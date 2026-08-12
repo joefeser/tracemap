@@ -65,6 +65,61 @@ internal static class RazorSemanticModelBindingExtractor
                 continue;
             }
 
+            if (InheritsTrusted(method.ContainingType, "Microsoft.AspNetCore.Mvc.ControllerBase")
+                && !IsDiscoverableController(method.ContainingType))
+            {
+                AddGapOrCount(
+                    projectPath,
+                    filePath,
+                    methodSyntax,
+                    "mvc-controller-owner",
+                    "RazorEndpointOwnerUnavailable",
+                    method,
+                    method.ContainingType,
+                    ref gapCount,
+                    ref truncatedGaps,
+                    gaps,
+                    stateKey: "ownerState",
+                    stateValue: "controller-type-not-discoverable");
+                continue;
+            }
+
+            var genericOwnerKind = PotentialOwnerKind(method);
+            if (method.IsGenericMethod && genericOwnerKind is not null)
+            {
+                AddGapOrCount(
+                    projectPath,
+                    filePath,
+                    methodSyntax,
+                    genericOwnerKind,
+                    "RazorEndpointOwnerUnavailable",
+                    method,
+                    method.ContainingType,
+                    ref gapCount,
+                    ref truncatedGaps,
+                    gaps,
+                    stateKey: "ownerState",
+                    stateValue: "generic-method-not-discoverable");
+                foreach (var parameterSyntax in methodSyntax.ParameterList.Parameters.OrderBy(parameter => parameter.SpanStart))
+                {
+                    if (model.GetDeclaredSymbol(parameterSyntax) is IParameterSymbol { Type: ITypeParameterSymbol } parameter)
+                    {
+                        AddGapOrCount(
+                            projectPath,
+                            filePath,
+                            parameterSyntax,
+                            genericOwnerKind,
+                            "RazorBindingTypeUnavailable",
+                            parameter,
+                            parameter.Type,
+                            ref gapCount,
+                            ref truncatedGaps,
+                            gaps);
+                    }
+                }
+                continue;
+            }
+
             var ownerKind = OwnerKind(method);
             if (ownerKind is null)
             {
@@ -233,6 +288,22 @@ internal static class RazorSemanticModelBindingExtractor
         List<SemanticFactCandidate> gaps)
     {
         var properties = EffectiveModelProperties(modelType);
+        if (FirstMetadataBase(modelType) is INamedTypeSymbol metadataBase)
+        {
+            AddGapOrCount(
+                projectPath,
+                filePath,
+                evidenceNode,
+                bindingKind,
+                "RazorBindingExternalBaseUnavailable",
+                owner,
+                metadataBase,
+                ref gapCount,
+                ref truncatedGaps,
+                gaps,
+                stateKey: "typeState",
+                stateValue: "external-base-properties-unavailable");
+        }
         if (properties.Length == 0)
         {
             AddGapOrCount(projectPath, filePath, evidenceNode, bindingKind, "RazorBindingPropertyUnavailable", owner, modelType, ref gapCount, ref truncatedGaps, gaps);
@@ -328,12 +399,14 @@ internal static class RazorSemanticModelBindingExtractor
             node.Span.Length);
     }
 
-    private static string? OwnerKind(IMethodSymbol method)
+    private static string? OwnerKind(IMethodSymbol method) =>
+        method.IsGenericMethod ? null : PotentialOwnerKind(method);
+
+    private static string? PotentialOwnerKind(IMethodSymbol method)
     {
         if (method.MethodKind != MethodKind.Ordinary
             || method.IsStatic
             || method.IsAbstract
-            || method.IsGenericMethod
             || method.DeclaredAccessibility != Accessibility.Public
             || method.IsImplicitlyDeclared)
         {
@@ -376,6 +449,26 @@ internal static class RazorSemanticModelBindingExtractor
             .ThenBy(property => property.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), StringComparer.Ordinal)
             .ToArray();
     }
+
+    private static INamedTypeSymbol? FirstMetadataBase(INamedTypeSymbol modelType)
+    {
+        for (var current = modelType.BaseType; current is not null; current = current.BaseType)
+        {
+            if (current.Locations.Any(location => location.IsInSource))
+            {
+                continue;
+            }
+            return current.SpecialType == SpecialType.System_Object ? null : current;
+        }
+        return null;
+    }
+
+    private static bool IsDiscoverableController(INamedTypeSymbol type) =>
+        type.TypeKind == TypeKind.Class
+        && !type.IsAbstract
+        && type.DeclaredAccessibility == Accessibility.Public
+        && type.ContainingType is null
+        && !type.TypeArguments.Any(argument => argument.TypeKind == TypeKind.TypeParameter);
 
     private static bool IsEligibleProperty(IPropertySymbol property) =>
         !property.IsStatic
@@ -563,7 +656,9 @@ internal static class RazorSemanticModelBindingExtractor
         ITypeSymbol? targetType,
         ref int gapCount,
         ref int truncatedGaps,
-        List<SemanticFactCandidate> gaps)
+        List<SemanticFactCandidate> gaps,
+        string? stateKey = null,
+        string? stateValue = null)
     {
         if (gapCount >= MaxGapsPerDocument)
         {
@@ -587,6 +682,10 @@ internal static class RazorSemanticModelBindingExtractor
         if (gapKind == "RazorFrameworkIdentityUnavailable")
         {
             properties["frameworkState"] = "source-or-unsigned-lookalike";
+        }
+        if (stateKey is not null && stateValue is not null)
+        {
+            properties[stateKey] = stateValue;
         }
         AddIdentity(properties, "scope", scope);
         AddIdentity(properties, "targetType", targetType);
