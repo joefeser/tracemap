@@ -409,6 +409,25 @@ public sealed class FrameworkMigrationEvidenceExtractorTests
     }
 
     [Fact]
+    public void Dynamic_identity_gap_protects_the_supported_operation_invocation()
+    {
+        var (facts, gaps, protectedSpans) = Extract("""
+            using Microsoft.EntityFrameworkCore.Migrations;
+            namespace Sample;
+            public sealed class M : Migration
+            {
+                protected override void Up(MigrationBuilder b) => b.DropTable(DynamicName());
+                protected override void Down(MigrationBuilder b) { }
+                private static string DynamicName() => "private-table";
+            }
+            """);
+
+        Assert.DoesNotContain(facts, fact => fact.FactType == FactTypes.FrameworkMigrationOperationCandidate);
+        Assert.Contains(gaps, gap => gap.Properties!["gapKind"] == "DynamicIdentityUnavailable");
+        Assert.Single(protectedSpans);
+    }
+
+    [Fact]
     public void Unresolved_migration_base_protects_bounded_syntax_candidate_operations()
     {
         const string source = """
@@ -457,7 +476,7 @@ public sealed class FrameworkMigrationEvidenceExtractorTests
             {
                 public void Up(object b)
                 {
-                    b.Sql("SELECT fallback_secret FROM private_table");
+                    b?.Sql("SELECT fallback_secret FROM private_table");
                     b.CreateTable("audit", table => new { Secret = "fallback-protected" });
                 }
             }
