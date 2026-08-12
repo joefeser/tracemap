@@ -21,6 +21,7 @@ internal static class RazorSemanticModelBindingExtractor
             ["Microsoft.AspNetCore.Mvc.FromFormAttribute"] = "Microsoft.AspNetCore.Mvc.Core",
             ["Microsoft.AspNetCore.Mvc.FromServicesAttribute"] = "Microsoft.AspNetCore.Mvc.Core",
             ["Microsoft.AspNetCore.Mvc.BindPropertyAttribute"] = "Microsoft.AspNetCore.Mvc.Core",
+            ["Microsoft.AspNetCore.Mvc.ModelBinding.BindNeverAttribute"] = "Microsoft.AspNetCore.Mvc.Core",
             ["Microsoft.AspNetCore.Mvc.HttpGetAttribute"] = "Microsoft.AspNetCore.Mvc.Core",
             ["Microsoft.AspNetCore.Mvc.HttpPostAttribute"] = "Microsoft.AspNetCore.Mvc.Core",
             ["Microsoft.AspNetCore.Mvc.HttpPutAttribute"] = "Microsoft.AspNetCore.Mvc.Core",
@@ -62,6 +63,10 @@ internal static class RazorSemanticModelBindingExtractor
         {
             if (model.GetDeclaredSymbol(methodSyntax) is not IMethodSymbol method
                 || method.ContainingType is null)
+            {
+                continue;
+            }
+            if (method.PartialImplementationPart is not null)
             {
                 continue;
             }
@@ -506,10 +511,34 @@ internal static class RazorSemanticModelBindingExtractor
             .Where(IsDiscoverableController)
             .Where(candidate => !HasTrustedAttributeInTypeHierarchy(candidate, "Microsoft.AspNetCore.Mvc.NonControllerAttribute"))
             .Where(candidate => InheritsFrom(candidate, method.ContainingType))
-            .Where(candidate => !candidate.GetMembers(method.Name).OfType<IMethodSymbol>().Any())
+            .Where(candidate => !HasInterveningOverride(candidate, method))
             .OrderBy(candidate => candidate.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), StringComparer.Ordinal)
             .Cast<ISymbol>()
             .ToArray();
+    }
+
+    private static bool HasInterveningOverride(INamedTypeSymbol candidate, IMethodSymbol method)
+    {
+        for (var current = candidate; current is not null && !SymbolEqualityComparer.Default.Equals(current, method.ContainingType); current = current.BaseType)
+        {
+            if (current.GetMembers(method.Name).OfType<IMethodSymbol>().Any(member => Overrides(member, method)))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static bool Overrides(IMethodSymbol candidate, IMethodSymbol expectedBase)
+    {
+        for (var current = candidate.OverriddenMethod; current is not null; current = current.OverriddenMethod)
+        {
+            if (SymbolEqualityComparer.Default.Equals(current, expectedBase))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static IEnumerable<INamedTypeSymbol> AllSourceTypes(INamespaceSymbol root)
@@ -566,6 +595,7 @@ internal static class RazorSemanticModelBindingExtractor
         && property.DeclaredAccessibility == Accessibility.Public
         && property.SetMethod is { DeclaredAccessibility: Accessibility.Public, IsInitOnly: false }
         && property.ExplicitInterfaceImplementations.Length == 0
+        && TrustedAttribute(property, "Microsoft.AspNetCore.Mvc.ModelBinding.BindNeverAttribute") is null
         && property.Locations.Any(location => location.IsInSource);
 
     private static string? ParameterSource(IParameterSymbol parameter)
