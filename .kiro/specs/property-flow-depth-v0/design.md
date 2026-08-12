@@ -68,10 +68,15 @@ examines compiler symbols rather than text:
    PageModel-property admission contract.
 3. Resolve parameter/property types through Roslyn, including cross-file and
    partial source types.
-4. Emit one target per source property symbol and owner/parameter binding
+4. Apply a binding-source-aware eligibility predicate before expansion:
+   ordinary public instance property, no index parameters or ref return, and a
+   public non-init setter. Unsupported/static/indexer/read-only/inaccessible/
+   constructor-bound shapes produce no Tier1 target and a bounded categorical
+   gap when the source boundary was otherwise admitted.
+5. Emit one target per eligible source property symbol and owner/parameter binding
    source with canonical owner, parameter, type, and property roles. Preserve
    supported HTTP methods as one sorted bounded property, not row multiplication.
-5. Emit categorical gaps for error/dynamic/type-parameter/external-unavailable
+6. Emit categorical gaps for error/dynamic/type-parameter/external-unavailable
    shapes without guessing a property.
 
 Prefer reusing `RazorModelBindingTarget` so downstream selectors retain their
@@ -93,6 +98,13 @@ Minimum safe fields:
 | target | canonical property ID, type, containing-type ID |
 | binding | closed binding kind/model family/HTTP evidence |
 | provenance | repo-relative span, commit, extractor, rule, tier, coverage, limitations |
+
+For a handler-independent PageModel property, do not manufacture handler or
+HTTP-method rows. Read the canonical `[BindProperty]` attribute data and retain
+only closed `supportsGet: true|false` evidence (`false` when the named argument
+is absent). Later composition must use that property-owned semantic rather than
+inherit the syntax producer's POST convention or treat missing `httpMethods` as
+a negative GET claim.
 
 Syntax fallback remains independently attributable. If the same logical target
 has both Tier1 and Tier3 rows, composition selects by exact canonical target ID

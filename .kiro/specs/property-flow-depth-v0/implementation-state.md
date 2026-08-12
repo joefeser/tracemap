@@ -121,6 +121,13 @@ must exclude its semantic producer rule from that reader and regression-lock
 unchanged property-flow output; PR 3 removes the exclusion only with exact-ID
 admission and collision coverage.
 
+The next exact-head Codex pass identified two producer-admission gaps, both
+accepted. PR 1 now has a conservative public-instance/writable/non-indexed/non-
+ref property predicate with explicit negative fixtures. Handler-independent
+PageModel property targets record canonical `supportsGet` attribute evidence
+without synthesizing handler HTTP methods or inheriting the syntax producer's
+POST convention.
+
 ## Validation
 
 Initial spec-only validation passed before review:
