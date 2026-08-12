@@ -367,6 +367,29 @@ public sealed class FrameworkMigrationEvidenceExtractorTests
     }
 
     [Fact]
+    public void Unresolved_supported_sensitive_shapes_and_annotation_are_protected()
+    {
+        var (_, gaps, protectedSpans) = Extract("""
+            using Microsoft.EntityFrameworkCore.Migrations;
+            namespace Sample;
+            public sealed class M : Migration
+            {
+                protected override void Up(MigrationBuilder b)
+                {
+                    b.CreateTable(name: "audit", columns: t => new { Secret = "hidden" }, unsupported: true);
+                    b.AddColumn<int>(name: "status", table: "accounts", defaultValue: "hidden", unsupported: true);
+                    b.Annotation("key", "hidden", unsupported: true);
+                }
+                protected override void Down(MigrationBuilder b) { }
+            }
+            """, allowCompilationErrors: true);
+
+        Assert.Equal(3, protectedSpans.Count);
+        Assert.Contains(gaps, gap => gap.Properties!["gapKind"] == "SemanticBindingUnavailable");
+        Assert.Contains(gaps, gap => gap.Properties!["gapKind"] == "AnnotationMigrationOperationUnavailable");
+    }
+
+    [Fact]
     public void Unresolved_migration_base_protects_bounded_syntax_candidate_operations()
     {
         const string source = """
@@ -404,6 +427,73 @@ public sealed class FrameworkMigrationEvidenceExtractorTests
         Assert.DoesNotContain(syntaxFacts, fact => fact.FactType == FactTypes.ObjectShapeInferred);
         Assert.DoesNotContain(integrationFacts, fact => fact.FactType is FactTypes.SqlTextUsed or FactTypes.QueryPatternDetected);
         Assert.DoesNotContain("protected-value", string.Join("\n", syntaxFacts.SelectMany(fact => fact.Properties.Values)), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Syntax_fallback_protects_migration_content_when_no_file_has_semantic_coverage()
+    {
+        const string source = """
+            namespace Sample;
+            public sealed class M : Migration
+            {
+                public void Up(object b)
+                {
+                    b.Sql("SELECT fallback_secret FROM private_table");
+                    b.CreateTable("audit", table => new { Secret = "fallback-protected" });
+                }
+            }
+            """;
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Migration.cs"), source);
+        var inventory = new[] { new FileInventoryItem("Migration.cs", "CSharp", source.Length) };
+
+        var fallback = FrameworkMigrationEvidenceExtractor.ExtractSyntaxFallback(
+            temp.Path,
+            inventory,
+            new HashSet<string>(StringComparer.Ordinal));
+        var syntaxFacts = CSharpSyntaxExtractor.Extract(temp.Path, Manifest(), inventory, fallback.ProtectedSpans);
+        var integrationFacts = CSharpIntegrationSyntaxExtractor.Extract(
+            temp.Path,
+            Manifest(),
+            inventory,
+            new HashSet<string>(StringComparer.Ordinal),
+            fallback.ProtectedSpans);
+
+        Assert.Equal(2, fallback.ProtectedSpans.Count);
+        Assert.Single(fallback.Gaps, gap => gap.RuleId == RuleIds.DatabaseFrameworkMigrationGap);
+        Assert.DoesNotContain(syntaxFacts, fact => fact.FactType == FactTypes.ObjectShapeInferred);
+        Assert.DoesNotContain(integrationFacts, fact => fact.FactType is FactTypes.SqlTextUsed or FactTypes.QueryPatternDetected);
+        Assert.DoesNotContain("fallback-protected", string.Join("\n", syntaxFacts.SelectMany(fact => fact.Properties.Values)), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Protected_defaults_suppress_nested_integration_syntax_facts()
+    {
+        const string source = """
+            using Microsoft.EntityFrameworkCore.Migrations;
+            namespace Sample;
+            public sealed class M : Migration
+            {
+                protected override void Up(MigrationBuilder b) =>
+                    b.AddColumn<object>(name: "payload", table: "accounts", defaultValue: queue.SendToQueue("private-destination"));
+                protected override void Down(MigrationBuilder b) { }
+                private static readonly Queue queue = new();
+            }
+            public sealed class Queue { public object SendToQueue(string value) => value; }
+            """;
+        var (_, _, spans) = Extract(source);
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Migration.cs"), source);
+
+        var facts = CSharpIntegrationSyntaxExtractor.Extract(
+            temp.Path,
+            Manifest(),
+            [new FileInventoryItem("Migration.cs", "CSharp", source.Length)],
+            new HashSet<string>(StringComparer.Ordinal),
+            spans.Select(span => span with { FilePath = "Migration.cs" }).ToArray());
+
+        Assert.DoesNotContain(facts, fact => fact.FactType == FactTypes.MessagePublisherSurface);
+        Assert.DoesNotContain("private-destination", string.Join("\n", facts.SelectMany(fact => fact.Properties.Values)), StringComparison.Ordinal);
     }
 
     [Fact]

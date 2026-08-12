@@ -1,12 +1,16 @@
 using System.Globalization;
 using System.Text.Json;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace TraceMap.Core;
 
 internal static class FrameworkMigrationEvidenceExtractor
 {
+    internal sealed record SyntaxProtectionResult(
+        IReadOnlyList<ProtectedSourceSpan> ProtectedSpans,
+        IReadOnlyList<SemanticFactCandidate> Gaps);
     private const string EfRelationalAssembly = "Microsoft.EntityFrameworkCore.Relational";
     private const string EfPublicKeyToken = "adb9793829ddae60";
     private const string MigrationMetadataName = "Microsoft.EntityFrameworkCore.Migrations.Migration";
@@ -158,14 +162,21 @@ internal static class FrameworkMigrationEvidenceExtractor
             var targetMethod = model.GetSymbolInfo(invocation).Symbol as IMethodSymbol;
             if (targetMethod is null)
             {
+                if (IsProtectedSyntaxCandidateInvocation(invocation))
+                {
+                    protectedSourceSpans?.Add(new ProtectedSourceSpan(filePath, invocation.SpanStart, invocation.Span.Length));
+                }
                 if (Operations.TryGetValue(methodName, out var unresolvedContract))
                 {
                     AddGap(gapCounts, filePath, declaration, migrationType, sourceMethod, "SemanticBindingUnavailable", unresolvedContract.Kind, direction);
                 }
                 else if (ProtectedOperations.TryGetValue(methodName, out var protectedGap))
                 {
-                    protectedSourceSpans?.Add(new ProtectedSourceSpan(filePath, invocation.SpanStart, invocation.Span.Length));
                     AddGap(gapCounts, filePath, declaration, migrationType, sourceMethod, protectedGap, null, direction);
+                }
+                else if (methodName == "Annotation")
+                {
+                    AddGap(gapCounts, filePath, declaration, migrationType, sourceMethod, "AnnotationMigrationOperationUnavailable", null, direction);
                 }
                 continue;
             }
@@ -566,6 +577,49 @@ internal static class FrameworkMigrationEvidenceExtractor
             && assembly.Locations.All(location => !location.IsInSource);
     }
 
+    internal static SyntaxProtectionResult ExtractSyntaxFallback(
+        string repoPath,
+        IEnumerable<FileInventoryItem> inventory,
+        IReadOnlySet<string> semanticallyAnalyzedFiles)
+    {
+        var spans = new List<ProtectedSourceSpan>();
+        var gaps = new List<SemanticFactCandidate>();
+        foreach (var file in inventory
+            .Where(item => FileInventory.IsCSharpKind(item.Kind) && !semanticallyAnalyzedFiles.Contains(item.RelativePath))
+            .OrderBy(item => item.RelativePath, StringComparer.Ordinal))
+        {
+            try
+            {
+                var root = CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(repoPath, file.RelativePath)), path: file.RelativePath)
+                    .GetCompilationUnitRoot();
+                foreach (var declaration in root.DescendantNodes().OfType<TypeDeclarationSyntax>().Where(IsMigrationSyntaxCandidate))
+                {
+                    ProtectSyntaxCandidateOperations(declaration, file.RelativePath, spans);
+                    gaps.Add(new SemanticFactCandidate(
+                        FactTypes.AnalysisGap,
+                        RuleIds.DatabaseFrameworkMigrationGap,
+                        EvidenceTiers.Tier4Unknown,
+                        Evidence(file.RelativePath, declaration),
+                        ContractElement: "SemanticBindingUnavailable",
+                        Properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                        {
+                            ["coverageLabel"] = "reduced-static-migration",
+                            ["frameworkFamily"] = "ef-core",
+                            ["gapKind"] = "SemanticBindingUnavailable",
+                            ["limitations"] = GapLimitations,
+                            ["occurrenceCount"] = "1",
+                            ["providerScope"] = "unknown"
+                        }));
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // The generic inventory/read gap remains authoritative for unreadable files.
+            }
+        }
+        return new SyntaxProtectionResult(spans, gaps);
+    }
+
     private static void ProtectSyntaxCandidateOperations(
         TypeDeclarationSyntax declaration,
         string filePath,
@@ -578,17 +632,25 @@ internal static class FrameworkMigrationEvidenceExtractor
 
         foreach (var invocation in declaration.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
-            var methodName = InvocationName(invocation);
-            var hasProtectedDefault = methodName is "AddColumn" or "AlterColumn"
-                && invocation.ArgumentList.Arguments.Any(argument =>
-                    argument.NameColon?.Name.Identifier.ValueText is "defaultValue" or "defaultValueSql" or "computedColumnSql");
-            if (ProtectedOperations.ContainsKey(methodName)
-                || methodName is "Annotation" or "CreateTable"
-                || hasProtectedDefault)
+            if (IsProtectedSyntaxCandidateInvocation(invocation))
             {
                 protectedSourceSpans.Add(new ProtectedSourceSpan(filePath, invocation.SpanStart, invocation.Span.Length));
             }
         }
+    }
+
+    private static bool IsMigrationSyntaxCandidate(TypeDeclarationSyntax declaration) =>
+        declaration.BaseList?.Types.Any(type => type.Type.ToString().EndsWith("Migration", StringComparison.Ordinal)) == true;
+
+    private static bool IsProtectedSyntaxCandidateInvocation(InvocationExpressionSyntax invocation)
+    {
+        var methodName = InvocationName(invocation);
+        var hasProtectedDefault = methodName is "AddColumn" or "AlterColumn"
+            && invocation.ArgumentList.Arguments.Any(argument =>
+                argument.NameColon?.Name.Identifier.ValueText is "defaultValue" or "defaultValueSql" or "computedColumnSql");
+        return ProtectedOperations.ContainsKey(methodName)
+            || methodName is "Annotation" or "CreateTable"
+            || hasProtectedDefault;
     }
 
     private static string PublicKeyToken(IAssemblySymbol assembly) =>

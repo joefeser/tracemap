@@ -566,14 +566,23 @@ public static class ScanEngine
         }
 
         facts.AddRange(BuildEnvironmentDiagnosticExtractor.Extract(repoPath, manifest, inventory, semanticResult));
-        facts.AddRange(CSharpSyntaxExtractor.Extract(repoPath, manifest, inventory, semanticResult.ProtectedSourceSpans));
         var semanticallyAnalyzedFiles = GetSemanticallyAnalyzedFiles(semanticResult);
+        var migrationSyntaxFallback = FrameworkMigrationEvidenceExtractor.ExtractSyntaxFallback(
+            repoPath,
+            inventory,
+            semanticallyAnalyzedFiles);
+        var protectedSourceSpans = (semanticResult.ProtectedSourceSpans ?? [])
+            .Concat(migrationSyntaxFallback.ProtectedSpans)
+            .Distinct()
+            .ToArray();
+        facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, migrationSyntaxFallback.Gaps));
+        facts.AddRange(CSharpSyntaxExtractor.Extract(repoPath, manifest, inventory, protectedSourceSpans));
         facts.AddRange(CSharpIntegrationSyntaxExtractor.Extract(
             repoPath,
             manifest,
             inventory,
             semanticallyAnalyzedFiles,
-            semanticResult.ProtectedSourceSpans));
+            protectedSourceSpans));
         facts.AddRange(RazorBindingExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(LegacyWcfExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(LegacyAsmxExtractor.Extract(repoPath, manifest, inventory));
