@@ -553,7 +553,15 @@ internal static class FrameworkMigrationEvidenceExtractor
 
     private static bool IsAdmittedAnnotationReceiver(InvocationExpressionSyntax annotation, SemanticModel model)
     {
-        ExpressionSyntax? receiver = (annotation.Expression as MemberAccessExpressionSyntax)?.Expression;
+        ExpressionSyntax? receiver = annotation.Expression switch
+        {
+            MemberAccessExpressionSyntax memberAccess => memberAccess.Expression,
+            MemberBindingExpressionSyntax => annotation.Ancestors()
+                .OfType<ConditionalAccessExpressionSyntax>()
+                .FirstOrDefault(conditional => conditional.WhenNotNull.Span.Contains(annotation.Span))?
+                .Expression,
+            _ => null
+        };
         while (receiver is InvocationExpressionSyntax invocation)
         {
             if (model.GetSymbolInfo(invocation).Symbol is not IMethodSymbol method)
@@ -647,11 +655,26 @@ internal static class FrameworkMigrationEvidenceExtractor
         }
     }
 
-    private static bool IsMigrationSyntaxCandidate(TypeDeclarationSyntax declaration) =>
-        declaration.BaseList?.Types.Any(type => type.Type.ToString() is
-            "Migration" or
-            "Microsoft.EntityFrameworkCore.Migrations.Migration" or
-            "global::Microsoft.EntityFrameworkCore.Migrations.Migration") == true;
+    private static bool IsMigrationSyntaxCandidate(TypeDeclarationSyntax declaration)
+    {
+        var baseTypes = declaration.BaseList?.Types.Select(type => type.Type.ToString()).ToArray() ?? [];
+        if (baseTypes.Any(IsCanonicalMigrationTypeName))
+        {
+            return true;
+        }
+
+        var aliases = declaration.SyntaxTree.GetCompilationUnitRoot().Usings
+            .Concat(declaration.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().SelectMany(namespaceDeclaration => namespaceDeclaration.Usings))
+            .Where(usingDirective => usingDirective.Alias is not null && IsCanonicalMigrationTypeName(usingDirective.Name?.ToString()))
+            .Select(usingDirective => usingDirective.Alias!.Name.Identifier.ValueText)
+            .ToHashSet(StringComparer.Ordinal);
+        return baseTypes.Any(aliases.Contains);
+    }
+
+    private static bool IsCanonicalMigrationTypeName(string? typeName) => typeName is
+        "Migration" or
+        "Microsoft.EntityFrameworkCore.Migrations.Migration" or
+        "global::Microsoft.EntityFrameworkCore.Migrations.Migration";
 
     private static bool IsProtectedSyntaxCandidateInvocation(InvocationExpressionSyntax invocation)
     {
