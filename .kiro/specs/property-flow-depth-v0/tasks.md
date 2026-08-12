@@ -1,0 +1,86 @@
+# Property Flow Depth v0 Tasks
+
+Issue: #517
+
+## Specification Slice
+
+- [x] Reconcile #517 against the shipped Razor, semantic, property-flow,
+      route-flow, storage, and consumer contracts.
+- [x] Narrow ownership to compiler-resolved Razor model-binding targets,
+      direct property mapping, and exact-ID property-flow composition.
+- [x] Document provenance, privacy, determinism, gap, compatibility, and
+      non-claim boundaries.
+- [x] Separate direct mapping from deferred AutoMapper/Mapster/runtime mapping.
+- [x] Record implementation ordering and validation requirements.
+- [ ] Complete exact-head review and ACK for this spec-only PR.
+
+## PR 1: Semantic Razor Model-Binding Producer
+
+- [ ] Pin test-only ASP.NET Core metadata versions, exact assembly/type/
+      attribute identities, and public-key-token or equivalent admission.
+- [ ] Emit Tier1 semantic `RazorModelBindingTarget` evidence for admitted MVC
+      action and Razor Page handler parameter properties across files/partials.
+- [ ] Emit canonical owner, parameter, model type, and property roles with a
+      closed property schema and fixed limitations.
+- [ ] Add categorical gaps for unresolved/error/dynamic/type-parameter,
+      external-unavailable, ambiguous, and forged framework shapes.
+- [ ] Reconcile semantic rows with syntax fallback without duplicate hidden
+      winners or evidence-tier inflation.
+- [ ] Add same-name cross-assembly, partial, overload/attribute, source-
+      lookalike, semantic-unavailable, span, property-schema, catalog, storage,
+      and file-order regressions.
+
+## PR 2: Direct Property Mapping Producer
+
+- [ ] Add a versioned mapping fact/rule and closed v0 property/gap schemas.
+- [ ] Emit exact RHS-property -> LHS-property facts for simple assignments.
+- [ ] Emit exact source-property -> initialized-target-property facts for
+      object initializers and LINQ projection initializers.
+- [ ] Decide constructor forwarding from current parameter-flow evidence;
+      implement only if both exact hops fit the same contract, otherwise defer.
+- [ ] Unwrap only bounded identity-preserving syntax/conversions.
+- [ ] Fail closed for transforming/dynamic/ambiguous/unsupported shapes without
+      retaining expressions or protected digests.
+- [ ] Add direction, collision, shadowing, projection, partial-build,
+      generated/excluded-source, determinism, catalog, storage, and generic-
+      reducer exclusion regressions.
+
+## PR 3: Exact-ID Property-Flow Composition
+
+- [ ] Audit the current property-flow reader/report version and every consumer
+      before changing row semantics.
+- [ ] Prefer exact semantic Razor property identity over syntax/convention
+      matching while preserving all supporting fact IDs and limitations.
+- [ ] Add directed `model-property-mapped` hops only from admitted mapping
+      facts; never reverse or infer them by name.
+- [ ] Keep syntax/convention/same-name/alias-only evidence review-tier and emit
+      explicit ambiguity/identity gaps.
+- [ ] Attach existing route/service/query/data context only after a selected
+      exact property trail reaches it.
+- [ ] Test cross-assembly collisions, ambiguous endpoints/models, broad route
+      reachability, direction, reduced coverage, bounds, byte stability, and
+      exact provenance.
+
+## PR 4: Consumer and Public-Safe Validation
+
+- [ ] Audit NDJSON, SQLite, combine, Markdown, snapshot diff, reducer, property-
+      flow, docs/vault, evidence-pack, explorer, and release-review behavior.
+- [ ] Preserve rule/tier/span/commit/extractor/coverage/support IDs/limitations
+      or emit documented omission/compatibility gaps.
+- [ ] Add a small synthetic public-safe MVC/Razor fixture with direct mapping
+      and negative collision/dynamic cases.
+- [ ] Run focused Razor/semantic/property-flow/storage/combine/consumer tests.
+- [ ] Run `dotnet build src/dotnet/TraceMap.sln`.
+- [ ] Run `dotnet test src/dotnet/TraceMap.sln`.
+- [ ] Run applicable pinned smoke checks from `docs/VALIDATION.md` or record a
+      bounded deferral.
+- [ ] Run `./scripts/check-private-paths.sh` and `git diff --check`.
+- [ ] Update this task file and `implementation-state.md` only as work lands.
+
+## Deferred
+
+- AutoMapper, Mapster, custom mapping packages/configuration/resolvers.
+- Arbitrary interprocedural transformations and business-rule inference.
+- Runtime Razor/model binding, serialization, validation, browser, HTTP, DI,
+  mapper execution, persistence, database, and telemetry evidence.
+- Persisted derived property-flow rows and whole-application inventory UI.
