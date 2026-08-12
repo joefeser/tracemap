@@ -45,6 +45,7 @@ public sealed class FrameworkMigrationConsumerAuditTests
         {
             InvalidFrameworkOperation(manifest),
             InvalidFrameworkOperation(manifest) with { FactId = UntrustedFactId },
+            InvalidFrameworkOperation(manifest) with { FactId = "missing-properties", Properties = null! },
             validOperation with { FactId = "invalid-tier", EvidenceTier = EvidenceTiers.Tier4Unknown },
             validOperation with { FactId = "invalid-commit", CommitSha = new string('f', 40) },
             validOperation with { FactId = "invalid-span", Evidence = validOperation.Evidence with { StartLine = 0 } },
@@ -69,12 +70,19 @@ public sealed class FrameworkMigrationConsumerAuditTests
 
         var declaration = Assert.Single(result.Data.EvidenceRows, row => row.RuleId == RuleIds.DatabaseFrameworkMigrationDeclaration);
         Assert.Equal("bounded-static-migration", declaration.CoverageLabel);
-        Assert.Equal([DeclarationLimitation], declaration.Limitations);
+        Assert.Equal(["limitation:framework-migration-declaration-static-boundary"], declaration.Limitations);
         var operation = Assert.Single(result.Data.EvidenceRows, row => row.RuleId == RuleIds.DatabaseFrameworkMigrationOperation);
-        Assert.Equal([OperationLimitation], operation.Limitations);
+        Assert.Equal(["limitation:framework-migration-operation-static-boundary"], operation.Limitations);
         var gapRow = Assert.Single(result.Data.EvidenceRows, row => row.RuleId == RuleIds.DatabaseFrameworkMigrationGap);
         Assert.Equal("reduced-static-migration", gapRow.CoverageLabel);
-        Assert.Equal([GapLimitation], gapRow.Limitations);
+        Assert.Equal(["limitation:framework-migration-gap-static-boundary"], gapRow.Limitations);
+        Assert.All(new[] { declaration, operation, gapRow }, row =>
+        {
+            var limitationId = Assert.Single(row.Limitations);
+            var limitation = Assert.Single(result.Data.Limitations, candidate => candidate.LimitationId == limitationId);
+            Assert.Equal(row.RuleId, limitation.RuleId);
+            Assert.NotEmpty(limitation.SupportIds);
+        });
         var metadataGaps = result.Data.Gaps
             .Where(gap => gap.RuleId == StaticHtmlEvidenceExplorer.FrameworkMigrationMetadataUnavailableRuleId)
             .ToArray();

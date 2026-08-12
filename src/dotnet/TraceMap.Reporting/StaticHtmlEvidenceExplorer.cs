@@ -568,6 +568,10 @@ public static partial class StaticHtmlEvidenceExplorer
                     continue;
                 }
 
+                var frameworkLimitationId = frameworkMetadata.Limitation is null
+                    ? null
+                    : RegisterFrameworkMigrationLimitation(fact, frameworkMetadata.Limitation, limitations);
+
                 if (evidence is null)
                 {
                     gaps.Add(CreateGap(
@@ -597,7 +601,7 @@ public static partial class StaticHtmlEvidenceExplorer
                     evidence is null ? "n/a" : SafeSnippetHash(evidence.SnippetHash, redactions),
                     frameworkMetadata.CoverageLabel ?? (coverageLabels.Count == 0 ? "UnknownCoverage" : coverageLabels.First()),
                     SafeClosedText(evidence?.ExtractorVersion, "extractor-version", redactions),
-                    frameworkMetadata.Limitation is null ? [] : [frameworkMetadata.Limitation]));
+                    frameworkLimitationId is null ? [] : [frameworkLimitationId]));
                 RecordOmittedFactProperties(fact, redactions);
 
                 if (fact.FactType == FactTypes.AnalysisGap)
@@ -921,8 +925,8 @@ public static partial class StaticHtmlEvidenceExplorer
             return (false, true, null, null);
         }
 
-        var coverage = fact.Properties.GetValueOrDefault("coverageLabel");
-        var limitation = fact.Properties.GetValueOrDefault("limitations");
+        var coverage = fact.Properties?.GetValueOrDefault("coverageLabel");
+        var limitation = fact.Properties?.GetValueOrDefault("limitations");
         var evidence = fact.Evidence;
         var expectedExtractor = evidence is not null
             && ((evidence.ExtractorId == "FrameworkMigrationEvidenceExtractor"
@@ -943,6 +947,50 @@ public static partial class StaticHtmlEvidenceExplorer
             && evidence.EndLine >= evidence.StartLine
             && expectedExtractor;
         return (true, valid, valid ? coverage : null, valid ? limitation : null);
+    }
+
+    private static string RegisterFrameworkMigrationLimitation(
+        CodeFact fact,
+        string message,
+        List<ExplorerLimitation> limitations)
+    {
+        var idPart = fact.RuleId switch
+        {
+            RuleIds.DatabaseFrameworkMigrationDeclaration => "framework-migration-declaration-static-boundary",
+            RuleIds.DatabaseFrameworkMigrationOperation => "framework-migration-operation-static-boundary",
+            RuleIds.DatabaseFrameworkMigrationGap => "framework-migration-gap-static-boundary",
+            _ => throw new InvalidOperationException("Framework migration limitation registration requires a supported rule ID.")
+        };
+        var limitationId = $"limitation:{idPart}";
+        var supportIds = SafeSupportIds([fact.FactId]);
+        var existingIndex = limitations.FindIndex(limitation => limitation.LimitationId == limitationId);
+        if (existingIndex < 0)
+        {
+            limitations.Add(new ExplorerLimitation(
+                limitationId,
+                fact.RuleId,
+                Tier4Unknown,
+                "framework-migration-static-boundary",
+                "evidence-rows",
+                SourceId,
+                "Prevents runtime, ordering, provider, generated-SQL, rollback, safety, and database-state conclusions.",
+                message,
+                supportIds));
+        }
+        else
+        {
+            var existing = limitations[existingIndex];
+            limitations[existingIndex] = existing with
+            {
+                SupportIds = existing.SupportIds
+                    .Concat(supportIds)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(value => value, StringComparer.Ordinal)
+                    .ToArray()
+            };
+        }
+
+        return limitationId;
     }
 
     private static async Task AddOptionalArtifactAsync(
