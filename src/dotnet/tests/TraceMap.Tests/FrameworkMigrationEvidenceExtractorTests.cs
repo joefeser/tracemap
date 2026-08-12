@@ -605,6 +605,37 @@ public sealed class FrameworkMigrationEvidenceExtractorTests
     }
 
     [Fact]
+    public void Syntax_fallback_protects_positional_default_arguments_and_nested_object_creation()
+    {
+        const string source = """
+            using Microsoft.EntityFrameworkCore.Migrations;
+            namespace Sample;
+            public sealed class M : Migration
+            {
+                public void Up(object b) =>
+                    b.AddColumn<object>("payload", "accounts", "blob", false, null, false, null, true, new PrivateCredential());
+            }
+            public sealed class PrivateCredential { }
+            """;
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Migration.cs"), source);
+        var inventory = new[] { new FileInventoryItem("Migration.cs", "CSharp", source.Length) };
+
+        var fallback = FrameworkMigrationEvidenceExtractor.ExtractSyntaxFallback(
+            temp.Path,
+            inventory,
+            new HashSet<string>(StringComparer.Ordinal));
+        var facts = CSharpSyntaxExtractor.Extract(temp.Path, Manifest(), inventory, fallback.ProtectedSpans);
+
+        Assert.Single(fallback.ProtectedSpans);
+        Assert.DoesNotContain(facts, fact => fact.FactType is FactTypes.ObjectCreated or FactTypes.CallEdge
+            && fact.TargetSymbol?.Contains("PrivateCredential", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain("PrivateCredential", string.Join("\n", facts
+            .Where(fact => fact.Evidence.StartLine == 6)
+            .SelectMany(fact => fact.Properties.Values)), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Protected_table_shape_suppresses_nested_message_attributes()
     {
         const string source = """
@@ -631,6 +662,46 @@ public sealed class FrameworkMigrationEvidenceExtractorTests
 
         Assert.DoesNotContain(facts, fact => fact.FactType == FactTypes.MessageBindingDeclared);
         Assert.DoesNotContain("private-queue", string.Join("\n", facts.SelectMany(fact => fact.Properties.Values)), StringComparison.Ordinal);
+
+        var syntaxFacts = CSharpSyntaxExtractor.Extract(
+            temp.Path,
+            Manifest(),
+            [new FileInventoryItem("Migration.cs", "CSharp", source.Length)],
+            [new ProtectedSourceSpan("Migration.cs", invocation.SpanStart, invocation.Span.Length)]);
+        Assert.DoesNotContain(syntaxFacts, fact => fact.FactType == FactTypes.AttributeUsed
+            && fact.TargetSymbol?.Contains("QueueTrigger", StringComparison.Ordinal) == true);
+    }
+
+    [Fact]
+    public void Syntax_fallback_gap_marks_clean_project_load_as_partial()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Sample.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+              </PropertyGroup>
+              <ItemGroup><Compile Include="App.cs" /></ItemGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "App.cs"), "public sealed class App { }");
+        File.WriteAllText(Path.Combine(temp.Path, "Migration.cs"), """
+            using MigrationBase = Microsoft.EntityFrameworkCore.Migrations.Migration;
+            public sealed class M : MigrationBase
+            {
+                public void Up(object b) => b.Sql("SELECT private_value");
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+
+        Assert.Equal("FailedOrPartial", result.Manifest.BuildStatus);
+        Assert.Equal("Level1SemanticAnalysisReduced", result.Manifest.AnalysisLevel);
+        Assert.Contains(result.Facts, fact => fact.RuleId == RuleIds.DatabaseFrameworkMigrationGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "SemanticBindingUnavailable");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.SqlTextUsed
+            && fact.Evidence.FilePath == "Migration.cs");
     }
 
     [Fact]
