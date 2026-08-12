@@ -45,12 +45,18 @@ public sealed class RazorSemanticModelBindingTests
         File.WriteAllText(Path.Combine(project, "InputModel.Part1.cs"), """
             namespace WebSample;
 
+            public class BaseInputModel
+            {
+                public string BaseName { get; set; } = "";
+                public string Hidden { get; set; } = "";
+            }
+
             public interface IExplicitModel
             {
                 string ExplicitValue { set; }
             }
 
-            public sealed partial class InputModel : IExplicitModel
+            public sealed partial class InputModel : BaseInputModel, IExplicitModel
             {
                 private string _refValue = "";
                 public string Name { get; set; } = "";
@@ -58,6 +64,7 @@ public sealed class RazorSemanticModelBindingTests
                 public string ReadOnly => "";
                 public string InitOnly { get; init; } = "";
                 public string PrivateSetter { get; private set; } = "";
+                public new string Hidden { get; private set; } = "";
                 public string this[int index] { get => ""; set { } }
                 public ref string RefValue => ref _refValue;
                 string IExplicitModel.ExplicitValue { set { } }
@@ -107,11 +114,23 @@ public sealed class RazorSemanticModelBindingTests
                 public string DefaultValue { get; set; } = "";
 
                 public void OnPost(InputModel input) { }
+
+                [NonHandler]
+                public void OnPostIgnored(InputModel input) { }
+            }
+
+            [NonController]
+            public sealed class HiddenController : ControllerBase
+            {
+                public IActionResult Save([FromBody] InputModel input) => Ok();
             }
 
             public sealed class Helper
             {
                 public void Run([FromBody] InputModel input) { }
+
+                [BindProperty]
+                public string HelperBound { get; set; } = "";
             }
 
             public sealed class GenericController<T> : ControllerBase
@@ -153,6 +172,9 @@ public sealed class RazorSemanticModelBindingTests
         Assert.Contains(semantic, fact =>
             fact.Properties["bindingKind"] == "mvc-action-parameter"
             && fact.Properties["propertyName"] == "Email");
+        Assert.Contains(semantic, fact =>
+            fact.Properties["bindingKind"] == "mvc-action-parameter"
+            && fact.Properties["propertyName"] == "BaseName");
         var overloadedNames = semantic.Where(fact =>
                 fact.Properties["bindingKind"] == "mvc-action-parameter"
                 && fact.Properties["propertyName"] == "Name")
@@ -165,21 +187,26 @@ public sealed class RazorSemanticModelBindingTests
             fact.Properties["bindingKind"] == "razor-page-handler-parameter"
             && fact.Properties["handlerName"] == "OnPost"
             && fact.Properties["httpMethods"] == "POST");
-        Assert.Contains(semantic, fact =>
+        var searchProperty = Assert.Single(semantic, fact =>
             fact.Properties["bindingKind"] == "razor-page-property"
-            && fact.Properties["propertyName"] == "Search"
-            && fact.Properties["supportsGet"] == "true"
-            && fact.Properties["httpMethods"] == string.Empty
-            && fact.Properties["frameworkOwnerType"] == "Microsoft.AspNetCore.Mvc.RazorPages.PageModel"
-            && fact.Properties["bindingAttributeType"] == "Microsoft.AspNetCore.Mvc.BindPropertyAttribute"
-            && !fact.Properties.ContainsKey("handlerName"));
+            && fact.Properties["propertyName"] == "Search");
+        Assert.Equal("true", searchProperty.Properties["supportsGet"]);
+        Assert.Equal(string.Empty, searchProperty.Properties["httpMethods"]);
+        Assert.Equal("Microsoft.AspNetCore.Mvc.RazorPages.PageModel", searchProperty.Properties["frameworkOwnerType"]);
+        Assert.Equal("Microsoft.AspNetCore.Mvc.BindPropertyAttribute", searchProperty.Properties["bindingAttributeType"]);
+        Assert.NotEqual(searchProperty.Properties["ownerSymbolId"], searchProperty.Properties["targetSymbolId"]);
+        Assert.Equal("NamedType", searchProperty.Properties["ownerSymbolKind"]);
+        Assert.DoesNotContain("handlerName", searchProperty.Properties.Keys);
         Assert.Contains(semantic, fact =>
             fact.Properties["bindingKind"] == "razor-page-property"
             && fact.Properties["propertyName"] == "DefaultValue"
             && fact.Properties["supportsGet"] == "false");
         Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("Helper.Run", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(semantic, fact => fact.Properties["propertyName"] == "HelperBound");
         Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("OrdersController.Ignore", StringComparison.Ordinal) == true);
-        Assert.DoesNotContain(semantic, fact => fact.Properties["propertyName"] is "StaticValue" or "ReadOnly" or "InitOnly" or "PrivateSetter" or "RefValue" or "ExplicitValue" or "ConstructorValue" or "Item");
+        Assert.DoesNotContain(semantic, fact => fact.Properties["propertyName"] is "StaticValue" or "ReadOnly" or "InitOnly" or "PrivateSetter" or "Hidden" or "RefValue" or "ExplicitValue" or "ConstructorValue" or "Item");
+        Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("HiddenController", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("OnPostIgnored", StringComparison.Ordinal) == true);
 
         var gaps = first.Facts.Where(fact => fact.RuleId == RuleIds.CSharpRazorSemanticModelBindingGap).ToArray();
         Assert.Contains(gaps, gap => gap.Properties["gapKind"] == "RazorBindingPropertyUnavailable");
@@ -197,6 +224,7 @@ public sealed class RazorSemanticModelBindingTests
             Assert.False(gap.Properties.ContainsKey("message"));
             Assert.Empty(gap.Properties.Keys.Except(GapPropertySchema, StringComparer.Ordinal));
         });
+        Assert.DoesNotContain(gaps, gap => gap.Properties.Values.Any(value => value.Contains("HelperBound", StringComparison.Ordinal)));
 
         var firstProjection = semantic.Select(StableProjection).ToArray();
         var secondProjection = second.Facts
@@ -239,6 +267,12 @@ public sealed class RazorSemanticModelBindingTests
             {
                 public class ControllerBase { }
                 public sealed class FromBodyAttribute : System.Attribute { }
+                public sealed class BindPropertyAttribute : System.Attribute { }
+            }
+
+            namespace Microsoft.AspNetCore.Mvc.RazorPages
+            {
+                public class PageModel { }
             }
 
             namespace Sample
@@ -248,14 +282,20 @@ public sealed class RazorSemanticModelBindingTests
                 {
                     public void Save([Microsoft.AspNetCore.Mvc.FromBody] InputModel input) { }
                 }
+
+                public sealed class FakePage : Microsoft.AspNetCore.Mvc.RazorPages.PageModel
+                {
+                    [Microsoft.AspNetCore.Mvc.BindProperty]
+                    public string Search { get; set; } = "";
+                }
             }
             """);
 
         var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")));
 
         Assert.DoesNotContain(result.Facts, fact => fact.RuleId == RuleIds.CSharpRazorSemanticModelBinding);
-        Assert.Contains(result.Facts, fact => fact.RuleId == RuleIds.CSharpRazorSemanticModelBindingGap
-            && fact.Properties["gapKind"] == "RazorFrameworkIdentityUnavailable");
+        Assert.True(result.Facts.Count(fact => fact.RuleId == RuleIds.CSharpRazorSemanticModelBindingGap
+            && fact.Properties["gapKind"] == "RazorFrameworkIdentityUnavailable") >= 2);
     }
 
     [Fact]
