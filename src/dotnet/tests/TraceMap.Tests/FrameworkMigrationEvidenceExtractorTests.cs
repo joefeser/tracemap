@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.Data.Sqlite;
@@ -156,6 +157,30 @@ public sealed class FrameworkMigrationEvidenceExtractorTests
         var gap = Assert.Single(gaps, fact => fact.RuleId == RuleIds.DatabaseFrameworkMigrationGap);
         Assert.Equal("FrameworkAssemblyIdentityUnavailable", gap.Properties!["gapKind"]);
         Assert.DoesNotContain("migrationTypeSymbolId", gap.Properties.Keys);
+    }
+
+    [Fact]
+    public void Source_declared_type_is_rejected_even_with_the_framework_strong_name_identity()
+    {
+        var publicKey = typeof(Migration).Assembly.GetName().GetPublicKey();
+        Assert.NotNull(publicKey);
+        var tree = CSharpSyntaxTree.ParseText("""
+            namespace Microsoft.EntityFrameworkCore.Migrations;
+            public abstract class Migration { }
+            """);
+        var compilation = CSharpCompilation.Create(
+            "Microsoft.EntityFrameworkCore.Relational",
+            [tree],
+            PlatformReferences(includeEfReferences: false),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+                .WithCryptoPublicKey(publicKey.ToImmutableArray())
+                .WithPublicSign(true));
+        var type = compilation.GetTypeByMetadataName("Microsoft.EntityFrameworkCore.Migrations.Migration");
+
+        Assert.NotNull(type);
+        Assert.Equal("adb9793829ddae60", string.Concat(
+            compilation.Assembly.Identity.PublicKeyToken.Select(value => value.ToString("x2"))));
+        Assert.False(FrameworkMigrationEvidenceExtractor.IsTrustedEfSymbol(type));
     }
 
     [Fact]
@@ -339,6 +364,46 @@ public sealed class FrameworkMigrationEvidenceExtractorTests
         Assert.Contains(gaps, gap => gap.Properties!["gapKind"] == "RawSqlMigrationOperationUnavailable");
         Assert.Single(protectedSpans);
         Assert.True(protectedSpans[0].Length > 0);
+    }
+
+    [Fact]
+    public void Unresolved_migration_base_protects_bounded_syntax_candidate_operations()
+    {
+        const string source = """
+            namespace Sample;
+            public sealed class M : MissingMigration
+            {
+                public void Up(object b)
+                {
+                    b.Sql("SELECT secret FROM private_table");
+                    b.CreateTable("audit", table => new { Secret = "protected-value" });
+                }
+            }
+            """;
+        var (facts, gaps, protectedSpans) = Extract(
+            source,
+            includeEfReferences: false,
+            allowCompilationErrors: true);
+
+        Assert.Empty(facts);
+        Assert.Contains(gaps, gap => gap.Properties!["gapKind"] == "SemanticBindingUnavailable");
+        Assert.Equal(2, protectedSpans.Count);
+
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Migration.cs"), source);
+        var inventory = new[] { new FileInventoryItem("Migration.cs", "CSharp", source.Length) };
+        var normalizedSpans = protectedSpans.Select(span => span with { FilePath = "Migration.cs" }).ToArray();
+        var syntaxFacts = CSharpSyntaxExtractor.Extract(temp.Path, Manifest(), inventory, normalizedSpans);
+        var integrationFacts = CSharpIntegrationSyntaxExtractor.Extract(
+            temp.Path,
+            Manifest(),
+            inventory,
+            new HashSet<string>(StringComparer.Ordinal),
+            normalizedSpans);
+
+        Assert.DoesNotContain(syntaxFacts, fact => fact.FactType == FactTypes.ObjectShapeInferred);
+        Assert.DoesNotContain(integrationFacts, fact => fact.FactType is FactTypes.SqlTextUsed or FactTypes.QueryPatternDetected);
+        Assert.DoesNotContain("protected-value", string.Join("\n", syntaxFacts.SelectMany(fact => fact.Properties.Values)), StringComparison.Ordinal);
     }
 
     [Fact]

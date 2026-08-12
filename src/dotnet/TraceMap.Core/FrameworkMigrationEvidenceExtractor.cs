@@ -127,6 +127,7 @@ internal static class FrameworkMigrationEvidenceExtractor
             {
                 if (syntaxCandidate)
                 {
+                    ProtectSyntaxCandidateOperations(declaration, filePath, protectedSourceSpans);
                     AddGap(gapCounts, filePath, declaration, null, null, "SemanticBindingUnavailable", null, null);
                 }
                 continue;
@@ -553,13 +554,41 @@ internal static class FrameworkMigrationEvidenceExtractor
         return false;
     }
 
-    private static bool IsTrustedEfSymbol(INamedTypeSymbol? type)
+    internal static bool IsTrustedEfSymbol(INamedTypeSymbol? type)
     {
         var assembly = type?.ContainingAssembly;
-        return assembly is not null
+        return type is not null
+            && type.DeclaringSyntaxReferences.Length == 0
+            && type.Locations.All(location => !location.IsInSource)
+            && assembly is not null
             && assembly.Identity.Name.Equals(EfRelationalAssembly, StringComparison.Ordinal)
             && PublicKeyToken(assembly).Equals(EfPublicKeyToken, StringComparison.Ordinal)
             && assembly.Locations.All(location => !location.IsInSource);
+    }
+
+    private static void ProtectSyntaxCandidateOperations(
+        TypeDeclarationSyntax declaration,
+        string filePath,
+        List<ProtectedSourceSpan>? protectedSourceSpans)
+    {
+        if (protectedSourceSpans is null)
+        {
+            return;
+        }
+
+        foreach (var invocation in declaration.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            var methodName = InvocationName(invocation);
+            var hasProtectedDefault = methodName is "AddColumn" or "AlterColumn"
+                && invocation.ArgumentList.Arguments.Any(argument =>
+                    argument.NameColon?.Name.Identifier.ValueText is "defaultValue" or "defaultValueSql" or "computedColumnSql");
+            if (ProtectedOperations.ContainsKey(methodName)
+                || methodName is "Annotation" or "CreateTable"
+                || hasProtectedDefault)
+            {
+                protectedSourceSpans.Add(new ProtectedSourceSpan(filePath, invocation.SpanStart, invocation.Span.Length));
+            }
+        }
     }
 
     private static string PublicKeyToken(IAssemblySymbol assembly) =>
