@@ -578,6 +578,14 @@ internal static class FrameworkMigrationEvidenceExtractor
             .Where(item => FileInventory.IsCSharpKind(item.Kind))
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
             .ToArray();
+        var fallbackFiles = csharpFiles
+            .Where(item => !semanticallyAnalyzedFiles.Contains(item.RelativePath))
+            .ToArray();
+        if (fallbackFiles.Length == 0)
+        {
+            return new SyntaxProtectionResult([], []);
+        }
+
         var roots = new Dictionary<string, CompilationUnitSyntax>(StringComparer.Ordinal);
         foreach (var file in csharpFiles)
         {
@@ -597,7 +605,7 @@ internal static class FrameworkMigrationEvidenceExtractor
             .SelectMany(root => root.Usings)
             .Where(usingDirective => usingDirective.GlobalKeyword.IsKind(SyntaxKind.GlobalKeyword))
             .ToArray();
-        foreach (var file in csharpFiles.Where(item => !semanticallyAnalyzedFiles.Contains(item.RelativePath)))
+        foreach (var file in fallbackFiles)
         {
             if (!roots.TryGetValue(file.RelativePath, out var root))
             {

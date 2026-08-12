@@ -71,6 +71,26 @@ internal static class RazorSemanticModelBindingExtractor
                 continue;
             }
 
+            var potentialOwnerKind = PotentialOwnerKind(method);
+            if (potentialOwnerKind is null)
+            {
+                if (method.Parameters.Length > 0 && HasUntrustedFrameworkOwnerShape(method.ContainingType))
+                {
+                    AddGapOrCount(
+                        projectPath,
+                        filePath,
+                        methodSyntax,
+                        "untrusted-framework-owner",
+                        "RazorFrameworkIdentityUnavailable",
+                        method,
+                        method.ContainingType,
+                        ref gapCount,
+                        ref truncatedGaps,
+                        gaps);
+                }
+                continue;
+            }
+
             if (InheritsTrusted(method.ContainingType, "Microsoft.AspNetCore.Mvc.RazorPages.PageModel")
                 && !IsDiscoverablePageModel(method.ContainingType))
             {
@@ -112,14 +132,13 @@ internal static class RazorSemanticModelBindingExtractor
                 continue;
             }
 
-            var genericOwnerKind = PotentialOwnerKind(method);
-            if (method.IsGenericMethod && genericOwnerKind is not null)
+            if (method.IsGenericMethod)
             {
                 AddGapOrCount(
                     projectPath,
                     filePath,
                     methodSyntax,
-                    genericOwnerKind,
+                    potentialOwnerKind,
                     "RazorEndpointOwnerUnavailable",
                     method,
                     method.ContainingType,
@@ -136,7 +155,7 @@ internal static class RazorSemanticModelBindingExtractor
                             projectPath,
                             filePath,
                             parameterSyntax,
-                            genericOwnerKind,
+                            potentialOwnerKind,
                             "RazorBindingTypeUnavailable",
                             parameter,
                             parameter.Type,
@@ -148,25 +167,7 @@ internal static class RazorSemanticModelBindingExtractor
                 continue;
             }
 
-            var ownerKind = OwnerKind(method);
-            if (ownerKind is null)
-            {
-                if (method.Parameters.Length > 0 && HasUntrustedFrameworkOwnerShape(method.ContainingType))
-                {
-                    AddGapOrCount(
-                        projectPath,
-                        filePath,
-                        methodSyntax,
-                        "untrusted-framework-owner",
-                        "RazorFrameworkIdentityUnavailable",
-                        method,
-                        method.ContainingType,
-                        ref gapCount,
-                        ref truncatedGaps,
-                        gaps);
-                }
-                continue;
-            }
+            var ownerKind = potentialOwnerKind;
 
             var httpMethods = ownerKind == "mvc-action-parameter"
                 ? ActionHttpMethods(method)
@@ -517,9 +518,6 @@ internal static class RazorSemanticModelBindingExtractor
             node.SpanStart,
             node.Span.Length);
     }
-
-    private static string? OwnerKind(IMethodSymbol method) =>
-        method.IsGenericMethod ? null : PotentialOwnerKind(method);
 
     private static string? PotentialOwnerKind(IMethodSymbol method)
     {
