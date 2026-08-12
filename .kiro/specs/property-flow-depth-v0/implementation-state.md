@@ -161,6 +161,14 @@ Local signed-fixture provenance was Microsoft.AspNetCore.App `10.0.10` and
 Microsoft.NETCore.App `10.0.10`; the test project records that runtime patch,
 while product admission remains version-independent.
 
+Hosted review on PR #648 identified five producer-boundary defects. The
+follow-up patch makes PageModel type and bound-property identities distinct,
+emits the promised forged property-only framework gap, honors canonical
+`[NonController]` and `[NonHandler]` exclusions, and walks source base-model
+properties deterministically with the most-derived declaration governing
+hidden or overridden names. The focused 46-test baseline and full 1,456-test
+solution suite remained green after these corrections.
+
 ## Deferred Work
 
 - PR 1 now emits compiler-resolved MVC action parameter, Razor Page handler

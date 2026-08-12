@@ -15,6 +15,7 @@ internal static class RazorSemanticModelBindingExtractor
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["Microsoft.AspNetCore.Mvc.ControllerBase"] = "Microsoft.AspNetCore.Mvc.Core",
+            ["Microsoft.AspNetCore.Mvc.NonControllerAttribute"] = "Microsoft.AspNetCore.Mvc.Core",
             ["Microsoft.AspNetCore.Mvc.NonActionAttribute"] = "Microsoft.AspNetCore.Mvc.Core",
             ["Microsoft.AspNetCore.Mvc.FromBodyAttribute"] = "Microsoft.AspNetCore.Mvc.Core",
             ["Microsoft.AspNetCore.Mvc.FromFormAttribute"] = "Microsoft.AspNetCore.Mvc.Core",
@@ -26,7 +27,8 @@ internal static class RazorSemanticModelBindingExtractor
             ["Microsoft.AspNetCore.Mvc.HttpPatchAttribute"] = "Microsoft.AspNetCore.Mvc.Core",
             ["Microsoft.AspNetCore.Mvc.HttpHeadAttribute"] = "Microsoft.AspNetCore.Mvc.Core",
             ["Microsoft.AspNetCore.Mvc.HttpOptionsAttribute"] = "Microsoft.AspNetCore.Mvc.Core",
-            ["Microsoft.AspNetCore.Mvc.RazorPages.PageModel"] = "Microsoft.AspNetCore.Mvc.RazorPages"
+            ["Microsoft.AspNetCore.Mvc.RazorPages.PageModel"] = "Microsoft.AspNetCore.Mvc.RazorPages",
+            ["Microsoft.AspNetCore.Mvc.RazorPages.NonHandlerAttribute"] = "Microsoft.AspNetCore.Mvc.RazorPages"
         };
 
     private static readonly IReadOnlyDictionary<string, string> HttpAttributeMethods =
@@ -142,12 +144,37 @@ internal static class RazorSemanticModelBindingExtractor
             .OrderBy(property => property.SpanStart))
         {
             if (model.GetDeclaredSymbol(propertySyntax) is not IPropertySymbol property
-                || property.ContainingType is null
-                || !InheritsTrusted(property.ContainingType, "Microsoft.AspNetCore.Mvc.RazorPages.PageModel")
-                || TrustedAttribute(property, "Microsoft.AspNetCore.Mvc.BindPropertyAttribute") is not AttributeData bindProperty)
+                || property.ContainingType is null)
             {
                 continue;
             }
+            var bindPropertyShape = AttributeByMetadataName(property, "Microsoft.AspNetCore.Mvc.BindPropertyAttribute");
+            if (bindPropertyShape is null)
+            {
+                continue;
+            }
+            var trustedPageModel = InheritsTrusted(property.ContainingType, "Microsoft.AspNetCore.Mvc.RazorPages.PageModel");
+            var trustedBindProperty = IsTrustedMetadataType(bindPropertyShape.AttributeClass, "Microsoft.AspNetCore.Mvc.BindPropertyAttribute");
+            if (!trustedPageModel || !trustedBindProperty)
+            {
+                if (HasUntrustedFrameworkOwnerShape(property.ContainingType)
+                    || (trustedPageModel && !trustedBindProperty))
+                {
+                    AddGapOrCount(
+                        projectPath,
+                        filePath,
+                        propertySyntax,
+                        "untrusted-framework-owner",
+                        "RazorFrameworkIdentityUnavailable",
+                        property,
+                        property.ContainingType,
+                        ref gapCount,
+                        ref truncatedGaps,
+                        gaps);
+                }
+                continue;
+            }
+            var bindProperty = bindPropertyShape;
 
             if (!IsEligibleProperty(property))
             {
@@ -168,7 +195,7 @@ internal static class RazorSemanticModelBindingExtractor
                 propertySyntax,
                 "razor-page-property",
                 "bind-property",
-                property,
+                property.ContainingType,
                 parameter: null,
                 property.ContainingType,
                 property,
@@ -205,9 +232,7 @@ internal static class RazorSemanticModelBindingExtractor
         List<SemanticFactCandidate> facts,
         List<SemanticFactCandidate> gaps)
     {
-        var properties = modelType.GetMembers().OfType<IPropertySymbol>()
-            .OrderBy(property => property.MetadataName, StringComparer.Ordinal)
-            .ToArray();
+        var properties = EffectiveModelProperties(modelType);
         if (properties.Length == 0)
         {
             AddGapOrCount(projectPath, filePath, evidenceNode, bindingKind, "RazorBindingPropertyUnavailable", owner, modelType, ref gapCount, ref truncatedGaps, gaps);
@@ -316,14 +341,40 @@ internal static class RazorSemanticModelBindingExtractor
         }
         if (InheritsTrusted(method.ContainingType, "Microsoft.AspNetCore.Mvc.ControllerBase"))
         {
-            return TrustedAttribute(method, "Microsoft.AspNetCore.Mvc.NonActionAttribute") is null
+            return TrustedAttribute(method.ContainingType, "Microsoft.AspNetCore.Mvc.NonControllerAttribute") is null
+                && TrustedAttribute(method, "Microsoft.AspNetCore.Mvc.NonActionAttribute") is null
                 ? "mvc-action-parameter"
                 : null;
         }
         return InheritsTrusted(method.ContainingType, "Microsoft.AspNetCore.Mvc.RazorPages.PageModel")
+            && TrustedAttribute(method, "Microsoft.AspNetCore.Mvc.RazorPages.NonHandlerAttribute") is null
             && HandlerHttpMethods(method.Name).Length > 0
             ? "razor-page-handler-parameter"
             : null;
+    }
+
+    private static IPropertySymbol[] EffectiveModelProperties(INamedTypeSymbol modelType)
+    {
+        var properties = new List<IPropertySymbol>();
+        var seenNames = new HashSet<string>(StringComparer.Ordinal);
+        for (var current = modelType;
+            current is not null && current.Locations.Any(location => location.IsInSource);
+            current = current.BaseType)
+        {
+            foreach (var property in current.GetMembers().OfType<IPropertySymbol>()
+                .OrderBy(candidate => candidate.MetadataName, StringComparer.Ordinal)
+                .ThenBy(candidate => candidate.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), StringComparer.Ordinal))
+            {
+                if (seenNames.Add(property.MetadataName))
+                {
+                    properties.Add(property);
+                }
+            }
+        }
+        return properties
+            .OrderBy(property => property.MetadataName, StringComparer.Ordinal)
+            .ThenBy(property => property.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), StringComparer.Ordinal)
+            .ToArray();
     }
 
     private static bool IsEligibleProperty(IPropertySymbol property) =>
@@ -410,6 +461,10 @@ internal static class RazorSemanticModelBindingExtractor
 
     private static AttributeData? TrustedAttribute(ISymbol symbol, string metadataName) =>
         symbol.GetAttributes().FirstOrDefault(attribute => IsTrustedMetadataType(attribute.AttributeClass, metadataName));
+
+    private static AttributeData? AttributeByMetadataName(ISymbol symbol, string metadataName) =>
+        symbol.GetAttributes().FirstOrDefault(attribute =>
+            string.Equals(MetadataName(attribute.AttributeClass), metadataName, StringComparison.Ordinal));
 
     private static bool IsTrustedMetadataType(INamedTypeSymbol? type, string metadataName)
     {
