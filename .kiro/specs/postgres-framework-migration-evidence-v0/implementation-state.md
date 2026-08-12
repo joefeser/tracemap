@@ -98,10 +98,10 @@ under a separately specified contract.
 Generic consumer audit validation on
 `codex/framework-migration-export-audit-v0`:
 
-- Focused framework migration consumer audit tests: 4/4 passed.
+- Focused framework migration consumer audit tests: 5/5 passed.
 - Focused neighboring consumer and rule-catalog tests: 169/169 passed.
 - Full .NET solution build: passed with 0 warnings and 0 errors.
-- Full .NET solution test: 1,441/1,441 passed.
+- Full .NET solution test: 1,442/1,442 passed.
 - Static HTML valid/invalid metadata projection, Markdown count-only output,
   single/combined snapshot diff gaps, vault omission gaps, and evidence-docs
   omission gaps are covered with protected-value assertions.
