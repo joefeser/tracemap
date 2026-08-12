@@ -12,12 +12,17 @@ Issue: #517
       non-claim boundaries.
 - [x] Separate direct mapping from deferred AutoMapper/Mapster/runtime mapping.
 - [x] Record implementation ordering and validation requirements.
-- [ ] Complete exact-head review and ACK for this spec-only PR.
+- [x] Complete an exact-head read-only Kiro advisory review and disposition its
+      blocking/important findings in the specification.
+- [ ] Complete hosted review and ACK for this spec-only PR.
 
 ## PR 1: Semantic Razor Model-Binding Producer
 
-- [ ] Pin test-only ASP.NET Core metadata versions, exact assembly/type/
-      attribute identities, and public-key-token or equivalent admission.
+- [ ] Add a pinned test dependency/shared-framework metadata reference that
+      supplies real signed ASP.NET Core symbols under locked restore; record
+      its version as fixture provenance only.
+- [ ] Pin the closed assembly-name/public-key-token/type/member/attribute
+      allowlist; keep source-declared and unsigned framework shapes negative.
 - [ ] Emit Tier1 semantic `RazorModelBindingTarget` evidence for admitted MVC
       action and Razor Page handler parameter properties across files/partials.
 - [ ] Emit canonical owner, parameter, model type, and property roles with a
@@ -26,6 +31,9 @@ Issue: #517
       external-unavailable, ambiguous, and forged framework shapes.
 - [ ] Reconcile semantic rows with syntax fallback without duplicate hidden
       winners or evidence-tier inflation.
+- [ ] Emit one row per owner/parameter/property binding source with sorted,
+      bounded HTTP-method metadata; document the review-tier Tier1/Tier3
+      reconciliation tuple.
 - [ ] Add same-name cross-assembly, partial, overload/attribute, source-
       lookalike, semantic-unavailable, span, property-schema, catalog, storage,
       and file-order regressions.
@@ -36,14 +44,16 @@ Issue: #517
 - [ ] Emit exact RHS-property -> LHS-property facts for simple assignments.
 - [ ] Emit exact source-property -> initialized-target-property facts for
       object initializers and LINQ projection initializers.
-- [ ] Decide constructor forwarding from current parameter-flow evidence;
-      implement only if both exact hops fit the same contract, otherwise defer.
 - [ ] Unwrap only bounded identity-preserving syntax/conversions.
 - [ ] Fail closed for transforming/dynamic/ambiguous/unsupported shapes without
       retaining expressions or protected digests.
 - [ ] Add direction, collision, shadowing, projection, partial-build,
       generated/excluded-source, determinism, catalog, storage, and generic-
       reducer exclusion regressions.
+- [ ] Define per-method/per-file bounds and emit an aggregated truncation gap.
+- [ ] Prove the generic reducer explicitly excludes both new fact families and
+      gap rules, preserves existing output, and cannot cross its fan-out
+      threshold because these facts are present.
 
 ## PR 3: Exact-ID Property-Flow Composition
 
@@ -55,6 +65,10 @@ Issue: #517
       facts; never reverse or infer them by name.
 - [ ] Keep syntax/convention/same-name/alias-only evidence review-tier and emit
       explicit ambiguity/identity gaps.
+- [ ] Order Tier1 exact candidates before bounded selection; emit truncation or
+      fallback-suppression gaps instead of silently displacing existing rows.
+- [ ] Keep v0 classifications unchanged unless a separately recorded report-
+      compatibility decision and golden regression authorizes promotion.
 - [ ] Attach existing route/service/query/data context only after a selected
       exact property trail reaches it.
 - [ ] Test cross-assembly collisions, ambiguous endpoints/models, broad route
@@ -64,11 +78,14 @@ Issue: #517
 ## PR 4: Consumer and Public-Safe Validation
 
 - [ ] Audit NDJSON, SQLite, combine, Markdown, snapshot diff, reducer, property-
-      flow, docs/vault, evidence-pack, explorer, and release-review behavior.
+      flow, docs/vault, evidence-pack, explorer, release review, rule-catalog
+      validators, demo summaries/site refresh fixtures, and
+      `docs/VALIDATION.md` behavior.
 - [ ] Preserve rule/tier/span/commit/extractor/coverage/support IDs/limitations
       or emit documented omission/compatibility gaps.
-- [ ] Add a small synthetic public-safe MVC/Razor fixture with direct mapping
-      and negative collision/dynamic cases.
+- [ ] Add a small public-safe MVC/Razor fixture backed by real signed test
+      metadata, plus source-lookalike, collision, dynamic, and direction
+      negatives.
 - [ ] Run focused Razor/semantic/property-flow/storage/combine/consumer tests.
 - [ ] Run `dotnet build src/dotnet/TraceMap.sln`.
 - [ ] Run `dotnet test src/dotnet/TraceMap.sln`.
@@ -84,3 +101,5 @@ Issue: #517
 - Runtime Razor/model binding, serialization, validation, browser, HTTP, DI,
   mapper execution, persistence, database, and telemetry evidence.
 - Persisted derived property-flow rows and whole-application inventory UI.
+- Constructor forwarding and legacy `System.Web.Mvc` until each has a separate
+  exact identity/flow contract.
