@@ -37,7 +37,16 @@ public sealed class FrameworkMigrationConsumerAuditTests
         var output = Path.Combine(temp.Path, "explorer");
         Directory.CreateDirectory(input);
         var manifest = Manifest('b');
-        var facts = FrameworkFacts(manifest).Append(InvalidFrameworkOperation(manifest)).ToArray();
+        var validOperation = FrameworkFacts(manifest).Single(fact => fact.RuleId == RuleIds.DatabaseFrameworkMigrationOperation);
+        var invalidFacts = new[]
+        {
+            InvalidFrameworkOperation(manifest),
+            validOperation with { FactId = "invalid-tier", EvidenceTier = EvidenceTiers.Tier4Unknown },
+            validOperation with { FactId = "invalid-commit", CommitSha = new string('f', 40) },
+            validOperation with { FactId = "invalid-span", Evidence = validOperation.Evidence with { StartLine = 0 } },
+            validOperation with { FactId = "invalid-extractor", Evidence = validOperation.Evidence with { ExtractorVersion = "framework-migration/9.9.9" } }
+        };
+        var facts = FrameworkFacts(manifest).Concat(invalidFacts).ToArray();
         await ManifestWriter.WriteAsync(Path.Combine(input, "scan-manifest.json"), manifest);
         await JsonlFactWriter.WriteAsync(Path.Combine(input, "facts.ndjson"), facts);
         await File.WriteAllTextAsync(Path.Combine(input, "index.sqlite"), "fixture");
@@ -53,10 +62,15 @@ public sealed class FrameworkMigrationConsumerAuditTests
         var gapRow = Assert.Single(result.Data.EvidenceRows, row => row.RuleId == RuleIds.DatabaseFrameworkMigrationGap);
         Assert.Equal("reduced-static-migration", gapRow.CoverageLabel);
         Assert.Equal([GapLimitation], gapRow.Limitations);
-        Assert.Contains(result.Data.Gaps, gap =>
-            gap.RuleId == StaticHtmlEvidenceExplorer.FrameworkMigrationMetadataUnavailableRuleId
-            && gap.SupportIds.Contains(InvalidFrameworkOperation(manifest).FactId, StringComparer.Ordinal));
-        Assert.DoesNotContain(result.Data.EvidenceRows, row => row.SupportId == InvalidFrameworkOperation(manifest).FactId);
+        var metadataGaps = result.Data.Gaps
+            .Where(gap => gap.RuleId == StaticHtmlEvidenceExplorer.FrameworkMigrationMetadataUnavailableRuleId)
+            .ToArray();
+        Assert.Equal(invalidFacts.Length, metadataGaps.Length);
+        Assert.All(invalidFacts, invalid =>
+        {
+            Assert.Contains(metadataGaps, gap => gap.SupportIds.Contains(invalid.FactId, StringComparer.Ordinal));
+            Assert.DoesNotContain(result.Data.EvidenceRows, row => row.SupportId == invalid.FactId);
+        });
 
         var generated = string.Join('\n', Directory.EnumerateFiles(output, "*", SearchOption.AllDirectories).Select(File.ReadAllText));
         Assert.DoesNotContain(ProtectedSymbol, generated, StringComparison.Ordinal);
@@ -105,6 +119,15 @@ public sealed class FrameworkMigrationConsumerAuditTests
         var combinedAfter = await CombinedIndexAsync(Path.Combine(temp.Path, "combined-after"), afterManifest);
         var combined = await SnapshotDiffReporter.BuildReportAsync(new SnapshotDiffOptions(combinedBefore, combinedAfter, Path.Combine(temp.Path, "combined")));
         AssertFrameworkSnapshotGap(combined);
+
+        var scopedBefore = await CombinedIndexWithUnselectedFrameworkAsync(Path.Combine(temp.Path, "scoped-before"), Manifest('1'));
+        var scopedAfter = await CombinedIndexWithUnselectedFrameworkAsync(Path.Combine(temp.Path, "scoped-after"), Manifest('2'));
+        var scoped = await SnapshotDiffReporter.BuildReportAsync(new SnapshotDiffOptions(
+            scopedBefore,
+            scopedAfter,
+            Path.Combine(temp.Path, "scoped"),
+            Source: "selected"));
+        Assert.DoesNotContain(scoped.Gaps, gap => gap.RuleId == "snapshot.diff.framework-migration-unsupported.v1");
     }
 
     private static void AssertFrameworkSnapshotGap(SnapshotDiffDocument report)
@@ -123,6 +146,28 @@ public sealed class FrameworkMigrationConsumerAuditTests
         var combined = Path.Combine(directory, "combined.sqlite");
         SqliteIndexWriter.Write(index, manifest, FrameworkFacts(manifest));
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["framework"]));
+        return combined;
+    }
+
+    private static async Task<string> CombinedIndexWithUnselectedFrameworkAsync(string directory, ScanManifest frameworkManifest)
+    {
+        Directory.CreateDirectory(directory);
+        var selectedManifest = frameworkManifest with
+        {
+            ScanId = $"selected-{frameworkManifest.ScanId}",
+            RepoName = "selected-repo",
+            ScanRootPathHash = FactFactory.Hash("selected-repo", 32),
+            GitRootHash = FactFactory.Hash("selected-repo-git", 32)
+        };
+        var selectedIndex = Path.Combine(directory, "selected.sqlite");
+        var frameworkIndex = Path.Combine(directory, "framework.sqlite");
+        var combined = Path.Combine(directory, "combined.sqlite");
+        SqliteIndexWriter.Write(selectedIndex, selectedManifest, []);
+        SqliteIndexWriter.Write(frameworkIndex, frameworkManifest, FrameworkFacts(frameworkManifest));
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [selectedIndex, frameworkIndex],
+            combined,
+            ["selected", "unselected-framework"]));
         return combined;
     }
 
@@ -176,8 +221,8 @@ public sealed class FrameworkMigrationConsumerAuditTests
                 line,
                 line,
                 FactFactory.Hash($"framework:{line}", 32),
-                "framework-migration",
-                "framework-migration/0.1.0"),
+                "FrameworkMigrationEvidenceExtractor",
+                ScannerVersions.FrameworkMigrationEvidenceExtractor),
             sourceSymbol: ProtectedSymbol,
             properties: new SortedDictionary<string, string>(
                 properties.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),

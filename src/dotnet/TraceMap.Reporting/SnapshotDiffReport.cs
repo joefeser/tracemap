@@ -304,11 +304,13 @@ public static class SnapshotDiffReporter
         var beforeFrameworkMigration = await ReleaseReviewReporter.ReadFrameworkMigrationEvidencePresenceAsync(
             options.BeforePath,
             before.Kind,
-            cancellationToken);
+            cancellationToken,
+            options.Source);
         var afterFrameworkMigration = await ReleaseReviewReporter.ReadFrameworkMigrationEvidencePresenceAsync(
             options.AfterPath,
             after.Kind,
-            cancellationToken);
+            cancellationToken,
+            options.Source);
         if ((scopes.Contains("surfaces", StringComparer.Ordinal) || scopes.Contains("gaps", StringComparer.Ordinal))
             && (beforeFrameworkMigration.FactCount > 0 || afterFrameworkMigration.FactCount > 0))
         {
