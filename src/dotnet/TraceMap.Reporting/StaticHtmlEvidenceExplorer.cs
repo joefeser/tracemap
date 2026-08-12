@@ -552,7 +552,7 @@ public static partial class StaticHtmlEvidenceExplorer
                          .ThenBy(fact => fact.FactId, StringComparer.Ordinal))
             {
                 var evidence = fact.Evidence;
-                var frameworkMetadata = FrameworkMigrationMetadata(fact);
+                var frameworkMetadata = FrameworkMigrationMetadata(fact, sourceCommitSha);
                 if (frameworkMetadata.IsFrameworkMigration && !frameworkMetadata.IsValid)
                 {
                     gaps.Add(CreateGap(
@@ -893,20 +893,25 @@ public static partial class StaticHtmlEvidenceExplorer
         return facts;
     }
 
-    private static (bool IsFrameworkMigration, bool IsValid, string? CoverageLabel, string? Limitation) FrameworkMigrationMetadata(CodeFact fact)
+    private static (bool IsFrameworkMigration, bool IsValid, string? CoverageLabel, string? Limitation) FrameworkMigrationMetadata(
+        CodeFact fact,
+        string? expectedCommitSha)
     {
         var expected = fact.RuleId switch
         {
             RuleIds.DatabaseFrameworkMigrationDeclaration => (
                 FactTypes.FrameworkMigrationDeclared,
+                EvidenceTiers.Tier1Semantic,
                 "bounded-static-migration",
                 "Static framework migration declaration only; execution, ordering, provider selection, generated SQL, database state, rollback, and safety are not proven."),
             RuleIds.DatabaseFrameworkMigrationOperation => (
                 FactTypes.FrameworkMigrationOperationCandidate,
+                EvidenceTiers.Tier1Semantic,
                 "bounded-static-migration",
                 "Static framework migration operation candidate only; execution, ordering, provider selection, generated SQL, database state, rollback, reversibility, and safety are not proven."),
             RuleIds.DatabaseFrameworkMigrationGap => (
                 FactTypes.AnalysisGap,
+                EvidenceTiers.Tier4Unknown,
                 "reduced-static-migration",
                 "Static framework migration coverage is reduced; omitted protected content and runtime behavior were not analyzed."),
             _ => default
@@ -918,9 +923,26 @@ public static partial class StaticHtmlEvidenceExplorer
 
         var coverage = fact.Properties.GetValueOrDefault("coverageLabel");
         var limitation = fact.Properties.GetValueOrDefault("limitations");
+        var evidence = fact.Evidence;
+        var expectedExtractor = fact.RuleId == RuleIds.DatabaseFrameworkMigrationGap
+            ? evidence?.ExtractorVersion is ScannerVersions.FrameworkMigrationEvidenceExtractor or ScannerVersions.FrameworkMigrationSyntaxFallbackExtractor
+            : evidence?.ExtractorVersion == ScannerVersions.FrameworkMigrationEvidenceExtractor;
+        var expectedExtractorId = fact.RuleId == RuleIds.DatabaseFrameworkMigrationGap
+            ? evidence?.ExtractorId is "FrameworkMigrationEvidenceExtractor" or "FrameworkMigrationSyntaxFallbackExtractor"
+            : evidence?.ExtractorId == "FrameworkMigrationEvidenceExtractor";
         var valid = fact.FactType == expected.Item1
-            && coverage == expected.Item2
-            && limitation == expected.Item3;
+            && fact.EvidenceTier == expected.Item2
+            && coverage == expected.Item3
+            && limitation == expected.Item4
+            && IsUsableCommitSha(fact.CommitSha)
+            && IsUsableCommitSha(expectedCommitSha)
+            && fact.CommitSha.Equals(expectedCommitSha, StringComparison.OrdinalIgnoreCase)
+            && evidence is not null
+            && !string.IsNullOrWhiteSpace(evidence.FilePath)
+            && evidence.StartLine > 0
+            && evidence.EndLine >= evidence.StartLine
+            && expectedExtractor
+            && expectedExtractorId;
         return (true, valid, valid ? coverage : null, valid ? limitation : null);
     }
 
