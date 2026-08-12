@@ -55,18 +55,18 @@
 
 ## PR 2 — Bounded Composition
 
-- [ ] Inventory exact database design-review and release-review seams before
+- [x] Inventory exact database design-review and release-review seams before
       changing either consumer, including the fact-type/property allowlists and
       object-kind mapping in `DatabaseDesignReviewReport.cs`.
-- [ ] Display generic framework migration evidence without PostgreSQL claims.
+- [x] Display generic framework migration evidence without PostgreSQL claims.
 - [ ] Correlate only operations admitted by a separately specified
       provider-explicit contract with one exact bounded same-source PostgreSQL
       identity; schema-unspecified identity remains unlinked.
-- [ ] Preserve upstream rule ID, tier, file span, commit SHA, extractor
+- [x] Preserve upstream rule ID, tier, file span, commit SHA, extractor
       version, coverage, supporting fact IDs, and limitations.
-- [ ] Emit explicit provider-unknown, identity-unavailable, ambiguous,
+- [x] Emit explicit provider-unknown, identity-unavailable, ambiguous,
       unsupported, and reduced-coverage gaps.
-- [ ] Prove no output claims application, ordering, rollback, generated SQL,
+- [x] Prove no output claims application, ordering, rollback, generated SQL,
       runtime provider, database state, compatibility, safety, or approval.
 
 ## Validation
