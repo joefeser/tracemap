@@ -768,7 +768,7 @@ public static class EvidenceDocsExporter
                 "gap",
                 frameworkMigrationFacts.Select(fact => fact.Source).DistinctBy(source => source.SourceId).ToArray(),
                 frameworkMigrationFacts.Select(fact => fact.FactId).ToArray(),
-                "hidden"));
+                MinClaim(frameworkMigrationFacts.Select(fact => fact.Source.ClaimLevel))));
         }
 
         if (input.Kind == "single-index")

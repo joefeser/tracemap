@@ -3,6 +3,7 @@ using TraceMap.Combine;
 using TraceMap.Core;
 using TraceMap.Reporting;
 using TraceMap.Storage;
+using System.Text.Json;
 
 namespace TraceMap.Tests;
 
@@ -117,6 +118,56 @@ public sealed class FrameworkMigrationConsumerAuditTests
     }
 
     [Fact]
+    public async Task Public_claim_filter_preserves_framework_omission_gaps_and_supporting_ids()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest('9');
+        var combined = await CombinedIndexAsync(temp.Path, manifest);
+        var sourceId = await ReadSourceIdAsync(combined);
+        var vaultCatalog = Path.Combine(temp.Path, "vault-claims.json");
+        await File.WriteAllTextAsync(vaultCatalog, JsonSerializer.Serialize(new
+        {
+            schemaVersion = "source-claim-catalog.v1",
+            sources = new[] { new { sourceIndexId = sourceId, claimLevel = "public-safe", proofId = "proof-framework" } }
+        }));
+        var docsCatalog = Path.Combine(temp.Path, "docs-claims.json");
+        await File.WriteAllTextAsync(docsCatalog, JsonSerializer.Serialize(new
+        {
+            schemaVersion = "source-claim-catalog.v1",
+            entries = new[] { new
+            {
+                sourceIdentity = new { kind = "combined-source", sourceIndexId = sourceId, commitSha = manifest.CommitSha },
+                claimLevel = "public-safe",
+                proofId = "proof-framework",
+                proofPathCategory = "reviewed-public-fixture",
+                reviewer = "reviewer",
+                reviewedAt = "2026-08",
+                limitations = Array.Empty<string>()
+            } }
+        }));
+
+        var vault = await VaultExporter.ExportAsync(new VaultExportOptions(
+            combined,
+            Path.Combine(temp.Path, "public-vault"),
+            SourceClaimCatalogPath: vaultCatalog,
+            MinimumClaimLevel: "public-safe",
+            Date: "2026-08"));
+        var vaultGap = Assert.Single(vault.Graph.Gaps, gap => gap.RuleId == "vault-export.gap.framework-migration-consumer-unsupported.v1");
+        Assert.Equal("public-safe", vaultGap.ClaimLevel);
+        Assert.NotEmpty(vaultGap.SupportingFactIds ?? []);
+
+        var docs = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
+            combined,
+            Path.Combine(temp.Path, "public-docs"),
+            SourceClaimCatalogPath: docsCatalog,
+            MinimumClaimLevel: "public-safe",
+            Date: "2026-08"));
+        var docsGap = Assert.Single(docs.Chunks, chunk => chunk.RuleIds.Contains("docs-export.gap.framework-migration-consumer-unsupported.v1", StringComparer.Ordinal));
+        Assert.Equal("public-safe", docsGap.ClaimLevel);
+        Assert.NotEmpty(docsGap.SupportingIds);
+    }
+
+    [Fact]
     public async Task Snapshot_diff_records_framework_projection_gap_for_single_and_combined_indexes()
     {
         using var temp = new TempDirectory();
@@ -162,6 +213,15 @@ public sealed class FrameworkMigrationConsumerAuditTests
         SqliteIndexWriter.Write(index, manifest, FrameworkFacts(manifest));
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["framework"]));
         return combined;
+    }
+
+    private static async Task<string> ReadSourceIdAsync(string combined)
+    {
+        await using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={combined};Mode=ReadOnly");
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "select source_index_id from index_sources where label = 'framework';";
+        return Assert.IsType<string>(await command.ExecuteScalarAsync());
     }
 
     private static async Task<string> CombinedIndexWithUnselectedFrameworkAsync(string directory, ScanManifest frameworkManifest)
