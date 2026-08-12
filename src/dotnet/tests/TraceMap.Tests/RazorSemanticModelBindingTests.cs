@@ -79,6 +79,12 @@ public sealed class RazorSemanticModelBindingTests
             {
                 public string LocalValue { get; set; } = "";
             }
+
+            public sealed class ConstructorOnlyInput
+            {
+                public ConstructorOnlyInput(string value) => Value = value;
+                public string Value { get; set; }
+            }
             """);
         File.WriteAllText(Path.Combine(project, "InputModel.Part2.cs"), """
             namespace WebSample;
@@ -110,6 +116,7 @@ public sealed class RazorSemanticModelBindingTests
                 public IActionResult SaveExternal(string input) => Ok();
                 public IActionResult SaveExternalBase(ExternalBaseInput input) => Ok();
                 public IActionResult SaveService([FromServices] InputModel service) => Ok();
+                public IActionResult SaveConstructorOnly([FromForm] ConstructorOnlyInput input) => Ok();
                 public partial IActionResult PartialSave(InputModel input);
                 public partial IActionResult PartialSave(InputModel input) => Ok();
 
@@ -131,6 +138,14 @@ public sealed class RazorSemanticModelBindingTests
 
                 [NonHandler]
                 public void OnPostIgnored(InputModel input) { }
+            }
+
+            public abstract class AbstractOrdersPage : PageModel
+            {
+                [BindProperty]
+                public string AbstractBound { get; set; } = "";
+
+                public void OnPostAbstract(InputModel input) { }
             }
 
             [NonController]
@@ -216,6 +231,11 @@ public sealed class RazorSemanticModelBindingTests
             }
 
             public sealed class LeafActionController : MiddleActionController { }
+
+            public sealed class HidingActionController : RootActionController
+            {
+                public new IActionResult LayeredAction(InputModel input) => Ok();
+            }
             """);
 
         var first = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap-first")));
@@ -298,6 +318,8 @@ public sealed class RazorSemanticModelBindingTests
         Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("SaveInheritedHidden", StringComparison.Ordinal) == true);
         Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("IgnoreInherited", StringComparison.Ordinal) == true);
         Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("SaveService", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("SaveConstructorOnly", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("AbstractOrdersPage", StringComparison.Ordinal) == true);
         Assert.DoesNotContain(semantic, fact => fact.Properties.GetValueOrDefault("controllerName") == "ExcludedDerived");
         Assert.Contains(semantic, fact => fact.Properties.GetValueOrDefault("actionName") == "InheritedAction"
             && fact.Properties.GetValueOrDefault("controllerName") == "DerivedAction"
@@ -309,6 +331,8 @@ public sealed class RazorSemanticModelBindingTests
         Assert.Equal(3, semantic.Count(fact => fact.Properties.GetValueOrDefault("actionName") == "PartialSave"));
         Assert.Equal(3, semantic.Count(fact => fact.Properties.GetValueOrDefault("actionName") == "LayeredAction"
             && fact.Properties.GetValueOrDefault("controllerName") == "LeafAction"));
+        Assert.Equal(3, semantic.Count(fact => fact.Properties.GetValueOrDefault("actionName") == "LayeredAction"
+            && fact.Properties.GetValueOrDefault("controllerName") == "HidingAction"));
         Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("SaveRecord", StringComparison.Ordinal) == true);
         Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("OnPostIgnored", StringComparison.Ordinal) == true);
         Assert.DoesNotContain(semantic, fact => fact.Properties.GetValueOrDefault("controllerName") is "Internal" or "Abstract" or "Nested" or "Generic");
@@ -325,6 +349,10 @@ public sealed class RazorSemanticModelBindingTests
         Assert.Contains(gaps, gap => gap.Properties.GetValueOrDefault("typeState") == "external-unavailable");
         Assert.Contains(gaps, gap => gap.Properties.GetValueOrDefault("typeState") == "unsupported"
             && gap.Properties["gapKind"] == "RazorBindingTypeUnavailable");
+        Assert.Contains(gaps, gap => gap.Properties.GetValueOrDefault("typeState") == "constructor-unavailable"
+            && gap.Properties["gapKind"] == "RazorBindingTypeUnavailable");
+        Assert.Contains(gaps, gap => gap.Properties.GetValueOrDefault("ownerState") == "page-model-type-not-discoverable"
+            && gap.Properties["gapKind"] == "RazorEndpointOwnerUnavailable");
         Assert.Contains(gaps, gap => gap.Properties["gapKind"] == "RazorBindingExternalBaseUnavailable"
             && gap.Properties.GetValueOrDefault("typeState") == "external-base-properties-unavailable");
         Assert.True(gaps.Count(gap => gap.Properties["gapKind"] == "RazorEndpointOwnerUnavailable"
