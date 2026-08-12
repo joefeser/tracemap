@@ -211,6 +211,13 @@ deduplicated partial action definition/implementation pairs before fact-bound
 accounting. Focused fixtures assert excluded properties, one effective layered
 action, and one partial action expansion rather than relying on aggregate counts.
 
+The following exact-head pass closed abstract/non-discoverable PageModel owner
+admission for handlers and bound properties, enforced public parameterless
+construction for non-body complex model binding, and treated a same-signature
+`new` declaration as an inherited-action hiding boundary. Each rejected surface
+now emits no Tier1 target and preserves a categorical coverage gap where the
+owner or model boundary was otherwise visible.
+
 ## Deferred Work
 
 - PR 1 now emits compiler-resolved MVC action parameter, Razor Page handler

@@ -71,6 +71,25 @@ internal static class RazorSemanticModelBindingExtractor
                 continue;
             }
 
+            if (InheritsTrusted(method.ContainingType, "Microsoft.AspNetCore.Mvc.RazorPages.PageModel")
+                && !IsDiscoverablePageModel(method.ContainingType))
+            {
+                AddGapOrCount(
+                    projectPath,
+                    filePath,
+                    methodSyntax,
+                    "razor-page-handler-owner",
+                    "RazorEndpointOwnerUnavailable",
+                    method,
+                    method.ContainingType,
+                    ref gapCount,
+                    ref truncatedGaps,
+                    gaps,
+                    stateKey: "ownerState",
+                    stateValue: "page-model-type-not-discoverable");
+                continue;
+            }
+
             var controllerOwners = InheritsTrusted(method.ContainingType, "Microsoft.AspNetCore.Mvc.ControllerBase")
                 ? EffectiveControllerOwners(method, model.Compilation)
                 : [];
@@ -188,6 +207,23 @@ internal static class RazorSemanticModelBindingExtractor
                     AddGapOrCount(projectPath, filePath, parameterSyntax, ownerKind, "RazorBindingTypeUnavailable", parameter, parameter.Type, ref gapCount, ref truncatedGaps, gaps);
                     continue;
                 }
+                if (source != "body" && !HasPublicParameterlessConstruction(modelType))
+                {
+                    AddGapOrCount(
+                        projectPath,
+                        filePath,
+                        parameterSyntax,
+                        ownerKind,
+                        "RazorBindingTypeUnavailable",
+                        parameter,
+                        modelType,
+                        ref gapCount,
+                        ref truncatedGaps,
+                        gaps,
+                        stateKey: "typeState",
+                        stateValue: "constructor-unavailable");
+                    continue;
+                }
 
                 var owners = ownerKind == "mvc-action-parameter" ? controllerOwners : [method];
                 foreach (var owner in owners)
@@ -246,6 +282,23 @@ internal static class RazorSemanticModelBindingExtractor
                         ref truncatedGaps,
                         gaps);
                 }
+                continue;
+            }
+            if (!IsDiscoverablePageModel(property.ContainingType))
+            {
+                AddGapOrCount(
+                    projectPath,
+                    filePath,
+                    propertySyntax,
+                    "razor-page-property",
+                    "RazorEndpointOwnerUnavailable",
+                    property,
+                    property.ContainingType,
+                    ref gapCount,
+                    ref truncatedGaps,
+                    gaps,
+                    stateKey: "ownerState",
+                    stateValue: "page-model-type-not-discoverable");
                 continue;
             }
             var bindProperty = bindPropertyShape;
@@ -492,6 +545,19 @@ internal static class RazorSemanticModelBindingExtractor
         && type.ContainingType is null
         && !type.TypeArguments.Any(argument => argument.TypeKind == TypeKind.TypeParameter);
 
+    private static bool IsDiscoverablePageModel(INamedTypeSymbol type) =>
+        type.TypeKind == TypeKind.Class
+        && !type.IsAbstract
+        && type.DeclaredAccessibility == Accessibility.Public
+        && type.ContainingType is null
+        && !type.TypeArguments.Any(argument => argument.TypeKind == TypeKind.TypeParameter);
+
+    private static bool HasPublicParameterlessConstruction(INamedTypeSymbol type) =>
+        type.TypeKind == TypeKind.Struct
+        || type.InstanceConstructors.Any(constructor =>
+            constructor.DeclaredAccessibility == Accessibility.Public
+            && constructor.Parameters.Length == 0);
+
     private static ISymbol[] EffectiveControllerOwners(IMethodSymbol method, Compilation compilation)
     {
         if (IsDiscoverableController(method.ContainingType))
@@ -521,7 +587,7 @@ internal static class RazorSemanticModelBindingExtractor
     {
         for (var current = candidate; current is not null && !SymbolEqualityComparer.Default.Equals(current, method.ContainingType); current = current.BaseType)
         {
-            if (current.GetMembers(method.Name).OfType<IMethodSymbol>().Any(member => Overrides(member, method)))
+            if (current.GetMembers(method.Name).OfType<IMethodSymbol>().Any(member => HasEffectiveSignature(member, method)))
             {
                 return true;
             }
@@ -529,17 +595,12 @@ internal static class RazorSemanticModelBindingExtractor
         return false;
     }
 
-    private static bool Overrides(IMethodSymbol candidate, IMethodSymbol expectedBase)
-    {
-        for (var current = candidate.OverriddenMethod; current is not null; current = current.OverriddenMethod)
-        {
-            if (SymbolEqualityComparer.Default.Equals(current, expectedBase))
-            {
-                return true;
-            }
-        }
-        return false;
-    }
+    private static bool HasEffectiveSignature(IMethodSymbol candidate, IMethodSymbol expectedBase) =>
+        candidate.Arity == expectedBase.Arity
+        && candidate.Parameters.Length == expectedBase.Parameters.Length
+        && candidate.Parameters.Zip(expectedBase.Parameters).All(pair =>
+            pair.First.RefKind == pair.Second.RefKind
+            && SymbolEqualityComparer.Default.Equals(pair.First.Type, pair.Second.Type));
 
     private static IEnumerable<INamedTypeSymbol> AllSourceTypes(INamespaceSymbol root)
     {
