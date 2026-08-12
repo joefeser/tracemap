@@ -15,7 +15,7 @@ public sealed class RazorSemanticModelBindingTests
         "ownerAssemblyName", "ownerAssemblyVersion", "ownerContainingSymbolId", "ownerFamily", "ownerSymbolId", "ownerSymbolKind",
         "pageModelName", "parameterAssemblyName", "parameterAssemblyVersion", "parameterContainingSymbolId", "parameterName",
         "parameterOrdinal", "parameterSource", "parameterSymbolId", "parameterSymbolKind", "propertyName", "propertyPath",
-        "propertyType", "reconciliationKeyVersion", "supportsGet", "targetAssemblyName", "targetAssemblyVersion",
+        "propertyType", "reconciliationProfileVersion", "supportsGet", "targetAssemblyName", "targetAssemblyVersion", "tier3ReconciliationState",
         "targetContainingSymbolId", "targetSymbolId", "targetSymbolKind", "uiFramework", "valueStored"
     };
 
@@ -113,7 +113,7 @@ public sealed class RazorSemanticModelBindingTests
                 public IActionResult SaveAmbiguous([FromBody, FromForm] InputModel input) => Ok();
                 public IActionResult SaveDynamic(dynamic input) => Ok();
                 public IActionResult SaveGeneric<T>(T input) => Ok();
-                public IActionResult SaveExternal(string input) => Ok();
+                public IActionResult SaveExternal(System.Exception input) => Ok();
                 public IActionResult SaveExternalBase(ExternalBaseInput input) => Ok();
                 public IActionResult SaveService([FromServices] InputModel service) => Ok();
                 public IActionResult SaveConstructorOnly([FromForm] ConstructorOnlyInput input) => Ok();
@@ -258,7 +258,10 @@ public sealed class RazorSemanticModelBindingTests
             Assert.Equal("adb9793829ddae60", fact.Properties["frameworkOwnerPublicKeyToken"]);
             Assert.NotEmpty(fact.Properties["limitations"]);
             Assert.Empty(fact.Properties.Keys.Except(TargetPropertySchema, StringComparer.Ordinal));
+            Assert.Equal("contextual-support-only-missing-canonical-identity", fact.Properties["tier3ReconciliationState"]);
         });
+        Assert.Contains(first.Manifest.KnownGaps, gap => gap.StartsWith("Semantic Razor model-binding coverage reduced:", StringComparison.Ordinal));
+        Assert.DoesNotContain("Roslyn semantic analysis reported a gap.", first.Manifest.KnownGaps);
         Assert.Contains(semantic, fact =>
             fact.Properties["bindingKind"] == "mvc-action-parameter"
             && fact.Properties["propertyName"] == "Name"
@@ -347,12 +350,13 @@ public sealed class RazorSemanticModelBindingTests
         Assert.Contains(gaps, gap => gap.Properties.GetValueOrDefault("typeState") == "dynamic");
         Assert.Contains(gaps, gap => gap.Properties.GetValueOrDefault("typeState") == "type-parameter");
         Assert.Contains(gaps, gap => gap.Properties.GetValueOrDefault("typeState") == "external-unavailable");
-        Assert.Contains(gaps, gap => gap.Properties.GetValueOrDefault("typeState") == "unsupported"
+        Assert.Contains(gaps, gap => gap.Properties.GetValueOrDefault("typeState") == "unsupported-record"
             && gap.Properties["gapKind"] == "RazorBindingTypeUnavailable");
         Assert.Contains(gaps, gap => gap.Properties.GetValueOrDefault("typeState") == "constructor-unavailable"
             && gap.Properties["gapKind"] == "RazorBindingTypeUnavailable");
         Assert.Contains(gaps, gap => gap.Properties.GetValueOrDefault("ownerState") == "page-model-type-not-discoverable"
             && gap.Properties["gapKind"] == "RazorEndpointOwnerUnavailable");
+
         Assert.Contains(gaps, gap => gap.Properties["gapKind"] == "RazorBindingExternalBaseUnavailable"
             && gap.Properties.GetValueOrDefault("typeState") == "external-base-properties-unavailable");
         Assert.True(gaps.Count(gap => gap.Properties["gapKind"] == "RazorEndpointOwnerUnavailable"
@@ -475,6 +479,7 @@ public sealed class RazorSemanticModelBindingTests
 
                 [HttpPost]
                 public IActionResult SaveB([FromBody] B::Shared.InputModel input) => Ok();
+
             }
             """);
 
@@ -488,6 +493,69 @@ public sealed class RazorSemanticModelBindingTests
         Assert.Equal(["ContractsA", "ContractsB"], targets.Select(fact => fact.Properties["modelTypeAssemblyName"]));
         Assert.Equal(2, targets.Select(fact => fact.Properties["modelTypeSymbolId"]).Distinct(StringComparer.Ordinal).Count());
         Assert.Equal(2, targets.Select(fact => fact.Properties["targetSymbolId"]).Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
+    public void Scan_distinguishes_terminal_unsupported_and_external_parameter_boundaries_without_failing_build()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Sample.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+              <ItemGroup><FrameworkReference Include="Microsoft.AspNetCore.App" /></ItemGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "Endpoints.cs"), """
+            using Microsoft.AspNetCore.Mvc;
+            namespace Sample;
+
+            public sealed class InputModel
+            {
+                public string Name { get; set; } = "";
+            }
+
+            public sealed class SampleController : ControllerBase
+            {
+                [HttpPost]
+                public IActionResult Save([FromBody] InputModel input) => Ok();
+                public IActionResult Scalars(int id, string query, System.Guid token) => Ok();
+                public IActionResult Collection(System.Collections.Generic.List<InputModel> input) => Ok();
+                public IActionResult External(System.Exception input) => Ok();
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+        var semantic = result.Facts.Where(fact => fact.RuleId == RuleIds.CSharpRazorSemanticModelBinding).ToArray();
+        var gaps = result.Facts.Where(fact => fact.RuleId == RuleIds.CSharpRazorSemanticModelBindingGap).ToArray();
+
+        Assert.Contains(semantic, fact => fact.SourceSymbol == "Save");
+        Assert.DoesNotContain(semantic, fact => fact.SourceSymbol == "Scalars");
+        Assert.DoesNotContain(gaps, gap => gap.Properties.GetValueOrDefault("scopeSymbolId")?.Contains("Scalars", StringComparison.Ordinal) == true);
+        Assert.Contains(gaps, gap => gap.Properties.GetValueOrDefault("scopeSymbolId")?.Contains("Collection", StringComparison.Ordinal) == true
+            && gap.Properties.GetValueOrDefault("typeState") == "unsupported-collection");
+        Assert.Contains(gaps, gap => gap.Properties.GetValueOrDefault("scopeSymbolId")?.Contains("External", StringComparison.Ordinal) == true
+            && gap.Properties.GetValueOrDefault("typeState") == "external-unavailable");
+        Assert.Equal("Succeeded", result.Manifest.BuildStatus);
+        Assert.Equal("Level1SemanticAnalysisReduced", result.Manifest.AnalysisLevel);
+        Assert.Contains("Semantic Razor model-binding coverage reduced: RazorBindingTypeUnavailable.", result.Manifest.KnownGaps);
+        Assert.DoesNotContain("Roslyn semantic analysis reported a gap.", result.Manifest.KnownGaps);
+
+        var tier3Save = Assert.Single(result.Facts, fact =>
+            fact.RuleId == RuleIds.RazorModelBinding
+            && fact.FactType == FactTypes.RazorModelBindingTarget
+            && fact.Properties.GetValueOrDefault("actionName") == "Save"
+            && fact.Properties.GetValueOrDefault("propertyName") == "Name");
+        var tier1Save = Assert.Single(semantic, fact =>
+            fact.Properties.GetValueOrDefault("actionName") == "Save"
+            && fact.Properties.GetValueOrDefault("propertyName") == "Name");
+        Assert.Equal("action-parameter", tier3Save.Properties["bindingKind"]);
+        Assert.Equal("mvc-action-parameter", tier1Save.Properties["bindingKind"]);
+        Assert.Equal(tier3Save.Properties["controllerName"], tier1Save.Properties["controllerName"]);
+        Assert.Equal(tier3Save.Properties["actionName"], tier1Save.Properties["actionName"]);
+        Assert.Equal(tier3Save.Properties["parameterName"], tier1Save.Properties["parameterName"]);
+        Assert.Equal(tier3Save.Properties["propertyName"], tier1Save.Properties["propertyName"]);
+        Assert.False(tier3Save.Properties.ContainsKey("ownerSymbolId"));
+        Assert.Equal("contextual-support-only-missing-canonical-identity", tier1Save.Properties["tier3ReconciliationState"]);
     }
 
     [Fact]
