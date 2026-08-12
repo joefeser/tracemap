@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.EntityFrameworkCore.Migrations;
@@ -7,6 +8,9 @@ namespace TraceMap.Tests;
 
 public sealed class FrameworkMigrationAdversarialRegressionTests
 {
+    private static readonly Lazy<ImmutableArray<MetadataReference>> PlatformReferenceCache =
+        new(CreatePlatformReferences);
+
     [Fact]
     public void Same_named_migrations_in_different_source_assemblies_keep_distinct_canonical_identity()
     {
@@ -245,9 +249,11 @@ public sealed class FrameworkMigrationAdversarialRegressionTests
             pair => pair.Key,
             pair => CSharpSyntaxTree.ParseText(pair.Value, path: pair.Key),
             StringComparer.Ordinal);
+        var orderedPaths = extractionOrder
+            ?? sources.Keys.OrderBy(path => path, StringComparer.Ordinal).ToArray();
         var compilation = CSharpCompilation.Create(
             assemblyName,
-            trees.Values,
+            orderedPaths.Select(path => trees[path]),
             PlatformReferences(),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
         Assert.Empty(compilation.GetDiagnostics().Where(item => item.Severity == DiagnosticSeverity.Error));
@@ -255,7 +261,7 @@ public sealed class FrameworkMigrationAdversarialRegressionTests
         var facts = new List<SemanticFactCandidate>();
         var gaps = new List<SemanticFactCandidate>();
         var protectedSpans = new List<ProtectedSourceSpan>();
-        foreach (var path in extractionOrder ?? sources.Keys.OrderBy(path => path, StringComparer.Ordinal).ToArray())
+        foreach (var path in orderedPaths)
         {
             var tree = trees[path];
             FrameworkMigrationEvidenceExtractor.Extract(
@@ -294,7 +300,10 @@ public sealed class FrameworkMigrationAdversarialRegressionTests
         }
         """;
 
-    private static IReadOnlyList<MetadataReference> PlatformReferences()
+    private static ImmutableArray<MetadataReference> PlatformReferences() =>
+        PlatformReferenceCache.Value;
+
+    private static ImmutableArray<MetadataReference> CreatePlatformReferences()
     {
         var references = ((string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES"))!
             .Split(Path.PathSeparator)
@@ -304,7 +313,7 @@ public sealed class FrameworkMigrationAdversarialRegressionTests
         var efDirectory = Path.GetDirectoryName(typeof(Migration).Assembly.Location)!;
         references.AddRange(Directory.GetFiles(efDirectory, "Microsoft.EntityFrameworkCore*.dll")
             .Select(path => MetadataReference.CreateFromFile(path)));
-        return references.DistinctBy(reference => reference.Display, StringComparer.Ordinal).ToArray();
+        return references.DistinctBy(reference => reference.Display, StringComparer.Ordinal).ToImmutableArray();
     }
 
     private static ScanManifest Manifest() => new(
