@@ -48,6 +48,9 @@ public sealed class RazorSemanticModelBindingTests
             public class BaseInputModel
             {
                 public string BaseName { get; set; } = "";
+
+                [Microsoft.AspNetCore.Mvc.ModelBinding.BindNever]
+                public string NeverBound { get; set; } = "";
                 public string Hidden { get; set; } = "";
             }
 
@@ -91,7 +94,7 @@ public sealed class RazorSemanticModelBindingTests
 
             namespace WebSample;
 
-            public sealed class OrdersController : ControllerBase
+            public sealed partial class OrdersController : ControllerBase
             {
                 [HttpPost]
                 public IActionResult Save([FromBody] InputModel input) => Ok();
@@ -107,6 +110,8 @@ public sealed class RazorSemanticModelBindingTests
                 public IActionResult SaveExternal(string input) => Ok();
                 public IActionResult SaveExternalBase(ExternalBaseInput input) => Ok();
                 public IActionResult SaveService([FromServices] InputModel service) => Ok();
+                public partial IActionResult PartialSave(InputModel input);
+                public partial IActionResult PartialSave(InputModel input) => Ok();
 
                 [NonAction]
                 public void Ignore([FromBody] InputModel input) { }
@@ -199,6 +204,18 @@ public sealed class RazorSemanticModelBindingTests
             {
                 public override IActionResult InheritedVerb(InputModel input) => Ok();
             }
+
+            public abstract class RootActionController : ControllerBase
+            {
+                public virtual IActionResult LayeredAction(InputModel input) => Ok();
+            }
+
+            public abstract class MiddleActionController : RootActionController
+            {
+                public override IActionResult LayeredAction(InputModel input) => Ok();
+            }
+
+            public sealed class LeafActionController : MiddleActionController { }
             """);
 
         var first = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap-first")));
@@ -276,6 +293,7 @@ public sealed class RazorSemanticModelBindingTests
         Assert.DoesNotContain(semantic, fact => fact.Properties["propertyName"] == "HelperBound");
         Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("OrdersController.Ignore", StringComparison.Ordinal) == true);
         Assert.DoesNotContain(semantic, fact => fact.Properties["propertyName"] is "StaticValue" or "ReadOnly" or "InitOnly" or "PrivateSetter" or "Hidden" or "RefValue" or "ExplicitValue" or "ConstructorValue" or "Item");
+        Assert.DoesNotContain(semantic, fact => fact.Properties["propertyName"] == "NeverBound");
         Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("HiddenController", StringComparison.Ordinal) == true);
         Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("SaveInheritedHidden", StringComparison.Ordinal) == true);
         Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("IgnoreInherited", StringComparison.Ordinal) == true);
@@ -288,6 +306,9 @@ public sealed class RazorSemanticModelBindingTests
         Assert.Contains(semantic, fact => fact.Properties.GetValueOrDefault("actionName") == "InheritedVerb"
             && fact.Properties.GetValueOrDefault("controllerName") == "Verb"
             && fact.Properties["httpMethods"] == "POST");
+        Assert.Equal(3, semantic.Count(fact => fact.Properties.GetValueOrDefault("actionName") == "PartialSave"));
+        Assert.Equal(3, semantic.Count(fact => fact.Properties.GetValueOrDefault("actionName") == "LayeredAction"
+            && fact.Properties.GetValueOrDefault("controllerName") == "LeafAction"));
         Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("SaveRecord", StringComparison.Ordinal) == true);
         Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("OnPostIgnored", StringComparison.Ordinal) == true);
         Assert.DoesNotContain(semantic, fact => fact.Properties.GetValueOrDefault("controllerName") is "Internal" or "Abstract" or "Nested" or "Generic");

@@ -205,6 +205,12 @@ source record model types fail closed with a categorical unsupported-type gap,
 and trusted HTTP-method attributes are preserved through an override chain.
 Regression fixtures cover each case without widening record/constructor support.
 
+The next exact-head review closed canonical `[BindNever]` exclusion, prevented
+superseded base-action projection through intermediate abstract overrides, and
+deduplicated partial action definition/implementation pairs before fact-bound
+accounting. Focused fixtures assert excluded properties, one effective layered
+action, and one partial action expansion rather than relying on aggregate counts.
+
 ## Deferred Work
 
 - PR 1 now emits compiler-resolved MVC action parameter, Razor Page handler
