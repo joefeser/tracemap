@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore.Migrations;
 using TraceMap.Core;
@@ -188,8 +189,8 @@ public sealed class FrameworkMigrationEvidenceExtractorTests
     {
         const string source = """
             namespace Sample;
-            public sealed class First : MissingMigration { }
-            public sealed class Second : MissingMigration { }
+            public sealed class First : Migration { }
+            public sealed class Second : Migration { }
             """;
         var (_, first, _) = Extract(
             source,
@@ -390,11 +391,29 @@ public sealed class FrameworkMigrationEvidenceExtractorTests
     }
 
     [Fact]
+    public void Unsupported_framework_operation_protects_arbitrary_argument_expression()
+    {
+        var (_, gaps, protectedSpans) = Extract("""
+            using Microsoft.EntityFrameworkCore.Migrations;
+            namespace Sample;
+            public sealed class M : Migration
+            {
+                protected override void Up(MigrationBuilder b) => b.EnsureSchema(GetPrivateSchema());
+                protected override void Down(MigrationBuilder b) { }
+                private static string GetPrivateSchema() => "private-schema";
+            }
+            """);
+
+        Assert.Single(protectedSpans);
+        Assert.Contains(gaps, gap => gap.Properties!["gapKind"] == "UnsupportedMigrationOperation");
+    }
+
+    [Fact]
     public void Unresolved_migration_base_protects_bounded_syntax_candidate_operations()
     {
         const string source = """
             namespace Sample;
-            public sealed class M : MissingMigration
+            public sealed class M : Migration
             {
                 public void Up(object b)
                 {
@@ -467,6 +486,29 @@ public sealed class FrameworkMigrationEvidenceExtractorTests
     }
 
     [Fact]
+    public void Syntax_fallback_does_not_classify_application_types_ending_in_migration()
+    {
+        const string source = """
+            namespace Sample;
+            public abstract class DataMigration { }
+            public sealed class M : DataMigration
+            {
+                public void Run(object b) => b.Sql("SELECT ordinary_application_text");
+            }
+            """;
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Migration.cs"), source);
+
+        var fallback = FrameworkMigrationEvidenceExtractor.ExtractSyntaxFallback(
+            temp.Path,
+            [new FileInventoryItem("Migration.cs", "CSharp", source.Length)],
+            new HashSet<string>(StringComparer.Ordinal));
+
+        Assert.Empty(fallback.ProtectedSpans);
+        Assert.Empty(fallback.Gaps);
+    }
+
+    [Fact]
     public void Protected_defaults_suppress_nested_integration_syntax_facts()
     {
         const string source = """
@@ -494,6 +536,35 @@ public sealed class FrameworkMigrationEvidenceExtractorTests
 
         Assert.DoesNotContain(facts, fact => fact.FactType == FactTypes.MessagePublisherSurface);
         Assert.DoesNotContain("private-destination", string.Join("\n", facts.SelectMany(fact => fact.Properties.Values)), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Protected_table_shape_suppresses_nested_message_attributes()
+    {
+        const string source = """
+            namespace Sample;
+            public sealed class M : Migration
+            {
+                public void Up(object b) =>
+                    b.CreateTable("audit", ([QueueTrigger("private-queue")] object table) => new { Id = 1 });
+            }
+            public sealed class QueueTriggerAttribute(string value) : System.Attribute;
+            """;
+        var tree = CSharpSyntaxTree.ParseText(source);
+        var invocation = tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>()
+            .Single(node => node.Expression.ToString().EndsWith("CreateTable", StringComparison.Ordinal));
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Migration.cs"), source);
+
+        var facts = CSharpIntegrationSyntaxExtractor.Extract(
+            temp.Path,
+            Manifest(),
+            [new FileInventoryItem("Migration.cs", "CSharp", source.Length)],
+            new HashSet<string>(StringComparer.Ordinal),
+            [new ProtectedSourceSpan("Migration.cs", invocation.SpanStart, invocation.Span.Length)]);
+
+        Assert.DoesNotContain(facts, fact => fact.FactType == FactTypes.MessageBindingDeclared);
+        Assert.DoesNotContain("private-queue", string.Join("\n", facts.SelectMany(fact => fact.Properties.Values)), StringComparison.Ordinal);
     }
 
     [Fact]
