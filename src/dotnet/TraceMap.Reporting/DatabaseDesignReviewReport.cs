@@ -230,10 +230,25 @@ public static class DatabaseDesignReviewReporter
             {
                 if (!CompatibleProvenance(input.Result.Manifest, fact))
                 {
+                    var (gapKind, message) = fact.RuleId switch
+                    {
+                        RuleIds.DatabaseFrameworkMigrationDeclaration
+                            or RuleIds.DatabaseFrameworkMigrationOperation
+                            or RuleIds.DatabaseFrameworkMigrationGap => (
+                                "FrameworkMigrationEvidenceProvenanceUnavailable",
+                                "A framework migration fact lacks compatible commit/extractor provenance and was not projected."),
+                        RuleIds.DatabaseSqlProjectRefactorIntent
+                            or RuleIds.DatabaseSqlProjectRefactorIntentGap => (
+                                "SqlProjectRefactorEvidenceProvenanceUnavailable",
+                                "A SQL project refactor-intent fact lacks compatible commit/extractor provenance and was not projected."),
+                        _ => (
+                            "PostgresEvidenceProvenanceUnavailable",
+                            "A PostgreSQL schema or migration fact lacks compatible commit/extractor provenance and was not projected.")
+                    };
                     gaps.Add(Gap(
-                        "PostgresEvidenceProvenanceUnavailable",
+                        gapKind,
                         input.SourceLabel,
-                        "A PostgreSQL schema or migration fact lacks compatible commit/extractor provenance and was not projected.",
+                        message,
                         [Pair("factType", SafeToken(fact.FactType, "unknown"))],
                         [fact.FactId],
                         commitSha: fact.CommitSha,
@@ -709,7 +724,9 @@ public static class DatabaseDesignReviewReporter
         }
 
         var compatibleDesignCount = tables.Sum(TableEvidenceCount) + globals.Length;
-        if (compatibleDesignCount == 0
+        var compatiblePostgresEvidenceCount = tables.Sum(TableEvidenceCount)
+            + globals.Count(item => item.Evidence.RuleId == RuleIds.DatabasePostgresSchemaMigration);
+        if (compatiblePostgresEvidenceCount == 0
             && gaps.All(gap => gap.GapKind != "CompatiblePostgresEvidenceUnavailable"))
         {
             gaps.Add(Gap(
