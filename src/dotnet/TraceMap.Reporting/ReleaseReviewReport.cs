@@ -263,6 +263,9 @@ public static class ReleaseReviewReporter
         RuleIds.DatabasePostgresPermissionGap,
         RuleIds.DatabasePostgresSchemaMigration,
         RuleIds.DatabasePostgresSchemaMigrationGap,
+        RuleIds.DatabaseFrameworkMigrationDeclaration,
+        RuleIds.DatabaseFrameworkMigrationOperation,
+        RuleIds.DatabaseFrameworkMigrationGap,
         RuleIds.DatabaseSqlProjectRefactorIntent,
         RuleIds.DatabaseSqlProjectRefactorIntentGap
     };
@@ -312,6 +315,30 @@ public static class ReleaseReviewReporter
         "newColumnName",
         "linkStatus",
         "operationKeyHash",
+        "coverageLabel"
+    };
+
+    private static readonly HashSet<string> FrameworkMigrationMetadataKeys = new(StringComparer.Ordinal)
+    {
+        "declarationKind",
+        "frameworkFamily",
+        "providerScope",
+        "direction",
+        "operationKind",
+        "objectKind",
+        "invocationOrdinal",
+        "schemaName",
+        "tableName",
+        "newSchemaName",
+        "newTableName",
+        "columnName",
+        "newColumnName",
+        "indexName",
+        "constraintName",
+        "principalSchemaName",
+        "principalTableName",
+        "columnNames",
+        "principalColumnNames",
         "coverageLabel"
     };
 
@@ -972,6 +999,49 @@ public static class ReleaseReviewReporter
                     SqlRunbookPacketBuilder.ProjectFactEvidence(fact, fact.CommitSha)));
             }
             foreach (var fact in input.Result.Facts
+                .Where(fact => fact.RuleId is RuleIds.DatabaseFrameworkMigrationDeclaration or RuleIds.DatabaseFrameworkMigrationOperation)
+                .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+                .ThenBy(fact => fact.Evidence.StartLine)
+                .ThenBy(fact => fact.FactId, StringComparer.Ordinal))
+            {
+                var operation = fact.FactType == FactTypes.FrameworkMigrationOperationCandidate;
+                findings.Add(SqlEvidenceFinding(
+                    input.SourceLabel,
+                    operation ? "framework-migration-operation" : "framework-migration",
+                    operation
+                        ? fact.Properties.GetValueOrDefault("operationKind") ?? "framework-migration-operation"
+                        : "framework-migration",
+                    operation
+                        ? ReleaseReviewClassifications.ReviewRecommended
+                        : ReleaseReviewClassifications.NoActionableEvidence,
+                    SqlRunbookPacketBuilder.ProjectFactEvidence(fact, fact.CommitSha),
+                    fact.Properties
+                        .Where(pair => FrameworkMigrationMetadataKeys.Contains(pair.Key))
+                        .Select(pair => new KeyValuePair<string, string?>(pair.Key, pair.Value))
+                        .Append(Pair("factType", fact.FactType))));
+                if (operation)
+                {
+                    gaps.Add(SqlEvidenceGap(
+                        input.SourceLabel,
+                        "FrameworkMigrationProviderUnknown",
+                        "A generic framework migration operation is available as application-side evidence but cannot be correlated to a PostgreSQL object because provider scope is unknown.",
+                        SqlRunbookPacketBuilder.ProjectFactEvidence(fact, fact.CommitSha)));
+                }
+            }
+            foreach (var fact in input.Result.Facts
+                .Where(fact => fact.RuleId == RuleIds.DatabaseFrameworkMigrationGap)
+                .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+                .ThenBy(fact => fact.Evidence.StartLine)
+                .ThenBy(fact => fact.FactId, StringComparer.Ordinal))
+            {
+                var gapKind = fact.Properties.GetValueOrDefault("gapKind") ?? "FrameworkMigrationCoverageGap";
+                gaps.Add(SqlEvidenceGap(
+                    input.SourceLabel,
+                    gapKind,
+                    "Upstream framework migration evidence recorded a bounded static-analysis gap; omitted protected content and runtime behavior remain unavailable.",
+                    SqlRunbookPacketBuilder.ProjectFactEvidence(fact, fact.CommitSha)));
+            }
+            foreach (var fact in input.Result.Facts
                 .Where(fact => fact.RuleId == RuleIds.DatabasePostgresSchemaMigration && fact.Evidence is not null)
                 .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
                 .ThenBy(fact => fact.Evidence.StartLine)
@@ -1194,6 +1264,7 @@ public static class ReleaseReviewReporter
     private static IReadOnlyList<string> SqlEvidenceLimitations() =>
     [
         "TraceMap does not execute SQL or establish runtime reachability, production database state, effective permissions, deployment, or release approval.",
+        "Framework migration evidence remains provider-unknown and does not prove PostgreSQL selection, migration application, ordering, rollback, generated SQL, compatibility, safety, or database state.",
         "SQL project refactor-log evidence is checked-in intent only; TraceMap does not build the project, inspect a DACPAC or deployment plan, query target __RefactorLog state, or prove deployment or application.",
         "SQL runway evidence does not provide an execution-safety conclusion or replace DBA/operator judgment.",
         "Raw SQL, connection strings, credentials, scheduled command bodies, private infrastructure identities, and local absolute paths are omitted."
@@ -1635,6 +1706,7 @@ public static class ReleaseReviewReporter
                 join index_sources sources on sources.source_index_id = facts.source_index_id
                 where facts.rule_id like 'database.sql.%'
                    or facts.rule_id like 'database.postgres.%'
+                   or facts.rule_id like 'database.framework-migration.%'
                    or facts.rule_id = @sql_project_refactor_rule
                    or facts.rule_id = @sql_project_refactor_gap_rule
                    or (@include_model_mappings = 1 and facts.rule_id = @ef_rule)
@@ -1654,6 +1726,7 @@ public static class ReleaseReviewReporter
                 cross join scan_manifest manifest
                 where facts.rule_id like 'database.sql.%'
                    or facts.rule_id like 'database.postgres.%'
+                   or facts.rule_id like 'database.framework-migration.%'
                    or facts.rule_id = @sql_project_refactor_rule
                    or facts.rule_id = @sql_project_refactor_gap_rule
                    or (@include_model_mappings = 1 and facts.rule_id = @ef_rule)

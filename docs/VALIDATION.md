@@ -1448,3 +1448,18 @@ gaps reduce `analysisLevel`, but do not change a successfully loaded and
 compiled repository's `buildStatus` to `FailedOrPartial`; those are separate
 claims. Confirm syntax-fallback facts use their dedicated extractor provenance
 and categorical migration messages in `knownGaps`.
+
+For framework-migration database design-review or release-review composition
+changes, also run:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~FrameworkMigrationCompositionTests
+```
+
+Verify both reports preserve rule, tier, span, commit, extractor, coverage,
+supporting fact IDs, and upstream limitations. Generic operations must remain
+global application-side evidence with explicit provider-unknown gaps; they must
+not attach to PostgreSQL objects. Confirm outputs contain no protected source
+symbol, raw SQL, local path, or claims of application, ordering, rollback,
+generated SQL, compatibility, safety, database state, or approval.
