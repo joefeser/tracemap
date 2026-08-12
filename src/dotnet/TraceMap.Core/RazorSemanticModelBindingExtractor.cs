@@ -200,11 +200,35 @@ internal static class RazorSemanticModelBindingExtractor
                 }
                 if (parameter.Type is not INamedTypeSymbol modelType
                     || modelType.TypeKind == TypeKind.Error
-                    || modelType.IsRecord
-                    || modelType.IsUnboundGenericType
-                    || modelType.Locations.All(location => !location.IsInSource))
+                    || modelType.IsUnboundGenericType)
                 {
                     AddGapOrCount(projectPath, filePath, parameterSyntax, ownerKind, "RazorBindingTypeUnavailable", parameter, parameter.Type, ref gapCount, ref truncatedGaps, gaps);
+                    continue;
+                }
+                if (IsTerminalParameterType(modelType))
+                {
+                    continue;
+                }
+                if (modelType.IsRecord || IsCollectionType(modelType))
+                {
+                    AddGapOrCount(
+                        projectPath,
+                        filePath,
+                        parameterSyntax,
+                        ownerKind,
+                        "RazorBindingTypeUnavailable",
+                        parameter,
+                        modelType,
+                        ref gapCount,
+                        ref truncatedGaps,
+                        gaps,
+                        stateKey: "typeState",
+                        stateValue: modelType.IsRecord ? "unsupported-record" : "unsupported-collection");
+                    continue;
+                }
+                if (modelType.Locations.All(location => !location.IsInSource))
+                {
+                    AddGapOrCount(projectPath, filePath, parameterSyntax, ownerKind, "RazorBindingTypeUnavailable", parameter, modelType, ref gapCount, ref truncatedGaps, gaps);
                     continue;
                 }
                 if (source != "body" && !HasPublicParameterlessConstruction(modelType))
@@ -432,8 +456,9 @@ internal static class RazorSemanticModelBindingExtractor
             ["propertyName"] = property.Name,
             ["propertyPath"] = property.Name,
             ["propertyType"] = property.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
-            ["reconciliationKeyVersion"] = "razor-model-binding/1.0",
+            ["reconciliationProfileVersion"] = "razor-model-binding/1.0",
             ["supportsGet"] = supportsGet?.ToString().ToLowerInvariant() ?? string.Empty,
+            ["tier3ReconciliationState"] = "contextual-support-only-missing-canonical-identity",
             ["uiFramework"] = "razor",
             ["valueStored"] = "safe-metadata-only"
         };
@@ -557,6 +582,40 @@ internal static class RazorSemanticModelBindingExtractor
         || type.InstanceConstructors.Any(constructor =>
             constructor.DeclaredAccessibility == Accessibility.Public
             && constructor.Parameters.Length == 0);
+
+    private static bool IsTerminalParameterType(INamedTypeSymbol type)
+    {
+        if (type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T
+            && type.TypeArguments.FirstOrDefault() is INamedTypeSymbol nullableValue)
+        {
+            return IsTerminalParameterType(nullableValue);
+        }
+        if (type.SpecialType != SpecialType.None || type.TypeKind == TypeKind.Enum)
+        {
+            return true;
+        }
+        return MetadataName(type) is
+            "System.Guid" or
+            "System.DateTime" or
+            "System.DateTimeOffset" or
+            "System.DateOnly" or
+            "System.TimeOnly" or
+            "System.TimeSpan" or
+            "System.Threading.CancellationToken" or
+            "System.Uri" or
+            "Microsoft.AspNetCore.Http.IFormFile";
+    }
+
+    private static bool IsCollectionType(INamedTypeSymbol type) =>
+        MetadataName(type.OriginalDefinition) is
+            "System.Collections.Generic.IEnumerable<T>" or
+            "System.Collections.Generic.ICollection<T>" or
+            "System.Collections.Generic.IList<T>" or
+            "System.Collections.Generic.IReadOnlyCollection<T>" or
+            "System.Collections.Generic.IReadOnlyList<T>" or
+            "System.Collections.Generic.List<T>"
+        || type.AllInterfaces.Any(candidate =>
+            MetadataName(candidate.OriginalDefinition) == "System.Collections.Generic.IEnumerable<T>");
 
     private static ISymbol[] EffectiveControllerOwners(IMethodSymbol method, Compilation compilation)
     {

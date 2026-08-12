@@ -218,6 +218,16 @@ construction for non-body complex model binding, and treated a same-signature
 now emits no Tier1 target and preserves a categorical coverage gap where the
 owner or model boundary was otherwise visible.
 
+An exact-head Kiro Opus advisory review then identified three blocking truth
+issues. Producer-local Razor gaps no longer change the repository build result
+to failed/partial, while they still retain a reduced analysis label and a
+specific known-gap message. Resolved scalar/terminal parameters now produce no
+false unavailable gaps; unsupported record/collection shapes and metadata-only
+complex models remain categorically distinct. Finally, the spec and Tier1
+schema now state that existing Tier3 rows are contextual support only because
+they lack the canonical identity needed for exact reconciliation; PR 3 owns
+actual composition.
+
 ## Deferred Work
 
 - PR 1 now emits compiler-resolved MVC action parameter, Razor Page handler
