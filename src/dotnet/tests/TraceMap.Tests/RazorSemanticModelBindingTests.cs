@@ -185,6 +185,20 @@ public sealed class RazorSemanticModelBindingTests
             {
                 public override IActionResult IgnoreInherited(InputModel input) => Ok();
             }
+
+            [NonController]
+            public sealed class ExcludedDerivedController : ActionBaseController { }
+
+            public abstract class VerbBaseController : ControllerBase
+            {
+                [HttpPost]
+                public virtual IActionResult InheritedVerb(InputModel input) => Ok();
+            }
+
+            public sealed class VerbController : VerbBaseController
+            {
+                public override IActionResult InheritedVerb(InputModel input) => Ok();
+            }
             """);
 
         var first = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap-first")));
@@ -266,10 +280,15 @@ public sealed class RazorSemanticModelBindingTests
         Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("SaveInheritedHidden", StringComparison.Ordinal) == true);
         Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("IgnoreInherited", StringComparison.Ordinal) == true);
         Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("SaveService", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(semantic, fact => fact.Properties.GetValueOrDefault("controllerName") == "ExcludedDerived");
         Assert.Contains(semantic, fact => fact.Properties.GetValueOrDefault("actionName") == "InheritedAction"
             && fact.Properties.GetValueOrDefault("controllerName") == "DerivedAction"
             && fact.Properties["propertyName"] == "Name"
             && fact.Properties["ownerSymbolKind"] == "NamedType");
+        Assert.Contains(semantic, fact => fact.Properties.GetValueOrDefault("actionName") == "InheritedVerb"
+            && fact.Properties.GetValueOrDefault("controllerName") == "Verb"
+            && fact.Properties["httpMethods"] == "POST");
+        Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("SaveRecord", StringComparison.Ordinal) == true);
         Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("OnPostIgnored", StringComparison.Ordinal) == true);
         Assert.DoesNotContain(semantic, fact => fact.Properties.GetValueOrDefault("controllerName") is "Internal" or "Abstract" or "Nested" or "Generic");
         Assert.Contains(semantic, fact => fact.Properties["propertyName"] == "LocalValue"
@@ -283,6 +302,8 @@ public sealed class RazorSemanticModelBindingTests
         Assert.Contains(gaps, gap => gap.Properties.GetValueOrDefault("typeState") == "dynamic");
         Assert.Contains(gaps, gap => gap.Properties.GetValueOrDefault("typeState") == "type-parameter");
         Assert.Contains(gaps, gap => gap.Properties.GetValueOrDefault("typeState") == "external-unavailable");
+        Assert.Contains(gaps, gap => gap.Properties.GetValueOrDefault("typeState") == "unsupported"
+            && gap.Properties["gapKind"] == "RazorBindingTypeUnavailable");
         Assert.Contains(gaps, gap => gap.Properties["gapKind"] == "RazorBindingExternalBaseUnavailable"
             && gap.Properties.GetValueOrDefault("typeState") == "external-base-properties-unavailable");
         Assert.True(gaps.Count(gap => gap.Properties["gapKind"] == "RazorEndpointOwnerUnavailable"

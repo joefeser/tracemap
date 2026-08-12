@@ -199,6 +199,12 @@ abstract source base are projected to discoverable concrete source controllers
 when no same-name declaration intervenes. Each behavior has a focused negative
 or identity regression and remains bounded to compiler-proven source symbols.
 
+The subsequent exact-head pass closed three more declared-contract edges:
+projected concrete descendants independently honor canonical `[NonController]`,
+source record model types fail closed with a categorical unsupported-type gap,
+and trusted HTTP-method attributes are preserved through an override chain.
+Regression fixtures cover each case without widening record/constructor support.
+
 ## Deferred Work
 
 - PR 1 now emits compiler-resolved MVC action parameter, Razor Page handler
