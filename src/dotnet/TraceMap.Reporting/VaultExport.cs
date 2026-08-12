@@ -173,6 +173,7 @@ public static class VaultExporter
     private const string PropertyFlowTerminalContextRuleId = "vault-export.graph.property-flow-terminal-context.v1";
     private const string TerminalContextOmittedRuleId = "vault-export.gap.terminal-context-omitted.v1";
     private const string AccessEvidenceConsumerUnsupportedRuleId = "vault-export.gap.access-evidence-consumer-unsupported.v1";
+    private const string FrameworkMigrationConsumerUnsupportedRuleId = "vault-export.gap.framework-migration-consumer-unsupported.v1";
     private const string GeneratedFileStaleRuleId = "vault-export.validation.generated-file-stale.v1";
     private const string UserFileCollisionRuleId = "vault-export.validation.user-file-collision.v1";
     private const string UnsafeRejectedRuleId = "vault-export.validation.unsafe-value-rejected.v1";
@@ -225,6 +226,8 @@ public static class VaultExporter
             UnsafeIdComponentRuleId,
             PropertyFlowTerminalContextRuleId,
             TerminalContextOmittedRuleId,
+            AccessEvidenceConsumerUnsupportedRuleId,
+            FrameworkMigrationConsumerUnsupportedRuleId,
             GeneratedFileStaleRuleId,
             UserFileCollisionRuleId,
             UnsafeRejectedRuleId,
@@ -607,6 +610,24 @@ public static class VaultExporter
                     null,
                     ["Count-only or bounded source-neutral static design evidence is not converted into Access identity or flow nodes."],
                     accessEvidence.SupportingFactIds));
+            }
+
+            var frameworkMigrationEvidence = await ReleaseReviewReporter.ReadFrameworkMigrationEvidencePresenceAsync(
+                options.CombinedIndexPath,
+                "combined",
+                cancellationToken);
+            if (frameworkMigrationEvidence.FactCount > 0)
+            {
+                gaps.Add(new VaultGraphGap(
+                    $"gap:{Hash(string.Join('\u001f', ["gap/v1", "framework-migration-consumer", "hidden", "FrameworkMigrationEvidenceConsumerUnsupported", FrameworkMigrationConsumerUnsupportedRuleId, EvidenceTiers.Tier4Unknown]), IdHashLength)}",
+                    "hidden",
+                    "FrameworkMigrationEvidenceConsumerUnsupported",
+                    FrameworkMigrationConsumerUnsupportedRuleId,
+                    EvidenceTiers.Tier4Unknown,
+                    "Framework migration facts are present, but vault export has no dedicated framework migration projection; source provenance remains available and no migration absence, application, ordering, provider, rollback, or safety conclusion is made.",
+                    null,
+                    ["Static framework migration declarations, operation candidates, and coverage gaps are omitted from vault graph nodes until a dedicated projection preserves their evidence contract."],
+                    frameworkMigrationEvidence.SupportingFactIds));
             }
         }
 
