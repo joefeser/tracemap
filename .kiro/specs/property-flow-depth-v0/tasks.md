@@ -23,6 +23,9 @@ Issue: #517
       its version as fixture provenance only.
 - [ ] Pin the closed assembly-name/public-key-token/type/member/attribute
       allowlist; keep source-declared and unsigned framework shapes negative.
+- [ ] Require controller/page-model plus action/handler ownership independently
+      of binding-source attributes; test real attributes on non-endpoint helper
+      methods produce zero Tier1 targets.
 - [ ] Emit Tier1 semantic `RazorModelBindingTarget` evidence for admitted MVC
       action and Razor Page handler parameter properties across files/partials.
 - [ ] Emit canonical owner, parameter, model type, and property roles with a

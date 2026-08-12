@@ -50,13 +50,17 @@ work.
 Add a semantic pass adjacent to the current C# semantic extraction. The pass
 examines compiler symbols rather than text:
 
-1. Admit an owner only when its controller/page-model base type or binding
-   attribute resolves to a metadata-only symbol in the closed ASP.NET Core
-   assembly-name/public-key-token/signature allowlist. Runtime/package version
-   is fixture provenance, not an admission key.
+1. Admit an owner only when its controller/page-model type and action/handler
+   independently resolve to metadata-backed framework semantics in the closed
+   ASP.NET Core assembly-name/public-key-token/signature allowlist. Runtime/
+   package version is fixture provenance, not an admission key. A real binding
+   attribute on a helper/service method cannot establish endpoint ownership.
 2. Admit an action/handler only through exact method/attribute/base semantics
    documented by the implementation fixture. Method-name conventions alone
    may remain syntax fallback but cannot yield Tier1.
+   After ownership qualifies, canonical `[BindProperty]`, `[FromBody]`, or
+   `[FromForm]` identity may classify the binding source; it cannot admit the
+   owner or method.
 3. Resolve parameter/property types through Roslyn, including cross-file and
    partial source types.
 4. Emit one target per source property symbol and owner/parameter binding
