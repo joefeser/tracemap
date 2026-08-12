@@ -46,7 +46,10 @@ direction proven only from real `Up`/`Down` overrides, provider scope
 default/computed expressions, and nested table shapes are gap-only. Their
 source text and digests are omitted. A semantic-to-syntax protected-span seam
 also prevents proven protected migration content from being reprojected by the
-generic C# SQL text/shape pass.
+generic C# syntax, integration, SQL text/shape, and later legacy passes. The
+bounded syntax fallback protects named and supported positional
+default/computed arguments and makes any fallback gap reduce the manifest's
+coverage instead of leaving a contradictory successful/full scan.
 
 The generic contract-delta reducer returns before matching either new fact type
 or the framework gap rule. `IsSqlFact` and `IsPostgresSchemaFact` remain
@@ -57,11 +60,9 @@ still deferred.
 
 Producer implementation validation at the current worktree:
 
-- Focused framework-migration and reducer isolation tests: 25/25 passed.
+- Focused framework-migration and reducer isolation tests: 26/26 passed.
 - Full .NET solution build: passed with 0 warnings and 0 errors.
-- Full .NET solution test: 1,427/1,427 passed. The first full run hit one
-  unrelated SQLite disposal race in a property-flow test; that exact test
-  passed on immediate isolated rerun and the unchanged full suite then passed.
+- Full .NET solution test: 1,429/1,429 passed.
 - Checked-in synthetic CLI scan: `FailedOrPartial` /
   `Level1SemanticAnalysisReduced`; all five artifacts present; NDJSON and
   SQLite contained one declaration, four operations, and one categorical raw-

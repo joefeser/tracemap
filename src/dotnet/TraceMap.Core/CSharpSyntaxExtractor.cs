@@ -44,10 +44,10 @@ public static class CSharpSyntaxExtractor
                     .ToArray() ?? [];
                 AddParseDiagnostics(manifest, facts, tree);
                 AddDeclarationFacts(manifest, facts, file.RelativePath, root);
-                AddAttributeFacts(manifest, facts, file.RelativePath, root);
+                AddAttributeFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans);
                 AddMemberAccessFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans);
                 AddInvocationFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans);
-                AddObjectCreationFacts(manifest, facts, file.RelativePath, root);
+                AddObjectCreationFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans);
                 AddLogicShapeFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans);
                 AddQueryPatternFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans);
                 AddObjectShapeFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans);
@@ -149,10 +149,14 @@ public static class CSharpSyntaxExtractor
         }
     }
 
-    private static void AddAttributeFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root)
+    private static void AddAttributeFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root, IReadOnlyList<ProtectedSourceSpan> protectedSpans)
     {
         foreach (var attribute in root.DescendantNodes().OfType<AttributeSyntax>())
         {
+            if (OverlapsProtected(attribute, protectedSpans))
+            {
+                continue;
+            }
             var attributeName = attribute.Name.ToString();
             facts.Add(CreateSyntaxFact(
                 manifest,
@@ -259,10 +263,14 @@ public static class CSharpSyntaxExtractor
         }
     }
 
-    private static void AddObjectCreationFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root)
+    private static void AddObjectCreationFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root, IReadOnlyList<ProtectedSourceSpan> protectedSpans)
     {
         foreach (var creation in root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
         {
+            if (OverlapsProtected(creation, protectedSpans))
+            {
+                continue;
+            }
             var typeName = creation.Type.ToString();
             var containingMember = GetContainingMemberName(creation);
             var assignedTo = GetAssignedVariableName(creation);

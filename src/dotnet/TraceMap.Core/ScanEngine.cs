@@ -115,17 +115,27 @@ public static class ScanEngine
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
+        var semanticallyAnalyzedFiles = GetSemanticallyAnalyzedFiles(semanticResult);
+        var migrationSyntaxFallback = FrameworkMigrationEvidenceExtractor.ExtractSyntaxFallback(
+            repoPath,
+            inventory,
+            semanticallyAnalyzedFiles);
+        var migrationFallbackGaps = migrationSyntaxFallback.Gaps
+            .Select(GetGapMessage)
+            .ToArray();
         var semanticKnownGaps = git.KnownGaps
             .Concat(semanticResult.GapFacts.Select(GetGapMessage))
+            .Concat(migrationFallbackGaps)
             .OrderBy(gap => gap, StringComparer.Ordinal)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
+        var migrationFallbackReducedCoverage = migrationFallbackGaps.Length > 0;
         var semanticBuildStatus = semanticResult.Attempted
-            ? semanticResult.ReducedCoverage ? "FailedOrPartial" : "Succeeded"
+            ? semanticResult.ReducedCoverage || migrationFallbackReducedCoverage ? "FailedOrPartial" : "Succeeded"
             : "NotRun";
         var semanticAnalysisLevel = semanticResult.Attempted
-            ? semanticResult.ReducedCoverage ? "Level1SemanticAnalysisReduced" : "Level1SemanticAnalysis"
-            : "Level3SyntaxAnalysis";
+            ? semanticResult.ReducedCoverage || migrationFallbackReducedCoverage ? "Level1SemanticAnalysisReduced" : "Level1SemanticAnalysis"
+            : migrationFallbackReducedCoverage ? "Level3SyntaxAnalysisReduced" : "Level3SyntaxAnalysis";
 
         var provisionalManifest = new ScanManifest(
             CreateScanId(git, inventory, sourceSnapshotDigest, options),
@@ -174,7 +184,7 @@ public static class ScanEngine
         using (var extractionOperation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.StaticExtraction, cancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            facts = CreateFacts(manifest, inventory, targetFrameworkInfos, ProjectFileReader.ReadPackageReferences(repoPath, inventory), knownGaps, repoPath, semanticResult, options, binlogFacts);
+            facts = CreateFacts(manifest, inventory, targetFrameworkInfos, ProjectFileReader.ReadPackageReferences(repoPath, inventory), knownGaps, repoPath, semanticResult, options, binlogFacts, migrationSyntaxFallback);
             cancellationToken.ThrowIfCancellationRequested();
             extractionOperation.RecordItems(facts.Count);
             extractionOperation.Complete(manifest.BuildStatus == "FailedOrPartial"
@@ -404,7 +414,8 @@ public static class ScanEngine
         string repoPath,
         SemanticExtractionResult semanticResult,
         ScanOptions options,
-        IReadOnlyList<CodeFact> binlogFacts)
+        IReadOnlyList<CodeFact> binlogFacts,
+        FrameworkMigrationEvidenceExtractor.SyntaxProtectionResult migrationSyntaxFallback)
     {
         var facts = new List<CodeFact>
         {
@@ -568,10 +579,6 @@ public static class ScanEngine
 
         facts.AddRange(BuildEnvironmentDiagnosticExtractor.Extract(repoPath, manifest, inventory, semanticResult));
         var semanticallyAnalyzedFiles = GetSemanticallyAnalyzedFiles(semanticResult);
-        var migrationSyntaxFallback = FrameworkMigrationEvidenceExtractor.ExtractSyntaxFallback(
-            repoPath,
-            inventory,
-            semanticallyAnalyzedFiles);
         var protectedSourceSpans = (semanticResult.ProtectedSourceSpans ?? [])
             .Concat(migrationSyntaxFallback.ProtectedSpans)
             .Distinct()

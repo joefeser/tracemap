@@ -526,9 +526,9 @@ public static class ScannerVersions
     public const string ProjectFileExtractor = "project-file/0.1.0";
     public const string BuildEnvironmentExtractor = "build-environment/0.1.0";
     public const string AnalyzerCapabilityExtractor = "analyzer-capability/0.1.0";
-    public const string CSharpSyntaxExtractor = "csharp-syntax/0.3.0";
+    public const string CSharpSyntaxExtractor = "csharp-syntax/0.4.0";
     public const string CSharpAspNetSyntaxRouteExtractor = "csharp-aspnet-syntax-route/0.1.0";
-    public const string CSharpIntegrationSyntaxExtractor = "csharp-integration-syntax/0.2.0";
+    public const string CSharpIntegrationSyntaxExtractor = "csharp-integration-syntax/0.3.0";
     public const string CSharpSemanticExtractor = "csharp-semantic/0.17.0";
     public const string ConfigExtractor = "config/0.1.0";
     public const string SqlTextExtractor = "sql-text/0.1.0";

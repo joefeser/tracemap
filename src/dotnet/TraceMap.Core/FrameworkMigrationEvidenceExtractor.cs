@@ -681,7 +681,11 @@ internal static class FrameworkMigrationEvidenceExtractor
         var methodName = InvocationName(invocation);
         var hasProtectedDefault = methodName is "AddColumn" or "AlterColumn"
             && invocation.ArgumentList.Arguments.Any(argument =>
-                argument.NameColon?.Name.Identifier.ValueText is "defaultValue" or "defaultValueSql" or "computedColumnSql");
+                argument.NameColon?.Name.Identifier.ValueText is "defaultValue" or "defaultValueSql" or "computedColumnSql")
+            || methodName is "AddColumn" or "AlterColumn"
+            && invocation.ArgumentList.Arguments
+                .Select((argument, index) => (argument, index))
+                .Any(item => item.argument.NameColon is null && item.index is 8 or 9 or 10);
         return ProtectedOperations.ContainsKey(methodName)
             || methodName is "Annotation" or "CreateTable"
             || hasProtectedDefault;
