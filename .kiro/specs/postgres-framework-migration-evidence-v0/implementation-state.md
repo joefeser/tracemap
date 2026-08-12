@@ -60,9 +60,9 @@ still deferred.
 
 Producer implementation validation at the current worktree:
 
-- Focused framework-migration and reducer isolation tests: 26/26 passed.
+- Focused framework-migration and reducer isolation tests: 27/27 passed.
 - Full .NET solution build: passed with 0 warnings and 0 errors.
-- Full .NET solution test: 1,429/1,429 passed.
+- Full .NET solution test: 1,430/1,430 passed.
 - Checked-in synthetic CLI scan: `FailedOrPartial` /
   `Level1SemanticAnalysisReduced`; all five artifacts present; NDJSON and
   SQLite contained one declaration, four operations, and one categorical raw-
