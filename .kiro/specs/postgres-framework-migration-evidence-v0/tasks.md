@@ -30,7 +30,7 @@
 - [x] Prove protected arguments and their digests never appear in facts,
       SQLite, report, or logs, and prove overlapping SQL-text/shape and runtime
       operation-call facts are absent for protected spans.
-- [ ] Add same-name cross-assembly, overload/named-argument, reordered-file,
+- [x] Add same-name cross-assembly, overload/named-argument, reordered-file,
       false-positive lookalike, helper/local-function direction, constant-fold,
       array/lambda identity-shape, semantic-unavailable, and rule-catalog
       regressions.
