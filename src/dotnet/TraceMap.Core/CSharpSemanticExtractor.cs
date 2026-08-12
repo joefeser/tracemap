@@ -4705,7 +4705,9 @@ public static class CSharpSemanticExtractor
                 ["coverageLabel"] = "source-unavailable",
                 ["expressionHash"] = FactFactory.Hash(invocation.ToString(), 32),
                 ["limitations"] = "The static extractor did not evaluate dynamic, helper-driven, reflection-driven, or assembly-scanned EF model configuration."
-            });
+            },
+            SourceStart: invocation.SpanStart,
+            SourceLength: invocation.Span.Length);
     }
 
     private static bool IsDapperCall(IMethodSymbol method)
