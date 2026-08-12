@@ -22,6 +22,9 @@ public sealed class RazorSemanticModelBindingTests
     private static readonly HashSet<string> GapPropertySchema = new(StringComparer.Ordinal)
     {
         "bindingKind", "coverageEffect", "coverageLabel", "frameworkState", "gapKind", "limitations", "occurrenceCount", "ownerState", "sanitization",
+        "endpointMethodAssemblyName", "endpointMethodAssemblyVersion", "endpointMethodContainingSymbolId", "endpointMethodSymbolId", "endpointMethodSymbolKind",
+        "ownerAssemblyName", "ownerAssemblyVersion", "ownerContainingSymbolId", "ownerSymbolId", "ownerSymbolKind", "parameterAssemblyName",
+        "parameterAssemblyVersion", "parameterContainingSymbolId", "parameterOrdinal", "parameterSymbolId", "parameterSymbolKind",
         "scopeAssemblyName", "scopeAssemblyVersion", "scopeContainingSymbolId", "scopeSymbolId", "scopeSymbolKind",
         "targetTypeAssemblyName", "targetTypeAssemblyVersion", "targetTypeContainingSymbolId", "targetTypeSymbolId", "targetTypeSymbolKind", "typeState"
     };
@@ -206,6 +209,8 @@ public sealed class RazorSemanticModelBindingTests
                 public override IActionResult IgnoreInherited(InputModel input) => Ok();
             }
 
+            public sealed class SecondDerivedActionController : ActionBaseController { }
+
             [NonController]
             public sealed class ExcludedDerivedController : ActionBaseController { }
 
@@ -312,17 +317,13 @@ public sealed class RazorSemanticModelBindingTests
             fact.Properties["bindingKind"] == "razor-page-property"
             && fact.Properties["propertyName"] == "DefaultValue"
             && fact.Properties["supportsGet"] == "false");
-        Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("Helper.Run", StringComparison.Ordinal) == true);
         Assert.DoesNotContain(semantic, fact => fact.Properties["propertyName"] == "HelperBound");
-        Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("OrdersController.Ignore", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(semantic, fact => fact.Properties.GetValueOrDefault("actionName") == "Ignore");
         Assert.DoesNotContain(semantic, fact => fact.Properties["propertyName"] is "StaticValue" or "ReadOnly" or "InitOnly" or "PrivateSetter" or "Hidden" or "RefValue" or "ExplicitValue" or "ConstructorValue" or "Item");
         Assert.DoesNotContain(semantic, fact => fact.Properties["propertyName"] == "NeverBound");
-        Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("HiddenController", StringComparison.Ordinal) == true);
-        Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("SaveInheritedHidden", StringComparison.Ordinal) == true);
-        Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("IgnoreInherited", StringComparison.Ordinal) == true);
-        Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("SaveService", StringComparison.Ordinal) == true);
-        Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("SaveConstructorOnly", StringComparison.Ordinal) == true);
-        Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("AbstractOrdersPage", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(semantic, fact => fact.Properties.GetValueOrDefault("controllerName") == "Hidden");
+        Assert.DoesNotContain(semantic, fact => fact.Properties.GetValueOrDefault("actionName") is "SaveInheritedHidden" or "IgnoreInherited" or "SaveService" or "SaveConstructorOnly");
+        Assert.DoesNotContain(semantic, fact => fact.Properties.GetValueOrDefault("pageModelName") == "AbstractOrdersPage");
         Assert.DoesNotContain(semantic, fact => fact.Properties.GetValueOrDefault("controllerName") == "ExcludedDerived");
         Assert.Contains(semantic, fact => fact.Properties.GetValueOrDefault("actionName") == "InheritedAction"
             && fact.Properties.GetValueOrDefault("controllerName") == "DerivedAction"
@@ -336,14 +337,21 @@ public sealed class RazorSemanticModelBindingTests
             && fact.Properties.GetValueOrDefault("controllerName") == "LeafAction"));
         Assert.Equal(3, semantic.Count(fact => fact.Properties.GetValueOrDefault("actionName") == "LayeredAction"
             && fact.Properties.GetValueOrDefault("controllerName") == "HidingAction"));
-        Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("SaveRecord", StringComparison.Ordinal) == true);
-        Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("OnPostIgnored", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(semantic, fact => fact.Properties.GetValueOrDefault("actionName") == "SaveRecord");
+        Assert.DoesNotContain(semantic, fact => fact.Properties.GetValueOrDefault("handlerName") == "OnPostIgnored");
         Assert.DoesNotContain(semantic, fact => fact.Properties.GetValueOrDefault("controllerName") is "Internal" or "Abstract" or "Nested" or "Generic");
         Assert.Contains(semantic, fact => fact.Properties["propertyName"] == "LocalValue"
             && fact.SourceSymbol?.Contains("SaveExternalBase", StringComparison.Ordinal) == true);
 
         var gaps = first.Facts.Where(fact => fact.RuleId == RuleIds.CSharpRazorSemanticModelBindingGap).ToArray();
         Assert.Contains(gaps, gap => gap.Properties["gapKind"] == "RazorBindingPropertyUnavailable");
+        var inheritedReadOnlyGaps = gaps.Where(gap =>
+            gap.Properties.GetValueOrDefault("gapKind") == "RazorBindingPropertyUnavailable"
+            && gap.Properties.GetValueOrDefault("endpointMethodSymbolId")?.Contains("InheritedAction", StringComparison.Ordinal) == true
+            && gap.Properties.GetValueOrDefault("scopeSymbolId")?.Contains("ReadOnly", StringComparison.Ordinal) == true).ToArray();
+        Assert.Equal(2, inheritedReadOnlyGaps.Length);
+        Assert.Equal(2, inheritedReadOnlyGaps.Select(gap => gap.Properties["ownerSymbolId"]).Distinct(StringComparer.Ordinal).Count());
+        Assert.All(inheritedReadOnlyGaps, gap => Assert.Equal("0", gap.Properties["parameterOrdinal"]));
         Assert.Contains(gaps, gap => gap.Properties["gapKind"] == "AmbiguousRazorBindingTarget");
         Assert.Contains(gaps, gap => gap.Properties["gapKind"] == "RazorBindingTypeUnavailable"
             && gap.Properties["bindingKind"] == "mvc-action-parameter");
@@ -520,6 +528,7 @@ public sealed class RazorSemanticModelBindingTests
                 public IActionResult Save([FromBody] InputModel input) => Ok();
                 public IActionResult Scalars(int id, string query, System.Guid token) => Ok();
                 public IActionResult Collection(System.Collections.Generic.List<InputModel> input) => Ok();
+                public IActionResult Array(InputModel[] input) => Ok();
                 public IActionResult External(System.Exception input) => Ok();
             }
             """);
@@ -533,12 +542,22 @@ public sealed class RazorSemanticModelBindingTests
         Assert.DoesNotContain(gaps, gap => gap.Properties.GetValueOrDefault("scopeSymbolId")?.Contains("Scalars", StringComparison.Ordinal) == true);
         Assert.Contains(gaps, gap => gap.Properties.GetValueOrDefault("scopeSymbolId")?.Contains("Collection", StringComparison.Ordinal) == true
             && gap.Properties.GetValueOrDefault("typeState") == "unsupported-collection");
+        Assert.Contains(gaps, gap => gap.Properties.GetValueOrDefault("scopeSymbolId")?.Contains("Array", StringComparison.Ordinal) == true
+            && gap.Properties.GetValueOrDefault("typeState") == "unsupported-collection");
         Assert.Contains(gaps, gap => gap.Properties.GetValueOrDefault("scopeSymbolId")?.Contains("External", StringComparison.Ordinal) == true
             && gap.Properties.GetValueOrDefault("typeState") == "external-unavailable");
         Assert.Equal("Succeeded", result.Manifest.BuildStatus);
-        Assert.Equal("Level1SemanticAnalysisReduced", result.Manifest.AnalysisLevel);
+        Assert.Equal("Level1SemanticAnalysis", result.Manifest.AnalysisLevel);
         Assert.Contains("Semantic Razor model-binding coverage reduced: RazorBindingTypeUnavailable.", result.Manifest.KnownGaps);
         Assert.DoesNotContain("Roslyn semantic analysis reported a gap.", result.Manifest.KnownGaps);
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalyzerCapabilityDiagnostic
+            && fact.Properties.GetValueOrDefault("capabilityCode") == AnalyzerCapabilityDiagnosticExtractor.Codes.MSBuildProjectLoad
+            && fact.Properties.GetValueOrDefault("capabilityState") == AnalyzerCapabilityDiagnosticExtractor.States.Available);
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalyzerCapabilityDiagnostic
+            && fact.Properties.GetValueOrDefault("capabilityCode") == AnalyzerCapabilityDiagnosticExtractor.Codes.CSharpSemanticCompilation
+            && fact.Properties.GetValueOrDefault("capabilityState") == AnalyzerCapabilityDiagnosticExtractor.States.Available);
 
         var tier3Save = Assert.Single(result.Facts, fact =>
             fact.RuleId == RuleIds.RazorModelBinding

@@ -91,7 +91,8 @@ public static class AnalyzerCapabilityDiagnosticExtractor
             .OrderBy(SupportFactSortKey, StringComparer.Ordinal)
             .ToArray();
         var analysisGaps = facts
-            .Where(fact => fact.FactType == FactTypes.AnalysisGap)
+            .Where(fact => fact.FactType == FactTypes.AnalysisGap
+                && fact.RuleId != RuleIds.CSharpRazorSemanticModelBindingGap)
             .OrderBy(SupportFactSortKey, StringComparer.Ordinal)
             .ToArray();
         var buildStatusFacts = facts
