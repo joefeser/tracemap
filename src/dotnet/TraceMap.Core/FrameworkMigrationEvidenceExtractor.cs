@@ -115,6 +115,7 @@ internal static class FrameworkMigrationEvidenceExtractor
     {
         var admitted = new Dictionary<INamedTypeSymbol, TypeDeclarationSyntax>(SymbolEqualityComparer.Default);
         var gapCounts = new Dictionary<GapKey, GapAccumulator>();
+        var operationOrdinals = new Dictionary<IMethodSymbol, int>(SymbolEqualityComparer.Default);
 
         foreach (var declaration in root.DescendantNodes().OfType<TypeDeclarationSyntax>())
         {
@@ -126,14 +127,14 @@ internal static class FrameworkMigrationEvidenceExtractor
             {
                 if (syntaxCandidate)
                 {
-                    AddGap(gapCounts, declaration, null, null, "SemanticBindingUnavailable", null, null);
+                    AddGap(gapCounts, filePath, declaration, null, null, "SemanticBindingUnavailable", null, null);
                 }
                 continue;
             }
 
             if (!IsTrustedEfSymbol(candidateBase))
             {
-                AddGap(gapCounts, declaration, null, null, "FrameworkAssemblyIdentityUnavailable", null, null);
+                AddGap(gapCounts, filePath, declaration, null, null, "FrameworkAssemblyIdentityUnavailable", null, null);
                 continue;
             }
 
@@ -158,11 +159,12 @@ internal static class FrameworkMigrationEvidenceExtractor
             {
                 if (Operations.TryGetValue(methodName, out var unresolvedContract))
                 {
-                    AddGap(gapCounts, declaration, migrationType, sourceMethod, "SemanticBindingUnavailable", unresolvedContract.Kind, direction);
+                    AddGap(gapCounts, filePath, declaration, migrationType, sourceMethod, "SemanticBindingUnavailable", unresolvedContract.Kind, direction);
                 }
                 else if (ProtectedOperations.TryGetValue(methodName, out var protectedGap))
                 {
-                    AddGap(gapCounts, declaration, migrationType, sourceMethod, protectedGap, null, direction);
+                    protectedSourceSpans?.Add(new ProtectedSourceSpan(filePath, invocation.SpanStart, invocation.Span.Length));
+                    AddGap(gapCounts, filePath, declaration, migrationType, sourceMethod, protectedGap, null, direction);
                 }
                 continue;
             }
@@ -172,7 +174,7 @@ internal static class FrameworkMigrationEvidenceExtractor
                 && IsAdmittedAnnotationReceiver(invocation, model))
             {
                 protectedSourceSpans?.Add(new ProtectedSourceSpan(filePath, invocation.SpanStart, invocation.Span.Length));
-                AddGap(gapCounts, declaration, migrationType, sourceMethod, "AnnotationMigrationOperationUnavailable", null, direction);
+                AddGap(gapCounts, filePath, declaration, migrationType, sourceMethod, "AnnotationMigrationOperationUnavailable", null, direction);
                 continue;
             }
 
@@ -183,34 +185,34 @@ internal static class FrameworkMigrationEvidenceExtractor
 
             if (direction == "unknown")
             {
-                AddGap(gapCounts, declaration, migrationType, sourceMethod, "MigrationDirectionUnavailable", Operations.GetValueOrDefault(methodName)?.Kind, direction);
+                AddGap(gapCounts, filePath, declaration, migrationType, sourceMethod, "MigrationDirectionUnavailable", Operations.GetValueOrDefault(methodName)?.Kind, direction);
             }
 
             if (ProtectedOperations.TryGetValue(methodName, out var gapKind))
             {
                 protectedSourceSpans?.Add(new ProtectedSourceSpan(filePath, invocation.SpanStart, invocation.Span.Length));
-                AddGap(gapCounts, declaration, migrationType, sourceMethod, gapKind, null, direction);
+                AddGap(gapCounts, filePath, declaration, migrationType, sourceMethod, gapKind, null, direction);
                 continue;
             }
 
             if (!Operations.TryGetValue(methodName, out var contract))
             {
-                AddGap(gapCounts, declaration, migrationType, sourceMethod, "UnsupportedMigrationOperation", null, direction);
+                AddGap(gapCounts, filePath, declaration, migrationType, sourceMethod, "UnsupportedMigrationOperation", null, direction);
                 continue;
             }
 
-            var properties = CommonOperationProperties(migrationType, admittedSourceMethod, targetMethod, contract, direction, InvocationOrdinal(root, model, admittedSourceMethod, invocation));
+            var identityProperties = new SortedDictionary<string, string>(StringComparer.Ordinal);
             var missingRequired = false;
             foreach (var pair in contract.Required)
             {
                 if (TryGetStringArgument(invocation, targetMethod, pair.Key, model, out var value))
                 {
-                    properties[pair.Value] = value;
+                    identityProperties[pair.Value] = value;
                 }
                 else
                 {
                     missingRequired = true;
-                    AddGap(gapCounts, declaration, migrationType, sourceMethod,
+                    AddGap(gapCounts, filePath, declaration, migrationType, sourceMethod,
                         HasArgument(invocation, targetMethod, pair.Key) ? "DynamicIdentityUnavailable" : "MissingRequiredIdentity",
                         contract.Kind, direction);
                 }
@@ -220,39 +222,46 @@ internal static class FrameworkMigrationEvidenceExtractor
             {
                 if (TryGetStringArgument(invocation, targetMethod, pair.Key, model, out var value))
                 {
-                    properties[pair.Value] = value;
+                    identityProperties[pair.Value] = value;
                 }
                 else if (HasArgument(invocation, targetMethod, pair.Key))
                 {
-                    AddGap(gapCounts, declaration, migrationType, sourceMethod, "DynamicIdentityUnavailable", contract.Kind, direction);
+                    AddGap(gapCounts, filePath, declaration, migrationType, sourceMethod, "DynamicIdentityUnavailable", contract.Kind, direction);
                 }
             }
 
             if (contract.ArrayParameter is not null)
             {
-                AddArrayIdentity(invocation, targetMethod, contract.ArrayParameter, contract.ArrayProperty!, model, properties,
+                AddArrayIdentity(invocation, targetMethod, contract.ArrayParameter, contract.ArrayProperty!, model, identityProperties,
                     contract.ObjectKind == "index" ? "IndexColumnShapeUnavailable" : "ForeignKeyColumnShapeUnavailable",
-                    gapCounts, declaration, migrationType, admittedSourceMethod, contract.Kind, direction);
+                    gapCounts, filePath, declaration, migrationType, admittedSourceMethod, contract.Kind, direction);
             }
             if (contract.SecondaryArrayParameter is not null)
             {
-                AddArrayIdentity(invocation, targetMethod, contract.SecondaryArrayParameter, contract.SecondaryArrayProperty!, model, properties,
-                    "ForeignKeyColumnShapeUnavailable", gapCounts, declaration, migrationType, admittedSourceMethod, contract.Kind, direction);
+                AddArrayIdentity(invocation, targetMethod, contract.SecondaryArrayParameter, contract.SecondaryArrayProperty!, model, identityProperties,
+                    "ForeignKeyColumnShapeUnavailable", gapCounts, filePath, declaration, migrationType, admittedSourceMethod, contract.Kind, direction);
             }
 
             if (methodName == "CreateTable")
             {
                 protectedSourceSpans?.Add(new ProtectedSourceSpan(filePath, invocation.SpanStart, invocation.Span.Length));
-                AddGap(gapCounts, declaration, migrationType, sourceMethod, "NestedTableShapeUnavailable", contract.Kind, direction);
+                AddGap(gapCounts, filePath, declaration, migrationType, sourceMethod, "NestedTableShapeUnavailable", contract.Kind, direction);
             }
             if (methodName is "AddColumn" or "AlterColumn" && HasProtectedDefaultArgument(invocation, targetMethod))
             {
                 protectedSourceSpans?.Add(new ProtectedSourceSpan(filePath, invocation.SpanStart, invocation.Span.Length));
-                AddGap(gapCounts, declaration, migrationType, sourceMethod, "DefaultOrComputedExpressionUnavailable", contract.Kind, direction);
+                AddGap(gapCounts, filePath, declaration, migrationType, sourceMethod, "DefaultOrComputedExpressionUnavailable", contract.Kind, direction);
             }
 
             if (!missingRequired)
             {
+                var ordinal = operationOrdinals.GetValueOrDefault(admittedSourceMethod) + 1;
+                operationOrdinals[admittedSourceMethod] = ordinal;
+                var properties = CommonOperationProperties(migrationType, admittedSourceMethod, targetMethod, contract, direction, ordinal);
+                foreach (var pair in identityProperties)
+                {
+                    properties[pair.Key] = pair.Value;
+                }
                 facts.Add(CreateOperation(projectPath, filePath, invocation, admittedSourceMethod, targetMethod, contract.Kind, properties));
             }
         }
@@ -391,6 +400,7 @@ internal static class FrameworkMigrationEvidenceExtractor
         SortedDictionary<string, string> properties,
         string gapKind,
         Dictionary<GapKey, GapAccumulator> gaps,
+        string filePath,
         TypeDeclarationSyntax declaration,
         INamedTypeSymbol migrationType,
         IMethodSymbol source,
@@ -408,7 +418,7 @@ internal static class FrameworkMigrationEvidenceExtractor
             properties[property] = JsonSerializer.Serialize(values);
             return;
         }
-        AddGap(gaps, declaration, migrationType, source, gapKind, operationKind, direction);
+        AddGap(gaps, filePath, declaration, migrationType, source, gapKind, operationKind, direction);
     }
 
     private static bool TryGetStringArray(ExpressionSyntax expression, SemanticModel model, out string[] values)
@@ -480,13 +490,6 @@ internal static class FrameworkMigrationEvidenceExtractor
 
     private static bool HasProtectedDefaultArgument(InvocationExpressionSyntax invocation, IMethodSymbol method) =>
         new[] { "defaultValue", "defaultValueSql", "computedColumnSql" }.Any(name => HasArgument(invocation, method, name));
-
-    private static int InvocationOrdinal(SyntaxNode root, SemanticModel model, IMethodSymbol source, InvocationExpressionSyntax current) =>
-        root.DescendantNodes().OfType<InvocationExpressionSyntax>()
-            .Where(invocation => SymbolEqualityComparer.Default.Equals(model.GetEnclosingSymbol(invocation.SpanStart), source))
-            .OrderBy(invocation => invocation.SpanStart)
-            .TakeWhile(invocation => invocation != current)
-            .Count() + 1;
 
     private static string GetDirection(IMethodSymbol method)
     {
@@ -589,6 +592,7 @@ internal static class FrameworkMigrationEvidenceExtractor
 
     private static void AddGap(
         Dictionary<GapKey, GapAccumulator> gaps,
+        string filePath,
         TypeDeclarationSyntax declaration,
         INamedTypeSymbol? migrationType,
         IMethodSymbol? source,
@@ -602,7 +606,7 @@ internal static class FrameworkMigrationEvidenceExtractor
         }
 
         var migrationScope = migrationType is null
-            ? $"{declaration.SyntaxTree.FilePath}:{declaration.SpanStart}:{declaration.Span.Length}"
+            ? $"{FileInventory.NormalizeRelativePath(filePath)}:{declaration.SpanStart}:{declaration.Span.Length}"
             : CSharpSymbolIdentityProvider.TryCreate(migrationType)!.SymbolId;
         var sourceScope = source is null ? "<none>" : CSharpSymbolIdentityProvider.TryCreate(source)!.SymbolId;
         var key = new GapKey(migrationScope, gapKind, sourceScope, operationKind ?? "<none>", direction ?? "<none>");

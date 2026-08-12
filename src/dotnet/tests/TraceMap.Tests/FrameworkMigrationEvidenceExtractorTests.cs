@@ -159,6 +159,28 @@ public sealed class FrameworkMigrationEvidenceExtractorTests
     }
 
     [Fact]
+    public void Unavailable_symbol_gap_order_is_independent_of_host_syntax_tree_path()
+    {
+        const string source = """
+            namespace Sample;
+            public sealed class First : MissingMigration { }
+            public sealed class Second : MissingMigration { }
+            """;
+        var (_, first, _) = Extract(
+            source,
+            includeEfReferences: false,
+            allowCompilationErrors: true,
+            syntaxTreePath: "/host-a/private/Migration.cs");
+        var (_, second, _) = Extract(
+            source,
+            includeEfReferences: false,
+            allowCompilationErrors: true,
+            syntaxTreePath: "C:\\host-b\\private\\Migration.cs");
+
+        Assert.Equal(first.Select(GapProjection), second.Select(GapProjection));
+    }
+
+    [Fact]
     public void Unsigned_same_name_metadata_assembly_is_rejected()
     {
         var forgedTree = CSharpSyntaxTree.ParseText("""
@@ -234,6 +256,89 @@ public sealed class FrameworkMigrationEvidenceExtractorTests
         Assert.Equal(["1", "2"], first
             .Where(fact => fact.FactType == FactTypes.FrameworkMigrationOperationCandidate)
             .Select(fact => fact.Properties["invocationOrdinal"]));
+    }
+
+    [Fact]
+    public void Operation_ordinals_ignore_unrelated_and_non_emitted_invocations()
+    {
+        var (facts, _, _) = Extract("""
+            using Microsoft.EntityFrameworkCore.Migrations;
+            namespace Sample;
+            public sealed class M : Migration
+            {
+                private static void Helper() { }
+                private static string DynamicName() => "runtime";
+                protected override void Up(MigrationBuilder b)
+                {
+                    Helper();
+                    b.DropTable(DynamicName());
+                    b.DropTable("one");
+                    Helper();
+                    b.DropColumn(name: "status", table: "one");
+                }
+                protected override void Down(MigrationBuilder b) { }
+            }
+            """);
+
+        Assert.Equal(["1", "2"], facts
+            .Where(fact => fact.FactType == FactTypes.FrameworkMigrationOperationCandidate)
+            .Select(fact => fact.Properties!["invocationOrdinal"]));
+    }
+
+    [Fact]
+    public void Protected_spans_remove_overlapping_generic_semantic_hash_facts()
+    {
+        var facts = new List<SemanticFactCandidate>
+        {
+            new(
+                FactTypes.ArgumentPassed,
+                RuleIds.CSharpSemanticValueFlow,
+                EvidenceTiers.Tier1Semantic,
+                new EvidenceSpan("src/Migration.cs", 8, 8, null, "test", "test/1"),
+                Properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["argumentExpressionHash"] = "prohibited-digest"
+                },
+                SourceStart: 100,
+                SourceLength: 20),
+            new(
+                FactTypes.MethodInvoked,
+                RuleIds.CSharpSemanticMethodInvocation,
+                EvidenceTiers.Tier1Semantic,
+                new EvidenceSpan("src/Migration.cs", 9, 9, null, "test", "test/1"),
+                SourceStart: 200,
+                SourceLength: 10)
+        };
+
+        CSharpSemanticExtractor.RemoveProtectedSemanticFacts(
+            facts,
+            0,
+            "src/Migration.cs",
+            [new ProtectedSourceSpan("src/Migration.cs", 90, 40)]);
+
+        Assert.Single(facts);
+        Assert.Equal(200, facts[0].SourceStart);
+        Assert.DoesNotContain(facts, fact => fact.Properties?.ContainsKey("argumentExpressionHash") == true);
+    }
+
+    [Fact]
+    public void Unresolved_protected_call_still_marks_syntax_span_and_emits_only_a_gap()
+    {
+        var (facts, gaps, protectedSpans) = Extract("""
+            using Microsoft.EntityFrameworkCore.Migrations;
+            namespace Sample;
+            public sealed class M : Migration
+            {
+                protected override void Up(MigrationBuilder b) =>
+                    b.Sql("SELECT secret FROM private_table", unsupported: true);
+                protected override void Down(MigrationBuilder b) { }
+            }
+            """, allowCompilationErrors: true);
+
+        Assert.DoesNotContain(facts, fact => fact.FactType == FactTypes.FrameworkMigrationOperationCandidate);
+        Assert.Contains(gaps, gap => gap.Properties!["gapKind"] == "RawSqlMigrationOperationUnavailable");
+        Assert.Single(protectedSpans);
+        Assert.True(protectedSpans[0].Length > 0);
     }
 
     [Fact]
@@ -425,9 +530,11 @@ public sealed class FrameworkMigrationEvidenceExtractorTests
         IReadOnlyList<ProtectedSourceSpan> ProtectedSpans) Extract(
         string source,
         bool includeEfReferences = true,
-        IReadOnlyList<MetadataReference>? additionalReferences = null)
+        IReadOnlyList<MetadataReference>? additionalReferences = null,
+        bool allowCompilationErrors = false,
+        string syntaxTreePath = "src/Migration.cs")
     {
-        var tree = CSharpSyntaxTree.ParseText(source, path: "src/Migration.cs");
+        var tree = CSharpSyntaxTree.ParseText(source, path: syntaxTreePath);
         var references = PlatformReferences(includeEfReferences).ToList();
         if (includeEfReferences)
         {
@@ -445,7 +552,10 @@ public sealed class FrameworkMigrationEvidenceExtractorTests
             references.DistinctBy(reference => reference.Display, StringComparer.Ordinal),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
         var errors = compilation.GetDiagnostics().Where(item => item.Severity == DiagnosticSeverity.Error).ToArray();
-        Assert.Empty(errors);
+        if (!allowCompilationErrors)
+        {
+            Assert.Empty(errors);
+        }
         var facts = new List<SemanticFactCandidate>();
         var gaps = new List<SemanticFactCandidate>();
         var protectedSpans = new List<ProtectedSourceSpan>();
@@ -459,6 +569,10 @@ public sealed class FrameworkMigrationEvidenceExtractorTests
             protectedSpans);
         return (facts, gaps, protectedSpans);
     }
+
+    private static string GapProjection(SemanticFactCandidate gap) =>
+        string.Join("\u001f", gap.ContractElement, gap.Evidence.FilePath, gap.Evidence.StartLine,
+            string.Join("\u001e", gap.Properties!.Select(pair => $"{pair.Key}={pair.Value}")));
 
     private static IReadOnlyList<MetadataReference> PlatformReferences(bool includeEfReferences = true) =>
         ((string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES"))!
