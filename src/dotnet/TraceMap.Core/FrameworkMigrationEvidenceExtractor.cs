@@ -125,8 +125,7 @@ internal static class FrameworkMigrationEvidenceExtractor
         {
             var symbol = model.GetDeclaredSymbol(declaration) as INamedTypeSymbol;
             var candidateBase = FindMigrationBase(symbol?.BaseType);
-            var syntaxCandidate = declaration.BaseList?.Types.Any(type =>
-                type.Type.ToString().EndsWith("Migration", StringComparison.Ordinal)) == true;
+            var syntaxCandidate = IsMigrationSyntaxCandidate(declaration);
             if (candidateBase is null)
             {
                 if (syntaxCandidate)
@@ -209,6 +208,7 @@ internal static class FrameworkMigrationEvidenceExtractor
 
             if (!Operations.TryGetValue(methodName, out var contract))
             {
+                protectedSourceSpans?.Add(new ProtectedSourceSpan(filePath, invocation.SpanStart, invocation.Span.Length));
                 AddGap(gapCounts, filePath, declaration, migrationType, sourceMethod, "UnsupportedMigrationOperation", null, direction);
                 continue;
             }
@@ -640,7 +640,10 @@ internal static class FrameworkMigrationEvidenceExtractor
     }
 
     private static bool IsMigrationSyntaxCandidate(TypeDeclarationSyntax declaration) =>
-        declaration.BaseList?.Types.Any(type => type.Type.ToString().EndsWith("Migration", StringComparison.Ordinal)) == true;
+        declaration.BaseList?.Types.Any(type => type.Type.ToString() is
+            "Migration" or
+            "Microsoft.EntityFrameworkCore.Migrations.Migration" or
+            "global::Microsoft.EntityFrameworkCore.Migrations.Migration") == true;
 
     private static bool IsProtectedSyntaxCandidateInvocation(InvocationExpressionSyntax invocation)
     {

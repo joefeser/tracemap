@@ -57,9 +57,9 @@ still deferred.
 
 Producer implementation validation at the current worktree:
 
-- Focused framework-migration and reducer isolation tests: 19/19 passed.
+- Focused framework-migration and reducer isolation tests: 22/22 passed.
 - Full .NET solution build: passed with 0 warnings and 0 errors.
-- Full .NET solution test: 1,421/1,421 passed. The first full run hit one
+- Full .NET solution test: 1,424/1,424 passed. The first full run hit one
   unrelated SQLite disposal race in a property-flow test; that exact test
   passed on immediate isolated rerun and the unchanged full suite then passed.
 - Checked-in synthetic CLI scan: `FailedOrPartial` /

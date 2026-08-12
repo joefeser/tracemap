@@ -159,7 +159,7 @@ public static class CSharpIntegrationSyntaxExtractor
                     root,
                     semanticallyAnalyzedFiles?.Contains(file.RelativePath) == true,
                     protectedSourceSpans);
-                AddMessageAttributeFacts(manifest, facts, file.RelativePath, root);
+                AddMessageAttributeFacts(manifest, facts, file.RelativePath, root, protectedSourceSpans);
                 AddSqlCommandFacts(manifest, facts, file.RelativePath, root, protectedSourceSpans);
                 AddSqlStringFacts(manifest, facts, file.RelativePath, root, protectedSourceSpans);
             }
@@ -431,11 +431,20 @@ public static class CSharpIntegrationSyntaxExtractor
         AddMessageSurface(manifest, facts, evidence, pattern, destination, GetContainingMemberName(invocation), GetContainingType(invocation), manifest.RepoName);
     }
 
-    private static void AddMessageAttributeFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root)
+    private static void AddMessageAttributeFacts(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        string filePath,
+        CompilationUnitSyntax root,
+        IReadOnlyList<ProtectedSourceSpan>? protectedSourceSpans)
     {
         var constants = ExtractStringConstants(root);
         foreach (var attribute in root.DescendantNodes().OfType<AttributeSyntax>())
         {
+            if (OverlapsProtected(filePath, attribute, protectedSourceSpans))
+            {
+                continue;
+            }
             var attributeName = attribute.Name.ToString();
             var arguments = attribute.ArgumentList?.Arguments ?? default(SeparatedSyntaxList<AttributeArgumentSyntax>);
             var pattern = MessageAttributePattern(attributeName, arguments);
