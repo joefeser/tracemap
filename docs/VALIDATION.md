@@ -1421,3 +1421,30 @@ and limitations. Confirm filename-only candidates and marker text inside SQL
 strings do not establish snapshot identity. Unsupported DDL must produce
 categorical Tier 4 snapshot gaps without retaining object names, comments,
 database/server identity, or raw SQL.
+
+### Framework migration evidence
+
+For changes to the bounded EF Core migration producer, run:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~FrameworkMigrationEvidenceExtractorTests
+
+dotnet run --project src/dotnet/TraceMap.Cli -- scan \
+  --repo samples/framework-migration-v0 \
+  --out .tmp/framework-migration-scan \
+  --restore
+```
+
+Inspect all five required scan artifacts. Confirm declarations and operations
+use the framework-migration rule family, Tier 1 semantic evidence, exact spans,
+canonical symbol roles, provider scope `unknown`, and the bounded static
+migration coverage label. Protected SQL, data, annotation, default, and
+computed content must produce categorical Tier 4 gaps without source values or
+digests, and must not reappear through SQL text/shape extraction. The generic
+contract-delta reducer must ignore this fact family until its composition
+contract preserves the upstream evidence and limitations. Migration coverage
+gaps reduce `analysisLevel`, but do not change a successfully loaded and
+compiled repository's `buildStatus` to `FailedOrPartial`; those are separate
+claims. Confirm syntax-fallback facts use their dedicated extractor provenance
+and categorical migration messages in `knownGaps`.

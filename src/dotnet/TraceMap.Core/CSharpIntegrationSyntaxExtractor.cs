@@ -128,7 +128,8 @@ public static class CSharpIntegrationSyntaxExtractor
         string repoPath,
         ScanManifest manifest,
         IEnumerable<FileInventoryItem> inventory,
-        IReadOnlySet<string>? semanticallyAnalyzedFiles = null)
+        IReadOnlySet<string>? semanticallyAnalyzedFiles = null,
+        IReadOnlyList<ProtectedSourceSpan>? protectedSourceSpans = null)
     {
         var facts = new List<CodeFact>();
         foreach (var file in inventory
@@ -156,10 +157,11 @@ public static class CSharpIntegrationSyntaxExtractor
                     facts,
                     file.RelativePath,
                     root,
-                    semanticallyAnalyzedFiles?.Contains(file.RelativePath) == true);
-                AddMessageAttributeFacts(manifest, facts, file.RelativePath, root);
-                AddSqlCommandFacts(manifest, facts, file.RelativePath, root);
-                AddSqlStringFacts(manifest, facts, file.RelativePath, root);
+                    semanticallyAnalyzedFiles?.Contains(file.RelativePath) == true,
+                    protectedSourceSpans);
+                AddMessageAttributeFacts(manifest, facts, file.RelativePath, root, protectedSourceSpans);
+                AddSqlCommandFacts(manifest, facts, file.RelativePath, root, protectedSourceSpans);
+                AddSqlStringFacts(manifest, facts, file.RelativePath, root, protectedSourceSpans);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -235,11 +237,16 @@ public static class CSharpIntegrationSyntaxExtractor
         List<CodeFact> facts,
         string filePath,
         CompilationUnitSyntax root,
-        bool semanticAnalysisAvailable)
+        bool semanticAnalysisAvailable,
+        IReadOnlyList<ProtectedSourceSpan>? protectedSourceSpans)
     {
         var constants = ExtractStringConstants(root);
         foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
+            if (OverlapsProtected(filePath, invocation, protectedSourceSpans))
+            {
+                continue;
+            }
             var invocationName = GetInvocationName(invocation.Expression);
             var receiverName = GetReceiver(invocation.Expression);
             if (!semanticAnalysisAvailable
@@ -424,11 +431,20 @@ public static class CSharpIntegrationSyntaxExtractor
         AddMessageSurface(manifest, facts, evidence, pattern, destination, GetContainingMemberName(invocation), GetContainingType(invocation), manifest.RepoName);
     }
 
-    private static void AddMessageAttributeFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root)
+    private static void AddMessageAttributeFacts(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        string filePath,
+        CompilationUnitSyntax root,
+        IReadOnlyList<ProtectedSourceSpan>? protectedSourceSpans)
     {
         var constants = ExtractStringConstants(root);
         foreach (var attribute in root.DescendantNodes().OfType<AttributeSyntax>())
         {
+            if (OverlapsProtected(filePath, attribute, protectedSourceSpans))
+            {
+                continue;
+            }
             var attributeName = attribute.Name.ToString();
             var arguments = attribute.ArgumentList?.Arguments ?? default(SeparatedSyntaxList<AttributeArgumentSyntax>);
             var pattern = MessageAttributePattern(attributeName, arguments);
@@ -593,10 +609,19 @@ public static class CSharpIntegrationSyntaxExtractor
         return metadata;
     }
 
-    private static void AddSqlCommandFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root)
+    private static void AddSqlCommandFacts(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        string filePath,
+        CompilationUnitSyntax root,
+        IReadOnlyList<ProtectedSourceSpan>? protectedSourceSpans)
     {
         foreach (var creation in root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
         {
+            if (OverlapsProtected(filePath, creation, protectedSourceSpans))
+            {
+                continue;
+            }
             var typeName = creation.Type.ToString();
             if (!IsSqlCommandTypeName(typeName))
             {
@@ -623,10 +648,23 @@ public static class CSharpIntegrationSyntaxExtractor
         }
     }
 
-    private static void AddSqlStringFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root)
+    private static void AddSqlStringFacts(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        string filePath,
+        CompilationUnitSyntax root,
+        IReadOnlyList<ProtectedSourceSpan>? protectedSourceSpans)
     {
         foreach (var token in root.DescendantTokens().Where(IsStringLiteralToken))
         {
+            if (protectedSourceSpans?.Any(span =>
+                span.FilePath.Equals(filePath, StringComparison.Ordinal)
+                && token.SpanStart >= span.Start
+                && token.Span.End <= span.Start + span.Length) == true)
+            {
+                continue;
+            }
+
             var value = token.ValueText;
             if (!SqlTextDetector.IsSqlLike(value))
             {
@@ -713,6 +751,15 @@ public static class CSharpIntegrationSyntaxExtractor
                 properties: shapeProperties));
         }
     }
+
+    private static bool OverlapsProtected(
+        string filePath,
+        SyntaxNode node,
+        IReadOnlyList<ProtectedSourceSpan>? protectedSourceSpans) =>
+        protectedSourceSpans?.Any(span =>
+            span.FilePath.Equals(filePath, StringComparison.Ordinal)
+            && node.SpanStart < span.Start + span.Length
+            && span.Start < node.Span.End) == true;
 
     private static void AddDynamicSqlBoundaryIfNeeded(ScanManifest manifest, List<CodeFact> facts, string filePath, InvocationExpressionSyntax invocation, string methodName)
     {

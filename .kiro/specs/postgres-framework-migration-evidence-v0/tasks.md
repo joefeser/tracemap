@@ -2,55 +2,55 @@
 
 ## PR 1 — Semantic Producer
 
-- [ ] Add framework migration fact types, declaration/operation/gap rule IDs,
+- [x] Add framework migration fact types, declaration/operation/gap rule IDs,
       explicit evidence tiers, extractor version update, and rule-catalog
       limitations.
-- [ ] Implement the exact closed declaration/operation/gap property schemas;
+- [x] Implement the exact closed declaration/operation/gap property schemas;
       reject or test-fail on unlisted keys and vocabulary values.
-- [ ] Implement and assert the exact top-level `CodeFact` identity fields,
+- [x] Implement and assert the exact top-level `CodeFact` identity fields,
       including required nulls, manifest bindings, project path, and evidence
       span inputs used by `FactFactory`.
-- [ ] Add a pinned test-only `Microsoft.EntityFrameworkCore.Relational` package
+- [x] Add a pinned test-only `Microsoft.EntityFrameworkCore.Relational` package
       reference for positive metadata fixtures; reject identical
       application-source and unsigned same-name metadata lookalikes. Keep EF
       Core out of TraceMap product dependencies. Production admission requires
       the EF Core public-key token; do not emit Npgsql provider scope in v0.
-- [ ] Emit migration declarations only from compiler-resolved EF Core base
+- [x] Emit migration declarations only from compiler-resolved EF Core base
       types.
-- [ ] Require every operation's enclosing type to satisfy migration admission;
+- [x] Require every operation's enclosing type to satisfy migration admission;
       reject ordinary helpers that accept a genuine `MigrationBuilder`.
-- [ ] Emit the closed v0 `MigrationBuilder` operation vocabulary with constant
+- [x] Emit the closed v0 `MigrationBuilder` operation vocabulary with constant
       bounded object identity, canonical owner roles, direction, provenance,
       and deterministic IDs.
-- [ ] Keep all v0 framework operations provider-unknown; add no Npgsql explicit
+- [x] Keep all v0 framework operations provider-unknown; add no Npgsql explicit
       operation until a separately pinned package/signature fixture exists.
-- [ ] Emit safe categorical gaps for dynamic identities, unresolved binding,
+- [x] Emit safe categorical gaps for dynamic identities, unresolved binding,
       helper direction, raw SQL, seed/data, annotation, default/computed, and
       unsupported operation shapes.
-- [ ] Prove protected arguments and their digests never appear in facts,
+- [x] Prove protected arguments and their digests never appear in facts,
       SQLite, report, or logs, and prove overlapping SQL-text/shape and runtime
       operation-call facts are absent for protected spans.
 - [ ] Add same-name cross-assembly, overload/named-argument, reordered-file,
       false-positive lookalike, helper/local-function direction, constant-fold,
       array/lambda identity-shape, semantic-unavailable, and rule-catalog
       regressions.
-- [ ] Aggregate gaps by migration type and `gapKind` with deterministic counts;
+- [x] Aggregate gaps by migration type and `gapKind` with deterministic counts;
       partition by containing method, operation kind, and direction so unlike
       contexts do not collapse; prove protected invocations do not create
       unbounded per-call rows.
-- [ ] Exclude the new fact family from generic contract-delta property matching
+- [x] Exclude the new fact family from generic contract-delta property matching
       until an evidence-preserving reducer contract is specified. Early-return
       by new fact type and gap rule ID; add adversarial type, member, SQL,
       migration-gap, and `UnknownAnalysisGap` downgrade regressions.
-- [ ] Prove deterministic invocation ordinals preserve two identical operation
+- [x] Prove deterministic invocation ordinals preserve two identical operation
       shapes on one source line.
-- [ ] Assert exact property-key sets, canonical symbol roles, fixed coverage and
+- [x] Assert exact property-key sets, canonical symbol roles, fixed coverage and
       limitation values, canonical JSON column arrays, and the full closed
       `gapKind` vocabulary in producer/storage round trips.
 - [ ] Audit snapshot diff, report counts, static HTML, and vault/evidence export
       behavior for the new fact types and gap rule; require preserved evidence
       metadata or explicit omission gaps.
-- [ ] Add a checked-in synthetic CLI sample, inspect all five required
+- [x] Add a checked-in synthetic CLI sample, inspect all five required
       artifacts, update `docs/VALIDATION.md`, and document the new rule family.
 
 ## PR 2 — Bounded Composition
@@ -71,15 +71,15 @@
 
 ## Validation
 
-- [ ] Run focused semantic, PostgreSQL schema, database design-review, release-
+- [x] Run focused semantic, PostgreSQL schema, database design-review, release-
       review, storage, and rule-catalog tests for each changed slice.
-- [ ] Run `dotnet build src/dotnet/TraceMap.sln`.
-- [ ] Run `dotnet test src/dotnet/TraceMap.sln`.
-- [ ] Run a CLI scan against the checked-in synthetic fixture and inspect all
+- [x] Run `dotnet build src/dotnet/TraceMap.sln`.
+- [x] Run `dotnet test src/dotnet/TraceMap.sln`.
+- [x] Run a CLI scan against the checked-in synthetic fixture and inspect all
       five required scan artifacts.
-- [ ] Run `./scripts/check-private-paths.sh`.
-- [ ] Run `git diff --check`.
-- [ ] Update this file and `implementation-state.md` only as work is completed.
+- [x] Run `./scripts/check-private-paths.sh`.
+- [x] Run `git diff --check`.
+- [x] Update this file and `implementation-state.md` only as work is completed.
 
 ## Deferred Follow-Ups
 
