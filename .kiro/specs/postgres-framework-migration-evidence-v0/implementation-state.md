@@ -1,11 +1,11 @@
 # Framework Migration Evidence v0 Implementation State
 
-Status: producer-and-bounded-composition-implemented
+Status: producer-composition-and-generic-consumer-audit-implemented
 
-Branch: `codex/framework-migration-composition-v0`
+Branch: `codex/framework-migration-export-audit-v0`
 
 Base: fresh `origin/dev` at
-`cedb654a64546789adfc39ff4f8d511bcecb44a9`
+`b205d60a3271b0c9280249e46939f98599b509b5`
 
 Issue: [#531](https://github.com/joefeser/tracemap/issues/531)
 
@@ -75,7 +75,36 @@ specified, pinned provider contract exists. The reports make no claim about
 application, ordering, rollback, generated SQL, runtime provider, compatibility,
 database state, safety, or approval.
 
+## Generic Consumer Audit
+
+The generic Markdown report already counts framework migration fact types
+without rendering their protected properties or symbols. The static HTML
+explorer now preserves framework facts only when their exact rule, fact type,
+coverage label, limitation, tier, commit, file span, extractor version, and
+supporting fact identity are compatible with the closed producer contract.
+Rows with missing or unexpected framework coverage/limitations are omitted
+with `explorer.input.framework-migration-metadata-unavailable.v1`.
+
+Snapshot diff, vault export, and evidence-docs export do not yet have dedicated
+framework migration semantic projections. They now detect the rule family,
+omit it from generic surface projections, preserve bounded supporting fact
+IDs, and emit explicit Tier4 omission gaps. They do not silently drop the
+facts or repackage them as ordinary dependency-surface claims. A future
+snapshot comparison may add migration identity and ordering semantics only
+under a separately specified contract.
+
 ## Validation
+
+Generic consumer audit validation on
+`codex/framework-migration-export-audit-v0`:
+
+- Focused framework migration consumer audit tests: 5/5 passed.
+- Focused neighboring consumer and rule-catalog tests: 169/169 passed.
+- Full .NET solution build: passed with 0 warnings and 0 errors.
+- Full .NET solution test: 1,442/1,442 passed.
+- Static HTML valid/invalid metadata projection, Markdown count-only output,
+  single/combined snapshot diff gaps, vault omission gaps, and evidence-docs
+  omission gaps are covered with protected-value assertions.
 
 Bounded composition validation on `codex/framework-migration-composition-v0`:
 

@@ -205,6 +205,11 @@ internal sealed record ReleaseIndexInfo(string Kind, ReleaseReviewSnapshot Snaps
 
 internal sealed record AccessEvidencePresence(long FactCount, IReadOnlyList<string> SupportingFactIds);
 
+internal sealed record FrameworkMigrationEvidencePresence(
+    long FactCount,
+    IReadOnlyList<string> SupportingFactIds,
+    IReadOnlyList<string> SourceIndexIds);
+
 internal sealed record SingleComparableFact(
     string StableKey,
     string EvidenceHash,
@@ -1832,6 +1837,68 @@ public static class ReleaseReviewReporter
         while (await reader.ReadAsync(cancellationToken))
             ids.Add(StringOrDefault(reader, 0, "unknown"));
         return new AccessEvidencePresence(count, ids);
+    }
+
+    internal static async Task<FrameworkMigrationEvidencePresence> ReadFrameworkMigrationEvidencePresenceAsync(
+        string path,
+        string indexKind,
+        CancellationToken cancellationToken,
+        string? sourceLabel = null)
+    {
+        if (indexKind == "single"
+            && !string.IsNullOrWhiteSpace(sourceLabel)
+            && !sourceLabel.Equals("single", StringComparison.Ordinal))
+        {
+            return new FrameworkMigrationEvidencePresence(0, [], []);
+        }
+
+        await using var connection = new SqliteConnection(ReadOnlyConnectionString(path));
+        await connection.OpenAsync(cancellationToken);
+        await using var countCommand = connection.CreateCommand();
+        countCommand.CommandText = indexKind == "combined"
+            ? "select count(*) from combined_facts f join index_sources s on s.source_index_id = f.source_index_id where f.rule_id in ($declaration, $operation, $gap) and ($source is null or s.label = $source);"
+            : "select count(*) from facts where rule_id in ($declaration, $operation, $gap);";
+        AddFrameworkMigrationRuleParameters(countCommand);
+        if (indexKind == "combined")
+            countCommand.Parameters.AddWithValue("$source", (object?)sourceLabel ?? DBNull.Value);
+        var count = Convert.ToInt64(await countCommand.ExecuteScalarAsync(cancellationToken), System.Globalization.CultureInfo.InvariantCulture);
+
+        var ids = new List<string>();
+        await using var idCommand = connection.CreateCommand();
+        idCommand.CommandText = indexKind == "combined"
+            ? "select f.combined_fact_id from combined_facts f join index_sources s on s.source_index_id = f.source_index_id where f.rule_id in ($declaration, $operation, $gap) and ($source is null or s.label = $source) order by f.combined_fact_id limit 12;"
+            : "select fact_id from facts where rule_id in ($declaration, $operation, $gap) order by fact_id limit 12;";
+        AddFrameworkMigrationRuleParameters(idCommand);
+        if (indexKind == "combined")
+            idCommand.Parameters.AddWithValue("$source", (object?)sourceLabel ?? DBNull.Value);
+        await using var reader = await idCommand.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+            ids.Add(StringOrDefault(reader, 0, "unknown"));
+
+        var sourceIds = new List<string>();
+        if (indexKind == "combined")
+        {
+            await using var sourceCommand = connection.CreateCommand();
+            sourceCommand.CommandText = "select distinct f.source_index_id from combined_facts f join index_sources s on s.source_index_id = f.source_index_id where f.rule_id in ($declaration, $operation, $gap) and ($source is null or s.label = $source) order by f.source_index_id;";
+            AddFrameworkMigrationRuleParameters(sourceCommand);
+            sourceCommand.Parameters.AddWithValue("$source", (object?)sourceLabel ?? DBNull.Value);
+            await using var sourceReader = await sourceCommand.ExecuteReaderAsync(cancellationToken);
+            while (await sourceReader.ReadAsync(cancellationToken))
+                sourceIds.Add(StringOrDefault(sourceReader, 0, "unknown"));
+        }
+        else if (count > 0)
+        {
+            sourceIds.Add("single");
+        }
+
+        return new FrameworkMigrationEvidencePresence(count, ids, sourceIds);
+    }
+
+    private static void AddFrameworkMigrationRuleParameters(SqliteCommand command)
+    {
+        command.Parameters.AddWithValue("$declaration", RuleIds.DatabaseFrameworkMigrationDeclaration);
+        command.Parameters.AddWithValue("$operation", RuleIds.DatabaseFrameworkMigrationOperation);
+        command.Parameters.AddWithValue("$gap", RuleIds.DatabaseFrameworkMigrationGap);
     }
 
     private static async Task<ReleaseIndexInfo> ReadIndexInfoAsync(string path, string side, CancellationToken cancellationToken)

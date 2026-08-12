@@ -164,6 +164,16 @@ rules:
       - Partial sections are compatibility and coverage labels, not proof of evidence absence or runtime safety.
       - The explorer must distinguish not-provided, unsupported, and no-evidence-under-credible-coverage states when enough input metadata is available.
 
+  - id: explorer.input.framework-migration-metadata-unavailable.v1
+    name: Static HTML explorer framework migration metadata gap
+    description: Omits framework migration facts whose exact bounded coverage and limitation metadata cannot be safely preserved by the explorer.
+    evidenceTier: Tier4Unknown
+    emits:
+      - framework-migration-metadata-unavailable gap
+    limitations:
+      - The gap describes explorer projection compatibility and does not prove that framework migration evidence is absent.
+      - Omitted rows must not be interpreted as migration application, ordering, provider selection, generated SQL, rollback, or safety evidence.
+
   - id: explorer.render.section-status.v1
     name: Static HTML explorer section status
     description: Records deterministic section availability labels derived from compatible generated artifacts, safe view models, and rule-backed explorer gaps.
@@ -740,6 +750,16 @@ rules:
     limitations:
       - Unsupported-family gaps describe exporter/input compatibility only; they do not prove source evidence absence.
 
+  - id: docs-export.gap.framework-migration-consumer-unsupported.v1
+    name: Docs export framework migration consumer gap
+    description: Records when framework migration facts are present but docs export has no dedicated framework migration chunk projection.
+    evidenceTier: Tier4Unknown
+    emits:
+      - framework-migration-consumer-unsupported gap
+    limitations:
+      - Supporting fact IDs are preserved, but framework migration facts are not repackaged as generic dependency-surface claims.
+      - The gap does not prove migration absence, application, ordering, provider selection, generated SQL, rollback, reversibility, or safety.
+
   - id: docs-export.gap.unsupported-question-family.v1
     name: Docs export unsupported question-family gap
     description: Records additive question-oriented docs-export views that cannot be generated from the supplied input schema without synthesizing unsupported evidence.
@@ -1122,6 +1142,16 @@ rules:
       - The gap preserves bounded supporting Access fact IDs but does not convert catalog counts or coverage gaps into Access identity, navigation, flow, runtime, or impact conclusions.
       - It does not prove Access evidence is absent, that a database object exists or executes, or that a change is safe or approved.
       - Supporting IDs are stable TraceMap identifiers; raw database names, paths, SQL, connections, VBA, macro bodies, expressions, and protected material are not rendered.
+
+  - id: vault-export.gap.framework-migration-consumer-unsupported.v1
+    name: Vault export framework migration consumer gap
+    description: Records when framework migration facts are present in a combined index but vault export has no dedicated framework migration graph projection.
+    evidenceTier: Tier4Unknown
+    emits:
+      - FrameworkMigrationEvidenceConsumerUnsupported
+    limitations:
+      - The gap preserves bounded supporting fact IDs without converting declarations, operation candidates, or coverage gaps into graph nodes.
+      - It does not prove migration absence, application, ordering, provider selection, generated SQL, database state, rollback, reversibility, approval, or safety.
 
   - id: public.demo.summary.v1
     name: Public demo summary section
@@ -2354,6 +2384,16 @@ rules:
     limitations:
       - Availability gaps explicitly mark partial analysis and must not be interpreted as no changes.
       - Missing optional precision tables can reduce comparison precision and downgrade conclusions.
+
+  - id: snapshot.diff.framework-migration-unsupported.v1
+    name: Snapshot diff framework migration projection gap
+    description: Records when framework migration facts are present but snapshot diff has no dedicated framework migration identity and comparison projection.
+    evidenceTier: Tier4Unknown
+    emits:
+      - FrameworkMigrationSnapshotDiffUnsupported gap
+    limitations:
+      - Supporting before/after fact IDs identify the omitted evidence without interpreting migration application or ordering.
+      - The gap does not prove migration absence, provider selection, generated SQL, database state, rollback, reversibility, approval, or safety.
 
   - id: combined.diff.source.v1
     name: Combined dependency diff source comparison

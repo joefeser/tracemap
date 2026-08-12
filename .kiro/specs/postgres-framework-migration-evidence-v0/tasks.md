@@ -47,7 +47,7 @@
 - [x] Assert exact property-key sets, canonical symbol roles, fixed coverage and
       limitation values, canonical JSON column arrays, and the full closed
       `gapKind` vocabulary in producer/storage round trips.
-- [ ] Audit snapshot diff, report counts, static HTML, and vault/evidence export
+- [x] Audit snapshot diff, report counts, static HTML, and vault/evidence export
       behavior for the new fact types and gap rule; require preserved evidence
       metadata or explicit omission gaps.
 - [x] Add a checked-in synthetic CLI sample, inspect all five required
