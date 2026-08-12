@@ -102,6 +102,13 @@ deferral, catalog naming/reconciliation, complete consumer inventory, producer
 bounds, report metadata allowlists, one limitations key, bounded hashing, and a
 review-tier Tier1/Tier3 reconciliation tuple.
 
+Hosted review on PR #647 then found two current-head issues. Both were accepted:
+
+- canonical binding attributes now classify binding source only after
+  controller/page-model and action/handler ownership independently qualify;
+- the superseded composition spec's task header now matches its historical
+  implementation-state status and points to this active queue.
+
 ## Validation
 
 Initial spec-only validation passed before review:

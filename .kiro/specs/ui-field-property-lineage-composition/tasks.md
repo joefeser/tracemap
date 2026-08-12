@@ -1,12 +1,12 @@
 # UI Field Property Lineage Composition Tasks
 
-Status: ready-for-implementation-after-route-flow-contract
-Readiness: ready-after-current-route-flow-worker
+Status: superseded-as-active-queue
+Readiness: historical-record
 
-Reconciliation note: this is the active property-flow implementation spec after
-the older continuation packet. Start here only after any in-flight route-flow
-branch is merged or explicitly closed, `origin/dev` is fetched, and the
-route-flow contract is re-audited against that commit.
+Historical reconciliation note: this file is not an active implementation
+queue. Unchecked boxes remain as a record of the original broad scope. The
+remaining bounded Razor identity, direct property mapping, and exact-ID
+composition work is owned by `.kiro/specs/property-flow-depth-v0/` under #517.
 
 ## Spec-Only PR Scope
 
