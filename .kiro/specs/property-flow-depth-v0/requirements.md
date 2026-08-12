@@ -170,7 +170,9 @@ mapped to another. Those are the two producer gaps owned here.
    namespace. New `AnalysisGap` kinds SHALL be a closed vocabulary. Initial
    candidates are:
    `RazorFrameworkIdentityUnavailable`, `RazorBindingTypeUnavailable`,
-   `RazorBindingPropertyUnavailable`, `AmbiguousRazorBindingTarget`,
+   `RazorBindingPropertyUnavailable`, `RazorBindingExternalBaseUnavailable`,
+   `RazorEndpointOwnerUnavailable`, `RazorBindingTargetTruncated`,
+   `RazorBindingGapTruncated`, `AmbiguousRazorBindingTarget`,
    `PropertyMappingSemanticUnavailable`, `PropertyMappingShapeUnsupported`,
    `PropertyMappingTargetAmbiguous`, `PropertyMappingCoverageReduced`, and
    `PropertyMappingTruncated`.
@@ -183,11 +185,14 @@ mapped to another. Those are the two producer gaps owned here.
 6. Same-name cross-assembly types/properties, overloads, partial types,
    generated/source mixtures, aliases, shadowing, and semantic-unavailable
    fixtures SHALL not collide or silently upgrade evidence.
-7. The Tier1/Tier3 reconciliation key SHALL be owner/action or handler family,
-   parameter ordinal/source, model type display identity, property name, and
-   compatible repository-relative span. Because Tier3 lacks canonical symbol
-   IDs, the pairing itself remains review-tier; only the Tier1 fact governs an
-   exact join. Reconciliation SHALL never discard either source fact.
+7. Tier1/Tier3 reconciliation SHALL use only the contextual fields both tiers
+   actually carry: owner/action or handler labels, parameter/source labels,
+   model/property labels, and compatible repository-relative spans. Tier3
+   lacks canonical owner identity, parameter ordinal, and canonical model-type
+   display identity, so it cannot form or select an exact reconciliation key.
+   It remains contextual support only; only an independently selected Tier1
+   fact governs an exact join, and reconciliation SHALL never discard either
+   source fact.
 8. The generic contract-delta reducer SHALL explicitly exclude the new fact
    types and their producer-gap rule IDs until a reducer contract admits them.
    Existing reduce outputs and high-fan-out classifications SHALL remain

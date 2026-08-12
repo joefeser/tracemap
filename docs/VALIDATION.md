@@ -664,6 +664,22 @@ dotnet test src/dotnet/TraceMap.sln
 git diff --check
 ```
 
+For semantic ASP.NET Core MVC/Razor Pages model-binding producer changes, also
+run the signed-metadata, reducer-isolation, and reporter-isolation regressions:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter "FullyQualifiedName~RazorSemanticModelBindingTests|FullyQualifiedName~Reduce_excludes_semantic_razor_binding|FullyQualifiedName~Property_flow_ignores_semantic_razor_targets"
+```
+
+The positive fixture uses the locked `net10.0` ASP.NET Core shared-framework
+metadata. Confirm admission records the exact framework metadata type, assembly
+name, and Microsoft public-key token; framework version is fixture provenance,
+not a product trust key. Source-declared lookalikes must produce no Tier1 target.
+The resulting semantic facts remain available in NDJSON/SQLite but must not
+change generic reducer or legacy name-based property-flow output until the
+exact-identity composition slice lands.
+
 Expected behavior: Angular template fixtures emit `UiTemplateBinding`,
 `UiFormControlBinding`, `UiEventBinding`, `UiTemplateVariable`, and
 `UiBindingGap` facts with rule IDs and safe metadata only; Razor fixtures emit

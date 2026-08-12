@@ -111,6 +111,20 @@ has both Tier1 and Tier3 rows, composition selects by exact canonical target ID
 and preserves both supporting IDs; it does not delete historical facts or
 pretend syntax evidence became semantic.
 
+### Review-tier reconciliation boundary
+
+PR 1 does not claim that the existing Tier3 syntax row can form the Tier1
+canonical reconciliation identity. The tiers share only contextual fields:
+binding kind, controller/action or page/handler label, parameter name/source,
+simple model label, property name/path, and compatible source location. Tier3
+does not carry a canonical owner ID, parameter ordinal, or canonical model-type
+display identity. Therefore it remains contextual supporting evidence only;
+it cannot select, replace, or upgrade a Tier1 target. The Tier1
+`reconciliationProfileVersion` names this staged profile and records
+`tier3ReconciliationState = contextual-support-only-missing-canonical-identity`.
+PR 3 may preserve a compatible Tier3 supporting fact only after an exact Tier1
+target is independently selected; ambiguity must remain a gap.
+
 PR 1 is independently safe to merge: the existing property-flow reporter must
 exclude semantic rows by the new producer rule ID because its current
 `RazorModelBindingTarget` path still joins display metadata. The facts remain
