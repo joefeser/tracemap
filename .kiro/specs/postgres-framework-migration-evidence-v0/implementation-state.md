@@ -1,11 +1,11 @@
 # Framework Migration Evidence v0 Implementation State
 
-Status: producer-implemented
+Status: producer-and-bounded-composition-implemented
 
-Branch: `codex/framework-migration-producer-v0`
+Branch: `codex/framework-migration-composition-v0`
 
 Base: fresh `origin/dev` at
-`1937def3647ae090ffc838d2135d06c134f7c6cb`
+`cedb654a64546789adfc39ff4f8d511bcecb44a9`
 
 Issue: [#531](https://github.com/joefeser/tracemap/issues/531)
 
@@ -57,10 +57,35 @@ migration coverage.
 
 The generic contract-delta reducer returns before matching either new fact type
 or the framework gap rule. `IsSqlFact` and `IsPostgresSchemaFact` remain
-unchanged. PR 2 composition into database design-review and release-review is
-still deferred.
+unchanged.
+
+## Bounded Composition
+
+PR 2 admits the three framework-migration rules into database design review and
+release review through closed fact/property allowlists. Declarations are static
+evidence; operations are review-recommended application-side evidence. Both
+reports preserve the upstream rule, tier, commit, file span, extractor,
+coverage, supporting fact ID, and limitations. Upstream categorical gaps remain
+rule-backed gaps, and database design review adds a separate rule-backed
+`FrameworkMigrationProviderUnknown` gap for every generic operation.
+
+No framework operation is attached to a PostgreSQL table or schema in v0.
+Provider-explicit correlation remains unchecked and deferred until a separately
+specified, pinned provider contract exists. The reports make no claim about
+application, ordering, rollback, generated SQL, runtime provider, compatibility,
+database state, safety, or approval.
 
 ## Validation
+
+Bounded composition validation on `codex/framework-migration-composition-v0`:
+
+- Focused producer, database design-review, release-review, and composition
+  tests: 74/74 passed, including framework-only single and combined indexes.
+- Full .NET solution build: passed with 0 warnings and 0 errors.
+- Full .NET solution test: 1,437/1,437 passed.
+- Changed-file `dotnet format`: passed.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
 
 Producer implementation validation at the current worktree:
 
