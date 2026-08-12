@@ -176,6 +176,7 @@ internal static class RazorSemanticModelBindingExtractor
                 }
                 if (parameter.Type is not INamedTypeSymbol modelType
                     || modelType.TypeKind == TypeKind.Error
+                    || modelType.IsRecord
                     || modelType.IsUnboundGenericType
                     || modelType.Locations.All(location => !location.IsInSource))
                 {
@@ -503,6 +504,7 @@ internal static class RazorSemanticModelBindingExtractor
 
         return AllSourceTypes(compilation.Assembly.GlobalNamespace)
             .Where(IsDiscoverableController)
+            .Where(candidate => !HasTrustedAttributeInTypeHierarchy(candidate, "Microsoft.AspNetCore.Mvc.NonControllerAttribute"))
             .Where(candidate => InheritsFrom(candidate, method.ContainingType))
             .Where(candidate => !candidate.GetMembers(method.Name).OfType<IMethodSymbol>().Any())
             .OrderBy(candidate => candidate.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), StringComparer.Ordinal)
@@ -590,12 +592,21 @@ internal static class RazorSemanticModelBindingExtractor
     }
 
     private static string[] ActionHttpMethods(IMethodSymbol method) =>
-        method.GetAttributes()
+        OverrideChain(method)
+            .SelectMany(candidate => candidate.GetAttributes())
             .Where(attribute => HttpAttributeMethods.Keys.Any(name => IsTrustedMetadataType(attribute.AttributeClass, name)))
             .Select(attribute => HttpAttributeMethods[MetadataName(attribute.AttributeClass)])
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
+
+    private static IEnumerable<IMethodSymbol> OverrideChain(IMethodSymbol method)
+    {
+        for (var current = method; current is not null; current = current.OverriddenMethod)
+        {
+            yield return current;
+        }
+    }
 
     private static string[] HandlerHttpMethods(string methodName)
     {
