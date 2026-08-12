@@ -26,8 +26,8 @@ Check specifically:
 3. Is direct property mapping narrow enough to avoid turning arbitrary
    expressions or same-name properties into evidence?
 4. Is assignment direction explicit and preserved through storage/composition?
-5. Are constructor forwarding and mapper packages deferred unless both sides
-   have exact independently proven contracts?
+5. Are constructor forwarding, legacy ASP.NET MVC, and mapper packages deferred
+   until they have exact independently proven contracts?
 6. Can property-flow join by canonical IDs without silently upgrading syntax,
    convention, alias, or broad endpoint evidence?
 7. Are gaps bounded, categorical, rule-backed, deterministic, and free of raw

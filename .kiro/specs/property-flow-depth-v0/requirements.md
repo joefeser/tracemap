@@ -38,10 +38,16 @@ mapped to another. Those are the two producer gaps owned here.
 2. Framework identity SHALL include an allowlisted metadata type and assembly
    identity. Source-declared, unsigned same-name, namespace-only, suffix-only,
    and unresolved lookalikes SHALL NOT qualify for Tier1 evidence.
-3. The first implementation SHALL pin the exact supported ASP.NET Core metadata
-   assemblies, public-key token or equivalent strong assembly identity, type
-   names, member/attribute signatures, and package/runtime version in tests and
-   implementation state before emission.
+3. The first implementation SHALL admit only a closed ASP.NET Core assembly-
+   name allowlist, the Microsoft public-key token, metadata-only symbols, and
+   exact type/member/attribute signatures. Tested package/runtime versions
+   SHALL be pinned as fixture provenance, but version SHALL NOT participate in
+   the admission predicate. The initial candidate assembly set is
+   `Microsoft.AspNetCore.Mvc.Core`, `Microsoft.AspNetCore.Mvc.Abstractions`,
+   `Microsoft.AspNetCore.Mvc.ViewFeatures`,
+   `Microsoft.AspNetCore.Mvc.RazorPages`, and
+   `Microsoft.AspNetCore.Http.Abstractions`; PR 1 SHALL narrow rather than
+   silently expand this set after inspecting the signed fixture symbols.
 4. A controller action or page handler parameter SHALL expand to properties
    only when Roslyn resolves the parameter type and property symbols. Cross-
    file and partial source types MAY qualify; error types, type parameters,
@@ -55,6 +61,9 @@ mapped to another. Those are the two producer gaps owned here.
    action or page/handler identity, HTTP method evidence where available,
    repository-relative span, rule ID, tier, commit SHA, extractor version,
    coverage label, supporting fact IDs where materialized, and limitations.
+   One fact SHALL represent one resolved target property for one owner and
+   parameter/property binding source. HTTP methods SHALL be a sorted,
+   deduplicated bounded property on that fact rather than multiplying facts.
 7. Semantic evidence SHALL coexist with syntax fallback deterministically. A
    compatible Tier1 target SHALL be preferred for strong joins; a syntax row
    SHALL not create a second hidden winner or upgrade an incompatible semantic
@@ -67,9 +76,10 @@ mapped to another. Those are the two producer gaps owned here.
 2. v0 SHALL support only these direct shapes:
    - simple assignment: `target.Property = source.Property`;
    - object initializer member assignment, including inside a LINQ projection:
-     `new Target { Property = source.Property }`; and
-   - constructor forwarding only when an exact constructor parameter-to-target-
-     property assignment is independently visible and both hops are preserved.
+     `new Target { Property = source.Property }`.
+   Constructor forwarding MAY be added in a later bounded slice only when an
+   exact constructor parameter-to-target-property assignment is independently
+   visible and both hops are preserved.
 3. Parentheses, null-forgiving syntax, and identity conversions MAY be unwrapped
    only when Roslyn preserves the same source property symbol. Arbitrary method
    calls, conditional expressions, arithmetic, interpolation, reflection,
@@ -86,6 +96,10 @@ mapped to another. Those are the two producer gaps owned here.
    source and target MAY emit an aggregated categorical gap. Gaps SHALL not
    retain source expressions, snippets, constant values, configuration values,
    or hashes derived from protected content.
+7. The producer SHALL define a deterministic per-method and per-file emission
+   bound before implementation. Exceeding a bound SHALL emit an aggregated,
+   rule-backed truncation gap; generated or excluded sources SHALL follow the
+   scanner's recorded scope policy and SHALL NOT be silently analyzed.
 
 ## Requirement 3: Property-Flow Composition
 
@@ -111,6 +125,15 @@ mapped to another. Those are the two producer gaps owned here.
    backward-compatible rows/metadata and every current consumer safely ignores
    or preserves them. Otherwise the implementation SHALL version the report or
    emit a compatibility gap.
+8. Exact semantic rows SHALL not automatically promote an existing path's
+   classification in v0. They add exact supporting identity and directed hops;
+   any classification promotion requires a separately documented compatibility
+   decision and regression baseline.
+9. Candidate ordering SHALL prefer stronger exact evidence before applying
+   existing row/path limits. If eligible candidates are displaced by a bound,
+   the report SHALL emit a deterministic truncation gap. Existing same-name
+   fallback SHALL remain review-tier or be represented by an explicit gap; it
+   SHALL not silently disappear because a different strong path exists.
 
 ## Requirement 4: Evidence, Gaps, and Determinism
 
@@ -118,13 +141,21 @@ mapped to another. Those are the two producer gaps owned here.
    product output emits it.
 2. Proposed producer rules are
    `csharp.razor.semantic-model-binding.v1` and
-   `csharp.semantic.property-mapping.v1`; implementation MAY reuse an existing
+   `csharp.semantic.propertymapping.v1`; implementation MAY reuse an existing
    rule only if its documented semantics and property schema are sufficient.
-3. New gap kinds SHALL be a closed vocabulary. Initial candidates are:
+   The existing `csharp.razor.model-binding.v1` catalog entry SHALL be narrowed
+   to its actual syntax semantics if it no longer truthfully describes all
+   `RazorModelBindingTarget` rows.
+3. Producer failures SHALL be `AnalysisGap` facts with PascalCase `gapKind`
+   values. Existing `RazorBindingGap` facts retain their kebab-case markup-
+   parser vocabulary; the two fact types SHALL NOT share an undocumented gap
+   namespace. New `AnalysisGap` kinds SHALL be a closed vocabulary. Initial
+   candidates are:
    `RazorFrameworkIdentityUnavailable`, `RazorBindingTypeUnavailable`,
    `RazorBindingPropertyUnavailable`, `AmbiguousRazorBindingTarget`,
    `PropertyMappingSemanticUnavailable`, `PropertyMappingShapeUnsupported`,
-   `PropertyMappingTargetAmbiguous`, and `PropertyMappingCoverageReduced`.
+   `PropertyMappingTargetAmbiguous`, `PropertyMappingCoverageReduced`, and
+   `PropertyMappingTruncated`.
 4. Gaps SHALL use `Tier4Unknown`, a rule ID, coverage label, safe scope
    identity, deterministic occurrence count where aggregation applies, and
    fixed limitations.
@@ -134,6 +165,15 @@ mapped to another. Those are the two producer gaps owned here.
 6. Same-name cross-assembly types/properties, overloads, partial types,
    generated/source mixtures, aliases, shadowing, and semantic-unavailable
    fixtures SHALL not collide or silently upgrade evidence.
+7. The Tier1/Tier3 reconciliation key SHALL be owner/action or handler family,
+   parameter ordinal/source, model type display identity, property name, and
+   compatible repository-relative span. Because Tier3 lacks canonical symbol
+   IDs, the pairing itself remains review-tier; only the Tier1 fact governs an
+   exact join. Reconciliation SHALL never discard either source fact.
+8. The generic contract-delta reducer SHALL explicitly exclude the new fact
+   types and their producer-gap rule IDs until a reducer contract admits them.
+   Existing reduce outputs and high-fan-out classifications SHALL remain
+   byte-identical when these unrelated facts are present.
 
 ## Requirement 5: Safety and Non-Claims
 
@@ -141,6 +181,11 @@ mapped to another. Those are the two producer gaps owned here.
    validation values, secrets, connection material, raw URLs, local absolute
    paths, private infrastructure identity, arbitrary mapping expressions, or
    protected-value digests.
+   Hashing is limited to repository-defined scan/scope identity inputs and
+   existing canonical symbol IDs; arbitrary source expressions, values, and
+   private labels SHALL NOT be newly hashed. Canonical symbol IDs may appear
+   only in consumers whose established public-safe allowlist already admits
+   them.
 2. No output SHALL claim runtime binding success, serializer behavior,
    validation success, handler execution, route reachability, mapper execution,
    object persistence, database execution, business intent, correctness,
@@ -155,18 +200,32 @@ mapped to another. Those are the two producer gaps owned here.
 1. Producer fixtures SHALL cover exact cross-file MVC and Razor Pages targets,
    partial models, same-name cross-assembly lookalikes, source framework
    lookalikes, binding attributes, error types, and deterministic fallback.
+   Positive Tier1 tests SHALL reference real signed ASP.NET Core metadata from
+   a pinned test dependency/shared-framework reference available during locked
+   restore. Source-declared framework lookalikes remain negative fixtures.
 2. Mapping fixtures SHALL cover direct assignment, object initializer, LINQ
-   projection, constructor forwarding, same-name non-mapping, reversed
+   projection, same-name non-mapping, reversed
    direction, conversion wrappers, dynamic/unsupported expressions, ambiguity,
    and file-order determinism.
 3. Composition fixtures SHALL prove exact-ID joins, downgrade syntax/convention
    evidence, reject short-name/cross-assembly collisions, preserve direction,
    and attach no broad endpoint context without a property bridge.
 4. Consumer tests SHALL cover report JSON/Markdown, storage/combine, docs/vault,
-   release review, and explorer behavior for any changed fact or row contract.
+   release review, explorer, evidence packs, snapshot diff, rule-catalog
+   validators, demo summary generation, and site demo-summary refresh behavior
+   for any changed fact or row contract. Reporter metadata allowlists SHALL
+   explicitly decide whether `mappingShape`, `direction`, `bindingKind`, and
+   assembly identity are safe row fields or fact-only fields.
 5. Validation SHALL run focused Razor, semantic extraction, property-flow,
    combine/storage, and touched consumer tests; full .NET build/test; applicable
    pinned smokes from `docs/VALIDATION.md`; private-path guard; and diff check.
+6. Reducer regressions SHALL prove explicit exclusion of both new fact
+   families/gap rules, unchanged existing reduce output, and no fan-out-driven
+   `DefiniteImpact` downgrade after more than ten unrelated new facts.
+7. Property-flow regressions SHALL cover unchanged v1.0 golden rows/counts,
+   tier-aware bounded selection, preserved-or-gapped same-name fallback,
+   directed and reversed assignments, no synthesized reverse edge, source-
+   index scoping across combined inputs, and persisted new-property round trip.
 
 ## Deferred
 
@@ -175,4 +234,7 @@ mapped to another. Those are the two producer gaps owned here.
 - Interprocedural mapping through arbitrary helpers or repository abstractions.
 - Runtime model-binding, serializer, validation, browser, HTTP, DI, or database
   observation.
+- Constructor forwarding until both exact hops fit one documented identity
+  contract, and legacy ASP.NET MVC (`System.Web.Mvc`) until its distinct
+  framework identity, binding semantics, and fixtures are specified.
 - Whole-application property inventory UI and persisted derived flow rows.

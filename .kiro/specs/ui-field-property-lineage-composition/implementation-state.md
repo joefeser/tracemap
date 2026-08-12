@@ -1,7 +1,7 @@
 # UI Field Property Lineage Composition Implementation State
 
-Status: implementation-slice-1-ready-for-pr
-Readiness: implementation-slice-1-validated
+Status: superseded-as-active-queue
+Readiness: historical-record
 Spec branch: `codex/spec-ui-field-property-lineage-composition`
 Target base: `dev`
 Primary issue: `#165`
@@ -20,11 +20,14 @@ Evidence on `dev`:
   service/data context groups in PR #292, duplicate-root selector gaps in PR
   #318, and cycle `TraversalBounds` gaps in PR #320.
 
-This remains the active property-flow implementation spec, but the first
-implementation task must re-audit the live route-flow contract after any
-in-flight route-flow branch is merged or explicitly closed and `origin/dev` is
-fetched. Do not reuse the older `ui-field-property-lineage-continuation` task
-list as the work queue.
+This spec is no longer the active property-flow queue. Shipped successor work
+completed the broad Angular, route-flow, terminal-context, and consumer runway.
+The remaining bounded Razor identity, direct property mapping, and exact-ID
+composition work is owned by
+`.kiro/specs/property-flow-depth-v0/` under issue #517. In particular, that
+successor owns this task file's task 4 and the compatibility consequences in
+tasks 9-10. Unchecked boxes below are retained as historical scope, not as a
+second implementation queue.
 
 Recommended property-flow order after the route-flow contract is stable:
 
