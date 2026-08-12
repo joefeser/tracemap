@@ -391,6 +391,25 @@ public sealed class FrameworkMigrationEvidenceExtractorTests
     }
 
     [Fact]
+    public void Conditional_access_annotation_chain_is_protected()
+    {
+        var (_, gaps, protectedSpans) = Extract("""
+            using Microsoft.EntityFrameworkCore.Migrations;
+            namespace Sample;
+            public sealed class M : Migration
+            {
+                protected override void Up(MigrationBuilder b) =>
+                    b.CreateTable(name: "audit", columns: table => new { Id = table.Column<int>() })
+                        ?.Annotation("private-name", "private-value");
+                protected override void Down(MigrationBuilder b) { }
+            }
+            """, allowCompilationErrors: true);
+
+        Assert.Contains(gaps, gap => gap.Properties!["gapKind"] == "AnnotationMigrationOperationUnavailable");
+        Assert.Contains(protectedSpans, span => span.Length > 0);
+    }
+
+    [Fact]
     public void Unsupported_framework_operation_protects_arbitrary_argument_expression()
     {
         var (_, gaps, protectedSpans) = Extract("""
@@ -471,8 +490,9 @@ public sealed class FrameworkMigrationEvidenceExtractorTests
     public void Syntax_fallback_protects_migration_content_when_no_file_has_semantic_coverage()
     {
         const string source = """
+            using MigrationBase = Microsoft.EntityFrameworkCore.Migrations.Migration;
             namespace Sample;
-            public sealed class M : Migration
+            public sealed class M : MigrationBase
             {
                 public void Up(object b)
                 {
@@ -502,6 +522,33 @@ public sealed class FrameworkMigrationEvidenceExtractorTests
         Assert.DoesNotContain(syntaxFacts, fact => fact.FactType == FactTypes.ObjectShapeInferred);
         Assert.DoesNotContain(integrationFacts, fact => fact.FactType is FactTypes.SqlTextUsed or FactTypes.QueryPatternDetected);
         Assert.DoesNotContain("fallback-protected", string.Join("\n", syntaxFacts.SelectMany(fact => fact.Properties.Values)), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Protected_ranges_filter_later_legacy_csharp_evidence()
+    {
+        const string source = """
+            using System.Runtime.Remoting.Channels.Tcp;
+            namespace Sample;
+            public sealed class M : Migration
+            {
+                public void Up(object b) => b.AddColumn("payload", "accounts", defaultValue: new TcpChannel("private-channel"));
+            }
+            """;
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Migration.cs"), source);
+        var inventory = new[] { new FileInventoryItem("Migration.cs", "CSharp", source.Length) };
+        var fallback = FrameworkMigrationEvidenceExtractor.ExtractSyntaxFallback(
+            temp.Path,
+            inventory,
+            new HashSet<string>(StringComparer.Ordinal));
+        var rawFacts = LegacyRemotingExtractor.Extract(temp.Path, Manifest(), inventory, [], semanticAttempted: false);
+        var lineRanges = ScanEngine.BuildProtectedLineRanges(temp.Path, fallback.ProtectedSpans);
+        var filteredFacts = ScanEngine.FilterProtectedEvidence(rawFacts, lineRanges).ToArray();
+
+        Assert.Contains(rawFacts, fact => fact.Properties.ContainsKey("valueHash"));
+        Assert.DoesNotContain(filteredFacts, fact => fact.Properties.ContainsKey("valueHash"));
+        Assert.DoesNotContain("private-channel", string.Join("\n", filteredFacts.SelectMany(fact => fact.Properties.Values)), StringComparison.Ordinal);
     }
 
     [Fact]

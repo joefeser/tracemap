@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.CodeAnalysis.Text;
 
 namespace TraceMap.Core;
 
@@ -575,6 +576,7 @@ public static class ScanEngine
             .Concat(migrationSyntaxFallback.ProtectedSpans)
             .Distinct()
             .ToArray();
+        var protectedLineRanges = BuildProtectedLineRanges(repoPath, protectedSourceSpans);
         facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, migrationSyntaxFallback.Gaps));
         facts.AddRange(CSharpSyntaxExtractor.Extract(repoPath, manifest, inventory, protectedSourceSpans));
         facts.AddRange(CSharpIntegrationSyntaxExtractor.Extract(
@@ -583,10 +585,12 @@ public static class ScanEngine
             inventory,
             semanticallyAnalyzedFiles,
             protectedSourceSpans));
-        facts.AddRange(RazorBindingExtractor.Extract(repoPath, manifest, inventory));
-        facts.AddRange(LegacyWcfExtractor.Extract(repoPath, manifest, inventory));
-        facts.AddRange(LegacyAsmxExtractor.Extract(repoPath, manifest, inventory));
-        facts.AddRange(LegacyRemotingExtractor.Extract(repoPath, manifest, inventory, semanticResult.Facts, semanticResult.Attempted));
+        facts.AddRange(FilterProtectedEvidence(RazorBindingExtractor.Extract(repoPath, manifest, inventory), protectedLineRanges));
+        facts.AddRange(FilterProtectedEvidence(LegacyWcfExtractor.Extract(repoPath, manifest, inventory), protectedLineRanges));
+        facts.AddRange(FilterProtectedEvidence(LegacyAsmxExtractor.Extract(repoPath, manifest, inventory), protectedLineRanges));
+        facts.AddRange(FilterProtectedEvidence(
+            LegacyRemotingExtractor.Extract(repoPath, manifest, inventory, semanticResult.Facts, semanticResult.Attempted),
+            protectedLineRanges));
         facts.AddRange(SqlFileExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(SqlExecutionContextExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(PostgresSchemaMigrationExtractor.Extract(repoPath, manifest, inventory));
@@ -599,10 +603,10 @@ public static class ScanEngine
         facts.AddRange(ConfigExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, semanticResult.GapFacts));
         facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, semanticResult.Facts));
-        facts.AddRange(LegacyDataMetadataExtractor.Extract(repoPath, manifest, inventory, facts));
-        facts.AddRange(LegacyWebFormsExtractor.Extract(repoPath, manifest, inventory, facts));
-        facts.AddRange(LegacyWinFormsExtractor.Extract(repoPath, manifest, inventory, facts));
-        facts.AddRange(LegacyAspNetExtractor.Extract(repoPath, manifest, inventory, facts));
+        facts.AddRange(FilterProtectedEvidence(LegacyDataMetadataExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges));
+        facts.AddRange(FilterProtectedEvidence(LegacyWebFormsExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges));
+        facts.AddRange(FilterProtectedEvidence(LegacyWinFormsExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges));
+        facts.AddRange(FilterProtectedEvidence(LegacyAspNetExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges));
         facts.AddRange(AnalyzerCapabilityDiagnosticExtractor.Extract(manifest, inventory, semanticResult, facts, options));
 
         return facts
@@ -623,6 +627,37 @@ public static class ScanEngine
                 .Select(candidate => candidate.Evidence.FilePath)
                 .Where(path => path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
                 .ToHashSet(StringComparer.Ordinal);
+
+    internal static IReadOnlyDictionary<string, IReadOnlyList<(int StartLine, int EndLine)>> BuildProtectedLineRanges(
+        string repoPath,
+        IReadOnlyList<ProtectedSourceSpan> protectedSourceSpans)
+    {
+        var result = new Dictionary<string, IReadOnlyList<(int StartLine, int EndLine)>>(StringComparer.Ordinal);
+        foreach (var group in protectedSourceSpans.GroupBy(span => span.FilePath, StringComparer.Ordinal))
+        {
+            var fullPath = Path.Combine(repoPath, group.Key);
+            if (!File.Exists(fullPath))
+            {
+                continue;
+            }
+
+            var source = SourceText.From(File.ReadAllText(fullPath));
+            result[group.Key] = group.Select(span =>
+            {
+                var start = Math.Clamp(span.Start, 0, source.Length);
+                var length = Math.Clamp(span.Length, 0, source.Length - start);
+                var lineSpan = source.Lines.GetLinePositionSpan(new TextSpan(start, length));
+                return (lineSpan.Start.Line + 1, lineSpan.End.Line + 1);
+            }).ToArray();
+        }
+        return result;
+    }
+
+    internal static IEnumerable<CodeFact> FilterProtectedEvidence(
+        IEnumerable<CodeFact> facts,
+        IReadOnlyDictionary<string, IReadOnlyList<(int StartLine, int EndLine)>> protectedLineRanges) =>
+        facts.Where(fact => !protectedLineRanges.TryGetValue(fact.Evidence.FilePath, out var ranges)
+            || !ranges.Any(range => fact.Evidence.StartLine <= range.EndLine && range.StartLine <= fact.Evidence.EndLine));
 
     private static string GetGapMessage(SemanticFactCandidate gap)
     {
