@@ -257,6 +257,49 @@ public sealed class ReducerTests
     }
 
     [Fact]
+    public async Task Reduce_excludes_semantic_razor_binding_facts_and_gaps_from_generic_matching()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        var outputPath = Path.Combine(temp.Path, "out");
+        var deltaPath = WriteDelta(temp.Path, "CustomerProfile.primaryEmail");
+        var manifest = CreateManifest("Level1SemanticAnalysis", "Succeeded");
+        var target = FactFactory.Create(
+            manifest,
+            FactTypes.RazorModelBindingTarget,
+            RuleIds.CSharpRazorSemanticModelBinding,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan("src/ProfileController.cs", 10, 10, null, "CSharpSemanticExtractor", ScannerVersions.CSharpSemanticExtractor),
+            sourceSymbol: "global::Sample.ProfileController.Save(global::Sample.CustomerProfile input)",
+            targetSymbol: "global::Sample.CustomerProfile.PrimaryEmail",
+            contractElement: "PrimaryEmail",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["modelType"] = "CustomerProfile",
+                ["propertyName"] = "PrimaryEmail"
+            });
+        var gap = FactFactory.Create(
+            manifest,
+            FactTypes.AnalysisGap,
+            RuleIds.CSharpRazorSemanticModelBindingGap,
+            EvidenceTiers.Tier4Unknown,
+            new EvidenceSpan("src/ProfileController.cs", 10, 10, null, "CSharpSemanticExtractor", ScannerVersions.CSharpSemanticExtractor),
+            contractElement: "RazorBindingPropertyUnavailable",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["gapKind"] = "RazorBindingPropertyUnavailable",
+                ["targetTypeSymbolId"] = "CustomerProfile.primaryEmail"
+            });
+        SqliteIndexWriter.Write(indexPath, manifest, [target, gap]);
+
+        var report = await RunReduceAsync(indexPath, deltaPath, outputPath);
+
+        Assert.Contains("Classification: `NoEvidenceFullCoverage`", report);
+        Assert.DoesNotContain("RazorModelBindingTarget", report, StringComparison.Ordinal);
+        Assert.DoesNotContain("UnknownAnalysisGap", report, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Reduce_no_match_with_reduced_coverage_reports_no_evidence_reduced_coverage()
     {
         using var temp = new TempDirectory();

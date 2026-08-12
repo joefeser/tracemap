@@ -1,0 +1,591 @@
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+
+namespace TraceMap.Core;
+
+internal static class RazorSemanticModelBindingExtractor
+{
+    private const string MicrosoftPublicKeyToken = "adb9793829ddae60";
+    private const string CoverageLabel = "bounded-static-semantic-model-binding";
+    private const string Limitations = "Static compiler evidence only; does not prove runtime binding, route selection, validation, handler execution, serializer behavior, authorization, or submitted values.";
+    private const int MaxFactsPerDocument = 500;
+    private const int MaxGapsPerDocument = 100;
+
+    private static readonly IReadOnlyDictionary<string, string> TrustedTypes =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["Microsoft.AspNetCore.Mvc.ControllerBase"] = "Microsoft.AspNetCore.Mvc.Core",
+            ["Microsoft.AspNetCore.Mvc.NonActionAttribute"] = "Microsoft.AspNetCore.Mvc.Core",
+            ["Microsoft.AspNetCore.Mvc.FromBodyAttribute"] = "Microsoft.AspNetCore.Mvc.Core",
+            ["Microsoft.AspNetCore.Mvc.FromFormAttribute"] = "Microsoft.AspNetCore.Mvc.Core",
+            ["Microsoft.AspNetCore.Mvc.BindPropertyAttribute"] = "Microsoft.AspNetCore.Mvc.Core",
+            ["Microsoft.AspNetCore.Mvc.HttpGetAttribute"] = "Microsoft.AspNetCore.Mvc.Core",
+            ["Microsoft.AspNetCore.Mvc.HttpPostAttribute"] = "Microsoft.AspNetCore.Mvc.Core",
+            ["Microsoft.AspNetCore.Mvc.HttpPutAttribute"] = "Microsoft.AspNetCore.Mvc.Core",
+            ["Microsoft.AspNetCore.Mvc.HttpDeleteAttribute"] = "Microsoft.AspNetCore.Mvc.Core",
+            ["Microsoft.AspNetCore.Mvc.HttpPatchAttribute"] = "Microsoft.AspNetCore.Mvc.Core",
+            ["Microsoft.AspNetCore.Mvc.HttpHeadAttribute"] = "Microsoft.AspNetCore.Mvc.Core",
+            ["Microsoft.AspNetCore.Mvc.HttpOptionsAttribute"] = "Microsoft.AspNetCore.Mvc.Core",
+            ["Microsoft.AspNetCore.Mvc.RazorPages.PageModel"] = "Microsoft.AspNetCore.Mvc.RazorPages"
+        };
+
+    private static readonly IReadOnlyDictionary<string, string> HttpAttributeMethods =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["Microsoft.AspNetCore.Mvc.HttpGetAttribute"] = "GET",
+            ["Microsoft.AspNetCore.Mvc.HttpPostAttribute"] = "POST",
+            ["Microsoft.AspNetCore.Mvc.HttpPutAttribute"] = "PUT",
+            ["Microsoft.AspNetCore.Mvc.HttpDeleteAttribute"] = "DELETE",
+            ["Microsoft.AspNetCore.Mvc.HttpPatchAttribute"] = "PATCH",
+            ["Microsoft.AspNetCore.Mvc.HttpHeadAttribute"] = "HEAD",
+            ["Microsoft.AspNetCore.Mvc.HttpOptionsAttribute"] = "OPTIONS"
+        };
+
+    public static void Extract(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts,
+        List<SemanticFactCandidate> gaps)
+    {
+        var factCount = 0;
+        var gapCount = 0;
+        var truncatedFacts = 0;
+        var truncatedGaps = 0;
+
+        foreach (var methodSyntax in root.DescendantNodes().OfType<MethodDeclarationSyntax>()
+            .OrderBy(method => method.SpanStart))
+        {
+            if (model.GetDeclaredSymbol(methodSyntax) is not IMethodSymbol method
+                || method.ContainingType is null)
+            {
+                continue;
+            }
+
+            var ownerKind = OwnerKind(method);
+            if (ownerKind is null)
+            {
+                if (method.Parameters.Length > 0 && HasUntrustedFrameworkOwnerShape(method.ContainingType))
+                {
+                    AddGapOrCount(
+                        projectPath,
+                        filePath,
+                        methodSyntax,
+                        "untrusted-framework-owner",
+                        "RazorFrameworkIdentityUnavailable",
+                        method,
+                        method.ContainingType,
+                        ref gapCount,
+                        ref truncatedGaps,
+                        gaps);
+                }
+                continue;
+            }
+
+            var httpMethods = ownerKind == "mvc-action-parameter"
+                ? ActionHttpMethods(method)
+                : HandlerHttpMethods(method.Name);
+            foreach (var parameterSyntax in methodSyntax.ParameterList.Parameters.OrderBy(parameter => parameter.SpanStart))
+            {
+                if (model.GetDeclaredSymbol(parameterSyntax) is not IParameterSymbol parameter)
+                {
+                    continue;
+                }
+
+                var source = ParameterSource(parameter);
+                if (source is null)
+                {
+                    AddGapOrCount(
+                        projectPath,
+                        filePath,
+                        parameterSyntax,
+                        ownerKind,
+                        "AmbiguousRazorBindingTarget",
+                        parameter,
+                        parameter.Type,
+                        ref gapCount,
+                        ref truncatedGaps,
+                        gaps);
+                    continue;
+                }
+                if (parameter.Type is not INamedTypeSymbol modelType
+                    || modelType.TypeKind == TypeKind.Error
+                    || modelType.IsUnboundGenericType
+                    || modelType.Locations.All(location => !location.IsInSource))
+                {
+                    AddGapOrCount(projectPath, filePath, parameterSyntax, ownerKind, "RazorBindingTypeUnavailable", parameter, parameter.Type, ref gapCount, ref truncatedGaps, gaps);
+                    continue;
+                }
+
+                ExpandModelProperties(
+                    projectPath,
+                    filePath,
+                    parameterSyntax,
+                    ownerKind,
+                    source,
+                    method,
+                    parameter,
+                    modelType,
+                    httpMethods,
+                    supportsGet: null,
+                    ref factCount,
+                    ref gapCount,
+                    ref truncatedFacts,
+                    ref truncatedGaps,
+                    facts,
+                    gaps);
+            }
+        }
+
+        foreach (var propertySyntax in root.DescendantNodes().OfType<PropertyDeclarationSyntax>()
+            .OrderBy(property => property.SpanStart))
+        {
+            if (model.GetDeclaredSymbol(propertySyntax) is not IPropertySymbol property
+                || property.ContainingType is null
+                || !InheritsTrusted(property.ContainingType, "Microsoft.AspNetCore.Mvc.RazorPages.PageModel")
+                || TrustedAttribute(property, "Microsoft.AspNetCore.Mvc.BindPropertyAttribute") is not AttributeData bindProperty)
+            {
+                continue;
+            }
+
+            if (!IsEligibleProperty(property))
+            {
+                AddGapOrCount(projectPath, filePath, propertySyntax, "razor-page-property", "RazorBindingPropertyUnavailable", property, property.Type, ref gapCount, ref truncatedGaps, gaps);
+                continue;
+            }
+
+            if (factCount >= MaxFactsPerDocument)
+            {
+                truncatedFacts++;
+                continue;
+            }
+
+            var supportsGet = bindProperty.NamedArguments.FirstOrDefault(argument => argument.Key == "SupportsGet").Value.Value as bool? ?? false;
+            facts.Add(CreateTarget(
+                projectPath,
+                filePath,
+                propertySyntax,
+                "razor-page-property",
+                "bind-property",
+                property,
+                parameter: null,
+                property.ContainingType,
+                property,
+                httpMethods: [],
+                supportsGet));
+            factCount++;
+        }
+
+        if (truncatedFacts > 0)
+        {
+            gaps.Add(CreateBoundGap(projectPath, filePath, "RazorBindingTargetTruncated", truncatedFacts));
+        }
+        if (truncatedGaps > 0)
+        {
+            gaps.Add(CreateBoundGap(projectPath, filePath, "RazorBindingGapTruncated", truncatedGaps));
+        }
+    }
+
+    private static void ExpandModelProperties(
+        string? projectPath,
+        string filePath,
+        SyntaxNode evidenceNode,
+        string bindingKind,
+        string parameterSource,
+        IMethodSymbol owner,
+        IParameterSymbol parameter,
+        INamedTypeSymbol modelType,
+        IReadOnlyList<string> httpMethods,
+        bool? supportsGet,
+        ref int factCount,
+        ref int gapCount,
+        ref int truncatedFacts,
+        ref int truncatedGaps,
+        List<SemanticFactCandidate> facts,
+        List<SemanticFactCandidate> gaps)
+    {
+        var properties = modelType.GetMembers().OfType<IPropertySymbol>()
+            .OrderBy(property => property.MetadataName, StringComparer.Ordinal)
+            .ToArray();
+        if (properties.Length == 0)
+        {
+            AddGapOrCount(projectPath, filePath, evidenceNode, bindingKind, "RazorBindingPropertyUnavailable", owner, modelType, ref gapCount, ref truncatedGaps, gaps);
+            return;
+        }
+
+        foreach (var property in properties)
+        {
+            if (!IsEligibleProperty(property))
+            {
+                AddGapOrCount(projectPath, filePath, evidenceNode, bindingKind, "RazorBindingPropertyUnavailable", property, property.Type, ref gapCount, ref truncatedGaps, gaps);
+                continue;
+            }
+            if (factCount >= MaxFactsPerDocument)
+            {
+                truncatedFacts++;
+                continue;
+            }
+
+            facts.Add(CreateTarget(projectPath, filePath, evidenceNode, bindingKind, parameterSource, owner, parameter, modelType, property, httpMethods, supportsGet));
+            factCount++;
+        }
+    }
+
+    private static SemanticFactCandidate CreateTarget(
+        string? projectPath,
+        string filePath,
+        SyntaxNode node,
+        string bindingKind,
+        string parameterSource,
+        ISymbol owner,
+        IParameterSymbol? parameter,
+        INamedTypeSymbol modelType,
+        IPropertySymbol property,
+        IReadOnlyList<string> httpMethods,
+        bool? supportsGet)
+    {
+        var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["bindingKind"] = bindingKind,
+            ["coverageLabel"] = CoverageLabel,
+            ["httpMethods"] = string.Join(";", httpMethods.OrderBy(value => value, StringComparer.Ordinal)),
+            ["limitations"] = Limitations,
+            ["modelKind"] = parameterSource == "body" ? "dto" : "view-model",
+            ["modelType"] = modelType.Name,
+            ["modelTypeDisplay"] = modelType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+            ["ownerFamily"] = bindingKind,
+            ["parameterName"] = parameter?.Name ?? string.Empty,
+            ["parameterOrdinal"] = parameter?.Ordinal.ToString() ?? string.Empty,
+            ["parameterSource"] = parameterSource,
+            ["propertyName"] = property.Name,
+            ["propertyPath"] = property.Name,
+            ["propertyType"] = property.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+            ["reconciliationKeyVersion"] = "razor-model-binding/1.0",
+            ["supportsGet"] = supportsGet?.ToString().ToLowerInvariant() ?? string.Empty,
+            ["uiFramework"] = "razor",
+            ["valueStored"] = "safe-metadata-only"
+        };
+        AddFrameworkAdmission(properties, bindingKind, parameterSource, owner, parameter, property);
+        AddIdentity(properties, "owner", owner);
+        AddIdentity(properties, "parameter", parameter);
+        AddIdentity(properties, "modelType", modelType);
+        AddIdentity(properties, "target", property);
+        if (owner is IMethodSymbol method)
+        {
+            if (bindingKind == "mvc-action-parameter")
+            {
+                properties["actionName"] = method.Name;
+                properties["controllerName"] = ControllerName(method.ContainingType.Name);
+            }
+            else
+            {
+                properties["handlerName"] = method.Name;
+                properties["pageModelName"] = method.ContainingType.Name;
+            }
+        }
+        else
+        {
+            properties["pageModelName"] = property.ContainingType.Name;
+        }
+
+        return new SemanticFactCandidate(
+            FactTypes.RazorModelBindingTarget,
+            RuleIds.CSharpRazorSemanticModelBinding,
+            EvidenceTiers.Tier1Semantic,
+            Span(filePath, node),
+            projectPath,
+            owner.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+            property.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+            property.Name,
+            properties,
+            node.SpanStart,
+            node.Span.Length);
+    }
+
+    private static string? OwnerKind(IMethodSymbol method)
+    {
+        if (method.MethodKind != MethodKind.Ordinary
+            || method.IsStatic
+            || method.IsAbstract
+            || method.IsGenericMethod
+            || method.DeclaredAccessibility != Accessibility.Public
+            || method.IsImplicitlyDeclared)
+        {
+            return null;
+        }
+        if (InheritsTrusted(method.ContainingType, "Microsoft.AspNetCore.Mvc.ControllerBase"))
+        {
+            return TrustedAttribute(method, "Microsoft.AspNetCore.Mvc.NonActionAttribute") is null
+                ? "mvc-action-parameter"
+                : null;
+        }
+        return InheritsTrusted(method.ContainingType, "Microsoft.AspNetCore.Mvc.RazorPages.PageModel")
+            && HandlerHttpMethods(method.Name).Length > 0
+            ? "razor-page-handler-parameter"
+            : null;
+    }
+
+    private static bool IsEligibleProperty(IPropertySymbol property) =>
+        !property.IsStatic
+        && !property.IsIndexer
+        && property.Parameters.Length == 0
+        && !property.ReturnsByRef
+        && !property.ReturnsByRefReadonly
+        && property.DeclaredAccessibility == Accessibility.Public
+        && property.SetMethod is { DeclaredAccessibility: Accessibility.Public, IsInitOnly: false }
+        && property.ExplicitInterfaceImplementations.Length == 0
+        && property.Locations.Any(location => location.IsInSource);
+
+    private static string? ParameterSource(IParameterSymbol parameter)
+    {
+        var body = TrustedAttribute(parameter, "Microsoft.AspNetCore.Mvc.FromBodyAttribute") is not null;
+        var form = TrustedAttribute(parameter, "Microsoft.AspNetCore.Mvc.FromFormAttribute") is not null;
+        if (body && form)
+        {
+            return null;
+        }
+        if (body)
+        {
+            return "body";
+        }
+        if (form)
+        {
+            return "form";
+        }
+        return "convention";
+    }
+
+    private static string[] ActionHttpMethods(IMethodSymbol method) =>
+        method.GetAttributes()
+            .Where(attribute => HttpAttributeMethods.Keys.Any(name => IsTrustedMetadataType(attribute.AttributeClass, name)))
+            .Select(attribute => HttpAttributeMethods[MetadataName(attribute.AttributeClass)])
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+
+    private static string[] HandlerHttpMethods(string methodName)
+    {
+        if (!methodName.StartsWith("On", StringComparison.Ordinal) || methodName.Length <= 2)
+        {
+            return [];
+        }
+        var suffix = methodName[2..];
+        foreach (var method in new[] { "Delete", "Get", "Head", "Options", "Patch", "Post", "Put" })
+        {
+            if (suffix.StartsWith(method, StringComparison.Ordinal))
+            {
+                return [method.ToUpperInvariant()];
+            }
+        }
+        return [];
+    }
+
+    private static bool InheritsTrusted(INamedTypeSymbol type, string metadataName)
+    {
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            if (IsTrustedMetadataType(current, metadataName))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static bool HasUntrustedFrameworkOwnerShape(INamedTypeSymbol type)
+    {
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            var name = MetadataName(current);
+            if ((name == "Microsoft.AspNetCore.Mvc.ControllerBase"
+                    || name == "Microsoft.AspNetCore.Mvc.RazorPages.PageModel")
+                && !IsTrustedMetadataType(current, name))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static AttributeData? TrustedAttribute(ISymbol symbol, string metadataName) =>
+        symbol.GetAttributes().FirstOrDefault(attribute => IsTrustedMetadataType(attribute.AttributeClass, metadataName));
+
+    private static bool IsTrustedMetadataType(INamedTypeSymbol? type, string metadataName)
+    {
+        if (type is null
+            || !TrustedTypes.TryGetValue(metadataName, out var assemblyName)
+            || type.Locations.Any(location => location.IsInSource)
+            || !string.Equals(MetadataName(type), metadataName, StringComparison.Ordinal)
+            || !string.Equals(type.ContainingAssembly?.Identity.Name, assemblyName, StringComparison.Ordinal))
+        {
+            return false;
+        }
+        return string.Equals(PublicKeyToken(type.ContainingAssembly), MicrosoftPublicKeyToken, StringComparison.Ordinal);
+    }
+
+    private static string MetadataName(INamedTypeSymbol? type) =>
+        type?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Replace("global::", string.Empty, StringComparison.Ordinal) ?? string.Empty;
+
+    private static string PublicKeyToken(IAssemblySymbol? assembly) =>
+        assembly is null ? string.Empty : Convert.ToHexString(assembly.Identity.PublicKeyToken.ToArray()).ToLowerInvariant();
+
+    private static string ControllerName(string typeName) =>
+        typeName.EndsWith("Controller", StringComparison.Ordinal) ? typeName[..^"Controller".Length] : typeName;
+
+    private static void AddFrameworkAdmission(
+        SortedDictionary<string, string> properties,
+        string bindingKind,
+        string parameterSource,
+        ISymbol owner,
+        IParameterSymbol? parameter,
+        IPropertySymbol property)
+    {
+        var ownerType = owner.ContainingType ?? property.ContainingType;
+        var frameworkTypeName = bindingKind == "mvc-action-parameter"
+            ? "Microsoft.AspNetCore.Mvc.ControllerBase"
+            : "Microsoft.AspNetCore.Mvc.RazorPages.PageModel";
+        var frameworkType = FindTrustedBase(ownerType, frameworkTypeName);
+        AddTrustedMetadataIdentity(properties, "frameworkOwner", frameworkType);
+
+        AttributeData? bindingAttribute = parameterSource switch
+        {
+            "body" when parameter is not null => TrustedAttribute(parameter, "Microsoft.AspNetCore.Mvc.FromBodyAttribute"),
+            "form" when parameter is not null => TrustedAttribute(parameter, "Microsoft.AspNetCore.Mvc.FromFormAttribute"),
+            "bind-property" => TrustedAttribute(property, "Microsoft.AspNetCore.Mvc.BindPropertyAttribute"),
+            _ => null
+        };
+        AddTrustedMetadataIdentity(properties, "bindingAttribute", bindingAttribute?.AttributeClass);
+    }
+
+    private static INamedTypeSymbol? FindTrustedBase(INamedTypeSymbol? type, string metadataName)
+    {
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            if (IsTrustedMetadataType(current, metadataName))
+            {
+                return current;
+            }
+        }
+        return null;
+    }
+
+    private static void AddTrustedMetadataIdentity(
+        SortedDictionary<string, string> properties,
+        string prefix,
+        INamedTypeSymbol? type)
+    {
+        if (type is null)
+        {
+            return;
+        }
+        properties[$"{prefix}Type"] = MetadataName(type);
+        properties[$"{prefix}AssemblyName"] = type.ContainingAssembly.Identity.Name;
+        properties[$"{prefix}PublicKeyToken"] = PublicKeyToken(type.ContainingAssembly);
+    }
+
+    private static void AddIdentity(SortedDictionary<string, string> properties, string prefix, ISymbol? symbol)
+    {
+        var identity = CSharpSymbolIdentityProvider.TryCreate(symbol);
+        if (identity is null)
+        {
+            return;
+        }
+        properties[$"{prefix}SymbolId"] = identity.SymbolId;
+        properties[$"{prefix}SymbolKind"] = identity.SymbolKind;
+        properties[$"{prefix}AssemblyName"] = identity.AssemblyName ?? string.Empty;
+        properties[$"{prefix}AssemblyVersion"] = identity.AssemblyVersion ?? string.Empty;
+        properties[$"{prefix}ContainingSymbolId"] = identity.ContainingSymbolId ?? string.Empty;
+    }
+
+    private static void AddGapOrCount(
+        string? projectPath,
+        string filePath,
+        SyntaxNode node,
+        string bindingKind,
+        string gapKind,
+        ISymbol scope,
+        ITypeSymbol? targetType,
+        ref int gapCount,
+        ref int truncatedGaps,
+        List<SemanticFactCandidate> gaps)
+    {
+        if (gapCount >= MaxGapsPerDocument)
+        {
+            truncatedGaps++;
+            return;
+        }
+        var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["bindingKind"] = bindingKind,
+            ["coverageEffect"] = "reduces-semantic-model-binding-coverage",
+            ["coverageLabel"] = "reduced-static-semantic-model-binding",
+            ["gapKind"] = gapKind,
+            ["limitations"] = Limitations,
+            ["occurrenceCount"] = "1",
+            ["sanitization"] = "categorical-symbol-identity"
+        };
+        if (gapKind == "RazorBindingTypeUnavailable")
+        {
+            properties["typeState"] = TypeState(targetType);
+        }
+        if (gapKind == "RazorFrameworkIdentityUnavailable")
+        {
+            properties["frameworkState"] = "source-or-unsigned-lookalike";
+        }
+        AddIdentity(properties, "scope", scope);
+        AddIdentity(properties, "targetType", targetType);
+        gaps.Add(new SemanticFactCandidate(
+            FactTypes.AnalysisGap,
+            RuleIds.CSharpRazorSemanticModelBindingGap,
+            EvidenceTiers.Tier4Unknown,
+            Span(filePath, node),
+            projectPath,
+            ContractElement: gapKind,
+            Properties: properties,
+            SourceStart: node.SpanStart,
+            SourceLength: node.Span.Length));
+        gapCount++;
+    }
+
+    private static string TypeState(ITypeSymbol? type) => type switch
+    {
+        null => "unresolved",
+        IDynamicTypeSymbol => "dynamic",
+        ITypeParameterSymbol => "type-parameter",
+        { TypeKind: TypeKind.Error } => "error-or-ambiguous",
+        INamedTypeSymbol named when named.Locations.All(location => !location.IsInSource) => "external-unavailable",
+        INamedTypeSymbol { IsUnboundGenericType: true } => "unbound-generic",
+        _ => "unsupported"
+    };
+
+    private static SemanticFactCandidate CreateBoundGap(string? projectPath, string filePath, string gapKind, int count) =>
+        new(
+            FactTypes.AnalysisGap,
+            RuleIds.CSharpRazorSemanticModelBindingGap,
+            EvidenceTiers.Tier4Unknown,
+            new EvidenceSpan(filePath, 1, 1, null, "CSharpSemanticExtractor", ScannerVersions.CSharpSemanticExtractor),
+            projectPath,
+            ContractElement: gapKind,
+            Properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["coverageEffect"] = "reduces-semantic-model-binding-coverage",
+                ["coverageLabel"] = "reduced-static-semantic-model-binding",
+                ["gapKind"] = gapKind,
+                ["limitations"] = Limitations,
+                ["occurrenceCount"] = count.ToString(),
+                ["sanitization"] = "categorical-count"
+            });
+
+    private static EvidenceSpan Span(string filePath, SyntaxNode node)
+    {
+        var span = node.SyntaxTree.GetLineSpan(node.Span);
+        return new EvidenceSpan(
+            FileInventory.NormalizeRelativePath(filePath),
+            span.StartLinePosition.Line + 1,
+            Math.Max(span.StartLinePosition.Line + 1, span.EndLinePosition.Line + 1),
+            null,
+            "CSharpSemanticExtractor",
+            ScannerVersions.CSharpSemanticExtractor);
+    }
+}
