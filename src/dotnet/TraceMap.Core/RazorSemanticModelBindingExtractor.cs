@@ -414,13 +414,13 @@ internal static class RazorSemanticModelBindingExtractor
         }
         if (InheritsTrusted(method.ContainingType, "Microsoft.AspNetCore.Mvc.ControllerBase"))
         {
-            return TrustedAttribute(method.ContainingType, "Microsoft.AspNetCore.Mvc.NonControllerAttribute") is null
-                && TrustedAttribute(method, "Microsoft.AspNetCore.Mvc.NonActionAttribute") is null
+            return !HasTrustedAttributeInTypeHierarchy(method.ContainingType, "Microsoft.AspNetCore.Mvc.NonControllerAttribute")
+                && !HasTrustedAttributeInOverrideChain(method, "Microsoft.AspNetCore.Mvc.NonActionAttribute")
                 ? "mvc-action-parameter"
                 : null;
         }
         return InheritsTrusted(method.ContainingType, "Microsoft.AspNetCore.Mvc.RazorPages.PageModel")
-            && TrustedAttribute(method, "Microsoft.AspNetCore.Mvc.RazorPages.NonHandlerAttribute") is null
+            && !HasTrustedAttributeInOverrideChain(method, "Microsoft.AspNetCore.Mvc.RazorPages.NonHandlerAttribute")
             && HandlerHttpMethods(method.Name).Length > 0
             ? "razor-page-handler-parameter"
             : null;
@@ -514,15 +514,24 @@ internal static class RazorSemanticModelBindingExtractor
         {
             return [];
         }
-        var suffix = methodName[2..];
-        foreach (var method in new[] { "Delete", "Get", "Head", "Options", "Patch", "Post", "Put" })
+        var conventionName = methodName.EndsWith("Async", StringComparison.Ordinal)
+            ? methodName[..^"Async".Length]
+            : methodName;
+        if (conventionName.Length <= 2)
         {
-            if (suffix.StartsWith(method, StringComparison.Ordinal))
+            return [];
+        }
+
+        var handlerNameStart = conventionName.Length;
+        for (var index = 3; index < conventionName.Length; index++)
+        {
+            if (char.IsUpper(conventionName[index]))
             {
-                return [method.ToUpperInvariant()];
+                handlerNameStart = index;
+                break;
             }
         }
-        return [];
+        return [conventionName[2..handlerNameStart].ToUpperInvariant()];
     }
 
     private static bool InheritsTrusted(INamedTypeSymbol type, string metadataName)
@@ -554,6 +563,30 @@ internal static class RazorSemanticModelBindingExtractor
 
     private static AttributeData? TrustedAttribute(ISymbol symbol, string metadataName) =>
         symbol.GetAttributes().FirstOrDefault(attribute => IsTrustedMetadataType(attribute.AttributeClass, metadataName));
+
+    private static bool HasTrustedAttributeInTypeHierarchy(INamedTypeSymbol type, string metadataName)
+    {
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            if (TrustedAttribute(current, metadataName) is not null)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static bool HasTrustedAttributeInOverrideChain(IMethodSymbol method, string metadataName)
+    {
+        for (var current = method; current is not null; current = current.OverriddenMethod)
+        {
+            if (TrustedAttribute(current, metadataName) is not null)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
 
     private static AttributeData? AttributeByMetadataName(ISymbol symbol, string metadataName) =>
         symbol.GetAttributes().FirstOrDefault(attribute =>

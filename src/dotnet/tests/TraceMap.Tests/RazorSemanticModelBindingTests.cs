@@ -120,6 +120,8 @@ public sealed class RazorSemanticModelBindingTests
                 public string DefaultValue { get; set; } = "";
 
                 public void OnPost(InputModel input) { }
+                public void OnPoster(InputModel input) { }
+                public void OnTraceAsync(InputModel input) { }
 
                 [NonHandler]
                 public void OnPostIgnored(InputModel input) { }
@@ -160,6 +162,25 @@ public sealed class RazorSemanticModelBindingTests
             public sealed class GenericController<T> : ControllerBase
             {
                 public IActionResult SaveType(InputModel input) => Ok();
+            }
+
+            [NonController]
+            public abstract class HiddenControllerBase : ControllerBase { }
+
+            public sealed class InheritedHiddenController : HiddenControllerBase
+            {
+                public IActionResult SaveInheritedHidden(InputModel input) => Ok();
+            }
+
+            public abstract class ActionBaseController : ControllerBase
+            {
+                [NonAction]
+                public virtual IActionResult IgnoreInherited(InputModel input) => Ok();
+            }
+
+            public sealed class DerivedActionController : ActionBaseController
+            {
+                public override IActionResult IgnoreInherited(InputModel input) => Ok();
             }
             """);
 
@@ -211,6 +232,14 @@ public sealed class RazorSemanticModelBindingTests
             fact.Properties["bindingKind"] == "razor-page-handler-parameter"
             && fact.Properties["handlerName"] == "OnPost"
             && fact.Properties["httpMethods"] == "POST");
+        Assert.Contains(semantic, fact =>
+            fact.Properties["bindingKind"] == "razor-page-handler-parameter"
+            && fact.Properties["handlerName"] == "OnPoster"
+            && fact.Properties["httpMethods"] == "POSTER");
+        Assert.Contains(semantic, fact =>
+            fact.Properties["bindingKind"] == "razor-page-handler-parameter"
+            && fact.Properties["handlerName"] == "OnTraceAsync"
+            && fact.Properties["httpMethods"] == "TRACE");
         var searchProperty = Assert.Single(semantic, fact =>
             fact.Properties["bindingKind"] == "razor-page-property"
             && fact.Properties["propertyName"] == "Search");
@@ -230,6 +259,8 @@ public sealed class RazorSemanticModelBindingTests
         Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("OrdersController.Ignore", StringComparison.Ordinal) == true);
         Assert.DoesNotContain(semantic, fact => fact.Properties["propertyName"] is "StaticValue" or "ReadOnly" or "InitOnly" or "PrivateSetter" or "Hidden" or "RefValue" or "ExplicitValue" or "ConstructorValue" or "Item");
         Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("HiddenController", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("SaveInheritedHidden", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("IgnoreInherited", StringComparison.Ordinal) == true);
         Assert.DoesNotContain(semantic, fact => fact.SourceSymbol?.Contains("OnPostIgnored", StringComparison.Ordinal) == true);
         Assert.DoesNotContain(semantic, fact => fact.Properties.GetValueOrDefault("controllerName") is "Internal" or "Abstract" or "Nested" or "Generic");
         Assert.Contains(semantic, fact => fact.Properties["propertyName"] == "LocalValue"
