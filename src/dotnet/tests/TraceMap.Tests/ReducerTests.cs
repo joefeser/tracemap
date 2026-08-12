@@ -213,6 +213,50 @@ public sealed class ReducerTests
     }
 
     [Fact]
+    public async Task Reduce_excludes_framework_migration_facts_and_gaps_from_generic_matching()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        var outputPath = Path.Combine(temp.Path, "out");
+        var deltaPath = WriteDelta(temp.Path, "CustomerProfile.accounts");
+        var manifest = CreateManifest("Level1SemanticAnalysis", "Succeeded");
+        var operation = FactFactory.Create(
+            manifest,
+            FactTypes.FrameworkMigrationOperationCandidate,
+            RuleIds.DatabaseFrameworkMigrationOperation,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan("src/Migration.cs", 10, 10, null, "CSharpSemanticExtractor", ScannerVersions.CSharpSemanticExtractor),
+            sourceSymbol: "global::Sample.M.Up(MigrationBuilder builder)",
+            targetSymbol: "global::Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder.DropTable(string name, string? schema = null)",
+            contractElement: "drop-table",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["operationKind"] = "drop-table",
+                ["tableName"] = "accounts"
+            });
+        var gap = FactFactory.Create(
+            manifest,
+            FactTypes.AnalysisGap,
+            RuleIds.DatabaseFrameworkMigrationGap,
+            EvidenceTiers.Tier4Unknown,
+            new EvidenceSpan("src/Migration.cs", 5, 20, null, "CSharpSemanticExtractor", ScannerVersions.CSharpSemanticExtractor),
+            contractElement: "DynamicIdentityUnavailable",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["gapKind"] = "DynamicIdentityUnavailable",
+                ["operationKind"] = "drop-table",
+                ["tableName"] = "accounts"
+            });
+        SqliteIndexWriter.Write(indexPath, manifest, [operation, gap]);
+
+        var report = await RunReduceAsync(indexPath, deltaPath, outputPath);
+
+        Assert.Contains("Classification: `NoEvidenceFullCoverage`", report);
+        Assert.DoesNotContain("FrameworkMigrationOperationCandidate", report, StringComparison.Ordinal);
+        Assert.DoesNotContain("UnknownAnalysisGap", report, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Reduce_no_match_with_reduced_coverage_reports_no_evidence_reduced_coverage()
     {
         using var temp = new TempDirectory();
