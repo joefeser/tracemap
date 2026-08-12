@@ -114,6 +114,13 @@ accepted: PageModel property `[BindProperty]` admission is now handler-
 independent and cannot synthesize handler ownership, and semantic Razor reducer
 isolation moves into PR 1 so that producer can land safely before mapping work.
 
+The next exact-head Codex pass found one remaining independent-landing hazard:
+the current property-flow reader would consume semantic
+`RazorModelBindingTarget` rows through display-name joins before PR 3. PR 1 now
+must exclude its semantic producer rule from that reader and regression-lock
+unchanged property-flow output; PR 3 removes the exclusion only with exact-ID
+admission and collision coverage.
+
 ## Validation
 
 Initial spec-only validation passed before review:

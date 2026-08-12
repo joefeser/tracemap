@@ -45,6 +45,9 @@ Issue: #517
 - [ ] Exclude the semantic Razor fact/rule and its producer-gap rule IDs from
       generic reducer matching in this PR; lock existing reduce output and
       high-fan-out classification before the producer can land independently.
+- [ ] Exclude the semantic producer rule from the current property-flow reader
+      in this PR; prove semantic rows cannot create name-joined paths or change
+      existing rows/classifications before exact-ID composition lands.
 
 ## PR 2: Direct Property Mapping Producer
 
@@ -69,6 +72,8 @@ Issue: #517
       before changing row semantics.
 - [ ] Prefer exact semantic Razor property identity over syntax/convention
       matching while preserving all supporting fact IDs and limitations.
+- [ ] Remove PR 1's semantic-rule reader exclusion only in this PR, together
+      with exact-ID admission and same-name/cross-source collision regressions.
 - [ ] Add directed `model-property-mapped` hops only from admitted mapping
       facts; never reverse or infer them by name.
 - [ ] Keep syntax/convention/same-name/alias-only evidence review-tier and emit

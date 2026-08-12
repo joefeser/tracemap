@@ -99,6 +99,13 @@ has both Tier1 and Tier3 rows, composition selects by exact canonical target ID
 and preserves both supporting IDs; it does not delete historical facts or
 pretend syntax evidence became semantic.
 
+PR 1 is independently safe to merge: the existing property-flow reporter must
+exclude semantic rows by the new producer rule ID because its current
+`RazorModelBindingTarget` path still joins display metadata. The facts remain
+available in NDJSON/SQLite, but cannot create name-based paths. PR 3 removes
+this temporary reader exclusion only alongside exact canonical-ID admission,
+collision fixtures, and unchanged-v1 compatibility evidence.
+
 ## Slice B: Direct Property Mapping Producer
 
 Add a small Roslyn operation/syntax projector for direct mappings. The producer
@@ -200,6 +207,9 @@ protected content. Both new fact families use the property key `limitations`.
 - Property-flow report metadata is allowlisted: `mappingShape`, `direction`,
   `bindingKind`, and assembly identity require an explicit safe-output decision
   rather than implicit passthrough.
+- Each staged PR is consumer-safe on its own. PR 1 isolates its semantic rule
+  from the current name-based property-flow reader; PR 3 owns removal of that
+  isolation and exact-ID consumption in one reviewed change.
 - Existing raw-snippet defaults remain unchanged.
 
 ## Adversarial Fixture Matrix
