@@ -138,6 +138,7 @@ internal static class FrameworkMigrationEvidenceExtractor
 
             if (!IsTrustedEfSymbol(candidateBase))
             {
+                ProtectSyntaxCandidateOperations(declaration, filePath, protectedSourceSpans);
                 AddGap(gapCounts, filePath, declaration, null, null, "FrameworkAssemblyIdentityUnavailable", null, null);
                 continue;
             }
@@ -159,7 +160,9 @@ internal static class FrameworkMigrationEvidenceExtractor
             var direction = GetDirection(admittedSourceMethod);
             var methodName = InvocationName(invocation);
             var targetMethod = model.GetSymbolInfo(invocation).Symbol as IMethodSymbol;
-            if (methodName == "Annotation" && IsAdmittedAnnotationReceiver(invocation, model))
+            if (methodName == "Annotation"
+                && targetMethod is not null
+                && IsTrustedOperationBuilder(targetMethod))
             {
                 protectedSourceSpans?.Add(new ProtectedSourceSpan(filePath, invocation.SpanStart, invocation.Span.Length));
                 AddGap(gapCounts, filePath, declaration, migrationType, sourceMethod, "AnnotationMigrationOperationUnavailable", null, direction);
@@ -370,7 +373,7 @@ internal static class FrameworkMigrationEvidenceExtractor
             FactTypes.AnalysisGap,
             RuleIds.DatabaseFrameworkMigrationGap,
             EvidenceTiers.Tier4Unknown,
-            Evidence(filePath, gap.Declaration, snippetHash: null),
+            Evidence(filePath, gap.Declaration),
             projectPath,
             SourceSymbol: gap.SourceMethod?.ToDisplayString(DisplayFormat),
             ContractElement: gapKind,
@@ -506,7 +509,11 @@ internal static class FrameworkMigrationEvidenceExtractor
     }
 
     private static bool HasProtectedDefaultArgument(InvocationExpressionSyntax invocation, IMethodSymbol method) =>
-        new[] { "defaultValue", "defaultValueSql", "computedColumnSql" }.Any(name => HasArgument(invocation, method, name));
+        method.Parameters.Any(parameter => IsProtectedDefaultParameter(parameter.Name) && HasArgument(invocation, method, parameter.Name));
+
+    private static bool IsProtectedDefaultParameter(string parameterName) => parameterName is
+        "defaultValue" or "defaultValueSql" or "computedColumnSql" or
+        "oldDefaultValue" or "oldDefaultValueSql" or "oldComputedColumnSql";
 
     private static string GetDirection(IMethodSymbol method)
     {
@@ -548,72 +555,6 @@ internal static class FrameworkMigrationEvidenceExtractor
         return false;
     }
 
-    private static bool IsAdmittedAnnotationReceiver(InvocationExpressionSyntax annotation, SemanticModel model)
-    {
-        ExpressionSyntax? receiver = GetAnnotationReceiver(annotation);
-        while (receiver is not null)
-        {
-            if (receiver is ConditionalAccessExpressionSyntax conditional
-                && conditional.WhenNotNull is InvocationExpressionSyntax conditionalInvocation)
-            {
-                if (!IsAdmittedAnnotationHop(conditionalInvocation, model, allowUnresolvedAnnotation: true, out var isOperation))
-                {
-                    return false;
-                }
-                if (isOperation)
-                {
-                    return true;
-                }
-                receiver = conditional.Expression;
-                continue;
-            }
-            if (receiver is not InvocationExpressionSyntax invocation)
-            {
-                return false;
-            }
-            if (!IsAdmittedAnnotationHop(invocation, model, allowUnresolvedAnnotation: true, out var admittedOperation))
-            {
-                return false;
-            }
-            if (admittedOperation)
-            {
-                return true;
-            }
-            receiver = GetAnnotationReceiver(invocation);
-        }
-        return false;
-    }
-
-    private static bool IsAdmittedAnnotationHop(
-        InvocationExpressionSyntax invocation,
-        SemanticModel model,
-        bool allowUnresolvedAnnotation,
-        out bool isOperation)
-    {
-        isOperation = false;
-        if (model.GetSymbolInfo(invocation).Symbol is not IMethodSymbol method)
-        {
-            return allowUnresolvedAnnotation && InvocationName(invocation) == "Annotation";
-        }
-        if (IsMigrationBuilderMethod(method) && Operations.ContainsKey(method.Name))
-        {
-            isOperation = true;
-            return true;
-        }
-        return method.Name == "Annotation" && IsTrustedOperationBuilder(method);
-    }
-
-    private static ExpressionSyntax? GetAnnotationReceiver(InvocationExpressionSyntax invocation) => invocation.Expression switch
-    {
-        MemberAccessExpressionSyntax memberAccess => memberAccess.Expression,
-        MemberBindingExpressionSyntax => invocation.Ancestors()
-            .OfType<ConditionalAccessExpressionSyntax>()
-            .FirstOrDefault(conditional => !ReferenceEquals(conditional.Expression, invocation)
-                && conditional.WhenNotNull.Span.Contains(invocation.Span))?
-            .Expression,
-        _ => null
-    };
-
     internal static bool IsTrustedEfSymbol(INamedTypeSymbol? type)
     {
         var assembly = type?.ContainingAssembly;
@@ -633,37 +574,54 @@ internal static class FrameworkMigrationEvidenceExtractor
     {
         var spans = new List<ProtectedSourceSpan>();
         var gaps = new List<SemanticFactCandidate>();
-        foreach (var file in inventory
-            .Where(item => FileInventory.IsCSharpKind(item.Kind) && !semanticallyAnalyzedFiles.Contains(item.RelativePath))
-            .OrderBy(item => item.RelativePath, StringComparer.Ordinal))
+        var csharpFiles = inventory
+            .Where(item => FileInventory.IsCSharpKind(item.Kind))
+            .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
+            .ToArray();
+        var roots = new Dictionary<string, CompilationUnitSyntax>(StringComparer.Ordinal);
+        foreach (var file in csharpFiles)
         {
             try
             {
-                var root = CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(repoPath, file.RelativePath)), path: file.RelativePath)
+                roots[file.RelativePath] = CSharpSyntaxTree.ParseText(
+                        File.ReadAllText(Path.Combine(repoPath, file.RelativePath)),
+                        path: file.RelativePath)
                     .GetCompilationUnitRoot();
-                foreach (var declaration in root.DescendantNodes().OfType<TypeDeclarationSyntax>().Where(IsMigrationSyntaxCandidate))
-                {
-                    ProtectSyntaxCandidateOperations(declaration, file.RelativePath, spans);
-                    gaps.Add(new SemanticFactCandidate(
-                        FactTypes.AnalysisGap,
-                        RuleIds.DatabaseFrameworkMigrationGap,
-                        EvidenceTiers.Tier4Unknown,
-                        Evidence(file.RelativePath, declaration),
-                        ContractElement: "SemanticBindingUnavailable",
-                        Properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
-                        {
-                            ["coverageLabel"] = "reduced-static-migration",
-                            ["frameworkFamily"] = "ef-core",
-                            ["gapKind"] = "SemanticBindingUnavailable",
-                            ["limitations"] = GapLimitations,
-                            ["occurrenceCount"] = "1",
-                            ["providerScope"] = "unknown"
-                        }));
-                }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 // The generic inventory/read gap remains authoritative for unreadable files.
+            }
+        }
+        var globalUsings = roots.Values
+            .SelectMany(root => root.Usings)
+            .Where(usingDirective => usingDirective.GlobalKeyword.IsKind(SyntaxKind.GlobalKeyword))
+            .ToArray();
+        foreach (var file in csharpFiles.Where(item => !semanticallyAnalyzedFiles.Contains(item.RelativePath)))
+        {
+            if (!roots.TryGetValue(file.RelativePath, out var root))
+            {
+                continue;
+            }
+            foreach (var declaration in root.DescendantNodes().OfType<TypeDeclarationSyntax>()
+                .Where(declaration => IsMigrationSyntaxCandidate(declaration, globalUsings)))
+            {
+                ProtectSyntaxCandidateOperations(declaration, file.RelativePath, spans);
+                gaps.Add(new SemanticFactCandidate(
+                    FactTypes.AnalysisGap,
+                    RuleIds.DatabaseFrameworkMigrationGap,
+                    EvidenceTiers.Tier4Unknown,
+                    Evidence(file.RelativePath, declaration, syntaxFallback: true),
+                    ContractElement: "SemanticBindingUnavailable",
+                    Properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["coverageLabel"] = "reduced-static-migration",
+                        ["frameworkFamily"] = "ef-core",
+                        ["gapKind"] = "SemanticBindingUnavailable",
+                        ["limitations"] = GapLimitations,
+                        ["occurrenceCount"] = "1",
+                        ["providerScope"] = "unknown"
+                    }));
             }
         }
         return new SyntaxProtectionResult(spans, gaps);
@@ -688,7 +646,9 @@ internal static class FrameworkMigrationEvidenceExtractor
         }
     }
 
-    private static bool IsMigrationSyntaxCandidate(TypeDeclarationSyntax declaration)
+    private static bool IsMigrationSyntaxCandidate(
+        TypeDeclarationSyntax declaration,
+        IReadOnlyList<UsingDirectiveSyntax>? globalUsings = null)
     {
         var baseTypes = declaration.BaseList?.Types.Select(type => type.Type.ToString()).ToArray() ?? [];
         if (baseTypes.Any(IsCanonicalMigrationTypeName))
@@ -696,20 +656,32 @@ internal static class FrameworkMigrationEvidenceExtractor
             return true;
         }
 
-        var aliasDirectives = declaration.SyntaxTree.GetCompilationUnitRoot().Usings
+        var applicableUsings = declaration.SyntaxTree.GetCompilationUnitRoot().Usings
             .Concat(declaration.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().SelectMany(namespaceDeclaration => namespaceDeclaration.Usings))
+            .Concat(globalUsings ?? [])
+            .Distinct()
+            .ToArray();
+        var aliasDirectives = applicableUsings
             .Where(usingDirective => usingDirective.Alias is not null)
             .ToArray();
         var typeAliases = aliasDirectives
             .Where(usingDirective => IsCanonicalMigrationTypeName(usingDirective.Name?.ToString()))
             .Select(usingDirective => usingDirective.Alias!.Name.Identifier.ValueText)
             .ToHashSet(StringComparer.Ordinal);
-        var namespaceAliases = aliasDirectives
+        var migrationNamespaceAliases = aliasDirectives
             .Where(usingDirective => IsCanonicalMigrationNamespace(usingDirective.Name?.ToString()))
             .Select(usingDirective => usingDirective.Alias!.Name.Identifier.ValueText)
             .ToHashSet(StringComparer.Ordinal);
+        var efNamespaceAliases = aliasDirectives
+            .Where(usingDirective => IsCanonicalEfNamespace(usingDirective.Name?.ToString()))
+            .Select(usingDirective => usingDirective.Alias!.Name.Identifier.ValueText)
+            .ToHashSet(StringComparer.Ordinal);
+        var importsEfNamespace = applicableUsings.Any(usingDirective =>
+            usingDirective.Alias is null && IsCanonicalEfNamespace(usingDirective.Name?.ToString()));
         return baseTypes.Any(typeAliases.Contains)
-            || baseTypes.Any(baseType => namespaceAliases.Any(alias => baseType.Equals($"{alias}.Migration", StringComparison.Ordinal)));
+            || baseTypes.Any(baseType => migrationNamespaceAliases.Any(alias => baseType.Equals($"{alias}.Migration", StringComparison.Ordinal)))
+            || importsEfNamespace && baseTypes.Contains("Migrations.Migration", StringComparer.Ordinal)
+            || baseTypes.Any(baseType => efNamespaceAliases.Any(alias => baseType.Equals($"{alias}.Migrations.Migration", StringComparison.Ordinal)));
     }
 
     private static bool IsCanonicalMigrationTypeName(string? typeName) => typeName is
@@ -721,16 +693,25 @@ internal static class FrameworkMigrationEvidenceExtractor
         "Microsoft.EntityFrameworkCore.Migrations" or
         "global::Microsoft.EntityFrameworkCore.Migrations";
 
+    private static bool IsCanonicalEfNamespace(string? namespaceName) => namespaceName is
+        "Microsoft.EntityFrameworkCore" or
+        "global::Microsoft.EntityFrameworkCore";
+
     private static bool IsProtectedSyntaxCandidateInvocation(InvocationExpressionSyntax invocation)
     {
         var methodName = InvocationName(invocation);
         var hasProtectedDefault = methodName is "AddColumn" or "AlterColumn"
             && invocation.ArgumentList.Arguments.Any(argument =>
-                argument.NameColon?.Name.Identifier.ValueText is "defaultValue" or "defaultValueSql" or "computedColumnSql")
-            || methodName is "AddColumn" or "AlterColumn"
+                argument.NameColon is not null && IsProtectedDefaultParameter(argument.NameColon.Name.Identifier.ValueText))
+            || methodName == "AddColumn"
             && invocation.ArgumentList.Arguments
                 .Select((argument, index) => (argument, index))
                 .Any(item => item.argument.NameColon is null && item.index is 8 or 9 or 10);
+        hasProtectedDefault = hasProtectedDefault
+            || methodName == "AlterColumn"
+            && invocation.ArgumentList.Arguments
+                .Select((argument, index) => (argument, index))
+                .Any(item => item.argument.NameColon is null && item.index is 8 or 9 or 10 or 17 or 18 or 19);
         return ProtectedOperations.ContainsKey(methodName)
             || methodName is "Annotation" or "CreateTable"
             || hasProtectedDefault;
@@ -792,16 +773,18 @@ internal static class FrameworkMigrationEvidenceExtractor
         accumulator.Count++;
     }
 
-    private static EvidenceSpan Evidence(string filePath, SyntaxNode node, string? snippetHash = null)
+    private static EvidenceSpan Evidence(string filePath, SyntaxNode node, bool syntaxFallback = false)
     {
         var span = node.GetLocation().GetLineSpan();
         return new EvidenceSpan(
             FileInventory.NormalizeRelativePath(filePath),
             span.StartLinePosition.Line + 1,
             Math.Max(span.StartLinePosition.Line + 1, span.EndLinePosition.Line + 1),
-            snippetHash is null ? null : FactFactory.Hash(node.ToString(), 32),
-            "CSharpSemanticExtractor",
-            ScannerVersions.CSharpSemanticExtractor);
+            null,
+            syntaxFallback ? "FrameworkMigrationSyntaxFallbackExtractor" : "FrameworkMigrationEvidenceExtractor",
+            syntaxFallback
+                ? ScannerVersions.FrameworkMigrationSyntaxFallbackExtractor
+                : ScannerVersions.FrameworkMigrationEvidenceExtractor);
     }
 
     private static string InvocationName(InvocationExpressionSyntax invocation) => invocation.Expression switch

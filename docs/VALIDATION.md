@@ -1443,4 +1443,8 @@ migration coverage label. Protected SQL, data, annotation, default, and
 computed content must produce categorical Tier 4 gaps without source values or
 digests, and must not reappear through SQL text/shape extraction. The generic
 contract-delta reducer must ignore this fact family until its composition
-contract preserves the upstream evidence and limitations.
+contract preserves the upstream evidence and limitations. Migration coverage
+gaps reduce `analysisLevel`, but do not change a successfully loaded and
+compiled repository's `buildStatus` to `FailedOrPartial`; those are separate
+claims. Confirm syntax-fallback facts use their dedicated extractor provenance
+and categorical migration messages in `knownGaps`.
