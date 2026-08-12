@@ -181,6 +181,13 @@ mapped to another. Those are the two producer gaps owned here.
    types and their producer-gap rule IDs until a reducer contract admits them.
    Existing reduce outputs and high-fan-out classifications SHALL remain
    byte-identical when these unrelated facts are present.
+9. Until the exact-ID reader in Requirement 3 is implemented, the existing
+   property-flow reporter SHALL explicitly exclude semantic
+   `RazorModelBindingTarget` rows by their producer rule ID. PR 1 SHALL prove
+   existing property-flow rows, paths, classifications, and bounds remain
+   unchanged when semantic rows are present. PR 3 SHALL remove that temporary
+   exclusion only in the same change that adds canonical-ID admission and
+   collision regressions.
 
 ## Requirement 5: Safety and Non-Claims
 
@@ -233,6 +240,9 @@ mapped to another. Those are the two producer gaps owned here.
    tier-aware bounded selection, preserved-or-gapped same-name fallback,
    directed and reversed assignments, no synthesized reverse edge, source-
    index scoping across combined inputs, and persisted new-property round trip.
+8. Staged-delivery regressions SHALL prove PR 1 semantic targets cannot enter
+   the current name-joining property-flow reader; removing that isolation and
+   admitting the rule is part of PR 3's exact-ID composition change.
 
 ## Deferred
 
