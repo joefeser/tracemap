@@ -1,11 +1,11 @@
 # Framework Migration Evidence v0 Implementation State
 
-Status: producer-composition-and-generic-consumer-audit-implemented
+Status: producer-regression-matrix-complete-provider-explicit-correlation-deferred
 
-Branch: `codex/framework-migration-export-audit-v0`
+Branch: `codex/framework-migration-adversarial-regressions`
 
 Base: fresh `origin/dev` at
-`b205d60a3271b0c9280249e46939f98599b509b5`
+`e4e5afadde22f06e15679829660dba3570eb30ac`
 
 Issue: [#531](https://github.com/joefeser/tracemap/issues/531)
 
@@ -93,7 +93,38 @@ facts or repackage them as ordinary dependency-surface claims. A future
 snapshot comparison may add migration identity and ordering semantics only
 under a separately specified contract.
 
+## Producer Adversarial Regression Matrix
+
+The final producer hardening slice adds focused Roslyn fixtures for same-named
+migrations in different source assemblies, exact overload and reordered named-
+argument binding, file-enumeration determinism, application operation
+lookalikes inside a genuine migration, helper and local-function direction,
+compiler-folded identity constants, partial array and lambda shapes, syntax-
+fallback evidence, and exact rule-catalog tiers/emissions/non-claims.
+
+The fixtures assert canonical assembly-aware symbol IDs, target overload IDs,
+repository-relative spans, deterministic materialized fact IDs, rule IDs,
+evidence tiers, extractor identity, categorical gaps, and protected snippet
+omission. All fixtures passed against the existing producer, so this slice did
+not widen extraction or change production behavior. Provider-explicit Npgsql
+correlation remains deferred: the existing spec requires a separately pinned
+package/signature contract and independent fixture before that checkbox can be
+implemented truthfully.
+
 ## Validation
+
+Producer adversarial regression validation on
+`codex/framework-migration-adversarial-regressions`:
+
+- Focused adversarial regression tests: 8/8 passed.
+- Focused framework-migration tests: 47/47 passed.
+- Full .NET solution build: passed with 0 warnings and 0 errors.
+- Full .NET solution test: 1,450/1,450 passed.
+- Changed-file `dotnet format --verify-no-changes`: passed.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
+- No production extractor defect was exposed; changes are tests and spec state
+  only.
 
 Generic consumer audit validation on
 `codex/framework-migration-export-audit-v0`:
