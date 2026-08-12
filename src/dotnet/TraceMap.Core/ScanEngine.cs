@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.CodeAnalysis.Text;
 
 namespace TraceMap.Core;
 
@@ -114,17 +115,29 @@ public static class ScanEngine
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
+        var semanticallyAnalyzedFiles = GetSemanticallyAnalyzedFiles(semanticResult);
+        var migrationSyntaxFallback = FrameworkMigrationEvidenceExtractor.ExtractSyntaxFallback(
+            repoPath,
+            inventory,
+            semanticallyAnalyzedFiles);
+        var migrationFallbackGaps = migrationSyntaxFallback.Gaps
+            .Select(GetGapMessage)
+            .ToArray();
         var semanticKnownGaps = git.KnownGaps
             .Concat(semanticResult.GapFacts.Select(GetGapMessage))
+            .Concat(migrationFallbackGaps)
             .OrderBy(gap => gap, StringComparer.Ordinal)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
+        var migrationFallbackReducedCoverage = migrationFallbackGaps.Length > 0;
+        var semanticBuildReducedCoverage = semanticResult.GapFacts.Any(gap =>
+            gap.RuleId != RuleIds.DatabaseFrameworkMigrationGap);
         var semanticBuildStatus = semanticResult.Attempted
-            ? semanticResult.ReducedCoverage ? "FailedOrPartial" : "Succeeded"
+            ? semanticBuildReducedCoverage ? "FailedOrPartial" : "Succeeded"
             : "NotRun";
         var semanticAnalysisLevel = semanticResult.Attempted
-            ? semanticResult.ReducedCoverage ? "Level1SemanticAnalysisReduced" : "Level1SemanticAnalysis"
-            : "Level3SyntaxAnalysis";
+            ? semanticResult.ReducedCoverage || migrationFallbackReducedCoverage ? "Level1SemanticAnalysisReduced" : "Level1SemanticAnalysis"
+            : migrationFallbackReducedCoverage ? "Level3SyntaxAnalysisReduced" : "Level3SyntaxAnalysis";
 
         var provisionalManifest = new ScanManifest(
             CreateScanId(git, inventory, sourceSnapshotDigest, options),
@@ -173,7 +186,7 @@ public static class ScanEngine
         using (var extractionOperation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.StaticExtraction, cancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            facts = CreateFacts(manifest, inventory, targetFrameworkInfos, ProjectFileReader.ReadPackageReferences(repoPath, inventory), knownGaps, repoPath, semanticResult, options, binlogFacts);
+            facts = CreateFacts(manifest, inventory, targetFrameworkInfos, ProjectFileReader.ReadPackageReferences(repoPath, inventory), knownGaps, repoPath, semanticResult, options, binlogFacts, migrationSyntaxFallback);
             cancellationToken.ThrowIfCancellationRequested();
             extractionOperation.RecordItems(facts.Count);
             extractionOperation.Complete(manifest.BuildStatus == "FailedOrPartial"
@@ -403,7 +416,8 @@ public static class ScanEngine
         string repoPath,
         SemanticExtractionResult semanticResult,
         ScanOptions options,
-        IReadOnlyList<CodeFact> binlogFacts)
+        IReadOnlyList<CodeFact> binlogFacts,
+        FrameworkMigrationEvidenceExtractor.SyntaxProtectionResult migrationSyntaxFallback)
     {
         var facts = new List<CodeFact>
         {
@@ -566,13 +580,26 @@ public static class ScanEngine
         }
 
         facts.AddRange(BuildEnvironmentDiagnosticExtractor.Extract(repoPath, manifest, inventory, semanticResult));
-        facts.AddRange(CSharpSyntaxExtractor.Extract(repoPath, manifest, inventory));
         var semanticallyAnalyzedFiles = GetSemanticallyAnalyzedFiles(semanticResult);
-        facts.AddRange(CSharpIntegrationSyntaxExtractor.Extract(repoPath, manifest, inventory, semanticallyAnalyzedFiles));
-        facts.AddRange(RazorBindingExtractor.Extract(repoPath, manifest, inventory));
-        facts.AddRange(LegacyWcfExtractor.Extract(repoPath, manifest, inventory));
-        facts.AddRange(LegacyAsmxExtractor.Extract(repoPath, manifest, inventory));
-        facts.AddRange(LegacyRemotingExtractor.Extract(repoPath, manifest, inventory, semanticResult.Facts, semanticResult.Attempted));
+        var protectedSourceSpans = (semanticResult.ProtectedSourceSpans ?? [])
+            .Concat(migrationSyntaxFallback.ProtectedSpans)
+            .Distinct()
+            .ToArray();
+        var protectedLineRanges = BuildProtectedLineRanges(repoPath, protectedSourceSpans);
+        facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, migrationSyntaxFallback.Gaps));
+        facts.AddRange(CSharpSyntaxExtractor.Extract(repoPath, manifest, inventory, protectedSourceSpans));
+        facts.AddRange(CSharpIntegrationSyntaxExtractor.Extract(
+            repoPath,
+            manifest,
+            inventory,
+            semanticallyAnalyzedFiles,
+            protectedSourceSpans));
+        facts.AddRange(FilterProtectedEvidence(RazorBindingExtractor.Extract(repoPath, manifest, inventory), protectedLineRanges));
+        facts.AddRange(FilterProtectedEvidence(LegacyWcfExtractor.Extract(repoPath, manifest, inventory), protectedLineRanges));
+        facts.AddRange(FilterProtectedEvidence(LegacyAsmxExtractor.Extract(repoPath, manifest, inventory), protectedLineRanges));
+        facts.AddRange(FilterProtectedEvidence(
+            LegacyRemotingExtractor.Extract(repoPath, manifest, inventory, semanticResult.Facts, semanticResult.Attempted),
+            protectedLineRanges));
         facts.AddRange(SqlFileExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(SqlExecutionContextExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(PostgresSchemaMigrationExtractor.Extract(repoPath, manifest, inventory));
@@ -585,10 +612,10 @@ public static class ScanEngine
         facts.AddRange(ConfigExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, semanticResult.GapFacts));
         facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, semanticResult.Facts));
-        facts.AddRange(LegacyDataMetadataExtractor.Extract(repoPath, manifest, inventory, facts));
-        facts.AddRange(LegacyWebFormsExtractor.Extract(repoPath, manifest, inventory, facts));
-        facts.AddRange(LegacyWinFormsExtractor.Extract(repoPath, manifest, inventory, facts));
-        facts.AddRange(LegacyAspNetExtractor.Extract(repoPath, manifest, inventory, facts));
+        facts.AddRange(FilterProtectedEvidence(LegacyDataMetadataExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges));
+        facts.AddRange(FilterProtectedEvidence(LegacyWebFormsExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges));
+        facts.AddRange(FilterProtectedEvidence(LegacyWinFormsExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges));
+        facts.AddRange(FilterProtectedEvidence(LegacyAspNetExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges));
         facts.AddRange(AnalyzerCapabilityDiagnosticExtractor.Extract(manifest, inventory, semanticResult, facts, options));
 
         return facts
@@ -610,11 +637,57 @@ public static class ScanEngine
                 .Where(path => path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
                 .ToHashSet(StringComparer.Ordinal);
 
+    internal static IReadOnlyDictionary<string, IReadOnlyList<(int StartLine, int EndLine)>> BuildProtectedLineRanges(
+        string repoPath,
+        IReadOnlyList<ProtectedSourceSpan> protectedSourceSpans)
+    {
+        var result = new Dictionary<string, IReadOnlyList<(int StartLine, int EndLine)>>(StringComparer.Ordinal);
+        foreach (var group in protectedSourceSpans.GroupBy(span => span.FilePath, StringComparer.Ordinal))
+        {
+            var fullPath = Path.Combine(repoPath, group.Key);
+            if (!File.Exists(fullPath))
+            {
+                result[group.Key] = [(1, int.MaxValue)];
+                continue;
+            }
+
+            try
+            {
+                var source = SourceText.From(File.ReadAllText(fullPath));
+                result[group.Key] = group.Select(span =>
+                {
+                    var start = Math.Clamp(span.Start, 0, source.Length);
+                    var length = Math.Clamp(span.Length, 0, source.Length - start);
+                    var lineSpan = source.Lines.GetLinePositionSpan(new TextSpan(start, length));
+                    return (lineSpan.Start.Line + 1, lineSpan.End.Line + 1);
+                }).ToArray();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                result[group.Key] = [(1, int.MaxValue)];
+            }
+        }
+        return result;
+    }
+
+    internal static IEnumerable<CodeFact> FilterProtectedEvidence(
+        IEnumerable<CodeFact> facts,
+        IReadOnlyDictionary<string, IReadOnlyList<(int StartLine, int EndLine)>> protectedLineRanges) =>
+        facts.Where(fact => !protectedLineRanges.TryGetValue(fact.Evidence.FilePath, out var ranges)
+            || !ranges.Any(range => fact.Evidence.StartLine <= range.EndLine && range.StartLine <= fact.Evidence.EndLine));
+
     private static string GetGapMessage(SemanticFactCandidate gap)
     {
-        return gap.Properties is not null && gap.Properties.TryGetValue("message", out var message)
-            ? message
-            : "Roslyn semantic analysis reported a gap.";
+        if (gap.Properties is not null && gap.Properties.TryGetValue("message", out var message))
+        {
+            return message;
+        }
+        if (gap.RuleId == RuleIds.DatabaseFrameworkMigrationGap)
+        {
+            var gapKind = gap.Properties?.GetValueOrDefault("gapKind") ?? gap.ContractElement ?? "UnknownMigrationGap";
+            return $"Framework migration coverage reduced: {gapKind}.";
+        }
+        return "Roslyn semantic analysis reported a gap.";
     }
 
     private static string GetBuildStatusReason(

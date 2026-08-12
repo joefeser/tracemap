@@ -7,7 +7,11 @@ namespace TraceMap.Core;
 
 public static class CSharpSyntaxExtractor
 {
-    public static IReadOnlyList<CodeFact> Extract(string repoPath, ScanManifest manifest, IEnumerable<FileInventoryItem> inventory)
+    public static IReadOnlyList<CodeFact> Extract(
+        string repoPath,
+        ScanManifest manifest,
+        IEnumerable<FileInventoryItem> inventory,
+        IReadOnlyList<ProtectedSourceSpan>? protectedSourceSpans = null)
     {
         var facts = new List<CodeFact>();
         foreach (var file in inventory
@@ -35,15 +39,18 @@ public static class CSharpSyntaxExtractor
 
                 var tree = CSharpSyntaxTree.ParseText(SourceText.From(source), path: file.RelativePath);
                 var root = tree.GetCompilationUnitRoot();
+                var fileProtectedSpans = protectedSourceSpans?
+                    .Where(span => span.FilePath.Equals(file.RelativePath, StringComparison.Ordinal))
+                    .ToArray() ?? [];
                 AddParseDiagnostics(manifest, facts, tree);
                 AddDeclarationFacts(manifest, facts, file.RelativePath, root);
-                AddAttributeFacts(manifest, facts, file.RelativePath, root);
-                AddMemberAccessFacts(manifest, facts, file.RelativePath, root);
-                AddInvocationFacts(manifest, facts, file.RelativePath, root);
-                AddObjectCreationFacts(manifest, facts, file.RelativePath, root);
-                AddLogicShapeFacts(manifest, facts, file.RelativePath, root);
-                AddQueryPatternFacts(manifest, facts, file.RelativePath, root);
-                AddObjectShapeFacts(manifest, facts, file.RelativePath, root);
+                AddAttributeFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans);
+                AddMemberAccessFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans);
+                AddInvocationFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans);
+                AddObjectCreationFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans);
+                AddLogicShapeFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans);
+                AddQueryPatternFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans);
+                AddObjectShapeFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans);
                 AddAspNetRouteFacts(manifest, facts, file.RelativePath, root);
                 AddRazorModelBindingTargetFacts(manifest, facts, file.RelativePath, root);
             }
@@ -142,10 +149,14 @@ public static class CSharpSyntaxExtractor
         }
     }
 
-    private static void AddAttributeFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root)
+    private static void AddAttributeFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root, IReadOnlyList<ProtectedSourceSpan> protectedSpans)
     {
         foreach (var attribute in root.DescendantNodes().OfType<AttributeSyntax>())
         {
+            if (OverlapsProtected(attribute, protectedSpans))
+            {
+                continue;
+            }
             var attributeName = attribute.Name.ToString();
             facts.Add(CreateSyntaxFact(
                 manifest,
@@ -161,10 +172,14 @@ public static class CSharpSyntaxExtractor
         }
     }
 
-    private static void AddMemberAccessFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root)
+    private static void AddMemberAccessFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root, IReadOnlyList<ProtectedSourceSpan> protectedSpans)
     {
         foreach (var memberAccess in root.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
         {
+            if (OverlapsProtected(memberAccess, protectedSpans))
+            {
+                continue;
+            }
             var memberName = memberAccess.Name.Identifier.ValueText;
             if (string.IsNullOrWhiteSpace(memberName))
             {
@@ -188,10 +203,14 @@ public static class CSharpSyntaxExtractor
         }
     }
 
-    private static void AddInvocationFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root)
+    private static void AddInvocationFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root, IReadOnlyList<ProtectedSourceSpan> protectedSpans)
     {
         foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
+            if (OverlapsProtected(invocation, protectedSpans))
+            {
+                continue;
+            }
             var invocationName = GetInvocationName(invocation.Expression);
             var containingMember = GetContainingMemberName(invocation);
             var receiverName = GetInvocationReceiverName(invocation.Expression);
@@ -244,10 +263,14 @@ public static class CSharpSyntaxExtractor
         }
     }
 
-    private static void AddObjectCreationFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root)
+    private static void AddObjectCreationFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root, IReadOnlyList<ProtectedSourceSpan> protectedSpans)
     {
         foreach (var creation in root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
         {
+            if (OverlapsProtected(creation, protectedSpans))
+            {
+                continue;
+            }
             var typeName = creation.Type.ToString();
             var containingMember = GetContainingMemberName(creation);
             var assignedTo = GetAssignedVariableName(creation);
@@ -288,10 +311,14 @@ public static class CSharpSyntaxExtractor
         }
     }
 
-    private static void AddLogicShapeFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root)
+    private static void AddLogicShapeFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root, IReadOnlyList<ProtectedSourceSpan> protectedSpans)
     {
         foreach (var binary in root.DescendantNodes().OfType<BinaryExpressionSyntax>().Where(IsCalculationExpression))
         {
+            if (OverlapsProtected(binary, protectedSpans))
+            {
+                continue;
+            }
             facts.Add(CreateSyntaxFact(
                 manifest,
                 FactTypes.CalculationExpression,
@@ -344,10 +371,14 @@ public static class CSharpSyntaxExtractor
         }
     }
 
-    private static void AddQueryPatternFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root)
+    private static void AddQueryPatternFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root, IReadOnlyList<ProtectedSourceSpan> protectedSpans)
     {
         foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
+            if (OverlapsProtected(invocation, protectedSpans))
+            {
+                continue;
+            }
             if (invocation.Expression is not MemberAccessExpressionSyntax memberAccess)
             {
                 continue;
@@ -384,10 +415,14 @@ public static class CSharpSyntaxExtractor
         }
     }
 
-    private static void AddObjectShapeFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root)
+    private static void AddObjectShapeFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root, IReadOnlyList<ProtectedSourceSpan> protectedSpans)
     {
         foreach (var creation in root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
         {
+            if (OverlapsProtected(creation, protectedSpans))
+            {
+                continue;
+            }
             if (creation.Initializer is null)
             {
                 continue;
@@ -404,6 +439,10 @@ public static class CSharpSyntaxExtractor
 
         foreach (var anonymous in root.DescendantNodes().OfType<AnonymousObjectCreationExpressionSyntax>())
         {
+            if (OverlapsProtected(anonymous, protectedSpans))
+            {
+                continue;
+            }
             var fields = anonymous.Initializers
                 .Select(initializer => initializer.NameEquals?.Name.Identifier.ValueText
                     ?? initializer.Expression switch
@@ -425,6 +464,9 @@ public static class CSharpSyntaxExtractor
             facts.Add(CreateObjectShapeFact(manifest, filePath, anonymous, "anonymous", fields));
         }
     }
+
+    private static bool OverlapsProtected(SyntaxNode node, IReadOnlyList<ProtectedSourceSpan> protectedSpans) =>
+        protectedSpans.Any(span => node.SpanStart < span.Start + span.Length && span.Start < node.Span.End);
 
     private static void AddAspNetRouteFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root)
     {
