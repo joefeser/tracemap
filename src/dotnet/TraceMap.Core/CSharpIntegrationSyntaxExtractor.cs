@@ -128,7 +128,8 @@ public static class CSharpIntegrationSyntaxExtractor
         string repoPath,
         ScanManifest manifest,
         IEnumerable<FileInventoryItem> inventory,
-        IReadOnlySet<string>? semanticallyAnalyzedFiles = null)
+        IReadOnlySet<string>? semanticallyAnalyzedFiles = null,
+        IReadOnlyList<ProtectedSourceSpan>? protectedSourceSpans = null)
     {
         var facts = new List<CodeFact>();
         foreach (var file in inventory
@@ -159,7 +160,7 @@ public static class CSharpIntegrationSyntaxExtractor
                     semanticallyAnalyzedFiles?.Contains(file.RelativePath) == true);
                 AddMessageAttributeFacts(manifest, facts, file.RelativePath, root);
                 AddSqlCommandFacts(manifest, facts, file.RelativePath, root);
-                AddSqlStringFacts(manifest, facts, file.RelativePath, root);
+                AddSqlStringFacts(manifest, facts, file.RelativePath, root, protectedSourceSpans);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -623,10 +624,23 @@ public static class CSharpIntegrationSyntaxExtractor
         }
     }
 
-    private static void AddSqlStringFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root)
+    private static void AddSqlStringFacts(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        string filePath,
+        CompilationUnitSyntax root,
+        IReadOnlyList<ProtectedSourceSpan>? protectedSourceSpans)
     {
         foreach (var token in root.DescendantTokens().Where(IsStringLiteralToken))
         {
+            if (protectedSourceSpans?.Any(span =>
+                span.FilePath.Equals(filePath, StringComparison.Ordinal)
+                && token.SpanStart >= span.Start
+                && token.Span.End <= span.Start + span.Length) == true)
+            {
+                continue;
+            }
+
             var value = token.ValueText;
             if (!SqlTextDetector.IsSqlLike(value))
             {

@@ -568,7 +568,12 @@ public static class ScanEngine
         facts.AddRange(BuildEnvironmentDiagnosticExtractor.Extract(repoPath, manifest, inventory, semanticResult));
         facts.AddRange(CSharpSyntaxExtractor.Extract(repoPath, manifest, inventory));
         var semanticallyAnalyzedFiles = GetSemanticallyAnalyzedFiles(semanticResult);
-        facts.AddRange(CSharpIntegrationSyntaxExtractor.Extract(repoPath, manifest, inventory, semanticallyAnalyzedFiles));
+        facts.AddRange(CSharpIntegrationSyntaxExtractor.Extract(
+            repoPath,
+            manifest,
+            inventory,
+            semanticallyAnalyzedFiles,
+            semanticResult.ProtectedSourceSpans));
         facts.AddRange(RazorBindingExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(LegacyWcfExtractor.Extract(repoPath, manifest, inventory));
         facts.AddRange(LegacyAsmxExtractor.Extract(repoPath, manifest, inventory));

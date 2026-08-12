@@ -1,11 +1,11 @@
 # Framework Migration Evidence v0 Implementation State
 
-Status: spec-ready
+Status: producer-implemented
 
-Branch: `codex/postgres-framework-migration-v0`
+Branch: `codex/framework-migration-producer-v0`
 
 Base: fresh `origin/dev` at
-`42a1556bf84a2725626ec40cae72f36055095236`
+`1937def3647ae090ffc838d2135d06c134f7c6cb`
 
 Issue: [#531](https://github.com/joefeser/tracemap/issues/531)
 
@@ -31,7 +31,45 @@ Protected raw SQL, seed/data, annotation, default, and computed arguments are
 categorical gaps and must not be retained or hashed. No migration execution,
 ordering, rollback, generated-SQL, database-state, or safety claim is added.
 
+## Producer Implementation
+
+PR 1 adds the three versioned framework-migration rules, the two closed fact
+types, and `csharp-semantic/0.17.0`. Admission requires Roslyn resolution to the
+strong-named `Microsoft.EntityFrameworkCore.Relational` metadata assembly with
+public-key token `adb9793829ddae60`; source and unsigned metadata lookalikes are
+rejected with categorical gaps.
+
+The producer emits the closed eleven-operation vocabulary with constant object
+identity, canonical migration/method roles, deterministic invocation ordinals,
+direction proven only from real `Up`/`Down` overrides, provider scope
+`unknown`, and fixed limitations. Protected SQL, data, annotations,
+default/computed expressions, and nested table shapes are gap-only. Their
+source text and digests are omitted. A semantic-to-syntax protected-span seam
+also prevents proven protected migration content from being reprojected by the
+generic C# SQL text/shape pass.
+
+The generic contract-delta reducer returns before matching either new fact type
+or the framework gap rule. `IsSqlFact` and `IsPostgresSchemaFact` remain
+unchanged. PR 2 composition into database design-review and release-review is
+still deferred.
+
 ## Validation
+
+Producer implementation validation at the current worktree:
+
+- Focused framework-migration and reducer isolation tests: 10/10 passed.
+- Full .NET solution build: passed with 0 warnings and 0 errors.
+- Full .NET solution test: 1,412/1,412 passed.
+- Checked-in synthetic CLI scan: `FailedOrPartial` /
+  `Level1SemanticAnalysisReduced`; all five artifacts present; NDJSON and
+  SQLite contained one declaration, four operations, and one categorical raw-
+  SQL gap. The protected SQL sentinel was absent from NDJSON, SQLite, report,
+  and analyzer log.
+- Changed-file `dotnet format --verify-no-changes`: passed. Repository-wide
+  format verification remains noisy from pre-existing formatting findings in
+  unrelated files.
+- `./scripts/check-private-paths.sh`: passed.
+- `git diff --check`: passed.
 
 - Confirmed no existing active spec owns framework migration extraction.
 - Confirmed all five spec files are private-path free and diff-clean.

@@ -19,6 +19,8 @@ public sealed record SemanticFactCandidate(
     string? ContractElement = null,
     IReadOnlyDictionary<string, string>? Properties = null);
 
+public sealed record ProtectedSourceSpan(string FilePath, int Start, int Length);
+
 public sealed record SemanticExtractionResult(
     IReadOnlyList<SemanticFactCandidate> Facts,
     IReadOnlyList<SemanticFactCandidate> GapFacts,
@@ -26,7 +28,8 @@ public sealed record SemanticExtractionResult(
     bool ReducedCoverage,
     IReadOnlySet<string>? AnalyzedFiles = null,
     bool ScopeReduced = false,
-    IReadOnlySet<string>? CompilationInputFiles = null);
+    IReadOnlySet<string>? CompilationInputFiles = null,
+    IReadOnlyList<ProtectedSourceSpan>? ProtectedSourceSpans = null);
 
 public static class CSharpSemanticExtractor
 {
@@ -146,6 +149,7 @@ public static class CSharpSemanticExtractor
         var gaps = new List<SemanticFactCandidate>();
         var analyzedFiles = new HashSet<string>(StringComparer.Ordinal);
         var compilationInputFiles = new HashSet<string>(StringComparer.Ordinal);
+        var protectedSourceSpans = new List<ProtectedSourceSpan>();
         var projects = inventory.Where(item => item.Kind == "Project").OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray();
         var solutions = inventory.Where(item => item.Kind == "Solution").OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray();
         var useFullSourceInventory = options.ProjectPaths is { Count: > 0 }
@@ -235,6 +239,7 @@ public static class CSharpSemanticExtractor
                         loadedProjectPaths,
                         analyzedFiles,
                         compilationInputFiles,
+                        protectedSourceSpans,
                         options.ProjectPaths is { Count: > 0 } ? selectedProjectPaths : null);
                 }
                 catch (Exception ex) when (IsWorkspaceException(ex))
@@ -271,7 +276,8 @@ public static class CSharpSemanticExtractor
                     facts,
                     gaps,
                     analyzedFiles,
-                    compilationInputFiles);
+                    compilationInputFiles,
+                    protectedSourceSpans);
                 loadedProjectPaths.Add(projectItem.RelativePath);
             }
             catch (Exception ex) when (IsWorkspaceException(ex))
@@ -295,7 +301,8 @@ public static class CSharpSemanticExtractor
             ReducedCoverage: gaps.Count > 0,
             AnalyzedFiles: analyzedFiles,
             ScopeReduced: explicitlyExcludedSourcePaths.Count > 0,
-            CompilationInputFiles: compilationInputFiles);
+            CompilationInputFiles: compilationInputFiles,
+            ProtectedSourceSpans: protectedSourceSpans);
     }
 
     public static IReadOnlyList<CodeFact> MaterializeFacts(ScanManifest manifest, IEnumerable<SemanticFactCandidate> candidates)
@@ -423,6 +430,7 @@ public static class CSharpSemanticExtractor
         HashSet<string> loadedProjectPaths,
         HashSet<string> analyzedFiles,
         HashSet<string> compilationInputFiles,
+        List<ProtectedSourceSpan> protectedSourceSpans,
         IReadOnlySet<string>? selectedProjectPaths)
     {
         solution = RemoveExplicitlyExcludedSourceDocuments(
@@ -447,7 +455,8 @@ public static class CSharpSemanticExtractor
                 facts,
                 gaps,
                 analyzedFiles,
-                compilationInputFiles);
+                compilationInputFiles,
+                protectedSourceSpans);
             if (!string.IsNullOrWhiteSpace(project.FilePath))
             {
                 loadedProjectPaths.Add(relativeProjectPath);
@@ -463,7 +472,8 @@ public static class CSharpSemanticExtractor
         List<SemanticFactCandidate> facts,
         List<SemanticFactCandidate> gaps,
         HashSet<string> analyzedFiles,
-        HashSet<string> compilationInputFiles)
+        HashSet<string> compilationInputFiles,
+        List<ProtectedSourceSpan> protectedSourceSpans)
     {
         var projectPath = ToRelativePath(repoPath, project.FilePath);
         Compilation? compilation;
@@ -515,6 +525,7 @@ public static class CSharpSemanticExtractor
                 facts,
                 gaps,
                 analyzedFiles,
+                protectedSourceSpans,
                 canonicalEvidencePath);
         }
     }
@@ -594,6 +605,7 @@ public static class CSharpSemanticExtractor
         List<SemanticFactCandidate> facts,
         List<SemanticFactCandidate> gaps,
         HashSet<string> analyzedFiles,
+        List<ProtectedSourceSpan> protectedSourceSpans,
         string? canonicalEvidencePath)
     {
         if (!document.SupportsSyntaxTree || IsCompilerGeneratedDocument(document))
@@ -633,6 +645,7 @@ public static class CSharpSemanticExtractor
         var model = compilation.GetSemanticModel(tree, ignoreAccessibility: true);
         analyzedFiles.Add(filePath);
         AddTypeDeclarationFacts(projectPath, filePath, root, model, facts);
+        FrameworkMigrationEvidenceExtractor.Extract(projectPath, filePath, root, model, facts, gaps, protectedSourceSpans);
         AddSymbolRelationshipFacts(projectPath, filePath, root, model, facts);
         AddFieldDeclarationFacts(projectPath, filePath, root, model, facts);
         AddParameterDeclarationFacts(projectPath, filePath, root, model, facts);
