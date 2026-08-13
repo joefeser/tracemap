@@ -585,20 +585,15 @@ public static partial class LegacyWebFormsExtractor
             return linked;
         }
 
-        var linkedProjectPaths = existingFacts
-            .Where(fact => fact.Evidence.FilePath.Equals(linkedCodePath, StringComparison.Ordinal)
-                && !string.IsNullOrWhiteSpace(fact.ProjectPath))
-            .Select(fact => fact.ProjectPath)
-            .ToHashSet(StringComparer.Ordinal);
+        var linkedProjectPaths = FindLinkedProjectPaths(page, existingFacts);
 
         return context.CodeFiles
             .Where(file => !file.FilePath.Equals(linkedCodePath, StringComparison.Ordinal))
             .SelectMany(file => file.Methods)
             .Where(method => method.MethodName.Equals(handlerName, StringComparison.Ordinal))
             .Where(method => PageTypeMatches(page.PageTypeName, method.PageTypeName))
-            .Where(method => FindSemanticHandlerEvidence(method, existingFacts) is { } semantic
-                && SemanticHandlerTypeMatches(page.PageTypeName, semantic.SourceSymbol, method.MethodName)
-                && linkedProjectPaths.Contains(semantic.ProjectPath))
+            .Where(method => FindSemanticHandlerEvidence(method, existingFacts, linkedProjectPaths) is { } semantic
+                && SemanticHandlerTypeMatches(page.PageTypeName, semantic.SourceSymbol, method.MethodName))
             .OrderBy(method => method.FilePath, StringComparer.Ordinal)
             .ThenBy(method => method.Line)
             .ToArray();
@@ -909,7 +904,7 @@ public static partial class LegacyWebFormsExtractor
         }
 
         var method = candidates[0];
-        return FindSemanticHandlerEvidence(method, existingFacts)?.Properties.GetValueOrDefault("sourceSymbolId")
+        return FindSemanticHandlerEvidence(method, existingFacts, FindLinkedProjectPaths(page, existingFacts))?.Properties.GetValueOrDefault("sourceSymbolId")
             ?? StructuralHandlerIdentity(page, method.MethodName, method.FilePath, method.Line);
     }
 
@@ -995,7 +990,7 @@ public static partial class LegacyWebFormsExtractor
         bool isAutoWireup,
         bool hasExplicitSubscription = false)
     {
-        var semanticEvidence = FindSemanticHandlerEvidence(method, existingFacts);
+        var semanticEvidence = FindSemanticHandlerEvidence(method, existingFacts, FindLinkedProjectPaths(page, existingFacts));
         var tier = semanticEvidence is not null
             ? EvidenceTiers.Tier1Semantic
             : method.HasCommonEventSignature && PageTypeMatches(page.PageTypeName, method.PageTypeName)
@@ -1259,11 +1254,16 @@ public static partial class LegacyWebFormsExtractor
             && clientSymbols.Contains(fact.SourceSymbol));
     }
 
-    private static CodeFact? FindSemanticHandlerEvidence(WebFormsMethod method, IReadOnlyList<CodeFact> existingFacts)
+    private static CodeFact? FindSemanticHandlerEvidence(
+        WebFormsMethod method,
+        IReadOnlyList<CodeFact> existingFacts,
+        IReadOnlySet<string>? allowedProjectPaths = null)
     {
         return existingFacts
             .Where(fact => fact.EvidenceTier == EvidenceTiers.Tier1Semantic
                 && fact.Evidence.FilePath.Equals(method.FilePath, StringComparison.Ordinal)
+                && (allowedProjectPaths is null
+                    || (!string.IsNullOrWhiteSpace(fact.ProjectPath) && allowedProjectPaths.Contains(fact.ProjectPath)))
                 && fact.Evidence.StartLine >= method.Line
                 && fact.Evidence.StartLine <= method.EndLine
                 && !string.IsNullOrWhiteSpace(fact.SourceSymbol)
@@ -1272,6 +1272,22 @@ public static partial class LegacyWebFormsExtractor
                     || fact.SourceSymbol.Contains("." + method.MethodName + "(", StringComparison.Ordinal)))
             .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
             .FirstOrDefault();
+    }
+
+    private static IReadOnlySet<string> FindLinkedProjectPaths(
+        WebFormsPage page,
+        IReadOnlyList<CodeFact> existingFacts)
+    {
+        if (page.LinkedCodePath is null)
+        {
+            return new HashSet<string>(StringComparer.Ordinal);
+        }
+
+        return existingFacts
+            .Where(fact => fact.Evidence.FilePath.Equals(page.LinkedCodePath, StringComparison.Ordinal)
+                && !string.IsNullOrWhiteSpace(fact.ProjectPath))
+            .Select(fact => fact.ProjectPath!)
+            .ToHashSet(StringComparer.Ordinal);
     }
 
     private static CodeFact CreateGap(ScanManifest manifest, string filePath, int line, string gapKind, string message)
