@@ -149,6 +149,7 @@ public sealed class RazorSemanticModelBindingTests
                 public string AbstractBound { get; set; } = "";
 
                 public void OnPostAbstract(InputModel input) { }
+                private void Normalize() { }
             }
 
             [NonController]
@@ -165,6 +166,7 @@ public sealed class RazorSemanticModelBindingTests
             public abstract class AbstractController : ControllerBase
             {
                 public IActionResult Save(InputModel input) => Ok();
+                private void NormalizeController() { }
             }
 
             public sealed class Outer
@@ -378,6 +380,8 @@ public sealed class RazorSemanticModelBindingTests
             Assert.Empty(gap.Properties.Keys.Except(GapPropertySchema, StringComparer.Ordinal));
         });
         Assert.DoesNotContain(gaps, gap => gap.Properties.Values.Any(value => value.Contains("HelperBound", StringComparison.Ordinal)));
+        Assert.DoesNotContain(gaps, gap => gap.Properties.Values.Any(value =>
+            value.Contains("Normalize", StringComparison.Ordinal)));
 
         var firstProjection = semantic.Select(StableProjection).ToArray();
         var secondProjection = second.Facts
