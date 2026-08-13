@@ -38,6 +38,10 @@ public sealed class WebFormsStaticExplorerTests
         Assert.NotNull(firstResult.Data.WebForms);
         Assert.NotEmpty(firstResult.Data.WebForms!.Surfaces);
         Assert.NotEmpty(firstResult.Data.WebForms.EventChains);
+        Assert.NotEmpty(firstResult.Data.WebForms.BatchDataMovementInventory);
+        Assert.Equal(
+            firstResult.Data.WebForms.Summary.BatchDataMovementCount,
+            firstResult.Data.WebForms.BatchDataMovementInventory.Count);
         Assert.NotEmpty(firstResult.Data.WebForms.OwnerQuestions);
         Assert.Contains(firstResult.Data.EvidenceRows, row =>
             row.ArtifactId == "artifact:webforms-modernization"
@@ -60,6 +64,7 @@ public sealed class WebFormsStaticExplorerTests
         Assert.Contains("Application coverage", html, StringComparison.Ordinal);
         Assert.Contains("Application surfaces and composition", html, StringComparison.Ordinal);
         Assert.Contains("Event and handler chains", html, StringComparison.Ordinal);
+        Assert.Contains("Batch and data-movement inventory", html, StringComparison.Ordinal);
         Assert.Contains("Structural slice candidates", html, StringComparison.Ordinal);
         Assert.Contains("Owner questions", html, StringComparison.Ordinal);
         Assert.DoesNotContain(repo, html, StringComparison.Ordinal);
@@ -197,6 +202,8 @@ public sealed class WebFormsStaticExplorerTests
                 protected void Save_Click(object sender, System.EventArgs e) { }
             }
             """);
+        File.WriteAllText(Path.Combine(repo, "Archive.dtsx"),
+            "<DTS:Executable xmlns:DTS=\"www.microsoft.com/SqlServer/Dts\" />");
         RunGit(repo, "init");
         RunGit(repo, "add", ".");
         RunGit(repo, "-c", "user.name=TraceMap", "-c", "user.email=fixture@example.invalid", "commit", "-m", "baseline");
