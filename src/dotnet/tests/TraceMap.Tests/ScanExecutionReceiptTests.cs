@@ -164,6 +164,9 @@ public sealed class ScanExecutionReceiptTests
         using var schema = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "docs", "contracts", "scan-execution-receipt.v1.schema.json")));
         Assert.Equal(ScanReceiptSchema.Version, schema.RootElement.GetProperty("properties").GetProperty("schemaVersion").GetProperty("const").GetString());
         Assert.Equal(RuleIds.ScannerStageReceipt, schema.RootElement.GetProperty("properties").GetProperty("ruleId").GetProperty("const").GetString());
+        Assert.Contains(
+            schema.RootElement.GetProperty("$defs").GetProperty("stage").GetProperty("properties").GetProperty("operationCode").GetProperty("enum").EnumerateArray(),
+            value => value.GetString() == "receipt-write");
         var catalog = File.ReadAllText(Path.Combine(root, "rules", "rule-catalog.yml"));
         var start = catalog.IndexOf("  - id: scanner.stage-receipt.v1", StringComparison.Ordinal);
         var end = catalog.IndexOf("\n  - id:", start + 1, StringComparison.Ordinal);
@@ -329,6 +332,73 @@ public sealed class ScanExecutionReceiptTests
         var stage = Assert.Single(receipt.Stages, candidate => candidate.Stage == "semantic-analysis");
         Assert.StartsWith("syntax", stage.CoverageAfter, StringComparison.Ordinal);
         Assert.DoesNotContain("semantic", stage.CoverageAfter, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Reduced_analysis_marks_top_level_receipt_partial_when_build_succeeds()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var outputPath = Path.Combine(temp.Path, "output");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Sample.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+              </PropertyGroup>
+              <ItemGroup><Compile Include="App.cs" /></ItemGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(repo, "App.cs"), "public sealed class App { }");
+        File.WriteAllText(Path.Combine(repo, "Migration.cs"), """
+            using MigrationBase = Microsoft.EntityFrameworkCore.Migrations.Migration;
+            public sealed class M : MigrationBase
+            {
+                public void Up(object builder) => builder.Sql("SELECT private_value");
+            }
+            """);
+        InitializeRepository(repo);
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
+
+        var exitCode = await TraceMapCommand.RunAsync(["scan", "--repo", repo, "--out", outputPath], stdout, stderr);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(string.Empty, stderr.ToString());
+        var receipt = JsonSerializer.Deserialize<ScanExecutionReceipt>(
+            await File.ReadAllTextAsync(Path.Combine(outputPath, "scan-receipt.json")), JsonOptions.Stable)!;
+        Assert.Equal("partial", receipt.Outcome);
+        Assert.Equal("semantic-reduced", receipt.Coverage);
+        Assert.NotEmpty(receipt.SupportingGapIds);
+    }
+
+    [Fact]
+    public async Task Final_receipt_write_failure_is_recorded_before_fallback_retry()
+    {
+        using var temp = new TempDirectory();
+        var recorder = new ScanReceiptRecorder(new ScanOptions("repo", "out"));
+        recorder.Bind(new GitMetadata("repo", null, "dev", CommitSha, []));
+        recorder.Complete("succeeded", "Level1SemanticAnalysis");
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => TraceMapCommand.WriteFinalScanReceiptAsync(
+            Path.Combine(temp.Path, "scan-receipt.json"),
+            recorder,
+            "Level1SemanticAnalysis",
+            cancellation.Token,
+            (_, _, token) => Task.FromCanceled(token)));
+
+        recorder.Complete("cancelled", "Level1SemanticAnalysis");
+        var receiptPath = Path.Combine(temp.Path, "scan-receipt.json");
+        await ScanExecutionReceiptWriter.WriteAsync(receiptPath, recorder.CreateReceipt(), CancellationToken.None);
+        var receipt = JsonSerializer.Deserialize<ScanExecutionReceipt>(
+            await File.ReadAllTextAsync(receiptPath), JsonOptions.Stable)!;
+        var stage = Assert.Single(receipt.Stages, candidate => candidate.OperationCode == "receipt-write");
+        Assert.Equal("cancelled", stage.Outcome);
+        Assert.Equal("operation-cancelled", stage.NextAction);
+        Assert.Equal("analyzer-log-written", stage.LastProvenSafeState);
     }
 
     [Fact]
