@@ -83,6 +83,7 @@ class AdapterArtifactValidatorTests(unittest.TestCase):
             "analysisLevel": "Level3SyntaxAnalysis",
             "buildStatus": "NotRun",
             "knownGaps": [],
+            "sourceSnapshotDigest": "2" * 64,
         }
         fact = {
             "factId": "fact-1",

@@ -168,7 +168,8 @@ public enum SwiftScanEngine {
         let git = try GitMetadata.load(scanRoot: repo)
         try OutputWriter.validateOutputPath(scanRoot: repo, gitRoot: git.gitRoot, outputPath: options.outputPath)
         let inventory = try InventoryBuilder.build(scanRoot: repo, gitRoot: git.gitRoot, options: options)
-        let scanId = stableScanId(git: git, options: options, inventory: inventory, scanRoot: repo)
+        let snapshotDigest = try sourceSnapshotDigest(inventory: inventory, scanRoot: repo)
+        let scanId = stableScanId(git: git, options: options, sourceSnapshotDigest: snapshotDigest)
         let syntax = SwiftSyntaxEvidenceExtractor.extract(scanRoot: repo, inventory: inventory)
         let toolchain = Toolchain.diagnostics(inventory: inventory)
         var gaps = CoverageGap.defaults(inventory: inventory)
@@ -209,6 +210,7 @@ public enum SwiftScanEngine {
             scanRootRelativePath: relativePath(from: git.gitRoot, to: repo),
             scanRootPathHash: sha256Hex(repo.path),
             gitRootHash: sha256Hex(git.gitRoot.path),
+            sourceSnapshotDigest: snapshotDigest,
             extractorVersions: [TraceMapSwiftVersion.extractorId: TraceMapSwiftVersion.extractorVersion]
         )
 
@@ -233,37 +235,67 @@ public enum SwiftScanEngine {
                 scanRootRelativePath: relativePath(from: git.gitRoot, to: repo),
                 scanRootPathHash: sha256Hex(repo.path),
                 gitRootHash: sha256Hex(git.gitRoot.path),
+                sourceSnapshotDigest: snapshotDigest,
                 extractorVersions: [TraceMapSwiftVersion.extractorId: TraceMapSwiftVersion.extractorVersion]
             )
         }
 
         let rawFacts = FactFactory.facts(manifest: manifest, inventory: inventory, gaps: gaps, toolchainDiagnostics: toolchain.diagnostics, scanRoot: repo, syntax: syntax, dependencies: dependencies, http: http, ui: ui, storage: storage)
         let facts = FactFactory.normalizeFacts(manifest: manifest, facts: rawFacts)
+        guard try sourceSnapshotDigest(inventory: inventory, scanRoot: repo) == snapshotDigest else {
+            throw ScanError.io("SourceSnapshotChangedDuringScan")
+        }
         try OutputWriter.write(outputPath: options.outputPath, manifest: manifest, facts: facts, inventory: inventory)
         return SwiftScanResult(manifest: manifest, facts: facts, inventory: inventory)
     }
 
-    private static func stableScanId(git: GitMetadata, options: SwiftScanOptions, inventory: [InventoryItem], scanRoot: URL) -> String {
+    private static func stableScanId(git: GitMetadata, options: SwiftScanOptions, sourceSnapshotDigest: String) -> String {
         let optionSignature = [
             "project=\(options.projectFilters.sorted().joined(separator: ","))",
             "include=\(options.includeGlobs.sorted().joined(separator: ","))",
             "exclude=\(options.excludeGlobs.sorted().joined(separator: ","))",
             "max=\(options.maxFileByteSize)"
         ].joined(separator: ";")
-        let inventorySignature = inventory
-            .map { item in
-                let hash = item.selected ? fileHash(scanRoot.appendingPathComponent(item.relativePath)) : ""
-                return "\(item.relativePath)|\(item.kind)|\(item.sizeBytes)|\(item.skippedReason ?? "selected")|\(hash)"
-            }
-            .sorted()
-            .joined(separator: "\n")
         return "swift-" + sha256Hex([
             TraceMapSwiftVersion.scanIdPrefix,
             git.repoIdentity,
             git.commitSha,
             optionSignature,
-            inventorySignature
+            sourceSnapshotDigest
         ].joined(separator: "\n"), length: 32)
+    }
+
+    private static func sourceSnapshotDigest(inventory: [InventoryItem], scanRoot: URL) throws -> String {
+        var signature = "scan-truth-source-snapshot/v1\0"
+        for item in inventory.sorted(by: { $0.relativePath < $1.relativePath }) {
+            let byteLength: Int
+            let contentHash: String
+            if item.skippedReason != nil {
+                byteLength = item.sizeBytes
+                contentHash = "skipped-before-analysis"
+            } else {
+                let url = scanRoot.appendingPathComponent(item.relativePath)
+                var isDirectory: ObjCBool = false
+                guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
+                    throw ScanError.io("SourceSnapshotInputUnavailable")
+                }
+                if isDirectory.boolValue {
+                    byteLength = 0
+                    contentHash = "selected-directory"
+                } else {
+                    do {
+                        let data = try Data(contentsOf: url, options: [.mappedIfSafe])
+                        byteLength = data.count
+                        contentHash = PortableSHA256.hash(data).map { String(format: "%02x", $0) }.joined()
+                    } catch {
+                        byteLength = item.sizeBytes
+                        contentHash = "unreadable-selected-input"
+                    }
+                }
+            }
+            signature += "\(item.relativePath)\0\(item.kind)\0\(byteLength)\0\(contentHash)\0"
+        }
+        return sha256Hex(signature)
     }
 }
 
@@ -711,6 +743,7 @@ public struct ScanManifest: Codable, Equatable {
     public let scanRootRelativePath: String?
     public let scanRootPathHash: String?
     public let gitRootHash: String?
+    public let sourceSnapshotDigest: String
     public let extractorVersions: [String: String]
 }
 
@@ -3726,6 +3759,7 @@ public enum TraceMapSwiftSelfTests {
             scanRootRelativePath: ".",
             scanRootPathHash: "self-test",
             gitRootHash: "self-test",
+            sourceSnapshotDigest: String(repeating: "0", count: 64),
             extractorVersions: [TraceMapSwiftVersion.extractorId: TraceMapSwiftVersion.extractorVersion]
         )
 

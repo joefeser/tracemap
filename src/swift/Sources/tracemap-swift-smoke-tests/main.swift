@@ -9,6 +9,7 @@ struct TraceMapSwiftSmokeTests {
         try missingRepoFailsBeforeArtifacts()
         try scanWritesRequiredArtifactsAndReducedCoverage()
         try factsAreStableWhenOnlyOutputPathChanges()
+        try sameSizeDirtyBytesChangeSnapshotIdentity()
         try symbolIdsIgnoreDeclarationBodyEdits()
         try duplicateSymbolIdentitiesEmitGapsAndDistinctIds()
         try duplicateSymbolRelationshipsUseRewrittenIds()
@@ -116,6 +117,25 @@ struct TraceMapSwiftSmokeTests {
         let firstFacts = try String(contentsOf: first.appendingPathComponent("facts.ndjson"), encoding: .utf8)
         let secondFacts = try String(contentsOf: second.appendingPathComponent("facts.ndjson"), encoding: .utf8)
         assert(firstFacts == secondFacts)
+    }
+
+    static func sameSizeDirtyBytesChangeSnapshotIdentity() throws {
+        let fixture = try SwiftFixture()
+        let source = fixture.repo.appendingPathComponent("Sources/App/main.swift")
+        let first = try SwiftScanEngine.scan(options: SwiftScanOptions(
+            repoPath: fixture.repo,
+            outputPath: fixture.temp.url.appendingPathComponent("snapshot-first")
+        ))
+        try "print(\"jello\")\n".write(to: source, atomically: true, encoding: .utf8)
+        let second = try SwiftScanEngine.scan(options: SwiftScanOptions(
+            repoPath: fixture.repo,
+            outputPath: fixture.temp.url.appendingPathComponent("snapshot-second")
+        ))
+
+        assert(first.manifest.commitSha == second.manifest.commitSha)
+        assert(first.manifest.sourceSnapshotDigest.count == 64)
+        assert(first.manifest.sourceSnapshotDigest != second.manifest.sourceSnapshotDigest)
+        assert(first.manifest.scanId != second.manifest.scanId)
     }
 
     static func symbolIdsIgnoreDeclarationBodyEdits() throws {

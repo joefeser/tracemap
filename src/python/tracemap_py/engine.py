@@ -11,7 +11,7 @@ from .constants import EvidenceTiers, FactTypes, RuleIds, ScannerVersions
 from .fact_factory import create_fact, evidence
 from .git_metadata import read_git_metadata
 from .hashes import sha256_hex
-from .inventory import create_scan_id, discover_inventory, package_roots
+from .inventory import create_scan_id, discover_inventory, package_roots, source_snapshot_digest
 from .metadata import read_package_metadata
 from .models import CodeFact, FileInventoryItem, ScanManifest, ScanOptions
 from .pathing import parse_byte_size
@@ -30,7 +30,15 @@ def scan(options: ScanOptions) -> tuple[ScanManifest, list[CodeFact]]:
     git = read_git_metadata(repo)
     inventory = discover_inventory(repo, options)
     repo_identity = git.remote_url or git.repo_name
-    scan_id = create_scan_id(repo_identity, git.commit_sha, inventory, sha256_hex)
+    snapshot_digest = source_snapshot_digest(inventory)
+    scan_id = create_scan_id(
+        repo_identity,
+        git.commit_sha,
+        snapshot_digest,
+        options,
+        ScannerVersions.TRACE_MAP_PY,
+        sha256_hex,
+    )
     roots = package_roots(repo, inventory)
     base_manifest = ScanManifest(
         scan_id,
@@ -49,6 +57,7 @@ def scan(options: ScanOptions) -> tuple[ScanManifest, list[CodeFact]]:
         _scan_root_relative(repo, git.git_root_path),
         sha256_hex(str(repo), 32),
         sha256_hex(str(Path(git.git_root_path).resolve()), 32),
+        snapshot_digest,
     )
     gaps: list[str] = []
     facts: list[CodeFact] = []
@@ -87,7 +96,10 @@ def scan(options: ScanOptions) -> tuple[ScanManifest, list[CodeFact]]:
         base_manifest.scan_root_relative_path,
         base_manifest.scan_root_path_hash,
         base_manifest.git_root_hash,
+        base_manifest.source_snapshot_digest,
     )
+    if source_snapshot_digest(inventory) != snapshot_digest:
+        raise RuntimeError("SourceSnapshotChangedDuringScan")
     _write_outputs(out, manifest, facts, gaps)
     return manifest, facts
 

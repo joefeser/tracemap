@@ -24,12 +24,16 @@ import com.tracemap.jvm.storage.SqliteIndexWriter;
 import com.tracemap.jvm.util.Hashes;
 import com.tracemap.jvm.util.PathsUtil;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -48,6 +52,7 @@ public final class ScanEngine {
 
         GitMetadata git = GitMetadataProvider.read(repo);
         List<FileInventoryItem> inventory = FileInventory.collect(options);
+        String sourceSnapshotDigest = sourceSnapshotDigest(inventory);
         AnalysisGapCollector gaps = new AnalysisGapCollector();
         git.knownGaps().forEach(gaps::add);
         for (FileInventoryItem item : inventory) {
@@ -56,7 +61,7 @@ public final class ScanEngine {
             }
         }
 
-        ScanManifest provisional = manifest(options, git, inventory, gaps.gaps(), "Level3SyntaxAnalysis", "NotRun");
+        ScanManifest provisional = manifest(options, git, inventory, sourceSnapshotDigest, gaps.gaps(), "Level3SyntaxAnalysis", "NotRun");
         List<CodeFact> facts = new ArrayList<>();
         facts.addAll(fileFacts(provisional, inventory));
         facts.addAll(BuildFileExtractor.extract(provisional, inventory, gaps));
@@ -90,7 +95,7 @@ public final class ScanEngine {
             buildStatus = "Succeeded";
         }
 
-        ScanManifest manifest = manifest(options, git, inventory, gaps.gaps(), analysisLevel, buildStatus);
+        ScanManifest manifest = manifest(options, git, inventory, sourceSnapshotDigest, gaps.gaps(), analysisLevel, buildStatus);
         facts = rewriteManifest(facts, provisional, manifest);
         facts.add(repoScanned(manifest, git));
         facts.add(buildStatus(manifest));
@@ -98,6 +103,10 @@ public final class ScanEngine {
             facts.add(analysisGap(manifest, gap));
         }
         facts = dedupeAndSort(facts);
+
+        if (!sourceSnapshotDigest.equals(sourceSnapshotDigest(inventory))) {
+            throw new IOException("SourceSnapshotChangedDuringScan");
+        }
 
         ManifestWriter.write(out.resolve("scan-manifest.json"), manifest);
         JsonlFactWriter.write(out.resolve("facts.ndjson"), facts);
@@ -107,7 +116,7 @@ public final class ScanEngine {
         return new ScanResult(manifest, facts, inventory);
     }
 
-    private static ScanManifest manifest(ScanOptions options, GitMetadata git, List<FileInventoryItem> inventory, List<String> knownGaps, String analysisLevel, String buildStatus) {
+    private static ScanManifest manifest(ScanOptions options, GitMetadata git, List<FileInventoryItem> inventory, String sourceSnapshotDigest, List<String> knownGaps, String analysisLevel, String buildStatus) {
         String repoIdentity = git.remoteUrl() == null ? git.repoName() : git.remoteUrl();
         String signature = String.join("|",
             sortedPaths(options.projectPaths()).toString(),
@@ -116,7 +125,7 @@ public final class ScanEngine {
             options.language(),
             "semantic=" + options.semantic(),
             "maxFileByteSize=" + options.maxFileByteSize());
-        String scanId = "scan-" + Hashes.sha256(repoIdentity + "|" + git.commitSha() + "|" + signature, 20);
+        String scanId = "scan-" + Hashes.sha256(repoIdentity + "|" + git.commitSha() + "|" + sourceSnapshotDigest + "|" + signature + "|" + ScannerVersions.TRACEMAP_JVM, 20);
         List<String> projects = inventory.stream()
             .filter(file -> file.kind().contains("Project") || file.kind().contains("Gradle"))
             .map(FileInventoryItem::relativePath)
@@ -141,7 +150,43 @@ public final class ScanEngine {
             knownGaps.stream().distinct().sorted().toList(),
             git.gitRootPath() == null ? null : PathsUtil.relativeUnix(git.gitRootPath(), repo),
             Hashes.sha256(repo.toString(), 32),
-            gitRootHash);
+            gitRootHash,
+            sourceSnapshotDigest);
+    }
+
+    private static String sourceSnapshotDigest(List<FileInventoryItem> inventory) throws Exception {
+        MessageDigest snapshot = MessageDigest.getInstance("SHA-256");
+        snapshot.update("scan-truth-source-snapshot/v1\0".getBytes(StandardCharsets.UTF_8));
+        for (FileInventoryItem item : inventory.stream().sorted(Comparator.comparing(FileInventoryItem::relativePath)).toList()) {
+            if (item.skipped()) {
+                updateSnapshotSegment(snapshot, item.relativePath());
+                updateSnapshotSegment(snapshot, item.kind());
+                updateSnapshotSegment(snapshot, Long.toString(item.sizeBytes()));
+                updateSnapshotSegment(snapshot, "skipped-before-analysis");
+                continue;
+            }
+            MessageDigest content = MessageDigest.getInstance("SHA-256");
+            long length = 0;
+            try (InputStream stream = Files.newInputStream(item.absolutePath())) {
+                byte[] buffer = new byte[1024 * 1024];
+                int count;
+                while ((count = stream.read(buffer)) >= 0) {
+                    if (count == 0) continue;
+                    length += count;
+                    content.update(buffer, 0, count);
+                }
+            }
+            updateSnapshotSegment(snapshot, item.relativePath());
+            updateSnapshotSegment(snapshot, item.kind());
+            updateSnapshotSegment(snapshot, Long.toString(length));
+            updateSnapshotSegment(snapshot, HexFormat.of().formatHex(content.digest()));
+        }
+        return HexFormat.of().formatHex(snapshot.digest());
+    }
+
+    private static void updateSnapshotSegment(MessageDigest digest, String value) {
+        digest.update(value.getBytes(StandardCharsets.UTF_8));
+        digest.update((byte) 0);
     }
 
     private static CodeFact repoScanned(ScanManifest manifest, GitMetadata git) {

@@ -34,6 +34,7 @@ MANIFEST_FIELDS = {
     "analysisLevel": str,
     "buildStatus": str,
     "knownGaps": list,
+    "sourceSnapshotDigest": str,
 }
 FACT_FIELDS = {
     "factId": str,
@@ -86,6 +87,7 @@ SQLITE_COLUMNS = {
     },
 }
 COMMIT_PATTERN = re.compile(r"^[0-9a-fA-F]{40}$")
+SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 RULE_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]*\.v[0-9]+$")
 WINDOWS_PATH_PATTERN = re.compile(r"(?i)(?:^|[^A-Za-z0-9])[A-Za-z]:\\(?:Users|home|opt|var|srv|app|mnt|private|tmp)\\")
 UNIX_PATH_PATTERN = re.compile(r"(?i)(?:^|[\s='\"])/(?:Users|home|opt|var|srv|app|mnt|private|tmp)/")
@@ -258,6 +260,8 @@ def validate_output(output: Path) -> list[str]:
     require_fields(manifest, MANIFEST_FIELDS, "manifest", errors)
     if not COMMIT_PATTERN.fullmatch(str(manifest.get("commitSha", ""))):
         errors.append("manifest.commitSha must be an exact 40-hex commit SHA")
+    if not SHA256_PATTERN.fullmatch(str(manifest.get("sourceSnapshotDigest", ""))):
+        errors.append("manifest.sourceSnapshotDigest must be a lowercase SHA-256 digest")
 
     facts = read_facts(output / "facts.ndjson", errors)
     registered_rules = rule_ids()
