@@ -259,6 +259,79 @@ public sealed class WebFormsModernizationPacketTests
     }
 
     [Fact]
+    public async Task Identity_inventory_is_bounded_joinable_private_and_preserves_identity_gaps()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("FailedOrPartial");
+        const string surface = "webforms-surface:login";
+        const string controlId = "webforms-control:login";
+        var page = Fact(manifest, FactTypes.WebFormsPageDeclared, RuleIds.LegacyWebFormsInventory, "Pages/Login.aspx", 1,
+            source: surface, target: "Sample.Login", contract: "Login.aspx",
+            ("surfaceIdentity", surface), ("directiveKind", "Page"), ("coverageLabel", "reduced-static-webforms-inventory"));
+        var control = Fact(manifest, FactTypes.WebFormsControlDeclared, RuleIds.LegacyWebFormsInventory, "Pages/Login.aspx", 4,
+            source: surface, target: controlId, contract: "Login",
+            ("surfaceIdentity", surface), ("controlIdentity", controlId), ("controlType", "Login"),
+            ("coverageLabel", "reduced-static-webforms-inventory"));
+        var login = Fact(manifest, FactTypes.AspNetIdentityStateDeclared, RuleIds.LegacyAspNetIdentityState, "Pages/Login.aspx", 4,
+            source: surface, target: controlId, contract: "login-control",
+            ("identityKind", "login-control"), ("declarationStatus", "declared-in-markup"),
+            ("supportingFactIds", control.FactId), ("unsafeRawValue", "private-login-secret"),
+            ("coverageLabel", "reduced-static-identity-state"));
+        var authentication = Fact(manifest, FactTypes.AspNetIdentityStateDeclared, RuleIds.LegacyAspNetIdentityState, "web.config", 3,
+            source: null, target: null, contract: "authentication",
+            ("identityKind", "authentication"), ("declarationStatus", "private-classification-secret"),
+            ("authenticationMode", "Forms"), ("cookieName", "private-cookie-secret"), ("sameSite", "private-metadata-secret"),
+            ("coverageLabel", "reduced-static-identity-state"));
+        var gap = Fact(manifest, FactTypes.AnalysisGap, RuleIds.LegacyAspNetIdentityState, "Identity.cs", 7,
+            source: null, target: null, contract: "IdentitySemanticDependencyUnavailable",
+            ("gapKind", "IdentitySemanticDependencyUnavailable"), ("supportingFactIds", login.FactId),
+            ("coverageLabel", "Reduced"));
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, manifest, [page, control, login, authentication, gap]);
+
+        var bounded = await WebFormsModernizationPacketReporter.BuildAsync(new(
+            index,
+            Path.Combine(temp.Path, "bounded"),
+            MaxIdentityState: 1));
+        Assert.Single(bounded.IdentityStateInventory);
+        Assert.Equal(1, bounded.Summary.IdentityStateCount);
+        Assert.True(bounded.Summary.Truncated);
+        Assert.Contains(bounded.Gaps, item => item.Classification == "WebFormsModernizationIdentityStateLimitReached"
+            && item.SupportingFactIds.Contains(authentication.FactId));
+        Assert.Contains(bounded.Gaps, item => item.Classification == "IdentitySemanticDependencyUnavailable"
+            && item.SupportingFactIds.Contains(login.FactId));
+
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(
+            index,
+            Path.Combine(temp.Path, "unbounded"),
+            MaxIdentityState: 10));
+        Assert.Equal(2, packet.IdentityStateInventory.Count);
+        Assert.Equal(2, packet.Summary.IdentityStateCount);
+        var loginRow = Assert.Single(packet.IdentityStateInventory, item => item.IdentityKind == "login-control");
+        Assert.Equal(surface, loginRow.SurfaceId);
+        Assert.Contains(control.FactId, loginRow.SupportingFactIds);
+        Assert.Equal(RuleIds.LegacyAspNetIdentityState, loginRow.Evidence.RuleId);
+        Assert.Equal(manifest.CommitSha, loginRow.Evidence.CommitSha);
+        Assert.Equal("Forms", Assert.Single(packet.IdentityStateInventory, item => item.IdentityKind == "authentication")
+            .SafeMetadata["authenticationMode"]);
+        Assert.Equal("unknown", Assert.Single(packet.IdentityStateInventory, item => item.IdentityKind == "authentication").Classification);
+        Assert.Contains(packet.Gaps, item => item.Classification == "UnsupportedIdentityStatePropertyShape"
+            && item.SupportingFactIds.Contains(authentication.FactId));
+        var serialized = JsonSerializer.Serialize(packet);
+        Assert.DoesNotContain("private-login-secret", serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain("private-cookie-secret", serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain("private-classification-secret", serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain("private-metadata-secret", serialized, StringComparison.Ordinal);
+        var written = await WebFormsModernizationPacketReporter.WriteAsync(new(
+            index,
+            Path.Combine(temp.Path, "written"),
+            MaxIdentityState: 10));
+        var markdown = await File.ReadAllTextAsync(written.MarkdownPath);
+        Assert.Contains("## Identity and state declarations", markdown, StringComparison.Ordinal);
+        Assert.Contains(loginRow.IdentityStateId, markdown, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Flow_fallback_groups_the_same_terminal_without_conflating_evidence_records()
     {
         var manifest = Manifest("Succeeded") with { AnalysisLevel = "Level1SemanticAnalysis" };
@@ -486,11 +559,12 @@ public sealed class WebFormsModernizationPacketTests
         using var stderr = new StringWriter();
         var output = Path.Combine(temp.Path, "packet");
         var exit = await TraceMapCommand.RunAsync([
-            "webforms-modernization", "--index", index, "--out", output, "--max-boundaries", "1"
+            "webforms-modernization", "--index", index, "--out", output, "--max-boundaries", "1", "--max-identity-state", "1"
         ], stdout, stderr);
         Assert.Equal(0, exit);
         Assert.Equal(string.Empty, stderr.ToString());
         Assert.Contains("Downstream boundaries: 0", stdout.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Identity/state declarations: 0", stdout.ToString(), StringComparison.Ordinal);
         Assert.Contains("Repository: repository-", stdout.ToString(), StringComparison.Ordinal);
         Assert.Contains($"Commit SHA: {manifest.CommitSha}", stdout.ToString(), StringComparison.Ordinal);
         Assert.True(File.Exists(Path.Combine(output, "webforms-modernization.json")));
