@@ -55,6 +55,8 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Equal(await File.ReadAllBytesAsync(first.MarkdownPath), await File.ReadAllBytesAsync(second.MarkdownPath));
         Assert.Equal(WebFormsModernizationPacketReporter.SchemaVersion, first.Packet.SchemaVersion);
         Assert.Equal("local-only", first.Packet.ClaimLevel);
+        Assert.False(string.IsNullOrWhiteSpace(first.Packet.Sources.Single().RepositoryId));
+        Assert.DoesNotContain("synthetic-repo", first.Packet.Sources.Single().RepositoryId, StringComparison.Ordinal);
         Assert.Equal(4, first.Packet.Surfaces.Count);
         Assert.Equal(2, first.Packet.Surfaces.Count(surface => surface.SurfaceKind == "Page"));
         Assert.Equal(2, first.Packet.Surfaces.Where(surface => surface.SurfaceKind == "Page").Select(surface => surface.SurfaceId).Distinct().Count());
@@ -63,6 +65,11 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Contains(first.Packet.Gaps, gap => gap.Classification == "MissingWebFormsHandler");
         Assert.Contains(first.Packet.Gaps, gap => gap.Classification == "DynamicWebFormsEventSubscription");
         Assert.Contains(first.Packet.StructuralSliceCandidates, candidate => candidate.SurfaceIds.Count > 1);
+        var areaPage = first.Packet.Surfaces.Single(surface => surface.Evidence.FilePath == "AreaA/Default.aspx");
+        var widget = first.Packet.Surfaces.Single(surface => surface.Evidence.FilePath == "Widget.ascx");
+        Assert.Contains(widget.SurfaceId, areaPage.CompositionTargetIds);
+        Assert.Contains(first.Packet.StructuralSliceCandidates, candidate => candidate.SurfaceIds.Contains(areaPage.SurfaceId)
+            && candidate.SurfaceIds.Contains(widget.SurfaceId));
         Assert.All(first.Packet.Surfaces, surface => Assert.NotEqual("unknown", surface.Evidence.CoverageLabel));
         Assert.All(first.Packet.EventChains.SelectMany(chain => chain.Evidence), evidence => Assert.NotEqual("unknown", evidence.CoverageLabel));
         var typed = JsonSerializer.Deserialize<WebFormsModernizationPacket>(await File.ReadAllTextAsync(first.JsonPath), new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
@@ -172,6 +179,15 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Equal("unknown", retained.Evidence.CoverageLabel);
         Assert.Contains(packet.Gaps, gap => gap.Classification == "EvidenceCoverageLabelUnavailable" && gap.SupportingFactIds.Contains(retained.Evidence.FactId));
         Assert.Equal(packet.Summary.GapCount, packet.Gaps.Count);
+
+        var gapBounded = await WebFormsModernizationPacketReporter.BuildAsync(new(
+            index,
+            Path.Combine(temp.Path, "gap-bounded"),
+            MaxSurfaces: 10,
+            MaxGaps: 1));
+        Assert.True(gapBounded.Summary.Truncated);
+        Assert.Single(gapBounded.Gaps);
+        Assert.Equal("WebFormsModernizationGapLimitReached", gapBounded.Gaps[0].Classification);
     }
 
     [Fact]
@@ -189,6 +205,51 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Equal(string.Empty, stderr.ToString());
         Assert.True(File.Exists(Path.Combine(output, "webforms-modernization.json")));
         Assert.True(File.Exists(Path.Combine(output, "webforms-modernization.md")));
+
+        stderr.GetStringBuilder().Clear();
+        exit = await TraceMapCommand.RunAsync(
+            ["webforms-modernization", "--index", index, "--out", output, "--max-surafces", "1"],
+            stdout,
+            stderr);
+        Assert.Equal(1, exit);
+        Assert.Contains("unsupported webforms-modernization option", stderr.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Combined_and_multi_manifest_indexes_fail_closed_with_stable_errors()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("Succeeded");
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, manifest, []);
+        await using (var connection = new SqliteConnection($"Data Source={index}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "create table index_sources(source_id text primary key);";
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var combined = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            WebFormsModernizationPacketReporter.BuildAsync(new(index, Path.Combine(temp.Path, "combined"))));
+        Assert.Equal("WebFormsModernizationIndexUnsupported", combined.Message);
+
+        await using (var connection = new SqliteConnection($"Data Source={index}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                drop table index_sources;
+                insert into scan_manifest(scan_id, repo, commit_sha, scanner_version, scanned_at, analysis_level, build_status, manifest_json)
+                select 'second-scan', repo, commit_sha, scanner_version, scanned_at, analysis_level, build_status, manifest_json
+                from scan_manifest limit 1;
+                """;
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var multiple = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            WebFormsModernizationPacketReporter.BuildAsync(new(index, Path.Combine(temp.Path, "multiple"))));
+        Assert.Equal("WebFormsModernizationSnapshotInvalid", multiple.Message);
     }
 
     private static ScanManifest Manifest(string buildStatus) => new(
