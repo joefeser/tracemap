@@ -381,6 +381,11 @@ dotnet run --project src/dotnet/TraceMap.Cli -- endpoints --client-index /tmp/ap
 
 Endpoint findings are static, coverage-relative evidence. A client-only row is not proof of a broken call, and a server-only row is not proof of dead code.
 
+For a copy/paste Windows and Bash workflow that scans multiple Angular and .NET
+repositories, combines their indexes, and investigates UI-to-endpoint-to-
+dependency chains, see the [Angular and .NET interaction mapping
+runbook](docs/ANGULAR_DOTNET_INTERACTION_RUNBOOK.md).
+
 ## License
 
 This project is licensed under the Apache License 2.0. See [LICENSE](./LICENSE).
