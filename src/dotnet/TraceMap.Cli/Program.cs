@@ -361,9 +361,10 @@ public static class TraceMapCommand
 
             if (receiptRecorder.CanWriteAuthoritativeReceipt)
             {
-                await ScanExecutionReceiptWriter.WriteAsync(
+                await WriteFinalScanReceiptAsync(
                     Path.Combine(fullOutputPath, "scan-receipt.json"),
-                    receiptRecorder.CreateReceipt(),
+                    receiptRecorder,
+                    result.Manifest.AnalysisLevel,
                     cancellationToken);
             }
         }
@@ -413,6 +414,26 @@ public static class TraceMapCommand
         catch (Exception ex)
         {
             operation.FailOutput(ex, "stage-started");
+            throw;
+        }
+    }
+
+    internal static async Task WriteFinalScanReceiptAsync(
+        string path,
+        ScanReceiptRecorder recorder,
+        string coverage,
+        CancellationToken cancellationToken,
+        Func<string, ScanExecutionReceipt, CancellationToken, Task>? writer = null)
+    {
+        writer ??= ScanExecutionReceiptWriter.WriteAsync;
+        try
+        {
+            await writer(path, recorder.CreateReceipt(), cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            using var operation = recorder.StartStage("artifact-write", "receipt-write", coverage, "occurred", "unknown");
+            operation.FailOutput(ex, "analyzer-log-written", "unknown");
             throw;
         }
     }

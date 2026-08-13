@@ -78,7 +78,7 @@
           "enum": [
             "inventory-and-identity", "compiler-and-syntax-analysis", "deterministic-fact-extraction",
             "pre-extraction-snapshot-verification", "post-extraction-snapshot-verification", "manifest-write", "facts-write", "index-write",
-            "output-directory-prepare", "report-write", "analyzer-log-write", "webforms-static-extraction", "other"
+            "output-directory-prepare", "report-write", "analyzer-log-write", "receipt-write", "webforms-static-extraction", "other"
           ]
         },
         "attempt": { "const": 1 },

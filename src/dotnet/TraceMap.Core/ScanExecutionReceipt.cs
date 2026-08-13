@@ -63,7 +63,7 @@ public sealed class ScanReceiptRecorder
     {
         "inventory-and-identity", "compiler-and-syntax-analysis", "deterministic-fact-extraction",
         "pre-extraction-snapshot-verification", "post-extraction-snapshot-verification", "manifest-write", "facts-write", "index-write",
-        "output-directory-prepare", "report-write", "analyzer-log-write", "webforms-static-extraction"
+        "output-directory-prepare", "report-write", "analyzer-log-write", "receipt-write", "webforms-static-extraction"
     };
     private static readonly HashSet<string> MutationStates = new(StringComparer.Ordinal)
     {
@@ -142,7 +142,11 @@ public sealed class ScanReceiptRecorder
             .ToArray();
         var factIds = result.Facts.Select(fact => fact.FactId);
         var gapIds = result.Facts.Where(fact => fact.FactType == FactTypes.AnalysisGap).Select(fact => fact.FactId);
-        Complete(result.Manifest.BuildStatus == "FailedOrPartial" ? "partial" : "succeeded", result.Manifest.AnalysisLevel, factIds, gapIds);
+        var outcome = result.Manifest.BuildStatus == "FailedOrPartial"
+            || NormalizeCoverage(result.Manifest.AnalysisLevel).EndsWith("-reduced", StringComparison.Ordinal)
+                ? "partial"
+                : "succeeded";
+        Complete(outcome, result.Manifest.AnalysisLevel, factIds, gapIds);
     }
 
     public void Bind(ScanManifest manifest)
