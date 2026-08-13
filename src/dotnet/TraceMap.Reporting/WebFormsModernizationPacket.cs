@@ -813,7 +813,8 @@ public static class WebFormsModernizationPacketReporter
         {
             DataSource = Path.GetFullPath(path),
             Mode = SqliteOpenMode.ReadOnly,
-            Cache = SqliteCacheMode.Private
+            Cache = SqliteCacheMode.Private,
+            Pooling = false
         }.ToString());
         try
         {
