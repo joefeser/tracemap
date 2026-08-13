@@ -36,8 +36,10 @@ For every successful `tracemap scan --repo <repo> --out <out>` run, verify:
 - `<out>/index.sqlite` exists.
 - `<out>/report.md` exists.
 - `<out>/logs/analyzer.log` exists.
+- `<out>/scan-receipt.json` exists when Git establishes an exact 40- or 64-character commit SHA; the receipt validates against `docs/contracts/scan-execution-receipt.v1.schema.json`.
 - manifest includes repo name, commit SHA, scanner version, analysis level, and build status.
 - facts include rule IDs, evidence tiers, file paths, line spans, commit SHA, and extractor versions.
+- the commit-bound receipt contains only hashed repository/scope identity, closed operational codes, versions, bounded canonical fact/gap IDs, and documented non-claims; it contains no raw exception, stack, source, path, remote, credential, connection, or customer value.
 - `index.sqlite` includes a `call_edges` table when call-edge facts are emitted.
 - `index.sqlite` includes an `object_creations` table when object-creation facts are emitted.
 - `index.sqlite` includes an `argument_flows` table when argument-flow facts are emitted.
