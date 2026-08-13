@@ -2115,6 +2115,8 @@ rules:
       - AnalysisGap
     limitations:
       - Packet rows preserve upstream evidence and deterministic structural connectivity; they do not add extractor conclusions or prove runtime reachability, event firing, postback behavior, validation, authorization, persistence, production usage, or complete workflow coverage.
+      - Downstream-boundary rows inventory only supported terminal evidence already composed by the bounded legacy-flow path reader; they do not prove successful service, message, configuration, database, or other external interaction.
+      - General file-operation extraction is unavailable in this packet version and remains an explicit capability gap; absence of a file boundary is not evidence that a handler does not access files.
       - Structural slice candidates do not infer business capabilities, parity, migration scope, effort, cloud readiness, target architecture, test completeness, security approval, release approval, or safety to change; owner naming and confirmation remain required.
       - Missing coverage labels, source identity mismatch, unsupported evidence, missing handlers or terminals, reduced scans, and deterministic traversal or output limits remain explicit gaps rather than clean-absence claims.
       - The local-only packet omits snippets, raw SQL, configuration values, URLs, connection strings, credentials, source values, repository remotes, and absolute local paths.

@@ -34,6 +34,8 @@ The packet can contain:
 - supported markup and named code subscriptions;
 - statically resolved handler identities;
 - existing bounded static paths to supported terminal surfaces;
+- a bounded downstream-boundary inventory for supported database, service,
+  messaging, configuration, and dependency surfaces;
 - structural slice candidates based only on declared surface composition;
 - provenance, evidence tiers, coverage labels, source spans, supporting fact
   and edge IDs, limitations, and explicit gaps.
@@ -90,6 +92,7 @@ $Cli = Join-Path $TraceMap "src\dotnet\TraceMap.Cli"
 $PacketBounds = @(
     "--max-surfaces", "1000",
     "--max-event-chains", "1000",
+    "--max-boundaries", "1000",
     "--max-candidates", "1000",
     "--max-gaps", "1000",
     "--max-depth", "8",
@@ -142,6 +145,7 @@ PACKET_OUT="/work/tracemap-output/webforms-packet-$STAMP"
 PACKET_BOUNDS=(
   --max-surfaces 1000
   --max-event-chains 1000
+  --max-boundaries 1000
   --max-candidates 1000
   --max-gaps 1000
   --max-depth 8
@@ -184,6 +188,7 @@ report.
 | --- | ---: | --- |
 | `--max-surfaces` | 1000 | Maximum retained Web Forms surfaces. |
 | `--max-event-chains` | 1000 | Maximum binding/handler/path chains. |
+| `--max-boundaries` | 1000 | Maximum retained downstream boundary rows. |
 | `--max-candidates` | 1000 | Maximum structural slice candidates. |
 | `--max-gaps` | 1000 | Maximum structured gaps, including a limit gap. |
 | `--max-depth` | 8 | Maximum legacy static-flow traversal depth. |
@@ -204,6 +209,7 @@ $LargerPacketOut = "$PacketOut-larger-bounds"
 $LargerPacketBounds = @(
     "--max-surfaces", "2000",
     "--max-event-chains", "3000",
+    "--max-boundaries", "3000",
     "--max-candidates", "2000",
     "--max-gaps", "2000",
     "--max-depth", "10",
@@ -228,6 +234,9 @@ $Packet.sources |
   Select-Object repositoryId, scanId, commitSha, analysisLevel, buildStatus |
   Format-Table
 $Packet.summary | Format-List
+$Packet.downstreamBoundaries |
+  Select-Object boundaryId, chainId, boundaryCategory, boundaryKind, classification |
+  Format-Table
 $Packet.gaps |
   Group-Object classification |
   Sort-Object Name |
@@ -247,6 +256,8 @@ if ($Packet.claimLevel -ne "local-only") {
 
 ```bash
 jq '{schemaVersion, packetId, claimLevel, coverage, sources, summary}' \
+  "$PACKET_OUT/webforms-modernization.json"
+jq -r '.downstreamBoundaries[] | [.boundaryId, .chainId, .boundaryCategory, .boundaryKind, .classification] | @tsv' \
   "$PACKET_OUT/webforms-modernization.json"
 jq -r '.gaps | group_by(.classification)[] | "\(.[0].classification)\t\(length)"' \
   "$PACKET_OUT/webforms-modernization.json"
@@ -310,6 +321,7 @@ generated file.
 | `surfaces` | Declared Web Forms surfaces and their composition/control evidence. These are static declarations, not proof that a user can reach or render them. |
 | `eventChains` | Bounded static chains from a surface/control event to a handler and, when evidence permits, an existing static terminal path. |
 | `eventChains[].classification` | May be a legacy static-path classification, `NoBackendEvidence`, or `handler-unavailable`. It is evidence-relative, not a runtime result. |
+| `downstreamBoundaries` | Bounded terminal projections from retained event chains. Each row keeps an opaque target identity, terminal evidence ID, path evidence, rules, tiers, coverage, and supporting IDs. It is not proof that the interaction ran or succeeded. |
 | `structuralSliceCandidates` | Connected components derived only from declared surface composition. `ownerNamingRequired` remains true; TraceMap does not assign business capability names. |
 | `gaps` | Explicit reasons evidence is missing, reduced, ambiguous, invalid, or bounded. A gap is part of the result, not an error to hide. |
 | `ownerQuestions` | Questions a developer or product owner should answer before treating structural evidence as a modernization plan. |
@@ -319,6 +331,13 @@ Every evidence-bearing row should retain a rule ID, evidence tier, coverage
 label, commit SHA, repository-relative file span, extractor ID/version,
 supporting IDs, and limitations. Missing required provenance fails closed as a
 gap or removes the unsupported path conclusion.
+
+The current scanner does not extract general file-operation boundaries. The
+packet therefore emits `FileOperationBoundaryExtractionUnavailable` rather
+than treating the absence of a file boundary as evidence that handlers do not
+read or write files. Configuration boundaries classified as needs-review,
+reduced, or unknown also emit `ConfigurationBoundaryNeedsReview`; a textual or
+generic configuration match is not promoted to a proven endpoint.
 
 ## Common outcomes
 

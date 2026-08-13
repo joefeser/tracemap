@@ -15,7 +15,8 @@ public sealed record WebFormsModernizationOptions(
     int MaxCandidates = 1_000,
     int MaxGaps = 1_000,
     int MaxDepth = 8,
-    int MaxPaths = 1_000);
+    int MaxPaths = 1_000,
+    int MaxBoundaries = 1_000);
 
 public sealed record WebFormsModernizationResult(
     WebFormsModernizationPacket Packet,
@@ -33,6 +34,7 @@ public sealed record WebFormsModernizationPacket(
     IReadOnlyList<WebFormsModernizationProject> Projects,
     IReadOnlyList<WebFormsModernizationSurface> Surfaces,
     IReadOnlyList<WebFormsModernizationEventChain> EventChains,
+    IReadOnlyList<WebFormsModernizationDownstreamBoundary> DownstreamBoundaries,
     IReadOnlyList<WebFormsModernizationSliceCandidate> StructuralSliceCandidates,
     IReadOnlyList<WebFormsModernizationGap> Gaps,
     IReadOnlyList<string> OwnerQuestions,
@@ -50,6 +52,7 @@ public sealed record WebFormsModernizationSummary(
     int ProjectCount,
     int SurfaceCount,
     int EventChainCount,
+    int DownstreamBoundaryCount,
     int StructuralSliceCandidateCount,
     int GapCount,
     bool Truncated);
@@ -102,6 +105,26 @@ public sealed record WebFormsModernizationPathEvidence(
     string ExtractorId,
     string ExtractorVersion,
     IReadOnlyList<string> SupportingFactIds,
+    IReadOnlyList<string> Limitations);
+
+public sealed record WebFormsModernizationDownstreamBoundary(
+    string BoundaryId,
+    string ChainId,
+    string SurfaceId,
+    string? HandlerId,
+    string BoundaryCategory,
+    string BoundaryKind,
+    string BoundaryTargetId,
+    string TerminalEvidenceId,
+    string Classification,
+    string? LegacyPathId,
+    IReadOnlyList<WebFormsModernizationEvidence> Evidence,
+    IReadOnlyList<WebFormsModernizationPathEvidence> PathEvidence,
+    IReadOnlyList<string> SupportingFactIds,
+    IReadOnlyList<string> SupportingEdgeIds,
+    IReadOnlyList<string> RuleIds,
+    IReadOnlyList<string> EvidenceTiers,
+    IReadOnlyList<string> CoverageLabels,
     IReadOnlyList<string> Limitations);
 
 public sealed record WebFormsModernizationSliceCandidate(
@@ -166,6 +189,7 @@ public static class WebFormsModernizationPacketReporter
         "This packet composes deterministic static evidence from one TraceMap snapshot; it does not prove runtime reachability, execution, event firing, postback behavior, validation, authorization, persistence, or production use.",
         "Structural candidates group only declared static surface composition; they do not name business capabilities or prove workflow completeness, parity, migration scope, effort, cloud readiness, target architecture, test completeness, security approval, release approval, or safety to change.",
         "A chain ending at a handler or without a terminal is useful reduced evidence, never proof that no backend behavior exists.",
+        "File-operation boundaries are not extracted by the current scanner and remain an explicit packet capability gap; absence is not proof that handlers do not read or write files.",
         "The packet omits snippets, raw SQL, configuration values, URLs, connection strings, credentials, source values, repository remotes, and absolute local paths."
     ];
     private static readonly IReadOnlyList<string> Questions =
@@ -173,6 +197,7 @@ public static class WebFormsModernizationPacketReporter
         "Which owner-provided capability label should be assigned to each structural candidate?",
         "Which missing or dynamic handler shapes require owner-controlled follow-up evidence?",
         "Which handler-only chains are expected to reach a backend or external boundary?",
+        "Which handlers are expected to read or write files, given that file-operation extraction is unavailable in this packet version?",
         "Which reduced build or analysis gaps must be closed before migration planning?"
     ];
 
@@ -230,6 +255,7 @@ public static class WebFormsModernizationPacketReporter
         var sourceAnalysisReduced = IsReducedAnalysisLevel(snapshot.AnalysisLevel);
         if (sourceAnalysisReduced)
             AddGeneratedGap(gaps, options.MaxGaps, snapshot, "SourceAnalysisCoverageReduced", "scan", snapshot.ScanId, []);
+        AddGeneratedGap(gaps, options.MaxGaps, snapshot, "FileOperationBoundaryExtractionUnavailable", "boundary-kind", "file-operation", []);
         var allFacts = snapshot.Facts.OrderBy(fact => fact.FactId, StringComparer.Ordinal).ToArray();
         foreach (var invalid in allFacts.Where(fact => !HasRequiredProvenance(fact)))
             AddGeneratedGap(gaps, options.MaxGaps, snapshot, "EvidenceProvenanceUnavailable", "fact", invalid.FactId, [invalid.FactId]);
@@ -287,7 +313,9 @@ public static class WebFormsModernizationPacketReporter
             .ThenBy(fact => fact.Evidence.StartLine)
             .ThenBy(fact => fact.FactId, StringComparer.Ordinal).ToArray();
         var chains = new List<WebFormsModernizationEventChain>();
+        var boundaries = new List<WebFormsModernizationDownstreamBoundary>();
         var omittedChainSupport = new SortedSet<string>(StringComparer.Ordinal);
+        var omittedBoundarySupport = new SortedSet<string>(StringComparer.Ordinal);
         foreach (var binding in bindings)
         {
             if (chains.Count >= options.MaxEventChains)
@@ -303,6 +331,17 @@ public static class WebFormsModernizationPacketReporter
                 || (handler is not null && (path.SupportingFactIds.Contains(handler.FactId, StringComparer.Ordinal)
                     || path.Nodes.FirstOrDefault()?.SymbolId == handler.TargetSymbol)))
                 .OrderBy(path => path.PathId, StringComparer.Ordinal).ToArray();
+            var concreteTerminals = legacyPaths
+                .Select(path => path.Nodes.LastOrDefault())
+                .Where(node => node is not null && node.SourceKind != "projection" && node.CombinedFactId is not null)
+                .Cast<CombinedPathNode>()
+                .ToArray();
+            legacyPaths = legacyPaths.Where(path =>
+            {
+                var terminal = path.Nodes.LastOrDefault();
+                return terminal?.SourceKind != "projection"
+                    || !concreteTerminals.Any(concrete => ProjectionDuplicatesConcreteTerminal(terminal, path, concrete));
+            }).ToArray();
             var support = new[] { binding, handler, flowFact }.Where(fact => fact is not null).Cast<CodeFact>().ToArray();
             foreach (var legacyPath in legacyPaths.Cast<CombinedPath?>().DefaultIfEmpty())
             {
@@ -330,7 +369,7 @@ public static class WebFormsModernizationPacketReporter
                 var terminalKind = supportedLegacyPath?.Nodes.LastOrDefault()?.SurfaceKind ?? EmptyToNull(flowFact?.Properties.GetValueOrDefault("terminalSurfaceKind"));
                 if (handler is not null && terminalKind is null)
                     AddGeneratedGap(gaps, options.MaxGaps, snapshot, "NoBackendEvidence", "event-chain", binding.FactId, support.Select(fact => fact.FactId));
-                chains.Add(new(
+                var chain = new WebFormsModernizationEventChain(
                     HashId("chain", [binding.FactId, handler?.FactId ?? "handler-unavailable", supportedLegacyPath?.PathId ?? "no-path"]),
                     binding.Properties.GetValueOrDefault("surfaceIdentity") ?? "surface-unavailable",
                     binding.Properties.GetValueOrDefault("eventSourceIdentity") ?? binding.SourceSymbol ?? "event-source-unavailable",
@@ -349,7 +388,63 @@ public static class WebFormsModernizationPacketReporter
                     support.Select(fact => fact.Properties.GetValueOrDefault("coverageLabel") ?? UnknownCoverage).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
                     terminalKind is null && handler is not null
                         ? ["No backend or terminal evidence was composed for this handler in the bounded static snapshot; this is not proof of absence."]
-                        : ["The chain is static evidence and does not prove runtime event firing or terminal execution."]));
+                        : ["The chain is static evidence and does not prove runtime event firing or terminal execution."]);
+                chains.Add(chain);
+                if (terminalKind is not null)
+                {
+                    var terminalNode = supportedLegacyPath?.Nodes.LastOrDefault();
+                    var terminalEvidenceId = terminalNode?.CombinedFactId
+                        ?? (terminalNode is null ? flowFact?.FactId : terminalNode.NodeId);
+                    if (terminalEvidenceId is null)
+                    {
+                        AddGeneratedGap(gaps, options.MaxGaps, snapshot, "DownstreamBoundaryIdentityUnavailable", "event-chain", chain.ChainId, chain.SupportingFactIds);
+                    }
+                    else if (boundaries.Count >= options.MaxBoundaries)
+                    {
+                        truncated = true;
+                        omittedBoundarySupport.UnionWith(chain.SupportingFactIds);
+                    }
+                    else
+                    {
+                        var category = BoundaryCategory(terminalKind, terminalNode);
+                        var projectedTargetHash = terminalNode?.SourceKind == "projection"
+                            ? EmptyToNull(terminalNode.ShapeHash)
+                            : null;
+                        var boundaryTargetIdentity = projectedTargetHash
+                            ?? terminalNode?.NodeId
+                            ?? EmptyToNull(flowFact?.Properties.GetValueOrDefault("terminalSurfaceNameHash"))
+                            ?? EmptyToNull(flowFact?.TargetSymbol)
+                            ?? terminalEvidenceId;
+                        var boundaryRuleIds = chain.RuleIds.Concat(chain.PathEvidence.Select(evidence => evidence.RuleId))
+                            .Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+                        var boundaryEvidenceTiers = chain.EvidenceTiers.Concat(chain.PathEvidence.Select(evidence => evidence.EvidenceTier))
+                            .Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+                        var boundaryCoverageLabels = chain.CoverageLabels.Concat(chain.PathEvidence.Select(evidence => evidence.CoverageLabel))
+                            .Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+                        var boundary = new WebFormsModernizationDownstreamBoundary(
+                            HashId("boundary", [chain.ChainId, terminalKind, terminalEvidenceId]),
+                            chain.ChainId,
+                            chain.SurfaceId,
+                            chain.HandlerId,
+                            category,
+                            terminalKind,
+                            HashId("boundary-target", [boundaryTargetIdentity]),
+                            terminalEvidenceId,
+                            chain.Classification,
+                            chain.LegacyPathId,
+                            chain.Evidence,
+                            chain.PathEvidence,
+                            chain.SupportingFactIds,
+                            chain.SupportingEdgeIds,
+                            boundaryRuleIds,
+                            boundaryEvidenceTiers,
+                            boundaryCoverageLabels,
+                            ["The boundary is a possible static downstream path; it does not prove runtime reachability, execution, successful interaction, configuration resolution, transaction outcome, or production use."]);
+                        boundaries.Add(boundary);
+                        if (category == "configuration" && IsNeedsReviewClassification(chain.Classification))
+                            AddGeneratedGap(gaps, options.MaxGaps, snapshot, "ConfigurationBoundaryNeedsReview", "downstream-boundary", boundary.BoundaryId, boundary.SupportingFactIds);
+                    }
+                }
             }
         }
         if (omittedChainSupport.Count > 0)
@@ -357,6 +452,8 @@ public static class WebFormsModernizationPacketReporter
             truncated = true;
             AddGeneratedGap(gaps, options.MaxGaps, snapshot, "WebFormsModernizationEventChainLimitReached", "packet", null, omittedChainSupport);
         }
+        if (omittedBoundarySupport.Count > 0)
+            AddGeneratedGap(gaps, options.MaxGaps, snapshot, "WebFormsModernizationBoundaryLimitReached", "packet", null, omittedBoundarySupport);
 
         var retainedPathIds = chains.Select(chain => chain.LegacyPathId).Where(id => id is not null).Cast<string>().ToHashSet(StringComparer.Ordinal);
         foreach (var pathGap in legacyFlow.Gaps.Where(gap =>
@@ -389,10 +486,11 @@ public static class WebFormsModernizationPacketReporter
             ClaimLevel,
             coverage,
             [source],
-            new(projects.Length, surfaces.Length, chains.Count, candidates.Count, uniqueGaps.Length, truncated),
+            new(projects.Length, surfaces.Length, chains.Count, boundaries.Count, candidates.Count, uniqueGaps.Length, truncated),
             projects,
             surfaces,
             chains.OrderBy(chain => chain.ChainId, StringComparer.Ordinal).ToArray(),
+            boundaries.OrderBy(boundary => boundary.BoundaryId, StringComparer.Ordinal).ToArray(),
             candidates,
             uniqueGaps,
             Questions,
@@ -761,7 +859,7 @@ public static class WebFormsModernizationPacketReporter
         b.AppendLine($"- Coverage: `{packet.Coverage}`");
         b.AppendLine($"- Repository: `{packet.Sources.Single().RepositoryId}`");
         b.AppendLine($"- Commit: `{packet.Sources.Single().CommitSha}`");
-        b.AppendLine($"- Surfaces: `{packet.Summary.SurfaceCount}`; event chains: `{packet.Summary.EventChainCount}`; structural candidates: `{packet.Summary.StructuralSliceCandidateCount}`; gaps: `{packet.Summary.GapCount}`; truncated: `{packet.Summary.Truncated}`.").AppendLine();
+        b.AppendLine($"- Surfaces: `{packet.Summary.SurfaceCount}`; event chains: `{packet.Summary.EventChainCount}`; downstream boundaries: `{packet.Summary.DownstreamBoundaryCount}`; structural candidates: `{packet.Summary.StructuralSliceCandidateCount}`; gaps: `{packet.Summary.GapCount}`; truncated: `{packet.Summary.Truncated}`.").AppendLine();
         b.AppendLine("## Surfaces").AppendLine();
         if (packet.Surfaces.Count == 0) b.AppendLine("- No supported Web Forms surfaces were available; see gaps.");
         foreach (var surface in packet.Surfaces)
@@ -770,6 +868,14 @@ public static class WebFormsModernizationPacketReporter
         if (packet.EventChains.Count == 0) b.AppendLine("- No supported static event chains were composed; this is not proof of absence.");
         foreach (var chain in packet.EventChains)
             b.AppendLine($"- `{chain.ChainId}` — `{chain.EventSourceId}` -> `{chain.HandlerId ?? "handler-unavailable"}` -> `{chain.TerminalKind ?? "terminal-unavailable"}`; classification `{chain.Classification}`; supporting facts {string.Join(", ", chain.SupportingFactIds.Select(id => $"`{id}`"))}.");
+        b.AppendLine().AppendLine("## Downstream boundaries").AppendLine();
+        if (packet.DownstreamBoundaries.Count == 0) b.AppendLine("- No supported downstream boundary was composed; this is not proof of absence.");
+        foreach (var boundary in packet.DownstreamBoundaries)
+        {
+            var primaryEvidence = boundary.PathEvidence.FirstOrDefault(evidence => evidence.FilePath is not null && evidence.StartLine is not null && evidence.EndLine is not null);
+            var evidenceSpan = primaryEvidence is null ? "span-unavailable" : $"{primaryEvidence.FilePath}:{primaryEvidence.StartLine}-{primaryEvidence.EndLine}";
+            b.AppendLine($"- `{boundary.BoundaryId}` — chain `{boundary.ChainId}` -> `{boundary.BoundaryCategory}/{boundary.BoundaryKind}`; target `{boundary.BoundaryTargetId}`; terminal evidence `{boundary.TerminalEvidenceId}`; classification `{boundary.Classification}`; evidence `{evidenceSpan}`; supporting facts {string.Join(", ", boundary.SupportingFactIds.Select(id => $"`{id}`"))}; rules {string.Join(", ", boundary.RuleIds.Select(id => $"`{id}`"))}.");
+        }
         b.AppendLine().AppendLine("## Structural slice candidates").AppendLine();
         foreach (var candidate in packet.StructuralSliceCandidates)
             b.AppendLine($"- `{candidate.CandidateId}` — classification `{candidate.Classification}`, owner naming required `{candidate.OwnerNamingRequired}`, surfaces {string.Join(", ", candidate.SurfaceIds.Select(id => $"`{id}`"))}.");
@@ -789,15 +895,41 @@ public static class WebFormsModernizationPacketReporter
         if (string.IsNullOrWhiteSpace(options.IndexPath)) throw new ArgumentException("webforms-modernization requires --index <index.sqlite>.");
         if (string.IsNullOrWhiteSpace(options.OutputDirectory)) throw new ArgumentException("webforms-modernization requires --out <directory>.");
         if (!File.Exists(options.IndexPath)) throw new FileNotFoundException("WebFormsModernizationIndexUnavailable");
-        if (options.MaxSurfaces <= 0 || options.MaxEventChains <= 0 || options.MaxCandidates <= 0 || options.MaxGaps <= 0 || options.MaxDepth <= 0 || options.MaxPaths <= 0)
+        if (options.MaxSurfaces <= 0 || options.MaxEventChains <= 0 || options.MaxCandidates <= 0 || options.MaxGaps <= 0 || options.MaxDepth <= 0 || options.MaxPaths <= 0 || options.MaxBoundaries <= 0)
             throw new ArgumentOutOfRangeException(nameof(options), "Web Forms modernization bounds must be positive.");
     }
 
     private static string SurfaceIdentity(CodeFact fact) =>
         fact.Properties.GetValueOrDefault("surfaceIdentity") ?? fact.SourceSymbol ?? HashId("surface", [fact.FactId]);
     private static string ProjectId(string? projectPath) => projectPath is null ? "project-unassigned" : HashId("project", [projectPath]);
+    private static bool ProjectionDuplicatesConcreteTerminal(CombinedPathNode projection, CombinedPath projectionPath, CombinedPathNode concrete)
+    {
+        if (string.IsNullOrWhiteSpace(projection.ShapeHash)
+            || string.IsNullOrWhiteSpace(concrete.CombinedFactId)
+            || !projectionPath.SupportingFactIds.Contains(concrete.CombinedFactId, StringComparer.Ordinal))
+            return false;
+        var concreteDisplay = EmptyToNull(concrete.SurfaceName) ?? EmptyToNull(concrete.DisplayName);
+        return concreteDisplay is not null
+            && string.Equals(projection.ShapeHash, FactFactory.Hash(concreteDisplay, 32), StringComparison.Ordinal);
+    }
     private static string? SafeIdentity(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Length <= 256 ? value : HashId("identity", [value]);
     private static string SafeKind(string? value, string fallback) => string.IsNullOrWhiteSpace(value) || value.Length > 96 ? fallback : value;
+    private static string BoundaryCategory(string surfaceKind, CombinedPathNode? terminalNode) => surfaceKind switch
+    {
+        "sql-query" or "sql-persistence" or "legacy-data" => "database",
+        "http-client" or "wcf-operation" or "remoting-endpoint" or "remoting-registration" or "remoting-channel" or "remoting-object" or "remoting-api"
+            or "asmx-service" or "asmx-operation" or "asmx-client" or "asmx-metadata" => "service",
+        "message-queue" or "message-topic" or "message-subscription" or "message-exchange" or "message-stream" or "message-event" or "message-channel" or "message-unknown" => "messaging",
+        "package-config" when !string.IsNullOrWhiteSpace(terminalNode?.ConfigKey) => "configuration",
+        "package-config" => "dependency",
+        "asmx-config" => "configuration",
+        _ => "dependency"
+    };
+    private static bool IsNeedsReviewClassification(string classification) => classification is
+        CombinedDependencyPathClassifications.NeedsReviewStaticPath
+        or CombinedDependencyPathClassifications.AnalysisGap
+        or CombinedDependencyPathClassifications.ReducedCoverage
+        or CombinedDependencyPathClassifications.UnknownAnalysisGap;
     private static string SafeFilePath(string path)
     {
         var normalized = path.Replace('\\', '/');

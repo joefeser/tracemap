@@ -132,6 +132,17 @@ public sealed class WebFormsModernizationPacketTests
             Assert.NotNull(chain.LegacyPathId);
             Assert.NotNull(chain.TerminalKind);
         });
+        Assert.Equal(packet.DownstreamBoundaries.Count, packet.Summary.DownstreamBoundaryCount);
+        Assert.Contains(packet.DownstreamBoundaries, boundary => boundary.BoundaryCategory == "database" && boundary.BoundaryKind == "sql-query");
+        Assert.Contains(packet.DownstreamBoundaries, boundary => boundary.BoundaryCategory == "dependency" && boundary.BoundaryKind == "package-config");
+        Assert.All(packet.DownstreamBoundaries, boundary =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(boundary.BoundaryTargetId));
+            Assert.False(string.IsNullOrWhiteSpace(boundary.TerminalEvidenceId));
+            Assert.NotEmpty(boundary.RuleIds);
+            Assert.NotEmpty(boundary.EvidenceTiers);
+            Assert.NotEmpty(boundary.SupportingFactIds);
+        });
         Assert.DoesNotContain(packet.Gaps, gap => gap.Classification == "UnrelatedWinFormsGap");
         Assert.True(packet.Summary.Truncated);
         Assert.Contains(packet.Gaps, gap => gap.Classification == "WebFormsModernizationEventChainLimitReached"
@@ -148,6 +159,277 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Equal("reduced-static-webforms-modernization", packet.Coverage);
         Assert.DoesNotContain(temp.Path, JsonSerializer.Serialize(packet), StringComparison.OrdinalIgnoreCase);
         Assert.Contains("does not prove runtime", string.Join(' ', packet.Limitations), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Boundary_inventory_preserves_direct_and_indirect_database_service_message_and_config_evidence()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("Succeeded") with { AnalysisLevel = "Level1SemanticAnalysis" };
+        var surface = "webforms-surface:orders";
+        var page = Fact(manifest, FactTypes.WebFormsPageDeclared, RuleIds.LegacyWebFormsInventory, "Pages/Orders.aspx", 1,
+            source: surface, target: "Sample.Orders", contract: "Orders.aspx",
+            ("surfaceIdentity", surface), ("directiveKind", "Page"), ("coverageLabel", "bounded-static-webforms-inventory"));
+        var bindings = new[]
+        {
+            (Control: "save", Handler: "method:save", Name: "Save_Click", Line: 10),
+            (Control: "copy", Handler: "method:copy", Name: "Copy_Click", Line: 11),
+            (Control: "send", Handler: "method:send", Name: "Send_Click", Line: 12),
+            (Control: "config", Handler: "method:config", Name: "Config_Click", Line: 13)
+        }.Select(item => Fact(manifest, FactTypes.WebFormsEventBindingDeclared, RuleIds.LegacyWebFormsEventBinding, "Pages/Orders.aspx", item.Line,
+            source: $"webforms-control:{item.Control}", target: item.Handler, contract: item.Name,
+            ("surfaceIdentity", surface), ("eventSourceIdentity", $"webforms-control:{item.Control}"), ("eventName", "OnClick"),
+            ("controlId", item.Control), ("handlerName", item.Name), ("markupFile", "Pages/Orders.aspx"), ("coverageLabel", "bounded-static-webforms-event"))).ToArray();
+        var handlers = bindings.Select((binding, index) => Fact(manifest, FactTypes.WebFormsHandlerResolved, RuleIds.LegacyWebFormsHandlerResolution, "Pages/Orders.aspx.cs", 20 + index,
+            source: binding.SourceSymbol, target: binding.TargetSymbol, contract: binding.ContractElement,
+            ("surfaceIdentity", surface), ("bindingFactId", binding.FactId), ("handlerSymbolId", binding.TargetSymbol!),
+            ("handlerSymbol", binding.TargetSymbol!), ("handlerName", binding.ContractElement!), ("controlId", binding.Properties["controlId"]),
+            ("eventName", "OnClick"), ("markupFile", "Pages/Orders.aspx"), ("pageTypeName", "Sample.Orders"),
+            ("coverageLabel", "bounded-static-webforms-handler"))).ToArray();
+        var firstQuery = Fact(manifest, FactTypes.QueryPatternDetected, RuleIds.CSharpSyntaxQueryPattern, "Services/Orders.cs", 40,
+            source: "method:save", target: "query-label", contract: "SELECT",
+            ("operationName", "SELECT"), ("tableName", "orders"), ("columnNames", "id;state"), ("sqlSourceKind", "literal-string"),
+            ("queryShapeHash", "shape-a"), ("coverageLabel", "bounded-static-query"));
+        var secondQuery = Fact(manifest, FactTypes.QueryPatternDetected, RuleIds.CSharpSyntaxQueryPattern, "Services/Orders.cs", 41,
+            source: "method:copy", target: "query-label", contract: "SELECT",
+            ("operationName", "SELECT"), ("tableName", "orders"), ("columnNames", "id;state"), ("sqlSourceKind", "literal-string"),
+            ("queryShapeHash", "shape-b"), ("coverageLabel", "bounded-static-query"));
+        var persistence = Fact(manifest, FactTypes.DatabaseOperationCandidate, RuleIds.DatabaseOperationCallPattern, "Services/Orders.cs", 42,
+            source: "method:copy", target: "orders", contract: "save",
+            ("frameworkFamily", "ef-core"), ("operationKind", "save-boundary"), ("targetIdentityStatus", "entity-static"),
+            ("tableName", "orders"), ("coverageLabel", "bounded-static-call"));
+        var serviceCall = Fact(manifest, FactTypes.CallEdge, "csharp.semantic.call.v1", "Pages/Orders.aspx.cs", 30,
+            source: "method:send", target: "method:dispatch", contract: "Dispatch", ("coverageLabel", "bounded-static-call"));
+        var http = Fact(manifest, FactTypes.HttpCallDetected, RuleIds.HttpClientInvocation, "Services/Dispatch.cs", 50,
+            source: "method:dispatch", target: "GET /orders", contract: "GET",
+            ("httpMethod", "GET"), ("methodName", "GET"), ("normalizedPathTemplate", "/orders"),
+            ("normalizedPathKey", "/orders"), ("urlKind", "template"), ("coverageLabel", "bounded-static-http"));
+        var message = Fact(manifest, FactTypes.MessagePublisherSurface, RuleIds.MessageSurfacePublish, "Services/Dispatch.cs", 51,
+            source: "method:dispatch", target: "publish:orders", contract: "publish",
+            ("destinationIdentityStatus", "static"), ("frameworkFamily", "fixture"), ("frameworkFeature", "send"),
+            ("normalizedDestinationKey", "orders"), ("operationDirection", "publish"), ("operationKind", "send"),
+            ("stableMessageSurfaceKey", "message:orders:publish"), ("surfaceKind", "message-queue"),
+            ("coverageLabel", "bounded-static-message"));
+        var config = Fact(manifest, FactTypes.ConfigBinding, RuleIds.ConfigKey, "Pages/Orders.aspx.cs", 60,
+            source: "method:config", target: "status", contract: "status",
+            ("configKey", "status"), ("surfaceKind", "package-config"), ("coverageLabel", "bounded-static-config"));
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, manifest, [page, .. bindings, .. handlers, firstQuery, secondQuery, persistence, serviceCall, http, message, config]);
+
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(
+            index,
+            Path.Combine(temp.Path, "output"),
+            MaxBoundaries: 5));
+
+        Assert.Equal(5, packet.DownstreamBoundaries.Count);
+        Assert.Equal(5, packet.Summary.DownstreamBoundaryCount);
+        Assert.Equal(3, packet.DownstreamBoundaries.Count(boundary => boundary.BoundaryCategory == "database"));
+        Assert.Equal(3, packet.DownstreamBoundaries.Where(boundary => boundary.BoundaryCategory == "database").Select(boundary => boundary.BoundaryTargetId).Distinct().Count());
+        Assert.Contains(packet.DownstreamBoundaries, boundary => boundary.BoundaryKind == "sql-persistence");
+        Assert.Contains(packet.DownstreamBoundaries, boundary => boundary.BoundaryCategory == "service" && boundary.BoundaryKind == "http-client");
+        Assert.Contains(packet.DownstreamBoundaries, boundary => boundary.BoundaryCategory == "messaging" && boundary.BoundaryKind == "message-queue");
+        Assert.Contains(packet.Gaps, gap => gap.Classification == "WebFormsModernizationBoundaryLimitReached");
+        Assert.Contains(packet.Gaps, gap => gap.Classification == "FileOperationBoundaryExtractionUnavailable");
+        Assert.True(packet.Summary.Truncated);
+        Assert.All(packet.DownstreamBoundaries, boundary =>
+        {
+            Assert.StartsWith("boundary-", boundary.BoundaryId, StringComparison.Ordinal);
+            Assert.StartsWith("boundary-target-", boundary.BoundaryTargetId, StringComparison.Ordinal);
+            Assert.NotEmpty(boundary.PathEvidence);
+            Assert.All(boundary.PathEvidence, evidence =>
+            {
+                Assert.False(string.IsNullOrWhiteSpace(evidence.RuleId));
+                Assert.False(string.IsNullOrWhiteSpace(evidence.EvidenceTier));
+                Assert.Equal(manifest.CommitSha, evidence.CommitSha);
+                Assert.True(evidence.FilePath is null || !Path.IsPathRooted(evidence.FilePath));
+            });
+        });
+
+        var unbounded = await WebFormsModernizationPacketReporter.BuildAsync(new(
+            index,
+            Path.Combine(temp.Path, "unbounded"),
+            MaxBoundaries: 20));
+        Assert.Contains(unbounded.DownstreamBoundaries, boundary => boundary.BoundaryCategory == "configuration");
+        Assert.Contains(unbounded.Gaps, gap => gap.Classification == "ConfigurationBoundaryNeedsReview");
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(unbounded);
+        var roundTrip = JsonSerializer.Deserialize<WebFormsModernizationPacket>(bytes, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        Assert.NotNull(roundTrip);
+        Assert.Equal(unbounded.DownstreamBoundaries.Count, roundTrip.DownstreamBoundaries.Count);
+        Assert.DoesNotContain("/orders", System.Text.Encoding.UTF8.GetString(bytes), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Flow_fallback_groups_the_same_terminal_without_conflating_evidence_records()
+    {
+        var manifest = Manifest("Succeeded") with { AnalysisLevel = "Level1SemanticAnalysis" };
+        var firstBinding = Fact(manifest, FactTypes.WebFormsEventBindingDeclared, RuleIds.LegacyWebFormsEventBinding, "Pages/First.aspx", 10,
+            source: "control:first", target: "method:first", contract: "First_Click",
+            ("surfaceIdentity", "surface:first"), ("eventSourceIdentity", "control:first"), ("coverageLabel", "bounded-static-webforms-event"));
+        var secondBinding = Fact(manifest, FactTypes.WebFormsEventBindingDeclared, RuleIds.LegacyWebFormsEventBinding, "Pages/Second.aspx", 10,
+            source: "control:second", target: "method:second", contract: "Second_Click",
+            ("surfaceIdentity", "surface:second"), ("eventSourceIdentity", "control:second"), ("coverageLabel", "bounded-static-webforms-event"));
+        var firstHandler = Fact(manifest, FactTypes.WebFormsHandlerResolved, RuleIds.LegacyWebFormsHandlerResolution, "Pages/First.aspx.cs", 20,
+            source: "control:first", target: "method:first", contract: "First_Click",
+            ("bindingFactId", firstBinding.FactId), ("handlerSymbolId", "method:first"), ("coverageLabel", "bounded-static-webforms-handler"));
+        var secondHandler = Fact(manifest, FactTypes.WebFormsHandlerResolved, RuleIds.LegacyWebFormsHandlerResolution, "Pages/Second.aspx.cs", 20,
+            source: "control:second", target: "method:second", contract: "Second_Click",
+            ("bindingFactId", secondBinding.FactId), ("handlerSymbolId", "method:second"), ("coverageLabel", "bounded-static-webforms-handler"));
+        var firstFlow = Fact(manifest, FactTypes.WebFormsEventFlowProjected, RuleIds.LegacyWebFormsEventFlow, "Pages/First.aspx.cs", 21,
+            source: "method:first", target: "private-target-a", contract: "flow",
+            ("supportingFactIds", firstHandler.FactId), ("terminalSurfaceKind", "http-client"),
+            ("terminalSurfaceNameHash", "shared-terminal-hash"), ("flowClassification", "ProbableStaticPath"),
+            ("coverageLabel", "bounded-static-webforms-flow"));
+        var secondFlow = Fact(manifest, FactTypes.WebFormsEventFlowProjected, RuleIds.LegacyWebFormsEventFlow, "Pages/Second.aspx.cs", 21,
+            source: "method:second", target: "private-target-b", contract: "flow",
+            ("supportingFactIds", secondHandler.FactId), ("terminalSurfaceKind", "http-client"),
+            ("terminalSurfaceNameHash", "shared-terminal-hash"), ("flowClassification", "ProbableStaticPath"),
+            ("coverageLabel", "bounded-static-webforms-flow"));
+        var snapshot = new WebFormsModernizationPacketReporter.Snapshot(
+            manifest.RepoName, manifest.ScanId, manifest.CommitSha, manifest.AnalysisLevel, manifest.BuildStatus,
+            [firstBinding, secondBinding, firstHandler, secondHandler, firstFlow, secondFlow]);
+
+        var packet = WebFormsModernizationPacketReporter.Build(
+            snapshot,
+            LegacyFlow(),
+            new("unused", "unused"));
+
+        Assert.Equal(2, packet.DownstreamBoundaries.Count);
+        Assert.Single(packet.DownstreamBoundaries.Select(boundary => boundary.BoundaryTargetId).Distinct(StringComparer.Ordinal));
+        Assert.Equal(2, packet.DownstreamBoundaries.Select(boundary => boundary.TerminalEvidenceId).Distinct(StringComparer.Ordinal).Count());
+        Assert.Contains(packet.DownstreamBoundaries, boundary => boundary.TerminalEvidenceId == firstFlow.FactId);
+        Assert.Contains(packet.DownstreamBoundaries, boundary => boundary.TerminalEvidenceId == secondFlow.FactId);
+
+        var firstRoot = PathNode("root:first", "symbol", "method:first", manifest, symbolId: "method:first");
+        var secondRoot = PathNode("root:second", "symbol", "method:second", manifest, symbolId: "method:second");
+        var firstProjection = PathNode(
+            "projection:first", "surface", "http-client:hash:shared-terminal-hash", manifest,
+            combinedFactId: firstFlow.FactId, ruleId: RuleIds.LegacyWebFormsEventFlow,
+            evidenceTier: EvidenceTiers.Tier2Structural, filePath: "Pages/First.aspx.cs", startLine: 21, endLine: 21,
+            surfaceKind: "http-client", sourceKind: "projection", shapeHash: "shared-terminal-hash");
+        var secondProjection = PathNode(
+            "projection:second", "surface", "http-client:hash:shared-terminal-hash", manifest,
+            combinedFactId: secondFlow.FactId, ruleId: RuleIds.LegacyWebFormsEventFlow,
+            evidenceTier: EvidenceTiers.Tier2Structural, filePath: "Pages/Second.aspx.cs", startLine: 21, endLine: 21,
+            surfaceKind: "http-client", sourceKind: "projection", shapeHash: "shared-terminal-hash");
+        var firstPath = LegacyPath(
+            "path:first", firstRoot, firstProjection, bindingId: firstBinding.FactId, handlerId: firstHandler.FactId);
+        var secondPath = LegacyPath(
+            "path:second", secondRoot, secondProjection, bindingId: secondBinding.FactId, handlerId: secondHandler.FactId);
+
+        var projectionPacket = WebFormsModernizationPacketReporter.Build(
+            snapshot,
+            LegacyFlow(firstPath, secondPath),
+            new("unused", "unused"));
+
+        Assert.Equal(2, projectionPacket.DownstreamBoundaries.Count);
+        Assert.Single(projectionPacket.DownstreamBoundaries.Select(boundary => boundary.BoundaryTargetId).Distinct(StringComparer.Ordinal));
+        Assert.Equal(2, projectionPacket.DownstreamBoundaries.Select(boundary => boundary.TerminalEvidenceId).Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
+    public void Legacy_path_node_identity_remains_joinable_and_its_provenance_is_aggregated()
+    {
+        var manifest = Manifest("Succeeded") with { AnalysisLevel = "Level1SemanticAnalysis" };
+        var binding = Fact(manifest, FactTypes.WebFormsEventBindingDeclared, RuleIds.LegacyWebFormsEventBinding, "Pages/Orders.aspx", 10,
+            source: "control:orders", target: "method:orders", contract: "Orders_Click",
+            ("surfaceIdentity", "surface:orders"), ("eventSourceIdentity", "control:orders"), ("coverageLabel", "bounded-static-webforms-event"));
+        var handler = Fact(manifest, FactTypes.WebFormsHandlerResolved, RuleIds.LegacyWebFormsHandlerResolution, "Pages/Orders.aspx.cs", 20,
+            source: "control:orders", target: "method:orders", contract: "Orders_Click",
+            ("bindingFactId", binding.FactId), ("handlerSymbolId", "method:orders"), ("coverageLabel", "bounded-static-webforms-handler"));
+        var rootNode = PathNode("handler-node", "symbol", "method:orders", manifest, symbolId: "method:orders");
+        var terminalNode = PathNode(
+            "surface-node-safe", "surface", "service-boundary", manifest,
+            ruleId: RuleIds.HttpClientInvocation,
+            evidenceTier: EvidenceTiers.Tier2Structural,
+            filePath: "Services/OrdersClient.cs",
+            startLine: 30,
+            endLine: 31,
+            surfaceKind: "http-client");
+        var edge = new CombinedPathEdge(
+            "path-edge-safe", "call", rootNode.NodeId, terminalNode.NodeId,
+            CombinedDependencyPathClassifications.ProbableStaticPath,
+            RuleIds.CSharpSemanticCallGraph,
+            EvidenceTiers.Tier1Semantic,
+            [handler.FactId], [], "Pages/Orders.aspx.cs", 20, 20);
+        var path = new CombinedPath(
+            "path:orders", CombinedDependencyPathClassifications.ProbableStaticPath, "Medium", 1,
+            rootNode.NodeId, terminalNode.NodeId, [rootNode, terminalNode], [edge],
+            [binding.FactId, handler.FactId], [edge.EdgeId], []);
+        var snapshot = new WebFormsModernizationPacketReporter.Snapshot(
+            manifest.RepoName, manifest.ScanId, manifest.CommitSha, manifest.AnalysisLevel, manifest.BuildStatus, [binding, handler]);
+
+        var packet = WebFormsModernizationPacketReporter.Build(snapshot, LegacyFlow(path), new("unused", "unused"));
+
+        var boundary = Assert.Single(packet.DownstreamBoundaries);
+        Assert.Equal(terminalNode.NodeId, boundary.TerminalEvidenceId);
+        Assert.Contains(boundary.PathEvidence, evidence => evidence.EvidenceId == boundary.TerminalEvidenceId);
+        Assert.Contains(RuleIds.HttpClientInvocation, boundary.RuleIds);
+        Assert.Contains(EvidenceTiers.Tier2Structural, boundary.EvidenceTiers);
+        Assert.Contains("unknown", boundary.CoverageLabels);
+    }
+
+    [Fact]
+    public void Generic_projection_is_suppressed_when_its_supporting_concrete_config_terminal_is_available()
+    {
+        var manifest = Manifest("Succeeded") with { AnalysisLevel = "Level1SemanticAnalysis" };
+        var binding = Fact(manifest, FactTypes.WebFormsEventBindingDeclared, RuleIds.LegacyWebFormsEventBinding, "Pages/Settings.aspx", 10,
+            source: "control:settings", target: "method:settings", contract: "Settings_Click",
+            ("surfaceIdentity", "surface:settings"), ("eventSourceIdentity", "control:settings"), ("coverageLabel", "bounded-static-webforms-event"));
+        var handler = Fact(manifest, FactTypes.WebFormsHandlerResolved, RuleIds.LegacyWebFormsHandlerResolution, "Pages/Settings.aspx.cs", 20,
+            source: "control:settings", target: "method:settings", contract: "Settings_Click",
+            ("bindingFactId", binding.FactId), ("handlerSymbolId", "method:settings"), ("coverageLabel", "bounded-static-webforms-handler"));
+        var config = Fact(manifest, FactTypes.ConfigBinding, RuleIds.ConfigKey, "Pages/Settings.aspx.cs", 22,
+            source: "method:settings", target: "config-key-hash", contract: "config-key-hash",
+            ("configKey", "config-key-hash"), ("surfaceKind", "package-config"), ("coverageLabel", "bounded-static-config"));
+        var otherConfig = Fact(manifest, FactTypes.ConfigBinding, RuleIds.ConfigKey, "Pages/Settings.aspx.cs", 23,
+            source: "method:settings", target: "other-key-hash", contract: "other-key-hash",
+            ("configKey", "other-key-hash"), ("surfaceKind", "package-config"), ("coverageLabel", "bounded-static-config"));
+        var flow = Fact(manifest, FactTypes.WebFormsEventFlowProjected, RuleIds.LegacyWebFormsEventFlow, "Pages/Settings.aspx.cs", 20,
+            source: "method:settings", target: "config-key-hash", contract: "Settings_Click",
+            ("supportingFactIds", $"{handler.FactId},{config.FactId},{otherConfig.FactId}"), ("terminalSurfaceKind", "dependency-surface"),
+            ("terminalSurfaceNameHash", FactFactory.Hash("config-key-hash", 32)), ("flowClassification", "ProbableStaticPath"),
+            ("coverageLabel", "bounded-static-webforms-flow"));
+        var root = PathNode("root:settings", "symbol", "method:settings", manifest, symbolId: "method:settings");
+        var concrete = PathNode(
+            "config:concrete", "surface", "config-key-hash", manifest,
+            combinedFactId: config.FactId, ruleId: RuleIds.ConfigKey, evidenceTier: EvidenceTiers.Tier2Structural,
+            filePath: "Pages/Settings.aspx.cs", startLine: 22, endLine: 22, surfaceKind: "package-config", sourceKind: "config",
+            shapeHash: "config-shape", configKey: "config-key-hash");
+        var projection = PathNode(
+            "projection:settings", "surface", "dependency-surface:hash:config-terminal", manifest,
+            combinedFactId: flow.FactId, ruleId: RuleIds.LegacyWebFormsEventFlow, evidenceTier: EvidenceTiers.Tier2Structural,
+            filePath: "Pages/Settings.aspx.cs", startLine: 20, endLine: 20, surfaceKind: "dependency-surface", sourceKind: "projection",
+            shapeHash: FactFactory.Hash("config-key-hash", 32));
+        var concretePath = LegacyPath("path:config", root, concrete, binding.FactId, handler.FactId, [config.FactId]);
+        var projectionPath = LegacyPath("path:projection", root, projection, binding.FactId, handler.FactId, [config.FactId, flow.FactId]);
+        var snapshot = new WebFormsModernizationPacketReporter.Snapshot(
+            manifest.RepoName, manifest.ScanId, manifest.CommitSha, manifest.AnalysisLevel, manifest.BuildStatus,
+            [binding, handler, config, otherConfig, flow]);
+
+        var packet = WebFormsModernizationPacketReporter.Build(
+            snapshot,
+            LegacyFlow(concretePath, projectionPath),
+            new("unused", "unused"));
+
+        var boundary = Assert.Single(packet.DownstreamBoundaries);
+        Assert.Equal("configuration", boundary.BoundaryCategory);
+        Assert.Equal("package-config", boundary.BoundaryKind);
+        Assert.Equal(config.FactId, boundary.TerminalEvidenceId);
+
+        var otherConcrete = PathNode(
+            "config:other", "surface", "other-key-hash", manifest,
+            combinedFactId: otherConfig.FactId, ruleId: RuleIds.ConfigKey, evidenceTier: EvidenceTiers.Tier2Structural,
+            filePath: "Pages/Settings.aspx.cs", startLine: 23, endLine: 23, surfaceKind: "package-config", sourceKind: "config",
+            shapeHash: "other-config-shape", configKey: "other-key-hash");
+        var otherConcretePath = LegacyPath("path:other-config", root, otherConcrete, binding.FactId, handler.FactId, [otherConfig.FactId]);
+        var partialPacket = WebFormsModernizationPacketReporter.Build(
+            snapshot,
+            LegacyFlow(otherConcretePath, projectionPath),
+            new("unused", "unused"));
+
+        Assert.Equal(2, partialPacket.DownstreamBoundaries.Count);
+        Assert.Contains(partialPacket.DownstreamBoundaries, item => item.TerminalEvidenceId == otherConfig.FactId && item.BoundaryCategory == "configuration");
+        Assert.Contains(partialPacket.DownstreamBoundaries, item => item.TerminalEvidenceId == flow.FactId && item.BoundaryKind == "dependency-surface");
     }
 
     [Fact]
@@ -203,9 +485,14 @@ public sealed class WebFormsModernizationPacketTests
         using var stdout = new StringWriter();
         using var stderr = new StringWriter();
         var output = Path.Combine(temp.Path, "packet");
-        var exit = await TraceMapCommand.RunAsync(["webforms-modernization", "--index", index, "--out", output], stdout, stderr);
+        var exit = await TraceMapCommand.RunAsync([
+            "webforms-modernization", "--index", index, "--out", output, "--max-boundaries", "1"
+        ], stdout, stderr);
         Assert.Equal(0, exit);
         Assert.Equal(string.Empty, stderr.ToString());
+        Assert.Contains("Downstream boundaries: 0", stdout.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Repository: repository-", stdout.ToString(), StringComparison.Ordinal);
+        Assert.Contains($"Commit SHA: {manifest.CommitSha}", stdout.ToString(), StringComparison.Ordinal);
         Assert.True(File.Exists(Path.Combine(output, "webforms-modernization.json")));
         Assert.True(File.Exists(Path.Combine(output, "webforms-modernization.md")));
 
@@ -340,6 +627,65 @@ public sealed class WebFormsModernizationPacketTests
             manifest, factType, ruleId, EvidenceTiers.Tier2Structural,
             new(path, line, line, null, "SyntheticFixture", "1.0"), sourceSymbol: source, targetSymbol: target, contractElement: contract,
             properties: new SortedDictionary<string, string>(properties.ToDictionary(item => item.Key, item => item.Value), StringComparer.Ordinal));
+
+    private static CombinedDependencyPathReport LegacyFlow(params CombinedPath[] paths) => new(
+        "1.0.0",
+        LegacyFlowReportConstants.SchemaVersion,
+        LegacyFlowReportConstants.View,
+        "bounded-static-legacy-flow",
+        [],
+        new(null, null, null, null, null, null, null, null, true, 8, 100, 10_000, "bounded-bfs", "1.0.0", null),
+        [],
+        new(1, paths.SelectMany(path => path.Nodes).Select(node => node.NodeId).Distinct(StringComparer.Ordinal).Count(),
+            paths.SelectMany(path => path.Edges).Select(edge => edge.EdgeId).Distinct(StringComparer.Ordinal).Count(),
+            paths.Length, 0, 0, false),
+        paths,
+        [],
+        new(
+            new Dictionary<string, int>(), new Dictionary<string, int>(), new Dictionary<string, int>(),
+            new Dictionary<string, int>(), new Dictionary<string, int>(), [], []),
+        ["Synthetic legacy-flow fixture only."]);
+
+    private static CombinedPathNode PathNode(
+        string nodeId,
+        string nodeKind,
+        string displayName,
+        ScanManifest manifest,
+        string? symbolId = null,
+        string? combinedFactId = null,
+        string? ruleId = null,
+        string? evidenceTier = null,
+        string? filePath = null,
+        int? startLine = null,
+        int? endLine = null,
+        string? surfaceKind = null,
+        string? sourceKind = null,
+        string? shapeHash = null,
+        string? configKey = null) => new(
+            nodeId, nodeKind, displayName, "fixture", "fixture", manifest.ScanId, manifest.CommitSha,
+            symbolId, combinedFactId, ruleId, evidenceTier, filePath, startLine, endLine, surfaceKind,
+            null, null, null, null, null, null, sourceKind, shapeHash, null, null, null, configKey, null);
+
+    private static CombinedPath LegacyPath(
+        string pathId,
+        CombinedPathNode root,
+        CombinedPathNode terminal,
+        string bindingId,
+        string handlerId,
+        IReadOnlyList<string>? additionalSupport = null)
+    {
+        var edge = new CombinedPathEdge(
+            $"edge:{pathId}", "webforms-event-flow-projection", root.NodeId, terminal.NodeId,
+            CombinedDependencyPathClassifications.ProbableStaticPath,
+            RuleIds.LegacyFlowStaticTraversal,
+            EvidenceTiers.Tier2Structural,
+            [bindingId, handlerId], [], root.FilePath ?? "Pages/Default.aspx.cs", root.StartLine ?? 1, root.EndLine ?? 1);
+        return new(
+            pathId, CombinedDependencyPathClassifications.ProbableStaticPath, "Medium", 1,
+            root.NodeId, terminal.NodeId, [root, terminal], [edge],
+            new[] { bindingId, handlerId }.Concat(additionalSupport ?? []).Distinct(StringComparer.Ordinal).ToArray(),
+            [edge.EdgeId], []);
+    }
 
     private static string Hash(string path) => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
 }
