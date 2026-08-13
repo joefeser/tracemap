@@ -1,0 +1,42 @@
+name: Local distribution validation
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/local-distribution-validation.yml"
+      - "scripts/smoke-local-distribution.ps1"
+      - "src/dotnet/**"
+      - "docs/LOCAL_DISTRIBUTION.md"
+      - "docs/LOCAL_REVIEW_WORKFLOW.md"
+      - "docs/contracts/local-review-result.v1.schema.json"
+      - "docs/contracts/tracemap-version.v1.schema.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package-smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Restore locked dependencies
+        run: dotnet restore src/dotnet/TraceMap.sln --locked-mode
+      - name: Run local distribution smoke
+        shell: pwsh
+        run: ./scripts/smoke-local-distribution.ps1 -OutputDirectory "${{ runner.temp }}/tracemap-local-distribution"
+      - name: Retain sanitized receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-distribution-${{ matrix.os }}
+          path: ${{ runner.temp }}/tracemap-local-distribution/local-distribution-smoke.json
+          if-no-files-found: error
