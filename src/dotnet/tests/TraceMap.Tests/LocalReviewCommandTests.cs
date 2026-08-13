@@ -83,7 +83,7 @@ public sealed class LocalReviewCommandTests
         Assert.Equal(0, await TraceMapCommand.RunAsync(
             [
                 "explorer", "generate",
-                "--input", Path.Combine(review, "scan"),
+                "--input", standaloneWebForms,
                 "--out", standaloneExplorer,
                 "--safety-profile", "hidden-local"
             ],
@@ -118,6 +118,16 @@ public sealed class LocalReviewCommandTests
         Assert.All(
             document.RootElement.GetProperty("stages")[1].GetProperty("inputs").EnumerateArray(),
             input => Assert.StartsWith("scan/", input.GetProperty("relativePath").GetString(), StringComparison.Ordinal));
+        Assert.All(
+            document.RootElement.GetProperty("stages")[2].GetProperty("inputs").EnumerateArray(),
+            input => Assert.StartsWith("webforms/", input.GetProperty("relativePath").GetString(), StringComparison.Ordinal));
+
+        using var explorerDocument = JsonDocument.Parse(
+            await File.ReadAllTextAsync(Path.Combine(review, "explorer", "data", "explorer-data.json")));
+        Assert.StartsWith(
+            "packet-",
+            explorerDocument.RootElement.GetProperty("webForms").GetProperty("summary").GetProperty("packetId").GetString(),
+            StringComparison.Ordinal);
     }
 
     [Fact]

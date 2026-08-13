@@ -32,12 +32,31 @@ The explorer currently supports:
 - `release-review.json` v1.2 through a bounded compatibility-metadata reader;
 - `paths-report.json` v1.0 through a bounded static surface/path reader;
 - `impact-report.json` contract-delta impact v2 through a bounded reducer-result reader.
+- `webforms-modernization.json` v1 through a bounded static modernization-packet reader.
 
 Other top-level JSON files are labeled unsupported with
 `explorer.input.unsupported-schema.v1` gaps instead of being silently merged.
 That still includes report JSON artifacts such as `dependency-report.json`,
 `route-flow-report.json`, `demo-summary.json`, and other report JSON families; compatible
 readers for those artifacts are deferred to later slices.
+
+The `webforms-modernization.json` reader accepts only the exact
+`webforms-modernization-packet.v1` contract at local-only claim level. It
+requires one usable source commit, matching summary counts, supported evidence
+tiers, rule-backed provenance, coherent file spans, bounded collections, and a
+matching scan commit when an authoritative scan manifest is present. Compatible
+packets add a dedicated no-JavaScript Web Forms section plus `webForms` data for
+project coverage, surfaces and composition, event/handler chains, downstream
+boundaries, identity/session inventory, structural candidates, owner questions,
+gaps, limitations, and supporting evidence IDs. Unsafe free text and repository
+paths are omitted, normalized, or replaced with explorer-local hashes.
+
+This is composition of already-generated static evidence, not new extraction.
+It does not prove runtime execution, event firing, postback behavior,
+authorization, persistence, production use, business intent, feature parity,
+migration effort, target architecture, workflow completeness, cloud readiness,
+security approval, release approval, or safety to change. Invalid or oversized
+packets fail closed as unsupported input rather than being partially rendered.
 
 The `impact-report.json` reader accepts only `contract-delta-impact-single` or
 `contract-delta-impact-combined` version `2.0` output produced by
@@ -223,9 +242,11 @@ generated artifact path without printing the unsafe raw value.
 ## Manifest Schema
 
 `data/explorer-manifest.json` and `data/explorer-data.json` use schema version
-`tracemap-static-html-evidence-explorer.v4`. The generator recognizes prior
-v1, v2, and v3 TraceMap-generated manifests when `--force` replaces an existing
-generated bundle, but all newly written bundles use v4. The manifest includes:
+`tracemap-static-html-evidence-explorer.v5`. The generator recognizes prior
+v1 through v4 TraceMap-generated manifests when `--force` replaces an existing
+generated bundle, but all newly written bundles use v5. Version 5 adds the
+bounded Web Forms packet projection and extractor/provider plus supporting
+fact/edge provenance fields on safe evidence rows. The manifest includes:
 
 - generator name, schema version, and TraceMap assembly version;
 - safety profile and claim level;
