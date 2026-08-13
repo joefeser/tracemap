@@ -247,6 +247,7 @@ public sealed class LegacyWebFormsEventIdentityTests
             && fact.ContractElement == "Missing_Load");
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
+            && fact.Evidence.FilePath == "Default.aspx.cs"
             && fact.Properties.GetValueOrDefault("gapKind") == "MissingWebFormsHandler");
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.WebFormsEventBindingDeclared
@@ -254,5 +255,61 @@ public sealed class LegacyWebFormsEventIdentityTests
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
             && fact.Properties.GetValueOrDefault("gapKind") == "AmbiguousWebFormsHandler");
+    }
+
+    [Fact]
+    public void Explicit_subscriptions_are_page_scoped_and_support_page_and_base_receivers()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), """
+            <%@ Page Language="C#" CodeBehind="Default.aspx.cs" Inherits="Sample.Default" AutoEventWireup="false" %>
+            <asp:Button runat="server" ID="SaveButton" />
+            """);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx.cs"), """
+            using System;
+            namespace Sample;
+            public partial class Default
+            {
+                public Default()
+                {
+                    base.SaveButton.Click += Save_Click;
+                    Page.Load += Page_Load;
+                }
+
+                protected void Save_Click(object sender, EventArgs e) { }
+                protected void Page_Load(object sender, EventArgs e) { }
+            }
+
+            public sealed class Helper
+            {
+                public void Wire()
+                {
+                    SaveButton.Click += Helper_Click;
+                }
+
+                private object SaveButton { get; } = new object();
+                private void Helper_Click(object sender, EventArgs e) { }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsEventBindingDeclared
+            && fact.ContractElement == "Save_Click"
+            && fact.Properties.GetValueOrDefault("bindingKind") == "ExplicitControlSubscription");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsEventBindingDeclared
+            && fact.ContractElement == "Page_Load"
+            && fact.Properties.GetValueOrDefault("bindingKind") == "ExplicitLifecycleSubscription");
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsEventBindingDeclared
+            && fact.ContractElement == "Helper_Click");
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "AutoEventWireupUnavailable"
+            && fact.Properties.GetValueOrDefault("message")?.Contains("Page_Load", StringComparison.Ordinal) == true);
     }
 }

@@ -320,7 +320,7 @@ public static partial class LegacyWebFormsExtractor
                 {
                     if (SupportedEvents.Contains(name) && LooksLikeHandlerName(value))
                     {
-                        bindings.Add(new WebFormsBinding(controlType, controlId, name, SafeIdentifier(value)!, file.RelativePath, line, line, FactFactory.Hash(match.Value, 32), "MarkupAttribute"));
+                        bindings.Add(new WebFormsBinding(controlType, controlId, name, SafeIdentifier(value)!, file.RelativePath, line, line, FactFactory.Hash(match.Value, 32), WebFormsBindingKind.MarkupAttribute));
                     }
                     else if (name.StartsWith("On", StringComparison.OrdinalIgnoreCase)
                         && !SupportedEvents.Contains(name)
@@ -441,6 +441,7 @@ public static partial class LegacyWebFormsExtractor
     private static WebFormsEventSubscription ToEventSubscription(SyntaxTree tree, AssignmentExpressionSyntax assignment)
     {
         var span = tree.GetLineSpan(assignment.Span);
+        var containingTypeName = QualifiedClassName(assignment.Ancestors().OfType<ClassDeclarationSyntax>().FirstOrDefault());
         var (receiverName, eventName) = assignment.Left switch
         {
             MemberAccessExpressionSyntax memberAccess =>
@@ -456,6 +457,7 @@ public static partial class LegacyWebFormsExtractor
         };
         return new WebFormsEventSubscription(
             tree.FilePath,
+            containingTypeName,
             receiverName,
             eventName,
             handlerName,
@@ -471,6 +473,7 @@ public static partial class LegacyWebFormsExtractor
             ThisExpressionSyntax => "this",
             BaseExpressionSyntax => "base",
             MemberAccessExpressionSyntax { Expression: ThisExpressionSyntax, Name: IdentifierNameSyntax identifier } => identifier.Identifier.ValueText,
+            MemberAccessExpressionSyntax { Expression: BaseExpressionSyntax, Name: IdentifierNameSyntax identifier } => identifier.Identifier.ValueText,
             _ => null
         };
     }
@@ -494,7 +497,7 @@ public static partial class LegacyWebFormsExtractor
                     && PageTypeMatches(page.PageTypeName, method.PageTypeName));
             facts.Add(CreateGap(
                 manifest,
-                page.FilePath,
+                binding.FilePath,
                 binding.Line,
                 unprovenCrossFile ? "UnprovenCrossFileWebFormsHandler" : "MissingWebFormsHandler",
                 unprovenCrossFile
@@ -505,7 +508,7 @@ public static partial class LegacyWebFormsExtractor
 
         if (candidates.Length > 1)
         {
-            facts.Add(CreateGap(manifest, page.FilePath, binding.Line, "AmbiguousWebFormsHandler", $"Multiple linked code-behind methods matched handler `{binding.HandlerName}`; TraceMap did not choose one."));
+            facts.Add(CreateGap(manifest, binding.FilePath, binding.Line, "AmbiguousWebFormsHandler", $"Multiple linked code-behind methods matched handler `{binding.HandlerName}`; TraceMap did not choose one."));
             return;
         }
 
@@ -518,7 +521,7 @@ public static partial class LegacyWebFormsExtractor
             method,
             existingFacts,
             isAutoWireup: false,
-            hasExplicitSubscription: binding.BindingKind.StartsWith("Explicit", StringComparison.Ordinal)));
+            hasExplicitSubscription: IsExplicitBinding(binding.BindingKind)));
     }
 
     private static void AddAutoWireupFacts(
@@ -554,7 +557,7 @@ public static partial class LegacyWebFormsExtractor
                 continue;
             }
 
-            var syntheticBinding = new WebFormsBinding(page.DirectiveKind, page.PageTypeName, eventName, handlerName, page.FilePath, page.DirectiveLine, null, null, "AutoEventWireup");
+            var syntheticBinding = new WebFormsBinding(page.DirectiveKind, page.PageTypeName, eventName, handlerName, page.FilePath, page.DirectiveLine, null, null, WebFormsBindingKind.AutoEventWireup);
             var bindingFact = CreateEventBindingFact(manifest, page, syntheticBinding, null, ResolveHandlerIdentity(page, syntheticBinding, context, existingFacts));
             facts.Add(bindingFact);
             facts.Add(CreateHandlerFact(manifest, page, syntheticBinding, bindingFact, candidates[0], existingFacts, isAutoWireup: page.AutoEventWireup == true, hasExplicitSubscription));
@@ -613,6 +616,7 @@ public static partial class LegacyWebFormsExtractor
         var subscriptions = context.CodeFiles
             .Where(file => file.FilePath.Equals(page.LinkedCodePath, StringComparison.Ordinal))
             .SelectMany(file => file.Subscriptions)
+            .Where(subscription => PageTypeMatches(page.PageTypeName, subscription.ContainingTypeName))
             .ToArray();
         foreach (var subscription in subscriptions)
         {
@@ -622,7 +626,7 @@ public static partial class LegacyWebFormsExtractor
                 continue;
             }
 
-            if (subscription.ReceiverName is null or "this" or "base")
+            if (subscription.ReceiverName is null or "this" or "base" or "Page")
             {
                 var lifecycleEventName = "On" + subscription.EventName;
                 if (!SupportedEvents.Contains(lifecycleEventName))
@@ -639,7 +643,7 @@ public static partial class LegacyWebFormsExtractor
                     subscription.Line,
                     null,
                     subscription.SnippetHash,
-                    "ExplicitLifecycleSubscription");
+                    WebFormsBindingKind.ExplicitLifecycleSubscription);
                 var lifecycleBindingFact = CreateEventBindingFact(
                     manifest,
                     page,
@@ -684,7 +688,7 @@ public static partial class LegacyWebFormsExtractor
                 subscription.Line,
                 control.Line,
                 subscription.SnippetHash,
-                "ExplicitControlSubscription");
+                WebFormsBindingKind.ExplicitControlSubscription);
             var bindingFact = CreateEventBindingFact(manifest, page, binding, null, ResolveHandlerIdentity(page, binding, context, existingFacts));
             facts.Add(bindingFact);
             AddHandlerResolutionFacts(manifest, page, binding, bindingFact, context, existingFacts, facts);
@@ -919,7 +923,7 @@ public static partial class LegacyWebFormsExtractor
             : ControlIdentity(surfaceIdentity, control);
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
-            ["bindingKind"] = binding.BindingKind,
+            ["bindingKind"] = binding.BindingKind.ToString(),
             ["controlId"] = binding.ControlId,
             ["controlType"] = binding.ControlType,
             ["eventSourceIdentity"] = sourceIdentity,
@@ -939,7 +943,7 @@ public static partial class LegacyWebFormsExtractor
             manifest,
             FactTypes.WebFormsEventBindingDeclared,
             RuleIds.LegacyWebFormsEventBinding,
-            binding.BindingKind == "MarkupAttribute" ? EvidenceTiers.Tier2Structural : EvidenceTiers.Tier3SyntaxOrTextual,
+            binding.BindingKind == WebFormsBindingKind.MarkupAttribute ? EvidenceTiers.Tier2Structural : EvidenceTiers.Tier3SyntaxOrTextual,
             new EvidenceSpan(binding.FilePath, binding.Line, binding.Line, binding.SnippetHash, "LegacyWebFormsExtractor", ScannerVersions.LegacyWebFormsExtractor),
             sourceSymbol: sourceIdentity,
             targetSymbol: handlerIdentity,
@@ -1202,6 +1206,7 @@ public static partial class LegacyWebFormsExtractor
         return context.CodeFiles
             .Where(file => page.LinkedCodePath is null || file.FilePath.Equals(page.LinkedCodePath, StringComparison.Ordinal))
             .SelectMany(file => file.Subscriptions)
+            .Where(subscription => PageTypeMatches(page.PageTypeName, subscription.ContainingTypeName))
             .Any(subscription => EventSubscriptionMatches(subscription, eventMemberName, handlerName));
     }
 
@@ -1209,7 +1214,7 @@ public static partial class LegacyWebFormsExtractor
     {
         var left = subscription.EventName;
         var right = subscription.HandlerName;
-        if (right is null || subscription.ReceiverName is not (null or "this" or "base"))
+        if (right is null || subscription.ReceiverName is not (null or "this" or "base" or "Page"))
         {
             return false;
         }
@@ -1398,7 +1403,7 @@ public static partial class LegacyWebFormsExtractor
             return false;
         }
 
-        var marker = "." + methodName;
+        var marker = "." + methodName + "(";
         var markerIndex = sourceSymbol.LastIndexOf(marker, StringComparison.Ordinal);
         return markerIndex > 0 && PageTypeMatches(pageTypeName, sourceSymbol[..markerIndex]);
     }
@@ -1454,6 +1459,12 @@ public static partial class LegacyWebFormsExtractor
     {
         var location = filePath ?? page.LinkedCodePath ?? page.FilePath;
         return $"webforms-handler:{FactFactory.Hash($"{SurfaceIdentity(page.FilePath)}|{FileInventory.NormalizeRelativePath(location)}|{page.PageTypeName}|{handlerName}|{line?.ToString() ?? "unresolved"}", 24)}";
+    }
+
+    private static bool IsExplicitBinding(WebFormsBindingKind bindingKind)
+    {
+        return bindingKind is WebFormsBindingKind.ExplicitControlSubscription
+            or WebFormsBindingKind.ExplicitLifecycleSubscription;
     }
 
     private static string MarkupPathForDesigner(string designerPath)
@@ -1790,7 +1801,15 @@ public static partial class LegacyWebFormsExtractor
         int Line,
         int? ControlLine,
         string? SnippetHash,
-        string BindingKind);
+        WebFormsBindingKind BindingKind);
+
+    private enum WebFormsBindingKind
+    {
+        MarkupAttribute,
+        AutoEventWireup,
+        ExplicitLifecycleSubscription,
+        ExplicitControlSubscription
+    }
 
     private sealed record WebFormsGap(string GapKind, string Message, int Line);
 
@@ -1801,6 +1820,7 @@ public static partial class LegacyWebFormsExtractor
 
     private sealed record WebFormsEventSubscription(
         string FilePath,
+        string ContainingTypeName,
         string? ReceiverName,
         string EventName,
         string? HandlerName,
