@@ -35,6 +35,7 @@ public static class TraceMapCommand
             await output.WriteLineAsync(command switch
             {
                 "scan" => ScanHelp(),
+                "version" => VersionHelp(),
                 "report" => ReportHelp(),
                 "database-design-review" => DatabaseDesignReviewHelp(),
                 "webforms-modernization" => WebFormsModernizationHelp(),
@@ -64,7 +65,7 @@ public static class TraceMapCommand
                 "explorer" => ExplorerHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "report" or "database-design-review" or "webforms-modernization" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
+            return command is "scan" or "version" or "report" or "database-design-review" or "webforms-modernization" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
         }
 
         using var commandOperation = TraceMapDiagnostics.StartCommand(command);
@@ -73,6 +74,7 @@ public static class TraceMapCommand
             var exitCode = command switch
             {
                 "scan" => await RunScanAsync(rest, output, error, cancellationToken),
+                "version" => await RunVersionAsync(rest, output, error),
                 "report" => await RunReportAsync(rest, output, error, cancellationToken),
                 "database-design-review" => await RunDatabaseDesignReviewAsync(rest, output, error, cancellationToken),
                 "webforms-modernization" => await RunWebFormsModernizationAsync(rest, output, error, cancellationToken),
@@ -118,6 +120,32 @@ public static class TraceMapCommand
             await error.WriteLineAsync($"error: {ex.Message}");
             return 1;
         }
+    }
+
+    private static async Task<int> RunVersionAsync(string[] args, TextWriter output, TextWriter error)
+    {
+        var unknown = args.Where(argument => !string.Equals(argument, "--json", StringComparison.Ordinal)).ToArray();
+        if (unknown.Length > 0)
+        {
+            await error.WriteLineAsync($"error: unsupported version option(s): {string.Join(", ", unknown)}.");
+            return 1;
+        }
+
+        var result = TraceMapVersionInfo.Create();
+        if (args.Contains("--json", StringComparer.Ordinal))
+        {
+            await output.WriteLineAsync(JsonSerializer.Serialize(result, TraceMapVersionInfo.JsonOptions));
+            return 0;
+        }
+
+        await output.WriteLineAsync($"TraceMap {result.ToolVersion} ({result.DistributionKind})");
+        await output.WriteLineAsync($"Readiness: {result.Readiness.Outcome}");
+        if (!string.Equals(result.Readiness.NextAction, "none", StringComparison.Ordinal))
+        {
+            await output.WriteLineAsync($"Next action: {result.Readiness.NextAction}");
+        }
+
+        return 0;
     }
 
     private static async Task<int> RunReduceAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
@@ -2381,6 +2409,7 @@ public static class TraceMapCommand
             TraceMap deterministic C# repository indexer
 
             Usage:
+              tracemap version [--json]
               tracemap scan --repo <path> --out <path>
               tracemap report --index <path> --out <path>
               tracemap database-design-review --index <combined.sqlite> --out <path>
@@ -2409,6 +2438,7 @@ public static class TraceMapCommand
               tracemap explorer generate --input <artifact-dir> --out <explorer-output>
 
             Commands:
+              version   Show installed build identity and bounded local readiness.
               scan      Inventory a repository and emit TraceMap artifacts.
               report    Generate a combined dependency report from a combined index.
               database-design-review Compose existing PostgreSQL design, query, and route evidence.
@@ -2436,6 +2466,19 @@ public static class TraceMapCommand
               baseline Create, validate, and compare redacted legacy baseline summaries.
               evidence-pack Create, validate, and promote redacted legacy evidence packs.
               explorer Generate a local static HTML evidence explorer from existing TraceMap artifacts.
+            """;
+    }
+
+    private static string VersionHelp()
+    {
+        return """
+            Usage:
+              tracemap version [--json]
+
+            Reports schema-versioned build identity and bounded local readiness.
+            The JSON output omits executable paths, environment values, and raw diagnostics.
+            Git is required for authoritative repository identity. Missing MSBuild reduces
+            semantic coverage but does not prevent syntax and structural evidence.
             """;
     }
 

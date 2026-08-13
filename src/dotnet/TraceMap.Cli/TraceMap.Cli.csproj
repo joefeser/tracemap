@@ -15,6 +15,21 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <VersionPrefix>0.1.0</VersionPrefix>
+    <TraceMapDistributionKind Condition="'$(TraceMapDistributionKind)' == ''">source-build</TraceMapDistributionKind>
+    <IsPackable Condition="'$(TraceMapPackAsTool)' != 'true'">false</IsPackable>
+    <IsPackable Condition="'$(TraceMapPackAsTool)' == 'true'">true</IsPackable>
+    <PackAsTool Condition="'$(TraceMapPackAsTool)' == 'true'">true</PackAsTool>
+    <ToolCommandName Condition="'$(TraceMapPackAsTool)' == 'true'">tracemap</ToolCommandName>
+    <PackageId Condition="'$(TraceMapPackAsTool)' == 'true'">TraceMap.Tool</PackageId>
+    <PackageDescription Condition="'$(TraceMapPackAsTool)' == 'true'">Deterministic repository evidence scanner and review tooling.</PackageDescription>
+    <Authors Condition="'$(TraceMapPackAsTool)' == 'true'">TraceMap contributors</Authors>
+    <PackageLicenseExpression Condition="'$(TraceMapPackAsTool)' == 'true'">MIT</PackageLicenseExpression>
+    <RepositoryUrl Condition="'$(TraceMapPackAsTool)' == 'true'">https://github.com/joefeser/tracemap</RepositoryUrl>
   </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="TraceMapDistributionKind" Value="$(TraceMapDistributionKind)" />
+  </ItemGroup>
 
 </Project>

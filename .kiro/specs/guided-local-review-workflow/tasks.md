@@ -12,17 +12,17 @@
 ## Implementation Runway
 
 - [ ] 1. Validate distribution candidates. Requirements: 1, 8, 10.
-  - [ ] Add a committed candidate matrix with pass/fail evidence and explicit host claims.
+  - [x] Add a committed candidate matrix with pass/fail evidence and explicit host claims.
   - [ ] Build synthetic .NET tool, framework-dependent archive, self-contained archive, and offline/container probes where the host supports them.
   - [ ] Prove install/run/remove outside the source checkout.
   - [ ] Inspect package/archive contents and native dependencies.
   - [ ] Select one v1 distribution only after the gates pass; otherwise retain source-checkout runbooks.
 
-- [ ] 2. Add installed version/readiness output. Requirements: 2, 8, 9.
-  - [ ] Define and add the version JSON schema.
-  - [ ] Add bounded local capability detection and closed readiness states.
-  - [ ] Add concise human rendering from the structured result.
-  - [ ] Add deterministic and privacy tests.
+- [x] 2. Add installed version/readiness output. Requirements: 2, 8, 9.
+  - [x] Define and add the version JSON schema.
+  - [x] Add bounded local capability detection and closed readiness states.
+  - [x] Add concise human rendering from the structured result.
+  - [x] Add deterministic and privacy tests.
 
 - [ ] 3. Extract reusable command services. Requirements: 3, 9.
   - [ ] Identify the smallest service seams shared by standalone scan, Web Forms packet, and explorer commands.

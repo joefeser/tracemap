@@ -1,6 +1,6 @@
 # Guided Local Review Workflow Implementation State
 
-Status: spec-ready-local
+Status: implementation-in-progress
 Issue: #666
 Branch: `codex/spec-guided-local-workflow`
 Base: `origin/dev`
@@ -54,6 +54,19 @@ Completed on 2026-08-13:
 
 Publication remains intentionally pending until GitHub confirms that #656 / PR
 #674 is merged into `dev`, or the owner explicitly authorizes parallel review.
+
+The first implementation slice also completed a macOS arm64 candidate probe:
+
+- focused `TraceMapVersionTests`: 7/7 passed;
+- full .NET suite: 1,516/1,516 passed;
+- changed-file format verification, private-path guard, and `git diff --check`:
+  passed;
+- conditional .NET-tool pack/install/version/scan/uninstall: passed outside the
+  source checkout;
+- tool payload comparison: byte-identical across two builds;
+- outer NuGet package comparison: not byte-identical because NuGet generated
+  different relationship/core-property identifiers;
+- Windows, Linux, upgrade, and remaining distribution candidates: pending.
 
 ## Deferred Work
 
