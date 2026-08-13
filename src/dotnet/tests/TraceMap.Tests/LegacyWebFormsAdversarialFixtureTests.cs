@@ -100,6 +100,16 @@ public sealed class LegacyWebFormsAdversarialFixtureTests
     {
         using var temp = new TempDirectory();
         var repo = Path.Combine(temp.Path, "repo");
+        var shared = Path.Combine(repo, "Shared");
+        Directory.CreateDirectory(shared);
+        File.WriteAllText(Path.Combine(shared, "Default.Handlers.cs"), """
+            using System;
+            namespace Shared;
+            public partial class Default
+            {
+                protected void Save_Click(object sender, EventArgs e) { }
+            }
+            """);
         foreach (var projectName in new[] { "First", "Second" })
         {
             var project = Path.Combine(repo, projectName);
@@ -107,6 +117,9 @@ public sealed class LegacyWebFormsAdversarialFixtureTests
             File.WriteAllText(Path.Combine(project, $"{projectName}.csproj"), """
                 <Project Sdk="Microsoft.NET.Sdk">
                   <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+                  <ItemGroup>
+                    <Compile Include="..\Shared\Default.Handlers.cs" Link="Default.Handlers.cs" />
+                  </ItemGroup>
                 </Project>
                 """);
             File.WriteAllText(Path.Combine(project, "Default.aspx"), """
@@ -116,14 +129,6 @@ public sealed class LegacyWebFormsAdversarialFixtureTests
             File.WriteAllText(Path.Combine(project, "Default.aspx.cs"), """
                 namespace Shared;
                 public partial class Default { }
-                """);
-            File.WriteAllText(Path.Combine(project, "Default.Handlers.cs"), """
-                using System;
-                namespace Shared;
-                public partial class Default
-                {
-                    protected void Save_Click(object sender, EventArgs e) { }
-                }
                 """);
         }
         InitializeGit(repo);
