@@ -695,6 +695,18 @@ public static class WebFormsModernizationPacketReporter
                 if (!IsCommitSha(commit))
                     throw new InvalidDataException("WebFormsModernizationCommitIdentityUnavailable");
             }
+            await using (var identity = connection.CreateCommand())
+            {
+                identity.CommandText = """
+                    select count(*) from facts
+                    where scan_id <> $scan or repo <> $repo or commit_sha <> $commit;
+                    """;
+                identity.Parameters.AddWithValue("$scan", scanId);
+                identity.Parameters.AddWithValue("$repo", repository);
+                identity.Parameters.AddWithValue("$commit", commit);
+                if (Convert.ToInt64(await identity.ExecuteScalarAsync(cancellationToken)) != 0)
+                    throw new InvalidDataException("WebFormsModernizationSourceIdentityMismatch");
+            }
             var facts = new List<CodeFact>();
             await using (var command = connection.CreateCommand())
             {
@@ -786,17 +798,27 @@ public static class WebFormsModernizationPacketReporter
     private static string ProjectId(string? projectPath) => projectPath is null ? "project-unassigned" : HashId("project", [projectPath]);
     private static string? SafeIdentity(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Length <= 256 ? value : HashId("identity", [value]);
     private static string SafeKind(string? value, string fallback) => string.IsNullOrWhiteSpace(value) || value.Length > 96 ? fallback : value;
-    private static string SafeFilePath(string path) => Path.IsPathRooted(path) || path.Contains("..", StringComparison.Ordinal) ? "path-unavailable" : path.Replace('\\', '/');
+    private static string SafeFilePath(string path)
+    {
+        var normalized = path.Replace('\\', '/');
+        var isWindowsDrivePath = normalized.Length >= 3
+            && char.IsAsciiLetter(normalized[0])
+            && normalized[1] == ':'
+            && normalized[2] == '/';
+        var isUncPath = normalized.StartsWith("//", StringComparison.Ordinal);
+        return Path.IsPathRooted(path) || normalized.StartsWith("/", StringComparison.Ordinal)
+            || isWindowsDrivePath || isUncPath || normalized.Split('/').Contains("..", StringComparer.Ordinal)
+            ? "path-unavailable"
+            : normalized;
+    }
     private static string? EmptyToNull(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
     private static bool IsReducedCoverageLabel(string? value) => string.IsNullOrWhiteSpace(value)
         || value.Contains("reduced", StringComparison.OrdinalIgnoreCase)
         || value.Contains("partial", StringComparison.OrdinalIgnoreCase)
         || value.Contains("unknown", StringComparison.OrdinalIgnoreCase)
         || value.Contains("unavailable", StringComparison.OrdinalIgnoreCase);
-    private static bool IsReducedAnalysisLevel(string? value) => string.IsNullOrWhiteSpace(value)
-        || value.Contains("reduced", StringComparison.OrdinalIgnoreCase)
-        || value.Contains("partial", StringComparison.OrdinalIgnoreCase)
-        || value.Contains("failed", StringComparison.OrdinalIgnoreCase);
+    private static bool IsReducedAnalysisLevel(string? value) =>
+        !string.Equals(value, "Level1SemanticAnalysis", StringComparison.Ordinal);
     private static bool IsCommitSha(string? value) => value is { Length: 40 or 64 }
         && value.All(Uri.IsHexDigit);
     private static bool HasRequiredProvenance(CodeFact fact) =>
