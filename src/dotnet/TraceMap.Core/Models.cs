@@ -290,6 +290,8 @@ public static class FactTypes
     public const string RemotingConfigProviderDeclared = nameof(RemotingConfigProviderDeclared);
     public const string WebFormsPageDeclared = nameof(WebFormsPageDeclared);
     public const string WebFormsControlDeclared = nameof(WebFormsControlDeclared);
+    public const string WebFormsUserControlRegistered = nameof(WebFormsUserControlRegistered);
+    public const string WebFormsCompositionDeclared = nameof(WebFormsCompositionDeclared);
     public const string WebFormsEventBindingDeclared = nameof(WebFormsEventBindingDeclared);
     public const string WebFormsDesignerControlDeclared = nameof(WebFormsDesignerControlDeclared);
     public const string WebFormsHandlerResolved = nameof(WebFormsHandlerResolved);
@@ -444,6 +446,7 @@ public static class RuleIds
     public const string LegacyRemotingRegistration = "legacy.remoting.registration.v1";
     public const string LegacyRemotingConfig = "legacy.remoting.config.v1";
     public const string LegacyWebFormsInventory = "legacy.webforms.inventory.v1";
+    public const string LegacyWebFormsComposition = "legacy.webforms.composition.v1";
     public const string LegacyWebFormsEventBinding = "legacy.webforms.event-binding.v1";
     public const string LegacyWebFormsHandlerResolution = "legacy.webforms.handler-resolution.v1";
     public const string LegacyWebFormsDesignerControl = "legacy.webforms.designer-control.v1";
@@ -547,7 +550,7 @@ public static class ScannerVersions
     public const string LegacyWcfExtractor = "legacy-wcf/0.2.0";
     public const string LegacyAsmxExtractor = "legacy-asmx/0.1.0";
     public const string LegacyRemotingExtractor = "legacy-remoting/0.1.0";
-    public const string LegacyWebFormsExtractor = "legacy-webforms/0.1.0";
+    public const string LegacyWebFormsExtractor = "legacy-webforms/0.2.0";
     public const string LegacyWinFormsExtractor = "legacy-winforms/0.1.0";
     public const string LegacyAspNetExtractor = "legacy-aspnet/0.1.0";
     public const string LegacyDataExtractor = "legacy-data/0.1.0";
