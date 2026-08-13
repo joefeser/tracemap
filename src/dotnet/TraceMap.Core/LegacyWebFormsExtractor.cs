@@ -45,21 +45,34 @@ public static partial class LegacyWebFormsExtractor
         {
             var fact = CreateDesignerFact(manifest, designer);
             facts.Add(fact);
-            designerFactsByPageAndField[PageFieldKey(designer.PageTypeName, designer.FieldName)] = fact;
+            designerFactsByPageAndField[SurfaceFieldKey(designer.MarkupFilePath, designer.FieldName)] = fact;
         }
 
         foreach (var page in context.Pages)
         {
-            facts.Add(CreatePageFact(manifest, page));
+            var pageFact = CreatePageFact(manifest, page);
+            facts.Add(pageFact);
+            var registrationFacts = new List<CodeFact>();
+            foreach (var registration in page.Registrations.Where(item => item.SourcePath is not null))
+            {
+                var registrationFact = CreateUserControlRegistrationFact(manifest, page, registration);
+                facts.Add(registrationFact);
+                registrationFacts.Add(registrationFact);
+            }
+            var controlFacts = new List<CodeFact>();
             foreach (var control in page.Controls)
             {
-                var designerFact = designerFactsByPageAndField.GetValueOrDefault(PageFieldKey(page.PageTypeName, control.ControlId));
-                facts.Add(CreateControlFact(manifest, page, control, designerFact));
+                var designerFact = designerFactsByPageAndField.GetValueOrDefault(SurfaceFieldKey(page.FilePath, control.ControlId));
+                var controlFact = CreateControlFact(manifest, page, control, designerFact);
+                facts.Add(controlFact);
+                controlFacts.Add(controlFact);
             }
+
+            facts.AddRange(CreateCompositionFacts(manifest, page, pageFact, registrationFacts, controlFacts));
 
             foreach (var binding in page.Bindings)
             {
-                var designerFact = designerFactsByPageAndField.GetValueOrDefault(PageFieldKey(page.PageTypeName, binding.ControlId));
+                var designerFact = designerFactsByPageAndField.GetValueOrDefault(SurfaceFieldKey(page.FilePath, binding.ControlId));
                 var bindingFact = CreateEventBindingFact(manifest, page, binding, designerFact);
                 facts.Add(bindingFact);
                 AddHandlerResolutionFacts(manifest, page, binding, bindingFact, context, existingFacts, facts);
@@ -103,10 +116,14 @@ public static partial class LegacyWebFormsExtractor
 
     private static WebFormsContext BuildContext(string repoPath, IReadOnlyList<FileInventoryItem> inventory)
     {
+        var inventoryPaths = inventory
+            .Select(item => item.RelativePath)
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
         var pages = inventory
             .Where(item => item.Kind == "WebFormsMarkup")
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
-            .Select(item => ParseMarkupFile(repoPath, item))
+            .Select(item => ParseMarkupFile(repoPath, item, inventoryPaths))
             .ToArray();
         var linkedPaths = pages
             .Select(page => page.LinkedCodePath)
@@ -124,7 +141,7 @@ public static partial class LegacyWebFormsExtractor
         var allDesigners = inventory
             .Where(item => item.Kind == "WebFormsDesigner")
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
-            .SelectMany(item => ParseDesignerFile(repoPath, item.RelativePath))
+            .SelectMany(item => ParseDesignerFile(repoPath, item.RelativePath, MarkupPathForDesigner(item.RelativePath)))
             .ToArray();
         var designers = allDesigners
             .Where(field => pages.Any(page => PageTypeMatches(page.PageTypeName, field.PageTypeName)))
@@ -136,45 +153,110 @@ public static partial class LegacyWebFormsExtractor
         return new WebFormsContext(pages, codeFiles, designers);
     }
 
-    private static WebFormsPage ParseMarkupFile(string repoPath, FileInventoryItem file)
+    private static WebFormsPage ParseMarkupFile(
+        string repoPath,
+        FileInventoryItem file,
+        IReadOnlyList<string> inventoryPaths)
     {
         var fullPath = Path.Combine(repoPath, file.RelativePath);
         try
         {
             var text = File.ReadAllText(fullPath);
             var source = SourceText.From(text);
-            var directive = DirectiveRegex().Match(text);
+            var activeMarkup = MaskServerComments(text);
+            var directive = DirectiveRegex().Match(activeMarkup);
             var directiveAttributes = !directive.Success
                 ? new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 : ParseAttributes(directive.Groups["attrs"].Value);
             var directiveKind = directive.Success ? directive.Groups["kind"].Value : MarkupKind(file.RelativePath);
-            var pageTypeName = SafeIdentifier(directiveAttributes.GetValueOrDefault("Inherits"))
+            var declaredPageTypeName = SafeIdentifier(directiveAttributes.GetValueOrDefault("Inherits"));
+            var pageTypeName = declaredPageTypeName
                 ?? SafeIdentifier(Path.GetFileNameWithoutExtension(file.RelativePath))
                 ?? "unknown";
             var codeBehind = SafeMarkupPath(directiveAttributes.GetValueOrDefault("CodeBehind"));
             var codeFile = SafeMarkupPath(directiveAttributes.GetValueOrDefault("CodeFile"));
-            var linkedCodePath = ResolveLinkedCodePath(file.RelativePath, codeBehind ?? codeFile);
+            var linkedCodeReference = ResolveLinkedCodePath(file.RelativePath, codeBehind ?? codeFile);
+            var linkedCodePath = ResolveInventoryPath(linkedCodeReference, inventoryPaths);
             var autoEventWireup = ParseAutoEventWireup(directiveAttributes.GetValueOrDefault("AutoEventWireup"));
+            var masterPageValue = directiveAttributes.GetValueOrDefault("MasterPageFile");
+            var masterPageReference = ResolveMarkupReferencePath(file.RelativePath, masterPageValue);
+            var masterPageFile = ResolveInventoryPath(masterPageReference, inventoryPaths);
+            var titleValue = directiveAttributes.GetValueOrDefault("Title");
+            var titleHash = SafeDisplayMetadata(titleValue);
+            var registrations = ParseUserControlRegistrations(file.RelativePath, activeMarkup, source, inventoryPaths);
+            var initialGaps = new List<WebFormsGap>();
+            if (!directive.Success)
+            {
+                initialGaps.Add(new WebFormsGap("MalformedWebFormsDirective", "Unable to parse a WebForms page/control/master directive.", 1));
+            }
+            else if (declaredPageTypeName is null)
+            {
+                initialGaps.Add(new WebFormsGap("UnresolvedWebFormsPageType", "The WebForms directive does not contain a supported static Inherits type.", LineAt(source, directive.Index)));
+            }
+
+            if (!string.IsNullOrWhiteSpace(titleValue) && titleHash is null)
+            {
+                initialGaps.Add(new WebFormsGap("UnsupportedWebFormsTitle", "The page title uses an unsupported dynamic or unsafe shape and was omitted.", LineAt(source, directive.Index)));
+            }
+
+            if ((codeBehind is not null || codeFile is not null) && linkedCodePath is null)
+            {
+                initialGaps.Add(new WebFormsGap("MissingWebFormsCodeBehind", "The declared code-behind file is not present in the scan input.", LineAt(source, directive.Index)));
+            }
+
+            if (!string.IsNullOrWhiteSpace(masterPageValue) && masterPageReference is null)
+            {
+                initialGaps.Add(new WebFormsGap("UnsupportedWebFormsMasterPageReference", "The MasterPageFile value is not a supported static repository-relative path.", LineAt(source, directive.Index)));
+            }
+            else if (masterPageReference is not null && masterPageFile is null)
+            {
+                initialGaps.Add(new WebFormsGap("MissingWebFormsMasterPage", "The declared master page is not present in the scan input.", LineAt(source, directive.Index)));
+            }
+
+            foreach (var registration in registrations.Where(item => item.SourceReference is null))
+            {
+                initialGaps.Add(new WebFormsGap("UnsupportedWebFormsUserControlRegistration", "A user-control registration does not contain a supported repository-relative Src path.", registration.Line));
+            }
+
+            foreach (var registration in registrations.Where(item => item.SourceReference is not null
+                && item.SourcePath is null))
+            {
+                initialGaps.Add(new WebFormsGap("MissingWebFormsUserControl", "The registered user-control source is not present in the scan input.", registration.Line));
+            }
+
             var page = new WebFormsPage(
                 file.RelativePath,
                 directiveKind,
                 pageTypeName,
                 codeBehind,
                 codeFile,
-                SafeMarkupPath(directiveAttributes.GetValueOrDefault("MasterPageFile")),
+                masterPageFile,
                 linkedCodePath,
                 autoEventWireup,
+                titleHash,
                 directive.Success ? LineAt(source, directive.Index) : 1,
+                registrations,
                 [],
                 [],
-                !directive.Success
-                    ? [new WebFormsGap("MalformedWebFormsDirective", "Unable to parse a WebForms page/control/master directive.", 1)]
-                    : []);
+                initialGaps);
 
             var controls = new List<WebFormsControl>();
             var bindings = new List<WebFormsBinding>();
             var gaps = page.Gaps.ToList();
-            foreach (Match match in ServerControlRegex().Matches(text))
+            var duplicateRegistrationKeys = registrations
+                .GroupBy(item => RegistrationKey(item.TagPrefix, item.TagName), StringComparer.OrdinalIgnoreCase)
+                .Where(group => group
+                    .Select(item => item.SourceReference ?? $"unsupported@{item.Line}")
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Count() > 1)
+                .Select(group => group.Key)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var duplicate in registrations.Where(item => duplicateRegistrationKeys.Contains(RegistrationKey(item.TagPrefix, item.TagName))))
+            {
+                gaps.Add(new WebFormsGap("AmbiguousWebFormsUserControlRegistration", "Multiple user-control registrations map the same tag to different static sources; TraceMap did not choose one.", duplicate.Line));
+            }
+
+            foreach (Match match in ServerControlRegex().Matches(activeMarkup))
             {
                 var attrs = ParseAttributes(match.Groups["attrs"].Value);
                 if (!IsServerControl(attrs))
@@ -183,9 +265,42 @@ public static partial class LegacyWebFormsExtractor
                 }
 
                 var line = LineAt(source, match.Index);
+                var controlPrefix = SafeIdentifier(match.Groups["prefix"].Value) ?? "unknown";
                 var controlType = SafeIdentifier(match.Groups["type"].Value) ?? "unknown";
                 var controlId = SafeIdentifier(attrs.GetValueOrDefault("ID")) ?? $"{controlType}@{line}";
-                controls.Add(new WebFormsControl(controlType, controlId, line, FactFactory.Hash(match.Value, 32)));
+                var registrationKey = RegistrationKey(controlPrefix, controlType);
+                var registration = duplicateRegistrationKeys.Contains(registrationKey)
+                    ? null
+                    : registrations.FirstOrDefault(item =>
+                    item.TagPrefix.Equals(controlPrefix, StringComparison.OrdinalIgnoreCase)
+                    && item.TagName.Equals(controlType, StringComparison.OrdinalIgnoreCase)
+                    && item.SourcePath is not null);
+                controls.Add(new WebFormsControl(
+                    controlPrefix,
+                    controlType,
+                    controlId,
+                    ClassifyControl(controlType, registration is not null),
+                    registration?.SourcePath,
+                    SafeIdentifier(attrs.GetValueOrDefault("CommandName")),
+                    SafeIdentifier(attrs.GetValueOrDefault("ContentPlaceHolderID")),
+                    line,
+                    FactFactory.Hash(match.Value, 32)));
+                if (controlType.Equals("Content", StringComparison.OrdinalIgnoreCase)
+                    && SafeIdentifier(attrs.GetValueOrDefault("ContentPlaceHolderID")) is null)
+                {
+                    gaps.Add(new WebFormsGap("UnresolvedWebFormsContentPlaceholder", "A Content control does not declare a supported static ContentPlaceHolderID.", line));
+                }
+                else if (controlType.Equals("Content", StringComparison.OrdinalIgnoreCase)
+                    && masterPageFile is null)
+                {
+                    gaps.Add(new WebFormsGap("UnresolvedWebFormsContentMaster", "A Content control declares a placeholder target, but no supported static master-page reference is available.", line));
+                }
+                if (registration is null
+                    && !controlPrefix.Equals("asp", StringComparison.OrdinalIgnoreCase)
+                    && !controlPrefix.Equals("html", StringComparison.OrdinalIgnoreCase))
+                {
+                    gaps.Add(new WebFormsGap("UnresolvedWebFormsControlRegistration", "A prefixed server control has no supported static Register directive in this markup file.", line));
+                }
                 foreach (var (name, value) in attrs.OrderBy(pair => pair.Key, StringComparer.Ordinal))
                 {
                     if (SupportedEvents.Contains(name) && LooksLikeHandlerName(value))
@@ -210,7 +325,7 @@ public static partial class LegacyWebFormsExtractor
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return new WebFormsPage(file.RelativePath, MarkupKind(file.RelativePath), Path.GetFileNameWithoutExtension(file.RelativePath), null, null, null, ResolveLinkedCodePath(file.RelativePath, null), null, 1, [], [], [new WebFormsGap("UnreadableWebFormsMarkup", "Unable to read WebForms markup for extraction.", 1)]);
+            return new WebFormsPage(file.RelativePath, MarkupKind(file.RelativePath), Path.GetFileNameWithoutExtension(file.RelativePath), null, null, null, ResolveLinkedCodePath(file.RelativePath, null), null, null, 1, [], [], [], [new WebFormsGap("UnreadableWebFormsMarkup", "Unable to read WebForms markup for extraction.", 1)]);
         }
     }
 
@@ -242,7 +357,7 @@ public static partial class LegacyWebFormsExtractor
         }
     }
 
-    private static IReadOnlyList<WebFormsDesignerField> ParseDesignerFile(string repoPath, string relativePath)
+    private static IReadOnlyList<WebFormsDesignerField> ParseDesignerFile(string repoPath, string relativePath, string markupFilePath)
     {
         try
         {
@@ -266,6 +381,7 @@ public static partial class LegacyWebFormsExtractor
                 var span = tree.GetLineSpan(variable.Span);
                 fields.Add(new WebFormsDesignerField(
                     relativePath,
+                    markupFilePath,
                     QualifiedClassName(containingClass),
                     variable.Identifier.ValueText,
                     fieldDeclaration.Declaration.Type.ToString(),
@@ -377,7 +493,7 @@ public static partial class LegacyWebFormsExtractor
                     ["handlerName"] = handlerName,
                     ["pageTypeName"] = page.PageTypeName,
                     ["ruleLimitations"] = "Static auto-event-wireup evidence does not prove page lifecycle execution."
-            });
+                });
             facts.Add(bindingFact);
             facts.Add(CreateHandlerFact(manifest, page, syntheticBinding, bindingFact, candidates[0], existingFacts, isAutoWireup: page.AutoEventWireup == true, hasExplicitSubscription));
         }
@@ -398,16 +514,24 @@ public static partial class LegacyWebFormsExtractor
 
     private static CodeFact CreatePageFact(ScanManifest manifest, WebFormsPage page)
     {
+        var surfaceIdentity = SurfaceIdentity(page.FilePath);
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
+            ["coverageLabel"] = "bounded-static-webforms-inventory",
             ["directiveKind"] = page.DirectiveKind,
             ["pageTypeName"] = page.PageTypeName,
+            ["surfaceIdentity"] = surfaceIdentity,
             ["ruleLimitations"] = "WebForms file inventory is static evidence and does not prove runtime page activation."
         };
         AddOptional(properties, "codeBehindPath", page.CodeBehindPath);
         AddOptional(properties, "codeFilePath", page.CodeFilePath);
         AddOptional(properties, "linkedCodePath", page.LinkedCodePath);
         AddOptional(properties, "masterPageFile", page.MasterPageFile);
+        AddOptional(properties, "titleHash", page.TitleHash);
+        if (page.TitleHash is not null)
+        {
+            properties["titlePresent"] = "True";
+        }
         if (page.AutoEventWireup is not null)
         {
             properties["autoEventWireup"] = page.AutoEventWireup.Value.ToString();
@@ -419,6 +543,7 @@ public static partial class LegacyWebFormsExtractor
             RuleIds.LegacyWebFormsInventory,
             EvidenceTiers.Tier2Structural,
             new EvidenceSpan(page.FilePath, page.DirectiveLine, page.DirectiveLine, null, "LegacyWebFormsExtractor", ScannerVersions.LegacyWebFormsExtractor),
+            sourceSymbol: surfaceIdentity,
             targetSymbol: page.PageTypeName,
             contractElement: Path.GetFileName(page.FilePath),
             properties: properties);
@@ -426,23 +551,155 @@ public static partial class LegacyWebFormsExtractor
 
     private static CodeFact CreateControlFact(ScanManifest manifest, WebFormsPage page, WebFormsControl control, CodeFact? designerFact)
     {
+        var surfaceIdentity = SurfaceIdentity(page.FilePath);
+        var controlIdentity = $"webforms-control:{FactFactory.Hash($"{surfaceIdentity}|{control.ControlId}|{control.Line}", 24)}";
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
+            ["coverageLabel"] = "bounded-static-webforms-inventory",
+            ["controlCategory"] = control.ControlCategory,
             ["controlId"] = control.ControlId,
+            ["controlIdentity"] = controlIdentity,
+            ["controlPrefix"] = control.ControlPrefix,
             ["controlType"] = control.ControlType,
             ["pageTypeName"] = page.PageTypeName,
+            ["surfaceIdentity"] = surfaceIdentity,
             ["ruleLimitations"] = "Markup controls are static declarations and do not prove runtime control tree construction."
         };
         AddOptional(properties, "designerFactId", designerFact?.FactId);
+        AddOptional(properties, "registeredSourcePath", control.RegisteredSourcePath);
+        AddOptional(properties, "commandName", control.CommandName);
+        AddOptional(properties, "contentPlaceHolderId", control.ContentPlaceHolderId);
         return FactFactory.Create(
             manifest,
             FactTypes.WebFormsControlDeclared,
             RuleIds.LegacyWebFormsInventory,
             EvidenceTiers.Tier2Structural,
             new EvidenceSpan(page.FilePath, control.Line, control.Line, control.SnippetHash, "LegacyWebFormsExtractor", ScannerVersions.LegacyWebFormsExtractor),
-            targetSymbol: control.ControlId,
+            sourceSymbol: surfaceIdentity,
+            targetSymbol: controlIdentity,
             contractElement: control.ControlType,
             properties: properties);
+    }
+
+    private static CodeFact CreateUserControlRegistrationFact(ScanManifest manifest, WebFormsPage page, WebFormsUserControlRegistration registration)
+    {
+        var surfaceIdentity = SurfaceIdentity(page.FilePath);
+        var registrationIdentity = $"webforms-registration:{FactFactory.Hash($"{surfaceIdentity}|{registration.TagPrefix}|{registration.TagName}|{registration.Line}", 24)}";
+        var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["coverageLabel"] = registration.SourcePath is null ? "reduced-static-webforms-composition" : "bounded-static-webforms-composition",
+            ["registrationIdentity"] = registrationIdentity,
+            ["surfaceIdentity"] = surfaceIdentity,
+            ["tagName"] = registration.TagName,
+            ["tagPrefix"] = registration.TagPrefix,
+            ["ruleLimitations"] = "A static Register directive does not prove runtime loading, control construction, or use by a rendered page."
+        };
+        AddOptional(properties, "sourcePath", registration.SourcePath);
+        return FactFactory.Create(
+            manifest,
+            FactTypes.WebFormsUserControlRegistered,
+            RuleIds.LegacyWebFormsInventory,
+            registration.SourcePath is null ? EvidenceTiers.Tier4Unknown : EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(page.FilePath, registration.Line, registration.Line, registration.SnippetHash, "LegacyWebFormsExtractor", ScannerVersions.LegacyWebFormsExtractor),
+            sourceSymbol: surfaceIdentity,
+            targetSymbol: registrationIdentity,
+            contractElement: $"{registration.TagPrefix}:{registration.TagName}",
+            properties: properties);
+    }
+
+    private static IReadOnlyList<CodeFact> CreateCompositionFacts(
+        ScanManifest manifest,
+        WebFormsPage page,
+        CodeFact pageFact,
+        IReadOnlyList<CodeFact> registrationFacts,
+        IReadOnlyList<CodeFact> controlFacts)
+    {
+        var facts = new List<CodeFact>();
+        var sourceSurfaceIdentity = SurfaceIdentity(page.FilePath);
+        if (page.MasterPageFile is not null)
+        {
+            facts.Add(CreateCompositionFact(
+                manifest,
+                page.FilePath,
+                page.DirectiveLine,
+                "UsesMasterPage",
+                sourceSurfaceIdentity,
+                SurfaceIdentity(page.MasterPageFile),
+                page.MasterPageFile,
+                [pageFact.FactId]));
+        }
+
+        foreach (var controlFact in controlFacts)
+        {
+            var controlCategory = controlFact.Properties.GetValueOrDefault("controlCategory");
+            if (controlCategory == "RegisteredUserControl"
+                && controlFact.Properties.GetValueOrDefault("registeredSourcePath") is { } registeredSourcePath)
+            {
+                var matchingRegistration = registrationFacts.FirstOrDefault(fact =>
+                    fact.Properties.GetValueOrDefault("sourcePath") == registeredSourcePath
+                    && string.Equals(fact.Properties.GetValueOrDefault("tagPrefix"), controlFact.Properties.GetValueOrDefault("controlPrefix"), StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(fact.Properties.GetValueOrDefault("tagName"), controlFact.Properties.GetValueOrDefault("controlType"), StringComparison.OrdinalIgnoreCase));
+                facts.Add(CreateCompositionFact(
+                    manifest,
+                    controlFact.Evidence.FilePath,
+                    controlFact.Evidence.StartLine,
+                    "UsesRegisteredUserControl",
+                    controlFact.TargetSymbol ?? sourceSurfaceIdentity,
+                    SurfaceIdentity(registeredSourcePath),
+                    registeredSourcePath,
+                    new[] { controlFact.FactId, matchingRegistration?.FactId }
+                        .Where(value => value is not null)
+                        .Select(value => value!)
+                        .ToArray()));
+            }
+
+            if (controlCategory == "MasterContent"
+                && page.MasterPageFile is not null
+                && controlFact.Properties.GetValueOrDefault("contentPlaceHolderId") is { } contentPlaceHolderId)
+            {
+                var targetIdentity = $"webforms-placeholder:{FactFactory.Hash($"{SurfaceIdentity(page.MasterPageFile)}|{contentPlaceHolderId}", 24)}";
+                facts.Add(CreateCompositionFact(
+                    manifest,
+                    controlFact.Evidence.FilePath,
+                    controlFact.Evidence.StartLine,
+                    "FillsMasterPlaceholder",
+                    controlFact.TargetSymbol ?? sourceSurfaceIdentity,
+                    targetIdentity,
+                    page.MasterPageFile,
+                    [pageFact.FactId, controlFact.FactId]));
+            }
+        }
+
+        return facts;
+    }
+
+    private static CodeFact CreateCompositionFact(
+        ScanManifest manifest,
+        string filePath,
+        int line,
+        string relationshipKind,
+        string sourceIdentity,
+        string targetIdentity,
+        string targetFilePath,
+        IReadOnlyList<string> supportingFactIds)
+    {
+        return FactFactory.Create(
+            manifest,
+            FactTypes.WebFormsCompositionDeclared,
+            RuleIds.LegacyWebFormsComposition,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan(filePath, line, line, null, "LegacyWebFormsExtractor", ScannerVersions.LegacyWebFormsExtractor),
+            sourceSymbol: sourceIdentity,
+            targetSymbol: targetIdentity,
+            contractElement: relationshipKind,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["coverageLabel"] = "bounded-static-webforms-composition",
+                ["relationshipKind"] = relationshipKind,
+                ["supportingFactIds"] = string.Join(",", supportingFactIds.OrderBy(value => value, StringComparer.Ordinal)),
+                ["targetFilePath"] = targetFilePath,
+                ["ruleLimitations"] = "Static WebForms composition evidence does not prove runtime loading, rendering, control construction, or navigation."
+            });
     }
 
     private static CodeFact CreateEventBindingFact(ScanManifest manifest, WebFormsPage page, WebFormsBinding binding, CodeFact? designerFact)
@@ -771,6 +1028,7 @@ public static partial class LegacyWebFormsExtractor
             new EvidenceSpan(filePath, line, line, null, "LegacyWebFormsExtractor", ScannerVersions.LegacyWebFormsExtractor),
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
+                ["coverageLabel"] = "reduced-static-webforms-evidence",
                 ["gapKind"] = gapKind,
                 ["message"] = message,
                 ["ruleLimitations"] = "WebForms gaps preserve reduced static evidence and are not proof of absence."
@@ -781,7 +1039,12 @@ public static partial class LegacyWebFormsExtractor
     {
         return gapKind switch
         {
-            "MalformedWebFormsDirective" => RuleIds.LegacyWebFormsInventory,
+            "MalformedWebFormsDirective" or "UnreadableWebFormsMarkup" or "UnresolvedWebFormsPageType"
+                or "MissingWebFormsCodeBehind" or "UnsupportedWebFormsTitle" => RuleIds.LegacyWebFormsInventory,
+            "UnsupportedWebFormsMasterPageReference" or "MissingWebFormsMasterPage"
+                or "UnsupportedWebFormsUserControlRegistration" or "MissingWebFormsUserControl"
+                or "UnresolvedWebFormsContentPlaceholder" or "UnresolvedWebFormsContentMaster"
+                or "UnresolvedWebFormsControlRegistration" or "AmbiguousWebFormsUserControlRegistration" => RuleIds.LegacyWebFormsComposition,
             "UnsupportedWebFormsEventAttribute" => RuleIds.LegacyWebFormsEventBinding,
             _ => RuleIds.LegacyWebFormsHandlerResolution
         };
@@ -917,9 +1180,151 @@ public static partial class LegacyWebFormsExtractor
         return string.Join(".", names);
     }
 
-    private static string PageFieldKey(string pageTypeName, string fieldName)
+    private static string SurfaceFieldKey(string markupFilePath, string fieldName)
     {
-        return $"{pageTypeName}|{fieldName}";
+        return $"{SurfaceIdentity(markupFilePath)}|{fieldName}";
+    }
+
+    private static string SurfaceIdentity(string markupFilePath)
+    {
+        return $"webforms-surface:{FactFactory.Hash(FileInventory.NormalizeRelativePath(markupFilePath), 24)}";
+    }
+
+    private static string MarkupPathForDesigner(string designerPath)
+    {
+        const string suffix = ".designer.cs";
+        return designerPath.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
+            ? designerPath[..^suffix.Length]
+            : designerPath;
+    }
+
+    private static IReadOnlyList<WebFormsUserControlRegistration> ParseUserControlRegistrations(
+        string markupFilePath,
+        string text,
+        SourceText source,
+        IReadOnlyList<string> inventoryPaths)
+    {
+        return RegisterDirectiveRegex()
+            .Matches(text)
+            .Cast<Match>()
+            .Select(match =>
+            {
+                var attributes = ParseAttributes(match.Groups["attrs"].Value);
+                var sourceReference = ResolveMarkupReferencePath(markupFilePath, attributes.GetValueOrDefault("Src"));
+                return new WebFormsUserControlRegistration(
+                    SafeIdentifier(attributes.GetValueOrDefault("TagPrefix")) ?? "unknown",
+                    SafeIdentifier(attributes.GetValueOrDefault("TagName")) ?? "unknown",
+                    sourceReference,
+                    ResolveInventoryPath(sourceReference, inventoryPaths),
+                    LineAt(source, match.Index),
+                    FactFactory.Hash(match.Value, 32));
+            })
+            .OrderBy(item => item.Line)
+            .ThenBy(item => item.TagPrefix, StringComparer.Ordinal)
+            .ThenBy(item => item.TagName, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static string MaskServerComments(string text)
+    {
+        return ServerCommentRegex().Replace(text, match =>
+            new string(match.Value.Select(character => character is '\r' or '\n' ? character : ' ').ToArray()));
+    }
+
+    private static string? ResolveInventoryPath(string? referencePath, IReadOnlyList<string> inventoryPaths)
+    {
+        if (referencePath is null)
+        {
+            return null;
+        }
+
+        var exact = inventoryPaths.FirstOrDefault(path => path.Equals(referencePath, StringComparison.Ordinal));
+        if (exact is not null)
+        {
+            return exact;
+        }
+
+        var caseInsensitive = inventoryPaths
+            .Where(path => path.Equals(referencePath, StringComparison.OrdinalIgnoreCase))
+            .Take(2)
+            .ToArray();
+        return caseInsensitive.Length == 1 ? caseInsensitive[0] : null;
+    }
+
+    private static string RegistrationKey(string tagPrefix, string tagName)
+    {
+        return $"{tagPrefix}|{tagName}";
+    }
+
+    private static string? ResolveMarkupReferencePath(string markupPath, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim().Replace('\\', '/');
+        var rootedAtScan = trimmed.StartsWith("~/", StringComparison.Ordinal);
+        var safePath = SafeMarkupPath(trimmed);
+        if (safePath is null)
+        {
+            return null;
+        }
+
+        if (rootedAtScan)
+        {
+            return safePath;
+        }
+
+        var directory = FileInventory.NormalizeRelativePath(Path.GetDirectoryName(markupPath) ?? ".");
+        var combined = directory is "." ? safePath : $"{directory}/{safePath}";
+        return FileInventory.NormalizeRelativePath(combined);
+    }
+
+    private static string? SafeDisplayMetadata(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+        return trimmed.Contains("<%", StringComparison.Ordinal)
+            || trimmed.Contains("%>", StringComparison.Ordinal)
+            || trimmed.Contains('$', StringComparison.Ordinal)
+            ? null
+            : FactFactory.Hash(trimmed, 32);
+    }
+
+    private static string ClassifyControl(string controlType, bool isRegisteredUserControl)
+    {
+        if (isRegisteredUserControl)
+        {
+            return "RegisteredUserControl";
+        }
+
+        if (controlType.Equals("Content", StringComparison.OrdinalIgnoreCase))
+        {
+            return "MasterContent";
+        }
+
+        if (controlType.Equals("ContentPlaceHolder", StringComparison.OrdinalIgnoreCase))
+        {
+            return "MasterPlaceholder";
+        }
+
+        if (controlType.EndsWith("Validator", StringComparison.OrdinalIgnoreCase)
+            || controlType.Equals("ValidationSummary", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Validator";
+        }
+
+        if (controlType.EndsWith("DataSource", StringComparison.OrdinalIgnoreCase))
+        {
+            return "DataSource";
+        }
+
+        return "ServerControl";
     }
 
     private static void AddOptional(IDictionary<string, string> properties, string key, string? value)
@@ -998,6 +1403,12 @@ public static partial class LegacyWebFormsExtractor
     [GeneratedRegex(@"<%@\s*(?<kind>Page|Control|Master)\b(?<attrs>.*?)%>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex DirectiveRegex();
 
+    [GeneratedRegex(@"<%@\s*Register\b(?<attrs>.*?)%>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    private static partial Regex RegisterDirectiveRegex();
+
+    [GeneratedRegex(@"<%--.*?--%>", RegexOptions.Singleline)]
+    private static partial Regex ServerCommentRegex();
+
     [GeneratedRegex(@"<(?<prefix>[A-Za-z][\w.-]*):(?<type>[A-Za-z][\w.-]*)\b(?<attrs>[^>]*)>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex ServerControlRegex();
 
@@ -1021,12 +1432,31 @@ public static partial class LegacyWebFormsExtractor
         string? MasterPageFile,
         string? LinkedCodePath,
         bool? AutoEventWireup,
+        string? TitleHash,
         int DirectiveLine,
+        IReadOnlyList<WebFormsUserControlRegistration> Registrations,
         IReadOnlyList<WebFormsControl> Controls,
         IReadOnlyList<WebFormsBinding> Bindings,
         IReadOnlyList<WebFormsGap> Gaps);
 
-    private sealed record WebFormsControl(string ControlType, string ControlId, int Line, string? SnippetHash);
+    private sealed record WebFormsControl(
+        string ControlPrefix,
+        string ControlType,
+        string ControlId,
+        string ControlCategory,
+        string? RegisteredSourcePath,
+        string? CommandName,
+        string? ContentPlaceHolderId,
+        int Line,
+        string? SnippetHash);
+
+    private sealed record WebFormsUserControlRegistration(
+        string TagPrefix,
+        string TagName,
+        string? SourceReference,
+        string? SourcePath,
+        int Line,
+        string? SnippetHash);
 
     private sealed record WebFormsBinding(string ControlType, string ControlId, string EventName, string HandlerName, int Line, string? SnippetHash);
 
@@ -1050,6 +1480,7 @@ public static partial class LegacyWebFormsExtractor
 
     private sealed record WebFormsDesignerField(
         string FilePath,
+        string MarkupFilePath,
         string PageTypeName,
         string FieldName,
         string ControlType,
