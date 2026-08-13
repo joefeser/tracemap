@@ -47,16 +47,33 @@
       <Output TaskParameter="ExitCode" PropertyName="TraceMapGitStatusExitCode" />
       <Output TaskParameter="ConsoleOutput" ItemName="TraceMapGitStatusLines" />
     </Exec>
+    <Exec Command="git rev-parse HEAD"
+          WorkingDirectory="$(MSBuildProjectDirectory)/../../.."
+          ConsoleToMSBuild="true"
+          StandardOutputImportance="Low"
+          StandardErrorImportance="Low"
+          IgnoreExitCode="true">
+      <Output TaskParameter="ExitCode" PropertyName="TraceMapGitHeadExitCode" />
+      <Output TaskParameter="ConsoleOutput" ItemName="TraceMapGitHeadLines" />
+    </Exec>
     <PropertyGroup>
       <TraceMapSourceState Condition="'$(TraceMapGitStatusExitCode)' != '0'">unavailable</TraceMapSourceState>
       <TraceMapSourceState Condition="'$(TraceMapGitStatusExitCode)' == '0' and '@(TraceMapGitStatusLines)' == ''">clean</TraceMapSourceState>
       <TraceMapSourceState Condition="'$(TraceMapGitStatusExitCode)' == '0' and '@(TraceMapGitStatusLines)' != ''">dirty</TraceMapSourceState>
+      <TraceMapSourceCommit Condition="'$(TraceMapGitHeadExitCode)' == '0'">@(TraceMapGitHeadLines)</TraceMapSourceCommit>
+      <TraceMapSourceCommit Condition="'$(TraceMapSourceCommit)' == ''">unavailable</TraceMapSourceCommit>
     </PropertyGroup>
     <Error Condition="'$(TraceMapPackAsTool)' == 'true' and '$(TraceMapSourceState)' != 'clean'"
            Text="TraceMapToolPackageRequiresCleanSource" />
+    <Error Condition="'$(TraceMapPackAsTool)' == 'true' and '$(TraceMapSourceCommit)' == 'unavailable'"
+           Text="TraceMapToolPackageRequiresSourceCommit" />
+    <ItemGroup>
+      <TraceMapSourceMetadataLines Include="[assembly: System.Reflection.AssemblyMetadataAttribute(&quot;TraceMapSourceState&quot;, &quot;$(TraceMapSourceState)&quot;)]" />
+      <TraceMapSourceMetadataLines Include="[assembly: System.Reflection.AssemblyMetadataAttribute(&quot;TraceMapSourceCommit&quot;, &quot;$(TraceMapSourceCommit)&quot;)]" />
+    </ItemGroup>
     <WriteLinesToFile
       File="$(IntermediateOutputPath)TraceMapSourceState.g.cs"
-      Lines="[assembly: System.Reflection.AssemblyMetadataAttribute(&quot;TraceMapSourceState&quot;, &quot;$(TraceMapSourceState)&quot;)]"
+      Lines="@(TraceMapSourceMetadataLines)"
       Overwrite="true" />
     <ItemGroup>
       <Compile Include="$(IntermediateOutputPath)TraceMapSourceState.g.cs" />

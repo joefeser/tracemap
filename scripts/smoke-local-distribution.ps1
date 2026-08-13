@@ -74,6 +74,7 @@ function Read-Version([string]$Executable, [string[]]$Prefix = @()) {
     $value = $json | ConvertFrom-Json
     if ($value.schemaVersion -ne "tracemap-version.v1") { throw "LocalDistributionVersionSchemaMismatch" }
     if ($value.sourceState -ne "clean") { throw "LocalDistributionSourceStateMismatch" }
+    if ($value.sourceCommit -ne $head) { throw "LocalDistributionSourceCommitMismatch" }
     return $value
 }
 
