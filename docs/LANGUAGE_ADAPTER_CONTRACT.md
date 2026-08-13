@@ -207,10 +207,14 @@ The .NET adapter emits WebForms-specific evidence for static event entry points:
 The local-only `webforms-modernization-packet.v1` read model composes these
 facts and the existing `legacy-flow.v1` static paths from one immutable
 `index.sqlite`. It emits deterministic `webforms-modernization.json` and
-`webforms-modernization.md`. Structural candidates group only declared
+`webforms-modernization.md`. Its bounded downstream-boundary rows inventory
+supported database, HTTP/service, messaging, configuration, and dependency
+terminals already present in those paths while preserving opaque target and
+terminal-evidence identities. Structural candidates group only declared
 surface composition and require owner naming; they are not business-capability,
 parity, effort, architecture, runtime, or release conclusions. Missing coverage
-or provenance fails closed as an explicit packet gap. Execution and
+or provenance fails closed as an explicit packet gap. General file-operation
+extraction remains unavailable and is reported as a packet capability gap. Execution and
 interpretation are documented in the
 [Web Forms modernization packet runbook](WEBFORMS_MODERNIZATION_PACKET.md).
 
