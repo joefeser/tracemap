@@ -13,7 +13,7 @@ public sealed class LegacyBatchDataMovementExtractorTests
         Directory.CreateDirectory(repo);
         File.WriteAllText(Path.Combine(repo, "Default.aspx"), "<%@ Page Language=\"C#\" %>");
         File.WriteAllText(Path.Combine(repo, "Archive.dtsx"), "<DTS:Executable xmlns:DTS=\"www.microsoft.com/SqlServer/Dts\" />");
-        File.WriteAllText(Path.Combine(repo, "Batch.cs"), """
+        const string batchSource = """
             namespace Sample;
 
             public sealed class ArchiveService : System.ServiceProcess.ServiceBase { }
@@ -50,7 +50,8 @@ public sealed class LegacyBatchDataMovementExtractorTests
                 private void LogInformation() { }
                 private object[] Items() => [];
             }
-            """);
+            """;
+        File.WriteAllText(Path.Combine(repo, "Batch.cs"), batchSource);
 
         var manifest = Manifest();
         var inventory = FileInventory.Collect(repo);
@@ -63,7 +64,12 @@ public sealed class LegacyBatchDataMovementExtractorTests
         var database = Fact(manifest, FactTypes.DatabaseOperationCandidate, RuleIds.DatabaseOperationCallPattern, "Batch.cs", 10, "global::Sample.BatchRunner.Run()", "ExecuteNonQuery",
             new() { ["operationKind"] = "execute-candidate" });
         var external = Fact(manifest, FactTypes.HttpCallDetected, RuleIds.HttpClientInvocation, "Batch.cs", 10, "global::Sample.BatchRunner.Run()", "SendAsync", new());
-        var facts = new[] { config, integrationConfig, message, database, external };
+        var fileReadLine = Array.FindIndex(batchSource.Split('\n'), line => line.Contains("System.IO.File.ReadAllText", StringComparison.Ordinal)) + 1;
+        Assert.True(fileReadLine > 0);
+        var semanticFile = Fact(manifest, FactTypes.MethodInvoked, RuleIds.CSharpSemanticMethodInvocation, "Batch.cs", fileReadLine,
+            "global::Sample.BatchRunner.Run()", "global::System.IO.File.ReadAllText(string)",
+            new() { ["containingMethod"] = "Run", ["containingType"] = "Sample.BatchRunner" });
+        var facts = new[] { config, integrationConfig, message, database, external, semanticFile };
 
         var first = LegacyBatchDataMovementExtractor.Extract(repo, manifest, inventory, facts);
         var second = LegacyBatchDataMovementExtractor.Extract(repo, manifest, inventory, facts);
@@ -94,6 +100,12 @@ public sealed class LegacyBatchDataMovementExtractorTests
 
         var storedProcedure = Assert.Single(rows, row => row.Properties.GetValueOrDefault("surfaceKind") == "stored-procedure-batch");
         Assert.Equal("present", storedProcedure.Properties.GetValueOrDefault("loopDeclaration"));
+        var semanticFileRow = Assert.Single(rows, row => row.Properties.GetValueOrDefault("mechanism") == "compiler-resolved-system-io-call");
+        Assert.Equal("named-call", semanticFileRow.Properties.GetValueOrDefault("retryDeclaration"));
+        Assert.Equal("catch-clause", semanticFileRow.Properties.GetValueOrDefault("errorHandlingDeclaration"));
+        Assert.Equal("named-call", semanticFileRow.Properties.GetValueOrDefault("transactionDeclaration"));
+        Assert.Equal("named-call", semanticFileRow.Properties.GetValueOrDefault("checkpointDeclaration"));
+        Assert.Equal("named-call", semanticFileRow.Properties.GetValueOrDefault("telemetryDeclaration"));
         Assert.All(rows, row =>
         {
             Assert.Equal(RuleIds.LegacyWebFormsBatchDataMovement, row.RuleId);
@@ -190,6 +202,30 @@ public sealed class LegacyBatchDataMovementExtractorTests
     }
 
     [Fact]
+    public void Extractor_requires_explicit_stored_procedure_command_type()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), "<%@ Page Language=\"C#\" %>");
+        File.WriteAllText(Path.Combine(repo, "Batch.cs"), """
+            public sealed class Batch
+            {
+                public void Run()
+                {
+                    var textCommand = new System.Data.SqlClient.SqlCommand();
+                    textCommand.ExecuteNonQuery();
+                }
+            }
+            """);
+
+        var facts = LegacyBatchDataMovementExtractor.Extract(repo, Manifest(), FileInventory.Collect(repo), []);
+
+        Assert.DoesNotContain(facts, fact => fact.FactType == FactTypes.LegacyBatchDataMovementDeclared
+            && fact.Properties.GetValueOrDefault("surfaceKind") == "stored-procedure-batch");
+    }
+
+    [Fact]
     public void Rule_catalog_documents_batch_data_movement_non_claims()
     {
         var catalog = File.ReadAllText(Path.Combine(FindRepoRoot(), "rules", "rule-catalog.yml"));
@@ -217,7 +253,7 @@ public sealed class LegacyBatchDataMovementExtractorTests
             manifest,
             factType,
             ruleId,
-            factType is FactTypes.MethodDeclared or FactTypes.DatabaseOperationCandidate or FactTypes.HttpCallDetected
+            factType is FactTypes.MethodDeclared or FactTypes.MethodInvoked or FactTypes.DatabaseOperationCandidate or FactTypes.HttpCallDetected
                 ? EvidenceTiers.Tier1Semantic
                 : EvidenceTiers.Tier2Structural,
             new(file, line, line, null, "fixture", "fixture/1.0"),
