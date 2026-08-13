@@ -275,12 +275,14 @@ public sealed class WebFormsModernizationPacketTests
         var login = Fact(manifest, FactTypes.AspNetIdentityStateDeclared, RuleIds.LegacyAspNetIdentityState, "Pages/Login.aspx", 4,
             source: surface, target: controlId, contract: "login-control",
             ("identityKind", "login-control"), ("declarationStatus", "declared-in-markup"),
-            ("supportingFactIds", control.FactId), ("unsafeRawValue", "private-login-secret"),
+            ("controlType", "Login"), ("supportingFactIds", control.FactId), ("unsafeRawValue", "private-login-secret"),
+            ("ruleLimitations", "Login-control rows are static markup declarations and do not prove runtime use."),
             ("coverageLabel", "reduced-static-identity-state"));
         var authentication = Fact(manifest, FactTypes.AspNetIdentityStateDeclared, RuleIds.LegacyAspNetIdentityState, "web.config", 3,
             source: null, target: null, contract: "authentication",
             ("identityKind", "authentication"), ("declarationStatus", "private-classification-secret"),
-            ("authenticationMode", "Forms"), ("cookieName", "private-cookie-secret"), ("sameSite", "private-metadata-secret"),
+            ("authenticationMode", "Forms"), ("cookielessSetting", "UseUri"), ("decryptionAlgorithm", "3DES"),
+            ("cookieName", "private-cookie-secret"), ("sameSite", "private-metadata-secret"),
             ("coverageLabel", "reduced-static-identity-state"));
         var gap = Fact(manifest, FactTypes.AnalysisGap, RuleIds.LegacyAspNetIdentityState, "Identity.cs", 7,
             source: null, target: null, contract: "IdentitySemanticDependencyUnavailable",
@@ -310,11 +312,14 @@ public sealed class WebFormsModernizationPacketTests
         var loginRow = Assert.Single(packet.IdentityStateInventory, item => item.IdentityKind == "login-control");
         Assert.Equal(surface, loginRow.SurfaceId);
         Assert.Contains(control.FactId, loginRow.SupportingFactIds);
+        Assert.Equal("Login", loginRow.SafeMetadata["controlType"]);
         Assert.Equal(RuleIds.LegacyAspNetIdentityState, loginRow.Evidence.RuleId);
         Assert.Equal(manifest.CommitSha, loginRow.Evidence.CommitSha);
-        Assert.Equal("Forms", Assert.Single(packet.IdentityStateInventory, item => item.IdentityKind == "authentication")
-            .SafeMetadata["authenticationMode"]);
-        Assert.Equal("unknown", Assert.Single(packet.IdentityStateInventory, item => item.IdentityKind == "authentication").Classification);
+        var authenticationRow = Assert.Single(packet.IdentityStateInventory, item => item.IdentityKind == "authentication");
+        Assert.Equal("Forms", authenticationRow.SafeMetadata["authenticationMode"]);
+        Assert.Equal("UseUri", authenticationRow.SafeMetadata["cookielessSetting"]);
+        Assert.Equal("3DES", authenticationRow.SafeMetadata["decryptionAlgorithm"]);
+        Assert.Equal("unknown", authenticationRow.Classification);
         Assert.Contains(packet.Gaps, item => item.Classification == "UnsupportedIdentityStatePropertyShape"
             && item.SupportingFactIds.Contains(authentication.FactId));
         var serialized = JsonSerializer.Serialize(packet);
@@ -322,6 +327,7 @@ public sealed class WebFormsModernizationPacketTests
         Assert.DoesNotContain("private-cookie-secret", serialized, StringComparison.Ordinal);
         Assert.DoesNotContain("private-classification-secret", serialized, StringComparison.Ordinal);
         Assert.DoesNotContain("private-metadata-secret", serialized, StringComparison.Ordinal);
+        Assert.Contains("Login-control rows are static markup declarations", string.Join(' ', loginRow.Limitations), StringComparison.Ordinal);
         var written = await WebFormsModernizationPacketReporter.WriteAsync(new(
             index,
             Path.Combine(temp.Path, "written"),

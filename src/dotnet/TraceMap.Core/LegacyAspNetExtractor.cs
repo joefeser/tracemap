@@ -309,7 +309,10 @@ public static partial class LegacyAspNetExtractor
 
     private static void ExtractIdentityStateConfig(ScanManifest manifest, FileInventoryItem item, XDocument document, List<CodeFact> facts)
     {
-        foreach (var element in document.Descendants().OrderBy(LineNumber).ThenBy(element => element.Name.LocalName, StringComparer.Ordinal))
+        foreach (var (element, declarationOrdinal) in document.Descendants()
+                     .Select((element, index) => (element, declarationOrdinal: index + 1))
+                     .OrderBy(item => LineNumber(item.element))
+                     .ThenBy(item => item.declarationOrdinal))
         {
             var identityKind = IdentityConfigKind(element);
             if (identityKind is null)
@@ -321,6 +324,7 @@ public static partial class LegacyAspNetExtractor
                 "Identity/state rows are checked-in static declarations only and do not prove effective runtime policy, authenticated identity, authorization outcome, session behavior, cookie behavior, provider availability, or security quality.");
             properties["identityKind"] = identityKind;
             properties["declarationStatus"] = "declared-in-checked-in-config";
+            properties["declarationOrdinal"] = declarationOrdinal.ToString(System.Globalization.CultureInfo.InvariantCulture);
             AddIdentityConfigProperties(properties, element, identityKind);
             var fact = FactFactory.Create(
                 manifest,
@@ -420,7 +424,7 @@ public static partial class LegacyAspNetExtractor
                 AddClosedValue(properties, "authenticationMode", AttributeValue(element, "mode"), ["None", "Windows", "Forms", "Passport"]);
                 break;
             case "forms-authentication":
-                AddBooleanSetting(properties, element, "cookieless", "cookielessSetting");
+                AddCookielessSetting(properties, element);
                 AddBooleanSetting(properties, element, "enableCrossAppRedirects", "crossAppRedirectSetting");
                 AddBooleanSetting(properties, element, "requireSSL", "requireSslSetting");
                 AddBooleanSetting(properties, element, "slidingExpiration", "slidingExpirationSetting");
@@ -441,7 +445,7 @@ public static partial class LegacyAspNetExtractor
                 properties["validationKeyDeclared"] = ValueDeclared(element, "validationKey");
                 properties["decryptionKeyDeclared"] = ValueDeclared(element, "decryptionKey");
                 AddClosedValue(properties, "validationAlgorithm", AttributeValue(element, "validation"), ["AES", "HMACSHA256", "HMACSHA384", "HMACSHA512", "MD5", "SHA1", "TripleDES"]);
-                AddClosedValue(properties, "decryptionAlgorithm", AttributeValue(element, "decryption"), ["AES", "Auto", "DES", "TripleDES"]);
+                AddClosedValue(properties, "decryptionAlgorithm", AttributeValue(element, "decryption"), ["3DES", "AES", "Auto", "DES", "TripleDES"]);
                 break;
             case "membership":
             case "role-manager":
@@ -459,7 +463,7 @@ public static partial class LegacyAspNetExtractor
                 break;
             case "session-state":
                 AddClosedValue(properties, "sessionMode", AttributeValue(element, "mode"), ["Custom", "InProc", "Off", "SQLServer", "StateServer"]);
-                AddBooleanSetting(properties, element, "cookieless", "cookielessSetting");
+                AddCookielessSetting(properties, element);
                 properties["timeoutDeclared"] = ValueDeclared(element, "timeout");
                 properties["stateConnectionDeclared"] = ValueDeclared(element, "stateConnectionString") == "true" || ValueDeclared(element, "sqlConnectionString") == "true" ? "true" : "false";
                 break;
@@ -491,6 +495,13 @@ public static partial class LegacyAspNetExtractor
         var value = AttributeValue(element, attributeName);
         properties[$"{propertyName}Declared"] = string.IsNullOrWhiteSpace(value) ? "false" : "true";
         if (bool.TryParse(value, out var parsed)) properties[propertyName] = parsed ? "true" : "false";
+    }
+
+    private static void AddCookielessSetting(SortedDictionary<string, string> properties, XElement element)
+    {
+        var value = AttributeValue(element, "cookieless");
+        properties["cookielessSettingDeclared"] = string.IsNullOrWhiteSpace(value) ? "false" : "true";
+        AddClosedValue(properties, "cookielessSetting", value, ["AutoDetect", "UseCookies", "UseDeviceProfile", "UseUri", "true", "false"]);
     }
 
     private static void AddClosedValue(SortedDictionary<string, string> properties, string propertyName, string? value, IReadOnlyList<string> allowed)
