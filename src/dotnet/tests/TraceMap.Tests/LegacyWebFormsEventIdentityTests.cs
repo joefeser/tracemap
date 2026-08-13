@@ -55,6 +55,7 @@ public sealed class LegacyWebFormsEventIdentityTests
         {
             var binding = Assert.Single(bindings, candidate => candidate.FactId == handler.Properties["bindingFactId"]);
             Assert.Equal(binding.SourceSymbol, handler.SourceSymbol);
+            Assert.Equal(binding.TargetSymbol, handler.TargetSymbol);
             Assert.Equal(handler.TargetSymbol, handler.Properties["handlerSymbolId"]);
             Assert.Equal(handler.TargetSymbol, handler.Properties["sourceSymbolId"]);
             Assert.Equal(binding.Properties["surfaceIdentity"], handler.Properties["surfaceIdentity"]);
@@ -67,32 +68,40 @@ public sealed class LegacyWebFormsEventIdentityTests
 
         await JsonlFactWriter.WriteAsync(Path.Combine(output, "facts.ndjson"), result.Facts);
         SqliteIndexWriter.Write(Path.Combine(output, "index.sqlite"), result.Manifest, result.Facts);
+        var directionalFacts = bindings.Concat(handlers).OrderBy(fact => fact.FactId, StringComparer.Ordinal).ToArray();
         var persisted = File.ReadLines(Path.Combine(output, "facts.ndjson"))
             .Select(line => JsonSerializer.Deserialize<CodeFact>(line, new JsonSerializerOptions(JsonSerializerDefaults.Web))!)
-            .Where(fact => handlers.Any(handler => handler.FactId == fact.FactId))
+            .Where(fact => directionalFacts.Any(expected => expected.FactId == fact.FactId))
             .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
             .ToArray();
-        Assert.Equal(handlers.OrderBy(fact => fact.FactId, StringComparer.Ordinal).Select(fact => fact.TargetSymbol), persisted.Select(fact => fact.TargetSymbol));
+        Assert.Equal(directionalFacts.Select(fact => fact.SourceSymbol), persisted.Select(fact => fact.SourceSymbol));
+        Assert.Equal(directionalFacts.Select(fact => fact.TargetSymbol), persisted.Select(fact => fact.TargetSymbol));
+        Assert.Equal(directionalFacts.Select(fact => fact.Properties["surfaceIdentity"]), persisted.Select(fact => fact.Properties["surfaceIdentity"]));
 
         using var connection = new SqliteConnection($"Data Source={Path.Combine(output, "index.sqlite")}");
         connection.Open();
-        foreach (var handler in handlers)
+        foreach (var directionalFact in directionalFacts)
         {
             using var command = connection.CreateCommand();
             command.CommandText = "select source_symbol, target_symbol, rule_id, evidence_tier, file_path, start_line, end_line, extractor_version, properties_json from facts where fact_id = $id";
-            command.Parameters.AddWithValue("$id", handler.FactId);
+            command.Parameters.AddWithValue("$id", directionalFact.FactId);
             using var reader = command.ExecuteReader();
             Assert.True(reader.Read());
-            Assert.Equal(handler.SourceSymbol, reader.GetString(0));
-            Assert.Equal(handler.TargetSymbol, reader.GetString(1));
-            Assert.Equal(handler.RuleId, reader.GetString(2));
-            Assert.Equal(handler.EvidenceTier, reader.GetString(3));
-            Assert.Equal(handler.Evidence.FilePath, reader.GetString(4));
-            Assert.Equal(handler.Evidence.StartLine, reader.GetInt32(5));
-            Assert.Equal(handler.Evidence.EndLine, reader.GetInt32(6));
-            Assert.Equal(handler.Evidence.ExtractorVersion, reader.GetString(7));
+            Assert.Equal(directionalFact.SourceSymbol, reader.GetString(0));
+            Assert.Equal(directionalFact.TargetSymbol, reader.GetString(1));
+            Assert.Equal(directionalFact.RuleId, reader.GetString(2));
+            Assert.Equal(directionalFact.EvidenceTier, reader.GetString(3));
+            Assert.Equal(directionalFact.Evidence.FilePath, reader.GetString(4));
+            Assert.Equal(directionalFact.Evidence.StartLine, reader.GetInt32(5));
+            Assert.Equal(directionalFact.Evidence.EndLine, reader.GetInt32(6));
+            Assert.Equal(directionalFact.Evidence.ExtractorVersion, reader.GetString(7));
             var properties = JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(8));
-            Assert.Equal(handler.Properties["supportingFactIds"], properties!["supportingFactIds"]);
+            Assert.Equal(directionalFact.Properties["surfaceIdentity"], properties!["surfaceIdentity"]);
+            Assert.Equal(directionalFact.Properties["handlerSymbolId"], properties["handlerSymbolId"]);
+            if (directionalFact.FactType == FactTypes.WebFormsHandlerResolved)
+            {
+                Assert.Equal(directionalFact.Properties["supportingFactIds"], properties["supportingFactIds"]);
+            }
         }
     }
 
@@ -191,13 +200,59 @@ public sealed class LegacyWebFormsEventIdentityTests
         var handler = Assert.Single(result.Facts, fact =>
             fact.FactType == FactTypes.WebFormsHandlerResolved
             && fact.ContractElement == "Save_Click");
+        var binding = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsEventBindingDeclared
+            && fact.ContractElement == "Save_Click");
 
         Assert.Equal(EvidenceTiers.Tier1Semantic, handler.EvidenceTier);
         Assert.Equal("SemanticSourceSymbol", handler.Properties["resolutionKind"]);
         Assert.Equal("Handlers.aspx.cs", handler.Evidence.FilePath);
         Assert.StartsWith("csharp method ", handler.TargetSymbol, StringComparison.Ordinal);
+        Assert.Equal(binding.TargetSymbol, handler.TargetSymbol);
         Assert.DoesNotContain(result.Facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
             && fact.Properties.GetValueOrDefault("gapKind") == "UnprovenCrossFileWebFormsHandler");
+    }
+
+    [Fact]
+    public void Missing_and_overloaded_named_lifecycle_subscriptions_remain_loud()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), """
+            <%@ Page Language="C#" CodeBehind="Default.aspx.cs" Inherits="Sample.Default" AutoEventWireup="false" %>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx.cs"), """
+            using System;
+            namespace Sample;
+            public partial class Default
+            {
+                public Default()
+                {
+                    Load += Missing_Load;
+                    Init += Duplicate_Init;
+                }
+
+                protected void Duplicate_Init(object sender, EventArgs e) { }
+                protected void Duplicate_Init(object sender, EventArgs e, string extra) { }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsEventBindingDeclared
+            && fact.Properties.GetValueOrDefault("bindingKind") == "ExplicitLifecycleSubscription"
+            && fact.ContractElement == "Missing_Load");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "MissingWebFormsHandler");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsEventBindingDeclared
+            && fact.ContractElement == "Duplicate_Init");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "AmbiguousWebFormsHandler");
     }
 }
