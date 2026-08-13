@@ -77,6 +77,9 @@ public static class ScanEngine
                 cancellationToken.ThrowIfCancellationRequested();
                 semanticResult = CSharpSemanticExtractor.Extract(repoPath, inventory, options, fullInventory);
                 semanticToolchainReducedCoverage = HasToolchainSemanticReduction(semanticResult);
+                var semanticStageCoverage = semanticResult.Attempted
+                    ? semanticToolchainReducedCoverage ? "semantic-reduced" : "semantic"
+                    : semanticToolchainReducedCoverage ? "syntax-reduced" : "syntax";
                 cancellationToken.ThrowIfCancellationRequested();
                 VerifySemanticInputSnapshot(repoPath, fullInventory, semanticResult, semanticInputSnapshot);
                 semanticOperation.Complete(semanticToolchainReducedCoverage
@@ -84,7 +87,7 @@ public static class ScanEngine
                     : TraceMapDiagnosticOutcome.Succeeded);
                 semanticReceipt?.Complete(
                     semanticToolchainReducedCoverage ? "partial" : "succeeded",
-                    semanticToolchainReducedCoverage ? "semantic-reduced" : "semantic",
+                    semanticStageCoverage,
                     "semantic-input-snapshot-verified",
                     retryability: semanticToolchainReducedCoverage ? "retry-after-dependency-restoration" : "not-required",
                     nextAction: semanticToolchainReducedCoverage ? "review-analysis-gaps" : "continue");
@@ -279,6 +282,10 @@ public static class ScanEngine
                 semanticResult);
             VerifySourceSnapshotInventory(authoritativeSnapshotInventory, verificationSnapshotInventory);
             verificationDigest = CreateSourceSnapshotDigest(repoPath, verificationSnapshotInventory);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!string.Equals(sourceSnapshotDigest, verificationDigest, StringComparison.Ordinal))
+                throw new SourceSnapshotException();
+            verificationReceipt?.Complete("succeeded", manifest.AnalysisLevel, "source-snapshot-verified");
         }
         catch (SourceInventoryException ex)
         {
@@ -291,14 +298,6 @@ public static class ScanEngine
             verificationReceipt?.Fail(ex, "stage-started");
             throw;
         }
-        if (!string.Equals(sourceSnapshotDigest, verificationDigest, StringComparison.Ordinal))
-        {
-            var exception = new SourceSnapshotException();
-            verificationReceipt?.Fail(exception, "stage-started");
-            throw exception;
-        }
-        verificationReceipt?.Complete("succeeded", manifest.AnalysisLevel, "source-snapshot-verified");
-
         cancellationToken.ThrowIfCancellationRequested();
 
         scanOperation.RecordItems(facts.Count);

@@ -115,6 +115,30 @@ public sealed class ScanExecutionReceiptTests
     }
 
     [Fact]
+    public void Stage_identity_includes_categorical_diagnostic_fields()
+    {
+        var generic = new ScanReceiptRecorder(new ScanOptions("repo", "out"));
+        generic.Bind(new GitMetadata("repo", null, "dev", CommitSha, []));
+        using (var operation = generic.StartStage("discovery", "inventory-and-identity"))
+            operation.Fail(new InvalidOperationException(), "stage-started");
+        generic.Complete("failed", "unknown");
+
+        var inventory = new ScanReceiptRecorder(new ScanOptions("repo", "out"));
+        inventory.Bind(new GitMetadata("repo", null, "dev", CommitSha, []));
+        using (var operation = inventory.StartStage("discovery", "inventory-and-identity"))
+            operation.Fail(new SourceInventoryException(new IOException()), "stage-started");
+        inventory.Complete("failed", "unknown");
+
+        var genericStage = Assert.Single(generic.CreateReceipt().Stages);
+        var inventoryStage = Assert.Single(inventory.CreateReceipt().Stages);
+        Assert.Equal("failed", genericStage.Outcome);
+        Assert.Equal("failed", inventoryStage.Outcome);
+        Assert.NotEqual(genericStage.NextAction, inventoryStage.NextAction);
+        Assert.NotEqual(genericStage.StageId, inventoryStage.StageId);
+        Assert.NotEqual(generic.CreateReceipt().ReceiptId, inventory.CreateReceipt().ReceiptId);
+    }
+
+    [Fact]
     public async Task Cancelled_atomic_write_removes_temporary_artifact()
     {
         using var temp = new TempDirectory();
@@ -282,6 +306,29 @@ public sealed class ScanExecutionReceiptTests
         var gapId = Assert.Single(reportStage.SupportingGapIds);
         Assert.Matches("^[0-9a-f]{24}$", gapId);
         Assert.Contains(gapId, receipt.SupportingGapIds);
+    }
+
+    [Fact]
+    public async Task Source_only_scan_records_syntax_not_semantic_stage_coverage()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var outputPath = Path.Combine(temp.Path, "output");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Sample.cs"), "public sealed class Sample { }");
+        InitializeRepository(repo);
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
+
+        var exitCode = await TraceMapCommand.RunAsync(["scan", "--repo", repo, "--out", outputPath], stdout, stderr);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(string.Empty, stderr.ToString());
+        var receipt = JsonSerializer.Deserialize<ScanExecutionReceipt>(
+            await File.ReadAllTextAsync(Path.Combine(outputPath, "scan-receipt.json")), JsonOptions.Stable)!;
+        var stage = Assert.Single(receipt.Stages, candidate => candidate.Stage == "semantic-analysis");
+        Assert.StartsWith("syntax", stage.CoverageAfter, StringComparison.Ordinal);
+        Assert.DoesNotContain("semantic", stage.CoverageAfter, StringComparison.Ordinal);
     }
 
     [Fact]
