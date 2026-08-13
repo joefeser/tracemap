@@ -224,6 +224,9 @@ $Packet = Get-Content (Join-Path $PacketOut "webforms-modernization.json") -Raw 
   ConvertFrom-Json
 
 $Packet | Select-Object schemaVersion, packetId, claimLevel, coverage
+$Packet.sources |
+  Select-Object repositoryId, scanId, commitSha, analysisLevel, buildStatus |
+  Format-Table
 $Packet.summary | Format-List
 $Packet.gaps |
   Group-Object classification |
@@ -243,7 +246,7 @@ if ($Packet.claimLevel -ne "local-only") {
 ### Bash with `jq`
 
 ```bash
-jq '{schemaVersion, packetId, claimLevel, coverage, summary}' \
+jq '{schemaVersion, packetId, claimLevel, coverage, sources, summary}' \
   "$PACKET_OUT/webforms-modernization.json"
 jq -r '.gaps | group_by(.classification)[] | "\(.[0].classification)\t\(length)"' \
   "$PACKET_OUT/webforms-modernization.json"
