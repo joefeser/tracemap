@@ -452,6 +452,7 @@ public static class RuleIds
     public const string LegacyWebFormsDesignerControl = "legacy.webforms.designer-control.v1";
     public const string LegacyWebFormsEventFlow = "legacy.webforms.event-flow.v1";
     public const string LegacyWebFormsLogicSignal = "legacy.webforms.logic-signal.v1";
+    public const string LegacyWebFormsModernizationPacket = "legacy.webforms.modernization-packet.v1";
     public const string LegacyWinFormsInventory = "legacy.winforms.inventory.v1";
     public const string LegacyWinFormsControl = "legacy.winforms.control.v1";
     public const string LegacyWinFormsEventBinding = "legacy.winforms.event-binding.v1";

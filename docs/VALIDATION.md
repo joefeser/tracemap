@@ -827,6 +827,22 @@ grep -E "WebForms Events|WebForms Event Flow|WebForms Static Logic Signals" <out
 
 WebForms smoke summaries must remain hidden public-claim level until reviewed. Do not commit local sample paths, raw remotes, raw markup/code snippets, raw SQL, config values, endpoint URLs, secrets, or generated private outputs. WebForms event-flow evidence is static and does not prove runtime page lifecycle execution, event firing, event bubbling, service reachability, SQL execution, branch feasibility, deployment, or production usage.
 
+For the bounded local modernization packet, run the scan first and then:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Cli -- webforms-modernization \
+  --index <scan-output>/index.sqlite \
+  --out <new-local-output-directory>
+```
+
+Verify both `webforms-modernization.json` and `webforms-modernization.md`, repeat
+to a second new directory, and compare bytes. The input index must remain
+unchanged. Inspect `coverage`, `gaps`, and `truncated` before using the packet;
+`NoBackendEvidence` is coverage-relative and never proves absence. Do not
+publish local-only packet output or treat structural candidates as named
+business capabilities, migration estimates, parity, target architecture, or
+release approval.
+
 ## Legacy WinForms Event Navigation Smoke
 
 When changing WinForms form/control inventory, designer parsing, event binding,
