@@ -271,9 +271,10 @@ config, and navigation target roles must produce different stored hashes.
 These facts are static evidence only. Identity/state rows do not prove effective
 runtime policy, authenticated users, authorization or session outcomes,
 provider availability, vulnerability, compliance, or migration success.
-External/encrypted identity configuration, dynamic pipeline registration,
-unavailable semantic dependencies, and unsupported custom providers remain
-explicit gaps. The ASP.NET facts do not prove route-table execution, IIS
+External/encrypted identity configuration, deterministically identity-related
+dynamic pipeline registration, unavailable semantic dependencies, and
+unsupported custom providers remain explicit gaps. The ASP.NET facts do not
+prove route-table execution, IIS
 deployment, runtime URL rewriting, browser behavior, JavaScript execution, page
 rendering, request handling, user reachability, or runtime impact. Raw URLs,
 hostnames, config values, endpoint values, machine keys, roles, users, provider

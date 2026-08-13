@@ -30,8 +30,11 @@ public sealed class LegacyAspNetExtractorTests
             }
             public static class IdentityBootstrap
             {
-                public static void Register() =>
+                public static void Register()
+                {
                     Microsoft.Web.Infrastructure.DynamicModuleHelper.DynamicModuleUtility.RegisterModule(typeof(PrivateIdentityModule));
+                    Microsoft.Web.Infrastructure.DynamicModuleHelper.DynamicModuleUtility.RegisterModule(typeof(LoggingModule));
+                }
             }
             """);
         File.WriteAllText(Path.Combine(repo, "web.config"), """
@@ -94,7 +97,7 @@ public sealed class LegacyAspNetExtractorTests
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.LegacyAspNetIdentityState
             && fact.Properties.GetValueOrDefault("gapKind") == "EncryptedIdentityConfigUnsupported");
-        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+        Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.LegacyAspNetIdentityState
             && fact.Properties.GetValueOrDefault("gapKind") == "DynamicIdentityPipelineRegistrationUnsupported");
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
