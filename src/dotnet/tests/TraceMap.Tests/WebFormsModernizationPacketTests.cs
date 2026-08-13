@@ -344,7 +344,7 @@ public sealed class WebFormsModernizationPacketTests
         var manifest = Manifest("FailedOrPartial");
         var batch = Fact(manifest, FactTypes.LegacyBatchDataMovementDeclared, RuleIds.LegacyWebFormsBatchDataMovement, "Jobs/Archive.cs", 12,
             source: "Run", target: "scheduled-task", contract: "timer-trigger-attribute",
-            ("surfaceKind", "scheduled-task"), ("mechanism", "timer-trigger-attribute"), ("operationKind", "trigger"),
+            ("surfaceKind", "scheduled-task"), ("mechanism", "compiler-resolved-hangfire-recurring-job"), ("operationKind", "trigger"),
             ("ownerStatus", "member-declared"), ("projectResolution", "resolved"), ("ownerMember", "Run"),
             ("scheduleSource", "config-reference-matched"), ("scheduleReferenceHash", new string('a', 32)),
             ("retryDeclaration", "named-call"), ("checkpointDeclaration", "named-call"),
@@ -382,7 +382,7 @@ public sealed class WebFormsModernizationPacketTests
             Path.Combine(temp.Path, "written"),
             MaxBatchDataMovement: 10));
         Assert.Equal(3, written.Packet.BatchDataMovementInventory.Count);
-        var row = Assert.Single(written.Packet.BatchDataMovementInventory, item => item.Mechanism == "timer-trigger-attribute");
+        var row = Assert.Single(written.Packet.BatchDataMovementInventory, item => item.Mechanism == "compiler-resolved-hangfire-recurring-job");
         Assert.Equal("scheduled-task", row.SurfaceKind);
         Assert.Equal("trigger", row.OperationKind);
         Assert.Equal("config-reference-matched", row.SafeMetadata["scheduleSource"]);

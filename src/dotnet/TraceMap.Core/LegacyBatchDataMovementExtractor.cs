@@ -514,10 +514,11 @@ public static class LegacyBatchDataMovementExtractor
             }
         }
         var storedProcedureVariables = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var declaration in method.DescendantNodes().OfType<VariableDeclarationSyntax>()
-                     .Where(declaration => IsSupportedCommandType(declaration.Type.ToString())))
+        foreach (var declaration in method.DescendantNodes().OfType<VariableDeclarationSyntax>())
         {
             foreach (var variable in declaration.Variables.Where(variable =>
+                         declaredCommandVariables.Contains(variable.Identifier.ValueText)
+                         &&
                          variable.Initializer?.Value is BaseObjectCreationExpressionSyntax creation
                          && HasStoredProcedureInitializer(creation.Initializer)))
             {
@@ -666,13 +667,23 @@ public static class LegacyBatchDataMovementExtractor
             if (value.Length > 2 && value[0] == '%' && value[^1] == '%')
             {
                 var configKey = value[1..^1];
-                var config = ownerProjectPath is null ? null : existingFacts.FirstOrDefault(fact => fact.FactType == FactTypes.ConfigKeyDeclared
-                    && string.Equals(fact.ProjectPath, ownerProjectPath, StringComparison.Ordinal)
-                    && string.Equals(fact.Properties.GetValueOrDefault("keyPath") ?? fact.TargetSymbol, configKey, StringComparison.Ordinal));
+                var configs = ownerProjectPath is null
+                    ? []
+                    : existingFacts.Where(fact => fact.FactType == FactTypes.ConfigKeyDeclared
+                        && ConfigBelongsToProject(fact, ownerProjectPath)
+                        && string.Equals(fact.Properties.GetValueOrDefault("keyPath") ?? fact.TargetSymbol, configKey, StringComparison.Ordinal))
+                        .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
+                        .Take(2)
+                        .ToArray();
+                var config = configs.Length == 1 ? configs[0] : null;
                 properties["scheduleSource"] = config is null ? "config-reference-unavailable" : "config-reference-matched";
                 properties["scheduleReferenceHash"] = FactFactory.Hash($"batch-schedule|{configKey}", 32);
                 if (config is not null) properties["scheduleConfigFactId"] = config.FactId;
-                else gaps.Add(new("BatchConfigurationReferenceUnavailable", "A timer trigger references a configuration key that was not declared in the scanned snapshot."));
+                else gaps.Add(new(
+                    configs.Length > 1 ? "BatchConfigurationReferenceAmbiguous" : "BatchConfigurationReferenceUnavailable",
+                    configs.Length > 1
+                        ? "Multiple configuration declarations matched the scheduled trigger within the proven owning project; TraceMap did not select one."
+                        : "A timer trigger references a configuration key that was not declared in the proven owning project."));
             }
             else
             {
@@ -1001,6 +1012,24 @@ public static class LegacyBatchDataMovementExtractor
             .Take(2)
             .ToArray();
         return projectPaths.Length == 1 ? projectPaths[0] : null;
+    }
+
+    private static bool ConfigBelongsToProject(CodeFact config, string projectPath)
+    {
+        if (!string.IsNullOrWhiteSpace(config.ProjectPath))
+        {
+            return string.Equals(config.ProjectPath, projectPath, StringComparison.Ordinal);
+        }
+
+        var normalizedProjectPath = FileInventory.NormalizeRelativePath(projectPath);
+        var projectDirectory = FileInventory.NormalizeRelativePath(Path.GetDirectoryName(normalizedProjectPath) ?? string.Empty);
+        var configPath = FileInventory.NormalizeRelativePath(config.Evidence.FilePath);
+        if (projectDirectory is "." or "")
+        {
+            return !configPath.Contains('/', StringComparison.Ordinal);
+        }
+
+        return configPath.StartsWith($"{projectDirectory}/", StringComparison.Ordinal);
     }
 
     private static bool TryOwnerSpan(IReadOnlyDictionary<string, string> properties, out int startLine, out int endLine)
