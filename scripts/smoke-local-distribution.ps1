@@ -162,7 +162,8 @@ try {
             runtimeVersion = $firstVersion.host.runtimeVersion
             runtimeIdentifier = $rid
         }
-        selectedCandidate = "dotnet-tool"
+        recommendedCandidate = "dotnet-tool"
+        selectionStatus = "pending-cross-platform-ci"
         candidates = @(
             [ordered]@{ kind = "dotnet-tool"; status = "supported"; lifecycle = "install-upgrade-run-uninstall"; bytes = [long]$packages[-1].Length; sha256 = (Get-FileHash $packages[-1].FullName -Algorithm SHA256).Hash.ToLowerInvariant() },
             [ordered]@{ kind = "framework-dependent-archive"; status = "supported"; lifecycle = "extract-run-remove-directory"; bytes = Get-DirectorySize $framework },
@@ -185,6 +186,10 @@ try {
     }
     $resultPath = Join-Path $root "local-distribution-smoke.json"
     $result | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $resultPath -Encoding utf8NoBOM
+    $schemaPath = Join-Path $repo "docs/contracts/local-distribution-smoke.v1.schema.json"
+    if (-not ((Get-Content -LiteralPath $resultPath -Raw) | Test-Json -SchemaFile $schemaPath)) {
+        throw "LocalDistributionReceiptSchemaMismatch"
+    }
     Write-Output "local-distribution-smoke=completed;head=$head;host=$($firstVersion.host.operatingSystem)-$($firstVersion.host.architecture);result=$resultPath"
 } finally {
     if ($ownsRoot -and (Test-Path -LiteralPath $root)) {
