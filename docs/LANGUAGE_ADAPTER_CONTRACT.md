@@ -210,7 +210,9 @@ facts and the existing `legacy-flow.v1` static paths from one immutable
 `webforms-modernization.md`. Structural candidates group only declared
 surface composition and require owner naming; they are not business-capability,
 parity, effort, architecture, runtime, or release conclusions. Missing coverage
-or provenance fails closed as an explicit packet gap.
+or provenance fails closed as an explicit packet gap. Execution and
+interpretation are documented in the
+[Web Forms modernization packet runbook](WEBFORMS_MODERNIZATION_PACKET.md).
 
 These facts are static evidence only. They do not prove runtime page lifecycle execution or order, rendering, control construction, postbacks, event firing, event bubbling, validation success, authorization, persistence, downstream execution, user reachability, service reachability, SQL execution, deployment, branch feasibility, or production usage. Lambda/dynamic subscriptions, unknown receivers, ambiguous controls or overloads, and cross-file partial handlers without exact semantic evidence remain explicit gaps. Page titles are hashed rather than stored as display text. Markup snippets, raw SQL, config values, raw URLs, local absolute paths, repository remotes, and private sample names must not appear in properties or reports.
 
