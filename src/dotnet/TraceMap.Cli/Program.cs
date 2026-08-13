@@ -360,6 +360,17 @@ public static class TraceMapCommand
     private static async Task<int> RunWebFormsModernizationAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
     {
         var values = ParseOptions(args);
+        string[] supportedOptions =
+        [
+            "--index", "--out", "--max-surfaces", "--max-event-chains", "--max-candidates",
+            "--max-gaps", "--max-depth", "--max-paths"
+        ];
+        var unknownOptions = values.Keys.Except(supportedOptions, StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        if (unknownOptions.Length > 0)
+        {
+            await error.WriteLineAsync($"error: unsupported webforms-modernization option(s): {string.Join(", ", unknownOptions)}.");
+            return 1;
+        }
         if (!values.TryGetValue("--index", out var indexPath) || string.IsNullOrWhiteSpace(indexPath))
         {
             await error.WriteLineAsync("error: webforms-modernization requires --index <index.sqlite>.");
@@ -2157,6 +2168,8 @@ public static class TraceMapCommand
         Dictionary<string, List<string>> values,
         HashSet<string> flags)
     {
+        public IEnumerable<string> Keys => values.Keys.Concat(flags);
+
         public bool TryGetValue(string key, out string? value)
         {
             if (values.TryGetValue(key, out var list) && list.Count > 0)

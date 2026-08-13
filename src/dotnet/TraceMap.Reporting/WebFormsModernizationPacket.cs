@@ -40,6 +40,7 @@ public sealed record WebFormsModernizationPacket(
 
 public sealed record WebFormsModernizationSource(
     string SourceId,
+    string RepositoryId,
     string ScanId,
     string CommitSha,
     string AnalysisLevel,
@@ -237,7 +238,8 @@ public static class WebFormsModernizationPacketReporter
         if (retainedPages.Length < pageFacts.Length)
         {
             truncated = true;
-            AddGeneratedGap(gaps, options.MaxGaps, snapshot, "WebFormsModernizationSurfaceLimitReached", "packet", null, []);
+            AddGeneratedGap(gaps, options.MaxGaps, snapshot, "WebFormsModernizationSurfaceLimitReached", "packet", null,
+                pageFacts.Skip(retainedPages.Length).Select(fact => fact.FactId));
         }
 
         var compositionFacts = facts.Where(fact => fact.FactType == FactTypes.WebFormsCompositionDeclared).ToArray();
@@ -245,8 +247,11 @@ public static class WebFormsModernizationPacketReporter
         var surfaces = retainedPages.Select(page =>
         {
             var surfaceId = SurfaceIdentity(page);
-            var supportingCompositions = compositionFacts.Where(fact => fact.SourceSymbol == surfaceId).ToArray();
             var controls = controlFacts.Where(fact => fact.Properties.GetValueOrDefault("surfaceIdentity") == surfaceId).ToArray();
+            var controlIds = controls.Select(fact => fact.Properties.GetValueOrDefault("controlIdentity") ?? fact.TargetSymbol)
+                .Where(value => !string.IsNullOrWhiteSpace(value)).Cast<string>().ToHashSet(StringComparer.Ordinal);
+            var supportingCompositions = compositionFacts.Where(fact => fact.SourceSymbol == surfaceId
+                || (fact.SourceSymbol is not null && controlIds.Contains(fact.SourceSymbol))).ToArray();
             return new WebFormsModernizationSurface(
                 surfaceId,
                 SafeKind(page.Properties.GetValueOrDefault("directiveKind"), "unknown"),
@@ -359,7 +364,7 @@ public static class WebFormsModernizationPacketReporter
             AddPathGap(gaps, options.MaxGaps, snapshot, pathGap);
 
         var candidates = BuildCandidates(surfaces, compositionFacts, factsById, options.MaxCandidates, ref truncated, gaps, options.MaxGaps, snapshot);
-        if (gaps.Count >= options.MaxGaps && (facts.Any(fact => fact.FactType == FactTypes.AnalysisGap) || legacyFlow.Gaps.Count > 0)) truncated = true;
+        if (gaps.Any(gap => gap.Classification == "WebFormsModernizationGapLimitReached")) truncated = true;
         var uniqueGaps = gaps.GroupBy(gap => gap.GapId, StringComparer.Ordinal).Select(group => group.First()).OrderBy(gap => gap.GapId, StringComparer.Ordinal).ToArray();
         var hasReducedInput = facts.Any(fact => fact.EvidenceTier == EvidenceTiers.Tier4Unknown
             || IsReducedCoverageLabel(fact.Properties.GetValueOrDefault("coverageLabel")));
@@ -368,6 +373,7 @@ public static class WebFormsModernizationPacketReporter
             : "reduced-static-webforms-modernization";
         var source = new WebFormsModernizationSource(
             HashId("source", [snapshot.Repository, snapshot.ScanId, snapshot.CommitSha]),
+            HashId("repository", [snapshot.Repository]),
             snapshot.ScanId,
             snapshot.CommitSha,
             snapshot.AnalysisLevel,
@@ -401,11 +407,18 @@ public static class WebFormsModernizationPacketReporter
         Snapshot snapshot)
     {
         var surfaceSet = surfaces.Select(surface => surface.SurfaceId).ToHashSet(StringComparer.Ordinal);
+        var containingSurfaceByControl = surfaces
+            .SelectMany(surface => surface.ControlIds.Select(controlId => (controlId, surface.SurfaceId)))
+            .GroupBy(item => item.controlId, StringComparer.Ordinal)
+            .Where(group => group.Select(item => item.SurfaceId).Distinct(StringComparer.Ordinal).Count() == 1)
+            .ToDictionary(group => group.Key, group => group.Single().SurfaceId, StringComparer.Ordinal);
         var adjacency = surfaces.ToDictionary(surface => surface.SurfaceId, _ => new SortedSet<string>(StringComparer.Ordinal), StringComparer.Ordinal);
         foreach (var fact in compositionFacts)
         {
             var source = SafeIdentity(fact.SourceSymbol);
             var target = SafeIdentity(fact.TargetSymbol);
+            if (source is not null && !surfaceSet.Contains(source))
+                source = containingSurfaceByControl.GetValueOrDefault(source);
             if (source is null || target is null || !surfaceSet.Contains(source) || !surfaceSet.Contains(target)) continue;
             adjacency[source].Add(target);
             adjacency[target].Add(source);
@@ -426,7 +439,8 @@ public static class WebFormsModernizationPacketReporter
             if (result.Count >= maxCandidates)
             {
                 truncated = true;
-                AddGeneratedGap(gaps, maxGaps, snapshot, "WebFormsModernizationCandidateLimitReached", "packet", null, []);
+                var omittedSupport = surfaces.First(surface => surface.SurfaceId == root).SupportingFactIds;
+                AddGeneratedGap(gaps, maxGaps, snapshot, "WebFormsModernizationCandidateLimitReached", "packet", null, omittedSupport);
                 break;
             }
             var support = surfaces.Where(surface => component.Contains(surface.SurfaceId)).SelectMany(surface => surface.SupportingFactIds)
@@ -537,9 +551,17 @@ public static class WebFormsModernizationPacketReporter
 
     private static void AddFactGap(List<WebFormsModernizationGap> gaps, int maxGaps, Snapshot snapshot, CodeFact fact)
     {
-        if (gaps.Count >= maxGaps) return;
+        if (gaps.Count >= maxGaps)
+        {
+            AddGeneratedGap(gaps, maxGaps, snapshot, "WebFormsModernizationGapLimitReached", "packet", null, [fact.FactId]);
+            return;
+        }
         var evidence = Evidence(fact, gaps, maxGaps, snapshot);
-        if (gaps.Count >= maxGaps) return;
+        if (gaps.Count >= maxGaps)
+        {
+            AddGeneratedGap(gaps, maxGaps, snapshot, "WebFormsModernizationGapLimitReached", "packet", null, [fact.FactId]);
+            return;
+        }
         gaps.Add(new(
             HashId("gap", [fact.FactId]),
             SafeKind(fact.Properties.GetValueOrDefault("gapKind"), "AnalysisGap"),
@@ -560,7 +582,11 @@ public static class WebFormsModernizationPacketReporter
 
     private static void AddPathGap(List<WebFormsModernizationGap> gaps, int maxGaps, Snapshot snapshot, CombinedPathGap gap)
     {
-        if (gaps.Count >= maxGaps) return;
+        if (gaps.Count >= maxGaps)
+        {
+            AddGeneratedGap(gaps, maxGaps, snapshot, "WebFormsModernizationGapLimitReached", "packet", null, gap.EffectiveSupportingFactIds);
+            return;
+        }
         gaps.Add(new(
             HashId("gap", [gap.GapId]),
             SafeKind(gap.GapKind, "LegacyFlowGap"),
@@ -583,8 +609,28 @@ public static class WebFormsModernizationPacketReporter
     {
         var supporting = support.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
         var gapId = HashId("gap", [classification, scopeKind, scopeId ?? "none", .. supporting]);
-        if (gaps.Any(gap => gap.GapId == gapId) || gaps.Select(gap => gap.GapId).Distinct(StringComparer.Ordinal).Count() >= maxGaps) return;
-        gaps.Add(new(
+        if (gaps.Any(gap => gap.GapId == gapId)) return;
+        if (gaps.Select(gap => gap.GapId).Distinct(StringComparer.Ordinal).Count() >= maxGaps)
+        {
+            const string limitClassification = "WebFormsModernizationGapLimitReached";
+            if (gaps.Any(gap => gap.Classification == limitClassification)) return;
+            var limitSupport = supporting.Take(16).ToArray();
+            var limitGap = CreateGeneratedGap(snapshot, limitClassification, "packet", null, limitSupport);
+            gaps[^1] = limitGap;
+            return;
+        }
+        gaps.Add(CreateGeneratedGap(snapshot, classification, scopeKind, scopeId, supporting));
+    }
+
+    private static WebFormsModernizationGap CreateGeneratedGap(
+        Snapshot snapshot,
+        string classification,
+        string scopeKind,
+        string? scopeId,
+        IReadOnlyList<string> supporting)
+    {
+        var gapId = HashId("gap", [classification, scopeKind, scopeId ?? "none", .. supporting]);
+        return new(
             gapId,
             classification,
             scopeKind,
@@ -599,7 +645,7 @@ public static class WebFormsModernizationPacketReporter
             "WebFormsModernizationPacketReporter",
             "webforms-modernization-packet/1.0.0",
             supporting,
-            ["The packet failed closed because required evidence was unavailable or bounded by a deterministic limit."]));
+            ["The packet failed closed because required evidence was unavailable or bounded by a deterministic limit."]);
     }
 
     private static async Task<Snapshot> ReadSnapshotAsync(string path, CancellationToken cancellationToken)
@@ -610,47 +656,81 @@ public static class WebFormsModernizationPacketReporter
             Mode = SqliteOpenMode.ReadOnly,
             Cache = SqliteCacheMode.Private
         }.ToString());
-        await connection.OpenAsync(cancellationToken);
-        string repository;
-        string scanId;
-        string commit;
-        string analysis;
-        string build;
-        await using (var command = connection.CreateCommand())
+        try
         {
-            command.CommandText = "select scan_id, repo, commit_sha, analysis_level, build_status from scan_manifest order by scanned_at desc limit 1;";
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-            if (!await reader.ReadAsync(cancellationToken)) throw new InvalidDataException("WebFormsModernizationScanIdentityUnavailable");
-            scanId = reader.GetString(0);
-            repository = reader.GetString(1);
-            commit = reader.GetString(2);
-            analysis = reader.GetString(3);
-            build = reader.GetString(4);
-        }
-        var facts = new List<CodeFact>();
-        await using (var command = connection.CreateCommand())
-        {
-            command.CommandText = """
+            await connection.OpenAsync(cancellationToken);
+            await using (var queryOnly = connection.CreateCommand())
+            {
+                queryOnly.CommandText = "pragma query_only = on;";
+                await queryOnly.ExecuteNonQueryAsync(cancellationToken);
+            }
+            if (!await TableExistsAsync(connection, "scan_manifest", cancellationToken)
+                || !await TableExistsAsync(connection, "facts", cancellationToken)
+                || await TableExistsAsync(connection, "index_sources", cancellationToken))
+                throw new InvalidDataException("WebFormsModernizationIndexUnsupported");
+            await using (var count = connection.CreateCommand())
+            {
+                count.CommandText = "select count(*) from scan_manifest;";
+                if (Convert.ToInt64(await count.ExecuteScalarAsync(cancellationToken)) != 1)
+                    throw new InvalidDataException("WebFormsModernizationSnapshotInvalid");
+            }
+            string repository;
+            string scanId;
+            string commit;
+            string analysis;
+            string build;
+            await using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "select scan_id, repo, commit_sha, analysis_level, build_status from scan_manifest limit 1;";
+                await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+                if (!await reader.ReadAsync(cancellationToken)) throw new InvalidDataException("WebFormsModernizationScanIdentityUnavailable");
+                scanId = reader.GetString(0);
+                repository = reader.GetString(1);
+                commit = reader.GetString(2);
+                analysis = reader.GetString(3);
+                build = reader.GetString(4);
+            }
+            var facts = new List<CodeFact>();
+            await using (var command = connection.CreateCommand())
+            {
+                command.CommandText = """
                 select fact_id, scan_id, repo, commit_sha, project_path, fact_type, rule_id, evidence_tier,
                        source_symbol, target_symbol, contract_element, file_path, start_line, end_line,
                        snippet_hash, extractor_id, extractor_version, properties_json
                 from facts where rule_id like 'legacy.webforms.%' order by fact_id;
                 """;
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-            while (await reader.ReadAsync(cancellationToken))
-            {
-                var properties = JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(17)) ?? [];
-                facts.Add(new(
+                await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+                while (await reader.ReadAsync(cancellationToken))
+                {
+                    var properties = JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(17)) ?? [];
+                    facts.Add(new(
                     reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
                     reader.IsDBNull(4) ? null : reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetString(7),
                     reader.IsDBNull(8) ? null : reader.GetString(8), reader.IsDBNull(9) ? null : reader.GetString(9), reader.IsDBNull(10) ? null : reader.GetString(10),
                     new(reader.GetString(11), reader.GetInt32(12), reader.GetInt32(13), reader.IsDBNull(14) ? null : reader.GetString(14), reader.GetString(15), reader.GetString(16)),
-                    new SortedDictionary<string, string>(properties, StringComparer.Ordinal)));
+                        new SortedDictionary<string, string>(properties, StringComparer.Ordinal)));
+                }
             }
+            if (facts.Any(fact => fact.ScanId != scanId || fact.Repo != repository || fact.CommitSha != commit))
+                throw new InvalidDataException("WebFormsModernizationSourceIdentityMismatch");
+            return new(repository, scanId, commit, analysis, build, facts);
         }
-        if (facts.Any(fact => fact.ScanId != scanId || fact.Repo != repository || fact.CommitSha != commit))
-            throw new InvalidDataException("WebFormsModernizationSourceIdentityMismatch");
-        return new(repository, scanId, commit, analysis, build, facts);
+        catch (InvalidDataException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is SqliteException or JsonException or InvalidCastException or FormatException or OverflowException)
+        {
+            throw new InvalidDataException("WebFormsModernizationIndexUnsupported", exception);
+        }
+    }
+
+    private static async Task<bool> TableExistsAsync(SqliteConnection connection, string tableName, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = "select count(*) from sqlite_master where type = 'table' and name = $name;";
+        command.Parameters.AddWithValue("$name", tableName);
+        return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken)) > 0;
     }
 
     private static string RenderMarkdown(WebFormsModernizationPacket packet)
@@ -662,6 +742,7 @@ public static class WebFormsModernizationPacketReporter
         b.AppendLine($"- Rule: `{packet.RuleId}`");
         b.AppendLine($"- Claim level: `{packet.ClaimLevel}`");
         b.AppendLine($"- Coverage: `{packet.Coverage}`");
+        b.AppendLine($"- Repository: `{packet.Sources.Single().RepositoryId}`");
         b.AppendLine($"- Commit: `{packet.Sources.Single().CommitSha}`");
         b.AppendLine($"- Surfaces: `{packet.Summary.SurfaceCount}`; event chains: `{packet.Summary.EventChainCount}`; structural candidates: `{packet.Summary.StructuralSliceCandidateCount}`; gaps: `{packet.Summary.GapCount}`; truncated: `{packet.Summary.Truncated}`.").AppendLine();
         b.AppendLine("## Surfaces").AppendLine();
