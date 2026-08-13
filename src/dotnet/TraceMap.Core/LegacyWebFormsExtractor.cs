@@ -924,6 +924,7 @@ public static partial class LegacyWebFormsExtractor
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
             ["bindingKind"] = binding.BindingKind.ToString(),
+            ["coverageLabel"] = "bounded-static-webforms-event",
             ["controlId"] = binding.ControlId,
             ["controlType"] = binding.ControlType,
             ["eventSourceIdentity"] = sourceIdentity,
@@ -969,6 +970,7 @@ public static partial class LegacyWebFormsExtractor
             contractElement: field.FieldName,
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
+                ["coverageLabel"] = "bounded-static-webforms-designer",
                 ["controlType"] = field.ControlType,
                 ["fieldName"] = field.FieldName,
                 ["pageTypeName"] = field.PageTypeName,
@@ -999,6 +1001,7 @@ public static partial class LegacyWebFormsExtractor
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
             ["bindingFactId"] = bindingFact.FactId,
+            ["coverageLabel"] = tier == EvidenceTiers.Tier1Semantic ? "bounded-static-webforms-handler" : "reduced-static-webforms-handler",
             ["controlId"] = binding.ControlId,
             ["eventName"] = binding.EventName,
             ["eventSourceIdentity"] = eventSourceIdentity,
@@ -1074,6 +1077,7 @@ public static partial class LegacyWebFormsExtractor
         {
             ["controlId"] = resolution.Properties.GetValueOrDefault("controlId") ?? string.Empty,
             ["coverage"] = hasReducedCoverage ? "Reduced" : "Full",
+            ["coverageLabel"] = hasReducedCoverage ? "reduced-static-webforms-flow" : "bounded-static-webforms-flow",
             ["eventName"] = resolution.Properties.GetValueOrDefault("eventName") ?? string.Empty,
             ["evidenceTiers"] = string.Join(",", supportingFacts.Select(fact => fact.EvidenceTier).Append(resolution.EvidenceTier).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal)),
             ["flowClassification"] = classification,
@@ -1144,6 +1148,7 @@ public static partial class LegacyWebFormsExtractor
             contractElement: handlerName,
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
+                ["coverageLabel"] = "bounded-static-webforms-logic-signal",
                 ["handlerName"] = handlerName,
                 ["pageTypeName"] = resolution.Properties.GetValueOrDefault("pageTypeName") ?? string.Empty,
                 ["signalKind"] = signalKind,
