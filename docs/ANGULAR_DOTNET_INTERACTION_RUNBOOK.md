@@ -51,13 +51,15 @@ link or reduced coverage instead of inventing it.
 - A current TraceMap checkout.
 - .NET SDK 10.
 - Node.js 20 and npm.
+- `jq` when using the Bash workflow.
 - PowerShell 7.3 or later when using the Windows workflow.
 - Local, authorized checkouts of every repository being reviewed.
 - A resolvable Git commit for each source repository.
 - Enough local disk space for one scan directory per repository plus reports.
 
-Use clean, committed source checkouts when practical. Record each source HEAD
-before scanning; a commit SHA does not describe uncommitted edits.
+Use clean, committed source checkouts. Record each source HEAD before scanning;
+a commit SHA does not describe uncommitted edits, and the current scan manifest
+does not carry a content-bound dirty-tree identity.
 
 The commands below keep every generated artifact beneath a new timestamped
 output directory. Do not reuse an old output path.
@@ -172,7 +174,10 @@ foreach ($Repository in $Repositories) {
     "REPOSITORY: $Repository"
     git -C $Repository rev-parse --show-toplevel
     git -C $Repository rev-parse HEAD
-    git -C $Repository status --short
+    $WorkingTreeStatus = @(git -C $Repository status --short)
+    if ($WorkingTreeStatus.Count -gt 0) {
+        throw "Source checkout must be clean before scanning: $Repository"
+    }
 }
 ```
 
@@ -183,12 +188,18 @@ for REPOSITORY in "$ANGULAR_REPO" "$API_REPO" "$WORKER_REPO"; do
   printf 'REPOSITORY: %s\n' "$REPOSITORY"
   git -C "$REPOSITORY" rev-parse --show-toplevel
   git -C "$REPOSITORY" rev-parse HEAD
-  git -C "$REPOSITORY" status --short
+  WORKING_TREE_STATUS="$(git -C "$REPOSITORY" status --short)"
+  if test -n "$WORKING_TREE_STATUS"; then
+    printf 'Source checkout must be clean before scanning: %s\n' \
+      "$REPOSITORY" >&2
+    exit 1
+  fi
 done
 ```
 
-Stop and decide whether to commit, stash, or intentionally retain any reported
-working-tree changes before scanning.
+Commit or stash working-tree changes before scanning. If the review must cover
+uncommitted bytes, create a separate content-addressed source snapshot and scan
+that snapshot; do not attribute dirty source content to the checkout's HEAD.
 
 ## Scan the Angular repository
 
