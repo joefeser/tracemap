@@ -6,6 +6,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
+$isWindowsHost = [Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([Runtime.InteropServices.OSPlatform]::Windows)
+$isMacOSHost = [Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([Runtime.InteropServices.OSPlatform]::OSX)
+$isLinuxHost = [Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([Runtime.InteropServices.OSPlatform]::Linux)
 
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $head = (& git -C $repo rev-parse HEAD).Trim()
@@ -47,7 +50,7 @@ New-Item -ItemType Directory -Path $feed, $fixture | Out-Null
     <add key="local" value="$feed" />
   </packageSources>
 </configuration>
-"@ | Set-Content -LiteralPath $nugetConfig -Encoding utf8NoBOM
+"@ | ForEach-Object { [IO.File]::WriteAllText($nugetConfig, $_, [Text.UTF8Encoding]::new($false)) }
 
 function Invoke-Checked {
     param([string]$File, [string[]]$Arguments, [string]$WorkingDirectory = $repo)
@@ -80,9 +83,9 @@ function Read-Version([string]$Executable, [string[]]$Prefix = @()) {
 
 function Get-RuntimeIdentifier {
     $architecture = [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString().ToLowerInvariant()
-    if ($IsWindows) { return "win-$architecture" }
-    if ($IsMacOS) { return "osx-$architecture" }
-    if ($IsLinux) { return "linux-$architecture" }
+    if ($isWindowsHost) { return "win-$architecture" }
+    if ($isMacOSHost) { return "osx-$architecture" }
+    if ($isLinuxHost) { return "linux-$architecture" }
     throw "LocalDistributionHostUnsupported"
 }
 
@@ -113,11 +116,11 @@ try {
 
     Invoke-Checked dotnet @("tool", "install", "TraceMap.Tool", "--tool-path", $toolPath,
         "--version", $versionOne, "--configfile", $nugetConfig, "--no-cache")
-    $tool = Join-Path $toolPath $(if ($IsWindows) { "tracemap.exe" } else { "tracemap" })
+    $tool = Join-Path $toolPath $(if ($isWindowsHost) { "tracemap.exe" } else { "tracemap" })
     $firstVersion = Read-Version $tool
     if ($firstVersion.distributionKind -ne "dotnet-tool") { throw "LocalDistributionKindMismatch" }
 
-    Set-Content -LiteralPath (Join-Path $fixture "Fixture.cs") -Value "internal sealed class Fixture { }" -Encoding utf8NoBOM
+    [IO.File]::WriteAllText((Join-Path $fixture "Fixture.cs"), "internal sealed class Fixture { }", [Text.UTF8Encoding]::new($false))
     Invoke-Checked git @("init") $fixture
     Invoke-Checked git @("config", "user.email", "fixture@example.invalid") $fixture
     Invoke-Checked git @("config", "user.name", "TraceMap Fixture") $fixture
@@ -149,7 +152,7 @@ try {
     Invoke-Checked dotnet @("publish", $project, "-c", $Configuration, "-o", $selfContained,
         "-r", $rid, "--self-contained", "true", "-p:TraceMapDistributionKind=self-contained-archive", "-p:Version=$versionTwo",
         "-p:DebugSymbols=false", "-p:DebugType=None")
-    $selfTool = Join-Path $selfContained $(if ($IsWindows) { "tracemap.exe" } else { "tracemap" })
+    $selfTool = Join-Path $selfContained $(if ($isWindowsHost) { "tracemap.exe" } else { "tracemap" })
     $selfVersion = Read-Version $selfTool
     if ($selfVersion.distributionKind -ne "self-contained-archive") { throw "LocalDistributionSelfContainedKindMismatch" }
 
@@ -185,9 +188,10 @@ try {
         )
     }
     $resultPath = Join-Path $root "local-distribution-smoke.json"
-    $result | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $resultPath -Encoding utf8NoBOM
+    [IO.File]::WriteAllText($resultPath, ($result | ConvertTo-Json -Depth 8), [Text.UTF8Encoding]::new($false))
     $schemaPath = Join-Path $repo "docs/contracts/local-distribution-smoke.v1.schema.json"
-    if (-not ((Get-Content -LiteralPath $resultPath -Raw) | Test-Json -SchemaFile $schemaPath)) {
+    $testJson = Get-Command Test-Json -ErrorAction SilentlyContinue
+    if ($null -ne $testJson -and -not ((Get-Content -LiteralPath $resultPath -Raw) | Test-Json -SchemaFile $schemaPath)) {
         throw "LocalDistributionReceiptSchemaMismatch"
     }
     Write-Output "local-distribution-smoke=completed;head=$head;host=$($firstVersion.host.operatingSystem)-$($firstVersion.host.architecture);result=$resultPath"
