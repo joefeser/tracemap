@@ -73,7 +73,7 @@ public static partial class LegacyWebFormsExtractor
             foreach (var binding in page.Bindings)
             {
                 var designerFact = designerFactsByPageAndField.GetValueOrDefault(SurfaceFieldKey(page.FilePath, binding.ControlId));
-                var bindingFact = CreateEventBindingFact(manifest, page, binding, designerFact);
+                var bindingFact = CreateEventBindingFact(manifest, page, binding, designerFact, ResolveHandlerIdentity(page, binding, context, existingFacts));
                 facts.Add(bindingFact);
                 AddHandlerResolutionFacts(manifest, page, binding, bindingFact, context, existingFacts, facts);
             }
@@ -510,7 +510,15 @@ public static partial class LegacyWebFormsExtractor
         }
 
         var method = candidates[0];
-        facts.Add(CreateHandlerFact(manifest, page, binding, bindingFact, method, existingFacts, isAutoWireup: false));
+        facts.Add(CreateHandlerFact(
+            manifest,
+            page,
+            binding,
+            bindingFact,
+            method,
+            existingFacts,
+            isAutoWireup: false,
+            hasExplicitSubscription: binding.BindingKind.StartsWith("Explicit", StringComparison.Ordinal)));
     }
 
     private static void AddAutoWireupFacts(
@@ -529,6 +537,11 @@ public static partial class LegacyWebFormsExtractor
             }
 
             var hasExplicitSubscription = HasExplicitEventSubscription(page, handlerName, eventName, context);
+            if (hasExplicitSubscription)
+            {
+                continue;
+            }
+
             if (page.AutoEventWireup != true && !hasExplicitSubscription)
             {
                 facts.Add(CreateGap(manifest, page.FilePath, page.DirectiveLine, "AutoEventWireupUnavailable", $"Auto-event-wireup handler `{handlerName}` is visible, but explicit enabled evidence is absent."));
@@ -541,9 +554,8 @@ public static partial class LegacyWebFormsExtractor
                 continue;
             }
 
-            var bindingKind = page.AutoEventWireup == true ? "AutoEventWireup" : "ExplicitLifecycleSubscription";
-            var syntheticBinding = new WebFormsBinding(page.DirectiveKind, page.PageTypeName, eventName, handlerName, page.FilePath, page.DirectiveLine, null, null, bindingKind);
-            var bindingFact = CreateEventBindingFact(manifest, page, syntheticBinding, null);
+            var syntheticBinding = new WebFormsBinding(page.DirectiveKind, page.PageTypeName, eventName, handlerName, page.FilePath, page.DirectiveLine, null, null, "AutoEventWireup");
+            var bindingFact = CreateEventBindingFact(manifest, page, syntheticBinding, null, ResolveHandlerIdentity(page, syntheticBinding, context, existingFacts));
             facts.Add(bindingFact);
             facts.Add(CreateHandlerFact(manifest, page, syntheticBinding, bindingFact, candidates[0], existingFacts, isAutoWireup: page.AutoEventWireup == true, hasExplicitSubscription));
         }
@@ -612,6 +624,30 @@ public static partial class LegacyWebFormsExtractor
 
             if (subscription.ReceiverName is null or "this" or "base")
             {
+                var lifecycleEventName = "On" + subscription.EventName;
+                if (!SupportedEvents.Contains(lifecycleEventName))
+                {
+                    continue;
+                }
+
+                var lifecycleBinding = new WebFormsBinding(
+                    page.DirectiveKind,
+                    page.PageTypeName,
+                    lifecycleEventName,
+                    subscription.HandlerName,
+                    subscription.FilePath,
+                    subscription.Line,
+                    null,
+                    subscription.SnippetHash,
+                    "ExplicitLifecycleSubscription");
+                var lifecycleBindingFact = CreateEventBindingFact(
+                    manifest,
+                    page,
+                    lifecycleBinding,
+                    null,
+                    ResolveHandlerIdentity(page, lifecycleBinding, context, existingFacts));
+                facts.Add(lifecycleBindingFact);
+                AddHandlerResolutionFacts(manifest, page, lifecycleBinding, lifecycleBindingFact, context, existingFacts, facts);
                 continue;
             }
 
@@ -649,7 +685,7 @@ public static partial class LegacyWebFormsExtractor
                 control.Line,
                 subscription.SnippetHash,
                 "ExplicitControlSubscription");
-            var bindingFact = CreateEventBindingFact(manifest, page, binding, null);
+            var bindingFact = CreateEventBindingFact(manifest, page, binding, null, ResolveHandlerIdentity(page, binding, context, existingFacts));
             facts.Add(bindingFact);
             AddHandlerResolutionFacts(manifest, page, binding, bindingFact, context, existingFacts, facts);
         }
@@ -849,7 +885,29 @@ public static partial class LegacyWebFormsExtractor
             });
     }
 
-    private static CodeFact CreateEventBindingFact(ScanManifest manifest, WebFormsPage page, WebFormsBinding binding, CodeFact? designerFact)
+    private static string ResolveHandlerIdentity(
+        WebFormsPage page,
+        WebFormsBinding binding,
+        WebFormsContext context,
+        IReadOnlyList<CodeFact> existingFacts)
+    {
+        var candidates = CandidateMethods(page, binding.HandlerName, context, existingFacts).ToArray();
+        if (candidates.Length != 1)
+        {
+            return StructuralHandlerIdentity(page, binding.HandlerName);
+        }
+
+        var method = candidates[0];
+        return FindSemanticHandlerEvidence(method, existingFacts)?.Properties.GetValueOrDefault("sourceSymbolId")
+            ?? StructuralHandlerIdentity(page, method.MethodName, method.FilePath, method.Line);
+    }
+
+    private static CodeFact CreateEventBindingFact(
+        ScanManifest manifest,
+        WebFormsPage page,
+        WebFormsBinding binding,
+        CodeFact? designerFact,
+        string handlerIdentity)
     {
         var surfaceIdentity = SurfaceIdentity(page.FilePath);
         var control = page.Controls.FirstOrDefault(candidate =>
@@ -859,7 +917,6 @@ public static partial class LegacyWebFormsExtractor
         var sourceIdentity = control is null
             ? surfaceIdentity
             : ControlIdentity(surfaceIdentity, control);
-        var structuralHandlerIdentity = StructuralHandlerIdentity(page, binding.HandlerName);
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
             ["bindingKind"] = binding.BindingKind,
@@ -868,7 +925,7 @@ public static partial class LegacyWebFormsExtractor
             ["eventSourceIdentity"] = sourceIdentity,
             ["eventName"] = binding.EventName,
             ["handlerName"] = binding.HandlerName,
-            ["handlerSymbolId"] = structuralHandlerIdentity,
+            ["handlerSymbolId"] = handlerIdentity,
             ["pageTypeName"] = page.PageTypeName,
             ["surfaceIdentity"] = surfaceIdentity,
             ["ruleLimitations"] = "Static WebForms event bindings do not prove that an event fires, a postback occurs, validation succeeds, or a handler executes at runtime."
@@ -885,7 +942,7 @@ public static partial class LegacyWebFormsExtractor
             binding.BindingKind == "MarkupAttribute" ? EvidenceTiers.Tier2Structural : EvidenceTiers.Tier3SyntaxOrTextual,
             new EvidenceSpan(binding.FilePath, binding.Line, binding.Line, binding.SnippetHash, "LegacyWebFormsExtractor", ScannerVersions.LegacyWebFormsExtractor),
             sourceSymbol: sourceIdentity,
-            targetSymbol: structuralHandlerIdentity,
+            targetSymbol: handlerIdentity,
             contractElement: binding.HandlerName,
             properties: properties);
     }
