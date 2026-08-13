@@ -179,7 +179,7 @@ public sealed class LegacyWebFormsEventIdentityTests
             namespace Sample;
             public partial class Default { }
             """);
-        File.WriteAllText(Path.Combine(repo, "Handlers.aspx.cs"), """
+        File.WriteAllText(Path.Combine(repo, "Default.Handlers.cs"), """
             using System;
             namespace Sample;
             public partial class Default
@@ -206,7 +206,7 @@ public sealed class LegacyWebFormsEventIdentityTests
 
         Assert.Equal(EvidenceTiers.Tier1Semantic, handler.EvidenceTier);
         Assert.Equal("SemanticSourceSymbol", handler.Properties["resolutionKind"]);
-        Assert.Equal("Handlers.aspx.cs", handler.Evidence.FilePath);
+        Assert.Equal("Default.Handlers.cs", handler.Evidence.FilePath);
         Assert.StartsWith("csharp method ", handler.TargetSymbol, StringComparison.Ordinal);
         Assert.Equal(binding.TargetSymbol, handler.TargetSymbol);
         Assert.DoesNotContain(result.Facts, fact =>
@@ -276,8 +276,10 @@ public sealed class LegacyWebFormsEventIdentityTests
                 {
                     base.SaveButton.Click += Save_Click;
                     Page.Load += Page_Load;
+                    total += 1;
                 }
 
+                private int total;
                 protected void Save_Click(object sender, EventArgs e) { }
                 protected void Page_Load(object sender, EventArgs e) { }
             }
@@ -311,5 +313,8 @@ public sealed class LegacyWebFormsEventIdentityTests
             fact.FactType == FactTypes.AnalysisGap
             && fact.Properties.GetValueOrDefault("gapKind") == "AutoEventWireupUnavailable"
             && fact.Properties.GetValueOrDefault("message")?.Contains("Page_Load", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "DynamicWebFormsEventSubscription");
     }
 }
