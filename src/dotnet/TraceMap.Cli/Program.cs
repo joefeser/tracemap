@@ -553,6 +553,8 @@ public static class TraceMapCommand
             ParsePositiveInt(values, "--max-paths", 1_000),
             ParsePositiveInt(values, "--max-boundaries", 1_000)), cancellationToken);
         await output.WriteLineAsync($"TraceMap Web Forms modernization packet completed: {result.JsonPath}");
+        await output.WriteLineAsync($"Repository: {result.Packet.Sources.Single().RepositoryId}");
+        await output.WriteLineAsync($"Commit SHA: {result.Packet.Sources.Single().CommitSha}");
         await output.WriteLineAsync($"Coverage: {result.Packet.Coverage}");
         await output.WriteLineAsync($"Surfaces: {result.Packet.Summary.SurfaceCount}");
         await output.WriteLineAsync($"Event chains: {result.Packet.Summary.EventChainCount}");
