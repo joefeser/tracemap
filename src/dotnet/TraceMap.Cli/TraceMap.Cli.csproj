@@ -34,7 +34,7 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(TraceMapPackAsTool)' == 'true'">
-    <None Include="../../../docs/LOCAL_REVIEW_WORKFLOW.md" Pack="true" PackagePath="/" Link="README.md" />
+    <None Include="../../../docs/LOCAL_REVIEW_WORKFLOW.md" Pack="true" PackagePath="README.md" />
   </ItemGroup>
 
   <Target Name="SetTraceMapSourceState" BeforeTargets="CoreCompile">
