@@ -124,14 +124,8 @@ public static partial class LegacyWebFormsExtractor
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
             .Select(item => ParseMarkupFile(repoPath, item, inventory, inventoryPathIndex))
             .ToArray();
-        var linkedPaths = pages
-            .Select(page => page.LinkedCodePath)
-            .Where(path => !string.IsNullOrWhiteSpace(path))
-            .Select(path => path!)
-            .ToHashSet(StringComparer.Ordinal);
         var codeFiles = inventory
-            .Where(item => item.Kind == "WebFormsCodeBehind"
-                || item.Kind == "CSharp" && linkedPaths.Contains(item.RelativePath))
+            .Where(item => item.Kind is "WebFormsCodeBehind" or "CSharp")
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
             .Select(item => ParseCodeFile(repoPath, item.RelativePath))
             .Where(file => file is not null)
@@ -620,24 +614,30 @@ public static partial class LegacyWebFormsExtractor
             .ToArray();
         foreach (var subscription in subscriptions)
         {
+            var lifecycleReceiver = subscription.ReceiverName is null or "this" or "base" or "Page";
+            var eventAttributeName = "On" + subscription.EventName;
+            if (!SupportedEvents.Contains(eventAttributeName))
+            {
+                if (!lifecycleReceiver && subscription.HandlerName is not null)
+                {
+                    facts.Add(CreateGap(manifest, subscription.FilePath, subscription.Line, "UnsupportedWebFormsEventSubscription", $"Static control subscription event `{subscription.EventName}` is outside the documented representative event set."));
+                }
+
+                continue;
+            }
+
             if (subscription.HandlerName is null)
             {
                 facts.Add(CreateGap(manifest, subscription.FilePath, subscription.Line, "DynamicWebFormsEventSubscription", "An event subscription uses a lambda, delegate expression, or unsupported dynamic handler shape; TraceMap did not infer a handler."));
                 continue;
             }
 
-            if (subscription.ReceiverName is null or "this" or "base" or "Page")
+            if (lifecycleReceiver)
             {
-                var lifecycleEventName = "On" + subscription.EventName;
-                if (!SupportedEvents.Contains(lifecycleEventName))
-                {
-                    continue;
-                }
-
                 var lifecycleBinding = new WebFormsBinding(
                     page.DirectiveKind,
                     page.PageTypeName,
-                    lifecycleEventName,
+                    eventAttributeName,
                     subscription.HandlerName,
                     subscription.FilePath,
                     subscription.Line,
@@ -652,13 +652,6 @@ public static partial class LegacyWebFormsExtractor
                     ResolveHandlerIdentity(page, lifecycleBinding, context, existingFacts));
                 facts.Add(lifecycleBindingFact);
                 AddHandlerResolutionFacts(manifest, page, lifecycleBinding, lifecycleBindingFact, context, existingFacts, facts);
-                continue;
-            }
-
-            var eventAttributeName = "On" + subscription.EventName;
-            if (!SupportedEvents.Contains(eventAttributeName))
-            {
-                facts.Add(CreateGap(manifest, subscription.FilePath, subscription.Line, "UnsupportedWebFormsEventSubscription", $"Static control subscription event `{subscription.EventName}` is outside the documented representative event set."));
                 continue;
             }
 
