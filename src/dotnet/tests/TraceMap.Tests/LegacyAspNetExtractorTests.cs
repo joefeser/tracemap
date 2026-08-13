@@ -125,14 +125,22 @@ public sealed class LegacyAspNetExtractorTests
             RuleIds.CSharpSemanticSymbolRelationship,
             EvidenceTiers.Tier1Semantic,
             new("Identity.cs", 2, 2, null, "CSharpSemanticExtractor", "test/1.0"),
-            sourceSymbol: "Sample.ReviewPrincipal",
-            targetSymbol: "System.Security.Principal.IPrincipal",
+            sourceSymbol: "global::Sample.ReviewPrincipal",
+            targetSymbol: "global::System.Security.Principal.IPrincipal",
             contractElement: "ImplementsInterface");
         var typeFacts = LegacyAspNetExtractor.Extract(repo, manifest, [], [relationship]);
         Assert.Contains(typeFacts, fact => fact.FactType == FactTypes.AspNetIdentityStateDeclared
             && fact.Properties.GetValueOrDefault("identityKind") == "custom-principal-type"
             && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
             && fact.Properties.GetValueOrDefault("supportingFactIds") == relationship.FactId);
+
+        var reducedFacts = LegacyAspNetExtractor.Extract(
+            repo,
+            manifest with { BuildStatus = "FailedOrPartial" },
+            [new FileInventoryItem("Identity.cs", "CSharp", 0)],
+            [relationship]);
+        Assert.DoesNotContain(reducedFacts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "IdentitySemanticDependencyUnavailable");
     }
 
     [Fact]
