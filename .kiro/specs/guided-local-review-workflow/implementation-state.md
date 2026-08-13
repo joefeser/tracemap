@@ -98,6 +98,10 @@ framework-dependent, self-contained, and a network-disabled/read-only
 container version probe passed. The dirty-tree pack attempt failed as designed
 with `TraceMapToolPackageRequiresCleanSource`.
 
+Post-fix validation remained green: full .NET 1,525/1,525, focused
+local-review/path/Web Forms suites 59/59 on macOS, guided workflow 9/9 on
+Windows, targeted formatting, private-path guard, and diff check.
+
 ## Deferred Work
 
 - Distribution probe implementation and selection.
