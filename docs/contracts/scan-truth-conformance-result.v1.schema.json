@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tracemap.tools/contracts/scan-truth-conformance-result.v1.schema.json",
+  "title": "TraceMap scan truth conformance result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "profileId", "overallStatus", "adapters", "limitations"],
+  "properties": {
+    "schemaVersion": { "const": "scan-truth-conformance-result.v1" },
+    "profileId": { "const": "tracemap.scan-truth.v1" },
+    "overallStatus": { "enum": ["supported", "reduced", "unsupported", "not-run"] },
+    "adapters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["adapter", "status", "capabilities", "limitations"],
+        "properties": {
+          "adapter": { "enum": ["dotnet", "jvm", "python", "typescript", "swift"] },
+          "status": { "enum": ["supported", "reduced", "unsupported", "not-run"] },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["capability", "status", "ruleId", "evidence", "limitations"],
+              "properties": {
+                "capability": { "type": "string", "minLength": 1 },
+                "status": { "enum": ["supported", "reduced", "unsupported", "not-applicable", "not-run"] },
+                "ruleId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*\\.v[0-9]+$" },
+                "evidence": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+                "limitations": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+              }
+            }
+          },
+          "limitations": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+        }
+      }
+    },
+    "limitations": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+  }
+}

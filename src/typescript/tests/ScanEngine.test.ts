@@ -228,7 +228,29 @@ describe("ScanEngine", () => {
     const resultB = await scan(scanOptions(repoB, path.join(root, "out-b")));
 
     expect(resultA.manifest.scanId).toBe(resultB.manifest.scanId);
+    expect(resultA.manifest.sourceSnapshotDigest).toBe(resultB.manifest.sourceSnapshotDigest);
+    expect(resultA.manifest.sourceSnapshotDigest).toMatch(/^[0-9a-f]{64}$/);
     expect(resultA.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.MethodDeclared, targetSymbol: expect.stringContaining("run") }));
+  });
+
+  it("changes authoritative snapshot identity for same-size dirty source bytes", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    await writeMiniRepo(repo);
+    const source = path.join(repo, "src", "sample.ts");
+
+    const first = await scan(scanOptions(repo, path.join(root, "first")));
+    const original = await fsp.readFile(source, "utf8");
+    const changed = original.replace("value = 1", "value = 2");
+    expect(Buffer.byteLength(changed)).toBe(Buffer.byteLength(original));
+    await fsp.writeFile(source, changed);
+    const second = await scan(scanOptions(repo, path.join(root, "second")));
+
+    expect(first.manifest.commitSha).toBe(second.manifest.commitSha);
+    expect(first.manifest.sourceSnapshotDigest).not.toBe(second.manifest.sourceSnapshotDigest);
+    expect(first.manifest.scanId).not.toBe(second.manifest.scanId);
+    const persisted = JSON.parse(await fsp.readFile(path.join(root, "second", "scan-manifest.json"), "utf8"));
+    expect(persisted.sourceSnapshotDigest).toBe(second.manifest.sourceSnapshotDigest);
   });
 
   it("refuses unsafe output paths before deleting anything", async () => {
@@ -384,7 +406,8 @@ function manifest(repoName: string): ScanManifest {
     scannedAt: "2026-06-13T00:00:00+00:00",
     scannerVersion: "tracemap-typescript/0.1.0",
     solutions: [],
-    targetFrameworks: []
+    targetFrameworks: [],
+    sourceSnapshotDigest: "0".repeat(64)
   };
 }
 

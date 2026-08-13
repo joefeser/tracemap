@@ -2,6 +2,7 @@ package com.tracemap.jvm;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.tracemap.jvm.model.EvidenceTiers;
@@ -107,6 +108,27 @@ final class ScanEngineIntegrationTest {
         String markdown = Files.readString(report);
         assertTrue(markdown.contains("NeedsReview"));
         assertTrue(markdown.contains("PropertyAccessed"));
+    }
+
+    @Test
+    void sameSizeDirtySourceChangesAuthoritativeSnapshotIdentity() throws Exception {
+        Path repo = temp.resolve("snapshot-repo");
+        Files.createDirectories(repo.resolve("src"));
+        Path source = repo.resolve("src/Sample.java");
+        Files.writeString(source, "final class Sample { int value = 1; }\n");
+        initGit(repo);
+
+        ScanOptions firstOptions = new ScanOptions(repo, temp.resolve("snapshot-first"), List.of(), List.of(), List.of(), 1024 * 1024, false, "all");
+        ScanResult first = new ScanEngine().scan(firstOptions);
+        Files.writeString(source, "final class Sample { int value = 2; }\n");
+        ScanResult second = new ScanEngine().scan(new ScanOptions(repo, temp.resolve("snapshot-second"), List.of(), List.of(), List.of(), 1024 * 1024, false, "all"));
+
+        assertEquals(first.manifest().commitSha(), second.manifest().commitSha());
+        assertTrue(first.manifest().sourceSnapshotDigest().matches("[0-9a-f]{64}"));
+        assertNotEquals(first.manifest().sourceSnapshotDigest(), second.manifest().sourceSnapshotDigest());
+        assertNotEquals(first.manifest().scanId(), second.manifest().scanId());
+        assertTrue(Files.readString(temp.resolve("snapshot-second/scan-manifest.json"))
+            .contains(second.manifest().sourceSnapshotDigest()));
     }
 
     @Test

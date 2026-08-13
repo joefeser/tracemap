@@ -200,6 +200,7 @@ final class MarkdownReportWriterTest {
             List.of(),
             null,
             null,
-            null);
+            null,
+            "0".repeat(64));
     }
 }

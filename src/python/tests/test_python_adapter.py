@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -200,6 +201,35 @@ def test_fastapi_sample_emits_integration_and_relationship_tables(tmp_path: Path
         con.close()
 
     assert any(fact.evidence.extractor_version for fact in facts)
+
+
+def test_snapshot_identity_changes_for_same_size_dirty_bytes_and_is_persisted(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    source = repo / "app.py"
+    source.write_text("value = 1\n", encoding="utf-8")
+    _git(repo, "init")
+    _git(repo, "add", ".")
+    _git(repo, "-c", "user.name=TraceMap", "-c", "user.email=fixture@example.invalid", "commit", "-m", "baseline")
+
+    first, first_facts = scan(make_options(str(repo), str(tmp_path / "first")))
+    repeat, repeat_facts = scan(make_options(str(repo), str(tmp_path / "repeat")))
+    source.write_text("value = 2\n", encoding="utf-8")
+    changed, _ = scan(make_options(str(repo), str(tmp_path / "changed")))
+
+    assert re.fullmatch(r"[0-9a-f]{64}", first.source_snapshot_digest or "")
+    assert first.source_snapshot_digest == repeat.source_snapshot_digest
+    assert first.scan_id == repeat.scan_id
+    assert [fact.to_json() for fact in first_facts] == [fact.to_json() for fact in repeat_facts]
+    assert first.commit_sha == changed.commit_sha
+    assert first.source_snapshot_digest != changed.source_snapshot_digest
+    assert first.scan_id != changed.scan_id
+
+    persisted = json.loads((tmp_path / "first" / "scan-manifest.json").read_text(encoding="utf-8"))
+    assert persisted["sourceSnapshotDigest"] == first.source_snapshot_digest
+    with sqlite3.connect(tmp_path / "first" / "index.sqlite") as connection:
+        sqlite_manifest = json.loads(connection.execute("select manifest_json from scan_manifest").fetchone()[0])
+    assert sqlite_manifest["sourceSnapshotDigest"] == first.source_snapshot_digest
 
 
 def test_fastapi_report_renders_sql_query_patterns_without_raw_sql(tmp_path: Path) -> None:
@@ -512,6 +542,10 @@ def test_sqlite_symbol_rows_follow_role_properties(tmp_path: Path) -> None:
 
 def _manifest(scan_id: str) -> ScanManifest:
     return ScanManifest(scan_id, "repo", None, "main", "0" * 40, "python-adapter/0.1.0", "2026-06-13T00:00:00+00:00", "Level1SemanticAnalysisReduced", "FailedOrPartial", [], [], ["python"], [])
+
+
+def _git(repo: Path, *arguments: str) -> None:
+    subprocess.run(["git", *arguments], cwd=repo, check=True, capture_output=True, text=True)
 
 
 def _fact_counts(index: Path) -> dict[str, int]:

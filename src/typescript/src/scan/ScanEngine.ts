@@ -19,7 +19,7 @@ import { writeFactsJsonl } from "../storage/JsonlFactWriter";
 import { writeManifest } from "../storage/ManifestWriter";
 import { writeSqliteIndex } from "../storage/SqliteIndexWriter";
 import { writeMarkdownReport } from "../reporting/MarkdownReportWriter";
-import { hash } from "../util/Hash";
+import { hash, hashBytes } from "../util/Hash";
 import { isUnderPath } from "../util/Paths";
 
 export async function scan(options: ScanOptions): Promise<ScanResult> {
@@ -35,8 +35,9 @@ export async function scan(options: ScanOptions): Promise<ScanResult> {
     throw new Error("TraceMap TypeScript scan requires git commit SHA. Run inside a git checkout with at least one commit.");
   }
   const inventory = await collectFileInventory(options);
+  const sourceSnapshotDigest = await createSourceSnapshotDigest(inventory);
   const manifest: ScanManifest = {
-    scanId: createScanId(git, inventory),
+    scanId: createScanId(git, sourceSnapshotDigest, options),
     repoName: git.repoName,
     remoteUrl: git.remoteUrl,
     branch: git.branch,
@@ -51,7 +52,8 @@ export async function scan(options: ScanOptions): Promise<ScanResult> {
     knownGaps: [...git.knownGaps],
     scanRootRelativePath: git.gitRootPath ? normalizeManifestPath(path.relative(git.gitRootPath, repoPath)) : ".",
     scanRootPathHash: hash(repoPath),
-    gitRootHash: git.gitRootPath ? hash(path.resolve(git.gitRootPath)) : null
+    gitRootHash: git.gitRootPath ? hash(path.resolve(git.gitRootPath)) : null,
+    sourceSnapshotDigest
   };
   const gapCollector = new AnalysisGapCollector();
   for (const gitGap of git.knownGaps) {
@@ -101,6 +103,9 @@ export async function scan(options: ScanOptions): Promise<ScanResult> {
   manifest.buildStatus = fullSemantic ? "Succeeded" : options.semantic && projects.length > 0 ? "FailedOrPartial" : "NotRun";
 
   const result: ScanResult = { manifest, facts: dedupeFacts(facts), inventory };
+  if (await createSourceSnapshotDigest(inventory) !== sourceSnapshotDigest) {
+    throw new Error("SourceSnapshotChangedDuringScan");
+  }
   await writeManifest(path.join(outputPath, "scan-manifest.json"), result.manifest);
   await writeFactsJsonl(path.join(outputPath, "facts.ndjson"), result.facts);
   await writeSqliteIndex(path.join(outputPath, "index.sqlite"), result.manifest, result.facts);
@@ -113,13 +118,36 @@ function normalizeManifestPath(value: string): string {
   return !value || value === "." ? "." : value.replaceAll("\\", "/");
 }
 
-function createScanId(git: { repoName: string; remoteUrl: string | null; commitSha: string }, inventory: readonly { relativePath: string; kind: string; sizeBytes: number }[]): string {
+async function createSourceSnapshotDigest(
+  inventory: readonly { relativePath: string; absolutePath: string; kind: string; sizeBytes: number; skipped: boolean }[]
+): Promise<string> {
+  const segments: string[] = ["scan-truth-source-snapshot/v1\0"];
+  for (const item of [...inventory].sort((left, right) => left.relativePath.localeCompare(right.relativePath))) {
+    if (item.skipped) {
+      segments.push(`${item.relativePath}\0${item.kind}\0${item.sizeBytes}\0skipped-before-analysis\0`);
+    } else {
+      const content = await fs.readFile(item.absolutePath);
+      segments.push(`${item.relativePath}\0${item.kind}\0${content.byteLength}\0${hashBytes(content)}\0`);
+    }
+  }
+  return hashBytes(Buffer.from(segments.join(""), "utf8"));
+}
+
+function createScanId(
+  git: { repoName: string; remoteUrl: string | null; commitSha: string },
+  sourceSnapshotDigest: string,
+  options: ScanOptions
+): string {
   const repoIdentity = git.remoteUrl && git.remoteUrl.trim().length > 0 ? git.remoteUrl : git.repoName;
-  const signature = inventory
-    .map((item) => `${item.relativePath}|${item.kind}|${item.sizeBytes}`)
-    .sort()
-    .join("\n");
-  return `scan-${hash(`${repoIdentity}|${git.commitSha}|${signature}`, 20)}`;
+  const optionSignature = [
+    [...options.projectPaths].sort().join(","),
+    [...options.includeGlobs].sort().join(","),
+    [...options.excludeGlobs].sort().join(","),
+    String(options.maxFileByteSize),
+    String(options.semantic),
+    ScannerVersions.TraceMapTypeScript
+  ].join("|");
+  return `scan-${hash(`${repoIdentity}|${git.commitSha}|${sourceSnapshotDigest}|${optionSignature}`, 20)}`;
 }
 
 function ensureSafeOutputPath(repoPath: string, outputPath: string): void {
