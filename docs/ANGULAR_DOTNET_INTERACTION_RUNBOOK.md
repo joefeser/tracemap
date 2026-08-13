@@ -51,6 +51,7 @@ link or reduced coverage instead of inventing it.
 - A current TraceMap checkout.
 - .NET SDK 10.
 - Node.js 20 and npm.
+- PowerShell 7.3 or later when using the Windows workflow.
 - Local, authorized checkouts of every repository being reviewed.
 - A resolvable Git commit for each source repository.
 - Enough local disk space for one scan directory per repository plus reports.
@@ -63,9 +64,15 @@ output directory. Do not reuse an old output path.
 
 ## Build TraceMap once
 
+Run the later commands in the same shell session. The first block enables
+fail-fast native-command handling; the repository/output setup block repeats
+that safety initialization in case the already-built tools are being reused.
+
 ### Windows PowerShell
 
 ```powershell
+$ErrorActionPreference = "Stop"
+$PSNativeCommandUseErrorActionPreference = $true
 $TraceMap = "C:\work\tracemap"
 
 dotnet build (Join-Path $TraceMap "src\dotnet\TraceMap.sln")
@@ -79,6 +86,8 @@ Pop-Location
 ### Bash
 
 ```bash
+set -euo pipefail
+
 TRACEMAP=/work/tracemap
 
 dotnet build "$TRACEMAP/src/dotnet/TraceMap.sln"
@@ -98,6 +107,8 @@ reports and selectors.
 ### Windows PowerShell
 
 ```powershell
+$ErrorActionPreference = "Stop"
+$PSNativeCommandUseErrorActionPreference = $true
 $TraceMap = "C:\work\tracemap"
 $AngularRepo = "C:\work\application-ui"
 $AngularProject = Join-Path $AngularRepo "tsconfig.json"
@@ -118,12 +129,14 @@ $TypeScriptCli = Join-Path $TraceMap "src\typescript\dist\src\cli.js"
 if (Test-Path $OutputRoot) {
     throw "Output root already exists: $OutputRoot"
 }
-New-Item -ItemType Directory -Path $OutputRoot | Out-Null
+New-Item -ItemType Directory -Path $OutputRoot -ErrorAction Stop | Out-Null
 ```
 
 ### Bash
 
 ```bash
+set -euo pipefail
+
 TRACEMAP=/work/tracemap
 ANGULAR_REPO=/work/application-ui
 ANGULAR_PROJECT="$ANGULAR_REPO/tsconfig.json"
