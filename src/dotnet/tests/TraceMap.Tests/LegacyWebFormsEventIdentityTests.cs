@@ -276,12 +276,16 @@ public sealed class LegacyWebFormsEventIdentityTests
                 {
                     base.SaveButton.Click += Save_Click;
                     Page.Load += Page_Load;
+                    SaveButton.Text += suffix;
+                    SaveButton.CustomEvent += CustomHandler;
                     total += 1;
                 }
 
                 private int total;
+                private string suffix = "suffix";
                 protected void Save_Click(object sender, EventArgs e) { }
                 protected void Page_Load(object sender, EventArgs e) { }
+                protected void CustomHandler(object sender, EventArgs e) { }
             }
 
             public sealed class Helper
@@ -316,5 +320,55 @@ public sealed class LegacyWebFormsEventIdentityTests
         Assert.DoesNotContain(result.Facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
             && fact.Properties.GetValueOrDefault("gapKind") == "DynamicWebFormsEventSubscription");
+        var unsupportedGap = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "UnsupportedWebFormsEventSubscription");
+        Assert.Contains("CustomEvent", unsupportedGap.Properties["message"], StringComparison.Ordinal);
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("message")?.Contains("Text", StringComparison.Ordinal) == true);
+    }
+
+    [Fact]
+    public void Repeated_same_line_subscriptions_retain_distinct_deterministic_occurrences()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), """
+            <%@ Page Language="C#" CodeBehind="Default.aspx.cs" Inherits="Sample.Default" AutoEventWireup="false" %>
+            <asp:Button runat="server" ID="SaveButton" />
+            """);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx.cs"), """
+            using System;
+            namespace Sample;
+            public partial class Default
+            {
+                public Default() { SaveButton.Click += Save_Click; SaveButton.Click += Save_Click; }
+                protected object SaveButton { get; } = new object();
+                protected void Save_Click(object sender, EventArgs e) { }
+            }
+            """);
+
+        var first = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out-a")));
+        var second = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out-b")));
+        var firstBindings = first.Facts
+            .Where(fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared
+                && fact.Properties.GetValueOrDefault("bindingKind") == "ExplicitControlSubscription")
+            .OrderBy(fact => fact.Properties["syntaxSpanStart"], StringComparer.Ordinal)
+            .ToArray();
+        var secondBindings = second.Facts
+            .Where(fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared
+                && fact.Properties.GetValueOrDefault("bindingKind") == "ExplicitControlSubscription")
+            .OrderBy(fact => fact.Properties["syntaxSpanStart"], StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(2, firstBindings.Length);
+        Assert.Single(firstBindings.Select(fact => fact.Evidence.StartLine).Distinct());
+        Assert.Equal(2, firstBindings.Select(fact => fact.Properties["syntaxSpanStart"]).Distinct().Count());
+        Assert.Equal(2, firstBindings.Select(fact => fact.FactId).Distinct().Count());
+        Assert.Equal(
+            firstBindings.Select(fact => (fact.FactId, fact.Properties["syntaxSpanStart"])),
+            secondBindings.Select(fact => (fact.FactId, fact.Properties["syntaxSpanStart"])));
     }
 }
