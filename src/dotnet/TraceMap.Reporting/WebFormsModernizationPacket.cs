@@ -331,6 +331,17 @@ public static class WebFormsModernizationPacketReporter
                 || (handler is not null && (path.SupportingFactIds.Contains(handler.FactId, StringComparer.Ordinal)
                     || path.Nodes.FirstOrDefault()?.SymbolId == handler.TargetSymbol)))
                 .OrderBy(path => path.PathId, StringComparer.Ordinal).ToArray();
+            var concreteTerminalFactIds = legacyPaths
+                .Select(path => path.Nodes.LastOrDefault())
+                .Where(node => node is not null && node.SourceKind != "projection" && node.CombinedFactId is not null)
+                .Select(node => node!.CombinedFactId!)
+                .ToHashSet(StringComparer.Ordinal);
+            legacyPaths = legacyPaths.Where(path =>
+            {
+                var terminal = path.Nodes.LastOrDefault();
+                return terminal?.SourceKind != "projection"
+                    || !path.SupportingFactIds.Any(concreteTerminalFactIds.Contains);
+            }).ToArray();
             var support = new[] { binding, handler, flowFact }.Where(fact => fact is not null).Cast<CodeFact>().ToArray();
             foreach (var legacyPath in legacyPaths.Cast<CombinedPath?>().DefaultIfEmpty())
             {
