@@ -2045,8 +2045,8 @@ rules:
       - Raw markup, page titles, source snippets, local absolute paths, URLs, configuration values, and unsafe expressions are omitted or hashed.
 
   - id: legacy.webforms.event-binding.v1
-    name: Legacy WebForms markup event binding evidence
-    description: Extracts supported static WebForms server-control event attributes such as OnClick, OnCommand, OnLoad, and OnInit with control IDs, handler names, and line spans.
+    name: Legacy WebForms static event binding evidence
+    description: Extracts supported static WebForms server-control event attributes and bounded code-behind control subscriptions such as OnClick, OnCommand, OnLoad, OnInit, and Button.Click += Handler with surface-qualified control identities, handler identities, and line spans.
     evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
     emits:
       - WebFormsEventBindingDeclared
@@ -2055,6 +2055,7 @@ rules:
       - Event bindings are static declarations and do not prove that a control exists at runtime, a user can reach the event, event bubbling occurs, or the handler executes.
       - Unsupported event-like attributes, dynamic wiring, generated controls, data-bound command names, and unsafe handler values are needs-review or gap evidence rather than guessed handlers.
       - Duplicate controls or duplicate bindings are preserved as separate evidence rows with deterministic IDs; TraceMap does not collapse them into a single runtime control.
+      - Explicit control subscriptions are limited to statically named receivers, representative events, and named handlers on the linked markup surface; lambdas, delegate expressions, unknown receivers, ambiguous controls, and dynamic wiring remain explicit gaps.
 
   - id: legacy.webforms.handler-resolution.v1
     name: Legacy WebForms code-behind handler resolution
@@ -2068,6 +2069,7 @@ rules:
       - Syntax and structural fallback depend on directive/linkage and partial class names; missing builds, generated code, stale files, partial classes, overloads, and event subscriptions can reduce confidence.
       - Ambiguous methods or partial classes are emitted as gaps and TraceMap does not choose an arbitrary winner.
       - Auto-event-wireup MVP evidence is limited to Page_Load and Page_Init and requires explicit enabled evidence; false, unknown, or contradictory evidence remains Tier4Unknown.
+      - Cross-file partial handler resolution requires semantic type and method evidence at the exact method span; syntax-only cross-file matches remain explicit gaps.
 
   - id: legacy.webforms.designer-control.v1
     name: Legacy WebForms designer control field evidence
