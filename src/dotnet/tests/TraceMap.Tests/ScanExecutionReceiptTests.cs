@@ -69,6 +69,14 @@ public sealed class ScanExecutionReceiptTests
     }
 
     [Fact]
+    public void Output_failure_classification_is_context_specific()
+    {
+        Assert.Equal("output-artifact-write-failed", ScanReceiptRecorder.ClassifyOutputFailure(new UnauthorizedAccessException()));
+        Assert.Equal("output-artifact-write-failed", ScanReceiptRecorder.ClassifyOutputFailure(new DirectoryNotFoundException()));
+        Assert.Equal("output-path-invalid", ScanReceiptRecorder.ClassifyOutputFailure(new ArgumentException()));
+    }
+
+    [Fact]
     public void Exception_timeout_and_cancellation_stages_fail_closed_without_exception_text()
     {
         var recorder = new ScanReceiptRecorder(new ScanOptions("repo", "out"));
@@ -213,13 +221,35 @@ public sealed class ScanExecutionReceiptTests
                 await File.ReadAllTextAsync(Path.Combine(outputPath, "scan-receipt.json")),
                 JsonOptions.Stable)!;
             Assert.Equal("failed", receipt.Outcome);
-            Assert.Contains(receipt.Stages, stage => stage.Stage == "discovery" && stage.Outcome == "failed");
+            Assert.Contains(receipt.Stages, stage => stage.Stage == "discovery"
+                && stage.Outcome == "failed"
+                && stage.NextAction == "sourceinventoryincomplete");
             Assert.DoesNotContain(repo, await File.ReadAllTextAsync(Path.Combine(outputPath, "scan-receipt.json")), StringComparison.Ordinal);
         }
         finally
         {
             File.SetUnixFileMode(restricted, originalMode);
         }
+    }
+
+    [Fact]
+    public async Task Artifact_write_failure_uses_output_specific_category()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var outputPath = Path.Combine(temp.Path, "occupied-output-path");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Sample.cs"), "public sealed class Sample { }");
+        File.WriteAllText(outputPath, "occupied");
+        InitializeRepository(repo);
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
+
+        var exitCode = await TraceMapCommand.RunAsync(["scan", "--repo", repo, "--out", outputPath], stdout, stderr);
+
+        Assert.Equal(1, exitCode);
+        Assert.Equal("error: output-artifact-write-failed" + Environment.NewLine, stderr.ToString());
+        Assert.DoesNotContain(outputPath, stderr.ToString(), StringComparison.Ordinal);
     }
 
     private static void InitializeRepository(string path)
