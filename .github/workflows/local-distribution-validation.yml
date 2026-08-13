@@ -9,6 +9,7 @@ on:
       - "docs/LOCAL_DISTRIBUTION.md"
       - "docs/LOCAL_REVIEW_WORKFLOW.md"
       - "docs/contracts/local-review-result.v1.schema.json"
+      - "docs/contracts/local-distribution-smoke.v1.schema.json"
       - "docs/contracts/tracemap-version.v1.schema.json"
   workflow_dispatch:
 

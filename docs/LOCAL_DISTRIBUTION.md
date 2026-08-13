@@ -72,3 +72,39 @@ sanitized `local-distribution-smoke.v1` receipt contains no package feed or
 absolute path. The `Local distribution validation` workflow runs the same
 probe on Windows, Ubuntu, and macOS; host support must remain unverified until
 those exact CI jobs pass.
+
+## Candidate Offline Lifecycle
+
+The commands below document the candidate lifecycle; they do not publish a
+package or claim host support before the matching CI receipt passes. Replace
+the placeholders with an owner-supplied local package directory and exact
+version. Do not add a remote feed or bypass operating-system security policy.
+
+PowerShell on Windows, macOS, or Linux:
+
+```powershell
+dotnet tool install TraceMap.Tool `
+  --tool-path <isolated-tool-directory> `
+  --version <exact-version> `
+  --configfile <offline-NuGet.Config> `
+  --no-cache
+
+<isolated-tool-directory>/tracemap version --json
+
+dotnet tool update TraceMap.Tool `
+  --tool-path <isolated-tool-directory> `
+  --version <new-exact-version> `
+  --configfile <offline-NuGet.Config> `
+  --no-cache
+
+dotnet tool uninstall TraceMap.Tool --tool-path <isolated-tool-directory>
+```
+
+On Windows Command Prompt, use the same command arguments on one line and call
+`<isolated-tool-directory>\tracemap.exe`. On macOS and Linux, call
+`<isolated-tool-directory>/tracemap`. A custom `--tool-path` is not added to
+`PATH`; invoke it explicitly or make an owner-approved PATH change. The local
+NuGet configuration must clear inherited feeds and name only the directory
+containing the owner-provided package. Installation requires the .NET 10 SDK;
+the packaged tool then observes local Git and MSBuild availability through
+`tracemap version --json` before a scan.
