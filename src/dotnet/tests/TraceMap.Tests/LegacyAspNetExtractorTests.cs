@@ -38,19 +38,19 @@ public sealed class LegacyAspNetExtractorTests
             <configuration>
               <system.web>
                 <authentication mode="Forms">
-                  <forms loginUrl="private-login-target" name="private-cookie-name" requireSSL="true" slidingExpiration="false" />
+                  <forms loginUrl="private-login-target" name="private-cookie-name" requireSSL="true" slidingExpiration="false" cookieless="UseUri" />
                 </authentication>
                 <authorization>
-                  <allow roles="private-role-one,private-role-two" verbs="GET" />
+                  <allow roles="private-role-one,private-role-two" verbs="GET" /><allow roles="private-role-three,private-role-four" verbs="GET" />
                   <deny users="?" />
                 </authorization>
                 <identity impersonate="true" userName="private-user" password="private-password" />
-                <machineKey validationKey="private-validation-key" decryptionKey="private-decryption-key" validation="HMACSHA256" decryption="AES" />
+                <machineKey validationKey="private-validation-key" decryptionKey="private-decryption-key" validation="HMACSHA256" decryption="3DES" />
                 <membership defaultProvider="private-membership-provider">
                   <providers><add name="private-provider-name" type="Sample.CustomMembershipProvider, Sample" connectionStringName="private-connection" /></providers>
                 </membership>
                 <roleManager enabled="true" configSource="private-role-source.config" />
-                <sessionState mode="SQLServer" cookieless="false" timeout="20" sqlConnectionString="private-session-connection" />
+                <sessionState mode="SQLServer" cookieless="AutoDetect" timeout="20" sqlConnectionString="private-session-connection" />
                 <httpCookies httpOnlyCookies="true" requireSSL="true" sameSite="Lax" domain="private.example" />
                 <anonymousIdentification enabled="false" />
                 <profile enabled="true"><EncryptedData>private-encrypted-value</EncryptedData></profile>
@@ -67,12 +67,17 @@ public sealed class LegacyAspNetExtractorTests
         Assert.Contains(identity, fact => fact.Properties.GetValueOrDefault("identityKind") == "authentication"
             && fact.Properties.GetValueOrDefault("authenticationMode") == "Forms");
         Assert.Contains(identity, fact => fact.Properties.GetValueOrDefault("identityKind") == "forms-authentication"
-            && fact.Properties.GetValueOrDefault("requireSslSetting") == "true");
-        Assert.Equal(2, identity.Count(fact => fact.Properties.GetValueOrDefault("identityKind") == "authorization-rule"));
+            && fact.Properties.GetValueOrDefault("requireSslSetting") == "true"
+            && fact.Properties.GetValueOrDefault("cookielessSetting") == "UseUri");
+        var authorizationRules = identity.Where(fact => fact.Properties.GetValueOrDefault("identityKind") == "authorization-rule").ToArray();
+        Assert.Equal(3, authorizationRules.Length);
+        Assert.Equal(3, authorizationRules.Select(fact => fact.FactId).Distinct(StringComparer.Ordinal).Count());
         Assert.Contains(identity, fact => fact.Properties.GetValueOrDefault("identityKind") == "machine-key-presence"
-            && fact.Properties.GetValueOrDefault("validationKeyDeclared") == "true");
+            && fact.Properties.GetValueOrDefault("validationKeyDeclared") == "true"
+            && fact.Properties.GetValueOrDefault("decryptionAlgorithm") == "3DES");
         Assert.Contains(identity, fact => fact.Properties.GetValueOrDefault("identityKind") == "session-state"
             && fact.Properties.GetValueOrDefault("sessionMode") == "SQLServer"
+            && fact.Properties.GetValueOrDefault("cookielessSetting") == "AutoDetect"
             && fact.Properties.GetValueOrDefault("stateConnectionDeclared") == "true");
         Assert.Contains(identity, fact => fact.Properties.GetValueOrDefault("identityKind") == "cookie-policy"
             && fact.Properties.GetValueOrDefault("sameSite") == "Lax");
@@ -105,7 +110,7 @@ public sealed class LegacyAspNetExtractorTests
         var serialized = SerializeFacts(result.Facts);
         foreach (var forbidden in new[]
                  {
-                     "private-login-target", "private-cookie-name", "private-role-one", "private-role-two",
+                     "private-login-target", "private-cookie-name", "private-role-one", "private-role-two", "private-role-three", "private-role-four",
                      "private-user", "private-password", "private-validation-key", "private-decryption-key",
                      "private-membership-provider", "private-provider-name", "private-connection",
                      "private-role-source.config", "private-session-connection", "private.example", "private-encrypted-value",

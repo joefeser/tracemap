@@ -505,16 +505,18 @@ public static class WebFormsModernizationPacketReporter
             var safeMetadata = IdentitySafeMetadata(fact, out var supportedMetadata);
             if (!supportedKind || !supportedClassification || !supportedMetadata)
                 AddGeneratedGap(gaps, options.MaxGaps, snapshot, "UnsupportedIdentityStatePropertyShape", "identity-state", identityStateId, [fact.FactId]);
+            var evidence = Evidence(fact, gaps, options.MaxGaps, snapshot);
             return new WebFormsModernizationIdentityState(
                 identityStateId,
                 identityKind,
                 classification,
                 surfaceId,
                 safeMetadata,
-                Evidence(fact, gaps, options.MaxGaps, snapshot),
+                evidence,
                 SplitIds(fact.Properties.GetValueOrDefault("supportingFactIds")).Append(fact.FactId)
                     .Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
-                ["Identity/state inventory is static declaration evidence only and does not prove effective runtime policy, identity, authorization, session behavior, security quality, vulnerability, compliance, or migration success."]);
+                evidence.Limitations.Append("Identity/state packet composition does not prove effective runtime policy, identity, authorization, session behavior, security quality, vulnerability, compliance, or migration success.")
+                    .Distinct(StringComparer.Ordinal).ToArray());
         }).OrderBy(item => item.IdentityStateId, StringComparer.Ordinal).ToArray();
         foreach (var identityGap in facts.Where(fact => fact.FactType == FactTypes.AnalysisGap && fact.RuleId == RuleIds.LegacyAspNetIdentityState))
             AddFactGap(gaps, options.MaxGaps, snapshot, identityGap);
@@ -967,9 +969,9 @@ public static class WebFormsModernizationPacketReporter
     {
         string[] allowed =
         [
-            "anonymousUserMarkerDeclared", "authenticationMode", "authorizationAction", "cookielessSetting",
+            "anonymousUserMarkerDeclared", "authenticationMode", "authorizationAction", "controlType", "cookielessSetting",
             "cookielessSettingDeclared", "cookieNameDeclared", "credentialAttributesDeclared", "crossAppRedirectSetting",
-            "crossAppRedirectSettingDeclared", "decryptionAlgorithm", "decryptionKeyDeclared", "defaultProviderDeclared",
+            "crossAppRedirectSettingDeclared", "declarationOrdinal", "decryptionAlgorithm", "decryptionKeyDeclared", "defaultProviderDeclared",
             "domainDeclared", "enabledSetting", "enabledSettingDeclared", "httpOnlySetting", "httpOnlySettingDeclared",
             "impersonationSetting", "impersonationSettingDeclared", "loginTargetDeclared", "providerClassification",
             "requireSslSetting", "requireSslSettingDeclared", "rolesDeclared", "rolesEntryCount", "rolesWildcardDeclared",
@@ -993,9 +995,11 @@ public static class WebFormsModernizationPacketReporter
     }
     private static string? SafeIdentityMetadataValue(string key, string value)
     {
+        if (key == "cookielessSetting")
+            return value is "AutoDetect" or "UseCookies" or "UseDeviceProfile" or "UseUri" or "true" or "false" ? value : null;
         if (key.EndsWith("Declared", StringComparison.Ordinal) || key.EndsWith("Setting", StringComparison.Ordinal))
             return value is "true" or "false" ? value : null;
-        if (key.EndsWith("EntryCount", StringComparison.Ordinal))
+        if (key.EndsWith("EntryCount", StringComparison.Ordinal) || key == "declarationOrdinal")
             return int.TryParse(value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var count) && count >= 0
                 ? count.ToString(System.Globalization.CultureInfo.InvariantCulture)
                 : null;
@@ -1003,7 +1007,8 @@ public static class WebFormsModernizationPacketReporter
         {
             "authenticationMode" when value is "None" or "Windows" or "Forms" or "Passport" or "unsupported-or-custom" => value,
             "authorizationAction" when value is "allow" or "deny" => value,
-            "decryptionAlgorithm" when value is "AES" or "Auto" or "DES" or "TripleDES" or "unsupported-or-custom" => value,
+            "controlType" when value is "ChangePassword" or "CreateUserWizard" or "Login" or "LoginName" or "LoginStatus" or "LoginView" or "PasswordRecovery" => value,
+            "decryptionAlgorithm" when value is "3DES" or "AES" or "Auto" or "DES" or "TripleDES" or "unsupported-or-custom" => value,
             "providerClassification" when value is "framework-declared" or "custom-or-unresolved" => value,
             "sameSite" when value is "Lax" or "None" or "Strict" or "Unspecified" or "unsupported-or-custom" => value,
             "sessionMode" when value is "Custom" or "InProc" or "Off" or "SQLServer" or "StateServer" or "unsupported-or-custom" => value,
