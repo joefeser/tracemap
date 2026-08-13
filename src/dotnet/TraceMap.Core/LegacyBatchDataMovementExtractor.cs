@@ -12,6 +12,8 @@ public static class LegacyBatchDataMovementExtractor
     private const long MaxCSharpBytes = 4 * 1024 * 1024;
     private const int RelatedFactLimit = 50;
     private const string ReducedCoverageLabel = "reduced-static-webforms-batch-data-movement";
+    private const string OwnerStartLineProperty = "_ownerStartLine";
+    private const string OwnerEndLineProperty = "_ownerEndLine";
     private const string Limitations = "Static candidate evidence only; scheduling, execution, successful data movement, completeness, retries, idempotency, checkpoint effectiveness, transaction outcome, monitoring, target state, and production use are not proven.";
 
     private static readonly HashSet<string> CSharpKinds = new(StringComparer.Ordinal)
@@ -139,6 +141,8 @@ public static class LegacyBatchDataMovementExtractor
                 ["projectResolution"] = projectPaths.Length switch { 0 => "unavailable", 1 => "resolved", _ => "ambiguous" },
                 ["surfaceKind"] = observation.SurfaceKind
             };
+            properties.Remove(OwnerStartLineProperty);
+            properties.Remove(OwnerEndLineProperty);
             AddIfPresent(properties, "ownerMember", observation.OwnerMember);
             AddIfPresent(properties, "ownerType", observation.OwnerType);
             AddIfPresent(properties, "supportingFactIds", supporting.Length == 0 ? null : string.Join(",", supporting));
@@ -383,6 +387,7 @@ public static class LegacyBatchDataMovementExtractor
         }
 
         var memberContexts = new Dictionary<string, List<MemberContext>>(StringComparer.Ordinal);
+        var ownerProjectPath = UniqueProjectPath(existingFacts, item.RelativePath);
         foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
         {
             var member = method.Identifier.ValueText;
@@ -417,7 +422,7 @@ public static class LegacyBatchDataMovementExtractor
 
                 var properties = new SortedDictionary<string, string>(signals, StringComparer.Ordinal);
                 var localGaps = new List<GapDescriptor>();
-                ClassifyScheduleReference(attribute.ArgumentList?.Arguments.FirstOrDefault()?.Expression, existingFacts, properties, localGaps);
+                ClassifyScheduleReference(attribute.ArgumentList?.Arguments.FirstOrDefault()?.Expression, ownerProjectPath, existingFacts, properties, localGaps);
                 var supportingFactIds = properties.GetValueOrDefault("scheduleConfigFactId") is { Length: > 0 } configFactId ? new[] { configFactId } : [];
                 observations.Add(SyntaxObservation(item.RelativePath, attribute, "scheduled-task", "timer-trigger-attribute", "trigger", member, ownerType, properties, localGaps, supportingFactIds));
             }
@@ -426,13 +431,16 @@ public static class LegacyBatchDataMovementExtractor
             {
                 var invocationName = InvocationName(invocation);
                 var receiver = InvocationReceiver(invocation);
-                if (invocationName == "AddOrUpdate" && NormalizeGlobalTypeName(receiver) == "Hangfire.RecurringJob")
+                var semanticHangfire = FindSemanticInvocation(existingFacts, item.RelativePath, invocation, "Hangfire.RecurringJob", "AddOrUpdate");
+                if (invocationName == "AddOrUpdate" && (NormalizeGlobalTypeName(receiver) == "Hangfire.RecurringJob" || semanticHangfire is not null))
                 {
                     var properties = new SortedDictionary<string, string>(signals, StringComparer.Ordinal)
                     {
                         ["scheduleSource"] = invocation.ArgumentList.Arguments.Count == 0 ? "unavailable" : "omitted-static-or-dynamic"
                     };
-                    observations.Add(SyntaxObservation(item.RelativePath, invocation, "scheduled-task", "hangfire-recurring-job", "schedule", member, ownerType, properties));
+                    observations.Add(semanticHangfire is null
+                        ? SyntaxObservation(item.RelativePath, invocation, "scheduled-task", "hangfire-recurring-job", "schedule", member, ownerType, properties)
+                        : FromFact(semanticHangfire, "scheduled-task", "compiler-resolved-hangfire-recurring-job", "schedule", properties));
                 }
 
                 if (IsExplicitSystemIoReceiver(receiver) && (FileReadMethods.Contains(invocationName) || FileWriteMethods.Contains(invocationName))
@@ -629,6 +637,8 @@ public static class LegacyBatchDataMovementExtractor
             if (context is null) continue;
 
             var properties = CopyProperties(observation.Properties);
+            properties[OwnerStartLineProperty] = context.StartLine.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            properties[OwnerEndLineProperty] = context.EndLine.ToString(System.Globalization.CultureInfo.InvariantCulture);
             foreach (var (key, value) in context.Signals)
             {
                 properties[key] = value;
@@ -645,6 +655,7 @@ public static class LegacyBatchDataMovementExtractor
 
     private static void ClassifyScheduleReference(
         ExpressionSyntax? expression,
+        string? ownerProjectPath,
         IReadOnlyList<CodeFact> existingFacts,
         SortedDictionary<string, string> properties,
         List<GapDescriptor> gaps)
@@ -655,7 +666,8 @@ public static class LegacyBatchDataMovementExtractor
             if (value.Length > 2 && value[0] == '%' && value[^1] == '%')
             {
                 var configKey = value[1..^1];
-                var config = existingFacts.FirstOrDefault(fact => fact.FactType == FactTypes.ConfigKeyDeclared
+                var config = ownerProjectPath is null ? null : existingFacts.FirstOrDefault(fact => fact.FactType == FactTypes.ConfigKeyDeclared
+                    && string.Equals(fact.ProjectPath, ownerProjectPath, StringComparison.Ordinal)
                     && string.Equals(fact.Properties.GetValueOrDefault("keyPath") ?? fact.TargetSymbol, configKey, StringComparison.Ordinal));
                 properties["scheduleSource"] = config is null ? "config-reference-unavailable" : "config-reference-matched";
                 properties["scheduleReferenceHash"] = FactFactory.Hash($"batch-schedule|{configKey}", 32);
@@ -729,19 +741,27 @@ public static class LegacyBatchDataMovementExtractor
         }
 
         return candidates
-            .Where(fact => BelongsToMember(fact, observation.OwnerMember, observation.OwnerType))
+            .Where(fact => BelongsToMember(fact, observation))
             .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
             .ToList();
     }
 
-    private static bool BelongsToMember(CodeFact fact, string member, string? ownerType)
+    private static bool BelongsToMember(CodeFact fact, BatchObservation observation)
     {
+        var member = observation.OwnerMember!;
+        var ownerType = observation.OwnerType;
         var memberMatches = string.Equals(fact.Properties.GetValueOrDefault("containingMethod"), member, StringComparison.Ordinal)
             || string.Equals(fact.SourceSymbol, member, StringComparison.Ordinal);
         var source = NormalizeGlobalTypeName(fact.SourceSymbol ?? string.Empty);
         memberMatches |= source.Contains($".{member}(", StringComparison.Ordinal)
             || source.EndsWith($".{member}", StringComparison.Ordinal);
         if (!memberMatches)
+        {
+            return false;
+        }
+
+        if (TryOwnerSpan(observation.Properties, out var ownerStartLine, out var ownerEndLine)
+            && (fact.Evidence.StartLine < ownerStartLine || fact.Evidence.EndLine > ownerEndLine))
         {
             return false;
         }
@@ -863,6 +883,25 @@ public static class LegacyBatchDataMovementExtractor
             && SimpleTypeName(fact.TargetSymbol ?? fact.Properties.GetValueOrDefault("targetSymbol") ?? string.Empty) == syntaxBaseName);
     }
 
+    private static CodeFact? FindSemanticInvocation(
+        IReadOnlyList<CodeFact> facts,
+        string filePath,
+        InvocationExpressionSyntax invocation,
+        string containingType,
+        string methodName)
+    {
+        var line = Line(invocation);
+        return facts.FirstOrDefault(fact =>
+            fact.FactType == FactTypes.MethodInvoked
+            && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+            && fact.Evidence.FilePath == filePath
+            && fact.Evidence.StartLine <= line
+            && fact.Evidence.EndLine >= line
+            && MethodName(fact.TargetSymbol ?? fact.Properties.GetValueOrDefault("methodSymbol") ?? string.Empty) == methodName
+            && NormalizeGlobalTypeName(fact.TargetSymbol ?? fact.Properties.GetValueOrDefault("methodSymbol") ?? string.Empty)
+                .StartsWith($"{containingType}.", StringComparison.Ordinal));
+    }
+
     private static BatchObservation SemanticRelationshipObservation(
         CodeFact relationship,
         string surfaceKind,
@@ -952,6 +991,24 @@ public static class LegacyBatchDataMovementExtractor
     }
 
     private static string MemberKey(string? ownerType, string member) => $"{NormalizeGlobalTypeName(ownerType ?? string.Empty)}|{member}";
+
+    private static string? UniqueProjectPath(IReadOnlyList<CodeFact> facts, string filePath)
+    {
+        var projectPaths = facts
+            .Where(fact => fact.Evidence.FilePath == filePath && !string.IsNullOrWhiteSpace(fact.ProjectPath))
+            .Select(fact => fact.ProjectPath!)
+            .Distinct(StringComparer.Ordinal)
+            .Take(2)
+            .ToArray();
+        return projectPaths.Length == 1 ? projectPaths[0] : null;
+    }
+
+    private static bool TryOwnerSpan(IReadOnlyDictionary<string, string> properties, out int startLine, out int endLine)
+    {
+        var hasStart = int.TryParse(properties.GetValueOrDefault(OwnerStartLineProperty), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out startLine);
+        var hasEnd = int.TryParse(properties.GetValueOrDefault(OwnerEndLineProperty), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out endLine);
+        return hasStart && hasEnd;
+    }
 
     private static bool IsSystemIoTarget(string target) =>
         target.StartsWith("global::System.IO.File.", StringComparison.Ordinal)
