@@ -312,6 +312,7 @@ public static class FactTypes
     public const string AspNetPageMethodDeclared = nameof(AspNetPageMethodDeclared);
     public const string AspNetNavigationReferenceDeclared = nameof(AspNetNavigationReferenceDeclared);
     public const string AspNetNavigationEdgeDeclared = nameof(AspNetNavigationEdgeDeclared);
+    public const string AspNetIdentityStateDeclared = nameof(AspNetIdentityStateDeclared);
     public const string LegacyDataMetadataDeclared = nameof(LegacyDataMetadataDeclared);
     public const string LegacyDataEntityDeclared = nameof(LegacyDataEntityDeclared);
     public const string LegacyDataStorageObjectDeclared = nameof(LegacyDataStorageObjectDeclared);
@@ -468,6 +469,7 @@ public static class RuleIds
     public const string LegacyAspNetHandler = "legacy.aspnet.handler.v1";
     public const string LegacyAspNetPageMethod = "legacy.aspnet.page-method.v1";
     public const string LegacyAspNetNavigation = "legacy.aspnet.navigation.v1";
+    public const string LegacyAspNetIdentityState = "legacy.aspnet.identity-state.v1";
     public const string LegacyDataMetadataInventory = "legacy.data.metadata.inventory.v1";
     public const string LegacyDataDbml = "legacy.data.dbml.v1";
     public const string LegacyDataEdmx = "legacy.data.edmx.v1";
@@ -554,7 +556,7 @@ public static class ScannerVersions
     public const string LegacyRemotingExtractor = "legacy-remoting/0.1.0";
     public const string LegacyWebFormsExtractor = "legacy-webforms/0.3.0";
     public const string LegacyWinFormsExtractor = "legacy-winforms/0.1.0";
-    public const string LegacyAspNetExtractor = "legacy-aspnet/0.1.0";
+    public const string LegacyAspNetExtractor = "legacy-aspnet/0.2.0";
     public const string LegacyDataExtractor = "legacy-data/0.1.0";
     public const string AccessExtractor = "legacy-access/0.3.2";
     public const string EndpointAlignment = "endpoint-alignment/0.1.0";
