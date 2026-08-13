@@ -232,6 +232,25 @@ def test_snapshot_identity_changes_for_same_size_dirty_bytes_and_is_persisted(tm
     assert sqlite_manifest["sourceSnapshotDigest"] == first.source_snapshot_digest
 
 
+def test_source_mutation_before_snapshot_verification_fails_without_publishing(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    source = repo / "app.py"
+    source.write_text("value = 1\n", encoding="utf-8")
+    _git(repo, "init")
+    _git(repo, "add", ".")
+    _git(repo, "-c", "user.name=TraceMap", "-c", "user.email=fixture@example.invalid", "commit", "-m", "baseline")
+    output = tmp_path / "output"
+
+    def mutate() -> None:
+        source.write_text("value = 2\n", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="SourceSnapshotChangedDuringScan"):
+        scan(make_options(str(repo), str(output)), _before_snapshot_verification=mutate)
+
+    assert not output.exists()
+
+
 def test_fastapi_report_renders_sql_query_patterns_without_raw_sql(tmp_path: Path) -> None:
     out = tmp_path / "fastapi-report"
     _, facts = scan(make_options(str(ROOT / "samples/python-fastapi-sample"), str(out)))

@@ -56,7 +56,7 @@ It does not normalize canonical evidence identity globally.
 
 ## Harness
 
-`scripts/scan-truth-conformance.mjs` owns synthetic fixture generation,
+`scripts/scan-truth-conformance.py` owns synthetic fixture generation,
 subprocess execution, artifact validation, deterministic comparison, SQLite
 readback through the installed `sqlite3` CLI where available, and the final
 sanitized JSON/Markdown readiness report. It never reads protected repositories

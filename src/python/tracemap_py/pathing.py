@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import fnmatch
 import os
+import sys
+import unicodedata
 from pathlib import Path
 
 
@@ -14,7 +16,13 @@ def relative_to(path: Path, root: Path) -> str:
 
 
 def matches_any(path: str, patterns: list[str]) -> bool:
-    return any(fnmatch.fnmatch(path, pattern) for pattern in patterns)
+    comparable_path = _filesystem_comparison_path(path)
+    return any(fnmatch.fnmatch(comparable_path, _filesystem_comparison_path(pattern)) for pattern in patterns)
+
+
+def _filesystem_comparison_path(value: str) -> str:
+    normalized = normalize_path(value)
+    return unicodedata.normalize("NFC", normalized) if sys.platform == "darwin" else normalized
 
 
 def parse_byte_size(value: str | int | None, default: int = 1_000_000) -> int:

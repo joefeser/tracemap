@@ -253,6 +253,25 @@ describe("ScanEngine", () => {
     expect(persisted.sourceSnapshotDigest).toBe(second.manifest.sourceSnapshotDigest);
   });
 
+  it("fails before publishing when source bytes mutate during a scan", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    const output = path.join(root, "output");
+    await writeMiniRepo(repo);
+    const source = path.join(repo, "src", "sample.ts");
+    await scan(scanOptions(repo, output));
+    const baselineManifest = await fsp.readFile(path.join(output, "scan-manifest.json"));
+
+    await expect(scan(scanOptions(repo, output), {
+      beforeSnapshotVerification: async () => {
+        const original = await fsp.readFile(source, "utf8");
+        await fsp.writeFile(source, original.replace("value = 1", "value = 2"));
+      }
+    })).rejects.toThrow("SourceSnapshotChangedDuringScan");
+
+    expect(await fsp.readFile(path.join(output, "scan-manifest.json"))).toEqual(baselineManifest);
+  });
+
   it("refuses unsafe output paths before deleting anything", async () => {
     const root = await tempDir();
     const repo = path.join(root, "repo");

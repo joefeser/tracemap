@@ -4,6 +4,7 @@ import json
 import shutil
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Callable
 
 from .ast_extractor import extract_python_files
 from .config_extractor import extract_config_files
@@ -20,7 +21,11 @@ from .sql_extractor import extract_sql_files
 from .writers import write_facts, write_manifest, write_sqlite
 
 
-def scan(options: ScanOptions) -> tuple[ScanManifest, list[CodeFact]]:
+def scan(
+    options: ScanOptions,
+    *,
+    _before_snapshot_verification: Callable[[], None] | None = None,
+) -> tuple[ScanManifest, list[CodeFact]]:
     repo = Path(options.repo_path).resolve()
     out = Path(options.output_path).resolve()
     if out == repo or out in repo.parents:
@@ -98,6 +103,8 @@ def scan(options: ScanOptions) -> tuple[ScanManifest, list[CodeFact]]:
         base_manifest.git_root_hash,
         base_manifest.source_snapshot_digest,
     )
+    if _before_snapshot_verification is not None:
+        _before_snapshot_verification()
     if source_snapshot_digest(inventory) != snapshot_digest:
         raise RuntimeError("SourceSnapshotChangedDuringScan")
     _write_outputs(out, manifest, facts, gaps)

@@ -42,6 +42,10 @@ import java.util.Set;
 
 public final class ScanEngine {
     public ScanResult scan(ScanOptions options) throws Exception {
+        return scan(options, () -> { });
+    }
+
+    ScanResult scan(ScanOptions options, Runnable beforeSnapshotVerification) throws Exception {
         Path repo = options.repoPath().toAbsolutePath().normalize();
         if (!Files.isDirectory(repo)) {
             throw new IOException("Repository path does not exist: " + repo);
@@ -104,6 +108,7 @@ public final class ScanEngine {
         }
         facts = dedupeAndSort(facts);
 
+        beforeSnapshotVerification.run();
         if (!sourceSnapshotDigest.equals(sourceSnapshotDigest(inventory))) {
             throw new IOException("SourceSnapshotChangedDuringScan");
         }
