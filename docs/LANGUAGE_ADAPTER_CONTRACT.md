@@ -194,17 +194,17 @@ The .NET adapter emits WebForms-specific evidence for static event entry points:
 
 | Fact type | Purpose | Safe matching keys |
 | --- | --- | --- |
-| `WebFormsPageDeclared` | Inventories `.aspx`, `.ascx`, and `.master` directives and safe code-behind linkage. | `pageTypeName`, `linkedCodePath`, `directiveKind`, `autoEventWireup` |
-| `WebFormsControlDeclared` | Records static server controls from markup. | `pageTypeName`, `controlId`, `controlType`, `designerFactId` |
+| `WebFormsPageDeclared` | Inventories `.aspx`, `.ascx`, and `.master` directives and safe code-behind linkage. | `surfaceIdentity`, `pageTypeName`, `linkedCodePath`, `directiveKind`, `autoEventWireup` |
+| `WebFormsControlDeclared` | Records static server controls from markup. | `surfaceIdentity`, `controlIdentity`, `pageTypeName`, `controlId`, `controlType`, `designerFactId` |
 | `WebFormsUserControlRegistered` | Records static `Register` directives with safe tag identity and repository-relative source linkage. | `surfaceIdentity`, `tagPrefix`, `tagName`, `sourcePath` |
 | `WebFormsCompositionDeclared` | Records declared master-page, content-placeholder, and registered user-control composition. | `relationshipKind`, `sourceSymbol`, `targetSymbol`, `supportingFactIds` |
-| `WebFormsEventBindingDeclared` | Records supported static event attributes and handler identifiers. | `pageTypeName`, `controlId`, `eventName`, `handlerName` |
+| `WebFormsEventBindingDeclared` | Records supported static event attributes and bounded named control subscriptions with explicit control/surface-to-handler direction. | `surfaceIdentity`, `controlIdentity`, `eventSourceIdentity`, `handlerSymbolId`, `bindingKind`, `eventName` |
 | `WebFormsDesignerControlDeclared` | Records designer partial-class control fields as supporting evidence. | `pageTypeName`, `fieldName`, `controlType` |
-| `WebFormsHandlerResolved` | Links event bindings to scoped code-behind methods. | `handlerName`, `handlerSymbol`, `sourceSymbolId`, `bindingFactId`, `resolutionKind` |
+| `WebFormsHandlerResolved` | Links event-source identities to scoped code-behind methods, preferring canonical semantic method IDs when proven. | `surfaceIdentity`, `controlIdentity`, `eventSourceIdentity`, `handlerSymbolId`, `sourceSymbolId`, `bindingFactId`, `resolutionKind` |
 | `WebFormsEventFlowProjected` | Projects resolved handlers to direct WCF, HTTP, SQL/query, config, or dependency-surface evidence. | `flowClassification`, `terminalSurfaceKind`, `terminalSurfaceNameHash`, `supportingFactIds`, `supportingEdgeIds`, `coverage` |
 | `WebFormsLogicSignalDetected` | Emits bounded static logic or UI-boilerplate signals for handlers. | `handlerName`, `signalKind`, `staticLogicSignal`, `uiBoilerplateSignal` |
 
-These facts are static evidence only. They do not prove runtime page lifecycle execution, rendering, control construction, postbacks, event bubbling, user reachability, service reachability, SQL execution, deployment, branch feasibility, or production usage. Page titles are hashed rather than stored as display text. Markup snippets, raw SQL, config values, raw URLs, local absolute paths, repository remotes, and private sample names must not appear in properties or reports.
+These facts are static evidence only. They do not prove runtime page lifecycle execution or order, rendering, control construction, postbacks, event firing, event bubbling, validation success, authorization, persistence, downstream execution, user reachability, service reachability, SQL execution, deployment, branch feasibility, or production usage. Lambda/dynamic subscriptions, unknown receivers, ambiguous controls or overloads, and cross-file partial handlers without exact semantic evidence remain explicit gaps. Page titles are hashed rather than stored as display text. Markup snippets, raw SQL, config values, raw URLs, local absolute paths, repository remotes, and private sample names must not appear in properties or reports.
 
 ### Legacy WinForms Event Navigation Facts
 
