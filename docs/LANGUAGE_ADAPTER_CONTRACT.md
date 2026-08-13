@@ -257,6 +257,7 @@ or executing the app.
 | `AspNetSurfaceDeclared` | Inventories checked-in ASP.NET application and handler surface files, while reusing WebForms page/control/master inventory instead of duplicating it. | `surfaceKind`, safe directive metadata or role-separated hashes, `coverageLabel`, `ruleLimitations` |
 | `AspNetRouteDeclared` | Records supported static classic ASP.NET route registration candidates such as `MapPageRoute`. | `routeShape`, `routePatternHash`, safe route name or hash, mapped page descriptor or hash, `coverageLabel` |
 | `AspNetConfigSurfaceDeclared` | Records safe structures from checked-in handler/module/pages/controls/namespaces/urlMappings/compilation config. | `sectionKind`, safe type/path/verb descriptors or role-separated hashes, `coverageLabel` |
+| `AspNetIdentityStateDeclared` | Inventories bounded checked-in authentication, authorization, impersonation, machine-key presence, membership/role provider, session, cookie, profile, login-control, identity-pipeline, and compiler-resolved custom principal/identity declarations. | `identityKind`, closed categorical settings, presence flags, counts, framework/custom provider classification, `supportingFactIds`, `coverageLabel` |
 | `AspNetHandlerDeclared` | Records `.ashx`, `IHttpHandler`, `IHttpAsyncHandler`, and handler-factory static evidence. | `handlerKind`, safe type identity, unresolved factory flags when needed, `coverageLabel` |
 | `AspNetPageMethodDeclared` | Records `[WebMethod]`, `[ScriptMethod]`, and `[ScriptService]` PageMethod/script-service evidence without reclassifying it as ASMX. | `methodName`, `containingTypeName`, `attributeNames`, `isStatic`, `coverageLabel` |
 | `AspNetNavigationReferenceDeclared` | Records static navigation reference candidates from markup, sitemap XML, or supported C# APIs. | `referenceKind`, `sourceSurface`, target descriptor or role-separated hash, `coverageLabel` |
@@ -267,12 +268,18 @@ ASP.NET route/navigation hashes use the scanner-side context shape
 32-character lowercase hex prefix. The same unsafe raw value in route pattern,
 config, and navigation target roles must produce different stored hashes.
 
-These facts are static evidence only. They do not prove route-table execution,
-IIS deployment, runtime URL rewriting, authorization, browser behavior,
-JavaScript execution, page rendering, request handling, user reachability, or
-runtime impact. Raw URLs, hostnames, config values, endpoint values, local
-absolute paths, remotes, snippets, credentials, and secrets are omitted or
-hashed.
+These facts are static evidence only. Identity/state rows do not prove effective
+runtime policy, authenticated users, authorization or session outcomes,
+provider availability, vulnerability, compliance, or migration success.
+External/encrypted identity configuration, deterministically identity-related
+dynamic pipeline registration, unavailable semantic dependencies, and
+unsupported custom providers remain explicit gaps. The ASP.NET facts do not
+prove route-table execution, IIS
+deployment, runtime URL rewriting, browser behavior, JavaScript execution, page
+rendering, request handling, user reachability, or runtime impact. Raw URLs,
+hostnames, config values, endpoint values, machine keys, roles, users, provider
+names, cookie names, login targets, connection strings, local absolute paths,
+remotes, snippets, credentials, and secrets are omitted or hashed.
 
 ### Legacy Data Metadata Facts
 

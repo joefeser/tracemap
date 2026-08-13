@@ -7,6 +7,159 @@ namespace TraceMap.Tests;
 public sealed class LegacyAspNetExtractorTests
 {
     [Fact]
+    public void Scan_inventories_identity_session_cookie_provider_login_control_and_principal_evidence_without_values()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Login.aspx"), """
+            <%@ Page Language="C#" CodeBehind="Login.aspx.cs" Inherits="Sample.LoginPage" %>
+            <asp:Login runat="server" ID="LoginControl" />
+            <asp:LoginStatus runat="server" ID="StatusControl" />
+            """);
+        File.WriteAllText(Path.Combine(repo, "Login.aspx.cs"), """
+            namespace Sample;
+            public partial class LoginPage { }
+            """);
+        File.WriteAllText(Path.Combine(repo, "Identity.cs"), """
+            namespace Sample;
+            public sealed class ReviewPrincipal<T> : System.Security.Principal.IPrincipal
+            {
+                public System.Security.Principal.IIdentity Identity => null!;
+                public bool IsInRole(string role) => false;
+            }
+            public static class IdentityBootstrap
+            {
+                public static void Register()
+                {
+                    Microsoft.Web.Infrastructure.DynamicModuleHelper.DynamicModuleUtility.RegisterModule(typeof(PrivateIdentityModule));
+                    Microsoft.Web.Infrastructure.DynamicModuleHelper.DynamicModuleUtility.RegisterModule(typeof(LoggingModule));
+                }
+            }
+            """);
+        File.WriteAllText(Path.Combine(repo, "web.config"), """
+            <configuration>
+              <system.web>
+                <authentication mode="Forms">
+                  <forms loginUrl="private-login-target" name="private-cookie-name" requireSSL="true" slidingExpiration="false" cookieless="UseUri" />
+                </authentication>
+                <authorization>
+                  <allow roles="private-role-one,private-role-two" verbs="GET" /><allow roles="private-role-three,private-role-four" verbs="GET" />
+                  <deny users="?" />
+                </authorization>
+                <identity impersonate="true" userName="private-user" password="private-password" />
+                <machineKey validationKey="private-validation-key" decryptionKey="private-decryption-key" validation="HMACSHA256" decryption="3DES" />
+                <membership defaultProvider="private-membership-provider">
+                  <providers><add name="private-provider-name" type="Sample.CustomMembershipProvider, Sample" connectionStringName="private-connection" /></providers>
+                </membership>
+                <roleManager enabled="true" configSource="private-role-source.config" />
+                <sessionState mode="SQLServer" cookieless="AutoDetect" timeout="20" sqlConnectionString="private-session-connection" />
+                <httpCookies httpOnlyCookies="true" requireSSL="true" sameSite="Lax" domain="private.example" />
+                <anonymousIdentification enabled="false" />
+                <profile enabled="true"><EncryptedData>private-encrypted-value</EncryptedData></profile>
+                <httpModules>
+                  <add name="FormsAuthentication" type="System.Web.Security.FormsAuthenticationModule" />
+                </httpModules>
+              </system.web>
+            </configuration>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var identity = result.Facts.Where(fact => fact.FactType == FactTypes.AspNetIdentityStateDeclared).ToArray();
+
+        Assert.Contains(identity, fact => fact.Properties.GetValueOrDefault("identityKind") == "authentication"
+            && fact.Properties.GetValueOrDefault("authenticationMode") == "Forms");
+        Assert.Contains(identity, fact => fact.Properties.GetValueOrDefault("identityKind") == "forms-authentication"
+            && fact.Properties.GetValueOrDefault("requireSslSetting") == "true"
+            && fact.Properties.GetValueOrDefault("cookielessSetting") == "UseUri");
+        var authorizationRules = identity.Where(fact => fact.Properties.GetValueOrDefault("identityKind") == "authorization-rule").ToArray();
+        Assert.Equal(3, authorizationRules.Length);
+        Assert.Equal(3, authorizationRules.Select(fact => fact.FactId).Distinct(StringComparer.Ordinal).Count());
+        Assert.Contains(identity, fact => fact.Properties.GetValueOrDefault("identityKind") == "machine-key-presence"
+            && fact.Properties.GetValueOrDefault("validationKeyDeclared") == "true"
+            && fact.Properties.GetValueOrDefault("decryptionAlgorithm") == "3DES");
+        Assert.Contains(identity, fact => fact.Properties.GetValueOrDefault("identityKind") == "session-state"
+            && fact.Properties.GetValueOrDefault("sessionMode") == "SQLServer"
+            && fact.Properties.GetValueOrDefault("cookielessSetting") == "AutoDetect"
+            && fact.Properties.GetValueOrDefault("stateConnectionDeclared") == "true");
+        Assert.Contains(identity, fact => fact.Properties.GetValueOrDefault("identityKind") == "cookie-policy"
+            && fact.Properties.GetValueOrDefault("sameSite") == "Lax");
+        Assert.Contains(identity, fact => fact.Properties.GetValueOrDefault("identityKind") == "membership-provider"
+            && fact.Properties.GetValueOrDefault("providerClassification") == "custom-or-unresolved");
+        Assert.Contains(identity, fact => fact.Properties.GetValueOrDefault("identityKind") == "identity-pipeline-component");
+        Assert.Equal(2, identity.Count(fact => fact.Properties.GetValueOrDefault("identityKind") == "login-control"));
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyAspNetIdentityState
+            && fact.Properties.GetValueOrDefault("gapKind") == "UnsupportedCustomIdentityProvider");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyAspNetIdentityState
+            && fact.Properties.GetValueOrDefault("gapKind") == "ExternalIdentityConfigUnsupported");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyAspNetIdentityState
+            && fact.Properties.GetValueOrDefault("gapKind") == "EncryptedIdentityConfigUnsupported");
+        Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyAspNetIdentityState
+            && fact.Properties.GetValueOrDefault("gapKind") == "DynamicIdentityPipelineRegistrationUnsupported");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyAspNetIdentityState
+            && fact.Properties.GetValueOrDefault("gapKind") == "IdentitySemanticDependencyUnavailable");
+        Assert.All(identity, fact =>
+        {
+            Assert.Equal(RuleIds.LegacyAspNetIdentityState, fact.RuleId);
+            Assert.False(string.IsNullOrWhiteSpace(fact.Evidence.ExtractorVersion));
+            Assert.True(fact.Evidence.StartLine > 0);
+        });
+
+        var report = MarkdownReportWriter.Build(result);
+        Assert.Contains("AspNetIdentityStateDeclared", report, StringComparison.Ordinal);
+        Assert.Contains("identity/session", report, StringComparison.Ordinal);
+
+        var serialized = SerializeFacts(result.Facts);
+        foreach (var forbidden in new[]
+                 {
+                     "private-login-target", "private-cookie-name", "private-role-one", "private-role-two", "private-role-three", "private-role-four",
+                     "private-user", "private-password", "private-validation-key", "private-decryption-key",
+                     "private-membership-provider", "private-provider-name", "private-connection",
+                     "private-role-source.config", "private-session-connection", "private.example", "private-encrypted-value",
+                     "PrivateIdentityModule"
+                 })
+            Assert.DoesNotContain(forbidden, serialized, StringComparison.OrdinalIgnoreCase);
+
+        var manifest = TestManifest();
+        var relationship = FactFactory.Create(
+            manifest,
+            FactTypes.SymbolRelationship,
+            RuleIds.CSharpSemanticSymbolRelationship,
+            EvidenceTiers.Tier1Semantic,
+            new("Identity.cs", 2, 2, null, "CSharpSemanticExtractor", "test/1.0"),
+            sourceSymbol: "global::Sample.ReviewPrincipal<T>",
+            targetSymbol: "global::System.Security.Principal.IPrincipal",
+            contractElement: "ImplementsInterface");
+        var aspNetInventory = new[] { new FileInventoryItem("Login.aspx", "WebFormsMarkup", 0) };
+        var typeFacts = LegacyAspNetExtractor.Extract(repo, manifest, aspNetInventory, [relationship]);
+        Assert.Contains(typeFacts, fact => fact.FactType == FactTypes.AspNetIdentityStateDeclared
+            && fact.Properties.GetValueOrDefault("identityKind") == "custom-principal-type"
+            && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+            && fact.Properties.GetValueOrDefault("supportingFactIds") == relationship.FactId);
+
+        var reducedFacts = LegacyAspNetExtractor.Extract(
+            repo,
+            manifest with { BuildStatus = "FailedOrPartial" },
+            [new FileInventoryItem("Identity.cs", "CSharp", 0), .. aspNetInventory],
+            [relationship]);
+        Assert.DoesNotContain(reducedFacts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "IdentitySemanticDependencyUnavailable");
+
+        var unrelatedFacts = LegacyAspNetExtractor.Extract(
+            repo,
+            manifest with { BuildStatus = "FailedOrPartial" },
+            [new FileInventoryItem("Identity.cs", "CSharp", 0)],
+            [relationship]);
+        Assert.DoesNotContain(unrelatedFacts, fact => fact.FactType == FactTypes.AspNetIdentityStateDeclared
+            || fact.RuleId == RuleIds.LegacyAspNetIdentityState);
+    }
+
+    [Fact]
     public void Scan_extracts_static_aspnet_route_config_handler_page_method_and_navigation_evidence()
     {
         using var temp = new TempDirectory();

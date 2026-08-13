@@ -36,12 +36,16 @@ The packet can contain:
 - existing bounded static paths to supported terminal surfaces;
 - a bounded downstream-boundary inventory for supported database, service,
   messaging, configuration, and dependency surfaces;
+- a bounded identity/state inventory containing safe categories, presence
+  flags, counts, provenance, and explicit unsupported-coverage gaps;
 - structural slice candidates based only on declared surface composition;
 - provenance, evidence tiers, coverage labels, source spans, supporting fact
   and edge IDs, limitations, and explicit gaps.
 
-It does not add new authentication, batch, database, service, or runtime
-extraction. It only composes evidence already present in one scan.
+The scanner inventories only supported checked-in identity/state declarations;
+the packet composes those existing facts. Neither phase authenticates users,
+loads external or encrypted configuration, executes providers, inspects runtime
+state, or adds batch, database, service, or runtime extraction.
 
 ## Requirements
 
@@ -93,6 +97,7 @@ $PacketBounds = @(
     "--max-surfaces", "1000",
     "--max-event-chains", "1000",
     "--max-boundaries", "1000",
+    "--max-identity-state", "1000",
     "--max-candidates", "1000",
     "--max-gaps", "1000",
     "--max-depth", "8",
@@ -146,6 +151,7 @@ PACKET_BOUNDS=(
   --max-surfaces 1000
   --max-event-chains 1000
   --max-boundaries 1000
+  --max-identity-state 1000
   --max-candidates 1000
   --max-gaps 1000
   --max-depth 8
@@ -189,6 +195,7 @@ report.
 | `--max-surfaces` | 1000 | Maximum retained Web Forms surfaces. |
 | `--max-event-chains` | 1000 | Maximum binding/handler/path chains. |
 | `--max-boundaries` | 1000 | Maximum retained downstream boundary rows. |
+| `--max-identity-state` | 1000 | Maximum retained identity/state declaration rows. |
 | `--max-candidates` | 1000 | Maximum structural slice candidates. |
 | `--max-gaps` | 1000 | Maximum structured gaps, including a limit gap. |
 | `--max-depth` | 8 | Maximum legacy static-flow traversal depth. |
@@ -210,6 +217,7 @@ $LargerPacketBounds = @(
     "--max-surfaces", "2000",
     "--max-event-chains", "3000",
     "--max-boundaries", "3000",
+    "--max-identity-state", "3000",
     "--max-candidates", "2000",
     "--max-gaps", "2000",
     "--max-depth", "10",
@@ -322,6 +330,7 @@ generated file.
 | `eventChains` | Bounded static chains from a surface/control event to a handler and, when evidence permits, an existing static terminal path. |
 | `eventChains[].classification` | May be a legacy static-path classification, `NoBackendEvidence`, or `handler-unavailable`. It is evidence-relative, not a runtime result. |
 | `downstreamBoundaries` | Bounded terminal projections from retained event chains. Each row keeps an opaque target identity, terminal evidence ID, path evidence, rules, tiers, coverage, and supporting IDs. It is not proof that the interaction ran or succeeded. |
+| `identityStateInventory` | Bounded supported identity/state declarations with allowlisted categorical metadata, provenance, supporting IDs, and limitations. Values, users, roles, credentials, provider names, machine keys, connection strings, cookie names, and login targets are not rendered. |
 | `structuralSliceCandidates` | Connected components derived only from declared surface composition. `ownerNamingRequired` remains true; TraceMap does not assign business capability names. |
 | `gaps` | Explicit reasons evidence is missing, reduced, ambiguous, invalid, or bounded. A gap is part of the result, not an error to hide. |
 | `ownerQuestions` | Questions a developer or product owner should answer before treating structural evidence as a modernization plan. |
@@ -338,6 +347,18 @@ than treating the absence of a file boundary as evidence that handlers do not
 read or write files. Configuration boundaries classified as needs-review,
 reduced, or unknown also emit `ConfigurationBoundaryNeedsReview`; a textual or
 generic configuration match is not promoted to a proven endpoint.
+
+Identity/state extraction emits `DynamicIdentityPipelineRegistrationUnsupported`
+only for registrations whose declared module type has a supported
+identity-related shape;
+`IdentitySemanticDependencyUnavailable`, `ExternalIdentityConfigUnsupported`,
+`EncryptedIdentityConfigUnsupported`, and `UnsupportedCustomIdentityProvider`
+when the corresponding boundary cannot be proven safely. Reaching the packet's
+identity bound emits `WebFormsModernizationIdentityStateLimitReached`. These
+gaps do not grade security or prove that the missing behavior is absent.
+The packet independently rejects non-vocabulary identity kinds,
+classifications, or metadata values and emits
+`UnsupportedIdentityStatePropertyShape` rather than rendering them.
 
 ## Common outcomes
 

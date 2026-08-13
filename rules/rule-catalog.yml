@@ -2255,6 +2255,19 @@ rules:
       - Encrypted sections, external configSource/file references, transforms, custom sections, machine.config dependencies, runtime mutations, and unsupported providers are gaps.
       - Matching hashes alone cannot prove page, route, navigation, or runtime reachability.
 
+  - id: legacy.aspnet.identity-state.v1
+    name: Legacy ASP.NET identity and state declaration evidence
+    description: Inventories bounded checked-in authentication, authorization, impersonation, machine-key presence, membership/role provider, session, cookie, profile, login-control, identity-pipeline, and compiler-resolved custom principal/identity declarations.
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier4Unknown
+    emits:
+      - AspNetIdentityStateDeclared
+      - AnalysisGap
+    limitations:
+      - Rows are static declarations only and do not prove effective runtime policy, authenticated users, authorization outcomes, session behavior, cookie behavior, provider availability, vulnerability, exploitability, compliance, security quality, or migration success.
+      - Keys, credentials, cookie names or values, login targets, provider names, roles, users, connection strings, domains, source values, and encrypted payloads are never emitted; only closed categories, presence flags, counts, safe framework/custom classification, rule-backed provenance, and supporting fact IDs are retained.
+      - External or encrypted identity configuration, deterministically identity-related dynamic pipeline registration, unavailable dependencies, unsupported providers, runtime principal assignment, and custom provider behavior remain explicit gaps or outside coverage; unrelated or dynamically named modules are not classified as identity evidence.
+      - Custom principal/identity declarations require compiler-resolved interface relationships; name-only lookalikes are not promoted to identity evidence.
+
   - id: legacy.aspnet.handler.v1
     name: Legacy ASP.NET static handler evidence
     description: Detects .ashx directives, IHttpHandler/IHttpAsyncHandler implementations, handler factories, and config-backed handler declarations as static handler surface candidates.
