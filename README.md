@@ -21,6 +21,7 @@ Start here:
 - [Build milestones](MILESTONES.md)
 - [Language adapter contract](docs/LANGUAGE_ADAPTER_CONTRACT.md)
 - [Adapter runway](docs/ADAPTER_RUNWAY.md)
+- [Web Forms modernization packet runbook](docs/WEBFORMS_MODERNIZATION_PACKET.md)
 - [PR review loop](docs/PR_REVIEW_LOOP.md)
 - [Static HTML evidence explorer](docs/STATIC_HTML_EVIDENCE_EXPLORER.md)
 - [Rule catalog](rules/rule-catalog.yml)

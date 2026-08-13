@@ -829,6 +829,11 @@ WebForms smoke summaries must remain hidden public-claim level until reviewed. D
 
 For the bounded local modernization packet, run the scan first and then:
 
+See the complete operator workflow, PowerShell and Bash examples, output
+interpretation, deterministic comparison, fail-closed errors, and privacy
+requirements in
+[`WEBFORMS_MODERNIZATION_PACKET.md`](WEBFORMS_MODERNIZATION_PACKET.md).
+
 ```bash
 dotnet run --project src/dotnet/TraceMap.Cli -- webforms-modernization \
   --index <scan-output>/index.sqlite \
