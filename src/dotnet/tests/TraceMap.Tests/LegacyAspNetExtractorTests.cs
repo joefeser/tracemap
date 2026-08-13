@@ -23,7 +23,7 @@ public sealed class LegacyAspNetExtractorTests
             """);
         File.WriteAllText(Path.Combine(repo, "Identity.cs"), """
             namespace Sample;
-            public sealed class ReviewPrincipal : System.Security.Principal.IPrincipal
+            public sealed class ReviewPrincipal<T> : System.Security.Principal.IPrincipal
             {
                 public System.Security.Principal.IIdentity Identity => null!;
                 public bool IsInRole(string role) => false;
@@ -107,6 +107,10 @@ public sealed class LegacyAspNetExtractorTests
             Assert.True(fact.Evidence.StartLine > 0);
         });
 
+        var report = MarkdownReportWriter.Build(result);
+        Assert.Contains("AspNetIdentityStateDeclared", report, StringComparison.Ordinal);
+        Assert.Contains("identity/session", report, StringComparison.Ordinal);
+
         var serialized = SerializeFacts(result.Facts);
         foreach (var forbidden in new[]
                  {
@@ -125,10 +129,11 @@ public sealed class LegacyAspNetExtractorTests
             RuleIds.CSharpSemanticSymbolRelationship,
             EvidenceTiers.Tier1Semantic,
             new("Identity.cs", 2, 2, null, "CSharpSemanticExtractor", "test/1.0"),
-            sourceSymbol: "global::Sample.ReviewPrincipal",
+            sourceSymbol: "global::Sample.ReviewPrincipal<T>",
             targetSymbol: "global::System.Security.Principal.IPrincipal",
             contractElement: "ImplementsInterface");
-        var typeFacts = LegacyAspNetExtractor.Extract(repo, manifest, [], [relationship]);
+        var aspNetInventory = new[] { new FileInventoryItem("Login.aspx", "WebFormsMarkup", 0) };
+        var typeFacts = LegacyAspNetExtractor.Extract(repo, manifest, aspNetInventory, [relationship]);
         Assert.Contains(typeFacts, fact => fact.FactType == FactTypes.AspNetIdentityStateDeclared
             && fact.Properties.GetValueOrDefault("identityKind") == "custom-principal-type"
             && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
@@ -137,10 +142,18 @@ public sealed class LegacyAspNetExtractorTests
         var reducedFacts = LegacyAspNetExtractor.Extract(
             repo,
             manifest with { BuildStatus = "FailedOrPartial" },
-            [new FileInventoryItem("Identity.cs", "CSharp", 0)],
+            [new FileInventoryItem("Identity.cs", "CSharp", 0), .. aspNetInventory],
             [relationship]);
         Assert.DoesNotContain(reducedFacts, fact => fact.FactType == FactTypes.AnalysisGap
             && fact.Properties.GetValueOrDefault("gapKind") == "IdentitySemanticDependencyUnavailable");
+
+        var unrelatedFacts = LegacyAspNetExtractor.Extract(
+            repo,
+            manifest with { BuildStatus = "FailedOrPartial" },
+            [new FileInventoryItem("Identity.cs", "CSharp", 0)],
+            [relationship]);
+        Assert.DoesNotContain(unrelatedFacts, fact => fact.FactType == FactTypes.AspNetIdentityStateDeclared
+            || fact.RuleId == RuleIds.LegacyAspNetIdentityState);
     }
 
     [Fact]

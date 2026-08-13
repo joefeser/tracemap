@@ -314,7 +314,8 @@ public static class MarkdownReportWriter
                 or FactTypes.AspNetHandlerDeclared
                 or FactTypes.AspNetPageMethodDeclared
                 or FactTypes.AspNetNavigationReferenceDeclared
-                or FactTypes.AspNetNavigationEdgeDeclared),
+                or FactTypes.AspNetNavigationEdgeDeclared
+                or FactTypes.AspNetIdentityStateDeclared),
             FormatLegacyAspNetFact);
 
         AddFactSection(
@@ -386,8 +387,9 @@ public static class MarkdownReportWriter
             lines.Add("");
             lines.Add("## Legacy ASP.NET Surface Limitations");
             lines.Add("");
-            lines.Add("- ASP.NET surface, route, config, handler, PageMethod, and navigation rows are deterministic static evidence from checked-in files only.");
+            lines.Add("- ASP.NET surface, route, config, handler, PageMethod, navigation, and identity/session rows are deterministic static evidence from checked-in files only.");
             lines.Add("- Each route candidate or navigation reference candidate does not prove runtime route matching, IIS deployment, URL rewriting, authorization, browser behavior, JavaScript execution, page rendering, request handling, user reachability, or runtime impact.");
+            lines.Add("- Identity/session declarations do not prove authentication, authorization, effective identity, session behavior, credential handling, runtime assignment, or production use.");
             lines.Add("- Raw URLs, hostnames, config values, local absolute paths, remotes, endpoint values, snippets, credentials, and secret-looking values are hashed or omitted.");
         }
 
@@ -909,12 +911,14 @@ public static class MarkdownReportWriter
             fact.Properties.GetValueOrDefault("typeName"),
             fact.Properties.GetValueOrDefault("methodName"),
             fact.Properties.GetValueOrDefault("sectionKind"),
+            fact.Properties.GetValueOrDefault("identityKind"),
             DisplayFactName(fact));
         var role = FirstPresentValue(
             fact.Properties.GetValueOrDefault("surfaceKind"),
             fact.Properties.GetValueOrDefault("routeShape"),
             fact.Properties.GetValueOrDefault("sectionKind"),
             fact.Properties.GetValueOrDefault("handlerKind"),
+            fact.Properties.GetValueOrDefault("identityKind"),
             fact.Properties.GetValueOrDefault("referenceKind"),
             fact.Properties.GetValueOrDefault("edgeKind"),
             fact.FactType);
