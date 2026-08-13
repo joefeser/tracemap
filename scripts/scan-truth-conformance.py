@@ -13,6 +13,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -119,13 +120,19 @@ def create_fixture(parent: Path, definition: AdapterDefinition) -> Path:
 
 def prepare(adapter: str, repo_root: Path) -> None:
     if adapter == "dotnet":
-        run(["dotnet", "build", "src/dotnet/TraceMap.sln", "--no-restore"], cwd=repo_root)
+        run(["dotnet", "build", "src/dotnet/TraceMap.sln"], cwd=repo_root)
+        run(["dotnet", "test", "src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj", "--no-build", "--filter", "FullyQualifiedName~ScanEngineTests"], cwd=repo_root)
     elif adapter == "jvm":
         run(["gradle", "-p", "src/jvm", "installDist"], cwd=repo_root, env=java_environment())
+        run(["gradle", "-p", "src/jvm", "test", "--tests", "*ScanMutationTruthTest"], cwd=repo_root, env=java_environment())
+    elif adapter == "python":
+        run([sys.executable, "-m", "pytest", "-q", "src/python/tests/test_python_adapter.py", "-k", "source_mutation_before_snapshot_verification"], cwd=repo_root)
     elif adapter == "typescript":
         run(["npm", "ci"], cwd=repo_root / "src/typescript")
         run(["npm", "run", "build"], cwd=repo_root / "src/typescript")
+        run(["npm", "test", "--", "--run", "tests/ScanEngine.test.ts", "-t", "fails before publishing when source bytes mutate"], cwd=repo_root / "src/typescript")
     elif adapter == "swift":
+        run(["swift", "run", "--package-path", "src/swift", "tracemap-swift-smoke-tests"], cwd=repo_root)
         run(["swift", "build", "--package-path", "src/swift", "--product", "tracemap-swift"], cwd=repo_root)
 
 
@@ -137,19 +144,20 @@ def java_environment() -> dict[str, str]:
     return env
 
 
-def scan_command(adapter: str, repo: Path, output: Path, repo_root: Path) -> tuple[list[str], dict[str, str] | None]:
+def scan_command(adapter: str, repo: Path, output: Path, repo_root: Path, extra: list[str] | None = None) -> tuple[list[str], dict[str, str] | None]:
+    extra = extra or []
     if adapter == "dotnet":
-        return (["dotnet", "run", "--no-build", "--project", "src/dotnet/TraceMap.Cli", "--", "scan", "--repo", str(repo), "--out", str(output)], None)
+        return (["dotnet", "run", "--no-build", "--project", "src/dotnet/TraceMap.Cli", "--", "scan", "--repo", str(repo), "--out", str(output), *extra], None)
     if adapter == "jvm":
-        return ([str(repo_root / "src/jvm/build/install/tracemap-jvm/bin/tracemap-jvm"), "scan", "--repo", str(repo), "--out", str(output)], java_environment())
+        return ([str(repo_root / "src/jvm/build/install/tracemap-jvm/bin/tracemap-jvm"), "scan", "--repo", str(repo), "--out", str(output), *extra], java_environment())
     if adapter == "python":
         env = dict(os.environ)
         env["PYTHONPATH"] = str(repo_root / "src/python")
-        return ([sys.executable, "-m", "tracemap_py.cli", "scan", "--repo", str(repo), "--out", str(output)], env)
+        return ([sys.executable, "-m", "tracemap_py.cli", "scan", "--repo", str(repo), "--out", str(output), *extra], env)
     if adapter == "typescript":
-        return (["node", str(repo_root / "src/typescript/dist/src/cli.js"), "scan", "--repo", str(repo), "--out", str(output)], None)
+        return (["node", str(repo_root / "src/typescript/dist/src/cli.js"), "scan", "--repo", str(repo), "--out", str(output), *extra], None)
     if adapter == "swift":
-        return (["swift", "run", "--skip-build", "--package-path", str(repo_root / "src/swift"), "tracemap-swift", "scan", "--repo", str(repo), "--out", str(output)], None)
+        return (["swift", "run", "--skip-build", "--package-path", str(repo_root / "src/swift"), "tracemap-swift", "scan", "--repo", str(repo), "--out", str(output), *extra], None)
     raise ValueError(adapter)
 
 
@@ -171,6 +179,55 @@ def logical_sqlite_facts(output: Path) -> list[tuple[Any, ...]]:
         connection.close()
 
 
+def facts(output: Path) -> list[dict[str, Any]]:
+    return [json.loads(line) for line in (output / "facts.ndjson").read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def artifact_hashes(output: Path) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for relative in json.loads((root() / "contracts/scan-truth-conformance.v1.json").read_text(encoding="utf-8"))["requiredArtifacts"]:
+        path = output / relative
+        if path.is_file():
+            result[relative] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return result
+
+
+def invalid_source(adapter: str) -> str:
+    return {
+        "dotnet": "public sealed class Broken { public void Run( { }\n",
+        "jvm": "package example; final class Broken { void run( { }\n",
+        "python": "def broken(:\n    pass\n",
+        "typescript": "export const = ;\n",
+        "swift": "func broken( {\n",
+    }[adapter]
+
+
+def unicode_exclusion_fixture(adapter: str) -> tuple[str, str, str]:
+    extension = {"dotnet": "cs", "jvm": "java", "python": "py", "typescript": "ts", "swift": "swift"}[adapter]
+    relative_nfd = f"Generated/Cafe\u0301.{extension}"
+    pattern_nfc = f"Generated/Café.{extension}"
+    content = {
+        "dotnet": "internal sealed class MustRemainExcluded { }\n",
+        "jvm": "final class MustRemainExcluded { }\n",
+        "python": "must_remain_excluded = True\n",
+        "typescript": "export const mustRemainExcluded = true;\n",
+        "swift": "let mustRemainExcluded = true\n",
+    }[adapter]
+    return relative_nfd, pattern_nfc, content
+
+
+def host_treats_unicode_names_as_equivalent(parent: Path) -> bool:
+    probe = parent / "unicode-probe"
+    probe.mkdir(parents=True)
+    nfd = probe / "Cafe\u0301.txt"
+    nfd.write_text("probe", encoding="utf-8")
+    nfc = probe / "Café.txt"
+    try:
+        return nfc.exists() and os.path.samefile(nfd, nfc)
+    finally:
+        shutil.rmtree(probe)
+
+
 def capability(name: str, status: str, evidence: list[str], limitations: list[str] | None = None) -> dict[str, Any]:
     return {
         "capability": name,
@@ -181,7 +238,38 @@ def capability(name: str, status: str, evidence: list[str], limitations: list[st
     }
 
 
-def evaluate_adapter(adapter: str, workspace: Path, repo_root: Path) -> dict[str, Any]:
+def render_markdown(result: dict[str, Any]) -> str:
+    lines = [
+        "# TraceMap Cross-Adapter Scan-Truth Readiness",
+        "",
+        f"- Profile: `{result['profileId']}`",
+        f"- Overall status: `{result['overallStatus']}`",
+        f"- Rule ID: `{PROFILE_RULE}`",
+        "",
+        "| Adapter | Status | Unsupported / not-run capabilities |",
+        "| --- | --- | --- |",
+    ]
+    for adapter in result["adapters"]:
+        incomplete = [
+            row["capability"]
+            for row in adapter["capabilities"]
+            if row["status"] not in {"supported", "not-applicable"}
+        ]
+        lines.append(f"| {adapter['adapter']} | {adapter['status']} | {', '.join(incomplete) if incomplete else 'none'} |")
+    lines.extend(["", "## Capability evidence", ""])
+    for adapter in result["adapters"]:
+        lines.extend([f"### {adapter['adapter']}", "", "| Capability | Status | Evidence |", "| --- | --- | --- |"])
+        for row in adapter["capabilities"]:
+            evidence = ", ".join(row["evidence"]) if row["evidence"] else "none"
+            lines.append(f"| {row['capability']} | {row['status']} | {evidence} |")
+        lines.append("")
+    lines.extend(["## Limitations", ""])
+    lines.extend(f"- {item}" for item in result["limitations"])
+    lines.append("")
+    return "\n".join(lines)
+
+
+def evaluate_adapter(adapter: str, workspace: Path, repo_root: Path, mutation_test_verified: bool) -> dict[str, Any]:
     definition = DEFINITIONS[adapter]
     repo = create_fixture(workspace, definition)
     first, repeat, dirty = (workspace / f"{adapter}-{name}" for name in ("first", "repeat", "dirty"))
@@ -213,20 +301,99 @@ def evaluate_adapter(adapter: str, workspace: Path, repo_root: Path) -> dict[str
         and first_manifest.get("scanId") != dirty_manifest.get("scanId")
     )
     valid = not any(validation_errors.values())
+
+    malformed = workspace / f"{adapter}-malformed"
+    shutil.copytree(first, malformed)
+    malformed_manifest_path = malformed / "scan-manifest.json"
+    malformed_manifest = json.loads(malformed_manifest_path.read_text(encoding="utf-8"))
+    malformed_manifest["sourceSnapshotDigest"] = "invalid"
+    malformed_manifest_path.write_text(json.dumps(malformed_manifest), encoding="utf-8")
+    malformed_rejected = any("sourceSnapshotDigest" in error for error in VALIDATOR.validate_output(malformed))
+
+    reduced_repo = create_fixture(workspace / f"{adapter}-reduced-root", definition)
+    (reduced_repo / definition.relative_source).write_text(invalid_source(adapter), encoding="utf-8")
+    git(reduced_repo, "add", ".")
+    git(reduced_repo, "commit", "-m", "invalid-source")
+    reduced_output = workspace / f"{adapter}-reduced"
+    command, env = scan_command(adapter, reduced_repo, reduced_output, repo_root)
+    reduced_run = run(command, cwd=repo_root, env=env, allow_failure=True)
+    reduced_valid = reduced_run.returncode == 0 and not VALIDATOR.validate_output(reduced_output)
+    reduced_facts = facts(reduced_output) if reduced_valid else []
+    reduced_manifest = normalized_manifest(reduced_output) if reduced_valid else {}
+    reduced_preserved = (
+        reduced_valid
+        and any(row.get("factType") == "AnalysisGap" for row in reduced_facts)
+        and any(row.get("factType") != "AnalysisGap" for row in reduced_facts)
+        and (reduced_manifest.get("buildStatus") != "Succeeded" or reduced_manifest.get("analysisLevel") != "Level1SemanticAnalysis")
+    )
+
+    inaccessible_repo = create_fixture(workspace / f"{adapter}-inaccessible-root", definition)
+    inaccessible_source = inaccessible_repo / definition.relative_source
+    prior_output = workspace / f"{adapter}-inaccessible"
+    shutil.copytree(first, prior_output)
+    prior_hashes = artifact_hashes(prior_output)
+    inaccessible_source.chmod(0)
+    try:
+        command, env = scan_command(adapter, inaccessible_repo, prior_output, repo_root)
+        inaccessible_run = run(command, cwd=repo_root, env=env, allow_failure=True)
+    finally:
+        inaccessible_source.chmod(0o600)
+    if inaccessible_run.returncode != 0:
+        inaccessible_truth = artifact_hashes(prior_output) == prior_hashes
+        transaction_truth = inaccessible_truth
+    else:
+        inaccessible_errors = VALIDATOR.validate_output(prior_output)
+        inaccessible_rows = facts(prior_output) if not inaccessible_errors else []
+        inaccessible_manifest = normalized_manifest(prior_output) if not inaccessible_errors else {}
+        inaccessible_truth = (
+            not inaccessible_errors
+            and any(row.get("factType") == "AnalysisGap" for row in inaccessible_rows)
+            and (inaccessible_manifest.get("buildStatus") != "Succeeded" or inaccessible_manifest.get("analysisLevel") != "Level1SemanticAnalysis")
+        )
+        transaction_truth = not inaccessible_errors
+
+    relative_nfd, pattern_nfc, excluded_content = unicode_exclusion_fixture(adapter)
+    exclusion_repo = create_fixture(workspace / f"{adapter}-exclusion-root", definition)
+    excluded_path = exclusion_repo / relative_nfd
+    excluded_path.parent.mkdir(parents=True, exist_ok=True)
+    excluded_path.write_text(excluded_content, encoding="utf-8")
+    git(exclusion_repo, "add", ".")
+    git(exclusion_repo, "commit", "-m", "unicode-exclusion")
+    exclusion_output = workspace / f"{adapter}-exclusion"
+    command, env = scan_command(adapter, exclusion_repo, exclusion_output, repo_root, ["--exclude", pattern_nfc])
+    exclusion_run = run(command, cwd=repo_root, env=env, allow_failure=True)
+    unicode_equivalent = host_treats_unicode_names_as_equivalent(workspace / f"{adapter}-unicode-probe-root")
+    if exclusion_run.returncode == 0 and not VALIDATOR.validate_output(exclusion_output):
+        excluded_observed = any(
+            unicodedata.normalize("NFC", row.get("evidence", {}).get("filePath", ""))
+            == unicodedata.normalize("NFC", relative_nfd)
+            for row in facts(exclusion_output)
+        )
+        exclusion_truth = not excluded_observed if unicode_equivalent else True
+        exclusion_status = "supported" if unicode_equivalent and exclusion_truth else "not-applicable" if not unicode_equivalent else "unsupported"
+    else:
+        exclusion_truth = False
+        exclusion_status = "unsupported" if unicode_equivalent else "not-applicable"
+
     capabilities = [
         capability("concrete-git-authority", "supported" if valid else "unsupported", ["synthetic-exact-commit"]),
         capability("actual-analyzed-byte-identity", "supported" if valid else "unsupported", ["manifest-sourceSnapshotDigest"]),
         capability("repeat-determinism", "supported" if deterministic else "unsupported", ["baseline-repeat-comparison"]),
         capability("same-size-dirty-mutation", "supported" if dirty_identity else "unsupported", ["same-commit-different-byte-snapshot"]),
-        capability("required-artifact-transaction", "supported" if valid else "unsupported", ["five-artifact-validator"]),
+        capability("inaccessible-input-truth", "supported" if inaccessible_truth else "unsupported", ["chmod-unreadable-adversarial-scan"]),
+        capability(
+            "source-mutation-detection",
+            "supported" if mutation_test_verified else "not-run",
+            ["deterministic-before-verification-mutation-test"] if mutation_test_verified else [],
+            [] if mutation_test_verified else ["Run without --skip-build so the adapter mutation fixture is verified."],
+        ),
+        capability("filesystem-correct-exclusion", exclusion_status, ["NFC-pattern-NFD-path-host-semantics"] if unicode_equivalent else [], [] if unicode_equivalent else ["Host filesystem keeps NFC and NFD names distinct."]),
+        capability("reduced-analysis-preservation", "supported" if reduced_preserved else "unsupported", ["invalid-source-reduced-scan"]),
+        capability("required-artifact-transaction", "supported" if valid and transaction_truth else "unsupported", ["five-artifact-validator", "failed-scan-prior-output-check"]),
         capability("ndjson-sqlite-roundtrip", "supported" if valid else "unsupported", ["read-only-sqlite-roundtrip"]),
+        capability("malformed-schema-fail-closed", "supported" if malformed_rejected else "unsupported", ["invalid-sourceSnapshotDigest-rejected"]),
         capability("repository-relative-evidence", "supported" if valid else "unsupported", ["private-path-and-relative-path-validator"]),
     ]
-    for pending in (
-        "inaccessible-input-truth", "source-mutation-detection", "filesystem-correct-exclusion",
-        "reduced-analysis-preservation", "malformed-schema-fail-closed",
-    ):
-        capabilities.append(capability(pending, "not-run", [], ["This capability requires its dedicated adversarial fixture stage."]))
     status = "supported" if all(row["status"] in {"supported", "not-applicable"} for row in capabilities) else "unsupported"
     return {
         "adapter": adapter,
@@ -240,6 +407,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--adapters", default=",".join(ALL_ADAPTERS), help="comma-separated adapter names")
     parser.add_argument("--out", type=Path, required=True, help="sanitized result JSON path")
+    parser.add_argument("--markdown-out", type=Path, help="sanitized Markdown result path (defaults beside --out)")
     parser.add_argument("--skip-build", action="store_true", help="use already-built adapter binaries")
     parser.add_argument("--keep-work", type=Path, help="retain synthetic work at this explicit path")
     args = parser.parse_args()
@@ -262,9 +430,10 @@ def main() -> int:
         rows = []
         for adapter in adapters:
             try:
+                mutation_test_verified = not args.skip_build
                 if not args.skip_build:
                     prepare(adapter, repo_root)
-                rows.append(evaluate_adapter(adapter, workspace, repo_root))
+                rows.append(evaluate_adapter(adapter, workspace, repo_root, mutation_test_verified))
             except Exception as exception:
                 rows.append({
                     "adapter": adapter,
@@ -283,6 +452,9 @@ def main() -> int:
         }
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        markdown_out = args.markdown_out or args.out.with_suffix(".md")
+        markdown_out.parent.mkdir(parents=True, exist_ok=True)
+        markdown_out.write_text(render_markdown(result), encoding="utf-8")
         print(f"scan-truth-conformance={overall};adapters={len(rows)};resultSha256={hashlib.sha256(args.out.read_bytes()).hexdigest()}")
         return 0 if overall == "supported" else 1
     finally:

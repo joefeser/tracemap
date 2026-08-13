@@ -1532,3 +1532,25 @@ global application-side evidence with explicit provider-unknown gaps; they must
 not attach to PostgreSQL objects. Confirm outputs contain no protected source
 symbol, raw SQL, local path, or claims of application, ordering, rollback,
 generated SQL, compatibility, safety, database state, or approval.
+
+### Cross-adapter scan-truth conformance
+
+For changes to adapter inventory, scan identity, snapshot verification,
+include/exclude matching, or artifact publication, run the offline synthetic
+matrix from a Python environment containing the adapter test dependencies:
+
+```bash
+python scripts/scan-truth-conformance.py \
+  --out /tmp/tracemap-scan-truth/readiness.json
+```
+
+The command builds the shipped .NET, JVM, Python, TypeScript, and Swift
+adapters, runs each deterministic during-scan mutation fixture, and emits a
+sanitized JSON and Markdown readiness report. It returns nonzero if any required
+capability is unsupported or not run. Review each adapter row for concrete Git
+authority, analyzed-byte identity, repeat determinism, same-size dirty changes,
+inaccessible and mid-scan mutation truth, host-filesystem exclusion semantics,
+reduced-analysis preservation, five-artifact publication, NDJSON/SQLite parity,
+malformed-schema rejection, and repository-relative evidence. The matrix uses
+only generated repositories and never proves semantic parity, runtime behavior,
+build success, or complete dependency coverage.

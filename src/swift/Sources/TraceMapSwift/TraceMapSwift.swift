@@ -160,6 +160,10 @@ public struct SwiftScanResult {
 
 public enum SwiftScanEngine {
     public static func scan(options: SwiftScanOptions) throws -> SwiftScanResult {
+        try scan(options: options, beforeSnapshotVerification: {})
+    }
+
+    static func scan(options: SwiftScanOptions, beforeSnapshotVerification: () throws -> Void) throws -> SwiftScanResult {
         let repo = options.repoPath.standardizedFileURL
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: repo.path, isDirectory: &isDirectory), isDirectory.boolValue else {
@@ -242,6 +246,7 @@ public enum SwiftScanEngine {
 
         let rawFacts = FactFactory.facts(manifest: manifest, inventory: inventory, gaps: gaps, toolchainDiagnostics: toolchain.diagnostics, scanRoot: repo, syntax: syntax, dependencies: dependencies, http: http, ui: ui, storage: storage)
         let facts = FactFactory.normalizeFacts(manifest: manifest, facts: rawFacts)
+        try beforeSnapshotVerification()
         guard try sourceSnapshotDigest(inventory: inventory, scanRoot: repo) == snapshotDigest else {
             throw ScanError.io("SourceSnapshotChangedDuringScan")
         }
@@ -3739,6 +3744,33 @@ enum FactFactory {
 public enum TraceMapSwiftSelfTests {
     public static func run() throws {
         try collisionNormalizationIsDeterministicAndEvidenceBacked()
+        try sourceMutationIsDetectedBeforePublishing()
+    }
+
+    private static func sourceMutationIsDetectedBeforePublishing() throws {
+        let temporary = FileManager.default.temporaryDirectory.appendingPathComponent("tracemap-swift-mutation-\(UUID().uuidString)")
+        let repo = temporary.appendingPathComponent("repo")
+        let sourceDirectory = repo.appendingPathComponent("Sources/App")
+        let source = sourceDirectory.appendingPathComponent("main.swift")
+        let output = temporary.appendingPathComponent("output")
+        defer { try? FileManager.default.removeItem(at: temporary) }
+        try FileManager.default.createDirectory(at: sourceDirectory, withIntermediateDirectories: true)
+        try "print(\"hello\")\n".write(to: source, atomically: true, encoding: .utf8)
+        _ = try runProcess(executable: "/usr/bin/git", arguments: ["-C", repo.path, "init"])
+        _ = try runProcess(executable: "/usr/bin/git", arguments: ["-C", repo.path, "add", "."])
+        _ = try runProcess(executable: "/usr/bin/git", arguments: ["-C", repo.path, "-c", "user.name=TraceMap", "-c", "user.email=fixture@example.invalid", "commit", "-m", "baseline"])
+
+        do {
+            _ = try SwiftScanEngine.scan(
+                options: SwiftScanOptions(repoPath: repo, outputPath: output),
+                beforeSnapshotVerification: {
+                    try "print(\"jello\")\n".write(to: source, atomically: true, encoding: .utf8)
+                })
+            try require(false, "source mutation should fail before publishing")
+        } catch {
+            try require(String(describing: error).contains("SourceSnapshotChangedDuringScan"), "source mutation should produce the typed failure")
+            try require(!FileManager.default.fileExists(atPath: output.path), "source mutation should not publish output artifacts")
+        }
     }
 
     private static func collisionNormalizationIsDeterministicAndEvidenceBacked() throws {
@@ -4912,7 +4944,7 @@ struct GlobMatcher {
     private let subtree: NSRegularExpression
 
     init(pattern: String) throws {
-        let escaped = NSRegularExpression.escapedPattern(for: normalizeRelativePath(pattern))
+        let escaped = NSRegularExpression.escapedPattern(for: fileSystemComparisonPath(normalizeRelativePath(pattern)))
             .replacingOccurrences(of: "\\*", with: ".*")
             .replacingOccurrences(of: "\\?", with: ".")
         exact = try NSRegularExpression(pattern: "^" + escaped + "$")
@@ -4920,10 +4952,19 @@ struct GlobMatcher {
     }
 
     func matches(_ value: String) -> Bool {
-        let range = NSRange(value.startIndex..<value.endIndex, in: value)
-        return exact.firstMatch(in: value, range: range) != nil
-            || subtree.firstMatch(in: value, range: range) != nil
+        let comparable = fileSystemComparisonPath(value)
+        let range = NSRange(comparable.startIndex..<comparable.endIndex, in: comparable)
+        return exact.firstMatch(in: comparable, range: range) != nil
+            || subtree.firstMatch(in: comparable, range: range) != nil
     }
+}
+
+func fileSystemComparisonPath(_ value: String) -> String {
+#if os(macOS)
+    return value.precomposedStringWithCanonicalMapping
+#else
+    return value
+#endif
 }
 
 enum PortableSHA256 {

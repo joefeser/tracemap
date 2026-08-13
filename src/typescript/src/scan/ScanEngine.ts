@@ -22,13 +22,15 @@ import { writeMarkdownReport } from "../reporting/MarkdownReportWriter";
 import { hash, hashBytes } from "../util/Hash";
 import { isUnderPath } from "../util/Paths";
 
-export async function scan(options: ScanOptions): Promise<ScanResult> {
+type ScanTestHooks = {
+  beforeSnapshotVerification?: () => void | Promise<void>;
+};
+
+export async function scan(options: ScanOptions, testHooks: ScanTestHooks = {}): Promise<ScanResult> {
   const repoPath = path.resolve(options.repoPath);
   const outputPath = path.resolve(options.outputPath);
   await ensureRepo(repoPath);
   ensureSafeOutputPath(repoPath, outputPath);
-  await fs.rm(outputPath, { recursive: true, force: true });
-  await fs.mkdir(path.join(outputPath, "logs"), { recursive: true });
 
   const git = await getGitMetadata(repoPath);
   if (git.commitSha === "unknown") {
@@ -103,15 +105,53 @@ export async function scan(options: ScanOptions): Promise<ScanResult> {
   manifest.buildStatus = fullSemantic ? "Succeeded" : options.semantic && projects.length > 0 ? "FailedOrPartial" : "NotRun";
 
   const result: ScanResult = { manifest, facts: dedupeFacts(facts), inventory };
+  await testHooks.beforeSnapshotVerification?.();
   if (await createSourceSnapshotDigest(inventory) !== sourceSnapshotDigest) {
     throw new Error("SourceSnapshotChangedDuringScan");
   }
-  await writeManifest(path.join(outputPath, "scan-manifest.json"), result.manifest);
-  await writeFactsJsonl(path.join(outputPath, "facts.ndjson"), result.facts);
-  await writeSqliteIndex(path.join(outputPath, "index.sqlite"), result.manifest, result.facts);
-  await writeMarkdownReport(path.join(outputPath, "report.md"), result);
-  await fs.writeFile(path.join(outputPath, "logs", "analyzer.log"), analyzerLog(result), "utf8");
+  await writeOutputTransaction(outputPath, async (stagingPath) => {
+    await fs.mkdir(path.join(stagingPath, "logs"), { recursive: true });
+    await writeManifest(path.join(stagingPath, "scan-manifest.json"), result.manifest);
+    await writeFactsJsonl(path.join(stagingPath, "facts.ndjson"), result.facts);
+    await writeSqliteIndex(path.join(stagingPath, "index.sqlite"), result.manifest, result.facts);
+    await writeMarkdownReport(path.join(stagingPath, "report.md"), result);
+    await fs.writeFile(path.join(stagingPath, "logs", "analyzer.log"), analyzerLog(result), "utf8");
+  });
   return result;
+}
+
+async function writeOutputTransaction(outputPath: string, write: (stagingPath: string) => Promise<void>): Promise<void> {
+  const parent = path.dirname(outputPath);
+  await fs.mkdir(parent, { recursive: true });
+  const stagingPath = await fs.mkdtemp(path.join(parent, `.tracemap-${path.basename(outputPath)}-`));
+  const previousPath = `${stagingPath}.previous`;
+  let previousMoved = false;
+  try {
+    await write(stagingPath);
+    try {
+      await fs.rename(outputPath, previousPath);
+      previousMoved = true;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        throw error;
+      }
+    }
+    try {
+      await fs.rename(stagingPath, outputPath);
+    } catch (error) {
+      if (previousMoved) {
+        await fs.rename(previousPath, outputPath);
+        previousMoved = false;
+      }
+      throw error;
+    }
+    if (previousMoved) {
+      await fs.rm(previousPath, { recursive: true, force: true }).catch(() => undefined);
+      previousMoved = false;
+    }
+  } finally {
+    await fs.rm(stagingPath, { recursive: true, force: true });
+  }
 }
 
 function normalizeManifestPath(value: string): string {
