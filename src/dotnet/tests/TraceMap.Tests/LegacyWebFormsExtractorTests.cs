@@ -21,7 +21,7 @@ public sealed class LegacyWebFormsExtractorTests
             <asp:TextBox runat="server" ID="Value" />
             """);
         File.WriteAllText(Path.Combine(repo, "Edit.aspx"), """
-            <%@ Page Language="C#" Inherits="Sample.Edit" MasterPageFile="~/Site.Master" Title="Edit private record" %>
+            <%@ Page Language="C#" Inherits="Sample.Edit" MasterPageFile="~/Site.Master" Title="Edit private record $5" %>
             <%@ Register Src="~/Controls/Editor.ascx" TagPrefix="uc" TagName="Editor" %>
             <asp:Content runat="server" ID="Body" ContentPlaceHolderID="MainContent">
               <uc:Editor runat="server" ID="RecordEditor" />
@@ -216,6 +216,7 @@ public sealed class LegacyWebFormsExtractorTests
         Directory.CreateDirectory(Path.Combine(repo, "Web", "Controls"));
         File.WriteAllText(Path.Combine(repo, "Web", "Web.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\" />");
         File.WriteAllText(Path.Combine(repo, "Web", "Site.Master"), "<%@ Master Language=\"C#\" Inherits=\"Sample.Site\" %>");
+        File.WriteAllText(Path.Combine(repo, "Web", "Pages", "Web.config"), "<configuration />");
         File.WriteAllText(Path.Combine(repo, "Web", "Controls", "Editor.ascx"), "<%@ Control Language=\"C#\" Inherits=\"Sample.Editor\" %>");
         File.WriteAllText(Path.Combine(repo, "Web", "Pages", "Edit.aspx"), """
             <%@ Page Language="C#" Inherits="Sample.Edit" MasterPageFile="~/Site.Master" %>
@@ -233,6 +234,26 @@ public sealed class LegacyWebFormsExtractorTests
             fact.FactType == FactTypes.WebFormsCompositionDeclared
             && fact.Properties.GetValueOrDefault("relationshipKind") == "UsesRegisteredUserControl"
             && fact.Properties.GetValueOrDefault("targetFilePath") == "Web/Controls/Editor.ascx");
+    }
+
+    [Fact]
+    public void Scan_rejects_non_master_targets_for_master_page_composition()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Other.aspx"), "<%@ Page Language=\"C#\" Inherits=\"Sample.Other\" %>");
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), "<%@ Page Language=\"C#\" Inherits=\"Sample.Default\" MasterPageFile=\"~/Other.aspx\" %>");
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyWebFormsComposition
+            && fact.Properties.GetValueOrDefault("gapKind") == "UnsupportedWebFormsMasterPageTarget");
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsCompositionDeclared
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "UsesMasterPage");
     }
 
     [Fact]
