@@ -201,18 +201,22 @@ public static class LocalReviewCommand
             if (parsed.Explorer)
             {
                 activeStage = "explorer";
-                var before = HashDirectory(scanDirectory);
+                var explorerInputDirectory = parsed.WebFormsModernization
+                    ? Path.Combine(staging, "webforms")
+                    : scanDirectory;
+                var explorerInputLabel = parsed.WebFormsModernization ? "webforms" : "scan";
+                var before = HashDirectory(explorerInputDirectory);
                 await stageServices.GenerateExplorerAsync(
                     new StaticHtmlEvidenceExplorerOptions(
-                        scanDirectory,
+                        explorerInputDirectory,
                         Path.Combine(staging, "explorer"),
                         "hidden-local"),
                     cancellationToken);
-                VerifyUnchanged(scanDirectory, before);
+                VerifyUnchanged(explorerInputDirectory, before);
                 stages.Add(new(
                     "explorer",
                     "succeeded",
-                    ToInputHashes(before, "scan"),
+                    ToInputHashes(before, explorerInputLabel),
                     ["static-html-explorer"]));
                 lastSafeState = "explorer-verified";
             }

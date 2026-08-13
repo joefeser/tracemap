@@ -70,6 +70,7 @@ public sealed record ExplorerData(
     IReadOnlyList<ExplorerSurface> Surfaces,
     IReadOnlyList<ExplorerPath> Paths,
     IReadOnlyList<ExplorerReducerResult> ReducerResults,
+    ExplorerWebFormsData? WebForms,
     IReadOnlyList<ExplorerEvidenceRow> EvidenceRows,
     IReadOnlyList<ExplorerGap> Gaps,
     IReadOnlyList<ExplorerLimitation> Limitations,
@@ -221,7 +222,10 @@ public sealed record ExplorerEvidenceRow(
     string? SnippetHash,
     string? CoverageLabel,
     string? ExtractorVersion,
-    IReadOnlyList<string> Limitations);
+    IReadOnlyList<string> Limitations,
+    string? ExtractorId = null,
+    IReadOnlyList<string>? SupportingFactIds = null,
+    IReadOnlyList<string>? SupportingEdgeIds = null);
 
 public sealed record ExplorerGap(
     string GapId,
@@ -263,13 +267,14 @@ public sealed record ExplorerRedaction(
 
 public static partial class StaticHtmlEvidenceExplorer
 {
-    public const string SchemaVersion = "tracemap-static-html-evidence-explorer.v4";
+    public const string SchemaVersion = "tracemap-static-html-evidence-explorer.v5";
     public const string GeneratorName = "tracemap-static-html-evidence-explorer";
     private static readonly string[] PriorSchemaVersions =
     [
         "tracemap-static-html-evidence-explorer.v1",
         "tracemap-static-html-evidence-explorer.v2",
-        "tracemap-static-html-evidence-explorer.v3"
+        "tracemap-static-html-evidence-explorer.v3",
+        "tracemap-static-html-evidence-explorer.v4"
     ];
 
     public const string UnsupportedSchemaRuleId = "explorer.input.unsupported-schema.v1";
@@ -670,18 +675,47 @@ public static partial class StaticHtmlEvidenceExplorer
             coverageLabels,
             redactions,
             cancellationToken);
+        var webFormsLoad = await AddWebFormsPacketArtifactAsync(
+            inputDirectory,
+            safetyProfile,
+            sourceCommitSha,
+            redactions,
+            cancellationToken);
+        if (webFormsLoad.Artifact is not null)
+        {
+            artifacts.Add(webFormsLoad.Artifact);
+        }
+        if (webFormsLoad.Source is not null)
+        {
+            reportSources.Add(webFormsLoad.Source);
+        }
+        if (sourceCommitSha is null && webFormsLoad.CommitSha is not null)
+        {
+            sourceCommitSha = webFormsLoad.CommitSha;
+            sourceCommitSupportId = WebFormsArtifactId;
+        }
+        evidenceRows.AddRange(webFormsLoad.EvidenceRows);
+        gaps.AddRange(webFormsLoad.Gaps);
+        limitations.AddRange(webFormsLoad.Limitations);
+        foreach (var label in webFormsLoad.CoverageLabels)
+        {
+            coverageLabels.Add(label);
+        }
         var catalogLoad = await AddRuleCatalogArtifactAsync(inputDirectory, safetyProfile, artifacts, gaps, redactions, cancellationToken);
         var catalogRules = catalogLoad.Entries;
         await AddUnsupportedJsonArtifactsAsync(inputDirectory, safetyProfile, artifacts, gaps, cancellationToken);
 
-        limitations.Add(CreateLimitation(
-            "claim-level-metadata-unavailable",
-            CompatibilityLedgerRuleId,
-            "claim-level-metadata-unknown",
-            "artifacts",
-            "claim-level",
-            "Compatible first-slice inputs do not expose independent claim-level metadata. The selected output safety profile governs rendering, and no claim-level conflict is inferred from unknown metadata.",
-            ["input-directory"]));
+        if (webFormsLoad.Artifact is null)
+        {
+            limitations.Add(CreateLimitation(
+                "claim-level-metadata-unavailable",
+                CompatibilityLedgerRuleId,
+                "claim-level-metadata-unknown",
+                "artifacts",
+                "claim-level",
+                "Compatible first-slice inputs do not expose independent claim-level metadata. The selected output safety profile governs rendering, and no claim-level conflict is inferred from unknown metadata.",
+                ["input-directory"]));
+        }
 
         if (artifacts.All(artifact => artifact.ArtifactKind != "sqlite-index"))
         {
@@ -770,6 +804,7 @@ public static partial class StaticHtmlEvidenceExplorer
             surfaces.OrderBy(surface => surface.SurfaceKind, StringComparer.Ordinal).ThenBy(surface => surface.SurfaceId, StringComparer.Ordinal).ToArray(),
             paths.OrderBy(path => path.PathId, StringComparer.Ordinal).ToArray(),
             reducerResults.OrderBy(result => result.Classification, StringComparer.Ordinal).ThenBy(result => result.ResultId, StringComparer.Ordinal).ToArray(),
+            webFormsLoad.Data,
             evidenceRows,
             gaps.OrderBy(gap => gap.RuleId, StringComparer.Ordinal).ThenBy(gap => gap.GapId, StringComparer.Ordinal).ToArray(),
             limitations.OrderBy(limitation => limitation.RuleId, StringComparer.Ordinal).ThenBy(limitation => limitation.LimitationId, StringComparer.Ordinal).ToArray(),
@@ -811,6 +846,7 @@ public static partial class StaticHtmlEvidenceExplorer
             context.Surfaces,
             context.Paths,
             context.ReducerResults,
+            context.WebForms,
             context.EvidenceRows,
             context.Gaps,
             context.Limitations,
@@ -1052,6 +1088,7 @@ public static partial class StaticHtmlEvidenceExplorer
                 || fileName.Equals("release-review.json", StringComparison.Ordinal)
                 || fileName.Equals("paths-report.json", StringComparison.Ordinal)
                 || fileName.Equals("impact-report.json", StringComparison.Ordinal)
+                || fileName.Equals("webforms-modernization.json", StringComparison.Ordinal)
                 || fileName.Equals("explorer-manifest.json", StringComparison.Ordinal)
                 || fileName.Equals("explorer-data.json", StringComparison.Ordinal))
             {
@@ -2228,6 +2265,7 @@ public static partial class StaticHtmlEvidenceExplorer
             Rule(ReleaseReviewInputRuleId, "Explorer release-review compatibility reader", "Validates bounded release-review v1.2 identity, snapshot shape, coverage, and content provenance without rendering report findings."),
             Rule(PathsReportInputRuleId, "Explorer static paths report reader", "Validates bounded paths-report v1.0 structure and projects only rule-backed static surfaces, ordered hops, provenance, gaps, and limitations."),
             Rule(ReducerImpactInputRuleId, "Explorer contract-delta impact reader", "Validates bounded contract-delta impact v2 output and projects only reducer-backed result classifications with sanitized evidence provenance."),
+            Rule(WebFormsPacketInputRuleId, "Explorer Web Forms modernization packet reader", "Validates one bounded Web Forms modernization packet and projects only its existing static evidence, structural candidates, gaps, limitations, and owner questions."),
             Rule(GeneratedFileStaleRuleId, "Explorer stale generated file", "Prevents overwriting stale generated explorer output without explicit force."),
             Rule(UserFileCollisionRuleId, "Explorer user file collision", "Prevents overwriting user-authored files in an explorer output directory."),
             Rule(UnsafeRejectedRuleId, "Explorer unsafe generated value rejected", "Fails generation when a generated asset contains an unsafe value after redaction.")
@@ -2253,6 +2291,8 @@ public static partial class StaticHtmlEvidenceExplorer
         var compatiblePathsReport = pathsReport?.Compatibility == "supported";
         var reducerReport = context.Artifacts.FirstOrDefault(artifact => artifact.ArtifactKind == "reducer-impact-report");
         var compatibleReducerReport = reducerReport?.Compatibility == "supported";
+        var webFormsPacket = context.Artifacts.FirstOrDefault(artifact => artifact.ArtifactKind == "webforms-modernization-packet");
+        var compatibleWebFormsPacket = webFormsPacket?.Compatibility is "supported" or "supported-partial";
         var ruleCatalogProvided = context.CatalogFilePresent;
         var compatibleRuleCatalogLoaded = context.CatalogRulesLoaded;
         var unsupportedJsonProvided = context.Artifacts.Any(artifact => artifact.ArtifactKind == "unsupported-json");
@@ -2302,6 +2342,19 @@ public static partial class StaticHtmlEvidenceExplorer
                     ? "Artifacts include unsupported JSON entries labeled unavailable without rendering raw content."
                     : "Artifacts are listed by stable ID, schema label, compatibility, and content hash.",
                 context.Artifacts.Select(artifact => artifact.ArtifactId).ToArray()),
+            SectionStatus(
+                "webforms",
+                "Web Forms Modernization",
+                compatibleWebFormsPacket
+                    ? webFormsPacket!.Compatibility == "supported-partial" ? "partial" : "available"
+                    : webFormsPacket is null ? "not-provided" : "unsupported-schema",
+                webFormsPacket?.CoverageLabels.FirstOrDefault() ?? coverageLabel,
+                compatibleWebFormsPacket
+                    ? "Web Forms rows preserve compatible packet classifications and provenance; structural candidates remain candidates, not migration conclusions."
+                    : webFormsPacket is null
+                        ? "A Web Forms modernization packet was not provided."
+                        : "The provided Web Forms modernization packet failed the bounded compatibility contract and was not rendered.",
+                webFormsPacket is null ? [WebFormsArtifactId] : [webFormsPacket.ArtifactId]),
             SectionStatus(
                 "evidence-rows",
                 "Evidence Rows",
@@ -2620,6 +2673,7 @@ public static partial class StaticHtmlEvidenceExplorer
             ("artifact:markdown-report", "markdown-report", "Markdown report"),
             ("artifact:release-review", "release-review", "Release review"),
             ("artifact:paths-report", "paths-report", "Static dependency paths report"),
+            (WebFormsArtifactId, "webforms-modernization-packet", "Web Forms modernization packet"),
             ("artifact:rule-catalog", "rule-catalog", "Rule catalog")
         ];
     }
@@ -3179,6 +3233,7 @@ public static partial class StaticHtmlEvidenceExplorer
         RenderSurfaces(builder, data.Surfaces);
         RenderPaths(builder, data.Paths);
         RenderReducerResults(builder, data.ReducerResults);
+        RenderWebForms(builder, data.WebForms);
         RenderGaps(builder, data.Gaps);
         RenderLimitations(builder, data.Limitations);
         RenderRedactions(builder, data.Redactions);
@@ -3463,6 +3518,7 @@ public static partial class StaticHtmlEvidenceExplorer
             ("surfaces", "Surfaces"),
             ("paths", "Paths"),
             ("reducer-results", "Reducer Results"),
+            ("webforms", "Web Forms Modernization"),
             ("gaps", "Gaps"),
             ("limitations", "Limitations"),
             ("redactions", "Safety & Redactions"),
@@ -3886,6 +3942,7 @@ public static partial class StaticHtmlEvidenceExplorer
         IReadOnlyList<ExplorerSurface> Surfaces,
         IReadOnlyList<ExplorerPath> Paths,
         IReadOnlyList<ExplorerReducerResult> ReducerResults,
+        ExplorerWebFormsData? WebForms,
         IReadOnlyList<ExplorerEvidenceRow> EvidenceRows,
         IReadOnlyList<ExplorerGap> Gaps,
         IReadOnlyList<ExplorerLimitation> Limitations,
