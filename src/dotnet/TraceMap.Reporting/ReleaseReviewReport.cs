@@ -205,6 +205,11 @@ internal sealed record ReleaseIndexInfo(string Kind, ReleaseReviewSnapshot Snaps
 
 internal sealed record AccessEvidencePresence(long FactCount, IReadOnlyList<string> SupportingFactIds);
 
+internal sealed record FrameworkMigrationEvidencePresence(
+    long FactCount,
+    IReadOnlyList<string> SupportingFactIds,
+    IReadOnlyList<string> SourceIndexIds);
+
 internal sealed record SingleComparableFact(
     string StableKey,
     string EvidenceHash,
@@ -263,6 +268,9 @@ public static class ReleaseReviewReporter
         RuleIds.DatabasePostgresPermissionGap,
         RuleIds.DatabasePostgresSchemaMigration,
         RuleIds.DatabasePostgresSchemaMigrationGap,
+        RuleIds.DatabaseFrameworkMigrationDeclaration,
+        RuleIds.DatabaseFrameworkMigrationOperation,
+        RuleIds.DatabaseFrameworkMigrationGap,
         RuleIds.DatabaseSqlProjectRefactorIntent,
         RuleIds.DatabaseSqlProjectRefactorIntentGap
     };
@@ -312,6 +320,30 @@ public static class ReleaseReviewReporter
         "newColumnName",
         "linkStatus",
         "operationKeyHash",
+        "coverageLabel"
+    };
+
+    private static readonly HashSet<string> FrameworkMigrationMetadataKeys = new(StringComparer.Ordinal)
+    {
+        "declarationKind",
+        "frameworkFamily",
+        "providerScope",
+        "direction",
+        "operationKind",
+        "objectKind",
+        "invocationOrdinal",
+        "schemaName",
+        "tableName",
+        "newSchemaName",
+        "newTableName",
+        "columnName",
+        "newColumnName",
+        "indexName",
+        "constraintName",
+        "principalSchemaName",
+        "principalTableName",
+        "columnNames",
+        "principalColumnNames",
         "coverageLabel"
     };
 
@@ -972,6 +1004,49 @@ public static class ReleaseReviewReporter
                     SqlRunbookPacketBuilder.ProjectFactEvidence(fact, fact.CommitSha)));
             }
             foreach (var fact in input.Result.Facts
+                .Where(fact => fact.RuleId is RuleIds.DatabaseFrameworkMigrationDeclaration or RuleIds.DatabaseFrameworkMigrationOperation)
+                .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+                .ThenBy(fact => fact.Evidence.StartLine)
+                .ThenBy(fact => fact.FactId, StringComparer.Ordinal))
+            {
+                var operation = fact.FactType == FactTypes.FrameworkMigrationOperationCandidate;
+                findings.Add(SqlEvidenceFinding(
+                    input.SourceLabel,
+                    operation ? "framework-migration-operation" : "framework-migration",
+                    operation
+                        ? fact.Properties.GetValueOrDefault("operationKind") ?? "framework-migration-operation"
+                        : "framework-migration",
+                    operation
+                        ? ReleaseReviewClassifications.ReviewRecommended
+                        : ReleaseReviewClassifications.NoActionableEvidence,
+                    SqlRunbookPacketBuilder.ProjectFactEvidence(fact, fact.CommitSha),
+                    fact.Properties
+                        .Where(pair => FrameworkMigrationMetadataKeys.Contains(pair.Key))
+                        .Select(pair => new KeyValuePair<string, string?>(pair.Key, pair.Value))
+                        .Append(Pair("factType", fact.FactType))));
+                if (operation)
+                {
+                    gaps.Add(SqlEvidenceGap(
+                        input.SourceLabel,
+                        "FrameworkMigrationProviderUnknown",
+                        "A generic framework migration operation is available as application-side evidence but cannot be correlated to a PostgreSQL object because provider scope is unknown.",
+                        SqlRunbookPacketBuilder.ProjectFactEvidence(fact, fact.CommitSha)));
+                }
+            }
+            foreach (var fact in input.Result.Facts
+                .Where(fact => fact.RuleId == RuleIds.DatabaseFrameworkMigrationGap)
+                .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+                .ThenBy(fact => fact.Evidence.StartLine)
+                .ThenBy(fact => fact.FactId, StringComparer.Ordinal))
+            {
+                var gapKind = fact.Properties.GetValueOrDefault("gapKind") ?? "FrameworkMigrationCoverageGap";
+                gaps.Add(SqlEvidenceGap(
+                    input.SourceLabel,
+                    gapKind,
+                    "Upstream framework migration evidence recorded a bounded static-analysis gap; omitted protected content and runtime behavior remain unavailable.",
+                    SqlRunbookPacketBuilder.ProjectFactEvidence(fact, fact.CommitSha)));
+            }
+            foreach (var fact in input.Result.Facts
                 .Where(fact => fact.RuleId == RuleIds.DatabasePostgresSchemaMigration && fact.Evidence is not null)
                 .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
                 .ThenBy(fact => fact.Evidence.StartLine)
@@ -1194,6 +1269,7 @@ public static class ReleaseReviewReporter
     private static IReadOnlyList<string> SqlEvidenceLimitations() =>
     [
         "TraceMap does not execute SQL or establish runtime reachability, production database state, effective permissions, deployment, or release approval.",
+        "Framework migration evidence remains provider-unknown and does not prove PostgreSQL selection, migration application, ordering, rollback, generated SQL, compatibility, safety, or database state.",
         "SQL project refactor-log evidence is checked-in intent only; TraceMap does not build the project, inspect a DACPAC or deployment plan, query target __RefactorLog state, or prove deployment or application.",
         "SQL runway evidence does not provide an execution-safety conclusion or replace DBA/operator judgment.",
         "Raw SQL, connection strings, credentials, scheduled command bodies, private infrastructure identities, and local absolute paths are omitted."
@@ -1635,6 +1711,7 @@ public static class ReleaseReviewReporter
                 join index_sources sources on sources.source_index_id = facts.source_index_id
                 where facts.rule_id like 'database.sql.%'
                    or facts.rule_id like 'database.postgres.%'
+                   or facts.rule_id like 'database.framework-migration.%'
                    or facts.rule_id = @sql_project_refactor_rule
                    or facts.rule_id = @sql_project_refactor_gap_rule
                    or (@include_model_mappings = 1 and facts.rule_id = @ef_rule)
@@ -1654,6 +1731,7 @@ public static class ReleaseReviewReporter
                 cross join scan_manifest manifest
                 where facts.rule_id like 'database.sql.%'
                    or facts.rule_id like 'database.postgres.%'
+                   or facts.rule_id like 'database.framework-migration.%'
                    or facts.rule_id = @sql_project_refactor_rule
                    or facts.rule_id = @sql_project_refactor_gap_rule
                    or (@include_model_mappings = 1 and facts.rule_id = @ef_rule)
@@ -1759,6 +1837,68 @@ public static class ReleaseReviewReporter
         while (await reader.ReadAsync(cancellationToken))
             ids.Add(StringOrDefault(reader, 0, "unknown"));
         return new AccessEvidencePresence(count, ids);
+    }
+
+    internal static async Task<FrameworkMigrationEvidencePresence> ReadFrameworkMigrationEvidencePresenceAsync(
+        string path,
+        string indexKind,
+        CancellationToken cancellationToken,
+        string? sourceLabel = null)
+    {
+        if (indexKind == "single"
+            && !string.IsNullOrWhiteSpace(sourceLabel)
+            && !sourceLabel.Equals("single", StringComparison.Ordinal))
+        {
+            return new FrameworkMigrationEvidencePresence(0, [], []);
+        }
+
+        await using var connection = new SqliteConnection(ReadOnlyConnectionString(path));
+        await connection.OpenAsync(cancellationToken);
+        await using var countCommand = connection.CreateCommand();
+        countCommand.CommandText = indexKind == "combined"
+            ? "select count(*) from combined_facts f join index_sources s on s.source_index_id = f.source_index_id where f.rule_id in ($declaration, $operation, $gap) and ($source is null or s.label = $source);"
+            : "select count(*) from facts where rule_id in ($declaration, $operation, $gap);";
+        AddFrameworkMigrationRuleParameters(countCommand);
+        if (indexKind == "combined")
+            countCommand.Parameters.AddWithValue("$source", (object?)sourceLabel ?? DBNull.Value);
+        var count = Convert.ToInt64(await countCommand.ExecuteScalarAsync(cancellationToken), System.Globalization.CultureInfo.InvariantCulture);
+
+        var ids = new List<string>();
+        await using var idCommand = connection.CreateCommand();
+        idCommand.CommandText = indexKind == "combined"
+            ? "select f.combined_fact_id from combined_facts f join index_sources s on s.source_index_id = f.source_index_id where f.rule_id in ($declaration, $operation, $gap) and ($source is null or s.label = $source) order by f.combined_fact_id limit 12;"
+            : "select fact_id from facts where rule_id in ($declaration, $operation, $gap) order by fact_id limit 12;";
+        AddFrameworkMigrationRuleParameters(idCommand);
+        if (indexKind == "combined")
+            idCommand.Parameters.AddWithValue("$source", (object?)sourceLabel ?? DBNull.Value);
+        await using var reader = await idCommand.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+            ids.Add(StringOrDefault(reader, 0, "unknown"));
+
+        var sourceIds = new List<string>();
+        if (indexKind == "combined")
+        {
+            await using var sourceCommand = connection.CreateCommand();
+            sourceCommand.CommandText = "select distinct f.source_index_id from combined_facts f join index_sources s on s.source_index_id = f.source_index_id where f.rule_id in ($declaration, $operation, $gap) and ($source is null or s.label = $source) order by f.source_index_id;";
+            AddFrameworkMigrationRuleParameters(sourceCommand);
+            sourceCommand.Parameters.AddWithValue("$source", (object?)sourceLabel ?? DBNull.Value);
+            await using var sourceReader = await sourceCommand.ExecuteReaderAsync(cancellationToken);
+            while (await sourceReader.ReadAsync(cancellationToken))
+                sourceIds.Add(StringOrDefault(sourceReader, 0, "unknown"));
+        }
+        else if (count > 0)
+        {
+            sourceIds.Add("single");
+        }
+
+        return new FrameworkMigrationEvidencePresence(count, ids, sourceIds);
+    }
+
+    private static void AddFrameworkMigrationRuleParameters(SqliteCommand command)
+    {
+        command.Parameters.AddWithValue("$declaration", RuleIds.DatabaseFrameworkMigrationDeclaration);
+        command.Parameters.AddWithValue("$operation", RuleIds.DatabaseFrameworkMigrationOperation);
+        command.Parameters.AddWithValue("$gap", RuleIds.DatabaseFrameworkMigrationGap);
     }
 
     private static async Task<ReleaseIndexInfo> ReadIndexInfoAsync(string path, string side, CancellationToken cancellationToken)

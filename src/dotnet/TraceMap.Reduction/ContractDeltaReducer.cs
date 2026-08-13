@@ -1349,6 +1349,13 @@ public static class ContractDeltaReducer
 
     private static EvidenceMatch MatchFact(NormalizedChange change, IndexedFact fact)
     {
+        if (fact.FactType is FactTypes.FrameworkMigrationDeclared or FactTypes.FrameworkMigrationOperationCandidate
+            || fact.RuleId == RuleIds.DatabaseFrameworkMigrationGap
+            || fact.RuleId is RuleIds.CSharpRazorSemanticModelBinding or RuleIds.CSharpRazorSemanticModelBindingGap)
+        {
+            return EvidenceMatch.None;
+        }
+
         if (fact.FactType == FactTypes.AnalysisGap)
         {
             return MatchAnalysisGap(change, fact);

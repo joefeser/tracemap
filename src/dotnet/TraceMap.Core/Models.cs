@@ -187,6 +187,8 @@ public static class FactTypes
     public const string DatabasePrerequisiteCandidate = nameof(DatabasePrerequisiteCandidate);
     public const string DatabasePermissionDeclared = nameof(DatabasePermissionDeclared);
     public const string DatabasePrerequisiteEvidence = nameof(DatabasePrerequisiteEvidence);
+    public const string FrameworkMigrationDeclared = nameof(FrameworkMigrationDeclared);
+    public const string FrameworkMigrationOperationCandidate = nameof(FrameworkMigrationOperationCandidate);
     public const string TypeDeclared = nameof(TypeDeclared);
     public const string MethodDeclared = nameof(MethodDeclared);
     public const string PropertyDeclared = nameof(PropertyDeclared);
@@ -376,6 +378,11 @@ public static class RuleIds
     public const string CSharpSemanticFlowBoundary = "csharp.semantic.flowboundary.v1";
     public const string CSharpSemanticRuntimeEvidence = "csharp.semantic.runtimeevidence.v1";
     public const string CSharpSemanticWorkspace = "csharp.semantic.workspace.v1";
+    public const string CSharpRazorSemanticModelBinding = "csharp.razor.semantic-model-binding.v1";
+    public const string CSharpRazorSemanticModelBindingGap = "csharp.razor.semantic-model-binding-gap.v1";
+    public const string DatabaseFrameworkMigrationDeclaration = "database.framework-migration.declaration.v1";
+    public const string DatabaseFrameworkMigrationOperation = "database.framework-migration.operation.v1";
+    public const string DatabaseFrameworkMigrationGap = "database.framework-migration.gap.v1";
     public const string BuildEnvironmentTargetFramework = "build.environment.target-framework.v1";
     public const string BuildEnvironmentToolset = "build.environment.toolset.v1";
     public const string BuildEnvironmentProjectFormat = "build.environment.project-format.v1";
@@ -521,10 +528,12 @@ public static class ScannerVersions
     public const string ProjectFileExtractor = "project-file/0.1.0";
     public const string BuildEnvironmentExtractor = "build-environment/0.1.0";
     public const string AnalyzerCapabilityExtractor = "analyzer-capability/0.1.0";
-    public const string CSharpSyntaxExtractor = "csharp-syntax/0.3.0";
+    public const string CSharpSyntaxExtractor = "csharp-syntax/0.4.0";
     public const string CSharpAspNetSyntaxRouteExtractor = "csharp-aspnet-syntax-route/0.1.0";
-    public const string CSharpIntegrationSyntaxExtractor = "csharp-integration-syntax/0.2.0";
-    public const string CSharpSemanticExtractor = "csharp-semantic/0.16.0";
+    public const string CSharpIntegrationSyntaxExtractor = "csharp-integration-syntax/0.3.0";
+    public const string CSharpSemanticExtractor = "csharp-semantic/0.18.0";
+    public const string FrameworkMigrationEvidenceExtractor = "framework-migration/0.1.0";
+    public const string FrameworkMigrationSyntaxFallbackExtractor = "framework-migration-syntax-fallback/0.1.0";
     public const string ConfigExtractor = "config/0.1.0";
     public const string SqlTextExtractor = "sql-text/0.1.0";
     public const string SqlShapeExtractor = "sql-shape/0.1.0";

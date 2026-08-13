@@ -138,6 +138,7 @@ public static class DatabaseDesignReviewReporter
     [
         "The packet describes bounded static repository evidence only; it does not prove database existence, current schema state, schema completeness, or schema freshness.",
         "Migration operations are repository evidence, not proof that migrations were ordered, applied, compatible, reversible, or operationally safe.",
+        "Framework migration evidence is provider-unknown application-side evidence; it is not correlated to PostgreSQL objects without a separately admitted provider-explicit contract and exact schema-qualified identity.",
         "SQL project refactor-log evidence is checked-in intent only; TraceMap does not build the project, inspect a DACPAC or deployment plan, query target __RefactorLog state, or prove deployment or application.",
         "Query/table correlation is an exact source-scoped static name match; it does not prove runtime provider, connection, search-path, generated SQL, branch feasibility, or query execution.",
         "EF table and column mappings are bounded compiler-resolved repository evidence; they do not reconstruct the runtime EF model, conventions, provider behavior, generated SQL, or database correspondence.",
@@ -218,6 +219,9 @@ public static class DatabaseDesignReviewReporter
             foreach (var fact in input.Result.Facts
                          .Where(fact => fact.RuleId is RuleIds.DatabasePostgresSchemaMigration
                              or RuleIds.DatabasePostgresSchemaMigrationGap
+                             or RuleIds.DatabaseFrameworkMigrationDeclaration
+                             or RuleIds.DatabaseFrameworkMigrationOperation
+                             or RuleIds.DatabaseFrameworkMigrationGap
                              or RuleIds.DatabaseSqlProjectRefactorIntent
                              or RuleIds.DatabaseSqlProjectRefactorIntentGap)
                          .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
@@ -226,10 +230,25 @@ public static class DatabaseDesignReviewReporter
             {
                 if (!CompatibleProvenance(input.Result.Manifest, fact))
                 {
+                    var (gapKind, message) = fact.RuleId switch
+                    {
+                        RuleIds.DatabaseFrameworkMigrationDeclaration
+                            or RuleIds.DatabaseFrameworkMigrationOperation
+                            or RuleIds.DatabaseFrameworkMigrationGap => (
+                                "FrameworkMigrationEvidenceProvenanceUnavailable",
+                                "A framework migration fact lacks compatible commit/extractor provenance and was not projected."),
+                        RuleIds.DatabaseSqlProjectRefactorIntent
+                            or RuleIds.DatabaseSqlProjectRefactorIntentGap => (
+                                "SqlProjectRefactorEvidenceProvenanceUnavailable",
+                                "A SQL project refactor-intent fact lacks compatible commit/extractor provenance and was not projected."),
+                        _ => (
+                            "PostgresEvidenceProvenanceUnavailable",
+                            "A PostgreSQL schema or migration fact lacks compatible commit/extractor provenance and was not projected.")
+                    };
                     gaps.Add(Gap(
-                        "PostgresEvidenceProvenanceUnavailable",
+                        gapKind,
                         input.SourceLabel,
-                        "A PostgreSQL schema or migration fact lacks compatible commit/extractor provenance and was not projected.",
+                        message,
                         [Pair("factType", SafeToken(fact.FactType, "unknown"))],
                         [fact.FactId],
                         commitSha: fact.CommitSha,
@@ -245,6 +264,34 @@ public static class DatabaseDesignReviewReporter
                 if (fact.FactType == FactTypes.AnalysisGap)
                 {
                     gaps.Add(FromFactGap(input.SourceLabel, fact));
+                    continue;
+                }
+
+                if (fact.FactType == FactTypes.FrameworkMigrationDeclared)
+                {
+                    globalObjects.Add(FromFact(input.SourceLabel, fact, "framework-migration"));
+                    continue;
+                }
+
+                if (fact.FactType == FactTypes.FrameworkMigrationOperationCandidate)
+                {
+                    globalObjects.Add(FromFact(input.SourceLabel, fact, "framework-migration-operation"));
+                    gaps.Add(Gap(
+                        "FrameworkMigrationProviderUnknown",
+                        input.SourceLabel,
+                        "A generic framework migration operation is available as application-side evidence but cannot be correlated to a PostgreSQL object because provider scope is unknown.",
+                        [
+                            Pair("operationKind", SafeToken(fact.Properties.GetValueOrDefault("operationKind"), "unknown")),
+                            Pair("providerScope", "unknown")
+                        ],
+                        [fact.FactId],
+                        commitSha: fact.CommitSha,
+                        filePath: fact.Evidence.FilePath,
+                        startLine: fact.Evidence.StartLine,
+                        endLine: fact.Evidence.EndLine,
+                        extractorId: fact.Evidence.ExtractorId,
+                        extractorVersion: fact.Evidence.ExtractorVersion,
+                        supportingRuleIds: [fact.RuleId]));
                     continue;
                 }
 
@@ -677,7 +724,9 @@ public static class DatabaseDesignReviewReporter
         }
 
         var compatibleDesignCount = tables.Sum(TableEvidenceCount) + globals.Length;
-        if (compatibleDesignCount == 0
+        var compatiblePostgresEvidenceCount = tables.Sum(TableEvidenceCount)
+            + globals.Count(item => item.Evidence.RuleId == RuleIds.DatabasePostgresSchemaMigration);
+        if (compatiblePostgresEvidenceCount == 0
             && gaps.All(gap => gap.GapKind != "CompatiblePostgresEvidenceUnavailable"))
         {
             gaps.Add(Gap(
@@ -803,6 +852,8 @@ public static class DatabaseDesignReviewReporter
             "snapshot" => "checked-in-schema-snapshot",
             "migration-file" => "migration-file",
             "migration-operation" => fact.Properties.GetValueOrDefault("operationKind") ?? "migration-operation",
+            "framework-migration" => "framework-migration",
+            "framework-migration-operation" => fact.Properties.GetValueOrDefault("operationKind") ?? "framework-migration-operation",
             "sql-project-refactor" => fact.Properties.GetValueOrDefault("operationKind") ?? "refactor-operation",
             "sql-project-refactor-log" => "refactor-log",
             _ => fact.Properties.GetValueOrDefault("tableName") ?? kind
@@ -811,7 +862,7 @@ public static class DatabaseDesignReviewReporter
             .Concat(Limitations)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        var safeDisplayName = kind is "migration-operation" or "snapshot" or "migration-file"
+        var safeDisplayName = kind is "migration-operation" or "framework-migration" or "framework-migration-operation" or "snapshot" or "migration-file"
             or "sql-project-refactor" or "sql-project-refactor-log"
             ? SafeToken(displayName, kind)
             : SafeIdentifier(displayName, kind);
@@ -819,7 +870,7 @@ public static class DatabaseDesignReviewReporter
             StableId("item", sourceLabel, kind, fact.FactId),
             kind,
             safeDisplayName,
-            kind is "migration-operation" or "sql-project-refactor" ? "ReviewRecommended" : "StaticEvidence",
+            kind is "migration-operation" or "framework-migration-operation" or "sql-project-refactor" ? "ReviewRecommended" : "StaticEvidence",
             metadata,
             new DatabaseDesignEvidenceRef(
                 fact.RuleId,
@@ -841,17 +892,23 @@ public static class DatabaseDesignReviewReporter
     private static DatabaseDesignGap FromFactGap(string sourceLabel, CodeFact fact)
     {
         var kind = SafeToken(
-            fact.Properties.GetValueOrDefault("classification"),
-            fact.RuleId == RuleIds.DatabaseSqlProjectRefactorIntentGap
-                ? "SqlProjectRefactorIntentGap"
-                : "PostgresSchemaMigrationGap");
+            fact.Properties.GetValueOrDefault("classification") ?? fact.Properties.GetValueOrDefault("gapKind"),
+            fact.RuleId switch
+            {
+                RuleIds.DatabaseSqlProjectRefactorIntentGap => "SqlProjectRefactorIntentGap",
+                RuleIds.DatabaseFrameworkMigrationGap => "FrameworkMigrationGap",
+                _ => "PostgresSchemaMigrationGap"
+            });
         return new DatabaseDesignGap(
             StableId("gap", sourceLabel, fact.FactId),
             kind,
             "PartialAnalysis",
-            fact.RuleId == RuleIds.DatabaseSqlProjectRefactorIntentGap
-                ? "SQL project refactor-intent evidence has an explicit upstream coverage gap."
-                : "PostgreSQL schema/migration evidence has an explicit upstream coverage gap.",
+            fact.RuleId switch
+            {
+                RuleIds.DatabaseSqlProjectRefactorIntentGap => "SQL project refactor-intent evidence has an explicit upstream coverage gap.",
+                RuleIds.DatabaseFrameworkMigrationGap => "Framework migration evidence has an explicit upstream coverage gap; omitted protected content remains unavailable.",
+                _ => "PostgreSQL schema/migration evidence has an explicit upstream coverage gap."
+            },
             SafeLabel(sourceLabel),
             fact.RuleId,
             NormalizeTier(fact.EvidenceTier),
@@ -1391,8 +1448,11 @@ public static class DatabaseDesignReviewReporter
             FactTypes.PostgresSchemaSnapshotDeclared => new[] { "objectKind", "snapshotFormat", "recognizedDdlStatementCount", "unsupportedDdlStatementCount", "sourceDatabaseIdentityOmitted", "coverageLabel" },
             FactTypes.PostgresMigrationOperation => new[] { "objectKind", "operationKind", "schemaName", "tableName", "columnName", "newTableName", "newColumnName", "dropBehavior", "constraintName", "constraintKind", "indexName", "indexKind", "enumName", "routineName", "routineKind", "coverageLabel" },
             FactTypes.PostgresMigrationFileDeclared => new[] { "objectKind", "coverageLabel" },
+            FactTypes.FrameworkMigrationDeclared => new[] { "declarationKind", "frameworkFamily", "providerScope", "coverageLabel" },
+            FactTypes.FrameworkMigrationOperationCandidate => new[] { "frameworkFamily", "providerScope", "direction", "operationKind", "objectKind", "invocationOrdinal", "schemaName", "tableName", "newSchemaName", "newTableName", "columnName", "newColumnName", "indexName", "constraintName", "principalSchemaName", "principalTableName", "columnNames", "principalColumnNames", "coverageLabel" },
             FactTypes.SqlProjectRefactorLogDeclared => new[] { "objectKind", "linkStatus", "coverageLabel" },
             FactTypes.SqlProjectRefactorOperation => new[] { "objectKind", "operationKind", "schemaName", "tableName", "columnName", "newSchemaName", "newTableName", "newColumnName", "operationKeyHash", "coverageLabel" },
+            FactTypes.AnalysisGap when fact.RuleId == RuleIds.DatabaseFrameworkMigrationGap => new[] { "gapKind", "frameworkFamily", "providerScope", "operationKind", "direction", "occurrenceCount", "coverageLabel" },
             FactTypes.AnalysisGap => new[] { "classification", "coverageLabel", "unsupportedDdlStatementCount", "unsupportedDdlFamilies", "omittedOperationCount" },
             _ => Array.Empty<string>()
         };
