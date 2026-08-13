@@ -815,7 +815,7 @@ python3 -m unittest scripts.tests.test_legacy_codebase_validation
 git diff --check
 ```
 
-Checked-in fixtures should cover explicit markup event bindings, missing or stale designer files, semantic or syntax-only code-behind resolution, ambiguity gaps, explicit `AutoEventWireup="true"` for `Page_Load`/`Page_Init`, false or unknown auto-wireup gaps, master/content declarations, registered and nested user controls, validator/data-source/command metadata, same-named surfaces in separate folders, missing composition targets, direct WCF/SQL reachability, reduced coverage, no-backend-evidence cases, static logic signals, UI-boilerplate signals, deterministic duplicate bindings, and privacy redaction.
+Checked-in fixtures should cover explicit markup event bindings, bounded named control subscriptions, lambda/dynamic and unknown-receiver gaps, missing or stale designer files, exact semantic or linked structural code-behind resolution, proven and unproven cross-file partial handlers, overload/ambiguity gaps, explicit `AutoEventWireup="true"` for `Page_Load`/`Page_Init`, false or unknown auto-wireup gaps, master/content declarations, registered and nested user controls, validator/data-source/command metadata, same-named surfaces in separate folders, surface-qualified combined-path resolution, extractor-to-NDJSON-to-SQLite identity/direction persistence, missing composition targets, direct WCF/SQL reachability, reduced coverage, no-backend-evidence cases, static logic signals, UI-boilerplate signals, deterministic duplicate bindings, and privacy redaction.
 
 Useful inspection queries:
 
