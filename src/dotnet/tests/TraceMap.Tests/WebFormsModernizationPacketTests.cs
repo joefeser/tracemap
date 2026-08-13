@@ -229,7 +229,7 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Contains(packet.DownstreamBoundaries, boundary => boundary.BoundaryCategory == "service" && boundary.BoundaryKind == "http-client");
         Assert.Contains(packet.DownstreamBoundaries, boundary => boundary.BoundaryCategory == "messaging" && boundary.BoundaryKind == "message-queue");
         Assert.Contains(packet.Gaps, gap => gap.Classification == "WebFormsModernizationBoundaryLimitReached");
-        Assert.Contains(packet.Gaps, gap => gap.Classification == "FileOperationBoundaryExtractionUnavailable");
+        Assert.Contains(packet.Gaps, gap => gap.Classification == "IndirectFileOperationBoundaryCoverageUnavailable");
         Assert.True(packet.Summary.Truncated);
         Assert.All(packet.DownstreamBoundaries, boundary =>
         {
@@ -335,6 +335,70 @@ public sealed class WebFormsModernizationPacketTests
         var markdown = await File.ReadAllTextAsync(written.MarkdownPath);
         Assert.Contains("## Identity and state declarations", markdown, StringComparison.Ordinal);
         Assert.Contains(loginRow.IdentityStateId, markdown, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Batch_data_movement_inventory_is_bounded_private_and_preserves_gaps()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("FailedOrPartial");
+        var batch = Fact(manifest, FactTypes.LegacyBatchDataMovementDeclared, RuleIds.LegacyWebFormsBatchDataMovement, "Jobs/Archive.cs", 12,
+            source: "Run", target: "scheduled-task", contract: "timer-trigger-attribute",
+            ("surfaceKind", "scheduled-task"), ("mechanism", "timer-trigger-attribute"), ("operationKind", "trigger"),
+            ("ownerStatus", "member-declared"), ("projectResolution", "resolved"), ("ownerMember", "Run"),
+            ("scheduleSource", "config-reference-matched"), ("scheduleReferenceHash", new string('a', 32)),
+            ("retryDeclaration", "named-call"), ("checkpointDeclaration", "named-call"),
+            ("supportingFactIds", "fact-safe-support"), ("limitations", "Static batch candidate only; runtime execution is not proven."));
+        var malformed = Fact(manifest, FactTypes.LegacyBatchDataMovementDeclared, RuleIds.LegacyWebFormsBatchDataMovement, "Jobs/Archive.cs", 30,
+            source: "Copy", target: "bulk-copy", contract: "compiler-resolved-sql-bulk-copy",
+            ("surfaceKind", "private-unsupported-kind"), ("mechanism", "compiler-resolved-sql-bulk-copy"), ("operationKind", "write"),
+            ("ownerStatus", "member-declared"), ("projectResolution", "resolved"), ("unsafeProperty", "private-batch-value"),
+            ("limitations", "Static batch candidate only."));
+        var binding = Fact(manifest, FactTypes.LegacyBatchDataMovementDeclared, RuleIds.LegacyWebFormsBatchDataMovement, "Jobs/Archive.cs", 24,
+            source: "Bind", target: "message-data-movement", contract: "existing-message-surface",
+            ("surfaceKind", "message-data-movement"), ("mechanism", "existing-message-surface"), ("operationKind", "bind"),
+            ("ownerStatus", "member-declared"), ("projectResolution", "resolved"), ("messageSurfaceKind", "message-topic"),
+            ("limitations", "Static batch candidate only."));
+        var gap = Fact(manifest, FactTypes.AnalysisGap, RuleIds.LegacyWebFormsBatchDataMovement, "Jobs/Archive.cs", 31,
+            source: "Copy", target: "bulk-copy", contract: "BatchOwnerProjectUnavailable",
+            ("gapKind", "BatchOwnerProjectUnavailable"), ("supportingFactIds", malformed.FactId), ("coverage", "reduced"));
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, manifest, [batch, binding, malformed, gap]);
+
+        var bounded = await WebFormsModernizationPacketReporter.BuildAsync(new(
+            index,
+            Path.Combine(temp.Path, "bounded"),
+            MaxBatchDataMovement: 1));
+        Assert.Single(bounded.BatchDataMovementInventory);
+        Assert.Equal(1, bounded.Summary.BatchDataMovementCount);
+        Assert.True(bounded.Summary.Truncated);
+        Assert.Contains(bounded.Gaps, item => item.Classification == "WebFormsModernizationBatchDataMovementLimitReached"
+            && item.SupportingFactIds.Contains(malformed.FactId));
+        Assert.Contains(bounded.Gaps, item => item.Classification == "BatchOwnerProjectUnavailable"
+            && item.SupportingFactIds.Contains(malformed.FactId));
+
+        var written = await WebFormsModernizationPacketReporter.WriteAsync(new(
+            index,
+            Path.Combine(temp.Path, "written"),
+            MaxBatchDataMovement: 10));
+        Assert.Equal(3, written.Packet.BatchDataMovementInventory.Count);
+        var row = Assert.Single(written.Packet.BatchDataMovementInventory, item => item.Mechanism == "timer-trigger-attribute");
+        Assert.Equal("scheduled-task", row.SurfaceKind);
+        Assert.Equal("trigger", row.OperationKind);
+        Assert.Equal("config-reference-matched", row.SafeMetadata["scheduleSource"]);
+        Assert.Equal("named-call", row.SafeMetadata["retryDeclaration"]);
+        Assert.Contains("fact-safe-support", row.SupportingFactIds);
+        Assert.Equal(RuleIds.LegacyWebFormsBatchDataMovement, row.Evidence.RuleId);
+        var bindingRow = Assert.Single(written.Packet.BatchDataMovementInventory, item => item.OperationKind == "bind");
+        Assert.Equal("message-topic", bindingRow.SafeMetadata["messageSurfaceKind"]);
+        Assert.Contains(written.Packet.Gaps, item => item.Classification == "UnsupportedBatchDataMovementPropertyShape"
+            && item.SupportingFactIds.Contains(malformed.FactId));
+        var json = await File.ReadAllTextAsync(written.JsonPath);
+        var markdown = await File.ReadAllTextAsync(written.MarkdownPath);
+        Assert.Contains("## Batch and data-movement inventory", markdown, StringComparison.Ordinal);
+        Assert.Contains(row.BatchDataMovementId, markdown, StringComparison.Ordinal);
+        Assert.DoesNotContain("private-batch-value", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("private-unsupported-kind", json, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -565,12 +629,13 @@ public sealed class WebFormsModernizationPacketTests
         using var stderr = new StringWriter();
         var output = Path.Combine(temp.Path, "packet");
         var exit = await TraceMapCommand.RunAsync([
-            "webforms-modernization", "--index", index, "--out", output, "--max-boundaries", "1", "--max-identity-state", "1"
+            "webforms-modernization", "--index", index, "--out", output, "--max-boundaries", "1", "--max-identity-state", "1", "--max-batch-data-movement", "1"
         ], stdout, stderr);
         Assert.Equal(0, exit);
         Assert.Equal(string.Empty, stderr.ToString());
         Assert.Contains("Downstream boundaries: 0", stdout.ToString(), StringComparison.Ordinal);
         Assert.Contains("Identity/state declarations: 0", stdout.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Batch/data-movement declarations: 0", stdout.ToString(), StringComparison.Ordinal);
         Assert.Contains("Repository: repository-", stdout.ToString(), StringComparison.Ordinal);
         Assert.Contains($"Commit SHA: {manifest.CommitSha}", stdout.ToString(), StringComparison.Ordinal);
         Assert.True(File.Exists(Path.Combine(output, "webforms-modernization.json")));

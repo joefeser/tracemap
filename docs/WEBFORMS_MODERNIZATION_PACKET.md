@@ -38,14 +38,18 @@ The packet can contain:
   messaging, configuration, and dependency surfaces;
 - a bounded identity/state inventory containing safe categories, presence
   flags, counts, provenance, and explicit unsupported-coverage gaps;
+- a bounded batch/data-movement inventory covering supported scheduled-entry,
+  service, console-job, file, message, stored-procedure, bulk-copy, ETL-package,
+  and integration-configuration candidates;
 - structural slice candidates based only on declared surface composition;
 - provenance, evidence tiers, coverage labels, source spans, supporting fact
   and edge IDs, limitations, and explicit gaps.
 
-The scanner inventories only supported checked-in identity/state declarations;
-the packet composes those existing facts. Neither phase authenticates users,
-loads external or encrypted configuration, executes providers, inspects runtime
-state, or adds batch, database, service, or runtime extraction.
+The scanner inventories only supported checked-in identity/state and bounded
+batch/data-movement declarations; the packet composes those existing facts.
+Neither phase authenticates users, loads external or encrypted configuration,
+executes providers or jobs, moves data, inspects runtime state, or connects to
+database, service, messaging, or scheduling infrastructure.
 
 ## Requirements
 
@@ -196,6 +200,7 @@ report.
 | `--max-event-chains` | 1000 | Maximum binding/handler/path chains. |
 | `--max-boundaries` | 1000 | Maximum retained downstream boundary rows. |
 | `--max-identity-state` | 1000 | Maximum retained identity/state declaration rows. |
+| `--max-batch-data-movement` | 1000 | Maximum retained batch/data-movement declaration rows. |
 | `--max-candidates` | 1000 | Maximum structural slice candidates. |
 | `--max-gaps` | 1000 | Maximum structured gaps, including a limit gap. |
 | `--max-depth` | 8 | Maximum legacy static-flow traversal depth. |
@@ -331,6 +336,7 @@ generated file.
 | `eventChains[].classification` | May be a legacy static-path classification, `NoBackendEvidence`, or `handler-unavailable`. It is evidence-relative, not a runtime result. |
 | `downstreamBoundaries` | Bounded terminal projections from retained event chains. Each row keeps an opaque target identity, terminal evidence ID, path evidence, rules, tiers, coverage, and supporting IDs. It is not proof that the interaction ran or succeeded. |
 | `identityStateInventory` | Bounded supported identity/state declarations with allowlisted categorical metadata, provenance, supporting IDs, and limitations. Values, users, roles, credentials, provider names, machine keys, connection strings, cookie names, and login targets are not rendered. |
+| `batchDataMovementInventory` | Bounded supported batch/data-movement candidates with allowlisted categories, declaration signals, provenance, supporting IDs, and limitations. Raw schedules, paths, destinations, SQL, connection material, config values, and source values are not rendered. |
 | `structuralSliceCandidates` | Connected components derived only from declared surface composition. `ownerNamingRequired` remains true; TraceMap does not assign business capability names. |
 | `gaps` | Explicit reasons evidence is missing, reduced, ambiguous, invalid, or bounded. A gap is part of the result, not an error to hide. |
 | `ownerQuestions` | Questions a developer or product owner should answer before treating structural evidence as a modernization plan. |
@@ -341,10 +347,12 @@ label, commit SHA, repository-relative file span, extractor ID/version,
 supporting IDs, and limitations. Missing required provenance fails closed as a
 gap or removes the unsupported path conclusion.
 
-The current scanner does not extract general file-operation boundaries. The
-packet therefore emits `FileOperationBoundaryExtractionUnavailable` rather
-than treating the absence of a file boundary as evidence that handlers do not
-read or write files. Configuration boundaries classified as needs-review,
+The current scanner inventories compiler-resolved and explicitly qualified
+supported file-operation declarations, but it does not prove indirect wrappers,
+aliases under reduced semantic coverage, runtime paths, or dynamic locations.
+The packet therefore emits `IndirectFileOperationBoundaryCoverageUnavailable`
+rather than treating absence as evidence that code does not read or write files.
+Configuration boundaries classified as needs-review,
 reduced, or unknown also emit `ConfigurationBoundaryNeedsReview`; a textual or
 generic configuration match is not promoted to a proven endpoint.
 
@@ -359,6 +367,16 @@ gaps do not grade security or prove that the missing behavior is absent.
 The packet independently rejects non-vocabulary identity kinds,
 classifications, or metadata values and emits
 `UnsupportedIdentityStatePropertyShape` rather than rendering them.
+
+Batch/data-movement extraction emits `BatchConfigurationReferenceUnavailable`,
+`BatchOwnerProjectUnavailable`, `AmbiguousBatchOwnerProject`,
+`ReducedBatchSemanticCoverage`, and bounded read/parse/limit gaps where the
+corresponding evidence cannot be proven. Reaching the packet's batch bound emits
+`WebFormsModernizationBatchDataMovementLimitReached`. The packet independently
+rejects unknown batch categories or metadata with
+`UnsupportedBatchDataMovementPropertyShape`. These rows and gaps do not prove a
+job is scheduled, executes, succeeds, moves complete data, retries effectively,
+is idempotent, is monitored, or should use a particular target architecture.
 
 ## Common outcomes
 
