@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
@@ -64,6 +65,7 @@ public static partial class LegacyAspNetExtractor
         var semanticTypesByFile = BuildSemanticLookup(existingFacts, FactTypes.TypeDeclared);
         var semanticMethodsByFile = BuildSemanticLookup(existingFacts, FactTypes.MethodDeclared);
         var asmxOperationsByFile = BuildFactLookup(existingFacts, FactTypes.AsmxOperationDeclared);
+        var hasAspNetCandidateInventory = HasAspNetCandidateInventory(inventory);
 
         AddDesignerOrphanGaps(manifest, inventory, pageFacts, facts);
 
@@ -91,14 +93,17 @@ public static partial class LegacyAspNetExtractor
 
         foreach (var item in inventory.Where(item => CSharpKinds.Contains(item.Kind)).OrderBy(item => item.RelativePath, StringComparer.Ordinal))
         {
-            ExtractCSharpFile(repoPath, manifest, item, semanticTypesByFile, semanticMethodsByFile, asmxOperationsByFile, existingFacts, facts);
+            ExtractCSharpFile(repoPath, manifest, item, semanticTypesByFile, semanticMethodsByFile, asmxOperationsByFile, existingFacts, facts, hasAspNetCandidateInventory);
         }
 
         AddNavigationEdges(manifest, pageFacts, facts);
         AddIdentityControlFacts(manifest, existingFacts, facts);
-        AddIdentityTypeFacts(manifest, existingFacts, facts);
+        if (hasAspNetCandidateInventory)
+        {
+            AddIdentityTypeFacts(manifest, existingFacts, facts);
+        }
 
-        if (manifest.BuildStatus != "Succeeded" && HasAspNetCandidateInventory(inventory))
+        if (manifest.BuildStatus != "Succeeded" && hasAspNetCandidateInventory)
         {
             facts.Add(CreateGap(
                 manifest,
@@ -588,7 +593,8 @@ public static partial class LegacyAspNetExtractor
         IReadOnlyDictionary<string, CodeFact[]> semanticMethodsByFile,
         IReadOnlyDictionary<string, CodeFact[]> asmxOperationsByFile,
         IReadOnlyList<CodeFact> existingFacts,
-        List<CodeFact> facts)
+        List<CodeFact> facts,
+        bool hasAspNetCandidateInventory)
     {
         if (!TryRead(repoPath, item.RelativePath, out var text))
         {
@@ -612,7 +618,10 @@ public static partial class LegacyAspNetExtractor
         ExtractRoutes(manifest, item, tree, root, facts);
         ExtractHandlersAndPageMethods(manifest, item, tree, root, semanticTypesByFile, semanticMethodsByFile, asmxOperationsByFile, facts);
         ExtractCodeNavigation(manifest, item, tree, root, facts);
-        ExtractIdentityCodeGaps(manifest, item, tree, root, existingFacts, facts);
+        if (hasAspNetCandidateInventory)
+        {
+            ExtractIdentityCodeGaps(manifest, item, tree, root, existingFacts, facts);
+        }
     }
 
     private static void ExtractIdentityCodeGaps(
@@ -1205,9 +1214,37 @@ public static partial class LegacyAspNetExtractor
 
     private static bool IsIdentitySourceSymbol(string? symbol, string typeName)
     {
-        var normalized = NormalizeGlobalSymbol(symbol);
+        var normalized = RemoveGenericTypeParameters(NormalizeGlobalSymbol(symbol));
         return normalized?.Equals(typeName, StringComparison.Ordinal) == true
             || normalized?.EndsWith($".{typeName}", StringComparison.Ordinal) == true;
+    }
+
+    private static string? RemoveGenericTypeParameters(string? symbol)
+    {
+        if (symbol is null || !symbol.Contains('<', StringComparison.Ordinal))
+        {
+            return symbol;
+        }
+
+        var builder = new StringBuilder(symbol.Length);
+        var depth = 0;
+        foreach (var character in symbol)
+        {
+            if (character == '<')
+            {
+                depth++;
+            }
+            else if (character == '>' && depth > 0)
+            {
+                depth--;
+            }
+            else if (depth == 0)
+            {
+                builder.Append(character);
+            }
+        }
+
+        return builder.ToString();
     }
 
     private static string? NormalizeGlobalSymbol(string? symbol)
