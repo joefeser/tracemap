@@ -269,6 +269,13 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Contains(reduced.Gaps, gap => gap.Classification == "SourceAnalysisCoverageReduced"
             && gap.ScopeId == reduced.Sources.Single().ScanId);
 
+        var syntaxIndex = Path.Combine(temp.Path, "syntax.sqlite");
+        SqliteIndexWriter.Write(syntaxIndex, Manifest("NotRun") with { AnalysisLevel = "Level3SyntaxAnalysis" }, []);
+        var syntax = await WebFormsModernizationPacketReporter.BuildAsync(new(
+            syntaxIndex,
+            Path.Combine(temp.Path, "syntax-output")));
+        Assert.Contains(syntax.Gaps, gap => gap.Classification == "SourceAnalysisCoverageReduced");
+
         var unknownCommitIndex = Path.Combine(temp.Path, "unknown-commit.sqlite");
         SqliteIndexWriter.Write(unknownCommitIndex, Manifest("Succeeded") with { CommitSha = "unknown" }, []);
         var exception = await Assert.ThrowsAsync<InvalidDataException>(() =>
@@ -276,6 +283,43 @@ public sealed class WebFormsModernizationPacketTests
                 unknownCommitIndex,
                 Path.Combine(temp.Path, "unknown-output"))));
         Assert.Equal("WebFormsModernizationCommitIdentityUnavailable", exception.Message);
+    }
+
+    [Fact]
+    public async Task Foreign_path_and_non_webforms_snapshot_identity_fail_closed()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("Succeeded") with { AnalysisLevel = "Level1SemanticAnalysis" };
+        var page = Fact(manifest, FactTypes.WebFormsPageDeclared, RuleIds.LegacyWebFormsInventory, "Pages/Orders.aspx", 1,
+            source: "surface:orders", target: "Orders", contract: "Orders.aspx",
+            ("surfaceIdentity", "surface:orders"), ("directiveKind", "Page"), ("coverageLabel", "bounded-static-webforms-inventory"));
+        var call = Fact(manifest, FactTypes.CallEdge, "csharp.semantic.call.v1", "Pages/Orders.aspx.cs", 4,
+            source: "method:orders", target: "method:save", contract: "Save", ("coverageLabel", "bounded-static-call"));
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, manifest, [page, call]);
+        await using (var connection = new SqliteConnection($"Data Source={index}"))
+        {
+            await connection.OpenAsync();
+            await using var path = connection.CreateCommand();
+            path.CommandText = "update facts set file_path = 'C:\\Users\\name\\Orders.aspx' where fact_id = $id;";
+            path.Parameters.AddWithValue("$id", page.FactId);
+            await path.ExecuteNonQueryAsync();
+        }
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(index, Path.Combine(temp.Path, "output")));
+        Assert.DoesNotContain(packet.Surfaces, surface => surface.Evidence.FilePath.Contains("Users", StringComparison.Ordinal));
+        Assert.Contains(packet.Gaps, gap => gap.Classification == "EvidenceFilePathUnavailable");
+
+        await using (var connection = new SqliteConnection($"Data Source={index}"))
+        {
+            await connection.OpenAsync();
+            await using var mismatch = connection.CreateCommand();
+            mismatch.CommandText = "update facts set repo = 'foreign-repository' where fact_id = $id;";
+            mismatch.Parameters.AddWithValue("$id", call.FactId);
+            await mismatch.ExecuteNonQueryAsync();
+        }
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            WebFormsModernizationPacketReporter.BuildAsync(new(index, Path.Combine(temp.Path, "mismatch"))));
+        Assert.Equal("WebFormsModernizationSourceIdentityMismatch", exception.Message);
     }
 
     private static ScanManifest Manifest(string buildStatus) => new(
