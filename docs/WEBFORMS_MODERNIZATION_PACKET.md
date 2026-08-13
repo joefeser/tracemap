@@ -47,8 +47,8 @@ extraction. It only composes evidence already present in one scan.
 - The .NET 10 SDK. Confirm with `dotnet --version`.
 - An authorized local checkout of the Web Forms application.
 - A Git repository and resolvable commit SHA for the application checkout.
-- Enough local disk space for the scan and two packet directories if byte-for-
-  byte determinism will be verified.
+- Enough local disk space for the scan and two packet directories when
+  verifying byte-for-byte determinism.
 - An optional solution or project path when the repository contains more than
   one build entry point.
 
@@ -87,6 +87,14 @@ $Stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $ScanOut = "C:\work\tracemap-output\webforms-scan-$Stamp"
 $PacketOut = "C:\work\tracemap-output\webforms-packet-$Stamp"
 $Cli = Join-Path $TraceMap "src\dotnet\TraceMap.Cli"
+$PacketBounds = @(
+    "--max-surfaces", "1000",
+    "--max-event-chains", "1000",
+    "--max-candidates", "1000",
+    "--max-gaps", "1000",
+    "--max-depth", "8",
+    "--max-paths", "1000"
+)
 
 if (Test-Path $ScanOut) { throw "Scan output already exists: $ScanOut" }
 if (Test-Path $PacketOut) { throw "Packet output already exists: $PacketOut" }
@@ -105,7 +113,8 @@ $IndexHashBefore = (Get-FileHash (Join-Path $ScanOut "index.sqlite") -Algorithm 
 
 dotnet run --project $Cli -- webforms-modernization `
   --index (Join-Path $ScanOut "index.sqlite") `
-  --out $PacketOut
+  --out $PacketOut `
+  @PacketBounds
 if ($LASTEXITCODE -ne 0) { throw "Web Forms packet generation failed" }
 
 $IndexHashAfter = (Get-FileHash (Join-Path $ScanOut "index.sqlite") -Algorithm SHA256).Hash
@@ -130,6 +139,14 @@ SOLUTION="$APPLICATION/LegacyApplication.sln"
 STAMP=$(date +%Y%m%d-%H%M%S)
 SCAN_OUT="/work/tracemap-output/webforms-scan-$STAMP"
 PACKET_OUT="/work/tracemap-output/webforms-packet-$STAMP"
+PACKET_BOUNDS=(
+  --max-surfaces 1000
+  --max-event-chains 1000
+  --max-candidates 1000
+  --max-gaps 1000
+  --max-depth 8
+  --max-paths 1000
+)
 
 test ! -e "$SCAN_OUT"
 test ! -e "$PACKET_OUT"
@@ -148,7 +165,8 @@ INDEX_HASH_BEFORE=$(shasum -a 256 "$SCAN_OUT/index.sqlite" | awk '{print $1}')
 dotnet run --project "$TRACEMAP/src/dotnet/TraceMap.Cli" -- \
   webforms-modernization \
   --index "$SCAN_OUT/index.sqlite" \
-  --out "$PACKET_OUT"
+  --out "$PACKET_OUT" \
+  "${PACKET_BOUNDS[@]}"
 
 INDEX_HASH_AFTER=$(shasum -a 256 "$SCAN_OUT/index.sqlite" | awk '{print $1}')
 test "$INDEX_HASH_BEFORE" = "$INDEX_HASH_AFTER"
@@ -171,23 +189,30 @@ report.
 | `--max-depth` | 8 | Maximum legacy static-flow traversal depth. |
 | `--max-paths` | 1000 | Maximum legacy static-flow paths considered. |
 
-Increase a bound only after inspecting why the packet truncated. A higher
-bound changes the packet identity and output and may materially increase run
-time and packet size. Reaching a bound sets `summary.truncated` and emits a
-corresponding gap; it must not be treated as complete coverage.
+Increase a bound only after inspecting why the packet truncated. A binding
+limit changes packet content and may materially increase run time and packet
+size; raising a non-binding limit may leave the bytes unchanged. In v1,
+`packetId` identifies the source snapshot and does not encode bound values.
+Record the exact bound arguments with the packet when they differ from the
+defaults. Reaching a bound sets `summary.truncated` and emits a corresponding
+gap; it must not be treated as complete coverage.
 
 Example:
 
 ```powershell
+$LargerPacketOut = "$PacketOut-larger-bounds"
+$LargerPacketBounds = @(
+    "--max-surfaces", "2000",
+    "--max-event-chains", "3000",
+    "--max-candidates", "2000",
+    "--max-gaps", "2000",
+    "--max-depth", "10",
+    "--max-paths", "3000"
+)
 dotnet run --project $Cli -- webforms-modernization `
   --index (Join-Path $ScanOut "index.sqlite") `
-  --out $PacketOut `
-  --max-surfaces 2000 `
-  --max-event-chains 3000 `
-  --max-candidates 2000 `
-  --max-gaps 2000 `
-  --max-depth 10 `
-  --max-paths 3000
+  --out $LargerPacketOut `
+  @LargerPacketBounds
 ```
 
 ## Required post-run checks
@@ -245,7 +270,8 @@ Generate a second packet from the unchanged index into another new directory.
 $PacketOut2 = "$PacketOut-repeat"
 dotnet run --project $Cli -- webforms-modernization `
   --index (Join-Path $ScanOut "index.sqlite") `
-  --out $PacketOut2
+  --out $PacketOut2 `
+  @PacketBounds
 
 $Files = "webforms-modernization.json", "webforms-modernization.md"
 foreach ($File in $Files) {
@@ -260,7 +286,8 @@ PACKET_OUT_2="${PACKET_OUT}-repeat"
 dotnet run --project "$TRACEMAP/src/dotnet/TraceMap.Cli" -- \
   webforms-modernization \
   --index "$SCAN_OUT/index.sqlite" \
-  --out "$PACKET_OUT_2"
+  --out "$PACKET_OUT_2" \
+  "${PACKET_BOUNDS[@]}"
 
 cmp "$PACKET_OUT/webforms-modernization.json" \
   "$PACKET_OUT_2/webforms-modernization.json"
@@ -268,8 +295,9 @@ cmp "$PACKET_OUT/webforms-modernization.md" \
   "$PACKET_OUT_2/webforms-modernization.md"
 ```
 
-The same index and bounds should produce byte-identical files. A difference is
-a validation failure; do not normalize or hand-edit either generated file.
+The same index and exact bound arguments should produce byte-identical files.
+A difference is a validation failure; do not normalize or hand-edit either
+generated file.
 
 ## How to interpret the packet
 
