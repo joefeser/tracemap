@@ -62,7 +62,7 @@ public sealed class ScanReceiptRecorder
     private static readonly HashSet<string> Operations = new(StringComparer.Ordinal)
     {
         "inventory-and-identity", "compiler-and-syntax-analysis", "deterministic-fact-extraction",
-        "post-extraction-snapshot-verification", "manifest-write", "facts-write", "index-write",
+        "pre-extraction-snapshot-verification", "post-extraction-snapshot-verification", "manifest-write", "facts-write", "index-write",
         "report-write", "analyzer-log-write", "webforms-static-extraction"
     };
     private static readonly HashSet<string> MutationStates = new(StringComparer.Ordinal)
@@ -270,14 +270,30 @@ public sealed class ScanReceiptRecorder
         _ => "operation-failed"
     };
 
-    private static IReadOnlyList<string> Bound(IEnumerable<string>? values) =>
-        (values ?? []).Where(value => !string.IsNullOrWhiteSpace(value))
-            .Select(value => value.Trim())
-            .Where(IsSafeFactId)
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(value => value, StringComparer.Ordinal)
-            .Take(ScanReceiptSchema.MaxSupportingIds)
-            .ToArray();
+    public static string ClassifyOutputFailure(Exception exception) => exception switch
+    {
+        OperationCanceledException => "operation-cancelled",
+        TimeoutException => "operation-timed-out",
+        UnauthorizedAccessException or DirectoryNotFoundException or IOException => "output-artifact-write-failed",
+        ArgumentException or NotSupportedException => "output-path-invalid",
+        _ => "output-artifact-write-failed"
+    };
+
+    private static IReadOnlyList<string> Bound(IEnumerable<string>? values)
+    {
+        var bounded = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var candidate in values ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(candidate))
+                continue;
+            var value = candidate.Trim();
+            if (!IsSafeFactId(value) || !bounded.Add(value))
+                continue;
+            if (bounded.Count > ScanReceiptSchema.MaxSupportingIds)
+                bounded.Remove(bounded.Max!);
+        }
+        return bounded.ToArray();
+    }
 
     private static bool IsSafeFactId(string value)
     {
@@ -367,6 +383,12 @@ public sealed class ScanReceiptOperation : IDisposable
         Record(outcome, coverageAfter, lastProvenSafeState, mutationState, cleanupResult, retryability, nextAction, supportingFactIds, supportingGapIds);
 
     public void Fail(Exception exception, string lastProvenSafeState, string cleanup = "not-attempted") =>
+        Fail(exception, lastProvenSafeState, cleanup, ScanReceiptRecorder.ClassifyFailure(exception));
+
+    public void FailOutput(Exception exception, string lastProvenSafeState, string cleanup = "not-attempted") =>
+        Fail(exception, lastProvenSafeState, cleanup, ScanReceiptRecorder.ClassifyOutputFailure(exception));
+
+    private void Fail(Exception exception, string lastProvenSafeState, string cleanup, string failureCode) =>
         Record(
             exception is OperationCanceledException ? "cancelled" : exception is TimeoutException ? "timed-out" : "failed",
             "unknown",
@@ -374,7 +396,7 @@ public sealed class ScanReceiptOperation : IDisposable
             "unknown",
             cleanup,
             exception is OperationCanceledException ? "retry-after-owner-review" : "retry-after-correction",
-            ScanReceiptRecorder.ClassifyFailure(exception));
+            failureCode);
 
     private void Record(
         string outcome,

@@ -234,7 +234,16 @@ public static class TraceMapCommand
         var receiptRecorder = new ScanReceiptRecorder(
             scanOptions,
             sqlValidationSummaryPaths.Append(sqlValidationAsOf?.ToString("O") ?? string.Empty));
-        var fullOutputPath = Path.GetFullPath(outputPath);
+        string fullOutputPath;
+        try
+        {
+            fullOutputPath = Path.GetFullPath(outputPath);
+        }
+        catch (Exception)
+        {
+            await error.WriteLineAsync("error: output-path-invalid");
+            return 1;
+        }
         ScanResult result;
         try
         {
@@ -271,56 +280,72 @@ public static class TraceMapCommand
             Directory.CreateDirectory(logsPath);
 
             using (var receiptOperation = receiptRecorder.StartStage("artifact-write", "manifest-write", result.Manifest.AnalysisLevel, "occurred", "completed"))
-            using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.ManifestWrite, cancellationToken))
             {
-                await ManifestWriter.WriteAsync(Path.Combine(fullOutputPath, "scan-manifest.json"), result.Manifest, cancellationToken);
-                operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
-                receiptOperation.Complete("succeeded", result.Manifest.AnalysisLevel, "manifest-written");
+                await RunReceiptStageAsync(receiptOperation, async () =>
+                {
+                    using var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.ManifestWrite, cancellationToken);
+                    await ManifestWriter.WriteAsync(Path.Combine(fullOutputPath, "scan-manifest.json"), result.Manifest, cancellationToken);
+                    operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
+                    receiptOperation.Complete("succeeded", result.Manifest.AnalysisLevel, "manifest-written");
+                });
             }
             using (var receiptOperation = receiptRecorder.StartStage("artifact-write", "facts-write", result.Manifest.AnalysisLevel, "occurred", "completed"))
-            using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.FactsWrite, cancellationToken))
             {
-                await JsonlFactWriter.WriteAsync(Path.Combine(fullOutputPath, "facts.ndjson"), result.Facts, cancellationToken);
-                operation.RecordItems(result.Facts.Count);
-                operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
-                receiptOperation.Complete("succeeded", result.Manifest.AnalysisLevel, "facts-written", supportingFactIds: result.Facts.Select(fact => fact.FactId));
+                await RunReceiptStageAsync(receiptOperation, async () =>
+                {
+                    using var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.FactsWrite, cancellationToken);
+                    await JsonlFactWriter.WriteAsync(Path.Combine(fullOutputPath, "facts.ndjson"), result.Facts, cancellationToken);
+                    operation.RecordItems(result.Facts.Count);
+                    operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
+                    receiptOperation.Complete("succeeded", result.Manifest.AnalysisLevel, "facts-written", supportingFactIds: result.Facts.Select(fact => fact.FactId));
+                });
             }
             using (var receiptOperation = receiptRecorder.StartStage("artifact-write", "index-write", result.Manifest.AnalysisLevel, "occurred", "completed"))
-            using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.IndexWrite, cancellationToken))
             {
-                SqliteIndexWriter.Write(Path.Combine(fullOutputPath, "index.sqlite"), result.Manifest, result.Facts);
-                operation.RecordItems(result.Facts.Count);
-                operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
-                receiptOperation.Complete("succeeded", result.Manifest.AnalysisLevel, "index-written");
+                await RunReceiptStageAsync(receiptOperation, () =>
+                {
+                    using var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.IndexWrite, cancellationToken);
+                    SqliteIndexWriter.Write(Path.Combine(fullOutputPath, "index.sqlite"), result.Manifest, result.Facts);
+                    operation.RecordItems(result.Facts.Count);
+                    operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
+                    receiptOperation.Complete("succeeded", result.Manifest.AnalysisLevel, "index-written");
+                    return Task.CompletedTask;
+                });
             }
             using (var receiptOperation = receiptRecorder.StartStage("artifact-write", "report-write", result.Manifest.AnalysisLevel, "occurred", "completed"))
-            using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.ReportWrite, cancellationToken))
             {
-                var staticPacket = SqlRunbookPacketBuilder.Build(result);
-                var validationComposition = await SqlValidationSummaryReader.ReadAsync(
-                    sqlValidationSummaryPaths,
-                    [SqlRunbookPacketBuilder.ValidationExpectedSource(result, staticPacket, evaluatedAt: sqlValidationAsOf)],
-                    cancellationToken);
-                var packetCandidate = SqlRunbookPacketBuilder.Build(result, validationComposition);
-                await MarkdownReportWriter.WriteAsync(Path.Combine(fullOutputPath, "report.md"), result, packetCandidate, cancellationToken);
-                if (SqlRunbookPacketBuilder.HasMeaningfulContent(packetCandidate))
-                    await SqlRunbookPacketWriter.WriteAsync(fullOutputPath, packetCandidate, cancellationToken);
-                operation.Complete(validationComposition.Gaps.Count > 0
-                    ? TraceMapDiagnosticOutcome.Partial
-                    : TraceMapDiagnosticOutcome.Succeeded);
-                receiptOperation.Complete(
-                    validationComposition.Gaps.Count > 0 ? "partial" : "succeeded",
-                    result.Manifest.AnalysisLevel,
-                    "report-written",
-                    retryability: validationComposition.Gaps.Count > 0 ? "retry-after-input-correction" : "not-required",
-                    nextAction: validationComposition.Gaps.Count > 0 ? "review-validation-gaps" : "continue");
+                await RunReceiptStageAsync(receiptOperation, async () =>
+                {
+                    using var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.ReportWrite, cancellationToken);
+                    var staticPacket = SqlRunbookPacketBuilder.Build(result);
+                    var validationComposition = await SqlValidationSummaryReader.ReadAsync(
+                        sqlValidationSummaryPaths,
+                        [SqlRunbookPacketBuilder.ValidationExpectedSource(result, staticPacket, evaluatedAt: sqlValidationAsOf)],
+                        cancellationToken);
+                    var packetCandidate = SqlRunbookPacketBuilder.Build(result, validationComposition);
+                    await MarkdownReportWriter.WriteAsync(Path.Combine(fullOutputPath, "report.md"), result, packetCandidate, cancellationToken);
+                    if (SqlRunbookPacketBuilder.HasMeaningfulContent(packetCandidate))
+                        await SqlRunbookPacketWriter.WriteAsync(fullOutputPath, packetCandidate, cancellationToken);
+                    operation.Complete(validationComposition.Gaps.Count > 0
+                        ? TraceMapDiagnosticOutcome.Partial
+                        : TraceMapDiagnosticOutcome.Succeeded);
+                    receiptOperation.Complete(
+                        validationComposition.Gaps.Count > 0 ? "partial" : "succeeded",
+                        result.Manifest.AnalysisLevel,
+                        "report-written",
+                        retryability: validationComposition.Gaps.Count > 0 ? "retry-after-input-correction" : "not-required",
+                        nextAction: validationComposition.Gaps.Count > 0 ? "review-validation-gaps" : "continue");
+                });
             }
             using (var receiptOperation = receiptRecorder.StartStage("artifact-write", "analyzer-log-write", result.Manifest.AnalysisLevel, "occurred", "completed"))
-            using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.AnalyzerLogWrite, cancellationToken))
             {
-                await WriteAnalyzerLogAsync(Path.Combine(logsPath, "analyzer.log"), result, cancellationToken);
-                operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
-                receiptOperation.Complete("succeeded", result.Manifest.AnalysisLevel, "analyzer-log-written");
+                await RunReceiptStageAsync(receiptOperation, async () =>
+                {
+                    using var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.AnalyzerLogWrite, cancellationToken);
+                    await WriteAnalyzerLogAsync(Path.Combine(logsPath, "analyzer.log"), result, cancellationToken);
+                    operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
+                    receiptOperation.Complete("succeeded", result.Manifest.AnalysisLevel, "analyzer-log-written");
+                });
             }
 
             if (receiptRecorder.CanWriteAuthoritativeReceipt)
@@ -352,7 +377,7 @@ public static class TraceMapCommand
             }
             if (ex is OperationCanceledException && cancellationToken.IsCancellationRequested)
                 throw;
-            await error.WriteLineAsync($"error: {ScanReceiptRecorder.ClassifyFailure(ex)}");
+            await error.WriteLineAsync($"error: {ScanReceiptRecorder.ClassifyOutputFailure(ex)}");
             return 1;
         }
 
@@ -367,6 +392,19 @@ public static class TraceMapCommand
         && argument.Message.StartsWith("--binlog", StringComparison.Ordinal)
             ? argument.Message
             : ScanReceiptRecorder.ClassifyFailure(exception);
+
+    private static async Task RunReceiptStageAsync(ScanReceiptOperation operation, Func<Task> action)
+    {
+        try
+        {
+            await action();
+        }
+        catch (Exception ex)
+        {
+            operation.FailOutput(ex, "stage-started");
+            throw;
+        }
+    }
 
     private static async Task<int> RunReportAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
     {

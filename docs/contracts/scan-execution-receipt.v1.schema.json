@@ -71,7 +71,7 @@
         "operationCode": {
           "enum": [
             "inventory-and-identity", "compiler-and-syntax-analysis", "deterministic-fact-extraction",
-            "post-extraction-snapshot-verification", "manifest-write", "facts-write", "index-write",
+            "pre-extraction-snapshot-verification", "post-extraction-snapshot-verification", "manifest-write", "facts-write", "index-write",
             "report-write", "analyzer-log-write", "webforms-static-extraction", "other"
           ]
         },
