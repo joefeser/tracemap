@@ -63,7 +63,7 @@ public sealed class ScanReceiptRecorder
     {
         "inventory-and-identity", "compiler-and-syntax-analysis", "deterministic-fact-extraction",
         "pre-extraction-snapshot-verification", "post-extraction-snapshot-verification", "manifest-write", "facts-write", "index-write",
-        "report-write", "analyzer-log-write", "webforms-static-extraction"
+        "output-directory-prepare", "report-write", "analyzer-log-write", "webforms-static-extraction"
     };
     private static readonly HashSet<string> MutationStates = new(StringComparer.Ordinal)
     {
@@ -82,7 +82,7 @@ public sealed class ScanReceiptRecorder
     {
         "stage-started", "inventory-and-commit-observed", "semantic-input-snapshot-verified",
         "syntax-fallback-completed", "facts-created", "source-snapshot-verified", "manifest-written",
-        "facts-written", "index-written", "report-written", "analyzer-log-written", "unknown"
+        "output-directory-prepared", "facts-written", "index-written", "report-written", "analyzer-log-written", "unknown"
     };
     private static readonly string[] ReceiptLimitations =
     [
@@ -178,8 +178,16 @@ public sealed class ScanReceiptRecorder
     {
         outcome = NormalizeOutcome(finalOutcome);
         coverage = NormalizeCoverage(finalCoverage);
-        finalFactIds = Bound(supportingFactIds);
-        finalGapIds = Bound(supportingGapIds);
+        finalFactIds = Bound(supportingFactIds, IsSafeFactId);
+        finalGapIds = Bound(supportingGapIds, IsSafeGapId);
+    }
+
+    public void MarkPartial(string finalCoverage, IEnumerable<string>? supportingGapIds = null)
+    {
+        if (outcome == "succeeded")
+            outcome = "partial";
+        coverage = NormalizeCoverage(finalCoverage);
+        finalGapIds = Bound(finalGapIds.Concat(supportingGapIds ?? []), IsSafeGapId);
     }
 
     private IReadOnlyList<string> finalFactIds = [];
@@ -231,8 +239,8 @@ public sealed class ScanReceiptRecorder
         IEnumerable<string>? supportingFactIds,
         IEnumerable<string>? supportingGapIds)
     {
-        var facts = Bound(supportingFactIds);
-        var gaps = Bound(supportingGapIds);
+        var facts = Bound(supportingFactIds, IsSafeFactId);
+        var gaps = Bound(supportingGapIds, IsSafeGapId);
         var normalizedOutcome = NormalizeOutcome(stageOutcome);
         var stageId = "stage-" + Hash($"{stage}|{operationCode}|1|{normalizedOutcome}|{coverageBefore}|{coverageAfter}|{lastProvenSafeState}|{string.Join('|', facts)}|{string.Join('|', gaps)}")[..20];
         var receipt = new ScanStageReceipt(
@@ -279,7 +287,7 @@ public sealed class ScanReceiptRecorder
         _ => "output-artifact-write-failed"
     };
 
-    private static IReadOnlyList<string> Bound(IEnumerable<string>? values)
+    private static IReadOnlyList<string> Bound(IEnumerable<string>? values, Func<string, bool> isSafe)
     {
         var bounded = new SortedSet<string>(StringComparer.Ordinal);
         foreach (var candidate in values ?? [])
@@ -287,7 +295,7 @@ public sealed class ScanReceiptRecorder
             if (string.IsNullOrWhiteSpace(candidate))
                 continue;
             var value = candidate.Trim();
-            if (!IsSafeFactId(value) || !bounded.Add(value))
+            if (!isSafe(value) || !bounded.Add(value))
                 continue;
             if (bounded.Count > ScanReceiptSchema.MaxSupportingIds)
                 bounded.Remove(bounded.Max!);
@@ -305,6 +313,13 @@ public sealed class ScanReceiptRecorder
                 return false;
         }
         return true;
+    }
+
+    private static bool IsSafeGapId(string value)
+    {
+        if (IsSafeFactId(value))
+            return true;
+        return value.Length == 24 && value.All(character => character is (>= '0' and <= '9') or (>= 'a' and <= 'f'));
     }
 
     private static string Normalize(IEnumerable<string>? values) => string.Join('\n',
