@@ -1,0 +1,79 @@
+# Guided Local Review Workflow Tasks
+
+## Spec-Only Slice
+
+- [x] 0.1 Inventory current CLI packaging, scan receipt, Web Forms packet, and explorer seams.
+- [x] 0.2 Define requirements, design, task runway, review prompts, and implementation state for #666.
+- [x] 0.3 Keep distribution selection gated on reproducible package smoke evidence.
+- [x] 0.4 Run spec formatting, private-path, and diff validation.
+- [x] 0.5 Review the spec and patch blocking or P1/P2 contract findings.
+- [ ] 0.6 Commit, push, and open the focused spec PR to `dev` after #656 is merged or the owner approves parallel review.
+
+## Implementation Runway
+
+- [ ] 1. Validate distribution candidates. Requirements: 1, 8, 10.
+  - [ ] Add a committed candidate matrix with pass/fail evidence and explicit host claims.
+  - [ ] Build synthetic .NET tool, framework-dependent archive, self-contained archive, and offline/container probes where the host supports them.
+  - [ ] Prove install/run/remove outside the source checkout.
+  - [ ] Inspect package/archive contents and native dependencies.
+  - [ ] Select one v1 distribution only after the gates pass; otherwise retain source-checkout runbooks.
+
+- [ ] 2. Add installed version/readiness output. Requirements: 2, 8, 9.
+  - [ ] Define and add the version JSON schema.
+  - [ ] Add bounded local capability detection and closed readiness states.
+  - [ ] Add concise human rendering from the structured result.
+  - [ ] Add deterministic and privacy tests.
+
+- [ ] 3. Extract reusable command services. Requirements: 3, 9.
+  - [ ] Identify the smallest service seams shared by standalone scan, Web Forms packet, and explorer commands.
+  - [ ] Preserve existing command behavior and schemas.
+  - [ ] Avoid recursive shelling to the CLI.
+  - [ ] Add standalone-versus-service parity tests.
+
+- [ ] 4. Implement output transaction and artifact hashing. Requirements: 4, 5.
+  - [ ] Add generated-only collision validation and unsafe-path refusal.
+  - [ ] Add sibling staging and atomic publication where supported.
+  - [ ] Add bounded SHA-256 artifact records using relative paths.
+  - [ ] Add upstream pre/post hash verification.
+  - [ ] Add cleanup-state tests including symlink/reparse adversarial fixtures.
+
+- [ ] 5. Implement the v1 guided workflow. Requirements: 3, 4, 6, 7, 9.
+  - [ ] Validate and lock the final command name.
+  - [ ] Run scan through the shared service and compose `scan-receipt.json`.
+  - [ ] Optionally run Web Forms packet generation when compatible evidence exists.
+  - [ ] Optionally run the ordinary static explorer on compatible artifacts.
+  - [ ] Keep #667 Web Forms packet rendering unavailable until its reader ships.
+  - [ ] Emit `local-review-result.v1` and README/terminal output from one structured model.
+  - [ ] Add closed outcomes, next actions, exit codes, and failure tests.
+
+- [ ] 6. Package and document the selected distribution. Requirements: 1, 2, 8.
+  - [ ] Add reproducible package metadata and version provenance.
+  - [ ] Add Windows, macOS, and Linux install/upgrade/uninstall instructions for proven hosts.
+  - [ ] Add offline installation guidance without security-control bypasses.
+  - [ ] Document integrity versus authenticity limitations.
+
+- [ ] 7. Validate end to end. Requirements: 9, 10.
+  - [ ] Run focused package/version/workflow tests.
+  - [ ] Run synthetic Web Forms standalone-versus-guided parity.
+  - [ ] Run claimed-host package smoke tests.
+  - [ ] Run `dotnet build src/dotnet/TraceMap.sln`.
+  - [ ] Run `dotnet test src/dotnet/TraceMap.sln`.
+  - [ ] Run `./scripts/check-private-paths.sh`.
+  - [ ] Run `git diff --check`.
+
+## Recommended PR Slices
+
+1. Spec-only contract and distribution decision gates.
+2. Distribution probe matrix plus installed `version --json` surface.
+3. Output transaction, shared command services, and guided scan result.
+4. Optional Web Forms packet and ordinary explorer orchestration.
+5. Cross-platform documentation and claimed-host smoke receipts.
+6. #667 integration after the Web Forms explorer reader is merged.
+
+## Deferred
+
+- Web Forms packet explorer rendering remains #667.
+- Hosted execution, upload, telemetry export, automatic restore, signing
+  authority, container publication, self-update, and shell completion require
+  separate owner decisions.
+- Go adapter #665 remains deferred until #664 conformance is complete.
