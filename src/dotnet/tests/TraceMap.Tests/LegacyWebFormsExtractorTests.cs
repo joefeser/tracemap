@@ -278,7 +278,7 @@ public sealed class LegacyWebFormsExtractorTests
         var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
 
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap && fact.Properties.GetValueOrDefault("gapKind") == "MissingWebFormsCodeBehind");
-        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap && fact.Properties.GetValueOrDefault("gapKind") == "MissingWebFormsHandler");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap && fact.Properties.GetValueOrDefault("gapKind") == "UnprovenCrossFileWebFormsHandler");
         Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WebFormsHandlerResolved);
     }
 

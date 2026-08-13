@@ -1,0 +1,203 @@
+using System.Text.Json;
+using Microsoft.Data.Sqlite;
+using TraceMap.Core;
+using TraceMap.Storage;
+
+namespace TraceMap.Tests;
+
+public sealed class LegacyWebFormsEventIdentityTests
+{
+    [Fact]
+    public async Task Same_named_surfaces_keep_event_sources_and_structural_handlers_distinct_through_persistence()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        foreach (var area in new[] { "AreaA", "AreaB" })
+        {
+            Directory.CreateDirectory(Path.Combine(repo, area));
+            File.WriteAllText(Path.Combine(repo, area, "Default.aspx"), """
+                <%@ Page Language="C#" CodeBehind="Default.aspx.cs" Inherits="Sample.Default" %>
+                <asp:Button runat="server" ID="SaveButton" OnClick="Save_Click" />
+                """);
+            File.WriteAllText(Path.Combine(repo, area, "Default.aspx.cs"), """
+                using System;
+                namespace Sample;
+                public partial class Default
+                {
+                    protected void Save_Click(object sender, EventArgs e) { }
+                }
+                """);
+        }
+
+        var output = Path.Combine(temp.Path, "out");
+        var result = ScanEngine.Scan(new ScanOptions(repo, output));
+        var bindings = result.Facts
+            .Where(fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared)
+            .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ToArray();
+        var handlers = result.Facts
+            .Where(fact => fact.FactType == FactTypes.WebFormsHandlerResolved)
+            .OrderBy(fact => fact.Properties["markupFile"], StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(2, bindings.Length);
+        Assert.Equal(2, handlers.Length);
+        Assert.All(bindings, binding =>
+        {
+            Assert.StartsWith("webforms-surface:", binding.Properties["surfaceIdentity"], StringComparison.Ordinal);
+            Assert.StartsWith("webforms-control:", binding.Properties["controlIdentity"], StringComparison.Ordinal);
+            Assert.Equal(binding.SourceSymbol, binding.Properties["eventSourceIdentity"]);
+            Assert.StartsWith("webforms-handler:", binding.TargetSymbol, StringComparison.Ordinal);
+        });
+        Assert.NotEqual(bindings[0].SourceSymbol, bindings[1].SourceSymbol);
+        Assert.NotEqual(bindings[0].TargetSymbol, bindings[1].TargetSymbol);
+        Assert.All(handlers, handler =>
+        {
+            var binding = Assert.Single(bindings, candidate => candidate.FactId == handler.Properties["bindingFactId"]);
+            Assert.Equal(binding.SourceSymbol, handler.SourceSymbol);
+            Assert.Equal(handler.TargetSymbol, handler.Properties["handlerSymbolId"]);
+            Assert.Equal(handler.TargetSymbol, handler.Properties["sourceSymbolId"]);
+            Assert.Equal(binding.Properties["surfaceIdentity"], handler.Properties["surfaceIdentity"]);
+            Assert.Equal(binding.FactId, handler.Properties["supportingFactIds"]);
+            Assert.Equal(RuleIds.LegacyWebFormsHandlerResolution, handler.RuleId);
+            Assert.Equal(ScannerVersions.LegacyWebFormsExtractor, handler.Evidence.ExtractorVersion);
+            Assert.Equal(result.Manifest.CommitSha, handler.CommitSha);
+        });
+        Assert.NotEqual(handlers[0].TargetSymbol, handlers[1].TargetSymbol);
+
+        await JsonlFactWriter.WriteAsync(Path.Combine(output, "facts.ndjson"), result.Facts);
+        SqliteIndexWriter.Write(Path.Combine(output, "index.sqlite"), result.Manifest, result.Facts);
+        var persisted = File.ReadLines(Path.Combine(output, "facts.ndjson"))
+            .Select(line => JsonSerializer.Deserialize<CodeFact>(line, new JsonSerializerOptions(JsonSerializerDefaults.Web))!)
+            .Where(fact => handlers.Any(handler => handler.FactId == fact.FactId))
+            .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(handlers.OrderBy(fact => fact.FactId, StringComparer.Ordinal).Select(fact => fact.TargetSymbol), persisted.Select(fact => fact.TargetSymbol));
+
+        using var connection = new SqliteConnection($"Data Source={Path.Combine(output, "index.sqlite")}");
+        connection.Open();
+        foreach (var handler in handlers)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = "select source_symbol, target_symbol, rule_id, evidence_tier, file_path, start_line, end_line, extractor_version, properties_json from facts where fact_id = $id";
+            command.Parameters.AddWithValue("$id", handler.FactId);
+            using var reader = command.ExecuteReader();
+            Assert.True(reader.Read());
+            Assert.Equal(handler.SourceSymbol, reader.GetString(0));
+            Assert.Equal(handler.TargetSymbol, reader.GetString(1));
+            Assert.Equal(handler.RuleId, reader.GetString(2));
+            Assert.Equal(handler.EvidenceTier, reader.GetString(3));
+            Assert.Equal(handler.Evidence.FilePath, reader.GetString(4));
+            Assert.Equal(handler.Evidence.StartLine, reader.GetInt32(5));
+            Assert.Equal(handler.Evidence.EndLine, reader.GetInt32(6));
+            Assert.Equal(handler.Evidence.ExtractorVersion, reader.GetString(7));
+            var properties = JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(8));
+            Assert.Equal(handler.Properties["supportingFactIds"], properties!["supportingFactIds"]);
+        }
+    }
+
+    [Fact]
+    public void Explicit_control_subscriptions_are_bounded_and_dynamic_or_unknown_shapes_fail_closed()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), """
+            <%@ Page Language="C#" CodeBehind="Default.aspx.cs" Inherits="Sample.Default" AutoEventWireup="false" %>
+            <asp:Button runat="server" ID="SaveButton" />
+            """);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx.cs"), """
+            using System;
+            namespace Sample;
+            public partial class Default
+            {
+                public Default()
+                {
+                    SaveButton.Click += Save_Click;
+                    SaveButton.Click += (sender, args) => Save_Click(sender, args);
+                    UnknownButton.Click += Save_Click;
+                    Load += Page_Load;
+                }
+
+                protected object SaveButton { get; } = new object();
+                protected void Save_Click(object sender, EventArgs e) { }
+                protected void Page_Load(object sender, EventArgs e) { }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var binding = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsEventBindingDeclared
+            && fact.Properties.GetValueOrDefault("bindingKind") == "ExplicitControlSubscription");
+        var handler = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsHandlerResolved
+            && fact.Properties.GetValueOrDefault("bindingFactId") == binding.FactId);
+
+        Assert.Equal("SaveButton", binding.Properties["controlId"]);
+        Assert.Equal("OnClick", binding.Properties["eventName"]);
+        Assert.Equal("Default.aspx.cs", binding.Evidence.FilePath);
+        Assert.Equal(binding.SourceSymbol, handler.SourceSymbol);
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyWebFormsEventBinding
+            && fact.Properties.GetValueOrDefault("gapKind") == "DynamicWebFormsEventSubscription");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyWebFormsEventBinding
+            && fact.Properties.GetValueOrDefault("gapKind") == "UnknownWebFormsEventSubscriptionReceiver");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsHandlerResolved
+            && fact.ContractElement == "Page_Load"
+            && fact.Properties.GetValueOrDefault("explicitEventSubscription") == "True");
+    }
+
+    [Fact]
+    public void Cross_file_partial_handler_requires_exact_semantic_method_evidence()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Sample.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), """
+            <%@ Page Language="C#" CodeBehind="Default.aspx.cs" Inherits="Sample.Default" %>
+            <asp:Button runat="server" ID="SaveButton" OnClick="Save_Click" />
+            """);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx.cs"), """
+            namespace Sample;
+            public partial class Default { }
+            """);
+        File.WriteAllText(Path.Combine(repo, "Handlers.aspx.cs"), """
+            using System;
+            namespace Sample;
+            public partial class Default
+            {
+                protected void Save_Click(object sender, EventArgs e)
+                {
+                    Helper.Touch();
+                }
+            }
+
+            public static class Helper
+            {
+                public static void Touch() { }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var handler = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsHandlerResolved
+            && fact.ContractElement == "Save_Click");
+
+        Assert.Equal(EvidenceTiers.Tier1Semantic, handler.EvidenceTier);
+        Assert.Equal("SemanticSourceSymbol", handler.Properties["resolutionKind"]);
+        Assert.Equal("Handlers.aspx.cs", handler.Evidence.FilePath);
+        Assert.StartsWith("csharp method ", handler.TargetSymbol, StringComparison.Ordinal);
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "UnprovenCrossFileWebFormsHandler");
+    }
+}

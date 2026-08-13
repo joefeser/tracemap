@@ -550,7 +550,7 @@ public static class ScannerVersions
     public const string LegacyWcfExtractor = "legacy-wcf/0.2.0";
     public const string LegacyAsmxExtractor = "legacy-asmx/0.1.0";
     public const string LegacyRemotingExtractor = "legacy-remoting/0.1.0";
-    public const string LegacyWebFormsExtractor = "legacy-webforms/0.2.0";
+    public const string LegacyWebFormsExtractor = "legacy-webforms/0.3.0";
     public const string LegacyWinFormsExtractor = "legacy-winforms/0.1.0";
     public const string LegacyAspNetExtractor = "legacy-aspnet/0.1.0";
     public const string LegacyDataExtractor = "legacy-data/0.1.0";
