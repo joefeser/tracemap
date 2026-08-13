@@ -141,8 +141,12 @@ COMBINED_INDEX="$OUTPUT_ROOT/combined.sqlite"
 DOTNET_CLI="$TRACEMAP/src/dotnet/TraceMap.Cli"
 TYPESCRIPT_CLI="$TRACEMAP/src/typescript/dist/src/cli.js"
 
-test ! -e "$OUTPUT_ROOT"
-mkdir -p "$OUTPUT_ROOT"
+mkdir -p "$(dirname "$OUTPUT_ROOT")"
+if ! mkdir "$OUTPUT_ROOT"; then
+  printf 'Output root already exists or could not be created: %s\n' \
+    "$OUTPUT_ROOT" >&2
+  exit 1
+fi
 ```
 
 ## Record the exact source state
