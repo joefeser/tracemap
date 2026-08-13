@@ -36,19 +36,25 @@
       "maxItems": 32,
       "items": { "$ref": "#/$defs/stage" }
     },
-    "supportingFactIds": { "$ref": "#/$defs/supportingIds" },
-    "supportingGapIds": { "$ref": "#/$defs/supportingIds" },
+    "supportingFactIds": { "$ref": "#/$defs/supportingFactIds" },
+    "supportingGapIds": { "$ref": "#/$defs/supportingGapIds" },
     "limitations": { "$ref": "#/$defs/limitations" }
   },
   "$defs": {
     "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "outcome": { "enum": ["succeeded", "partial", "failed", "cancelled", "timed-out"] },
     "coverage": { "enum": ["semantic", "semantic-reduced", "syntax", "syntax-reduced", "unknown", "unchanged"] },
-    "supportingIds": {
+    "supportingFactIds": {
       "type": "array",
       "maxItems": 256,
       "uniqueItems": true,
       "items": { "type": "string", "pattern": "^fact-[0-9a-f]{20}$" }
+    },
+    "supportingGapIds": {
+      "type": "array",
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^(?:fact-[0-9a-f]{20}|[0-9a-f]{24})$" }
     },
     "limitations": {
       "type": "array",
@@ -72,7 +78,7 @@
           "enum": [
             "inventory-and-identity", "compiler-and-syntax-analysis", "deterministic-fact-extraction",
             "pre-extraction-snapshot-verification", "post-extraction-snapshot-verification", "manifest-write", "facts-write", "index-write",
-            "report-write", "analyzer-log-write", "webforms-static-extraction", "other"
+            "output-directory-prepare", "report-write", "analyzer-log-write", "webforms-static-extraction", "other"
           ]
         },
         "attempt": { "const": 1 },
@@ -84,7 +90,7 @@
           "enum": [
             "stage-started", "inventory-and-commit-observed", "semantic-input-snapshot-verified",
             "syntax-fallback-completed", "facts-created", "source-snapshot-verified", "manifest-written",
-            "facts-written", "index-written", "report-written", "analyzer-log-written", "unknown"
+            "output-directory-prepared", "facts-written", "index-written", "report-written", "analyzer-log-written", "unknown"
           ]
         },
         "mutationState": { "enum": ["none-observed", "occurred", "unknown"] },
@@ -96,8 +102,8 @@
           ]
         },
         "nextAction": { "type": "string", "pattern": "^[a-z0-9-]{1,80}$" },
-        "supportingFactIds": { "$ref": "#/$defs/supportingIds" },
-        "supportingGapIds": { "$ref": "#/$defs/supportingIds" },
+        "supportingFactIds": { "$ref": "#/$defs/supportingFactIds" },
+        "supportingGapIds": { "$ref": "#/$defs/supportingGapIds" },
         "limitations": { "$ref": "#/$defs/limitations" }
       }
     }

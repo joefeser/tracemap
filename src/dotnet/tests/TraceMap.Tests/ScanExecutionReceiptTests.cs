@@ -30,7 +30,7 @@ public sealed class ScanExecutionReceiptTests
                 "retry-after-dependency-restoration",
                 "review-analysis-gaps",
                 supportingFactIds: Enumerable.Range(0, 300).Select(index => $"fact-{index:x20}"),
-                supportingGapIds: ["fact-bbbbbbbbbbbbbbbbbbbb", "fact-aaaaaaaaaaaaaaaaaaaa", "fact-aaaaaaaaaaaaaaaaaaaa"]);
+                supportingGapIds: ["fact-bbbbbbbbbbbbbbbbbbbb", "fact-aaaaaaaaaaaaaaaaaaaa", "fact-aaaaaaaaaaaaaaaaaaaa", "0123456789abcdef01234567"]);
         }
         recorder.Complete("partial", "semantic-reduced", ["fact-bbbbbbbbbbbbbbbbbbbb", "fact-aaaaaaaaaaaaaaaaaaaa"], ["fact-dddddddddddddddddddd", "fact-cccccccccccccccccccc"]);
 
@@ -46,7 +46,7 @@ public sealed class ScanExecutionReceiptTests
         Assert.Equal("operational-diagnostic", receipt.EvidenceClass);
         Assert.Equal(CommitSha, receipt.CommitSha);
         Assert.Equal(ScanReceiptSchema.MaxSupportingIds, Assert.Single(receipt.Stages).SupportingFactIds.Count);
-        Assert.Equal(["fact-aaaaaaaaaaaaaaaaaaaa", "fact-bbbbbbbbbbbbbbbbbbbb"], Assert.Single(receipt.Stages).SupportingGapIds);
+        Assert.Equal(["0123456789abcdef01234567", "fact-aaaaaaaaaaaaaaaaaaaa", "fact-bbbbbbbbbbbbbbbbbbbb"], Assert.Single(receipt.Stages).SupportingGapIds);
         Assert.Equal(["fact-aaaaaaaaaaaaaaaaaaaa", "fact-bbbbbbbbbbbbbbbbbbbb"], receipt.SupportingFactIds);
         var json = await File.ReadAllTextAsync(first);
         Assert.DoesNotContain(protectedPath, json, StringComparison.Ordinal);
@@ -250,6 +250,64 @@ public sealed class ScanExecutionReceiptTests
         Assert.Equal(1, exitCode);
         Assert.Equal("error: output-artifact-write-failed" + Environment.NewLine, stderr.ToString());
         Assert.DoesNotContain(outputPath, stderr.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Sql_validation_gaps_downgrade_receipt_and_preserve_gap_support()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var outputPath = Path.Combine(temp.Path, "output");
+        var summaryPath = Path.Combine(temp.Path, "malformed-summary.json");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Sample.cs"), "public sealed class Sample { }");
+        File.WriteAllText(summaryPath, "{ malformed");
+        InitializeRepository(repo);
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
+
+        var exitCode = await TraceMapCommand.RunAsync([
+            "scan", "--repo", repo, "--out", outputPath,
+            "--sql-validation-summary", summaryPath,
+            "--sql-validation-as-of", "2026-08-13T12:00:00+00:00"
+        ], stdout, stderr);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(string.Empty, stderr.ToString());
+        var receipt = JsonSerializer.Deserialize<ScanExecutionReceipt>(
+            await File.ReadAllTextAsync(Path.Combine(outputPath, "scan-receipt.json")), JsonOptions.Stable)!;
+        Assert.Equal("partial", receipt.Outcome);
+        var reportStage = Assert.Single(receipt.Stages, stage => stage.OperationCode == "report-write");
+        Assert.Equal("partial", reportStage.Outcome);
+        var gapId = Assert.Single(reportStage.SupportingGapIds);
+        Assert.Matches("^[0-9a-f]{24}$", gapId);
+        Assert.Contains(gapId, receipt.SupportingGapIds);
+    }
+
+    [Fact]
+    public async Task Log_directory_collision_records_failed_artifact_stage()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var outputPath = Path.Combine(temp.Path, "output");
+        Directory.CreateDirectory(repo);
+        Directory.CreateDirectory(outputPath);
+        File.WriteAllText(Path.Combine(repo, "Sample.cs"), "public sealed class Sample { }");
+        File.WriteAllText(Path.Combine(outputPath, "logs"), "occupied");
+        InitializeRepository(repo);
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
+
+        var exitCode = await TraceMapCommand.RunAsync(["scan", "--repo", repo, "--out", outputPath], stdout, stderr);
+
+        Assert.Equal(1, exitCode);
+        Assert.Equal("error: output-artifact-write-failed" + Environment.NewLine, stderr.ToString());
+        var receipt = JsonSerializer.Deserialize<ScanExecutionReceipt>(
+            await File.ReadAllTextAsync(Path.Combine(outputPath, "scan-receipt.json")), JsonOptions.Stable)!;
+        Assert.Equal("failed", receipt.Outcome);
+        Assert.Contains(receipt.Stages, stage => stage.OperationCode == "output-directory-prepare"
+            && stage.Outcome == "failed"
+            && stage.NextAction == "output-artifact-write-failed");
     }
 
     private static void InitializeRepository(string path)

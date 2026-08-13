@@ -277,7 +277,15 @@ public static class TraceMapCommand
         try
         {
             var logsPath = Path.Combine(fullOutputPath, "logs");
-            Directory.CreateDirectory(logsPath);
+            using (var receiptOperation = receiptRecorder.StartStage("artifact-write", "output-directory-prepare", result.Manifest.AnalysisLevel, "occurred", "completed"))
+            {
+                await RunReceiptStageAsync(receiptOperation, () =>
+                {
+                    Directory.CreateDirectory(logsPath);
+                    receiptOperation.Complete("succeeded", result.Manifest.AnalysisLevel, "output-directory-prepared");
+                    return Task.CompletedTask;
+                });
+            }
 
             using (var receiptOperation = receiptRecorder.StartStage("artifact-write", "manifest-write", result.Manifest.AnalysisLevel, "occurred", "completed"))
             {
@@ -334,7 +342,10 @@ public static class TraceMapCommand
                         result.Manifest.AnalysisLevel,
                         "report-written",
                         retryability: validationComposition.Gaps.Count > 0 ? "retry-after-input-correction" : "not-required",
-                        nextAction: validationComposition.Gaps.Count > 0 ? "review-validation-gaps" : "continue");
+                        nextAction: validationComposition.Gaps.Count > 0 ? "review-validation-gaps" : "continue",
+                        supportingGapIds: validationComposition.Gaps.Select(gap => gap.GapId));
+                    if (validationComposition.Gaps.Count > 0)
+                        receiptRecorder.MarkPartial(result.Manifest.AnalysisLevel, validationComposition.Gaps.Select(gap => gap.GapId));
                 });
             }
             using (var receiptOperation = receiptRecorder.StartStage("artifact-write", "analyzer-log-write", result.Manifest.AnalysisLevel, "occurred", "completed"))
