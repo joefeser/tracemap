@@ -657,10 +657,8 @@ public static partial class LegacyAspNetExtractor
                 fact.FactType == FactTypes.SymbolRelationship
                 && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
                 && fact.Evidence.FilePath == item.RelativePath
-                && fact.SourceSymbol is not null
-                && (fact.SourceSymbol.Equals(typeName, StringComparison.Ordinal)
-                    || fact.SourceSymbol.EndsWith($".{typeName}", StringComparison.Ordinal))
-                && fact.TargetSymbol is "System.Security.Principal.IPrincipal" or "System.Security.Principal.IIdentity");
+                && IsIdentitySourceSymbol(fact.SourceSymbol, typeName)
+                && IsIdentityInterfaceSymbol(fact.TargetSymbol));
             if (hasSemanticRelationship)
             {
                 continue;
@@ -1176,7 +1174,7 @@ public static partial class LegacyAspNetExtractor
     {
         foreach (var relationship in existingFacts
                      .Where(fact => fact.FactType == FactTypes.SymbolRelationship && fact.EvidenceTier == EvidenceTiers.Tier1Semantic)
-                     .Where(fact => fact.TargetSymbol is "System.Security.Principal.IPrincipal" or "System.Security.Principal.IIdentity")
+                     .Where(fact => IsIdentityInterfaceSymbol(fact.TargetSymbol))
                      .OrderBy(fact => fact.FactId, StringComparer.Ordinal))
         {
             var kind = relationship.TargetSymbol!.EndsWith("IPrincipal", StringComparison.Ordinal) ? "custom-principal-type" : "custom-identity-type";
@@ -1197,6 +1195,27 @@ public static partial class LegacyAspNetExtractor
                 contractElement: kind,
                 properties: properties));
         }
+    }
+
+    private static bool IsIdentityInterfaceSymbol(string? symbol)
+    {
+        var normalized = NormalizeGlobalSymbol(symbol);
+        return normalized is "System.Security.Principal.IPrincipal" or "System.Security.Principal.IIdentity";
+    }
+
+    private static bool IsIdentitySourceSymbol(string? symbol, string typeName)
+    {
+        var normalized = NormalizeGlobalSymbol(symbol);
+        return normalized?.Equals(typeName, StringComparison.Ordinal) == true
+            || normalized?.EndsWith($".{typeName}", StringComparison.Ordinal) == true;
+    }
+
+    private static string? NormalizeGlobalSymbol(string? symbol)
+    {
+        const string globalPrefix = "global::";
+        return symbol?.StartsWith(globalPrefix, StringComparison.Ordinal) == true
+            ? symbol[globalPrefix.Length..]
+            : symbol;
     }
 
     private static CodeFact CreateGap(
