@@ -634,7 +634,8 @@ public static partial class LegacyAspNetExtractor
     {
         foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>()
                      .Where(invocation => InvocationName(invocation).Equals("RegisterModule", StringComparison.Ordinal))
-                     .Where(invocation => invocation.Expression.ToString().Contains("DynamicModuleUtility", StringComparison.Ordinal)))
+                     .Where(invocation => invocation.Expression.ToString().Contains("DynamicModuleUtility", StringComparison.Ordinal))
+                     .Where(IsIdentityModuleRegistration))
         {
             facts.Add(CreateGap(
                 manifest,
@@ -682,6 +683,17 @@ public static partial class LegacyAspNetExtractor
                 $"A syntax-level {identityInterface} candidate could not be confirmed with compiler-resolved relationship evidence under reduced build coverage.",
                 null));
         }
+    }
+
+    private static bool IsIdentityModuleRegistration(InvocationExpressionSyntax invocation)
+    {
+        if (invocation.ArgumentList.Arguments.FirstOrDefault()?.Expression is not TypeOfExpressionSyntax typeOf)
+        {
+            return false;
+        }
+
+        var typeName = RemoveGenericTypeParameters(NormalizeGlobalSymbol(typeOf.Type.ToString())) ?? string.Empty;
+        return KnownIdentityPipelineTypes.Contains(typeName) || IdentityPipelineNameRegex().IsMatch(typeName);
     }
 
     private static void ExtractRoutes(

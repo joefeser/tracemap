@@ -348,7 +348,9 @@ read or write files. Configuration boundaries classified as needs-review,
 reduced, or unknown also emit `ConfigurationBoundaryNeedsReview`; a textual or
 generic configuration match is not promoted to a proven endpoint.
 
-Identity/state extraction emits `DynamicIdentityPipelineRegistrationUnsupported`,
+Identity/state extraction emits `DynamicIdentityPipelineRegistrationUnsupported`
+only for registrations whose declared module type has a supported
+identity-related shape;
 `IdentitySemanticDependencyUnavailable`, `ExternalIdentityConfigUnsupported`,
 `EncryptedIdentityConfigUnsupported`, and `UnsupportedCustomIdentityProvider`
 when the corresponding boundary cannot be proven safely. Reaching the packet's

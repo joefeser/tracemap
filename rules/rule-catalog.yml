@@ -2265,7 +2265,7 @@ rules:
     limitations:
       - Rows are static declarations only and do not prove effective runtime policy, authenticated users, authorization outcomes, session behavior, cookie behavior, provider availability, vulnerability, exploitability, compliance, security quality, or migration success.
       - Keys, credentials, cookie names or values, login targets, provider names, roles, users, connection strings, domains, source values, and encrypted payloads are never emitted; only closed categories, presence flags, counts, safe framework/custom classification, rule-backed provenance, and supporting fact IDs are retained.
-      - External or encrypted identity configuration, dynamic pipeline registration, unavailable dependencies, unsupported providers, runtime principal assignment, and custom provider behavior remain explicit gaps or outside coverage.
+      - External or encrypted identity configuration, deterministically identity-related dynamic pipeline registration, unavailable dependencies, unsupported providers, runtime principal assignment, and custom provider behavior remain explicit gaps or outside coverage; unrelated or dynamically named modules are not classified as identity evidence.
       - Custom principal/identity declarations require compiler-resolved interface relationships; name-only lookalikes are not promoted to identity evidence.
 
   - id: legacy.aspnet.handler.v1
