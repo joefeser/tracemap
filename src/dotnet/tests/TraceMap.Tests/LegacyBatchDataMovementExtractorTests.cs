@@ -323,6 +323,49 @@ public sealed class LegacyBatchDataMovementExtractorTests
     }
 
     [Fact]
+    public void Extractor_scopes_semantic_schedules_and_related_facts_to_the_proven_owner()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), "<%@ Page Language=\"C#\" %>");
+        const string source = """
+            using Hangfire;
+            public sealed class Batch
+            {
+                [TimerTrigger("%ArchiveSchedule%")]
+                public void Run() => RecurringJob.AddOrUpdate("job", () => Run(), "cron");
+                public void Run(int value) => Save(value);
+                private void Save(int value) { }
+            }
+            """;
+        File.WriteAllText(Path.Combine(repo, "Batch.cs"), source);
+        var lines = source.Split('\n');
+        var scheduleLine = Array.FindIndex(lines, line => line.Contains("RecurringJob", StringComparison.Ordinal)) + 1;
+        var overloadLine = Array.FindIndex(lines, line => line.Contains("Run(int", StringComparison.Ordinal)) + 1;
+        var manifest = Manifest();
+        var hangfire = Fact(manifest, FactTypes.MethodInvoked, RuleIds.CSharpSemanticMethodInvocation, "Batch.cs", scheduleLine,
+            "global::Batch.Run()", "global::Hangfire.RecurringJob.AddOrUpdate(string)",
+            new() { ["containingMethod"] = "Run", ["containingType"] = "global::Batch" });
+        var wrongProjectConfig = Fact(manifest, FactTypes.ConfigKeyDeclared, RuleIds.ConfigKey, "Other.config", 1,
+            "ArchiveSchedule", "ArchiveSchedule", new() { ["keyPath"] = "ArchiveSchedule" }, "src/Other.csproj");
+        var overloadDatabase = Fact(manifest, FactTypes.DatabaseOperationCandidate, RuleIds.DatabaseOperationCallPattern, "Batch.cs", overloadLine,
+            "global::Batch.Run(int)", "Save", new() { ["containingMethod"] = "Run", ["containingType"] = "global::Batch" });
+
+        var facts = LegacyBatchDataMovementExtractor.Extract(repo, manifest, FileInventory.Collect(repo), [hangfire, wrongProjectConfig, overloadDatabase]);
+        var rows = facts.Where(fact => fact.FactType == FactTypes.LegacyBatchDataMovementDeclared).ToArray();
+        var timer = Assert.Single(rows, row => row.Properties.GetValueOrDefault("mechanism") == "timer-trigger-attribute");
+        var recurring = Assert.Single(rows, row => row.Properties.GetValueOrDefault("mechanism") == "compiler-resolved-hangfire-recurring-job");
+
+        Assert.Equal(EvidenceTiers.Tier1Semantic, recurring.EvidenceTier);
+        Assert.Equal("config-reference-unavailable", timer.Properties.GetValueOrDefault("scheduleSource"));
+        Assert.DoesNotContain(wrongProjectConfig.FactId, timer.Properties.GetValueOrDefault("supportingFactIds") ?? string.Empty, StringComparison.Ordinal);
+        Assert.DoesNotContain(overloadDatabase.FactId, timer.Properties.GetValueOrDefault("databaseOperationFactIds") ?? string.Empty, StringComparison.Ordinal);
+        Assert.Contains(facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "BatchConfigurationReferenceUnavailable");
+    }
+
+    [Fact]
     public void Rule_catalog_documents_batch_data_movement_non_claims()
     {
         var catalog = File.ReadAllText(Path.Combine(FindRepoRoot(), "rules", "rule-catalog.yml"));
