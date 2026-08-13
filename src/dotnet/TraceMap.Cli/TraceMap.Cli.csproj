@@ -23,6 +23,7 @@
     <ToolCommandName Condition="'$(TraceMapPackAsTool)' == 'true'">tracemap</ToolCommandName>
     <PackageId Condition="'$(TraceMapPackAsTool)' == 'true'">TraceMap.Tool</PackageId>
     <PackageDescription Condition="'$(TraceMapPackAsTool)' == 'true'">Deterministic repository evidence scanner and review tooling.</PackageDescription>
+    <PackageReadmeFile Condition="'$(TraceMapPackAsTool)' == 'true'">README.md</PackageReadmeFile>
     <Authors Condition="'$(TraceMapPackAsTool)' == 'true'">TraceMap contributors</Authors>
     <PackageLicenseExpression Condition="'$(TraceMapPackAsTool)' == 'true'">MIT</PackageLicenseExpression>
     <RepositoryUrl Condition="'$(TraceMapPackAsTool)' == 'true'">https://github.com/joefeser/tracemap</RepositoryUrl>
@@ -30,6 +31,10 @@
 
   <ItemGroup>
     <AssemblyMetadata Include="TraceMapDistributionKind" Value="$(TraceMapDistributionKind)" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TraceMapPackAsTool)' == 'true'">
+    <None Include="../../../docs/LOCAL_REVIEW_WORKFLOW.md" Pack="true" PackagePath="/" Link="README.md" />
   </ItemGroup>
 
   <Target Name="SetTraceMapSourceState" BeforeTargets="CoreCompile">

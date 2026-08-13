@@ -11,9 +11,9 @@ publisher identity, authority, or authenticity.
 
 | Candidate | Runtime | Install / upgrade / remove | Offline shape | Native dependencies | Determinism boundary | Current evidence |
 |---|---|---|---|---|---|---|
-| .NET tool | Compatible .NET 10 SDK/runtime | Built-in `dotnet tool` lifecycle | Local NuGet source after package creation | Package contains the supported SQLite runtime assets | Tool payload files must be stable; the NuGet container carries generated relationship/core-property identifiers and therefore gets a per-build integrity hash | macOS arm64 probe passed; Windows and Linux unverified |
-| Framework-dependent archive | Compatible .NET 10 runtime | Extract, invoke with `dotnet`, remove directory | Copyable archive | Runtime assets must be retained in the archive | Archive construction and extracted payload require separate proof | Not yet probed |
-| Self-contained archive | None beyond supported host | Extract, invoke native launcher, remove directory | Per-RID archive | One platform-specific SQLite runtime plus .NET runtime | Each RID requires independent content and host proof | Not yet probed |
+| .NET tool | Compatible .NET 10 SDK/runtime | Built-in `dotnet tool` lifecycle | Local NuGet source after package creation | Package contains the supported SQLite runtime assets | Tool payload files must be stable; the NuGet container carries generated relationship/core-property identifiers and therefore gets a per-build integrity hash | macOS arm64 install/upgrade/guided-run/uninstall probe passed; Windows and Linux CI pending |
+| Framework-dependent archive | Compatible .NET 10 runtime | Extract, invoke with `dotnet`, remove directory | Copyable archive | Runtime assets must be retained in the archive | Archive construction and extracted payload require separate proof | macOS arm64 version/readiness probe passed; Windows and Linux CI pending |
+| Self-contained archive | None beyond supported host | Extract, invoke native launcher, remove directory | Per-RID archive | One platform-specific SQLite runtime plus .NET runtime | Each RID requires independent content and host proof | macOS arm64 `osx-arm64` version/readiness probe passed; Windows and Linux CI pending |
 | Offline container | Compatible container runtime | Load, run, remove image | OCI archive with no-network execution | Image-specific native assets | Image manifest/layers and mounted output require proof | Not yet probed |
 
 The .NET tool is the leading hypothesis because it provides a conventional
@@ -63,3 +63,12 @@ recursive comparison showed the tool payload itself was byte-identical; only
 - decide whether payload-stable/per-build-hash NuGet packaging satisfies the
   release policy or whether a reproducible archive is required;
 - publish install instructions only for hosts with matching evidence.
+
+The committed `scripts/smoke-local-distribution.ps1` probe performs package
+content and size checks, local-feed install, a guided synthetic scan outside
+the checkout working directory, explicit-version upgrade, uninstall,
+framework-dependent publication, and host-RID self-contained publication. Its
+sanitized `local-distribution-smoke.v1` receipt contains no package feed or
+absolute path. The `Local distribution validation` workflow runs the same
+probe on Windows, Ubuntu, and macOS; host support must remain unverified until
+those exact CI jobs pass.
