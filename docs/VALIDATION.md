@@ -2,6 +2,10 @@
 
 This guide defines the repeatable checks used to validate language adapters and cross-index analysis. It complements `docs/ACCEPTANCE.md`: acceptance defines expected behavior, while this file describes the concrete sample and open-source smoke set.
 
+For an operator-oriented multi-repository Angular/.NET scan, combination, and
+interaction-query workflow, see
+[Angular and .NET interaction mapping](ANGULAR_DOTNET_INTERACTION_RUNBOOK.md).
+
 TraceMap validation must stay deterministic and evidence-backed. Do not add LLM calls, embeddings, or prompt-based classification to validation.
 
 ## Required Matrix
