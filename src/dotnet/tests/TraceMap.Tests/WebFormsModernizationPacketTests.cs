@@ -42,8 +42,11 @@ public sealed class WebFormsModernizationPacketTests
         File.WriteAllText(Path.Combine(repo, "AreaB", "Default.aspx.cs"), "namespace Sample.AreaB; public partial class Default { } ");
 
         var scan = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "scan")));
+        const string fixtureCommit = "0123456789abcdef0123456789abcdef01234567";
+        var committedManifest = scan.Manifest with { CommitSha = fixtureCommit };
+        var committedFacts = scan.Facts.Select(fact => fact with { CommitSha = fixtureCommit }).ToArray();
         var index = Path.Combine(temp.Path, "index.sqlite");
-        SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
+        SqliteIndexWriter.Write(index, committedManifest, committedFacts);
         var indexHash = Hash(index);
         var firstOut = Path.Combine(temp.Path, "packet-a");
         var secondOut = Path.Combine(temp.Path, "packet-b");
@@ -250,6 +253,29 @@ public sealed class WebFormsModernizationPacketTests
         var multiple = await Assert.ThrowsAsync<InvalidDataException>(() =>
             WebFormsModernizationPacketReporter.BuildAsync(new(index, Path.Combine(temp.Path, "multiple"))));
         Assert.Equal("WebFormsModernizationSnapshotInvalid", multiple.Message);
+    }
+
+    [Fact]
+    public async Task Reduced_analysis_is_explicit_and_unknown_commit_identity_is_rejected()
+    {
+        using var temp = new TempDirectory();
+        var reducedIndex = Path.Combine(temp.Path, "reduced.sqlite");
+        SqliteIndexWriter.Write(reducedIndex, Manifest("Succeeded"), []);
+
+        var reduced = await WebFormsModernizationPacketReporter.BuildAsync(new(
+            reducedIndex,
+            Path.Combine(temp.Path, "reduced-output")));
+        Assert.Equal("reduced-static-webforms-modernization", reduced.Coverage);
+        Assert.Contains(reduced.Gaps, gap => gap.Classification == "SourceAnalysisCoverageReduced"
+            && gap.ScopeId == reduced.Sources.Single().ScanId);
+
+        var unknownCommitIndex = Path.Combine(temp.Path, "unknown-commit.sqlite");
+        SqliteIndexWriter.Write(unknownCommitIndex, Manifest("Succeeded") with { CommitSha = "unknown" }, []);
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            WebFormsModernizationPacketReporter.BuildAsync(new(
+                unknownCommitIndex,
+                Path.Combine(temp.Path, "unknown-output"))));
+        Assert.Equal("WebFormsModernizationCommitIdentityUnavailable", exception.Message);
     }
 
     private static ScanManifest Manifest(string buildStatus) => new(

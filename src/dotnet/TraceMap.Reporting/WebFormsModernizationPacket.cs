@@ -227,6 +227,9 @@ public static class WebFormsModernizationPacketReporter
         WebFormsModernizationOptions options)
     {
         var gaps = new List<WebFormsModernizationGap>();
+        var sourceAnalysisReduced = IsReducedAnalysisLevel(snapshot.AnalysisLevel);
+        if (sourceAnalysisReduced)
+            AddGeneratedGap(gaps, options.MaxGaps, snapshot, "SourceAnalysisCoverageReduced", "scan", snapshot.ScanId, []);
         var allFacts = snapshot.Facts.OrderBy(fact => fact.FactId, StringComparer.Ordinal).ToArray();
         foreach (var invalid in allFacts.Where(fact => !HasRequiredProvenance(fact)))
             AddGeneratedGap(gaps, options.MaxGaps, snapshot, "EvidenceProvenanceUnavailable", "fact", invalid.FactId, [invalid.FactId]);
@@ -368,7 +371,7 @@ public static class WebFormsModernizationPacketReporter
         var uniqueGaps = gaps.GroupBy(gap => gap.GapId, StringComparer.Ordinal).Select(group => group.First()).OrderBy(gap => gap.GapId, StringComparer.Ordinal).ToArray();
         var hasReducedInput = facts.Any(fact => fact.EvidenceTier == EvidenceTiers.Tier4Unknown
             || IsReducedCoverageLabel(fact.Properties.GetValueOrDefault("coverageLabel")));
-        var coverage = snapshot.BuildStatus == "Succeeded" && !truncated && uniqueGaps.Length == 0 && !hasReducedInput
+        var coverage = snapshot.BuildStatus == "Succeeded" && !sourceAnalysisReduced && !truncated && uniqueGaps.Length == 0 && !hasReducedInput
             ? "bounded-static-webforms-modernization"
             : "reduced-static-webforms-modernization";
         var source = new WebFormsModernizationSource(
@@ -689,6 +692,8 @@ public static class WebFormsModernizationPacketReporter
                 commit = reader.GetString(2);
                 analysis = reader.GetString(3);
                 build = reader.GetString(4);
+                if (!IsCommitSha(commit))
+                    throw new InvalidDataException("WebFormsModernizationCommitIdentityUnavailable");
             }
             var facts = new List<CodeFact>();
             await using (var command = connection.CreateCommand())
@@ -788,6 +793,12 @@ public static class WebFormsModernizationPacketReporter
         || value.Contains("partial", StringComparison.OrdinalIgnoreCase)
         || value.Contains("unknown", StringComparison.OrdinalIgnoreCase)
         || value.Contains("unavailable", StringComparison.OrdinalIgnoreCase);
+    private static bool IsReducedAnalysisLevel(string? value) => string.IsNullOrWhiteSpace(value)
+        || value.Contains("reduced", StringComparison.OrdinalIgnoreCase)
+        || value.Contains("partial", StringComparison.OrdinalIgnoreCase)
+        || value.Contains("failed", StringComparison.OrdinalIgnoreCase);
+    private static bool IsCommitSha(string? value) => value is { Length: 40 or 64 }
+        && value.All(Uri.IsHexDigit);
     private static bool HasRequiredProvenance(CodeFact fact) =>
         !string.IsNullOrWhiteSpace(fact.RuleId)
         && !string.IsNullOrWhiteSpace(fact.EvidenceTier)
