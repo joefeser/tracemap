@@ -11,6 +11,8 @@ public sealed class LegacyBatchDataMovementExtractorTests
         using var temp = new TempDirectory();
         var repo = Path.Combine(temp.Path, "repo");
         Directory.CreateDirectory(repo);
+        Directory.CreateDirectory(Path.Combine(repo, "src"));
+        File.WriteAllText(Path.Combine(repo, "src", "Legacy.csproj"), "<Project><PropertyGroup><OutputType>Exe</OutputType></PropertyGroup></Project>");
         File.WriteAllText(Path.Combine(repo, "Default.aspx"), "<%@ Page Language=\"C#\" %>");
         File.WriteAllText(Path.Combine(repo, "Archive.dtsx"), "<DTS:Executable xmlns:DTS=\"www.microsoft.com/SqlServer/Dts\" />");
         const string batchSource = """
@@ -154,6 +156,9 @@ public sealed class LegacyBatchDataMovementExtractorTests
             && fact.Properties.GetValueOrDefault("gapKind") == "AmbiguousBatchOwnerProject");
         Assert.Contains(facts, fact => fact.FactType == FactTypes.AnalysisGap
             && fact.Properties.GetValueOrDefault("gapKind") == "ReducedBatchSemanticCoverage");
+        Assert.All(
+            facts.Where(fact => fact.FactType == FactTypes.AnalysisGap && fact.RuleId == RuleIds.LegacyWebFormsBatchDataMovement),
+            fact => Assert.Equal("reduced-static-webforms-batch-data-movement", fact.Properties.GetValueOrDefault("coverageLabel")));
         var row = Assert.Single(facts, fact => fact.FactType == FactTypes.LegacyBatchDataMovementDeclared);
         Assert.Null(row.ProjectPath);
         Assert.Equal("ambiguous", row.Properties.GetValueOrDefault("projectResolution"));
@@ -228,6 +233,96 @@ public sealed class LegacyBatchDataMovementExtractorTests
     }
 
     [Fact]
+    public void Extractor_uses_semantic_relationships_and_command_invocations_for_imported_framework_types()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), "<%@ Page Language=\"C#\" %>");
+        const string source = """
+            using System.Data;
+            using System.Data.SqlClient;
+            using System.ServiceProcess;
+            using Quartz;
+
+            namespace Sample;
+            public sealed class Worker : ServiceBase { }
+            public sealed class Job : IJob { }
+            public sealed class Runner
+            {
+                public void Run()
+                {
+                    SqlCommand command = new();
+                    command.CommandType = CommandType.StoredProcedure;
+                    command.ExecuteNonQuery();
+                }
+            }
+            """;
+        File.WriteAllText(Path.Combine(repo, "Batch.cs"), source);
+        var lines = source.Split('\n');
+        var serviceLine = Array.FindIndex(lines, line => line.Contains("ServiceBase", StringComparison.Ordinal)) + 1;
+        var jobLine = Array.FindIndex(lines, line => line.Contains("IJob", StringComparison.Ordinal)) + 1;
+        var executeLine = Array.FindIndex(lines, line => line.Contains("ExecuteNonQuery", StringComparison.Ordinal)) + 1;
+        var manifest = Manifest();
+        var relationships = new[]
+        {
+            Fact(manifest, FactTypes.SymbolRelationship, RuleIds.CSharpSemanticSymbolRelationship, "Batch.cs", serviceLine,
+                "global::Sample.Worker", "global::System.ServiceProcess.ServiceBase", new() { ["relationshipKind"] = "InheritsFrom" }),
+            Fact(manifest, FactTypes.SymbolRelationship, RuleIds.CSharpSemanticSymbolRelationship, "Batch.cs", jobLine,
+                "global::Sample.Job", "global::Quartz.IJob", new() { ["relationshipKind"] = "ImplementsInterface" }),
+            Fact(manifest, FactTypes.MethodInvoked, RuleIds.CSharpSemanticMethodInvocation, "Batch.cs", executeLine,
+                "global::Sample.Runner.Run()", "global::System.Data.SqlClient.SqlCommand.ExecuteNonQuery()",
+                new() { ["containingMethod"] = "Run", ["containingType"] = "global::Sample.Runner" })
+        };
+
+        var facts = LegacyBatchDataMovementExtractor.Extract(repo, manifest, FileInventory.Collect(repo), relationships);
+        var rows = facts.Where(fact => fact.FactType == FactTypes.LegacyBatchDataMovementDeclared).ToArray();
+
+        Assert.Contains(rows, row => row.Properties.GetValueOrDefault("mechanism") == "compiler-resolved-service-base-type"
+            && row.EvidenceTier == EvidenceTiers.Tier1Semantic);
+        Assert.Contains(rows, row => row.Properties.GetValueOrDefault("mechanism") == "compiler-resolved-quartz-job-type"
+            && row.EvidenceTier == EvidenceTiers.Tier1Semantic);
+        Assert.Contains(rows, row => row.Properties.GetValueOrDefault("surfaceKind") == "stored-procedure-batch");
+    }
+
+    [Fact]
+    public void Extractor_requires_a_supported_main_signature_and_executable_project()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), "<%@ Page Language=\"C#\" %>");
+        File.WriteAllText(Path.Combine(repo, "Legacy.csproj"), "<Project><PropertyGroup><OutputType>Exe</OutputType></PropertyGroup></Project>");
+        File.WriteAllText(Path.Combine(repo, "Batch.cs"), "public sealed class Batch { private static string Main(int value) => value.ToString(); }");
+        var manifest = Manifest();
+        var owner = Fact(manifest, FactTypes.MethodDeclared, RuleIds.CSharpSyntaxDeclarations, "Batch.cs", 1, "Batch", "Main", new(), "Legacy.csproj");
+
+        var facts = LegacyBatchDataMovementExtractor.Extract(repo, manifest, FileInventory.Collect(repo), [owner]);
+
+        Assert.DoesNotContain(facts, fact => fact.FactType == FactTypes.LegacyBatchDataMovementDeclared
+            && fact.Properties.GetValueOrDefault("surfaceKind") == "console-job");
+    }
+
+    [Fact]
+    public void Extractor_skips_oversized_sources_with_a_rule_backed_gap()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), "<%@ Page Language=\"C#\" %>");
+        File.WriteAllText(Path.Combine(repo, "Batch.cs"), "public sealed class Batch { public void Run() { } }");
+        var inventory = FileInventory.Collect(repo)
+            .Select(item => item.RelativePath == "Batch.cs" ? item with { SizeBytes = 4 * 1024 * 1024 + 1 } : item)
+            .ToArray();
+
+        var facts = LegacyBatchDataMovementExtractor.Extract(repo, Manifest(), inventory, []);
+        var gap = Assert.Single(facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "BatchSourceInputTooLarge");
+        Assert.Equal("reduced-static-webforms-batch-data-movement", gap.Properties.GetValueOrDefault("coverageLabel"));
+        Assert.DoesNotContain("4194305", JsonSerializer.Serialize(gap), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Rule_catalog_documents_batch_data_movement_non_claims()
     {
         var catalog = File.ReadAllText(Path.Combine(FindRepoRoot(), "rules", "rule-catalog.yml"));
@@ -255,7 +350,7 @@ public sealed class LegacyBatchDataMovementExtractorTests
             manifest,
             factType,
             ruleId,
-            factType is FactTypes.MethodDeclared or FactTypes.MethodInvoked or FactTypes.DatabaseOperationCandidate or FactTypes.HttpCallDetected
+            factType is FactTypes.MethodDeclared or FactTypes.MethodInvoked or FactTypes.SymbolRelationship or FactTypes.DatabaseOperationCandidate or FactTypes.HttpCallDetected
                 ? EvidenceTiers.Tier1Semantic
                 : EvidenceTiers.Tier2Structural,
             new(file, line, line, null, "fixture", "fixture/1.0"),

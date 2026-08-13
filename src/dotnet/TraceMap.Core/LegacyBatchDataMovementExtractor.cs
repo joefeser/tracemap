@@ -9,7 +9,9 @@ namespace TraceMap.Core;
 public static class LegacyBatchDataMovementExtractor
 {
     private const string ExtractorId = "LegacyBatchDataMovementExtractor";
+    private const long MaxCSharpBytes = 4 * 1024 * 1024;
     private const int RelatedFactLimit = 50;
+    private const string ReducedCoverageLabel = "reduced-static-webforms-batch-data-movement";
     private const string Limitations = "Static candidate evidence only; scheduling, execution, successful data movement, completeness, retries, idempotency, checkpoint effectiveness, transaction outcome, monitoring, target state, and production use are not proven.";
 
     private static readonly HashSet<string> CSharpKinds = new(StringComparer.Ordinal)
@@ -200,6 +202,7 @@ public static class LegacyBatchDataMovementExtractor
                 properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
                 {
                     ["coverage"] = "reduced",
+                    ["coverageLabel"] = ReducedCoverageLabel,
                     ["gapKind"] = "ReducedBatchSemanticCoverage",
                     ["message"] = "Batch/data-movement inventory includes syntax or structural fallback because semantic coverage is reduced.",
                     ["limitations"] = Limitations
@@ -319,10 +322,25 @@ public static class LegacyBatchDataMovementExtractor
         List<BatchObservation> observations,
         List<PendingGap> gaps)
     {
+        var fullPath = Path.Combine(repoPath, item.RelativePath);
+        try
+        {
+            if (item.SizeBytes > MaxCSharpBytes || new FileInfo(fullPath).Length > MaxCSharpBytes)
+            {
+                gaps.Add(new(item.RelativePath, 1, "BatchSourceInputTooLarge", "An in-scope C# source exceeded the deterministic batch/data-movement input bound and was not read."));
+                return;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            gaps.Add(new(item.RelativePath, 1, "UnreadableBatchSource", "Unable to inspect an in-scope C# source for batch/data-movement extraction."));
+            return;
+        }
+
         string text;
         try
         {
-            text = File.ReadAllText(Path.Combine(repoPath, item.RelativePath));
+            text = File.ReadAllText(fullPath);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -347,24 +365,44 @@ public static class LegacyBatchDataMovementExtractor
             foreach (var baseType in type.BaseList?.Types ?? [])
             {
                 var baseName = NormalizeGlobalTypeName(baseType.Type.ToString());
-                if (baseName == "System.ServiceProcess.ServiceBase")
+                var semanticRelationship = FindSemanticBaseRelationship(existingFacts, item.RelativePath, baseType, ownerType);
+                var resolvedBaseName = NormalizeGlobalTypeName(semanticRelationship?.TargetSymbol ?? baseName);
+                if (resolvedBaseName == "System.ServiceProcess.ServiceBase")
                 {
-                    observations.Add(SyntaxObservation(item.RelativePath, baseType, "windows-service", "service-base-type", "host", null, ownerType));
+                    observations.Add(semanticRelationship is null
+                        ? SyntaxObservation(item.RelativePath, baseType, "windows-service", "service-base-type", "host", null, ownerType)
+                        : SemanticRelationshipObservation(semanticRelationship, "windows-service", "compiler-resolved-service-base-type", "host", ownerType));
                 }
-                else if (baseName == "Quartz.IJob")
+                else if (resolvedBaseName == "Quartz.IJob")
                 {
-                    observations.Add(SyntaxObservation(item.RelativePath, baseType, "scheduled-task", "quartz-job-type", "execute", null, ownerType));
+                    observations.Add(semanticRelationship is null
+                        ? SyntaxObservation(item.RelativePath, baseType, "scheduled-task", "quartz-job-type", "execute", null, ownerType)
+                        : SemanticRelationshipObservation(semanticRelationship, "scheduled-task", "compiler-resolved-quartz-job-type", "execute", ownerType));
                 }
             }
         }
 
+        var memberContexts = new Dictionary<string, List<MemberContext>>(StringComparer.Ordinal);
         foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
         {
             var member = method.Identifier.ValueText;
             var ownerType = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault() is { } type ? QualifiedTypeName(type) : null;
             var signals = MemberSignals(method);
-            EnrichExistingObservations(item.RelativePath, method, member, ownerType, signals, observations);
-            if (member == "Main" && method.Modifiers.Any(modifier => modifier.IsKind(SyntaxKind.StaticKeyword)))
+            var methodSpan = method.SyntaxTree.GetLineSpan(method.Span);
+            var context = new MemberContext(
+                member,
+                ownerType,
+                methodSpan.StartLinePosition.Line + 1,
+                Math.Max(methodSpan.StartLinePosition.Line + 1, methodSpan.EndLinePosition.Line + 1),
+                signals);
+            var memberKey = MemberKey(ownerType, member);
+            if (!memberContexts.TryGetValue(memberKey, out var contexts))
+            {
+                contexts = [];
+                memberContexts[memberKey] = contexts;
+            }
+            contexts.Add(context);
+            if (IsExecutableEntryPoint(repoPath, item.RelativePath, method, existingFacts))
             {
                 observations.Add(SyntaxObservation(item.RelativePath, method.Identifier, "console-job", "static-main-method", "entry", member, ownerType, signals));
             }
@@ -430,9 +468,11 @@ public static class LegacyBatchDataMovementExtractor
                 }
             }
 
-            AddStoredProcedureObservations(item.RelativePath, method, member, ownerType, signals, observations);
+            AddStoredProcedureObservations(item.RelativePath, method, member, ownerType, signals, existingFacts, observations);
             AddBulkCopySyntaxFallback(item.RelativePath, method, member, ownerType, signals, existingFacts, observations);
         }
+
+        EnrichExistingObservations(item.RelativePath, memberContexts, observations);
     }
 
     private static void AddStoredProcedureObservations(
@@ -441,6 +481,7 @@ public static class LegacyBatchDataMovementExtractor
         string member,
         string? ownerType,
         IReadOnlyDictionary<string, string> signals,
+        IReadOnlyList<CodeFact> existingFacts,
         List<BatchObservation> observations)
     {
         var declaredCommandVariables = method.DescendantNodes().OfType<VariableDeclarationSyntax>()
@@ -454,6 +495,14 @@ public static class LegacyBatchDataMovementExtractor
                 && IsSupportedCommandType(creation.Type.ToString()))
             {
                 declaredCommandVariables.Add(variable.Identifier.ValueText);
+            }
+        }
+        foreach (var invocation in method.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            if (invocation.Expression is MemberAccessExpressionSyntax access
+                && HasSemanticCommandInvocation(existingFacts, filePath, invocation))
+            {
+                declaredCommandVariables.Add(access.Expression.ToString());
             }
         }
         var storedProcedureVariables = new HashSet<string>(StringComparer.Ordinal);
@@ -561,35 +610,34 @@ public static class LegacyBatchDataMovementExtractor
 
     private static void EnrichExistingObservations(
         string filePath,
-        MethodDeclarationSyntax method,
-        string member,
-        string? ownerType,
-        IReadOnlyDictionary<string, string> signals,
+        IReadOnlyDictionary<string, List<MemberContext>> memberContexts,
         List<BatchObservation> observations)
     {
-        var span = method.SyntaxTree.GetLineSpan(method.Span);
-        var startLine = span.StartLinePosition.Line + 1;
-        var endLine = Math.Max(startLine, span.EndLinePosition.Line + 1);
         for (var index = 0; index < observations.Count; index++)
         {
             var observation = observations[index];
             if (observation.Evidence.FilePath != filePath
-                || observation.Evidence.StartLine < startLine
-                || observation.Evidence.EndLine > endLine)
+                || observation.OwnerMember is null
+                || !memberContexts.TryGetValue(MemberKey(observation.OwnerType, observation.OwnerMember), out var contexts))
             {
                 continue;
             }
 
+            var context = contexts.FirstOrDefault(candidate =>
+                observation.Evidence.StartLine >= candidate.StartLine
+                && observation.Evidence.EndLine <= candidate.EndLine);
+            if (context is null) continue;
+
             var properties = CopyProperties(observation.Properties);
-            foreach (var (key, value) in signals)
+            foreach (var (key, value) in context.Signals)
             {
                 properties[key] = value;
             }
 
             observations[index] = observation with
             {
-                OwnerMember = observation.OwnerMember ?? member,
-                OwnerType = observation.OwnerType ?? ownerType,
+                OwnerMember = context.Member,
+                OwnerType = observation.OwnerType ?? context.OwnerType,
                 Properties = properties
             };
         }
@@ -731,6 +779,7 @@ public static class LegacyBatchDataMovementExtractor
             new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
                 ["coverage"] = "reduced",
+                ["coverageLabel"] = ReducedCoverageLabel,
                 ["gapKind"] = kind,
                 ["limitations"] = Limitations,
                 ["message"] = message,
@@ -748,6 +797,7 @@ public static class LegacyBatchDataMovementExtractor
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
                 ["coverage"] = "reduced",
+                ["coverageLabel"] = ReducedCoverageLabel,
                 ["gapKind"] = gap.Kind,
                 ["limitations"] = Limitations,
                 ["message"] = gap.Message
@@ -793,6 +843,116 @@ public static class LegacyBatchDataMovementExtractor
             && MethodName(fact.TargetSymbol ?? fact.Properties.GetValueOrDefault("methodSymbol") ?? string.Empty) == method);
     }
 
+    private static CodeFact? FindSemanticBaseRelationship(
+        IReadOnlyList<CodeFact> facts,
+        string filePath,
+        BaseTypeSyntax baseType,
+        string ownerType)
+    {
+        var line = Line(baseType);
+        var normalizedOwner = NormalizeGlobalTypeName(ownerType);
+        var syntaxBaseName = SimpleTypeName(baseType.Type.ToString());
+        return facts.FirstOrDefault(fact =>
+            fact.FactType == FactTypes.SymbolRelationship
+            && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+            && fact.Evidence.FilePath == filePath
+            && fact.Evidence.StartLine <= line
+            && fact.Evidence.EndLine >= line
+            && fact.Properties.GetValueOrDefault("relationshipKind") is "InheritsFrom" or "ImplementsInterface"
+            && NormalizeGlobalTypeName(fact.SourceSymbol ?? fact.Properties.GetValueOrDefault("sourceSymbol") ?? string.Empty) == normalizedOwner
+            && SimpleTypeName(fact.TargetSymbol ?? fact.Properties.GetValueOrDefault("targetSymbol") ?? string.Empty) == syntaxBaseName);
+    }
+
+    private static BatchObservation SemanticRelationshipObservation(
+        CodeFact relationship,
+        string surfaceKind,
+        string mechanism,
+        string operationKind,
+        string ownerType) =>
+        new(
+            relationship.Evidence,
+            EvidenceTiers.Tier1Semantic,
+            surfaceKind,
+            mechanism,
+            operationKind,
+            null,
+            ownerType,
+            relationship.ProjectPath,
+            [relationship.FactId],
+            new SortedDictionary<string, string>(StringComparer.Ordinal),
+            []);
+
+    private static bool HasSemanticCommandInvocation(
+        IReadOnlyList<CodeFact> facts,
+        string filePath,
+        InvocationExpressionSyntax invocation)
+    {
+        var line = Line(invocation);
+        var method = InvocationName(invocation);
+        return StoredProcedureExecuteMethods.Contains(method)
+            && facts.Any(fact => fact.FactType == FactTypes.MethodInvoked
+                && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+                && fact.Evidence.FilePath == filePath
+                && fact.Evidence.StartLine <= line
+                && fact.Evidence.EndLine >= line
+                && IsSupportedCommandTarget(fact.TargetSymbol ?? fact.Properties.GetValueOrDefault("methodSymbol") ?? string.Empty)
+                && MethodName(fact.TargetSymbol ?? fact.Properties.GetValueOrDefault("methodSymbol") ?? string.Empty) == method);
+    }
+
+    private static bool IsExecutableEntryPoint(
+        string repoPath,
+        string filePath,
+        MethodDeclarationSyntax method,
+        IReadOnlyList<CodeFact> existingFacts)
+    {
+        if (method.Identifier.ValueText != "Main"
+            || !method.Modifiers.Any(modifier => modifier.IsKind(SyntaxKind.StaticKeyword))
+            || method.TypeParameterList is not null
+            || method.ParameterList.Parameters.Count > 1
+            || !IsSupportedMainReturnType(method.ReturnType.ToString())
+            || (method.ParameterList.Parameters.Count == 1 && !IsSupportedMainParameter(method.ParameterList.Parameters[0].Type?.ToString())))
+        {
+            return false;
+        }
+
+        var projectPaths = existingFacts
+            .Where(fact => fact.Evidence.FilePath == filePath && !string.IsNullOrWhiteSpace(fact.ProjectPath))
+            .Select(fact => fact.ProjectPath!)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (projectPaths.Length != 1)
+        {
+            return false;
+        }
+
+        try
+        {
+            var document = SafeXml.LoadDocument(Path.Combine(repoPath, projectPaths[0]));
+            return document.Descendants()
+                .Where(element => element.Name.LocalName == "OutputType")
+                .Any(element => element.Value.Trim() is "Exe" or "WinExe");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SafeXmlException)
+        {
+            return false;
+        }
+    }
+
+    private static bool IsSupportedMainReturnType(string value)
+    {
+        var normalized = NormalizeGlobalTypeName(value).Replace(" ", string.Empty, StringComparison.Ordinal);
+        return normalized is "void" or "int" or "System.Int32" or "Task" or "System.Threading.Tasks.Task"
+            or "Task<int>" or "Task<System.Int32>" or "System.Threading.Tasks.Task<int>" or "System.Threading.Tasks.Task<System.Int32>";
+    }
+
+    private static bool IsSupportedMainParameter(string? value)
+    {
+        var normalized = NormalizeGlobalTypeName(value ?? string.Empty).Replace(" ", string.Empty, StringComparison.Ordinal);
+        return normalized is "string[]" or "System.String[]";
+    }
+
+    private static string MemberKey(string? ownerType, string member) => $"{NormalizeGlobalTypeName(ownerType ?? string.Empty)}|{member}";
+
     private static bool IsSystemIoTarget(string target) =>
         target.StartsWith("global::System.IO.File.", StringComparison.Ordinal)
         || target.StartsWith("System.IO.File.", StringComparison.Ordinal)
@@ -806,6 +966,12 @@ public static class LegacyBatchDataMovementExtractor
     private static bool IsSqlBulkCopyTarget(string target) =>
         target.Contains("System.Data.SqlClient.SqlBulkCopy.", StringComparison.Ordinal)
         || target.Contains("Microsoft.Data.SqlClient.SqlBulkCopy.", StringComparison.Ordinal);
+
+    private static bool IsSupportedCommandTarget(string target) =>
+        target.Contains("System.Data.Common.DbCommand.", StringComparison.Ordinal)
+        || target.Contains("System.Data.SqlClient.SqlCommand.", StringComparison.Ordinal)
+        || target.Contains("Microsoft.Data.SqlClient.SqlCommand.", StringComparison.Ordinal)
+        || target.Contains("Npgsql.NpgsqlCommand.", StringComparison.Ordinal);
 
     private static bool IsExplicitSystemIoReceiver(string receiver) =>
         receiver is "System.IO.File" or "System.IO.Directory" or "global::System.IO.File" or "global::System.IO.Directory";
@@ -926,5 +1092,11 @@ public static class LegacyBatchDataMovementExtractor
         IReadOnlyList<GapDescriptor> Gaps);
 
     private sealed record GapDescriptor(string Kind, string Message);
+    private sealed record MemberContext(
+        string Member,
+        string? OwnerType,
+        int StartLine,
+        int EndLine,
+        IReadOnlyDictionary<string, string> Signals);
     private sealed record PendingGap(string FilePath, int Line, string Kind, string Message);
 }
