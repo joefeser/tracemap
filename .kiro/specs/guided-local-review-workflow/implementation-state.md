@@ -1,20 +1,18 @@
 # Guided Local Review Workflow Implementation State
 
-Status: implementation-in-progress
+Status: implementation-complete; PR review in progress
 Issue: #666
-Branch: `codex/spec-guided-local-workflow`
+Branch: `codex/guided-local-version-package-probe`
 Base: `origin/dev`
 Base SHA: `d8cac83e` (`Document Angular and .NET interaction mapping (#673)`)
 
 ## Current Scope
 
-This is a specification-first slice. It defines the evidence gates for
-distribution selection, installed version/readiness output, guided local
-orchestration, output transactions, input-hash continuity, typed failure
-readback, and cross-platform validation.
-
-No product code, package metadata, release workflow, or public site content is
-changed in this slice.
+This slice implements the specification, selects the .NET tool as the v1 local
+distribution, and retains framework-dependent and self-contained archives as
+validated alternatives rather than the default. It adds installed
+version/readiness output, guided local orchestration, output transactions,
+input-hash continuity, typed failure readback, and cross-platform validation.
 
 ## Repository Findings
 
@@ -33,10 +31,10 @@ changed in this slice.
 
 ## Decisions
 
-- Do not choose .NET tool, archive, self-contained, or container distribution
-  until synthetic package smoke evidence satisfies the matrix.
-- Treat .NET tool as the leading hypothesis because it naturally supports a
-  `tracemap` command and upgrade/uninstall, but not as an approved result.
+- Select the .NET tool as the v1 local distribution after synthetic arm64 host
+  probes and the hosted Windows/macOS/Linux x64 matrix passed.
+- Retain framework-dependent and self-contained archives as supported
+  alternatives; do not select or publish a container distribution.
 - Keep orchestration thin and invoke shared producer services.
 - Keep portable paths relative and terminal-only absolute paths ephemeral.
 - Bind derivatives with input hashes and pre/post mutation checks.
@@ -52,8 +50,7 @@ Completed on 2026-08-13:
 - Spec structure/readback review — passed; no blocking or P1/P2 contract
   finding remained.
 
-Publication remains intentionally pending until GitHub confirms that #656 / PR
-#674 is merged into `dev`, or the owner explicitly authorizes parallel review.
+PR #675 is open against `dev` under the owner-authorized ordered roadmap.
 
 The first implementation slice also completed a macOS arm64 candidate probe:
 
@@ -102,12 +99,15 @@ Post-fix validation remained green: full .NET 1,525/1,525, focused
 local-review/path/Web Forms suites 59/59 on macOS, guided workflow 9/9 on
 Windows, targeted formatting, private-path guard, and diff check.
 
+Hosted x64 validation on PR #675 passed on `windows-latest`, `macos-latest`,
+and `ubuntu-latest`. Each host completed .NET-tool pack/install/guided
+run/update/uninstall plus framework-dependent and host-RID self-contained
+execution. One unrelated JVM integration assertion failed on the first adapter
+run; the single unchanged-head failed-job rerun passed.
+
 ## Deferred Work
 
-- Distribution probe implementation and selection.
-- Installed version/readiness implementation.
-- Guided command implementation.
-- x64 CI receipts and final distribution selection/publication.
 - #667 Web Forms static-explorer reader.
-- Hosted execution, uploads, telemetry export, automatic restore, signing,
+- Public package publication and signing policy.
+- Hosted execution, source uploads, telemetry export, automatic restore,
   self-update, and container publication.

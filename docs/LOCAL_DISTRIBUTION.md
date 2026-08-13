@@ -1,6 +1,7 @@
 # TraceMap Local Distribution Evidence
 
-Status: candidate evaluation; no public distribution is selected or published.
+Status: .NET tool selected for the v1 local distribution; no public package is
+published by this change.
 
 TraceMap must run outside a source checkout before it can claim a packaged
 local workflow. This record separates observed package behavior from proposed
@@ -11,14 +12,15 @@ publisher identity, authority, or authenticity.
 
 | Candidate | Runtime | Install / upgrade / remove | Offline shape | Native dependencies | Determinism boundary | Current evidence |
 |---|---|---|---|---|---|---|
-| .NET tool | Compatible .NET 10 SDK/runtime | Built-in `dotnet tool` lifecycle | Local NuGet source after package creation | Package contains the supported SQLite runtime assets | Tool payload files must be stable; the NuGet container carries generated relationship/core-property identifiers and therefore gets a per-build integrity hash | macOS arm64, Windows arm64, and Linux arm64 install/upgrade/guided-run/uninstall probes passed; x64 CI pending |
-| Framework-dependent archive | Compatible .NET 10 runtime | Extract, invoke with `dotnet`, remove directory | Copyable archive | Runtime assets must be retained in the archive | Archive construction and extracted payload require separate proof | macOS arm64, Windows arm64, and Linux arm64 version/readiness probes passed; x64 CI pending |
-| Self-contained archive | None beyond supported host | Extract, invoke native launcher, remove directory | Per-RID archive | One platform-specific SQLite runtime plus .NET runtime | Each RID requires independent content and host proof | `osx-arm64`, `win-arm64`, and `linux-arm64` version/readiness probes passed; x64 CI pending |
+| .NET tool | Compatible .NET 10 SDK/runtime | Built-in `dotnet tool` lifecycle | Local NuGet source after package creation | Package contains the supported SQLite runtime assets | Tool payload files must be stable; the NuGet container carries generated relationship/core-property identifiers and therefore gets a per-build integrity hash | Selected for v1 after macOS, Windows, and Linux arm64 probes plus hosted x64 install/upgrade/guided-run/uninstall validation passed |
+| Framework-dependent archive | Compatible .NET 10 runtime | Extract, invoke with `dotnet`, remove directory | Copyable archive | Runtime assets must be retained in the archive | Archive construction and extracted payload require separate proof | Validated alternative on macOS, Windows, and Linux arm64 plus hosted x64; not the v1 default |
+| Self-contained archive | None beyond supported host | Extract, invoke native launcher, remove directory | Per-RID archive | One platform-specific SQLite runtime plus .NET runtime | Each RID requires independent content and host proof | Validated alternative for arm64 and hosted x64 RIDs on macOS, Windows, and Linux; not the v1 default |
 | Offline container | Compatible container runtime | Load, run, remove image | OCI archive with no-network execution | Image-specific native assets | Image manifest/layers and mounted output require proof | Linux arm64 pinned-base, network-disabled, read-only version probe passed; scan/output mounting, publication, signing, and other platforms remain unverified |
 
-The .NET tool is the leading hypothesis because it provides a conventional
-`tracemap` command and explicit install, upgrade, and uninstall operations. It
-is not selected until the claimed Windows, macOS, and Linux probes pass.
+The .NET tool is the selected v1 local distribution because it provides a
+conventional `tracemap` command plus explicit install, update, and uninstall
+semantics, and the claimed Windows, macOS, and Linux probes passed. Selection
+does not publish, sign, or grant release approval to a package.
 
 Tool packaging is refused unless Git reports a clean source tree. The compiled
 version contract records `sourceState` as `clean`, `dirty`, or `unavailable` so
