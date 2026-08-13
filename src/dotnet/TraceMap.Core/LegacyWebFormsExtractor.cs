@@ -183,7 +183,11 @@ public static partial class LegacyWebFormsExtractor
             var masterPageValue = directiveAttributes.GetValueOrDefault("MasterPageFile");
             var webApplicationRoot = FindWebApplicationRoot(file.RelativePath, inventory);
             var masterPageReference = ResolveMarkupReferencePath(file.RelativePath, webApplicationRoot, masterPageValue);
-            var masterPageFile = ResolveInventoryPath(masterPageReference, inventoryPathIndex);
+            var resolvedMasterPageFile = ResolveInventoryPath(masterPageReference, inventoryPathIndex);
+            var masterPageFile = resolvedMasterPageFile is not null
+                && Path.GetExtension(resolvedMasterPageFile).Equals(".master", StringComparison.OrdinalIgnoreCase)
+                    ? resolvedMasterPageFile
+                    : null;
             var titleValue = directiveAttributes.GetValueOrDefault("Title");
             var titleHash = SafeDisplayMetadata(titleValue);
             var registrations = ParseUserControlRegistrations(file.RelativePath, webApplicationRoot, activeMarkup, source, inventoryPathIndex);
@@ -213,7 +217,12 @@ public static partial class LegacyWebFormsExtractor
             }
             else if (masterPageReference is not null && masterPageFile is null)
             {
-                initialGaps.Add(new WebFormsGap("MissingWebFormsMasterPage", "The declared master page is not present in the scan input.", LineAt(source, directive.Index)));
+                initialGaps.Add(new WebFormsGap(
+                    resolvedMasterPageFile is null ? "MissingWebFormsMasterPage" : "UnsupportedWebFormsMasterPageTarget",
+                    resolvedMasterPageFile is null
+                        ? "The declared master page is not present in the scan input."
+                        : "The MasterPageFile target is present but is not a supported .master markup surface.",
+                    LineAt(source, directive.Index)));
             }
 
             foreach (var registration in registrations.Where(item => item.SourceReference is null))
@@ -1054,7 +1063,7 @@ public static partial class LegacyWebFormsExtractor
         {
             "MalformedWebFormsDirective" or "UnreadableWebFormsMarkup" or "UnresolvedWebFormsPageType"
                 or "MissingWebFormsCodeBehind" or "UnsupportedWebFormsTitle" => RuleIds.LegacyWebFormsInventory,
-            "UnsupportedWebFormsMasterPageReference" or "MissingWebFormsMasterPage"
+            "UnsupportedWebFormsMasterPageReference" or "MissingWebFormsMasterPage" or "UnsupportedWebFormsMasterPageTarget"
                 or "UnsupportedWebFormsUserControlRegistration" or "MissingWebFormsUserControl"
                 or "UnresolvedWebFormsContentPlaceholder" or "UnresolvedWebFormsContentMaster"
                 or "UnresolvedWebFormsControlRegistration" or "AmbiguousWebFormsUserControlRegistration" => RuleIds.LegacyWebFormsComposition,
@@ -1287,16 +1296,29 @@ public static partial class LegacyWebFormsExtractor
     private static string FindWebApplicationRoot(string markupPath, IReadOnlyList<FileInventoryItem> inventory)
     {
         var markupDirectory = FileInventory.NormalizeRelativePath(Path.GetDirectoryName(markupPath) ?? ".");
-        var candidates = inventory
-            .Where(item => item.Kind == "Project"
-                || Path.GetFileName(item.RelativePath).Equals("Web.config", StringComparison.OrdinalIgnoreCase))
+        var projectCandidates = inventory
+            .Where(item => item.Kind == "Project")
             .Select(item => FileInventory.NormalizeRelativePath(Path.GetDirectoryName(item.RelativePath) ?? "."))
             .Where(directory => IsSameOrAncestor(directory, markupDirectory))
             .Distinct(StringComparer.Ordinal)
             .OrderByDescending(directory => directory.Length)
             .ThenBy(directory => directory, StringComparer.Ordinal)
             .ToArray();
-        return candidates.FirstOrDefault() ?? ".";
+        if (projectCandidates.Length > 0)
+        {
+            return projectCandidates[0];
+        }
+
+        var webConfigCandidates = inventory
+            .Where(item => Path.GetFileName(item.RelativePath).Equals("Web.config", StringComparison.OrdinalIgnoreCase))
+            .Select(item => FileInventory.NormalizeRelativePath(Path.GetDirectoryName(item.RelativePath) ?? "."))
+            .Where(directory => IsSameOrAncestor(directory, markupDirectory))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(directory => directory.Count(character => character == '/'))
+            .ThenBy(directory => directory.Length)
+            .ThenBy(directory => directory, StringComparer.Ordinal)
+            .ToArray();
+        return webConfigCandidates.FirstOrDefault() ?? ".";
     }
 
     private static bool IsSameOrAncestor(string candidate, string path)
@@ -1343,7 +1365,7 @@ public static partial class LegacyWebFormsExtractor
         var trimmed = value.Trim();
         return trimmed.Contains("<%", StringComparison.Ordinal)
             || trimmed.Contains("%>", StringComparison.Ordinal)
-            || trimmed.Contains('$', StringComparison.Ordinal)
+            || trimmed.Contains("$(", StringComparison.Ordinal)
             ? null
             : FactFactory.Hash(trimmed, 32);
     }
