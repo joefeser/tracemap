@@ -201,8 +201,16 @@ The .NET adapter emits WebForms-specific evidence for static event entry points:
 | `WebFormsEventBindingDeclared` | Records supported static event attributes and bounded named control subscriptions with explicit control/surface-to-handler direction. | `surfaceIdentity`, `controlIdentity`, `eventSourceIdentity`, `handlerSymbolId`, `bindingKind`, `eventName` |
 | `WebFormsDesignerControlDeclared` | Records designer partial-class control fields as supporting evidence. | `pageTypeName`, `fieldName`, `controlType` |
 | `WebFormsHandlerResolved` | Links event-source identities to scoped code-behind methods, preferring canonical semantic method IDs when proven. | `surfaceIdentity`, `controlIdentity`, `eventSourceIdentity`, `handlerSymbolId`, `sourceSymbolId`, `bindingFactId`, `resolutionKind` |
-| `WebFormsEventFlowProjected` | Projects resolved handlers to direct WCF, HTTP, SQL/query, config, or dependency-surface evidence. | `flowClassification`, `terminalSurfaceKind`, `terminalSurfaceNameHash`, `supportingFactIds`, `supportingEdgeIds`, `coverage` |
+| `WebFormsEventFlowProjected` | Projects resolved handlers to direct WCF, HTTP, SQL/query, config, or dependency-surface evidence. | `flowClassification`, `terminalSurfaceKind`, `terminalSurfaceNameHash`, `supportingFactIds`, `supportingEdgeIds`, `coverageLabel`, compatibility `coverage` |
 | `WebFormsLogicSignalDetected` | Emits bounded static logic or UI-boilerplate signals for handlers. | `handlerName`, `signalKind`, `staticLogicSignal`, `uiBoilerplateSignal` |
+
+The local-only `webforms-modernization-packet.v1` read model composes these
+facts and the existing `legacy-flow.v1` static paths from one immutable
+`index.sqlite`. It emits deterministic `webforms-modernization.json` and
+`webforms-modernization.md`. Structural candidates group only declared
+surface composition and require owner naming; they are not business-capability,
+parity, effort, architecture, runtime, or release conclusions. Missing coverage
+or provenance fails closed as an explicit packet gap.
 
 These facts are static evidence only. They do not prove runtime page lifecycle execution or order, rendering, control construction, postbacks, event firing, event bubbling, validation success, authorization, persistence, downstream execution, user reachability, service reachability, SQL execution, deployment, branch feasibility, or production usage. Lambda/dynamic subscriptions, unknown receivers, ambiguous controls or overloads, and cross-file partial handlers without exact semantic evidence remain explicit gaps. Page titles are hashed rather than stored as display text. Markup snippets, raw SQL, config values, raw URLs, local absolute paths, repository remotes, and private sample names must not appear in properties or reports.
 
