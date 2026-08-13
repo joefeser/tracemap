@@ -53,7 +53,7 @@ public static partial class LegacyWebFormsExtractor
             var pageFact = CreatePageFact(manifest, page);
             facts.Add(pageFact);
             var registrationFacts = new List<CodeFact>();
-            foreach (var registration in page.Registrations.Where(item => item.SourcePath is not null))
+            foreach (var registration in page.Registrations.Where(item => item.SourceReference is not null))
             {
                 var registrationFact = CreateUserControlRegistrationFact(manifest, page, registration);
                 facts.Add(registrationFact);
@@ -116,14 +116,11 @@ public static partial class LegacyWebFormsExtractor
 
     private static WebFormsContext BuildContext(string repoPath, IReadOnlyList<FileInventoryItem> inventory)
     {
-        var inventoryPaths = inventory
-            .Select(item => item.RelativePath)
-            .OrderBy(path => path, StringComparer.Ordinal)
-            .ToArray();
+        var inventoryPathIndex = CreateInventoryPathIndex(inventory);
         var pages = inventory
             .Where(item => item.Kind == "WebFormsMarkup")
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
-            .Select(item => ParseMarkupFile(repoPath, item, inventoryPaths))
+            .Select(item => ParseMarkupFile(repoPath, item, inventory, inventoryPathIndex))
             .ToArray();
         var linkedPaths = pages
             .Select(page => page.LinkedCodePath)
@@ -141,7 +138,11 @@ public static partial class LegacyWebFormsExtractor
         var allDesigners = inventory
             .Where(item => item.Kind == "WebFormsDesigner")
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
-            .SelectMany(item => ParseDesignerFile(repoPath, item.RelativePath, MarkupPathForDesigner(item.RelativePath)))
+            .SelectMany(item => ParseDesignerFile(
+                repoPath,
+                item.RelativePath,
+                ResolveInventoryPath(MarkupPathForDesigner(item.RelativePath), inventoryPathIndex)
+                    ?? MarkupPathForDesigner(item.RelativePath)))
             .ToArray();
         var designers = allDesigners
             .Where(field => pages.Any(page => PageTypeMatches(page.PageTypeName, field.PageTypeName)))
@@ -156,7 +157,8 @@ public static partial class LegacyWebFormsExtractor
     private static WebFormsPage ParseMarkupFile(
         string repoPath,
         FileInventoryItem file,
-        IReadOnlyList<string> inventoryPaths)
+        IReadOnlyList<FileInventoryItem> inventory,
+        InventoryPathIndex inventoryPathIndex)
     {
         var fullPath = Path.Combine(repoPath, file.RelativePath);
         try
@@ -176,14 +178,15 @@ public static partial class LegacyWebFormsExtractor
             var codeBehind = SafeMarkupPath(directiveAttributes.GetValueOrDefault("CodeBehind"));
             var codeFile = SafeMarkupPath(directiveAttributes.GetValueOrDefault("CodeFile"));
             var linkedCodeReference = ResolveLinkedCodePath(file.RelativePath, codeBehind ?? codeFile);
-            var linkedCodePath = ResolveInventoryPath(linkedCodeReference, inventoryPaths);
+            var linkedCodePath = ResolveInventoryPath(linkedCodeReference, inventoryPathIndex);
             var autoEventWireup = ParseAutoEventWireup(directiveAttributes.GetValueOrDefault("AutoEventWireup"));
             var masterPageValue = directiveAttributes.GetValueOrDefault("MasterPageFile");
-            var masterPageReference = ResolveMarkupReferencePath(file.RelativePath, masterPageValue);
-            var masterPageFile = ResolveInventoryPath(masterPageReference, inventoryPaths);
+            var webApplicationRoot = FindWebApplicationRoot(file.RelativePath, inventory);
+            var masterPageReference = ResolveMarkupReferencePath(file.RelativePath, webApplicationRoot, masterPageValue);
+            var masterPageFile = ResolveInventoryPath(masterPageReference, inventoryPathIndex);
             var titleValue = directiveAttributes.GetValueOrDefault("Title");
             var titleHash = SafeDisplayMetadata(titleValue);
-            var registrations = ParseUserControlRegistrations(file.RelativePath, activeMarkup, source, inventoryPaths);
+            var registrations = ParseUserControlRegistrations(file.RelativePath, webApplicationRoot, activeMarkup, source, inventoryPathIndex);
             var initialGaps = new List<WebFormsGap>();
             if (!directive.Success)
             {
@@ -233,6 +236,7 @@ public static partial class LegacyWebFormsExtractor
                 masterPageFile,
                 linkedCodePath,
                 autoEventWireup,
+                !string.IsNullOrWhiteSpace(titleValue),
                 titleHash,
                 directive.Success ? LineAt(source, directive.Index) : 1,
                 registrations,
@@ -325,7 +329,7 @@ public static partial class LegacyWebFormsExtractor
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return new WebFormsPage(file.RelativePath, MarkupKind(file.RelativePath), Path.GetFileNameWithoutExtension(file.RelativePath), null, null, null, ResolveLinkedCodePath(file.RelativePath, null), null, null, 1, [], [], [], [new WebFormsGap("UnreadableWebFormsMarkup", "Unable to read WebForms markup for extraction.", 1)]);
+            return new WebFormsPage(file.RelativePath, MarkupKind(file.RelativePath), Path.GetFileNameWithoutExtension(file.RelativePath), null, null, null, ResolveLinkedCodePath(file.RelativePath, null), null, false, null, 1, [], [], [], [new WebFormsGap("UnreadableWebFormsMarkup", "Unable to read WebForms markup for extraction.", 1)]);
         }
     }
 
@@ -502,8 +506,13 @@ public static partial class LegacyWebFormsExtractor
     private static IEnumerable<WebFormsMethod> CandidateMethods(WebFormsPage page, string handlerName, WebFormsContext context)
     {
         var linkedCodePath = page.LinkedCodePath;
+        if (linkedCodePath is null)
+        {
+            return [];
+        }
+
         return context.CodeFiles
-            .Where(file => linkedCodePath is null || file.FilePath.Equals(linkedCodePath, StringComparison.Ordinal))
+            .Where(file => file.FilePath.Equals(linkedCodePath, StringComparison.Ordinal))
             .SelectMany(file => file.Methods)
             .Where(method => method.MethodName.Equals(handlerName, StringComparison.Ordinal))
             .Where(method => PageTypeMatches(page.PageTypeName, method.PageTypeName))
@@ -528,7 +537,7 @@ public static partial class LegacyWebFormsExtractor
         AddOptional(properties, "linkedCodePath", page.LinkedCodePath);
         AddOptional(properties, "masterPageFile", page.MasterPageFile);
         AddOptional(properties, "titleHash", page.TitleHash);
-        if (page.TitleHash is not null)
+        if (page.TitlePresent)
         {
             properties["titlePresent"] = "True";
         }
@@ -595,6 +604,10 @@ public static partial class LegacyWebFormsExtractor
             ["ruleLimitations"] = "A static Register directive does not prove runtime loading, control construction, or use by a rendered page."
         };
         AddOptional(properties, "sourcePath", registration.SourcePath);
+        if (registration.SourcePath is null)
+        {
+            AddOptional(properties, "declaredSourcePath", registration.SourceReference);
+        }
         return FactFactory.Create(
             manifest,
             FactTypes.WebFormsUserControlRegistered,
@@ -1200,9 +1213,10 @@ public static partial class LegacyWebFormsExtractor
 
     private static IReadOnlyList<WebFormsUserControlRegistration> ParseUserControlRegistrations(
         string markupFilePath,
+        string webApplicationRoot,
         string text,
         SourceText source,
-        IReadOnlyList<string> inventoryPaths)
+        InventoryPathIndex inventoryPathIndex)
     {
         return RegisterDirectiveRegex()
             .Matches(text)
@@ -1210,12 +1224,12 @@ public static partial class LegacyWebFormsExtractor
             .Select(match =>
             {
                 var attributes = ParseAttributes(match.Groups["attrs"].Value);
-                var sourceReference = ResolveMarkupReferencePath(markupFilePath, attributes.GetValueOrDefault("Src"));
+                var sourceReference = ResolveMarkupReferencePath(markupFilePath, webApplicationRoot, attributes.GetValueOrDefault("Src"));
                 return new WebFormsUserControlRegistration(
                     SafeIdentifier(attributes.GetValueOrDefault("TagPrefix")) ?? "unknown",
                     SafeIdentifier(attributes.GetValueOrDefault("TagName")) ?? "unknown",
                     sourceReference,
-                    ResolveInventoryPath(sourceReference, inventoryPaths),
+                    ResolveInventoryPath(sourceReference, inventoryPathIndex),
                     LineAt(source, match.Index),
                     FactFactory.Hash(match.Value, 32));
             })
@@ -1231,24 +1245,38 @@ public static partial class LegacyWebFormsExtractor
             new string(match.Value.Select(character => character is '\r' or '\n' ? character : ' ').ToArray()));
     }
 
-    private static string? ResolveInventoryPath(string? referencePath, IReadOnlyList<string> inventoryPaths)
+    private static InventoryPathIndex CreateInventoryPathIndex(IReadOnlyList<FileInventoryItem> inventory)
+    {
+        var exact = inventory
+            .Select(item => item.RelativePath)
+            .Distinct(StringComparer.Ordinal)
+            .ToDictionary(path => path, path => path, StringComparer.Ordinal);
+        var caseInsensitive = inventory
+            .Select(item => item.RelativePath)
+            .Distinct(StringComparer.Ordinal)
+            .GroupBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Take(2).Count() == 1 ? group.First() : null,
+                StringComparer.OrdinalIgnoreCase);
+        return new InventoryPathIndex(exact, caseInsensitive);
+    }
+
+    private static string? ResolveInventoryPath(string? referencePath, InventoryPathIndex inventoryPathIndex)
     {
         if (referencePath is null)
         {
             return null;
         }
 
-        var exact = inventoryPaths.FirstOrDefault(path => path.Equals(referencePath, StringComparison.Ordinal));
-        if (exact is not null)
+        if (inventoryPathIndex.Exact.TryGetValue(referencePath, out var exact))
         {
             return exact;
         }
 
-        var caseInsensitive = inventoryPaths
-            .Where(path => path.Equals(referencePath, StringComparison.OrdinalIgnoreCase))
-            .Take(2)
-            .ToArray();
-        return caseInsensitive.Length == 1 ? caseInsensitive[0] : null;
+        return inventoryPathIndex.CaseInsensitive.TryGetValue(referencePath, out var caseInsensitive)
+            ? caseInsensitive
+            : null;
     }
 
     private static string RegistrationKey(string tagPrefix, string tagName)
@@ -1256,7 +1284,29 @@ public static partial class LegacyWebFormsExtractor
         return $"{tagPrefix}|{tagName}";
     }
 
-    private static string? ResolveMarkupReferencePath(string markupPath, string? value)
+    private static string FindWebApplicationRoot(string markupPath, IReadOnlyList<FileInventoryItem> inventory)
+    {
+        var markupDirectory = FileInventory.NormalizeRelativePath(Path.GetDirectoryName(markupPath) ?? ".");
+        var candidates = inventory
+            .Where(item => item.Kind == "Project"
+                || Path.GetFileName(item.RelativePath).Equals("Web.config", StringComparison.OrdinalIgnoreCase))
+            .Select(item => FileInventory.NormalizeRelativePath(Path.GetDirectoryName(item.RelativePath) ?? "."))
+            .Where(directory => IsSameOrAncestor(directory, markupDirectory))
+            .Distinct(StringComparer.Ordinal)
+            .OrderByDescending(directory => directory.Length)
+            .ThenBy(directory => directory, StringComparer.Ordinal)
+            .ToArray();
+        return candidates.FirstOrDefault() ?? ".";
+    }
+
+    private static bool IsSameOrAncestor(string candidate, string path)
+    {
+        return candidate == "."
+            || path.Equals(candidate, StringComparison.Ordinal)
+            || path.StartsWith(candidate + "/", StringComparison.Ordinal);
+    }
+
+    private static string? ResolveMarkupReferencePath(string markupPath, string webApplicationRoot, string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
@@ -1273,7 +1323,9 @@ public static partial class LegacyWebFormsExtractor
 
         if (rootedAtScan)
         {
-            return safePath;
+            return webApplicationRoot == "."
+                ? safePath
+                : FileInventory.NormalizeRelativePath($"{webApplicationRoot}/{safePath}");
         }
 
         var directory = FileInventory.NormalizeRelativePath(Path.GetDirectoryName(markupPath) ?? ".");
@@ -1432,6 +1484,7 @@ public static partial class LegacyWebFormsExtractor
         string? MasterPageFile,
         string? LinkedCodePath,
         bool? AutoEventWireup,
+        bool TitlePresent,
         string? TitleHash,
         int DirectiveLine,
         IReadOnlyList<WebFormsUserControlRegistration> Registrations,
@@ -1457,6 +1510,10 @@ public static partial class LegacyWebFormsExtractor
         string? SourcePath,
         int Line,
         string? SnippetHash);
+
+    private sealed record InventoryPathIndex(
+        IReadOnlyDictionary<string, string> Exact,
+        IReadOnlyDictionary<string, string?> CaseInsensitive);
 
     private sealed record WebFormsBinding(string ControlType, string ControlId, string EventName, string HandlerName, int Line, string? SnippetHash);
 
