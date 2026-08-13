@@ -363,6 +363,7 @@ public static class LegacyBatchDataMovementExtractor
             var member = method.Identifier.ValueText;
             var ownerType = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault() is { } type ? QualifiedTypeName(type) : null;
             var signals = MemberSignals(method);
+            EnrichExistingObservations(item.RelativePath, method, member, ownerType, signals, observations);
             if (member == "Main" && method.Modifiers.Any(modifier => modifier.IsKind(SyntaxKind.StaticKeyword)))
             {
                 observations.Add(SyntaxObservation(item.RelativePath, method.Identifier, "console-job", "static-main-method", "entry", member, ownerType, signals));
@@ -442,7 +443,7 @@ public static class LegacyBatchDataMovementExtractor
         IReadOnlyDictionary<string, string> signals,
         List<BatchObservation> observations)
     {
-        var commandVariables = method.DescendantNodes().OfType<VariableDeclarationSyntax>()
+        var declaredCommandVariables = method.DescendantNodes().OfType<VariableDeclarationSyntax>()
             .Where(declaration => IsSupportedCommandType(declaration.Type.ToString()))
             .SelectMany(declaration => declaration.Variables)
             .Select(variable => variable.Identifier.ValueText)
@@ -452,17 +453,18 @@ public static class LegacyBatchDataMovementExtractor
             if (variable.Initializer?.Value is ObjectCreationExpressionSyntax creation
                 && IsSupportedCommandType(creation.Type.ToString()))
             {
-                commandVariables.Add(variable.Identifier.ValueText);
+                declaredCommandVariables.Add(variable.Identifier.ValueText);
             }
         }
+        var storedProcedureVariables = new HashSet<string>(StringComparer.Ordinal);
         foreach (var assignment in method.DescendantNodes().OfType<AssignmentExpressionSyntax>())
         {
             if (assignment.Left is MemberAccessExpressionSyntax left
                 && left.Name.Identifier.ValueText == "CommandType"
-                && commandVariables.Contains(left.Expression.ToString())
+                && declaredCommandVariables.Contains(left.Expression.ToString())
                 && assignment.Right.ToString().EndsWith("CommandType.StoredProcedure", StringComparison.Ordinal))
             {
-                commandVariables.Add(left.Expression.ToString());
+                storedProcedureVariables.Add(left.Expression.ToString());
             }
         }
 
@@ -474,7 +476,7 @@ public static class LegacyBatchDataMovementExtractor
                     && assignment.Right.ToString().EndsWith("CommandType.StoredProcedure", StringComparison.Ordinal)) == true
                 && creation.Parent is EqualsValueClauseSyntax { Parent: VariableDeclaratorSyntax variable })
             {
-                commandVariables.Add(variable.Identifier.ValueText);
+                storedProcedureVariables.Add(variable.Identifier.ValueText);
             }
         }
 
@@ -482,7 +484,7 @@ public static class LegacyBatchDataMovementExtractor
         {
             if (!StoredProcedureExecuteMethods.Contains(InvocationName(invocation))
                 || invocation.Expression is not MemberAccessExpressionSyntax access
-                || !commandVariables.Contains(access.Expression.ToString()))
+                || !storedProcedureVariables.Contains(access.Expression.ToString()))
             {
                 continue;
             }
@@ -509,6 +511,14 @@ public static class LegacyBatchDataMovementExtractor
             .SelectMany(declaration => declaration.Variables)
             .Select(variable => variable.Identifier.ValueText)
             .ToHashSet(StringComparer.Ordinal);
+        foreach (var variable in method.DescendantNodes().OfType<VariableDeclaratorSyntax>())
+        {
+            if (variable.Initializer?.Value is ObjectCreationExpressionSyntax creation
+                && IsSupportedBulkCopyType(creation.Type.ToString()))
+            {
+                variables.Add(variable.Identifier.ValueText);
+            }
+        }
 
         foreach (var invocation in method.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
@@ -534,6 +544,42 @@ public static class LegacyBatchDataMovementExtractor
         if (invocationNames.Overlaps(CheckpointMethods)) properties["checkpointDeclaration"] = "named-call";
         if (invocationNames.Overlaps(TelemetryMethods)) properties["telemetryDeclaration"] = "named-call";
         return properties;
+    }
+
+    private static void EnrichExistingObservations(
+        string filePath,
+        MethodDeclarationSyntax method,
+        string member,
+        string? ownerType,
+        IReadOnlyDictionary<string, string> signals,
+        List<BatchObservation> observations)
+    {
+        var span = method.SyntaxTree.GetLineSpan(method.Span);
+        var startLine = span.StartLinePosition.Line + 1;
+        var endLine = Math.Max(startLine, span.EndLinePosition.Line + 1);
+        for (var index = 0; index < observations.Count; index++)
+        {
+            var observation = observations[index];
+            if (observation.Evidence.FilePath != filePath
+                || observation.Evidence.StartLine < startLine
+                || observation.Evidence.EndLine > endLine)
+            {
+                continue;
+            }
+
+            var properties = CopyProperties(observation.Properties);
+            foreach (var (key, value) in signals)
+            {
+                properties[key] = value;
+            }
+
+            observations[index] = observation with
+            {
+                OwnerMember = observation.OwnerMember ?? member,
+                OwnerType = observation.OwnerType ?? ownerType,
+                Properties = properties
+            };
+        }
     }
 
     private static void ClassifyScheduleReference(
