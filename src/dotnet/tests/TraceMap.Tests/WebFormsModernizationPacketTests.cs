@@ -298,6 +298,32 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Equal(2, packet.DownstreamBoundaries.Select(boundary => boundary.TerminalEvidenceId).Distinct(StringComparer.Ordinal).Count());
         Assert.Contains(packet.DownstreamBoundaries, boundary => boundary.TerminalEvidenceId == firstFlow.FactId);
         Assert.Contains(packet.DownstreamBoundaries, boundary => boundary.TerminalEvidenceId == secondFlow.FactId);
+
+        var firstRoot = PathNode("root:first", "symbol", "method:first", manifest, symbolId: "method:first");
+        var secondRoot = PathNode("root:second", "symbol", "method:second", manifest, symbolId: "method:second");
+        var firstProjection = PathNode(
+            "projection:first", "surface", "http-client:hash:shared-terminal-hash", manifest,
+            combinedFactId: firstFlow.FactId, ruleId: RuleIds.LegacyWebFormsEventFlow,
+            evidenceTier: EvidenceTiers.Tier2Structural, filePath: "Pages/First.aspx.cs", startLine: 21, endLine: 21,
+            surfaceKind: "http-client", sourceKind: "projection", shapeHash: "shared-terminal-hash");
+        var secondProjection = PathNode(
+            "projection:second", "surface", "http-client:hash:shared-terminal-hash", manifest,
+            combinedFactId: secondFlow.FactId, ruleId: RuleIds.LegacyWebFormsEventFlow,
+            evidenceTier: EvidenceTiers.Tier2Structural, filePath: "Pages/Second.aspx.cs", startLine: 21, endLine: 21,
+            surfaceKind: "http-client", sourceKind: "projection", shapeHash: "shared-terminal-hash");
+        var firstPath = LegacyPath(
+            "path:first", firstRoot, firstProjection, bindingId: firstBinding.FactId, handlerId: firstHandler.FactId);
+        var secondPath = LegacyPath(
+            "path:second", secondRoot, secondProjection, bindingId: secondBinding.FactId, handlerId: secondHandler.FactId);
+
+        var projectionPacket = WebFormsModernizationPacketReporter.Build(
+            snapshot,
+            LegacyFlow(firstPath, secondPath),
+            new("unused", "unused"));
+
+        Assert.Equal(2, projectionPacket.DownstreamBoundaries.Count);
+        Assert.Single(projectionPacket.DownstreamBoundaries.Select(boundary => boundary.BoundaryTargetId).Distinct(StringComparer.Ordinal));
+        Assert.Equal(2, projectionPacket.DownstreamBoundaries.Select(boundary => boundary.TerminalEvidenceId).Distinct(StringComparer.Ordinal).Count());
     }
 
     [Fact]
@@ -568,10 +594,31 @@ public sealed class WebFormsModernizationPacketTests
         string? filePath = null,
         int? startLine = null,
         int? endLine = null,
-        string? surfaceKind = null) => new(
+        string? surfaceKind = null,
+        string? sourceKind = null,
+        string? shapeHash = null) => new(
             nodeId, nodeKind, displayName, "fixture", "fixture", manifest.ScanId, manifest.CommitSha,
             symbolId, combinedFactId, ruleId, evidenceTier, filePath, startLine, endLine, surfaceKind,
-            null, null, null, null, null, null, null, null, null, null, null, null, null);
+            null, null, null, null, null, null, sourceKind, shapeHash, null, null, null, null, null);
+
+    private static CombinedPath LegacyPath(
+        string pathId,
+        CombinedPathNode root,
+        CombinedPathNode terminal,
+        string bindingId,
+        string handlerId)
+    {
+        var edge = new CombinedPathEdge(
+            $"edge:{pathId}", "webforms-event-flow-projection", root.NodeId, terminal.NodeId,
+            CombinedDependencyPathClassifications.ProbableStaticPath,
+            RuleIds.LegacyFlowStaticTraversal,
+            EvidenceTiers.Tier2Structural,
+            [bindingId, handlerId], [], root.FilePath ?? "Pages/Default.aspx.cs", root.StartLine ?? 1, root.EndLine ?? 1);
+        return new(
+            pathId, CombinedDependencyPathClassifications.ProbableStaticPath, "Medium", 1,
+            root.NodeId, terminal.NodeId, [root, terminal], [edge],
+            [bindingId, handlerId], [edge.EdgeId], []);
+    }
 
     private static string Hash(string path) => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
 }
