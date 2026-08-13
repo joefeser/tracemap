@@ -59,10 +59,10 @@ public sealed class LegacyBatchDataMovementExtractorTests
 
         var manifest = Manifest();
         var inventory = FileInventory.Collect(repo);
-        var config = Fact(manifest, FactTypes.ConfigKeyDeclared, RuleIds.ConfigKey, "Web.config", 2, "ArchiveSchedule", "ArchiveSchedule",
-            new() { ["keyPath"] = "ArchiveSchedule" });
-        var integrationConfig = Fact(manifest, FactTypes.ConfigKeyDeclared, RuleIds.ConfigKey, "Web.config", 3, "QueueEndpoint", "QueueEndpoint",
-            new() { ["keyPath"] = "QueueEndpoint" });
+        var config = Fact(manifest, FactTypes.ConfigKeyDeclared, RuleIds.ConfigKey, "src/Web.config", 2, "ArchiveSchedule", "ArchiveSchedule",
+            new() { ["keyPath"] = "ArchiveSchedule" }, null);
+        var integrationConfig = Fact(manifest, FactTypes.ConfigKeyDeclared, RuleIds.ConfigKey, "src/Web.config", 3, "QueueEndpoint", "QueueEndpoint",
+            new() { ["keyPath"] = "QueueEndpoint" }, null);
         var message = Fact(manifest, FactTypes.MessagePublisherSurface, RuleIds.MessageSurfacePublish, "Batch.cs", 10, "Run", "queue-hash",
             new() { ["containingMethod"] = "Run", ["containingType"] = "Sample.BatchRunner", ["frameworkFamily"] = "queue-client", ["operationDirection"] = "publish", ["surfaceKind"] = "message-queue" });
         var database = Fact(manifest, FactTypes.DatabaseOperationCandidate, RuleIds.DatabaseOperationCallPattern, "Batch.cs", 10, "global::Sample.BatchRunner.Run()", "ExecuteNonQuery",
@@ -252,8 +252,7 @@ public sealed class LegacyBatchDataMovementExtractorTests
             {
                 public void Run()
                 {
-                    SqlCommand command = new();
-                    command.CommandType = CommandType.StoredProcedure;
+                    SqlCommand command = new() { CommandType = CommandType.StoredProcedure };
                     command.ExecuteNonQuery();
                 }
             }
@@ -388,7 +387,7 @@ public sealed class LegacyBatchDataMovementExtractorTests
         string source,
         string target,
         SortedDictionary<string, string> properties,
-        string projectPath = "src/Legacy.csproj") =>
+        string? projectPath = "src/Legacy.csproj") =>
         FactFactory.Create(
             manifest,
             factType,

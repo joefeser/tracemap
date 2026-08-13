@@ -220,7 +220,8 @@ public static class WebFormsModernizationPacketReporter
     };
     private static readonly HashSet<string> BatchMechanisms = new(StringComparer.Ordinal)
     {
-        "command-type-stored-procedure", "compiler-resolved-file-system-watcher", "compiler-resolved-sql-bulk-copy",
+        "command-type-stored-procedure", "compiler-resolved-file-system-watcher", "compiler-resolved-hangfire-recurring-job",
+        "compiler-resolved-quartz-job-type", "compiler-resolved-service-base-type", "compiler-resolved-sql-bulk-copy",
         "compiler-resolved-system-io-call", "config-key-shape", "declared-sql-bulk-copy-variable", "existing-message-surface",
         "hangfire-recurring-job", "qualified-file-system-watcher", "qualified-system-io-call", "qualified-timer-construction",
         "quartz-job-type", "service-base-type", "ssis-package-file", "static-main-method", "timer-trigger-attribute"
