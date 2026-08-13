@@ -37,6 +37,7 @@ public static class TraceMapCommand
                 "scan" => ScanHelp(),
                 "report" => ReportHelp(),
                 "database-design-review" => DatabaseDesignReviewHelp(),
+                "webforms-modernization" => WebFormsModernizationHelp(),
                 "reduce" => ReduceHelp(),
                 "flow" => FlowHelp(),
                 "relate" => RelateHelp(),
@@ -63,7 +64,7 @@ public static class TraceMapCommand
                 "explorer" => ExplorerHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "report" or "database-design-review" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
+            return command is "scan" or "report" or "database-design-review" or "webforms-modernization" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
         }
 
         using var commandOperation = TraceMapDiagnostics.StartCommand(command);
@@ -74,6 +75,7 @@ public static class TraceMapCommand
                 "scan" => await RunScanAsync(rest, output, error, cancellationToken),
                 "report" => await RunReportAsync(rest, output, error, cancellationToken),
                 "database-design-review" => await RunDatabaseDesignReviewAsync(rest, output, error, cancellationToken),
+                "webforms-modernization" => await RunWebFormsModernizationAsync(rest, output, error, cancellationToken),
                 "reduce" => await RunReduceAsync(rest, output, error, cancellationToken),
                 "flow" => await RunFlowAsync(rest, output, error, cancellationToken),
                 "relate" => await RunRelateAsync(rest, output, error, cancellationToken),
@@ -352,6 +354,49 @@ public static class TraceMapCommand
         await output.WriteLineAsync($"Query references: {result.Report.Summary.QueryReferenceCount}");
         await output.WriteLineAsync($"Route references: {result.Report.Summary.RouteReferenceCount}");
         await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
+        return 0;
+    }
+
+    private static async Task<int> RunWebFormsModernizationAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        var values = ParseOptions(args);
+        string[] supportedOptions =
+        [
+            "--index", "--out", "--max-surfaces", "--max-event-chains", "--max-candidates",
+            "--max-gaps", "--max-depth", "--max-paths"
+        ];
+        var unknownOptions = values.Keys.Except(supportedOptions, StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        if (unknownOptions.Length > 0)
+        {
+            await error.WriteLineAsync($"error: unsupported webforms-modernization option(s): {string.Join(", ", unknownOptions)}.");
+            return 1;
+        }
+        if (!values.TryGetValue("--index", out var indexPath) || string.IsNullOrWhiteSpace(indexPath))
+        {
+            await error.WriteLineAsync("error: webforms-modernization requires --index <index.sqlite>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: webforms-modernization requires --out <directory>.");
+            return 1;
+        }
+
+        var result = await WebFormsModernizationPacketReporter.WriteAsync(new(
+            indexPath,
+            outputPath,
+            ParsePositiveInt(values, "--max-surfaces", 1_000),
+            ParsePositiveInt(values, "--max-event-chains", 1_000),
+            ParsePositiveInt(values, "--max-candidates", 1_000),
+            ParsePositiveInt(values, "--max-gaps", 1_000),
+            ParsePositiveInt(values, "--max-depth", 8),
+            ParsePositiveInt(values, "--max-paths", 1_000)), cancellationToken);
+        await output.WriteLineAsync($"TraceMap Web Forms modernization packet completed: {result.JsonPath}");
+        await output.WriteLineAsync($"Coverage: {result.Packet.Coverage}");
+        await output.WriteLineAsync($"Surfaces: {result.Packet.Summary.SurfaceCount}");
+        await output.WriteLineAsync($"Event chains: {result.Packet.Summary.EventChainCount}");
+        await output.WriteLineAsync($"Gaps: {result.Packet.Summary.GapCount}");
         return 0;
     }
 
@@ -2123,6 +2168,8 @@ public static class TraceMapCommand
         Dictionary<string, List<string>> values,
         HashSet<string> flags)
     {
+        public IEnumerable<string> Keys => values.Keys.Concat(flags);
+
         public bool TryGetValue(string key, out string? value)
         {
             if (values.TryGetValue(key, out var list) && list.Count > 0)
@@ -2172,6 +2219,7 @@ public static class TraceMapCommand
               tracemap scan --repo <path> --out <path>
               tracemap report --index <path> --out <path>
               tracemap database-design-review --index <combined.sqlite> --out <path>
+              tracemap webforms-modernization --index <index.sqlite> --out <directory>
               tracemap reduce --index <path> --contract-delta <path> --out <path>
               tracemap flow --index <path> --symbol <symbol-or-fragment> --out <path>
               tracemap relate --index <path> --symbol <symbol-or-fragment> --out <path>
@@ -2199,6 +2247,7 @@ public static class TraceMapCommand
               scan      Inventory a repository and emit TraceMap artifacts.
               report    Generate a combined dependency report from a combined index.
               database-design-review Compose existing PostgreSQL design, query, and route evidence.
+              webforms-modernization Compose existing Web Forms evidence into a local modernization packet.
               reduce    Reduce a contract delta against an index.
               flow      Trace deterministic parameter-forwarding paths.
               relate    Trace deterministic symbol relationship paths.
@@ -2305,6 +2354,33 @@ public static class TraceMapCommand
               Read-side composition only. No database connection, SQL execution,
               migration execution, runtime reachability claim, or release approval.
               Single-index input reports route-path coverage as unavailable.
+            """;
+    }
+
+    private static string WebFormsModernizationHelp()
+    {
+        return """
+            Usage:
+              tracemap webforms-modernization --index <index.sqlite> --out <directory> [bounds]
+
+            Required:
+              --index <path>             One immutable TraceMap scan index.
+              --out <directory>          New output directory.
+
+            Optional:
+              --max-surfaces <n>         Maximum surface rows (default 1000).
+              --max-event-chains <n>     Maximum event chains (default 1000).
+              --max-candidates <n>       Maximum structural candidates (default 1000).
+              --max-gaps <n>             Maximum gap rows (default 1000).
+              --max-depth <n>            Legacy static-flow traversal depth (default 8).
+              --max-paths <n>            Legacy static-flow path limit (default 1000).
+
+            Outputs:
+              webforms-modernization.json and webforms-modernization.md
+
+            Boundaries:
+              Local-only, single-snapshot static evidence composition. No runtime,
+              business-capability, parity, migration-estimate, architecture, or release claim.
             """;
     }
 

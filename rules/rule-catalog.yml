@@ -2106,6 +2106,19 @@ rules:
       - UI-boilerplate signals are lower-strength syntax evidence and do not prove that a handler is safe, irrelevant, or free of backend effects.
       - Generated code, partial methods, reflection, dynamic dispatch, branch feasibility, and indirect helper calls can hide or dilute signals.
 
+  - id: legacy.webforms.modernization-packet.v1
+    name: Web Forms modernization evidence packet composition
+    description: Composes one immutable TraceMap snapshot's existing Web Forms and legacy-flow evidence into deterministic local-only JSON and Markdown modernization inventory packets.
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - webforms-modernization-packet.v1
+      - AnalysisGap
+    limitations:
+      - Packet rows preserve upstream evidence and deterministic structural connectivity; they do not add extractor conclusions or prove runtime reachability, event firing, postback behavior, validation, authorization, persistence, production usage, or complete workflow coverage.
+      - Structural slice candidates do not infer business capabilities, parity, migration scope, effort, cloud readiness, target architecture, test completeness, security approval, release approval, or safety to change; owner naming and confirmation remain required.
+      - Missing coverage labels, source identity mismatch, unsupported evidence, missing handlers or terminals, reduced scans, and deterministic traversal or output limits remain explicit gaps rather than clean-absence claims.
+      - The local-only packet omits snippets, raw SQL, configuration values, URLs, connection strings, credentials, source values, repository remotes, and absolute local paths.
+
   - id: legacy.winforms.inventory.v1
     name: Legacy WinForms file and surface inventory
     description: Inventories static WinForms form, user-control, control, component, application-context, designer, startup, and linked resource surface evidence from checked-in files.
