@@ -13,9 +13,9 @@
 
 - [ ] 1. Validate distribution candidates. Requirements: 1, 8, 10.
   - [x] Add a committed candidate matrix with pass/fail evidence and explicit host claims.
-  - [ ] Build synthetic .NET tool, framework-dependent archive, self-contained archive, and offline/container probes where the host supports them.
-  - [ ] Prove install/run/remove outside the source checkout.
-  - [ ] Inspect package/archive contents and native dependencies.
+  - [x] Build synthetic .NET tool, framework-dependent archive, self-contained archive, and offline/container probes where the host supports them.
+  - [x] Prove install/run/remove outside the source checkout.
+  - [x] Inspect package/archive contents and native dependencies.
   - [ ] Select one v1 distribution only after the gates pass; otherwise retain source-checkout runbooks.
 
 - [x] 2. Add installed version/readiness output. Requirements: 2, 8, 9.
@@ -47,19 +47,19 @@
   - [x] Add closed outcomes, next actions, exit codes, and failure tests.
 
 - [ ] 6. Package and document the selected distribution. Requirements: 1, 2, 8.
-  - [ ] Add reproducible package metadata and version provenance.
+  - [x] Add reproducible package metadata and version provenance.
   - [ ] Add Windows, macOS, and Linux install/upgrade/uninstall instructions for proven hosts.
-  - [ ] Add offline installation guidance without security-control bypasses.
-  - [ ] Document integrity versus authenticity limitations.
+  - [x] Add offline installation guidance without security-control bypasses.
+  - [x] Document integrity versus authenticity limitations.
 
 - [ ] 7. Validate end to end. Requirements: 9, 10.
   - [x] Run focused package/version/workflow tests.
   - [x] Run synthetic Web Forms standalone-versus-guided parity.
   - [ ] Run claimed-host package smoke tests.
-  - [ ] Run `dotnet build src/dotnet/TraceMap.sln`.
-  - [ ] Run `dotnet test src/dotnet/TraceMap.sln`.
-  - [ ] Run `./scripts/check-private-paths.sh`.
-  - [ ] Run `git diff --check`.
+  - [x] Run `dotnet build src/dotnet/TraceMap.sln`.
+  - [x] Run `dotnet test src/dotnet/TraceMap.sln`.
+  - [x] Run `./scripts/check-private-paths.sh`.
+  - [x] Run `git diff --check`.
 
 ## Recommended PR Slices
 

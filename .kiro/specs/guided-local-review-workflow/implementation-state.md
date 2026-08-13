@@ -89,16 +89,21 @@ The guided workflow implementation now provides:
   `sourceState` in version output.
 
 Focused guided workflow plus version tests: 16/16 passed. Full .NET suite:
-1,525/1,525 passed. A new clean-source
-package smoke is required after this implementation commit; the dirty-tree
-pack attempt failed as designed with `TraceMapToolPackageRequiresCleanSource`.
+1,525/1,525 passed. Clean-source package smoke passed on macOS arm64, Windows
+11 arm64, and isolated Linux arm64. The Windows run exposed SQLite pooled
+handle retention in the scan writer, Web Forms packet reader, and dependency
+path reader; after the bounded non-pooled fixes, all 9/9 guided workflow tests
+passed on Windows and the full distribution packet completed. Linux tool,
+framework-dependent, self-contained, and a network-disabled/read-only
+container version probe passed. The dirty-tree pack attempt failed as designed
+with `TraceMapToolPackageRequiresCleanSource`.
 
 ## Deferred Work
 
 - Distribution probe implementation and selection.
 - Installed version/readiness implementation.
 - Guided command implementation.
-- Cross-platform package smoke execution.
+- x64 CI receipts and final distribution selection/publication.
 - #667 Web Forms static-explorer reader.
 - Hosted execution, uploads, telemetry export, automatic restore, signing,
   self-update, and container publication.

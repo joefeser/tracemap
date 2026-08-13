@@ -11,10 +11,10 @@ publisher identity, authority, or authenticity.
 
 | Candidate | Runtime | Install / upgrade / remove | Offline shape | Native dependencies | Determinism boundary | Current evidence |
 |---|---|---|---|---|---|---|
-| .NET tool | Compatible .NET 10 SDK/runtime | Built-in `dotnet tool` lifecycle | Local NuGet source after package creation | Package contains the supported SQLite runtime assets | Tool payload files must be stable; the NuGet container carries generated relationship/core-property identifiers and therefore gets a per-build integrity hash | macOS arm64 install/upgrade/guided-run/uninstall probe passed; Windows and Linux CI pending |
-| Framework-dependent archive | Compatible .NET 10 runtime | Extract, invoke with `dotnet`, remove directory | Copyable archive | Runtime assets must be retained in the archive | Archive construction and extracted payload require separate proof | macOS arm64 version/readiness probe passed; Windows and Linux CI pending |
-| Self-contained archive | None beyond supported host | Extract, invoke native launcher, remove directory | Per-RID archive | One platform-specific SQLite runtime plus .NET runtime | Each RID requires independent content and host proof | macOS arm64 `osx-arm64` version/readiness probe passed; Windows and Linux CI pending |
-| Offline container | Compatible container runtime | Load, run, remove image | OCI archive with no-network execution | Image-specific native assets | Image manifest/layers and mounted output require proof | Not yet probed |
+| .NET tool | Compatible .NET 10 SDK/runtime | Built-in `dotnet tool` lifecycle | Local NuGet source after package creation | Package contains the supported SQLite runtime assets | Tool payload files must be stable; the NuGet container carries generated relationship/core-property identifiers and therefore gets a per-build integrity hash | macOS arm64, Windows arm64, and Linux arm64 install/upgrade/guided-run/uninstall probes passed; x64 CI pending |
+| Framework-dependent archive | Compatible .NET 10 runtime | Extract, invoke with `dotnet`, remove directory | Copyable archive | Runtime assets must be retained in the archive | Archive construction and extracted payload require separate proof | macOS arm64, Windows arm64, and Linux arm64 version/readiness probes passed; x64 CI pending |
+| Self-contained archive | None beyond supported host | Extract, invoke native launcher, remove directory | Per-RID archive | One platform-specific SQLite runtime plus .NET runtime | Each RID requires independent content and host proof | `osx-arm64`, `win-arm64`, and `linux-arm64` version/readiness probes passed; x64 CI pending |
+| Offline container | Compatible container runtime | Load, run, remove image | OCI archive with no-network execution | Image-specific native assets | Image manifest/layers and mounted output require proof | Linux arm64 pinned-base, network-disabled, read-only version probe passed; scan/output mounting, publication, signing, and other platforms remain unverified |
 
 The .NET tool is the leading hypothesis because it provides a conventional
 `tracemap` command and explicit install, upgrade, and uninstall operations. It
@@ -63,6 +63,25 @@ recursive comparison showed the tool payload itself was byte-identical; only
 - decide whether payload-stable/per-build-hash NuGet packaging satisfies the
   release policy or whether a reproducible archive is required;
 - publish install instructions only for hosts with matching evidence.
+
+## 2026-08-13 Windows and Linux arm64 probes
+
+The committed smoke harness ran against exact head
+`8eb2d2eca4a911a6e978134d950102c4541b06f1` in an owner-controlled Windows 11
+arm64 VM. The first run exposed Windows file-handle retention in the SQLite
+writer, Web Forms packet reader, and dependency-path reader. Those connections
+now disable pooling for their bounded single-use operations. All nine guided
+workflow tests then passed on Windows, followed by a complete package install,
+guided scan, upgrade, uninstall, framework-dependent archive, and `win-arm64`
+self-contained archive probe.
+
+An isolated official .NET 10 SDK container independently completed the same
+tool lifecycle and archive probes on Linux arm64. A self-contained Linux arm64
+payload also ran `version --json` inside a network-disabled, read-only container
+built from a digest-pinned Microsoft runtime-deps base. The container correctly
+reported unavailable Git/MSBuild rather than claiming scan readiness. These
+probes support the candidate comparison; they do not publish or sign packages
+or images.
 
 The committed `scripts/smoke-local-distribution.ps1` probe performs package
 content and size checks, local-feed install, a guided synthetic scan outside
