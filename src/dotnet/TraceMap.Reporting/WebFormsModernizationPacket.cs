@@ -383,7 +383,7 @@ public static class WebFormsModernizationPacketReporter
                 {
                     var terminalNode = supportedLegacyPath?.Nodes.LastOrDefault();
                     var terminalEvidenceId = terminalNode?.CombinedFactId
-                        ?? (terminalNode is null ? flowFact?.FactId : HashId("path-node", [terminalNode.NodeId]));
+                        ?? (terminalNode is null ? flowFact?.FactId : terminalNode.NodeId);
                     if (terminalEvidenceId is null)
                     {
                         AddGeneratedGap(gaps, options.MaxGaps, snapshot, "DownstreamBoundaryIdentityUnavailable", "event-chain", chain.ChainId, chain.SupportingFactIds);
@@ -395,7 +395,17 @@ public static class WebFormsModernizationPacketReporter
                     }
                     else
                     {
-                        var category = BoundaryCategory(terminalKind);
+                        var category = BoundaryCategory(terminalKind, terminalNode);
+                        var boundaryTargetIdentity = terminalNode?.NodeId
+                            ?? EmptyToNull(flowFact?.Properties.GetValueOrDefault("terminalSurfaceNameHash"))
+                            ?? EmptyToNull(flowFact?.TargetSymbol)
+                            ?? terminalEvidenceId;
+                        var boundaryRuleIds = chain.RuleIds.Concat(chain.PathEvidence.Select(evidence => evidence.RuleId))
+                            .Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+                        var boundaryEvidenceTiers = chain.EvidenceTiers.Concat(chain.PathEvidence.Select(evidence => evidence.EvidenceTier))
+                            .Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+                        var boundaryCoverageLabels = chain.CoverageLabels.Concat(chain.PathEvidence.Select(evidence => evidence.CoverageLabel))
+                            .Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
                         var boundary = new WebFormsModernizationDownstreamBoundary(
                             HashId("boundary", [chain.ChainId, terminalKind, terminalEvidenceId]),
                             chain.ChainId,
@@ -403,7 +413,7 @@ public static class WebFormsModernizationPacketReporter
                             chain.HandlerId,
                             category,
                             terminalKind,
-                            HashId("boundary-target", [terminalEvidenceId]),
+                            HashId("boundary-target", [boundaryTargetIdentity]),
                             terminalEvidenceId,
                             chain.Classification,
                             chain.LegacyPathId,
@@ -411,9 +421,9 @@ public static class WebFormsModernizationPacketReporter
                             chain.PathEvidence,
                             chain.SupportingFactIds,
                             chain.SupportingEdgeIds,
-                            chain.RuleIds,
-                            chain.EvidenceTiers,
-                            chain.CoverageLabels,
+                            boundaryRuleIds,
+                            boundaryEvidenceTiers,
+                            boundaryCoverageLabels,
                             ["The boundary is a possible static downstream path; it does not prove runtime reachability, execution, successful interaction, configuration resolution, transaction outcome, or production use."]);
                         boundaries.Add(boundary);
                         if (category == "configuration" && IsNeedsReviewClassification(chain.Classification))
@@ -846,7 +856,11 @@ public static class WebFormsModernizationPacketReporter
         b.AppendLine().AppendLine("## Downstream boundaries").AppendLine();
         if (packet.DownstreamBoundaries.Count == 0) b.AppendLine("- No supported downstream boundary was composed; this is not proof of absence.");
         foreach (var boundary in packet.DownstreamBoundaries)
-            b.AppendLine($"- `{boundary.BoundaryId}` — chain `{boundary.ChainId}` -> `{boundary.BoundaryCategory}/{boundary.BoundaryKind}`; target `{boundary.BoundaryTargetId}`; terminal evidence `{boundary.TerminalEvidenceId}`; classification `{boundary.Classification}`; rules {string.Join(", ", boundary.RuleIds.Select(id => $"`{id}`"))}.");
+        {
+            var primaryEvidence = boundary.PathEvidence.FirstOrDefault(evidence => evidence.FilePath is not null && evidence.StartLine is not null && evidence.EndLine is not null);
+            var evidenceSpan = primaryEvidence is null ? "span-unavailable" : $"{primaryEvidence.FilePath}:{primaryEvidence.StartLine}-{primaryEvidence.EndLine}";
+            b.AppendLine($"- `{boundary.BoundaryId}` — chain `{boundary.ChainId}` -> `{boundary.BoundaryCategory}/{boundary.BoundaryKind}`; target `{boundary.BoundaryTargetId}`; terminal evidence `{boundary.TerminalEvidenceId}`; classification `{boundary.Classification}`; evidence `{evidenceSpan}`; supporting facts {string.Join(", ", boundary.SupportingFactIds.Select(id => $"`{id}`"))}; rules {string.Join(", ", boundary.RuleIds.Select(id => $"`{id}`"))}.");
+        }
         b.AppendLine().AppendLine("## Structural slice candidates").AppendLine();
         foreach (var candidate in packet.StructuralSliceCandidates)
             b.AppendLine($"- `{candidate.CandidateId}` — classification `{candidate.Classification}`, owner naming required `{candidate.OwnerNamingRequired}`, surfaces {string.Join(", ", candidate.SurfaceIds.Select(id => $"`{id}`"))}.");
@@ -875,13 +889,15 @@ public static class WebFormsModernizationPacketReporter
     private static string ProjectId(string? projectPath) => projectPath is null ? "project-unassigned" : HashId("project", [projectPath]);
     private static string? SafeIdentity(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Length <= 256 ? value : HashId("identity", [value]);
     private static string SafeKind(string? value, string fallback) => string.IsNullOrWhiteSpace(value) || value.Length > 96 ? fallback : value;
-    private static string BoundaryCategory(string surfaceKind) => surfaceKind switch
+    private static string BoundaryCategory(string surfaceKind, CombinedPathNode? terminalNode) => surfaceKind switch
     {
         "sql-query" or "sql-persistence" or "legacy-data" => "database",
         "http-client" or "wcf-operation" or "remoting-endpoint" or "remoting-registration" or "remoting-channel" or "remoting-object" or "remoting-api"
             or "asmx-service" or "asmx-operation" or "asmx-client" or "asmx-metadata" => "service",
         "message-queue" or "message-topic" or "message-subscription" or "message-exchange" or "message-stream" or "message-event" or "message-channel" or "message-unknown" => "messaging",
-        "package-config" or "asmx-config" => "configuration",
+        "package-config" when !string.IsNullOrWhiteSpace(terminalNode?.ConfigKey) => "configuration",
+        "package-config" => "dependency",
+        "asmx-config" => "configuration",
         _ => "dependency"
     };
     private static bool IsNeedsReviewClassification(string classification) => classification is
