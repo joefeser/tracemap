@@ -359,6 +359,7 @@ public static partial class LegacyWebFormsExtractor
                 .ThenBy(subscription => subscription.ReceiverName, StringComparer.Ordinal)
                 .ThenBy(subscription => subscription.EventName, StringComparer.Ordinal)
                 .ThenBy(subscription => subscription.HandlerName, StringComparer.Ordinal)
+                .ThenBy(subscription => subscription.SyntaxSpanStart)
                 .ToArray();
             return new WebFormsCodeFile(relativePath, methods, subscriptions);
         }
@@ -456,7 +457,8 @@ public static partial class LegacyWebFormsExtractor
             eventName,
             handlerName,
             span.StartLinePosition.Line + 1,
-            FactFactory.Hash(assignment.ToString(), 32));
+            FactFactory.Hash(assignment.ToString(), 32),
+            assignment.SpanStart);
     }
 
     private static string? StaticSubscriptionReceiver(ExpressionSyntax expression)
@@ -618,7 +620,10 @@ public static partial class LegacyWebFormsExtractor
             var eventAttributeName = "On" + subscription.EventName;
             if (!SupportedEvents.Contains(eventAttributeName))
             {
-                if (!lifecycleReceiver && subscription.HandlerName is not null)
+                var hasPlausibleEventHandler = subscription.HandlerName is not null
+                    && CandidateMethods(page, subscription.HandlerName, context, existingFacts)
+                        .Any(method => method.HasCommonEventSignature);
+                if (!lifecycleReceiver && hasPlausibleEventHandler)
                 {
                     facts.Add(CreateGap(manifest, subscription.FilePath, subscription.Line, "UnsupportedWebFormsEventSubscription", $"Static control subscription event `{subscription.EventName}` is outside the documented representative event set."));
                 }
@@ -643,7 +648,8 @@ public static partial class LegacyWebFormsExtractor
                     subscription.Line,
                     null,
                     subscription.SnippetHash,
-                    WebFormsBindingKind.ExplicitLifecycleSubscription);
+                    WebFormsBindingKind.ExplicitLifecycleSubscription,
+                    subscription.SyntaxSpanStart);
                 var lifecycleBindingFact = CreateEventBindingFact(
                     manifest,
                     page,
@@ -681,7 +687,8 @@ public static partial class LegacyWebFormsExtractor
                 subscription.Line,
                 control.Line,
                 subscription.SnippetHash,
-                WebFormsBindingKind.ExplicitControlSubscription);
+                WebFormsBindingKind.ExplicitControlSubscription,
+                subscription.SyntaxSpanStart);
             var bindingFact = CreateEventBindingFact(manifest, page, binding, null, ResolveHandlerIdentity(page, binding, context, existingFacts));
             facts.Add(bindingFact);
             AddHandlerResolutionFacts(manifest, page, binding, bindingFact, context, existingFacts, facts);
@@ -932,6 +939,11 @@ public static partial class LegacyWebFormsExtractor
             properties["controlIdentity"] = sourceIdentity;
         }
         AddOptional(properties, "designerFactId", designerFact?.FactId);
+        if (binding.SyntaxSpanStart is not null)
+        {
+            properties["syntaxSpanStart"] = binding.SyntaxSpanStart.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
         return FactFactory.Create(
             manifest,
             FactTypes.WebFormsEventBindingDeclared,
@@ -1794,7 +1806,8 @@ public static partial class LegacyWebFormsExtractor
         int Line,
         int? ControlLine,
         string? SnippetHash,
-        WebFormsBindingKind BindingKind);
+        WebFormsBindingKind BindingKind,
+        int? SyntaxSpanStart = null);
 
     private enum WebFormsBindingKind
     {
@@ -1818,7 +1831,8 @@ public static partial class LegacyWebFormsExtractor
         string EventName,
         string? HandlerName,
         int Line,
-        string SnippetHash);
+        string SnippetHash,
+        int SyntaxSpanStart);
 
     private sealed record WebFormsMethod(
         string FilePath,
