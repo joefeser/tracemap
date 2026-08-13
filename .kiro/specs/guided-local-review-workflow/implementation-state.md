@@ -62,11 +62,36 @@ The first implementation slice also completed a macOS arm64 candidate probe:
 - changed-file format verification, private-path guard, and `git diff --check`:
   passed;
 - conditional .NET-tool pack/install/version/scan/uninstall: passed outside the
-  source checkout;
+source checkout;
+- clean-source installed package `version --json` reported the exact
+  `b9f58968...` build and `sourceState: clean`;
+- installed package guided scan plus ordinary explorer completed outside the
+  checkout, then uninstall passed;
 - tool payload comparison: byte-identical across two builds;
 - outer NuGet package comparison: not byte-identical because NuGet generated
   different relationship/core-property identifiers;
 - Windows, Linux, upgrade, and remaining distribution candidates: pending.
+
+The guided workflow implementation now provides:
+
+- `tracemap local-review run` over the existing scan, Web Forms packet, and
+  ordinary explorer producers;
+- `local-review-result.v1`, relative artifact hashes, source/commit/scan/
+  snapshot identity, closed stage outcomes, limitations, and bounded next
+  actions;
+- sibling staging, canonical output authorization, empty-output support,
+  collision refusal, and input-mutation failure;
+- preservation of verified scan artifacts and a typed result after downstream
+  failure;
+- standalone-versus-guided packet/explorer byte-parity coverage;
+- stable workflow identity over repeated immutable-source runs;
+- package refusal when the source tree is dirty and an explicit compiled
+  `sourceState` in version output.
+
+Focused guided workflow plus version tests: 16/16 passed. Full .NET suite:
+1,525/1,525 passed. A new clean-source
+package smoke is required after this implementation commit; the dirty-tree
+pack attempt failed as designed with `TraceMapToolPackageRequiresCleanSource`.
 
 ## Deferred Work
 

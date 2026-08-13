@@ -32,4 +32,30 @@
     <AssemblyMetadata Include="TraceMapDistributionKind" Value="$(TraceMapDistributionKind)" />
   </ItemGroup>
 
+  <Target Name="SetTraceMapSourceState" BeforeTargets="CoreCompile">
+    <Exec Command="git status --porcelain --untracked-files=all"
+          WorkingDirectory="$(MSBuildProjectDirectory)/../../.."
+          ConsoleToMSBuild="true"
+          StandardOutputImportance="Low"
+          StandardErrorImportance="Low"
+          IgnoreExitCode="true">
+      <Output TaskParameter="ExitCode" PropertyName="TraceMapGitStatusExitCode" />
+      <Output TaskParameter="ConsoleOutput" ItemName="TraceMapGitStatusLines" />
+    </Exec>
+    <PropertyGroup>
+      <TraceMapSourceState Condition="'$(TraceMapGitStatusExitCode)' != '0'">unavailable</TraceMapSourceState>
+      <TraceMapSourceState Condition="'$(TraceMapGitStatusExitCode)' == '0' and '@(TraceMapGitStatusLines)' == ''">clean</TraceMapSourceState>
+      <TraceMapSourceState Condition="'$(TraceMapGitStatusExitCode)' == '0' and '@(TraceMapGitStatusLines)' != ''">dirty</TraceMapSourceState>
+    </PropertyGroup>
+    <Error Condition="'$(TraceMapPackAsTool)' == 'true' and '$(TraceMapSourceState)' != 'clean'"
+           Text="TraceMapToolPackageRequiresCleanSource" />
+    <WriteLinesToFile
+      File="$(IntermediateOutputPath)TraceMapSourceState.g.cs"
+      Lines="[assembly: System.Reflection.AssemblyMetadataAttribute(&quot;TraceMapSourceState&quot;, &quot;$(TraceMapSourceState)&quot;)]"
+      Overwrite="true" />
+    <ItemGroup>
+      <Compile Include="$(IntermediateOutputPath)TraceMapSourceState.g.cs" />
+    </ItemGroup>
+  </Target>
+
 </Project>

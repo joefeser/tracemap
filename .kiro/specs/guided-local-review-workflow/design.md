@@ -177,13 +177,16 @@ Workflow ID inputs:
 - commit SHA and source snapshot digest;
 - normalized authorized options;
 - selected stage names;
-- deterministic input artifact hashes and stage outcomes.
+- producer-owned scan ID and source-snapshot digest;
+- selected stage outcomes.
 
-Workflow ID excludes start time, end time, duration, absolute paths, and host
-identity. Duration may appear in non-identifying stage observations but is not
-required for byte-stable result mode. If retained, deterministic comparison
-tests must explicitly exclude it through a documented projection rather than
-calling the whole file byte-stable.
+Workflow ID excludes start time, end time, duration, the scan manifest's
+producer-owned `scannedAt` observation, absolute paths, host identity, and raw
+artifact hashes. Artifact records still carry the exact SHA-256 of the bytes
+that were consumed or emitted. Re-rendering a workflow projection from the same
+stage artifacts is byte-stable; independently executing a fresh scan is not
+misrepresented as byte-identical because its existing manifest records when it
+ran.
 
 ## Artifact Contract
 
@@ -224,8 +227,10 @@ No digest is a trust assertion.
 Use a sibling staging directory owned by this invocation. Before writing:
 
 - canonicalize the requested output path;
-- reject repository root, `.git`, input artifact roots, symlinks/reparse
-  points, filesystem root, and any path outside the authorized parent;
+- resolve existing parent symlinks/reparse points to their final canonical
+  target, then reject repository root, `.git`, input artifact roots, an
+  existing output link, filesystem root, and any path outside that authorized
+  canonical parent;
 - reject existing nonempty output unless `--force-generated` verifies a
   workflow sentinel and every overwritten path is generated;
 - never recursively delete a path that has not passed those checks.

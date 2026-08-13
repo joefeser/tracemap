@@ -14,6 +14,7 @@ public sealed class TraceMapVersionTests
         var second = TraceMapVersionInfo.Create(Available);
 
         Assert.Equal("tracemap-version.v1", first.SchemaVersion);
+        Assert.Contains(first.SourceState, new[] { "clean", "dirty", "unavailable" });
         Assert.Equal("ready", first.Readiness.Outcome);
         Assert.Equal("none", first.Readiness.NextAction);
         Assert.Equal("available", first.Readiness.Git.Status);

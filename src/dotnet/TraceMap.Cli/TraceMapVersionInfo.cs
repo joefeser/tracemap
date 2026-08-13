@@ -12,6 +12,7 @@ public sealed record TraceMapVersionResult(
     string ToolVersion,
     string ScannerVersion,
     string DistributionKind,
+    string SourceState,
     string TargetFramework,
     TraceMapVersionHost Host,
     TraceMapVersionReadiness Readiness,
@@ -58,6 +59,10 @@ public static class TraceMapVersionInfo
         var targetFramework = assembly
             .GetCustomAttribute<System.Runtime.Versioning.TargetFrameworkAttribute>()?
             .FrameworkName;
+        var sourceState = assembly
+            .GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(attribute => string.Equals(attribute.Key, "TraceMapSourceState", StringComparison.Ordinal))?
+            .Value;
 
         var gitAvailable = capabilityProbe("git");
         var msBuildAvailable = capabilityProbe("dotnet-msbuild");
@@ -73,6 +78,7 @@ public static class TraceMapVersionInfo
             toolVersion,
             TraceMapDiagnostics.ToolVersion,
             string.IsNullOrWhiteSpace(distributionKind) ? "unknown" : distributionKind,
+            sourceState is "clean" or "dirty" or "unavailable" ? sourceState : "unavailable",
             string.IsNullOrWhiteSpace(targetFramework) ? "unknown" : targetFramework,
             new TraceMapVersionHost(
                 OperatingSystemName(),

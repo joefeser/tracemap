@@ -4,12 +4,13 @@
   "title": "TraceMap installed version and local readiness",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "toolVersion", "scannerVersion", "distributionKind", "targetFramework", "host", "readiness", "limitations"],
+  "required": ["schemaVersion", "toolVersion", "scannerVersion", "distributionKind", "sourceState", "targetFramework", "host", "readiness", "limitations"],
   "properties": {
     "schemaVersion": { "const": "tracemap-version.v1" },
     "toolVersion": { "type": "string", "minLength": 1 },
     "scannerVersion": { "type": "string", "minLength": 1 },
     "distributionKind": { "enum": ["source-build", "dotnet-tool", "framework-dependent-archive", "self-contained-archive", "offline-container", "unknown"] },
+    "sourceState": { "enum": ["clean", "dirty", "unavailable"] },
     "targetFramework": { "type": "string", "minLength": 1 },
     "host": {
       "type": "object",
