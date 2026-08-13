@@ -396,7 +396,11 @@ public static class WebFormsModernizationPacketReporter
                     else
                     {
                         var category = BoundaryCategory(terminalKind, terminalNode);
-                        var boundaryTargetIdentity = terminalNode?.NodeId
+                        var projectedTargetHash = terminalNode?.SourceKind == "projection"
+                            ? EmptyToNull(terminalNode.ShapeHash)
+                            : null;
+                        var boundaryTargetIdentity = projectedTargetHash
+                            ?? terminalNode?.NodeId
                             ?? EmptyToNull(flowFact?.Properties.GetValueOrDefault("terminalSurfaceNameHash"))
                             ?? EmptyToNull(flowFact?.TargetSymbol)
                             ?? terminalEvidenceId;
