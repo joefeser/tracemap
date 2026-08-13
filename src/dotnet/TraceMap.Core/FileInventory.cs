@@ -54,6 +54,7 @@ public static class FileInventory
         ".sqlmap",
         ".dbml",
         ".edmx",
+        ".dtsx",
         ".wsdl",
         ".disco",
         ".discomap",
@@ -449,6 +450,7 @@ public static class FileInventory
             ".xsd" => "XsdSchema",
             ".dbml" => "Dbml",
             ".edmx" => "Edmx",
+            ".dtsx" => "SsisPackage",
             _ => "File"
         };
     }

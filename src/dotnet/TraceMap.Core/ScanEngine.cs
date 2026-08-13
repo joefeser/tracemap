@@ -691,6 +691,7 @@ public static class ScanEngine
         facts.AddRange(FilterProtectedEvidence(LegacyWebFormsExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges));
         facts.AddRange(FilterProtectedEvidence(LegacyWinFormsExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges));
         facts.AddRange(FilterProtectedEvidence(LegacyAspNetExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges));
+        facts.AddRange(FilterProtectedEvidence(LegacyBatchDataMovementExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges));
         var diagnosticSemanticResult = semanticResult with
         {
             GapFacts = semanticResult.GapFacts.Where(gap => !IsProducerLocalSemanticGap(gap)).ToArray(),

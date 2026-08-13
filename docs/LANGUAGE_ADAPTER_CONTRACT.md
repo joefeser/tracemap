@@ -203,6 +203,7 @@ The .NET adapter emits WebForms-specific evidence for static event entry points:
 | `WebFormsHandlerResolved` | Links event-source identities to scoped code-behind methods, preferring canonical semantic method IDs when proven. | `surfaceIdentity`, `controlIdentity`, `eventSourceIdentity`, `handlerSymbolId`, `sourceSymbolId`, `bindingFactId`, `resolutionKind` |
 | `WebFormsEventFlowProjected` | Projects resolved handlers to direct WCF, HTTP, SQL/query, config, or dependency-surface evidence. | `flowClassification`, `terminalSurfaceKind`, `terminalSurfaceNameHash`, `supportingFactIds`, `supportingEdgeIds`, `coverageLabel`, compatibility `coverage` |
 | `WebFormsLogicSignalDetected` | Emits bounded static logic or UI-boilerplate signals for handlers. | `handlerName`, `signalKind`, `staticLogicSignal`, `uiBoilerplateSignal` |
+| `LegacyBatchDataMovementDeclared` | Inventories supported scheduled-entry, service, console-job, file, message, stored-procedure batch, bulk-copy, ETL-package, and integration-config candidates when concrete Web Forms inventory scopes the repository. | `surfaceKind`, `mechanism`, `operationKind`, `ownerStatus`, `projectResolution`, bounded declaration flags, `supportingFactIds`, `coverageLabel` |
 
 The local-only `webforms-modernization-packet.v1` read model composes these
 facts and the existing `legacy-flow.v1` static paths from one immutable
@@ -213,8 +214,10 @@ terminals already present in those paths while preserving opaque target and
 terminal-evidence identities. Structural candidates group only declared
 surface composition and require owner naming; they are not business-capability,
 parity, effort, architecture, runtime, or release conclusions. Missing coverage
-or provenance fails closed as an explicit packet gap. General file-operation
-extraction remains unavailable and is reported as a packet capability gap. Execution and
+or provenance fails closed as an explicit packet gap. Supported file-operation
+declarations are inventoried, while indirect wrappers, aliases under reduced
+semantic coverage, runtime paths, and dynamic locations remain explicit packet
+coverage gaps. Execution and
 interpretation are documented in the
 [Web Forms modernization packet runbook](WEBFORMS_MODERNIZATION_PACKET.md).
 
