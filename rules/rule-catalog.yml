@@ -2022,11 +2022,27 @@ rules:
     emits:
       - WebFormsPageDeclared
       - WebFormsControlDeclared
+      - WebFormsUserControlRegistered
       - AnalysisGap
     limitations:
       - Markup and file inventory are static repository evidence and do not prove IIS configuration, page activation, runtime control tree construction, event firing, deployment, or production usage.
       - Directive paths and linkage attributes are kept only as safe relative filenames or omitted; raw local paths, URLs, config values, snippets, and unsafe expressions are not stored.
       - Malformed or unreadable markup is an analysis gap, not proof that no WebForms page, control, or handler exists.
+      - Page titles are represented only by presence and a bounded digest; raw display text is not stored.
+      - Surface and control identities are derived from normalized repository-relative markup paths and declaration sites; page or control labels alone are not canonical identity.
+
+  - id: legacy.webforms.composition.v1
+    name: Legacy WebForms static composition declarations
+    description: Records bounded master-page, content-placeholder, and registered user-control composition declared by checked-in WebForms markup.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - WebFormsCompositionDeclared
+      - AnalysisGap
+    limitations:
+      - Composition facts describe static markup declarations and do not prove runtime loading, rendering, control construction, navigation, event firing, deployment, or production use.
+      - Registered user-control and master-page targets are repository-relative declarations; missing, dynamic, unsafe, malformed, or out-of-scope targets remain explicit analysis gaps.
+      - ContentPlaceHolderID is a declared target candidate and is not proof that the referenced master page contains a compatible runtime placeholder.
+      - Raw markup, page titles, source snippets, local absolute paths, URLs, configuration values, and unsafe expressions are omitted or hashed.
 
   - id: legacy.webforms.event-binding.v1
     name: Legacy WebForms markup event binding evidence
