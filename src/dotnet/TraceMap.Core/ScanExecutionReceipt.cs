@@ -242,7 +242,27 @@ public sealed class ScanReceiptRecorder
         var facts = Bound(supportingFactIds, IsSafeFactId);
         var gaps = Bound(supportingGapIds, IsSafeGapId);
         var normalizedOutcome = NormalizeOutcome(stageOutcome);
-        var stageId = "stage-" + Hash($"{stage}|{operationCode}|1|{normalizedOutcome}|{coverageBefore}|{coverageAfter}|{lastProvenSafeState}|{string.Join('|', facts)}|{string.Join('|', gaps)}")[..20];
+        var normalizedCoverageBefore = NormalizeCoverage(coverageBefore);
+        var normalizedCoverageAfter = NormalizeCoverage(coverageAfter);
+        var normalizedSafeState = NormalizeAllowed(lastProvenSafeState, SafeStates, "unknown");
+        var normalizedMutationState = NormalizeAllowed(mutationState, MutationStates, "unknown");
+        var normalizedCleanupResult = NormalizeAllowed(cleanupResult, CleanupResults, "unknown");
+        var normalizedRetryability = NormalizeAllowed(retryability, Retryabilities, "unknown");
+        var normalizedNextAction = NormalizeCode(nextAction);
+        var stageId = "stage-" + Hash(string.Join('|',
+            stage,
+            operationCode,
+            "1",
+            normalizedOutcome,
+            normalizedCoverageBefore,
+            normalizedCoverageAfter,
+            normalizedSafeState,
+            normalizedMutationState,
+            normalizedCleanupResult,
+            normalizedRetryability,
+            normalizedNextAction,
+            string.Join('|', facts),
+            string.Join('|', gaps)))[..20];
         var receipt = new ScanStageReceipt(
             stageId,
             stage,
@@ -250,13 +270,13 @@ public sealed class ScanReceiptRecorder
             1,
             Math.Max(0, durationMilliseconds),
             normalizedOutcome,
-            NormalizeCoverage(coverageBefore),
-            NormalizeCoverage(coverageAfter),
-            NormalizeAllowed(lastProvenSafeState, SafeStates, "unknown"),
-            NormalizeAllowed(mutationState, MutationStates, "unknown"),
-            NormalizeAllowed(cleanupResult, CleanupResults, "unknown"),
-            NormalizeAllowed(retryability, Retryabilities, "unknown"),
-            NormalizeCode(nextAction),
+            normalizedCoverageBefore,
+            normalizedCoverageAfter,
+            normalizedSafeState,
+            normalizedMutationState,
+            normalizedCleanupResult,
+            normalizedRetryability,
+            normalizedNextAction,
             facts,
             gaps,
             []);
