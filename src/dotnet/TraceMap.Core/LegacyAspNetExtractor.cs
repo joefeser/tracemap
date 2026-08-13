@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
@@ -32,6 +33,24 @@ public static partial class LegacyAspNetExtractor
         "ScriptService"
     };
 
+    private static readonly HashSet<string> IdentityControlTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "ChangePassword", "CreateUserWizard", "Login", "LoginName", "LoginStatus", "LoginView", "PasswordRecovery"
+    };
+
+    private static readonly HashSet<string> KnownIdentityPipelineTypes = new(StringComparer.Ordinal)
+    {
+        "System.Web.Profile.ProfileModule",
+        "System.Web.Security.AnonymousIdentificationModule",
+        "System.Web.Security.DefaultAuthenticationModule",
+        "System.Web.Security.FileAuthorizationModule",
+        "System.Web.Security.FormsAuthenticationModule",
+        "System.Web.Security.RoleManagerModule",
+        "System.Web.Security.UrlAuthorizationModule",
+        "System.Web.Security.WindowsAuthenticationModule",
+        "System.Web.SessionState.SessionStateModule"
+    };
+
     public static IReadOnlyList<CodeFact> Extract(
         string repoPath,
         ScanManifest manifest,
@@ -46,6 +65,7 @@ public static partial class LegacyAspNetExtractor
         var semanticTypesByFile = BuildSemanticLookup(existingFacts, FactTypes.TypeDeclared);
         var semanticMethodsByFile = BuildSemanticLookup(existingFacts, FactTypes.MethodDeclared);
         var asmxOperationsByFile = BuildFactLookup(existingFacts, FactTypes.AsmxOperationDeclared);
+        var hasAspNetCandidateInventory = HasAspNetCandidateInventory(inventory);
 
         AddDesignerOrphanGaps(manifest, inventory, pageFacts, facts);
 
@@ -73,12 +93,17 @@ public static partial class LegacyAspNetExtractor
 
         foreach (var item in inventory.Where(item => CSharpKinds.Contains(item.Kind)).OrderBy(item => item.RelativePath, StringComparer.Ordinal))
         {
-            ExtractCSharpFile(repoPath, manifest, item, semanticTypesByFile, semanticMethodsByFile, asmxOperationsByFile, facts);
+            ExtractCSharpFile(repoPath, manifest, item, semanticTypesByFile, semanticMethodsByFile, asmxOperationsByFile, existingFacts, facts, hasAspNetCandidateInventory);
         }
 
         AddNavigationEdges(manifest, pageFacts, facts);
+        AddIdentityControlFacts(manifest, existingFacts, facts);
+        if (hasAspNetCandidateInventory)
+        {
+            AddIdentityTypeFacts(manifest, existingFacts, facts);
+        }
 
-        if (manifest.BuildStatus != "Succeeded" && HasAspNetCandidateInventory(inventory))
+        if (manifest.BuildStatus != "Succeeded" && hasAspNetCandidateInventory)
         {
             facts.Add(CreateGap(
                 manifest,
@@ -283,6 +308,222 @@ public static partial class LegacyAspNetExtractor
         {
             facts.Add(CreateGap(manifest, item.RelativePath, LineNumber(element), RuleIds.LegacyAspNetConfig, "EncryptedConfigUnsupported", "Encrypted config sections cannot be interpreted by static extraction.", null));
         }
+
+        ExtractIdentityStateConfig(manifest, item, document, facts);
+    }
+
+    private static void ExtractIdentityStateConfig(ScanManifest manifest, FileInventoryItem item, XDocument document, List<CodeFact> facts)
+    {
+        foreach (var (element, declarationOrdinal) in document.Descendants()
+                     .Select((element, index) => (element, declarationOrdinal: index + 1))
+                     .OrderBy(item => LineNumber(item.element))
+                     .ThenBy(item => item.declarationOrdinal))
+        {
+            var identityKind = IdentityConfigKind(element);
+            if (identityKind is null)
+            {
+                continue;
+            }
+
+            var properties = BaseProperties(manifest, RuleIds.LegacyAspNetIdentityState,
+                "Identity/state rows are checked-in static declarations only and do not prove effective runtime policy, authenticated identity, authorization outcome, session behavior, cookie behavior, provider availability, or security quality.");
+            properties["identityKind"] = identityKind;
+            properties["declarationStatus"] = "declared-in-checked-in-config";
+            properties["declarationOrdinal"] = declarationOrdinal.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            AddIdentityConfigProperties(properties, element, identityKind);
+            var fact = FactFactory.Create(
+                manifest,
+                FactTypes.AspNetIdentityStateDeclared,
+                RuleIds.LegacyAspNetIdentityState,
+                EvidenceTiers.Tier2Structural,
+                Evidence(item.RelativePath, LineNumber(element), LineNumber(element)),
+                targetSymbol: properties.GetValueOrDefault("typeName"),
+                contractElement: identityKind,
+                properties: properties);
+            facts.Add(fact);
+
+            if (identityKind is "membership-provider" or "role-provider"
+                && properties.GetValueOrDefault("providerClassification") == "custom-or-unresolved")
+            {
+                facts.Add(CreateGap(
+                    manifest,
+                    item.RelativePath,
+                    LineNumber(element),
+                    RuleIds.LegacyAspNetIdentityState,
+                    "UnsupportedCustomIdentityProvider",
+                    "A custom or unresolved identity provider is declared; TraceMap records its static presence but does not inspect or grade provider behavior.",
+                    null,
+                    fact.FactId));
+            }
+        }
+
+        foreach (var element in document.Descendants().Where(HasUnsupportedConfigSource).Where(IsIdentityConfigScope).OrderBy(LineNumber))
+        {
+            facts.Add(CreateGap(
+                manifest,
+                item.RelativePath,
+                LineNumber(element),
+                RuleIds.LegacyAspNetIdentityState,
+                "ExternalIdentityConfigUnsupported",
+                "An identity/state section uses external configSource/file evidence that is not loaded or interpreted.",
+                null));
+        }
+
+        foreach (var element in document.Descendants()
+                     .Where(element => element.Name.LocalName.Equals("EncryptedData", StringComparison.OrdinalIgnoreCase))
+                     .Where(element => element.Ancestors().Any(IsIdentityConfigScope))
+                     .OrderBy(LineNumber))
+        {
+            facts.Add(CreateGap(
+                manifest,
+                item.RelativePath,
+                LineNumber(element),
+                RuleIds.LegacyAspNetIdentityState,
+                "EncryptedIdentityConfigUnsupported",
+                "An encrypted identity/state section cannot be interpreted by static extraction.",
+                null));
+        }
+    }
+
+    private static string? IdentityConfigKind(XElement element)
+    {
+        var name = element.Name.LocalName;
+        if (ParentNameEquals(element, "system.web"))
+        {
+            if (name.Equals("authentication", StringComparison.OrdinalIgnoreCase)) return "authentication";
+            if (name.Equals("authorization", StringComparison.OrdinalIgnoreCase)) return "authorization-section";
+            if (name.Equals("identity", StringComparison.OrdinalIgnoreCase)) return "impersonation";
+            if (name.Equals("machineKey", StringComparison.OrdinalIgnoreCase)) return "machine-key-presence";
+            if (name.Equals("membership", StringComparison.OrdinalIgnoreCase)) return "membership";
+            if (name.Equals("roleManager", StringComparison.OrdinalIgnoreCase)) return "role-manager";
+            if (name.Equals("sessionState", StringComparison.OrdinalIgnoreCase)) return "session-state";
+            if (name.Equals("httpCookies", StringComparison.OrdinalIgnoreCase)) return "cookie-policy";
+            if (name.Equals("anonymousIdentification", StringComparison.OrdinalIgnoreCase)) return "anonymous-identification";
+            if (name.Equals("profile", StringComparison.OrdinalIgnoreCase)) return "profile";
+        }
+
+        if (name.Equals("forms", StringComparison.OrdinalIgnoreCase) && HasAncestorNamed(element, "authentication"))
+            return "forms-authentication";
+        if ((name.Equals("allow", StringComparison.OrdinalIgnoreCase) || name.Equals("deny", StringComparison.OrdinalIgnoreCase))
+            && HasAncestorNamed(element, "authorization"))
+            return "authorization-rule";
+        if (name.Equals("add", StringComparison.OrdinalIgnoreCase) && HasAncestorNamed(element, "membership"))
+            return "membership-provider";
+        if (name.Equals("add", StringComparison.OrdinalIgnoreCase) && HasAncestorNamed(element, "roleManager"))
+            return "role-provider";
+        if (name.Equals("add", StringComparison.OrdinalIgnoreCase) && element.Parent?.Name.LocalName is "httpModules" or "modules")
+        {
+            var typeName = TypeName(element);
+            if (typeName is not null && (KnownIdentityPipelineTypes.Contains(typeName) || IdentityPipelineNameRegex().IsMatch(typeName)))
+                return "identity-pipeline-component";
+        }
+
+        return null;
+    }
+
+    private static void AddIdentityConfigProperties(SortedDictionary<string, string> properties, XElement element, string identityKind)
+    {
+        switch (identityKind)
+        {
+            case "authentication":
+                AddClosedValue(properties, "authenticationMode", AttributeValue(element, "mode"), ["None", "Windows", "Forms", "Passport"]);
+                break;
+            case "forms-authentication":
+                AddCookielessSetting(properties, element);
+                AddBooleanSetting(properties, element, "enableCrossAppRedirects", "crossAppRedirectSetting");
+                AddBooleanSetting(properties, element, "requireSSL", "requireSslSetting");
+                AddBooleanSetting(properties, element, "slidingExpiration", "slidingExpirationSetting");
+                properties["loginTargetDeclared"] = ValueDeclared(element, "loginUrl");
+                properties["cookieNameDeclared"] = ValueDeclared(element, "name");
+                break;
+            case "authorization-rule":
+                properties["authorizationAction"] = element.Name.LocalName.Equals("allow", StringComparison.OrdinalIgnoreCase) ? "allow" : "deny";
+                AddSubjectPresence(properties, element, "users");
+                AddSubjectPresence(properties, element, "roles");
+                AddSubjectPresence(properties, element, "verbs");
+                break;
+            case "impersonation":
+                AddBooleanSetting(properties, element, "impersonate", "impersonationSetting");
+                properties["credentialAttributesDeclared"] = ValueDeclared(element, "userName") == "true" || ValueDeclared(element, "password") == "true" ? "true" : "false";
+                break;
+            case "machine-key-presence":
+                properties["validationKeyDeclared"] = ValueDeclared(element, "validationKey");
+                properties["decryptionKeyDeclared"] = ValueDeclared(element, "decryptionKey");
+                AddClosedValue(properties, "validationAlgorithm", AttributeValue(element, "validation"), ["AES", "HMACSHA256", "HMACSHA384", "HMACSHA512", "MD5", "SHA1", "TripleDES"]);
+                AddClosedValue(properties, "decryptionAlgorithm", AttributeValue(element, "decryption"), ["3DES", "AES", "Auto", "DES", "TripleDES"]);
+                break;
+            case "membership":
+            case "role-manager":
+                properties["defaultProviderDeclared"] = ValueDeclared(element, "defaultProvider");
+                AddBooleanSetting(properties, element, "enabled", "enabledSetting");
+                break;
+            case "membership-provider":
+            case "role-provider":
+            case "identity-pipeline-component":
+                var typeName = TypeName(element);
+                AddSafeCodeName(properties, "typeName", typeName, "identity-state", identityKind);
+                properties["providerClassification"] = typeName is not null && typeName.StartsWith("System.Web.", StringComparison.Ordinal)
+                    ? "framework-declared"
+                    : "custom-or-unresolved";
+                break;
+            case "session-state":
+                AddClosedValue(properties, "sessionMode", AttributeValue(element, "mode"), ["Custom", "InProc", "Off", "SQLServer", "StateServer"]);
+                AddCookielessSetting(properties, element);
+                properties["timeoutDeclared"] = ValueDeclared(element, "timeout");
+                properties["stateConnectionDeclared"] = ValueDeclared(element, "stateConnectionString") == "true" || ValueDeclared(element, "sqlConnectionString") == "true" ? "true" : "false";
+                break;
+            case "cookie-policy":
+                AddBooleanSetting(properties, element, "httpOnlyCookies", "httpOnlySetting");
+                AddBooleanSetting(properties, element, "requireSSL", "requireSslSetting");
+                AddClosedValue(properties, "sameSite", AttributeValue(element, "sameSite"), ["Lax", "None", "Strict", "Unspecified"]);
+                properties["domainDeclared"] = ValueDeclared(element, "domain");
+                break;
+            case "anonymous-identification":
+            case "profile":
+                AddBooleanSetting(properties, element, "enabled", "enabledSetting");
+                break;
+        }
+    }
+
+    private static bool IsIdentityConfigScope(XElement element) => IdentityConfigKind(element) is not null;
+
+    private static string? TypeName(XElement element)
+    {
+        var value = AttributeValue(element, "type");
+        return string.IsNullOrWhiteSpace(value) ? null : value.Split(',')[0].Trim();
+    }
+
+    private static string ValueDeclared(XElement element, string attributeName) => string.IsNullOrWhiteSpace(AttributeValue(element, attributeName)) ? "false" : "true";
+
+    private static void AddBooleanSetting(SortedDictionary<string, string> properties, XElement element, string attributeName, string propertyName)
+    {
+        var value = AttributeValue(element, attributeName);
+        properties[$"{propertyName}Declared"] = string.IsNullOrWhiteSpace(value) ? "false" : "true";
+        if (bool.TryParse(value, out var parsed)) properties[propertyName] = parsed ? "true" : "false";
+    }
+
+    private static void AddCookielessSetting(SortedDictionary<string, string> properties, XElement element)
+    {
+        var value = AttributeValue(element, "cookieless");
+        properties["cookielessSettingDeclared"] = string.IsNullOrWhiteSpace(value) ? "false" : "true";
+        AddClosedValue(properties, "cookielessSetting", value, ["AutoDetect", "UseCookies", "UseDeviceProfile", "UseUri", "true", "false"]);
+    }
+
+    private static void AddClosedValue(SortedDictionary<string, string> properties, string propertyName, string? value, IReadOnlyList<string> allowed)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return;
+        properties[propertyName] = allowed.FirstOrDefault(candidate => candidate.Equals(value.Trim(), StringComparison.OrdinalIgnoreCase)) ?? "unsupported-or-custom";
+    }
+
+    private static void AddSubjectPresence(SortedDictionary<string, string> properties, XElement element, string attributeName)
+    {
+        var value = AttributeValue(element, attributeName);
+        properties[$"{attributeName}Declared"] = string.IsNullOrWhiteSpace(value) ? "false" : "true";
+        if (string.IsNullOrWhiteSpace(value)) return;
+        var values = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        properties[$"{attributeName}EntryCount"] = values.Length.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        properties[$"{attributeName}WildcardDeclared"] = values.Contains("*", StringComparer.Ordinal) ? "true" : "false";
+        if (attributeName == "users") properties["anonymousUserMarkerDeclared"] = values.Contains("?", StringComparer.Ordinal) ? "true" : "false";
     }
 
     private static void ExtractSiteMap(string repoPath, ScanManifest manifest, FileInventoryItem item, List<CodeFact> facts)
@@ -351,7 +592,9 @@ public static partial class LegacyAspNetExtractor
         IReadOnlyDictionary<string, CodeFact[]> semanticTypesByFile,
         IReadOnlyDictionary<string, CodeFact[]> semanticMethodsByFile,
         IReadOnlyDictionary<string, CodeFact[]> asmxOperationsByFile,
-        List<CodeFact> facts)
+        IReadOnlyList<CodeFact> existingFacts,
+        List<CodeFact> facts,
+        bool hasAspNetCandidateInventory)
     {
         if (!TryRead(repoPath, item.RelativePath, out var text))
         {
@@ -375,6 +618,82 @@ public static partial class LegacyAspNetExtractor
         ExtractRoutes(manifest, item, tree, root, facts);
         ExtractHandlersAndPageMethods(manifest, item, tree, root, semanticTypesByFile, semanticMethodsByFile, asmxOperationsByFile, facts);
         ExtractCodeNavigation(manifest, item, tree, root, facts);
+        if (hasAspNetCandidateInventory)
+        {
+            ExtractIdentityCodeGaps(manifest, item, tree, root, existingFacts, facts);
+        }
+    }
+
+    private static void ExtractIdentityCodeGaps(
+        ScanManifest manifest,
+        FileInventoryItem item,
+        SyntaxTree tree,
+        CompilationUnitSyntax root,
+        IReadOnlyList<CodeFact> existingFacts,
+        List<CodeFact> facts)
+    {
+        foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>()
+                     .Where(invocation => InvocationName(invocation).Equals("RegisterModule", StringComparison.Ordinal))
+                     .Where(invocation => invocation.Expression.ToString().Contains("DynamicModuleUtility", StringComparison.Ordinal))
+                     .Where(IsIdentityModuleRegistration))
+        {
+            facts.Add(CreateGap(
+                manifest,
+                item.RelativePath,
+                SpanLine(tree, invocation),
+                RuleIds.LegacyAspNetIdentityState,
+                "DynamicIdentityPipelineRegistrationUnsupported",
+                "Runtime module registration was observed, but TraceMap does not execute registration code or infer effective identity-pipeline ordering.",
+                null));
+        }
+
+        if (manifest.BuildStatus == "Succeeded")
+        {
+            return;
+        }
+
+        foreach (var type in root.DescendantNodes().OfType<TypeDeclarationSyntax>())
+        {
+            var identityInterface = type.BaseList?.Types
+                .Select(baseType => baseType.Type.ToString().Split('.').Last())
+                .FirstOrDefault(baseName => baseName is "IPrincipal" or "IIdentity");
+            if (identityInterface is null)
+            {
+                continue;
+            }
+
+            var typeName = QualifiedTypeName(type);
+            var hasSemanticRelationship = existingFacts.Any(fact =>
+                fact.FactType == FactTypes.SymbolRelationship
+                && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+                && fact.Evidence.FilePath == item.RelativePath
+                && IsIdentitySourceSymbol(fact.SourceSymbol, typeName)
+                && IsIdentityInterfaceSymbol(fact.TargetSymbol));
+            if (hasSemanticRelationship)
+            {
+                continue;
+            }
+
+            facts.Add(CreateGap(
+                manifest,
+                item.RelativePath,
+                SpanLine(tree, type),
+                RuleIds.LegacyAspNetIdentityState,
+                "IdentitySemanticDependencyUnavailable",
+                $"A syntax-level {identityInterface} candidate could not be confirmed with compiler-resolved relationship evidence under reduced build coverage.",
+                null));
+        }
+    }
+
+    private static bool IsIdentityModuleRegistration(InvocationExpressionSyntax invocation)
+    {
+        if (invocation.ArgumentList.Arguments.FirstOrDefault()?.Expression is not TypeOfExpressionSyntax typeOf)
+        {
+            return false;
+        }
+
+        var typeName = RemoveGenericTypeParameters(NormalizeGlobalSymbol(typeOf.Type.ToString())) ?? string.Empty;
+        return KnownIdentityPipelineTypes.Contains(typeName) || IdentityPipelineNameRegex().IsMatch(typeName);
     }
 
     private static void ExtractRoutes(
@@ -846,6 +1165,108 @@ public static partial class LegacyAspNetExtractor
         return element.Attributes().Any(attribute => attribute.Name.LocalName is "configSource" or "file");
     }
 
+    private static void AddIdentityControlFacts(ScanManifest manifest, IReadOnlyList<CodeFact> existingFacts, List<CodeFact> facts)
+    {
+        foreach (var control in existingFacts
+                     .Where(fact => fact.FactType == FactTypes.WebFormsControlDeclared)
+                     .Where(fact => IdentityControlTypes.Contains(fact.Properties.GetValueOrDefault("controlType") ?? string.Empty))
+                     .OrderBy(fact => fact.FactId, StringComparer.Ordinal))
+        {
+            var properties = BaseProperties(manifest, RuleIds.LegacyAspNetIdentityState,
+                "Login-control rows are static markup declarations and do not prove rendering, authentication, authorization, credential handling, or runtime use.");
+            properties["identityKind"] = "login-control";
+            properties["controlType"] = control.Properties["controlType"];
+            properties["declarationStatus"] = "declared-in-markup";
+            properties["supportingFactIds"] = control.FactId;
+            facts.Add(FactFactory.Create(
+                manifest,
+                FactTypes.AspNetIdentityStateDeclared,
+                RuleIds.LegacyAspNetIdentityState,
+                EvidenceTiers.Tier2Structural,
+                Evidence(control.Evidence.FilePath, control.Evidence.StartLine, control.Evidence.EndLine),
+                sourceSymbol: control.SourceSymbol,
+                targetSymbol: control.TargetSymbol,
+                contractElement: "login-control",
+                properties: properties));
+        }
+    }
+
+    private static void AddIdentityTypeFacts(ScanManifest manifest, IReadOnlyList<CodeFact> existingFacts, List<CodeFact> facts)
+    {
+        foreach (var relationship in existingFacts
+                     .Where(fact => fact.FactType == FactTypes.SymbolRelationship && fact.EvidenceTier == EvidenceTiers.Tier1Semantic)
+                     .Where(fact => IsIdentityInterfaceSymbol(fact.TargetSymbol))
+                     .OrderBy(fact => fact.FactId, StringComparer.Ordinal))
+        {
+            var kind = relationship.TargetSymbol!.EndsWith("IPrincipal", StringComparison.Ordinal) ? "custom-principal-type" : "custom-identity-type";
+            var properties = BaseProperties(manifest, RuleIds.LegacyAspNetIdentityState,
+                "Custom principal/identity rows preserve compiler-resolved interface evidence but do not prove runtime assignment, claims, authentication, authorization, or effective identity flow.");
+            properties["identityKind"] = kind;
+            properties["declarationStatus"] = "compiler-resolved-interface";
+            properties["supportingFactIds"] = relationship.FactId;
+            AddSafeCodeName(properties, "typeName", relationship.SourceSymbol, "identity-state", kind);
+            facts.Add(FactFactory.Create(
+                manifest,
+                FactTypes.AspNetIdentityStateDeclared,
+                RuleIds.LegacyAspNetIdentityState,
+                EvidenceTiers.Tier1Semantic,
+                Evidence(relationship.Evidence.FilePath, relationship.Evidence.StartLine, relationship.Evidence.EndLine),
+                sourceSymbol: relationship.SourceSymbol,
+                targetSymbol: relationship.TargetSymbol,
+                contractElement: kind,
+                properties: properties));
+        }
+    }
+
+    private static bool IsIdentityInterfaceSymbol(string? symbol)
+    {
+        var normalized = NormalizeGlobalSymbol(symbol);
+        return normalized is "System.Security.Principal.IPrincipal" or "System.Security.Principal.IIdentity";
+    }
+
+    private static bool IsIdentitySourceSymbol(string? symbol, string typeName)
+    {
+        var normalized = RemoveGenericTypeParameters(NormalizeGlobalSymbol(symbol));
+        return normalized?.Equals(typeName, StringComparison.Ordinal) == true
+            || normalized?.EndsWith($".{typeName}", StringComparison.Ordinal) == true;
+    }
+
+    private static string? RemoveGenericTypeParameters(string? symbol)
+    {
+        if (symbol is null || !symbol.Contains('<', StringComparison.Ordinal))
+        {
+            return symbol;
+        }
+
+        var builder = new StringBuilder(symbol.Length);
+        var depth = 0;
+        foreach (var character in symbol)
+        {
+            if (character == '<')
+            {
+                depth++;
+            }
+            else if (character == '>' && depth > 0)
+            {
+                depth--;
+            }
+            else if (depth == 0)
+            {
+                builder.Append(character);
+            }
+        }
+
+        return builder.ToString();
+    }
+
+    private static string? NormalizeGlobalSymbol(string? symbol)
+    {
+        const string globalPrefix = "global::";
+        return symbol?.StartsWith(globalPrefix, StringComparison.Ordinal) == true
+            ? symbol[globalPrefix.Length..]
+            : symbol;
+    }
+
     private static CodeFact CreateGap(
         ScanManifest manifest,
         string filePath,
@@ -853,8 +1274,17 @@ public static partial class LegacyAspNetExtractor
         string ruleId,
         string gapKind,
         string message,
-        string? snippetHash)
+        string? snippetHash,
+        string? supportingFactId = null)
     {
+        var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["coverageLabel"] = manifest.BuildStatus == "Succeeded" ? "Full" : "Reduced",
+            ["gapKind"] = gapKind,
+            ["message"] = message,
+            ["ruleLimitations"] = "Analysis gaps preserve uncertainty and must not be read as absence findings."
+        };
+        if (!string.IsNullOrWhiteSpace(supportingFactId)) properties["supportingFactIds"] = supportingFactId;
         return FactFactory.Create(
             manifest,
             FactTypes.AnalysisGap,
@@ -862,13 +1292,7 @@ public static partial class LegacyAspNetExtractor
             EvidenceTiers.Tier4Unknown,
             new EvidenceSpan(filePath, line, line, snippetHash, ExtractorId, ScannerVersions.LegacyAspNetExtractor),
             contractElement: gapKind,
-            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["coverageLabel"] = manifest.BuildStatus == "Succeeded" ? "Full" : "Reduced",
-                ["gapKind"] = gapKind,
-                ["message"] = message,
-                ["ruleLimitations"] = "Analysis gaps preserve uncertainty and must not be read as absence findings."
-            });
+            properties: properties);
     }
 
     private static SortedDictionary<string, string> BaseProperties(ScanManifest manifest, string ruleId, string limitations)
@@ -1388,6 +1812,9 @@ public static partial class LegacyAspNetExtractor
 
     [GeneratedRegex(@"^[A-Za-z_][A-Za-z0-9_.+`]{0,255}$")]
     private static partial Regex SafeCodeNameRegex();
+
+    [GeneratedRegex(@"(?:Authentication|Authorization|Identity|Principal|Role|Session|Profile)Module$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex IdentityPipelineNameRegex();
 
     [GeneratedRegex(@"^[A-Za-z0-9_./*{}-]{1,180}$")]
     private static partial Regex SafeRelativePathRegex();

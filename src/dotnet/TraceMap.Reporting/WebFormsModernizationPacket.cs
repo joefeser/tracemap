@@ -16,7 +16,8 @@ public sealed record WebFormsModernizationOptions(
     int MaxGaps = 1_000,
     int MaxDepth = 8,
     int MaxPaths = 1_000,
-    int MaxBoundaries = 1_000);
+    int MaxBoundaries = 1_000,
+    int MaxIdentityState = 1_000);
 
 public sealed record WebFormsModernizationResult(
     WebFormsModernizationPacket Packet,
@@ -35,6 +36,7 @@ public sealed record WebFormsModernizationPacket(
     IReadOnlyList<WebFormsModernizationSurface> Surfaces,
     IReadOnlyList<WebFormsModernizationEventChain> EventChains,
     IReadOnlyList<WebFormsModernizationDownstreamBoundary> DownstreamBoundaries,
+    IReadOnlyList<WebFormsModernizationIdentityState> IdentityStateInventory,
     IReadOnlyList<WebFormsModernizationSliceCandidate> StructuralSliceCandidates,
     IReadOnlyList<WebFormsModernizationGap> Gaps,
     IReadOnlyList<string> OwnerQuestions,
@@ -53,6 +55,7 @@ public sealed record WebFormsModernizationSummary(
     int SurfaceCount,
     int EventChainCount,
     int DownstreamBoundaryCount,
+    int IdentityStateCount,
     int StructuralSliceCandidateCount,
     int GapCount,
     bool Truncated);
@@ -125,6 +128,16 @@ public sealed record WebFormsModernizationDownstreamBoundary(
     IReadOnlyList<string> RuleIds,
     IReadOnlyList<string> EvidenceTiers,
     IReadOnlyList<string> CoverageLabels,
+    IReadOnlyList<string> Limitations);
+
+public sealed record WebFormsModernizationIdentityState(
+    string IdentityStateId,
+    string IdentityKind,
+    string Classification,
+    string? SurfaceId,
+    IReadOnlyDictionary<string, string> SafeMetadata,
+    WebFormsModernizationEvidence Evidence,
+    IReadOnlyList<string> SupportingFactIds,
     IReadOnlyList<string> Limitations);
 
 public sealed record WebFormsModernizationSliceCandidate(
@@ -464,6 +477,49 @@ public static class WebFormsModernizationPacketReporter
             AddPathGap(gaps, options.MaxGaps, snapshot, pathGap);
 
         var candidates = BuildCandidates(surfaces, compositionFacts, factsById, options.MaxCandidates, ref truncated, gaps, options.MaxGaps, snapshot);
+        var identityFacts = facts.Where(fact => fact.FactType == FactTypes.AspNetIdentityStateDeclared)
+            .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ThenBy(fact => fact.Evidence.StartLine)
+            .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
+            .ToArray();
+        var retainedIdentityFacts = identityFacts.Take(options.MaxIdentityState).ToArray();
+        if (retainedIdentityFacts.Length < identityFacts.Length)
+        {
+            truncated = true;
+            AddGeneratedGap(gaps, options.MaxGaps, snapshot, "WebFormsModernizationIdentityStateLimitReached", "packet", null,
+                identityFacts.Skip(retainedIdentityFacts.Length).Select(fact => fact.FactId));
+        }
+        var surfaceByIdentity = surfaces.ToDictionary(surface => surface.SurfaceId, StringComparer.Ordinal);
+        var controlSurface = surfaces.SelectMany(surface => surface.ControlIds.Select(controlId => (controlId, surface.SurfaceId)))
+            .GroupBy(item => item.controlId, StringComparer.Ordinal)
+            .Where(group => group.Select(item => item.SurfaceId).Distinct(StringComparer.Ordinal).Count() == 1)
+            .ToDictionary(group => group.Key, group => group.Single().SurfaceId, StringComparer.Ordinal);
+        var identityState = retainedIdentityFacts.Select(fact =>
+        {
+            var surfaceId = fact.SourceSymbol is not null && surfaceByIdentity.ContainsKey(fact.SourceSymbol)
+                ? fact.SourceSymbol
+                : fact.TargetSymbol is null ? null : controlSurface.GetValueOrDefault(fact.TargetSymbol);
+            var identityStateId = HashId("identity-state", [fact.FactId]);
+            var identityKind = IdentityKind(fact.Properties.GetValueOrDefault("identityKind"), out var supportedKind);
+            var classification = IdentityClassification(fact.Properties.GetValueOrDefault("declarationStatus"), out var supportedClassification);
+            var safeMetadata = IdentitySafeMetadata(fact, out var supportedMetadata);
+            if (!supportedKind || !supportedClassification || !supportedMetadata)
+                AddGeneratedGap(gaps, options.MaxGaps, snapshot, "UnsupportedIdentityStatePropertyShape", "identity-state", identityStateId, [fact.FactId]);
+            var evidence = Evidence(fact, gaps, options.MaxGaps, snapshot);
+            return new WebFormsModernizationIdentityState(
+                identityStateId,
+                identityKind,
+                classification,
+                surfaceId,
+                safeMetadata,
+                evidence,
+                SplitIds(fact.Properties.GetValueOrDefault("supportingFactIds")).Append(fact.FactId)
+                    .Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                evidence.Limitations.Append("Identity/state packet composition does not prove effective runtime policy, identity, authorization, session behavior, security quality, vulnerability, compliance, or migration success.")
+                    .Distinct(StringComparer.Ordinal).ToArray());
+        }).OrderBy(item => item.IdentityStateId, StringComparer.Ordinal).ToArray();
+        foreach (var identityGap in facts.Where(fact => fact.FactType == FactTypes.AnalysisGap && fact.RuleId == RuleIds.LegacyAspNetIdentityState))
+            AddFactGap(gaps, options.MaxGaps, snapshot, identityGap);
         if (gaps.Any(gap => gap.Classification == "WebFormsModernizationGapLimitReached")) truncated = true;
         var uniqueGaps = gaps.GroupBy(gap => gap.GapId, StringComparer.Ordinal).Select(group => group.First()).OrderBy(gap => gap.GapId, StringComparer.Ordinal).ToArray();
         var hasReducedInput = facts.Any(fact => fact.EvidenceTier == EvidenceTiers.Tier4Unknown
@@ -486,11 +542,12 @@ public static class WebFormsModernizationPacketReporter
             ClaimLevel,
             coverage,
             [source],
-            new(projects.Length, surfaces.Length, chains.Count, boundaries.Count, candidates.Count, uniqueGaps.Length, truncated),
+            new(projects.Length, surfaces.Length, chains.Count, boundaries.Count, identityState.Length, candidates.Count, uniqueGaps.Length, truncated),
             projects,
             surfaces,
             chains.OrderBy(chain => chain.ChainId, StringComparer.Ordinal).ToArray(),
             boundaries.OrderBy(boundary => boundary.BoundaryId, StringComparer.Ordinal).ToArray(),
+            identityState,
             candidates,
             uniqueGaps,
             Questions,
@@ -677,7 +734,8 @@ public static class WebFormsModernizationPacketReporter
             evidence.EndLine,
             evidence.ExtractorId,
             evidence.ExtractorVersion,
-            [fact.FactId],
+            SplitIds(fact.Properties.GetValueOrDefault("supportingFactIds")).Append(fact.FactId)
+                .Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             evidence.Limitations));
     }
 
@@ -812,8 +870,9 @@ public static class WebFormsModernizationPacketReporter
                 select fact_id, scan_id, repo, commit_sha, project_path, fact_type, rule_id, evidence_tier,
                        source_symbol, target_symbol, contract_element, file_path, start_line, end_line,
                        snippet_hash, extractor_id, extractor_version, properties_json
-                from facts where rule_id like 'legacy.webforms.%' order by fact_id;
+                from facts where rule_id like 'legacy.webforms.%' or rule_id = $identityRule order by fact_id;
                 """;
+                command.Parameters.AddWithValue("$identityRule", RuleIds.LegacyAspNetIdentityState);
                 await using var reader = await command.ExecuteReaderAsync(cancellationToken);
                 while (await reader.ReadAsync(cancellationToken))
                 {
@@ -859,7 +918,7 @@ public static class WebFormsModernizationPacketReporter
         b.AppendLine($"- Coverage: `{packet.Coverage}`");
         b.AppendLine($"- Repository: `{packet.Sources.Single().RepositoryId}`");
         b.AppendLine($"- Commit: `{packet.Sources.Single().CommitSha}`");
-        b.AppendLine($"- Surfaces: `{packet.Summary.SurfaceCount}`; event chains: `{packet.Summary.EventChainCount}`; downstream boundaries: `{packet.Summary.DownstreamBoundaryCount}`; structural candidates: `{packet.Summary.StructuralSliceCandidateCount}`; gaps: `{packet.Summary.GapCount}`; truncated: `{packet.Summary.Truncated}`.").AppendLine();
+        b.AppendLine($"- Surfaces: `{packet.Summary.SurfaceCount}`; event chains: `{packet.Summary.EventChainCount}`; downstream boundaries: `{packet.Summary.DownstreamBoundaryCount}`; identity/state declarations: `{packet.Summary.IdentityStateCount}`; structural candidates: `{packet.Summary.StructuralSliceCandidateCount}`; gaps: `{packet.Summary.GapCount}`; truncated: `{packet.Summary.Truncated}`.").AppendLine();
         b.AppendLine("## Surfaces").AppendLine();
         if (packet.Surfaces.Count == 0) b.AppendLine("- No supported Web Forms surfaces were available; see gaps.");
         foreach (var surface in packet.Surfaces)
@@ -876,6 +935,10 @@ public static class WebFormsModernizationPacketReporter
             var evidenceSpan = primaryEvidence is null ? "span-unavailable" : $"{primaryEvidence.FilePath}:{primaryEvidence.StartLine}-{primaryEvidence.EndLine}";
             b.AppendLine($"- `{boundary.BoundaryId}` — chain `{boundary.ChainId}` -> `{boundary.BoundaryCategory}/{boundary.BoundaryKind}`; target `{boundary.BoundaryTargetId}`; terminal evidence `{boundary.TerminalEvidenceId}`; classification `{boundary.Classification}`; evidence `{evidenceSpan}`; supporting facts {string.Join(", ", boundary.SupportingFactIds.Select(id => $"`{id}`"))}; rules {string.Join(", ", boundary.RuleIds.Select(id => $"`{id}`"))}.");
         }
+        b.AppendLine().AppendLine("## Identity and state declarations").AppendLine();
+        if (packet.IdentityStateInventory.Count == 0) b.AppendLine("- No supported identity/state declaration was inventoried; this is not proof of absence.");
+        foreach (var item in packet.IdentityStateInventory)
+            b.AppendLine($"- `{item.IdentityStateId}` — `{item.IdentityKind}` / `{item.Classification}`; surface `{item.SurfaceId ?? "unassociated"}`; fact `{item.Evidence.FactId}`; rule `{item.Evidence.RuleId}`; tier `{item.Evidence.EvidenceTier}`; coverage `{item.Evidence.CoverageLabel}`; span `{item.Evidence.FilePath}:{item.Evidence.StartLine}-{item.Evidence.EndLine}`.");
         b.AppendLine().AppendLine("## Structural slice candidates").AppendLine();
         foreach (var candidate in packet.StructuralSliceCandidates)
             b.AppendLine($"- `{candidate.CandidateId}` — classification `{candidate.Classification}`, owner naming required `{candidate.OwnerNamingRequired}`, surfaces {string.Join(", ", candidate.SurfaceIds.Select(id => $"`{id}`"))}.");
@@ -895,13 +958,77 @@ public static class WebFormsModernizationPacketReporter
         if (string.IsNullOrWhiteSpace(options.IndexPath)) throw new ArgumentException("webforms-modernization requires --index <index.sqlite>.");
         if (string.IsNullOrWhiteSpace(options.OutputDirectory)) throw new ArgumentException("webforms-modernization requires --out <directory>.");
         if (!File.Exists(options.IndexPath)) throw new FileNotFoundException("WebFormsModernizationIndexUnavailable");
-        if (options.MaxSurfaces <= 0 || options.MaxEventChains <= 0 || options.MaxCandidates <= 0 || options.MaxGaps <= 0 || options.MaxDepth <= 0 || options.MaxPaths <= 0 || options.MaxBoundaries <= 0)
+        if (options.MaxSurfaces <= 0 || options.MaxEventChains <= 0 || options.MaxCandidates <= 0 || options.MaxGaps <= 0 || options.MaxDepth <= 0 || options.MaxPaths <= 0 || options.MaxBoundaries <= 0 || options.MaxIdentityState <= 0)
             throw new ArgumentOutOfRangeException(nameof(options), "Web Forms modernization bounds must be positive.");
     }
 
     private static string SurfaceIdentity(CodeFact fact) =>
         fact.Properties.GetValueOrDefault("surfaceIdentity") ?? fact.SourceSymbol ?? HashId("surface", [fact.FactId]);
     private static string ProjectId(string? projectPath) => projectPath is null ? "project-unassigned" : HashId("project", [projectPath]);
+    private static IReadOnlyDictionary<string, string> IdentitySafeMetadata(CodeFact fact, out bool supported)
+    {
+        string[] allowed =
+        [
+            "anonymousUserMarkerDeclared", "authenticationMode", "authorizationAction", "controlType", "cookielessSetting",
+            "cookielessSettingDeclared", "cookieNameDeclared", "credentialAttributesDeclared", "crossAppRedirectSetting",
+            "crossAppRedirectSettingDeclared", "declarationOrdinal", "decryptionAlgorithm", "decryptionKeyDeclared", "defaultProviderDeclared",
+            "domainDeclared", "enabledSetting", "enabledSettingDeclared", "httpOnlySetting", "httpOnlySettingDeclared",
+            "impersonationSetting", "impersonationSettingDeclared", "loginTargetDeclared", "providerClassification",
+            "requireSslSetting", "requireSslSettingDeclared", "rolesDeclared", "rolesEntryCount", "rolesWildcardDeclared",
+            "sameSite", "sessionMode", "slidingExpirationSetting", "slidingExpirationSettingDeclared",
+            "stateConnectionDeclared", "timeoutDeclared", "usersDeclared", "usersEntryCount", "usersWildcardDeclared",
+            "validationAlgorithm", "validationKeyDeclared", "verbsDeclared", "verbsEntryCount", "verbsWildcardDeclared"
+        ];
+        supported = true;
+        var result = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        foreach (var pair in fact.Properties.Where(pair => allowed.Contains(pair.Key, StringComparer.Ordinal)).OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            var value = SafeIdentityMetadataValue(pair.Key, pair.Value);
+            if (value is null)
+            {
+                supported = false;
+                continue;
+            }
+            result[pair.Key] = value;
+        }
+        return result;
+    }
+    private static string? SafeIdentityMetadataValue(string key, string value)
+    {
+        if (key == "cookielessSetting")
+            return value is "AutoDetect" or "UseCookies" or "UseDeviceProfile" or "UseUri" or "true" or "false" ? value : null;
+        if (key.EndsWith("Declared", StringComparison.Ordinal) || key.EndsWith("Setting", StringComparison.Ordinal))
+            return value is "true" or "false" ? value : null;
+        if (key.EndsWith("EntryCount", StringComparison.Ordinal) || key == "declarationOrdinal")
+            return int.TryParse(value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var count) && count >= 0
+                ? count.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                : null;
+        return key switch
+        {
+            "authenticationMode" when value is "None" or "Windows" or "Forms" or "Passport" or "unsupported-or-custom" => value,
+            "authorizationAction" when value is "allow" or "deny" => value,
+            "controlType" when value is "ChangePassword" or "CreateUserWizard" or "Login" or "LoginName" or "LoginStatus" or "LoginView" or "PasswordRecovery" => value,
+            "decryptionAlgorithm" when value is "3DES" or "AES" or "Auto" or "DES" or "TripleDES" or "unsupported-or-custom" => value,
+            "providerClassification" when value is "framework-declared" or "custom-or-unresolved" => value,
+            "sameSite" when value is "Lax" or "None" or "Strict" or "Unspecified" or "unsupported-or-custom" => value,
+            "sessionMode" when value is "Custom" or "InProc" or "Off" or "SQLServer" or "StateServer" or "unsupported-or-custom" => value,
+            "validationAlgorithm" when value is "AES" or "HMACSHA256" or "HMACSHA384" or "HMACSHA512" or "MD5" or "SHA1" or "TripleDES" or "unsupported-or-custom" => value,
+            _ => null
+        };
+    }
+    private static string IdentityKind(string? value, out bool supported)
+    {
+        supported = value is "authentication" or "authorization-section" or "impersonation" or "machine-key-presence"
+            or "membership" or "role-manager" or "session-state" or "cookie-policy" or "anonymous-identification"
+            or "profile" or "forms-authentication" or "authorization-rule" or "membership-provider" or "role-provider"
+            or "identity-pipeline-component" or "login-control" or "custom-principal-type" or "custom-identity-type";
+        return supported ? value! : "unknown";
+    }
+    private static string IdentityClassification(string? value, out bool supported)
+    {
+        supported = value is "declared-in-checked-in-config" or "declared-in-markup" or "compiler-resolved-interface";
+        return supported ? value! : "unknown";
+    }
     private static bool ProjectionDuplicatesConcreteTerminal(CombinedPathNode projection, CombinedPath projectionPath, CombinedPathNode concrete)
     {
         if (string.IsNullOrWhiteSpace(projection.ShapeHash)
