@@ -457,6 +457,16 @@ public static class LegacyBatchDataMovementExtractor
             }
         }
         var storedProcedureVariables = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var declaration in method.DescendantNodes().OfType<VariableDeclarationSyntax>()
+                     .Where(declaration => IsSupportedCommandType(declaration.Type.ToString())))
+        {
+            foreach (var variable in declaration.Variables.Where(variable =>
+                         variable.Initializer?.Value is BaseObjectCreationExpressionSyntax creation
+                         && HasStoredProcedureInitializer(creation.Initializer)))
+            {
+                storedProcedureVariables.Add(variable.Identifier.ValueText);
+            }
+        }
         foreach (var assignment in method.DescendantNodes().OfType<AssignmentExpressionSyntax>())
         {
             if (assignment.Left is MemberAccessExpressionSyntax left
@@ -471,9 +481,7 @@ public static class LegacyBatchDataMovementExtractor
         foreach (var creation in method.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
         {
             if (IsSupportedCommandType(creation.Type.ToString())
-                && creation.Initializer?.Expressions.OfType<AssignmentExpressionSyntax>().Any(assignment =>
-                    assignment.Left.ToString() == "CommandType"
-                    && assignment.Right.ToString().EndsWith("CommandType.StoredProcedure", StringComparison.Ordinal)) == true
+                && HasStoredProcedureInitializer(creation.Initializer)
                 && creation.Parent is EqualsValueClauseSyntax { Parent: VariableDeclaratorSyntax variable })
             {
                 storedProcedureVariables.Add(variable.Identifier.ValueText);
@@ -496,6 +504,11 @@ public static class LegacyBatchDataMovementExtractor
             observations.Add(SyntaxObservation(filePath, invocation, "stored-procedure-batch", "command-type-stored-procedure", "execute", member, ownerType, properties));
         }
     }
+
+    private static bool HasStoredProcedureInitializer(InitializerExpressionSyntax? initializer) =>
+        initializer?.Expressions.OfType<AssignmentExpressionSyntax>().Any(assignment =>
+            assignment.Left.ToString() == "CommandType"
+            && assignment.Right.ToString().EndsWith("CommandType.StoredProcedure", StringComparison.Ordinal)) == true;
 
     private static void AddBulkCopySyntaxFallback(
         string filePath,

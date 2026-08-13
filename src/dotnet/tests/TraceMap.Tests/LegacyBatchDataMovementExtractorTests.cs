@@ -31,8 +31,10 @@ public sealed class LegacyBatchDataMovementExtractorTests
                         Retry();
                         _ = System.IO.File.ReadAllText("private-file-path");
                         var watcher = new System.IO.FileSystemWatcher("private-watch-path");
-                        var command = new System.Data.SqlClient.SqlCommand();
-                        command.CommandType = System.Data.CommandType.StoredProcedure;
+                        System.Data.SqlClient.SqlCommand command = new()
+                        {
+                            CommandType = System.Data.CommandType.StoredProcedure
+                        };
                         foreach (var item in Items()) command.ExecuteNonQuery();
                         System.Data.SqlClient.SqlBulkCopy bulk = new();
                         bulk.WriteToServer(Items());
