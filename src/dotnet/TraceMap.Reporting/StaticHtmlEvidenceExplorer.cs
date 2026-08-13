@@ -64,13 +64,91 @@ public sealed record ExplorerData(
     string SchemaVersion,
     ExplorerSummary Summary,
     IReadOnlyList<ExplorerSectionStatus> SectionStatuses,
+    IReadOnlyList<ExplorerCompatibilityRow> CompatibilityLedger,
     IReadOnlyList<ExplorerSource> Sources,
     IReadOnlyList<ExplorerInputArtifact> Artifacts,
+    IReadOnlyList<ExplorerSurface> Surfaces,
+    IReadOnlyList<ExplorerPath> Paths,
+    IReadOnlyList<ExplorerReducerResult> ReducerResults,
     IReadOnlyList<ExplorerEvidenceRow> EvidenceRows,
     IReadOnlyList<ExplorerGap> Gaps,
     IReadOnlyList<ExplorerLimitation> Limitations,
     IReadOnlyList<ExplorerRule> Rules,
     IReadOnlyList<ExplorerRedaction> Redactions);
+
+public sealed record ExplorerSurface(
+    string SurfaceId,
+    string SurfaceKind,
+    string? SurfaceSubtype,
+    string SafeLabel,
+    string Classification,
+    string RuleId,
+    string EvidenceTier,
+    string CoverageLabel,
+    string ArtifactId,
+    string SourceId,
+    string CommitSha,
+    string ExtractorVersion,
+    string? FilePath,
+    int? StartLine,
+    int? EndLine,
+    IReadOnlyList<string> SupportIds,
+    IReadOnlyList<string> LimitationIds);
+
+public sealed record ExplorerPath(
+    string PathId,
+    string PathKind,
+    string Classification,
+    string Confidence,
+    string CoverageLabel,
+    string ArtifactId,
+    IReadOnlyList<ExplorerPathHop> Hops,
+    IReadOnlyList<string> SupportIds,
+    IReadOnlyList<string> LimitationIds);
+
+public sealed record ExplorerPathHop(
+    string HopId,
+    int Sequence,
+    string EdgeKind,
+    string RuleId,
+    string EvidenceTier,
+    string FromNodeId,
+    string ToNodeId,
+    string SourceId,
+    string CommitSha,
+    string ExtractorVersion,
+    string? FilePath,
+    int? StartLine,
+    int? EndLine,
+    IReadOnlyList<string> SupportIds,
+    IReadOnlyList<string> LimitationIds);
+
+public sealed record ExplorerReducerResult(
+    string ResultId,
+    string Classification,
+    string Confidence,
+    string RuleId,
+    string EvidenceTier,
+    string ReducerVersion,
+    string CoverageLabel,
+    string ArtifactId,
+    IReadOnlyList<string> EvidenceIds,
+    IReadOnlyList<string> SupportIds,
+    IReadOnlyList<string> LimitationIds);
+
+public sealed record ExplorerCompatibilityRow(
+    string RowId,
+    string SubjectKind,
+    string SubjectId,
+    string SafeLabel,
+    string CompatibilityStatus,
+    string RuleId,
+    string EvidenceTier,
+    string CoverageLabel,
+    string Scope,
+    IReadOnlyList<string> SupportIds,
+    IReadOnlyList<string> LimitationIds,
+    string Message);
 
 public sealed record ExplorerSummary(
     string SafetyProfile,
@@ -183,10 +261,16 @@ public sealed record ExplorerRedaction(
     string Action,
     int Count);
 
-public static class StaticHtmlEvidenceExplorer
+public static partial class StaticHtmlEvidenceExplorer
 {
-    public const string SchemaVersion = "tracemap-static-html-evidence-explorer.v1";
+    public const string SchemaVersion = "tracemap-static-html-evidence-explorer.v4";
     public const string GeneratorName = "tracemap-static-html-evidence-explorer";
+    private static readonly string[] PriorSchemaVersions =
+    [
+        "tracemap-static-html-evidence-explorer.v1",
+        "tracemap-static-html-evidence-explorer.v2",
+        "tracemap-static-html-evidence-explorer.v3"
+    ];
 
     public const string UnsupportedSchemaRuleId = "explorer.input.unsupported-schema.v1";
     public const string ProvenanceConflictRuleId = "explorer.input.provenance-conflict.v1";
@@ -196,7 +280,12 @@ public static class StaticHtmlEvidenceExplorer
     public const string CatalogUnavailableRuleId = "explorer.render.catalog-unavailable.v1";
     public const string NoNetworkAssetsRuleId = "explorer.render.no-network-assets.v1";
     public const string PartialSectionRuleId = "explorer.render.partial-section.v1";
+    public const string FrameworkMigrationMetadataUnavailableRuleId = "explorer.input.framework-migration-metadata-unavailable.v1";
     public const string SectionStatusRuleId = "explorer.render.section-status.v1";
+    public const string CompatibilityLedgerRuleId = "explorer.render.compatibility-ledger.v1";
+    public const string ReleaseReviewInputRuleId = "explorer.input.release-review.v1";
+    public const string PathsReportInputRuleId = "explorer.input.paths-report.v1";
+    public const string ReducerImpactInputRuleId = "explorer.input.contract-delta-impact.v1";
     public const string GeneratedFileStaleRuleId = "explorer.validation.generated-file-stale.v1";
     public const string UserFileCollisionRuleId = "explorer.validation.user-file-collision.v1";
     public const string UnsafeRejectedRuleId = "explorer.validation.unsafe-value-rejected.v1";
@@ -206,9 +295,61 @@ public static class StaticHtmlEvidenceExplorer
     private const string PublicDemo = "public-demo";
     private const string HiddenLocal = "hidden-local";
     private const string SourceId = "source:scan-output";
+    private const string StaticDependencySurfaceClassification = "StaticDependencySurface";
     private const int EvidenceRowNoScriptLimit = 200;
     private const int MaxRuleCatalogTextLength = 360;
     private const long MaxRuleCatalogBytes = 1_048_576;
+    private const long MaxReleaseReviewBytes = 16_777_216;
+    private const long MaxPathsReportBytes = 33_554_432;
+    private const int MaxPathsReportSources = 1_000;
+    private const int MaxPathsReportPaths = 1_000;
+    private const int MaxPathsReportHops = 10_000;
+
+    private static readonly HashSet<string> SupportedPathClassifications = new(StringComparer.Ordinal)
+    {
+        CombinedDependencyPathClassifications.StrongStaticPath,
+        CombinedDependencyPathClassifications.ProbableStaticPath,
+        CombinedDependencyPathClassifications.NeedsReviewPath,
+        CombinedDependencyPathClassifications.NeedsReviewStaticPath,
+        CombinedDependencyPathClassifications.ReducedCoverage,
+        CombinedDependencyPathClassifications.AnalysisGap,
+        CombinedDependencyPathClassifications.NoBackendEvidence,
+        CombinedDependencyPathClassifications.UnknownAnalysisGap,
+        CombinedDependencyPathClassifications.NoPathFound,
+        CombinedDependencyPathClassifications.SelectorNoMatch,
+        CombinedDependencyPathClassifications.ClassificationFilterNoMatch
+    };
+
+    private static readonly HashSet<string> SupportedPathEdgeKinds = new(StringComparer.Ordinal)
+    {
+        "calls",
+        "creates",
+        "inherits",
+        "implements",
+        "overrides",
+        "argument-passed",
+        "parameter-forward",
+        "endpoint-match",
+        "fact-attached-to-symbol",
+        "surface-evidence",
+        "symbol-reconciliation",
+        "interface-candidate",
+        "override-candidate",
+        "message-publish-consume"
+    };
+
+    private static readonly HashSet<string> SupportedPathEdgeClassifications = new(StringComparer.Ordinal)
+    {
+        "EvidenceEdge",
+        CombinedEndpointClassifications.MatchedEndpoint,
+        CombinedEndpointClassifications.OptionalSegmentMatch,
+        CombinedEndpointClassifications.MethodMismatch,
+        CombinedEndpointClassifications.ClientCallNoServerEndpoint,
+        CombinedEndpointClassifications.ServerEndpointNoClientMatch,
+        CombinedEndpointClassifications.AmbiguousMatch,
+        CombinedEndpointClassifications.DynamicClientUrlNeedsReview,
+        CombinedEndpointClassifications.UnknownAnalysisGap
+    };
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -274,17 +415,28 @@ public static class StaticHtmlEvidenceExplorer
         CancellationToken cancellationToken)
     {
         var artifacts = new List<ExplorerInputArtifact>();
+        var surfaces = new List<ExplorerSurface>();
+        var paths = new List<ExplorerPath>();
+        var reducerResults = new List<ExplorerReducerResult>();
         var evidenceRows = new List<ExplorerEvidenceRow>();
         var gaps = new List<ExplorerGap>();
         var limitations = new List<ExplorerLimitation>();
         var redactions = new Dictionary<(string RuleId, string Category, string Location, string Action), int>();
         var coverageLabels = new SortedSet<string>(StringComparer.Ordinal);
+        var reportSources = new List<ExplorerSource>();
         ScanManifest? manifest = null;
+        string? sourceCommitSha = null;
+        string? sourceCommitSupportId = null;
 
         var manifestPath = Path.Combine(inputDirectory, "scan-manifest.json");
         if (File.Exists(manifestPath))
         {
             manifest = await ReadJsonAsync<ScanManifest>(manifestPath, cancellationToken);
+            if (IsUsableCommitSha(manifest.CommitSha))
+            {
+                sourceCommitSha = manifest.CommitSha;
+                sourceCommitSupportId = "artifact:scan-manifest";
+            }
             var manifestCoverage = CoverageLabelsFromManifest(manifest);
             foreach (var label in manifestCoverage)
             {
@@ -355,6 +507,14 @@ public static class StaticHtmlEvidenceExplorer
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
+            var factsHaveOneCompleteCommit = facts.Count > 0
+                && facts.All(fact => IsUsableCommitSha(fact.CommitSha))
+                && factCommitShas.Length == 1;
+            if (sourceCommitSha is null && factsHaveOneCompleteCommit)
+            {
+                sourceCommitSha = factCommitShas[0];
+                sourceCommitSupportId = "artifact:facts-ndjson";
+            }
 
             if (manifest is not null && IsUsableCommitSha(manifest.CommitSha))
             {
@@ -372,7 +532,7 @@ public static class StaticHtmlEvidenceExplorer
                 }
             }
 
-            if (manifest is null && factCommitShas.Length == 0)
+            if (manifest is null && !factsHaveOneCompleteCommit)
             {
                 gaps.Add(CreateGap(
                     "missing-commit-facts",
@@ -381,7 +541,7 @@ public static class StaticHtmlEvidenceExplorer
                     "artifact:facts-ndjson",
                     "evidence-rows",
                     "PartialAnalysis",
-                    "facts.ndjson does not contain usable commit metadata and no scan manifest was provided.",
+                    "facts.ndjson does not establish one usable commit for every fact and no scan manifest was provided.",
                     ["artifact:facts-ndjson"]));
             }
 
@@ -392,6 +552,26 @@ public static class StaticHtmlEvidenceExplorer
                          .ThenBy(fact => fact.FactId, StringComparer.Ordinal))
             {
                 var evidence = fact.Evidence;
+                var frameworkMetadata = FrameworkMigrationMetadata(fact, sourceCommitSha);
+                if (frameworkMetadata.IsFrameworkMigration && !frameworkMetadata.IsValid)
+                {
+                    gaps.Add(CreateGap(
+                        $"framework-migration-metadata-{Hash(fact.FactId, 16)}",
+                        FrameworkMigrationMetadataUnavailableRuleId,
+                        "framework-migration-metadata-unavailable",
+                        SourceId,
+                        "evidence-rows",
+                        "PartialAnalysis",
+                        "A framework migration fact did not contain the exact bounded coverage and limitation metadata required for safe explorer projection, so the evidence row was omitted.",
+                        SafeSupportIds([fact.FactId])));
+                    RecordOmittedFactProperties(fact, redactions);
+                    continue;
+                }
+
+                var frameworkLimitationId = frameworkMetadata.Limitation is null
+                    ? null
+                    : RegisterFrameworkMigrationLimitation(fact, frameworkMetadata.Limitation, limitations);
+
                 if (evidence is null)
                 {
                     gaps.Add(CreateGap(
@@ -400,7 +580,7 @@ public static class StaticHtmlEvidenceExplorer
                         "missing-evidence-span",
                         "artifact:facts-ndjson",
                         "evidence-rows",
-                        coverageLabels.Count == 0 ? "UnknownCoverage" : coverageLabels.First(),
+                        frameworkMetadata.CoverageLabel ?? (coverageLabels.Count == 0 ? "UnknownCoverage" : coverageLabels.First()),
                         "An evidence row did not include a file span, so the explorer rendered the row with partial span metadata.",
                         [fact.FactId]));
                 }
@@ -419,9 +599,9 @@ public static class StaticHtmlEvidenceExplorer
                     evidence?.StartLine,
                     evidence?.EndLine,
                     evidence is null ? "n/a" : SafeSnippetHash(evidence.SnippetHash, redactions),
-                    coverageLabels.Count == 0 ? "UnknownCoverage" : coverageLabels.First(),
+                    frameworkMetadata.CoverageLabel ?? (coverageLabels.Count == 0 ? "UnknownCoverage" : coverageLabels.First()),
                     SafeClosedText(evidence?.ExtractorVersion, "extractor-version", redactions),
-                    []));
+                    frameworkLimitationId is null ? [] : [frameworkLimitationId]));
                 RecordOmittedFactProperties(fact, redactions);
 
                 if (fact.FactType == FactTypes.AnalysisGap)
@@ -433,7 +613,7 @@ public static class StaticHtmlEvidenceExplorer
                         "analysis-gap",
                         SourceId,
                         "coverage",
-                        coverageLabels.Count == 0 ? "UnknownCoverage" : coverageLabels.First(),
+                        frameworkMetadata.CoverageLabel ?? (coverageLabels.Count == 0 ? "UnknownCoverage" : coverageLabels.First()),
                         "Input facts contain an AnalysisGap row. The explorer preserves it as a coverage limitation without deriving a new conclusion.",
                         [fact.FactId]));
                 }
@@ -454,17 +634,53 @@ public static class StaticHtmlEvidenceExplorer
 
         await AddOptionalArtifactAsync(inputDirectory, "index.sqlite", "sqlite-index", "SQLite index", "index.sqlite.v1", safetyProfile, artifacts, gaps, cancellationToken);
         await AddOptionalArtifactAsync(inputDirectory, "report.md", "markdown-report", "Markdown report", "report.md.v1", safetyProfile, artifacts, gaps, cancellationToken);
+        await AddReleaseReviewArtifactAsync(
+            inputDirectory,
+            safetyProfile,
+            sourceCommitSha,
+            sourceCommitSupportId,
+            artifacts,
+            gaps,
+            limitations,
+            cancellationToken);
+        await AddPathsReportArtifactAsync(
+            inputDirectory,
+            safetyProfile,
+            sourceCommitSha,
+            artifacts,
+            reportSources,
+            surfaces,
+            paths,
+            evidenceRows,
+            gaps,
+            limitations,
+            coverageLabels,
+            redactions,
+            cancellationToken);
+        await AddReducerImpactArtifactAsync(
+            inputDirectory,
+            safetyProfile,
+            sourceCommitSha,
+            artifacts,
+            reportSources,
+            reducerResults,
+            evidenceRows,
+            gaps,
+            limitations,
+            coverageLabels,
+            redactions,
+            cancellationToken);
         var catalogLoad = await AddRuleCatalogArtifactAsync(inputDirectory, safetyProfile, artifacts, gaps, redactions, cancellationToken);
         var catalogRules = catalogLoad.Entries;
         await AddUnsupportedJsonArtifactsAsync(inputDirectory, safetyProfile, artifacts, gaps, cancellationToken);
 
         limitations.Add(CreateLimitation(
-            "claim-level-conflict-detection-deferred",
-            ProvenanceConflictRuleId,
-            "claim-level-conflict-detection-deferred",
+            "claim-level-metadata-unavailable",
+            CompatibilityLedgerRuleId,
+            "claim-level-metadata-unknown",
             "artifacts",
             "claim-level",
-            "Claim-level conflict detection across multiple compatible structured artifacts is deferred in this explorer slice. Existing rendered data still uses the selected safety profile and documents this limitation.",
+            "Compatible first-slice inputs do not expose independent claim-level metadata. The selected output safety profile governs rendering, and no claim-level conflict is inferred from unknown metadata.",
             ["input-directory"]));
 
         if (artifacts.All(artifact => artifact.ArtifactKind != "sqlite-index"))
@@ -483,6 +699,7 @@ public static class StaticHtmlEvidenceExplorer
         var builtInRuleIds = BuiltInExplorerRules().Select(rule => rule.RuleId).ToHashSet(StringComparer.Ordinal);
         var observedRuleIds = evidenceRows
             .Select(row => row.RuleId)
+            .Concat(reducerResults.Select(result => result.RuleId))
             .Where(ruleId => !builtInRuleIds.Contains(ruleId))
             .Distinct(StringComparer.Ordinal)
             .OrderBy(ruleId => ruleId, StringComparer.Ordinal)
@@ -496,21 +713,39 @@ public static class StaticHtmlEvidenceExplorer
         if (observedRulesWithoutCatalog.Length > 0 && (!catalogLoad.FilePresent || catalogRules.Count > 0))
         {
             var catalogProvided = catalogLoad.FilePresent;
+            var observedArtifactIds = evidenceRows
+                .Where(row => observedRulesWithoutCatalog.Contains(row.RuleId, StringComparer.Ordinal))
+                .Select(row => row.ArtifactId)
+                .Concat(reducerResults
+                    .Where(result => observedRulesWithoutCatalog.Contains(result.RuleId, StringComparer.Ordinal))
+                    .Select(result => result.ArtifactId))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray();
+            var observedScope = observedArtifactIds.Length == 1 ? observedArtifactIds[0] : "input-directory";
             gaps.Add(CreateGap(
                 catalogProvided ? "rule-catalog-observed-entry-unavailable" : "rule-catalog-unavailable",
                 CatalogUnavailableRuleId,
                 catalogProvided ? "catalog-entry-unavailable" : "catalog-unavailable",
-                "artifact:facts-ndjson",
+                observedScope,
                 "rules",
                 coverageLabels.Count == 0 ? "UnknownCoverage" : coverageLabels.First(),
                 catalogProvided
-                    ? "facts.ndjson references rule IDs that are not present in the compatible rule catalog artifact; those observed rules remain partial."
-                    : "facts.ndjson references rule IDs that are rendered with observed metadata only because no compatible rule catalog artifact was provided.",
-                observedRulesWithoutCatalog));
+                    ? "Compatible evidence inputs reference rule IDs that are not present in the compatible rule catalog artifact; those observed rules remain partial."
+                    : "Compatible evidence inputs reference rule IDs that are rendered with observed metadata only because no compatible rule catalog artifact was provided.",
+                observedArtifactIds.Concat(observedRulesWithoutCatalog).ToArray()));
         }
 
-        var rules = BuildExplorerRules(evidenceRows, catalogRules);
+        var rules = BuildExplorerRules(evidenceRows, reducerResults, catalogRules);
         var source = BuildSource(manifest, safetyProfile, artifacts, gaps, limitations, redactions, coverageLabels);
+        var includePrimarySource = reportSources.Count == 0
+            || artifacts.Any(artifact => artifact.SourceIds.Contains(SourceId, StringComparer.Ordinal));
+        var sources = (includePrimarySource ? new[] { source } : [])
+            .Concat(reportSources)
+            .GroupBy(item => item.SourceId, StringComparer.Ordinal)
+            .Select(group => group.First())
+            .OrderBy(item => item.SourceId, StringComparer.Ordinal)
+            .ToArray();
         var redactionRows = redactions
             .OrderBy(pair => pair.Key.RuleId, StringComparer.Ordinal)
             .ThenBy(pair => pair.Key.Category, StringComparer.Ordinal)
@@ -530,8 +765,11 @@ public static class StaticHtmlEvidenceExplorer
             manifest?.CommitSha is { } sha && IsUsableCommitSha(sha) ? sha : null,
             CoverageStatus(gaps, coverageLabels),
             coverageLabels.Count == 0 ? ["UnknownCoverage"] : coverageLabels.ToArray(),
-            [source],
+            sources,
             artifacts.OrderBy(artifact => artifact.ArtifactId, StringComparer.Ordinal).ToArray(),
+            surfaces.OrderBy(surface => surface.SurfaceKind, StringComparer.Ordinal).ThenBy(surface => surface.SurfaceId, StringComparer.Ordinal).ToArray(),
+            paths.OrderBy(path => path.PathId, StringComparer.Ordinal).ToArray(),
+            reducerResults.OrderBy(result => result.Classification, StringComparer.Ordinal).ThenBy(result => result.ResultId, StringComparer.Ordinal).ToArray(),
             evidenceRows,
             gaps.OrderBy(gap => gap.RuleId, StringComparer.Ordinal).ThenBy(gap => gap.GapId, StringComparer.Ordinal).ToArray(),
             limitations.OrderBy(limitation => limitation.RuleId, StringComparer.Ordinal).ThenBy(limitation => limitation.LimitationId, StringComparer.Ordinal).ToArray(),
@@ -550,9 +788,9 @@ public static class StaticHtmlEvidenceExplorer
             context.CommitSha,
             context.Sources.Count,
             context.Artifacts.Count,
-            SurfaceCount: 0,
-            PathCount: 0,
-            ReducerResultCount: 0,
+            context.Surfaces.Count,
+            context.Paths.Count,
+            context.ReducerResults.Count,
             context.EvidenceRows.Count,
             context.Gaps.Count,
             context.Limitations.Count,
@@ -560,14 +798,19 @@ public static class StaticHtmlEvidenceExplorer
             context.Redactions.Sum(redaction => redaction.Count),
             OmittedCount: context.Gaps.Count(gap => gap.GapKind is "not-provided" or "unsupported"),
             context.CoverageLabels,
-            ReducerOutputPresent: false);
+            ReducerOutputPresent: context.Artifacts.Any(artifact => artifact.ArtifactKind == "reducer-impact-report" && artifact.Compatibility == "supported"));
 
+        var sectionStatuses = BuildSectionStatuses(context);
         return new ExplorerData(
             SchemaVersion,
             summary,
-            BuildSectionStatuses(context),
+            sectionStatuses,
+            BuildCompatibilityLedger(context, sectionStatuses),
             context.Sources,
             context.Artifacts,
+            context.Surfaces,
+            context.Paths,
+            context.ReducerResults,
             context.EvidenceRows,
             context.Gaps,
             context.Limitations,
@@ -654,6 +897,102 @@ public static class StaticHtmlEvidenceExplorer
         return facts;
     }
 
+    private static (bool IsFrameworkMigration, bool IsValid, string? CoverageLabel, string? Limitation) FrameworkMigrationMetadata(
+        CodeFact fact,
+        string? expectedCommitSha)
+    {
+        var expected = fact.RuleId switch
+        {
+            RuleIds.DatabaseFrameworkMigrationDeclaration => (
+                FactTypes.FrameworkMigrationDeclared,
+                EvidenceTiers.Tier1Semantic,
+                "bounded-static-migration",
+                "Static framework migration declaration only; execution, ordering, provider selection, generated SQL, database state, rollback, and safety are not proven."),
+            RuleIds.DatabaseFrameworkMigrationOperation => (
+                FactTypes.FrameworkMigrationOperationCandidate,
+                EvidenceTiers.Tier1Semantic,
+                "bounded-static-migration",
+                "Static framework migration operation candidate only; execution, ordering, provider selection, generated SQL, database state, rollback, reversibility, and safety are not proven."),
+            RuleIds.DatabaseFrameworkMigrationGap => (
+                FactTypes.AnalysisGap,
+                EvidenceTiers.Tier4Unknown,
+                "reduced-static-migration",
+                "Static framework migration coverage is reduced; omitted protected content and runtime behavior were not analyzed."),
+            _ => default
+        };
+        if (expected == default)
+        {
+            return (false, true, null, null);
+        }
+
+        var coverage = fact.Properties?.GetValueOrDefault("coverageLabel");
+        var limitation = fact.Properties?.GetValueOrDefault("limitations");
+        var evidence = fact.Evidence;
+        var expectedExtractor = evidence is not null
+            && ((evidence.ExtractorId == "FrameworkMigrationEvidenceExtractor"
+                    && evidence.ExtractorVersion == ScannerVersions.FrameworkMigrationEvidenceExtractor)
+                || (fact.RuleId == RuleIds.DatabaseFrameworkMigrationGap
+                    && evidence.ExtractorId == "FrameworkMigrationSyntaxFallbackExtractor"
+                    && evidence.ExtractorVersion == ScannerVersions.FrameworkMigrationSyntaxFallbackExtractor));
+        var valid = fact.FactType == expected.Item1
+            && fact.EvidenceTier == expected.Item2
+            && coverage == expected.Item3
+            && limitation == expected.Item4
+            && IsUsableCommitSha(fact.CommitSha)
+            && IsUsableCommitSha(expectedCommitSha)
+            && fact.CommitSha.Equals(expectedCommitSha, StringComparison.OrdinalIgnoreCase)
+            && evidence is not null
+            && !string.IsNullOrWhiteSpace(evidence.FilePath)
+            && evidence.StartLine > 0
+            && evidence.EndLine >= evidence.StartLine
+            && expectedExtractor;
+        return (true, valid, valid ? coverage : null, valid ? limitation : null);
+    }
+
+    private static string RegisterFrameworkMigrationLimitation(
+        CodeFact fact,
+        string message,
+        List<ExplorerLimitation> limitations)
+    {
+        var idPart = fact.RuleId switch
+        {
+            RuleIds.DatabaseFrameworkMigrationDeclaration => "framework-migration-declaration-static-boundary",
+            RuleIds.DatabaseFrameworkMigrationOperation => "framework-migration-operation-static-boundary",
+            RuleIds.DatabaseFrameworkMigrationGap => "framework-migration-gap-static-boundary",
+            _ => throw new InvalidOperationException("Framework migration limitation registration requires a supported rule ID.")
+        };
+        var limitationId = $"limitation:{idPart}";
+        var supportIds = SafeSupportIds([fact.FactId]);
+        var existingIndex = limitations.FindIndex(limitation => limitation.LimitationId == limitationId);
+        if (existingIndex < 0)
+        {
+            limitations.Add(new ExplorerLimitation(
+                limitationId,
+                fact.RuleId,
+                Tier4Unknown,
+                "framework-migration-static-boundary",
+                "evidence-rows",
+                SourceId,
+                "Prevents runtime, ordering, provider, generated-SQL, rollback, safety, and database-state conclusions.",
+                message,
+                supportIds));
+        }
+        else
+        {
+            var existing = limitations[existingIndex];
+            limitations[existingIndex] = existing with
+            {
+                SupportIds = existing.SupportIds
+                    .Concat(supportIds)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(value => value, StringComparer.Ordinal)
+                    .ToArray()
+            };
+        }
+
+        return limitationId;
+    }
+
     private static async Task AddOptionalArtifactAsync(
         string inputDirectory,
         string fileName,
@@ -710,6 +1049,9 @@ public static class StaticHtmlEvidenceExplorer
         {
             var fileName = Path.GetFileName(path);
             if (fileName.Equals("scan-manifest.json", StringComparison.Ordinal)
+                || fileName.Equals("release-review.json", StringComparison.Ordinal)
+                || fileName.Equals("paths-report.json", StringComparison.Ordinal)
+                || fileName.Equals("impact-report.json", StringComparison.Ordinal)
                 || fileName.Equals("explorer-manifest.json", StringComparison.Ordinal)
                 || fileName.Equals("explorer-data.json", StringComparison.Ordinal))
             {
@@ -739,6 +1081,810 @@ public static class StaticHtmlEvidenceExplorer
                 "A JSON artifact was discovered but is not supported by the first explorer slice. It is labeled unavailable without rendering raw content.",
                 [artifactId]));
         }
+    }
+
+    private static async Task AddReleaseReviewArtifactAsync(
+        string inputDirectory,
+        string safetyProfile,
+        string? sourceCommitSha,
+        string? sourceCommitSupportId,
+        List<ExplorerInputArtifact> artifacts,
+        List<ExplorerGap> gaps,
+        List<ExplorerLimitation> limitations,
+        CancellationToken cancellationToken)
+    {
+        const string artifactId = "artifact:release-review";
+        var path = Path.Combine(inputDirectory, "release-review.json");
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        var snapshot = await ReadBoundedArtifactAsync(path, MaxReleaseReviewBytes, cancellationToken);
+        if (snapshot.Content is null)
+        {
+            AddUnsupportedReleaseReviewArtifact(
+                artifacts,
+                gaps,
+                safetyProfile,
+                snapshot.ContentHash,
+                "artifact-too-large",
+                "The release-review artifact exceeded the bounded compatibility-reader size and was not parsed.");
+            return;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(
+                snapshot.Content,
+                new JsonDocumentOptions
+                {
+                    AllowTrailingCommas = false,
+                    CommentHandling = JsonCommentHandling.Disallow,
+                    MaxDepth = 64
+                });
+            var root = RequireObject(document.RootElement, "root");
+            if (RequireString(root, "reportType") != "release-review"
+                || RequireString(root, "version") != "1.2")
+            {
+                throw new InvalidDataException("unsupported release-review identity");
+            }
+
+            var mode = RequireString(root, "mode");
+            var expectedIndexKind = mode switch
+            {
+                "ReleaseReviewSingleV1" => "single",
+                "ReleaseReviewCombinedV1" => "combined",
+                _ => throw new InvalidDataException("unsupported release-review mode")
+            };
+            var beforeSnapshot = ReadReleaseReviewSnapshot(root, "beforeSnapshot", "before", expectedIndexKind);
+            var afterSnapshot = ReadReleaseReviewSnapshot(root, "afterSnapshot", "after", expectedIndexKind);
+            var summary = RequireObject(RequireProperty(root, "summary"), "summary");
+            var truncated = RequireBoolean(summary, "truncated");
+            var gapCount = RequireNonNegativeInt32(summary, "gapCount");
+
+            var coverageLabels = new SortedSet<string>(StringComparer.Ordinal)
+            {
+                $"ReleaseReviewBefore{beforeSnapshot.Coverage}",
+                $"ReleaseReviewAfter{afterSnapshot.Coverage}",
+                truncated ? "ReleaseReviewTruncated" : "ReleaseReviewNotTruncated",
+                gapCount > 0 ? "ReleaseReviewGapsPresent" : "ReleaseReviewNoRecordedGaps"
+            };
+            IReadOnlyList<string> sourceIds;
+            if (sourceCommitSha is null || sourceCommitSupportId is null)
+            {
+                sourceIds = [];
+                gaps.Add(CreateGap(
+                    "release-review-source-association-unknown",
+                    MissingCommitRuleId,
+                    "source-association-unknown",
+                    artifactId,
+                    "artifacts",
+                    "PartialAnalysis",
+                    "The explorer could not establish an authoritative scan commit for release-review source association, so the artifact remains unbound.",
+                    [artifactId]));
+            }
+            else if (!afterSnapshot.CommitShas.Contains(sourceCommitSha, StringComparer.OrdinalIgnoreCase))
+            {
+                sourceIds = [];
+                gaps.Add(CreateGap(
+                    "release-review-commit-conflict",
+                    ProvenanceConflictRuleId,
+                    "commit-conflict",
+                    artifactId,
+                    "artifacts",
+                    "PartialAnalysis",
+                    "The release-review after snapshot does not contain the authoritative scan commit, so the artifact is not bound to the scan source.",
+                    [artifactId, sourceCommitSupportId]));
+            }
+            else
+            {
+                sourceIds = [SourceId];
+            }
+
+            artifacts.Add(new ExplorerInputArtifact(
+                artifactId,
+                "release-review",
+                "Release review",
+                snapshot.ContentHash,
+                "release-review/1.2",
+                ClaimLevelForSafetyProfile(safetyProfile),
+                coverageLabels.ToArray(),
+                sourceIds,
+                ["limitation:release-review-content-not-rendered"],
+                [],
+                "supported"));
+            limitations.Add(CreateLimitation(
+                "release-review-content-not-rendered",
+                ReleaseReviewInputRuleId,
+                "report-content-not-rendered",
+                "artifacts",
+                "compatibility-only",
+                "The explorer validated release-review compatibility metadata and content identity only. Finding bodies, source labels, paths, messages, metadata, and reducer conclusions are not read or rendered in this slice.",
+                [artifactId]));
+        }
+        catch (Exception exception) when (exception is JsonException or InvalidDataException)
+        {
+            AddUnsupportedReleaseReviewArtifact(
+                artifacts,
+                gaps,
+                safetyProfile,
+                snapshot.ContentHash,
+                "unsupported-schema",
+                "The release-review artifact did not match the supported v1.2 compatibility metadata contract and was not rendered.");
+        }
+    }
+
+    private static void AddUnsupportedReleaseReviewArtifact(
+        List<ExplorerInputArtifact> artifacts,
+        List<ExplorerGap> gaps,
+        string safetyProfile,
+        string contentHash,
+        string gapKind,
+        string message)
+    {
+        const string artifactId = "artifact:release-review";
+        artifacts.Add(new ExplorerInputArtifact(
+            artifactId,
+            "release-review",
+            "Release review",
+            contentHash,
+            "release-review/unsupported",
+            ClaimLevelForSafetyProfile(safetyProfile),
+            [],
+            [],
+            [],
+            [UnsupportedSchemaRuleId],
+            "unsupported"));
+        gaps.Add(CreateGap(
+            "release-review-unsupported",
+            UnsupportedSchemaRuleId,
+            gapKind,
+            artifactId,
+            "artifacts",
+            "PartialAnalysis",
+            message,
+            [artifactId]));
+    }
+
+    private static ReleaseReviewSnapshotMetadata ReadReleaseReviewSnapshot(
+        JsonElement root,
+        string propertyName,
+        string expectedSide,
+        string expectedIndexKind)
+    {
+        var snapshot = RequireObject(RequireProperty(root, propertyName), propertyName);
+        if (RequireString(snapshot, "side") != expectedSide
+            || RequireString(snapshot, "indexKind") != expectedIndexKind)
+        {
+            throw new InvalidDataException("release-review snapshot identity mismatch");
+        }
+
+        var coverage = RequireString(snapshot, "reportCoverage");
+        if (coverage is not ("Full" or "Reduced"))
+        {
+            throw new InvalidDataException("unsupported release-review coverage");
+        }
+
+        var sources = RequireProperty(snapshot, "sources");
+        if (sources.ValueKind != JsonValueKind.Array || sources.GetArrayLength() == 0)
+        {
+            throw new InvalidDataException("release-review sources unavailable");
+        }
+
+        var commitShas = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var sourceElement in sources.EnumerateArray())
+        {
+            var source = RequireObject(sourceElement, "source");
+            var commitProperties = source.EnumerateObject()
+                .Where(property => property.NameEquals("commitSha"))
+                .ToArray();
+            if (commitProperties.Length != 1)
+            {
+                throw new InvalidDataException("release-review source commit identity unavailable");
+            }
+
+            var commit = commitProperties[0].Value;
+            if (commit.ValueKind != JsonValueKind.Null
+                && (commit.ValueKind != JsonValueKind.String || !IsUsableCommitSha(commit.GetString())))
+            {
+                throw new InvalidDataException("release-review source commit identity invalid");
+            }
+
+            if (commit.ValueKind == JsonValueKind.String)
+            {
+                commitShas.Add(commit.GetString()!);
+            }
+        }
+
+        return new ReleaseReviewSnapshotMetadata(coverage, commitShas.ToArray());
+    }
+
+    private static async Task AddPathsReportArtifactAsync(
+        string inputDirectory,
+        string safetyProfile,
+        string? authoritativeCommitSha,
+        List<ExplorerInputArtifact> artifacts,
+        List<ExplorerSource> reportSources,
+        List<ExplorerSurface> surfaces,
+        List<ExplorerPath> paths,
+        List<ExplorerEvidenceRow> evidenceRows,
+        List<ExplorerGap> gaps,
+        List<ExplorerLimitation> limitations,
+        SortedSet<string> overallCoverageLabels,
+        Dictionary<(string RuleId, string Category, string Location, string Action), int> redactions,
+        CancellationToken cancellationToken)
+    {
+        const string artifactId = "artifact:paths-report";
+        const string limitationId = "limitation:paths-report-display-text-not-rendered";
+        var path = Path.Combine(inputDirectory, "paths-report.json");
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        var snapshot = await ReadBoundedArtifactAsync(path, MaxPathsReportBytes, cancellationToken);
+        if (snapshot.Content is null)
+        {
+            AddUnsupportedPathsReportArtifact(
+                artifacts,
+                gaps,
+                safetyProfile,
+                snapshot.ContentHash,
+                "artifact-too-large",
+                "The paths report exceeded the bounded reader size and was not parsed.");
+            return;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(
+                snapshot.Content,
+                new JsonDocumentOptions
+                {
+                    AllowTrailingCommas = false,
+                    CommentHandling = JsonCommentHandling.Disallow,
+                    MaxDepth = 96
+                });
+            var root = RequireObject(document.RootElement, "root");
+            RejectDuplicateJsonProperties(root);
+            foreach (var required in new[] { "version", "reportCoverage", "sources", "summary", "paths", "gaps", "limitations" })
+            {
+                _ = RequireProperty(root, required);
+            }
+
+            var schemaVersionProperties = root.EnumerateObject()
+                .Where(property => property.NameEquals("schemaVersion"))
+                .ToArray();
+            if (schemaVersionProperties.Length > 1
+                || (schemaVersionProperties.Length == 1 && schemaVersionProperties[0].Value.ValueKind != JsonValueKind.Null))
+            {
+                throw new InvalidDataException("unsupported paths report schema variant");
+            }
+
+            if (RequireString(root, "version") != "1.0")
+            {
+                throw new InvalidDataException("unsupported paths report version");
+            }
+
+            var report = JsonSerializer.Deserialize<CombinedDependencyPathReport>(snapshot.Content, JsonOptions)
+                ?? throw new InvalidDataException("paths report unavailable");
+            ValidatePathsReport(report);
+
+            var orderedSources = report.Sources
+                .OrderBy(source => source.SourceIndexId, StringComparer.Ordinal)
+                .ToArray();
+            var authoritativeMatches = authoritativeCommitSha is null
+                ? 0
+                : orderedSources.Count(source => source.CommitSha.Equals(authoritativeCommitSha, StringComparison.OrdinalIgnoreCase));
+            var sourceIdByIndex = new Dictionary<string, string>(StringComparer.Ordinal);
+            for (var index = 0; index < orderedSources.Length; index++)
+            {
+                var reportSource = orderedSources[index];
+                var sourceId = authoritativeMatches == 1
+                    && reportSource.CommitSha.Equals(authoritativeCommitSha, StringComparison.OrdinalIgnoreCase)
+                        ? SourceId
+                        : $"source:paths:{Hash(reportSource.SourceIndexId, 24)}";
+                sourceIdByIndex.Add(reportSource.SourceIndexId, sourceId);
+                if (sourceId == SourceId)
+                {
+                    continue;
+                }
+
+                reportSources.Add(new ExplorerSource(
+                    sourceId,
+                    $"Paths report source {index + 1:D2}",
+                    "combined-path-source",
+                    ClaimLevelForSafetyProfile(safetyProfile),
+                    report.ReportCoverage == "FullEvidenceAvailable" ? "available" : "reduced",
+                    reportSource.CommitSha,
+                    [SafeClosedText(reportSource.ScannerVersion, "paths-report.scanner-version", redactions)],
+                    [artifactId],
+                    report.Gaps.Count,
+                    1,
+                    0,
+                    0));
+            }
+
+            var coverageLabels = new SortedSet<string>(StringComparer.Ordinal)
+            {
+                report.ReportCoverage == "FullEvidenceAvailable" ? "PathsFullEvidenceAvailable" : "PathsReducedCoverage",
+                report.Summary.Truncated ? "PathsTruncated" : "PathsNotTruncated",
+                report.Gaps.Count > 0 ? "PathsGapsPresent" : "PathsNoRecordedGaps"
+            };
+            foreach (var label in coverageLabels)
+            {
+                overallCoverageLabels.Add(label);
+            }
+
+            artifacts.Add(new ExplorerInputArtifact(
+                artifactId,
+                "paths-report",
+                "Static dependency paths report",
+                snapshot.ContentHash,
+                "paths-report/1.0",
+                ClaimLevelForSafetyProfile(safetyProfile),
+                coverageLabels.ToArray(),
+                sourceIdByIndex.Values.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                [limitationId],
+                [],
+                "supported"));
+            limitations.Add(CreateLimitation(
+                "paths-report-display-text-not-rendered",
+                PathsReportInputRuleId,
+                "report-display-text-not-rendered",
+                "paths",
+                "display",
+                "The explorer renders closed path and surface categories plus evidence provenance only. Query selectors, source labels, node display names, surface names, notes, and free-text report limitations are omitted.",
+                [artifactId]));
+
+            var sourceByIndex = orderedSources.ToDictionary(source => source.SourceIndexId, StringComparer.Ordinal);
+            var surfaceRows = new Dictionary<string, ExplorerSurface>(StringComparer.Ordinal);
+            foreach (var reportPath in report.Paths.OrderBy(item => item.PathId, StringComparer.Ordinal))
+            {
+                var safePathId = $"path:{Hash(reportPath.PathId, 24)}";
+                var hops = new List<ExplorerPathHop>();
+                for (var index = 0; index < reportPath.Edges.Count; index++)
+                {
+                    var edge = reportPath.Edges[index];
+                    var fromNode = reportPath.Nodes[index];
+                    var toNode = reportPath.Nodes[index + 1];
+                    // Endpoint-match evidence is emitted at the matched server endpoint.
+                    // Other path-edge evidence is emitted at the originating node.
+                    var evidenceNode = edge.EdgeKind == "endpoint-match" ? toNode : fromNode;
+                    var sourceId = sourceIdByIndex[evidenceNode.SourceIndexId];
+                    var source = sourceByIndex[evidenceNode.SourceIndexId];
+                    var extractorVersion = SafeClosedText(source.ScannerVersion, "paths-report.scanner-version", redactions);
+                    var supportIds = SafeSupportIds(edge.SupportingFactIds.Concat(edge.SupportingCombinedEdgeIds));
+                    var hop = new ExplorerPathHop(
+                        $"hop:{Hash($"{reportPath.PathId}:{index}:{edge.EdgeId}", 24)}",
+                        index + 1,
+                        edge.EdgeKind,
+                        edge.RuleId,
+                        edge.EvidenceTier,
+                        $"node:{Hash(edge.FromNodeId, 24)}",
+                        $"node:{Hash(edge.ToNodeId, 24)}",
+                        sourceId,
+                        source.CommitSha,
+                        extractorVersion,
+                        SafeOptionalRepositoryPath(edge.FilePath, redactions),
+                        edge.StartLine,
+                        edge.EndLine,
+                        supportIds,
+                        [limitationId]);
+                    hops.Add(hop);
+                    if (hop.FilePath is null || hop.StartLine is null || hop.EndLine is null)
+                    {
+                        gaps.Add(CreateGap(
+                            $"path-hop-location-{Hash(hop.HopId, 16)}",
+                            hop.RuleId,
+                            "path-hop-location-unavailable",
+                            artifactId,
+                            "paths",
+                            "ReducedCoverage",
+                            "A static path hop did not include a complete repository-relative file span; the hop remains available with explicitly partial location coverage.",
+                            hop.SupportIds.Append(hop.HopId).ToArray()));
+                    }
+
+                    evidenceRows.Add(new ExplorerEvidenceRow(
+                        $"evidence:{Hash(hop.HopId, 24)}",
+                        hop.RuleId,
+                        hop.EvidenceTier,
+                        "path-hop",
+                        hop.SupportIds.FirstOrDefault() ?? hop.HopId,
+                        artifactId,
+                        sourceId,
+                        source.CommitSha,
+                        hop.FilePath,
+                        hop.StartLine,
+                        hop.EndLine,
+                        null,
+                        report.ReportCoverage,
+                        extractorVersion,
+                        [limitationId]));
+                }
+
+                paths.Add(new ExplorerPath(
+                    safePathId,
+                    "dependency-path",
+                    reportPath.Classification,
+                    reportPath.Confidence,
+                    report.ReportCoverage,
+                    artifactId,
+                    hops.OrderBy(hop => hop.Sequence).ThenBy(hop => hop.HopId, StringComparer.Ordinal).ToArray(),
+                    SafeSupportIds(reportPath.SupportingFactIds.Concat(reportPath.SupportingEdgeIds)),
+                    [limitationId]));
+
+                foreach (var node in reportPath.Nodes.Where(node => !string.IsNullOrWhiteSpace(node.SurfaceKind)))
+                {
+                    var surfaceId = $"surface:{Hash(node.NodeId, 24)}";
+                    if (surfaceRows.ContainsKey(surfaceId))
+                    {
+                        continue;
+                    }
+
+                    var sourceId = sourceIdByIndex[node.SourceIndexId];
+                    var source = sourceByIndex[node.SourceIndexId];
+                    var extractorVersion = SafeClosedText(source.ScannerVersion, "paths-report.scanner-version", redactions);
+                    var supportIds = SafeSupportIds(node.CombinedFactId is null ? [] : [node.CombinedFactId]);
+                    var surface = new ExplorerSurface(
+                        surfaceId,
+                        node.SurfaceKind!,
+                        null,
+                        $"Static {node.SurfaceKind} surface",
+                        StaticDependencySurfaceClassification,
+                        node.RuleId!,
+                        node.EvidenceTier!,
+                        report.ReportCoverage,
+                        artifactId,
+                        sourceId,
+                        node.CommitSha ?? source.CommitSha,
+                        extractorVersion,
+                        SafeOptionalRepositoryPath(node.FilePath, redactions),
+                        node.StartLine,
+                        node.EndLine,
+                        supportIds,
+                        [limitationId]);
+                    surfaceRows.Add(surfaceId, surface);
+                    if (surface.FilePath is null || surface.StartLine is null || surface.EndLine is null)
+                    {
+                        gaps.Add(CreateGap(
+                            $"surface-location-{Hash(surfaceId, 16)}",
+                            surface.RuleId,
+                            "surface-location-unavailable",
+                            artifactId,
+                            "surfaces",
+                            "ReducedCoverage",
+                            "A static dependency surface did not include a complete repository-relative file span; the surface remains available with explicitly partial location coverage.",
+                            supportIds.Append(surfaceId).ToArray()));
+                    }
+
+                    evidenceRows.Add(new ExplorerEvidenceRow(
+                        $"evidence:{Hash(surfaceId, 24)}",
+                        surface.RuleId,
+                        surface.EvidenceTier,
+                        "dependency-surface",
+                        supportIds.FirstOrDefault() ?? surfaceId,
+                        artifactId,
+                        sourceId,
+                        surface.CommitSha,
+                        surface.FilePath,
+                        surface.StartLine,
+                        surface.EndLine,
+                        null,
+                        surface.CoverageLabel,
+                        extractorVersion,
+                        [limitationId]));
+                }
+            }
+
+            surfaces.AddRange(surfaceRows.Values);
+            foreach (var reportGap in report.Gaps.OrderBy(item => item.GapId, StringComparer.Ordinal))
+            {
+                var ruleId = IsSafeRuleId(reportGap.RuleId) ? reportGap.RuleId! : PathsReportInputRuleId;
+                var tier = IsSupportedEvidenceTier(reportGap.EvidenceTier) ? reportGap.EvidenceTier! : Tier4Unknown;
+                gaps.Add(CreateGap(
+                    $"paths-report-{Hash(reportGap.GapId, 16)}",
+                    ruleId,
+                    "paths-report-gap",
+                    artifactId,
+                    "paths",
+                    report.ReportCoverage,
+                    "The paths report preserved a rule-backed static path analysis gap; the explorer does not reinterpret its free-text message.",
+                    SafeSupportIds(reportGap.EffectiveSupportingFactIds).Append(artifactId).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                    tier));
+            }
+
+            RecordOmittedPathsReportText(report, redactions);
+        }
+        catch (Exception exception) when (exception is JsonException or InvalidDataException)
+        {
+            AddUnsupportedPathsReportArtifact(
+                artifacts,
+                gaps,
+                safetyProfile,
+                snapshot.ContentHash,
+                "unsupported-schema",
+                "The paths report did not match the supported v1.0 static dependency-path contract and was not rendered.");
+        }
+    }
+
+    private static void ValidatePathsReport(CombinedDependencyPathReport report)
+    {
+        if (report.Version != "1.0"
+            || report.SchemaVersion is not null
+            || report.ReportCoverage is not ("FullEvidenceAvailable" or "ReducedCoverage")
+            || report.CoverageWarnings is null
+            || report.Query is null
+            || report.Sources is null
+            || report.Summary is null
+            || report.Paths is null
+            || report.Gaps is null
+            || report.Inventory is null
+            || report.Limitations is null
+            || report.Sources.Count == 0
+            || report.Sources.Count > MaxPathsReportSources
+            || report.Paths.Count > MaxPathsReportPaths
+            || report.Paths.Sum(path => path?.Edges?.Count ?? 0) > MaxPathsReportHops
+            || report.Summary.SourceCount != report.Sources.Count
+            || report.Summary.PathCount != report.Paths.Count
+            || report.Summary.GapCount != report.Gaps.Count)
+        {
+            throw new InvalidDataException("paths report contract mismatch");
+        }
+
+        var sourceIds = new HashSet<string>(StringComparer.Ordinal);
+        var commitBySourceIndex = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var source in report.Sources)
+        {
+            if (source is null
+                || string.IsNullOrWhiteSpace(source.SourceIndexId)
+                || !sourceIds.Add(source.SourceIndexId)
+                || !IsUsableCommitSha(source.CommitSha)
+                || string.IsNullOrWhiteSpace(source.ScannerVersion))
+            {
+                throw new InvalidDataException("paths report source identity unavailable");
+            }
+
+            commitBySourceIndex.Add(source.SourceIndexId, source.CommitSha);
+        }
+
+        var pathIds = new HashSet<string>(StringComparer.Ordinal);
+        var gapIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var gap in report.Gaps)
+        {
+            if (gap is null
+                || string.IsNullOrWhiteSpace(gap.GapId)
+                || !gapIds.Add(gap.GapId)
+                || string.IsNullOrWhiteSpace(gap.GapKind))
+            {
+                throw new InvalidDataException("paths report gap identity unavailable");
+            }
+        }
+
+        foreach (var path in report.Paths)
+        {
+            if (path is null
+                || string.IsNullOrWhiteSpace(path.PathId)
+                || !pathIds.Add(path.PathId)
+                || !SupportedPathClassifications.Contains(path.Classification)
+                || path.Confidence is not ("High" or "Medium" or "Low")
+                || path.Nodes is null
+                || path.Edges is null
+                || path.SupportingFactIds is null
+                || path.SupportingEdgeIds is null
+                || path.Notes is null
+                || path.Nodes.Count == 0
+                || path.Edges.Count + 1 != path.Nodes.Count
+                || path.Length != path.Edges.Count
+                || path.StartNodeId != path.Nodes[0].NodeId
+                || path.EndNodeId != path.Nodes[^1].NodeId)
+            {
+                throw new InvalidDataException("paths report path shape unavailable");
+            }
+
+            var nodeIds = new HashSet<string>(StringComparer.Ordinal);
+            for (var index = 0; index < path.Nodes.Count; index++)
+            {
+                var node = path.Nodes[index];
+                if (node is null
+                    || string.IsNullOrWhiteSpace(node.NodeId)
+                    || !nodeIds.Add(node.NodeId)
+                    || !sourceIds.Contains(node.SourceIndexId)
+                    || (!string.IsNullOrWhiteSpace(node.CommitSha) && !IsUsableCommitSha(node.CommitSha))
+                    || (!string.IsNullOrWhiteSpace(node.CommitSha)
+                        && !commitBySourceIndex[node.SourceIndexId].Equals(node.CommitSha, StringComparison.OrdinalIgnoreCase))
+                    || (!string.IsNullOrWhiteSpace(node.SurfaceKind)
+                        && (!CombinedTerminalSurfaceKinds.AllSet.Contains(node.SurfaceKind)
+                            || !IsSafeRuleId(node.RuleId)
+                            || !IsSupportedEvidenceTier(node.EvidenceTier)))
+                    || !IsValidSpan(node.StartLine, node.EndLine))
+                {
+                    throw new InvalidDataException("paths report node evidence unavailable");
+                }
+            }
+
+            var edgeIds = new HashSet<string>(StringComparer.Ordinal);
+            for (var index = 0; index < path.Edges.Count; index++)
+            {
+                var edge = path.Edges[index];
+                if (edge is null
+                    || string.IsNullOrWhiteSpace(edge.EdgeId)
+                    || !edgeIds.Add(edge.EdgeId)
+                    || !SupportedPathEdgeKinds.Contains(edge.EdgeKind)
+                    || !SupportedPathEdgeClassifications.Contains(edge.Classification)
+                    || !IsSafeRuleId(edge.RuleId)
+                    || !IsSupportedEvidenceTier(edge.EvidenceTier)
+                    || edge.SupportingFactIds is null
+                    || edge.SupportingCombinedEdgeIds is null
+                    || edge.FromNodeId != path.Nodes[index].NodeId
+                    || edge.ToNodeId != path.Nodes[index + 1].NodeId
+                    || !IsValidSpan(edge.StartLine, edge.EndLine))
+                {
+                    throw new InvalidDataException("paths report hop evidence unavailable");
+                }
+            }
+        }
+    }
+
+    private static bool IsValidSpan(int? startLine, int? endLine)
+    {
+        return startLine is null && endLine is null
+            || startLine is > 0 && endLine is > 0 && endLine >= startLine;
+    }
+
+    private static string? SafeOptionalRepositoryPath(
+        string? value,
+        Dictionary<(string RuleId, string Category, string Location, string Action), int> redactions)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : SafeRepositoryPath(value, redactions);
+    }
+
+    private static bool IsSafeRuleId(string? value)
+    {
+        return !string.IsNullOrWhiteSpace(value)
+            && Regex.IsMatch(value, "^[A-Za-z0-9_.:-]+$", RegexOptions.CultureInvariant);
+    }
+
+    private static bool IsSupportedEvidenceTier(string? value)
+    {
+        return value is EvidenceTiers.Tier1Semantic
+            or EvidenceTiers.Tier2Structural
+            or EvidenceTiers.Tier3SyntaxOrTextual
+            or EvidenceTiers.Tier4Unknown;
+    }
+
+    private static IReadOnlyList<string> SafeSupportIds(IEnumerable<string> values)
+    {
+        return values
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => $"support:{Hash(value, 24)}")
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static void RecordOmittedPathsReportText(
+        CombinedDependencyPathReport report,
+        Dictionary<(string RuleId, string Category, string Location, string Action), int> redactions)
+    {
+        var omittedCount = report.Sources.Count
+            + report.Paths.Sum(path => path.Nodes.Count(node => !string.IsNullOrWhiteSpace(node.DisplayName)))
+            + report.Paths.Sum(path => path.Notes?.Count ?? 0)
+            + report.Gaps.Count
+            + report.Limitations.Count;
+        if (omittedCount > 0)
+        {
+            var key = (OmittedUnsafeValueRuleId, "paths-report-display-text", "paths-report.text", "omit");
+            redactions[key] = redactions.TryGetValue(key, out var count) ? count + omittedCount : omittedCount;
+        }
+    }
+
+    private static void AddUnsupportedPathsReportArtifact(
+        List<ExplorerInputArtifact> artifacts,
+        List<ExplorerGap> gaps,
+        string safetyProfile,
+        string contentHash,
+        string gapKind,
+        string message)
+    {
+        const string artifactId = "artifact:paths-report";
+        artifacts.Add(new ExplorerInputArtifact(
+            artifactId,
+            "paths-report",
+            "Static dependency paths report",
+            contentHash,
+            "paths-report/unsupported",
+            ClaimLevelForSafetyProfile(safetyProfile),
+            [],
+            [],
+            [],
+            [UnsupportedSchemaRuleId],
+            "unsupported"));
+        gaps.Add(CreateGap(
+            "paths-report-unsupported",
+            UnsupportedSchemaRuleId,
+            gapKind,
+            artifactId,
+            "paths",
+            "PartialAnalysis",
+            message,
+            [artifactId]));
+    }
+
+    private static JsonElement RequireProperty(JsonElement element, string propertyName)
+    {
+        var properties = element.EnumerateObject()
+            .Where(property => property.NameEquals(propertyName))
+            .ToArray();
+        return properties.Length == 1
+            ? properties[0].Value
+            : throw new InvalidDataException("release-review property unavailable or duplicated");
+    }
+
+    private static void RejectDuplicateJsonProperties(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in element.EnumerateArray())
+            {
+                RejectDuplicateJsonProperties(item);
+            }
+
+            return;
+        }
+
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            return;
+        }
+
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var property in element.EnumerateObject())
+        {
+            if (!names.Add(property.Name))
+            {
+                throw new InvalidDataException("paths report property duplicated");
+            }
+
+            RejectDuplicateJsonProperties(property.Value);
+        }
+    }
+
+    private static JsonElement RequireObject(JsonElement element, string scope)
+    {
+        return element.ValueKind == JsonValueKind.Object
+            ? element
+            : throw new InvalidDataException($"release-review {scope} is not an object");
+    }
+
+    private static string RequireString(JsonElement element, string propertyName)
+    {
+        var value = RequireProperty(element, propertyName);
+        return value.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(value.GetString())
+            ? value.GetString()!
+            : throw new InvalidDataException("release-review string property unavailable");
+    }
+
+    private static bool RequireBoolean(JsonElement element, string propertyName)
+    {
+        var value = RequireProperty(element, propertyName);
+        return value.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            _ => throw new InvalidDataException("release-review boolean property unavailable")
+        };
+    }
+
+    private static int RequireNonNegativeInt32(JsonElement element, string propertyName)
+    {
+        var value = RequireProperty(element, propertyName);
+        return value.ValueKind == JsonValueKind.Number
+            && value.TryGetInt32(out var number)
+            && number >= 0
+                ? number
+                : throw new InvalidDataException("release-review count property unavailable");
     }
 
     private static async Task<RuleCatalogLoadResult> AddRuleCatalogArtifactAsync(
@@ -832,7 +1978,10 @@ public static class StaticHtmlEvidenceExplorer
             CoverageStatus(gaps, coverageLabels),
             manifest?.CommitSha is { } sha && IsUsableCommitSha(sha) ? sha : null,
             extractorVersions.ToArray(),
-            artifacts.Select(artifact => artifact.ArtifactId).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            artifacts.Where(artifact => artifact.SourceIds.Contains(SourceId, StringComparer.Ordinal))
+                .Select(artifact => artifact.ArtifactId)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray(),
             gaps.Count,
             limitations.Count,
             redactions.Values.Sum(),
@@ -867,16 +2016,22 @@ public static class StaticHtmlEvidenceExplorer
             return "partial";
         }
 
-        if (coverageLabels.Any(label =>
-                label.Contains("Reduced", StringComparison.OrdinalIgnoreCase)
-                || label.Contains("Partial", StringComparison.OrdinalIgnoreCase)
-                || label.Contains("Failed", StringComparison.OrdinalIgnoreCase)
-                || label.Contains("Unknown", StringComparison.OrdinalIgnoreCase)))
+        if (coverageLabels.Any(IsCoverageReducingLabel))
         {
             return "reduced";
         }
 
         return "available";
+    }
+
+    internal static bool IsCoverageReducingLabel(string label)
+    {
+        return label.Contains("Reduced", StringComparison.OrdinalIgnoreCase)
+            || label.Contains("Partial", StringComparison.OrdinalIgnoreCase)
+            || label.Contains("Failed", StringComparison.OrdinalIgnoreCase)
+            || label.EndsWith("Truncated", StringComparison.OrdinalIgnoreCase)
+                && !label.EndsWith("NotTruncated", StringComparison.OrdinalIgnoreCase)
+            || label.Contains("Unknown", StringComparison.OrdinalIgnoreCase);
     }
 
     private static ExplorerGap CreateGap(
@@ -887,12 +2042,13 @@ public static class StaticHtmlEvidenceExplorer
         string affectedSection,
         string coverageLabel,
         string message,
-        IReadOnlyList<string> supportIds)
+        IReadOnlyList<string> supportIds,
+        string evidenceTier = Tier4Unknown)
     {
         return new ExplorerGap(
             $"gap:{idPart}",
             ruleId,
-            Tier4Unknown,
+            evidenceTier,
             gapKind,
             scope,
             affectedSection,
@@ -926,13 +2082,13 @@ public static class StaticHtmlEvidenceExplorer
             .ToArray());
     }
 
-    private static IReadOnlyList<ExplorerRule> BuildExplorerRules(IReadOnlyList<ExplorerEvidenceRow> evidenceRows, IReadOnlyList<RuleCatalogEntry> catalogRules)
+    private static IReadOnlyList<ExplorerRule> BuildExplorerRules(
+        IReadOnlyList<ExplorerEvidenceRow> evidenceRows,
+        IReadOnlyList<ExplorerReducerResult> reducerResults,
+        IReadOnlyList<RuleCatalogEntry> catalogRules)
     {
         var builtInRules = BuiltInExplorerRules();
         var rules = builtInRules.ToDictionary(rule => rule.RuleId, StringComparer.Ordinal);
-        var observedRuleIds = evidenceRows
-            .Select(row => row.RuleId)
-            .ToHashSet(StringComparer.Ordinal);
         foreach (var catalogRule in catalogRules)
         {
             if (catalogRule.RuleId.StartsWith("explorer.", StringComparison.Ordinal)
@@ -951,7 +2107,7 @@ public static class StaticHtmlEvidenceExplorer
                         "The compatible rule catalog did not provide limitations for this rule; treat the rendered metadata as partial."
                     ]
                     : catalogRule.Limitations,
-                RelatedSectionsForCatalogRule(catalogRule.RuleId, observedRuleIds));
+                RelatedSectionsForCatalogRule(catalogRule.RuleId, evidenceRows, reducerResults));
         }
 
         var observedRules = evidenceRows
@@ -961,17 +2117,36 @@ public static class StaticHtmlEvidenceExplorer
             .Select(group => new ExplorerRule(
                 group.Key,
                 "Observed evidence rule",
-                "Rule ID observed in safe evidence rows from facts.ndjson. Full rule catalog metadata was not provided in this explorer slice.",
+                group.All(row => row.ArtifactId == "artifact:facts-ndjson")
+                    ? "Rule ID observed in safe evidence rows from facts.ndjson. Full rule catalog metadata was not provided in this explorer slice."
+                    : "Rule ID observed in safe evidence rows from a compatible generated input. Full rule catalog metadata was not provided in this explorer slice.",
                 ObservedEvidenceTier(group.Select(row => row.EvidenceTier)),
                 [
                     "Observed rule rows preserve safe evidence-row rule IDs only.",
                     "Without a compatible rule catalog artifact, title, description, and limitations are partial and must not strengthen the underlying evidence."
                 ],
-                ["evidence-rows", "rules"]))
+                RelatedSectionsForObservedEvidence(group)))
             .ToArray();
         foreach (var observedRule in observedRules)
         {
             rules[observedRule.RuleId] = observedRule;
+        }
+
+        foreach (var resultGroup in reducerResults
+                     .GroupBy(result => result.RuleId, StringComparer.Ordinal)
+                     .Where(group => !rules.ContainsKey(group.Key))
+                     .OrderBy(group => group.Key, StringComparer.Ordinal))
+        {
+            rules[resultGroup.Key] = new ExplorerRule(
+                resultGroup.Key,
+                "Observed reducer result rule",
+                "Rule ID observed on reducer-backed result rows from a compatible generated input. Full rule catalog metadata was not provided in this explorer slice.",
+                ObservedEvidenceTier(resultGroup.Select(result => result.EvidenceTier)),
+                [
+                    "Observed reducer rule rows preserve safe result metadata only.",
+                    "Without a compatible rule catalog artifact, title, description, and limitations are partial and must not strengthen the reducer result."
+                ],
+                ["reducer-results", "rules"]);
         }
 
         return rules.Values
@@ -979,15 +2154,31 @@ public static class StaticHtmlEvidenceExplorer
             .ToArray();
     }
 
-    private static IReadOnlyList<string> RelatedSectionsForCatalogRule(string ruleId, IReadOnlySet<string> observedRuleIds)
+    private static IReadOnlyList<string> RelatedSectionsForCatalogRule(
+        string ruleId,
+        IReadOnlyList<ExplorerEvidenceRow> evidenceRows,
+        IReadOnlyList<ExplorerReducerResult> reducerResults)
     {
         var sections = new SortedSet<string>(StringComparer.Ordinal)
         {
             "rules"
         };
-        if (observedRuleIds.Contains(ruleId))
+        var matchingRows = evidenceRows.Where(row => row.RuleId == ruleId).ToArray();
+        if (matchingRows.Length > 0)
         {
             sections.Add("evidence-rows");
+            if (matchingRows.Any(row => row.EvidenceKind == "path-hop"))
+            {
+                sections.Add("paths");
+            }
+            if (matchingRows.Any(row => row.EvidenceKind == "dependency-surface"))
+            {
+                sections.Add("surfaces");
+            }
+        }
+        if (reducerResults.Any(result => result.RuleId == ruleId))
+        {
+            sections.Add("reducer-results");
         }
 
         if (ruleId.StartsWith("explorer.render.", StringComparison.Ordinal)
@@ -998,6 +2189,24 @@ public static class StaticHtmlEvidenceExplorer
             sections.Add("limitations");
         }
 
+        return sections.ToArray();
+    }
+
+    private static IReadOnlyList<string> RelatedSectionsForObservedEvidence(IGrouping<string, ExplorerEvidenceRow> rows)
+    {
+        var sections = new SortedSet<string>(StringComparer.Ordinal) { "evidence-rows", "rules" };
+        if (rows.Any(row => row.EvidenceKind == "path-hop"))
+        {
+            sections.Add("paths");
+        }
+        if (rows.Any(row => row.EvidenceKind == "dependency-surface"))
+        {
+            sections.Add("surfaces");
+        }
+        if (rows.Any(row => row.EvidenceKind == "reducer-impact-evidence"))
+        {
+            sections.Add("reducer-results");
+        }
         return sections.ToArray();
     }
 
@@ -1013,7 +2222,12 @@ public static class StaticHtmlEvidenceExplorer
             Rule(CatalogUnavailableRuleId, "Explorer rule catalog unavailable", "Records that only observed rule IDs and built-in explorer rule stubs are rendered."),
             Rule(NoNetworkAssetsRuleId, "Explorer local no-network assets", "Documents that generated HTML uses only bundled local CSS and JavaScript assets."),
             Rule(PartialSectionRuleId, "Explorer partial section", "Marks unavailable first-slice sections and missing optional artifacts as partial rather than empty."),
+            Rule(FrameworkMigrationMetadataUnavailableRuleId, "Framework migration metadata unavailable", "Omits framework migration rows whose bounded coverage or limitation metadata is missing or unexpected."),
             Rule(SectionStatusRuleId, "Explorer section status", "Records deterministic section availability labels derived from compatible generated artifacts and rule-backed gaps."),
+            Rule(CompatibilityLedgerRuleId, "Explorer compatibility ledger", "Records deterministic artifact, section, safety-profile, and claim-metadata compatibility states without reading unsupported content."),
+            Rule(ReleaseReviewInputRuleId, "Explorer release-review compatibility reader", "Validates bounded release-review v1.2 identity, snapshot shape, coverage, and content provenance without rendering report findings."),
+            Rule(PathsReportInputRuleId, "Explorer static paths report reader", "Validates bounded paths-report v1.0 structure and projects only rule-backed static surfaces, ordered hops, provenance, gaps, and limitations."),
+            Rule(ReducerImpactInputRuleId, "Explorer contract-delta impact reader", "Validates bounded contract-delta impact v2 output and projects only reducer-backed result classifications with sanitized evidence provenance."),
             Rule(GeneratedFileStaleRuleId, "Explorer stale generated file", "Prevents overwriting stale generated explorer output without explicit force."),
             Rule(UserFileCollisionRuleId, "Explorer user file collision", "Prevents overwriting user-authored files in an explorer output directory."),
             Rule(UnsafeRejectedRuleId, "Explorer unsafe generated value rejected", "Fails generation when a generated asset contains an unsafe value after redaction.")
@@ -1035,20 +2249,34 @@ public static class StaticHtmlEvidenceExplorer
         var factsProvided = context.Artifacts.Any(artifact => artifact.ArtifactKind == "facts-ndjson");
         var sqliteProvided = context.Artifacts.Any(artifact => artifact.ArtifactKind == "sqlite-index");
         var reportProvided = context.Artifacts.Any(artifact => artifact.ArtifactKind == "markdown-report");
+        var pathsReport = context.Artifacts.FirstOrDefault(artifact => artifact.ArtifactKind == "paths-report");
+        var compatiblePathsReport = pathsReport?.Compatibility == "supported";
+        var reducerReport = context.Artifacts.FirstOrDefault(artifact => artifact.ArtifactKind == "reducer-impact-report");
+        var compatibleReducerReport = reducerReport?.Compatibility == "supported";
         var ruleCatalogProvided = context.CatalogFilePresent;
         var compatibleRuleCatalogLoaded = context.CatalogRulesLoaded;
         var unsupportedJsonProvided = context.Artifacts.Any(artifact => artifact.ArtifactKind == "unsupported-json");
         var coverageLabel = context.CoverageLabels.FirstOrDefault() ?? "UnknownCoverage";
-        var evidenceRowsStatus = factsProvided
-            ? (context.EvidenceRows.Count == 0
+        var pathReportPartial = compatiblePathsReport
+            && (pathsReport!.CoverageLabels.Contains("PathsReducedCoverage", StringComparer.Ordinal)
+                || pathsReport.CoverageLabels.Contains("PathsTruncated", StringComparer.Ordinal));
+        var reducerReportPartial = compatibleReducerReport
+            && (reducerReport!.CoverageLabels.Contains("ReducerReducedCoverage", StringComparer.Ordinal)
+                || reducerReport.CoverageLabels.Contains("ReducerPartialCoverage", StringComparer.Ordinal)
+                || reducerReport.CoverageLabels.Contains("ReducerTruncated", StringComparer.Ordinal));
+        var evidenceArtifactProvided = factsProvided || compatiblePathsReport || compatibleReducerReport;
+        var evidenceRowsStatus = evidenceArtifactProvided
+            ? pathReportPartial || reducerReportPartial
+                ? "partial"
+                : context.EvidenceRows.Count == 0
                 ? "no-evidence-under-current-coverage"
-                : SectionStatusFromGaps(context.Gaps, "evidence-rows", true))
+                : SectionStatusFromGaps(context.Gaps, "evidence-rows", true)
             : "not-provided";
-        var evidenceRowsMessage = factsProvided
-            ? (context.EvidenceRows.Count == 0
-                ? "facts.ndjson was provided and compatible, but no static evidence rows were present under the current coverage."
-                : "Evidence rows are rendered from facts.ndjson after safety filtering and deterministic ordering.")
-            : "Evidence rows are unavailable because no compatible fact stream was provided.";
+        var evidenceRowsMessage = evidenceArtifactProvided
+            ? context.EvidenceRows.Count == 0
+                ? "Compatible evidence artifacts were provided, but no static evidence rows were present under the current coverage."
+                : "Evidence rows are rendered from compatible fact, path, and reducer artifacts after safety filtering and deterministic ordering."
+            : "Evidence rows are unavailable because no compatible fact, path, or reducer artifact was provided.";
         var rows = new List<ExplorerSectionStatus>
         {
             SectionStatus(
@@ -1080,34 +2308,86 @@ public static class StaticHtmlEvidenceExplorer
                 evidenceRowsStatus,
                 coverageLabel,
                 evidenceRowsMessage,
-                factsProvided ? ["artifact:facts-ndjson"] : ["input-directory"]),
+                factsProvided && compatiblePathsReport && compatibleReducerReport
+                    ? ["artifact:facts-ndjson", "artifact:paths-report", "artifact:reducer-impact-report"]
+                    : factsProvided && compatiblePathsReport
+                        ? ["artifact:facts-ndjson", "artifact:paths-report"]
+                        : factsProvided && compatibleReducerReport
+                            ? ["artifact:facts-ndjson", "artifact:reducer-impact-report"]
+                            : compatiblePathsReport && compatibleReducerReport
+                                ? ["artifact:paths-report", "artifact:reducer-impact-report"]
+                    : factsProvided
+                        ? ["artifact:facts-ndjson"]
+                        : compatiblePathsReport
+                            ? ["artifact:paths-report"]
+                            : compatibleReducerReport
+                                ? ["artifact:reducer-impact-report"]
+                            : ["input-directory"]),
             SectionStatus(
                 "surfaces",
                 "Surfaces",
-                sqliteProvided ? "not-rendered-in-current-slice" : "not-provided",
-                "PartialAnalysis",
-                sqliteProvided
-                    ? "index.sqlite was hashed as provenance, but static surface extraction from SQLite is deferred in this explorer slice."
-                    : "Surface rendering requires a compatible surface artifact or future SQLite reader and is unavailable here.",
-                sqliteProvided ? ["artifact:sqlite-index"] : ["input-directory"]),
+                compatiblePathsReport
+                    ? pathReportPartial
+                        ? "partial"
+                        : context.Surfaces.Count == 0
+                        ? context.Gaps.Any(gap => gap.AffectedSection == "surfaces") ? "partial" : "no-evidence-under-current-coverage"
+                        : SectionStatusFromGaps(context.Gaps, "surfaces", true)
+                    : pathsReport is not null ? "unsupported-schema" : sqliteProvided ? "not-rendered-in-current-slice" : "not-provided",
+                compatiblePathsReport ? pathsReport!.CoverageLabels.FirstOrDefault() ?? "UnknownCoverage" : "PartialAnalysis",
+                compatiblePathsReport
+                    ? context.Surfaces.Count == 0
+                        ? "A compatible paths report was provided, but no closed static dependency-surface rows were present under its recorded coverage."
+                        : "Static dependency surfaces are rendered from the compatible paths report with rule, tier, provenance, and limitation metadata."
+                    : pathsReport is not null
+                        ? "The paths report schema was unsupported, so surface rows are unavailable rather than absent."
+                        : sqliteProvided
+                            ? "index.sqlite was hashed as provenance, but static surface extraction from SQLite is deferred in this explorer slice."
+                            : "Surface rendering requires a compatible surface artifact or future SQLite reader and is unavailable here.",
+                compatiblePathsReport || pathsReport is not null ? ["artifact:paths-report"] : sqliteProvided ? ["artifact:sqlite-index"] : ["input-directory"]),
             SectionStatus(
                 "paths",
                 "Paths",
-                sqliteProvided ? "not-rendered-in-current-slice" : "not-provided",
-                "PartialAnalysis",
-                sqliteProvided
-                    ? "index.sqlite was hashed as provenance, but dependency and route path rendering from SQLite is deferred in this explorer slice."
-                    : "Path rendering requires a compatible path artifact or future SQLite reader and is unavailable here.",
-                sqliteProvided ? ["artifact:sqlite-index"] : ["input-directory"]),
+                compatiblePathsReport
+                    ? pathReportPartial
+                        ? "partial"
+                        : context.Paths.Count == 0
+                        ? context.Gaps.Any(gap => gap.AffectedSection == "paths") ? "partial" : "no-evidence-under-current-coverage"
+                        : SectionStatusFromGaps(context.Gaps, "paths", true)
+                    : pathsReport is not null ? "unsupported-schema" : sqliteProvided ? "not-rendered-in-current-slice" : "not-provided",
+                compatiblePathsReport ? pathsReport!.CoverageLabels.FirstOrDefault() ?? "UnknownCoverage" : "PartialAnalysis",
+                compatiblePathsReport
+                    ? context.Paths.Count == 0
+                        ? "A compatible paths report was provided, but no static dependency paths were present under its recorded coverage."
+                        : "Static dependency paths preserve deterministic hop order and existing rule-backed classifications without runtime or impact claims."
+                    : pathsReport is not null
+                        ? "The paths report schema was unsupported, so path rows are unavailable rather than absent."
+                        : sqliteProvided
+                            ? "index.sqlite was hashed as provenance, but dependency and route path rendering from SQLite is deferred in this explorer slice."
+                            : "Path rendering requires a compatible path artifact or future SQLite reader and is unavailable here.",
+                compatiblePathsReport || pathsReport is not null ? ["artifact:paths-report"] : sqliteProvided ? ["artifact:sqlite-index"] : ["input-directory"]),
             SectionStatus(
                 "reducer-results",
                 "Reducer Results",
-                reportProvided ? "not-rendered-in-current-slice" : "not-provided",
-                "PartialAnalysis",
-                reportProvided
-                    ? "Markdown report input was hashed as provenance, but reducer-backed result parsing is deferred until a compatible structured reducer artifact is provided."
-                    : "Reducer-backed rows are not provided; scanner-only rows are not described as impact.",
-                reportProvided ? ["artifact:markdown-report"] : ["input-directory"]),
+                compatibleReducerReport
+                    ? reducerReportPartial
+                        ? "partial"
+                        : context.ReducerResults.Count == 0
+                            ? context.Gaps.Any(gap => gap.AffectedSection == "reducer-results") ? "partial" : "no-evidence-under-current-coverage"
+                            : SectionStatusFromGaps(context.Gaps, "reducer-results", true)
+                    : reducerReport is not null
+                        ? "unsupported-schema"
+                        : reportProvided ? "not-rendered-in-current-slice" : "not-provided",
+                compatibleReducerReport ? reducerReport!.CoverageLabels.FirstOrDefault() ?? "UnknownCoverage" : "PartialAnalysis",
+                compatibleReducerReport
+                    ? context.ReducerResults.Count == 0
+                        ? "A compatible reducer report was provided, but no reducer-backed result rows were present under its recorded coverage."
+                        : "Impact wording is limited to reducer-backed result rows with rule, tier, supporting evidence, coverage, and limitation metadata."
+                    : reducerReport is not null
+                        ? "The reducer report schema was unsupported, so reducer-backed results are unavailable rather than absent."
+                        : reportProvided
+                            ? "Markdown report input was hashed as provenance, but reducer-backed result parsing requires compatible structured impact-report.json v2 output."
+                            : "Reducer-backed rows are not provided; scanner-only rows are not described as impact.",
+                reducerReport is not null ? ["artifact:reducer-impact-report"] : reportProvided ? ["artifact:markdown-report"] : ["input-directory"]),
             SectionStatus(
                 "rules",
                 "Rules",
@@ -1131,6 +2411,242 @@ public static class StaticHtmlEvidenceExplorer
         };
 
         return rows.ToArray();
+    }
+
+    private static IReadOnlyList<ExplorerCompatibilityRow> BuildCompatibilityLedger(
+        ExplorerBuildContext context,
+        IReadOnlyList<ExplorerSectionStatus> sectionStatuses)
+    {
+        var coverageLabel = context.CoverageLabels.FirstOrDefault() ?? "UnknownCoverage";
+        var rows = new List<ExplorerCompatibilityRow>();
+        var artifactsByKind = context.Artifacts
+            .GroupBy(artifact => artifact.ArtifactKind, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+
+        foreach (var expected in ExpectedArtifactSubjects())
+        {
+            if (!artifactsByKind.TryGetValue(expected.ArtifactKind, out var matchingArtifacts))
+            {
+                rows.Add(CompatibilityRow(
+                    "artifact",
+                    expected.ArtifactId,
+                    expected.SafeLabel,
+                    "not-provided",
+                    PartialSectionRuleId,
+                    coverageLabel,
+                    "generated-input-artifact",
+                    ["input-directory"],
+                    [],
+                    $"{expected.SafeLabel} was not provided; this compatibility state does not prove evidence absence."));
+                continue;
+            }
+
+            foreach (var artifact in matchingArtifacts)
+            {
+                rows.Add(BuildArtifactCompatibilityRow(context, artifact, coverageLabel));
+            }
+        }
+
+        foreach (var artifact in context.Artifacts
+                     .Where(artifact => !ExpectedArtifactSubjects().Any(expected => expected.ArtifactKind == artifact.ArtifactKind)))
+        {
+            rows.Add(BuildArtifactCompatibilityRow(context, artifact, coverageLabel));
+        }
+
+        foreach (var section in sectionStatuses)
+        {
+            var sectionGapIds = context.Gaps
+                .Where(gap => section.SectionId == "overview" || gap.AffectedSection == section.SectionId)
+                .Select(gap => gap.GapId)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray();
+            var compatibilityStatus = section.Status switch
+            {
+                _ when sectionGapIds.Length > 0 => "partial",
+                "not-provided" => "not-provided",
+                "not-rendered-in-current-slice" => "provenance-only",
+                "no-evidence-under-current-coverage" or "none-recorded" => "compatible-empty",
+                "partial" or "built-in-stubs" => "partial",
+                _ => "compatible"
+            };
+            var ruleId = compatibilityStatus is "not-provided" or "provenance-only" or "partial"
+                ? PartialSectionRuleId
+                : CompatibilityLedgerRuleId;
+            rows.Add(CompatibilityRow(
+                "section",
+                section.SectionId,
+                section.Label,
+                compatibilityStatus,
+                ruleId,
+                section.CoverageLabel,
+                "generated-explorer-section",
+                section.SupportIds,
+                compatibilityStatus == "partial" ? sectionGapIds : [],
+                SectionCompatibilityMessage(section.Label, compatibilityStatus)));
+        }
+
+        rows.Add(CompatibilityRow(
+            "safety-profile",
+            $"safety-profile:{context.SafetyProfile}",
+            context.SafetyProfile == PublicDemo ? "Public/demo safety profile" : "Hidden/local safety profile",
+            "compatible",
+            CompatibilityLedgerRuleId,
+            coverageLabel,
+            "selected-output-profile",
+            ["data/explorer-manifest.json", "data/explorer-data.json"],
+            [],
+            "The selected output safety profile controls rendering and generated-output validation."));
+
+        rows.Add(CompatibilityRow(
+            "claim-level",
+            "claim-level:unknown",
+            "Artifact claim metadata",
+            "partial",
+            CompatibilityLedgerRuleId,
+            coverageLabel,
+            "artifact-claim-metadata",
+            ["input-directory"],
+            ["claim-level-metadata-unavailable"],
+            "Compatible first-slice inputs do not expose independent claim-level metadata; unknown metadata is not treated as a conflict."));
+
+        return rows
+            .OrderBy(row => row.SubjectKind, StringComparer.Ordinal)
+            .ThenBy(row => row.SubjectId, StringComparer.Ordinal)
+            .ThenBy(row => row.CompatibilityStatus, StringComparer.Ordinal)
+            .ThenBy(row => row.RuleId, StringComparer.Ordinal)
+            .ThenBy(row => row.RowId, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static ExplorerCompatibilityRow BuildArtifactCompatibilityRow(
+        ExplorerBuildContext context,
+        ExplorerInputArtifact artifact,
+        string coverageLabel)
+    {
+        var affectedSection = artifact.ArtifactKind switch
+        {
+            "scan-manifest" => "sources",
+            "facts-ndjson" => "evidence-rows",
+            "paths-report" => "paths",
+            "reducer-impact-report" => "reducer-results",
+            "rule-catalog" => "rules",
+            _ => "artifacts"
+        };
+        var relatedGaps = context.Gaps
+            .Where(gap => gap.AffectedSection == affectedSection
+                && (gap.Scope == artifact.ArtifactId || gap.SupportIds.Contains(artifact.ArtifactId, StringComparer.Ordinal)))
+            .OrderBy(gap => gap.GapId, StringComparer.Ordinal)
+            .ToArray();
+        var commitConflict = relatedGaps.Any(gap => gap.GapKind == "commit-conflict");
+        var unsupportedSchema = relatedGaps.Any(gap => gap.GapKind is "unsupported-schema" or "artifact-too-large");
+        var partialInput = relatedGaps.Any(gap => gap.GapKind is not ("unsupported-schema" or "artifact-too-large" or "unsupported"));
+        var status = artifact.Compatibility switch
+        {
+            "supported-provenance-only" => "provenance-only",
+            _ when unsupportedSchema => "unsupported-schema",
+            "unsupported" => "unsupported-artifact",
+            _ when commitConflict => "partial",
+            _ when partialInput => "partial",
+            "supported" when artifact.ArtifactKind == "facts-ndjson" && context.EvidenceRows.Count == 0 => "compatible-empty",
+            "supported" => "rendered-compatible",
+            _ => "partial"
+        };
+        var ruleId = status switch
+        {
+            "unsupported-schema" or "unsupported-artifact" => UnsupportedSchemaRuleId,
+            "partial" when commitConflict => ProvenanceConflictRuleId,
+            "partial" => PartialSectionRuleId,
+            _ => CompatibilityLedgerRuleId
+        };
+        var limitationIds = artifact.Limitations
+            .Concat(relatedGaps.Select(gap => gap.GapId))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        var supportIds = artifact.SourceIds
+            .Append(artifact.ArtifactId)
+            .Concat(relatedGaps.SelectMany(gap => gap.SupportIds))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        return CompatibilityRow(
+            "artifact",
+            artifact.ArtifactId,
+            artifact.SafeLabel,
+            status,
+            ruleId,
+            artifact.CoverageLabels.FirstOrDefault() ?? coverageLabel,
+            "generated-input-artifact",
+            supportIds,
+            limitationIds,
+            ArtifactCompatibilityMessage(artifact.SafeLabel, status));
+    }
+
+    private static ExplorerCompatibilityRow CompatibilityRow(
+        string subjectKind,
+        string subjectId,
+        string safeLabel,
+        string compatibilityStatus,
+        string ruleId,
+        string coverageLabel,
+        string scope,
+        IReadOnlyList<string> supportIds,
+        IReadOnlyList<string> limitationIds,
+        string message)
+    {
+        return new ExplorerCompatibilityRow(
+            $"compatibility:{subjectKind}:{Hash(subjectId, 20)}",
+            subjectKind,
+            subjectId,
+            safeLabel,
+            compatibilityStatus,
+            ruleId,
+            Tier4Unknown,
+            coverageLabel,
+            scope,
+            supportIds.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            limitationIds.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            message);
+    }
+
+    private static IReadOnlyList<(string ArtifactId, string ArtifactKind, string SafeLabel)> ExpectedArtifactSubjects()
+    {
+        return
+        [
+            ("artifact:scan-manifest", "scan-manifest", "Scan manifest"),
+            ("artifact:facts-ndjson", "facts-ndjson", "Fact stream"),
+            ("artifact:sqlite-index", "sqlite-index", "SQLite index"),
+            ("artifact:markdown-report", "markdown-report", "Markdown report"),
+            ("artifact:release-review", "release-review", "Release review"),
+            ("artifact:paths-report", "paths-report", "Static dependency paths report"),
+            ("artifact:rule-catalog", "rule-catalog", "Rule catalog")
+        ];
+    }
+
+    private static string ArtifactCompatibilityMessage(string safeLabel, string status)
+    {
+        return status switch
+        {
+            "rendered-compatible" => $"{safeLabel} was parsed through a compatible safe reader and contributed rendered explorer data.",
+            "compatible-empty" => $"{safeLabel} was parsed through a compatible safe reader and contained no renderable rows under the current coverage.",
+            "provenance-only" => $"{safeLabel} was hashed for provenance only; its raw content was not inspected or rendered.",
+            "unsupported-schema" => $"{safeLabel} was present but its schema is not supported by the current safe reader.",
+            "unsupported-artifact" => $"{safeLabel} was present but is not a supported rendered artifact in this explorer slice.",
+            _ => $"{safeLabel} contributed only partial compatible data because a rule-backed input gap applies."
+        };
+    }
+
+    private static string SectionCompatibilityMessage(string safeLabel, string status)
+    {
+        return status switch
+        {
+            "compatible" => $"{safeLabel} is available from compatible safe explorer data.",
+            "compatible-empty" => $"{safeLabel} has compatible input but no rows under the current coverage.",
+            "provenance-only" => $"{safeLabel} has provenance-only input; raw content was not inspected or rendered.",
+            "not-provided" => $"{safeLabel} lacks a compatible input and is unavailable rather than evidence-empty.",
+            _ => $"{safeLabel} is partial under the current rule-backed explorer coverage."
+        };
     }
 
     private static ExplorerSectionStatus SectionStatus(
@@ -1175,7 +2691,7 @@ public static class StaticHtmlEvidenceExplorer
                 "Explorer rules describe deterministic rendering, provenance, safety, or generation gaps only.",
                 "They do not create scanner or reducer conclusions and do not prove runtime behavior."
             ],
-            ["overview", "gaps", "limitations", "artifacts", "evidence-rows"]);
+            ["overview", "compatibility-ledger", "gaps", "limitations", "artifacts", "evidence-rows"]);
     }
 
     private static void RecordOmittedManifestIdentity(
@@ -1571,6 +3087,46 @@ public static class StaticHtmlEvidenceExplorer
         return $"sha256:{Convert.ToHexString(hash).ToLowerInvariant()}";
     }
 
+    private static async Task<BoundedArtifactSnapshot> ReadBoundedArtifactAsync(
+        string path,
+        long maxBytes,
+        CancellationToken cancellationToken)
+    {
+        if (new FileInfo(path).Length > maxBytes)
+        {
+            return new BoundedArtifactSnapshot("unavailable:artifact-too-large", null);
+        }
+
+        await using var stream = File.OpenRead(path);
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using var content = new MemoryStream();
+        var buffer = new byte[81_920];
+        long totalBytes = 0;
+        int read;
+        while (true)
+        {
+            var bytesUntilDecision = maxBytes - totalBytes + 1;
+            var requestedBytes = (int)Math.Min(buffer.Length, bytesUntilDecision);
+            read = await stream.ReadAsync(buffer.AsMemory(0, requestedBytes), cancellationToken);
+            if (read == 0)
+            {
+                break;
+            }
+
+            totalBytes += read;
+            if (totalBytes > maxBytes)
+            {
+                return new BoundedArtifactSnapshot("unavailable:artifact-too-large", null);
+            }
+
+            hash.AppendData(buffer, 0, read);
+            await content.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+        }
+
+        var contentHash = $"sha256:{Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant()}";
+        return new BoundedArtifactSnapshot(contentHash, content.ToArray());
+    }
+
     private static string Hash(string value, int length = 64)
     {
         return CombinedReportHelpers.Hash(value, length);
@@ -1596,6 +3152,7 @@ public static class StaticHtmlEvidenceExplorer
         builder.AppendLine("  <link rel=\"stylesheet\" href=\"assets/explorer.css\">");
         builder.AppendLine("</head>");
         builder.AppendLine("<body>");
+        builder.AppendLine("  <a class=\"skip-link\" href=\"#main-content\">Skip to evidence content</a>");
         builder.AppendLine("  <header>");
         builder.AppendLine("    <p class=\"eyebrow\">Local generated artifact</p>");
         builder.AppendLine("    <h1>TraceMap Evidence Explorer</h1>");
@@ -1612,16 +3169,25 @@ public static class StaticHtmlEvidenceExplorer
         }
         builder.AppendLine("  </ul></nav>");
 
-        builder.AppendLine("  <main>");
+        builder.AppendLine("  <main id=\"main-content\" tabindex=\"-1\">");
+        builder.AppendLine("    <noscript><p class=\"notice no-script-notice\">All evidence sections and the deterministic evidence-row baseline remain available. Interactive table filtering requires JavaScript.</p></noscript>");
         RenderOverview(builder, data.Summary);
         RenderCoverage(builder, data.SectionStatuses);
+        RenderCompatibilityLedger(builder, data.CompatibilityLedger);
         RenderSources(builder, data.Sources);
         RenderArtifacts(builder, data.Artifacts);
+        RenderSurfaces(builder, data.Surfaces);
+        RenderPaths(builder, data.Paths);
+        RenderReducerResults(builder, data.ReducerResults);
         RenderGaps(builder, data.Gaps);
         RenderLimitations(builder, data.Limitations);
         RenderRedactions(builder, data.Redactions);
         RenderRules(builder, data.Rules);
-        RenderEvidenceRows(builder, data.EvidenceRows, data.Artifacts.Any(artifact => artifact.ArtifactKind == "facts-ndjson"));
+        RenderEvidenceRows(
+            builder,
+            data.EvidenceRows,
+            data.Artifacts.Any(artifact => artifact.Compatibility == "supported"
+                && artifact.ArtifactKind is "facts-ndjson" or "paths-report" or "reducer-impact-report"));
         RenderAbout(builder);
         builder.AppendLine("  </main>");
         builder.AppendLine("  <script src=\"assets/explorer.js\"></script>");
@@ -1677,6 +3243,22 @@ public static class StaticHtmlEvidenceExplorer
         builder.AppendLine("    </section>");
     }
 
+    private static void RenderCompatibilityLedger(StringBuilder builder, IReadOnlyList<ExplorerCompatibilityRow> rows)
+    {
+        builder.AppendLine("    <section id=\"compatibility-ledger\" aria-labelledby=\"compatibility-ledger-heading\">");
+        builder.AppendLine("      <h2 id=\"compatibility-ledger-heading\">Compatibility Ledger</h2>");
+        builder.AppendLine("      <p>Compatibility rows explain what the explorer could safely read or render. Missing and unsupported inputs are not evidence-absence conclusions.</p>");
+        builder.AppendLine("      <table><caption>Rule-backed artifact, section, profile, and claim-metadata compatibility</caption><thead><tr><th>Subject</th><th>Kind</th><th>Label</th><th>Status</th><th>Rule ID</th><th>Tier</th><th>Coverage</th><th>Scope</th><th>Support IDs</th><th>Limitations</th><th>Message</th></tr></thead><tbody>");
+        foreach (var row in rows)
+        {
+            var supportIds = Html(string.Join(", ", row.SupportIds));
+            var limitationIds = Html(string.Join(", ", row.LimitationIds));
+            builder.AppendLine($"        <tr><th scope=\"row\">{Html(row.SubjectId)}</th><td>{Html(row.SubjectKind)}</td><td>{Html(row.SafeLabel)}</td><td>{Html(row.CompatibilityStatus)}</td><td>{Html(row.RuleId)}</td><td>{Html(row.EvidenceTier)}</td><td>{Html(row.CoverageLabel)}</td><td>{Html(row.Scope)}</td><td>{supportIds}</td><td>{limitationIds}</td><td>{Html(row.Message)}</td></tr>");
+        }
+        builder.AppendLine("      </tbody></table>");
+        builder.AppendLine("    </section>");
+    }
+
     private static void RenderSources(StringBuilder builder, IReadOnlyList<ExplorerSource> sources)
     {
         builder.AppendLine("    <section id=\"sources\" aria-labelledby=\"sources-heading\">");
@@ -1700,6 +3282,65 @@ public static class StaticHtmlEvidenceExplorer
         foreach (var artifact in artifacts.OrderBy(artifact => artifact.ArtifactId, StringComparer.Ordinal))
         {
             builder.AppendLine($"        <tr><th scope=\"row\">{Html(artifact.ArtifactId)}</th><td>{Html(artifact.ArtifactKind)}</td><td>{Html(artifact.SafeLabel)}</td><td>{Html(artifact.SchemaVersion)}</td><td>{Html(artifact.Compatibility)}</td><td>{Html(artifact.ContentHash)}</td></tr>");
+        }
+        builder.AppendLine("      </tbody></table>");
+        builder.AppendLine("    </section>");
+    }
+
+    private static void RenderSurfaces(StringBuilder builder, IReadOnlyList<ExplorerSurface> surfaces)
+    {
+        builder.AppendLine("    <section id=\"surfaces\" aria-labelledby=\"surfaces-heading\">");
+        builder.AppendLine("      <h2 id=\"surfaces-heading\">Surfaces</h2>");
+        builder.AppendLine("      <p>These rows are static dependency-surface evidence from compatible generated reports. They do not prove runtime reachability, execution, production use, or impact.</p>");
+        builder.AppendLine("      <table id=\"surfaces-table\" data-filterable=\"true\" data-filter-name=\"static dependency surfaces\"><caption>Rule-backed static dependency surfaces</caption><thead><tr><th>Surface</th><th>Kind</th><th>Classification</th><th>Rule ID</th><th>Tier</th><th>Coverage</th><th>Source</th><th>Commit SHA</th><th>Extractor</th><th>File span</th><th>Support IDs</th><th>Limitations</th></tr></thead><tbody>");
+        foreach (var surface in surfaces)
+        {
+            var span = surface.FilePath is null ? "n/a" : $"{surface.FilePath}:{surface.StartLine}-{surface.EndLine}";
+            builder.AppendLine($"        <tr data-filter-row=\"true\"><th scope=\"row\">{Html(surface.SurfaceId)}</th><td>{Html(surface.SurfaceKind)}</td><td>{Html(surface.Classification)}</td><td>{Html(surface.RuleId)}</td><td>{Html(surface.EvidenceTier)}</td><td>{Html(surface.CoverageLabel)}</td><td>{Html(surface.SourceId)}</td><td>{Html(surface.CommitSha)}</td><td>{Html(surface.ExtractorVersion)}</td><td>{Html(span)}</td><td>{Html(string.Join(", ", surface.SupportIds))}</td><td>{Html(string.Join(", ", surface.LimitationIds))}</td></tr>");
+        }
+        if (surfaces.Count == 0)
+        {
+            builder.AppendLine("        <tr data-empty-row=\"true\"><td colspan=\"12\">No compatible static dependency-surface rows were provided under the current coverage.</td></tr>");
+        }
+        builder.AppendLine("      </tbody></table>");
+        builder.AppendLine("    </section>");
+    }
+
+    private static void RenderPaths(StringBuilder builder, IReadOnlyList<ExplorerPath> paths)
+    {
+        builder.AppendLine("    <section id=\"paths\" aria-labelledby=\"paths-heading\">");
+        builder.AppendLine("      <h2 id=\"paths-heading\">Paths</h2>");
+        builder.AppendLine("      <p>Paths preserve deterministic static hop evidence and existing classifications. They are not runtime traces or reducer-backed impact conclusions.</p>");
+        builder.AppendLine("      <table id=\"paths-table\" data-filterable=\"true\" data-filter-name=\"static dependency paths\"><caption>Ordered static dependency-path hops</caption><thead><tr><th>Path</th><th>Classification</th><th>Confidence</th><th>Hop</th><th>Edge kind</th><th>Rule ID</th><th>Tier</th><th>Coverage</th><th>From</th><th>To</th><th>Source</th><th>Commit SHA</th><th>Extractor</th><th>File span</th><th>Support IDs</th><th>Limitations</th></tr></thead><tbody>");
+        foreach (var path in paths)
+        {
+            foreach (var hop in path.Hops)
+            {
+                var span = hop.FilePath is null ? "n/a" : $"{hop.FilePath}:{hop.StartLine}-{hop.EndLine}";
+                builder.AppendLine($"        <tr data-filter-row=\"true\"><th scope=\"row\">{Html(path.PathId)}</th><td>{Html(path.Classification)}</td><td>{Html(path.Confidence)}</td><td>{hop.Sequence}</td><td>{Html(hop.EdgeKind)}</td><td>{Html(hop.RuleId)}</td><td>{Html(hop.EvidenceTier)}</td><td>{Html(path.CoverageLabel)}</td><td>{Html(hop.FromNodeId)}</td><td>{Html(hop.ToNodeId)}</td><td>{Html(hop.SourceId)}</td><td>{Html(hop.CommitSha)}</td><td>{Html(hop.ExtractorVersion)}</td><td>{Html(span)}</td><td>{Html(string.Join(", ", hop.SupportIds))}</td><td>{Html(string.Join(", ", hop.LimitationIds))}</td></tr>");
+            }
+        }
+        if (paths.Count == 0)
+        {
+            builder.AppendLine("        <tr data-empty-row=\"true\"><td colspan=\"16\">No compatible static dependency paths were provided under the current coverage.</td></tr>");
+        }
+        builder.AppendLine("      </tbody></table>");
+        builder.AppendLine("    </section>");
+    }
+
+    private static void RenderReducerResults(StringBuilder builder, IReadOnlyList<ExplorerReducerResult> results)
+    {
+        builder.AppendLine("    <section id=\"reducer-results\" aria-labelledby=\"reducer-results-heading\">");
+        builder.AppendLine("      <h2 id=\"reducer-results-heading\">Reducer Results</h2>");
+        builder.AppendLine("      <p>These impact classifications come from a compatible deterministic TraceMap reducer artifact. They describe static, coverage-relative evidence and do not prove runtime reachability, production behavior, business impact, or release safety.</p>");
+        builder.AppendLine("      <table id=\"reducer-results-table\" data-filterable=\"true\" data-filter-name=\"contract-delta reducer results\"><caption>Rule-backed contract-delta impact results</caption><thead><tr><th>Result</th><th>Classification</th><th>Confidence</th><th>Rule ID</th><th>Tier</th><th>Reducer</th><th>Coverage</th><th>Evidence IDs</th><th>Support IDs</th><th>Limitations</th></tr></thead><tbody>");
+        foreach (var result in results)
+        {
+            builder.AppendLine($"        <tr data-filter-row=\"true\"><th scope=\"row\">{Html(result.ResultId)}</th><td>{Html(result.Classification)}</td><td>{Html(result.Confidence)}</td><td>{Html(result.RuleId)}</td><td>{Html(result.EvidenceTier)}</td><td>{Html(result.ReducerVersion)}</td><td>{Html(result.CoverageLabel)}</td><td>{Html(string.Join(", ", result.EvidenceIds))}</td><td>{Html(string.Join(", ", result.SupportIds))}</td><td>{Html(string.Join(", ", result.LimitationIds))}</td></tr>");
+        }
+        if (results.Count == 0)
+        {
+            builder.AppendLine("        <tr data-empty-row=\"true\"><td colspan=\"10\">No compatible reducer-backed result rows were provided under the current coverage.</td></tr>");
         }
         builder.AppendLine("      </tbody></table>");
         builder.AppendLine("    </section>");
@@ -1773,7 +3414,7 @@ public static class StaticHtmlEvidenceExplorer
         builder.AppendLine("    </section>");
     }
 
-    private static void RenderEvidenceRows(StringBuilder builder, IReadOnlyList<ExplorerEvidenceRow> rows, bool factStreamProvided)
+    private static void RenderEvidenceRows(StringBuilder builder, IReadOnlyList<ExplorerEvidenceRow> rows, bool compatibleEvidenceArtifactProvided)
     {
         builder.AppendLine("    <section id=\"evidence-rows\" aria-labelledby=\"evidence-rows-heading\">");
         builder.AppendLine("      <h2 id=\"evidence-rows-heading\">Evidence Rows</h2>");
@@ -1781,7 +3422,7 @@ public static class StaticHtmlEvidenceExplorer
         {
             builder.AppendLine($"      <p>The no-JavaScript baseline renders the first {EvidenceRowNoScriptLimit} deterministic rows out of {rows.Count}. The full safe row set is available in data/explorer-data.json.</p>");
         }
-        builder.AppendLine("      <table data-filterable=\"true\"><caption>Safe evidence rows</caption><thead><tr><th>Evidence</th><th>Rule ID</th><th>Tier</th><th>Kind</th><th>Support ID</th><th>Artifact ID</th><th>Source ID</th><th>Coverage</th><th>Commit SHA</th><th>File span</th><th>Snippet hash</th><th>Extractor</th><th>Limitations</th></tr></thead><tbody>");
+        builder.AppendLine("      <table id=\"evidence-rows-table\" data-filterable=\"true\" data-filter-name=\"safe evidence rows\"><caption>Safe evidence rows</caption><thead><tr><th>Evidence</th><th>Rule ID</th><th>Tier</th><th>Kind</th><th>Support ID</th><th>Artifact ID</th><th>Source ID</th><th>Coverage</th><th>Commit SHA</th><th>File span</th><th>Snippet hash</th><th>Extractor</th><th>Limitations</th></tr></thead><tbody>");
         foreach (var row in rows.Take(EvidenceRowNoScriptLimit))
         {
             var span = row.FilePath is null ? "n/a" : $"{row.FilePath}:{row.StartLine}-{row.EndLine}";
@@ -1789,14 +3430,14 @@ public static class StaticHtmlEvidenceExplorer
             var extractorVersion = Html(row.ExtractorVersion ?? "unknown");
             var commitSha = Html(row.CommitSha ?? "partial");
             var limitations = Html(string.Join(", ", row.Limitations));
-            builder.AppendLine($"        <tr><th scope=\"row\">{Html(row.EvidenceId)}</th><td>{Html(row.RuleId)}</td><td>{Html(row.EvidenceTier)}</td><td>{Html(row.EvidenceKind)}</td><td>{Html(row.SupportId)}</td><td>{Html(row.ArtifactId)}</td><td>{Html(row.SourceId ?? "unknown")}</td><td>{Html(row.CoverageLabel ?? "UnknownCoverage")}</td><td>{commitSha}</td><td>{Html(span)}</td><td>{snippetHash}</td><td>{extractorVersion}</td><td>{limitations}</td></tr>");
+            builder.AppendLine($"        <tr data-filter-row=\"true\"><th scope=\"row\">{Html(row.EvidenceId)}</th><td>{Html(row.RuleId)}</td><td>{Html(row.EvidenceTier)}</td><td>{Html(row.EvidenceKind)}</td><td>{Html(row.SupportId)}</td><td>{Html(row.ArtifactId)}</td><td>{Html(row.SourceId ?? "unknown")}</td><td>{Html(row.CoverageLabel ?? "UnknownCoverage")}</td><td>{commitSha}</td><td>{Html(span)}</td><td>{snippetHash}</td><td>{extractorVersion}</td><td>{limitations}</td></tr>");
         }
         if (rows.Count == 0)
         {
-            var message = factStreamProvided
-                ? "No static evidence rows were found in the provided fact stream under the current coverage."
-                : "Evidence rows are unavailable because no compatible fact stream was provided.";
-            builder.AppendLine($"        <tr><td colspan=\"13\">{Html(message)}</td></tr>");
+            var message = compatibleEvidenceArtifactProvided
+                ? "No static evidence rows were found in the compatible evidence artifacts under the current coverage."
+                : "Evidence rows are unavailable because no compatible fact, path, or reducer artifact was provided.";
+            builder.AppendLine($"        <tr data-empty-row=\"true\"><td colspan=\"13\">{Html(message)}</td></tr>");
         }
         builder.AppendLine("      </tbody></table>");
         builder.AppendLine("    </section>");
@@ -1816,8 +3457,12 @@ public static class StaticHtmlEvidenceExplorer
         [
             ("overview", "Evidence Overview"),
             ("coverage", "Coverage"),
+            ("compatibility-ledger", "Compatibility Ledger"),
             ("sources", "Sources"),
             ("artifacts", "Artifacts"),
+            ("surfaces", "Surfaces"),
+            ("paths", "Paths"),
+            ("reducer-results", "Reducer Results"),
             ("gaps", "Gaps"),
             ("limitations", "Limitations"),
             ("redactions", "Safety & Redactions"),
@@ -1850,6 +3495,22 @@ public static class StaticHtmlEvidenceExplorer
               background: var(--bg);
               color: var(--text);
               font: 15px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            }
+
+            .skip-link {
+              position: fixed;
+              top: 8px;
+              left: 8px;
+              z-index: 10;
+              padding: 10px 12px;
+              background: var(--panel);
+              border: 2px solid var(--accent);
+              border-radius: 4px;
+              transform: translateY(-160%);
+            }
+
+            .skip-link:focus {
+              transform: translateY(0);
             }
 
             header,
@@ -1901,6 +3562,35 @@ public static class StaticHtmlEvidenceExplorer
             input:focus {
               outline: 3px solid #86b8ff;
               outline-offset: 2px;
+            }
+
+            main:focus {
+              outline: 3px solid #86b8ff;
+              outline-offset: -3px;
+            }
+
+            .table-filter {
+              display: grid;
+              gap: 4px;
+              max-width: 34rem;
+              margin: 12px 0;
+              font-weight: 700;
+            }
+
+            .table-filter input {
+              min-height: 44px;
+              padding: 8px 10px;
+              border: 1px solid var(--line);
+              border-radius: 4px;
+              background: var(--panel);
+              color: var(--text);
+              font: inherit;
+            }
+
+            .filter-status {
+              min-height: 1.5em;
+              margin: -4px 0 12px;
+              color: var(--muted);
             }
 
             section {
@@ -1959,6 +3649,30 @@ public static class StaticHtmlEvidenceExplorer
               background: #eaf0ec;
               text-align: left;
             }
+
+            @media (max-width: 720px) {
+              header,
+              nav,
+              main {
+                padding: 16px;
+              }
+
+              header {
+                padding-top: 32px;
+              }
+
+              nav a {
+                display: inline-flex;
+                align-items: center;
+                min-height: 44px;
+                padding: 4px;
+              }
+
+              th,
+              td {
+                padding: 6px;
+              }
+            }
             """.ReplaceLineEndings("\n");
     }
 
@@ -1968,21 +3682,44 @@ public static class StaticHtmlEvidenceExplorer
             (() => {
               "use strict";
               for (const table of document.querySelectorAll("table[data-filterable='true']")) {
+                if (!table.id || !table.dataset.filterName) {
+                  continue;
+                }
+                const filterId = `${table.id}-filter`;
+                const statusId = `${table.id}-filter-status`;
                 const label = document.createElement("label");
-                label.textContent = "Filter safe rendered rows";
+                label.className = "table-filter";
+                label.htmlFor = filterId;
+                label.textContent = `Filter ${table.dataset.filterName}`;
                 const input = document.createElement("input");
+                input.id = filterId;
                 input.type = "search";
                 input.autocomplete = "off";
-                input.setAttribute("aria-label", "Filter safe rendered evidence rows");
-                label.append(" ", input);
-                table.before(label);
-                const rows = Array.from(table.tBodies[0]?.rows ?? []);
-                input.addEventListener("input", () => {
+                input.setAttribute("aria-controls", table.id);
+                input.setAttribute("aria-describedby", statusId);
+                label.append(input);
+                const status = document.createElement("p");
+                status.id = statusId;
+                status.className = "filter-status";
+                status.setAttribute("role", "status");
+                status.setAttribute("aria-live", "polite");
+                table.before(label, status);
+                const rows = Array.from(table.querySelectorAll("tbody tr[data-filter-row='true']"));
+                const update = () => {
                   const needle = input.value.toLowerCase();
+                  let visibleCount = 0;
                   for (const row of rows) {
                     row.hidden = needle.length > 0 && !row.textContent.toLowerCase().includes(needle);
+                    if (!row.hidden) {
+                      visibleCount += 1;
+                    }
                   }
-                });
+                  status.textContent = rows.length === 0
+                    ? "No filterable rows are available under the current coverage."
+                    : `Showing ${visibleCount} of ${rows.length} rows.`;
+                };
+                input.addEventListener("input", update);
+                update();
               }
             })();
             """.ReplaceLineEndings("\n");
@@ -2069,7 +3806,8 @@ public static class StaticHtmlEvidenceExplorer
         {
             using var document = JsonDocument.Parse(content);
             return document.RootElement.TryGetProperty("schemaVersion", out var schemaVersion)
-                && schemaVersion.GetString() == SchemaVersion
+                && (schemaVersion.GetString() == SchemaVersion
+                    || PriorSchemaVersions.Contains(schemaVersion.GetString(), StringComparer.Ordinal))
                 && document.RootElement.TryGetProperty("tracemapGenerated", out var generated)
                 && generated.ValueKind == JsonValueKind.True;
         }
@@ -2145,6 +3883,9 @@ public static class StaticHtmlEvidenceExplorer
         IReadOnlyList<string> CoverageLabels,
         IReadOnlyList<ExplorerSource> Sources,
         IReadOnlyList<ExplorerInputArtifact> Artifacts,
+        IReadOnlyList<ExplorerSurface> Surfaces,
+        IReadOnlyList<ExplorerPath> Paths,
+        IReadOnlyList<ExplorerReducerResult> ReducerResults,
         IReadOnlyList<ExplorerEvidenceRow> EvidenceRows,
         IReadOnlyList<ExplorerGap> Gaps,
         IReadOnlyList<ExplorerLimitation> Limitations,
@@ -2163,4 +3904,12 @@ public static class StaticHtmlEvidenceExplorer
         string Description,
         string EvidenceTier,
         IReadOnlyList<string> Limitations);
+
+    private sealed record BoundedArtifactSnapshot(
+        string ContentHash,
+        byte[]? Content);
+
+    private sealed record ReleaseReviewSnapshotMetadata(
+        string Coverage,
+        IReadOnlyList<string> CommitShas);
 }

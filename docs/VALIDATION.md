@@ -664,6 +664,22 @@ dotnet test src/dotnet/TraceMap.sln
 git diff --check
 ```
 
+For semantic ASP.NET Core MVC/Razor Pages model-binding producer changes, also
+run the signed-metadata, reducer-isolation, and reporter-isolation regressions:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter "FullyQualifiedName~RazorSemanticModelBindingTests|FullyQualifiedName~Reduce_excludes_semantic_razor_binding|FullyQualifiedName~Property_flow_ignores_semantic_razor_targets"
+```
+
+The positive fixture uses the locked `net10.0` ASP.NET Core shared-framework
+metadata. Confirm admission records the exact framework metadata type, assembly
+name, and Microsoft public-key token; framework version is fixture provenance,
+not a product trust key. Source-declared lookalikes must produce no Tier1 target.
+The resulting semantic facts remain available in NDJSON/SQLite but must not
+change generic reducer or legacy name-based property-flow output until the
+exact-identity composition slice lands.
+
 Expected behavior: Angular template fixtures emit `UiTemplateBinding`,
 `UiFormControlBinding`, `UiEventBinding`, `UiTemplateVariable`, and
 `UiBindingGap` facts with rule IDs and safe metadata only; Razor fixtures emit
@@ -1421,3 +1437,60 @@ and limitations. Confirm filename-only candidates and marker text inside SQL
 strings do not establish snapshot identity. Unsupported DDL must produce
 categorical Tier 4 snapshot gaps without retaining object names, comments,
 database/server identity, or raw SQL.
+
+### Framework migration evidence
+
+Generic consumer audit:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~FrameworkMigrationConsumerAuditTests
+```
+
+Expected behavior: the Markdown report counts framework migration fact types
+without rendering protected fact properties; the static HTML explorer
+preserves only the exact bounded coverage and limitation contract; snapshot
+diff, vault export, and evidence-docs export emit rule-backed gaps with
+supporting fact IDs where no dedicated framework migration projection exists.
+None of these consumers claims migration application, ordering, provider
+selection, generated SQL, database state, rollback, approval, or safety.
+
+For changes to the bounded EF Core migration producer, run:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~FrameworkMigrationEvidenceExtractorTests
+
+dotnet run --project src/dotnet/TraceMap.Cli -- scan \
+  --repo samples/framework-migration-v0 \
+  --out .tmp/framework-migration-scan \
+  --restore
+```
+
+Inspect all five required scan artifacts. Confirm declarations and operations
+use the framework-migration rule family, Tier 1 semantic evidence, exact spans,
+canonical symbol roles, provider scope `unknown`, and the bounded static
+migration coverage label. Protected SQL, data, annotation, default, and
+computed content must produce categorical Tier 4 gaps without source values or
+digests, and must not reappear through SQL text/shape extraction. The generic
+contract-delta reducer must ignore this fact family until its composition
+contract preserves the upstream evidence and limitations. Migration coverage
+gaps reduce `analysisLevel`, but do not change a successfully loaded and
+compiled repository's `buildStatus` to `FailedOrPartial`; those are separate
+claims. Confirm syntax-fallback facts use their dedicated extractor provenance
+and categorical migration messages in `knownGaps`.
+
+For framework-migration database design-review or release-review composition
+changes, also run:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~FrameworkMigrationCompositionTests
+```
+
+Verify both reports preserve rule, tier, span, commit, extractor, coverage,
+supporting fact IDs, and upstream limitations. Generic operations must remain
+global application-side evidence with explicit provider-unknown gaps; they must
+not attach to PostgreSQL objects. Confirm outputs contain no protected source
+symbol, raw SQL, local path, or claims of application, ordering, rollback,
+generated SQL, compatibility, safety, database state, or approval.

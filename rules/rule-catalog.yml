@@ -164,6 +164,16 @@ rules:
       - Partial sections are compatibility and coverage labels, not proof of evidence absence or runtime safety.
       - The explorer must distinguish not-provided, unsupported, and no-evidence-under-credible-coverage states when enough input metadata is available.
 
+  - id: explorer.input.framework-migration-metadata-unavailable.v1
+    name: Static HTML explorer framework migration metadata gap
+    description: Omits framework migration facts whose exact bounded coverage and limitation metadata cannot be safely preserved by the explorer.
+    evidenceTier: Tier4Unknown
+    emits:
+      - framework-migration-metadata-unavailable gap
+    limitations:
+      - The gap describes explorer projection compatibility and does not prove that framework migration evidence is absent.
+      - Omitted rows must not be interpreted as migration application, ordering, provider selection, generated SQL, rollback, or safety evidence.
+
   - id: explorer.render.section-status.v1
     name: Static HTML explorer section status
     description: Records deterministic section availability labels derived from compatible generated artifacts, safe view models, and rule-backed explorer gaps.
@@ -175,6 +185,69 @@ rules:
       - Section status rows describe explorer rendering coverage only and do not prove runtime behavior, source reachability, production use, or absence of evidence outside compatible inputs.
       - First-slice not-rendered or not-provided labels must stay visibly partial and must not be converted into no-evidence conclusions.
       - Support IDs must use stable artifact IDs, rule IDs, or generated data paths rather than raw source paths, remotes, hostnames, or private repository names.
+
+  - id: explorer.render.compatibility-ledger.v1
+    name: Static HTML explorer compatibility ledger
+    description: Records deterministic compatibility states for generated artifacts, rendered sections, the selected output safety profile, and independently available claim metadata.
+    evidenceTier: Tier4Unknown
+    emits:
+      - explorer compatibility ledger row
+      - generated compatibility table row
+    limitations:
+      - Compatibility rows describe explorer input and rendering support only; they do not prove evidence absence, runtime behavior, source reachability, production use, or complete analysis.
+      - Missing and unsupported artifacts remain unavailable or partial and must not be represented as compatible-empty evidence.
+      - Claim metadata that is not exposed by a compatible structured input remains unknown and must not be converted into a profile or claim-level conflict.
+      - Ledger labels, messages, scopes, statuses, and subject identities must use closed explorer-authored values and stable safe IDs rather than raw paths, remotes, hosts, private names, snippets, SQL, or configuration values.
+
+  - id: explorer.input.release-review.v1
+    name: Static HTML explorer release-review compatibility reader
+    description: Validates bounded release-review v1.2 identity, mode, snapshot shape, closed coverage labels, and deterministic content identity for explorer compatibility projection.
+    evidenceTier: Tier4Unknown
+    emits:
+      - compatible release-review input artifact
+      - release-review compatibility limitation
+    limitations:
+      - This reader establishes artifact compatibility and deterministic content identity only; it does not render or independently verify findings, paths, source labels, messages, metadata, checklist text, or reducer conclusions.
+      - A compatible release-review artifact does not prove runtime reachability, production behavior, release approval, deployment safety, or complete analysis.
+      - Unsupported versions, modes, malformed metadata, duplicate required properties, invalid commit identities, and oversized artifacts remain unavailable under explorer.input.unsupported-schema.v1.
+      - The report is associated with the scan source only when its after-snapshot commits include the authoritative scan/fact commit; mismatch or unavailable authority remains an explicit provenance gap.
+      - Oversized inputs stop at the bounded size-decision point and use a closed unavailable placeholder instead of a full-content digest.
+      - Richer release-review surface, path, and reducer projections require a separately bounded reader slice with public-safe validation.
+
+  - id: explorer.input.paths-report.v1
+    name: Static HTML explorer dependency-path report reader
+    description: Validates bounded paths-report v1.0 structure and projects deterministic static dependency surfaces, ordered path hops, provenance, gaps, and limitations into safe explorer rows.
+    evidenceTier: Tier4Unknown
+    emits:
+      - compatible paths-report input artifact
+      - explorer static dependency surface
+      - explorer static dependency path hop
+      - paths-report compatibility limitation
+    limitations:
+      - Projected rows preserve existing static report classifications and evidence only; they do not prove runtime reachability, execution, production use, business impact, release safety, or complete analysis.
+      - Query selectors, source labels, node and surface display names, report notes, raw SQL, and free-text report limitations are omitted from explorer output.
+      - Path topology must be contiguous and deterministic, every hop must carry a catalog-compatible rule ID and evidence tier, and surface kinds must remain in the existing closed TraceMap vocabulary; unsupported shapes remain unavailable rather than guessed.
+      - Support IDs and node identities are hashed into stable explorer-local identifiers; the explorer does not expose original combined fact, edge, node, source-index, or path IDs.
+      - The reader supports the ordinary paths-report v1.0 contract only. Legacy-flow variants, other report families, reducer results, and runtime evidence require separate bounded readers.
+      - A 32 MiB input bound plus 1,000-source, 1,000-path, and 10,000-hop caps limit this reader; over-limit reports remain unsupported and oversized reports do not receive a full-content digest.
+
+  - id: explorer.input.contract-delta-impact.v1
+    name: Static HTML explorer contract-delta impact reader
+    description: Validates bounded contract-delta impact v2 reducer output and projects deterministic reducer classifications, evidence provenance, gaps, and limitations into safe explorer rows.
+    evidenceTier: Tier4Unknown
+    emits:
+      - compatible contract-delta impact input artifact
+      - explorer reducer result
+      - explorer reducer evidence row
+      - reducer impact gap
+      - reducer compatibility limitation
+    limitations:
+      - Projected impact wording is copied only from existing reducer classifications and rule-backed evidence; the explorer does not infer impact, risk, runtime reachability, execution, production behavior, business effect, release safety, or complete dependency coverage.
+      - The reader supports contract-delta-impact-single and contract-delta-impact-combined version 2.0 with contract-delta-fact-match version 2.0 only; SQL impact, combined-change-impact, package, route-flow, and other reducer families remain unsupported.
+      - Full, Reduced, and Partial reducer coverage remain distinct; Partial includes bounded truncation and never becomes full explorer coverage.
+      - Finding elements, reasons, warnings, references, source labels, scan IDs, evidence symbols and metadata, gap kinds and messages, and free-text upstream limitations are omitted rather than rendered.
+      - Finding, fact, source-index, and gap identities are projected as stable explorer-local hashes; repository paths use the existing public-safe path policy while commit SHA, scanner version, rule ID, tier, and spans remain provenance.
+      - A 32 MiB input bound plus 1,000-source, 1,000-result, 10,000-evidence-row, and 1,000-gap caps limit this reader; unsupported or over-limit reports remain unavailable rather than partially guessed.
 
   - id: explorer.validation.generated-file-stale.v1
     name: Static HTML explorer stale generated file guard
@@ -677,6 +750,16 @@ rules:
     limitations:
       - Unsupported-family gaps describe exporter/input compatibility only; they do not prove source evidence absence.
 
+  - id: docs-export.gap.framework-migration-consumer-unsupported.v1
+    name: Docs export framework migration consumer gap
+    description: Records when framework migration facts are present but docs export has no dedicated framework migration chunk projection.
+    evidenceTier: Tier4Unknown
+    emits:
+      - framework-migration-consumer-unsupported gap
+    limitations:
+      - Supporting fact IDs are preserved, but framework migration facts are not repackaged as generic dependency-surface claims.
+      - The gap does not prove migration absence, application, ordering, provider selection, generated SQL, rollback, reversibility, or safety.
+
   - id: docs-export.gap.unsupported-question-family.v1
     name: Docs export unsupported question-family gap
     description: Records additive question-oriented docs-export views that cannot be generated from the supplied input schema without synthesizing unsupported evidence.
@@ -874,9 +957,9 @@ rules:
       - Page paths and unsafe target-like values are hashed or omitted rather than rendered raw.
 
   - id: csharp.razor.model-binding.v1
-    name: Razor model-binding target evidence
-    description: Reserved rule for static Razor Pages/MVC model-binding target evidence such as handlers, action parameters, BindProperty, FromBody, and FromForm metadata.
-    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
+    name: Razor syntax model-binding target evidence
+    description: Extracts syntax- and convention-based Razor Pages/MVC model-binding target candidates such as handlers, action parameters, BindProperty, FromBody, and FromForm metadata.
+    evidenceTier: Tier3SyntaxOrTextual
     emits:
       - RazorModelBindingTarget
     limitations:
@@ -885,6 +968,38 @@ rules:
       - Convention-based ViewModel/InputModel/FormModel type-name matching emits review-tier RazorModelBindingTarget facts for matching type properties without requiring a proven route, action parameter, handler parameter, or model directive.
       - Syntax fallback only expands action and handler parameter types declared in the same syntax file; unresolved cross-file parameter types emit RazorBindingGap facts instead of hidden target winners.
       - Duplicate simple type names in the same syntax file are treated as ambiguous for parameter property expansion and emit RazorBindingGap facts instead of merging properties across candidate types.
+
+  - id: csharp.razor.semantic-model-binding.v1
+    name: Razor semantic model-binding target evidence
+    description: Extracts compiler-resolved MVC action parameters, Razor Page handler parameters, and handler-independent PageModel BindProperty targets admitted through exact signed ASP.NET Core metadata identities.
+    evidenceTier: Tier1Semantic
+    emits:
+      - RazorModelBindingTarget
+    limitations:
+      - Evidence proves only a bounded static model-binding target relationship; it does not prove runtime binding, route selection, handler execution, validation, serializer behavior, authorization, or submitted values.
+      - ASP.NET Core admission requires the documented Microsoft assembly names, public-key token, and exact framework type or attribute identity; assembly version is retained as fixture provenance and is not a product trust requirement.
+      - Canonical NonController, NonAction, and NonHandler exclusions suppress Tier1 owner admission across the applicable base-type or override chain; source base-model properties are traversed deterministically with the most-derived declaration governing hidden or overridden names.
+      - Razor Page handler HTTP methods follow the complete conventional verb segment, including custom verbs, rather than a prefix allowlist; this remains static naming evidence and does not prove endpoint selection or execution.
+      - Canonical FromServices parameters are excluded from request model-binding targets; inherited non-abstract actions are projected only to discoverable concrete source controllers when no same-name declaration intervenes.
+      - Projected concrete controller owners independently honor canonical NonController exclusions, source record model types remain unsupported with a categorical type gap, and trusted HTTP-method attributes are collected across the override chain.
+      - Canonical BindNever properties emit no targets; inherited-action projection rejects superseded base declarations across intermediate overrides; partial action definition/implementation pairs are processed once.
+      - Abstract, nested, internal, or open-generic PageModel owners emit categorical gaps; non-body complex models require public parameterless construction; inherited action projection treats same-signature new declarations as effective hiding boundaries.
+      - Resolved scalar/terminal parameters emit neither property targets nor unavailable gaps; record and collection shapes remain categorical unsupported gaps, while metadata-only complex models remain external-unavailable.
+      - Parameter binding-source classification is limited to canonical FromBody and FromForm; other request-source attributes and class-level BindProperties are not modeled in v1. Handler-independent BindProperty rows describe only the attributed property and do not recursively expand a complex property type.
+      - Tier3 syntax rows lack canonical owner, ordinal, and model-type identity and remain contextual support only; the Tier1 reconciliation profile does not make those rows exact or permit classification promotion.
+      - Internal, nested, abstract, or open-generic controller types emit no Tier1 action targets; metadata-only base-model property boundaries reduce coverage through categorical gaps rather than silent omission.
+      - Only public instance source properties with a public non-init setter are expanded; static, indexed, ref-returning, read-only, init-only, inaccessible, explicit-interface, metadata-only, ambiguous, or unresolved properties are omitted with rule-backed gaps.
+      - These facts remain excluded from the legacy name-based property-flow reporter and generic contract reducer until exact-identity composition is implemented under the property-flow depth runway.
+
+  - id: csharp.razor.semantic-model-binding-gap.v1
+    name: Razor semantic model-binding analysis gap
+    description: Records categorical compiler-evidence boundaries that prevent precise semantic MVC or Razor Pages model-binding target extraction.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - A gap reduces semantic model-binding coverage and does not prove that a runtime binding, handler, model property, route, or submitted value is absent.
+      - Gap records contain categorical state, canonical symbol identities where available, bounded counts, and limitations; they do not store source snippets, host-local paths, or raw submitted values.
 
   - id: csharp.razor.binding-gap.v1
     name: Razor binding analysis gap
@@ -1059,6 +1174,16 @@ rules:
       - The gap preserves bounded supporting Access fact IDs but does not convert catalog counts or coverage gaps into Access identity, navigation, flow, runtime, or impact conclusions.
       - It does not prove Access evidence is absent, that a database object exists or executes, or that a change is safe or approved.
       - Supporting IDs are stable TraceMap identifiers; raw database names, paths, SQL, connections, VBA, macro bodies, expressions, and protected material are not rendered.
+
+  - id: vault-export.gap.framework-migration-consumer-unsupported.v1
+    name: Vault export framework migration consumer gap
+    description: Records when framework migration facts are present in a combined index but vault export has no dedicated framework migration graph projection.
+    evidenceTier: Tier4Unknown
+    emits:
+      - FrameworkMigrationEvidenceConsumerUnsupported
+    limitations:
+      - The gap preserves bounded supporting fact IDs without converting declarations, operation candidates, or coverage gaps into graph nodes.
+      - It does not prove migration absence, application, ordering, provider selection, generated SQL, database state, rollback, reversibility, approval, or safety.
 
   - id: public.demo.summary.v1
     name: Public demo summary section
@@ -2292,6 +2417,16 @@ rules:
       - Availability gaps explicitly mark partial analysis and must not be interpreted as no changes.
       - Missing optional precision tables can reduce comparison precision and downgrade conclusions.
 
+  - id: snapshot.diff.framework-migration-unsupported.v1
+    name: Snapshot diff framework migration projection gap
+    description: Records when framework migration facts are present but snapshot diff has no dedicated framework migration identity and comparison projection.
+    evidenceTier: Tier4Unknown
+    emits:
+      - FrameworkMigrationSnapshotDiffUnsupported gap
+    limitations:
+      - Supporting before/after fact IDs identify the omitted evidence without interpreting migration application or ordering.
+      - The gap does not prove migration absence, provider selection, generated SQL, database state, rollback, reversibility, approval, or safety.
+
   - id: combined.diff.source.v1
     name: Combined dependency diff source comparison
     description: Compares source inventory and source metadata between two combined indexes by exact source label and stable source identity metadata.
@@ -3499,6 +3634,39 @@ rules:
       - Save and transaction boundaries do not identify the tracked changes, affected tables, isolation, scope, commit, rollback, or atomicity.
       - Recognizable calls without semantic binding and candidates without one bounded target emit explicit Tier4 gaps rather than guessed operations.
       - When a C# file has no semantic model, name-only syntax fallback emits Tier4 gaps and does not claim framework or target identity.
+
+  - id: database.framework-migration.declaration.v1
+    name: Framework migration declaration
+    description: Admits compiler-resolved EF Core migration types from the pinned strong-named relational metadata assembly.
+    evidenceTier: Tier1Semantic
+    emits:
+      - FrameworkMigrationDeclared
+    limitations:
+      - Static framework migration declaration only; execution, ordering, provider selection, generated SQL, database state, rollback, and safety are not proven.
+      - Namespace, type-name, source-defined, and unsigned metadata lookalikes are rejected; admission requires the exact EF Core relational assembly identity and public-key token.
+      - Provider scope remains unknown in v0 and does not establish PostgreSQL or any runtime provider.
+
+  - id: database.framework-migration.operation.v1
+    name: Framework migration operation candidate
+    description: Records a closed set of compiler-resolved EF Core MigrationBuilder operation shapes with bounded constant object identity.
+    evidenceTier: Tier1Semantic
+    emits:
+      - FrameworkMigrationOperationCandidate
+    limitations:
+      - Static framework migration operation candidate only; execution, ordering, provider selection, generated SQL, database state, rollback, reversibility, and safety are not proven.
+      - Only operations owned by an independently admitted migration type qualify; an ordinary helper accepting MigrationBuilder does not.
+      - The evidence does not claim that a migration ran, succeeded, is reversible, is safe to run, or is approved for release.
+
+  - id: database.framework-migration.gap.v1
+    name: Framework migration coverage gap
+    description: Records bounded categorical gaps for unavailable migration identity, direction, protected content, or unsupported operation shapes.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Static framework migration coverage is reduced; omitted protected content and runtime behavior were not analyzed.
+      - Raw SQL, seed values, annotations, default/computed expressions, arbitrary source text, and their digests are not retained.
+      - A gap does not prove absence, execution, generated SQL, provider selection, database state, rollback behavior, or safety.
 
   - id: database.dapper.invocation.v1
     name: Dapper invocation

@@ -311,6 +311,57 @@ public sealed class PropertyFlowTests
     }
 
     [Fact]
+    public async Task Property_flow_ignores_semantic_razor_targets_until_exact_identity_composition_is_available()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var manifest = Manifest("server", "tracemap-milestone16");
+        var syntaxTarget = ModelBindingFact(
+            manifest,
+            "ProfileModel",
+            "Email",
+            "view-model",
+            "mvc-action-parameter",
+            "form",
+            "Profile",
+            "Save",
+            null,
+            "POST",
+            "Controllers/ProfileController.cs",
+            10);
+        var semanticTarget = FactFactory.Create(
+            manifest,
+            FactTypes.RazorModelBindingTarget,
+            RuleIds.CSharpRazorSemanticModelBinding,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan("Controllers/ProfileController.cs", 10, 10, null, "CSharpSemanticExtractor", ScannerVersions.CSharpSemanticExtractor),
+            sourceSymbol: "global::Server.ProfileController.Save(global::Server.ProfileModel input)",
+            targetSymbol: "global::Server.ProfileModel.Email",
+            contractElement: "Email",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["modelKind"] = "view-model",
+                ["modelType"] = "ProfileModel",
+                ["propertyName"] = "Email",
+                ["targetSymbolId"] = "property|assembly:server|type:Server.ProfileModel|member:Email"
+            });
+        SqliteIndexWriter.Write(indexPath, manifest, [syntaxTarget, semanticTarget]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([indexPath], combinedPath, ["server"]));
+
+        var report = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "out"),
+            "model:ProfileModel.Email",
+            Framework: "razor"));
+
+        var root = Assert.Single(report.SelectedRoots);
+        Assert.Equal(RuleIds.RazorModelBinding, root.RuleId);
+        Assert.Equal(1, report.Summary.TotalCandidateCount);
+        Assert.DoesNotContain(report.LineagePaths.SelectMany(path => path.Nodes), node => node.RuleId == RuleIds.CSharpRazorSemanticModelBinding);
+    }
+
+    [Fact]
     public async Task Property_flow_rejects_single_language_index_and_unsafe_selectors()
     {
         using var temp = new TempDirectory();
