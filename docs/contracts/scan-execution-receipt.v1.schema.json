@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tracemap.tools/schemas/scan-execution-receipt.v1.schema.json",
+  "title": "TraceMap bounded scan execution receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "receiptId", "ruleId", "evidenceClass", "runId", "traceId",
+    "scannerVersion", "extractorVersions", "repositoryIdentityHash", "commitSha",
+    "authorizedScopeFingerprint", "sourceSnapshotDigest", "outcome", "coverage",
+    "stages", "supportingFactIds", "supportingGapIds", "limitations"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "scan-execution-receipt.v1" },
+    "receiptId": { "type": "string", "pattern": "^receipt-[0-9a-f]{20}$" },
+    "ruleId": { "const": "scanner.stage-receipt.v1" },
+    "evidenceClass": { "const": "operational-diagnostic" },
+    "runId": { "type": "string", "pattern": "^(scan|run)-[0-9a-f]{20}$" },
+    "traceId": { "type": "string", "pattern": "^(scan|run)-[0-9a-f]{20}$" },
+    "scannerVersion": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "extractorVersions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 80 }
+    },
+    "repositoryIdentityHash": { "$ref": "#/$defs/sha256" },
+    "commitSha": { "type": "string", "pattern": "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$" },
+    "authorizedScopeFingerprint": { "$ref": "#/$defs/sha256" },
+    "sourceSnapshotDigest": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
+    "outcome": { "$ref": "#/$defs/outcome" },
+    "coverage": { "$ref": "#/$defs/coverage" },
+    "stages": {
+      "type": "array",
+      "maxItems": 32,
+      "items": { "$ref": "#/$defs/stage" }
+    },
+    "supportingFactIds": { "$ref": "#/$defs/supportingIds" },
+    "supportingGapIds": { "$ref": "#/$defs/supportingIds" },
+    "limitations": { "$ref": "#/$defs/limitations" }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "outcome": { "enum": ["succeeded", "partial", "failed", "cancelled", "timed-out"] },
+    "coverage": { "enum": ["semantic", "semantic-reduced", "syntax", "syntax-reduced", "unknown", "unchanged"] },
+    "supportingIds": {
+      "type": "array",
+      "maxItems": 256,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^fact-[0-9a-f]{20}$" }
+    },
+    "limitations": {
+      "type": "array",
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+    },
+    "stage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stageId", "stage", "operationCode", "attempt", "durationMilliseconds", "outcome",
+        "coverageBefore", "coverageAfter", "lastProvenSafeState", "mutationState",
+        "cleanupResult", "retryability", "nextAction", "supportingFactIds",
+        "supportingGapIds", "limitations"
+      ],
+      "properties": {
+        "stageId": { "type": "string", "pattern": "^stage-[0-9a-f]{20}$" },
+        "stage": { "enum": ["discovery", "semantic-analysis", "static-extraction", "source-verification", "artifact-write", "other"] },
+        "operationCode": {
+          "enum": [
+            "inventory-and-identity", "compiler-and-syntax-analysis", "deterministic-fact-extraction",
+            "post-extraction-snapshot-verification", "manifest-write", "facts-write", "index-write",
+            "report-write", "analyzer-log-write", "webforms-static-extraction", "other"
+          ]
+        },
+        "attempt": { "const": 1 },
+        "durationMilliseconds": { "type": "integer", "minimum": 0 },
+        "outcome": { "$ref": "#/$defs/outcome" },
+        "coverageBefore": { "$ref": "#/$defs/coverage" },
+        "coverageAfter": { "$ref": "#/$defs/coverage" },
+        "lastProvenSafeState": {
+          "enum": [
+            "stage-started", "inventory-and-commit-observed", "semantic-input-snapshot-verified",
+            "syntax-fallback-completed", "facts-created", "source-snapshot-verified", "manifest-written",
+            "facts-written", "index-written", "report-written", "analyzer-log-written", "unknown"
+          ]
+        },
+        "mutationState": { "enum": ["none-observed", "occurred", "unknown"] },
+        "cleanupResult": { "enum": ["not-required", "completed", "not-attempted", "failed", "unknown"] },
+        "retryability": {
+          "enum": [
+            "not-required", "retry-after-dependency-restoration", "retry-after-input-correction",
+            "retry-after-owner-review", "retry-after-correction", "unknown"
+          ]
+        },
+        "nextAction": { "type": "string", "pattern": "^[a-z0-9-]{1,80}$" },
+        "supportingFactIds": { "$ref": "#/$defs/supportingIds" },
+        "supportingGapIds": { "$ref": "#/$defs/supportingIds" },
+        "limitations": { "$ref": "#/$defs/limitations" }
+      }
+    }
+  }
+}

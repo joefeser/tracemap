@@ -220,7 +220,7 @@ public static class TraceMapCommand
         var sqlValidationSummaryPaths = values.GetMany("--sql-validation-summary");
         var sqlValidationAsOf = ParseSqlValidationAsOf(values, sqlValidationSummaryPaths);
 
-        var result = ScanEngine.Scan(new ScanOptions(
+        var scanOptions = new ScanOptions(
             repoPath,
             outputPath,
             SolutionPaths: values.GetMany("--solution"),
@@ -230,47 +230,130 @@ public static class TraceMapCommand
             TargetFramework: values.GetValueOrDefault("--target-framework"),
             Restore: values.HasFlag("--restore"),
             BinlogPaths: values.GetMany("--binlog"),
-            BinlogCommitSha: values.GetValueOrDefault("--binlog-commit-sha")), cancellationToken);
+            BinlogCommitSha: values.GetValueOrDefault("--binlog-commit-sha"));
+        var receiptRecorder = new ScanReceiptRecorder(
+            scanOptions,
+            sqlValidationSummaryPaths.Append(sqlValidationAsOf?.ToString("O") ?? string.Empty));
         var fullOutputPath = Path.GetFullPath(outputPath);
-        var logsPath = Path.Combine(fullOutputPath, "logs");
-        Directory.CreateDirectory(logsPath);
+        ScanResult result;
+        try
+        {
+            result = ScanEngine.Scan(scanOptions, receiptRecorder, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            receiptRecorder.Complete(
+                ex is OperationCanceledException ? "cancelled" : ex is TimeoutException ? "timed-out" : "failed",
+                "unknown");
+            if (receiptRecorder.CanWriteAuthoritativeReceipt)
+            {
+                try
+                {
+                    await ScanExecutionReceiptWriter.WriteAsync(
+                        Path.Combine(fullOutputPath, "scan-receipt.json"),
+                        receiptRecorder.CreateReceipt(),
+                        CancellationToken.None);
+                }
+                catch
+                {
+                    // The original categorical scan failure remains authoritative.
+                    // Receipt-write failure must not expose a second raw exception.
+                }
+            }
+            if (ex is OperationCanceledException && cancellationToken.IsCancellationRequested)
+                throw;
+            await error.WriteLineAsync($"error: {SafeScanError(ex)}");
+            return 1;
+        }
+        try
+        {
+            var logsPath = Path.Combine(fullOutputPath, "logs");
+            Directory.CreateDirectory(logsPath);
 
-        using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.ManifestWrite, cancellationToken))
-        {
-            await ManifestWriter.WriteAsync(Path.Combine(fullOutputPath, "scan-manifest.json"), result.Manifest, cancellationToken);
-            operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
+            using (var receiptOperation = receiptRecorder.StartStage("artifact-write", "manifest-write", result.Manifest.AnalysisLevel, "occurred", "completed"))
+            using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.ManifestWrite, cancellationToken))
+            {
+                await ManifestWriter.WriteAsync(Path.Combine(fullOutputPath, "scan-manifest.json"), result.Manifest, cancellationToken);
+                operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
+                receiptOperation.Complete("succeeded", result.Manifest.AnalysisLevel, "manifest-written");
+            }
+            using (var receiptOperation = receiptRecorder.StartStage("artifact-write", "facts-write", result.Manifest.AnalysisLevel, "occurred", "completed"))
+            using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.FactsWrite, cancellationToken))
+            {
+                await JsonlFactWriter.WriteAsync(Path.Combine(fullOutputPath, "facts.ndjson"), result.Facts, cancellationToken);
+                operation.RecordItems(result.Facts.Count);
+                operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
+                receiptOperation.Complete("succeeded", result.Manifest.AnalysisLevel, "facts-written", supportingFactIds: result.Facts.Select(fact => fact.FactId));
+            }
+            using (var receiptOperation = receiptRecorder.StartStage("artifact-write", "index-write", result.Manifest.AnalysisLevel, "occurred", "completed"))
+            using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.IndexWrite, cancellationToken))
+            {
+                SqliteIndexWriter.Write(Path.Combine(fullOutputPath, "index.sqlite"), result.Manifest, result.Facts);
+                operation.RecordItems(result.Facts.Count);
+                operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
+                receiptOperation.Complete("succeeded", result.Manifest.AnalysisLevel, "index-written");
+            }
+            using (var receiptOperation = receiptRecorder.StartStage("artifact-write", "report-write", result.Manifest.AnalysisLevel, "occurred", "completed"))
+            using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.ReportWrite, cancellationToken))
+            {
+                var staticPacket = SqlRunbookPacketBuilder.Build(result);
+                var validationComposition = await SqlValidationSummaryReader.ReadAsync(
+                    sqlValidationSummaryPaths,
+                    [SqlRunbookPacketBuilder.ValidationExpectedSource(result, staticPacket, evaluatedAt: sqlValidationAsOf)],
+                    cancellationToken);
+                var packetCandidate = SqlRunbookPacketBuilder.Build(result, validationComposition);
+                await MarkdownReportWriter.WriteAsync(Path.Combine(fullOutputPath, "report.md"), result, packetCandidate, cancellationToken);
+                if (SqlRunbookPacketBuilder.HasMeaningfulContent(packetCandidate))
+                    await SqlRunbookPacketWriter.WriteAsync(fullOutputPath, packetCandidate, cancellationToken);
+                operation.Complete(validationComposition.Gaps.Count > 0
+                    ? TraceMapDiagnosticOutcome.Partial
+                    : TraceMapDiagnosticOutcome.Succeeded);
+                receiptOperation.Complete(
+                    validationComposition.Gaps.Count > 0 ? "partial" : "succeeded",
+                    result.Manifest.AnalysisLevel,
+                    "report-written",
+                    retryability: validationComposition.Gaps.Count > 0 ? "retry-after-input-correction" : "not-required",
+                    nextAction: validationComposition.Gaps.Count > 0 ? "review-validation-gaps" : "continue");
+            }
+            using (var receiptOperation = receiptRecorder.StartStage("artifact-write", "analyzer-log-write", result.Manifest.AnalysisLevel, "occurred", "completed"))
+            using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.AnalyzerLogWrite, cancellationToken))
+            {
+                await WriteAnalyzerLogAsync(Path.Combine(logsPath, "analyzer.log"), result, cancellationToken);
+                operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
+                receiptOperation.Complete("succeeded", result.Manifest.AnalysisLevel, "analyzer-log-written");
+            }
+
+            if (receiptRecorder.CanWriteAuthoritativeReceipt)
+            {
+                await ScanExecutionReceiptWriter.WriteAsync(
+                    Path.Combine(fullOutputPath, "scan-receipt.json"),
+                    receiptRecorder.CreateReceipt(),
+                    cancellationToken);
+            }
         }
-        using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.FactsWrite, cancellationToken))
+        catch (Exception ex)
         {
-            await JsonlFactWriter.WriteAsync(Path.Combine(fullOutputPath, "facts.ndjson"), result.Facts, cancellationToken);
-            operation.RecordItems(result.Facts.Count);
-            operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
-        }
-        using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.IndexWrite, cancellationToken))
-        {
-            SqliteIndexWriter.Write(Path.Combine(fullOutputPath, "index.sqlite"), result.Manifest, result.Facts);
-            operation.RecordItems(result.Facts.Count);
-            operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
-        }
-        using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.ReportWrite, cancellationToken))
-        {
-            var staticPacket = SqlRunbookPacketBuilder.Build(result);
-            var validationComposition = await SqlValidationSummaryReader.ReadAsync(
-                sqlValidationSummaryPaths,
-                [SqlRunbookPacketBuilder.ValidationExpectedSource(result, staticPacket, evaluatedAt: sqlValidationAsOf)],
-                cancellationToken);
-            var packetCandidate = SqlRunbookPacketBuilder.Build(result, validationComposition);
-            await MarkdownReportWriter.WriteAsync(Path.Combine(fullOutputPath, "report.md"), result, packetCandidate, cancellationToken);
-            if (SqlRunbookPacketBuilder.HasMeaningfulContent(packetCandidate))
-                await SqlRunbookPacketWriter.WriteAsync(fullOutputPath, packetCandidate, cancellationToken);
-            operation.Complete(validationComposition.Gaps.Count > 0
-                ? TraceMapDiagnosticOutcome.Partial
-                : TraceMapDiagnosticOutcome.Succeeded);
-        }
-        using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.AnalyzerLogWrite, cancellationToken))
-        {
-            await WriteAnalyzerLogAsync(Path.Combine(logsPath, "analyzer.log"), result, cancellationToken);
-            operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
+            receiptRecorder.Complete(
+                ex is OperationCanceledException ? "cancelled" : ex is TimeoutException ? "timed-out" : "failed",
+                result.Manifest.AnalysisLevel,
+                result.Facts.Select(fact => fact.FactId),
+                result.Facts.Where(fact => fact.FactType == FactTypes.AnalysisGap).Select(fact => fact.FactId));
+            try
+            {
+                await ScanExecutionReceiptWriter.WriteAsync(
+                    Path.Combine(fullOutputPath, "scan-receipt.json"),
+                    receiptRecorder.CreateReceipt(),
+                    CancellationToken.None);
+            }
+            catch
+            {
+                // Preserve the categorical artifact failure without exposing a
+                // secondary writer exception or protected output path.
+            }
+            if (ex is OperationCanceledException && cancellationToken.IsCancellationRequested)
+                throw;
+            await error.WriteLineAsync($"error: {ScanReceiptRecorder.ClassifyFailure(ex)}");
+            return 1;
         }
 
         await output.WriteLineAsync($"TraceMap scan completed: {fullOutputPath}");
@@ -278,6 +361,12 @@ public static class TraceMapCommand
         await output.WriteLineAsync($"Analysis level: {result.Manifest.AnalysisLevel}");
         return 0;
     }
+
+    private static string SafeScanError(Exception exception) =>
+        exception is ArgumentException argument
+        && argument.Message.StartsWith("--binlog", StringComparison.Ordinal)
+            ? argument.Message
+            : ScanReceiptRecorder.ClassifyFailure(exception);
 
     private static async Task<int> RunReportAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
     {
@@ -2305,10 +2394,12 @@ public static class TraceMapCommand
               index.sqlite
               report.md
               logs/analyzer.log
+              scan-receipt.json       Commit-bound sanitized operational receipt; omitted when no exact commit is available.
 
-            Truthfulness failures (exit code 1; no scan artifacts are written):
+            Truthfulness failures (exit code 1; normal scan artifacts are not written):
               SourceInventoryIncomplete          An in-scope inventory entry could not be read.
               SourceSnapshotChangedDuringScan    Protected input bytes changed or disappeared during analysis.
+              A commit-bound failure may write only scan-receipt.json with categorical diagnostics.
             """;
     }
 

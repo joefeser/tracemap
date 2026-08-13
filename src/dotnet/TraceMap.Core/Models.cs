@@ -354,6 +354,7 @@ public static class FactTypes
 public static class RuleIds
 {
     public const string RepoManifest = "repo.manifest.v1";
+    public const string ScannerStageReceipt = "scanner.stage-receipt.v1";
     public const string FileInventory = "file.inventory.v1";
     public const string ProjectFile = "project.file.v1";
     public const string CSharpSyntaxDeclarations = "csharp.syntax.declarations.v1";

@@ -3052,6 +3052,18 @@ rules:
     limitations:
       - Git metadata may be unavailable outside a git checkout.
 
+  - id: scanner.stage-receipt.v1
+    name: Bounded scanner stage receipt
+    description: Records sanitized operational outcomes for bounded scanner stages using a commit-bound run identity and closed status codes.
+    evidenceTier: Tier4Unknown
+    emits:
+      - scan-execution-receipt.v1
+    limitations:
+      - Stage receipts are operational diagnostics, not static code facts, and do not prove root cause, operator fault, application correctness, runtime reachability, or complete repository coverage.
+      - Durations are local monotonic observations and are excluded from receipt and stage identity derivation.
+      - No authoritative receipt is emitted when a repository commit SHA cannot be established.
+      - Default receipts omit raw exception messages, stack traces, source snippets, absolute paths, repository names, remotes, credentials, connection strings, and source values.
+
   - id: file.inventory.v1
     name: File inventory
     description: Records deterministic inventory facts for supported solution, project, source, config, JSON, and SQL files.
