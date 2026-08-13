@@ -585,13 +585,20 @@ public static partial class LegacyWebFormsExtractor
             return linked;
         }
 
+        var linkedProjectPaths = existingFacts
+            .Where(fact => fact.Evidence.FilePath.Equals(linkedCodePath, StringComparison.Ordinal)
+                && !string.IsNullOrWhiteSpace(fact.ProjectPath))
+            .Select(fact => fact.ProjectPath)
+            .ToHashSet(StringComparer.Ordinal);
+
         return context.CodeFiles
             .Where(file => !file.FilePath.Equals(linkedCodePath, StringComparison.Ordinal))
             .SelectMany(file => file.Methods)
             .Where(method => method.MethodName.Equals(handlerName, StringComparison.Ordinal))
             .Where(method => PageTypeMatches(page.PageTypeName, method.PageTypeName))
             .Where(method => FindSemanticHandlerEvidence(method, existingFacts) is { } semantic
-                && SemanticHandlerTypeMatches(page.PageTypeName, semantic.SourceSymbol, method.MethodName))
+                && SemanticHandlerTypeMatches(page.PageTypeName, semantic.SourceSymbol, method.MethodName)
+                && linkedProjectPaths.Contains(semantic.ProjectPath))
             .OrderBy(method => method.FilePath, StringComparer.Ordinal)
             .ThenBy(method => method.Line)
             .ToArray();

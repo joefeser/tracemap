@@ -827,6 +827,19 @@ grep -E "WebForms Events|WebForms Event Flow|WebForms Static Logic Signals" <out
 
 WebForms smoke summaries must remain hidden public-claim level until reviewed. Do not commit local sample paths, raw remotes, raw markup/code snippets, raw SQL, config values, endpoint URLs, secrets, or generated private outputs. WebForms event-flow evidence is static and does not prove runtime page lifecycle execution, event firing, event bubbling, service reachability, SQL execution, branch feasibility, deployment, or production usage.
 
+For WebForms graph or packet hardening, also run the adversarial fixture matrix:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~LegacyWebFormsAdversarialFixtureTests
+```
+
+The matrix must keep non-SDK/partial builds useful but reduced, preserve
+same-named cross-project surface/control/handler identities, retain explicit
+event-source to handler direction through NDJSON/SQLite and packet composition,
+and prove full-snapshot rename/delete/exclude/failure transitions do not retain
+stale WebForms evidence. It does not authorize an in-place incremental updater.
+
 For the bounded local modernization packet, run the scan first and then:
 
 See the complete operator workflow, PowerShell and Bash examples, output
