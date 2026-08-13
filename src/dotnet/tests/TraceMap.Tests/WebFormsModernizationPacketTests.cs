@@ -381,26 +381,30 @@ public sealed class WebFormsModernizationPacketTests
         var config = Fact(manifest, FactTypes.ConfigBinding, RuleIds.ConfigKey, "Pages/Settings.aspx.cs", 22,
             source: "method:settings", target: "config-key-hash", contract: "config-key-hash",
             ("configKey", "config-key-hash"), ("surfaceKind", "package-config"), ("coverageLabel", "bounded-static-config"));
+        var otherConfig = Fact(manifest, FactTypes.ConfigBinding, RuleIds.ConfigKey, "Pages/Settings.aspx.cs", 23,
+            source: "method:settings", target: "other-key-hash", contract: "other-key-hash",
+            ("configKey", "other-key-hash"), ("surfaceKind", "package-config"), ("coverageLabel", "bounded-static-config"));
         var flow = Fact(manifest, FactTypes.WebFormsEventFlowProjected, RuleIds.LegacyWebFormsEventFlow, "Pages/Settings.aspx.cs", 20,
             source: "method:settings", target: "config-key-hash", contract: "Settings_Click",
-            ("supportingFactIds", $"{handler.FactId},{config.FactId}"), ("terminalSurfaceKind", "dependency-surface"),
-            ("terminalSurfaceNameHash", "config-terminal-hash"), ("flowClassification", "ProbableStaticPath"),
+            ("supportingFactIds", $"{handler.FactId},{config.FactId},{otherConfig.FactId}"), ("terminalSurfaceKind", "dependency-surface"),
+            ("terminalSurfaceNameHash", FactFactory.Hash("config-key-hash", 32)), ("flowClassification", "ProbableStaticPath"),
             ("coverageLabel", "bounded-static-webforms-flow"));
         var root = PathNode("root:settings", "symbol", "method:settings", manifest, symbolId: "method:settings");
         var concrete = PathNode(
             "config:concrete", "surface", "config-key-hash", manifest,
             combinedFactId: config.FactId, ruleId: RuleIds.ConfigKey, evidenceTier: EvidenceTiers.Tier2Structural,
             filePath: "Pages/Settings.aspx.cs", startLine: 22, endLine: 22, surfaceKind: "package-config", sourceKind: "config",
-            shapeHash: "config-terminal-hash", configKey: "config-key-hash");
+            shapeHash: "config-shape", configKey: "config-key-hash");
         var projection = PathNode(
-            "projection:settings", "surface", "dependency-surface:hash:config-terminal-hash", manifest,
+            "projection:settings", "surface", "dependency-surface:hash:config-terminal", manifest,
             combinedFactId: flow.FactId, ruleId: RuleIds.LegacyWebFormsEventFlow, evidenceTier: EvidenceTiers.Tier2Structural,
-            filePath: "Pages/Settings.aspx.cs", startLine: 20, endLine: 20, surfaceKind: "dependency-surface", sourceKind: "projection", shapeHash: "config-terminal-hash");
+            filePath: "Pages/Settings.aspx.cs", startLine: 20, endLine: 20, surfaceKind: "dependency-surface", sourceKind: "projection",
+            shapeHash: FactFactory.Hash("config-key-hash", 32));
         var concretePath = LegacyPath("path:config", root, concrete, binding.FactId, handler.FactId, [config.FactId]);
         var projectionPath = LegacyPath("path:projection", root, projection, binding.FactId, handler.FactId, [config.FactId, flow.FactId]);
         var snapshot = new WebFormsModernizationPacketReporter.Snapshot(
             manifest.RepoName, manifest.ScanId, manifest.CommitSha, manifest.AnalysisLevel, manifest.BuildStatus,
-            [binding, handler, config, flow]);
+            [binding, handler, config, otherConfig, flow]);
 
         var packet = WebFormsModernizationPacketReporter.Build(
             snapshot,
@@ -411,6 +415,21 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Equal("configuration", boundary.BoundaryCategory);
         Assert.Equal("package-config", boundary.BoundaryKind);
         Assert.Equal(config.FactId, boundary.TerminalEvidenceId);
+
+        var otherConcrete = PathNode(
+            "config:other", "surface", "other-key-hash", manifest,
+            combinedFactId: otherConfig.FactId, ruleId: RuleIds.ConfigKey, evidenceTier: EvidenceTiers.Tier2Structural,
+            filePath: "Pages/Settings.aspx.cs", startLine: 23, endLine: 23, surfaceKind: "package-config", sourceKind: "config",
+            shapeHash: "other-config-shape", configKey: "other-key-hash");
+        var otherConcretePath = LegacyPath("path:other-config", root, otherConcrete, binding.FactId, handler.FactId, [otherConfig.FactId]);
+        var partialPacket = WebFormsModernizationPacketReporter.Build(
+            snapshot,
+            LegacyFlow(otherConcretePath, projectionPath),
+            new("unused", "unused"));
+
+        Assert.Equal(2, partialPacket.DownstreamBoundaries.Count);
+        Assert.Contains(partialPacket.DownstreamBoundaries, item => item.TerminalEvidenceId == otherConfig.FactId && item.BoundaryCategory == "configuration");
+        Assert.Contains(partialPacket.DownstreamBoundaries, item => item.TerminalEvidenceId == flow.FactId && item.BoundaryKind == "dependency-surface");
     }
 
     [Fact]

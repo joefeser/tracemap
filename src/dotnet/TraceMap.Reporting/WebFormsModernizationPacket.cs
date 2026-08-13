@@ -331,16 +331,16 @@ public static class WebFormsModernizationPacketReporter
                 || (handler is not null && (path.SupportingFactIds.Contains(handler.FactId, StringComparer.Ordinal)
                     || path.Nodes.FirstOrDefault()?.SymbolId == handler.TargetSymbol)))
                 .OrderBy(path => path.PathId, StringComparer.Ordinal).ToArray();
-            var concreteTerminalFactIds = legacyPaths
+            var concreteTerminals = legacyPaths
                 .Select(path => path.Nodes.LastOrDefault())
                 .Where(node => node is not null && node.SourceKind != "projection" && node.CombinedFactId is not null)
-                .Select(node => node!.CombinedFactId!)
-                .ToHashSet(StringComparer.Ordinal);
+                .Cast<CombinedPathNode>()
+                .ToArray();
             legacyPaths = legacyPaths.Where(path =>
             {
                 var terminal = path.Nodes.LastOrDefault();
                 return terminal?.SourceKind != "projection"
-                    || !path.SupportingFactIds.Any(concreteTerminalFactIds.Contains);
+                    || !concreteTerminals.Any(concrete => ProjectionDuplicatesConcreteTerminal(terminal, path, concrete));
             }).ToArray();
             var support = new[] { binding, handler, flowFact }.Where(fact => fact is not null).Cast<CodeFact>().ToArray();
             foreach (var legacyPath in legacyPaths.Cast<CombinedPath?>().DefaultIfEmpty())
@@ -902,6 +902,16 @@ public static class WebFormsModernizationPacketReporter
     private static string SurfaceIdentity(CodeFact fact) =>
         fact.Properties.GetValueOrDefault("surfaceIdentity") ?? fact.SourceSymbol ?? HashId("surface", [fact.FactId]);
     private static string ProjectId(string? projectPath) => projectPath is null ? "project-unassigned" : HashId("project", [projectPath]);
+    private static bool ProjectionDuplicatesConcreteTerminal(CombinedPathNode projection, CombinedPath projectionPath, CombinedPathNode concrete)
+    {
+        if (string.IsNullOrWhiteSpace(projection.ShapeHash)
+            || string.IsNullOrWhiteSpace(concrete.CombinedFactId)
+            || !projectionPath.SupportingFactIds.Contains(concrete.CombinedFactId, StringComparer.Ordinal))
+            return false;
+        var concreteDisplay = EmptyToNull(concrete.SurfaceName) ?? EmptyToNull(concrete.DisplayName);
+        return concreteDisplay is not null
+            && string.Equals(projection.ShapeHash, FactFactory.Hash(concreteDisplay, 32), StringComparison.Ordinal);
+    }
     private static string? SafeIdentity(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Length <= 256 ? value : HashId("identity", [value]);
     private static string SafeKind(string? value, string fallback) => string.IsNullOrWhiteSpace(value) || value.Length > 96 ? fallback : value;
     private static string BoundaryCategory(string surfaceKind, CombinedPathNode? terminalNode) => surfaceKind switch
