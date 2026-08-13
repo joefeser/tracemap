@@ -20,6 +20,11 @@ The .NET tool is the leading hypothesis because it provides a conventional
 `tracemap` command and explicit install, upgrade, and uninstall operations. It
 is not selected until the claimed Windows, macOS, and Linux probes pass.
 
+Tool packaging is refused unless Git reports a clean source tree. The compiled
+version contract records `sourceState` as `clean`, `dirty`, or `unavailable` so
+a source build cannot silently present its commit as the complete identity of
+different uncommitted bytes.
+
 ## 2026-08-13 macOS arm64 Probe
 
 Observed against the #666 implementation worktree:
@@ -30,7 +35,11 @@ Observed against the #666 implementation worktree:
   and SQLite native assets for supported runtime identifiers;
 - installation from a local package directory succeeded;
 - `tracemap version --json` ran outside the source checkout and reported
-  `distributionKind: dotnet-tool` with ready Git/MSBuild observations;
+  `distributionKind: dotnet-tool`, `sourceState: clean`, and ready Git/MSBuild
+  observations;
+- a dirty-source packaging attempt failed with
+  `TraceMapToolPackageRequiresCleanSource` rather than assigning the last
+  commit identity to uncommitted bytes;
 - an empty committed synthetic repository scanned outside the source checkout,
   emitted the normal artifacts, and reported two facts with syntax coverage;
 - uninstall succeeded and removed the tool command from the isolated tool path.

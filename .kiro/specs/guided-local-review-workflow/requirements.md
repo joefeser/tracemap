@@ -154,8 +154,9 @@ and leave an understandable safe state after failure.
    `--force` mode proves every replaced file is TraceMap-generated.
 2. The workflow SHALL stage outputs under a sibling temporary directory and
    publish them atomically where the host filesystem permits.
-3. It SHALL never overwrite user-authored files, follow output symlinks or
-   reparse points, delete outside the authorized output root, or place output
+3. It SHALL never overwrite user-authored files, treat an unresolved output
+   symlink or reparse point as authoritative, delete outside the canonically
+   resolved and authorized output root, or place output
    inside the scanned repository unless the operator explicitly selects a safe
    ignored location and the collision guard accepts it.
 4. Portable artifacts SHALL contain only relative paths. Interactive terminal
@@ -241,9 +242,11 @@ to preserve current commands and artifacts.
    separately versioned breaking change is approved.
 2. The guided workflow SHALL call the same scanner, packet reporter, and
    explorer generator implementation used by their standalone commands.
-3. Identical immutable input, options, selected stages, and tool version SHALL
-   produce byte-identical portable workflow results and downstream artifacts,
-   excluding documented monotonic duration observations.
+3. Identical immutable stage artifacts, options, selected stages, and tool
+   version SHALL produce byte-identical portable workflow projections and
+   downstream artifacts. A fresh scan may retain its existing observational
+   `scannedAt` value; the workflow SHALL NOT rewrite that producer-owned field
+   or claim two independently executed scans are byte-identical.
 4. Stage ordering and artifact ordering SHALL be deterministic.
 5. A standalone command and the corresponding guided stage SHALL produce
    equivalent deterministic artifacts.

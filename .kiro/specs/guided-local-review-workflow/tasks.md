@@ -24,27 +24,27 @@
   - [x] Add concise human rendering from the structured result.
   - [x] Add deterministic and privacy tests.
 
-- [ ] 3. Extract reusable command services. Requirements: 3, 9.
-  - [ ] Identify the smallest service seams shared by standalone scan, Web Forms packet, and explorer commands.
-  - [ ] Preserve existing command behavior and schemas.
-  - [ ] Avoid recursive shelling to the CLI.
-  - [ ] Add standalone-versus-service parity tests.
+- [x] 3. Extract reusable command services. Requirements: 3, 9.
+  - [x] Identify the smallest service seams shared by standalone scan, Web Forms packet, and explorer commands.
+  - [x] Preserve existing command behavior and schemas.
+  - [x] Avoid recursive shelling to the CLI.
+  - [x] Add standalone-versus-service parity tests.
 
-- [ ] 4. Implement output transaction and artifact hashing. Requirements: 4, 5.
-  - [ ] Add generated-only collision validation and unsafe-path refusal.
-  - [ ] Add sibling staging and atomic publication where supported.
-  - [ ] Add bounded SHA-256 artifact records using relative paths.
-  - [ ] Add upstream pre/post hash verification.
-  - [ ] Add cleanup-state tests including symlink/reparse adversarial fixtures.
+- [x] 4. Implement output transaction and artifact hashing. Requirements: 4, 5.
+  - [x] Add generated-only collision validation and unsafe-path refusal (v1 refuses replacement rather than exposing force).
+  - [x] Add sibling staging and atomic publication where supported.
+  - [x] Add bounded SHA-256 artifact records using relative paths.
+  - [x] Add upstream pre/post hash verification.
+  - [x] Add cleanup-state tests including Unix symlink fixtures; Windows reparse smoke remains a host gate.
 
-- [ ] 5. Implement the v1 guided workflow. Requirements: 3, 4, 6, 7, 9.
-  - [ ] Validate and lock the final command name.
-  - [ ] Run scan through the shared service and compose `scan-receipt.json`.
-  - [ ] Optionally run Web Forms packet generation when compatible evidence exists.
-  - [ ] Optionally run the ordinary static explorer on compatible artifacts.
-  - [ ] Keep #667 Web Forms packet rendering unavailable until its reader ships.
-  - [ ] Emit `local-review-result.v1` and README/terminal output from one structured model.
-  - [ ] Add closed outcomes, next actions, exit codes, and failure tests.
+- [x] 5. Implement the v1 guided workflow. Requirements: 3, 4, 6, 7, 9.
+  - [x] Validate and lock the final command name.
+  - [x] Run scan through the shared service and compose `scan-receipt.json`.
+  - [x] Optionally run Web Forms packet generation when compatible evidence exists.
+  - [x] Optionally run the ordinary static explorer on compatible artifacts.
+  - [x] Keep #667 Web Forms packet rendering unavailable until its reader ships.
+  - [x] Emit `local-review-result.v1` and README/terminal output from one structured model.
+  - [x] Add closed outcomes, next actions, exit codes, and failure tests.
 
 - [ ] 6. Package and document the selected distribution. Requirements: 1, 2, 8.
   - [ ] Add reproducible package metadata and version provenance.
@@ -53,8 +53,8 @@
   - [ ] Document integrity versus authenticity limitations.
 
 - [ ] 7. Validate end to end. Requirements: 9, 10.
-  - [ ] Run focused package/version/workflow tests.
-  - [ ] Run synthetic Web Forms standalone-versus-guided parity.
+  - [x] Run focused package/version/workflow tests.
+  - [x] Run synthetic Web Forms standalone-versus-guided parity.
   - [ ] Run claimed-host package smoke tests.
   - [ ] Run `dotnet build src/dotnet/TraceMap.sln`.
   - [ ] Run `dotnet test src/dotnet/TraceMap.sln`.
