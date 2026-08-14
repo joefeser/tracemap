@@ -105,6 +105,17 @@ run/update/uninstall plus framework-dependent and host-RID self-contained
 execution. One unrelated JVM integration assertion failed on the first adapter
 run; the single unchanged-head failed-job rerun passed.
 
+Exact-head Codex follow-up on 2026-08-13 identified three identity and failure
+contract gaps. The bounded correction now validates the successful scan receipt
+against the manifest before downstream work, uses the receipt's repository
+identity for portable workflow identity/results, and distinguishes incompatible
+Web Forms input, Web Forms producer failure, incompatible explorer input, and
+explorer producer failure without persisting exception details. Regression
+coverage proves receipt/manifest conflicts fail closed before optional stages and
+that typed stage recovery guidance is retained. Focused local-review tests passed
+30/30; the full .NET suite passed 1,533/1,533; targeted formatting,
+private-path guard, and diff check passed.
+
 ## Deferred Work
 
 - #667 Web Forms static-explorer reader.
