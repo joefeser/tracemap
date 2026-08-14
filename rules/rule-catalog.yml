@@ -2134,6 +2134,21 @@ rules:
       - Missing coverage labels, source identity mismatch, unsupported evidence, missing handlers or terminals, reduced scans, and deterministic traversal or output limits remain explicit gaps rather than clean-absence claims.
       - The local-only packet omits snippets, raw SQL, configuration values, URLs, connection strings, credentials, source values, repository remotes, and absolute local paths.
 
+  - id: legacy.webforms.batch-data-movement.v1
+    name: Legacy Web Forms batch and data-movement evidence
+    description: Inventories bounded static scheduled-entry, service, console-job, file-movement, message, stored-procedure batch, bulk-copy, ETL-package, and integration-configuration candidates in repositories with concrete Web Forms inventory, and composes related existing boundary facts by source member where proven.
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - LegacyBatchDataMovementDeclared
+      - AnalysisGap
+    limitations:
+      - Rows are static candidates only and do not prove that a job is scheduled, runs, succeeds, moves complete data, retries effectively, is idempotent, checkpoints effectively, commits or rolls back successfully, is monitored, or is used in production.
+      - Compiler-resolved System.IO, FileSystemWatcher, and SqlBulkCopy calls are preferred; syntax fallback is restricted to explicitly qualified framework calls, declared SqlBulkCopy variables, known scheduled-entry shapes, and CommandType.StoredProcedure execution shapes.
+      - Retry, error-handling, transaction, checkpoint, and telemetry fields record only deterministic declaration shapes in the same member; they do not prove runtime behavior or effectiveness.
+      - Related database, message, service, and configuration facts are composed only when source file and member identity prove the association; missing or ambiguous project owners, config references, reduced semantic coverage, and deterministic limits remain explicit gaps.
+      - Raw schedules, paths, destinations, SQL, connection material, configuration values, source values, snippets, credentials, local absolute paths, and remotes are omitted or represented only by bounded hashes and categories.
+      - This rule does not recommend Kafka, Solace, RabbitMQ, cloud services, or any other target architecture; architecture selection remains an owner decision.
+
   - id: legacy.winforms.inventory.v1
     name: Legacy WinForms file and surface inventory
     description: Inventories static WinForms form, user-control, control, component, application-context, designer, startup, and linked resource surface evidence from checked-in files.
