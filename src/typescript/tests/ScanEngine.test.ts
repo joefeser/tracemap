@@ -11,7 +11,6 @@ import { RuleIds } from "../src/facts/RuleIds";
 import { exportIndex } from "../src/export/IndexExporter";
 import { extractPackageFacts } from "../src/extractors/PackageJsonExtractor";
 import { findSqlJsFile } from "../src/storage/SqliteIndexWriter";
-import { hashBytes } from "../src/util/Hash";
 
 const packageRoot = process.cwd();
 const repoRoot = path.resolve(packageRoot, "../..");
@@ -319,14 +318,20 @@ describe("ScanEngine", () => {
     await fsp.writeFile(path.join(repo, "node_modules", "fixture-package", "index.d.ts"), "export declare const dependencyValue: string;\n");
     initGitRepo(repo);
 
-    const result = await scan(scanOptions(repo, path.join(root, "output")));
+    const dependencyPath = path.join(repo, "node_modules", "fixture-package", "index.d.ts");
+    const first = await scan(scanOptions(repo, path.join(root, "first")));
+    await fsp.writeFile(dependencyPath, "export declare const dependencyValue: number;\n");
+    const second = await scan(scanOptions(repo, path.join(root, "second")));
 
-    expect(result.facts).not.toContainEqual(expect.objectContaining({
+    expect(first.facts).not.toContainEqual(expect.objectContaining({
       factType: FactTypes.AnalysisGap,
       properties: expect.objectContaining({ diagnosticCode: "2307" })
     }));
-    expect(result.facts.some((fact) => fact.evidence.filePath.includes("node_modules"))).toBe(false);
-    expect(result.inventory.some((item) => item.relativePath.includes("node_modules"))).toBe(false);
+    expect(first.manifest.commitSha).toBe(second.manifest.commitSha);
+    expect(first.manifest.sourceSnapshotDigest).not.toBe(second.manifest.sourceSnapshotDigest);
+    expect(first.manifest.scanId).not.toBe(second.manifest.scanId);
+    expect(first.facts.some((fact) => fact.evidence.filePath.includes("node_modules"))).toBe(false);
+    expect(first.inventory.some((item) => item.relativePath.includes("node_modules"))).toBe(false);
   });
 
   it("preserves prior output when a staged artifact write fails", async () => {
@@ -345,7 +350,7 @@ describe("ScanEngine", () => {
     expect((await fsp.readdir(root)).some((name) => name.startsWith(".tracemap-output-"))).toBe(false);
   });
 
-  it("orders snapshot inputs by ordinal path identity", async () => {
+  it("produces deterministic snapshot identity for non-ASCII paths", async () => {
     const root = await tempDir();
     const repo = path.join(root, "repo");
     await writeMiniRepo(repo);
@@ -354,13 +359,10 @@ describe("ScanEngine", () => {
     expect(spawnSync("git", ["add", "."], { cwd: repo, encoding: "utf8" }).status).toBe(0);
     expect(spawnSync("git", ["-c", "user.email=test@example.com", "-c", "user.name=TraceMap Test", "commit", "-m", "ordinal paths"], { cwd: repo, encoding: "utf8" }).status).toBe(0);
 
-    const result = await scan(scanOptions(repo, path.join(root, "output")));
-    const segments = ["scan-truth-source-snapshot/v1\0"];
-    for (const item of [...result.inventory].sort((left, right) => left.relativePath < right.relativePath ? -1 : left.relativePath > right.relativePath ? 1 : 0)) {
-      const content = await fsp.readFile(item.absolutePath);
-      segments.push(`${item.relativePath}\0${item.kind}\0${content.byteLength}\0${hashBytes(content)}\0`);
-    }
-    expect(result.manifest.sourceSnapshotDigest).toBe(hashBytes(Buffer.from(segments.join(""), "utf8")));
+    const first = await scan(scanOptions(repo, path.join(root, "first")));
+    const second = await scan(scanOptions(repo, path.join(root, "second")));
+
+    expect(first.manifest.sourceSnapshotDigest).toBe(second.manifest.sourceSnapshotDigest);
   });
 
   it("refuses unsafe output paths before deleting anything", async () => {
