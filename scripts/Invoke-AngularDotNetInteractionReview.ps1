@@ -26,7 +26,11 @@ $FeedbackSchemaVersion = "angular-dotnet-interaction-feedback.v1"
 $script:FeedbackRuleId = "interaction.review.feedback.v1"
 $SafeNamePattern = '^[a-z0-9][a-z0-9._-]{0,63}$'
 $MaximumSources = 100
+$MaximumEndpointPairs = 100
 $MaximumQueries = 500
+$AllowedEvidenceTiers = [System.Collections.Generic.HashSet[string]]::new(
+    [string[]]@("Tier1Semantic", "Tier2Structural", "Tier3SyntaxOrTextual", "Tier4Unknown"),
+    [System.StringComparer]::Ordinal)
 
 function Stop-InteractionReview {
     param([Parameter(Mandatory = $true)][string]$Code)
@@ -216,7 +220,7 @@ function Add-UnresolvedSignal {
     $normalizedKind = if ([string]::IsNullOrWhiteSpace($Kind)) { "unknown" } else { $Kind }
     $normalizedClassification = if ([string]::IsNullOrWhiteSpace($Classification)) { "UnknownAnalysisGap" } else { $Classification }
     $normalizedRule = if ([string]::IsNullOrWhiteSpace($RuleId)) { $script:FeedbackRuleId } else { $RuleId }
-    $normalizedTier = if ([string]::IsNullOrWhiteSpace($EvidenceTier)) { "Tier4Unknown" } else { $EvidenceTier }
+    $normalizedTier = if ($script:AllowedEvidenceTiers.Contains($EvidenceTier)) { $EvidenceTier } else { "Tier4Unknown" }
     $normalizedCoverage = if ([string]::IsNullOrWhiteSpace($Coverage)) { "unknown" } else { $Coverage }
     Add-Count $Signals "$Producer|$normalizedKind|$normalizedClassification|$normalizedRule|$normalizedTier|$normalizedCoverage" $Count
 }
@@ -229,6 +233,7 @@ function Add-ScanGapSignals {
 
     foreach ($line in [System.IO.File]::ReadLines($FactsPath)) {
         if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        if ($line.IndexOf('"AnalysisGap"', [System.StringComparison]::Ordinal) -lt 0) { continue }
         $fact = $line | ConvertFrom-Json -Depth 30
         if ((Get-PropertyValue $fact "factType" "") -ne "AnalysisGap") { continue }
         $ruleId = [string](Get-PropertyValue $fact "ruleId" $script:FeedbackRuleId)
@@ -472,7 +477,8 @@ $endpointPairs = @(ConvertTo-Array (Get-PropertyValue $config "endpointPairs" @(
 $propertyFlows = @(ConvertTo-Array (Get-PropertyValue $config "propertyFlows" @()))
 $routeFlows = @(ConvertTo-Array (Get-PropertyValue $config "routeFlows" @()))
 $pathQueries = @(ConvertTo-Array (Get-PropertyValue $config "paths" @()))
-foreach ($array in @($endpointPairs, $propertyFlows, $routeFlows, $pathQueries)) {
+if ($endpointPairs.Count -gt $MaximumEndpointPairs) { Stop-InteractionReview "INTERACTION_RUN_ENDPOINT_PAIR_COUNT_INVALID" }
+foreach ($array in @($propertyFlows, $routeFlows, $pathQueries)) {
     if (@($array).Count -gt $MaximumQueries) { Stop-InteractionReview "INTERACTION_RUN_QUERY_COUNT_INVALID" }
 }
 
@@ -494,7 +500,7 @@ foreach ($query in $propertyFlows) {
     $framework = [string](Get-PropertyValue $query "framework" "any")
     if ($name -notmatch $SafeNamePattern -or -not $queryNames.Add("property:$name") -or [string]::IsNullOrWhiteSpace($selector)) { Stop-InteractionReview "INTERACTION_RUN_QUERY_INVALID" }
     if (-not [string]::IsNullOrWhiteSpace($sourceLabel) -and -not $sourceLabels.Contains($sourceLabel)) { Stop-InteractionReview "INTERACTION_RUN_QUERY_SOURCE_UNAVAILABLE" }
-    if ($framework -notin @("angular", "razor", "webforms", "any")) { Stop-InteractionReview "INTERACTION_RUN_QUERY_FRAMEWORK_UNSUPPORTED" }
+    if ($framework -notin @("angular", "razor", "any")) { Stop-InteractionReview "INTERACTION_RUN_QUERY_FRAMEWORK_UNSUPPORTED" }
 }
 
 foreach ($query in $routeFlows) {
@@ -738,7 +744,11 @@ $feedback = [ordered]@{
     sourceKinds = @(Convert-CountsToRows $sourceKindCounts)
     scanStates = @(Convert-CountsToRows $scanStateCounts)
     reportCount = $reportResults.Count
-    reportStates = @($reportStates | Sort-Object producer)
+    reportStates = @($reportStates | Sort-Object `
+        { [string]$_.producer },
+        { [string]$_.classification },
+        { [string]$_.coverage },
+        { [bool]$_.truncated })
     unresolvedSignals = @(Convert-SignalsToRows $signals)
     failureCode = $failureCode
     limitations = @(

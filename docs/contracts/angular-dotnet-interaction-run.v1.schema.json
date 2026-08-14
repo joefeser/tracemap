@@ -91,7 +91,7 @@
         "name": { "$ref": "#/$defs/safeName" },
         "selector": { "type": "string", "minLength": 1, "maxLength": 500 },
         "sourceLabel": { "$ref": "#/$defs/safeName" },
-        "framework": { "enum": ["angular", "razor", "webforms", "any"] }
+        "framework": { "enum": ["angular", "razor", "any"] }
       }
     },
     "routeFlow": {
