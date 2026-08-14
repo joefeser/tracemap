@@ -139,6 +139,16 @@ public static partial class StaticHtmlEvidenceExplorer
 
         try
         {
+            using var document = JsonDocument.Parse(
+                snapshot.Content,
+                new JsonDocumentOptions
+                {
+                    AllowTrailingCommas = false,
+                    CommentHandling = JsonCommentHandling.Disallow,
+                    MaxDepth = 96
+                });
+            var root = RequireObject(document.RootElement, "root");
+            RejectDuplicateJsonProperties(root);
             var packet = JsonSerializer.Deserialize<WebFormsModernizationPacket>(snapshot.Content, JsonOptions)
                 ?? throw new InvalidDataException("empty packet");
             ValidateWebFormsPacket(packet, expectedCommitSha);
@@ -150,10 +160,11 @@ public static partial class StaticHtmlEvidenceExplorer
             IReadOnlyList<string> RegisterLimitations(IEnumerable<string> messages, string scope)
             {
                 var ids = new List<string>();
+                var safeScope = SafeClosedText(scope, "support-id", redactions);
                 foreach (var raw in messages ?? [])
                 {
                     var message = SafeClosedText(raw, "webforms.limitations", redactions);
-                    var id = $"limitation:webforms:{Hash(message, 20)}";
+                    var id = $"limitation:webforms:{Hash(safeScope + "|" + message, 20)}";
                     ids.Add(id);
                     limitationRows.TryAdd(id, new ExplorerLimitation(
                         id,
@@ -161,7 +172,7 @@ public static partial class StaticHtmlEvidenceExplorer
                         Tier4Unknown,
                         "webforms-static-boundary",
                         "webforms",
-                        scope,
+                        safeScope,
                         "Prevents runtime, business-intent, parity, migration, architecture, security, cloud-readiness, and release conclusions.",
                         message,
                         [WebFormsArtifactId]));
