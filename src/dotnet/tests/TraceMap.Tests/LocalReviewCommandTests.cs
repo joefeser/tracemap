@@ -120,6 +120,14 @@ public sealed class LocalReviewCommandTests
             .Select(stage => stage.GetProperty("stage").GetString())
             .ToArray();
         Assert.Equal(new[] { "scan", "webforms-modernization", "explorer" }, stages);
+        Assert.Equal("partial", document.RootElement.GetProperty("outcome").GetString());
+        Assert.Equal("reduced", document.RootElement.GetProperty("coverage").GetString());
+        Assert.Equal(
+            "partial",
+            document.RootElement.GetProperty("stages")[1].GetProperty("outcome").GetString());
+        Assert.Contains(
+            document.RootElement.GetProperty("gaps").EnumerateArray(),
+            gap => gap.GetString() == "LOCAL_REVIEW_WEBFORMS_PARTIAL");
         Assert.Equal("explorer-verified", document.RootElement.GetProperty("lastProvenSafeState").GetString());
         Assert.All(
             document.RootElement.GetProperty("stages")[1].GetProperty("inputs").EnumerateArray(),
