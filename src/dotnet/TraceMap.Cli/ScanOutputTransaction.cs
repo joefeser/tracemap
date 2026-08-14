@@ -105,7 +105,24 @@ internal static class ScanOutputTransaction
         if (entries.Length == 0
             || entries.All(path => File.Exists(path) && Path.GetFileName(path).Equals("scan-receipt.json", StringComparison.Ordinal)))
             return true;
-        return HasCompleteOutput(outputPath);
+        if (!HasCompleteOutput(outputPath)) return false;
+
+        var allowedRootEntries = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "scan-manifest.json",
+            "facts.ndjson",
+            "index.sqlite",
+            "report.md",
+            "scan-receipt.json",
+            "logs"
+        };
+        if (entries.Any(path => !allowedRootEntries.Contains(Path.GetFileName(path)))) return false;
+        var logsPath = Path.Combine(outputPath, "logs");
+        if (!Directory.Exists(logsPath)) return false;
+        var logEntries = Directory.EnumerateFileSystemEntries(logsPath).ToArray();
+        return logEntries.Length == 1
+            && File.Exists(logEntries[0])
+            && Path.GetFileName(logEntries[0]).Equals("analyzer.log", StringComparison.Ordinal);
     }
 
     private static void EnsureComplete(string stagingPath)
