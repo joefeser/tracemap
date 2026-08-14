@@ -146,8 +146,10 @@ public sealed class SqlRunbookPacketTests
         using var error = new StringWriter();
 
         var exitCode = await TraceMapCommand.RunAsync(["scan", "--repo", fixture, "--out", outputPath], output, error);
+        var replacementExitCode = await TraceMapCommand.RunAsync(["scan", "--repo", fixture, "--out", outputPath], output, error);
 
         Assert.Equal(0, exitCode);
+        Assert.Equal(0, replacementExitCode);
         foreach (var name in new[] { "scan-manifest.json", "facts.ndjson", "index.sqlite", "report.md", "logs/analyzer.log", "sql-runbook.md", "sql-runbook.json" })
             Assert.True(File.Exists(Path.Combine(outputPath, name)), name);
         using var document = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(outputPath, "sql-runbook.json")));

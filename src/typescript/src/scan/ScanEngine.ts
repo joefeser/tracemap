@@ -110,7 +110,8 @@ export async function scan(options: ScanOptions, testHooks: ScanTestHooks = {}):
 
   const result: ScanResult = { manifest, facts: dedupeFacts(facts), inventory };
   await testHooks.beforeSnapshotVerification?.();
-  if (await createSourceSnapshotDigest(inventory) !== sourceSnapshotDigest) {
+  const verifiedInventory = await collectFileInventory(options);
+  if (await createSourceSnapshotDigest(verifiedInventory) !== sourceSnapshotDigest) {
     throw new Error("SourceSnapshotChangedDuringScan");
   }
   await writeOutputTransaction(outputPath, async (stagingPath) => {
@@ -211,7 +212,7 @@ async function ensureReplaceableOutputPath(outputPath: string): Promise<void> {
     if (!stat.isDirectory()) {
       throw new Error(`Output artifact set is not replaceable: ${outputPath}`);
     }
-    const entries = await fs.readdir(outputPath);
+    const entries = await fs.readdir(outputPath, { withFileTypes: true });
     if (entries.length === 0) {
       return;
     }
@@ -222,7 +223,20 @@ async function ensureReplaceableOutputPath(outputPath: string): Promise<void> {
         return false;
       }
     }));
-    if (!complete.every(Boolean)) {
+    const allowedRootEntries = new Set([
+      "scan-manifest.json",
+      "facts.ndjson",
+      "index.sqlite",
+      "report.md",
+      "logs",
+      "base44-evidence.json",
+      "base44-evidence.md",
+      "base44-evidence.html"
+    ]);
+    const rootOwned = entries.every((entry) => allowedRootEntries.has(entry.name));
+    const logEntries = await fs.readdir(path.join(outputPath, "logs"), { withFileTypes: true }).catch(() => []);
+    const logsOwned = logEntries.length === 1 && logEntries[0].isFile() && logEntries[0].name === "analyzer.log";
+    if (!complete.every(Boolean) || !rootOwned || !logsOwned) {
       throw new Error(`Output artifact set is not replaceable: ${outputPath}`);
     }
   } catch (error) {
