@@ -309,6 +309,26 @@ describe("ScanEngine", () => {
     expect(first.facts).toEqual(second.facts);
   });
 
+  it("loads dependency declarations without adding them to inventory evidence", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    await fsp.mkdir(path.join(repo, "src"), { recursive: true });
+    await fsp.mkdir(path.join(repo, "node_modules", "fixture-package"), { recursive: true });
+    await fsp.writeFile(path.join(repo, "tsconfig.json"), JSON.stringify({ compilerOptions: { target: "ES2022", module: "CommonJS", strict: true }, include: ["src/**/*.ts"] }));
+    await fsp.writeFile(path.join(repo, "src", "sample.ts"), "import { dependencyValue } from 'fixture-package';\nexport const selected: string = dependencyValue;\n");
+    await fsp.writeFile(path.join(repo, "node_modules", "fixture-package", "index.d.ts"), "export declare const dependencyValue: string;\n");
+    initGitRepo(repo);
+
+    const result = await scan(scanOptions(repo, path.join(root, "output")));
+
+    expect(result.facts).not.toContainEqual(expect.objectContaining({
+      factType: FactTypes.AnalysisGap,
+      properties: expect.objectContaining({ diagnosticCode: "2307" })
+    }));
+    expect(result.facts.some((fact) => fact.evidence.filePath.includes("node_modules"))).toBe(false);
+    expect(result.inventory.some((item) => item.relativePath.includes("node_modules"))).toBe(false);
+  });
+
   it("preserves prior output when a staged artifact write fails", async () => {
     const root = await tempDir();
     const repo = path.join(root, "repo");

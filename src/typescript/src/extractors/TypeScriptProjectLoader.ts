@@ -88,8 +88,12 @@ function loadProjectRecursive(
     cache,
     options.maxFileByteSize,
     skippedFiles,
-    (fileName) => !isUnderPath(path.resolve(fileName), repoPath)
-      || selectedPaths.has(path.resolve(fileName)));
+    (fileName) => {
+      const absoluteFileName = path.resolve(fileName);
+      return !isUnderPath(absoluteFileName, repoPath)
+        || selectedPaths.has(absoluteFileName)
+        || isCompilerDependencyInput(repoPath, absoluteFileName);
+    });
   const program = ts.createProgram(parsed.fileNames, parsed.options, host);
   const diagnostics = [
     ...parsed.errors,
@@ -111,6 +115,11 @@ function loadProjectRecursive(
     diagnostics,
     skippedFiles
   });
+}
+
+function isCompilerDependencyInput(repoPath: string, fileName: string): boolean {
+  const relative = path.relative(repoPath, fileName);
+  return relative.split(path.sep).some((segment) => segment === "node_modules" || segment === ".pnpm-store");
 }
 
 function emptyParsed(configPath: string): ts.ParsedCommandLine {
