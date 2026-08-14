@@ -221,7 +221,10 @@ stream using
 `docs/contracts/angular-dotnet-interaction-operational-event.v1.schema.json`.
 It records run, source-scan, combine, and report start/completion/failure events,
 monotonic elapsed milliseconds, bounded owner-configured subject labels, and
-categorical failure codes. Each line is independently parseable JSON so a
+categorical failure codes. Every event binds to a digest of the complete
+label/commit source set; source-scan events additionally carry the exact source
+commit SHA while their subject ID is the configured repository label. Each line
+is independently parseable JSON so a
 failed long-running review retains the highest completed stage. The derived
 `execution-summary.md` sorts completed operations by duration to make slow
 repositories and report pairings visible without inspecting raw scanner logs.
@@ -233,6 +236,8 @@ and query names can still identify private architecture; use
 `feedback-summary.json` for a smaller sanitized handoff and review all material
 under the owner's handling policy before sharing. Durations describe only the
 specific machine and run and do not prove application runtime behavior.
+Telemetry writes are best-effort: the runner disables the stream after a write
+failure rather than allowing diagnostics to change deterministic scan results.
 
 ## Choose repositories and output paths
 

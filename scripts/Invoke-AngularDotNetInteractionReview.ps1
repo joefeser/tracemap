@@ -26,8 +26,11 @@ $FeedbackSchemaVersion = "angular-dotnet-interaction-feedback.v1"
 $OperationalEventSchemaVersion = "angular-dotnet-interaction-operational-event.v1"
 $script:FeedbackRuleId = "interaction.review.feedback.v1"
 $script:OperationalEventPath = $null
+$script:OperationalTelemetryDisabled = $false
 $script:OperationalEventSequence = 0
 $script:OperationalEvents = [System.Collections.Generic.List[object]]::new()
+$script:SourceSnapshotSha256 = $null
+$script:SourceCommitByLabel = @{}
 $SafeNamePattern = '^[a-z0-9][a-z0-9._-]{0,63}$'
 $MaximumSources = 100
 $MaximumEndpointPairs = 100
@@ -254,12 +257,20 @@ function Write-OperationalEvent {
         [AllowNull()][string]$FailureCode
     )
 
-    if ([string]::IsNullOrWhiteSpace([string]$script:OperationalEventPath)) { return }
-    $script:OperationalEventSequence++
+    if ($script:OperationalTelemetryDisabled -or [string]::IsNullOrWhiteSpace([string]$script:OperationalEventPath)) { return }
+    $nextSequence = $script:OperationalEventSequence + 1
+    $sourceCommitSha = if ($SubjectKind -eq "source" -and $script:SourceCommitByLabel.ContainsKey($SubjectId)) {
+        [string]$script:SourceCommitByLabel[$SubjectId]
+    }
+    else {
+        $null
+    }
     $record = [ordered]@{
         schemaVersion = $OperationalEventSchemaVersion
         runId = $RunId
-        sequence = $script:OperationalEventSequence
+        sourceSnapshotSha256 = $script:SourceSnapshotSha256
+        sourceCommitSha = $sourceCommitSha
+        sequence = $nextSequence
         timestampUtc = [DateTimeOffset]::UtcNow.ToString("O", [Globalization.CultureInfo]::InvariantCulture)
         event = $Event
         stage = $Stage
@@ -270,9 +281,20 @@ function Write-OperationalEvent {
         durationMilliseconds = $DurationMilliseconds
         failureCode = $FailureCode
     }
-    $script:OperationalEvents.Add($record)
-    $line = $record | ConvertTo-Json -Compress -Depth 10
-    [System.IO.File]::AppendAllText($script:OperationalEventPath, $line + "`n", [System.Text.UTF8Encoding]::new($false))
+    try {
+        $line = $record | ConvertTo-Json -Compress -Depth 10
+        [System.IO.File]::AppendAllText($script:OperationalEventPath, $line + "`n", [System.Text.UTF8Encoding]::new($false))
+        $script:OperationalEventSequence = $nextSequence
+        $script:OperationalEvents.Add($record)
+    }
+    catch {
+        # Operational telemetry is best-effort and must not change evidence or
+        # prevent deterministic outputs. Disable it after the first write error
+        # so no later event can create an apparent sequence gap.
+        $script:OperationalTelemetryDisabled = $true
+        $script:OperationalEventPath = $null
+        Write-Verbose "interaction operational telemetry disabled after a write failure"
+    }
 }
 
 function Invoke-TimedOperation {
@@ -724,6 +746,9 @@ if (($resolvedSources.kind -contains "typescript") -and -not (Test-Path -Literal
 
 $sourceCommits = @($resolvedSources | Sort-Object label | ForEach-Object { $_.commitSha })
 $runId = "interaction-" + (Get-Sha256Text ($configSha256 + "|" + ($sourceCommits -join "|"))).Substring(0, 20)
+$sourceSnapshotRows = @($resolvedSources | Sort-Object label | ForEach-Object { "$($_.label)=$($_.commitSha)" })
+$script:SourceSnapshotSha256 = Get-Sha256Text ($sourceSnapshotRows -join "`n")
+foreach ($source in $resolvedSources) { $script:SourceCommitByLabel[$source.label] = $source.commitSha }
 
 if ($ValidateOnly) {
     [ordered]@{
@@ -765,59 +790,59 @@ try {
     New-Item -ItemType Directory -Path $scanRoot | Out-Null
 
     foreach ($source in $resolvedSources) {
-        $scanOutput = Join-Path $scanRoot $source.label
-        if ($source.kind -eq "typescript") {
-            $arguments = [System.Collections.Generic.List[string]]::new()
-            foreach ($value in @("scan", "--repo", $source.repositoryPath, "--out", $scanOutput)) { $arguments.Add($value) }
-            foreach ($project in $source.projects) { $arguments.Add("--project"); $arguments.Add($project) }
-            foreach ($include in $source.include) { $arguments.Add("--include"); $arguments.Add($include) }
-            foreach ($exclude in $source.exclude) { $arguments.Add("--exclude"); $arguments.Add($exclude) }
-            Invoke-TimedOperation -RunId $runId -Stage "source-scan" -Operation "typescript-scan" `
-                -FailureCode "INTERACTION_RUN_TYPESCRIPT_SCAN_FAILED" -SubjectKind "source" -SubjectId $source.label `
-                -Action { Invoke-CheckedCommand "node" (@($typeScriptCli) + $arguments.ToArray()) "INTERACTION_RUN_TYPESCRIPT_SCAN_FAILED" }
-        }
-        else {
-            $arguments = [System.Collections.Generic.List[string]]::new()
-            foreach ($value in @("scan", "--repo", $source.repositoryPath, "--out", $scanOutput)) { $arguments.Add($value) }
-            foreach ($solution in $source.solutions) { $arguments.Add("--solution"); $arguments.Add($solution) }
-            foreach ($project in $source.projects) { $arguments.Add("--project"); $arguments.Add($project) }
-            foreach ($include in $source.include) { $arguments.Add("--include"); $arguments.Add($include) }
-            foreach ($exclude in $source.exclude) { $arguments.Add("--exclude"); $arguments.Add($exclude) }
-            if (-not [string]::IsNullOrWhiteSpace($source.targetFramework)) { $arguments.Add("--target-framework"); $arguments.Add($source.targetFramework) }
-            Invoke-TimedOperation -RunId $runId -Stage "source-scan" -Operation "dotnet-scan" `
-                -FailureCode "INTERACTION_RUN_DOTNET_SCAN_FAILED" -SubjectKind "source" -SubjectId $source.label `
-                -Action { Invoke-TraceMap $arguments.ToArray() "INTERACTION_RUN_DOTNET_SCAN_FAILED" }
-        }
+        $sourceOperation = if ($source.kind -eq "typescript") { "typescript-scan" } else { "dotnet-scan" }
+        $sourceFailureCode = if ($source.kind -eq "typescript") { "INTERACTION_RUN_TYPESCRIPT_SCAN_FAILED" } else { "INTERACTION_RUN_DOTNET_SCAN_FAILED" }
+        Invoke-TimedOperation -RunId $runId -Stage "source-scan" -Operation $sourceOperation `
+            -FailureCode $sourceFailureCode -SubjectKind "source" -SubjectId $source.label `
+            -Action {
+                $scanOutput = Join-Path $scanRoot $source.label
+                $arguments = [System.Collections.Generic.List[string]]::new()
+                foreach ($value in @("scan", "--repo", $source.repositoryPath, "--out", $scanOutput)) { $arguments.Add($value) }
+                if ($source.kind -eq "typescript") {
+                    foreach ($project in $source.projects) { $arguments.Add("--project"); $arguments.Add($project) }
+                    foreach ($include in $source.include) { $arguments.Add("--include"); $arguments.Add($include) }
+                    foreach ($exclude in $source.exclude) { $arguments.Add("--exclude"); $arguments.Add($exclude) }
+                    Invoke-CheckedCommand "node" (@($typeScriptCli) + $arguments.ToArray()) "INTERACTION_RUN_TYPESCRIPT_SCAN_FAILED"
+                }
+                else {
+                    foreach ($solution in $source.solutions) { $arguments.Add("--solution"); $arguments.Add($solution) }
+                    foreach ($project in $source.projects) { $arguments.Add("--project"); $arguments.Add($project) }
+                    foreach ($include in $source.include) { $arguments.Add("--include"); $arguments.Add($include) }
+                    foreach ($exclude in $source.exclude) { $arguments.Add("--exclude"); $arguments.Add($exclude) }
+                    if (-not [string]::IsNullOrWhiteSpace($source.targetFramework)) { $arguments.Add("--target-framework"); $arguments.Add($source.targetFramework) }
+                    Invoke-TraceMap $arguments.ToArray() "INTERACTION_RUN_DOTNET_SCAN_FAILED"
+                }
 
-        $postScanHead = Get-GitValue $source.repositoryPath @("rev-parse", "HEAD") "INTERACTION_RUN_SOURCE_COMMIT_UNAVAILABLE"
-        $postScanStatus = @(& git -C $source.repositoryPath status --short)
-        if ($LASTEXITCODE -ne 0) { Stop-InteractionReview "INTERACTION_RUN_SOURCE_STATUS_UNAVAILABLE" }
-        if ($postScanHead -ne $source.commitSha -or $postScanStatus.Count -gt 0) {
-            Stop-InteractionReview "INTERACTION_RUN_SOURCE_CHANGED_DURING_SCAN"
-        }
+                $postScanHead = Get-GitValue $source.repositoryPath @("rev-parse", "HEAD") "INTERACTION_RUN_SOURCE_COMMIT_UNAVAILABLE"
+                $postScanStatus = @(& git -C $source.repositoryPath status --short)
+                if ($LASTEXITCODE -ne 0) { Stop-InteractionReview "INTERACTION_RUN_SOURCE_STATUS_UNAVAILABLE" }
+                if ($postScanHead -ne $source.commitSha -or $postScanStatus.Count -gt 0) {
+                    Stop-InteractionReview "INTERACTION_RUN_SOURCE_CHANGED_DURING_SCAN"
+                }
 
-        $manifestPath = Join-Path $scanOutput "scan-manifest.json"
-        $factsPath = Join-Path $scanOutput "facts.ndjson"
-        $indexPath = Join-Path $scanOutput "index.sqlite"
-        foreach ($required in @($manifestPath, $factsPath, $indexPath, (Join-Path $scanOutput "report.md"), (Join-Path $scanOutput "logs/analyzer.log"))) {
-            if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { Stop-InteractionReview "INTERACTION_RUN_SCAN_ARTIFACT_MISSING" }
-        }
-        $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json -Depth 50
-        if ([string](Get-PropertyValue $manifest "commitSha" "") -ne $source.commitSha) { Stop-InteractionReview "INTERACTION_RUN_SCAN_COMMIT_MISMATCH" }
-        $analysisLevel = [string](Get-PropertyValue $manifest "analysisLevel" "unknown")
-        $buildStatus = [string](Get-PropertyValue $manifest "buildStatus" "unknown")
-        Add-Count $sourceKindCounts $source.kind
-        Add-Count $scanStateCounts "$analysisLevel|$buildStatus"
-        Add-ScanGapSignals $factsPath $signals
-        $sourceResults.Add([ordered]@{
-            label = $source.label
-            kind = $source.kind
-            commitSha = $source.commitSha
-            analysisLevel = $analysisLevel
-            buildStatus = $buildStatus
-            scanPath = "scans/$($source.label)"
-            indexSha256 = Get-Sha256File $indexPath
-        })
+                $manifestPath = Join-Path $scanOutput "scan-manifest.json"
+                $factsPath = Join-Path $scanOutput "facts.ndjson"
+                $indexPath = Join-Path $scanOutput "index.sqlite"
+                foreach ($required in @($manifestPath, $factsPath, $indexPath, (Join-Path $scanOutput "report.md"), (Join-Path $scanOutput "logs/analyzer.log"))) {
+                    if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { Stop-InteractionReview "INTERACTION_RUN_SCAN_ARTIFACT_MISSING" }
+                }
+                $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json -Depth 50
+                if ([string](Get-PropertyValue $manifest "commitSha" "") -ne $source.commitSha) { Stop-InteractionReview "INTERACTION_RUN_SCAN_COMMIT_MISMATCH" }
+                $analysisLevel = [string](Get-PropertyValue $manifest "analysisLevel" "unknown")
+                $buildStatus = [string](Get-PropertyValue $manifest "buildStatus" "unknown")
+                Add-Count $sourceKindCounts $source.kind
+                Add-Count $scanStateCounts "$analysisLevel|$buildStatus"
+                Add-ScanGapSignals $factsPath $signals
+                $sourceResults.Add([ordered]@{
+                    label = $source.label
+                    kind = $source.kind
+                    commitSha = $source.commitSha
+                    analysisLevel = $analysisLevel
+                    buildStatus = $buildStatus
+                    scanPath = "scans/$($source.label)"
+                    indexSha256 = Get-Sha256File $indexPath
+                })
+            }
     }
 
     $combinedIndex = Join-Path $staging "combined.sqlite"
@@ -941,64 +966,83 @@ catch {
     }
 }
 
+try {
+    $feedback = [ordered]@{
+        schemaVersion = $FeedbackSchemaVersion
+        runId = $runId
+        outcome = $outcome
+        sourceCount = $resolvedSources.Count
+        sourceKinds = @(Convert-CountsToRows $sourceKindCounts)
+        scanStates = @(Convert-CountsToRows $scanStateCounts)
+        reportCount = $reportResults.Count
+        reportStates = @($reportStates | Sort-Object `
+            { [string]$_.producer },
+            { [string]$_.classification },
+            { [string]$_.coverage },
+            { [bool]$_.truncated })
+        unresolvedSignals = @(Convert-SignalsToRows $signals)
+        failureCode = $failureCode
+        limitations = @(
+            "Counts are categorical projections and may include the same underlying gap in more than one report.",
+            "This summary omits repository paths, source identifiers, routes, symbols, SQL, configuration values, and source content.",
+            "A missing or unresolved static link is not proof that runtime behavior or a dependency is absent."
+        )
+    }
+    Write-StableJson $feedback (Join-Path $staging "feedback-summary.json")
+    Write-FeedbackMarkdown $feedback (Join-Path $staging "feedback-summary.md")
+
+    $artifacts = @(
+        Get-ChildItem -LiteralPath $staging -File -Recurse |
+            ForEach-Object {
+                $relative = [System.IO.Path]::GetRelativePath($staging, $_.FullName).Replace('\', '/')
+                [pscustomobject]@{ file = $_; relativePath = $relative }
+            } |
+            Where-Object { $_.relativePath -notin @("interaction-run-result.json", "logs/interaction-review-events.jsonl", "execution-summary.md") } |
+            ForEach-Object {
+                [ordered]@{ relativePath = $_.relativePath; sha256 = Get-Sha256File $_.file.FullName }
+            } |
+            Sort-Object relativePath
+    )
+    $result = [ordered]@{
+        schemaVersion = $ResultSchemaVersion
+        runId = $runId
+        configSha256 = $configSha256
+        outcome = $outcome
+        failureCode = $failureCode
+        combinedIndexAvailable = Test-Path -LiteralPath (Join-Path $staging "combined.sqlite") -PathType Leaf
+        sources = @($sourceResults | Sort-Object label)
+        reports = @($reportResults | Sort-Object kind, name)
+        artifacts = $artifacts
+        nextAction = if ($outcome -eq "succeeded" -and $signals.Count -eq 0) { "review-generated-reports" } elseif ($outcome -eq "succeeded") { "review-feedback-summary" } else { "inspect-failure-code-and-retained-stage-output" }
+        limitations = @(
+            "This run composes deterministic static evidence and does not prove runtime execution, reachability, correctness, ownership, or migration safety.",
+            "Generated reports can contain private repository-relative identifiers and must remain in owner-controlled storage."
+        )
+    }
+    Write-StableJson $result (Join-Path $staging "interaction-run-result.json")
+    Move-Item -LiteralPath $staging -Destination $OutputRoot
+}
+catch {
+    $outcome = "failed"
+    $failureCode = "INTERACTION_RUN_FINALIZATION_FAILED"
+    $runStopwatch.Stop()
+    $publishedLog = Join-Path $OutputRoot "logs/interaction-review-events.jsonl"
+    if (-not $script:OperationalTelemetryDisabled -and (Test-Path -LiteralPath $publishedLog -PathType Leaf)) { $script:OperationalEventPath = $publishedLog }
+    Write-OperationalEvent $runId "run-completed" "runner" "run" "failed" $null $null $runStopwatch.ElapsedMilliseconds $failureCode
+    $summaryRoot = if (Test-Path -LiteralPath $OutputRoot -PathType Container) { $OutputRoot } else { $staging }
+    try { Write-ExecutionSummaryMarkdown $runId $outcome $failureCode (Join-Path $summaryRoot "execution-summary.md") }
+    catch { Write-Verbose "interaction execution summary unavailable after finalization failure" }
+    Write-Output "interaction-review=failed;runId=$runId;sourceCount=$($resolvedSources.Count);reportCount=$($reportResults.Count);unresolvedSignalKinds=$($signals.Count)"
+    Write-Output "failureCode=$failureCode"
+    exit 1
+}
+
+if (-not $script:OperationalTelemetryDisabled) { $script:OperationalEventPath = Join-Path $OutputRoot "logs/interaction-review-events.jsonl" }
 $runStopwatch.Stop()
 Write-OperationalEvent $runId "run-completed" "runner" "run" $outcome $null $null $runStopwatch.ElapsedMilliseconds $failureCode
-$feedback = [ordered]@{
-    schemaVersion = $FeedbackSchemaVersion
-    runId = $runId
-    outcome = $outcome
-    sourceCount = $resolvedSources.Count
-    sourceKinds = @(Convert-CountsToRows $sourceKindCounts)
-    scanStates = @(Convert-CountsToRows $scanStateCounts)
-    reportCount = $reportResults.Count
-    reportStates = @($reportStates | Sort-Object `
-        { [string]$_.producer },
-        { [string]$_.classification },
-        { [string]$_.coverage },
-        { [bool]$_.truncated })
-    unresolvedSignals = @(Convert-SignalsToRows $signals)
-    failureCode = $failureCode
-    limitations = @(
-        "Counts are categorical projections and may include the same underlying gap in more than one report.",
-        "This summary omits repository paths, source identifiers, routes, symbols, SQL, configuration values, and source content.",
-        "A missing or unresolved static link is not proof that runtime behavior or a dependency is absent."
-    )
-}
-Write-StableJson $feedback (Join-Path $staging "feedback-summary.json")
-Write-FeedbackMarkdown $feedback (Join-Path $staging "feedback-summary.md")
-Write-ExecutionSummaryMarkdown $runId $outcome $failureCode (Join-Path $staging "execution-summary.md")
+try { Write-ExecutionSummaryMarkdown $runId $outcome $failureCode (Join-Path $OutputRoot "execution-summary.md") }
+catch { Write-Verbose "interaction execution summary unavailable after a write failure" }
 
-$artifacts = @(
-    Get-ChildItem -LiteralPath $staging -File -Recurse |
-        ForEach-Object {
-            $relative = [System.IO.Path]::GetRelativePath($staging, $_.FullName).Replace('\', '/')
-            [pscustomobject]@{ file = $_; relativePath = $relative }
-        } |
-        Where-Object { $_.relativePath -notin @("interaction-run-result.json", "logs/interaction-review-events.jsonl", "execution-summary.md") } |
-        ForEach-Object {
-            [ordered]@{ relativePath = $_.relativePath; sha256 = Get-Sha256File $_.file.FullName }
-        } |
-        Sort-Object relativePath
-)
-$result = [ordered]@{
-    schemaVersion = $ResultSchemaVersion
-    runId = $runId
-    configSha256 = $configSha256
-    outcome = $outcome
-    failureCode = $failureCode
-    combinedIndexAvailable = Test-Path -LiteralPath (Join-Path $staging "combined.sqlite") -PathType Leaf
-    sources = @($sourceResults | Sort-Object label)
-    reports = @($reportResults | Sort-Object kind, name)
-    artifacts = $artifacts
-    nextAction = if ($outcome -eq "succeeded" -and $signals.Count -eq 0) { "review-generated-reports" } elseif ($outcome -eq "succeeded") { "review-feedback-summary" } else { "inspect-failure-code-and-retained-stage-output" }
-    limitations = @(
-        "This run composes deterministic static evidence and does not prove runtime execution, reachability, correctness, ownership, or migration safety.",
-        "Generated reports can contain private repository-relative identifiers and must remain in owner-controlled storage."
-    )
-}
-Write-StableJson $result (Join-Path $staging "interaction-run-result.json")
-
-Move-Item -LiteralPath $staging -Destination $OutputRoot
 Write-Output "interaction-review=$outcome;runId=$runId;sourceCount=$($resolvedSources.Count);reportCount=$($reportResults.Count);unresolvedSignalKinds=$($signals.Count)"
 if ($null -ne $failureCode) { Write-Output "failureCode=$failureCode" }
 Write-Output "output=$OutputRoot"

@@ -206,8 +206,11 @@ try {
             Assert-True ($event.schemaVersion -eq "angular-dotnet-interaction-operational-event.v1") "unexpected operational event schema"
             Assert-True ([int]$event.sequence -eq ($eventIndex + 1)) "operational event sequence is not contiguous"
             Assert-True (-not [string]::IsNullOrWhiteSpace([string]$event.timestampUtc)) "operational event omitted timestamp"
+            Assert-True ([string]$event.sourceSnapshotSha256 -match '^[0-9a-f]{64}$') "operational event omitted source-set provenance"
         }
-        Assert-True (@($operationalEvents | Where-Object { $_.event -eq "operation-completed" -and $_.stage -eq "source-scan" }).Count -eq 2) "source scan timings are incomplete"
+        $sourceScanEvents = @($operationalEvents | Where-Object { $_.event -eq "operation-completed" -and $_.stage -eq "source-scan" })
+        Assert-True ($sourceScanEvents.Count -eq 2) "source scan timings are incomplete"
+        Assert-True (@($sourceScanEvents | Where-Object { [string]$_.sourceCommitSha -match '^[0-9a-fA-F]{40,64}$' }).Count -eq 2) "source scan events omitted exact commits"
         Assert-True (@($operationalEvents | Where-Object { $_.event -eq "operation-completed" -and $_.stage -eq "report" }).Count -eq 6) "report timings are incomplete"
         Assert-True (@($result.artifacts | Where-Object { $_.relativePath -in @("execution-summary.md", "logs/interaction-review-events.jsonl") }).Count -eq 0) "nondeterministic telemetry entered the deterministic artifact inventory"
         $reportStateKeys = @($feedback.reportStates | ForEach-Object { "$($_.producer)|$($_.classification)|$($_.coverage)|$($_.truncated)" })
