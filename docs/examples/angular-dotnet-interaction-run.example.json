@@ -15,6 +15,9 @@
       "repositoryPath": "../application-api",
       "solutions": [
         "Application.Api.sln"
+      ],
+      "exclude": [
+        "custom-generated/**"
       ]
     },
     {
