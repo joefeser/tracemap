@@ -3,6 +3,7 @@ import path from "node:path";
 import ts from "typescript";
 import { FileInventoryItem, ScanOptions } from "../facts/Models";
 import { createCompilerHostWithCache, CompilerHostCache } from "../util/CompilerHost";
+import { hashBytes } from "../util/Hash";
 import { isUnderPath, repoRelative } from "../util/Paths";
 
 export interface LoadedProject {
@@ -15,7 +16,12 @@ export interface LoadedProject {
   skippedFiles: Set<string>;
 }
 
-export async function loadTypeScriptProjects(repoPath: string, options: ScanOptions, inventory: readonly FileInventoryItem[]): Promise<LoadedProject[]> {
+export interface LoadedProjectSet {
+  projects: LoadedProject[];
+  compilerInputTokens: string[];
+}
+
+export async function loadTypeScriptProjects(repoPath: string, options: ScanOptions, inventory: readonly FileInventoryItem[]): Promise<LoadedProjectSet> {
   const projectPaths = discoverProjectPaths(repoPath, options, inventory);
   const visited = new Set<string>();
   const loaded: LoadedProject[] = [];
@@ -24,7 +30,16 @@ export async function loadTypeScriptProjects(repoPath: string, options: ScanOpti
   for (const projectPath of projectPaths) {
     loadProjectRecursive(repoPath, projectPath, options, selectedPaths, cache, visited, loaded);
   }
-  return loaded;
+  return {
+    projects: loaded,
+    compilerInputTokens: [...cache.sourceFiles.entries()]
+      .filter(([fileName]) => !selectedPaths.has(path.resolve(fileName)))
+      .map(([, [sourceFile]]) => {
+        const analyzedText = Buffer.from(sourceFile.text, "utf8");
+        return `${analyzedText.byteLength}\0${hashBytes(analyzedText)}\0`;
+      })
+      .sort()
+  };
 }
 
 export function discoverProjectPaths(repoPath: string, options: ScanOptions, inventory: readonly FileInventoryItem[]): string[] {

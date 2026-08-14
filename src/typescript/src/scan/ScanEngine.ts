@@ -41,7 +41,11 @@ export async function scan(options: ScanOptions, testHooks: ScanTestHooks = {}):
     throw new Error("TraceMap TypeScript scan requires git commit SHA. Run inside a git checkout with at least one commit.");
   }
   const inventory = await collectFileInventory(options);
-  const sourceSnapshotDigest = await createSourceSnapshotDigest(inventory);
+  const projectSet = options.semantic
+    ? await loadTypeScriptProjects(repoPath, options, inventory)
+    : { projects: [], compilerInputTokens: [] };
+  const projects = projectSet.projects;
+  const sourceSnapshotDigest = await createSourceSnapshotDigest(inventory, projectSet.compilerInputTokens);
   const manifest: ScanManifest = {
     scanId: createScanId(git, sourceSnapshotDigest, options),
     repoName: git.repoName,
@@ -75,7 +79,6 @@ export async function scan(options: ScanOptions, testHooks: ScanTestHooks = {}):
   facts.push(...await extractConfigFacts(manifest, inventory));
   facts.push(...await extractBase44Facts(manifest, inventory));
 
-  const projects = options.semantic ? await loadTypeScriptProjects(repoPath, options, inventory) : [];
   manifest.projects = projects.map((project) => project.projectPath).sort();
   manifest.targetFrameworks = [...new Set(projects.map((project) => String(project.parsed.options.target ? project.parsed.options.target : "default")))].sort();
   if (options.semantic && projects.length === 0) {
@@ -111,7 +114,10 @@ export async function scan(options: ScanOptions, testHooks: ScanTestHooks = {}):
   const result: ScanResult = { manifest, facts: dedupeFacts(facts), inventory };
   await testHooks.beforeSnapshotVerification?.();
   const verifiedInventory = await collectFileInventory(options);
-  if (await createSourceSnapshotDigest(verifiedInventory) !== sourceSnapshotDigest) {
+  const verifiedProjectSet = options.semantic
+    ? await loadTypeScriptProjects(repoPath, options, verifiedInventory)
+    : { projects: [], compilerInputTokens: [] };
+  if (await createSourceSnapshotDigest(verifiedInventory, verifiedProjectSet.compilerInputTokens) !== sourceSnapshotDigest) {
     throw new Error("SourceSnapshotChangedDuringScan");
   }
   await writeOutputTransaction(outputPath, async (stagingPath) => {
@@ -165,9 +171,10 @@ function normalizeManifestPath(value: string): string {
 }
 
 async function createSourceSnapshotDigest(
-  inventory: readonly { relativePath: string; absolutePath: string; kind: string; sizeBytes: number; skipped: boolean }[]
+  inventory: readonly { relativePath: string; absolutePath: string; kind: string; sizeBytes: number; skipped: boolean }[],
+  compilerInputTokens: readonly string[]
 ): Promise<string> {
-  const segments: string[] = ["scan-truth-source-snapshot/v1\0"];
+  const segments: string[] = ["scan-truth-source-snapshot/v2\0"];
   for (const item of [...inventory].sort((left, right) => left.relativePath < right.relativePath ? -1 : left.relativePath > right.relativePath ? 1 : 0)) {
     if (item.skipped) {
       segments.push(`${item.relativePath}\0${item.kind}\0${item.sizeBytes}\0skipped-before-analysis\0`);
@@ -176,6 +183,7 @@ async function createSourceSnapshotDigest(
       segments.push(`${item.relativePath}\0${item.kind}\0${content.byteLength}\0${hashBytes(content)}\0`);
     }
   }
+  segments.push("compiler-inputs\0", ...compilerInputTokens);
   return hashBytes(Buffer.from(segments.join(""), "utf8"));
 }
 
