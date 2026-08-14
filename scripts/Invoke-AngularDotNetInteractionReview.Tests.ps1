@@ -173,6 +173,8 @@ try {
             "interaction-run-result.json",
             "feedback-summary.json",
             "feedback-summary.md",
+            "execution-summary.md",
+            "logs/interaction-review-events.jsonl",
             "combined.sqlite",
             "reports/dependency/dependency-report.json",
             "reports/portfolio/portfolio-report.json",
@@ -190,6 +192,24 @@ try {
         Assert-True ($result.reports.Count -eq 6) "unexpected report count"
         Assert-True ($feedback.schemaVersion -eq "angular-dotnet-interaction-feedback.v1") "unexpected feedback schema"
         Assert-True ($feedback.reportCount -eq 6) "unexpected feedback report count"
+        $operationalEventPath = Join-Path $output "logs/interaction-review-events.jsonl"
+        $operationalEvents = @(Get-Content -LiteralPath $operationalEventPath |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            ForEach-Object { $_ | ConvertFrom-Json -Depth 20 })
+        Assert-True ($operationalEvents.Count -eq 20) "unexpected operational event count"
+        Assert-True ($operationalEvents[0].event -eq "run-started") "operational stream does not begin with run-started"
+        Assert-True ($operationalEvents[-1].event -eq "run-completed") "operational stream does not end with run-completed"
+        Assert-True ($operationalEvents[-1].status -eq "succeeded") "operational stream has unexpected run outcome"
+        Assert-True ([long]$operationalEvents[-1].durationMilliseconds -ge 0) "operational stream omitted total duration"
+        for ($eventIndex = 0; $eventIndex -lt $operationalEvents.Count; $eventIndex++) {
+            $event = $operationalEvents[$eventIndex]
+            Assert-True ($event.schemaVersion -eq "angular-dotnet-interaction-operational-event.v1") "unexpected operational event schema"
+            Assert-True ([int]$event.sequence -eq ($eventIndex + 1)) "operational event sequence is not contiguous"
+            Assert-True (-not [string]::IsNullOrWhiteSpace([string]$event.timestampUtc)) "operational event omitted timestamp"
+        }
+        Assert-True (@($operationalEvents | Where-Object { $_.event -eq "operation-completed" -and $_.stage -eq "source-scan" }).Count -eq 2) "source scan timings are incomplete"
+        Assert-True (@($operationalEvents | Where-Object { $_.event -eq "operation-completed" -and $_.stage -eq "report" }).Count -eq 6) "report timings are incomplete"
+        Assert-True (@($result.artifacts | Where-Object { $_.relativePath -in @("execution-summary.md", "logs/interaction-review-events.jsonl") }).Count -eq 0) "nondeterministic telemetry entered the deterministic artifact inventory"
         $reportStateKeys = @($feedback.reportStates | ForEach-Object { "$($_.producer)|$($_.classification)|$($_.coverage)|$($_.truncated)" })
         $sortedReportStateKeys = @($feedback.reportStates |
             Sort-Object `
@@ -210,6 +230,8 @@ try {
         Assert-True (-not $feedbackText.Contains("runner-id", [System.StringComparison]::Ordinal)) "feedback leaked a property-flow query name"
         Assert-True (-not $feedbackText.Contains("runner-get", [System.StringComparison]::Ordinal)) "feedback leaked a route-flow query name"
         Assert-True (-not $feedbackText.Contains("runner-to-sql", [System.StringComparison]::Ordinal)) "feedback leaked a path query name"
+        $operationalText = Get-Content -LiteralPath $operationalEventPath -Raw
+        Assert-True (-not $operationalText.Contains($testRoot, [System.StringComparison]::Ordinal)) "operational events leaked a local path"
     }
 
     $feedback1 = Get-FileHash -LiteralPath (Join-Path $output1 "feedback-summary.json") -Algorithm SHA256

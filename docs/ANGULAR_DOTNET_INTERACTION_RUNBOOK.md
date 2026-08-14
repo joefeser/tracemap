@@ -116,6 +116,7 @@ The contract is:
 docs/contracts/angular-dotnet-interaction-run.v1.schema.json
 docs/contracts/angular-dotnet-interaction-run-result.v1.schema.json
 docs/contracts/angular-dotnet-interaction-feedback.v1.schema.json
+docs/contracts/angular-dotnet-interaction-operational-event.v1.schema.json
 ```
 
 Keep the populated configuration outside the TraceMap repository. It contains
@@ -181,6 +182,8 @@ The generated root contains:
 interaction-run-result.json
 feedback-summary.json
 feedback-summary.md
+execution-summary.md
+logs/interaction-review-events.jsonl
 combined.sqlite
 scans/<source-label>/...
 reports/dependency/...
@@ -212,6 +215,24 @@ counts are diagnostic occurrences, not a deduplicated defect count. Use the
 producer, classification, rule ID, and retained local reports to investigate a
 signal. Do not ask another model to merge raw report structures or infer a
 missing link from names.
+
+`logs/interaction-review-events.jsonl` is an append-only operational event
+stream using
+`docs/contracts/angular-dotnet-interaction-operational-event.v1.schema.json`.
+It records run, source-scan, combine, and report start/completion/failure events,
+monotonic elapsed milliseconds, bounded owner-configured subject labels, and
+categorical failure codes. Each line is independently parseable JSON so a
+failed long-running review retains the highest completed stage. The derived
+`execution-summary.md` sorts completed operations by duration to make slow
+repositories and report pairings visible without inspecting raw scanner logs.
+
+These two files are nondeterministic private operational telemetry. They are
+excluded from the deterministic artifact hash inventory and never influence
+facts, indexes, manifests, report classifications, or run IDs. Subject labels
+and query names can still identify private architecture; use
+`feedback-summary.json` for a smaller sanitized handoff and review all material
+under the owner's handling policy before sharing. Durations describe only the
+specific machine and run and do not prove application runtime behavior.
 
 ## Choose repositories and output paths
 
