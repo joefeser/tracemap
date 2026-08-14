@@ -260,6 +260,44 @@ public sealed class LocalReviewCommandTests
     }
 
     [Fact]
+    public async Task Late_scan_failure_preserves_valid_available_manifest_identity()
+    {
+        using var temp = new TempDirectory();
+        var repo = CreateRepository(temp.Path, webForms: false);
+        var review = Path.Combine(temp.Path, "late-scan-failure");
+
+        static async Task<int> FailedAfterManifest(
+            string[] args,
+            TextWriter stdout,
+            TextWriter stderr,
+            CancellationToken cancellationToken)
+        {
+            var outputPath = args[Array.IndexOf(args, "--out") + 1];
+            Directory.CreateDirectory(outputPath);
+            await File.WriteAllTextAsync(
+                Path.Combine(outputPath, "scan-manifest.json"),
+                JsonSerializer.Serialize(SyntheticManifest(
+                    "scan-late-failure",
+                    new string('a', 40),
+                    new string('b', 64))),
+                cancellationToken);
+            return 1;
+        }
+
+        Assert.Equal(1, await LocalReviewCommand.RunAsync(
+            ["run", "--repo", repo, "--out", review],
+            TextWriter.Null,
+            TextWriter.Null,
+            FailedAfterManifest));
+
+        using var result = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(review, "local-review-result.json")));
+        Assert.Equal(new string('a', 40), result.RootElement.GetProperty("commitSha").GetString());
+        Assert.Equal("scan-late-failure", result.RootElement.GetProperty("scanId").GetString());
+        Assert.Equal(new string('b', 64), result.RootElement.GetProperty("sourceSnapshotDigest").GetString());
+        Assert.Equal("full", result.RootElement.GetProperty("coverage").GetString());
+    }
+
+    [Fact]
     public async Task Identity_unavailable_failures_are_location_independent_and_do_not_fabricate_scan_identity()
     {
         using var firstTemp = new TempDirectory();
@@ -383,6 +421,72 @@ public sealed class LocalReviewCommandTests
     }
 
     [Fact]
+    public async Task Downstream_failure_identity_includes_the_verified_snapshot()
+    {
+        using var temp = new TempDirectory();
+        var repo = CreateRepository(temp.Path, webForms: false);
+
+        static LocalReviewScanRunner FailedWebFormsScan(string snapshot) => async (
+            args,
+            stdout,
+            stderr,
+            cancellationToken) =>
+        {
+            var outputPath = args[Array.IndexOf(args, "--out") + 1];
+            await WriteSyntheticScanAsync(outputPath, SyntheticManifest("scan-" + snapshot[..8], new string('a', 40), snapshot), cancellationToken);
+            return 0;
+        };
+
+        var firstOutput = Path.Combine(temp.Path, "failure-one");
+        var secondOutput = Path.Combine(temp.Path, "failure-two");
+        Assert.Equal(1, await LocalReviewCommand.RunAsync(
+            ["run", "--repo", repo, "--out", firstOutput, "--webforms-modernization"],
+            TextWriter.Null,
+            TextWriter.Null,
+            FailedWebFormsScan(new string('b', 64))));
+        Assert.Equal(1, await LocalReviewCommand.RunAsync(
+            ["run", "--repo", repo, "--out", secondOutput, "--webforms-modernization"],
+            TextWriter.Null,
+            TextWriter.Null,
+            FailedWebFormsScan(new string('c', 64))));
+
+        using var first = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(firstOutput, "local-review-result.json")));
+        using var second = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(secondOutput, "local-review-result.json")));
+        Assert.NotEqual(first.RootElement.GetProperty("workflowId").GetString(), second.RootElement.GetProperty("workflowId").GetString());
+    }
+
+    [Fact]
+    public async Task Explorer_failure_preserves_reduced_webforms_packet_coverage()
+    {
+        using var temp = new TempDirectory();
+        var repo = CreateRepository(temp.Path, webForms: true);
+        var review = Path.Combine(temp.Path, "partial-packet-failure");
+        var services = new LocalReviewStageServices(
+            async (options, token) => { _ = await TraceMap.Reporting.WebFormsModernizationPacketReporter.WriteAsync(options, token); },
+            (options, token) => throw new InvalidOperationException("synthetic explorer failure"));
+
+        Assert.Equal(1, await LocalReviewCommand.RunAsync(
+            ["run", "--repo", repo, "--out", review, "--webforms-modernization", "--explorer"],
+            TextWriter.Null,
+            TextWriter.Null,
+            async (arguments, stdout, stderr, token) =>
+                await TraceMapCommand.RunAsync(["scan", .. arguments], stdout, stderr, token),
+            stageServices: services));
+
+        using var result = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(review, "local-review-result.json")));
+        Assert.Equal("reduced", result.RootElement.GetProperty("coverage").GetString());
+        Assert.Contains(
+            result.RootElement.GetProperty("gaps").EnumerateArray(),
+            gap => gap.GetString() == "LOCAL_REVIEW_WEBFORMS_PARTIAL");
+        Assert.Equal(
+            "partial",
+            result.RootElement.GetProperty("stages")[1].GetProperty("outcome").GetString());
+        Assert.Equal(
+            "failed",
+            result.RootElement.GetProperty("stages")[2].GetProperty("outcome").GetString());
+    }
+
+    [Fact]
     public async Task Downstream_input_mutation_fails_closed_and_preserves_a_typed_result()
     {
         using var temp = new TempDirectory();
@@ -471,6 +575,42 @@ public sealed class LocalReviewCommandTests
         var required = document.RootElement.GetProperty("required").EnumerateArray().Select(item => item.GetString()).ToArray();
         Assert.DoesNotContain("repositoryIdentityHash", required);
         Assert.DoesNotContain("commitSha", required);
+    }
+
+    private static ScanManifest SyntheticManifest(string scanId, string commitSha, string snapshot) => new(
+        scanId,
+        "synthetic",
+        null,
+        null,
+        commitSha,
+        "test-scanner",
+        DateTimeOffset.UnixEpoch,
+        "Level1SemanticAnalysis",
+        "Succeeded",
+        [],
+        [],
+        ["net10.0"],
+        [],
+        null,
+        null,
+        new string('c', 32),
+        snapshot);
+
+    private static async Task WriteSyntheticScanAsync(
+        string outputPath,
+        ScanManifest manifest,
+        CancellationToken cancellationToken)
+    {
+        Directory.CreateDirectory(Path.Combine(outputPath, "logs"));
+        await File.WriteAllTextAsync(
+            Path.Combine(outputPath, "scan-manifest.json"),
+            JsonSerializer.Serialize(manifest),
+            cancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(outputPath, "facts.ndjson"), string.Empty, cancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(outputPath, "index.sqlite"), string.Empty, cancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(outputPath, "report.md"), "report", cancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(outputPath, "logs", "analyzer.log"), string.Empty, cancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(outputPath, "scan-receipt.json"), "{}", cancellationToken);
     }
 
     private static string CreateRepository(string root, bool webForms)
