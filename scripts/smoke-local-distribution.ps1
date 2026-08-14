@@ -126,7 +126,7 @@ try {
     Invoke-Checked git @("config", "user.name", "TraceMap Fixture") $fixture
     Invoke-Checked git @("add", ".") $fixture
     Invoke-Checked git @("commit", "-m", "baseline") $fixture
-    Invoke-Checked $tool @("local-review", "run", "--repo", $fixture, "--out", $review)
+    Invoke-Checked $tool @("local-review", "run", "--repo", $fixture, "--out", $review) $fixture
     foreach ($relative in @("local-review-result.json", "README.md", "scan/scan-manifest.json", "scan/facts.ndjson", "scan/index.sqlite", "scan/report.md", "scan/logs/analyzer.log")) {
         if (-not (Test-Path -LiteralPath (Join-Path $review $relative) -PathType Leaf)) {
             throw "LocalDistributionGuidedArtifactMissing"
