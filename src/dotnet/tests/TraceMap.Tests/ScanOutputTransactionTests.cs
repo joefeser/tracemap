@@ -58,6 +58,16 @@ public sealed class ScanOutputTransactionTests
         Assert.Equal("keep", await File.ReadAllTextAsync(sentinel));
     }
 
+    [Fact]
+    public void Failure_receipt_eligibility_never_propagates_target_validation_errors()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+
+        Assert.False(ScanOutputTransaction.CanWriteFailureReceipt("\0", repo));
+    }
+
     private static async Task WritePacketAsync(string staging, string value)
     {
         Directory.CreateDirectory(Path.Combine(staging, "logs"));
