@@ -639,6 +639,17 @@ public static partial class StaticHtmlEvidenceExplorer
 
         await AddOptionalArtifactAsync(inputDirectory, "index.sqlite", "sqlite-index", "SQLite index", "index.sqlite.v1", safetyProfile, artifacts, gaps, cancellationToken);
         await AddOptionalArtifactAsync(inputDirectory, "report.md", "markdown-report", "Markdown report", "report.md.v1", safetyProfile, artifacts, gaps, cancellationToken);
+        var webFormsLoad = await AddWebFormsPacketArtifactAsync(
+            inputDirectory,
+            safetyProfile,
+            sourceCommitSha,
+            redactions,
+            cancellationToken);
+        if (sourceCommitSha is null && webFormsLoad.CommitSha is not null)
+        {
+            sourceCommitSha = webFormsLoad.CommitSha;
+            sourceCommitSupportId = WebFormsArtifactId;
+        }
         await AddReleaseReviewArtifactAsync(
             inputDirectory,
             safetyProfile,
@@ -675,12 +686,6 @@ public static partial class StaticHtmlEvidenceExplorer
             coverageLabels,
             redactions,
             cancellationToken);
-        var webFormsLoad = await AddWebFormsPacketArtifactAsync(
-            inputDirectory,
-            safetyProfile,
-            sourceCommitSha,
-            redactions,
-            cancellationToken);
         if (webFormsLoad.Artifact is not null)
         {
             artifacts.Add(webFormsLoad.Artifact);
@@ -688,11 +693,6 @@ public static partial class StaticHtmlEvidenceExplorer
         if (webFormsLoad.Source is not null)
         {
             reportSources.Add(webFormsLoad.Source);
-        }
-        if (sourceCommitSha is null && webFormsLoad.CommitSha is not null)
-        {
-            sourceCommitSha = webFormsLoad.CommitSha;
-            sourceCommitSupportId = WebFormsArtifactId;
         }
         evidenceRows.AddRange(webFormsLoad.EvidenceRows);
         gaps.AddRange(webFormsLoad.Gaps);
@@ -1414,6 +1414,18 @@ public static partial class StaticHtmlEvidenceExplorer
             var authoritativeMatches = authoritativeCommitSha is null
                 ? 0
                 : orderedSources.Count(source => source.CommitSha.Equals(authoritativeCommitSha, StringComparison.OrdinalIgnoreCase));
+            if (authoritativeCommitSha is not null && authoritativeMatches == 0)
+            {
+                gaps.Add(CreateGap(
+                    "paths-report-commit-conflict",
+                    ProvenanceConflictRuleId,
+                    "commit-conflict",
+                    artifactId,
+                    "paths",
+                    "PartialAnalysis",
+                    "The paths report does not contain the authoritative explorer commit, so its evidence remains associated with separate report sources.",
+                    [artifactId]));
+            }
             var sourceIdByIndex = new Dictionary<string, string>(StringComparer.Ordinal);
             for (var index = 0; index < orderedSources.Length; index++)
             {
@@ -2590,6 +2602,7 @@ public static partial class StaticHtmlEvidenceExplorer
             "facts-ndjson" => "evidence-rows",
             "paths-report" => "paths",
             "reducer-impact-report" => "reducer-results",
+            "webforms-modernization-packet" => "webforms",
             "rule-catalog" => "rules",
             _ => "artifacts"
         };

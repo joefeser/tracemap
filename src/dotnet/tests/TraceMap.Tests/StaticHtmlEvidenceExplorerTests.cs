@@ -1647,7 +1647,7 @@ public sealed class StaticHtmlEvidenceExplorerTests
         await File.WriteAllTextAsync(Path.Combine(directory, "release-review.json"), json);
     }
 
-    private static async Task WriteReducerImpactArtifactAsync(
+    internal static async Task WriteReducerImpactArtifactAsync(
         string directory,
         string commitSha,
         bool includeGap = false,
@@ -1778,7 +1778,7 @@ public sealed class StaticHtmlEvidenceExplorerTests
         await File.WriteAllTextAsync(Path.Combine(directory, "impact-report.json"), json);
     }
 
-    private static async Task WritePathsReportArtifactAsync(
+    internal static async Task WritePathsReportArtifactAsync(
         string directory,
         string commitSha,
         bool invalidEdgeTarget = false,
