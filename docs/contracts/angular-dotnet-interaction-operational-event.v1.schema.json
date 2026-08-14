@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tracemap.tools/contracts/angular-dotnet-interaction-operational-event.v1.schema.json",
+  "title": "TraceMap Angular and .NET interaction review operational event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "runId", "sequence", "timestampUtc", "event",
+    "stage", "operation", "status", "subjectKind", "subjectId",
+    "durationMilliseconds", "failureCode"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "angular-dotnet-interaction-operational-event.v1" },
+    "runId": { "type": "string", "pattern": "^interaction-[0-9a-f]{20}$" },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "timestampUtc": { "type": "string", "format": "date-time" },
+    "event": {
+      "enum": [
+        "run-started", "run-completed", "operation-started",
+        "operation-completed", "operation-failed"
+      ]
+    },
+    "stage": { "enum": ["runner", "source-scan", "combine", "report"] },
+    "operation": {
+      "enum": [
+        "run", "typescript-scan", "dotnet-scan", "combine",
+        "dependency-report", "portfolio-report", "endpoint-report",
+        "property-flow", "route-flow", "path-query"
+      ]
+    },
+    "status": { "enum": ["started", "completed", "succeeded", "failed"] },
+    "subjectKind": { "type": ["string", "null"], "enum": ["source", "query", null] },
+    "subjectId": {
+      "type": ["string", "null"],
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+    },
+    "durationMilliseconds": { "type": ["integer", "null"], "minimum": 0 },
+    "failureCode": {
+      "type": ["string", "null"],
+      "pattern": "^INTERACTION_RUN_[A-Z_]+$"
+    }
+  }
+}
