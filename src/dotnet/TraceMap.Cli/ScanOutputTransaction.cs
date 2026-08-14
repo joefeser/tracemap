@@ -62,6 +62,19 @@ internal static class ScanOutputTransaction
         Directory.Exists(outputPath)
         && RequiredArtifacts.All(relative => File.Exists(Path.Combine(outputPath, relative.Replace('/', Path.DirectorySeparatorChar))));
 
+    internal static bool CanWriteFailureReceipt(string outputPath, string repoPath)
+    {
+        try
+        {
+            ValidateTarget(outputPath, repoPath);
+            return true;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+    }
+
     internal static void ValidateTarget(string outputPath, string repoPath)
     {
         var target = Path.GetFullPath(outputPath);

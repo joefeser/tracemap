@@ -260,6 +260,24 @@ def test_source_mutation_before_snapshot_verification_fails_without_publishing(t
     assert not output.exists()
 
 
+def test_source_creation_before_snapshot_verification_fails_without_publishing(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "app.py").write_text("value = 1\n", encoding="utf-8")
+    _git(repo, "init")
+    _git(repo, "add", ".")
+    _git(repo, "-c", "user.name=TraceMap", "-c", "user.email=fixture@example.invalid", "commit", "-m", "baseline")
+    output = tmp_path / "output"
+
+    def create_source() -> None:
+        (repo / "added.py").write_text("added = True\n", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="SourceSnapshotChangedDuringScan"):
+        scan(make_options(str(repo), str(output)), _before_snapshot_verification=create_source)
+
+    assert not output.exists()
+
+
 def test_artifact_write_failure_preserves_prior_complete_output(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()

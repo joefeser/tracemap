@@ -176,7 +176,10 @@ public enum SwiftScanEngine {
         let git = try GitMetadata.load(scanRoot: repo)
         try OutputWriter.validateOutputPath(scanRoot: repo, gitRoot: git.gitRoot, outputPath: options.outputPath)
         let inventory = try InventoryBuilder.build(scanRoot: repo, gitRoot: git.gitRoot, options: options)
-        let snapshotDigest = try sourceSnapshotDigest(inventory: inventory, scanRoot: repo)
+        let snapshotDigest = try sourceSnapshotDigest(
+            inventory: inventory,
+            scanRoot: repo,
+            maxFileByteSize: options.maxFileByteSize)
         let scanId = stableScanId(git: git, options: options, sourceSnapshotDigest: snapshotDigest)
         let syntax = SwiftSyntaxEvidenceExtractor.extract(scanRoot: repo, inventory: inventory)
         let toolchain = Toolchain.diagnostics(inventory: inventory)
@@ -251,7 +254,10 @@ public enum SwiftScanEngine {
         let rawFacts = FactFactory.facts(manifest: manifest, inventory: inventory, gaps: gaps, toolchainDiagnostics: toolchain.diagnostics, scanRoot: repo, syntax: syntax, dependencies: dependencies, http: http, ui: ui, storage: storage)
         let facts = FactFactory.normalizeFacts(manifest: manifest, facts: rawFacts)
         try beforeSnapshotVerification()
-        guard try sourceSnapshotDigest(inventory: inventory, scanRoot: repo) == snapshotDigest else {
+        guard try sourceSnapshotDigest(
+            inventory: inventory,
+            scanRoot: repo,
+            maxFileByteSize: options.maxFileByteSize) == snapshotDigest else {
             throw ScanError.io("SourceSnapshotChangedDuringScan")
         }
         try OutputWriter.write(
@@ -287,7 +293,11 @@ public enum SwiftScanEngine {
         return "\(sorted.count):" + sorted.map { "\($0.utf8.count):\($0)" }.joined()
     }
 
-    private static func sourceSnapshotDigest(inventory: [InventoryItem], scanRoot: URL) throws -> String {
+    private static func sourceSnapshotDigest(
+        inventory: [InventoryItem],
+        scanRoot: URL,
+        maxFileByteSize: Int
+    ) throws -> String {
         var signature = "scan-truth-source-snapshot/v1\0"
         for item in inventory.sorted(by: { $0.relativePath < $1.relativePath }) {
             let byteLength: Int
@@ -301,7 +311,13 @@ public enum SwiftScanEngine {
                 guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
                     throw ScanError.io("SourceSnapshotInputUnavailable")
                 }
-                if isDirectory.boolValue {
+                if isDirectory.boolValue && item.kind == "coredata-model-bundle" {
+                    let bundleSignature = try coreDataBundleSnapshotSignature(
+                        bundle: url,
+                        maxFileByteSize: maxFileByteSize)
+                    byteLength = bundleSignature.utf8.count
+                    contentHash = sha256Hex(bundleSignature)
+                } else if isDirectory.boolValue {
                     byteLength = 0
                     contentHash = "selected-directory"
                 } else {
@@ -317,6 +333,54 @@ public enum SwiftScanEngine {
             signature += "\(item.relativePath)\0\(item.kind)\0\(byteLength)\0\(contentHash)\0"
         }
         return sha256Hex(signature)
+    }
+
+    private static func coreDataBundleSnapshotSignature(
+        bundle: URL,
+        maxFileByteSize: Int
+    ) throws -> String {
+        var enumerationFailed = false
+        guard let enumerator = FileManager.default.enumerator(
+            at: bundle,
+            includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey],
+            options: [.skipsHiddenFiles],
+            errorHandler: { _, _ in
+                enumerationFailed = true
+                return false
+            }
+        ) else {
+            throw ScanError.io("SourceSnapshotInputUnavailable")
+        }
+
+        var entries: [String] = []
+        for case let child as URL in enumerator {
+            guard child.lastPathComponent == "contents",
+                  child.deletingLastPathComponent().pathExtension == "xcdatamodel" else { continue }
+            let values: URLResourceValues
+            do {
+                values = try child.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+            } catch {
+                throw ScanError.io("SourceSnapshotInputUnavailable")
+            }
+            guard values.isRegularFile == true else { continue }
+            let relative = relativePath(from: bundle, to: child)
+            let size = values.fileSize ?? 0
+            if size > maxFileByteSize {
+                entries.append("\(relative)\0\(size)\0skipped-before-analysis")
+                continue
+            }
+            do {
+                let data = try Data(contentsOf: child, options: [.mappedIfSafe])
+                let hash = PortableSHA256.hash(data).map { String(format: "%02x", $0) }.joined()
+                entries.append("\(relative)\0\(data.count)\0\(hash)")
+            } catch {
+                throw ScanError.io("SourceSnapshotInputUnavailable")
+            }
+        }
+        guard !enumerationFailed else {
+            throw ScanError.io("SourceSnapshotInputUnavailable")
+        }
+        return framedValues(entries)
     }
 }
 
