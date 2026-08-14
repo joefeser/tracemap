@@ -865,6 +865,16 @@ publish local-only packet output or treat structural candidates as named
 business capabilities, migration estimates, parity, target architecture, or
 release approval.
 
+When changing Web Forms batch/data-movement extraction or packet composition,
+run the focused `LegacyBatchDataMovementExtractorTests` and
+`WebFormsModernizationPacketTests`. Confirm scheduled entry points, Windows
+service and console-job declarations, file movement, queue/message evidence,
+stored-procedure loops, bulk-copy, ETL packages, missing configuration, reduced
+builds, and ambiguous owners remain deterministic. Verify raw schedules, paths,
+destinations, SQL, config values, and source values are absent from both packet
+formats, and confirm every retained row preserves rule, tier, commit, span,
+extractor version, supporting IDs, coverage, gaps, and limitations.
+
 ## Legacy WinForms Event Navigation Smoke
 
 When changing WinForms form/control inventory, designer parsing, event binding,
