@@ -143,6 +143,7 @@ public static class LocalReviewCommand
         }
 
         ScanManifest? manifest = null;
+        LocalReviewIdentity? authoritativeIdentity = null;
         var stages = new List<LocalReviewStage>();
         var workflowCoverage = "unknown";
         var gaps = new SortedSet<string>(StringComparer.Ordinal);
@@ -174,10 +175,10 @@ public static class LocalReviewCommand
 
             EnsureRequiredScanArtifacts(scanDirectory);
             var candidateManifest = await ReadManifestAsync(scanDirectory, cancellationToken);
-            if (!TryCreateIdentity(candidateManifest, Coverage(candidateManifest), out _))
-            {
-                throw new LocalReviewException("LOCAL_REVIEW_IDENTITY_UNAVAILABLE");
-            }
+            authoritativeIdentity = await ReadAuthoritativeIdentityAsync(
+                scanDirectory,
+                candidateManifest,
+                cancellationToken);
 
             manifest = candidateManifest;
 
@@ -245,16 +246,16 @@ public static class LocalReviewCommand
             var coverage = workflowCoverage;
             var version = TraceMapVersionInfo.Create();
             var outcome = coverage == "full" && gaps.Count == 0 ? "succeeded" : "partial";
-            var workflowId = CreateWorkflowId(version, manifest, parsed, stages);
+            var workflowId = CreateWorkflowId(version, authoritativeIdentity, parsed, stages);
             var result = new LocalReviewResult(
                 SchemaVersion,
                 workflowId,
                 version.ToolVersion,
                 version.DistributionKind,
-                manifest.GitRootHash!,
-                manifest.CommitSha,
-                manifest.ScanId,
-                manifest.SourceSnapshotDigest,
+                authoritativeIdentity.RepositoryIdentityHash,
+                authoritativeIdentity.CommitSha,
+                authoritativeIdentity.ScanId,
+                authoritativeIdentity.SourceSnapshotDigest,
                 "local-only",
                 outcome,
                 coverage,
@@ -278,7 +279,7 @@ public static class LocalReviewCommand
                 parsed,
                 staging,
                 fullOutput,
-                manifest,
+                authoritativeIdentity,
                 stages,
                 workflowCoverage,
                 gaps,
@@ -296,7 +297,7 @@ public static class LocalReviewCommand
                 parsed,
                 staging,
                 fullOutput,
-                manifest,
+                authoritativeIdentity,
                 stages,
                 workflowCoverage,
                 gaps,
@@ -309,23 +310,24 @@ public static class LocalReviewCommand
             await error.WriteLineAsync($"error: {exception.Code}");
             return 1;
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            var failure = ClassifyStageFailure(activeStage, exception);
             await TryPublishStageFailureAsync(
                 parsed,
                 staging,
                 fullOutput,
-                manifest,
+                authoritativeIdentity,
                 stages,
                 workflowCoverage,
                 gaps,
                 activeStage,
                 "failed",
-                "LOCAL_REVIEW_STAGE_FAILED",
+                failure.Code,
                 lastSafeState,
-                "contact-owner",
+                failure.NextAction,
                 output);
-            await error.WriteLineAsync("error: LOCAL_REVIEW_STAGE_FAILED");
+            await error.WriteLineAsync($"error: {failure.Code}");
             return 1;
         }
     }
@@ -565,10 +567,43 @@ public static class LocalReviewCommand
                 return null;
             }
 
-            return manifestIdentity;
+            return receiptIdentity with { Coverage = manifestIdentity.Coverage };
         }
 
         return manifestIdentity ?? receiptIdentity;
+    }
+
+    private static async Task<LocalReviewIdentity> ReadAuthoritativeIdentityAsync(
+        string scanDirectory,
+        ScanManifest manifest,
+        CancellationToken cancellationToken)
+    {
+        if (!TryCreateIdentity(manifest, Coverage(manifest), out var manifestIdentity))
+        {
+            throw new LocalReviewException("LOCAL_REVIEW_IDENTITY_UNAVAILABLE");
+        }
+
+        ScanExecutionReceipt? receipt;
+        try
+        {
+            await using var stream = File.OpenRead(Path.Combine(scanDirectory, "scan-receipt.json"));
+            receipt = await JsonSerializer.DeserializeAsync<ScanExecutionReceipt>(stream, ReadOptions, cancellationToken);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
+        {
+            throw new LocalReviewException("LOCAL_REVIEW_IDENTITY_UNAVAILABLE");
+        }
+
+        if (receipt is null
+            || !TryCreateIdentity(receipt, out var receiptIdentity)
+            || !string.Equals(manifestIdentity.CommitSha, receiptIdentity.CommitSha, StringComparison.Ordinal)
+            || !string.Equals(manifestIdentity.ScanId, receiptIdentity.ScanId, StringComparison.Ordinal)
+            || !string.Equals(manifestIdentity.SourceSnapshotDigest, receiptIdentity.SourceSnapshotDigest, StringComparison.Ordinal))
+        {
+            throw new LocalReviewException("LOCAL_REVIEW_IDENTITY_UNAVAILABLE");
+        }
+
+        return receiptIdentity with { Coverage = manifestIdentity.Coverage };
     }
 
     private static bool TryCreateIdentity(
@@ -728,22 +763,6 @@ public static class LocalReviewCommand
 
     private static string CreateWorkflowId(
         TraceMapVersionResult version,
-        ScanManifest manifest,
-        LocalReviewArguments arguments,
-        IReadOnlyList<LocalReviewStage> stages) =>
-        CreateWorkflowId(
-            version,
-            new LocalReviewIdentity(
-                manifest.GitRootHash!,
-                manifest.CommitSha,
-                manifest.ScanId,
-                manifest.SourceSnapshotDigest,
-                Coverage(manifest)),
-            arguments,
-            stages);
-
-    private static string CreateWorkflowId(
-        TraceMapVersionResult version,
         LocalReviewIdentity identity,
         LocalReviewArguments arguments,
         IReadOnlyList<LocalReviewStage> stages)
@@ -808,7 +827,7 @@ public static class LocalReviewCommand
         LocalReviewArguments arguments,
         string staging,
         string outputPath,
-        ScanManifest? manifest,
+        LocalReviewIdentity? authoritativeIdentity,
         IReadOnlyList<LocalReviewStage> completedStages,
         string workflowCoverage,
         IReadOnlyCollection<string> completedGaps,
@@ -834,9 +853,9 @@ public static class LocalReviewCommand
             {
                 stages.Add(new(activeStage, outcome, [], []));
             }
-            var workflowId = manifest is null
+            var workflowId = authoritativeIdentity is null
                 ? CreateUnknownFailureWorkflowId(version, arguments, gap)
-                : CreateWorkflowId(version, manifest, arguments, stages);
+                : CreateWorkflowId(version, authoritativeIdentity, arguments, stages);
             var factsPath = Path.Combine(staging, "scan", "facts.ndjson");
             var counts = File.Exists(factsPath)
                 ? CountFacts(factsPath)
@@ -846,13 +865,13 @@ public static class LocalReviewCommand
                 workflowId,
                 version.ToolVersion,
                 version.DistributionKind,
-                manifest?.GitRootHash,
-                manifest?.CommitSha,
-                manifest?.ScanId,
-                manifest?.SourceSnapshotDigest,
+                authoritativeIdentity?.RepositoryIdentityHash,
+                authoritativeIdentity?.CommitSha,
+                authoritativeIdentity?.ScanId,
+                authoritativeIdentity?.SourceSnapshotDigest,
                 "local-only",
                 outcome,
-                manifest is null ? "unknown" : workflowCoverage,
+                authoritativeIdentity is null ? "unknown" : workflowCoverage,
                 lastSafeState,
                 "completed",
                 outcome == "cancelled" ? "not-retryable" : "retry-after-correction",
@@ -890,6 +909,23 @@ public static class LocalReviewCommand
         "LOCAL_REVIEW_INPUT_MUTATED" => "contact-owner",
         _ => "contact-owner"
     };
+
+    private static (string Code, string NextAction) ClassifyStageFailure(string activeStage, Exception exception)
+    {
+        var incompatibleInput = exception is InvalidDataException
+            || (exception is InvalidOperationException
+                && exception.Message.StartsWith("UnsupportedSchema:", StringComparison.Ordinal));
+        return activeStage switch
+        {
+            "webforms-modernization" when incompatibleInput =>
+                ("LOCAL_REVIEW_WEBFORMS_INPUT_INCOMPATIBLE", "review-scan-gaps"),
+            "webforms-modernization" => ("LOCAL_REVIEW_WEBFORMS_FAILED", "contact-owner"),
+            "explorer" when incompatibleInput =>
+                ("LOCAL_REVIEW_EXPLORER_INPUT_INCOMPATIBLE", "review-scan-gaps"),
+            "explorer" => ("LOCAL_REVIEW_EXPLORER_FAILED", "contact-owner"),
+            _ => ("LOCAL_REVIEW_STAGE_FAILED", "contact-owner")
+        };
+    }
 
     private static IReadOnlyList<string> Limitations() =>
     [

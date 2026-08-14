@@ -36,6 +36,10 @@ public sealed class LocalReviewCommandTests
         Assert.Equal("local-only", root.GetProperty("claimLevel").GetString());
         Assert.Matches("^[0-9a-f]{7,64}$", root.GetProperty("commitSha").GetString());
         Assert.Matches("^[0-9a-f]{64}$", root.GetProperty("sourceSnapshotDigest").GetString());
+        using var receipt = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(review, "scan", "scan-receipt.json")));
+        Assert.Equal(
+            receipt.RootElement.GetProperty("repositoryIdentityHash").GetString(),
+            root.GetProperty("repositoryIdentityHash").GetString());
         Assert.Equal("scan-artifacts-verified", root.GetProperty("lastProvenSafeState").GetString());
         Assert.All(root.GetProperty("artifacts").EnumerateArray(), artifact =>
         {
@@ -389,7 +393,7 @@ public sealed class LocalReviewCommandTests
             await File.WriteAllTextAsync(Path.Combine(outputPath, "index.sqlite"), string.Empty, cancellationToken);
             await File.WriteAllTextAsync(Path.Combine(outputPath, "report.md"), "report", cancellationToken);
             await File.WriteAllTextAsync(Path.Combine(outputPath, "logs", "analyzer.log"), string.Empty, cancellationToken);
-            await File.WriteAllTextAsync(Path.Combine(outputPath, "scan-receipt.json"), "{}", cancellationToken);
+            await WriteSyntheticReceiptAsync(outputPath, manifest, cancellationToken);
             return 0;
         }
 
@@ -400,7 +404,7 @@ public sealed class LocalReviewCommandTests
             SyntheticScan);
 
         Assert.Equal(1, exit);
-        Assert.Contains("LOCAL_REVIEW_STAGE_FAILED", error.ToString(), StringComparison.Ordinal);
+        Assert.Contains("LOCAL_REVIEW_WEBFORMS_INPUT_INCOMPATIBLE", error.ToString(), StringComparison.Ordinal);
         Assert.True(File.Exists(Path.Combine(review, "scan", "scan-manifest.json")));
         using var document = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(review, "local-review-result.json")));
         Assert.Equal("failed", document.RootElement.GetProperty("outcome").GetString());
@@ -408,6 +412,81 @@ public sealed class LocalReviewCommandTests
         Assert.Equal("scan", stages[0].GetProperty("stage").GetString());
         Assert.Equal("webforms-modernization", stages[1].GetProperty("stage").GetString());
         Assert.Equal("failed", stages[1].GetProperty("outcome").GetString());
+    }
+
+    [Fact]
+    public async Task Successful_scan_rejects_conflicting_receipt_before_downstream_stages()
+    {
+        using var temp = new TempDirectory();
+        var repo = CreateRepository(temp.Path, webForms: false);
+        var review = Path.Combine(temp.Path, "receipt-conflict");
+        var downstreamCalled = false;
+        var services = new LocalReviewStageServices(
+            (options, token) =>
+            {
+                downstreamCalled = true;
+                return Task.CompletedTask;
+            },
+            (options, token) => Task.CompletedTask);
+
+        static async Task<int> ConflictingReceiptScan(
+            string[] args,
+            TextWriter stdout,
+            TextWriter stderr,
+            CancellationToken cancellationToken)
+        {
+            var outputPath = args[Array.IndexOf(args, "--out") + 1];
+            var manifest = SyntheticManifest("scan-receipt-conflict", new string('a', 40), new string('b', 64));
+            await WriteSyntheticScanAsync(outputPath, manifest, cancellationToken);
+            await WriteSyntheticReceiptAsync(
+                outputPath,
+                manifest with { CommitSha = new string('e', 40) },
+                cancellationToken);
+            return 0;
+        }
+
+        using var error = new StringWriter();
+        Assert.Equal(1, await LocalReviewCommand.RunAsync(
+            ["run", "--repo", repo, "--out", review, "--webforms-modernization"],
+            TextWriter.Null,
+            error,
+            ConflictingReceiptScan,
+            stageServices: services));
+
+        Assert.False(downstreamCalled);
+        Assert.Contains("LOCAL_REVIEW_IDENTITY_UNAVAILABLE", error.ToString(), StringComparison.Ordinal);
+        using var result = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(review, "local-review-result.json")));
+        Assert.Equal("unknown", result.RootElement.GetProperty("coverage").GetString());
+        Assert.Contains(
+            result.RootElement.GetProperty("gaps").EnumerateArray(),
+            gap => gap.GetString() == "LOCAL_REVIEW_IDENTITY_UNAVAILABLE");
+    }
+
+    [Fact]
+    public async Task Incompatible_webforms_input_emits_typed_stage_failure()
+    {
+        using var temp = new TempDirectory();
+        var repo = CreateRepository(temp.Path, webForms: false);
+        var review = Path.Combine(temp.Path, "webforms-incompatible");
+        var services = new LocalReviewStageServices(
+            (options, token) => throw new InvalidDataException("WebFormsModernizationIndexUnsupported"),
+            (options, token) => Task.CompletedTask);
+        using var error = new StringWriter();
+
+        Assert.Equal(1, await LocalReviewCommand.RunAsync(
+            ["run", "--repo", repo, "--out", review, "--webforms-modernization"],
+            TextWriter.Null,
+            error,
+            async (arguments, stdout, stderr, token) =>
+                await TraceMapCommand.RunAsync(["scan", .. arguments], stdout, stderr, token),
+            stageServices: services));
+
+        Assert.Contains("LOCAL_REVIEW_WEBFORMS_INPUT_INCOMPATIBLE", error.ToString(), StringComparison.Ordinal);
+        using var result = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(review, "local-review-result.json")));
+        Assert.Equal("review-scan-gaps", result.RootElement.GetProperty("nextAction").GetString());
+        Assert.Contains(
+            result.RootElement.GetProperty("gaps").EnumerateArray(),
+            gap => gap.GetString() == "LOCAL_REVIEW_WEBFORMS_INPUT_INCOMPATIBLE");
     }
 
     [Fact]
@@ -600,7 +679,37 @@ public sealed class LocalReviewCommandTests
         await File.WriteAllTextAsync(Path.Combine(outputPath, "index.sqlite"), string.Empty, cancellationToken);
         await File.WriteAllTextAsync(Path.Combine(outputPath, "report.md"), "report", cancellationToken);
         await File.WriteAllTextAsync(Path.Combine(outputPath, "logs", "analyzer.log"), string.Empty, cancellationToken);
-        await File.WriteAllTextAsync(Path.Combine(outputPath, "scan-receipt.json"), "{}", cancellationToken);
+        await WriteSyntheticReceiptAsync(outputPath, manifest, cancellationToken);
+    }
+
+    private static async Task WriteSyntheticReceiptAsync(
+        string outputPath,
+        ScanManifest manifest,
+        CancellationToken cancellationToken)
+    {
+        var receipt = new ScanExecutionReceipt(
+            ScanReceiptSchema.Version,
+            "receipt-synthetic",
+            RuleIds.ScannerStageReceipt,
+            "operational-diagnostic",
+            manifest.ScanId,
+            manifest.ScanId,
+            "test-scanner",
+            ["test-scanner"],
+            new string('d', 64),
+            manifest.CommitSha,
+            new string('e', 64),
+            manifest.SourceSnapshotDigest,
+            "succeeded",
+            "full",
+            [],
+            [],
+            [],
+            ["Synthetic test receipt."]);
+        await File.WriteAllTextAsync(
+            Path.Combine(outputPath, "scan-receipt.json"),
+            JsonSerializer.Serialize(receipt),
+            cancellationToken);
     }
 
     private static string CreateRepository(string root, bool webForms)
