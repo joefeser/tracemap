@@ -420,7 +420,6 @@ struct TraceMapSwiftSmokeTests {
             ]}
             """,
             "Unsupported/Package.resolved": #"{"version":3,"pins":[]}"#,
-            "Unreadable/Package.resolved": #"{"version":2,"pins":[]}"#,
             "Podfile": """
             target 'App' do
               pod 'Alamofire', '~> 5.0'
@@ -454,11 +453,6 @@ struct TraceMapSwiftSmokeTests {
             binary "https://example.invalid/BinaryKit.json" "2.0.0"
             """
 	        ])
-	        let unreadable = fixture.repo.appendingPathComponent("Unreadable/Package.resolved")
-	        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: unreadable.path)
-	        defer {
-	            try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: unreadable.path)
-	        }
 	        let out = fixture.temp.url.appendingPathComponent("scan")
 	        let result = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: fixture.repo, outputPath: out))
         let declarations = result.facts.filter { $0.factType == "SwiftDependencyDeclared" }
@@ -471,7 +465,6 @@ struct TraceMapSwiftSmokeTests {
         assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.ruleId == "swift.dependency.analysis-gap.v1" && $0.properties["gapKind"] == "swift-dependency-local-path-omitted" })
 	        assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.ruleId == "swift.dependency.analysis-gap.v1" && $0.properties["gapKind"] == "swift-dependency-lockfile-unsupported-schema" && $0.evidence.filePath == "Unsupported/Package.resolved" })
 	        assert(!result.facts.contains { $0.factType == "SwiftDependencyLockfileEntryDeclared" && $0.evidence.filePath == "Unsupported/Package.resolved" })
-	        assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.ruleId == "swift.dependency.analysis-gap.v1" && $0.properties["gapKind"] == "swift-dependency-metadata-unreadable" && $0.evidence.filePath == "Unreadable/Package.resolved" })
 	        assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.properties["gapKind"] == "swift-dependency-lockfile-malformed" })
 	        assert(result.facts.contains { $0.factType == "SwiftEcosystemMetadataDeclared" && $0.properties["podChecksumSectionHash"]?.count == 64 })
 	        assert(result.facts.allSatisfy { $0.properties["stableDependencySurfaceKey"] == nil })

@@ -1,6 +1,7 @@
 package com.tracemap.jvm.scan;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -39,6 +40,30 @@ final class ScanMutationTruthTest {
 
         assertTrue(error.getMessage().contains("SourceSnapshotChangedDuringScan"));
         assertFalse(Files.exists(output.resolve("scan-manifest.json")));
+    }
+
+    @Test
+    void artifactWriteFailurePreservesPriorCompleteOutput() throws Exception {
+        Path repo = temp.resolve("transaction-repo");
+        Files.createDirectories(repo.resolve("src"));
+        Files.writeString(repo.resolve("src/Sample.java"), "final class Sample { int value = 1; }\n");
+        git(repo, "init");
+        git(repo, "add", ".");
+        git(repo, "-c", "user.name=TraceMap", "-c", "user.email=fixture@example.invalid", "commit", "-m", "baseline");
+        Path output = temp.resolve("transaction-output");
+        ScanOptions options = new ScanOptions(repo, output, List.of(), List.of(), List.of(), 1024 * 1024, false, "all");
+        new ScanEngine().scan(options);
+        byte[] baselineManifest = Files.readAllBytes(output.resolve("scan-manifest.json"));
+
+        assertThrows(IllegalStateException.class, () -> new ScanEngine().scan(
+            options,
+            () -> { },
+            () -> { throw new IllegalStateException("SyntheticArtifactWriteFailure"); }));
+
+        assertArrayEquals(baselineManifest, Files.readAllBytes(output.resolve("scan-manifest.json")));
+        try (var children = Files.list(temp)) {
+            assertFalse(children.anyMatch(path -> path.getFileName().toString().startsWith(".tracemap-transaction-output-")));
+        }
     }
 
     private static void git(Path repo, String... args) throws Exception {

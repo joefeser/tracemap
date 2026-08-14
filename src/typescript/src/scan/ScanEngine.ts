@@ -24,6 +24,7 @@ import { isUnderPath } from "../util/Paths";
 
 type ScanTestHooks = {
   beforeSnapshotVerification?: () => void | Promise<void>;
+  afterManifestWrite?: () => void | Promise<void>;
 };
 
 export async function scan(options: ScanOptions, testHooks: ScanTestHooks = {}): Promise<ScanResult> {
@@ -112,6 +113,7 @@ export async function scan(options: ScanOptions, testHooks: ScanTestHooks = {}):
   await writeOutputTransaction(outputPath, async (stagingPath) => {
     await fs.mkdir(path.join(stagingPath, "logs"), { recursive: true });
     await writeManifest(path.join(stagingPath, "scan-manifest.json"), result.manifest);
+    await testHooks.afterManifestWrite?.();
     await writeFactsJsonl(path.join(stagingPath, "facts.ndjson"), result.facts);
     await writeSqliteIndex(path.join(stagingPath, "index.sqlite"), result.manifest, result.facts);
     await writeMarkdownReport(path.join(stagingPath, "report.md"), result);
@@ -162,7 +164,7 @@ async function createSourceSnapshotDigest(
   inventory: readonly { relativePath: string; absolutePath: string; kind: string; sizeBytes: number; skipped: boolean }[]
 ): Promise<string> {
   const segments: string[] = ["scan-truth-source-snapshot/v1\0"];
-  for (const item of [...inventory].sort((left, right) => left.relativePath.localeCompare(right.relativePath))) {
+  for (const item of [...inventory].sort((left, right) => left.relativePath < right.relativePath ? -1 : left.relativePath > right.relativePath ? 1 : 0)) {
     if (item.skipped) {
       segments.push(`${item.relativePath}\0${item.kind}\0${item.sizeBytes}\0skipped-before-analysis\0`);
     } else {

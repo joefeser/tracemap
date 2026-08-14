@@ -28,6 +28,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -42,17 +43,19 @@ import java.util.Set;
 
 public final class ScanEngine {
     public ScanResult scan(ScanOptions options) throws Exception {
-        return scan(options, () -> { });
+        return scan(options, () -> { }, () -> { });
     }
 
     ScanResult scan(ScanOptions options, Runnable beforeSnapshotVerification) throws Exception {
+        return scan(options, beforeSnapshotVerification, () -> { });
+    }
+
+    ScanResult scan(ScanOptions options, Runnable beforeSnapshotVerification, Runnable afterManifestWrite) throws Exception {
         Path repo = options.repoPath().toAbsolutePath().normalize();
         if (!Files.isDirectory(repo)) {
             throw new IOException("Repository path does not exist: " + repo);
         }
         Path out = options.outputPath().toAbsolutePath().normalize();
-        Files.createDirectories(out);
-        Files.createDirectories(out.resolve("logs"));
 
         GitMetadata git = GitMetadataProvider.read(repo);
         List<FileInventoryItem> inventory = FileInventory.collect(options);
@@ -113,12 +116,74 @@ public final class ScanEngine {
             throw new IOException("SourceSnapshotChangedDuringScan");
         }
 
-        ManifestWriter.write(out.resolve("scan-manifest.json"), manifest);
-        JsonlFactWriter.write(out.resolve("facts.ndjson"), facts);
-        SqliteIndexWriter.write(out.resolve("index.sqlite"), manifest, facts);
-        MarkdownReportWriter.write(out.resolve("report.md"), manifest, facts);
-        Files.writeString(out.resolve("logs/analyzer.log"), String.join(System.lineSeparator(), gaps.gaps()) + System.lineSeparator());
+        writeOutputsTransaction(out, manifest, facts, gaps.gaps(), afterManifestWrite);
         return new ScanResult(manifest, facts, inventory);
+    }
+
+    private static void writeOutputsTransaction(
+        Path out,
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        List<String> gaps,
+        Runnable afterManifestWrite) throws Exception {
+        Path parent = out.getParent();
+        if (parent == null) {
+            throw new IOException("OutputParentUnavailable");
+        }
+        Files.createDirectories(parent);
+        Path staging = Files.createTempDirectory(parent, ".tracemap-" + out.getFileName() + "-");
+        Path previous = staging.resolveSibling(staging.getFileName() + ".previous");
+        boolean previousMoved = false;
+        try {
+            Files.createDirectories(staging.resolve("logs"));
+            ManifestWriter.write(staging.resolve("scan-manifest.json"), manifest);
+            afterManifestWrite.run();
+            JsonlFactWriter.write(staging.resolve("facts.ndjson"), facts);
+            SqliteIndexWriter.write(staging.resolve("index.sqlite"), manifest, facts);
+            MarkdownReportWriter.write(staging.resolve("report.md"), manifest, facts);
+            Files.writeString(staging.resolve("logs/analyzer.log"), String.join(System.lineSeparator(), gaps) + System.lineSeparator());
+            if (Files.exists(out)) {
+                moveDirectory(out, previous);
+                previousMoved = true;
+            }
+            try {
+                moveDirectory(staging, out);
+            } catch (Exception exception) {
+                if (previousMoved && !Files.exists(out)) {
+                    moveDirectory(previous, out);
+                    previousMoved = false;
+                }
+                throw exception;
+            }
+            if (previousMoved) {
+                deleteTree(previous);
+                previousMoved = false;
+            }
+        } finally {
+            deleteTree(staging);
+            if (previousMoved && Files.exists(previous) && !Files.exists(out)) {
+                moveDirectory(previous, out);
+            }
+        }
+    }
+
+    private static void moveDirectory(Path source, Path target) throws IOException {
+        try {
+            Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
+        } catch (java.nio.file.AtomicMoveNotSupportedException exception) {
+            Files.move(source, target);
+        }
+    }
+
+    private static void deleteTree(Path root) throws IOException {
+        if (!Files.exists(root)) {
+            return;
+        }
+        try (var paths = Files.walk(root)) {
+            for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
+                Files.deleteIfExists(path);
+            }
+        }
     }
 
     private static ScanManifest manifest(ScanOptions options, GitMetadata git, List<FileInventoryItem> inventory, String sourceSnapshotDigest, List<String> knownGaps, String analysisLevel, String buildStatus) {
