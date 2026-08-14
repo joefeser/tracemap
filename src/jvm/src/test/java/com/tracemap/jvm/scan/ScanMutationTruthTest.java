@@ -44,6 +44,30 @@ final class ScanMutationTruthTest {
     }
 
     @Test
+    void sourceCreationBeforeVerificationFailsWithoutPublishing() throws Exception {
+        Path repo = temp.resolve("creation-repo");
+        Files.createDirectories(repo.resolve("src"));
+        Files.writeString(repo.resolve("src/Sample.java"), "final class Sample { }");
+        git(repo, "init");
+        git(repo, "add", ".");
+        git(repo, "-c", "user.name=TraceMap", "-c", "user.email=fixture@example.invalid", "commit", "-m", "baseline");
+        Path output = temp.resolve("creation-output");
+
+        IOException error = assertThrows(IOException.class, () -> new ScanEngine().scan(
+            new ScanOptions(repo, output, List.of(), List.of(), List.of(), 1024 * 1024, false, "all"),
+            () -> {
+                try {
+                    Files.writeString(repo.resolve("src/Added.java"), "final class Added { }");
+                } catch (IOException exception) {
+                    throw new IllegalStateException(exception);
+                }
+            }));
+
+        assertTrue(error.getMessage().contains("SourceSnapshotChangedDuringScan"));
+        assertFalse(Files.exists(output.resolve("scan-manifest.json")));
+    }
+
+    @Test
     void artifactWriteFailurePreservesPriorCompleteOutput() throws Exception {
         Path repo = temp.resolve("transaction-repo");
         Files.createDirectories(repo.resolve("src"));
@@ -76,6 +100,21 @@ final class ScanMutationTruthTest {
         Files.writeString(sentinel, "important\n");
 
         IOException error = assertThrows(IOException.class, () -> new ScanEngine().scan(options(repo, output, List.of())));
+
+        assertTrue(error.getMessage().contains("OutputArtifactSetNotReplaceable"));
+        assertTrue(Files.exists(sentinel));
+    }
+
+    @Test
+    void rejectsCompleteOutputContainingUnownedFile() throws Exception {
+        Path repo = initializedRepo("owned-output-repo");
+        Path output = temp.resolve("owned-output");
+        ScanOptions options = options(repo, output, List.of());
+        new ScanEngine().scan(options);
+        Path sentinel = output.resolve("caller-owned.txt");
+        Files.writeString(sentinel, "keep\n");
+
+        IOException error = assertThrows(IOException.class, () -> new ScanEngine().scan(options));
 
         assertTrue(error.getMessage().contains("OutputArtifactSetNotReplaceable"));
         assertTrue(Files.exists(sentinel));

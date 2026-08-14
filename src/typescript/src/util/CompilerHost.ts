@@ -4,13 +4,15 @@ import ts from "typescript";
 export interface CompilerHostCache {
   parsedCommandLines: Map<string, ts.ParsedCommandLine>;
   sourceFiles: Map<string, [ts.SourceFile, ts.ScriptTarget]>;
+  configFiles: Map<string, string>;
 }
 
 export function createCompilerHostWithCache(
   options: ts.CompilerOptions,
   cache: CompilerHostCache,
   maxFileByteSize: number,
-  skippedFiles: Set<string>
+  skippedFiles: Set<string>,
+  sourceFileAllowed: (fileName: string) => boolean = () => true
 ): ts.CompilerHost {
   const host = ts.createCompilerHost(options);
   const originalGetSourceFile = host.getSourceFile.bind(host);
@@ -22,6 +24,9 @@ export function createCompilerHostWithCache(
     return undefined;
   };
   host.getSourceFile = (fileName, languageVersion, onError, shouldCreateNewSourceFile) => {
+    if (!sourceFileAllowed(fileName)) {
+      return undefined;
+    }
     try {
       if (!fileName.includes("node_modules/typescript/lib/") && fs.existsSync(fileName) && fs.statSync(fileName).size > maxFileByteSize) {
         skippedFiles.add(fileName);

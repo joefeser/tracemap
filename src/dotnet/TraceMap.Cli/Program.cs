@@ -285,7 +285,8 @@ public static class TraceMapCommand
             receiptRecorder.Complete(
                 ex is OperationCanceledException ? "cancelled" : ex is TimeoutException ? "timed-out" : "failed",
                 "unknown");
-            if (receiptRecorder.CanWriteAuthoritativeReceipt)
+            if (receiptRecorder.CanWriteAuthoritativeReceipt
+                && ScanOutputTransaction.CanWriteFailureReceipt(fullOutputPath, repoPath))
             {
                 try
                 {
@@ -412,7 +413,8 @@ public static class TraceMapCommand
                 result.Facts.Where(fact => fact.FactType == FactTypes.AnalysisGap).Select(fact => fact.FactId));
             try
             {
-                if (!ScanOutputTransaction.HasCompleteOutput(fullOutputPath))
+                if (!ScanOutputTransaction.HasCompleteOutput(fullOutputPath)
+                    && ScanOutputTransaction.CanWriteFailureReceipt(fullOutputPath, repoPath))
                 {
                     await ScanExecutionReceiptWriter.WriteAsync(
                         Path.Combine(fullOutputPath, "scan-receipt.json"),
