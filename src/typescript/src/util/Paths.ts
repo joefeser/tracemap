@@ -35,6 +35,12 @@ export function matchesSimpleGlob(relativePath: string, glob: string): boolean {
   if (pattern.endsWith("/**") && normalized === pattern.slice(0, -3)) {
     return true;
   }
+  if (pattern.startsWith("**/*.")) {
+    return normalized.endsWith(pattern.slice(4));
+  }
+  if (pattern.startsWith("*.")) {
+    return normalized.endsWith(pattern.slice(1));
+  }
   if (pattern.includes("*")) {
     const expression = pattern
       .replace(/[.+^${}()|[\]\\]/g, "\\$&")
