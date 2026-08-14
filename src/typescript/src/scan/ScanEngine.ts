@@ -19,24 +19,31 @@ import { writeFactsJsonl } from "../storage/JsonlFactWriter";
 import { writeManifest } from "../storage/ManifestWriter";
 import { writeSqliteIndex } from "../storage/SqliteIndexWriter";
 import { writeMarkdownReport } from "../reporting/MarkdownReportWriter";
-import { hash } from "../util/Hash";
+import { hash, hashBytes } from "../util/Hash";
 import { isUnderPath } from "../util/Paths";
 
-export async function scan(options: ScanOptions): Promise<ScanResult> {
+type ScanTestHooks = {
+  beforeSnapshotVerification?: () => void | Promise<void>;
+  afterManifestWrite?: () => void | Promise<void>;
+};
+
+const requiredOutputArtifacts = ["scan-manifest.json", "facts.ndjson", "index.sqlite", "report.md", "logs/analyzer.log"] as const;
+
+export async function scan(options: ScanOptions, testHooks: ScanTestHooks = {}): Promise<ScanResult> {
   const repoPath = path.resolve(options.repoPath);
   const outputPath = path.resolve(options.outputPath);
   await ensureRepo(repoPath);
   ensureSafeOutputPath(repoPath, outputPath);
-  await fs.rm(outputPath, { recursive: true, force: true });
-  await fs.mkdir(path.join(outputPath, "logs"), { recursive: true });
+  await ensureReplaceableOutputPath(outputPath);
 
   const git = await getGitMetadata(repoPath);
   if (git.commitSha === "unknown") {
     throw new Error("TraceMap TypeScript scan requires git commit SHA. Run inside a git checkout with at least one commit.");
   }
   const inventory = await collectFileInventory(options);
+  const sourceSnapshotDigest = await createSourceSnapshotDigest(inventory);
   const manifest: ScanManifest = {
-    scanId: createScanId(git, inventory),
+    scanId: createScanId(git, sourceSnapshotDigest, options),
     repoName: git.repoName,
     remoteUrl: git.remoteUrl,
     branch: git.branch,
@@ -51,7 +58,8 @@ export async function scan(options: ScanOptions): Promise<ScanResult> {
     knownGaps: [...git.knownGaps],
     scanRootRelativePath: git.gitRootPath ? normalizeManifestPath(path.relative(git.gitRootPath, repoPath)) : ".",
     scanRootPathHash: hash(repoPath),
-    gitRootHash: git.gitRootPath ? hash(path.resolve(git.gitRootPath)) : null
+    gitRootHash: git.gitRootPath ? hash(path.resolve(git.gitRootPath)) : null,
+    sourceSnapshotDigest
   };
   const gapCollector = new AnalysisGapCollector();
   for (const gitGap of git.knownGaps) {
@@ -101,25 +109,91 @@ export async function scan(options: ScanOptions): Promise<ScanResult> {
   manifest.buildStatus = fullSemantic ? "Succeeded" : options.semantic && projects.length > 0 ? "FailedOrPartial" : "NotRun";
 
   const result: ScanResult = { manifest, facts: dedupeFacts(facts), inventory };
-  await writeManifest(path.join(outputPath, "scan-manifest.json"), result.manifest);
-  await writeFactsJsonl(path.join(outputPath, "facts.ndjson"), result.facts);
-  await writeSqliteIndex(path.join(outputPath, "index.sqlite"), result.manifest, result.facts);
-  await writeMarkdownReport(path.join(outputPath, "report.md"), result);
-  await fs.writeFile(path.join(outputPath, "logs", "analyzer.log"), analyzerLog(result), "utf8");
+  await testHooks.beforeSnapshotVerification?.();
+  const verifiedInventory = await collectFileInventory(options);
+  if (await createSourceSnapshotDigest(verifiedInventory) !== sourceSnapshotDigest) {
+    throw new Error("SourceSnapshotChangedDuringScan");
+  }
+  await writeOutputTransaction(outputPath, async (stagingPath) => {
+    await fs.mkdir(path.join(stagingPath, "logs"), { recursive: true });
+    await writeManifest(path.join(stagingPath, "scan-manifest.json"), result.manifest);
+    await testHooks.afterManifestWrite?.();
+    await writeFactsJsonl(path.join(stagingPath, "facts.ndjson"), result.facts);
+    await writeSqliteIndex(path.join(stagingPath, "index.sqlite"), result.manifest, result.facts);
+    await writeMarkdownReport(path.join(stagingPath, "report.md"), result);
+    await fs.writeFile(path.join(stagingPath, "logs", "analyzer.log"), analyzerLog(result), "utf8");
+  });
   return result;
+}
+
+async function writeOutputTransaction(outputPath: string, write: (stagingPath: string) => Promise<void>): Promise<void> {
+  const parent = path.dirname(outputPath);
+  await fs.mkdir(parent, { recursive: true });
+  const stagingPath = await fs.mkdtemp(path.join(parent, `.tracemap-${path.basename(outputPath)}-`));
+  const previousPath = `${stagingPath}.previous`;
+  let previousMoved = false;
+  try {
+    await write(stagingPath);
+    try {
+      await fs.rename(outputPath, previousPath);
+      previousMoved = true;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        throw error;
+      }
+    }
+    try {
+      await fs.rename(stagingPath, outputPath);
+    } catch (error) {
+      if (previousMoved) {
+        await fs.rename(previousPath, outputPath);
+        previousMoved = false;
+      }
+      throw error;
+    }
+    if (previousMoved) {
+      await fs.rm(previousPath, { recursive: true, force: true }).catch(() => undefined);
+      previousMoved = false;
+    }
+  } finally {
+    await fs.rm(stagingPath, { recursive: true, force: true });
+  }
 }
 
 function normalizeManifestPath(value: string): string {
   return !value || value === "." ? "." : value.replaceAll("\\", "/");
 }
 
-function createScanId(git: { repoName: string; remoteUrl: string | null; commitSha: string }, inventory: readonly { relativePath: string; kind: string; sizeBytes: number }[]): string {
+async function createSourceSnapshotDigest(
+  inventory: readonly { relativePath: string; absolutePath: string; kind: string; sizeBytes: number; skipped: boolean }[]
+): Promise<string> {
+  const segments: string[] = ["scan-truth-source-snapshot/v1\0"];
+  for (const item of [...inventory].sort((left, right) => left.relativePath < right.relativePath ? -1 : left.relativePath > right.relativePath ? 1 : 0)) {
+    if (item.skipped) {
+      segments.push(`${item.relativePath}\0${item.kind}\0${item.sizeBytes}\0skipped-before-analysis\0`);
+    } else {
+      const content = await fs.readFile(item.absolutePath);
+      segments.push(`${item.relativePath}\0${item.kind}\0${content.byteLength}\0${hashBytes(content)}\0`);
+    }
+  }
+  return hashBytes(Buffer.from(segments.join(""), "utf8"));
+}
+
+function createScanId(
+  git: { repoName: string; remoteUrl: string | null; commitSha: string },
+  sourceSnapshotDigest: string,
+  options: ScanOptions
+): string {
   const repoIdentity = git.remoteUrl && git.remoteUrl.trim().length > 0 ? git.remoteUrl : git.repoName;
-  const signature = inventory
-    .map((item) => `${item.relativePath}|${item.kind}|${item.sizeBytes}`)
-    .sort()
-    .join("\n");
-  return `scan-${hash(`${repoIdentity}|${git.commitSha}|${signature}`, 20)}`;
+  const optionSignature = JSON.stringify({
+    excludeGlobs: [...options.excludeGlobs].sort(),
+    includeGlobs: [...options.includeGlobs].sort(),
+    maxFileByteSize: options.maxFileByteSize,
+    projectPaths: [...options.projectPaths].sort(),
+    scannerVersion: ScannerVersions.TraceMapTypeScript,
+    semantic: options.semantic
+  });
+  return `scan-${hash(`${repoIdentity}|${git.commitSha}|${sourceSnapshotDigest}|${optionSignature}`, 20)}`;
 }
 
 function ensureSafeOutputPath(repoPath: string, outputPath: string): void {
@@ -129,6 +203,47 @@ function ensureSafeOutputPath(repoPath: string, outputPath: string): void {
   }
   if (outputPath === repoPath || isUnderPath(repoPath, outputPath)) {
     throw new Error(`Unsafe output path: ${outputPath}. Output cannot be the repository root or an ancestor of it.`);
+  }
+}
+
+async function ensureReplaceableOutputPath(outputPath: string): Promise<void> {
+  try {
+    const stat = await fs.stat(outputPath);
+    if (!stat.isDirectory()) {
+      throw new Error(`Output artifact set is not replaceable: ${outputPath}`);
+    }
+    const entries = await fs.readdir(outputPath, { withFileTypes: true });
+    if (entries.length === 0) {
+      return;
+    }
+    const complete = await Promise.all(requiredOutputArtifacts.map(async (relative) => {
+      try {
+        return (await fs.stat(path.join(outputPath, relative))).isFile();
+      } catch {
+        return false;
+      }
+    }));
+    const allowedRootEntries = new Set([
+      "scan-manifest.json",
+      "facts.ndjson",
+      "index.sqlite",
+      "report.md",
+      "logs",
+      "base44-evidence.json",
+      "base44-evidence.md",
+      "base44-evidence.html"
+    ]);
+    const rootOwned = entries.every((entry) => allowedRootEntries.has(entry.name));
+    const logEntries = await fs.readdir(path.join(outputPath, "logs"), { withFileTypes: true }).catch(() => []);
+    const logsOwned = logEntries.length === 1 && logEntries[0].isFile() && logEntries[0].name === "analyzer.log";
+    if (!complete.every(Boolean) || !rootOwned || !logsOwned) {
+      throw new Error(`Output artifact set is not replaceable: ${outputPath}`);
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return;
+    }
+    throw error;
   }
 }
 

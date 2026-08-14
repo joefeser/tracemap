@@ -18,5 +18,6 @@ public record ScanManifest(
     List<String> knownGaps,
     String scanRootRelativePath,
     String scanRootPathHash,
-    String gitRootHash) {
+    String gitRootHash,
+    String sourceSnapshotDigest) {
 }

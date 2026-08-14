@@ -187,6 +187,7 @@ function testManifest(): ScanManifest {
     solutions: [],
     projects: [],
     targetFrameworks: [],
-    knownGaps: []
+    knownGaps: [],
+    sourceSnapshotDigest: "0".repeat(64)
   };
 }

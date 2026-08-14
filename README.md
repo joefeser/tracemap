@@ -21,6 +21,7 @@ Start here:
 - [Build milestones](MILESTONES.md)
 - [Language adapter contract](docs/LANGUAGE_ADAPTER_CONTRACT.md)
 - [Adapter runway](docs/ADAPTER_RUNWAY.md)
+- [Web Forms modernization packet runbook](docs/WEBFORMS_MODERNIZATION_PACKET.md)
 - [PR review loop](docs/PR_REVIEW_LOOP.md)
 - [Static HTML evidence explorer](docs/STATIC_HTML_EVIDENCE_EXPLORER.md)
 - [Rule catalog](rules/rule-catalog.yml)
@@ -379,6 +380,11 @@ dotnet run --project src/dotnet/TraceMap.Cli -- endpoints --client-index /tmp/ap
 ```
 
 Endpoint findings are static, coverage-relative evidence. A client-only row is not proof of a broken call, and a server-only row is not proof of dead code.
+
+For a copy/paste Windows and Bash workflow that scans multiple Angular and .NET
+repositories, combines their indexes, and investigates UI-to-endpoint-to-
+dependency chains, see the [Angular and .NET interaction mapping
+runbook](docs/ANGULAR_DOTNET_INTERACTION_RUNBOOK.md).
 
 ## License
 

@@ -11,6 +11,7 @@ import { RuleIds } from "../src/facts/RuleIds";
 import { exportIndex } from "../src/export/IndexExporter";
 import { extractPackageFacts } from "../src/extractors/PackageJsonExtractor";
 import { findSqlJsFile } from "../src/storage/SqliteIndexWriter";
+import { hashBytes } from "../src/util/Hash";
 
 const packageRoot = process.cwd();
 const repoRoot = path.resolve(packageRoot, "../..");
@@ -228,7 +229,118 @@ describe("ScanEngine", () => {
     const resultB = await scan(scanOptions(repoB, path.join(root, "out-b")));
 
     expect(resultA.manifest.scanId).toBe(resultB.manifest.scanId);
+    expect(resultA.manifest.sourceSnapshotDigest).toBe(resultB.manifest.sourceSnapshotDigest);
+    expect(resultA.manifest.sourceSnapshotDigest).toMatch(/^[0-9a-f]{64}$/);
     expect(resultA.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.MethodDeclared, targetSymbol: expect.stringContaining("run") }));
+  });
+
+  it("changes authoritative snapshot identity for same-size dirty source bytes", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    await writeMiniRepo(repo);
+    const source = path.join(repo, "src", "sample.ts");
+
+    const first = await scan(scanOptions(repo, path.join(root, "first")));
+    const original = await fsp.readFile(source, "utf8");
+    const changed = original.replace("value = 1", "value = 2");
+    expect(Buffer.byteLength(changed)).toBe(Buffer.byteLength(original));
+    await fsp.writeFile(source, changed);
+    const second = await scan(scanOptions(repo, path.join(root, "second")));
+
+    expect(first.manifest.commitSha).toBe(second.manifest.commitSha);
+    expect(first.manifest.sourceSnapshotDigest).not.toBe(second.manifest.sourceSnapshotDigest);
+    expect(first.manifest.scanId).not.toBe(second.manifest.scanId);
+    const persisted = JSON.parse(await fsp.readFile(path.join(root, "second", "scan-manifest.json"), "utf8"));
+    expect(persisted.sourceSnapshotDigest).toBe(second.manifest.sourceSnapshotDigest);
+  });
+
+  it("fails before publishing when source bytes mutate during a scan", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    const output = path.join(root, "output");
+    await writeMiniRepo(repo);
+    const source = path.join(repo, "src", "sample.ts");
+    await scan(scanOptions(repo, output));
+    const baselineManifest = await fsp.readFile(path.join(output, "scan-manifest.json"));
+
+    await expect(scan(scanOptions(repo, output), {
+      beforeSnapshotVerification: async () => {
+        const original = await fsp.readFile(source, "utf8");
+        await fsp.writeFile(source, original.replace("value = 1", "value = 2"));
+      }
+    })).rejects.toThrow("SourceSnapshotChangedDuringScan");
+
+    expect(await fsp.readFile(path.join(output, "scan-manifest.json"))).toEqual(baselineManifest);
+  });
+
+  it("fails before publishing when an eligible source is created during a scan", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    const output = path.join(root, "output");
+    await writeMiniRepo(repo);
+
+    await expect(scan(scanOptions(repo, output), {
+      beforeSnapshotVerification: async () => {
+        await fsp.writeFile(path.join(repo, "src", "added.ts"), "export const added = true;\n");
+      }
+    })).rejects.toThrow("SourceSnapshotChangedDuringScan");
+
+    await expect(fsp.stat(output)).rejects.toThrow();
+  });
+
+  it("keeps excluded in-repo imports outside semantic evidence and snapshot identity", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    await fsp.mkdir(path.join(repo, "src"), { recursive: true });
+    await fsp.writeFile(path.join(repo, "tsconfig.json"), JSON.stringify({ compilerOptions: { target: "ES2022", module: "CommonJS", strict: true }, include: ["src/**/*.ts"] }));
+    await fsp.writeFile(path.join(repo, "src", "sample.ts"), "import { ignored } from './ignored';\nexport const selected = ignored;\n");
+    const ignored = path.join(repo, "src", "ignored.ts");
+    await fsp.writeFile(ignored, "export const ignored = 'first';\n");
+    initGitRepo(repo);
+    const options = { ...scanOptions(repo, path.join(root, "first")), excludeGlobs: ["src/ignored.ts"] };
+
+    const first = await scan(options);
+    await fsp.writeFile(ignored, "export const ignored = 'other';\n");
+    const second = await scan({ ...options, outputPath: path.join(root, "second") });
+
+    expect(first.manifest.sourceSnapshotDigest).toBe(second.manifest.sourceSnapshotDigest);
+    expect(first.manifest.scanId).toBe(second.manifest.scanId);
+    expect(first.facts.some((fact) => fact.evidence.filePath === "src/ignored.ts")).toBe(false);
+    expect(first.facts).toEqual(second.facts);
+  });
+
+  it("preserves prior output when a staged artifact write fails", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    const output = path.join(root, "output");
+    await writeMiniRepo(repo);
+    await scan(scanOptions(repo, output));
+    const baselineManifest = await fsp.readFile(path.join(output, "scan-manifest.json"));
+
+    await expect(scan(scanOptions(repo, output), {
+      afterManifestWrite: () => { throw new Error("SyntheticArtifactWriteFailure"); }
+    })).rejects.toThrow("SyntheticArtifactWriteFailure");
+
+    expect(await fsp.readFile(path.join(output, "scan-manifest.json"))).toEqual(baselineManifest);
+    expect((await fsp.readdir(root)).some((name) => name.startsWith(".tracemap-output-"))).toBe(false);
+  });
+
+  it("orders snapshot inputs by ordinal path identity", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    await writeMiniRepo(repo);
+    await fsp.writeFile(path.join(repo, "src", "z.ts"), "export const z = 1;\n");
+    await fsp.writeFile(path.join(repo, "src", "ä.ts"), "export const umlaut = 1;\n");
+    expect(spawnSync("git", ["add", "."], { cwd: repo, encoding: "utf8" }).status).toBe(0);
+    expect(spawnSync("git", ["-c", "user.email=test@example.com", "-c", "user.name=TraceMap Test", "commit", "-m", "ordinal paths"], { cwd: repo, encoding: "utf8" }).status).toBe(0);
+
+    const result = await scan(scanOptions(repo, path.join(root, "output")));
+    const segments = ["scan-truth-source-snapshot/v1\0"];
+    for (const item of [...result.inventory].sort((left, right) => left.relativePath < right.relativePath ? -1 : left.relativePath > right.relativePath ? 1 : 0)) {
+      const content = await fsp.readFile(item.absolutePath);
+      segments.push(`${item.relativePath}\0${item.kind}\0${content.byteLength}\0${hashBytes(content)}\0`);
+    }
+    expect(result.manifest.sourceSnapshotDigest).toBe(hashBytes(Buffer.from(segments.join(""), "utf8")));
   });
 
   it("refuses unsafe output paths before deleting anything", async () => {
@@ -238,6 +350,42 @@ describe("ScanEngine", () => {
 
     await expect(scan(scanOptions(repo, repo))).rejects.toThrow(/Unsafe output path/);
     expect(fs.existsSync(path.join(repo, "src", "sample.ts"))).toBe(true);
+  });
+
+  it("refuses an arbitrary existing output without moving it", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    const output = path.join(root, "existing");
+    await writeMiniRepo(repo);
+    await fsp.mkdir(output);
+    await fsp.writeFile(path.join(output, "keep.txt"), "important\n");
+
+    await expect(scan(scanOptions(repo, output))).rejects.toThrow(/not replaceable/);
+    expect(await fsp.readFile(path.join(output, "keep.txt"), "utf8")).toBe("important\n");
+  });
+
+  it("refuses a complete output containing an unowned file", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    const output = path.join(root, "output");
+    await writeMiniRepo(repo);
+    await scan(scanOptions(repo, output));
+    const sentinel = path.join(output, "caller-owned.txt");
+    await fsp.writeFile(sentinel, "keep\n");
+
+    await expect(scan(scanOptions(repo, output))).rejects.toThrow(/not replaceable/);
+    expect(await fsp.readFile(sentinel, "utf8")).toBe("keep\n");
+  });
+
+  it("frames option lists without delimiter collisions", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    await writeMiniRepo(repo);
+
+    const one = await scan({ ...scanOptions(repo, path.join(root, "one")), excludeGlobs: ["foo,bar"] });
+    const two = await scan({ ...scanOptions(repo, path.join(root, "two")), excludeGlobs: ["foo", "bar"] });
+
+    expect(one.manifest.scanId).not.toBe(two.manifest.scanId);
   });
 
   it("refuses scans when git commit SHA is unavailable", async () => {
@@ -384,7 +532,8 @@ function manifest(repoName: string): ScanManifest {
     scannedAt: "2026-06-13T00:00:00+00:00",
     scannerVersion: "tracemap-typescript/0.1.0",
     solutions: [],
-    targetFrameworks: []
+    targetFrameworks: [],
+    sourceSnapshotDigest: "0".repeat(64)
   };
 }
 

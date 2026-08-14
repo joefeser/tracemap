@@ -1,0 +1,1124 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using TraceMap.Core;
+using TraceMap.Reporting;
+
+namespace TraceMap.Cli;
+
+public delegate Task<int> LocalReviewScanRunner(
+    string[] args,
+    TextWriter output,
+    TextWriter error,
+    CancellationToken cancellationToken);
+
+public sealed record LocalReviewStageServices(
+    Func<WebFormsModernizationOptions, CancellationToken, Task> WriteWebFormsAsync,
+    Func<StaticHtmlEvidenceExplorerOptions, CancellationToken, Task> GenerateExplorerAsync);
+
+public sealed record LocalReviewResult(
+    string SchemaVersion,
+    string WorkflowId,
+    string ToolVersion,
+    string DistributionKind,
+    string? RepositoryIdentityHash,
+    string? CommitSha,
+    string? ScanId,
+    string? SourceSnapshotDigest,
+    string ClaimLevel,
+    string Outcome,
+    string Coverage,
+    string LastProvenSafeState,
+    string CleanupResult,
+    string Retryability,
+    string NextAction,
+    IReadOnlyList<LocalReviewStage> Stages,
+    IReadOnlyList<LocalReviewArtifact> Artifacts,
+    LocalReviewSummary Summary,
+    IReadOnlyList<string> Gaps,
+    IReadOnlyList<string> Limitations);
+
+public sealed record LocalReviewStage(
+    string Stage,
+    string Outcome,
+    IReadOnlyList<LocalReviewInputHash> Inputs,
+    IReadOnlyList<string> OutputKinds);
+
+public sealed record LocalReviewInputHash(string RelativePath, string Sha256);
+
+public sealed record LocalReviewArtifact(
+    string ArtifactKind,
+    string RelativePath,
+    string Sha256,
+    string ProducerStage,
+    string Status);
+
+public sealed record LocalReviewSummary(int FactCount, int GapCount, int ArtifactCount);
+
+public static class LocalReviewCommand
+{
+    public const string SchemaVersion = "local-review-result.v1";
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
+    private static readonly JsonSerializerOptions ReadOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+    private static readonly string[] RequiredScanArtifacts =
+    [
+        "scan-manifest.json",
+        "facts.ndjson",
+        "index.sqlite",
+        "report.md",
+        "logs/analyzer.log"
+    ];
+    private static readonly HashSet<string> Flags = new(StringComparer.Ordinal)
+    {
+        "--webforms-modernization",
+        "--explorer"
+    };
+    private static readonly HashSet<string> ValueOptions = new(StringComparer.Ordinal)
+    {
+        "--repo",
+        "--out",
+        "--solution",
+        "--project",
+        "--include",
+        "--exclude",
+        "--target-framework"
+    };
+
+    public static async Task<int> RunAsync(
+        string[] args,
+        TextWriter output,
+        TextWriter error,
+        LocalReviewScanRunner scanRunner,
+        CancellationToken cancellationToken = default,
+        LocalReviewStageServices? stageServices = null)
+    {
+        stageServices ??= new LocalReviewStageServices(
+            async (options, token) => { _ = await WebFormsModernizationPacketReporter.WriteAsync(options, token); },
+            async (options, token) => { _ = await StaticHtmlEvidenceExplorer.GenerateAsync(options, token); });
+        if (args.Length == 0 || !string.Equals(args[0], "run", StringComparison.OrdinalIgnoreCase))
+        {
+            await error.WriteLineAsync("error: LOCAL_REVIEW_ARGUMENT_INVALID; expected 'local-review run'.");
+            return 1;
+        }
+
+        LocalReviewArguments parsed;
+        string fullOutput;
+        try
+        {
+            parsed = Parse(args.Skip(1).ToArray());
+            fullOutput = ValidateOutput(parsed.RepositoryPath, parsed.OutputPath);
+        }
+        catch (LocalReviewException exception)
+        {
+            await error.WriteLineAsync($"error: {exception.Code}");
+            return 1;
+        }
+
+        var parent = Path.GetDirectoryName(fullOutput)!;
+        var staging = Path.Combine(parent, $".{Path.GetFileName(fullOutput)}.local-review-{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(parent);
+            if (Directory.Exists(fullOutput))
+            {
+                Directory.Delete(fullOutput);
+            }
+
+            Directory.CreateDirectory(staging);
+        }
+        catch (Exception)
+        {
+            await error.WriteLineAsync("error: LOCAL_REVIEW_OUTPUT_UNSAFE");
+            return 1;
+        }
+
+        ScanManifest? manifest = null;
+        LocalReviewIdentity? authoritativeIdentity = null;
+        var stages = new List<LocalReviewStage>();
+        var workflowCoverage = "unknown";
+        var gaps = new SortedSet<string>(StringComparer.Ordinal);
+        var activeStage = "scan";
+        var lastSafeState = "output-staged";
+        try
+        {
+            var scanDirectory = Path.Combine(staging, "scan");
+            var scanArguments = parsed.ToScanArguments(scanDirectory);
+            using var scanOutput = new StringWriter();
+            using var scanError = new StringWriter();
+            var scanExit = await scanRunner(scanArguments, scanOutput, scanError, cancellationToken);
+            if (scanExit != 0)
+            {
+                var failureIdentity = await TryReadAuthoritativeFailureIdentityAsync(scanDirectory, cancellationToken);
+                var failed = BuildFailureResult(
+                    parsed,
+                    staging,
+                    failureIdentity,
+                    "LOCAL_REVIEW_SCAN_FAILED",
+                    "scan-attempted",
+                    "inspect-scan-receipt");
+                await WriteResultAsync(staging, failed, cancellationToken);
+                Publish(staging, fullOutput);
+                await WriteHumanAsync(failed, fullOutput, output);
+                await error.WriteLineAsync("error: LOCAL_REVIEW_SCAN_FAILED");
+                return 1;
+            }
+
+            EnsureRequiredScanArtifacts(scanDirectory);
+            var candidateManifest = await ReadManifestAsync(scanDirectory, cancellationToken);
+            authoritativeIdentity = await ReadAuthoritativeIdentityAsync(
+                scanDirectory,
+                candidateManifest,
+                cancellationToken);
+
+            manifest = candidateManifest;
+
+            stages.Add(new("scan", Coverage(manifest) == "full" ? "succeeded" : "partial", [], ["scan-artifacts"]));
+            lastSafeState = "scan-artifacts-verified";
+            workflowCoverage = Coverage(manifest);
+            if (workflowCoverage != "full")
+            {
+                gaps.Add("LOCAL_REVIEW_SCAN_PARTIAL");
+            }
+
+            if (parsed.WebFormsModernization)
+            {
+                activeStage = "webforms-modernization";
+                var before = HashDirectory(scanDirectory);
+                await stageServices.WriteWebFormsAsync(
+                    new WebFormsModernizationOptions(
+                        Path.Combine(scanDirectory, "index.sqlite"),
+                        Path.Combine(staging, "webforms")),
+                    cancellationToken);
+                VerifyUnchanged(scanDirectory, before);
+                var webFormsPacket = await ReadWebFormsPacketAsync(
+                    Path.Combine(staging, "webforms", "webforms-modernization.json"),
+                    cancellationToken);
+                var webFormsPartial = !string.Equals(
+                    webFormsPacket.Coverage,
+                    "bounded-static-webforms-modernization",
+                    StringComparison.Ordinal)
+                    || webFormsPacket.Summary.Truncated
+                    || webFormsPacket.Gaps.Count > 0;
+                if (webFormsPartial)
+                {
+                    workflowCoverage = "reduced";
+                    gaps.Add("LOCAL_REVIEW_WEBFORMS_PARTIAL");
+                }
+                stages.Add(new(
+                    "webforms-modernization",
+                    webFormsPartial ? "partial" : "succeeded",
+                    ToInputHashes(before, "scan"),
+                    ["webforms-modernization-packet"]));
+                lastSafeState = "webforms-modernization-verified";
+            }
+
+            if (parsed.Explorer)
+            {
+                activeStage = "explorer";
+                var scanBefore = HashDirectory(scanDirectory);
+                var webFormsDirectory = Path.Combine(staging, "webforms");
+                var webFormsBefore = parsed.WebFormsModernization
+                    ? HashDirectory(webFormsDirectory)
+                    : null;
+                var explorerInputDirectory = scanDirectory;
+                string? composedInputDirectory = null;
+                try
+                {
+                    if (parsed.WebFormsModernization)
+                    {
+                        composedInputDirectory = Path.Combine(
+                            parent,
+                            $".{Path.GetFileName(fullOutput)}.explorer-input-{Guid.NewGuid():N}");
+                        CopyDirectory(scanDirectory, composedInputDirectory);
+                        CopyDirectory(webFormsDirectory, composedInputDirectory);
+                        explorerInputDirectory = composedInputDirectory;
+                    }
+
+                    await stageServices.GenerateExplorerAsync(
+                        new StaticHtmlEvidenceExplorerOptions(
+                            explorerInputDirectory,
+                            Path.Combine(staging, "explorer"),
+                            "hidden-local"),
+                        cancellationToken);
+                }
+                finally
+                {
+                    if (composedInputDirectory is not null)
+                    {
+                        if (!TryCleanup(composedInputDirectory))
+                        {
+                            throw new LocalReviewException("LOCAL_REVIEW_CLEANUP_FAILED");
+                        }
+                    }
+                }
+
+                VerifyUnchanged(scanDirectory, scanBefore);
+                if (webFormsBefore is not null)
+                {
+                    VerifyUnchanged(webFormsDirectory, webFormsBefore);
+                }
+
+                var explorerInputs = ToInputHashes(scanBefore, "scan").ToList();
+                if (webFormsBefore is not null)
+                {
+                    explorerInputs.AddRange(ToInputHashes(webFormsBefore, "webforms"));
+                }
+                stages.Add(new(
+                    "explorer",
+                    "succeeded",
+                    explorerInputs.AsReadOnly(),
+                    ["static-html-explorer"]));
+                lastSafeState = "explorer-verified";
+            }
+
+            var artifacts = BuildArtifactRecords(staging);
+            var (factCount, factGapCount) = CountFacts(Path.Combine(scanDirectory, "facts.ndjson"));
+            var coverage = workflowCoverage;
+            var version = TraceMapVersionInfo.Create();
+            var outcome = coverage == "full" && gaps.Count == 0 ? "succeeded" : "partial";
+            var workflowId = CreateWorkflowId(version, authoritativeIdentity, parsed, stages);
+            var result = new LocalReviewResult(
+                SchemaVersion,
+                workflowId,
+                version.ToolVersion,
+                version.DistributionKind,
+                authoritativeIdentity.RepositoryIdentityHash,
+                authoritativeIdentity.CommitSha,
+                authoritativeIdentity.ScanId,
+                authoritativeIdentity.SourceSnapshotDigest,
+                "local-only",
+                outcome,
+                coverage,
+                lastSafeState,
+                "completed",
+                outcome == "succeeded" ? "not-required" : "retry-after-owner-review",
+                outcome == "succeeded" ? "review-generated-artifacts" : "review-scan-gaps",
+                stages.AsReadOnly(),
+                artifacts,
+                new LocalReviewSummary(factCount, factGapCount, artifacts.Count),
+                gaps.ToArray(),
+                Limitations());
+            await WriteResultAsync(staging, result, cancellationToken);
+            Publish(staging, fullOutput);
+            await WriteHumanAsync(result, fullOutput, output);
+            return 0;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            await TryPublishStageFailureAsync(
+                parsed,
+                staging,
+                fullOutput,
+                authoritativeIdentity,
+                stages,
+                workflowCoverage,
+                gaps,
+                activeStage,
+                "cancelled",
+                "LOCAL_REVIEW_CANCELLED",
+                lastSafeState,
+                "contact-owner",
+                output);
+            throw;
+        }
+        catch (LocalReviewException exception)
+        {
+            await TryPublishStageFailureAsync(
+                parsed,
+                staging,
+                fullOutput,
+                authoritativeIdentity,
+                stages,
+                workflowCoverage,
+                gaps,
+                activeStage,
+                "failed",
+                exception.Code,
+                lastSafeState,
+                NextAction(exception.Code),
+                output);
+            await error.WriteLineAsync($"error: {exception.Code}");
+            return 1;
+        }
+        catch (Exception exception)
+        {
+            var failure = ClassifyStageFailure(activeStage, exception);
+            await TryPublishStageFailureAsync(
+                parsed,
+                staging,
+                fullOutput,
+                authoritativeIdentity,
+                stages,
+                workflowCoverage,
+                gaps,
+                activeStage,
+                "failed",
+                failure.Code,
+                lastSafeState,
+                failure.NextAction,
+                output);
+            await error.WriteLineAsync($"error: {failure.Code}");
+            return 1;
+        }
+    }
+
+    private static LocalReviewArguments Parse(string[] args)
+    {
+        var values = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        var flags = new HashSet<string>(StringComparer.Ordinal);
+        for (var index = 0; index < args.Length; index++)
+        {
+            var argument = args[index];
+            if (Flags.Contains(argument))
+            {
+                flags.Add(argument);
+                continue;
+            }
+
+            if (!ValueOptions.Contains(argument)
+                || index + 1 >= args.Length
+                || args[index + 1].StartsWith("--", StringComparison.Ordinal))
+            {
+                throw new LocalReviewException("LOCAL_REVIEW_ARGUMENT_INVALID");
+            }
+
+            if (!values.TryGetValue(argument, out var list))
+            {
+                list = [];
+                values[argument] = list;
+            }
+
+            list.Add(args[++index]);
+        }
+
+        var repository = Single(values, "--repo");
+        var output = Single(values, "--out");
+        return new LocalReviewArguments(
+            repository,
+            output,
+            Many(values, "--solution"),
+            Many(values, "--project"),
+            Many(values, "--include"),
+            Many(values, "--exclude"),
+            OptionalSingle(values, "--target-framework"),
+            flags.Contains("--webforms-modernization"),
+            flags.Contains("--explorer"));
+    }
+
+    private static string Single(Dictionary<string, List<string>> values, string key)
+    {
+        if (!values.TryGetValue(key, out var items) || items.Count != 1 || string.IsNullOrWhiteSpace(items[0]))
+        {
+            throw new LocalReviewException("LOCAL_REVIEW_ARGUMENT_INVALID");
+        }
+
+        return items[0];
+    }
+
+    private static string? OptionalSingle(Dictionary<string, List<string>> values, string key) =>
+        values.TryGetValue(key, out var items)
+            ? items.Count == 1 && !string.IsNullOrWhiteSpace(items[0])
+                ? items[0]
+                : throw new LocalReviewException("LOCAL_REVIEW_ARGUMENT_INVALID")
+            : null;
+
+    private static IReadOnlyList<string> Many(Dictionary<string, List<string>> values, string key) =>
+        values.TryGetValue(key, out var items) ? items.AsReadOnly() : [];
+
+    private static string ValidateOutput(string repositoryPath, string outputPath)
+    {
+        string repository;
+        string output;
+        try
+        {
+            repository = ResolveDirectoryPath(Path.GetFullPath(repositoryPath)).TrimEnd(Path.DirectorySeparatorChar);
+            var requestedOutput = Path.GetFullPath(outputPath).TrimEnd(Path.DirectorySeparatorChar);
+            var requestedParent = Path.GetDirectoryName(requestedOutput)
+                ?? throw new LocalReviewException("LOCAL_REVIEW_OUTPUT_UNSAFE");
+            output = Path.Combine(
+                ResolveDirectoryPath(requestedParent),
+                Path.GetFileName(requestedOutput));
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            throw new LocalReviewException("LOCAL_REVIEW_ARGUMENT_INVALID");
+        }
+
+        if (!Directory.Exists(repository))
+        {
+            throw new LocalReviewException("LOCAL_REVIEW_ARGUMENT_INVALID");
+        }
+
+        var comparison = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        var root = Path.GetPathRoot(output)?.TrimEnd(Path.DirectorySeparatorChar);
+        if (string.IsNullOrWhiteSpace(output)
+            || string.Equals(output, root, comparison)
+            || IsWithin(output, repository, comparison)
+            || output.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                .Any(component => string.Equals(component, ".git", comparison)))
+        {
+            throw new LocalReviewException("LOCAL_REVIEW_OUTPUT_UNSAFE");
+        }
+
+        if (File.Exists(output))
+        {
+            throw new LocalReviewException("LOCAL_REVIEW_OUTPUT_COLLISION");
+        }
+
+        if (Directory.Exists(output))
+        {
+            var info = new DirectoryInfo(output);
+            if (info.Attributes.HasFlag(FileAttributes.ReparsePoint)
+                || Directory.EnumerateFileSystemEntries(output).Any())
+            {
+                throw new LocalReviewException("LOCAL_REVIEW_OUTPUT_COLLISION");
+            }
+        }
+        else if (FileSystemEntryExists(output))
+        {
+            throw new LocalReviewException("LOCAL_REVIEW_OUTPUT_COLLISION");
+        }
+
+        return output;
+    }
+
+    private static string ResolveDirectoryPath(string path)
+    {
+        var fullPath = Path.GetFullPath(path);
+        var root = Path.GetPathRoot(fullPath)
+            ?? throw new LocalReviewException("LOCAL_REVIEW_OUTPUT_UNSAFE");
+        var relative = Path.GetRelativePath(root, fullPath);
+        var current = root;
+        if (relative == ".") return current;
+
+        foreach (var component in relative.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+        {
+            current = Path.Combine(current, component);
+            var info = new DirectoryInfo(current);
+            if (!info.Exists) continue;
+            if (!info.Attributes.HasFlag(FileAttributes.ReparsePoint)) continue;
+
+            var target = info.ResolveLinkTarget(returnFinalTarget: true)
+                ?? throw new LocalReviewException("LOCAL_REVIEW_OUTPUT_UNSAFE");
+            current = Path.GetFullPath(target.FullName);
+        }
+
+        return current;
+    }
+
+    private static bool IsWithin(string candidate, string parent, StringComparison comparison) =>
+        string.Equals(candidate, parent, comparison)
+        || candidate.StartsWith(parent + Path.DirectorySeparatorChar, comparison);
+
+    private static bool FileSystemEntryExists(string path)
+    {
+        if (File.Exists(path) || Directory.Exists(path))
+        {
+            return true;
+        }
+
+        var parent = Path.GetDirectoryName(path);
+        if (string.IsNullOrWhiteSpace(parent) || !Directory.Exists(parent))
+        {
+            return false;
+        }
+
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        try
+        {
+            return Directory.EnumerateFileSystemEntries(parent)
+                .Any(entry => string.Equals(Path.GetFullPath(entry), path, comparison));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return true;
+        }
+    }
+
+    private static async Task<ScanManifest> ReadManifestAsync(string scanDirectory, CancellationToken cancellationToken)
+    {
+        await using var stream = File.OpenRead(Path.Combine(scanDirectory, "scan-manifest.json"));
+        return await JsonSerializer.DeserializeAsync<ScanManifest>(stream, ReadOptions, cancellationToken)
+            ?? throw new LocalReviewException("LOCAL_REVIEW_IDENTITY_UNAVAILABLE");
+    }
+
+    private static async Task<LocalReviewIdentity?> TryReadAuthoritativeFailureIdentityAsync(
+        string scanDirectory,
+        CancellationToken cancellationToken)
+    {
+        var manifestPath = Path.Combine(scanDirectory, "scan-manifest.json");
+        var receiptPath = Path.Combine(scanDirectory, "scan-receipt.json");
+        var manifestExists = File.Exists(manifestPath);
+        var receiptExists = File.Exists(receiptPath);
+        LocalReviewIdentity? manifestIdentity = null;
+        LocalReviewIdentity? receiptIdentity = null;
+
+        try
+        {
+            if (manifestExists)
+            {
+                await using var stream = File.OpenRead(manifestPath);
+                var availableManifest = await JsonSerializer.DeserializeAsync<ScanManifest>(stream, ReadOptions, cancellationToken);
+                if (availableManifest is null
+                    || !TryCreateIdentity(availableManifest, Coverage(availableManifest), out var parsedManifestIdentity))
+                {
+                    return null;
+                }
+
+                manifestIdentity = parsedManifestIdentity;
+            }
+
+            if (receiptExists)
+            {
+                await using var stream = File.OpenRead(receiptPath);
+                var availableReceipt = await JsonSerializer.DeserializeAsync<ScanExecutionReceipt>(stream, ReadOptions, cancellationToken);
+                if (availableReceipt is null || !TryCreateIdentity(availableReceipt, out var parsedReceiptIdentity))
+                {
+                    return null;
+                }
+
+                receiptIdentity = parsedReceiptIdentity;
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
+        {
+            return null;
+        }
+
+        if (manifestIdentity is not null && receiptIdentity is not null)
+        {
+            if (!string.Equals(manifestIdentity.CommitSha, receiptIdentity.CommitSha, StringComparison.Ordinal)
+                || !string.Equals(manifestIdentity.ScanId, receiptIdentity.ScanId, StringComparison.Ordinal)
+                || (receiptIdentity.SourceSnapshotDigest is not null
+                    && !string.Equals(manifestIdentity.SourceSnapshotDigest, receiptIdentity.SourceSnapshotDigest, StringComparison.Ordinal)))
+            {
+                return null;
+            }
+
+            return receiptIdentity with { Coverage = manifestIdentity.Coverage };
+        }
+
+        return manifestIdentity ?? receiptIdentity;
+    }
+
+    private static async Task<LocalReviewIdentity> ReadAuthoritativeIdentityAsync(
+        string scanDirectory,
+        ScanManifest manifest,
+        CancellationToken cancellationToken)
+    {
+        if (!TryCreateIdentity(manifest, Coverage(manifest), out var manifestIdentity))
+        {
+            throw new LocalReviewException("LOCAL_REVIEW_IDENTITY_UNAVAILABLE");
+        }
+
+        ScanExecutionReceipt? receipt;
+        try
+        {
+            await using var stream = File.OpenRead(Path.Combine(scanDirectory, "scan-receipt.json"));
+            receipt = await JsonSerializer.DeserializeAsync<ScanExecutionReceipt>(stream, ReadOptions, cancellationToken);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
+        {
+            throw new LocalReviewException("LOCAL_REVIEW_IDENTITY_UNAVAILABLE");
+        }
+
+        if (receipt is null
+            || !TryCreateIdentity(receipt, out var receiptIdentity)
+            || !string.Equals(manifestIdentity.CommitSha, receiptIdentity.CommitSha, StringComparison.Ordinal)
+            || !string.Equals(manifestIdentity.ScanId, receiptIdentity.ScanId, StringComparison.Ordinal)
+            || !string.Equals(manifestIdentity.SourceSnapshotDigest, receiptIdentity.SourceSnapshotDigest, StringComparison.Ordinal))
+        {
+            throw new LocalReviewException("LOCAL_REVIEW_IDENTITY_UNAVAILABLE");
+        }
+
+        return receiptIdentity with { Coverage = manifestIdentity.Coverage };
+    }
+
+    private static bool TryCreateIdentity(
+        ScanManifest manifest,
+        string coverage,
+        out LocalReviewIdentity identity)
+    {
+        if (!IsHex(manifest.GitRootHash, 32, 64)
+            || !IsHex(manifest.CommitSha, 7, 64)
+            || string.IsNullOrWhiteSpace(manifest.ScanId)
+            || !IsHex(manifest.SourceSnapshotDigest, 64, 64))
+        {
+            identity = null!;
+            return false;
+        }
+
+        identity = new(
+            manifest.GitRootHash!,
+            manifest.CommitSha,
+            manifest.ScanId,
+            manifest.SourceSnapshotDigest,
+            coverage);
+        return true;
+    }
+
+    private static bool TryCreateIdentity(
+        ScanExecutionReceipt receipt,
+        out LocalReviewIdentity identity)
+    {
+        if (!string.Equals(receipt.SchemaVersion, ScanReceiptSchema.Version, StringComparison.Ordinal)
+            || !string.Equals(receipt.RuleId, RuleIds.ScannerStageReceipt, StringComparison.Ordinal)
+            || !IsHex(receipt.RepositoryIdentityHash, 64, 64)
+            || !IsHex(receipt.CommitSha, 7, 64)
+            || string.IsNullOrWhiteSpace(receipt.RunId)
+            || (receipt.SourceSnapshotDigest is not null && !IsHex(receipt.SourceSnapshotDigest, 64, 64)))
+        {
+            identity = null!;
+            return false;
+        }
+
+        identity = new(
+            receipt.RepositoryIdentityHash!,
+            receipt.CommitSha,
+            receipt.RunId,
+            receipt.SourceSnapshotDigest,
+            "unknown");
+        return true;
+    }
+
+    private static bool IsHex(string? value, int minimumLength, int maximumLength) =>
+        value is not null
+        && value.Length >= minimumLength
+        && value.Length <= maximumLength
+        && value.All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f' or >= 'A' and <= 'F');
+
+    private static async Task<WebFormsModernizationPacket> ReadWebFormsPacketAsync(
+        string path,
+        CancellationToken cancellationToken)
+    {
+        await using var stream = File.OpenRead(path);
+        return await JsonSerializer.DeserializeAsync<WebFormsModernizationPacket>(stream, ReadOptions, cancellationToken)
+            ?? throw new LocalReviewException("LOCAL_REVIEW_STAGE_FAILED");
+    }
+
+    private static void EnsureRequiredScanArtifacts(string scanDirectory)
+    {
+        if (RequiredScanArtifacts.Any(relative => !File.Exists(Path.Combine(scanDirectory, relative))))
+        {
+            throw new LocalReviewException("LOCAL_REVIEW_SCAN_FAILED");
+        }
+    }
+
+    private static SortedDictionary<string, string> HashDirectory(string directory)
+    {
+        return new SortedDictionary<string, string>(
+            Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories)
+                .ToDictionary(
+                    path => Normalize(Path.GetRelativePath(directory, path)),
+                    HashFile,
+                    StringComparer.Ordinal),
+            StringComparer.Ordinal);
+    }
+
+    private static void VerifyUnchanged(string directory, IReadOnlyDictionary<string, string> before)
+    {
+        var after = HashDirectory(directory);
+        if (before.Count != after.Count
+            || before.Any(pair => !after.TryGetValue(pair.Key, out var hash)
+                || !string.Equals(pair.Value, hash, StringComparison.Ordinal)))
+        {
+            throw new LocalReviewException("LOCAL_REVIEW_INPUT_MUTATED");
+        }
+    }
+
+    private static IReadOnlyList<LocalReviewInputHash> ToInputHashes(
+        IReadOnlyDictionary<string, string> hashes,
+        string root) => hashes
+            .Select(pair => new LocalReviewInputHash($"{root}/{pair.Key}", pair.Value))
+            .ToArray();
+
+    private static IReadOnlyList<LocalReviewArtifact> BuildArtifactRecords(string staging)
+    {
+        return Directory.EnumerateFiles(staging, "*", SearchOption.AllDirectories)
+            .Select(path =>
+            {
+                var relative = Normalize(Path.GetRelativePath(staging, path));
+                var root = relative.Split('/')[0];
+                var stage = root == "webforms" ? "webforms-modernization" : root;
+                return new LocalReviewArtifact(
+                    ArtifactKind(relative),
+                    relative,
+                    HashFile(path),
+                    stage,
+                    "available");
+            })
+            .OrderBy(artifact => artifact.RelativePath, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static string ArtifactKind(string relativePath)
+    {
+        if (relativePath.EndsWith("scan-manifest.json", StringComparison.Ordinal)) return "scan-manifest";
+        if (relativePath.EndsWith("scan-receipt.json", StringComparison.Ordinal)) return "scan-execution-receipt";
+        if (relativePath.EndsWith("facts.ndjson", StringComparison.Ordinal)) return "facts";
+        if (relativePath.EndsWith("index.sqlite", StringComparison.Ordinal)) return "scan-index";
+        if (relativePath.EndsWith("webforms-modernization.json", StringComparison.Ordinal)) return "webforms-modernization-packet";
+        if (relativePath.StartsWith("explorer/", StringComparison.Ordinal)) return "static-html-explorer-file";
+        if (relativePath.EndsWith(".md", StringComparison.Ordinal)) return "markdown-report";
+        if (relativePath.EndsWith(".log", StringComparison.Ordinal)) return "diagnostic-log";
+        return "generated-file";
+    }
+
+    private static (int FactCount, int GapCount) CountFacts(string path)
+    {
+        var facts = 0;
+        var gaps = 0;
+        foreach (var line in File.ReadLines(path))
+        {
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            facts++;
+            using var document = JsonDocument.Parse(line);
+            if (document.RootElement.TryGetProperty("factType", out var factType)
+                && string.Equals(factType.GetString(), FactTypes.AnalysisGap, StringComparison.Ordinal))
+            {
+                gaps++;
+            }
+        }
+
+        return (facts, gaps);
+    }
+
+    private static string Coverage(ScanManifest manifest) =>
+        string.Equals(manifest.AnalysisLevel, "Level1SemanticAnalysis", StringComparison.Ordinal)
+        && string.Equals(manifest.BuildStatus, "Succeeded", StringComparison.Ordinal)
+            ? "full"
+            : "reduced";
+
+    private static string CreateWorkflowId(
+        TraceMapVersionResult version,
+        LocalReviewIdentity identity,
+        LocalReviewArguments arguments,
+        IReadOnlyList<LocalReviewStage> stages)
+    {
+        var identityValue = string.Join("\n", new[]
+        {
+            SchemaVersion,
+            version.ToolVersion,
+            version.DistributionKind,
+            identity.RepositoryIdentityHash,
+            identity.CommitSha,
+            identity.ScanId,
+            identity.SourceSnapshotDigest ?? string.Empty,
+            string.Join(',', arguments.IdentityPaths(arguments.Solutions)),
+            string.Join(',', arguments.IdentityPaths(arguments.Projects)),
+            string.Join(',', arguments.Includes.OrderBy(value => value, StringComparer.Ordinal)),
+            string.Join(',', arguments.Excludes.OrderBy(value => value, StringComparer.Ordinal)),
+            arguments.TargetFramework ?? string.Empty,
+            string.Join(',', stages.Select(stage => $"{stage.Stage}:{stage.Outcome}"))
+        });
+        return "workflow-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identityValue))).ToLowerInvariant()[..20];
+    }
+
+    private static LocalReviewResult BuildFailureResult(
+        LocalReviewArguments arguments,
+        string staging,
+        LocalReviewIdentity? authoritativeIdentity,
+        string gap,
+        string lastSafeState,
+        string nextAction)
+    {
+        var version = TraceMapVersionInfo.Create();
+        var artifacts = BuildArtifactRecords(staging);
+        LocalReviewStage[] stages = [new("scan", "failed", [], [])];
+        var workflowId = authoritativeIdentity is null
+            ? CreateUnknownFailureWorkflowId(version, arguments, gap)
+            : CreateWorkflowId(version, authoritativeIdentity, arguments, stages);
+        return new LocalReviewResult(
+            SchemaVersion,
+            workflowId,
+            version.ToolVersion,
+            version.DistributionKind,
+            authoritativeIdentity?.RepositoryIdentityHash,
+            authoritativeIdentity?.CommitSha,
+            authoritativeIdentity?.ScanId,
+            authoritativeIdentity?.SourceSnapshotDigest,
+            "local-only",
+            "failed",
+            authoritativeIdentity?.Coverage ?? "unknown",
+            lastSafeState,
+            "completed",
+            "retry-after-correction",
+            nextAction,
+            stages,
+            artifacts,
+            new LocalReviewSummary(0, 0, artifacts.Count),
+            [gap],
+            Limitations());
+    }
+
+    private static async Task TryPublishStageFailureAsync(
+        LocalReviewArguments arguments,
+        string staging,
+        string outputPath,
+        LocalReviewIdentity? authoritativeIdentity,
+        IReadOnlyList<LocalReviewStage> completedStages,
+        string workflowCoverage,
+        IReadOnlyCollection<string> completedGaps,
+        string activeStage,
+        string outcome,
+        string gap,
+        string lastSafeState,
+        string nextAction,
+        TextWriter output)
+    {
+        if (!Directory.Exists(staging) || FileSystemEntryExists(outputPath))
+        {
+            TryCleanup(staging);
+            return;
+        }
+
+        try
+        {
+            var version = TraceMapVersionInfo.Create();
+            var artifacts = BuildArtifactRecords(staging);
+            var stages = completedStages.ToList();
+            if (!stages.Any(stage => string.Equals(stage.Stage, activeStage, StringComparison.Ordinal)))
+            {
+                stages.Add(new(activeStage, outcome, [], []));
+            }
+            var workflowId = authoritativeIdentity is null
+                ? CreateUnknownFailureWorkflowId(version, arguments, gap)
+                : CreateWorkflowId(version, authoritativeIdentity, arguments, stages);
+            var factsPath = Path.Combine(staging, "scan", "facts.ndjson");
+            var counts = File.Exists(factsPath)
+                ? CountFacts(factsPath)
+                : (FactCount: 0, GapCount: 0);
+            var result = new LocalReviewResult(
+                SchemaVersion,
+                workflowId,
+                version.ToolVersion,
+                version.DistributionKind,
+                authoritativeIdentity?.RepositoryIdentityHash,
+                authoritativeIdentity?.CommitSha,
+                authoritativeIdentity?.ScanId,
+                authoritativeIdentity?.SourceSnapshotDigest,
+                "local-only",
+                outcome,
+                authoritativeIdentity is null ? "unknown" : workflowCoverage,
+                lastSafeState,
+                "completed",
+                outcome == "cancelled" ? "not-retryable" : "retry-after-correction",
+                nextAction,
+                stages.AsReadOnly(),
+                artifacts,
+                new LocalReviewSummary(counts.FactCount, counts.GapCount, artifacts.Count),
+                completedGaps.Append(gap).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                Limitations());
+            await WriteResultAsync(staging, result, CancellationToken.None);
+            Publish(staging, outputPath);
+            await WriteHumanAsync(result, outputPath, output);
+        }
+        catch (Exception)
+        {
+            TryCleanup(staging);
+        }
+    }
+
+    private static string CreateUnknownFailureWorkflowId(
+        TraceMapVersionResult version,
+        LocalReviewArguments arguments,
+        string gap)
+    {
+        const string attemptScope = "identity-unavailable";
+        var identity = string.Join("\n", SchemaVersion, version.ToolVersion, gap, attemptScope, arguments.StageSignature());
+        return "workflow-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity))).ToLowerInvariant()[..20];
+    }
+
+    private static string NextAction(string code) => code switch
+    {
+        "LOCAL_REVIEW_OUTPUT_COLLISION" => "choose-new-output",
+        "LOCAL_REVIEW_ARGUMENT_INVALID" => "correct-input",
+        "LOCAL_REVIEW_IDENTITY_UNAVAILABLE" => "inspect-scan-receipt",
+        "LOCAL_REVIEW_INPUT_MUTATED" => "contact-owner",
+        _ => "contact-owner"
+    };
+
+    private static (string Code, string NextAction) ClassifyStageFailure(string activeStage, Exception exception)
+    {
+        var incompatibleInput = exception is InvalidDataException
+            || (exception is InvalidOperationException
+                && exception.Message.StartsWith("UnsupportedSchema:", StringComparison.Ordinal));
+        return activeStage switch
+        {
+            "webforms-modernization" when incompatibleInput =>
+                ("LOCAL_REVIEW_WEBFORMS_INPUT_INCOMPATIBLE", "review-scan-gaps"),
+            "webforms-modernization" => ("LOCAL_REVIEW_WEBFORMS_FAILED", "contact-owner"),
+            "explorer" when incompatibleInput =>
+                ("LOCAL_REVIEW_EXPLORER_INPUT_INCOMPATIBLE", "review-scan-gaps"),
+            "explorer" => ("LOCAL_REVIEW_EXPLORER_FAILED", "contact-owner"),
+            _ => ("LOCAL_REVIEW_STAGE_FAILED", "contact-owner")
+        };
+    }
+
+    private static IReadOnlyList<string> Limitations() =>
+    [
+        "This workflow composes local static evidence; it does not prove runtime execution, application correctness, complete coverage, migration safety, release approval, publisher identity, or production state.",
+        "Absolute local paths and raw diagnostic text are intentionally excluded from portable workflow artifacts."
+    ];
+
+    private static async Task WriteResultAsync(string staging, LocalReviewResult result, CancellationToken cancellationToken)
+    {
+        var json = JsonSerializer.Serialize(result, JsonOptions) + "\n";
+        await File.WriteAllTextAsync(Path.Combine(staging, "local-review-result.json"), json, new UTF8Encoding(false), cancellationToken);
+        var markdown = string.Join('\n', new[]
+        {
+            "# TraceMap Local Review",
+            string.Empty,
+            $"- Workflow: `{result.WorkflowId}`",
+            $"- Commit: `{result.CommitSha ?? "unavailable"}`",
+            $"- Source snapshot: `{result.SourceSnapshotDigest ?? "unavailable"}`",
+            $"- Outcome: `{result.Outcome}`",
+            $"- Coverage: `{result.Coverage}`",
+            $"- Facts: {result.Summary.FactCount}",
+            $"- Gaps: {result.Summary.GapCount}",
+            $"- Next action: `{result.NextAction}`",
+            string.Empty,
+            "This packet contains local static evidence only. Review its explicit gaps and limitations before drawing conclusions.",
+            string.Empty
+        });
+        await File.WriteAllTextAsync(Path.Combine(staging, "README.md"), markdown, new UTF8Encoding(false), cancellationToken);
+    }
+
+    private static async Task WriteHumanAsync(LocalReviewResult result, string outputPath, TextWriter output)
+    {
+        await output.WriteLineAsync("TraceMap local review completed.");
+        await output.WriteLineAsync($"Commit SHA: {result.CommitSha ?? "unavailable"}");
+        await output.WriteLineAsync($"Source snapshot: {result.SourceSnapshotDigest ?? "unavailable"}");
+        await output.WriteLineAsync($"Outcome: {result.Outcome}");
+        await output.WriteLineAsync($"Coverage: {result.Coverage}");
+        await output.WriteLineAsync($"Facts: {result.Summary.FactCount}");
+        await output.WriteLineAsync($"Gaps: {result.Summary.GapCount}");
+        await output.WriteLineAsync($"Output: {outputPath}");
+        await output.WriteLineAsync($"Next action: {result.NextAction}");
+    }
+
+    private static void Publish(string staging, string output)
+    {
+        if (FileSystemEntryExists(output))
+        {
+            throw new LocalReviewException("LOCAL_REVIEW_OUTPUT_COLLISION");
+        }
+
+        Directory.Move(staging, output);
+    }
+
+    private static bool TryCleanup(string staging)
+    {
+        try
+        {
+            if (Directory.Exists(staging))
+            {
+                Directory.Delete(staging, recursive: true);
+            }
+
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    private static void CopyDirectory(string source, string destination)
+    {
+        Directory.CreateDirectory(destination);
+        foreach (var directory in Directory.EnumerateDirectories(source, "*", SearchOption.AllDirectories))
+        {
+            Directory.CreateDirectory(Path.Combine(destination, Path.GetRelativePath(source, directory)));
+        }
+
+        foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+        {
+            var target = Path.Combine(destination, Path.GetRelativePath(source, file));
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(file, target, overwrite: false);
+        }
+    }
+
+    private static string Normalize(string path) => path.Replace(Path.DirectorySeparatorChar, '/');
+
+    private static string HashFile(string path)
+    {
+        using var stream = File.OpenRead(path);
+        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+    }
+
+    private sealed record LocalReviewIdentity(
+        string RepositoryIdentityHash,
+        string CommitSha,
+        string ScanId,
+        string? SourceSnapshotDigest,
+        string Coverage);
+
+    private sealed record LocalReviewArguments(
+        string RepositoryPath,
+        string OutputPath,
+        IReadOnlyList<string> Solutions,
+        IReadOnlyList<string> Projects,
+        IReadOnlyList<string> Includes,
+        IReadOnlyList<string> Excludes,
+        string? TargetFramework,
+        bool WebFormsModernization,
+        bool Explorer)
+    {
+        public string[] ToScanArguments(string outputPath)
+        {
+            var arguments = new List<string> { "--repo", RepositoryPath, "--out", outputPath };
+            Add(arguments, "--solution", Solutions);
+            Add(arguments, "--project", Projects);
+            Add(arguments, "--include", Includes);
+            Add(arguments, "--exclude", Excludes);
+            if (!string.IsNullOrWhiteSpace(TargetFramework))
+            {
+                arguments.Add("--target-framework");
+                arguments.Add(TargetFramework);
+            }
+
+            return arguments.ToArray();
+        }
+
+        public string StageSignature() => $"webforms={WebFormsModernization};explorer={Explorer}";
+
+        public IReadOnlyList<string> IdentityPaths(IReadOnlyList<string> paths)
+        {
+            var repository = Path.GetFullPath(RepositoryPath);
+            return paths
+                .Select(path => Path.IsPathRooted(path)
+                    ? Path.GetRelativePath(repository, Path.GetFullPath(path))
+                    : path)
+                .Select(Normalize)
+                .OrderBy(path => path, StringComparer.Ordinal)
+                .ToArray();
+        }
+
+        private static void Add(List<string> arguments, string option, IReadOnlyList<string> values)
+        {
+            foreach (var value in values)
+            {
+                arguments.Add(option);
+                arguments.Add(value);
+            }
+        }
+    }
+
+    private sealed class LocalReviewException(string code) : Exception(code)
+    {
+        public string Code { get; } = code;
+    }
+}

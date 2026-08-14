@@ -194,15 +194,34 @@ The .NET adapter emits WebForms-specific evidence for static event entry points:
 
 | Fact type | Purpose | Safe matching keys |
 | --- | --- | --- |
-| `WebFormsPageDeclared` | Inventories `.aspx`, `.ascx`, and `.master` directives and safe code-behind linkage. | `pageTypeName`, `linkedCodePath`, `directiveKind`, `autoEventWireup` |
-| `WebFormsControlDeclared` | Records static server controls from markup. | `pageTypeName`, `controlId`, `controlType`, `designerFactId` |
-| `WebFormsEventBindingDeclared` | Records supported static event attributes and handler identifiers. | `pageTypeName`, `controlId`, `eventName`, `handlerName` |
+| `WebFormsPageDeclared` | Inventories `.aspx`, `.ascx`, and `.master` directives and safe code-behind linkage. | `surfaceIdentity`, `pageTypeName`, `linkedCodePath`, `directiveKind`, `autoEventWireup` |
+| `WebFormsControlDeclared` | Records static server controls from markup. | `surfaceIdentity`, `controlIdentity`, `pageTypeName`, `controlId`, `controlType`, `designerFactId` |
+| `WebFormsUserControlRegistered` | Records static `Register` directives with safe tag identity and repository-relative source linkage. | `surfaceIdentity`, `tagPrefix`, `tagName`, `sourcePath` |
+| `WebFormsCompositionDeclared` | Records declared master-page, content-placeholder, and registered user-control composition. | `relationshipKind`, `sourceSymbol`, `targetSymbol`, `supportingFactIds` |
+| `WebFormsEventBindingDeclared` | Records supported static event attributes and bounded named control subscriptions with explicit control/surface-to-handler direction. | `surfaceIdentity`, `controlIdentity`, `eventSourceIdentity`, `handlerSymbolId`, `bindingKind`, `eventName` |
 | `WebFormsDesignerControlDeclared` | Records designer partial-class control fields as supporting evidence. | `pageTypeName`, `fieldName`, `controlType` |
-| `WebFormsHandlerResolved` | Links event bindings to scoped code-behind methods. | `handlerName`, `handlerSymbol`, `sourceSymbolId`, `bindingFactId`, `resolutionKind` |
-| `WebFormsEventFlowProjected` | Projects resolved handlers to direct WCF, HTTP, SQL/query, config, or dependency-surface evidence. | `flowClassification`, `terminalSurfaceKind`, `terminalSurfaceNameHash`, `supportingFactIds`, `supportingEdgeIds`, `coverage` |
+| `WebFormsHandlerResolved` | Links event-source identities to scoped code-behind methods, preferring canonical semantic method IDs when proven. | `surfaceIdentity`, `controlIdentity`, `eventSourceIdentity`, `handlerSymbolId`, `sourceSymbolId`, `bindingFactId`, `resolutionKind` |
+| `WebFormsEventFlowProjected` | Projects resolved handlers to direct WCF, HTTP, SQL/query, config, or dependency-surface evidence. | `flowClassification`, `terminalSurfaceKind`, `terminalSurfaceNameHash`, `supportingFactIds`, `supportingEdgeIds`, `coverageLabel`, compatibility `coverage` |
 | `WebFormsLogicSignalDetected` | Emits bounded static logic or UI-boilerplate signals for handlers. | `handlerName`, `signalKind`, `staticLogicSignal`, `uiBoilerplateSignal` |
+| `LegacyBatchDataMovementDeclared` | Inventories supported scheduled-entry, service, console-job, file, message, stored-procedure batch, bulk-copy, ETL-package, and integration-config candidates when concrete Web Forms inventory scopes the repository. | `surfaceKind`, `mechanism`, `operationKind`, `ownerStatus`, `projectResolution`, bounded declaration flags, `supportingFactIds`, `coverageLabel` |
 
-These facts are static evidence only. They do not prove runtime page lifecycle execution, postbacks, event bubbling, user reachability, service reachability, SQL execution, deployment, branch feasibility, or production usage. Markup snippets, raw SQL, config values, raw URLs, local absolute paths, repository remotes, and private sample names must not appear in properties or reports.
+The local-only `webforms-modernization-packet.v1` read model composes these
+facts and the existing `legacy-flow.v1` static paths from one immutable
+`index.sqlite`. It emits deterministic `webforms-modernization.json` and
+`webforms-modernization.md`. Its bounded downstream-boundary rows inventory
+supported database, HTTP/service, messaging, configuration, and dependency
+terminals already present in those paths while preserving opaque target and
+terminal-evidence identities. Structural candidates group only declared
+surface composition and require owner naming; they are not business-capability,
+parity, effort, architecture, runtime, or release conclusions. Missing coverage
+or provenance fails closed as an explicit packet gap. Supported file-operation
+declarations are inventoried, while indirect wrappers, aliases under reduced
+semantic coverage, runtime paths, and dynamic locations remain explicit packet
+coverage gaps. Execution and
+interpretation are documented in the
+[Web Forms modernization packet runbook](WEBFORMS_MODERNIZATION_PACKET.md).
+
+These facts are static evidence only. They do not prove runtime page lifecycle execution or order, rendering, control construction, postbacks, event firing, event bubbling, validation success, authorization, persistence, downstream execution, user reachability, service reachability, SQL execution, deployment, branch feasibility, or production usage. Lambda/dynamic subscriptions, unknown receivers, ambiguous controls or overloads, and cross-file partial handlers without exact semantic evidence remain explicit gaps. Page titles are hashed rather than stored as display text. Markup snippets, raw SQL, config values, raw URLs, local absolute paths, repository remotes, and private sample names must not appear in properties or reports.
 
 ### Legacy WinForms Event Navigation Facts
 
@@ -241,6 +260,7 @@ or executing the app.
 | `AspNetSurfaceDeclared` | Inventories checked-in ASP.NET application and handler surface files, while reusing WebForms page/control/master inventory instead of duplicating it. | `surfaceKind`, safe directive metadata or role-separated hashes, `coverageLabel`, `ruleLimitations` |
 | `AspNetRouteDeclared` | Records supported static classic ASP.NET route registration candidates such as `MapPageRoute`. | `routeShape`, `routePatternHash`, safe route name or hash, mapped page descriptor or hash, `coverageLabel` |
 | `AspNetConfigSurfaceDeclared` | Records safe structures from checked-in handler/module/pages/controls/namespaces/urlMappings/compilation config. | `sectionKind`, safe type/path/verb descriptors or role-separated hashes, `coverageLabel` |
+| `AspNetIdentityStateDeclared` | Inventories bounded checked-in authentication, authorization, impersonation, machine-key presence, membership/role provider, session, cookie, profile, login-control, identity-pipeline, and compiler-resolved custom principal/identity declarations. | `identityKind`, closed categorical settings, presence flags, counts, framework/custom provider classification, `supportingFactIds`, `coverageLabel` |
 | `AspNetHandlerDeclared` | Records `.ashx`, `IHttpHandler`, `IHttpAsyncHandler`, and handler-factory static evidence. | `handlerKind`, safe type identity, unresolved factory flags when needed, `coverageLabel` |
 | `AspNetPageMethodDeclared` | Records `[WebMethod]`, `[ScriptMethod]`, and `[ScriptService]` PageMethod/script-service evidence without reclassifying it as ASMX. | `methodName`, `containingTypeName`, `attributeNames`, `isStatic`, `coverageLabel` |
 | `AspNetNavigationReferenceDeclared` | Records static navigation reference candidates from markup, sitemap XML, or supported C# APIs. | `referenceKind`, `sourceSurface`, target descriptor or role-separated hash, `coverageLabel` |
@@ -251,12 +271,18 @@ ASP.NET route/navigation hashes use the scanner-side context shape
 32-character lowercase hex prefix. The same unsafe raw value in route pattern,
 config, and navigation target roles must produce different stored hashes.
 
-These facts are static evidence only. They do not prove route-table execution,
-IIS deployment, runtime URL rewriting, authorization, browser behavior,
-JavaScript execution, page rendering, request handling, user reachability, or
-runtime impact. Raw URLs, hostnames, config values, endpoint values, local
-absolute paths, remotes, snippets, credentials, and secrets are omitted or
-hashed.
+These facts are static evidence only. Identity/state rows do not prove effective
+runtime policy, authenticated users, authorization or session outcomes,
+provider availability, vulnerability, compliance, or migration success.
+External/encrypted identity configuration, deterministically identity-related
+dynamic pipeline registration, unavailable semantic dependencies, and
+unsupported custom providers remain explicit gaps. The ASP.NET facts do not
+prove route-table execution, IIS
+deployment, runtime URL rewriting, browser behavior, JavaScript execution, page
+rendering, request handling, user reachability, or runtime impact. Raw URLs,
+hostnames, config values, endpoint values, machine keys, roles, users, provider
+names, cookie names, login targets, connection strings, local absolute paths,
+remotes, snippets, credentials, and secrets are omitted or hashed.
 
 ### Legacy Data Metadata Facts
 

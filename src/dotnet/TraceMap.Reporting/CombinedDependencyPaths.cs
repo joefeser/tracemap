@@ -404,7 +404,8 @@ public static class CombinedDependencyPathReporter
         var connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = indexPath,
-            Mode = SqliteOpenMode.ReadOnly
+            Mode = SqliteOpenMode.ReadOnly,
+            Pooling = false
         }.ToString();
         await using var connection = new SqliteConnection(connectionString);
         await connection.OpenAsync(cancellationToken);
@@ -1847,6 +1848,7 @@ public static class CombinedDependencyPathReporter
 
     private static string? UiBindingKey(CombinedFactRow fact)
     {
+        var surfaceIdentity = CombinedDependencyReporter.FirstValue(fact.Properties, "surfaceIdentity");
         var controlId = CombinedDependencyReporter.FirstValue(fact.Properties, "controlId");
         var eventName = CombinedDependencyReporter.FirstValue(fact.Properties, "eventName");
         var handlerName = CombinedDependencyReporter.FirstValue(fact.Properties, "handlerName") ?? fact.ContractElement ?? fact.TargetSymbol;
@@ -1855,7 +1857,10 @@ public static class CombinedDependencyPathReporter
             return null;
         }
 
-        return $"{fact.SourceIndexId}\0{controlId}\0{eventName}\0{handlerName}";
+        var surfaceKey = surfaceIdentity
+            ?? CombinedDependencyReporter.FirstValue(fact.Properties, "markupFile")
+            ?? fact.FilePath;
+        return $"{fact.SourceIndexId}\0{surfaceKey}\0{controlId}\0{eventName}\0{handlerName}";
     }
 
     private static string SourceFactKey(string sourceIndexId, string originalFactId)

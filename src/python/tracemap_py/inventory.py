@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import hashlib
+import json
 
 from .models import FileInventoryItem, ScanOptions
 from .pathing import matches_any, relative_to
@@ -79,9 +81,51 @@ def classify(path: Path) -> str | None:
     return None
 
 
-def create_scan_id(repo_identity: str, commit_sha: str, inventory: list[FileInventoryItem], hash_fn) -> str:
-    signature = "\n".join(f"{item.relative_path}|{item.kind}|{item.size_bytes}" for item in inventory)
-    return "scan-" + hash_fn(f"{repo_identity}|{commit_sha}|{signature}", 20)
+def source_snapshot_digest(inventory: list[FileInventoryItem]) -> str:
+    digest = hashlib.sha256()
+    digest.update(b"scan-truth-source-snapshot/v1\0")
+    for item in sorted(inventory, key=lambda value: value.relative_path):
+        if item.skipped:
+            byte_length = item.size_bytes
+            content_hash = "skipped-before-analysis"
+        else:
+            content_digest = hashlib.sha256()
+            byte_length = 0
+            with Path(item.absolute_path).open("rb") as stream:
+                while chunk := stream.read(1024 * 1024):
+                    byte_length += len(chunk)
+                    content_digest.update(chunk)
+            content_hash = content_digest.hexdigest()
+        for value in (item.relative_path, item.kind, str(byte_length), content_hash):
+            digest.update(value.encode("utf-8"))
+            digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def create_scan_id(
+    repo_identity: str,
+    commit_sha: str,
+    source_digest: str,
+    options: ScanOptions,
+    scanner_version: str,
+    hash_fn,
+) -> str:
+    option_signature = json.dumps(
+        {
+            "excludeGlobs": sorted(options.exclude_globs),
+            "includeGlobs": sorted(options.include_globs),
+            "maxFileByteSize": options.max_file_byte_size,
+            "noMetadata": options.no_metadata,
+            "projectPaths": sorted(options.project_paths),
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return "scan-" + hash_fn(
+        f"{repo_identity}|{commit_sha}|{source_digest}|{option_signature}|{scanner_version}",
+        20,
+    )
 
 
 def package_roots(repo: Path, inventory: list[FileInventoryItem]) -> list[Path]:

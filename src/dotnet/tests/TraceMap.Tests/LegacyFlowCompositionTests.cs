@@ -11,6 +11,33 @@ namespace TraceMap.Tests;
 public sealed class LegacyFlowCompositionTests
 {
     [Fact]
+    public async Task Legacy_root_resolution_uses_surface_identity_when_labels_collide()
+    {
+        using var temp = new TempDirectory();
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var manifest = Manifest("legacy-app");
+        SqliteIndexWriter.Write(index, manifest, [
+            WebFormsBinding(manifest, "AreaA/Default.aspx", "Save", "OnClick", "Save_Click", 2),
+            WebFormsHandler(
+                manifest,
+                "AreaB/Default.aspx.cs",
+                "Legacy.Default.Save_Click(System.Object,System.EventArgs)",
+                "Save_Click",
+                10,
+                EvidenceTiers.Tier2Structural,
+                "different-binding")
+        ]);
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(new CombinedDependencyPathOptions(
+            IndexPath: index,
+            OutputPath: Path.Combine(temp.Path, "flows"),
+            IncludeLegacyRoots: true,
+            View: LegacyFlowReportConstants.View));
+
+        Assert.Contains(result.Report.Gaps, gap => gap.GapKind == "UnresolvedRoot");
+    }
+
+    [Fact]
     public async Task Legacy_paths_compose_webforms_event_to_sql_with_stable_redacted_outputs()
     {
         using var temp = new TempDirectory();
@@ -881,12 +908,14 @@ public sealed class LegacyFlowCompositionTests
 
     private static CodeFact WebFormsBinding(ScanManifest manifest, string file, string controlId, string eventName, string handlerName, int line, string tier = EvidenceTiers.Tier2Structural)
     {
+        var surfaceIdentity = $"webforms-surface:{FactFactory.Hash(file, 24)}";
         return FactFactory.Create(
             manifest,
             FactTypes.WebFormsEventBindingDeclared,
             RuleIds.LegacyWebFormsEventBinding,
             tier,
             new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
+            sourceSymbol: $"webforms-control:{FactFactory.Hash($"{surfaceIdentity}|{controlId}|{line}", 24)}",
             targetSymbol: handlerName,
             contractElement: handlerName,
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
@@ -895,19 +924,22 @@ public sealed class LegacyFlowCompositionTests
                 ["controlType"] = "asp:Button",
                 ["eventName"] = eventName,
                 ["handlerName"] = handlerName,
-                ["pageTypeName"] = "Legacy.Pages.Orders"
+                ["pageTypeName"] = "Legacy.Pages.Orders",
+                ["surfaceIdentity"] = surfaceIdentity
             });
     }
 
     private static CodeFact WebFormsHandler(ScanManifest manifest, string file, string handlerSymbol, string handlerName, int line, string tier, string bindingFactId)
     {
+        var markupFile = file.Replace(".cs", string.Empty, StringComparison.Ordinal);
+        var surfaceIdentity = $"webforms-surface:{FactFactory.Hash(markupFile, 24)}";
         return FactFactory.Create(
             manifest,
             FactTypes.WebFormsHandlerResolved,
             RuleIds.LegacyWebFormsHandlerResolution,
             tier,
             new EvidenceSpan(file, line, line, null, "test", "test/1.0"),
-            sourceSymbol: "Legacy.Pages.Orders",
+            sourceSymbol: surfaceIdentity,
             targetSymbol: handlerSymbol,
             contractElement: handlerName,
             properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
@@ -916,9 +948,10 @@ public sealed class LegacyFlowCompositionTests
                 ["eventName"] = "OnClick",
                 ["handlerName"] = handlerName,
                 ["handlerSymbol"] = handlerSymbol,
-                ["markupFile"] = file.Replace(".cs", string.Empty, StringComparison.Ordinal),
+                ["markupFile"] = markupFile,
                 ["pageTypeName"] = "Legacy.Pages.Orders",
-                ["supportingFactIds"] = bindingFactId
+                ["supportingFactIds"] = bindingFactId,
+                ["surfaceIdentity"] = surfaceIdentity
             });
     }
 

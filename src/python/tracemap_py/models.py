@@ -42,6 +42,7 @@ class ScanManifest:
     scan_root_relative_path: str | None = None
     scan_root_path_hash: str | None = None
     git_root_hash: str | None = None
+    source_snapshot_digest: str | None = None
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -61,6 +62,7 @@ class ScanManifest:
             "scanRootRelativePath": self.scan_root_relative_path,
             "scanRootPathHash": self.scan_root_path_hash,
             "gitRootHash": self.git_root_hash,
+            "sourceSnapshotDigest": self.source_snapshot_digest,
         }
 
 
