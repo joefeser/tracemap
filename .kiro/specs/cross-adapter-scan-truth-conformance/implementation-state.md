@@ -22,8 +22,8 @@
 
 ## Validation
 
-- Python: 31/31 adapter tests passed in an isolated temporary virtual environment.
-- TypeScript: 37/37 tests passed; `npm run build` passed.
+- Python: 32/32 adapter tests passed in an isolated temporary virtual environment.
+- TypeScript: 39/39 tests passed; `npm run build` passed.
 - JVM: Gradle test suite passed with Java 21.
 - Swift: full smoke-test executable passed.
 - .NET: 1,551/1,551 solution tests passed on the final integrated `origin/dev` stack.
@@ -37,7 +37,7 @@
   compilation, and `git diff --check` passed.
 - The authoritative matrix was rerun after stacking the completed prerequisite
   branches and again after review hardening. The final suites passed with
-  Python 31/31, TypeScript 37/37, JVM on Java 21, and the Swift executable smoke.
+  Python 32/32, TypeScript 39/39, JVM on Java 21, and the Swift executable smoke.
 
 Final prerequisite integration on 2026-08-13 includes merged Web Forms explorer
 PR #676 at exact feature head
@@ -89,6 +89,14 @@ JVM, Python, TypeScript, and Swift adapters at the final integrated checkpoint.
   that an unreadable-file precondition is real before claiming support, and
   always emits non-empty rule-governed capability evidence.
 - TypeScript snapshot ordering is ordinal rather than locale-sensitive.
+- Partial `--adapters` invocations retain all five required adapter rows and
+  report omitted adapters as `not-run`; they cannot emit a green full-profile
+  result. Adapter option lists use unambiguous framing so distinct authority
+  does not collapse to one scan ID, and Swift identity includes its concrete
+  scanner and extractor versions.
+- JVM, TypeScript, and Swift publication now reject a repository root, ancestor,
+  file, or unrecognized nonempty output directory before any swap; existing
+  unrelated content is never treated as a replaceable TraceMap packet.
 
 ## Deferred
 

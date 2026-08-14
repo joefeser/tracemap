@@ -316,6 +316,29 @@ describe("ScanEngine", () => {
     expect(fs.existsSync(path.join(repo, "src", "sample.ts"))).toBe(true);
   });
 
+  it("refuses an arbitrary existing output without moving it", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    const output = path.join(root, "existing");
+    await writeMiniRepo(repo);
+    await fsp.mkdir(output);
+    await fsp.writeFile(path.join(output, "keep.txt"), "important\n");
+
+    await expect(scan(scanOptions(repo, output))).rejects.toThrow(/not replaceable/);
+    expect(await fsp.readFile(path.join(output, "keep.txt"), "utf8")).toBe("important\n");
+  });
+
+  it("frames option lists without delimiter collisions", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    await writeMiniRepo(repo);
+
+    const one = await scan({ ...scanOptions(repo, path.join(root, "one")), excludeGlobs: ["foo,bar"] });
+    const two = await scan({ ...scanOptions(repo, path.join(root, "two")), excludeGlobs: ["foo", "bar"] });
+
+    expect(one.manifest.scanId).not.toBe(two.manifest.scanId);
+  });
+
   it("refuses scans when git commit SHA is unavailable", async () => {
     const root = await tempDir();
     const repo = path.join(root, "not-git");

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 import com.tracemap.jvm.model.ScanOptions;
 import java.io.IOException;
@@ -64,6 +65,53 @@ final class ScanMutationTruthTest {
         try (var children = Files.list(temp)) {
             assertFalse(children.anyMatch(path -> path.getFileName().toString().startsWith(".tracemap-transaction-output-")));
         }
+    }
+
+    @Test
+    void rejectsArbitraryExistingOutputWithoutMovingIt() throws Exception {
+        Path repo = initializedRepo("unsafe-repo");
+        Path output = temp.resolve("existing-output");
+        Files.createDirectories(output);
+        Path sentinel = output.resolve("keep.txt");
+        Files.writeString(sentinel, "important\n");
+
+        IOException error = assertThrows(IOException.class, () -> new ScanEngine().scan(options(repo, output, List.of())));
+
+        assertTrue(error.getMessage().contains("OutputArtifactSetNotReplaceable"));
+        assertTrue(Files.exists(sentinel));
+    }
+
+    @Test
+    void rejectsRepositoryRootAsOutput() throws Exception {
+        Path repo = initializedRepo("same-output-repo");
+
+        IOException error = assertThrows(IOException.class, () -> new ScanEngine().scan(options(repo, repo, List.of())));
+
+        assertTrue(error.getMessage().contains("OutputArtifactSetNotReplaceable"));
+        assertTrue(Files.exists(repo.resolve("src/Sample.java")));
+    }
+
+    @Test
+    void optionListFramingPreventsDelimiterCollisions() throws Exception {
+        Path repo = initializedRepo("option-repo");
+        var oneValue = new ScanEngine().scan(options(repo, temp.resolve("one-value"), List.of("foo,bar")));
+        var twoValues = new ScanEngine().scan(options(repo, temp.resolve("two-values"), List.of("foo", "bar")));
+
+        assertNotEquals(oneValue.manifest().scanId(), twoValues.manifest().scanId());
+    }
+
+    private Path initializedRepo(String name) throws Exception {
+        Path repo = temp.resolve(name);
+        Files.createDirectories(repo.resolve("src"));
+        Files.writeString(repo.resolve("src/Sample.java"), "final class Sample { int value = 1; }\n");
+        git(repo, "init");
+        git(repo, "add", ".");
+        git(repo, "-c", "user.name=TraceMap", "-c", "user.email=fixture@example.invalid", "commit", "-m", "baseline");
+        return repo;
+    }
+
+    private static ScanOptions options(Path repo, Path output, List<String> excludes) {
+        return new ScanOptions(repo, output, List.of(), List.of(), excludes, 1024 * 1024, false, "all");
     }
 
     private static void git(Path repo, String... args) throws Exception {

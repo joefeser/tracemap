@@ -14,7 +14,7 @@ from tracemap_py.fact_factory import create_fact
 from tracemap_py.config_extractor import extract_config_files
 from tracemap_py.git_metadata import read_git_metadata
 from tracemap_py.hashes import sha256_hex
-from tracemap_py.inventory import discover_inventory
+from tracemap_py.inventory import create_scan_id, discover_inventory
 from tracemap_py.metadata import read_package_metadata
 from tracemap_py.models import CodeFact, EvidenceSpan, ScanManifest
 from tracemap_py.report import render_report
@@ -230,6 +230,15 @@ def test_snapshot_identity_changes_for_same_size_dirty_bytes_and_is_persisted(tm
     with sqlite3.connect(tmp_path / "first" / "index.sqlite") as connection:
         sqlite_manifest = json.loads(connection.execute("select manifest_json from scan_manifest").fetchone()[0])
     assert sqlite_manifest["sourceSnapshotDigest"] == first.source_snapshot_digest
+
+
+def test_scan_identity_option_lists_have_unambiguous_framing() -> None:
+    one_value = make_options("repo", "out", exclude=["foo,bar"])
+    two_values = make_options("repo", "out", exclude=["foo", "bar"])
+
+    assert create_scan_id("repo", "a" * 40, "b" * 64, one_value, "scanner/v1", sha256_hex) != create_scan_id(
+        "repo", "a" * 40, "b" * 64, two_values, "scanner/v1", sha256_hex
+    )
 
 
 def test_source_mutation_before_snapshot_verification_fails_without_publishing(tmp_path: Path) -> None:

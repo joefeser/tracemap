@@ -465,7 +465,16 @@ def main() -> int:
         workspace = Path(temporary.name)
     try:
         rows = []
-        for adapter in adapters:
+        selected_adapters = set(adapters)
+        for adapter in ALL_ADAPTERS:
+            if adapter not in selected_adapters:
+                rows.append({
+                    "adapter": adapter,
+                    "status": "not-run",
+                    "capabilities": [capability(name, "not-run", ["adapter-not-selected-by-invocation"], ["adapter-not-selected-by-invocation"]) for name in CAPABILITIES],
+                    "limitations": ["adapter-not-selected-by-invocation"],
+                })
+                continue
             try:
                 mutation_test_verified = not args.skip_build
                 if not args.skip_build:
@@ -478,7 +487,7 @@ def main() -> int:
                     "capabilities": [capability(name, "not-run", [f"adapter-stage-failed:{exception.__class__.__name__}"], [exception.__class__.__name__]) for name in CAPABILITIES],
                     "limitations": [f"adapter-stage-failed:{exception.__class__.__name__}"],
                 })
-        overall = "supported" if rows and all(row["status"] == "supported" for row in rows) else "unsupported"
+        overall = "supported" if all(row["status"] == "supported" for row in rows) else "unsupported"
         profile = json.loads((repo_root / "contracts/scan-truth-conformance.v1.json").read_text(encoding="utf-8"))
         result = {
             "schemaVersion": "scan-truth-conformance-result.v1",
