@@ -126,6 +126,18 @@ try {
     Assert-True ($LASTEXITCODE -ne 0) "invalid property-flow selector was accepted"
     $config.propertyFlows[0].selector = "field:runnerId"
 
+    $config.propertyFlows[0].selector = "field:"
+    [System.IO.File]::WriteAllText($configPath, (($config | ConvertTo-Json -Depth 20) + "`n"), [System.Text.UTF8Encoding]::new($false))
+    & pwsh -NoProfile -File $runner -ConfigPath $configPath -TraceMapRoot $TraceMapRoot -OutputRoot $output1 -ValidateOnly 2>$null | Out-Null
+    Assert-True ($LASTEXITCODE -ne 0) "empty property-flow selector value was accepted"
+    $config.propertyFlows[0].selector = "field:runnerId"
+
+    $config.reports["combinedDependency"] = "false"
+    [System.IO.File]::WriteAllText($configPath, (($config | ConvertTo-Json -Depth 20) + "`n"), [System.Text.UTF8Encoding]::new($false))
+    & pwsh -NoProfile -File $runner -ConfigPath $configPath -TraceMapRoot $TraceMapRoot -OutputRoot $output1 -ValidateOnly 2>$null | Out-Null
+    Assert-True ($LASTEXITCODE -ne 0) "non-boolean report switch was accepted"
+    $config.reports["combinedDependency"] = $true
+
     $config.paths[0].toSurface = "unsupported-terminal"
     [System.IO.File]::WriteAllText($configPath, (($config | ConvertTo-Json -Depth 20) + "`n"), [System.Text.UTF8Encoding]::new($false))
     & pwsh -NoProfile -File $runner -ConfigPath $configPath -TraceMapRoot $TraceMapRoot -OutputRoot $output1 -ValidateOnly 2>$null | Out-Null
@@ -143,15 +155,18 @@ try {
     )
     [System.IO.File]::WriteAllText($configPath, (($config | ConvertTo-Json -Depth 20) + "`n"), [System.Text.UTF8Encoding]::new($false))
 
+    & pwsh -NoProfile -File $runner -ConfigPath $configPath -TraceMapRoot $TraceMapRoot -OutputRoot $output1 -ValidateOnly | Out-Null
+    Assert-True ($LASTEXITCODE -eq 0) "restored configuration validation failed"
+
     & pwsh -NoProfile -File $runner -ConfigPath $configPath -TraceMapRoot $TraceMapRoot -OutputRoot (Join-Path $angular "unsafe-output") -ValidateOnly 2>$null | Out-Null
     $unsafeOutputExit = $LASTEXITCODE
-    $PSNativeCommandUseErrorActionPreference = $nativePreference
     Assert-True ($unsafeOutputExit -ne 0) "output inside a source repository was accepted"
 
-    & pwsh -NoProfile -File $runner -ConfigPath $configPath -TraceMapRoot $TraceMapRoot -OutputRoot $output1 | Out-Null
-    Assert-True ($LASTEXITCODE -eq 0) "first interaction review failed"
+    $firstRunOutput = @(& pwsh -NoProfile -File $runner -ConfigPath $configPath -TraceMapRoot $TraceMapRoot -OutputRoot $output1 -Verbose)
+    Assert-True ($LASTEXITCODE -eq 0) "first interaction review failed: $($firstRunOutput -join '; ')"
     & pwsh -NoProfile -File $runner -ConfigPath $configPath -TraceMapRoot $TraceMapRoot -OutputRoot $output2 | Out-Null
     Assert-True ($LASTEXITCODE -eq 0) "second interaction review failed"
+    $PSNativeCommandUseErrorActionPreference = $nativePreference
 
     foreach ($output in @($output1, $output2)) {
         foreach ($relative in @(

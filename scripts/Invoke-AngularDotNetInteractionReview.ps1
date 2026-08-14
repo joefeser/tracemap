@@ -58,6 +58,19 @@ function Get-PropertyValue {
     return $property.Value
 }
 
+function Get-BooleanProperty {
+    param(
+        [Parameter(Mandatory = $true)]$InputObject,
+        [Parameter(Mandatory = $true)][string]$Name,
+        [Parameter(Mandatory = $true)][bool]$DefaultValue
+    )
+
+    $property = $InputObject.PSObject.Properties[$Name]
+    if ($null -eq $property) { return $DefaultValue }
+    if ($property.Value -isnot [bool]) { Stop-InteractionReview "INTERACTION_RUN_REPORT_SWITCH_INVALID" }
+    return [bool]$property.Value
+}
+
 function Assert-KnownProperties {
     param(
         [Parameter(Mandatory = $true)]$InputObject,
@@ -172,6 +185,7 @@ function Test-PropertySelector {
     $kind = $trimmed.Substring(0, $separator)
     $value = $trimmed.Substring($separator + 1).Trim()
     if ($kind -cnotin @("field", "control", "binding", "model", "dto", "symbol", "fact")) { return $false }
+    if ([string]::IsNullOrWhiteSpace($value)) { return $false }
     if ($kind -cin @("model", "dto") -and -not $value.Contains('.', [System.StringComparison]::Ordinal)) { return $false }
     return $true
 }
@@ -300,11 +314,16 @@ function Add-ReportSignals {
     )
 
     $report = Get-Content -LiteralPath $JsonPath -Raw | ConvertFrom-Json -Depth 100
-    $reportCoverage = [string](Get-PropertyValue $report "reportCoverage" "unknown")
     $summary = Get-PropertyValue $report "summary" $null
+    $reportCoverage = if ($null -eq $summary) {
+        [string](Get-PropertyValue $report "reportCoverage" "unknown")
+    }
+    else {
+        [string](Get-PropertyValue $summary "reportCoverage" (Get-PropertyValue $report "reportCoverage" "unknown"))
+    }
     if ($null -ne $summary) {
         $classification = [string](Get-PropertyValue $summary "classification" (Get-PropertyValue $summary "rollupClassification" "unavailable"))
-        $coverage = [string](Get-PropertyValue $summary "reportCoverage" (Get-PropertyValue $report "reportCoverage" "unknown"))
+        $coverage = $reportCoverage
         $truncated = [bool](Get-PropertyValue $summary "truncated" $false)
         $ReportStates.Add([ordered]@{
             producer = $Producer
@@ -346,7 +365,13 @@ function Add-ReportSignals {
         Add-UnresolvedSignal $Signals $Producer $kind "NeedsReview" $ruleId $tier $reportCoverage
     }
 
-    $endpointRows = ConvertTo-Array (Get-PropertyValue $report "endpointFindings" (Get-PropertyValue $report "findings" @()))
+    $endpointRows = @(ConvertTo-Array (Get-PropertyValue $report "endpointFindings" (Get-PropertyValue $report "findings" @())))
+    if ($endpointRows.Count -eq 0) {
+        $endpointAlignment = Get-PropertyValue $report "endpointAlignment" $null
+        if ($null -ne $endpointAlignment) {
+            $endpointRows = @(ConvertTo-Array (Get-PropertyValue $endpointAlignment "rows" @()))
+        }
+    }
     foreach ($finding in $endpointRows) {
         $classification = [string](Get-PropertyValue $finding "classification" "unknown")
         if ($classification -in @("MatchedEndpoint", "OptionalSegmentMatch")) { continue }
@@ -577,8 +602,8 @@ foreach ($query in $pathQueries) {
 
 $reports = Get-PropertyValue $config "reports" ([pscustomobject]@{})
 Assert-KnownProperties $reports @("combinedDependency", "portfolio") "INTERACTION_RUN_REPORT_PROPERTY_UNSUPPORTED"
-$combinedDependencyEnabled = [bool](Get-PropertyValue $reports "combinedDependency" $true)
-$portfolioEnabled = [bool](Get-PropertyValue $reports "portfolio" $true)
+$combinedDependencyEnabled = Get-BooleanProperty $reports "combinedDependency" $true
+$portfolioEnabled = Get-BooleanProperty $reports "portfolio" $true
 
 $script:DotNetCli = Join-Path $TraceMapRoot "src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll"
 $typeScriptCli = Join-Path $TraceMapRoot "src/typescript/dist/src/cli.js"

@@ -93,7 +93,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 500,
-          "pattern": "^(field|control|binding|model|dto|symbol|fact):"
+          "pattern": "^(field|control|binding|model|dto|symbol|fact):\\s*\\S"
         },
         "sourceLabel": { "$ref": "#/$defs/safeName" },
         "framework": { "enum": ["angular", "razor", "any"] }
