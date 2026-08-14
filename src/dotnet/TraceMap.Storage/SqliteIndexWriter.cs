@@ -26,7 +26,13 @@ public static class SqliteIndexWriter
             File.Delete(path);
         }
 
-        using var connection = new SqliteConnection($"Data Source={path}");
+        var connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = path,
+            Mode = SqliteOpenMode.ReadWriteCreate,
+            Pooling = false
+        }.ToString();
+        using var connection = new SqliteConnection(connectionString);
         connection.Open();
         CreateSchema(connection);
         InsertManifest(connection, manifest);

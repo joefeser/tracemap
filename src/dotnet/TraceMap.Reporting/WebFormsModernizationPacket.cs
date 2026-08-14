@@ -17,7 +17,8 @@ public sealed record WebFormsModernizationOptions(
     int MaxDepth = 8,
     int MaxPaths = 1_000,
     int MaxBoundaries = 1_000,
-    int MaxIdentityState = 1_000);
+    int MaxIdentityState = 1_000,
+    int MaxBatchDataMovement = 1_000);
 
 public sealed record WebFormsModernizationResult(
     WebFormsModernizationPacket Packet,
@@ -37,6 +38,7 @@ public sealed record WebFormsModernizationPacket(
     IReadOnlyList<WebFormsModernizationEventChain> EventChains,
     IReadOnlyList<WebFormsModernizationDownstreamBoundary> DownstreamBoundaries,
     IReadOnlyList<WebFormsModernizationIdentityState> IdentityStateInventory,
+    IReadOnlyList<WebFormsModernizationBatchDataMovement> BatchDataMovementInventory,
     IReadOnlyList<WebFormsModernizationSliceCandidate> StructuralSliceCandidates,
     IReadOnlyList<WebFormsModernizationGap> Gaps,
     IReadOnlyList<string> OwnerQuestions,
@@ -56,6 +58,7 @@ public sealed record WebFormsModernizationSummary(
     int EventChainCount,
     int DownstreamBoundaryCount,
     int IdentityStateCount,
+    int BatchDataMovementCount,
     int StructuralSliceCandidateCount,
     int GapCount,
     bool Truncated);
@@ -140,6 +143,19 @@ public sealed record WebFormsModernizationIdentityState(
     IReadOnlyList<string> SupportingFactIds,
     IReadOnlyList<string> Limitations);
 
+public sealed record WebFormsModernizationBatchDataMovement(
+    string BatchDataMovementId,
+    string SurfaceKind,
+    string Mechanism,
+    string OperationKind,
+    string OwnerStatus,
+    string ProjectResolution,
+    string? ProjectId,
+    IReadOnlyDictionary<string, string> SafeMetadata,
+    WebFormsModernizationEvidence Evidence,
+    IReadOnlyList<string> SupportingFactIds,
+    IReadOnlyList<string> Limitations);
+
 public sealed record WebFormsModernizationSliceCandidate(
     string CandidateId,
     string Classification,
@@ -197,12 +213,32 @@ public static class WebFormsModernizationPacketReporter
         WriteIndented = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
+    private static readonly HashSet<string> BatchSurfaceKinds = new(StringComparer.Ordinal)
+    {
+        "bulk-copy", "configuration-integration", "console-job", "etl-package", "file-data-movement",
+        "message-data-movement", "scheduled-task", "stored-procedure-batch", "windows-service"
+    };
+    private static readonly HashSet<string> BatchMechanisms = new(StringComparer.Ordinal)
+    {
+        "command-type-stored-procedure", "compiler-resolved-file-system-watcher", "compiler-resolved-hangfire-recurring-job",
+        "compiler-resolved-quartz-job-type", "compiler-resolved-service-base-type", "compiler-resolved-sql-bulk-copy",
+        "compiler-resolved-system-io-call", "config-key-shape", "declared-sql-bulk-copy-variable", "existing-message-surface",
+        "hangfire-recurring-job", "qualified-file-system-watcher", "qualified-system-io-call", "qualified-timer-construction",
+        "quartz-job-type", "service-base-type", "ssis-package-file", "static-main-method", "timer-trigger-attribute"
+    };
+    private static readonly HashSet<string> BatchOperationKinds = new(StringComparer.Ordinal)
+    {
+        "bind", "consume", "declare", "entry", "execute", "handle", "host", "publish", "read", "schedule", "trigger", "watch", "write"
+    };
+    private static readonly HashSet<string> BatchOwnerStatuses = new(StringComparer.Ordinal) { "file-level", "member-declared" };
+    private static readonly HashSet<string> BatchProjectResolutions = new(StringComparer.Ordinal) { "ambiguous", "resolved", "unavailable" };
     private static readonly IReadOnlyList<string> PacketLimitations =
     [
         "This packet composes deterministic static evidence from one TraceMap snapshot; it does not prove runtime reachability, execution, event firing, postback behavior, validation, authorization, persistence, or production use.",
         "Structural candidates group only declared static surface composition; they do not name business capabilities or prove workflow completeness, parity, migration scope, effort, cloud readiness, target architecture, test completeness, security approval, release approval, or safety to change.",
         "A chain ending at a handler or without a terminal is useful reduced evidence, never proof that no backend behavior exists.",
-        "File-operation boundaries are not extracted by the current scanner and remain an explicit packet capability gap; absence is not proof that handlers do not read or write files.",
+        "Supported compiler-resolved and explicitly qualified file-operation declarations are inventoried as batch/data-movement candidates; indirect wrappers, aliases under reduced semantic coverage, runtime paths, and dynamic locations remain outside coverage, so absence is not proof that code does not read or write files.",
+        "Batch/data-movement rows are static candidates only; they do not prove a job is scheduled, runs, succeeds, moves complete data, retries effectively, is idempotent, is monitored, or should use any particular target architecture.",
         "The packet omits snippets, raw SQL, configuration values, URLs, connection strings, credentials, source values, repository remotes, and absolute local paths."
     ];
     private static readonly IReadOnlyList<string> Questions =
@@ -210,7 +246,9 @@ public static class WebFormsModernizationPacketReporter
         "Which owner-provided capability label should be assigned to each structural candidate?",
         "Which missing or dynamic handler shapes require owner-controlled follow-up evidence?",
         "Which handler-only chains are expected to reach a backend or external boundary?",
-        "Which handlers are expected to read or write files, given that file-operation extraction is unavailable in this packet version?",
+        "Which handlers are expected to read or write files through indirect wrappers or dynamic locations not covered by the bounded file-operation rules?",
+        "Which batch/data-movement candidates are active, owner-approved workflows rather than dormant or test-only declarations?",
+        "Which retry, checkpoint, transaction, and telemetry expectations require runtime or operator evidence beyond the static declarations?",
         "Which reduced build or analysis gaps must be closed before migration planning?"
     ];
 
@@ -268,7 +306,7 @@ public static class WebFormsModernizationPacketReporter
         var sourceAnalysisReduced = IsReducedAnalysisLevel(snapshot.AnalysisLevel);
         if (sourceAnalysisReduced)
             AddGeneratedGap(gaps, options.MaxGaps, snapshot, "SourceAnalysisCoverageReduced", "scan", snapshot.ScanId, []);
-        AddGeneratedGap(gaps, options.MaxGaps, snapshot, "FileOperationBoundaryExtractionUnavailable", "boundary-kind", "file-operation", []);
+        AddGeneratedGap(gaps, options.MaxGaps, snapshot, "IndirectFileOperationBoundaryCoverageUnavailable", "boundary-kind", "file-operation", []);
         var allFacts = snapshot.Facts.OrderBy(fact => fact.FactId, StringComparer.Ordinal).ToArray();
         foreach (var invalid in allFacts.Where(fact => !HasRequiredProvenance(fact)))
             AddGeneratedGap(gaps, options.MaxGaps, snapshot, "EvidenceProvenanceUnavailable", "fact", invalid.FactId, [invalid.FactId]);
@@ -520,6 +558,47 @@ public static class WebFormsModernizationPacketReporter
         }).OrderBy(item => item.IdentityStateId, StringComparer.Ordinal).ToArray();
         foreach (var identityGap in facts.Where(fact => fact.FactType == FactTypes.AnalysisGap && fact.RuleId == RuleIds.LegacyAspNetIdentityState))
             AddFactGap(gaps, options.MaxGaps, snapshot, identityGap);
+        var batchFacts = facts.Where(fact => fact.FactType == FactTypes.LegacyBatchDataMovementDeclared)
+            .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ThenBy(fact => fact.Evidence.StartLine)
+            .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
+            .ToArray();
+        var retainedBatchFacts = batchFacts.Take(options.MaxBatchDataMovement).ToArray();
+        if (retainedBatchFacts.Length < batchFacts.Length)
+        {
+            truncated = true;
+            AddGeneratedGap(gaps, options.MaxGaps, snapshot, "WebFormsModernizationBatchDataMovementLimitReached", "packet", null,
+                batchFacts.Skip(retainedBatchFacts.Length).Select(fact => fact.FactId));
+        }
+        var batchDataMovement = retainedBatchFacts.Select(fact =>
+        {
+            var batchId = HashId("batch-data-movement", [fact.FactId]);
+            var surfaceKind = BatchValue(fact.Properties.GetValueOrDefault("surfaceKind"), BatchSurfaceKinds, out var supportedSurface);
+            var mechanism = BatchValue(fact.Properties.GetValueOrDefault("mechanism"), BatchMechanisms, out var supportedMechanism);
+            var operationKind = BatchValue(fact.Properties.GetValueOrDefault("operationKind"), BatchOperationKinds, out var supportedOperation);
+            var ownerStatus = BatchValue(fact.Properties.GetValueOrDefault("ownerStatus"), BatchOwnerStatuses, out var supportedOwner);
+            var projectResolution = BatchValue(fact.Properties.GetValueOrDefault("projectResolution"), BatchProjectResolutions, out var supportedProject);
+            var safeMetadata = BatchSafeMetadata(fact, out var supportedMetadata);
+            if (!supportedSurface || !supportedMechanism || !supportedOperation || !supportedOwner || !supportedProject || !supportedMetadata)
+                AddGeneratedGap(gaps, options.MaxGaps, snapshot, "UnsupportedBatchDataMovementPropertyShape", "batch-data-movement", batchId, [fact.FactId]);
+            var evidence = Evidence(fact, gaps, options.MaxGaps, snapshot);
+            return new WebFormsModernizationBatchDataMovement(
+                batchId,
+                surfaceKind,
+                mechanism,
+                operationKind,
+                ownerStatus,
+                projectResolution,
+                fact.ProjectPath is null ? null : ProjectId(fact.ProjectPath),
+                safeMetadata,
+                evidence,
+                SplitIds(fact.Properties.GetValueOrDefault("supportingFactIds")).Append(fact.FactId)
+                    .Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                evidence.Limitations.Append("Batch/data-movement packet rows do not prove scheduling, execution, successful or complete movement, retries, idempotency, checkpoint effectiveness, transaction outcome, monitoring, target state, or production use.")
+                    .Distinct(StringComparer.Ordinal).ToArray());
+        }).OrderBy(item => item.BatchDataMovementId, StringComparer.Ordinal).ToArray();
+        foreach (var batchGap in facts.Where(fact => fact.FactType == FactTypes.AnalysisGap && fact.RuleId == RuleIds.LegacyWebFormsBatchDataMovement))
+            AddFactGap(gaps, options.MaxGaps, snapshot, batchGap);
         if (gaps.Any(gap => gap.Classification == "WebFormsModernizationGapLimitReached")) truncated = true;
         var uniqueGaps = gaps.GroupBy(gap => gap.GapId, StringComparer.Ordinal).Select(group => group.First()).OrderBy(gap => gap.GapId, StringComparer.Ordinal).ToArray();
         var hasReducedInput = facts.Any(fact => fact.EvidenceTier == EvidenceTiers.Tier4Unknown
@@ -542,12 +621,13 @@ public static class WebFormsModernizationPacketReporter
             ClaimLevel,
             coverage,
             [source],
-            new(projects.Length, surfaces.Length, chains.Count, boundaries.Count, identityState.Length, candidates.Count, uniqueGaps.Length, truncated),
+            new(projects.Length, surfaces.Length, chains.Count, boundaries.Count, identityState.Length, batchDataMovement.Length, candidates.Count, uniqueGaps.Length, truncated),
             projects,
             surfaces,
             chains.OrderBy(chain => chain.ChainId, StringComparer.Ordinal).ToArray(),
             boundaries.OrderBy(boundary => boundary.BoundaryId, StringComparer.Ordinal).ToArray(),
             identityState,
+            batchDataMovement,
             candidates,
             uniqueGaps,
             Questions,
@@ -813,7 +893,8 @@ public static class WebFormsModernizationPacketReporter
         {
             DataSource = Path.GetFullPath(path),
             Mode = SqliteOpenMode.ReadOnly,
-            Cache = SqliteCacheMode.Private
+            Cache = SqliteCacheMode.Private,
+            Pooling = false
         }.ToString());
         try
         {
@@ -918,7 +999,7 @@ public static class WebFormsModernizationPacketReporter
         b.AppendLine($"- Coverage: `{packet.Coverage}`");
         b.AppendLine($"- Repository: `{packet.Sources.Single().RepositoryId}`");
         b.AppendLine($"- Commit: `{packet.Sources.Single().CommitSha}`");
-        b.AppendLine($"- Surfaces: `{packet.Summary.SurfaceCount}`; event chains: `{packet.Summary.EventChainCount}`; downstream boundaries: `{packet.Summary.DownstreamBoundaryCount}`; identity/state declarations: `{packet.Summary.IdentityStateCount}`; structural candidates: `{packet.Summary.StructuralSliceCandidateCount}`; gaps: `{packet.Summary.GapCount}`; truncated: `{packet.Summary.Truncated}`.").AppendLine();
+        b.AppendLine($"- Surfaces: `{packet.Summary.SurfaceCount}`; event chains: `{packet.Summary.EventChainCount}`; downstream boundaries: `{packet.Summary.DownstreamBoundaryCount}`; identity/state declarations: `{packet.Summary.IdentityStateCount}`; batch/data-movement declarations: `{packet.Summary.BatchDataMovementCount}`; structural candidates: `{packet.Summary.StructuralSliceCandidateCount}`; gaps: `{packet.Summary.GapCount}`; truncated: `{packet.Summary.Truncated}`.").AppendLine();
         b.AppendLine("## Surfaces").AppendLine();
         if (packet.Surfaces.Count == 0) b.AppendLine("- No supported Web Forms surfaces were available; see gaps.");
         foreach (var surface in packet.Surfaces)
@@ -939,6 +1020,10 @@ public static class WebFormsModernizationPacketReporter
         if (packet.IdentityStateInventory.Count == 0) b.AppendLine("- No supported identity/state declaration was inventoried; this is not proof of absence.");
         foreach (var item in packet.IdentityStateInventory)
             b.AppendLine($"- `{item.IdentityStateId}` — `{item.IdentityKind}` / `{item.Classification}`; surface `{item.SurfaceId ?? "unassociated"}`; fact `{item.Evidence.FactId}`; rule `{item.Evidence.RuleId}`; tier `{item.Evidence.EvidenceTier}`; coverage `{item.Evidence.CoverageLabel}`; span `{item.Evidence.FilePath}:{item.Evidence.StartLine}-{item.Evidence.EndLine}`.");
+        b.AppendLine().AppendLine("## Batch and data-movement inventory").AppendLine();
+        if (packet.BatchDataMovementInventory.Count == 0) b.AppendLine("- No supported batch/data-movement declaration was inventoried; this is not proof of absence.");
+        foreach (var item in packet.BatchDataMovementInventory)
+            b.AppendLine($"- `{item.BatchDataMovementId}` — `{item.SurfaceKind}` / `{item.Mechanism}` / `{item.OperationKind}`; owner `{item.OwnerStatus}`; project `{item.ProjectId ?? item.ProjectResolution}`; fact `{item.Evidence.FactId}`; rule `{item.Evidence.RuleId}`; tier `{item.Evidence.EvidenceTier}`; coverage `{item.Evidence.CoverageLabel}`; span `{item.Evidence.FilePath}:{item.Evidence.StartLine}-{item.Evidence.EndLine}`.");
         b.AppendLine().AppendLine("## Structural slice candidates").AppendLine();
         foreach (var candidate in packet.StructuralSliceCandidates)
             b.AppendLine($"- `{candidate.CandidateId}` — classification `{candidate.Classification}`, owner naming required `{candidate.OwnerNamingRequired}`, surfaces {string.Join(", ", candidate.SurfaceIds.Select(id => $"`{id}`"))}.");
@@ -958,7 +1043,7 @@ public static class WebFormsModernizationPacketReporter
         if (string.IsNullOrWhiteSpace(options.IndexPath)) throw new ArgumentException("webforms-modernization requires --index <index.sqlite>.");
         if (string.IsNullOrWhiteSpace(options.OutputDirectory)) throw new ArgumentException("webforms-modernization requires --out <directory>.");
         if (!File.Exists(options.IndexPath)) throw new FileNotFoundException("WebFormsModernizationIndexUnavailable");
-        if (options.MaxSurfaces <= 0 || options.MaxEventChains <= 0 || options.MaxCandidates <= 0 || options.MaxGaps <= 0 || options.MaxDepth <= 0 || options.MaxPaths <= 0 || options.MaxBoundaries <= 0 || options.MaxIdentityState <= 0)
+        if (options.MaxSurfaces <= 0 || options.MaxEventChains <= 0 || options.MaxCandidates <= 0 || options.MaxGaps <= 0 || options.MaxDepth <= 0 || options.MaxPaths <= 0 || options.MaxBoundaries <= 0 || options.MaxIdentityState <= 0 || options.MaxBatchDataMovement <= 0)
             throw new ArgumentOutOfRangeException(nameof(options), "Web Forms modernization bounds must be positive.");
     }
 
@@ -992,6 +1077,57 @@ public static class WebFormsModernizationPacketReporter
             result[pair.Key] = value;
         }
         return result;
+    }
+    private static IReadOnlyDictionary<string, string> BatchSafeMetadata(CodeFact fact, out bool supported)
+    {
+        string[] allowed =
+        [
+            "apiClassification", "checkpointDeclaration", "configurationKeyHash", "configurationKind",
+            "errorHandlingDeclaration", "loopDeclaration", "messageSurfaceKind", "retryDeclaration",
+            "scheduleReferenceHash", "scheduleSource", "telemetryDeclaration", "transactionDeclaration"
+        ];
+        supported = true;
+        var result = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        foreach (var pair in fact.Properties.Where(pair => allowed.Contains(pair.Key, StringComparer.Ordinal)).OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            var value = SafeBatchMetadataValue(pair.Key, pair.Value);
+            if (value is null)
+            {
+                supported = false;
+                continue;
+            }
+            result[pair.Key] = value;
+        }
+
+        var knownKeys = allowed
+            .Concat(["coverageLabel", "databaseOperationFactIds", "externalBoundaryFactIds", "limitations", "mechanism",
+                "messageBoundaryFactIds", "operationKind", "ownerMember", "ownerStatus", "ownerType", "projectResolution",
+                "scheduleConfigFactId", "supportingFactIds", "surfaceKind"])
+            .ToHashSet(StringComparer.Ordinal);
+        if (fact.Properties.Keys.Any(key => !knownKeys.Contains(key))) supported = false;
+        return result;
+    }
+    private static string? SafeBatchMetadataValue(string key, string value)
+    {
+        if (key is "configurationKeyHash" or "scheduleReferenceHash")
+            return value.Length == 32 && value.All(character => char.IsAsciiHexDigit(character)) ? value : null;
+        if (key is "checkpointDeclaration" or "retryDeclaration" or "telemetryDeclaration" or "transactionDeclaration")
+            return value == "named-call" ? value : null;
+        if (key == "errorHandlingDeclaration") return value == "catch-clause" ? value : null;
+        if (key == "loopDeclaration") return value is "present" or "not-observed" ? value : null;
+        if (key == "configurationKind") return value is "etl" or "file-boundary" or "message-boundary" or "schedule" ? value : null;
+        if (key == "messageSurfaceKind") return MessageSurfaceIdentity.SurfaceKinds.Contains(value, StringComparer.Ordinal) ? value : null;
+        if (key == "scheduleSource") return value is "config-reference-matched" or "config-reference-unavailable" or "dynamic-or-unavailable" or "literal-omitted" or "omitted-static-or-dynamic" or "unavailable" ? value : null;
+        if (key == "apiClassification")
+            return value is "AppendAllLines" or "AppendAllText" or "Copy" or "Create" or "EnumerateFiles" or "GetFiles"
+                or "Move" or "OpenRead" or "OpenWrite" or "ReadAllBytes" or "ReadAllLines" or "ReadAllText" or "ReadLines"
+                or "Replace" or "WriteAllBytes" or "WriteAllLines" or "WriteAllText" ? value : null;
+        return null;
+    }
+    private static string BatchValue(string? value, IReadOnlySet<string> allowed, out bool supported)
+    {
+        supported = value is not null && allowed.Contains(value);
+        return supported ? value! : "unknown";
     }
     private static string? SafeIdentityMetadataValue(string key, string value)
     {

@@ -13,6 +13,7 @@ public sealed record TraceMapVersionResult(
     string ScannerVersion,
     string DistributionKind,
     string SourceState,
+    string SourceCommit,
     string TargetFramework,
     TraceMapVersionHost Host,
     TraceMapVersionReadiness Readiness,
@@ -63,6 +64,10 @@ public static class TraceMapVersionInfo
             .GetCustomAttributes<AssemblyMetadataAttribute>()
             .FirstOrDefault(attribute => string.Equals(attribute.Key, "TraceMapSourceState", StringComparison.Ordinal))?
             .Value;
+        var sourceCommit = assembly
+            .GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(attribute => string.Equals(attribute.Key, "TraceMapSourceCommit", StringComparison.Ordinal))?
+            .Value;
 
         var gitAvailable = capabilityProbe("git");
         var msBuildAvailable = capabilityProbe("dotnet-msbuild");
@@ -79,6 +84,7 @@ public static class TraceMapVersionInfo
             TraceMapDiagnostics.ToolVersion,
             string.IsNullOrWhiteSpace(distributionKind) ? "unknown" : distributionKind,
             sourceState is "clean" or "dirty" or "unavailable" ? sourceState : "unavailable",
+            IsCommitSha(sourceCommit) ? sourceCommit!.ToLowerInvariant() : "unavailable",
             string.IsNullOrWhiteSpace(targetFramework) ? "unknown" : targetFramework,
             new TraceMapVersionHost(
                 OperatingSystemName(),
@@ -94,6 +100,9 @@ public static class TraceMapVersionInfo
                 "Version and package hashes do not establish publisher identity or authority."
             ]);
     }
+
+    private static bool IsCommitSha(string? value) =>
+        value is { Length: 40 } && value.All(character => char.IsAsciiHexDigit(character));
 
     private static string OperatingSystemName()
     {

@@ -7,16 +7,16 @@
 - [x] 0.3 Keep distribution selection gated on reproducible package smoke evidence.
 - [x] 0.4 Run spec formatting, private-path, and diff validation.
 - [x] 0.5 Review the spec and patch blocking or P1/P2 contract findings.
-- [ ] 0.6 Commit, push, and open the focused spec PR to `dev` after #656 is merged or the owner approves parallel review.
+- [x] 0.6 Commit, push, and open the focused implementation PR to `dev` under the owner-authorized ordered roadmap.
 
 ## Implementation Runway
 
-- [ ] 1. Validate distribution candidates. Requirements: 1, 8, 10.
+- [x] 1. Validate distribution candidates. Requirements: 1, 8, 10.
   - [x] Add a committed candidate matrix with pass/fail evidence and explicit host claims.
-  - [ ] Build synthetic .NET tool, framework-dependent archive, self-contained archive, and offline/container probes where the host supports them.
-  - [ ] Prove install/run/remove outside the source checkout.
-  - [ ] Inspect package/archive contents and native dependencies.
-  - [ ] Select one v1 distribution only after the gates pass; otherwise retain source-checkout runbooks.
+  - [x] Build synthetic .NET tool, framework-dependent archive, self-contained archive, and offline/container probes where the host supports them.
+  - [x] Prove install/run/remove outside the source checkout.
+  - [x] Inspect package/archive contents and native dependencies.
+  - [x] Select the .NET tool for v1 after the macOS, Windows, and Linux arm64 host probes plus hosted x64 matrix passed.
 
 - [x] 2. Add installed version/readiness output. Requirements: 2, 8, 9.
   - [x] Define and add the version JSON schema.
@@ -46,20 +46,20 @@
   - [x] Emit `local-review-result.v1` and README/terminal output from one structured model.
   - [x] Add closed outcomes, next actions, exit codes, and failure tests.
 
-- [ ] 6. Package and document the selected distribution. Requirements: 1, 2, 8.
-  - [ ] Add reproducible package metadata and version provenance.
-  - [ ] Add Windows, macOS, and Linux install/upgrade/uninstall instructions for proven hosts.
-  - [ ] Add offline installation guidance without security-control bypasses.
-  - [ ] Document integrity versus authenticity limitations.
+- [x] 6. Package and document the selected distribution. Requirements: 1, 2, 8.
+  - [x] Add reproducible package metadata and version provenance.
+  - [x] Add Windows, macOS, and Linux install/upgrade/uninstall instructions for proven hosts.
+  - [x] Add offline installation guidance without security-control bypasses.
+  - [x] Document integrity versus authenticity limitations.
 
-- [ ] 7. Validate end to end. Requirements: 9, 10.
+- [x] 7. Validate end to end. Requirements: 9, 10.
   - [x] Run focused package/version/workflow tests.
   - [x] Run synthetic Web Forms standalone-versus-guided parity.
-  - [ ] Run claimed-host package smoke tests.
-  - [ ] Run `dotnet build src/dotnet/TraceMap.sln`.
-  - [ ] Run `dotnet test src/dotnet/TraceMap.sln`.
-  - [ ] Run `./scripts/check-private-paths.sh`.
-  - [ ] Run `git diff --check`.
+  - [x] Run claimed-host package smoke tests.
+  - [x] Run `dotnet build src/dotnet/TraceMap.sln`.
+  - [x] Run `dotnet test src/dotnet/TraceMap.sln`.
+  - [x] Run `./scripts/check-private-paths.sh`.
+  - [x] Run `git diff --check`.
 
 ## Recommended PR Slices
 
