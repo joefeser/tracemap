@@ -135,6 +135,28 @@ The configuration supports bounded arrays of:
 - endpoint-to-surface path queries;
 - combined dependency and portfolio report choices.
 
+Every configured source receives these default exclusions before its scan:
+
+```text
+.vs/**
+**/bin/**
+**/obj/**
+**/node_modules/**
+**/dist/**
+**/coverage/**
+**/TestResults/**
+**/.angular/**
+**/.next/**
+```
+
+These directories commonly contain IDE, build, dependency, test, and framework
+outputs that can change while project loading is in progress. Excluding them
+keeps generated churn outside the authoritative source snapshot. A source's
+configured `exclude` entries are added to these defaults; they do not replace
+them. Duplicate patterns are removed deterministically. Files outside the
+effective exclusion set remain protected by the source-snapshot and clean-Git
+checks, so an ordinary selected-source mutation still stops the run.
+
 Validate the configuration and local source state without scanning:
 
 ```powershell
