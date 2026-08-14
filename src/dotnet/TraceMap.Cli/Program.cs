@@ -268,6 +268,7 @@ public static class TraceMapCommand
         try
         {
             fullOutputPath = Path.GetFullPath(outputPath);
+            ScanOutputTransaction.ValidateProtectedRoot(fullOutputPath, repoPath);
         }
         catch (Exception)
         {
@@ -310,12 +311,12 @@ public static class TraceMapCommand
             {
                 await RunReceiptStageAsync(receiptOperation, () =>
                 {
-                    ScanOutputTransaction.ValidateTarget(fullOutputPath);
+                    ScanOutputTransaction.ValidateTarget(fullOutputPath, repoPath);
                     receiptOperation.Complete("succeeded", result.Manifest.AnalysisLevel, "output-directory-prepared");
                     return Task.CompletedTask;
                 });
             }
-            await ScanOutputTransaction.WriteAsync(fullOutputPath, async artifactOutputPath =>
+            await ScanOutputTransaction.WriteAsync(fullOutputPath, repoPath, async artifactOutputPath =>
             {
                 var logsPath = Path.Combine(artifactOutputPath, "logs");
                 Directory.CreateDirectory(logsPath);
