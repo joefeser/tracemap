@@ -4,6 +4,7 @@ import ts from "typescript";
 export interface CompilerHostCache {
   parsedCommandLines: Map<string, ts.ParsedCommandLine>;
   sourceFiles: Map<string, [ts.SourceFile, ts.ScriptTarget]>;
+  configFiles: Map<string, string>;
 }
 
 export function createCompilerHostWithCache(

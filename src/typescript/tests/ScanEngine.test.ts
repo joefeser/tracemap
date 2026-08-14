@@ -334,6 +334,37 @@ describe("ScanEngine", () => {
     expect(first.inventory.some((item) => item.relativePath.includes("node_modules"))).toBe(false);
   });
 
+  it("binds extended compiler configuration inputs into snapshot identity", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    const configDirectory = path.join(repo, "node_modules", "fixture-config");
+    await fsp.mkdir(path.join(repo, "src"), { recursive: true });
+    await fsp.mkdir(configDirectory, { recursive: true });
+    await fsp.writeFile(path.join(repo, "tsconfig.json"), JSON.stringify({ extends: "./node_modules/fixture-config/base.json", include: ["src/**/*.ts"] }));
+    await fsp.writeFile(path.join(repo, "src", "sample.ts"), "export function sample(value) { return value; }\n");
+    const extendedConfig = path.join(configDirectory, "base.json");
+    await fsp.writeFile(extendedConfig, JSON.stringify({ compilerOptions: { noImplicitAny: true } }));
+    initGitRepo(repo);
+
+    const first = await scan(scanOptions(repo, path.join(root, "first")));
+    await fsp.writeFile(extendedConfig, JSON.stringify({ compilerOptions: { noImplicitAny: false } }));
+    const second = await scan(scanOptions(repo, path.join(root, "second")));
+
+    expect(first.manifest.commitSha).toBe(second.manifest.commitSha);
+    expect(first.manifest.sourceSnapshotDigest).not.toBe(second.manifest.sourceSnapshotDigest);
+    expect(first.manifest.scanId).not.toBe(second.manifest.scanId);
+    expect(first.facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.AnalysisGap,
+      properties: expect.objectContaining({ diagnosticCode: "7006" })
+    }));
+    expect(second.facts).not.toContainEqual(expect.objectContaining({
+      factType: FactTypes.AnalysisGap,
+      properties: expect.objectContaining({ diagnosticCode: "7006" })
+    }));
+    expect(first.facts.some((fact) => fact.evidence.filePath.includes("node_modules"))).toBe(false);
+    expect(first.inventory.some((item) => item.relativePath.includes("node_modules"))).toBe(false);
+  });
+
   it("preserves prior output when a staged artifact write fails", async () => {
     const root = await tempDir();
     const repo = path.join(root, "repo");

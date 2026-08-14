@@ -25,20 +25,27 @@ export async function loadTypeScriptProjects(repoPath: string, options: ScanOpti
   const projectPaths = discoverProjectPaths(repoPath, options, inventory);
   const visited = new Set<string>();
   const loaded: LoadedProject[] = [];
-  const cache: CompilerHostCache = { parsedCommandLines: new Map(), sourceFiles: new Map() };
+  const cache: CompilerHostCache = { parsedCommandLines: new Map(), sourceFiles: new Map(), configFiles: new Map() };
   const selectedPaths = new Set(inventory.filter((item) => !item.skipped).map((item) => path.resolve(item.absolutePath)));
   for (const projectPath of projectPaths) {
     loadProjectRecursive(repoPath, projectPath, options, selectedPaths, cache, visited, loaded);
   }
   return {
     projects: loaded,
-    compilerInputTokens: [...cache.sourceFiles.entries()]
-      .filter(([fileName]) => !selectedPaths.has(path.resolve(fileName)))
-      .map(([, [sourceFile]]) => {
-        const analyzedText = Buffer.from(sourceFile.text, "utf8");
-        return `${analyzedText.byteLength}\0${hashBytes(analyzedText)}\0`;
-      })
-      .sort()
+    compilerInputTokens: [
+      ...[...cache.sourceFiles.entries()]
+        .filter(([fileName]) => !selectedPaths.has(path.resolve(fileName)))
+        .map(([, [sourceFile]]) => {
+          const analyzedText = Buffer.from(sourceFile.text, "utf8");
+          return `source\0${analyzedText.byteLength}\0${hashBytes(analyzedText)}\0`;
+        }),
+      ...[...cache.configFiles.entries()]
+        .filter(([fileName]) => !selectedPaths.has(path.resolve(fileName)))
+        .map(([, configText]) => {
+          const analyzedText = Buffer.from(configText, "utf8");
+          return `config\0${analyzedText.byteLength}\0${hashBytes(analyzedText)}\0`;
+        })
+    ].sort()
   };
 }
 
@@ -87,7 +94,19 @@ function loadProjectRecursive(
     });
     return;
   }
-  const parsed = ts.parseJsonConfigFileContent(config.config, ts.sys, path.dirname(normalizedProjectPath), undefined, normalizedProjectPath);
+  const parseConfigHost: ts.ParseConfigHost = {
+    useCaseSensitiveFileNames: ts.sys.useCaseSensitiveFileNames,
+    readDirectory: ts.sys.readDirectory,
+    fileExists: ts.sys.fileExists,
+    readFile: (fileName) => {
+      const text = ts.sys.readFile(fileName);
+      if (text !== undefined) {
+        cache.configFiles.set(path.resolve(fileName), text);
+      }
+      return text;
+    }
+  };
+  const parsed = ts.parseJsonConfigFileContent(config.config, parseConfigHost, path.dirname(normalizedProjectPath), undefined, normalizedProjectPath);
   cache.parsedCommandLines.set(normalizedProjectPath, parsed);
   for (const reference of parsed.projectReferences ?? []) {
     const referencePath = path.resolve(path.dirname(normalizedProjectPath), reference.path);
