@@ -58,7 +58,18 @@ public sealed class WebFormsStaticExplorerTests
             row.SectionId == "webforms" && row.Status is "available" or "partial");
         var evidenceStatus = Assert.Single(firstResult.Data.SectionStatuses, row => row.SectionId == "evidence-rows");
         Assert.NotEqual("not-provided", evidenceStatus.Status);
+        if (artifact.Compatibility == "supported-partial")
+        {
+            Assert.Equal("partial", evidenceStatus.Status);
+        }
         Assert.Contains("artifact:webforms-modernization", evidenceStatus.SupportIds);
+        Assert.Contains(firstResult.Data.CompatibilityLedger, row =>
+            row.SubjectKind == "claim-level"
+            && row.SubjectId == "claim-level:local-only"
+            && row.CompatibilityStatus == "compatible"
+            && row.SupportIds.SequenceEqual(["artifact:webforms-modernization"])
+            && row.LimitationIds.Count == 0);
+        Assert.DoesNotContain(firstResult.Data.CompatibilityLedger, row => row.SubjectId == "claim-level:unknown");
         Assert.Equal(
             firstResult.Data.Sources.Single(source => source.SourceId == "source:webforms-modernization").CommitSha,
             firstResult.Manifest.CommitSha);
