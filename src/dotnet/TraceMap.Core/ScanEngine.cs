@@ -9,7 +9,13 @@ public static class ScanEngine
 {
     public static ScanResult Scan(ScanOptions options) => Scan(options, CancellationToken.None);
 
-    public static ScanResult Scan(ScanOptions options, CancellationToken cancellationToken)
+    public static ScanResult Scan(ScanOptions options, CancellationToken cancellationToken) =>
+        Scan(options, receiptRecorder: null, cancellationToken);
+
+    public static ScanResult Scan(
+        ScanOptions options,
+        ScanReceiptRecorder? receiptRecorder,
+        CancellationToken cancellationToken = default)
     {
         using var scanOperation = TraceMapDiagnostics.StartScan(cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
@@ -23,50 +29,81 @@ public static class ScanEngine
         GitMetadata git;
         IReadOnlyList<FileInventoryItem> fullInventory;
         IReadOnlyList<FileInventoryItem> inventory;
-        using (var discoveryOperation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.Discovery, cancellationToken))
+        using var discoveryReceipt = receiptRecorder?.StartStage("discovery", "inventory-and-identity");
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            git = GitMetadataProvider.Detect(repoPath);
-            MsBuildBinlogExtractor.ValidateCommitBinding(git.CommitSha, options.BinlogPaths, options.BinlogCommitSha);
-            var sourcePathComparer = CSharpSemanticExtractor.CreateSourcePathComparer(repoPath);
-            fullInventory = FileInventory.Collect(
-                repoPath,
-                outputPath,
-                options.ExcludeGlobs,
-                sourcePathComparer,
-                options.IncludeGlobs);
-            inventory = ApplyScope(fullInventory, repoPath, options);
-            cancellationToken.ThrowIfCancellationRequested();
-            discoveryOperation.RecordItems(inventory.Count);
-            discoveryOperation.Complete(TraceMapDiagnosticOutcome.Succeeded);
+            using (var discoveryOperation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.Discovery, cancellationToken))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                git = GitMetadataProvider.Detect(repoPath);
+                receiptRecorder?.Bind(git);
+                MsBuildBinlogExtractor.ValidateCommitBinding(git.CommitSha, options.BinlogPaths, options.BinlogCommitSha);
+                var sourcePathComparer = CSharpSemanticExtractor.CreateSourcePathComparer(repoPath);
+                fullInventory = FileInventory.Collect(
+                    repoPath,
+                    outputPath,
+                    options.ExcludeGlobs,
+                    sourcePathComparer,
+                    options.IncludeGlobs);
+                inventory = ApplyScope(fullInventory, repoPath, options);
+                cancellationToken.ThrowIfCancellationRequested();
+                discoveryOperation.RecordItems(inventory.Count);
+                discoveryOperation.Complete(TraceMapDiagnosticOutcome.Succeeded);
+                discoveryReceipt?.Complete("succeeded", "unchanged", "inventory-and-commit-observed");
+            }
+        }
+        catch (Exception ex)
+        {
+            discoveryReceipt?.Fail(ex, "stage-started");
+            throw;
         }
 
         IReadOnlyDictionary<string, string> semanticInputSnapshot;
-        try
-        {
-            semanticInputSnapshot = CaptureSemanticInputSnapshot(repoPath, fullInventory);
-        }
-        catch (SourceInventoryException ex)
-        {
-            throw new SourceSnapshotException(ex);
-        }
         SemanticExtractionResult semanticResult;
         bool semanticToolchainReducedCoverage;
-        using (var semanticOperation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.SemanticAnalysis, cancellationToken))
+        using var semanticReceipt = receiptRecorder?.StartStage("semantic-analysis", "compiler-and-syntax-analysis");
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            semanticResult = CSharpSemanticExtractor.Extract(repoPath, inventory, options, fullInventory);
-            semanticToolchainReducedCoverage = HasToolchainSemanticReduction(semanticResult);
-            cancellationToken.ThrowIfCancellationRequested();
-            VerifySemanticInputSnapshot(repoPath, fullInventory, semanticResult, semanticInputSnapshot);
-            semanticOperation.Complete(semanticToolchainReducedCoverage
-                ? TraceMapDiagnosticOutcome.Partial
-                : TraceMapDiagnosticOutcome.Succeeded);
+            try
+            {
+                semanticInputSnapshot = CaptureSemanticInputSnapshot(repoPath, fullInventory);
+            }
+            catch (SourceInventoryException ex)
+            {
+                throw new SourceSnapshotException(ex);
+            }
+            using (var semanticOperation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.SemanticAnalysis, cancellationToken))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                semanticResult = CSharpSemanticExtractor.Extract(repoPath, inventory, options, fullInventory);
+                semanticToolchainReducedCoverage = HasToolchainSemanticReduction(semanticResult);
+                var semanticStageCoverage = semanticResult.Attempted
+                    ? semanticToolchainReducedCoverage ? "semantic-reduced" : "semantic"
+                    : semanticToolchainReducedCoverage ? "syntax-reduced" : "syntax";
+                cancellationToken.ThrowIfCancellationRequested();
+                VerifySemanticInputSnapshot(repoPath, fullInventory, semanticResult, semanticInputSnapshot);
+                semanticOperation.Complete(semanticToolchainReducedCoverage
+                    ? TraceMapDiagnosticOutcome.Partial
+                    : TraceMapDiagnosticOutcome.Succeeded);
+                semanticReceipt?.Complete(
+                    semanticToolchainReducedCoverage ? "partial" : "succeeded",
+                    semanticStageCoverage,
+                    "semantic-input-snapshot-verified",
+                    retryability: semanticToolchainReducedCoverage ? "retry-after-dependency-restoration" : "not-required",
+                    nextAction: semanticToolchainReducedCoverage ? "review-analysis-gaps" : "continue");
+            }
+        }
+        catch (Exception ex)
+        {
+            semanticReceipt?.Fail(ex, "stage-started");
+            throw;
         }
 
         inventory = IncludeSemanticallyAnalyzedFiles(inventory, fullInventory, semanticResult);
         var discoveredSnapshotInventory = IncludeSemanticInputs(inventory, fullInventory, semanticResult);
         IReadOnlyList<FileInventoryItem> authoritativeSnapshotInventory;
+        string sourceSnapshotDigest;
+        using var preVerificationReceipt = receiptRecorder?.StartStage("source-verification", "pre-extraction-snapshot-verification");
         try
         {
             var sourcePathComparer = CSharpSemanticExtractor.CreateSourcePathComparer(repoPath);
@@ -94,13 +131,21 @@ public static class ScanEngine
             fullInventory = refreshedFullInventory;
             inventory = refreshedInventory;
             authoritativeSnapshotInventory = refreshedSnapshotInventory;
+            sourceSnapshotDigest = CreateSourceSnapshotDigest(repoPath, authoritativeSnapshotInventory);
+            preVerificationReceipt?.Complete("succeeded", "unchanged", "source-snapshot-verified");
         }
         catch (SourceInventoryException ex)
         {
-            throw new SourceSnapshotException(ex);
+            var transformed = new SourceSnapshotException(ex);
+            preVerificationReceipt?.Fail(transformed, "stage-started");
+            throw transformed;
+        }
+        catch (Exception ex)
+        {
+            preVerificationReceipt?.Fail(ex, "stage-started");
+            throw;
         }
 
-        var sourceSnapshotDigest = CreateSourceSnapshotDigest(repoPath, authoritativeSnapshotInventory);
         var solutions = inventory
             .Where(item => item.Kind == "Solution")
             .Select(item => item.RelativePath)
@@ -186,18 +231,37 @@ public static class ScanEngine
         };
 
         IReadOnlyList<CodeFact> facts;
-        using (var extractionOperation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.StaticExtraction, cancellationToken))
+        receiptRecorder?.Bind(manifest);
+        using var extractionReceipt = receiptRecorder?.StartStage("static-extraction", "deterministic-fact-extraction", manifest.AnalysisLevel);
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            facts = CreateFacts(manifest, inventory, targetFrameworkInfos, ProjectFileReader.ReadPackageReferences(repoPath, inventory), knownGaps, repoPath, semanticResult, options, binlogFacts, migrationSyntaxFallback);
-            cancellationToken.ThrowIfCancellationRequested();
-            extractionOperation.RecordItems(facts.Count);
-            extractionOperation.Complete(manifest.BuildStatus == "FailedOrPartial"
-                ? TraceMapDiagnosticOutcome.Partial
-                : TraceMapDiagnosticOutcome.Succeeded);
+            using (var extractionOperation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.StaticExtraction, cancellationToken))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                facts = CreateFacts(manifest, inventory, targetFrameworkInfos, ProjectFileReader.ReadPackageReferences(repoPath, inventory), knownGaps, repoPath, semanticResult, options, binlogFacts, migrationSyntaxFallback);
+                cancellationToken.ThrowIfCancellationRequested();
+                extractionOperation.RecordItems(facts.Count);
+                extractionOperation.Complete(manifest.BuildStatus == "FailedOrPartial"
+                    ? TraceMapDiagnosticOutcome.Partial
+                    : TraceMapDiagnosticOutcome.Succeeded);
+                extractionReceipt?.Complete(
+                    manifest.BuildStatus == "FailedOrPartial" ? "partial" : "succeeded",
+                    manifest.AnalysisLevel,
+                    "facts-created",
+                    retryability: manifest.BuildStatus == "FailedOrPartial" ? "retry-after-dependency-restoration" : "not-required",
+                    nextAction: manifest.BuildStatus == "FailedOrPartial" ? "review-analysis-gaps" : "continue",
+                    supportingFactIds: facts.Select(fact => fact.FactId),
+                    supportingGapIds: facts.Where(fact => fact.FactType == FactTypes.AnalysisGap).Select(fact => fact.FactId));
+            }
+        }
+        catch (Exception ex)
+        {
+            extractionReceipt?.Fail(ex, "stage-started");
+            throw;
         }
 
         string verificationDigest;
+        using var verificationReceipt = receiptRecorder?.StartStage("source-verification", "post-extraction-snapshot-verification", manifest.AnalysisLevel);
         try
         {
             var sourcePathComparer = CSharpSemanticExtractor.CreateSourcePathComparer(repoPath);
@@ -218,16 +282,22 @@ public static class ScanEngine
                 semanticResult);
             VerifySourceSnapshotInventory(authoritativeSnapshotInventory, verificationSnapshotInventory);
             verificationDigest = CreateSourceSnapshotDigest(repoPath, verificationSnapshotInventory);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!string.Equals(sourceSnapshotDigest, verificationDigest, StringComparison.Ordinal))
+                throw new SourceSnapshotException();
+            verificationReceipt?.Complete("succeeded", manifest.AnalysisLevel, "source-snapshot-verified");
         }
         catch (SourceInventoryException ex)
         {
-            throw new SourceSnapshotException(ex);
+            var transformed = new SourceSnapshotException(ex);
+            verificationReceipt?.Fail(transformed, "stage-started");
+            throw transformed;
         }
-        if (!string.Equals(sourceSnapshotDigest, verificationDigest, StringComparison.Ordinal))
+        catch (Exception ex)
         {
-            throw new SourceSnapshotException();
+            verificationReceipt?.Fail(ex, "stage-started");
+            throw;
         }
-
         cancellationToken.ThrowIfCancellationRequested();
 
         scanOperation.RecordItems(facts.Count);
@@ -237,7 +307,9 @@ public static class ScanEngine
                 : TraceMapDiagnosticOutcome.Succeeded,
             manifest.AnalysisLevel,
             manifest.BuildStatus);
-        return new ScanResult(manifest, facts, inventory);
+        var result = new ScanResult(manifest, facts, inventory);
+        receiptRecorder?.Bind(result);
+        return result;
     }
 
     private static string CreateScanId(
@@ -248,8 +320,22 @@ public static class ScanEngine
     {
         var signature = string.Join('\n', inventory.Select(item => $"{item.RelativePath}|{item.Kind}|{item.SizeBytes}"));
         var binlogSignature = MsBuildBinlogExtractor.CreateInputSignature(options.BinlogPaths, repoPath: options.RepoPath);
+        var optionSignature = string.Join('|',
+            FrameValues(NormalizeOptionPaths(options.RepoPath, options.SolutionPaths)),
+            FrameValues(NormalizeOptionPaths(options.RepoPath, options.ProjectPaths)),
+            FrameValues((options.IncludeGlobs ?? []).Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => NormalizePathForFileSystemComparison(value.Trim()))),
+            FrameValues((options.ExcludeGlobs ?? []).Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => NormalizePathForFileSystemComparison(value.Trim()))),
+            FrameValues(string.IsNullOrWhiteSpace(options.TargetFramework) ? [] : [options.TargetFramework.Trim()]),
+            $"restore={options.Restore.ToString().ToLowerInvariant()}",
+            FrameValues(string.IsNullOrWhiteSpace(options.BinlogCommitSha) ? [] : [options.BinlogCommitSha.Trim()]));
         var repoIdentity = string.IsNullOrWhiteSpace(git.RemoteUrl) ? git.RepoName : git.RemoteUrl;
-        return "scan-" + FactFactory.Hash($"{repoIdentity}|{git.CommitSha}|{sourceSnapshotDigest}|{signature}|{binlogSignature}", 20);
+        return "scan-" + FactFactory.Hash($"{repoIdentity}|{git.CommitSha}|{sourceSnapshotDigest}|{signature}|{optionSignature}|{binlogSignature}", 20);
+    }
+
+    private static string FrameValues(IEnumerable<string> values)
+    {
+        var sorted = values.Order(StringComparer.Ordinal).ToArray();
+        return $"{sorted.Length}:" + string.Concat(sorted.Select(value => $"{Encoding.UTF8.GetByteCount(value)}:{value}"));
     }
 
     internal static string CreateSourceSnapshotDigest(string repoPath, IReadOnlyList<FileInventoryItem> inventory)
@@ -619,6 +705,7 @@ public static class ScanEngine
         facts.AddRange(FilterProtectedEvidence(LegacyWebFormsExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges));
         facts.AddRange(FilterProtectedEvidence(LegacyWinFormsExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges));
         facts.AddRange(FilterProtectedEvidence(LegacyAspNetExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges));
+        facts.AddRange(FilterProtectedEvidence(LegacyBatchDataMovementExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges));
         var diagnosticSemanticResult = semanticResult with
         {
             GapFacts = semanticResult.GapFacts.Where(gap => !IsProducerLocalSemanticGap(gap)).ToArray(),

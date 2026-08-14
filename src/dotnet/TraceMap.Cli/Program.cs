@@ -35,8 +35,11 @@ public static class TraceMapCommand
             await output.WriteLineAsync(command switch
             {
                 "scan" => ScanHelp(),
+                "version" => VersionHelp(),
+                "local-review" => LocalReviewHelp(),
                 "report" => ReportHelp(),
                 "database-design-review" => DatabaseDesignReviewHelp(),
+                "webforms-modernization" => WebFormsModernizationHelp(),
                 "reduce" => ReduceHelp(),
                 "flow" => FlowHelp(),
                 "relate" => RelateHelp(),
@@ -63,7 +66,7 @@ public static class TraceMapCommand
                 "explorer" => ExplorerHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "report" or "database-design-review" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
+            return command is "scan" or "version" or "local-review" or "report" or "database-design-review" or "webforms-modernization" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
         }
 
         using var commandOperation = TraceMapDiagnostics.StartCommand(command);
@@ -72,8 +75,11 @@ public static class TraceMapCommand
             var exitCode = command switch
             {
                 "scan" => await RunScanAsync(rest, output, error, cancellationToken),
+                "version" => await RunVersionAsync(rest, output, error),
+                "local-review" => await LocalReviewCommand.RunAsync(rest, output, error, RunScanAsync, cancellationToken),
                 "report" => await RunReportAsync(rest, output, error, cancellationToken),
                 "database-design-review" => await RunDatabaseDesignReviewAsync(rest, output, error, cancellationToken),
+                "webforms-modernization" => await RunWebFormsModernizationAsync(rest, output, error, cancellationToken),
                 "reduce" => await RunReduceAsync(rest, output, error, cancellationToken),
                 "flow" => await RunFlowAsync(rest, output, error, cancellationToken),
                 "relate" => await RunRelateAsync(rest, output, error, cancellationToken),
@@ -116,6 +122,32 @@ public static class TraceMapCommand
             await error.WriteLineAsync($"error: {ex.Message}");
             return 1;
         }
+    }
+
+    private static async Task<int> RunVersionAsync(string[] args, TextWriter output, TextWriter error)
+    {
+        var unknown = args.Where(argument => !string.Equals(argument, "--json", StringComparison.Ordinal)).ToArray();
+        if (unknown.Length > 0)
+        {
+            await error.WriteLineAsync($"error: unsupported version option(s): {string.Join(", ", unknown)}.");
+            return 1;
+        }
+
+        var result = TraceMapVersionInfo.Create();
+        if (args.Contains("--json", StringComparer.Ordinal))
+        {
+            await output.WriteLineAsync(JsonSerializer.Serialize(result, TraceMapVersionInfo.JsonOptions));
+            return 0;
+        }
+
+        await output.WriteLineAsync($"TraceMap {result.ToolVersion} ({result.DistributionKind})");
+        await output.WriteLineAsync($"Readiness: {result.Readiness.Outcome}");
+        if (!string.Equals(result.Readiness.NextAction, "none", StringComparison.Ordinal))
+        {
+            await output.WriteLineAsync($"Next action: {result.Readiness.NextAction}");
+        }
+
+        return 0;
     }
 
     private static async Task<int> RunReduceAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
@@ -218,7 +250,7 @@ public static class TraceMapCommand
         var sqlValidationSummaryPaths = values.GetMany("--sql-validation-summary");
         var sqlValidationAsOf = ParseSqlValidationAsOf(values, sqlValidationSummaryPaths);
 
-        var result = ScanEngine.Scan(new ScanOptions(
+        var scanOptions = new ScanOptions(
             repoPath,
             outputPath,
             SolutionPaths: values.GetMany("--solution"),
@@ -228,53 +260,222 @@ public static class TraceMapCommand
             TargetFramework: values.GetValueOrDefault("--target-framework"),
             Restore: values.HasFlag("--restore"),
             BinlogPaths: values.GetMany("--binlog"),
-            BinlogCommitSha: values.GetValueOrDefault("--binlog-commit-sha")), cancellationToken);
-        var fullOutputPath = Path.GetFullPath(outputPath);
-        var logsPath = Path.Combine(fullOutputPath, "logs");
-        Directory.CreateDirectory(logsPath);
+            BinlogCommitSha: values.GetValueOrDefault("--binlog-commit-sha"));
+        var receiptRecorder = new ScanReceiptRecorder(
+            scanOptions,
+            sqlValidationSummaryPaths.Append(sqlValidationAsOf?.ToString("O") ?? string.Empty));
+        string fullOutputPath;
+        try
+        {
+            fullOutputPath = Path.GetFullPath(outputPath);
+            ScanOutputTransaction.ValidateProtectedRoot(fullOutputPath, repoPath);
+        }
+        catch (Exception)
+        {
+            await error.WriteLineAsync("error: output-path-invalid");
+            return 1;
+        }
+        ScanResult result;
+        try
+        {
+            result = ScanEngine.Scan(scanOptions, receiptRecorder, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            receiptRecorder.Complete(
+                ex is OperationCanceledException ? "cancelled" : ex is TimeoutException ? "timed-out" : "failed",
+                "unknown");
+            if (receiptRecorder.CanWriteAuthoritativeReceipt
+                && ScanOutputTransaction.CanWriteFailureReceipt(fullOutputPath, repoPath))
+            {
+                try
+                {
+                    await ScanExecutionReceiptWriter.WriteAsync(
+                        Path.Combine(fullOutputPath, "scan-receipt.json"),
+                        receiptRecorder.CreateReceipt(),
+                        CancellationToken.None);
+                }
+                catch
+                {
+                    // The original categorical scan failure remains authoritative.
+                    // Receipt-write failure must not expose a second raw exception.
+                }
+            }
+            if (ex is OperationCanceledException && cancellationToken.IsCancellationRequested)
+                throw;
+            await error.WriteLineAsync($"error: {SafeScanError(ex)}");
+            return 1;
+        }
+        try
+        {
+            using (var receiptOperation = receiptRecorder.StartStage("artifact-write", "output-directory-prepare", result.Manifest.AnalysisLevel, "occurred", "completed"))
+            {
+                await RunReceiptStageAsync(receiptOperation, () =>
+                {
+                    ScanOutputTransaction.ValidateTarget(fullOutputPath, repoPath);
+                    receiptOperation.Complete("succeeded", result.Manifest.AnalysisLevel, "output-directory-prepared");
+                    return Task.CompletedTask;
+                });
+            }
+            await ScanOutputTransaction.WriteAsync(fullOutputPath, repoPath, async artifactOutputPath =>
+            {
+                var logsPath = Path.Combine(artifactOutputPath, "logs");
+                Directory.CreateDirectory(logsPath);
 
-        using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.ManifestWrite, cancellationToken))
-        {
-            await ManifestWriter.WriteAsync(Path.Combine(fullOutputPath, "scan-manifest.json"), result.Manifest, cancellationToken);
-            operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
+                using (var receiptOperation = receiptRecorder.StartStage("artifact-write", "manifest-write", result.Manifest.AnalysisLevel, "occurred", "completed"))
+                {
+                    await RunReceiptStageAsync(receiptOperation, async () =>
+                    {
+                        using var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.ManifestWrite, cancellationToken);
+                        await ManifestWriter.WriteAsync(Path.Combine(artifactOutputPath, "scan-manifest.json"), result.Manifest, cancellationToken);
+                        operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
+                        receiptOperation.Complete("succeeded", result.Manifest.AnalysisLevel, "manifest-written");
+                    });
+                }
+                using (var receiptOperation = receiptRecorder.StartStage("artifact-write", "facts-write", result.Manifest.AnalysisLevel, "occurred", "completed"))
+                {
+                    await RunReceiptStageAsync(receiptOperation, async () =>
+                    {
+                        using var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.FactsWrite, cancellationToken);
+                        await JsonlFactWriter.WriteAsync(Path.Combine(artifactOutputPath, "facts.ndjson"), result.Facts, cancellationToken);
+                        operation.RecordItems(result.Facts.Count);
+                        operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
+                        receiptOperation.Complete("succeeded", result.Manifest.AnalysisLevel, "facts-written", supportingFactIds: result.Facts.Select(fact => fact.FactId));
+                    });
+                }
+                using (var receiptOperation = receiptRecorder.StartStage("artifact-write", "index-write", result.Manifest.AnalysisLevel, "occurred", "completed"))
+                {
+                    await RunReceiptStageAsync(receiptOperation, () =>
+                    {
+                        using var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.IndexWrite, cancellationToken);
+                        SqliteIndexWriter.Write(Path.Combine(artifactOutputPath, "index.sqlite"), result.Manifest, result.Facts);
+                        operation.RecordItems(result.Facts.Count);
+                        operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
+                        receiptOperation.Complete("succeeded", result.Manifest.AnalysisLevel, "index-written");
+                        return Task.CompletedTask;
+                    });
+                }
+                using (var receiptOperation = receiptRecorder.StartStage("artifact-write", "report-write", result.Manifest.AnalysisLevel, "occurred", "completed"))
+                {
+                    await RunReceiptStageAsync(receiptOperation, async () =>
+                    {
+                        using var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.ReportWrite, cancellationToken);
+                        var staticPacket = SqlRunbookPacketBuilder.Build(result);
+                        var validationComposition = await SqlValidationSummaryReader.ReadAsync(
+                            sqlValidationSummaryPaths,
+                            [SqlRunbookPacketBuilder.ValidationExpectedSource(result, staticPacket, evaluatedAt: sqlValidationAsOf)],
+                            cancellationToken);
+                        var packetCandidate = SqlRunbookPacketBuilder.Build(result, validationComposition);
+                        await MarkdownReportWriter.WriteAsync(Path.Combine(artifactOutputPath, "report.md"), result, packetCandidate, cancellationToken);
+                        if (SqlRunbookPacketBuilder.HasMeaningfulContent(packetCandidate))
+                            await SqlRunbookPacketWriter.WriteAsync(artifactOutputPath, packetCandidate, cancellationToken);
+                        operation.Complete(validationComposition.Gaps.Count > 0
+                            ? TraceMapDiagnosticOutcome.Partial
+                            : TraceMapDiagnosticOutcome.Succeeded);
+                        receiptOperation.Complete(
+                            validationComposition.Gaps.Count > 0 ? "partial" : "succeeded",
+                            result.Manifest.AnalysisLevel,
+                            "report-written",
+                            retryability: validationComposition.Gaps.Count > 0 ? "retry-after-input-correction" : "not-required",
+                            nextAction: validationComposition.Gaps.Count > 0 ? "review-validation-gaps" : "continue",
+                            supportingGapIds: validationComposition.Gaps.Select(gap => gap.GapId));
+                        if (validationComposition.Gaps.Count > 0)
+                            receiptRecorder.MarkPartial(result.Manifest.AnalysisLevel, validationComposition.Gaps.Select(gap => gap.GapId));
+                    });
+                }
+                using (var receiptOperation = receiptRecorder.StartStage("artifact-write", "analyzer-log-write", result.Manifest.AnalysisLevel, "occurred", "completed"))
+                {
+                    await RunReceiptStageAsync(receiptOperation, async () =>
+                    {
+                        using var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.AnalyzerLogWrite, cancellationToken);
+                        await WriteAnalyzerLogAsync(Path.Combine(logsPath, "analyzer.log"), result, cancellationToken);
+                        operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
+                        receiptOperation.Complete("succeeded", result.Manifest.AnalysisLevel, "analyzer-log-written");
+                    });
+                }
+
+                if (receiptRecorder.CanWriteAuthoritativeReceipt)
+                {
+                    await WriteFinalScanReceiptAsync(
+                        Path.Combine(artifactOutputPath, "scan-receipt.json"),
+                        receiptRecorder,
+                        result.Manifest.AnalysisLevel,
+                        cancellationToken);
+                }
+            });
         }
-        using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.FactsWrite, cancellationToken))
+        catch (Exception ex)
         {
-            await JsonlFactWriter.WriteAsync(Path.Combine(fullOutputPath, "facts.ndjson"), result.Facts, cancellationToken);
-            operation.RecordItems(result.Facts.Count);
-            operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
-        }
-        using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.IndexWrite, cancellationToken))
-        {
-            SqliteIndexWriter.Write(Path.Combine(fullOutputPath, "index.sqlite"), result.Manifest, result.Facts);
-            operation.RecordItems(result.Facts.Count);
-            operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
-        }
-        using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.ReportWrite, cancellationToken))
-        {
-            var staticPacket = SqlRunbookPacketBuilder.Build(result);
-            var validationComposition = await SqlValidationSummaryReader.ReadAsync(
-                sqlValidationSummaryPaths,
-                [SqlRunbookPacketBuilder.ValidationExpectedSource(result, staticPacket, evaluatedAt: sqlValidationAsOf)],
-                cancellationToken);
-            var packetCandidate = SqlRunbookPacketBuilder.Build(result, validationComposition);
-            await MarkdownReportWriter.WriteAsync(Path.Combine(fullOutputPath, "report.md"), result, packetCandidate, cancellationToken);
-            if (SqlRunbookPacketBuilder.HasMeaningfulContent(packetCandidate))
-                await SqlRunbookPacketWriter.WriteAsync(fullOutputPath, packetCandidate, cancellationToken);
-            operation.Complete(validationComposition.Gaps.Count > 0
-                ? TraceMapDiagnosticOutcome.Partial
-                : TraceMapDiagnosticOutcome.Succeeded);
-        }
-        using (var operation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.AnalyzerLogWrite, cancellationToken))
-        {
-            await WriteAnalyzerLogAsync(Path.Combine(logsPath, "analyzer.log"), result, cancellationToken);
-            operation.Complete(TraceMapDiagnosticOutcome.Succeeded);
+            receiptRecorder.Complete(
+                ex is OperationCanceledException ? "cancelled" : ex is TimeoutException ? "timed-out" : "failed",
+                result.Manifest.AnalysisLevel,
+                result.Facts.Select(fact => fact.FactId),
+                result.Facts.Where(fact => fact.FactType == FactTypes.AnalysisGap).Select(fact => fact.FactId));
+            try
+            {
+                if (!ScanOutputTransaction.HasCompleteOutput(fullOutputPath)
+                    && ScanOutputTransaction.CanWriteFailureReceipt(fullOutputPath, repoPath))
+                {
+                    await ScanExecutionReceiptWriter.WriteAsync(
+                        Path.Combine(fullOutputPath, "scan-receipt.json"),
+                        receiptRecorder.CreateReceipt(),
+                        CancellationToken.None);
+                }
+            }
+            catch
+            {
+                // Preserve the categorical artifact failure without exposing a
+                // secondary writer exception or protected output path.
+            }
+            if (ex is OperationCanceledException && cancellationToken.IsCancellationRequested)
+                throw;
+            await error.WriteLineAsync($"error: {ScanReceiptRecorder.ClassifyOutputFailure(ex)}");
+            return 1;
         }
 
         await output.WriteLineAsync($"TraceMap scan completed: {fullOutputPath}");
         await output.WriteLineAsync($"Facts written: {result.Facts.Count}");
         await output.WriteLineAsync($"Analysis level: {result.Manifest.AnalysisLevel}");
         return 0;
+    }
+
+    private static string SafeScanError(Exception exception) =>
+        exception is ArgumentException argument
+        && argument.Message.StartsWith("--binlog", StringComparison.Ordinal)
+            ? argument.Message
+            : ScanReceiptRecorder.ClassifyFailure(exception);
+
+    private static async Task RunReceiptStageAsync(ScanReceiptOperation operation, Func<Task> action)
+    {
+        try
+        {
+            await action();
+        }
+        catch (Exception ex)
+        {
+            operation.FailOutput(ex, "stage-started");
+            throw;
+        }
+    }
+
+    internal static async Task WriteFinalScanReceiptAsync(
+        string path,
+        ScanReceiptRecorder recorder,
+        string coverage,
+        CancellationToken cancellationToken,
+        Func<string, ScanExecutionReceipt, CancellationToken, Task>? writer = null)
+    {
+        writer ??= ScanExecutionReceiptWriter.WriteAsync;
+        try
+        {
+            await writer(path, recorder.CreateReceipt(), cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            using var operation = recorder.StartStage("artifact-write", "receipt-write", coverage, "occurred", "unknown");
+            operation.FailOutput(ex, "analyzer-log-written", "unknown");
+            throw;
+        }
     }
 
     private static async Task<int> RunReportAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
@@ -352,6 +553,57 @@ public static class TraceMapCommand
         await output.WriteLineAsync($"Query references: {result.Report.Summary.QueryReferenceCount}");
         await output.WriteLineAsync($"Route references: {result.Report.Summary.RouteReferenceCount}");
         await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
+        return 0;
+    }
+
+    private static async Task<int> RunWebFormsModernizationAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        var values = ParseOptions(args);
+        string[] supportedOptions =
+        [
+            "--index", "--out", "--max-surfaces", "--max-event-chains", "--max-candidates",
+            "--max-gaps", "--max-depth", "--max-paths", "--max-boundaries", "--max-identity-state", "--max-batch-data-movement"
+        ];
+        var unknownOptions = values.Keys.Except(supportedOptions, StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        if (unknownOptions.Length > 0)
+        {
+            await error.WriteLineAsync($"error: unsupported webforms-modernization option(s): {string.Join(", ", unknownOptions)}.");
+            return 1;
+        }
+        if (!values.TryGetValue("--index", out var indexPath) || string.IsNullOrWhiteSpace(indexPath))
+        {
+            await error.WriteLineAsync("error: webforms-modernization requires --index <index.sqlite>.");
+            return 1;
+        }
+
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: webforms-modernization requires --out <directory>.");
+            return 1;
+        }
+
+        var result = await WebFormsModernizationPacketReporter.WriteAsync(new(
+            indexPath,
+            outputPath,
+            ParsePositiveInt(values, "--max-surfaces", 1_000),
+            ParsePositiveInt(values, "--max-event-chains", 1_000),
+            ParsePositiveInt(values, "--max-candidates", 1_000),
+            ParsePositiveInt(values, "--max-gaps", 1_000),
+            ParsePositiveInt(values, "--max-depth", 8),
+            ParsePositiveInt(values, "--max-paths", 1_000),
+            ParsePositiveInt(values, "--max-boundaries", 1_000),
+            ParsePositiveInt(values, "--max-identity-state", 1_000),
+            ParsePositiveInt(values, "--max-batch-data-movement", 1_000)), cancellationToken);
+        await output.WriteLineAsync($"TraceMap Web Forms modernization packet completed: {result.JsonPath}");
+        await output.WriteLineAsync($"Repository: {result.Packet.Sources.Single().RepositoryId}");
+        await output.WriteLineAsync($"Commit SHA: {result.Packet.Sources.Single().CommitSha}");
+        await output.WriteLineAsync($"Coverage: {result.Packet.Coverage}");
+        await output.WriteLineAsync($"Surfaces: {result.Packet.Summary.SurfaceCount}");
+        await output.WriteLineAsync($"Event chains: {result.Packet.Summary.EventChainCount}");
+        await output.WriteLineAsync($"Downstream boundaries: {result.Packet.Summary.DownstreamBoundaryCount}");
+        await output.WriteLineAsync($"Identity/state declarations: {result.Packet.Summary.IdentityStateCount}");
+        await output.WriteLineAsync($"Batch/data-movement declarations: {result.Packet.Summary.BatchDataMovementCount}");
+        await output.WriteLineAsync($"Gaps: {result.Packet.Summary.GapCount}");
         return 0;
     }
 
@@ -2123,6 +2375,8 @@ public static class TraceMapCommand
         Dictionary<string, List<string>> values,
         HashSet<string> flags)
     {
+        public IEnumerable<string> Keys => values.Keys.Concat(flags);
+
         public bool TryGetValue(string key, out string? value)
         {
             if (values.TryGetValue(key, out var list) && list.Count > 0)
@@ -2169,9 +2423,12 @@ public static class TraceMapCommand
             TraceMap deterministic C# repository indexer
 
             Usage:
+              tracemap version [--json]
+              tracemap local-review run --repo <path> --out <new-output-root> [--webforms-modernization] [--explorer]
               tracemap scan --repo <path> --out <path>
               tracemap report --index <path> --out <path>
               tracemap database-design-review --index <combined.sqlite> --out <path>
+              tracemap webforms-modernization --index <index.sqlite> --out <directory>
               tracemap reduce --index <path> --contract-delta <path> --out <path>
               tracemap flow --index <path> --symbol <symbol-or-fragment> --out <path>
               tracemap relate --index <path> --symbol <symbol-or-fragment> --out <path>
@@ -2196,9 +2453,12 @@ public static class TraceMapCommand
               tracemap explorer generate --input <artifact-dir> --out <explorer-output>
 
             Commands:
+              version   Show installed build identity and bounded local readiness.
+              local-review Run a guided local scan and compatible review stages.
               scan      Inventory a repository and emit TraceMap artifacts.
               report    Generate a combined dependency report from a combined index.
               database-design-review Compose existing PostgreSQL design, query, and route evidence.
+              webforms-modernization Compose existing Web Forms evidence into a local modernization packet.
               reduce    Reduce a contract delta against an index.
               flow      Trace deterministic parameter-forwarding paths.
               relate    Trace deterministic symbol relationship paths.
@@ -2222,6 +2482,38 @@ public static class TraceMapCommand
               baseline Create, validate, and compare redacted legacy baseline summaries.
               evidence-pack Create, validate, and promote redacted legacy evidence packs.
               explorer Generate a local static HTML evidence explorer from existing TraceMap artifacts.
+            """;
+    }
+
+    private static string VersionHelp()
+    {
+        return """
+            Usage:
+              tracemap version [--json]
+
+            Reports schema-versioned build identity and bounded local readiness.
+            The JSON output omits executable paths, environment values, and raw diagnostics.
+            Git is required for authoritative repository identity. Missing MSBuild reduces
+            semantic coverage but does not prevent syntax and structural evidence.
+            """;
+    }
+
+    private static string LocalReviewHelp()
+    {
+        return """
+            Usage:
+              tracemap local-review run --repo <path> --out <new-output-root> [scan options] [--webforms-modernization] [--explorer]
+
+            Safe scan options:
+              --solution <path>        Repeatable solution selection.
+              --project <path>         Repeatable project selection.
+              --include <glob>         Repeatable inventory inclusion.
+              --exclude <glob>         Repeatable inventory exclusion.
+              --target-framework <tfm> Semantic target-framework selection.
+
+            The v1 guided path never restores packages, accesses a network service,
+            uploads artifacts, or overwrites an existing nonempty output. It emits
+            local-review-result.json and README.md beside the generated stage folders.
             """;
     }
 
@@ -2256,10 +2548,12 @@ public static class TraceMapCommand
               index.sqlite
               report.md
               logs/analyzer.log
+              scan-receipt.json       Commit-bound sanitized operational receipt; omitted when no exact commit is available.
 
-            Truthfulness failures (exit code 1; no scan artifacts are written):
+            Truthfulness failures (exit code 1; normal scan artifacts are not written):
               SourceInventoryIncomplete          An in-scope inventory entry could not be read.
               SourceSnapshotChangedDuringScan    Protected input bytes changed or disappeared during analysis.
+              A commit-bound failure may write only scan-receipt.json with categorical diagnostics.
             """;
     }
 
@@ -2305,6 +2599,37 @@ public static class TraceMapCommand
               Read-side composition only. No database connection, SQL execution,
               migration execution, runtime reachability claim, or release approval.
               Single-index input reports route-path coverage as unavailable.
+            """;
+    }
+
+    private static string WebFormsModernizationHelp()
+    {
+        return """
+            Usage:
+              tracemap webforms-modernization --index <index.sqlite> --out <directory> [bounds]
+
+            Required:
+              --index <path>             One immutable TraceMap scan index.
+              --out <directory>          New output directory.
+
+            Optional:
+              --max-surfaces <n>         Maximum surface rows (default 1000).
+              --max-event-chains <n>     Maximum event chains (default 1000).
+              --max-boundaries <n>       Maximum downstream boundary rows (default 1000).
+              --max-identity-state <n>   Maximum identity/state rows (default 1000).
+              --max-batch-data-movement <n>
+                                         Maximum batch/data-movement rows (default 1000).
+              --max-candidates <n>       Maximum structural candidates (default 1000).
+              --max-gaps <n>             Maximum gap rows (default 1000).
+              --max-depth <n>            Legacy static-flow traversal depth (default 8).
+              --max-paths <n>            Legacy static-flow path limit (default 1000).
+
+            Outputs:
+              webforms-modernization.json and webforms-modernization.md
+
+            Boundaries:
+              Local-only, single-snapshot static evidence composition. No runtime,
+              business-capability, parity, migration-estimate, architecture, or release claim.
             """;
     }
 

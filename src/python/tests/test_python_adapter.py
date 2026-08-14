@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -13,7 +14,7 @@ from tracemap_py.fact_factory import create_fact
 from tracemap_py.config_extractor import extract_config_files
 from tracemap_py.git_metadata import read_git_metadata
 from tracemap_py.hashes import sha256_hex
-from tracemap_py.inventory import discover_inventory
+from tracemap_py.inventory import create_scan_id, discover_inventory
 from tracemap_py.metadata import read_package_metadata
 from tracemap_py.models import CodeFact, EvidenceSpan, ScanManifest
 from tracemap_py.report import render_report
@@ -200,6 +201,102 @@ def test_fastapi_sample_emits_integration_and_relationship_tables(tmp_path: Path
         con.close()
 
     assert any(fact.evidence.extractor_version for fact in facts)
+
+
+def test_snapshot_identity_changes_for_same_size_dirty_bytes_and_is_persisted(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    source = repo / "app.py"
+    source.write_text("value = 1\n", encoding="utf-8")
+    _git(repo, "init")
+    _git(repo, "add", ".")
+    _git(repo, "-c", "user.name=TraceMap", "-c", "user.email=fixture@example.invalid", "commit", "-m", "baseline")
+
+    first, first_facts = scan(make_options(str(repo), str(tmp_path / "first")))
+    repeat, repeat_facts = scan(make_options(str(repo), str(tmp_path / "repeat")))
+    source.write_text("value = 2\n", encoding="utf-8")
+    changed, _ = scan(make_options(str(repo), str(tmp_path / "changed")))
+
+    assert re.fullmatch(r"[0-9a-f]{64}", first.source_snapshot_digest or "")
+    assert first.source_snapshot_digest == repeat.source_snapshot_digest
+    assert first.scan_id == repeat.scan_id
+    assert [fact.to_json() for fact in first_facts] == [fact.to_json() for fact in repeat_facts]
+    assert first.commit_sha == changed.commit_sha
+    assert first.source_snapshot_digest != changed.source_snapshot_digest
+    assert first.scan_id != changed.scan_id
+
+    persisted = json.loads((tmp_path / "first" / "scan-manifest.json").read_text(encoding="utf-8"))
+    assert persisted["sourceSnapshotDigest"] == first.source_snapshot_digest
+    with sqlite3.connect(tmp_path / "first" / "index.sqlite") as connection:
+        sqlite_manifest = json.loads(connection.execute("select manifest_json from scan_manifest").fetchone()[0])
+    assert sqlite_manifest["sourceSnapshotDigest"] == first.source_snapshot_digest
+
+
+def test_scan_identity_option_lists_have_unambiguous_framing() -> None:
+    one_value = make_options("repo", "out", exclude=["foo,bar"])
+    two_values = make_options("repo", "out", exclude=["foo", "bar"])
+
+    assert create_scan_id("repo", "a" * 40, "b" * 64, one_value, "scanner/v1", sha256_hex) != create_scan_id(
+        "repo", "a" * 40, "b" * 64, two_values, "scanner/v1", sha256_hex
+    )
+
+
+def test_source_mutation_before_snapshot_verification_fails_without_publishing(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    source = repo / "app.py"
+    source.write_text("value = 1\n", encoding="utf-8")
+    _git(repo, "init")
+    _git(repo, "add", ".")
+    _git(repo, "-c", "user.name=TraceMap", "-c", "user.email=fixture@example.invalid", "commit", "-m", "baseline")
+    output = tmp_path / "output"
+
+    def mutate() -> None:
+        source.write_text("value = 2\n", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="SourceSnapshotChangedDuringScan"):
+        scan(make_options(str(repo), str(output)), _before_snapshot_verification=mutate)
+
+    assert not output.exists()
+
+
+def test_source_creation_before_snapshot_verification_fails_without_publishing(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "app.py").write_text("value = 1\n", encoding="utf-8")
+    _git(repo, "init")
+    _git(repo, "add", ".")
+    _git(repo, "-c", "user.name=TraceMap", "-c", "user.email=fixture@example.invalid", "commit", "-m", "baseline")
+    output = tmp_path / "output"
+
+    def create_source() -> None:
+        (repo / "added.py").write_text("added = True\n", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="SourceSnapshotChangedDuringScan"):
+        scan(make_options(str(repo), str(output)), _before_snapshot_verification=create_source)
+
+    assert not output.exists()
+
+
+def test_artifact_write_failure_preserves_prior_complete_output(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "app.py").write_text("value = 1\n", encoding="utf-8")
+    _git(repo, "init")
+    _git(repo, "add", ".")
+    _git(repo, "-c", "user.name=TraceMap", "-c", "user.email=fixture@example.invalid", "commit", "-m", "baseline")
+    output = tmp_path / "output"
+    scan(make_options(str(repo), str(output)))
+    baseline = {path.relative_to(output): path.read_bytes() for path in output.rglob("*") if path.is_file()}
+
+    def fail_after_manifest() -> None:
+        raise RuntimeError("SyntheticArtifactWriteFailure")
+
+    with pytest.raises(RuntimeError, match="SyntheticArtifactWriteFailure"):
+        scan(make_options(str(repo), str(output)), _after_manifest_write=fail_after_manifest)
+
+    assert {path.relative_to(output): path.read_bytes() for path in output.rglob("*") if path.is_file()} == baseline
+    assert not list(tmp_path.glob(".tracemap-output-*"))
 
 
 def test_fastapi_report_renders_sql_query_patterns_without_raw_sql(tmp_path: Path) -> None:
@@ -512,6 +609,10 @@ def test_sqlite_symbol_rows_follow_role_properties(tmp_path: Path) -> None:
 
 def _manifest(scan_id: str) -> ScanManifest:
     return ScanManifest(scan_id, "repo", None, "main", "0" * 40, "python-adapter/0.1.0", "2026-06-13T00:00:00+00:00", "Level1SemanticAnalysisReduced", "FailedOrPartial", [], [], ["python"], [])
+
+
+def _git(repo: Path, *arguments: str) -> None:
+    subprocess.run(["git", *arguments], cwd=repo, check=True, capture_output=True, text=True)
 
 
 def _fact_counts(index: Path) -> dict[str, int]:

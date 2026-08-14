@@ -35,4 +35,12 @@ Diagnostic observation is always potentially partial. Late listener attachment, 
 
 The v0 seam does not start `dotnet-trace`, parse `.nettrace` files, profile application code, or ship an OpenTelemetry SDK/exporter. Maintainers may attach compatible local .NET diagnostics tooling explicitly, but captured artifacts remain local diagnostic material and are not accepted as TraceMap static evidence. Automatic capture, upload, runtime-topology claims, and application telemetry ingestion require separate security and evidence contracts.
 
-No timing fields are added to `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, normal reports, or deterministic IDs. A future local timing sidecar would require a versioned schema, explicit option, partial-collection receipt, and separate privacy review.
+No timing fields are added to `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, normal reports, or deterministic IDs.
+
+## Commit-bound scan execution receipt
+
+`tracemap scan` now writes `scan-receipt.json` when Git establishes an exact commit SHA. The versioned `scan-execution-receipt.v1` contract is a bounded operational sidecar, not a `CodeFact`. It records closed stage and outcome codes, monotonic duration, hashed repository and authorized-scope identity, the scan/run ID, commit and source-snapshot digest, coverage transitions, last safe state, mutation/cleanup state, retry guidance, and bounded supporting fact/gap IDs. Receipt and stage IDs exclude duration.
+
+The default receipt omits repository names, remotes, branches, absolute paths, source snippets and values, exception messages and stack traces, credentials, connection strings, and customer identity. A failed commit-bound scan may write only `scan-receipt.json`; it does not fabricate normal scan artifacts. When no exact commit SHA is available, TraceMap does not emit an authoritative receipt.
+
+The receipt proves only what the scanner observed. It does not establish root cause, operator fault, application correctness, runtime reachability, production state, or complete repository coverage. The normative schema is [`contracts/scan-execution-receipt.v1.schema.json`](contracts/scan-execution-receipt.v1.schema.json), and rule `scanner.stage-receipt.v1` documents its limitations.

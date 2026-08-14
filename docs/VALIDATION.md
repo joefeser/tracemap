@@ -2,6 +2,10 @@
 
 This guide defines the repeatable checks used to validate language adapters and cross-index analysis. It complements `docs/ACCEPTANCE.md`: acceptance defines expected behavior, while this file describes the concrete sample and open-source smoke set.
 
+For an operator-oriented multi-repository Angular/.NET scan, combination, and
+interaction-query workflow, see
+[Angular and .NET interaction mapping](ANGULAR_DOTNET_INTERACTION_RUNBOOK.md).
+
 TraceMap validation must stay deterministic and evidence-backed. Do not add LLM calls, embeddings, or prompt-based classification to validation.
 
 ## Required Matrix
@@ -815,7 +819,7 @@ python3 -m unittest scripts.tests.test_legacy_codebase_validation
 git diff --check
 ```
 
-Checked-in fixtures should cover explicit markup event bindings, missing or stale designer files, semantic or syntax-only code-behind resolution, ambiguity gaps, explicit `AutoEventWireup="true"` for `Page_Load`/`Page_Init`, false or unknown auto-wireup gaps, direct WCF/SQL reachability, reduced coverage, no-backend-evidence cases, static logic signals, UI-boilerplate signals, deterministic duplicate bindings, and privacy redaction.
+Checked-in fixtures should cover explicit markup event bindings, bounded named control subscriptions, lambda/dynamic and unknown-receiver gaps, missing or stale designer files, exact semantic or linked structural code-behind resolution, proven and unproven cross-file partial handlers, overload/ambiguity gaps, explicit `AutoEventWireup="true"` for `Page_Load`/`Page_Init`, false or unknown auto-wireup gaps, master/content declarations, registered and nested user controls, validator/data-source/command metadata, same-named surfaces in separate folders, surface-qualified combined-path resolution, extractor-to-NDJSON-to-SQLite identity/direction persistence, missing composition targets, direct WCF/SQL reachability, reduced coverage, no-backend-evidence cases, static logic signals, UI-boilerplate signals, deterministic duplicate bindings, and privacy redaction.
 
 Useful inspection queries:
 
@@ -826,6 +830,50 @@ grep -E "WebForms Events|WebForms Event Flow|WebForms Static Logic Signals" <out
 ```
 
 WebForms smoke summaries must remain hidden public-claim level until reviewed. Do not commit local sample paths, raw remotes, raw markup/code snippets, raw SQL, config values, endpoint URLs, secrets, or generated private outputs. WebForms event-flow evidence is static and does not prove runtime page lifecycle execution, event firing, event bubbling, service reachability, SQL execution, branch feasibility, deployment, or production usage.
+
+For WebForms graph or packet hardening, also run the adversarial fixture matrix:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~LegacyWebFormsAdversarialFixtureTests
+```
+
+The matrix must keep non-SDK/partial builds useful but reduced, preserve
+same-named cross-project surface/control/handler identities, retain explicit
+event-source to handler direction through NDJSON/SQLite and packet composition,
+and prove full-snapshot rename/delete/exclude/failure transitions do not retain
+stale WebForms evidence. It does not authorize an in-place incremental updater.
+
+For the bounded local modernization packet, run the scan first and then:
+
+See the complete operator workflow, PowerShell and Bash examples, output
+interpretation, deterministic comparison, fail-closed errors, and privacy
+requirements in
+[`WEBFORMS_MODERNIZATION_PACKET.md`](WEBFORMS_MODERNIZATION_PACKET.md).
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Cli -- webforms-modernization \
+  --index <scan-output>/index.sqlite \
+  --out <new-local-output-directory>
+```
+
+Verify both `webforms-modernization.json` and `webforms-modernization.md`, repeat
+to a second new directory, and compare bytes. The input index must remain
+unchanged. Inspect `coverage`, `gaps`, and `truncated` before using the packet;
+`NoBackendEvidence` is coverage-relative and never proves absence. Do not
+publish local-only packet output or treat structural candidates as named
+business capabilities, migration estimates, parity, target architecture, or
+release approval.
+
+When changing Web Forms batch/data-movement extraction or packet composition,
+run the focused `LegacyBatchDataMovementExtractorTests` and
+`WebFormsModernizationPacketTests`. Confirm scheduled entry points, Windows
+service and console-job declarations, file movement, queue/message evidence,
+stored-procedure loops, bulk-copy, ETL packages, missing configuration, reduced
+builds, and ambiguous owners remain deterministic. Verify raw schedules, paths,
+destinations, SQL, config values, and source values are absent from both packet
+formats, and confirm every retained row preserves rule, tier, commit, span,
+extractor version, supporting IDs, coverage, gaps, and limitations.
 
 ## Legacy WinForms Event Navigation Smoke
 
@@ -1494,3 +1542,25 @@ global application-side evidence with explicit provider-unknown gaps; they must
 not attach to PostgreSQL objects. Confirm outputs contain no protected source
 symbol, raw SQL, local path, or claims of application, ordering, rollback,
 generated SQL, compatibility, safety, database state, or approval.
+
+### Cross-adapter scan-truth conformance
+
+For changes to adapter inventory, scan identity, snapshot verification,
+include/exclude matching, or artifact publication, run the offline synthetic
+matrix from a Python environment containing the adapter test dependencies:
+
+```bash
+python scripts/scan-truth-conformance.py \
+  --out /tmp/tracemap-scan-truth/readiness.json
+```
+
+The command builds the shipped .NET, JVM, Python, TypeScript, and Swift
+adapters, runs each deterministic during-scan mutation fixture, and emits a
+sanitized JSON and Markdown readiness report. It returns nonzero if any required
+capability is unsupported or not run. Review each adapter row for concrete Git
+authority, analyzed-byte identity, repeat determinism, same-size dirty changes,
+inaccessible and mid-scan mutation truth, host-filesystem exclusion semantics,
+reduced-analysis preservation, five-artifact publication, NDJSON/SQLite parity,
+malformed-schema rejection, and repository-relative evidence. The matrix uses
+only generated repositories and never proves semantic parity, runtime behavior,
+build success, or complete dependency coverage.

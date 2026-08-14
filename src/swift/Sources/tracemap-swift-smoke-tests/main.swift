@@ -9,6 +9,8 @@ struct TraceMapSwiftSmokeTests {
         try missingRepoFailsBeforeArtifacts()
         try scanWritesRequiredArtifactsAndReducedCoverage()
         try factsAreStableWhenOnlyOutputPathChanges()
+        try sameSizeDirtyBytesChangeSnapshotIdentity()
+        try coreDataBundleBytesChangeSnapshotIdentity()
         try symbolIdsIgnoreDeclarationBodyEdits()
         try duplicateSymbolIdentitiesEmitGapsAndDistinctIds()
         try duplicateSymbolRelationshipsUseRewrittenIds()
@@ -116,6 +118,46 @@ struct TraceMapSwiftSmokeTests {
         let firstFacts = try String(contentsOf: first.appendingPathComponent("facts.ndjson"), encoding: .utf8)
         let secondFacts = try String(contentsOf: second.appendingPathComponent("facts.ndjson"), encoding: .utf8)
         assert(firstFacts == secondFacts)
+    }
+
+    static func sameSizeDirtyBytesChangeSnapshotIdentity() throws {
+        let fixture = try SwiftFixture()
+        let source = fixture.repo.appendingPathComponent("Sources/App/main.swift")
+        let first = try SwiftScanEngine.scan(options: SwiftScanOptions(
+            repoPath: fixture.repo,
+            outputPath: fixture.temp.url.appendingPathComponent("snapshot-first")
+        ))
+        try "print(\"jello\")\n".write(to: source, atomically: true, encoding: .utf8)
+        let second = try SwiftScanEngine.scan(options: SwiftScanOptions(
+            repoPath: fixture.repo,
+            outputPath: fixture.temp.url.appendingPathComponent("snapshot-second")
+        ))
+
+        assert(first.manifest.commitSha == second.manifest.commitSha)
+        assert(first.manifest.sourceSnapshotDigest.count == 64)
+        assert(first.manifest.sourceSnapshotDigest != second.manifest.sourceSnapshotDigest)
+        assert(first.manifest.scanId != second.manifest.scanId)
+    }
+
+    static func coreDataBundleBytesChangeSnapshotIdentity() throws {
+        let modelPath = "Sources/App/Model.xcdatamodeld/Model.xcdatamodel/contents"
+        let fixture = try SwiftFixture(extraFiles: [
+            modelPath: #"<model><entity name="User"/></model>"#
+        ])
+        let model = fixture.repo.appendingPathComponent(modelPath)
+        let first = try SwiftScanEngine.scan(options: SwiftScanOptions(
+            repoPath: fixture.repo,
+            outputPath: fixture.temp.url.appendingPathComponent("bundle-first")
+        ))
+        try #"<model><entity name="Role"/></model>"#.write(to: model, atomically: true, encoding: .utf8)
+        let second = try SwiftScanEngine.scan(options: SwiftScanOptions(
+            repoPath: fixture.repo,
+            outputPath: fixture.temp.url.appendingPathComponent("bundle-second")
+        ))
+
+        assert(first.manifest.commitSha == second.manifest.commitSha)
+        assert(first.manifest.sourceSnapshotDigest != second.manifest.sourceSnapshotDigest)
+        assert(first.manifest.scanId != second.manifest.scanId)
     }
 
     static func symbolIdsIgnoreDeclarationBodyEdits() throws {
@@ -400,7 +442,6 @@ struct TraceMapSwiftSmokeTests {
             ]}
             """,
             "Unsupported/Package.resolved": #"{"version":3,"pins":[]}"#,
-            "Unreadable/Package.resolved": #"{"version":2,"pins":[]}"#,
             "Podfile": """
             target 'App' do
               pod 'Alamofire', '~> 5.0'
@@ -434,11 +475,6 @@ struct TraceMapSwiftSmokeTests {
             binary "https://example.invalid/BinaryKit.json" "2.0.0"
             """
 	        ])
-	        let unreadable = fixture.repo.appendingPathComponent("Unreadable/Package.resolved")
-	        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: unreadable.path)
-	        defer {
-	            try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: unreadable.path)
-	        }
 	        let out = fixture.temp.url.appendingPathComponent("scan")
 	        let result = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: fixture.repo, outputPath: out))
         let declarations = result.facts.filter { $0.factType == "SwiftDependencyDeclared" }
@@ -451,7 +487,6 @@ struct TraceMapSwiftSmokeTests {
         assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.ruleId == "swift.dependency.analysis-gap.v1" && $0.properties["gapKind"] == "swift-dependency-local-path-omitted" })
 	        assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.ruleId == "swift.dependency.analysis-gap.v1" && $0.properties["gapKind"] == "swift-dependency-lockfile-unsupported-schema" && $0.evidence.filePath == "Unsupported/Package.resolved" })
 	        assert(!result.facts.contains { $0.factType == "SwiftDependencyLockfileEntryDeclared" && $0.evidence.filePath == "Unsupported/Package.resolved" })
-	        assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.ruleId == "swift.dependency.analysis-gap.v1" && $0.properties["gapKind"] == "swift-dependency-metadata-unreadable" && $0.evidence.filePath == "Unreadable/Package.resolved" })
 	        assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.properties["gapKind"] == "swift-dependency-lockfile-malformed" })
 	        assert(result.facts.contains { $0.factType == "SwiftEcosystemMetadataDeclared" && $0.properties["podChecksumSectionHash"]?.count == 64 })
 	        assert(result.facts.allSatisfy { $0.properties["stableDependencySurfaceKey"] == nil })

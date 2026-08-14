@@ -258,6 +258,8 @@ public static class MarkdownReportWriter
             "WebForms Events",
             result.Facts.Where(fact => fact.FactType is FactTypes.WebFormsPageDeclared
                 or FactTypes.WebFormsControlDeclared
+                or FactTypes.WebFormsUserControlRegistered
+                or FactTypes.WebFormsCompositionDeclared
                 or FactTypes.WebFormsEventBindingDeclared
                 or FactTypes.WebFormsDesignerControlDeclared
                 or FactTypes.WebFormsHandlerResolved),
@@ -312,8 +314,15 @@ public static class MarkdownReportWriter
                 or FactTypes.AspNetHandlerDeclared
                 or FactTypes.AspNetPageMethodDeclared
                 or FactTypes.AspNetNavigationReferenceDeclared
-                or FactTypes.AspNetNavigationEdgeDeclared),
+                or FactTypes.AspNetNavigationEdgeDeclared
+                or FactTypes.AspNetIdentityStateDeclared),
             FormatLegacyAspNetFact);
+
+        AddFactSection(
+            lines,
+            "Web Forms Batch And Data-Movement Evidence",
+            result.Facts.Where(fact => fact.FactType == FactTypes.LegacyBatchDataMovementDeclared),
+            FormatLegacyBatchDataMovementFact);
 
         AddFactSection(
             lines,
@@ -384,9 +393,20 @@ public static class MarkdownReportWriter
             lines.Add("");
             lines.Add("## Legacy ASP.NET Surface Limitations");
             lines.Add("");
-            lines.Add("- ASP.NET surface, route, config, handler, PageMethod, and navigation rows are deterministic static evidence from checked-in files only.");
+            lines.Add("- ASP.NET surface, route, config, handler, PageMethod, navigation, and identity/session rows are deterministic static evidence from checked-in files only.");
             lines.Add("- Each route candidate or navigation reference candidate does not prove runtime route matching, IIS deployment, URL rewriting, authorization, browser behavior, JavaScript execution, page rendering, request handling, user reachability, or runtime impact.");
+            lines.Add("- Identity/session declarations do not prove authentication, authorization, effective identity, session behavior, credential handling, runtime assignment, or production use.");
             lines.Add("- Raw URLs, hostnames, config values, local absolute paths, remotes, endpoint values, snippets, credentials, and secret-looking values are hashed or omitted.");
+        }
+
+        if (result.Facts.Any(fact => fact.RuleId == RuleIds.LegacyWebFormsBatchDataMovement))
+        {
+            lines.Add("");
+            lines.Add("## Web Forms Batch And Data-Movement Limitations");
+            lines.Add("");
+            lines.Add("- Batch/data-movement rows are deterministic static candidates from compiler-resolved calls, bounded syntax, checked-in configuration keys, message evidence, and package inventory.");
+            lines.Add("- They do not prove scheduling, execution, successful or complete data movement, retries, idempotency, checkpoint effectiveness, transaction outcome, monitoring, target state, production use, or target architecture suitability.");
+            lines.Add("- Raw schedules, paths, destinations, SQL, connection material, configuration values, source values, snippets, credentials, local absolute paths, and remotes are omitted or represented only by bounded hashes and categories.");
         }
 
         lines.Add("");
@@ -842,6 +862,8 @@ public static class MarkdownReportWriter
             FactTypes.WebFormsHandlerResolved => $"- handler `{fact.Properties.GetValueOrDefault("handlerName") ?? DisplayFactName(fact)}` resolved as `{fact.Properties.GetValueOrDefault("resolutionKind") ?? "unknown"}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`",
             FactTypes.WebFormsDesignerControlDeclared => $"- designer field `{fact.Properties.GetValueOrDefault("fieldName") ?? DisplayFactName(fact)}` type `{fact.Properties.GetValueOrDefault("controlType") ?? "unknown"}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`",
             FactTypes.WebFormsControlDeclared => $"- control `{fact.Properties.GetValueOrDefault("controlId") ?? DisplayFactName(fact)}` type `{fact.Properties.GetValueOrDefault("controlType") ?? "unknown"}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`",
+            FactTypes.WebFormsUserControlRegistered => $"- user-control registration `{fact.Properties.GetValueOrDefault("tagPrefix") ?? "unknown"}:{fact.Properties.GetValueOrDefault("tagName") ?? "unknown"}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`",
+            FactTypes.WebFormsCompositionDeclared => $"- composition `{fact.Properties.GetValueOrDefault("relationshipKind") ?? "unknown"}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`",
             _ => $"- `{fact.FactType}` `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`"
         };
     }
@@ -905,17 +927,28 @@ public static class MarkdownReportWriter
             fact.Properties.GetValueOrDefault("typeName"),
             fact.Properties.GetValueOrDefault("methodName"),
             fact.Properties.GetValueOrDefault("sectionKind"),
+            fact.Properties.GetValueOrDefault("identityKind"),
             DisplayFactName(fact));
         var role = FirstPresentValue(
             fact.Properties.GetValueOrDefault("surfaceKind"),
             fact.Properties.GetValueOrDefault("routeShape"),
             fact.Properties.GetValueOrDefault("sectionKind"),
             fact.Properties.GetValueOrDefault("handlerKind"),
+            fact.Properties.GetValueOrDefault("identityKind"),
             fact.Properties.GetValueOrDefault("referenceKind"),
             fact.Properties.GetValueOrDefault("edgeKind"),
             fact.FactType);
         var path = CombinedReportHelpers.SafePath(fact.Evidence.FilePath);
         return $"- `{fact.FactType}` `{DisplayCodeValue(name)}` as static ASP.NET `{DisplayCodeValue(role)}` evidence ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{path}:{fact.Evidence.StartLine}`";
+    }
+
+    private static string FormatLegacyBatchDataMovementFact(CodeFact fact)
+    {
+        var surface = DisplayCodeValue(fact.Properties.GetValueOrDefault("surfaceKind") ?? "unknown");
+        var mechanism = DisplayCodeValue(fact.Properties.GetValueOrDefault("mechanism") ?? "unknown");
+        var operation = DisplayCodeValue(fact.Properties.GetValueOrDefault("operationKind") ?? "unknown");
+        var path = CombinedReportHelpers.SafePath(fact.Evidence.FilePath);
+        return $"- `{surface}` via `{mechanism}` / `{operation}` as static batch/data-movement evidence ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{path}:{fact.Evidence.StartLine}`";
     }
 
     private static string FormatLegacyDataMetadataFact(CodeFact fact)

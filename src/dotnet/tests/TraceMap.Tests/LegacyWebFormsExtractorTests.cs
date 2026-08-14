@@ -7,6 +7,385 @@ namespace TraceMap.Tests;
 public sealed class LegacyWebFormsExtractorTests
 {
     [Fact]
+    public void Scan_inventories_master_user_control_and_bounded_control_metadata_deterministically()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "Controls"));
+        File.WriteAllText(Path.Combine(repo, "Site.Master"), """
+            <%@ Master Language="C#" Inherits="Sample.Site" %>
+            <asp:ContentPlaceHolder runat="server" ID="MainContent" />
+            """);
+        File.WriteAllText(Path.Combine(repo, "Controls", "Editor.ascx"), """
+            <%@ Control Language="C#" Inherits="Sample.Editor" %>
+            <asp:TextBox runat="server" ID="Value" />
+            """);
+        File.WriteAllText(Path.Combine(repo, "Edit.aspx"), """
+            <%@ Page Language="C#" Inherits="Sample.Edit" MasterPageFile="~/Site.Master" Title="Edit private record $5" %>
+            <%@ Register Src="~/Controls/Editor.ascx" TagPrefix="uc" TagName="Editor" %>
+            <asp:Content runat="server" ID="Body" ContentPlaceHolderID="MainContent">
+              <uc:Editor runat="server" ID="RecordEditor" />
+              <asp:RequiredFieldValidator runat="server" ID="Required" />
+              <asp:SqlDataSource runat="server" ID="Data" />
+              <asp:LinkButton runat="server" ID="Edit" CommandName="Edit" />
+            </asp:Content>
+            """);
+
+        var first = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out-a")));
+        var second = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out-b")));
+
+        var page = Assert.Single(first.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsPageDeclared
+            && fact.Evidence.FilePath == "Edit.aspx");
+        Assert.Equal(RuleIds.LegacyWebFormsInventory, page.RuleId);
+        Assert.Equal(EvidenceTiers.Tier2Structural, page.EvidenceTier);
+        Assert.Equal(first.Manifest.CommitSha, page.CommitSha);
+        Assert.Equal(ScannerVersions.LegacyWebFormsExtractor, page.Evidence.ExtractorVersion);
+        Assert.StartsWith("webforms-surface:", page.Properties.GetValueOrDefault("surfaceIdentity"), StringComparison.Ordinal);
+        Assert.Equal("bounded-static-webforms-inventory", page.Properties.GetValueOrDefault("coverageLabel"));
+        Assert.Equal("True", page.Properties.GetValueOrDefault("titlePresent"));
+        Assert.Equal(32, page.Properties.GetValueOrDefault("titleHash")?.Length);
+
+        var registration = Assert.Single(first.Facts, fact => fact.FactType == FactTypes.WebFormsUserControlRegistered);
+        Assert.Equal("Controls/Editor.ascx", registration.Properties.GetValueOrDefault("sourcePath"));
+        Assert.Equal(2, registration.Evidence.StartLine);
+        Assert.False(string.IsNullOrWhiteSpace(registration.Evidence.SnippetHash));
+
+        Assert.Contains(first.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsControlDeclared
+            && fact.Properties.GetValueOrDefault("controlCategory") == "RegisteredUserControl"
+            && fact.Properties.GetValueOrDefault("registeredSourcePath") == "Controls/Editor.ascx");
+        Assert.Contains(first.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsControlDeclared
+            && fact.Properties.GetValueOrDefault("controlCategory") == "MasterContent"
+            && fact.Properties.GetValueOrDefault("contentPlaceHolderId") == "MainContent");
+        Assert.Contains(first.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsControlDeclared
+            && fact.Properties.GetValueOrDefault("controlCategory") == "Validator");
+        Assert.Contains(first.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsControlDeclared
+            && fact.Properties.GetValueOrDefault("controlCategory") == "DataSource");
+        Assert.Contains(first.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsControlDeclared
+            && fact.Properties.GetValueOrDefault("commandName") == "Edit");
+
+        var compositions = first.Facts.Where(fact => fact.FactType == FactTypes.WebFormsCompositionDeclared).ToArray();
+        Assert.Contains(compositions, fact => fact.Properties.GetValueOrDefault("relationshipKind") == "UsesMasterPage");
+        Assert.Contains(compositions, fact => fact.Properties.GetValueOrDefault("relationshipKind") == "UsesRegisteredUserControl");
+        Assert.Contains(compositions, fact => fact.Properties.GetValueOrDefault("relationshipKind") == "FillsMasterPlaceholder");
+        Assert.All(compositions, fact =>
+        {
+            Assert.Equal(RuleIds.LegacyWebFormsComposition, fact.RuleId);
+            Assert.Equal("bounded-static-webforms-composition", fact.Properties.GetValueOrDefault("coverageLabel"));
+            Assert.False(string.IsNullOrWhiteSpace(fact.Properties.GetValueOrDefault("supportingFactIds")));
+        });
+
+        var firstIds = first.Facts
+            .Where(fact => fact.FactType.StartsWith("WebForms", StringComparison.Ordinal))
+            .Select(fact => fact.FactId)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        var secondIds = second.Facts
+            .Where(fact => fact.FactType.StartsWith("WebForms", StringComparison.Ordinal))
+            .Select(fact => fact.FactId)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(firstIds, secondIds);
+
+        var serialized = SerializeFacts(first.Facts.Where(fact => fact.FactType.StartsWith("WebForms", StringComparison.Ordinal)));
+        Assert.DoesNotContain("Edit private record", serialized);
+
+        var report = MarkdownReportWriter.Build(first);
+        Assert.Contains("user-control registration", report);
+        Assert.Contains("composition `UsesMasterPage`", report);
+        Assert.DoesNotContain("Edit private record", report);
+    }
+
+    [Fact]
+    public void Scan_scopes_designer_evidence_to_the_markup_surface_when_type_and_control_names_collide()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "AreaA"));
+        Directory.CreateDirectory(Path.Combine(repo, "AreaB"));
+        foreach (var area in new[] { "AreaA", "AreaB" })
+        {
+            File.WriteAllText(Path.Combine(repo, area, "Default.aspx"), """
+                <%@ Page Language="C#" Inherits="Sample.Default" %>
+                <asp:Button runat="server" ID="SaveButton" />
+                """);
+        }
+        File.WriteAllText(Path.Combine(repo, "AreaA", "Default.aspx.designer.cs"), """
+            namespace Sample;
+            public partial class Default
+            {
+                protected global::System.Web.UI.WebControls.Button SaveButton;
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        var controls = result.Facts
+            .Where(fact => fact.FactType == FactTypes.WebFormsControlDeclared && fact.Properties.GetValueOrDefault("controlId") == "SaveButton")
+            .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(2, controls.Length);
+        Assert.False(string.IsNullOrWhiteSpace(controls[0].Properties.GetValueOrDefault("designerFactId")));
+        Assert.Null(controls[1].Properties.GetValueOrDefault("designerFactId"));
+        Assert.NotEqual(controls[0].Properties.GetValueOrDefault("surfaceIdentity"), controls[1].Properties.GetValueOrDefault("surfaceIdentity"));
+        Assert.NotEqual(controls[0].TargetSymbol, controls[1].TargetSymbol);
+    }
+
+    [Fact]
+    public void Scan_emits_inventory_and_composition_gaps_for_missing_or_unsupported_static_targets()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Incomplete.aspx"), """
+            <%@ Page Language="C#" CodeBehind="Missing.aspx.cs" MasterPageFile="~/Missing.Master" Title="$(PrivateTitle)" %>
+            <%@ Register Namespace="Dynamic.Controls" Assembly="Dynamic" TagPrefix="dynamic" %>
+            <asp:Content runat="server" ID="Body" />
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var gaps = result.Facts.Where(fact => fact.FactType == FactTypes.AnalysisGap).ToArray();
+
+        Assert.Contains(gaps, fact => fact.RuleId == RuleIds.LegacyWebFormsInventory && fact.Properties.GetValueOrDefault("gapKind") == "UnresolvedWebFormsPageType");
+        Assert.Contains(gaps, fact => fact.RuleId == RuleIds.LegacyWebFormsInventory && fact.Properties.GetValueOrDefault("gapKind") == "MissingWebFormsCodeBehind");
+        Assert.Contains(gaps, fact => fact.RuleId == RuleIds.LegacyWebFormsInventory && fact.Properties.GetValueOrDefault("gapKind") == "UnsupportedWebFormsTitle");
+        Assert.Contains(gaps, fact => fact.RuleId == RuleIds.LegacyWebFormsComposition && fact.Properties.GetValueOrDefault("gapKind") == "MissingWebFormsMasterPage");
+        Assert.Contains(gaps, fact => fact.RuleId == RuleIds.LegacyWebFormsComposition && fact.Properties.GetValueOrDefault("gapKind") == "UnsupportedWebFormsUserControlRegistration");
+        Assert.Contains(gaps, fact => fact.RuleId == RuleIds.LegacyWebFormsComposition && fact.Properties.GetValueOrDefault("gapKind") == "UnresolvedWebFormsContentPlaceholder");
+        Assert.All(gaps.Where(fact => fact.RuleId.StartsWith("legacy.webforms", StringComparison.Ordinal)), fact =>
+        {
+            Assert.Equal(EvidenceTiers.Tier4Unknown, fact.EvidenceTier);
+            Assert.Equal(ScannerVersions.LegacyWebFormsExtractor, fact.Evidence.ExtractorVersion);
+            Assert.Equal("reduced-static-webforms-evidence", fact.Properties.GetValueOrDefault("coverageLabel"));
+            Assert.False(string.IsNullOrWhiteSpace(fact.Properties.GetValueOrDefault("ruleLimitations")));
+        });
+        var page = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WebFormsPageDeclared);
+        Assert.Equal("True", page.Properties.GetValueOrDefault("titlePresent"));
+        Assert.Null(page.Properties.GetValueOrDefault("titleHash"));
+    }
+
+    [Fact]
+    public void Scan_uses_inventory_casing_and_rejects_excluded_composition_targets()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "Excluded"));
+        File.WriteAllText(Path.Combine(repo, "Site.Master"), "<%@ Master Language=\"C#\" Inherits=\"Sample.Site\" %>");
+        File.WriteAllText(Path.Combine(repo, "Excluded", "Widget.ascx"), "<%@ Control Language=\"C#\" Inherits=\"Sample.Widget\" %>");
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), """
+            <%@ Page Language="C#" Inherits="Sample.Default" MasterPageFile="~/site.master" %>
+            <%@ Register Src="~/Excluded/Widget.ascx" TagPrefix="uc" TagName="Widget" %>
+            <uc:Widget runat="server" ID="Widget" />
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(
+            repo,
+            Path.Combine(temp.Path, "out"),
+            ExcludeGlobs: ["Excluded/**"]));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsPageDeclared
+            && fact.Properties.GetValueOrDefault("masterPageFile") == "Site.Master");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsCompositionDeclared
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "UsesMasterPage"
+            && fact.Properties.GetValueOrDefault("targetFilePath") == "Site.Master");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "MissingWebFormsUserControl");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsUserControlRegistered
+            && fact.EvidenceTier == EvidenceTiers.Tier4Unknown
+            && fact.Properties.GetValueOrDefault("declaredSourcePath") == "Excluded/Widget.ascx");
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsCompositionDeclared
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "UsesRegisteredUserControl");
+    }
+
+    [Fact]
+    public void Scan_resolves_app_relative_composition_from_the_owning_web_project_root()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "Web", "Pages"));
+        Directory.CreateDirectory(Path.Combine(repo, "Web", "Controls"));
+        File.WriteAllText(Path.Combine(repo, "Web", "Web.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\" />");
+        File.WriteAllText(Path.Combine(repo, "Web", "Site.Master"), "<%@ Master Language=\"C#\" Inherits=\"Sample.Site\" %>");
+        File.WriteAllText(Path.Combine(repo, "Web", "Pages", "Web.config"), "<configuration />");
+        File.WriteAllText(Path.Combine(repo, "Web", "Controls", "Editor.ascx"), "<%@ Control Language=\"C#\" Inherits=\"Sample.Editor\" %>");
+        File.WriteAllText(Path.Combine(repo, "Web", "Pages", "Edit.aspx"), """
+            <%@ Page Language="C#" Inherits="Sample.Edit" MasterPageFile="~/Site.Master" %>
+            <%@ Register Src="~/Controls/Editor.ascx" TagPrefix="uc" TagName="Editor" %>
+            <uc:Editor runat="server" ID="Editor" />
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsCompositionDeclared
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "UsesMasterPage"
+            && fact.Properties.GetValueOrDefault("targetFilePath") == "Web/Site.Master");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsCompositionDeclared
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "UsesRegisteredUserControl"
+            && fact.Properties.GetValueOrDefault("targetFilePath") == "Web/Controls/Editor.ascx");
+    }
+
+    [Fact]
+    public void Scan_rejects_non_master_targets_for_master_page_composition()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Other.aspx"), "<%@ Page Language=\"C#\" Inherits=\"Sample.Other\" %>");
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), "<%@ Page Language=\"C#\" Inherits=\"Sample.Default\" MasterPageFile=\"~/Other.aspx\" %>");
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyWebFormsComposition
+            && fact.Properties.GetValueOrDefault("gapKind") == "UnsupportedWebFormsMasterPageTarget");
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsCompositionDeclared
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "UsesMasterPage");
+    }
+
+    [Fact]
+    public void Scan_does_not_resolve_a_missing_linked_handler_from_an_unrelated_codebehind_file()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "Other"));
+        File.WriteAllText(Path.Combine(repo, "Missing.aspx"), """
+            <%@ Page Language="C#" CodeBehind="Missing.aspx.cs" Inherits="Sample.Shared" %>
+            <asp:Button runat="server" ID="Save" OnClick="Save_Click" />
+            """);
+        File.WriteAllText(Path.Combine(repo, "Other", "Other.aspx.cs"), """
+            using System;
+            namespace Sample;
+            public partial class Shared
+            {
+                protected void Save_Click(object sender, EventArgs e) { }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap && fact.Properties.GetValueOrDefault("gapKind") == "MissingWebFormsCodeBehind");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap && fact.Properties.GetValueOrDefault("gapKind") == "UnprovenCrossFileWebFormsHandler");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WebFormsHandlerResolved);
+    }
+
+    [Fact]
+    public void Scan_canonicalizes_designer_markup_path_casing_through_inventory()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), """
+            <%@ Page Language="C#" Inherits="Sample.Default" %>
+            <asp:Button runat="server" ID="Save" />
+            """);
+        File.WriteAllText(Path.Combine(repo, "default.aspx.designer.cs"), """
+            namespace Sample;
+            public partial class Default
+            {
+                protected global::System.Web.UI.WebControls.Button Save;
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var control = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WebFormsControlDeclared);
+
+        Assert.False(string.IsNullOrWhiteSpace(control.Properties.GetValueOrDefault("designerFactId")));
+    }
+
+    [Fact]
+    public void Scan_ignores_server_comments_and_fails_closed_on_ambiguous_registration_tags()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "Controls"));
+        foreach (var name in new[] { "First", "Second", "Commented" })
+        {
+            File.WriteAllText(Path.Combine(repo, "Controls", $"{name}.ascx"), $"<%@ Control Language=\"C#\" Inherits=\"Sample.{name}\" %>");
+        }
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), """
+            <%@ Page Language="C#" Inherits="Sample.Default" %>
+            <%-- <%@ Register Src="~/Controls/Commented.ascx" TagPrefix="uc" TagName="Commented" %>
+                 <uc:Commented runat="server" ID="Commented" /> --%>
+            <%@ Register Src="~/Controls/First.ascx" TagPrefix="uc" TagName="Widget" %>
+            <%@ Register Src="~/Controls/Second.ascx" TagPrefix="uc" TagName="Widget" %>
+            <uc:Widget runat="server" ID="Widget" />
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.Evidence.FilePath == "Default.aspx"
+            && fact.FactType.StartsWith("WebForms", StringComparison.Ordinal)
+            && (fact.Properties.Values.Any(value => value.Contains("Commented", StringComparison.Ordinal))
+                || fact.ContractElement?.Contains("Commented", StringComparison.Ordinal) == true));
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyWebFormsComposition
+            && fact.Properties.GetValueOrDefault("gapKind") == "AmbiguousWebFormsUserControlRegistration");
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsCompositionDeclared
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "UsesRegisteredUserControl");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsControlDeclared
+            && fact.Properties.GetValueOrDefault("controlId") == "Widget"
+            && fact.Properties.GetValueOrDefault("controlCategory") == "ServerControl");
+    }
+
+    [Fact]
+    public void Scan_fails_closed_when_one_competing_user_control_registration_is_missing()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "Controls"));
+        File.WriteAllText(Path.Combine(repo, "Controls", "Present.ascx"), "<%@ Control Language=\"C#\" Inherits=\"Sample.Present\" %>");
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), """
+            <%@ Page Language="C#" Inherits="Sample.Default" %>
+            <%@ Register Src="~/Controls/Present.ascx" TagPrefix="uc" TagName="Widget" %>
+            <%@ Register Src="~/Controls/Missing.ascx" TagPrefix="uc" TagName="Widget" %>
+            <uc:Widget runat="server" ID="Widget" />
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyWebFormsComposition
+            && fact.Properties.GetValueOrDefault("gapKind") == "AmbiguousWebFormsUserControlRegistration");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "MissingWebFormsUserControl");
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsCompositionDeclared
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "UsesRegisteredUserControl");
+    }
+
+    [Fact]
+    public void Webforms_inventory_and_composition_rules_are_documented()
+    {
+        var catalog = File.ReadAllText(Path.Combine(FindRepoRoot(), "rules", "rule-catalog.yml"));
+
+        Assert.Contains($"- id: {RuleIds.LegacyWebFormsInventory}", catalog);
+        Assert.Contains($"- id: {RuleIds.LegacyWebFormsComposition}", catalog);
+        Assert.Contains(FactTypes.WebFormsUserControlRegistered, catalog);
+        Assert.Contains(FactTypes.WebFormsCompositionDeclared, catalog);
+        Assert.Contains("do not prove runtime loading", catalog);
+    }
+
+    [Fact]
     public void Scan_extracts_markup_binding_handler_designer_and_report_sections()
     {
         using var temp = new TempDirectory();
@@ -464,5 +843,21 @@ public sealed class LegacyWebFormsExtractorTests
     private static string SerializeFacts(IEnumerable<CodeFact> facts)
     {
         return string.Join("\n", facts.Select(fact => JsonSerializer.Serialize(fact)));
+    }
+
+    private static string FindRepoRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "rules", "rule-catalog.yml")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Unable to locate the TraceMap repository root.");
     }
 }

@@ -3,6 +3,19 @@
 # - deferred: documented future/planned rule that must not appear in emitted facts.
 # Existing rules without an explicit status are treated as active.
 rules:
+  - id: adapter.scan-truth.conformance.v1
+    name: Cross-adapter scan truth conformance
+    description: Validates bounded synthetic adapter outputs against the shared v1 repository authority, analyzed-byte identity, determinism, artifact, coverage, exclusion, gap, path, and persistence contract.
+    evidenceTier: Tier2Structural
+    emits:
+      - scan truth conformance result
+      - adapter capability readiness row
+      - explicit unsupported or reduced capability row
+    limitations:
+      - Conformance is bounded synthetic validation and does not prove semantic parity, build success, runtime reachability, execution, production behavior, or complete dependency coverage.
+      - Missing toolchains and unexecuted checks remain not-run or unsupported; they are never inferred as passing.
+      - Adapter-specific semantic ceilings remain explicit and are not normalized into false equivalence.
+
   - id: base44.sdk.import.v1
     name: Base44 SDK import
     description: Records syntax-visible Base44 SDK imports and their requested package/version identity.
@@ -85,6 +98,19 @@ rules:
     limitations:
       - Unsupported input gaps describe explorer compatibility only and do not prove that the artifact lacks evidence.
       - The explorer must not merge unsupported generated artifacts silently or render raw unsupported content.
+
+  - id: explorer.input.webforms-modernization-packet.v1
+    name: Static HTML explorer Web Forms modernization packet reader
+    description: Validates one bounded Web Forms modernization packet and projects its existing static project, surface, event-chain, downstream-boundary, identity/session, structural-candidate, gap, limitation, and provenance records into the local explorer.
+    evidenceTier: Tier2Structural
+    emits:
+      - compatible Web Forms explorer section
+      - Web Forms packet evidence rows
+      - Web Forms packet compatibility and gap rows
+    limitations:
+      - The reader composes existing packet evidence and performs no source scan, runtime observation, execution, impact reduction, business-capability classification, parity assessment, migration sizing, or target-architecture selection.
+      - Packet support does not prove runtime reachability, event firing, postback behavior, authorization, persistence, production use, workflow completeness, migration safety, security approval, release approval, or safety to change.
+      - Unsupported schema, identity, provenance, vocabulary, size, or collection contracts fail closed under explorer.input.unsupported-schema.v1 and are not partially guessed.
 
   - id: explorer.input.provenance-conflict.v1
     name: Static HTML explorer provenance conflict
@@ -2022,15 +2048,31 @@ rules:
     emits:
       - WebFormsPageDeclared
       - WebFormsControlDeclared
+      - WebFormsUserControlRegistered
       - AnalysisGap
     limitations:
       - Markup and file inventory are static repository evidence and do not prove IIS configuration, page activation, runtime control tree construction, event firing, deployment, or production usage.
       - Directive paths and linkage attributes are kept only as safe relative filenames or omitted; raw local paths, URLs, config values, snippets, and unsafe expressions are not stored.
       - Malformed or unreadable markup is an analysis gap, not proof that no WebForms page, control, or handler exists.
+      - Page titles are represented only by presence and a bounded digest; raw display text is not stored.
+      - Surface and control identities are derived from normalized repository-relative markup paths and declaration sites; page or control labels alone are not canonical identity.
+
+  - id: legacy.webforms.composition.v1
+    name: Legacy WebForms static composition declarations
+    description: Records bounded master-page, content-placeholder, and registered user-control composition declared by checked-in WebForms markup.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - WebFormsCompositionDeclared
+      - AnalysisGap
+    limitations:
+      - Composition facts describe static markup declarations and do not prove runtime loading, rendering, control construction, navigation, event firing, deployment, or production use.
+      - Registered user-control and master-page targets are repository-relative declarations; missing, dynamic, unsafe, malformed, or out-of-scope targets remain explicit analysis gaps.
+      - ContentPlaceHolderID is a declared target candidate and is not proof that the referenced master page contains a compatible runtime placeholder.
+      - Raw markup, page titles, source snippets, local absolute paths, URLs, configuration values, and unsafe expressions are omitted or hashed.
 
   - id: legacy.webforms.event-binding.v1
-    name: Legacy WebForms markup event binding evidence
-    description: Extracts supported static WebForms server-control event attributes such as OnClick, OnCommand, OnLoad, and OnInit with control IDs, handler names, and line spans.
+    name: Legacy WebForms static event binding evidence
+    description: Extracts supported static WebForms server-control event attributes and bounded code-behind control subscriptions such as OnClick, OnCommand, OnLoad, OnInit, and Button.Click += Handler with surface-qualified control identities, handler identities, and line spans.
     evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
     emits:
       - WebFormsEventBindingDeclared
@@ -2039,6 +2081,7 @@ rules:
       - Event bindings are static declarations and do not prove that a control exists at runtime, a user can reach the event, event bubbling occurs, or the handler executes.
       - Unsupported event-like attributes, dynamic wiring, generated controls, data-bound command names, and unsafe handler values are needs-review or gap evidence rather than guessed handlers.
       - Duplicate controls or duplicate bindings are preserved as separate evidence rows with deterministic IDs; TraceMap does not collapse them into a single runtime control.
+      - Explicit control subscriptions are limited to statically named receivers, representative events, and named handlers on the linked markup surface; lambdas, delegate expressions, unknown receivers, ambiguous controls, and dynamic wiring remain explicit gaps.
 
   - id: legacy.webforms.handler-resolution.v1
     name: Legacy WebForms code-behind handler resolution
@@ -2052,6 +2095,7 @@ rules:
       - Syntax and structural fallback depend on directive/linkage and partial class names; missing builds, generated code, stale files, partial classes, overloads, and event subscriptions can reduce confidence.
       - Ambiguous methods or partial classes are emitted as gaps and TraceMap does not choose an arbitrary winner.
       - Auto-event-wireup MVP evidence is limited to Page_Load and Page_Init and requires explicit enabled evidence; false, unknown, or contradictory evidence remains Tier4Unknown.
+      - Cross-file partial handler resolution requires semantic type and method evidence at the exact method span; syntax-only cross-file matches remain explicit gaps.
 
   - id: legacy.webforms.designer-control.v1
     name: Legacy WebForms designer control field evidence
@@ -2087,6 +2131,36 @@ rules:
       - Logic signals are deterministic static heuristics, not proof of business logic, code quality, risk, runtime behavior, or production usage.
       - UI-boilerplate signals are lower-strength syntax evidence and do not prove that a handler is safe, irrelevant, or free of backend effects.
       - Generated code, partial methods, reflection, dynamic dispatch, branch feasibility, and indirect helper calls can hide or dilute signals.
+
+  - id: legacy.webforms.modernization-packet.v1
+    name: Web Forms modernization evidence packet composition
+    description: Composes one immutable TraceMap snapshot's existing Web Forms and legacy-flow evidence into deterministic local-only JSON and Markdown modernization inventory packets.
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - webforms-modernization-packet.v1
+      - AnalysisGap
+    limitations:
+      - Packet rows preserve upstream evidence and deterministic structural connectivity; they do not add extractor conclusions or prove runtime reachability, event firing, postback behavior, validation, authorization, persistence, production usage, or complete workflow coverage.
+      - Downstream-boundary rows inventory only supported terminal evidence already composed by the bounded legacy-flow path reader; they do not prove successful service, message, configuration, database, or other external interaction.
+      - General file-operation extraction is unavailable in this packet version and remains an explicit capability gap; absence of a file boundary is not evidence that a handler does not access files.
+      - Structural slice candidates do not infer business capabilities, parity, migration scope, effort, cloud readiness, target architecture, test completeness, security approval, release approval, or safety to change; owner naming and confirmation remain required.
+      - Missing coverage labels, source identity mismatch, unsupported evidence, missing handlers or terminals, reduced scans, and deterministic traversal or output limits remain explicit gaps rather than clean-absence claims.
+      - The local-only packet omits snippets, raw SQL, configuration values, URLs, connection strings, credentials, source values, repository remotes, and absolute local paths.
+
+  - id: legacy.webforms.batch-data-movement.v1
+    name: Legacy Web Forms batch and data-movement evidence
+    description: Inventories bounded static scheduled-entry, service, console-job, file-movement, message, stored-procedure batch, bulk-copy, ETL-package, and integration-configuration candidates in repositories with concrete Web Forms inventory, and composes related existing boundary facts by source member where proven.
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - LegacyBatchDataMovementDeclared
+      - AnalysisGap
+    limitations:
+      - Rows are static candidates only and do not prove that a job is scheduled, runs, succeeds, moves complete data, retries effectively, is idempotent, checkpoints effectively, commits or rolls back successfully, is monitored, or is used in production.
+      - Compiler-resolved System.IO, FileSystemWatcher, and SqlBulkCopy calls are preferred; syntax fallback is restricted to explicitly qualified framework calls, declared SqlBulkCopy variables, known scheduled-entry shapes, and CommandType.StoredProcedure execution shapes.
+      - Retry, error-handling, transaction, checkpoint, and telemetry fields record only deterministic declaration shapes in the same member; they do not prove runtime behavior or effectiveness.
+      - Related database, message, service, and configuration facts are composed only when source file and member identity prove the association; missing or ambiguous project owners, config references, reduced semantic coverage, and deterministic limits remain explicit gaps.
+      - Raw schedules, paths, destinations, SQL, connection material, configuration values, source values, snippets, credentials, local absolute paths, and remotes are omitted or represented only by bounded hashes and categories.
+      - This rule does not recommend Kafka, Solace, RabbitMQ, cloud services, or any other target architecture; architecture selection remains an owner decision.
 
   - id: legacy.winforms.inventory.v1
     name: Legacy WinForms file and surface inventory
@@ -2221,6 +2295,19 @@ rules:
       - Raw config values, connection strings, app settings, machine keys, endpoint addresses, hostnames, local physical paths, URLs, credentials, and secret-looking values are omitted or hashed and never emitted raw.
       - Encrypted sections, external configSource/file references, transforms, custom sections, machine.config dependencies, runtime mutations, and unsupported providers are gaps.
       - Matching hashes alone cannot prove page, route, navigation, or runtime reachability.
+
+  - id: legacy.aspnet.identity-state.v1
+    name: Legacy ASP.NET identity and state declaration evidence
+    description: Inventories bounded checked-in authentication, authorization, impersonation, machine-key presence, membership/role provider, session, cookie, profile, login-control, identity-pipeline, and compiler-resolved custom principal/identity declarations.
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier4Unknown
+    emits:
+      - AspNetIdentityStateDeclared
+      - AnalysisGap
+    limitations:
+      - Rows are static declarations only and do not prove effective runtime policy, authenticated users, authorization outcomes, session behavior, cookie behavior, provider availability, vulnerability, exploitability, compliance, security quality, or migration success.
+      - Keys, credentials, cookie names or values, login targets, provider names, roles, users, connection strings, domains, source values, and encrypted payloads are never emitted; only closed categories, presence flags, counts, safe framework/custom classification, rule-backed provenance, and supporting fact IDs are retained.
+      - External or encrypted identity configuration, deterministically identity-related dynamic pipeline registration, unavailable dependencies, unsupported providers, runtime principal assignment, and custom provider behavior remain explicit gaps or outside coverage; unrelated or dynamically named modules are not classified as identity evidence.
+      - Custom principal/identity declarations require compiler-resolved interface relationships; name-only lookalikes are not promoted to identity evidence.
 
   - id: legacy.aspnet.handler.v1
     name: Legacy ASP.NET static handler evidence
@@ -3020,6 +3107,18 @@ rules:
       - AnalysisGap
     limitations:
       - Git metadata may be unavailable outside a git checkout.
+
+  - id: scanner.stage-receipt.v1
+    name: Bounded scanner stage receipt
+    description: Records sanitized operational outcomes for bounded scanner stages using a commit-bound run identity and closed status codes.
+    evidenceTier: Tier4Unknown
+    emits:
+      - scan-execution-receipt.v1
+    limitations:
+      - Stage receipts are operational diagnostics, not static code facts, and do not prove root cause, operator fault, application correctness, runtime reachability, or complete repository coverage.
+      - Durations are local monotonic observations and are excluded from receipt and stage identity derivation.
+      - No authoritative receipt is emitted when a repository commit SHA cannot be established.
+      - Default receipts omit raw exception messages, stack traces, source snippets, absolute paths, repository names, remotes, credentials, connection strings, and source values.
 
   - id: file.inventory.v1
     name: File inventory
