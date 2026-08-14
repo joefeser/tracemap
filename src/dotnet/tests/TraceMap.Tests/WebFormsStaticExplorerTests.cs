@@ -56,6 +56,16 @@ public sealed class WebFormsStaticExplorerTests
             && row.SupportId.Length > 0);
         Assert.Contains(firstResult.Data.SectionStatuses, row =>
             row.SectionId == "webforms" && row.Status is "available" or "partial");
+        var evidenceStatus = Assert.Single(firstResult.Data.SectionStatuses, row => row.SectionId == "evidence-rows");
+        Assert.NotEqual("not-provided", evidenceStatus.Status);
+        Assert.Contains("artifact:webforms-modernization", evidenceStatus.SupportIds);
+        Assert.Equal(
+            firstResult.Data.Sources.Single(source => source.SourceId == "source:webforms-modernization").CommitSha,
+            firstResult.Manifest.CommitSha);
+        var limitationsById = firstResult.Data.Limitations.ToDictionary(row => row.LimitationId, StringComparer.Ordinal);
+        Assert.All(
+            firstResult.Data.EvidenceRows.Where(row => row.ArtifactId == "artifact:webforms-modernization"),
+            row => Assert.All(row.Limitations, id => Assert.Equal(row.SupportId, limitationsById[id].Scope)));
         Assert.Equal("public-demo", publicResult.Manifest.SafetyProfile);
         Assert.NotNull(publicResult.Data.WebForms);
 
@@ -157,6 +167,37 @@ public sealed class WebFormsStaticExplorerTests
         var conflict = await StaticHtmlEvidenceExplorer.GenerateAsync(new(conflictInput, Path.Combine(temp.Path, "conflict"), "hidden-local"));
         Assert.Null(conflict.Data.WebForms);
         Assert.Contains(conflict.Gaps, gap => gap.Scope == "artifact:webforms-modernization");
+    }
+
+    [Fact]
+    public async Task Explorer_rejects_duplicate_webforms_packet_properties()
+    {
+        using var temp = new TempDirectory();
+        var repo = CreateWebFormsRepository(temp.Path);
+        var scan = Path.Combine(temp.Path, "scan");
+        var packet = Path.Combine(temp.Path, "packet");
+        Assert.Equal(0, await TraceMapCommand.RunAsync(["scan", "--repo", repo, "--out", scan], TextWriter.Null, TextWriter.Null));
+        Assert.Equal(0, await TraceMapCommand.RunAsync(
+            ["webforms-modernization", "--index", Path.Combine(scan, "index.sqlite"), "--out", packet],
+            TextWriter.Null,
+            TextWriter.Null));
+
+        var packetPath = Path.Combine(packet, "webforms-modernization.json");
+        var json = await File.ReadAllTextAsync(packetPath);
+        var marker = $"\"schemaVersion\": \"{WebFormsModernizationPacketReporter.SchemaVersion}\"";
+        json = json.Replace(marker, marker + ",\n  " + marker, StringComparison.Ordinal);
+        await File.WriteAllTextAsync(packetPath, json);
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(
+            new(packet, Path.Combine(temp.Path, "explorer"), "hidden-local"));
+
+        Assert.Null(result.Data.WebForms);
+        Assert.Contains(result.Data.Artifacts, artifact =>
+            artifact.ArtifactKind == "webforms-modernization-packet"
+            && artifact.Compatibility == "unsupported");
+        Assert.Contains(result.Gaps, gap =>
+            gap.Scope == "artifact:webforms-modernization"
+            && gap.GapKind == "unsupported-schema");
     }
 
     [Fact]

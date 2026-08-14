@@ -139,6 +139,16 @@ public static partial class StaticHtmlEvidenceExplorer
 
         try
         {
+            using var document = JsonDocument.Parse(
+                snapshot.Content,
+                new JsonDocumentOptions
+                {
+                    AllowTrailingCommas = false,
+                    CommentHandling = JsonCommentHandling.Disallow,
+                    MaxDepth = 96
+                });
+            var root = RequireObject(document.RootElement, "root");
+            RejectDuplicateJsonProperties(root);
             var packet = JsonSerializer.Deserialize<WebFormsModernizationPacket>(snapshot.Content, JsonOptions)
                 ?? throw new InvalidDataException("empty packet");
             ValidateWebFormsPacket(packet, expectedCommitSha);
@@ -153,7 +163,7 @@ public static partial class StaticHtmlEvidenceExplorer
                 foreach (var raw in messages ?? [])
                 {
                     var message = SafeClosedText(raw, "webforms.limitations", redactions);
-                    var id = $"limitation:webforms:{Hash(message, 20)}";
+                    var id = $"limitation:webforms:{Hash(scope + "|" + message, 20)}";
                     ids.Add(id);
                     limitationRows.TryAdd(id, new ExplorerLimitation(
                         id,
