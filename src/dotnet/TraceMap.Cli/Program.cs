@@ -522,7 +522,7 @@ public static class TraceMapCommand
         string[] supportedOptions =
         [
             "--index", "--out", "--max-surfaces", "--max-event-chains", "--max-candidates",
-            "--max-gaps", "--max-depth", "--max-paths", "--max-boundaries", "--max-identity-state"
+            "--max-gaps", "--max-depth", "--max-paths", "--max-boundaries", "--max-identity-state", "--max-batch-data-movement"
         ];
         var unknownOptions = values.Keys.Except(supportedOptions, StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
         if (unknownOptions.Length > 0)
@@ -552,7 +552,8 @@ public static class TraceMapCommand
             ParsePositiveInt(values, "--max-depth", 8),
             ParsePositiveInt(values, "--max-paths", 1_000),
             ParsePositiveInt(values, "--max-boundaries", 1_000),
-            ParsePositiveInt(values, "--max-identity-state", 1_000)), cancellationToken);
+            ParsePositiveInt(values, "--max-identity-state", 1_000),
+            ParsePositiveInt(values, "--max-batch-data-movement", 1_000)), cancellationToken);
         await output.WriteLineAsync($"TraceMap Web Forms modernization packet completed: {result.JsonPath}");
         await output.WriteLineAsync($"Repository: {result.Packet.Sources.Single().RepositoryId}");
         await output.WriteLineAsync($"Commit SHA: {result.Packet.Sources.Single().CommitSha}");
@@ -561,6 +562,7 @@ public static class TraceMapCommand
         await output.WriteLineAsync($"Event chains: {result.Packet.Summary.EventChainCount}");
         await output.WriteLineAsync($"Downstream boundaries: {result.Packet.Summary.DownstreamBoundaryCount}");
         await output.WriteLineAsync($"Identity/state declarations: {result.Packet.Summary.IdentityStateCount}");
+        await output.WriteLineAsync($"Batch/data-movement declarations: {result.Packet.Summary.BatchDataMovementCount}");
         await output.WriteLineAsync($"Gaps: {result.Packet.Summary.GapCount}");
         return 0;
     }
@@ -2539,6 +2541,8 @@ public static class TraceMapCommand
               --max-event-chains <n>     Maximum event chains (default 1000).
               --max-boundaries <n>       Maximum downstream boundary rows (default 1000).
               --max-identity-state <n>   Maximum identity/state rows (default 1000).
+              --max-batch-data-movement <n>
+                                         Maximum batch/data-movement rows (default 1000).
               --max-candidates <n>       Maximum structural candidates (default 1000).
               --max-gaps <n>             Maximum gap rows (default 1000).
               --max-depth <n>            Legacy static-flow traversal depth (default 8).
