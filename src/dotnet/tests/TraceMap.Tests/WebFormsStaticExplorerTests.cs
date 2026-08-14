@@ -215,6 +215,7 @@ public sealed class WebFormsStaticExplorerTests
         var packetPath = Path.Combine(packet, "webforms-modernization.json");
         var root = JsonNode.Parse(await File.ReadAllTextAsync(packetPath))!.AsObject();
         root["ownerQuestions"]![0] = "Inspect C:\\Users\\private\\secret.txt";
+        root["surfaces"]![0]!["evidence"]!["factId"] = "C:\\Users\\private\\unsafe-fact";
         await File.WriteAllTextAsync(packetPath, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
 
         var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new(packet, Path.Combine(temp.Path, "safe"), "hidden-local"));
@@ -222,7 +223,13 @@ public sealed class WebFormsStaticExplorerTests
         var all = string.Join('\n', Directory.EnumerateFiles(Path.Combine(temp.Path, "safe"), "*", SearchOption.AllDirectories).Select(File.ReadAllText));
         Assert.DoesNotContain("C:\\Users\\private", all, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("webforms-owner-question-hash:", all, StringComparison.Ordinal);
+        Assert.Contains("support-id-hash:", all, StringComparison.Ordinal);
         Assert.Contains(result.Data.Redactions, redaction => redaction.Location == "webforms-owner-question");
+        Assert.Contains(result.Data.Redactions, redaction => redaction.Location == "support-id");
+        var unsafeEvidence = Assert.Single(result.Data.EvidenceRows, row => row.SupportId.StartsWith("support-id-hash:", StringComparison.Ordinal));
+        Assert.All(
+            unsafeEvidence.Limitations,
+            id => Assert.Equal(unsafeEvidence.SupportId, result.Data.Limitations.Single(row => row.LimitationId == id).Scope));
     }
 
     private static string CreateWebFormsRepository(string root)

@@ -160,10 +160,11 @@ public static partial class StaticHtmlEvidenceExplorer
             IReadOnlyList<string> RegisterLimitations(IEnumerable<string> messages, string scope)
             {
                 var ids = new List<string>();
+                var safeScope = SafeClosedText(scope, "support-id", redactions);
                 foreach (var raw in messages ?? [])
                 {
                     var message = SafeClosedText(raw, "webforms.limitations", redactions);
-                    var id = $"limitation:webforms:{Hash(scope + "|" + message, 20)}";
+                    var id = $"limitation:webforms:{Hash(safeScope + "|" + message, 20)}";
                     ids.Add(id);
                     limitationRows.TryAdd(id, new ExplorerLimitation(
                         id,
@@ -171,7 +172,7 @@ public static partial class StaticHtmlEvidenceExplorer
                         Tier4Unknown,
                         "webforms-static-boundary",
                         "webforms",
-                        scope,
+                        safeScope,
                         "Prevents runtime, business-intent, parity, migration, architecture, security, cloud-readiness, and release conclusions.",
                         message,
                         [WebFormsArtifactId]));
