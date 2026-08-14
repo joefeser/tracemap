@@ -36,11 +36,16 @@ public sealed class LocalReviewCommandTests
         Assert.Equal("local-only", root.GetProperty("claimLevel").GetString());
         Assert.Matches("^[0-9a-f]{7,64}$", root.GetProperty("commitSha").GetString());
         Assert.Matches("^[0-9a-f]{64}$", root.GetProperty("sourceSnapshotDigest").GetString());
+        Assert.Equal("scan-artifacts-verified", root.GetProperty("lastProvenSafeState").GetString());
         Assert.All(root.GetProperty("artifacts").EnumerateArray(), artifact =>
         {
             var relative = artifact.GetProperty("relativePath").GetString()!;
             Assert.False(Path.IsPathRooted(relative));
             Assert.DoesNotContain('\\', relative);
+            Assert.Contains(
+                artifact.GetProperty("producerStage").GetString(),
+                new[] { "scan", "webforms-modernization", "explorer" });
+            Assert.DoesNotContain(relative, new[] { "local-review-result.json", "README.md" });
         });
         Assert.DoesNotContain(temp.Path, json, StringComparison.Ordinal);
         Assert.DoesNotContain(temp.Path, await File.ReadAllTextAsync(Path.Combine(review, "README.md")), StringComparison.Ordinal);
@@ -115,6 +120,7 @@ public sealed class LocalReviewCommandTests
             .Select(stage => stage.GetProperty("stage").GetString())
             .ToArray();
         Assert.Equal(new[] { "scan", "webforms-modernization", "explorer" }, stages);
+        Assert.Equal("explorer-verified", document.RootElement.GetProperty("lastProvenSafeState").GetString());
         Assert.All(
             document.RootElement.GetProperty("stages")[1].GetProperty("inputs").EnumerateArray(),
             input => Assert.StartsWith("scan/", input.GetProperty("relativePath").GetString(), StringComparison.Ordinal));
@@ -178,6 +184,35 @@ public sealed class LocalReviewCommandTests
     }
 
     [Fact]
+    public async Task Guided_scan_rejects_a_dangling_symlink_output_before_scan()
+    {
+        if (OperatingSystem.IsWindows()) return;
+
+        using var temp = new TempDirectory();
+        var repo = CreateRepository(temp.Path, webForms: false);
+        var outputPath = Path.Combine(temp.Path, "dangling-output");
+        File.CreateSymbolicLink(outputPath, Path.Combine(temp.Path, "missing-target"));
+        var scanCalled = false;
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        var exit = await LocalReviewCommand.RunAsync(
+            ["run", "--repo", repo, "--out", outputPath],
+            output,
+            error,
+            (arguments, stdout, stderr, cancellationToken) =>
+            {
+                scanCalled = true;
+                return Task.FromResult(0);
+            });
+
+        Assert.Equal(1, exit);
+        Assert.False(scanCalled);
+        Assert.Contains("LOCAL_REVIEW_OUTPUT_COLLISION", error.ToString(), StringComparison.Ordinal);
+        Assert.NotNull(File.ResolveLinkTarget(outputPath, returnFinalTarget: false));
+    }
+
+    [Fact]
     public async Task Guided_scan_publishes_typed_failure_result_without_raw_diagnostics()
     {
         using var temp = new TempDirectory();
@@ -204,6 +239,65 @@ public sealed class LocalReviewCommandTests
         Assert.Contains("\"outcome\": \"failed\"", json, StringComparison.Ordinal);
         Assert.Contains("LOCAL_REVIEW_SCAN_FAILED", json, StringComparison.Ordinal);
         Assert.DoesNotContain(temp.Path, json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Identity_unavailable_failures_are_location_independent_and_do_not_fabricate_scan_identity()
+    {
+        using var firstTemp = new TempDirectory();
+        using var secondTemp = new TempDirectory();
+        var firstRepo = CreateRepository(firstTemp.Path, webForms: false);
+        var secondRepo = CreateRepository(secondTemp.Path, webForms: false);
+        var firstReview = Path.Combine(firstTemp.Path, "review");
+        var secondReview = Path.Combine(secondTemp.Path, "review");
+
+        static Task<int> FailedScan(
+            string[] args,
+            TextWriter stdout,
+            TextWriter stderr,
+            CancellationToken cancellationToken) => Task.FromResult(1);
+
+        Assert.Equal(1, await LocalReviewCommand.RunAsync(
+            ["run", "--repo", firstRepo, "--out", firstReview],
+            TextWriter.Null,
+            TextWriter.Null,
+            FailedScan));
+        Assert.Equal(1, await LocalReviewCommand.RunAsync(
+            ["run", "--repo", secondRepo, "--out", secondReview],
+            TextWriter.Null,
+            TextWriter.Null,
+            FailedScan));
+
+        using var first = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(firstReview, "local-review-result.json")));
+        using var second = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(secondReview, "local-review-result.json")));
+        Assert.Equal(first.RootElement.GetProperty("workflowId").GetString(), second.RootElement.GetProperty("workflowId").GetString());
+        Assert.False(first.RootElement.TryGetProperty("repositoryIdentityHash", out _));
+        Assert.False(first.RootElement.TryGetProperty("commitSha", out _));
+    }
+
+    [Fact]
+    public async Task Syntax_only_scan_is_partial_with_explicit_reduced_coverage()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "syntax-only");
+        Directory.CreateDirectory(repo);
+        await File.WriteAllTextAsync(Path.Combine(repo, "Fixture.cs"), "internal sealed class Fixture { }");
+        RunGit(repo, "init");
+        RunGit(repo, "add", ".");
+        RunGit(repo, "-c", "user.name=TraceMap", "-c", "user.email=fixture@example.invalid", "commit", "-m", "baseline");
+        var review = Path.Combine(temp.Path, "review");
+
+        Assert.Equal(0, await TraceMapCommand.RunAsync(
+            ["local-review", "run", "--repo", repo, "--out", review],
+            TextWriter.Null,
+            TextWriter.Null));
+
+        using var result = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(review, "local-review-result.json")));
+        Assert.Equal("partial", result.RootElement.GetProperty("outcome").GetString());
+        Assert.Equal("reduced", result.RootElement.GetProperty("coverage").GetString());
+        Assert.Contains(
+            result.RootElement.GetProperty("gaps").EnumerateArray(),
+            gap => gap.GetString() == "LOCAL_REVIEW_SCAN_PARTIAL");
     }
 
     [Fact]
@@ -356,6 +450,9 @@ public sealed class LocalReviewCommandTests
             "local-review-result.v1",
             document.RootElement.GetProperty("properties").GetProperty("schemaVersion").GetProperty("const").GetString());
         Assert.False(document.RootElement.GetProperty("$defs").GetProperty("artifact").GetProperty("additionalProperties").GetBoolean());
+        var required = document.RootElement.GetProperty("required").EnumerateArray().Select(item => item.GetString()).ToArray();
+        Assert.DoesNotContain("repositoryIdentityHash", required);
+        Assert.DoesNotContain("commitSha", required);
     }
 
     private static string CreateRepository(string root, bool webForms)
