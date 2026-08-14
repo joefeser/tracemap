@@ -288,6 +288,12 @@ def evaluate_adapter(adapter: str, workspace: Path, repo_root: Path, mutation_te
     run(command, cwd=repo_root, env=env)
     command, env = scan_command(adapter, repo, repeat, repo_root)
     run(command, cwd=repo_root, env=env)
+    option_one = workspace / f"{adapter}-option-one"
+    option_two = workspace / f"{adapter}-option-two"
+    command, env = scan_command(adapter, repo, option_one, repo_root, ["--exclude", "__tracemap_option_a__"])
+    run(command, cwd=repo_root, env=env)
+    command, env = scan_command(adapter, repo, option_two, repo_root, ["--exclude", "__tracemap_option_b__"])
+    run(command, cwd=repo_root, env=env)
     source = repo / definition.relative_source
     if len(definition.original_source.encode()) != len(definition.changed_source.encode()):
         raise RuntimeError("dirty fixture mutation must preserve byte length")
@@ -295,10 +301,15 @@ def evaluate_adapter(adapter: str, workspace: Path, repo_root: Path, mutation_te
     command, env = scan_command(adapter, repo, dirty, repo_root)
     run(command, cwd=repo_root, env=env)
 
-    validation_errors = {name: VALIDATOR.validate_output(path) for name, path in (("first", first), ("repeat", repeat), ("dirty", dirty))}
+    validation_errors = {
+        name: VALIDATOR.validate_output(path)
+        for name, path in (("first", first), ("repeat", repeat), ("dirty", dirty), ("option-one", option_one), ("option-two", option_two))
+    }
     first_manifest = normalized_manifest(first)
     repeat_manifest = normalized_manifest(repeat)
     dirty_manifest = normalized_manifest(dirty)
+    option_one_manifest = normalized_manifest(option_one)
+    option_two_manifest = normalized_manifest(option_two)
     deterministic = (
         first_manifest == repeat_manifest
         and (first / "facts.ndjson").read_bytes() == (repeat / "facts.ndjson").read_bytes()
@@ -311,12 +322,20 @@ def evaluate_adapter(adapter: str, workspace: Path, repo_root: Path, mutation_te
         and first_manifest.get("sourceSnapshotDigest") != dirty_manifest.get("sourceSnapshotDigest")
         and first_manifest.get("scanId") != dirty_manifest.get("scanId")
     )
+    option_authority = (
+        option_one_manifest.get("commitSha") == fixture_commit
+        and option_two_manifest.get("commitSha") == fixture_commit
+        and option_one_manifest.get("sourceSnapshotDigest") == first_manifest.get("sourceSnapshotDigest")
+        and option_two_manifest.get("sourceSnapshotDigest") == first_manifest.get("sourceSnapshotDigest")
+        and option_one_manifest.get("scanId") != option_two_manifest.get("scanId")
+    )
     valid = (
         not any(validation_errors.values())
         and first_manifest.get("commitSha") == fixture_commit
         and repeat_manifest.get("commitSha") == fixture_commit
         and dirty_manifest.get("commitSha") == fixture_commit
     )
+    identity_valid = valid and option_authority
 
     malformed = workspace / f"{adapter}-malformed"
     shutil.copytree(first, malformed)
@@ -404,7 +423,7 @@ def evaluate_adapter(adapter: str, workspace: Path, repo_root: Path, mutation_te
 
     capabilities = [
         capability("concrete-git-authority", "supported" if valid else "unsupported", ["synthetic-exact-commit"]),
-        capability("actual-analyzed-byte-identity", "supported" if valid else "unsupported", ["manifest-sourceSnapshotDigest"]),
+        capability("actual-analyzed-byte-identity", "supported" if identity_valid else "unsupported", ["manifest-sourceSnapshotDigest", "distinct-option-authority-mutation"]),
         capability("repeat-determinism", "supported" if deterministic else "unsupported", ["baseline-repeat-comparison"]),
         capability("same-size-dirty-mutation", "supported" if dirty_identity else "unsupported", ["same-commit-different-byte-snapshot"]),
         capability(

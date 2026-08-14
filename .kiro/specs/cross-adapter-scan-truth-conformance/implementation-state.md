@@ -26,13 +26,13 @@
 - TypeScript: 39/39 tests passed; `npm run build` passed.
 - JVM: Gradle test suite passed with Java 21.
 - Swift: full smoke-test executable passed.
-- .NET: 1,551/1,551 solution tests passed on the final integrated `origin/dev` stack.
+- .NET: 1,553/1,553 solution tests passed on the final integrated `origin/dev` stack.
 - The final #675 reduced Web Forms packet-coverage propagation is included;
   focused local-review/explorer tests passed 19/19 on the final integrated stack,
   including all exact-head failure-evidence regressions from #675 review.
 - The full five-adapter executable matrix returned `supported`; its sanitized
   JSON SHA-256 was
-  `19431acded95d068c61fc8af8fab971019a1282c04063c53828a310dd2d8221d`.
+  `cd0f5ba06bce209716d6af849973852e5bc0e6a8d3e2a90e27ae3341c0b8d2df`.
 - Combined public paths/reverse smoke, private-path guard, Python bytecode
   compilation, and `git diff --check` passed.
 - The authoritative matrix was rerun after stacking the completed prerequisite
@@ -50,8 +50,8 @@ isolated temporary venv containing `src/python[dev]`.
 
 The final post-merge matrix returned `supported` for all five adapters and
 produced the sanitized digest
-`19431acded95d068c61fc8af8fab971019a1282c04063c53828a310dd2d8221d`.
-Exact integrated validation then passed: full .NET 1,551/1,551; public combined
+`cd0f5ba06bce209716d6af849973852e5bc0e6a8d3e2a90e27ae3341c0b8d2df`.
+Exact integrated validation then passed: full .NET 1,553/1,553; public combined
 paths/reverse smoke; Python bytecode compilation; private-path guard; and
 `git diff --check`. The matrix itself rebuilt and exercised the shipped .NET,
 JVM, Python, TypeScript, and Swift adapters at the final integrated checkpoint.
@@ -94,9 +94,12 @@ JVM, Python, TypeScript, and Swift adapters at the final integrated checkpoint.
   result. Adapter option lists use unambiguous framing so distinct authority
   does not collapse to one scan ID, and Swift identity includes its concrete
   scanner and extractor versions.
-- JVM, TypeScript, and Swift publication now reject a repository root, ancestor,
+- .NET, JVM, TypeScript, and Swift publication now reject a repository root, ancestor,
   file, or unrecognized nonempty output directory before any swap; existing
   unrelated content is never treated as a replaceable TraceMap packet.
+- The executable matrix runs two distinct non-matching option configurations
+  against unchanged bytes and requires distinct scan IDs with the same exact
+  commit and source snapshot before reporting identity support.
 
 ## Deferred
 

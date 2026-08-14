@@ -11,11 +11,11 @@ internal static class ScanOutputTransaction
         "logs/analyzer.log"
     ];
 
-    internal static async Task WriteAsync(string outputPath, Func<string, Task> writer)
+    internal static async Task WriteAsync(string outputPath, string repoPath, Func<string, Task> writer)
     {
         var target = Path.GetFullPath(outputPath);
         var parent = Path.GetDirectoryName(target) ?? throw new IOException("OutputParentUnavailable");
-        ValidateTarget(target);
+        ValidateTarget(target, repoPath);
 
         Directory.CreateDirectory(parent);
         var staging = Path.Combine(parent, $".tracemap-{Path.GetFileName(target)}-{Guid.NewGuid():N}");
@@ -62,11 +62,27 @@ internal static class ScanOutputTransaction
         Directory.Exists(outputPath)
         && RequiredArtifacts.All(relative => File.Exists(Path.Combine(outputPath, relative.Replace('/', Path.DirectorySeparatorChar))));
 
-    internal static void ValidateTarget(string outputPath)
+    internal static void ValidateTarget(string outputPath, string repoPath)
     {
         var target = Path.GetFullPath(outputPath);
+        ValidateProtectedRoot(target, repoPath);
         if (File.Exists(target) || Directory.Exists(target) && !CanReplace(target))
             throw new IOException("OutputArtifactSetNotReplaceable");
+    }
+
+    internal static void ValidateProtectedRoot(string outputPath, string repoPath)
+    {
+        var target = Path.GetFullPath(outputPath);
+        var repo = Path.GetFullPath(repoPath);
+        if (IsSameOrAncestor(target, repo))
+            throw new IOException("OutputArtifactSetNotReplaceable");
+    }
+
+    private static bool IsSameOrAncestor(string candidate, string path)
+    {
+        var relative = Path.GetRelativePath(candidate, path);
+        return relative is "." or ""
+            || !(relative == ".." || relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal));
     }
 
     private static bool CanReplace(string outputPath)

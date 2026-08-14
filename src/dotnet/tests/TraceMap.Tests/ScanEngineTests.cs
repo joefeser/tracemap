@@ -567,6 +567,32 @@ public sealed class ScanEngineTests
         Assert.Equal(after.Manifest.ScanId, reader.GetString(1));
     }
 
+    [Fact]
+    public void Scan_identity_distinguishes_delimiter_colliding_option_authority()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Sample.cs"), "public sealed class Sample { }");
+        RunGit(repo, "init");
+        RunGit(repo, "config", "user.email", "fixture@example.invalid");
+        RunGit(repo, "config", "user.name", "TraceMap Fixture");
+        RunGit(repo, "add", "Sample.cs");
+        RunGit(repo, "commit", "-m", "baseline");
+
+        var oneValue = ScanEngine.Scan(new ScanOptions(
+            repo,
+            Path.Combine(temp.Path, "one"),
+            ExcludeGlobs: ["foo,bar"]));
+        var twoValues = ScanEngine.Scan(new ScanOptions(
+            repo,
+            Path.Combine(temp.Path, "two"),
+            ExcludeGlobs: ["foo", "bar"]));
+
+        Assert.Equal(oneValue.Manifest.SourceSnapshotDigest, twoValues.Manifest.SourceSnapshotDigest);
+        Assert.NotEqual(oneValue.Manifest.ScanId, twoValues.Manifest.ScanId);
+    }
+
     private static string ExpectedSourceSnapshotDigest(params (string Path, string Kind, byte[] Content)[] items)
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
