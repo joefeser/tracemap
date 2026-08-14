@@ -113,6 +113,24 @@ try {
 
     $nativePreference = $PSNativeCommandUseErrorActionPreference
     $PSNativeCommandUseErrorActionPreference = $false
+
+    $config.propertyFlows[0].framework = "webforms"
+    [System.IO.File]::WriteAllText($configPath, (($config | ConvertTo-Json -Depth 20) + "`n"), [System.Text.UTF8Encoding]::new($false))
+    & pwsh -NoProfile -File $runner -ConfigPath $configPath -TraceMapRoot $TraceMapRoot -OutputRoot $output1 -ValidateOnly 2>$null | Out-Null
+    Assert-True ($LASTEXITCODE -ne 0) "unsupported Web Forms property-flow framework was accepted"
+    $config.propertyFlows[0].framework = "angular"
+
+    $config.endpointPairs = @(0..100 | ForEach-Object {
+        [ordered]@{ name = "pair-$($_.ToString('000'))"; clientLabel = "angular-client"; serverLabel = "dotnet-api" }
+    })
+    [System.IO.File]::WriteAllText($configPath, (($config | ConvertTo-Json -Depth 20) + "`n"), [System.Text.UTF8Encoding]::new($false))
+    & pwsh -NoProfile -File $runner -ConfigPath $configPath -TraceMapRoot $TraceMapRoot -OutputRoot $output1 -ValidateOnly 2>$null | Out-Null
+    Assert-True ($LASTEXITCODE -ne 0) "endpoint-pair count above the contract limit was accepted"
+    $config.endpointPairs = @(
+        [ordered]@{ name = "client-api"; clientLabel = "angular-client"; serverLabel = "dotnet-api" }
+    )
+    [System.IO.File]::WriteAllText($configPath, (($config | ConvertTo-Json -Depth 20) + "`n"), [System.Text.UTF8Encoding]::new($false))
+
     & pwsh -NoProfile -File $runner -ConfigPath $configPath -TraceMapRoot $TraceMapRoot -OutputRoot (Join-Path $angular "unsafe-output") -ValidateOnly 2>$null | Out-Null
     $unsafeOutputExit = $LASTEXITCODE
     $PSNativeCommandUseErrorActionPreference = $nativePreference
@@ -145,6 +163,15 @@ try {
         Assert-True ($result.reports.Count -eq 6) "unexpected report count"
         Assert-True ($feedback.schemaVersion -eq "angular-dotnet-interaction-feedback.v1") "unexpected feedback schema"
         Assert-True ($feedback.reportCount -eq 6) "unexpected feedback report count"
+        $reportStateKeys = @($feedback.reportStates | ForEach-Object { "$($_.producer)|$($_.classification)|$($_.coverage)|$($_.truncated)" })
+        $sortedReportStateKeys = @($feedback.reportStates |
+            Sort-Object `
+                { [string]$_.producer },
+                { [string]$_.classification },
+                { [string]$_.coverage },
+                { [bool]$_.truncated } |
+            ForEach-Object { "$($_.producer)|$($_.classification)|$($_.coverage)|$($_.truncated)" })
+        Assert-True (($reportStateKeys -join "`n") -eq ($sortedReportStateKeys -join "`n")) "feedback report states are not canonically ordered"
         foreach ($signal in $feedback.unresolvedSignals) {
             Assert-True (-not [string]::IsNullOrWhiteSpace([string]$signal.ruleId)) "feedback signal omitted a rule ID"
             Assert-True ([string]$signal.evidenceTier -in @("Tier1Semantic", "Tier2Structural", "Tier3SyntaxOrTextual", "Tier4Unknown")) "feedback signal used an invalid evidence tier"
