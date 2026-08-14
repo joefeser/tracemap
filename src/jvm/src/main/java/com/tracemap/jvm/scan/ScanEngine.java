@@ -120,7 +120,8 @@ public final class ScanEngine {
         facts = dedupeAndSort(facts);
 
         beforeSnapshotVerification.run();
-        if (!sourceSnapshotDigest.equals(sourceSnapshotDigest(inventory))) {
+        List<FileInventoryItem> verifiedInventory = FileInventory.collect(options);
+        if (!sourceSnapshotDigest.equals(sourceSnapshotDigest(verifiedInventory))) {
             throw new IOException("SourceSnapshotChangedDuringScan");
         }
 

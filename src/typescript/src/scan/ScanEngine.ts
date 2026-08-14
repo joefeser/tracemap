@@ -110,7 +110,8 @@ export async function scan(options: ScanOptions, testHooks: ScanTestHooks = {}):
 
   const result: ScanResult = { manifest, facts: dedupeFacts(facts), inventory };
   await testHooks.beforeSnapshotVerification?.();
-  if (await createSourceSnapshotDigest(inventory) !== sourceSnapshotDigest) {
+  const verifiedInventory = await collectFileInventory(options);
+  if (await createSourceSnapshotDigest(verifiedInventory) !== sourceSnapshotDigest) {
     throw new Error("SourceSnapshotChangedDuringScan");
   }
   await writeOutputTransaction(outputPath, async (stagingPath) => {
