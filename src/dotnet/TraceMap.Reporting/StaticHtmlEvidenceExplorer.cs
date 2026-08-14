@@ -639,6 +639,17 @@ public static partial class StaticHtmlEvidenceExplorer
 
         await AddOptionalArtifactAsync(inputDirectory, "index.sqlite", "sqlite-index", "SQLite index", "index.sqlite.v1", safetyProfile, artifacts, gaps, cancellationToken);
         await AddOptionalArtifactAsync(inputDirectory, "report.md", "markdown-report", "Markdown report", "report.md.v1", safetyProfile, artifacts, gaps, cancellationToken);
+        var webFormsLoad = await AddWebFormsPacketArtifactAsync(
+            inputDirectory,
+            safetyProfile,
+            sourceCommitSha,
+            redactions,
+            cancellationToken);
+        if (sourceCommitSha is null && webFormsLoad.CommitSha is not null)
+        {
+            sourceCommitSha = webFormsLoad.CommitSha;
+            sourceCommitSupportId = WebFormsArtifactId;
+        }
         await AddReleaseReviewArtifactAsync(
             inputDirectory,
             safetyProfile,
@@ -675,12 +686,6 @@ public static partial class StaticHtmlEvidenceExplorer
             coverageLabels,
             redactions,
             cancellationToken);
-        var webFormsLoad = await AddWebFormsPacketArtifactAsync(
-            inputDirectory,
-            safetyProfile,
-            sourceCommitSha,
-            redactions,
-            cancellationToken);
         if (webFormsLoad.Artifact is not null)
         {
             artifacts.Add(webFormsLoad.Artifact);
@@ -688,11 +693,6 @@ public static partial class StaticHtmlEvidenceExplorer
         if (webFormsLoad.Source is not null)
         {
             reportSources.Add(webFormsLoad.Source);
-        }
-        if (sourceCommitSha is null && webFormsLoad.CommitSha is not null)
-        {
-            sourceCommitSha = webFormsLoad.CommitSha;
-            sourceCommitSupportId = WebFormsArtifactId;
         }
         evidenceRows.AddRange(webFormsLoad.EvidenceRows);
         gaps.AddRange(webFormsLoad.Gaps);
@@ -705,7 +705,7 @@ public static partial class StaticHtmlEvidenceExplorer
         var catalogRules = catalogLoad.Entries;
         await AddUnsupportedJsonArtifactsAsync(inputDirectory, safetyProfile, artifacts, gaps, cancellationToken);
 
-        if (webFormsLoad.Artifact is null)
+        if (webFormsLoad.Artifact?.Compatibility is not ("supported" or "supported-partial"))
         {
             limitations.Add(CreateLimitation(
                 "claim-level-metadata-unavailable",
@@ -1414,6 +1414,18 @@ public static partial class StaticHtmlEvidenceExplorer
             var authoritativeMatches = authoritativeCommitSha is null
                 ? 0
                 : orderedSources.Count(source => source.CommitSha.Equals(authoritativeCommitSha, StringComparison.OrdinalIgnoreCase));
+            if (authoritativeCommitSha is not null && authoritativeMatches == 0)
+            {
+                gaps.Add(CreateGap(
+                    "paths-report-commit-conflict",
+                    ProvenanceConflictRuleId,
+                    "commit-conflict",
+                    artifactId,
+                    "paths",
+                    "PartialAnalysis",
+                    "The paths report does not contain the authoritative explorer commit, so its evidence remains associated with separate report sources.",
+                    [artifactId]));
+            }
             var sourceIdByIndex = new Dictionary<string, string>(StringComparer.Ordinal);
             for (var index = 0; index < orderedSources.Length; index++)
             {
@@ -2293,6 +2305,7 @@ public static partial class StaticHtmlEvidenceExplorer
         var compatibleReducerReport = reducerReport?.Compatibility == "supported";
         var webFormsPacket = context.Artifacts.FirstOrDefault(artifact => artifact.ArtifactKind == "webforms-modernization-packet");
         var compatibleWebFormsPacket = webFormsPacket?.Compatibility is "supported" or "supported-partial";
+        var webFormsPacketPartial = webFormsPacket?.Compatibility == "supported-partial";
         var ruleCatalogProvided = context.CatalogFilePresent;
         var compatibleRuleCatalogLoaded = context.CatalogRulesLoaded;
         var unsupportedJsonProvided = context.Artifacts.Any(artifact => artifact.ArtifactKind == "unsupported-json");
@@ -2311,7 +2324,7 @@ public static partial class StaticHtmlEvidenceExplorer
         if (compatibleReducerReport) evidenceSupportIds.Add("artifact:reducer-impact-report");
         if (compatibleWebFormsPacket) evidenceSupportIds.Add(WebFormsArtifactId);
         var evidenceRowsStatus = evidenceArtifactProvided
-            ? pathReportPartial || reducerReportPartial
+            ? pathReportPartial || reducerReportPartial || webFormsPacketPartial
                 ? "partial"
                 : context.EvidenceRows.Count == 0
                 ? "no-evidence-under-current-coverage"
@@ -2542,17 +2555,32 @@ public static partial class StaticHtmlEvidenceExplorer
             [],
             "The selected output safety profile controls rendering and generated-output validation."));
 
-        rows.Add(CompatibilityRow(
-            "claim-level",
-            "claim-level:unknown",
-            "Artifact claim metadata",
-            "partial",
-            CompatibilityLedgerRuleId,
-            coverageLabel,
-            "artifact-claim-metadata",
-            ["input-directory"],
-            ["claim-level-metadata-unavailable"],
-            "Compatible first-slice inputs do not expose independent claim-level metadata; unknown metadata is not treated as a conflict."));
+        var compatibleClaimArtifact = context.Artifacts.FirstOrDefault(artifact =>
+            artifact.ArtifactKind == "webforms-modernization-packet"
+            && artifact.Compatibility is "supported" or "supported-partial");
+        rows.Add(compatibleClaimArtifact is null
+            ? CompatibilityRow(
+                "claim-level",
+                "claim-level:unknown",
+                "Artifact claim metadata",
+                "partial",
+                CompatibilityLedgerRuleId,
+                coverageLabel,
+                "artifact-claim-metadata",
+                ["input-directory"],
+                ["claim-level-metadata-unavailable"],
+                "Compatible first-slice inputs do not expose independent claim-level metadata; unknown metadata is not treated as a conflict.")
+            : CompatibilityRow(
+                "claim-level",
+                $"claim-level:{compatibleClaimArtifact.ClaimLevel}",
+                "Web Forms packet claim metadata",
+                "compatible",
+                CompatibilityLedgerRuleId,
+                compatibleClaimArtifact.CoverageLabels.FirstOrDefault() ?? coverageLabel,
+                "artifact-claim-metadata",
+                [compatibleClaimArtifact.ArtifactId],
+                [],
+                "The compatible Web Forms packet exposes validated local-only claim metadata; this does not authorize public promotion or strengthen its static evidence claims."));
 
         return rows
             .OrderBy(row => row.SubjectKind, StringComparer.Ordinal)
@@ -2574,6 +2602,7 @@ public static partial class StaticHtmlEvidenceExplorer
             "facts-ndjson" => "evidence-rows",
             "paths-report" => "paths",
             "reducer-impact-report" => "reducer-results",
+            "webforms-modernization-packet" => "webforms",
             "rule-catalog" => "rules",
             _ => "artifacts"
         };

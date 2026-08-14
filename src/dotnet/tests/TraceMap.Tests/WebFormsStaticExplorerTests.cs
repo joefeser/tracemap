@@ -58,7 +58,18 @@ public sealed class WebFormsStaticExplorerTests
             row.SectionId == "webforms" && row.Status is "available" or "partial");
         var evidenceStatus = Assert.Single(firstResult.Data.SectionStatuses, row => row.SectionId == "evidence-rows");
         Assert.NotEqual("not-provided", evidenceStatus.Status);
+        if (artifact.Compatibility == "supported-partial")
+        {
+            Assert.Equal("partial", evidenceStatus.Status);
+        }
         Assert.Contains("artifact:webforms-modernization", evidenceStatus.SupportIds);
+        Assert.Contains(firstResult.Data.CompatibilityLedger, row =>
+            row.SubjectKind == "claim-level"
+            && row.SubjectId == "claim-level:local-only"
+            && row.CompatibilityStatus == "compatible"
+            && row.SupportIds.SequenceEqual(["artifact:webforms-modernization"])
+            && row.LimitationIds.Count == 0);
+        Assert.DoesNotContain(firstResult.Data.CompatibilityLedger, row => row.SubjectId == "claim-level:unknown");
         Assert.Equal(
             firstResult.Data.Sources.Single(source => source.SourceId == "source:webforms-modernization").CommitSha,
             firstResult.Manifest.CommitSha);
@@ -155,6 +166,11 @@ public sealed class WebFormsStaticExplorerTests
         Assert.Contains(unsupported.Data.Artifacts, artifact =>
             artifact.ArtifactKind == "webforms-modernization-packet"
             && artifact.Compatibility == "unsupported");
+        Assert.Contains(unsupported.Data.CompatibilityLedger, row =>
+            row.SubjectId == "artifact:webforms-modernization"
+            && row.CompatibilityStatus == "unsupported-schema"
+            && row.RuleId == StaticHtmlEvidenceExplorer.UnsupportedSchemaRuleId
+            && row.LimitationIds.Any(id => id.Contains("webforms", StringComparison.Ordinal)));
 
         var conflictInput = Path.Combine(temp.Path, "conflict-input");
         Directory.CreateDirectory(conflictInput);
@@ -167,6 +183,52 @@ public sealed class WebFormsStaticExplorerTests
         var conflict = await StaticHtmlEvidenceExplorer.GenerateAsync(new(conflictInput, Path.Combine(temp.Path, "conflict"), "hidden-local"));
         Assert.Null(conflict.Data.WebForms);
         Assert.Contains(conflict.Gaps, gap => gap.Scope == "artifact:webforms-modernization");
+    }
+
+    [Fact]
+    public async Task Explorer_reconciles_packet_commit_before_paths_and_reducer_reports()
+    {
+        using var temp = new TempDirectory();
+        var repo = CreateWebFormsRepository(temp.Path);
+        var scan = Path.Combine(temp.Path, "scan");
+        var packet = Path.Combine(temp.Path, "packet");
+        var input = Path.Combine(temp.Path, "input");
+        Directory.CreateDirectory(input);
+        Assert.Equal(0, await TraceMapCommand.RunAsync(["scan", "--repo", repo, "--out", scan], TextWriter.Null, TextWriter.Null));
+        Assert.Equal(0, await TraceMapCommand.RunAsync(
+            ["webforms-modernization", "--index", Path.Combine(scan, "index.sqlite"), "--out", packet],
+            TextWriter.Null,
+            TextWriter.Null));
+
+        var packetPath = Path.Combine(packet, "webforms-modernization.json");
+        File.Copy(packetPath, Path.Combine(input, "webforms-modernization.json"));
+        var packetRoot = JsonNode.Parse(await File.ReadAllTextAsync(packetPath))!.AsObject();
+        var packetCommit = packetRoot["sources"]![0]!["commitSha"]!.GetValue<string>();
+        await StaticHtmlEvidenceExplorerTests.WritePathsReportArtifactAsync(input, new string('a', 40));
+        await StaticHtmlEvidenceExplorerTests.WriteReducerImpactArtifactAsync(input, new string('b', 40));
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(
+            new(input, Path.Combine(temp.Path, "explorer"), "hidden-local"));
+
+        Assert.Equal(packetCommit, result.Manifest.CommitSha);
+        Assert.Contains(result.Gaps, gap =>
+            gap.RuleId == StaticHtmlEvidenceExplorer.ProvenanceConflictRuleId
+            && gap.GapKind == "commit-conflict"
+            && gap.Scope == "artifact:paths-report"
+            && gap.AffectedSection == "paths");
+        Assert.Contains(result.Gaps, gap =>
+            gap.RuleId == StaticHtmlEvidenceExplorer.ProvenanceConflictRuleId
+            && gap.GapKind == "commit-conflict"
+            && gap.Scope == "artifact:reducer-impact-report"
+            && gap.AffectedSection == "reducer-results");
+        Assert.Contains(result.Data.CompatibilityLedger, row =>
+            row.SubjectId == "artifact:paths-report"
+            && row.CompatibilityStatus == "partial"
+            && row.RuleId == StaticHtmlEvidenceExplorer.ProvenanceConflictRuleId);
+        Assert.Contains(result.Data.CompatibilityLedger, row =>
+            row.SubjectId == "artifact:reducer-impact-report"
+            && row.CompatibilityStatus == "partial"
+            && row.RuleId == StaticHtmlEvidenceExplorer.ProvenanceConflictRuleId);
     }
 
     [Fact]
