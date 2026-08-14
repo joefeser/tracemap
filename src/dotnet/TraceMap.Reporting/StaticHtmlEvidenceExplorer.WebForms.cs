@@ -10,6 +10,7 @@ public sealed record ExplorerWebFormsData(
     IReadOnlyList<ExplorerWebFormsEventChain> EventChains,
     IReadOnlyList<ExplorerWebFormsBoundary> DownstreamBoundaries,
     IReadOnlyList<ExplorerWebFormsIdentityState> IdentityStateInventory,
+    IReadOnlyList<ExplorerWebFormsBatchDataMovement> BatchDataMovementInventory,
     IReadOnlyList<ExplorerWebFormsCandidate> StructuralCandidates,
     IReadOnlyList<string> OwnerQuestions);
 
@@ -21,6 +22,7 @@ public sealed record ExplorerWebFormsSummary(
     int EventChainCount,
     int DownstreamBoundaryCount,
     int IdentityStateCount,
+    int BatchDataMovementCount,
     int StructuralCandidateCount,
     int GapCount,
     bool Truncated);
@@ -75,6 +77,19 @@ public sealed record ExplorerWebFormsIdentityState(
     string IdentityKind,
     string Classification,
     string? SurfaceId,
+    IReadOnlyDictionary<string, string> SafeMetadata,
+    string EvidenceId,
+    IReadOnlyList<string> SupportIds,
+    IReadOnlyList<string> LimitationIds);
+
+public sealed record ExplorerWebFormsBatchDataMovement(
+    string BatchDataMovementId,
+    string SurfaceKind,
+    string Mechanism,
+    string OperationKind,
+    string OwnerStatus,
+    string ProjectResolution,
+    string? ProjectId,
     IReadOnlyDictionary<string, string> SafeMetadata,
     string EvidenceId,
     IReadOnlyList<string> SupportIds,
@@ -263,6 +278,21 @@ public static partial class StaticHtmlEvidenceExplorer
                 AddEvidence(state.Evidence, "webforms-identity-state-evidence"),
                 SafeSupportIds(state.SupportingFactIds),
                 RegisterLimitations(state.Limitations, state.IdentityStateId))).ToArray();
+            var batchDataMovement = packet.BatchDataMovementInventory.Select(item => new ExplorerWebFormsBatchDataMovement(
+                SafeClosedText(item.BatchDataMovementId, "webforms-batch-data-movement-id", redactions),
+                SafeClosedText(item.SurfaceKind, "webforms-batch-surface-kind", redactions),
+                SafeClosedText(item.Mechanism, "webforms-batch-mechanism", redactions),
+                SafeClosedText(item.OperationKind, "webforms-batch-operation-kind", redactions),
+                SafeClosedText(item.OwnerStatus, "webforms-batch-owner-status", redactions),
+                SafeClosedText(item.ProjectResolution, "webforms-batch-project-resolution", redactions),
+                string.IsNullOrWhiteSpace(item.ProjectId) ? null : SafeClosedText(item.ProjectId, "webforms-project-id", redactions),
+                item.SafeMetadata.OrderBy(pair => pair.Key, StringComparer.Ordinal).ToDictionary(
+                    pair => SafeClosedText(pair.Key, "webforms-metadata-key", redactions),
+                    pair => SafeClosedText(pair.Value, "webforms-metadata-value", redactions),
+                    StringComparer.Ordinal),
+                AddEvidence(item.Evidence, "webforms-batch-data-movement-evidence"),
+                SafeSupportIds(item.SupportingFactIds),
+                RegisterLimitations(item.Limitations, item.BatchDataMovementId))).ToArray();
             var candidates = packet.StructuralSliceCandidates.Select(candidate => new ExplorerWebFormsCandidate(
                 SafeClosedText(candidate.CandidateId, "webforms-candidate-id", redactions),
                 SafeClosedText(candidate.Classification, "webforms-classification", redactions),
@@ -321,6 +351,7 @@ public static partial class StaticHtmlEvidenceExplorer
                     packet.Summary.EventChainCount,
                     packet.Summary.DownstreamBoundaryCount,
                     packet.Summary.IdentityStateCount,
+                    packet.Summary.BatchDataMovementCount,
                     packet.Summary.StructuralSliceCandidateCount,
                     packet.Summary.GapCount,
                     packet.Summary.Truncated),
@@ -329,6 +360,7 @@ public static partial class StaticHtmlEvidenceExplorer
                 chains,
                 boundaries,
                 identityStates,
+                batchDataMovement,
                 candidates,
                 packet.OwnerQuestions.Select(value => SafeClosedText(value, "webforms-owner-question", redactions)).ToArray());
             var artifact = new ExplorerInputArtifact(
@@ -390,12 +422,14 @@ public static partial class StaticHtmlEvidenceExplorer
             || (expectedCommitSha is not null && !packet.Sources[0].CommitSha.Equals(expectedCommitSha, StringComparison.OrdinalIgnoreCase))
             || packet.Projects is null || packet.Surfaces is null || packet.EventChains is null
             || packet.DownstreamBoundaries is null || packet.IdentityStateInventory is null
+            || packet.BatchDataMovementInventory is null
             || packet.StructuralSliceCandidates is null || packet.Gaps is null
             || packet.OwnerQuestions is null || packet.Limitations is null
             || new[]
             {
                 packet.Projects.Count, packet.Surfaces.Count, packet.EventChains.Count,
                 packet.DownstreamBoundaries.Count, packet.IdentityStateInventory.Count,
+                packet.BatchDataMovementInventory.Count,
                 packet.StructuralSliceCandidates.Count, packet.Gaps.Count,
                 packet.OwnerQuestions.Count, packet.Limitations.Count
             }.Any(count => count > MaxWebFormsRowsPerCollection)
@@ -404,6 +438,7 @@ public static partial class StaticHtmlEvidenceExplorer
             || packet.Summary.EventChainCount != packet.EventChains.Count
             || packet.Summary.DownstreamBoundaryCount != packet.DownstreamBoundaries.Count
             || packet.Summary.IdentityStateCount != packet.IdentityStateInventory.Count
+            || packet.Summary.BatchDataMovementCount != packet.BatchDataMovementInventory.Count
             || packet.Summary.StructuralSliceCandidateCount != packet.StructuralSliceCandidates.Count
             || packet.Summary.GapCount != packet.Gaps.Count)
         {
@@ -418,6 +453,7 @@ public static partial class StaticHtmlEvidenceExplorer
             || chainIds.Count != packet.EventChains.Count
             || packet.DownstreamBoundaries.Select(boundary => boundary.BoundaryId).Distinct(StringComparer.Ordinal).Count() != packet.DownstreamBoundaries.Count
             || packet.IdentityStateInventory.Select(state => state.IdentityStateId).Distinct(StringComparer.Ordinal).Count() != packet.IdentityStateInventory.Count
+            || packet.BatchDataMovementInventory.Select(item => item.BatchDataMovementId).Distinct(StringComparer.Ordinal).Count() != packet.BatchDataMovementInventory.Count
             || packet.StructuralSliceCandidates.Select(candidate => candidate.CandidateId).Distinct(StringComparer.Ordinal).Count() != packet.StructuralSliceCandidates.Count
             || packet.Gaps.Select(gap => gap.GapId).Distinct(StringComparer.Ordinal).Count() != packet.Gaps.Count
             || packet.Surfaces.Any(surface => !projectIds.Contains(surface.ProjectId))
@@ -492,6 +528,17 @@ public static partial class StaticHtmlEvidenceExplorer
             ValidateWebFormsEvidence(state.Evidence, sourceCommitSha);
             evidenceCount++;
         }
+        foreach (var item in packet.BatchDataMovementInventory)
+        {
+            if (string.IsNullOrWhiteSpace(item.BatchDataMovementId) || string.IsNullOrWhiteSpace(item.SurfaceKind)
+                || string.IsNullOrWhiteSpace(item.Mechanism) || string.IsNullOrWhiteSpace(item.OperationKind)
+                || string.IsNullOrWhiteSpace(item.OwnerStatus) || string.IsNullOrWhiteSpace(item.ProjectResolution)
+                || item.SafeMetadata is null || item.Evidence is null || item.SupportingFactIds is null
+                || item.Limitations is null)
+                throw new InvalidDataException("invalid Web Forms batch/data-movement row");
+            ValidateWebFormsEvidence(item.Evidence, sourceCommitSha);
+            evidenceCount++;
+        }
         foreach (var candidate in packet.StructuralSliceCandidates)
         {
             if (string.IsNullOrWhiteSpace(candidate.CandidateId) || string.IsNullOrWhiteSpace(candidate.Classification)
@@ -550,8 +597,9 @@ public static partial class StaticHtmlEvidenceExplorer
             || string.IsNullOrWhiteSpace(gap.ScopeKind) || !IsSafeRuleId(gap.RuleId)
             || !IsSupportedEvidenceTier(gap.EvidenceTier) || !IsSafeWebFormsLabel(gap.CoverageLabel)
             || !gap.CommitSha.Equals(commitSha, StringComparison.OrdinalIgnoreCase)
-            || hasPath != (gap.StartLine.HasValue && gap.EndLine.HasValue)
-            || (hasPath && (gap.StartLine!.Value < 1 || gap.EndLine!.Value < gap.StartLine.Value))
+            || hasPath != gap.StartLine.HasValue
+            || (!hasPath && gap.EndLine.HasValue)
+            || (hasPath && (gap.StartLine!.Value < 1 || (gap.EndLine.HasValue && gap.EndLine.Value < gap.StartLine.Value)))
             || string.IsNullOrWhiteSpace(gap.ExtractorId) || string.IsNullOrWhiteSpace(gap.ExtractorVersion)
             || gap.SupportingFactIds is null || gap.Limitations is null)
             throw new InvalidDataException("invalid Web Forms gap provenance");
@@ -617,6 +665,7 @@ public static partial class StaticHtmlEvidenceExplorer
         SummaryItem(builder, "Event chains", data.Summary.EventChainCount.ToString(System.Globalization.CultureInfo.InvariantCulture));
         SummaryItem(builder, "Downstream boundaries", data.Summary.DownstreamBoundaryCount.ToString(System.Globalization.CultureInfo.InvariantCulture));
         SummaryItem(builder, "Identity/session rows", data.Summary.IdentityStateCount.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        SummaryItem(builder, "Batch/data-movement rows", data.Summary.BatchDataMovementCount.ToString(System.Globalization.CultureInfo.InvariantCulture));
         SummaryItem(builder, "Structural candidates", data.Summary.StructuralCandidateCount.ToString(System.Globalization.CultureInfo.InvariantCulture));
         SummaryItem(builder, "Packet gaps", data.Summary.GapCount.ToString(System.Globalization.CultureInfo.InvariantCulture));
         SummaryItem(builder, "Truncated", data.Summary.Truncated.ToString().ToLowerInvariant());
@@ -666,6 +715,17 @@ public static partial class StaticHtmlEvidenceExplorer
             builder.AppendLine($"        <tr data-filter-row=\"true\"><th scope=\"row\">{Html(row.IdentityStateId)}</th><td>{Html(row.IdentityKind)}</td><td>{Html(row.Classification)}</td><td>{Html(row.SurfaceId ?? "unavailable")}</td><td>{Html(metadata)}</td><td>{Html(row.EvidenceId)}</td><td>{Html(string.Join(", ", row.SupportIds))}</td><td>{Html(string.Join(", ", row.LimitationIds))}</td></tr>");
         }
         if (data.IdentityStateInventory.Count == 0) builder.AppendLine("        <tr data-empty-row=\"true\"><td colspan=\"8\">No identity/session rows were present under the compatible packet coverage.</td></tr>");
+        builder.AppendLine("      </tbody></table>");
+
+        builder.AppendLine("      <h3>Batch and data-movement inventory</h3>");
+        builder.AppendLine("      <p>These are static declarations only. They do not prove scheduling, execution, successful or complete movement, retries, idempotency, monitoring, target state, or production use.</p>");
+        builder.AppendLine("      <table data-filterable=\"true\" data-filter-name=\"Web Forms batch and data-movement inventory\"><caption>Packet-preserved batch and data-movement declarations</caption><thead><tr><th>Declaration</th><th>Surface</th><th>Mechanism</th><th>Operation</th><th>Owner</th><th>Project resolution</th><th>Project</th><th>Safe metadata</th><th>Evidence</th><th>Support IDs</th><th>Limitations</th></tr></thead><tbody>");
+        foreach (var row in data.BatchDataMovementInventory)
+        {
+            var metadata = string.Join(", ", row.SafeMetadata.Select(pair => $"{pair.Key}={pair.Value}"));
+            builder.AppendLine($"        <tr data-filter-row=\"true\"><th scope=\"row\">{Html(row.BatchDataMovementId)}</th><td>{Html(row.SurfaceKind)}</td><td>{Html(row.Mechanism)}</td><td>{Html(row.OperationKind)}</td><td>{Html(row.OwnerStatus)}</td><td>{Html(row.ProjectResolution)}</td><td>{Html(row.ProjectId ?? "unavailable")}</td><td>{Html(metadata)}</td><td>{Html(row.EvidenceId)}</td><td>{Html(string.Join(", ", row.SupportIds))}</td><td>{Html(string.Join(", ", row.LimitationIds))}</td></tr>");
+        }
+        if (data.BatchDataMovementInventory.Count == 0) builder.AppendLine("        <tr data-empty-row=\"true\"><td colspan=\"11\">No supported batch/data-movement declaration was present. This is not proof of absence.</td></tr>");
         builder.AppendLine("      </tbody></table>");
 
         builder.AppendLine("      <h3>Structural slice candidates</h3>");

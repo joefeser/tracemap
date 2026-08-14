@@ -239,7 +239,7 @@ public static class LocalReviewCommand
                 "local-only",
                 outcome,
                 coverage,
-                stages[^1].Stage + "-verified",
+                lastSafeState,
                 "completed",
                 outcome == "succeeded" ? "not-required" : "retry-after-owner-review",
                 outcome == "succeeded" ? "review-generated-artifacts" : "review-scan-gaps",
@@ -419,6 +419,10 @@ public static class LocalReviewCommand
                 throw new LocalReviewException("LOCAL_REVIEW_OUTPUT_COLLISION");
             }
         }
+        else if (FileSystemEntryExists(output))
+        {
+            throw new LocalReviewException("LOCAL_REVIEW_OUTPUT_COLLISION");
+        }
 
         return output;
     }
@@ -450,6 +454,31 @@ public static class LocalReviewCommand
     private static bool IsWithin(string candidate, string parent, StringComparison comparison) =>
         string.Equals(candidate, parent, comparison)
         || candidate.StartsWith(parent + Path.DirectorySeparatorChar, comparison);
+
+    private static bool FileSystemEntryExists(string path)
+    {
+        if (File.Exists(path) || Directory.Exists(path))
+        {
+            return true;
+        }
+
+        var parent = Path.GetDirectoryName(path);
+        if (string.IsNullOrWhiteSpace(parent) || !Directory.Exists(parent))
+        {
+            return false;
+        }
+
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        try
+        {
+            return Directory.EnumerateFileSystemEntries(parent)
+                .Any(entry => string.Equals(Path.GetFullPath(entry), path, comparison));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return true;
+        }
+    }
 
     private static async Task<ScanManifest> ReadManifestAsync(string scanDirectory, CancellationToken cancellationToken)
     {
@@ -546,10 +575,10 @@ public static class LocalReviewCommand
     }
 
     private static string Coverage(ScanManifest manifest) =>
-        manifest.AnalysisLevel.Contains("Reduced", StringComparison.Ordinal)
-        || string.Equals(manifest.BuildStatus, "FailedOrPartial", StringComparison.Ordinal)
-            ? "reduced"
-            : "full";
+        string.Equals(manifest.AnalysisLevel, "Level1SemanticAnalysis", StringComparison.Ordinal)
+        && string.Equals(manifest.BuildStatus, "Succeeded", StringComparison.Ordinal)
+            ? "full"
+            : "reduced";
 
     private static string CreateWorkflowId(
         TraceMapVersionResult version,
@@ -585,7 +614,7 @@ public static class LocalReviewCommand
     {
         var version = TraceMapVersionInfo.Create();
         var artifacts = BuildArtifactRecords(staging);
-        var attemptScope = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(arguments.RepositoryPath)))).ToLowerInvariant();
+        const string attemptScope = "identity-unavailable";
         var identity = string.Join("\n", SchemaVersion, version.ToolVersion, gap, attemptScope, arguments.StageSignature());
         var workflowId = "workflow-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity))).ToLowerInvariant()[..20];
         return new LocalReviewResult(
@@ -624,7 +653,7 @@ public static class LocalReviewCommand
         string nextAction,
         TextWriter output)
     {
-        if (!Directory.Exists(staging) || Directory.Exists(outputPath) || File.Exists(outputPath))
+        if (!Directory.Exists(staging) || FileSystemEntryExists(outputPath))
         {
             TryCleanup(staging);
             return;
@@ -640,7 +669,7 @@ public static class LocalReviewCommand
                 stages.Add(new(activeStage, outcome, [], []));
             }
             var attemptScope = manifest?.GitRootHash
-                ?? Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(arguments.RepositoryPath)))).ToLowerInvariant();
+                ?? "identity-unavailable";
             var identity = string.Join("\n", SchemaVersion, version.ToolVersion, attemptScope, gap, arguments.StageSignature());
             var workflowId = "workflow-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity))).ToLowerInvariant()[..20];
             var factsPath = Path.Combine(staging, "scan", "facts.ndjson");
@@ -731,7 +760,7 @@ public static class LocalReviewCommand
 
     private static void Publish(string staging, string output)
     {
-        if (Directory.Exists(output) || File.Exists(output))
+        if (FileSystemEntryExists(output))
         {
             throw new LocalReviewException("LOCAL_REVIEW_OUTPUT_COLLISION");
         }
