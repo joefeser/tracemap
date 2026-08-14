@@ -2,8 +2,8 @@
 
 - Issue: #664
 - Branch: `codex/cross-adapter-scan-truth`
-- Base stack head: `d5d5d0960115f160ccb0fdf66f1bc87156afa0a9`
-- Current checkpoint before final commit: `2d9c289921222242b11fc37b4ebf654165b0d4c3`
+- Base stack head: `4dd38ea7f6628a670f21f36f3daebec861f8e71f`
+- Validated integrated checkpoint: `28d6fe9cf59dedb683ffac7f2f91e9df84776657`
 - Scope: five shipped adapters only; Go #665 deferred
 
 ## Evidence inventory
@@ -25,12 +25,16 @@
 - TypeScript: 35/35 tests passed; `npm run build` passed.
 - JVM: Gradle test suite passed with Java 21.
 - Swift: full smoke-test executable passed.
-- .NET: 1,529/1,529 solution tests passed.
+- .NET: 1,543/1,543 solution tests passed on the integrated #674/#675/#667 stack.
 - The full five-adapter executable matrix returned `supported`; its sanitized
   JSON SHA-256 was
   `59f0849c4eff9e1f9271c6949845095f865f330c7ce5c4cc5f7d7fb9f64d1f96`.
 - Combined public paths/reverse smoke, private-path guard, Python bytecode
   compilation, and `git diff --check` passed.
+- The authoritative matrix was rerun after stacking the completed prerequisite
+  branches and reproduced the exact prior five-adapter readiness digest. Python
+  remained 30/30, TypeScript 35/35, JVM passed with Java 21, and the Swift
+  executable smoke passed.
 
 ## Current implementation
 
