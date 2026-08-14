@@ -481,6 +481,41 @@ public sealed class LocalReviewCommandTests
     }
 
     [Fact]
+    public async Task Missing_scan_receipt_is_classified_as_identity_unavailable()
+    {
+        using var temp = new TempDirectory();
+        var repo = CreateRepository(temp.Path, webForms: false);
+        var review = Path.Combine(temp.Path, "missing-receipt");
+
+        static async Task<int> ScanWithoutReceipt(
+            string[] args,
+            TextWriter stdout,
+            TextWriter stderr,
+            CancellationToken cancellationToken)
+        {
+            var outputPath = args[Array.IndexOf(args, "--out") + 1];
+            var manifest = SyntheticManifest("scan-without-receipt", new string('a', 40), new string('b', 64));
+            await WriteSyntheticScanAsync(outputPath, manifest, cancellationToken);
+            File.Delete(Path.Combine(outputPath, "scan-receipt.json"));
+            return 0;
+        }
+
+        using var error = new StringWriter();
+        Assert.Equal(1, await LocalReviewCommand.RunAsync(
+            ["run", "--repo", repo, "--out", review],
+            TextWriter.Null,
+            error,
+            ScanWithoutReceipt));
+
+        Assert.Contains("LOCAL_REVIEW_IDENTITY_UNAVAILABLE", error.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("LOCAL_REVIEW_SCAN_FAILED", error.ToString(), StringComparison.Ordinal);
+        using var result = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(review, "local-review-result.json")));
+        Assert.Contains(
+            result.RootElement.GetProperty("gaps").EnumerateArray(),
+            gap => gap.GetString() == "LOCAL_REVIEW_IDENTITY_UNAVAILABLE");
+    }
+
+    [Fact]
     public async Task Incompatible_webforms_input_emits_typed_stage_failure()
     {
         using var temp = new TempDirectory();

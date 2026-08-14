@@ -75,8 +75,7 @@ public static class LocalReviewCommand
         "facts.ndjson",
         "index.sqlite",
         "report.md",
-        "logs/analyzer.log",
-        "scan-receipt.json"
+        "logs/analyzer.log"
     ];
     private static readonly HashSet<string> Flags = new(StringComparer.Ordinal)
     {

@@ -107,7 +107,8 @@ def scan(
     )
     if _before_snapshot_verification is not None:
         _before_snapshot_verification()
-    if source_snapshot_digest(inventory) != snapshot_digest:
+    verified_inventory = discover_inventory(repo, options)
+    if verified_inventory != inventory or source_snapshot_digest(verified_inventory) != snapshot_digest:
         raise RuntimeError("SourceSnapshotChangedDuringScan")
     _write_outputs(out, manifest, facts, gaps, _after_manifest_write)
     return manifest, facts

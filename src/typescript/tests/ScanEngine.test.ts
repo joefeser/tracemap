@@ -273,6 +273,42 @@ describe("ScanEngine", () => {
     expect(await fsp.readFile(path.join(output, "scan-manifest.json"))).toEqual(baselineManifest);
   });
 
+  it("fails before publishing when an eligible source is created during a scan", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    const output = path.join(root, "output");
+    await writeMiniRepo(repo);
+
+    await expect(scan(scanOptions(repo, output), {
+      beforeSnapshotVerification: async () => {
+        await fsp.writeFile(path.join(repo, "src", "added.ts"), "export const added = true;\n");
+      }
+    })).rejects.toThrow("SourceSnapshotChangedDuringScan");
+
+    await expect(fsp.stat(output)).rejects.toThrow();
+  });
+
+  it("keeps excluded in-repo imports outside semantic evidence and snapshot identity", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    await fsp.mkdir(path.join(repo, "src"), { recursive: true });
+    await fsp.writeFile(path.join(repo, "tsconfig.json"), JSON.stringify({ compilerOptions: { target: "ES2022", module: "CommonJS", strict: true }, include: ["src/**/*.ts"] }));
+    await fsp.writeFile(path.join(repo, "src", "sample.ts"), "import { ignored } from './ignored';\nexport const selected = ignored;\n");
+    const ignored = path.join(repo, "src", "ignored.ts");
+    await fsp.writeFile(ignored, "export const ignored = 'first';\n");
+    initGitRepo(repo);
+    const options = { ...scanOptions(repo, path.join(root, "first")), excludeGlobs: ["src/ignored.ts"] };
+
+    const first = await scan(options);
+    await fsp.writeFile(ignored, "export const ignored = 'other';\n");
+    const second = await scan({ ...options, outputPath: path.join(root, "second") });
+
+    expect(first.manifest.sourceSnapshotDigest).toBe(second.manifest.sourceSnapshotDigest);
+    expect(first.manifest.scanId).toBe(second.manifest.scanId);
+    expect(first.facts.some((fact) => fact.evidence.filePath === "src/ignored.ts")).toBe(false);
+    expect(first.facts).toEqual(second.facts);
+  });
+
   it("preserves prior output when a staged artifact write fails", async () => {
     const root = await tempDir();
     const repo = path.join(root, "repo");
@@ -326,6 +362,19 @@ describe("ScanEngine", () => {
 
     await expect(scan(scanOptions(repo, output))).rejects.toThrow(/not replaceable/);
     expect(await fsp.readFile(path.join(output, "keep.txt"), "utf8")).toBe("important\n");
+  });
+
+  it("refuses a complete output containing an unowned file", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    const output = path.join(root, "output");
+    await writeMiniRepo(repo);
+    await scan(scanOptions(repo, output));
+    const sentinel = path.join(output, "caller-owned.txt");
+    await fsp.writeFile(sentinel, "keep\n");
+
+    await expect(scan(scanOptions(repo, output))).rejects.toThrow(/not replaceable/);
+    expect(await fsp.readFile(sentinel, "utf8")).toBe("keep\n");
   });
 
   it("frames option lists without delimiter collisions", async () => {

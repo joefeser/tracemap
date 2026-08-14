@@ -10,6 +10,7 @@ struct TraceMapSwiftSmokeTests {
         try scanWritesRequiredArtifactsAndReducedCoverage()
         try factsAreStableWhenOnlyOutputPathChanges()
         try sameSizeDirtyBytesChangeSnapshotIdentity()
+        try coreDataBundleBytesChangeSnapshotIdentity()
         try symbolIdsIgnoreDeclarationBodyEdits()
         try duplicateSymbolIdentitiesEmitGapsAndDistinctIds()
         try duplicateSymbolRelationshipsUseRewrittenIds()
@@ -134,6 +135,27 @@ struct TraceMapSwiftSmokeTests {
 
         assert(first.manifest.commitSha == second.manifest.commitSha)
         assert(first.manifest.sourceSnapshotDigest.count == 64)
+        assert(first.manifest.sourceSnapshotDigest != second.manifest.sourceSnapshotDigest)
+        assert(first.manifest.scanId != second.manifest.scanId)
+    }
+
+    static func coreDataBundleBytesChangeSnapshotIdentity() throws {
+        let modelPath = "Sources/App/Model.xcdatamodeld/Model.xcdatamodel/contents"
+        let fixture = try SwiftFixture(extraFiles: [
+            modelPath: #"<model><entity name="User"/></model>"#
+        ])
+        let model = fixture.repo.appendingPathComponent(modelPath)
+        let first = try SwiftScanEngine.scan(options: SwiftScanOptions(
+            repoPath: fixture.repo,
+            outputPath: fixture.temp.url.appendingPathComponent("bundle-first")
+        ))
+        try #"<model><entity name="Role"/></model>"#.write(to: model, atomically: true, encoding: .utf8)
+        let second = try SwiftScanEngine.scan(options: SwiftScanOptions(
+            repoPath: fixture.repo,
+            outputPath: fixture.temp.url.appendingPathComponent("bundle-second")
+        ))
+
+        assert(first.manifest.commitSha == second.manifest.commitSha)
         assert(first.manifest.sourceSnapshotDigest != second.manifest.sourceSnapshotDigest)
         assert(first.manifest.scanId != second.manifest.scanId)
     }

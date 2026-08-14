@@ -402,7 +402,7 @@ public sealed class ScanExecutionReceiptTests
     }
 
     [Fact]
-    public async Task Log_directory_collision_records_failed_artifact_stage()
+    public async Task Log_file_collision_does_not_modify_caller_owned_output()
     {
         using var temp = new TempDirectory();
         var repo = Path.Combine(temp.Path, "repo");
@@ -419,12 +419,31 @@ public sealed class ScanExecutionReceiptTests
 
         Assert.Equal(1, exitCode);
         Assert.Equal("error: output-artifact-write-failed" + Environment.NewLine, stderr.ToString());
-        var receipt = JsonSerializer.Deserialize<ScanExecutionReceipt>(
-            await File.ReadAllTextAsync(Path.Combine(outputPath, "scan-receipt.json")), JsonOptions.Stable)!;
-        Assert.Equal("failed", receipt.Outcome);
-        Assert.Contains(receipt.Stages, stage => stage.OperationCode == "output-directory-prepare"
-            && stage.Outcome == "failed"
-            && stage.NextAction == "output-artifact-write-failed");
+        Assert.Equal("occupied", await File.ReadAllTextAsync(Path.Combine(outputPath, "logs")));
+        Assert.False(File.Exists(Path.Combine(outputPath, "scan-receipt.json")));
+    }
+
+    [Fact]
+    public async Task Existing_caller_owned_output_is_not_modified_by_failure_receipt_fallback()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var outputPath = Path.Combine(temp.Path, "caller-owned");
+        Directory.CreateDirectory(repo);
+        Directory.CreateDirectory(outputPath);
+        File.WriteAllText(Path.Combine(repo, "Sample.cs"), "public sealed class Sample { }");
+        File.WriteAllText(Path.Combine(outputPath, "owner-data.txt"), "keep");
+        var receiptPath = Path.Combine(outputPath, "scan-receipt.json");
+        File.WriteAllText(receiptPath, "caller-owned-receipt");
+        InitializeRepository(repo);
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
+
+        var exitCode = await TraceMapCommand.RunAsync(["scan", "--repo", repo, "--out", outputPath], stdout, stderr);
+
+        Assert.Equal(1, exitCode);
+        Assert.Equal("caller-owned-receipt", await File.ReadAllTextAsync(receiptPath));
+        Assert.Equal("keep", await File.ReadAllTextAsync(Path.Combine(outputPath, "owner-data.txt")));
     }
 
     private static void InitializeRepository(string path)
