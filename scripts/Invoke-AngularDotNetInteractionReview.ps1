@@ -867,10 +867,12 @@ try {
         $reportOut = Join-Path $reportsRoot "dependency"
         Invoke-TimedOperation -RunId $runId -Stage "report" -Operation "dependency-report" `
             -FailureCode "INTERACTION_RUN_DEPENDENCY_REPORT_FAILED" `
-            -Action { Invoke-TraceMap @("report", "--index", $combinedIndex, "--out", $reportOut, "--format", "json") "INTERACTION_RUN_DEPENDENCY_REPORT_FAILED" }
-        $jsonPath = Join-Path $reportOut "dependency-report.json"
-        Add-ReportSignals $jsonPath "dependency" $signals $reportStates
-        $reportResults.Add([ordered]@{ name = "dependency"; kind = "combined-dependency"; relativePath = "reports/dependency/dependency-report.json"; sha256 = Get-Sha256File $jsonPath })
+            -Action {
+                Invoke-TraceMap @("report", "--index", $combinedIndex, "--out", $reportOut, "--format", "json") "INTERACTION_RUN_DEPENDENCY_REPORT_FAILED"
+                $jsonPath = Join-Path $reportOut "dependency-report.json"
+                Add-ReportSignals $jsonPath "dependency" $signals $reportStates
+                $reportResults.Add([ordered]@{ name = "dependency"; kind = "combined-dependency"; relativePath = "reports/dependency/dependency-report.json"; sha256 = Get-Sha256File $jsonPath })
+            }
     }
 
     if ($portfolioEnabled) {
@@ -885,10 +887,12 @@ try {
         }
         Invoke-TimedOperation -RunId $runId -Stage "report" -Operation "portfolio-report" `
             -FailureCode "INTERACTION_RUN_PORTFOLIO_REPORT_FAILED" `
-            -Action { Invoke-TraceMap $arguments.ToArray() "INTERACTION_RUN_PORTFOLIO_REPORT_FAILED" }
-        $jsonPath = Join-Path $reportOut "portfolio-report.json"
-        Add-ReportSignals $jsonPath "portfolio" $signals $reportStates
-        $reportResults.Add([ordered]@{ name = "portfolio"; kind = "portfolio"; relativePath = "reports/portfolio/portfolio-report.json"; sha256 = Get-Sha256File $jsonPath })
+            -Action {
+                Invoke-TraceMap $arguments.ToArray() "INTERACTION_RUN_PORTFOLIO_REPORT_FAILED"
+                $jsonPath = Join-Path $reportOut "portfolio-report.json"
+                Add-ReportSignals $jsonPath "portfolio" $signals $reportStates
+                $reportResults.Add([ordered]@{ name = "portfolio"; kind = "portfolio"; relativePath = "reports/portfolio/portfolio-report.json"; sha256 = Get-Sha256File $jsonPath })
+            }
     }
 
     foreach ($pair in $endpointPairs) {
@@ -907,10 +911,10 @@ try {
                     "--server-label", $server,
                     "--out", $reportOut,
                     "--format", "json") "INTERACTION_RUN_ENDPOINT_REPORT_FAILED"
+                $jsonPath = Join-Path $reportOut "endpoint-report.json"
+                Add-ReportSignals $jsonPath "endpoint-alignment" $signals $reportStates
+                $reportResults.Add([ordered]@{ name = $name; kind = "endpoint-alignment"; relativePath = "reports/endpoints/$name/endpoint-report.json"; sha256 = Get-Sha256File $jsonPath })
             }
-        $jsonPath = Join-Path $reportOut "endpoint-report.json"
-        Add-ReportSignals $jsonPath "endpoint-alignment" $signals $reportStates
-        $reportResults.Add([ordered]@{ name = $name; kind = "endpoint-alignment"; relativePath = "reports/endpoints/$name/endpoint-report.json"; sha256 = Get-Sha256File $jsonPath })
     }
 
     foreach ($query in $propertyFlows) {
@@ -924,10 +928,12 @@ try {
         $arguments.Add("--framework"); $arguments.Add($framework)
         Invoke-TimedOperation -RunId $runId -Stage "report" -Operation "property-flow" `
             -FailureCode "INTERACTION_RUN_PROPERTY_FLOW_FAILED" -SubjectKind "query" -SubjectId $name `
-            -Action { Invoke-TraceMap $arguments.ToArray() "INTERACTION_RUN_PROPERTY_FLOW_FAILED" }
-        $jsonPath = Join-Path $reportOut "property-flow-report.json"
-        Add-ReportSignals $jsonPath "property-flow" $signals $reportStates
-        $reportResults.Add([ordered]@{ name = $name; kind = "property-flow"; relativePath = "reports/property-flow/$name/property-flow-report.json"; sha256 = Get-Sha256File $jsonPath })
+            -Action {
+                Invoke-TraceMap $arguments.ToArray() "INTERACTION_RUN_PROPERTY_FLOW_FAILED"
+                $jsonPath = Join-Path $reportOut "property-flow-report.json"
+                Add-ReportSignals $jsonPath "property-flow" $signals $reportStates
+                $reportResults.Add([ordered]@{ name = $name; kind = "property-flow"; relativePath = "reports/property-flow/$name/property-flow-report.json"; sha256 = Get-Sha256File $jsonPath })
+            }
     }
 
     foreach ($query in $routeFlows) {
@@ -935,10 +941,12 @@ try {
         $reportOut = Join-Path $reportsRoot "route-flow/$name"
         Invoke-TimedOperation -RunId $runId -Stage "report" -Operation "route-flow" `
             -FailureCode "INTERACTION_RUN_ROUTE_FLOW_FAILED" -SubjectKind "query" -SubjectId $name `
-            -Action { Invoke-TraceMap @("route-flow", "--index", $combinedIndex, "--route", [string]$query.route, "--out", $reportOut, "--format", "json") "INTERACTION_RUN_ROUTE_FLOW_FAILED" }
-        $jsonPath = Join-Path $reportOut "route-flow-report.json"
-        Add-ReportSignals $jsonPath "route-flow" $signals $reportStates
-        $reportResults.Add([ordered]@{ name = $name; kind = "route-flow"; relativePath = "reports/route-flow/$name/route-flow-report.json"; sha256 = Get-Sha256File $jsonPath })
+            -Action {
+                Invoke-TraceMap @("route-flow", "--index", $combinedIndex, "--route", [string]$query.route, "--out", $reportOut, "--format", "json") "INTERACTION_RUN_ROUTE_FLOW_FAILED"
+                $jsonPath = Join-Path $reportOut "route-flow-report.json"
+                Add-ReportSignals $jsonPath "route-flow" $signals $reportStates
+                $reportResults.Add([ordered]@{ name = $name; kind = "route-flow"; relativePath = "reports/route-flow/$name/route-flow-report.json"; sha256 = Get-Sha256File $jsonPath })
+            }
     }
 
     foreach ($query in $pathQueries) {
@@ -950,10 +958,12 @@ try {
         if (-not [string]::IsNullOrWhiteSpace($sourcePair)) { $arguments.Add("--source-pair"); $arguments.Add($sourcePair) }
         Invoke-TimedOperation -RunId $runId -Stage "report" -Operation "path-query" `
             -FailureCode "INTERACTION_RUN_PATH_QUERY_FAILED" -SubjectKind "query" -SubjectId $name `
-            -Action { Invoke-TraceMap $arguments.ToArray() "INTERACTION_RUN_PATH_QUERY_FAILED" }
-        $jsonPath = Join-Path $reportOut "paths-report.json"
-        Add-ReportSignals $jsonPath "dependency-path" $signals $reportStates
-        $reportResults.Add([ordered]@{ name = $name; kind = "dependency-path"; relativePath = "reports/paths/$name/paths-report.json"; sha256 = Get-Sha256File $jsonPath })
+            -Action {
+                Invoke-TraceMap $arguments.ToArray() "INTERACTION_RUN_PATH_QUERY_FAILED"
+                $jsonPath = Join-Path $reportOut "paths-report.json"
+                Add-ReportSignals $jsonPath "dependency-path" $signals $reportStates
+                $reportResults.Add([ordered]@{ name = $name; kind = "dependency-path"; relativePath = "reports/paths/$name/paths-report.json"; sha256 = Get-Sha256File $jsonPath })
+            }
     }
 }
 catch {
