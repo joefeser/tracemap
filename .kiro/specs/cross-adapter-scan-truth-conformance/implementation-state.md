@@ -2,8 +2,8 @@
 
 - Issue: #664
 - Branch: `codex/cross-adapter-scan-truth`
-- Base stack head: `4dd38ea7f6628a670f21f36f3daebec861f8e71f`
-- Validated integrated checkpoint: `28d6fe9cf59dedb683ffac7f2f91e9df84776657`
+- Base stack head: `cfeca74510fd0c1ffd2dcd3ac1616993af497549`
+- Validated integrated checkpoint: `e8932eb42454a5729561ae7a8f6439b4628ce5ad`
 - Scope: five shipped adapters only; Go #665 deferred
 
 ## Evidence inventory
@@ -26,6 +26,8 @@
 - JVM: Gradle test suite passed with Java 21.
 - Swift: full smoke-test executable passed.
 - .NET: 1,543/1,543 solution tests passed on the integrated #674/#675/#667 stack.
+- The final #675 reduced Web Forms packet-coverage propagation is included;
+  focused local-review/explorer tests passed 16/16 on the final integrated stack.
 - The full five-adapter executable matrix returned `supported`; its sanitized
   JSON SHA-256 was
   `59f0849c4eff9e1f9271c6949845095f865f330c7ce5c4cc5f7d7fb9f64d1f96`.
