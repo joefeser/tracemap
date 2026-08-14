@@ -91,6 +91,9 @@ DEFINITIONS = {
 
 
 def run(command: list[str], *, cwd: Path, env: dict[str, str] | None = None, allow_failure: bool = False) -> subprocess.CompletedProcess[str]:
+    # Commands are assembled only from the fixed adapter allowlist below and are
+    # passed as argv with shell=False; shell escaping would change their meaning.
+    # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
     completed = subprocess.run(command, cwd=cwd, env=env, text=True, capture_output=True, check=False)
     if completed.returncode and not allow_failure:
         label = command[0] if command else "command"
