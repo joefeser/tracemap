@@ -23,7 +23,14 @@ $PSNativeCommandUseErrorActionPreference = $false
 $SchemaVersion = "angular-dotnet-interaction-run.v1"
 $ResultSchemaVersion = "angular-dotnet-interaction-run-result.v1"
 $FeedbackSchemaVersion = "angular-dotnet-interaction-feedback.v1"
+$OperationalEventSchemaVersion = "angular-dotnet-interaction-operational-event.v1"
 $script:FeedbackRuleId = "interaction.review.feedback.v1"
+$script:OperationalEventPath = $null
+$script:OperationalTelemetryDisabled = $false
+$script:OperationalEventSequence = 0
+$script:OperationalEvents = [System.Collections.Generic.List[object]]::new()
+$script:SourceSnapshotSha256 = $null
+$script:SourceCommitByLabel = @{}
 $SafeNamePattern = '^[a-z0-9][a-z0-9._-]{0,63}$'
 $MaximumSources = 100
 $MaximumEndpointPairs = 100
@@ -235,6 +242,86 @@ function Invoke-TraceMap {
     )
 
     Invoke-CheckedCommand "dotnet" (@($script:DotNetCli) + $Arguments) $FailureCode
+}
+
+function Write-OperationalEvent {
+    param(
+        [Parameter(Mandatory = $true)][string]$RunId,
+        [Parameter(Mandatory = $true)][string]$Event,
+        [Parameter(Mandatory = $true)][string]$Stage,
+        [Parameter(Mandatory = $true)][string]$Operation,
+        [Parameter(Mandatory = $true)][string]$Status,
+        [AllowNull()][string]$SubjectKind,
+        [AllowNull()][string]$SubjectId,
+        [AllowNull()][Nullable[long]]$DurationMilliseconds,
+        [AllowNull()][string]$FailureCode
+    )
+
+    if ($script:OperationalTelemetryDisabled -or [string]::IsNullOrWhiteSpace([string]$script:OperationalEventPath)) { return }
+    $nextSequence = $script:OperationalEventSequence + 1
+    $sourceCommitSha = if ($SubjectKind -eq "source" -and $script:SourceCommitByLabel.ContainsKey($SubjectId)) {
+        [string]$script:SourceCommitByLabel[$SubjectId]
+    }
+    else {
+        $null
+    }
+    $record = [ordered]@{
+        schemaVersion = $OperationalEventSchemaVersion
+        runId = $RunId
+        sourceSnapshotSha256 = $script:SourceSnapshotSha256
+        sourceCommitSha = $sourceCommitSha
+        sequence = $nextSequence
+        timestampUtc = [DateTimeOffset]::UtcNow.ToString("O", [Globalization.CultureInfo]::InvariantCulture)
+        event = $Event
+        stage = $Stage
+        operation = $Operation
+        status = $Status
+        subjectKind = $SubjectKind
+        subjectId = $SubjectId
+        durationMilliseconds = $DurationMilliseconds
+        failureCode = $FailureCode
+    }
+    try {
+        $line = $record | ConvertTo-Json -Compress -Depth 10
+        [System.IO.File]::AppendAllText($script:OperationalEventPath, $line + "`n", [System.Text.UTF8Encoding]::new($false))
+        $script:OperationalEventSequence = $nextSequence
+        $script:OperationalEvents.Add($record)
+    }
+    catch {
+        # Operational telemetry is best-effort and must not change evidence or
+        # prevent deterministic outputs. Disable it after the first write error
+        # so no later event can create an apparent sequence gap.
+        $script:OperationalTelemetryDisabled = $true
+        $script:OperationalEventPath = $null
+        Write-Verbose "interaction operational telemetry disabled after a write failure"
+    }
+}
+
+function Invoke-TimedOperation {
+    param(
+        [Parameter(Mandatory = $true)][string]$RunId,
+        [Parameter(Mandatory = $true)][string]$Stage,
+        [Parameter(Mandatory = $true)][string]$Operation,
+        [Parameter(Mandatory = $true)][string]$FailureCode,
+        [Parameter(Mandatory = $true)][scriptblock]$Action,
+        [AllowNull()][string]$SubjectKind,
+        [AllowNull()][string]$SubjectId
+    )
+
+    Write-OperationalEvent $RunId "operation-started" $Stage $Operation "started" $SubjectKind $SubjectId $null $null
+    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+    try {
+        & $Action
+        $stopwatch.Stop()
+        Write-OperationalEvent $RunId "operation-completed" $Stage $Operation "completed" $SubjectKind $SubjectId $stopwatch.ElapsedMilliseconds $null
+    }
+    catch {
+        $stopwatch.Stop()
+        $candidate = $_.Exception.Message
+        $recordedCode = if ($candidate -match '^INTERACTION_RUN_[A-Z_]+$') { $candidate } else { $FailureCode }
+        Write-OperationalEvent $RunId "operation-failed" $Stage $Operation "failed" $SubjectKind $SubjectId $stopwatch.ElapsedMilliseconds $recordedCode
+        throw
+    }
 }
 
 function Get-GitValue {
@@ -470,6 +557,48 @@ function Write-FeedbackMarkdown {
     [System.IO.File]::WriteAllLines($Path, $lines, [System.Text.UTF8Encoding]::new($false))
 }
 
+function Write-ExecutionSummaryMarkdown {
+    param(
+        [Parameter(Mandatory = $true)][string]$RunId,
+        [Parameter(Mandatory = $true)][string]$Outcome,
+        [AllowNull()][string]$FailureCode,
+        [Parameter(Mandatory = $true)][string]$Path
+    )
+
+    $completed = @($script:OperationalEvents |
+        Where-Object { $_.event -in @("operation-completed", "operation-failed") } |
+        Sort-Object @{ Expression = { [long]$_.durationMilliseconds }; Descending = $true }, sequence)
+    $runEvent = @($script:OperationalEvents | Where-Object { $_.event -eq "run-completed" } | Select-Object -Last 1)
+    $lines = [System.Collections.Generic.List[string]]::new()
+    $lines.Add("# TraceMap Interaction Review Execution Summary")
+    $lines.Add("")
+    $lines.Add("- Run: ``$RunId``")
+    $lines.Add("- Outcome: ``$Outcome``")
+    if ($runEvent.Count -eq 1) { $lines.Add("- Total duration: $([Math]::Round(([long]$runEvent[0].durationMilliseconds / 1000.0), 3)) seconds") }
+    if ($null -ne $FailureCode) { $lines.Add("- Failure code: ``$FailureCode``") }
+    $lines.Add("")
+    $lines.Add("## Timed Operations")
+    $lines.Add("")
+    $lines.Add("| Stage | Operation | Subject kind | Subject | Status | Duration seconds | Failure code |")
+    $lines.Add("| --- | --- | --- | --- | --- | ---: | --- |")
+    foreach ($event in $completed) {
+        $subjectKind = if ([string]::IsNullOrWhiteSpace([string]$event.subjectKind)) { "—" } else { ConvertTo-MarkdownCell ([string]$event.subjectKind) }
+        $subjectId = if ([string]::IsNullOrWhiteSpace([string]$event.subjectId)) { "—" } else { ConvertTo-MarkdownCell ([string]$event.subjectId) }
+        $eventFailure = if ([string]::IsNullOrWhiteSpace([string]$event.failureCode)) { "—" } else { "``$($event.failureCode)``" }
+        $seconds = [Math]::Round(([long]$event.durationMilliseconds / 1000.0), 3)
+        $lines.Add("| $(ConvertTo-MarkdownCell ([string]$event.stage)) | $(ConvertTo-MarkdownCell ([string]$event.operation)) | $subjectKind | $subjectId | $($event.status) | $seconds | $eventFailure |")
+    }
+    if ($completed.Count -eq 0) { $lines.Add("| none completed | — | — | — | — | 0 | — |") }
+    $lines.Add("")
+    $lines.Add("## Handling Boundary")
+    $lines.Add("")
+    $lines.Add("- This is nondeterministic, private operational telemetry and is excluded from deterministic artifact hashes.")
+    $lines.Add("- Subject identifiers are owner-configured labels or query names; review them before sharing.")
+    $lines.Add("- Durations describe this machine and run only. They do not prove correctness or runtime application behavior.")
+    $lines.Add("")
+    [System.IO.File]::WriteAllLines($Path, $lines, [System.Text.UTF8Encoding]::new($false))
+}
+
 if (-not (Test-Path -LiteralPath $ConfigPath -PathType Leaf)) { Stop-InteractionReview "INTERACTION_RUN_CONFIG_UNAVAILABLE" }
 if (-not (Test-Path -LiteralPath $TraceMapRoot -PathType Container)) { Stop-InteractionReview "INTERACTION_RUN_TRACEMAP_UNAVAILABLE" }
 $ConfigPath = [string](Resolve-Path -LiteralPath $ConfigPath).ProviderPath
@@ -615,6 +744,12 @@ if ($BuildTools) {
 if (-not (Test-Path -LiteralPath $script:DotNetCli -PathType Leaf)) { Stop-InteractionReview "INTERACTION_RUN_DOTNET_CLI_UNAVAILABLE" }
 if (($resolvedSources.kind -contains "typescript") -and -not (Test-Path -LiteralPath $typeScriptCli -PathType Leaf)) { Stop-InteractionReview "INTERACTION_RUN_TYPESCRIPT_CLI_UNAVAILABLE" }
 
+$sourceCommits = @($resolvedSources | Sort-Object label | ForEach-Object { $_.commitSha })
+$runId = "interaction-" + (Get-Sha256Text ($configSha256 + "|" + ($sourceCommits -join "|"))).Substring(0, 20)
+$sourceSnapshotRows = @($resolvedSources | Sort-Object label | ForEach-Object { "$($_.label)=$($_.commitSha)" })
+$script:SourceSnapshotSha256 = Get-Sha256Text ($sourceSnapshotRows -join "`n")
+foreach ($source in $resolvedSources) { $script:SourceCommitByLabel[$source.label] = $source.commitSha }
+
 if ($ValidateOnly) {
     [ordered]@{
         schemaVersion = $SchemaVersion
@@ -635,6 +770,11 @@ if ([string]::IsNullOrWhiteSpace($outputParent)) { Stop-InteractionReview "INTER
 New-Item -ItemType Directory -Path $outputParent -Force | Out-Null
 $staging = Join-Path $outputParent ("." + [System.IO.Path]::GetFileName($OutputRoot) + ".interaction-" + [System.Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $staging | Out-Null
+$logsRoot = Join-Path $staging "logs"
+New-Item -ItemType Directory -Path $logsRoot | Out-Null
+$script:OperationalEventPath = Join-Path $logsRoot "interaction-review-events.jsonl"
+$runStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+Write-OperationalEvent $runId "run-started" "runner" "run" "started" $null $null $null $null
 
 $sourceResults = [System.Collections.Generic.List[object]]::new()
 $reportResults = [System.Collections.Generic.List[object]]::new()
@@ -650,55 +790,59 @@ try {
     New-Item -ItemType Directory -Path $scanRoot | Out-Null
 
     foreach ($source in $resolvedSources) {
-        $scanOutput = Join-Path $scanRoot $source.label
-        if ($source.kind -eq "typescript") {
-            $arguments = [System.Collections.Generic.List[string]]::new()
-            foreach ($value in @("scan", "--repo", $source.repositoryPath, "--out", $scanOutput)) { $arguments.Add($value) }
-            foreach ($project in $source.projects) { $arguments.Add("--project"); $arguments.Add($project) }
-            foreach ($include in $source.include) { $arguments.Add("--include"); $arguments.Add($include) }
-            foreach ($exclude in $source.exclude) { $arguments.Add("--exclude"); $arguments.Add($exclude) }
-            Invoke-CheckedCommand "node" (@($typeScriptCli) + $arguments.ToArray()) "INTERACTION_RUN_TYPESCRIPT_SCAN_FAILED"
-        }
-        else {
-            $arguments = [System.Collections.Generic.List[string]]::new()
-            foreach ($value in @("scan", "--repo", $source.repositoryPath, "--out", $scanOutput)) { $arguments.Add($value) }
-            foreach ($solution in $source.solutions) { $arguments.Add("--solution"); $arguments.Add($solution) }
-            foreach ($project in $source.projects) { $arguments.Add("--project"); $arguments.Add($project) }
-            foreach ($include in $source.include) { $arguments.Add("--include"); $arguments.Add($include) }
-            foreach ($exclude in $source.exclude) { $arguments.Add("--exclude"); $arguments.Add($exclude) }
-            if (-not [string]::IsNullOrWhiteSpace($source.targetFramework)) { $arguments.Add("--target-framework"); $arguments.Add($source.targetFramework) }
-            Invoke-TraceMap $arguments.ToArray() "INTERACTION_RUN_DOTNET_SCAN_FAILED"
-        }
+        $sourceOperation = if ($source.kind -eq "typescript") { "typescript-scan" } else { "dotnet-scan" }
+        $sourceFailureCode = if ($source.kind -eq "typescript") { "INTERACTION_RUN_TYPESCRIPT_SCAN_FAILED" } else { "INTERACTION_RUN_DOTNET_SCAN_FAILED" }
+        Invoke-TimedOperation -RunId $runId -Stage "source-scan" -Operation $sourceOperation `
+            -FailureCode $sourceFailureCode -SubjectKind "source" -SubjectId $source.label `
+            -Action {
+                $scanOutput = Join-Path $scanRoot $source.label
+                $arguments = [System.Collections.Generic.List[string]]::new()
+                foreach ($value in @("scan", "--repo", $source.repositoryPath, "--out", $scanOutput)) { $arguments.Add($value) }
+                if ($source.kind -eq "typescript") {
+                    foreach ($project in $source.projects) { $arguments.Add("--project"); $arguments.Add($project) }
+                    foreach ($include in $source.include) { $arguments.Add("--include"); $arguments.Add($include) }
+                    foreach ($exclude in $source.exclude) { $arguments.Add("--exclude"); $arguments.Add($exclude) }
+                    Invoke-CheckedCommand "node" (@($typeScriptCli) + $arguments.ToArray()) "INTERACTION_RUN_TYPESCRIPT_SCAN_FAILED"
+                }
+                else {
+                    foreach ($solution in $source.solutions) { $arguments.Add("--solution"); $arguments.Add($solution) }
+                    foreach ($project in $source.projects) { $arguments.Add("--project"); $arguments.Add($project) }
+                    foreach ($include in $source.include) { $arguments.Add("--include"); $arguments.Add($include) }
+                    foreach ($exclude in $source.exclude) { $arguments.Add("--exclude"); $arguments.Add($exclude) }
+                    if (-not [string]::IsNullOrWhiteSpace($source.targetFramework)) { $arguments.Add("--target-framework"); $arguments.Add($source.targetFramework) }
+                    Invoke-TraceMap $arguments.ToArray() "INTERACTION_RUN_DOTNET_SCAN_FAILED"
+                }
 
-        $postScanHead = Get-GitValue $source.repositoryPath @("rev-parse", "HEAD") "INTERACTION_RUN_SOURCE_COMMIT_UNAVAILABLE"
-        $postScanStatus = @(& git -C $source.repositoryPath status --short)
-        if ($LASTEXITCODE -ne 0) { Stop-InteractionReview "INTERACTION_RUN_SOURCE_STATUS_UNAVAILABLE" }
-        if ($postScanHead -ne $source.commitSha -or $postScanStatus.Count -gt 0) {
-            Stop-InteractionReview "INTERACTION_RUN_SOURCE_CHANGED_DURING_SCAN"
-        }
+                $postScanHead = Get-GitValue $source.repositoryPath @("rev-parse", "HEAD") "INTERACTION_RUN_SOURCE_COMMIT_UNAVAILABLE"
+                $postScanStatus = @(& git -C $source.repositoryPath status --short)
+                if ($LASTEXITCODE -ne 0) { Stop-InteractionReview "INTERACTION_RUN_SOURCE_STATUS_UNAVAILABLE" }
+                if ($postScanHead -ne $source.commitSha -or $postScanStatus.Count -gt 0) {
+                    Stop-InteractionReview "INTERACTION_RUN_SOURCE_CHANGED_DURING_SCAN"
+                }
 
-        $manifestPath = Join-Path $scanOutput "scan-manifest.json"
-        $factsPath = Join-Path $scanOutput "facts.ndjson"
-        $indexPath = Join-Path $scanOutput "index.sqlite"
-        foreach ($required in @($manifestPath, $factsPath, $indexPath, (Join-Path $scanOutput "report.md"), (Join-Path $scanOutput "logs/analyzer.log"))) {
-            if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { Stop-InteractionReview "INTERACTION_RUN_SCAN_ARTIFACT_MISSING" }
-        }
-        $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json -Depth 50
-        if ([string](Get-PropertyValue $manifest "commitSha" "") -ne $source.commitSha) { Stop-InteractionReview "INTERACTION_RUN_SCAN_COMMIT_MISMATCH" }
-        $analysisLevel = [string](Get-PropertyValue $manifest "analysisLevel" "unknown")
-        $buildStatus = [string](Get-PropertyValue $manifest "buildStatus" "unknown")
-        Add-Count $sourceKindCounts $source.kind
-        Add-Count $scanStateCounts "$analysisLevel|$buildStatus"
-        Add-ScanGapSignals $factsPath $signals
-        $sourceResults.Add([ordered]@{
-            label = $source.label
-            kind = $source.kind
-            commitSha = $source.commitSha
-            analysisLevel = $analysisLevel
-            buildStatus = $buildStatus
-            scanPath = "scans/$($source.label)"
-            indexSha256 = Get-Sha256File $indexPath
-        })
+                $manifestPath = Join-Path $scanOutput "scan-manifest.json"
+                $factsPath = Join-Path $scanOutput "facts.ndjson"
+                $indexPath = Join-Path $scanOutput "index.sqlite"
+                foreach ($required in @($manifestPath, $factsPath, $indexPath, (Join-Path $scanOutput "report.md"), (Join-Path $scanOutput "logs/analyzer.log"))) {
+                    if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { Stop-InteractionReview "INTERACTION_RUN_SCAN_ARTIFACT_MISSING" }
+                }
+                $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json -Depth 50
+                if ([string](Get-PropertyValue $manifest "commitSha" "") -ne $source.commitSha) { Stop-InteractionReview "INTERACTION_RUN_SCAN_COMMIT_MISMATCH" }
+                $analysisLevel = [string](Get-PropertyValue $manifest "analysisLevel" "unknown")
+                $buildStatus = [string](Get-PropertyValue $manifest "buildStatus" "unknown")
+                Add-Count $sourceKindCounts $source.kind
+                Add-Count $scanStateCounts "$analysisLevel|$buildStatus"
+                Add-ScanGapSignals $factsPath $signals
+                $sourceResults.Add([ordered]@{
+                    label = $source.label
+                    kind = $source.kind
+                    commitSha = $source.commitSha
+                    analysisLevel = $analysisLevel
+                    buildStatus = $buildStatus
+                    scanPath = "scans/$($source.label)"
+                    indexSha256 = Get-Sha256File $indexPath
+                })
+            }
     }
 
     $combinedIndex = Join-Path $staging "combined.sqlite"
@@ -712,17 +856,23 @@ try {
     }
     $combineArguments.Add("--out")
     $combineArguments.Add($combinedIndex)
-    Invoke-TraceMap $combineArguments.ToArray() "INTERACTION_RUN_COMBINE_FAILED"
+    Invoke-TimedOperation -RunId $runId -Stage "combine" -Operation "combine" `
+        -FailureCode "INTERACTION_RUN_COMBINE_FAILED" `
+        -Action { Invoke-TraceMap $combineArguments.ToArray() "INTERACTION_RUN_COMBINE_FAILED" }
 
     $reportsRoot = Join-Path $staging "reports"
     New-Item -ItemType Directory -Path $reportsRoot | Out-Null
 
     if ($combinedDependencyEnabled) {
         $reportOut = Join-Path $reportsRoot "dependency"
-        Invoke-TraceMap @("report", "--index", $combinedIndex, "--out", $reportOut, "--format", "json") "INTERACTION_RUN_DEPENDENCY_REPORT_FAILED"
-        $jsonPath = Join-Path $reportOut "dependency-report.json"
-        Add-ReportSignals $jsonPath "dependency" $signals $reportStates
-        $reportResults.Add([ordered]@{ name = "dependency"; kind = "combined-dependency"; relativePath = "reports/dependency/dependency-report.json"; sha256 = Get-Sha256File $jsonPath })
+        Invoke-TimedOperation -RunId $runId -Stage "report" -Operation "dependency-report" `
+            -FailureCode "INTERACTION_RUN_DEPENDENCY_REPORT_FAILED" `
+            -Action {
+                Invoke-TraceMap @("report", "--index", $combinedIndex, "--out", $reportOut, "--format", "json") "INTERACTION_RUN_DEPENDENCY_REPORT_FAILED"
+                $jsonPath = Join-Path $reportOut "dependency-report.json"
+                Add-ReportSignals $jsonPath "dependency" $signals $reportStates
+                $reportResults.Add([ordered]@{ name = "dependency"; kind = "combined-dependency"; relativePath = "reports/dependency/dependency-report.json"; sha256 = Get-Sha256File $jsonPath })
+            }
     }
 
     if ($portfolioEnabled) {
@@ -735,10 +885,14 @@ try {
             $arguments.Add("--label")
             $arguments.Add($source.label)
         }
-        Invoke-TraceMap $arguments.ToArray() "INTERACTION_RUN_PORTFOLIO_REPORT_FAILED"
-        $jsonPath = Join-Path $reportOut "portfolio-report.json"
-        Add-ReportSignals $jsonPath "portfolio" $signals $reportStates
-        $reportResults.Add([ordered]@{ name = "portfolio"; kind = "portfolio"; relativePath = "reports/portfolio/portfolio-report.json"; sha256 = Get-Sha256File $jsonPath })
+        Invoke-TimedOperation -RunId $runId -Stage "report" -Operation "portfolio-report" `
+            -FailureCode "INTERACTION_RUN_PORTFOLIO_REPORT_FAILED" `
+            -Action {
+                Invoke-TraceMap $arguments.ToArray() "INTERACTION_RUN_PORTFOLIO_REPORT_FAILED"
+                $jsonPath = Join-Path $reportOut "portfolio-report.json"
+                Add-ReportSignals $jsonPath "portfolio" $signals $reportStates
+                $reportResults.Add([ordered]@{ name = "portfolio"; kind = "portfolio"; relativePath = "reports/portfolio/portfolio-report.json"; sha256 = Get-Sha256File $jsonPath })
+            }
     }
 
     foreach ($pair in $endpointPairs) {
@@ -746,17 +900,21 @@ try {
         $client = [string]$pair.clientLabel
         $server = [string]$pair.serverLabel
         $reportOut = Join-Path $reportsRoot "endpoints/$name"
-        Invoke-TraceMap @(
-            "endpoints",
-            "--client-index", (Join-Path $scanRoot "$client/index.sqlite"),
-            "--server-index", (Join-Path $scanRoot "$server/index.sqlite"),
-            "--client-label", $client,
-            "--server-label", $server,
-            "--out", $reportOut,
-            "--format", "json") "INTERACTION_RUN_ENDPOINT_REPORT_FAILED"
-        $jsonPath = Join-Path $reportOut "endpoint-report.json"
-        Add-ReportSignals $jsonPath "endpoint-alignment" $signals $reportStates
-        $reportResults.Add([ordered]@{ name = $name; kind = "endpoint-alignment"; relativePath = "reports/endpoints/$name/endpoint-report.json"; sha256 = Get-Sha256File $jsonPath })
+        Invoke-TimedOperation -RunId $runId -Stage "report" -Operation "endpoint-report" `
+            -FailureCode "INTERACTION_RUN_ENDPOINT_REPORT_FAILED" -SubjectKind "query" -SubjectId $name `
+            -Action {
+                Invoke-TraceMap @(
+                    "endpoints",
+                    "--client-index", (Join-Path $scanRoot "$client/index.sqlite"),
+                    "--server-index", (Join-Path $scanRoot "$server/index.sqlite"),
+                    "--client-label", $client,
+                    "--server-label", $server,
+                    "--out", $reportOut,
+                    "--format", "json") "INTERACTION_RUN_ENDPOINT_REPORT_FAILED"
+                $jsonPath = Join-Path $reportOut "endpoint-report.json"
+                Add-ReportSignals $jsonPath "endpoint-alignment" $signals $reportStates
+                $reportResults.Add([ordered]@{ name = $name; kind = "endpoint-alignment"; relativePath = "reports/endpoints/$name/endpoint-report.json"; sha256 = Get-Sha256File $jsonPath })
+            }
     }
 
     foreach ($query in $propertyFlows) {
@@ -768,19 +926,27 @@ try {
         if (-not [string]::IsNullOrWhiteSpace($sourceLabel)) { $arguments.Add("--source"); $arguments.Add($sourceLabel) }
         $framework = [string](Get-PropertyValue $query "framework" "any")
         $arguments.Add("--framework"); $arguments.Add($framework)
-        Invoke-TraceMap $arguments.ToArray() "INTERACTION_RUN_PROPERTY_FLOW_FAILED"
-        $jsonPath = Join-Path $reportOut "property-flow-report.json"
-        Add-ReportSignals $jsonPath "property-flow" $signals $reportStates
-        $reportResults.Add([ordered]@{ name = $name; kind = "property-flow"; relativePath = "reports/property-flow/$name/property-flow-report.json"; sha256 = Get-Sha256File $jsonPath })
+        Invoke-TimedOperation -RunId $runId -Stage "report" -Operation "property-flow" `
+            -FailureCode "INTERACTION_RUN_PROPERTY_FLOW_FAILED" -SubjectKind "query" -SubjectId $name `
+            -Action {
+                Invoke-TraceMap $arguments.ToArray() "INTERACTION_RUN_PROPERTY_FLOW_FAILED"
+                $jsonPath = Join-Path $reportOut "property-flow-report.json"
+                Add-ReportSignals $jsonPath "property-flow" $signals $reportStates
+                $reportResults.Add([ordered]@{ name = $name; kind = "property-flow"; relativePath = "reports/property-flow/$name/property-flow-report.json"; sha256 = Get-Sha256File $jsonPath })
+            }
     }
 
     foreach ($query in $routeFlows) {
         $name = [string]$query.name
         $reportOut = Join-Path $reportsRoot "route-flow/$name"
-        Invoke-TraceMap @("route-flow", "--index", $combinedIndex, "--route", [string]$query.route, "--out", $reportOut, "--format", "json") "INTERACTION_RUN_ROUTE_FLOW_FAILED"
-        $jsonPath = Join-Path $reportOut "route-flow-report.json"
-        Add-ReportSignals $jsonPath "route-flow" $signals $reportStates
-        $reportResults.Add([ordered]@{ name = $name; kind = "route-flow"; relativePath = "reports/route-flow/$name/route-flow-report.json"; sha256 = Get-Sha256File $jsonPath })
+        Invoke-TimedOperation -RunId $runId -Stage "report" -Operation "route-flow" `
+            -FailureCode "INTERACTION_RUN_ROUTE_FLOW_FAILED" -SubjectKind "query" -SubjectId $name `
+            -Action {
+                Invoke-TraceMap @("route-flow", "--index", $combinedIndex, "--route", [string]$query.route, "--out", $reportOut, "--format", "json") "INTERACTION_RUN_ROUTE_FLOW_FAILED"
+                $jsonPath = Join-Path $reportOut "route-flow-report.json"
+                Add-ReportSignals $jsonPath "route-flow" $signals $reportStates
+                $reportResults.Add([ordered]@{ name = $name; kind = "route-flow"; relativePath = "reports/route-flow/$name/route-flow-report.json"; sha256 = Get-Sha256File $jsonPath })
+            }
     }
 
     foreach ($query in $pathQueries) {
@@ -790,10 +956,14 @@ try {
         foreach ($value in @("paths", "--index", $combinedIndex, "--from-endpoint", [string]$query.fromEndpoint, "--to-surface", [string]$query.toSurface, "--out", $reportOut, "--format", "json")) { $arguments.Add($value) }
         $sourcePair = [string](Get-PropertyValue $query "sourcePair" "")
         if (-not [string]::IsNullOrWhiteSpace($sourcePair)) { $arguments.Add("--source-pair"); $arguments.Add($sourcePair) }
-        Invoke-TraceMap $arguments.ToArray() "INTERACTION_RUN_PATH_QUERY_FAILED"
-        $jsonPath = Join-Path $reportOut "paths-report.json"
-        Add-ReportSignals $jsonPath "dependency-path" $signals $reportStates
-        $reportResults.Add([ordered]@{ name = $name; kind = "dependency-path"; relativePath = "reports/paths/$name/paths-report.json"; sha256 = Get-Sha256File $jsonPath })
+        Invoke-TimedOperation -RunId $runId -Stage "report" -Operation "path-query" `
+            -FailureCode "INTERACTION_RUN_PATH_QUERY_FAILED" -SubjectKind "query" -SubjectId $name `
+            -Action {
+                Invoke-TraceMap $arguments.ToArray() "INTERACTION_RUN_PATH_QUERY_FAILED"
+                $jsonPath = Join-Path $reportOut "paths-report.json"
+                Add-ReportSignals $jsonPath "dependency-path" $signals $reportStates
+                $reportResults.Add([ordered]@{ name = $name; kind = "dependency-path"; relativePath = "reports/paths/$name/paths-report.json"; sha256 = Get-Sha256File $jsonPath })
+            }
     }
 }
 catch {
@@ -806,60 +976,83 @@ catch {
     }
 }
 
-$sourceCommits = @($resolvedSources | Sort-Object label | ForEach-Object { $_.commitSha })
-$runId = "interaction-" + (Get-Sha256Text ($configSha256 + "|" + ($sourceCommits -join "|"))).Substring(0, 20)
-$feedback = [ordered]@{
-    schemaVersion = $FeedbackSchemaVersion
-    runId = $runId
-    outcome = $outcome
-    sourceCount = $resolvedSources.Count
-    sourceKinds = @(Convert-CountsToRows $sourceKindCounts)
-    scanStates = @(Convert-CountsToRows $scanStateCounts)
-    reportCount = $reportResults.Count
-    reportStates = @($reportStates | Sort-Object `
-        { [string]$_.producer },
-        { [string]$_.classification },
-        { [string]$_.coverage },
-        { [bool]$_.truncated })
-    unresolvedSignals = @(Convert-SignalsToRows $signals)
-    failureCode = $failureCode
-    limitations = @(
-        "Counts are categorical projections and may include the same underlying gap in more than one report.",
-        "This summary omits repository paths, source identifiers, routes, symbols, SQL, configuration values, and source content.",
-        "A missing or unresolved static link is not proof that runtime behavior or a dependency is absent."
-    )
-}
-Write-StableJson $feedback (Join-Path $staging "feedback-summary.json")
-Write-FeedbackMarkdown $feedback (Join-Path $staging "feedback-summary.md")
+try {
+    $feedback = [ordered]@{
+        schemaVersion = $FeedbackSchemaVersion
+        runId = $runId
+        outcome = $outcome
+        sourceCount = $resolvedSources.Count
+        sourceKinds = @(Convert-CountsToRows $sourceKindCounts)
+        scanStates = @(Convert-CountsToRows $scanStateCounts)
+        reportCount = $reportResults.Count
+        reportStates = @($reportStates | Sort-Object `
+            { [string]$_.producer },
+            { [string]$_.classification },
+            { [string]$_.coverage },
+            { [bool]$_.truncated })
+        unresolvedSignals = @(Convert-SignalsToRows $signals)
+        failureCode = $failureCode
+        limitations = @(
+            "Counts are categorical projections and may include the same underlying gap in more than one report.",
+            "This summary omits repository paths, source identifiers, routes, symbols, SQL, configuration values, and source content.",
+            "A missing or unresolved static link is not proof that runtime behavior or a dependency is absent."
+        )
+    }
+    Write-StableJson $feedback (Join-Path $staging "feedback-summary.json")
+    Write-FeedbackMarkdown $feedback (Join-Path $staging "feedback-summary.md")
 
-$artifacts = @(
-    Get-ChildItem -LiteralPath $staging -File -Recurse |
-        Where-Object { $_.Name -notin @("interaction-run-result.json") } |
-        ForEach-Object {
-            $relative = [System.IO.Path]::GetRelativePath($staging, $_.FullName).Replace('\', '/')
-            [ordered]@{ relativePath = $relative; sha256 = Get-Sha256File $_.FullName }
-        } |
-        Sort-Object relativePath
-)
-$result = [ordered]@{
-    schemaVersion = $ResultSchemaVersion
-    runId = $runId
-    configSha256 = $configSha256
-    outcome = $outcome
-    failureCode = $failureCode
-    combinedIndexAvailable = Test-Path -LiteralPath (Join-Path $staging "combined.sqlite") -PathType Leaf
-    sources = @($sourceResults | Sort-Object label)
-    reports = @($reportResults | Sort-Object kind, name)
-    artifacts = $artifacts
-    nextAction = if ($outcome -eq "succeeded" -and $signals.Count -eq 0) { "review-generated-reports" } elseif ($outcome -eq "succeeded") { "review-feedback-summary" } else { "inspect-failure-code-and-retained-stage-output" }
-    limitations = @(
-        "This run composes deterministic static evidence and does not prove runtime execution, reachability, correctness, ownership, or migration safety.",
-        "Generated reports can contain private repository-relative identifiers and must remain in owner-controlled storage."
+    $artifacts = @(
+        Get-ChildItem -LiteralPath $staging -File -Recurse |
+            ForEach-Object {
+                $relative = [System.IO.Path]::GetRelativePath($staging, $_.FullName).Replace('\', '/')
+                [pscustomobject]@{ file = $_; relativePath = $relative }
+            } |
+            Where-Object { $_.relativePath -notin @("interaction-run-result.json", "logs/interaction-review-events.jsonl", "execution-summary.md") } |
+            ForEach-Object {
+                [ordered]@{ relativePath = $_.relativePath; sha256 = Get-Sha256File $_.file.FullName }
+            } |
+            Sort-Object relativePath
     )
+    $result = [ordered]@{
+        schemaVersion = $ResultSchemaVersion
+        runId = $runId
+        configSha256 = $configSha256
+        outcome = $outcome
+        failureCode = $failureCode
+        combinedIndexAvailable = Test-Path -LiteralPath (Join-Path $staging "combined.sqlite") -PathType Leaf
+        sources = @($sourceResults | Sort-Object label)
+        reports = @($reportResults | Sort-Object kind, name)
+        artifacts = $artifacts
+        nextAction = if ($outcome -eq "succeeded" -and $signals.Count -eq 0) { "review-generated-reports" } elseif ($outcome -eq "succeeded") { "review-feedback-summary" } else { "inspect-failure-code-and-retained-stage-output" }
+        limitations = @(
+            "This run composes deterministic static evidence and does not prove runtime execution, reachability, correctness, ownership, or migration safety.",
+            "Generated reports can contain private repository-relative identifiers and must remain in owner-controlled storage."
+        )
+    }
+    Write-StableJson $result (Join-Path $staging "interaction-run-result.json")
+    Move-Item -LiteralPath $staging -Destination $OutputRoot
 }
-Write-StableJson $result (Join-Path $staging "interaction-run-result.json")
+catch {
+    $outcome = "failed"
+    $failureCode = "INTERACTION_RUN_FINALIZATION_FAILED"
+    $runStopwatch.Stop()
+    $publishedLog = Join-Path $OutputRoot "logs/interaction-review-events.jsonl"
+    if (-not $script:OperationalTelemetryDisabled -and (Test-Path -LiteralPath $publishedLog -PathType Leaf)) { $script:OperationalEventPath = $publishedLog }
+    Write-OperationalEvent $runId "run-completed" "runner" "run" "failed" $null $null $runStopwatch.ElapsedMilliseconds $failureCode
+    $summaryRoot = if (Test-Path -LiteralPath $OutputRoot -PathType Container) { $OutputRoot } else { $staging }
+    try { Write-ExecutionSummaryMarkdown $runId $outcome $failureCode (Join-Path $summaryRoot "execution-summary.md") }
+    catch { Write-Verbose "interaction execution summary unavailable after finalization failure" }
+    Write-Output "interaction-review=failed;runId=$runId;sourceCount=$($resolvedSources.Count);reportCount=$($reportResults.Count);unresolvedSignalKinds=$($signals.Count)"
+    Write-Output "failureCode=$failureCode"
+    exit 1
+}
 
-Move-Item -LiteralPath $staging -Destination $OutputRoot
+if (-not $script:OperationalTelemetryDisabled) { $script:OperationalEventPath = Join-Path $OutputRoot "logs/interaction-review-events.jsonl" }
+$runStopwatch.Stop()
+Write-OperationalEvent $runId "run-completed" "runner" "run" $outcome $null $null $runStopwatch.ElapsedMilliseconds $failureCode
+try { Write-ExecutionSummaryMarkdown $runId $outcome $failureCode (Join-Path $OutputRoot "execution-summary.md") }
+catch { Write-Verbose "interaction execution summary unavailable after a write failure" }
+
 Write-Output "interaction-review=$outcome;runId=$runId;sourceCount=$($resolvedSources.Count);reportCount=$($reportResults.Count);unresolvedSignalKinds=$($signals.Count)"
 if ($null -ne $failureCode) { Write-Output "failureCode=$failureCode" }
 Write-Output "output=$OutputRoot"
