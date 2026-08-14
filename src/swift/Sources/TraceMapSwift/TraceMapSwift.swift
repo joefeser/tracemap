@@ -3859,6 +3859,14 @@ public enum TraceMapSwiftSelfTests {
         let one = try SwiftScanEngine.scan(options: oneOptions)
         let two = try SwiftScanEngine.scan(options: twoOptions)
         try require(one.manifest.scanId != two.manifest.scanId, "option list framing must be unambiguous")
+        let callerOwned = oneOptions.outputPath.appendingPathComponent("caller-owned.txt")
+        try "keep\n".write(to: callerOwned, atomically: true, encoding: .utf8)
+        do {
+            _ = try SwiftScanEngine.scan(options: oneOptions)
+            try require(false, "complete output with caller-owned data should be rejected")
+        } catch {
+            try require(FileManager.default.fileExists(atPath: callerOwned.path), "caller-owned output must remain unchanged")
+        }
 
         let optionSignature = ["project=0:", "include=0:", "exclude=1:7:foo,bar", "max=\(oneOptions.maxFileByteSize)"].joined(separator: ";")
         let expected = "swift-" + sha256Hex([
@@ -4197,7 +4205,12 @@ enum OutputWriter {
                     atPath: outputPath.appendingPathComponent($0).path,
                     isDirectory: &artifactIsDirectory) && !artifactIsDirectory.boolValue
             }
-            guard entries.isEmpty || complete else {
+            let allowedRootEntries: Set<String> = ["scan-manifest.json", "facts.ndjson", "index.sqlite", "report.md", "logs"]
+            let logsPath = outputPath.appendingPathComponent("logs")
+            let logEntries = (try? FileManager.default.contentsOfDirectory(atPath: logsPath.path)) ?? []
+            let logsOwned = logEntries == ["analyzer.log"]
+                && FileManager.default.fileExists(atPath: logsPath.appendingPathComponent("analyzer.log").path)
+            guard entries.isEmpty || complete && Set(entries).isSubset(of: allowedRootEntries) && logsOwned else {
                 throw ScanError.invalidArguments("--out is not a replaceable TraceMap artifact set")
             }
         }

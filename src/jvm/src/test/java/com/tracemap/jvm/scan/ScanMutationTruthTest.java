@@ -106,6 +106,21 @@ final class ScanMutationTruthTest {
     }
 
     @Test
+    void rejectsCompleteOutputContainingUnownedFile() throws Exception {
+        Path repo = initializedRepo("owned-output-repo");
+        Path output = temp.resolve("owned-output");
+        ScanOptions options = options(repo, output, List.of());
+        new ScanEngine().scan(options);
+        Path sentinel = output.resolve("caller-owned.txt");
+        Files.writeString(sentinel, "keep\n");
+
+        IOException error = assertThrows(IOException.class, () -> new ScanEngine().scan(options));
+
+        assertTrue(error.getMessage().contains("OutputArtifactSetNotReplaceable"));
+        assertTrue(Files.exists(sentinel));
+    }
+
+    @Test
     void rejectsRepositoryRootAsOutput() throws Exception {
         Path repo = initializedRepo("same-output-repo");
 

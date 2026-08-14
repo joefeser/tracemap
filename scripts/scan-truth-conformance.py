@@ -384,9 +384,9 @@ def evaluate_adapter(adapter: str, workspace: Path, repo_root: Path, mutation_te
             inaccessible_run = None
     finally:
         inaccessible_source.chmod(0o600)
+    transaction_truth = True
     if not inaccessible_precondition:
         inaccessible_truth = False
-        transaction_truth = False
     elif inaccessible_run is not None and inaccessible_run.returncode != 0:
         inaccessible_truth = artifact_hashes(prior_output) == prior_hashes
         transaction_truth = inaccessible_truth
