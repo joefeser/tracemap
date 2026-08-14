@@ -2041,6 +2041,19 @@ rules:
       - Surface classification is capped for syntax-only, ambiguous, high fan-out, missing generated-code, unsupported, or reduced-coverage evidence.
       - Raw SQL, source snippets, connection strings, config values, URLs, remotes, local absolute paths, schema/catalog/provider values, private labels, and secrets are hashed or omitted.
 
+  - id: interaction.review.feedback.v1
+    name: Multi-repository interaction review feedback projection
+    description: Aggregates existing scan and report gap, needs-review, endpoint-alignment, coverage, and truncation categories into a bounded categorical feedback summary without copying source identifiers or evidence content.
+    evidenceTier: Tier4Unknown
+    emits:
+      - angular-dotnet-interaction-feedback.v1
+      - categorical unresolved signal
+    limitations:
+      - Feedback rows are diagnostic projections of existing evidence and may count the same underlying gap in more than one report; they are not deduplicated defects, root-cause findings, severity judgments, or proof of runtime behavior.
+      - This rule is used only when an upstream projection does not expose its own rule ID; available upstream rule IDs remain attached to their categorical rows.
+      - The summary omits repository paths, source identifiers, route templates, symbols, SQL, configuration values, and source content, but rare counts and rule combinations can still disclose architectural characteristics and require owner review before sharing.
+      - A missing or unresolved static link is unknown under stated coverage, never proof that a runtime behavior, dependency, feature, or defect is absent.
+
   - id: legacy.webforms.inventory.v1
     name: Legacy WebForms file and page inventory
     description: Inventories WebForms markup, code-behind, designer files, directives, static server controls, and safe page linkage metadata.

@@ -97,6 +97,122 @@ npm --prefix "$TRACEMAP/src/typescript" ci
 npm --prefix "$TRACEMAP/src/typescript" run build
 ```
 
+## Config-driven multi-repository workflow
+
+Use the checked-in PowerShell runner when more than a few repositories or
+reports participate in the review. The runner replaces the repeated command
+blocks below with one validated configuration; it does not add extraction or
+reinterpret report evidence.
+
+Start from:
+
+```text
+docs/examples/angular-dotnet-interaction-run.example.json
+```
+
+The contract is:
+
+```text
+docs/contracts/angular-dotnet-interaction-run.v1.schema.json
+docs/contracts/angular-dotnet-interaction-run-result.v1.schema.json
+docs/contracts/angular-dotnet-interaction-feedback.v1.schema.json
+```
+
+Keep the populated configuration outside the TraceMap repository. It contains
+local repository paths and can also contain private selectors and route
+templates. Relative repository paths resolve from the configuration file;
+solution, project, and `tsconfig.json` paths resolve from their repository
+root.
+
+The configuration supports bounded arrays of:
+
+- TypeScript/Angular and .NET source repositories;
+- explicit TypeScript projects, .NET projects, and .NET solutions;
+- client/server endpoint-alignment pairs;
+- property-flow selectors;
+- route-flow selectors;
+- endpoint-to-surface path queries;
+- combined dependency and portfolio report choices.
+
+Validate the configuration and local source state without scanning:
+
+```powershell
+$TraceMap = "C:\work\tracemap"
+$Config = "C:\work\review-config\interaction-review.json"
+$Output = "C:\work\tracemap-output\interaction-$(Get-Date -Format yyyyMMdd-HHmmss)"
+
+pwsh -NoProfile -File (Join-Path $TraceMap "scripts\Invoke-AngularDotNetInteractionReview.ps1") `
+  -ConfigPath $Config `
+  -TraceMapRoot $TraceMap `
+  -OutputRoot $Output `
+  -ValidateOnly
+```
+
+Run every configured scan and report:
+
+```powershell
+pwsh -NoProfile -File (Join-Path $TraceMap "scripts\Invoke-AngularDotNetInteractionReview.ps1") `
+  -ConfigPath $Config `
+  -TraceMapRoot $TraceMap `
+  -OutputRoot $Output
+```
+
+Add `-BuildTools` only when installing/building the locked TypeScript
+dependencies and building the .NET solution is authorized. Without that flag,
+the runner requires the already-built .NET CLI and TypeScript CLI and performs
+no tool build or package install.
+
+The runner requires every source path to be the root of a clean Git checkout
+with a resolvable commit. It rejects duplicate/unsafe labels, unsupported
+configuration fields, missing or out-of-root project selections, unknown
+source references, an existing output root, and missing built tools before it
+starts the review. The output root must be outside both TraceMap and every
+source repository. It never enables restore and does not overwrite outputs.
+
+After each scan, the runner verifies that the source commit and Git working
+tree remain unchanged. `INTERACTION_RUN_SOURCE_CHANGED_DURING_SCAN` is a real
+boundary stop: retain the generated local stage output, determine which build
+or project-load operation changed the checkout, restore the checkout under
+owner control, and correct ignore/build isolation before retrying.
+
+The generated root contains:
+
+```text
+interaction-run-result.json
+feedback-summary.json
+feedback-summary.md
+combined.sqlite
+scans/<source-label>/...
+reports/dependency/...
+reports/portfolio/...
+reports/endpoints/<query-name>/...
+reports/property-flow/<query-name>/...
+reports/route-flow/<query-name>/...
+reports/paths/<query-name>/...
+```
+
+`interaction-run-result.json` is the local execution inventory. It binds each
+source label to the observed commit, scan coverage/build state, relative scan
+path, and index hash, and binds every generated JSON report to a relative path
+and SHA-256 digest.
+
+`feedback-summary.json` and its equivalent `feedback-summary.md` are the
+preferred small diagnostic handoff. They contain categorical counts for source
+kinds, analysis/build states, report states,
+truncation, scan gaps, report gaps, needs-review rows, and unresolved endpoint
+classifications. Each unresolved row preserves an upstream or projection rule
+ID, evidence tier, and coverage label. The categorical handoff omits repository
+paths, source identifiers, routes, symbols, SQL, configuration values, and
+source content. Review it under the
+owner's handling policy before sharing: rare counts and rule combinations can
+still disclose architectural characteristics.
+
+The same underlying gap may be projected into several reports, so feedback
+counts are diagnostic occurrences, not a deduplicated defect count. Use the
+producer, classification, rule ID, and retained local reports to investigate a
+signal. Do not ask another model to merge raw report structures or infer a
+missing link from names.
+
 ## Choose repositories and output paths
 
 This example uses one Angular client and two .NET repositories. Remove the
@@ -582,6 +698,9 @@ projection; do not upgrade uncertain links beyond their source evidence.
 
 Retain the following together so evidence does not lose its provenance:
 
+- the populated config and `interaction-run-result.json` when the
+  config-driven runner was used;
+- `feedback-summary.json` as the bounded categorical diagnostic handoff;
 - every source `scan-manifest.json` and `scan-receipt.json` when present;
 - every source `index.sqlite` and `report.md`;
 - the combined index;
