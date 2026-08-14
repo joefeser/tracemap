@@ -28,6 +28,17 @@ $SafeNamePattern = '^[a-z0-9][a-z0-9._-]{0,63}$'
 $MaximumSources = 100
 $MaximumEndpointPairs = 100
 $MaximumQueries = 500
+$DefaultSourceExcludes = [string[]]@(
+    ".vs/**",
+    "**/bin/**",
+    "**/obj/**",
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/coverage/**",
+    "**/TestResults/**",
+    "**/.angular/**",
+    "**/.next/**"
+)
 $AllowedEvidenceTiers = [System.Collections.Generic.HashSet[string]]::new(
     [string[]]@("Tier1Semantic", "Tier2Structural", "Tier3SyntaxOrTextual", "Tier4Unknown"),
     [System.StringComparer]::Ordinal)
@@ -87,6 +98,18 @@ function ConvertTo-Array {
     param($Value)
     if ($null -eq $Value) { return @() }
     return @($Value)
+}
+
+function Get-EffectiveSourceExcludes {
+    param($ConfiguredExcludes)
+
+    $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+    $effective = [System.Collections.Generic.List[string]]::new()
+    foreach ($exclude in @($DefaultSourceExcludes) + @(ConvertTo-Array $ConfiguredExcludes)) {
+        $value = [string]$exclude
+        if ($seen.Add($value)) { $effective.Add($value) }
+    }
+    return $effective.ToArray()
 }
 
 function Resolve-ConfiguredPath {
@@ -523,7 +546,7 @@ foreach ($source in $sources) {
         projects = $projects
         solutions = $solutions
         include = @((ConvertTo-Array (Get-PropertyValue $source "include" @())) | ForEach-Object { [string]$_ })
-        exclude = @((ConvertTo-Array (Get-PropertyValue $source "exclude" @())) | ForEach-Object { [string]$_ })
+        exclude = @(Get-EffectiveSourceExcludes (Get-PropertyValue $source "exclude" @()))
         targetFramework = $targetFramework
     })
 }
