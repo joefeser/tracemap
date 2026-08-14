@@ -288,6 +288,27 @@ describe("ScanEngine", () => {
     await expect(fsp.stat(output)).rejects.toThrow();
   });
 
+  it("keeps excluded in-repo imports outside semantic evidence and snapshot identity", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    await fsp.mkdir(path.join(repo, "src"), { recursive: true });
+    await fsp.writeFile(path.join(repo, "tsconfig.json"), JSON.stringify({ compilerOptions: { target: "ES2022", module: "CommonJS", strict: true }, include: ["src/**/*.ts"] }));
+    await fsp.writeFile(path.join(repo, "src", "sample.ts"), "import { ignored } from './ignored';\nexport const selected = ignored;\n");
+    const ignored = path.join(repo, "src", "ignored.ts");
+    await fsp.writeFile(ignored, "export const ignored = 'first';\n");
+    initGitRepo(repo);
+    const options = { ...scanOptions(repo, path.join(root, "first")), excludeGlobs: ["src/ignored.ts"] };
+
+    const first = await scan(options);
+    await fsp.writeFile(ignored, "export const ignored = 'other';\n");
+    const second = await scan({ ...options, outputPath: path.join(root, "second") });
+
+    expect(first.manifest.sourceSnapshotDigest).toBe(second.manifest.sourceSnapshotDigest);
+    expect(first.manifest.scanId).toBe(second.manifest.scanId);
+    expect(first.facts.some((fact) => fact.evidence.filePath === "src/ignored.ts")).toBe(false);
+    expect(first.facts).toEqual(second.facts);
+  });
+
   it("preserves prior output when a staged artifact write fails", async () => {
     const root = await tempDir();
     const repo = path.join(root, "repo");
