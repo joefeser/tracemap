@@ -56,6 +56,16 @@ public sealed class WebFormsStaticExplorerTests
             && row.SupportId.Length > 0);
         Assert.Contains(firstResult.Data.SectionStatuses, row =>
             row.SectionId == "webforms" && row.Status is "available" or "partial");
+        var evidenceStatus = Assert.Single(firstResult.Data.SectionStatuses, row => row.SectionId == "evidence-rows");
+        Assert.NotEqual("not-provided", evidenceStatus.Status);
+        Assert.Contains("artifact:webforms-modernization", evidenceStatus.SupportIds);
+        Assert.Equal(
+            firstResult.Data.Sources.Single(source => source.SourceId == "source:webforms-modernization").CommitSha,
+            firstResult.Manifest.CommitSha);
+        var limitationsById = firstResult.Data.Limitations.ToDictionary(row => row.LimitationId, StringComparer.Ordinal);
+        Assert.All(
+            firstResult.Data.EvidenceRows.Where(row => row.ArtifactId == "artifact:webforms-modernization"),
+            row => Assert.All(row.Limitations, id => Assert.Equal(row.SupportId, limitationsById[id].Scope)));
         Assert.Equal("public-demo", publicResult.Manifest.SafetyProfile);
         Assert.NotNull(publicResult.Data.WebForms);
 
@@ -160,6 +170,37 @@ public sealed class WebFormsStaticExplorerTests
     }
 
     [Fact]
+    public async Task Explorer_rejects_duplicate_webforms_packet_properties()
+    {
+        using var temp = new TempDirectory();
+        var repo = CreateWebFormsRepository(temp.Path);
+        var scan = Path.Combine(temp.Path, "scan");
+        var packet = Path.Combine(temp.Path, "packet");
+        Assert.Equal(0, await TraceMapCommand.RunAsync(["scan", "--repo", repo, "--out", scan], TextWriter.Null, TextWriter.Null));
+        Assert.Equal(0, await TraceMapCommand.RunAsync(
+            ["webforms-modernization", "--index", Path.Combine(scan, "index.sqlite"), "--out", packet],
+            TextWriter.Null,
+            TextWriter.Null));
+
+        var packetPath = Path.Combine(packet, "webforms-modernization.json");
+        var json = await File.ReadAllTextAsync(packetPath);
+        var marker = $"\"schemaVersion\": \"{WebFormsModernizationPacketReporter.SchemaVersion}\"";
+        json = json.Replace(marker, marker + ",\n  " + marker, StringComparison.Ordinal);
+        await File.WriteAllTextAsync(packetPath, json);
+
+        var result = await StaticHtmlEvidenceExplorer.GenerateAsync(
+            new(packet, Path.Combine(temp.Path, "explorer"), "hidden-local"));
+
+        Assert.Null(result.Data.WebForms);
+        Assert.Contains(result.Data.Artifacts, artifact =>
+            artifact.ArtifactKind == "webforms-modernization-packet"
+            && artifact.Compatibility == "unsupported");
+        Assert.Contains(result.Gaps, gap =>
+            gap.Scope == "artifact:webforms-modernization"
+            && gap.GapKind == "unsupported-schema");
+    }
+
+    [Fact]
     public async Task Explorer_redacts_unsafe_owner_question_instead_of_rendering_it()
     {
         using var temp = new TempDirectory();
@@ -174,6 +215,7 @@ public sealed class WebFormsStaticExplorerTests
         var packetPath = Path.Combine(packet, "webforms-modernization.json");
         var root = JsonNode.Parse(await File.ReadAllTextAsync(packetPath))!.AsObject();
         root["ownerQuestions"]![0] = "Inspect C:\\Users\\private\\secret.txt";
+        root["surfaces"]![0]!["evidence"]!["factId"] = "C:\\Users\\private\\unsafe-fact";
         await File.WriteAllTextAsync(packetPath, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
 
         var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new(packet, Path.Combine(temp.Path, "safe"), "hidden-local"));
@@ -181,7 +223,13 @@ public sealed class WebFormsStaticExplorerTests
         var all = string.Join('\n', Directory.EnumerateFiles(Path.Combine(temp.Path, "safe"), "*", SearchOption.AllDirectories).Select(File.ReadAllText));
         Assert.DoesNotContain("C:\\Users\\private", all, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("webforms-owner-question-hash:", all, StringComparison.Ordinal);
+        Assert.Contains("support-id-hash:", all, StringComparison.Ordinal);
         Assert.Contains(result.Data.Redactions, redaction => redaction.Location == "webforms-owner-question");
+        Assert.Contains(result.Data.Redactions, redaction => redaction.Location == "support-id");
+        var unsafeEvidence = Assert.Single(result.Data.EvidenceRows, row => row.SupportId.StartsWith("support-id-hash:", StringComparison.Ordinal));
+        Assert.All(
+            unsafeEvidence.Limitations,
+            id => Assert.Equal(unsafeEvidence.SupportId, result.Data.Limitations.Single(row => row.LimitationId == id).Scope));
     }
 
     private static string CreateWebFormsRepository(string root)
