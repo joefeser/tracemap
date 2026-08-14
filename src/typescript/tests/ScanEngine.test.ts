@@ -364,6 +364,19 @@ describe("ScanEngine", () => {
     expect(await fsp.readFile(path.join(output, "keep.txt"), "utf8")).toBe("important\n");
   });
 
+  it("refuses a complete output containing an unowned file", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    const output = path.join(root, "output");
+    await writeMiniRepo(repo);
+    await scan(scanOptions(repo, output));
+    const sentinel = path.join(output, "caller-owned.txt");
+    await fsp.writeFile(sentinel, "keep\n");
+
+    await expect(scan(scanOptions(repo, output))).rejects.toThrow(/not replaceable/);
+    expect(await fsp.readFile(sentinel, "utf8")).toBe("keep\n");
+  });
+
   it("frames option lists without delimiter collisions", async () => {
     const root = await tempDir();
     const repo = path.join(root, "repo");

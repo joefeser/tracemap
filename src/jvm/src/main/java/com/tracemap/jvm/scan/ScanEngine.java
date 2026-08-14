@@ -191,10 +191,21 @@ public final class ScanEngine {
                 return;
             }
         }
-        if (REQUIRED_OUTPUT_ARTIFACTS.stream().allMatch(relative -> Files.isRegularFile(out.resolve(relative)))) {
-            return;
+        if (!REQUIRED_OUTPUT_ARTIFACTS.stream().allMatch(relative -> Files.isRegularFile(out.resolve(relative)))) {
+            throw new IOException("OutputArtifactSetNotReplaceable");
         }
-        throw new IOException("OutputArtifactSetNotReplaceable");
+        Set<String> allowedRootEntries = Set.of("scan-manifest.json", "facts.ndjson", "index.sqlite", "report.md", "logs");
+        try (var entries = Files.list(out)) {
+            if (entries.anyMatch(path -> !allowedRootEntries.contains(path.getFileName().toString()))) {
+                throw new IOException("OutputArtifactSetNotReplaceable");
+            }
+        }
+        try (var logEntries = Files.list(out.resolve("logs"))) {
+            List<Path> logs = logEntries.toList();
+            if (logs.size() != 1 || !Files.isRegularFile(logs.getFirst()) || !"analyzer.log".equals(logs.getFirst().getFileName().toString())) {
+                throw new IOException("OutputArtifactSetNotReplaceable");
+            }
+        }
     }
 
     private static void moveDirectory(Path source, Path target) throws IOException {
