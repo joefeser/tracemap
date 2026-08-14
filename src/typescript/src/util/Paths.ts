@@ -27,8 +27,8 @@ export function parseHumanByteSize(value: string): number {
 }
 
 export function matchesSimpleGlob(relativePath: string, glob: string): boolean {
-  const normalized = normalizePath(relativePath);
-  const pattern = normalizePath(glob);
+  const normalized = fileSystemComparisonPath(relativePath);
+  const pattern = fileSystemComparisonPath(glob);
   if (pattern === normalized) {
     return true;
   }
@@ -43,4 +43,9 @@ export function matchesSimpleGlob(relativePath: string, glob: string): boolean {
     return normalized.endsWith(pattern.slice(1));
   }
   return normalized.includes(pattern);
+}
+
+function fileSystemComparisonPath(value: string): string {
+  const normalized = normalizePath(value);
+  return process.platform === "darwin" ? normalized.normalize("NFC") : normalized;
 }

@@ -320,8 +320,22 @@ public static class ScanEngine
     {
         var signature = string.Join('\n', inventory.Select(item => $"{item.RelativePath}|{item.Kind}|{item.SizeBytes}"));
         var binlogSignature = MsBuildBinlogExtractor.CreateInputSignature(options.BinlogPaths, repoPath: options.RepoPath);
+        var optionSignature = string.Join('|',
+            FrameValues(NormalizeOptionPaths(options.RepoPath, options.SolutionPaths)),
+            FrameValues(NormalizeOptionPaths(options.RepoPath, options.ProjectPaths)),
+            FrameValues((options.IncludeGlobs ?? []).Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => NormalizePathForFileSystemComparison(value.Trim()))),
+            FrameValues((options.ExcludeGlobs ?? []).Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => NormalizePathForFileSystemComparison(value.Trim()))),
+            FrameValues(string.IsNullOrWhiteSpace(options.TargetFramework) ? [] : [options.TargetFramework.Trim()]),
+            $"restore={options.Restore.ToString().ToLowerInvariant()}",
+            FrameValues(string.IsNullOrWhiteSpace(options.BinlogCommitSha) ? [] : [options.BinlogCommitSha.Trim()]));
         var repoIdentity = string.IsNullOrWhiteSpace(git.RemoteUrl) ? git.RepoName : git.RemoteUrl;
-        return "scan-" + FactFactory.Hash($"{repoIdentity}|{git.CommitSha}|{sourceSnapshotDigest}|{signature}|{binlogSignature}", 20);
+        return "scan-" + FactFactory.Hash($"{repoIdentity}|{git.CommitSha}|{sourceSnapshotDigest}|{signature}|{optionSignature}|{binlogSignature}", 20);
+    }
+
+    private static string FrameValues(IEnumerable<string> values)
+    {
+        var sorted = values.Order(StringComparer.Ordinal).ToArray();
+        return $"{sorted.Length}:" + string.Concat(sorted.Select(value => $"{Encoding.UTF8.GetByteCount(value)}:{value}"));
     }
 
     internal static string CreateSourceSnapshotDigest(string repoPath, IReadOnlyList<FileInventoryItem> inventory)

@@ -3,6 +3,19 @@
 # - deferred: documented future/planned rule that must not appear in emitted facts.
 # Existing rules without an explicit status are treated as active.
 rules:
+  - id: adapter.scan-truth.conformance.v1
+    name: Cross-adapter scan truth conformance
+    description: Validates bounded synthetic adapter outputs against the shared v1 repository authority, analyzed-byte identity, determinism, artifact, coverage, exclusion, gap, path, and persistence contract.
+    evidenceTier: Tier2Structural
+    emits:
+      - scan truth conformance result
+      - adapter capability readiness row
+      - explicit unsupported or reduced capability row
+    limitations:
+      - Conformance is bounded synthetic validation and does not prove semantic parity, build success, runtime reachability, execution, production behavior, or complete dependency coverage.
+      - Missing toolchains and unexecuted checks remain not-run or unsupported; they are never inferred as passing.
+      - Adapter-specific semantic ceilings remain explicit and are not normalized into false equivalence.
+
   - id: base44.sdk.import.v1
     name: Base44 SDK import
     description: Records syntax-visible Base44 SDK imports and their requested package/version identity.

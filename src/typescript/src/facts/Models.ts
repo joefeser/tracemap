@@ -15,6 +15,7 @@ export interface ScanManifest {
   scanRootRelativePath?: string | null;
   scanRootPathHash?: string | null;
   gitRootHash?: string | null;
+  sourceSnapshotDigest: string;
 }
 
 export interface EvidenceSpan {
