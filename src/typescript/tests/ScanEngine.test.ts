@@ -11,6 +11,7 @@ import { RuleIds } from "../src/facts/RuleIds";
 import { exportIndex } from "../src/export/IndexExporter";
 import { extractPackageFacts } from "../src/extractors/PackageJsonExtractor";
 import { findSqlJsFile } from "../src/storage/SqliteIndexWriter";
+import { hashBytes } from "../src/util/Hash";
 
 const packageRoot = process.cwd();
 const repoRoot = path.resolve(packageRoot, "../..");
@@ -270,6 +271,40 @@ describe("ScanEngine", () => {
     })).rejects.toThrow("SourceSnapshotChangedDuringScan");
 
     expect(await fsp.readFile(path.join(output, "scan-manifest.json"))).toEqual(baselineManifest);
+  });
+
+  it("preserves prior output when a staged artifact write fails", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    const output = path.join(root, "output");
+    await writeMiniRepo(repo);
+    await scan(scanOptions(repo, output));
+    const baselineManifest = await fsp.readFile(path.join(output, "scan-manifest.json"));
+
+    await expect(scan(scanOptions(repo, output), {
+      afterManifestWrite: () => { throw new Error("SyntheticArtifactWriteFailure"); }
+    })).rejects.toThrow("SyntheticArtifactWriteFailure");
+
+    expect(await fsp.readFile(path.join(output, "scan-manifest.json"))).toEqual(baselineManifest);
+    expect((await fsp.readdir(root)).some((name) => name.startsWith(".tracemap-output-"))).toBe(false);
+  });
+
+  it("orders snapshot inputs by ordinal path identity", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    await writeMiniRepo(repo);
+    await fsp.writeFile(path.join(repo, "src", "z.ts"), "export const z = 1;\n");
+    await fsp.writeFile(path.join(repo, "src", "ä.ts"), "export const umlaut = 1;\n");
+    expect(spawnSync("git", ["add", "."], { cwd: repo, encoding: "utf8" }).status).toBe(0);
+    expect(spawnSync("git", ["-c", "user.email=test@example.com", "-c", "user.name=TraceMap Test", "commit", "-m", "ordinal paths"], { cwd: repo, encoding: "utf8" }).status).toBe(0);
+
+    const result = await scan(scanOptions(repo, path.join(root, "output")));
+    const segments = ["scan-truth-source-snapshot/v1\0"];
+    for (const item of [...result.inventory].sort((left, right) => left.relativePath < right.relativePath ? -1 : left.relativePath > right.relativePath ? 1 : 0)) {
+      const content = await fsp.readFile(item.absolutePath);
+      segments.push(`${item.relativePath}\0${item.kind}\0${content.byteLength}\0${hashBytes(content)}\0`);
+    }
+    expect(result.manifest.sourceSnapshotDigest).toBe(hashBytes(Buffer.from(segments.join(""), "utf8")));
   });
 
   it("refuses unsafe output paths before deleting anything", async () => {

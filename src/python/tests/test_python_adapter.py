@@ -251,6 +251,27 @@ def test_source_mutation_before_snapshot_verification_fails_without_publishing(t
     assert not output.exists()
 
 
+def test_artifact_write_failure_preserves_prior_complete_output(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "app.py").write_text("value = 1\n", encoding="utf-8")
+    _git(repo, "init")
+    _git(repo, "add", ".")
+    _git(repo, "-c", "user.name=TraceMap", "-c", "user.email=fixture@example.invalid", "commit", "-m", "baseline")
+    output = tmp_path / "output"
+    scan(make_options(str(repo), str(output)))
+    baseline = {path.relative_to(output): path.read_bytes() for path in output.rglob("*") if path.is_file()}
+
+    def fail_after_manifest() -> None:
+        raise RuntimeError("SyntheticArtifactWriteFailure")
+
+    with pytest.raises(RuntimeError, match="SyntheticArtifactWriteFailure"):
+        scan(make_options(str(repo), str(output)), _after_manifest_write=fail_after_manifest)
+
+    assert {path.relative_to(output): path.read_bytes() for path in output.rglob("*") if path.is_file()} == baseline
+    assert not list(tmp_path.glob(".tracemap-output-*"))
+
+
 def test_fastapi_report_renders_sql_query_patterns_without_raw_sql(tmp_path: Path) -> None:
     out = tmp_path / "fastapi-report"
     _, facts = scan(make_options(str(ROOT / "samples/python-fastapi-sample"), str(out)))

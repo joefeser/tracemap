@@ -3,7 +3,8 @@
 - Issue: #664
 - Branch: `codex/cross-adapter-scan-truth`
 - Integrated `origin/dev` prerequisite head: `1d45ba53755b95c3cfd5ccd7f0239bd57810cc21`
-- Validated integrated checkpoint before this state-only refresh: `e8505061d83fd8c673ca851d8531ec881573b61e`
+- Review-patch validation is recorded against the branch state immediately
+  before its final review-fix commit; the exact commit is recorded after commit.
 - Scope: five shipped adapters only; Go #665 deferred
 
 ## Evidence inventory
@@ -21,23 +22,22 @@
 
 ## Validation
 
-- Python: 30/30 adapter tests passed in an isolated temporary virtual environment.
-- TypeScript: 35/35 tests passed; `npm run build` passed.
+- Python: 31/31 adapter tests passed in an isolated temporary virtual environment.
+- TypeScript: 37/37 tests passed; `npm run build` passed.
 - JVM: Gradle test suite passed with Java 21.
 - Swift: full smoke-test executable passed.
-- .NET: 1,550/1,550 solution tests passed on the final integrated `origin/dev` stack.
+- .NET: 1,551/1,551 solution tests passed on the final integrated `origin/dev` stack.
 - The final #675 reduced Web Forms packet-coverage propagation is included;
   focused local-review/explorer tests passed 19/19 on the final integrated stack,
   including all exact-head failure-evidence regressions from #675 review.
 - The full five-adapter executable matrix returned `supported`; its sanitized
   JSON SHA-256 was
-  `59f0849c4eff9e1f9271c6949845095f865f330c7ce5c4cc5f7d7fb9f64d1f96`.
+  `19431acded95d068c61fc8af8fab971019a1282c04063c53828a310dd2d8221d`.
 - Combined public paths/reverse smoke, private-path guard, Python bytecode
   compilation, and `git diff --check` passed.
 - The authoritative matrix was rerun after stacking the completed prerequisite
-  branches and reproduced the exact prior five-adapter readiness digest. Python
-  remained 30/30, TypeScript 35/35, JVM passed with Java 21, and the Swift
-  executable smoke passed.
+  branches and again after review hardening. The final suites passed with
+  Python 31/31, TypeScript 37/37, JVM on Java 21, and the Swift executable smoke.
 
 Final prerequisite integration on 2026-08-13 includes merged Web Forms explorer
 PR #676 at exact feature head
@@ -49,9 +49,9 @@ failure. Following `docs/VALIDATION.md`, all authoritative reruns used an
 isolated temporary venv containing `src/python[dev]`.
 
 The final post-merge matrix returned `supported` for all five adapters and
-reproduced the exact sanitized digest
-`59f0849c4eff9e1f9271c6949845095f865f330c7ce5c4cc5f7d7fb9f64d1f96`.
-Exact integrated validation then passed: full .NET 1,550/1,550; public combined
+produced the sanitized digest
+`19431acded95d068c61fc8af8fab971019a1282c04063c53828a310dd2d8221d`.
+Exact integrated validation then passed: full .NET 1,551/1,551; public combined
 paths/reverse smoke; Python bytecode compilation; private-path guard; and
 `git diff --check`. The matrix itself rebuilt and exercised the shipped .NET,
 JVM, Python, TypeScript, and Swift adapters at the final integrated checkpoint.
@@ -80,6 +80,15 @@ JVM, Python, TypeScript, and Swift adapters at the final integrated checkpoint.
   packet into place only after source verification. This fixes the real
   conformance divergence found by the matrix: an inaccessible input previously
   deleted the prior valid output before the failed replacement scan completed.
+- .NET, JVM, Python, TypeScript, and Swift now have deterministic staged-write
+  failure coverage proving a prior complete packet survives a failure after the
+  new manifest is staged. Swift selected-input read failure is fatal rather
+  than represented by a constant digest marker.
+- The conformance harness pins SHA-1 fixture repositories, compares every
+  manifest commit to the fixture's actual `HEAD`, requires Java 21, verifies
+  that an unreadable-file precondition is real before claiming support, and
+  always emits non-empty rule-governed capability evidence.
+- TypeScript snapshot ordering is ordinal rather than locale-sensitive.
 
 ## Deferred
 

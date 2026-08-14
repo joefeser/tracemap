@@ -8,6 +8,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -97,8 +98,8 @@ def run(command: list[str], *, cwd: Path, env: dict[str, str] | None = None, all
     return completed
 
 
-def git(repo: Path, *arguments: str) -> None:
-    run(["git", *arguments], cwd=repo)
+def git(repo: Path, *arguments: str) -> str:
+    return run(["git", *arguments], cwd=repo).stdout.strip()
 
 
 def create_fixture(parent: Path, definition: AdapterDefinition) -> Path:
@@ -107,7 +108,7 @@ def create_fixture(parent: Path, definition: AdapterDefinition) -> Path:
         path = repo / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
-    git(repo, "init")
+    git(repo, "-c", "init.defaultObjectFormat=sha1", "init", "--object-format=sha1")
     git(repo, "config", "user.email", "fixture@example.invalid")
     git(repo, "config", "user.name", "TraceMap Fixture")
     git(repo, "add", ".")
@@ -121,16 +122,16 @@ def create_fixture(parent: Path, definition: AdapterDefinition) -> Path:
 def prepare(adapter: str, repo_root: Path) -> None:
     if adapter == "dotnet":
         run(["dotnet", "build", "src/dotnet/TraceMap.sln"], cwd=repo_root)
-        run(["dotnet", "test", "src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj", "--no-build", "--filter", "FullyQualifiedName~ScanEngineTests"], cwd=repo_root)
+        run(["dotnet", "test", "src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj", "--no-build", "--filter", "FullyQualifiedName~ScanEngineTests|FullyQualifiedName~ScanOutputTransactionTests"], cwd=repo_root)
     elif adapter == "jvm":
         run(["gradle", "-p", "src/jvm", "installDist"], cwd=repo_root, env=java_environment())
         run(["gradle", "-p", "src/jvm", "test", "--tests", "*ScanMutationTruthTest"], cwd=repo_root, env=java_environment())
     elif adapter == "python":
-        run([sys.executable, "-m", "pytest", "-q", "src/python/tests/test_python_adapter.py", "-k", "source_mutation_before_snapshot_verification"], cwd=repo_root)
+        run([sys.executable, "-m", "pytest", "-q", "src/python/tests/test_python_adapter.py", "-k", "source_mutation_before_snapshot_verification or artifact_write_failure_preserves"], cwd=repo_root)
     elif adapter == "typescript":
         run(["npm", "ci"], cwd=repo_root / "src/typescript")
         run(["npm", "run", "build"], cwd=repo_root / "src/typescript")
-        run(["npm", "test", "--", "--run", "tests/ScanEngine.test.ts", "-t", "fails before publishing when source bytes mutate"], cwd=repo_root / "src/typescript")
+        run(["npm", "test", "--", "--run", "tests/ScanEngine.test.ts", "-t", "fails before publishing|preserves prior output"], cwd=repo_root / "src/typescript")
     elif adapter == "swift":
         run(["swift", "run", "--package-path", "src/swift", "tracemap-swift-smoke-tests"], cwd=repo_root)
         run(["swift", "build", "--package-path", "src/swift", "--product", "tracemap-swift"], cwd=repo_root)
@@ -138,10 +139,19 @@ def prepare(adapter: str, repo_root: Path) -> None:
 
 def java_environment() -> dict[str, str]:
     env = dict(os.environ)
-    homebrew = Path("/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home")
-    if homebrew.is_dir():
-        env["JAVA_HOME"] = str(homebrew)
-    return env
+    candidates = [
+        Path(env["JAVA_HOME"]) if env.get("JAVA_HOME") else None,
+        Path("/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home"),
+        Path("/usr/local/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home"),
+    ]
+    for candidate in candidates:
+        if candidate is None or not (candidate / "bin/java").is_file():
+            continue
+        selected = dict(env, JAVA_HOME=str(candidate))
+        version = run([str(candidate / "bin/java"), "-version"], cwd=root(), env=selected, allow_failure=True)
+        if version.returncode == 0 and re.search(r'\bversion "21(?:\.|\")', version.stderr + version.stdout):
+            return selected
+    raise RuntimeError("Java21Unavailable")
 
 
 def scan_command(adapter: str, repo: Path, output: Path, repo_root: Path, extra: list[str] | None = None) -> tuple[list[str], dict[str, str] | None]:
@@ -272,6 +282,7 @@ def render_markdown(result: dict[str, Any]) -> str:
 def evaluate_adapter(adapter: str, workspace: Path, repo_root: Path, mutation_test_verified: bool) -> dict[str, Any]:
     definition = DEFINITIONS[adapter]
     repo = create_fixture(workspace, definition)
+    fixture_commit = git(repo, "rev-parse", "HEAD")
     first, repeat, dirty = (workspace / f"{adapter}-{name}" for name in ("first", "repeat", "dirty"))
     command, env = scan_command(adapter, repo, first, repo_root)
     run(command, cwd=repo_root, env=env)
@@ -300,7 +311,12 @@ def evaluate_adapter(adapter: str, workspace: Path, repo_root: Path, mutation_te
         and first_manifest.get("sourceSnapshotDigest") != dirty_manifest.get("sourceSnapshotDigest")
         and first_manifest.get("scanId") != dirty_manifest.get("scanId")
     )
-    valid = not any(validation_errors.values())
+    valid = (
+        not any(validation_errors.values())
+        and first_manifest.get("commitSha") == fixture_commit
+        and repeat_manifest.get("commitSha") == fixture_commit
+        and dirty_manifest.get("commitSha") == fixture_commit
+    )
 
     malformed = workspace / f"{adapter}-malformed"
     shutil.copytree(first, malformed)
@@ -334,11 +350,22 @@ def evaluate_adapter(adapter: str, workspace: Path, repo_root: Path, mutation_te
     prior_hashes = artifact_hashes(prior_output)
     inaccessible_source.chmod(0)
     try:
-        command, env = scan_command(adapter, inaccessible_repo, prior_output, repo_root)
-        inaccessible_run = run(command, cwd=repo_root, env=env, allow_failure=True)
+        try:
+            inaccessible_source.read_bytes()
+            inaccessible_precondition = False
+        except OSError:
+            inaccessible_precondition = True
+        if inaccessible_precondition:
+            command, env = scan_command(adapter, inaccessible_repo, prior_output, repo_root)
+            inaccessible_run = run(command, cwd=repo_root, env=env, allow_failure=True)
+        else:
+            inaccessible_run = None
     finally:
         inaccessible_source.chmod(0o600)
-    if inaccessible_run.returncode != 0:
+    if not inaccessible_precondition:
+        inaccessible_truth = False
+        transaction_truth = False
+    elif inaccessible_run is not None and inaccessible_run.returncode != 0:
         inaccessible_truth = artifact_hashes(prior_output) == prior_hashes
         transaction_truth = inaccessible_truth
     else:
@@ -380,16 +407,26 @@ def evaluate_adapter(adapter: str, workspace: Path, repo_root: Path, mutation_te
         capability("actual-analyzed-byte-identity", "supported" if valid else "unsupported", ["manifest-sourceSnapshotDigest"]),
         capability("repeat-determinism", "supported" if deterministic else "unsupported", ["baseline-repeat-comparison"]),
         capability("same-size-dirty-mutation", "supported" if dirty_identity else "unsupported", ["same-commit-different-byte-snapshot"]),
-        capability("inaccessible-input-truth", "supported" if inaccessible_truth else "unsupported", ["chmod-unreadable-adversarial-scan"]),
+        capability(
+            "inaccessible-input-truth",
+            "supported" if inaccessible_truth else "not-applicable" if not inaccessible_precondition else "unsupported",
+            ["chmod-unreadable-adversarial-scan"] if inaccessible_precondition else ["host-did-not-enforce-unreadable-precondition"],
+            [] if inaccessible_precondition else ["The current host did not make the synthetic file unreadable for this process."],
+        ),
         capability(
             "source-mutation-detection",
             "supported" if mutation_test_verified else "not-run",
-            ["deterministic-before-verification-mutation-test"] if mutation_test_verified else [],
+            ["deterministic-before-verification-mutation-test"] if mutation_test_verified else ["mutation-test-skipped-by-option"],
             [] if mutation_test_verified else ["Run without --skip-build so the adapter mutation fixture is verified."],
         ),
-        capability("filesystem-correct-exclusion", exclusion_status, ["NFC-pattern-NFD-path-host-semantics"] if unicode_equivalent else [], [] if unicode_equivalent else ["Host filesystem keeps NFC and NFD names distinct."]),
+        capability("filesystem-correct-exclusion", exclusion_status, ["NFC-pattern-NFD-path-host-semantics"] if unicode_equivalent else ["host-filesystem-distinguishes-normalization-forms"], [] if unicode_equivalent else ["Host filesystem keeps NFC and NFD names distinct."]),
         capability("reduced-analysis-preservation", "supported" if reduced_preserved else "unsupported", ["invalid-source-reduced-scan"]),
-        capability("required-artifact-transaction", "supported" if valid and transaction_truth else "unsupported", ["five-artifact-validator", "failed-scan-prior-output-check"]),
+        capability(
+            "required-artifact-transaction",
+            "supported" if valid and transaction_truth and mutation_test_verified else "not-run" if not mutation_test_verified else "unsupported",
+            ["five-artifact-validator", "failed-scan-prior-output-check", "deterministic-staged-write-failure-test"] if mutation_test_verified else ["transaction-test-skipped-by-option"],
+            [] if mutation_test_verified else ["Run without --skip-build so the staged artifact failure fixture is verified."],
+        ),
         capability("ndjson-sqlite-roundtrip", "supported" if valid else "unsupported", ["read-only-sqlite-roundtrip"]),
         capability("malformed-schema-fail-closed", "supported" if malformed_rejected else "unsupported", ["invalid-sourceSnapshotDigest-rejected"]),
         capability("repository-relative-evidence", "supported" if valid else "unsupported", ["private-path-and-relative-path-validator"]),
@@ -438,7 +475,7 @@ def main() -> int:
                 rows.append({
                     "adapter": adapter,
                     "status": "not-run",
-                    "capabilities": [capability(name, "not-run", [], [exception.__class__.__name__]) for name in CAPABILITIES],
+                    "capabilities": [capability(name, "not-run", [f"adapter-stage-failed:{exception.__class__.__name__}"], [exception.__class__.__name__]) for name in CAPABILITIES],
                     "limitations": [f"adapter-stage-failed:{exception.__class__.__name__}"],
                 })
         overall = "supported" if rows and all(row["status"] == "supported" for row in rows) else "unsupported"

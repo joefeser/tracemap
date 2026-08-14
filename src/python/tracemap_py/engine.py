@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable
@@ -25,6 +26,7 @@ def scan(
     options: ScanOptions,
     *,
     _before_snapshot_verification: Callable[[], None] | None = None,
+    _after_manifest_write: Callable[[], None] | None = None,
 ) -> tuple[ScanManifest, list[CodeFact]]:
     repo = Path(options.repo_path).resolve()
     out = Path(options.output_path).resolve()
@@ -107,7 +109,7 @@ def scan(
         _before_snapshot_verification()
     if source_snapshot_digest(inventory) != snapshot_digest:
         raise RuntimeError("SourceSnapshotChangedDuringScan")
-    _write_outputs(out, manifest, facts, gaps)
+    _write_outputs(out, manifest, facts, gaps, _after_manifest_write)
     return manifest, facts
 
 
@@ -115,17 +117,46 @@ def make_options(repo: str, out: str, project: list[str] | None = None, include:
     return ScanOptions(repo, out, project or [], include or [], exclude or [], parse_byte_size(max_file_byte_size), no_metadata)
 
 
-def _write_outputs(out: Path, manifest: ScanManifest, facts: list[CodeFact], gaps: list[str]) -> None:
+def _write_outputs(
+    out: Path,
+    manifest: ScanManifest,
+    facts: list[CodeFact],
+    gaps: list[str],
+    after_manifest_write: Callable[[], None] | None = None,
+) -> None:
     if out.exists() and not _can_replace_output_directory(out):
         raise ValueError(f"Output path already exists and is not a TraceMap output directory: {out}")
-    if out.exists():
-        shutil.rmtree(out)
-    (out / "logs").mkdir(parents=True, exist_ok=True)
-    write_manifest(out / "scan-manifest.json", manifest)
-    write_facts(out / "facts.ndjson", facts)
-    write_sqlite(out / "index.sqlite", manifest, facts)
-    (out / "report.md").write_text(render_report(manifest, facts), encoding="utf-8")
-    (out / "logs" / "analyzer.log").write_text("\n".join(gaps) + ("\n" if gaps else ""), encoding="utf-8")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix=f".tracemap-{out.name}-", dir=out.parent))
+    previous = staging.with_name(staging.name + ".previous")
+    previous_moved = False
+    try:
+        (staging / "logs").mkdir(parents=True, exist_ok=True)
+        write_manifest(staging / "scan-manifest.json", manifest)
+        if after_manifest_write is not None:
+            after_manifest_write()
+        write_facts(staging / "facts.ndjson", facts)
+        write_sqlite(staging / "index.sqlite", manifest, facts)
+        (staging / "report.md").write_text(render_report(manifest, facts), encoding="utf-8")
+        (staging / "logs" / "analyzer.log").write_text("\n".join(gaps) + ("\n" if gaps else ""), encoding="utf-8")
+        if out.exists():
+            out.replace(previous)
+            previous_moved = True
+        try:
+            staging.replace(out)
+        except Exception:
+            if previous_moved and not out.exists():
+                previous.replace(out)
+                previous_moved = False
+            raise
+        if previous_moved:
+            shutil.rmtree(previous)
+            previous_moved = False
+    finally:
+        if staging.exists():
+            shutil.rmtree(staging)
+        if previous_moved and previous.exists() and not out.exists():
+            previous.replace(out)
 
 
 def _can_replace_output_directory(out: Path) -> bool:

@@ -160,10 +160,14 @@ public struct SwiftScanResult {
 
 public enum SwiftScanEngine {
     public static func scan(options: SwiftScanOptions) throws -> SwiftScanResult {
-        try scan(options: options, beforeSnapshotVerification: {})
+        try scan(options: options, beforeSnapshotVerification: {}, afterManifestWrite: {})
     }
 
-    static func scan(options: SwiftScanOptions, beforeSnapshotVerification: () throws -> Void) throws -> SwiftScanResult {
+    static func scan(
+        options: SwiftScanOptions,
+        beforeSnapshotVerification: () throws -> Void,
+        afterManifestWrite: () throws -> Void = {}
+    ) throws -> SwiftScanResult {
         let repo = options.repoPath.standardizedFileURL
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: repo.path, isDirectory: &isDirectory), isDirectory.boolValue else {
@@ -250,7 +254,12 @@ public enum SwiftScanEngine {
         guard try sourceSnapshotDigest(inventory: inventory, scanRoot: repo) == snapshotDigest else {
             throw ScanError.io("SourceSnapshotChangedDuringScan")
         }
-        try OutputWriter.write(outputPath: options.outputPath, manifest: manifest, facts: facts, inventory: inventory)
+        try OutputWriter.write(
+            outputPath: options.outputPath,
+            manifest: manifest,
+            facts: facts,
+            inventory: inventory,
+            afterManifestWrite: afterManifestWrite)
         return SwiftScanResult(manifest: manifest, facts: facts, inventory: inventory)
     }
 
@@ -293,8 +302,7 @@ public enum SwiftScanEngine {
                         byteLength = data.count
                         contentHash = PortableSHA256.hash(data).map { String(format: "%02x", $0) }.joined()
                     } catch {
-                        byteLength = item.sizeBytes
-                        contentHash = "unreadable-selected-input"
+                        throw ScanError.io("SourceSnapshotInputUnavailable")
                     }
                 }
             }
@@ -3745,6 +3753,8 @@ public enum TraceMapSwiftSelfTests {
     public static func run() throws {
         try collisionNormalizationIsDeterministicAndEvidenceBacked()
         try sourceMutationIsDetectedBeforePublishing()
+        try unreadableSelectedInputStopsPublication()
+        try artifactWriteFailurePreservesPriorOutput()
     }
 
     private static func sourceMutationIsDetectedBeforePublishing() throws {
@@ -3770,6 +3780,60 @@ public enum TraceMapSwiftSelfTests {
         } catch {
             try require(String(describing: error).contains("SourceSnapshotChangedDuringScan"), "source mutation should produce the typed failure")
             try require(!FileManager.default.fileExists(atPath: output.path), "source mutation should not publish output artifacts")
+        }
+    }
+
+    private static func artifactWriteFailurePreservesPriorOutput() throws {
+        let temporary = FileManager.default.temporaryDirectory.appendingPathComponent("tracemap-swift-transaction-\(UUID().uuidString)")
+        let repo = temporary.appendingPathComponent("repo")
+        let sourceDirectory = repo.appendingPathComponent("Sources/App")
+        let source = sourceDirectory.appendingPathComponent("main.swift")
+        let output = temporary.appendingPathComponent("output")
+        defer { try? FileManager.default.removeItem(at: temporary) }
+        try FileManager.default.createDirectory(at: sourceDirectory, withIntermediateDirectories: true)
+        try "print(\"hello\")\n".write(to: source, atomically: true, encoding: .utf8)
+        _ = try runProcess(executable: "/usr/bin/git", arguments: ["-C", repo.path, "init"])
+        _ = try runProcess(executable: "/usr/bin/git", arguments: ["-C", repo.path, "add", "."])
+        _ = try runProcess(executable: "/usr/bin/git", arguments: ["-C", repo.path, "-c", "user.name=TraceMap", "-c", "user.email=fixture@example.invalid", "commit", "-m", "baseline"])
+        _ = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: repo, outputPath: output))
+        let baseline = try Data(contentsOf: output.appendingPathComponent("scan-manifest.json"))
+
+        do {
+            _ = try SwiftScanEngine.scan(
+                options: SwiftScanOptions(repoPath: repo, outputPath: output),
+                beforeSnapshotVerification: {},
+                afterManifestWrite: { throw ScanError.io("SyntheticArtifactWriteFailure") })
+            try require(false, "artifact write failure should stop publication")
+        } catch {
+            try require(String(describing: error).contains("SyntheticArtifactWriteFailure"), "artifact write failure should remain typed")
+            try require(try Data(contentsOf: output.appendingPathComponent("scan-manifest.json")) == baseline, "prior output should remain unchanged")
+            let siblings = try FileManager.default.contentsOfDirectory(atPath: temporary.path)
+            try require(!siblings.contains(where: { $0.hasPrefix(".tracemap-output-") }), "transaction staging should be cleaned")
+        }
+    }
+
+    private static func unreadableSelectedInputStopsPublication() throws {
+        let temporary = FileManager.default.temporaryDirectory.appendingPathComponent("tracemap-swift-unreadable-\(UUID().uuidString)")
+        let repo = temporary.appendingPathComponent("repo")
+        let sourceDirectory = repo.appendingPathComponent("Sources/App")
+        let source = sourceDirectory.appendingPathComponent("main.swift")
+        let output = temporary.appendingPathComponent("output")
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: source.path)
+            try? FileManager.default.removeItem(at: temporary)
+        }
+        try FileManager.default.createDirectory(at: sourceDirectory, withIntermediateDirectories: true)
+        try "print(\"hello\")\n".write(to: source, atomically: true, encoding: .utf8)
+        _ = try runProcess(executable: "/usr/bin/git", arguments: ["-C", repo.path, "init"])
+        _ = try runProcess(executable: "/usr/bin/git", arguments: ["-C", repo.path, "add", "."])
+        _ = try runProcess(executable: "/usr/bin/git", arguments: ["-C", repo.path, "-c", "user.name=TraceMap", "-c", "user.email=fixture@example.invalid", "commit", "-m", "baseline"])
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: source.path)
+        do {
+            _ = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: repo, outputPath: output))
+            try require(false, "unreadable selected input should stop publication")
+        } catch {
+            try require(String(describing: error).contains("SourceSnapshotInputUnavailable"), "unreadable input should produce the typed failure")
+            try require(!FileManager.default.fileExists(atPath: output.path), "unreadable input should not publish artifacts")
         }
     }
 
@@ -3975,18 +4039,52 @@ enum OutputWriter {
         }
     }
 
-    static func write(outputPath: URL, manifest: ScanManifest, facts: [CodeFact], inventory: [InventoryItem]) throws {
+    static func write(
+        outputPath: URL,
+        manifest: ScanManifest,
+        facts: [CodeFact],
+        inventory: [InventoryItem],
+        afterManifestWrite: () throws -> Void = {}
+    ) throws {
         let fm = FileManager.default
-        if fm.fileExists(atPath: outputPath.path) {
-            try fm.removeItem(at: outputPath)
+        let parent = outputPath.deletingLastPathComponent()
+        try fm.createDirectory(at: parent, withIntermediateDirectories: true)
+        let staging = parent.appendingPathComponent(".tracemap-\(outputPath.lastPathComponent)-\(UUID().uuidString)")
+        let previous = parent.appendingPathComponent(".tracemap-\(outputPath.lastPathComponent)-previous-\(UUID().uuidString)")
+        var previousMoved = false
+        try fm.createDirectory(at: staging, withIntermediateDirectories: true)
+        do {
+            try fm.createDirectory(at: staging.appendingPathComponent("logs"), withIntermediateDirectories: true)
+            try writeJSON(manifest, to: staging.appendingPathComponent("scan-manifest.json"), pretty: true)
+            try afterManifestWrite()
+            try writeFacts(facts, to: staging.appendingPathComponent("facts.ndjson"))
+            try SQLiteWriter.write(path: staging.appendingPathComponent("index.sqlite"), manifest: manifest, facts: facts)
+            try report(manifest: manifest, facts: facts, inventory: inventory).write(to: staging.appendingPathComponent("report.md"), atomically: true, encoding: .utf8)
+            try analyzerLog(manifest: manifest, facts: facts).write(to: staging.appendingPathComponent("logs/analyzer.log"), atomically: true, encoding: .utf8)
+            if fm.fileExists(atPath: outputPath.path) {
+                try fm.moveItem(at: outputPath, to: previous)
+                previousMoved = true
+            }
+            do {
+                try fm.moveItem(at: staging, to: outputPath)
+            } catch {
+                if previousMoved && !fm.fileExists(atPath: outputPath.path) {
+                    try fm.moveItem(at: previous, to: outputPath)
+                    previousMoved = false
+                }
+                throw error
+            }
+            if previousMoved {
+                try fm.removeItem(at: previous)
+                previousMoved = false
+            }
+        } catch {
+            try? fm.removeItem(at: staging)
+            if previousMoved && fm.fileExists(atPath: previous.path) && !fm.fileExists(atPath: outputPath.path) {
+                try? fm.moveItem(at: previous, to: outputPath)
+            }
+            throw error
         }
-        try fm.createDirectory(at: outputPath, withIntermediateDirectories: true)
-        try fm.createDirectory(at: outputPath.appendingPathComponent("logs"), withIntermediateDirectories: true)
-        try writeJSON(manifest, to: outputPath.appendingPathComponent("scan-manifest.json"), pretty: true)
-        try writeFacts(facts, to: outputPath.appendingPathComponent("facts.ndjson"))
-        try SQLiteWriter.write(path: outputPath.appendingPathComponent("index.sqlite"), manifest: manifest, facts: facts)
-        try report(manifest: manifest, facts: facts, inventory: inventory).write(to: outputPath.appendingPathComponent("report.md"), atomically: true, encoding: .utf8)
-        try analyzerLog(manifest: manifest, facts: facts).write(to: outputPath.appendingPathComponent("logs/analyzer.log"), atomically: true, encoding: .utf8)
     }
 
     private static func writeFacts(_ facts: [CodeFact], to url: URL) throws {
