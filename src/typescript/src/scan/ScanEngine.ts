@@ -27,11 +27,14 @@ type ScanTestHooks = {
   afterManifestWrite?: () => void | Promise<void>;
 };
 
+const requiredOutputArtifacts = ["scan-manifest.json", "facts.ndjson", "index.sqlite", "report.md", "logs/analyzer.log"] as const;
+
 export async function scan(options: ScanOptions, testHooks: ScanTestHooks = {}): Promise<ScanResult> {
   const repoPath = path.resolve(options.repoPath);
   const outputPath = path.resolve(options.outputPath);
   await ensureRepo(repoPath);
   ensureSafeOutputPath(repoPath, outputPath);
+  await ensureReplaceableOutputPath(outputPath);
 
   const git = await getGitMetadata(repoPath);
   if (git.commitSha === "unknown") {
@@ -181,14 +184,14 @@ function createScanId(
   options: ScanOptions
 ): string {
   const repoIdentity = git.remoteUrl && git.remoteUrl.trim().length > 0 ? git.remoteUrl : git.repoName;
-  const optionSignature = [
-    [...options.projectPaths].sort().join(","),
-    [...options.includeGlobs].sort().join(","),
-    [...options.excludeGlobs].sort().join(","),
-    String(options.maxFileByteSize),
-    String(options.semantic),
-    ScannerVersions.TraceMapTypeScript
-  ].join("|");
+  const optionSignature = JSON.stringify({
+    excludeGlobs: [...options.excludeGlobs].sort(),
+    includeGlobs: [...options.includeGlobs].sort(),
+    maxFileByteSize: options.maxFileByteSize,
+    projectPaths: [...options.projectPaths].sort(),
+    scannerVersion: ScannerVersions.TraceMapTypeScript,
+    semantic: options.semantic
+  });
   return `scan-${hash(`${repoIdentity}|${git.commitSha}|${sourceSnapshotDigest}|${optionSignature}`, 20)}`;
 }
 
@@ -199,6 +202,34 @@ function ensureSafeOutputPath(repoPath: string, outputPath: string): void {
   }
   if (outputPath === repoPath || isUnderPath(repoPath, outputPath)) {
     throw new Error(`Unsafe output path: ${outputPath}. Output cannot be the repository root or an ancestor of it.`);
+  }
+}
+
+async function ensureReplaceableOutputPath(outputPath: string): Promise<void> {
+  try {
+    const stat = await fs.stat(outputPath);
+    if (!stat.isDirectory()) {
+      throw new Error(`Output artifact set is not replaceable: ${outputPath}`);
+    }
+    const entries = await fs.readdir(outputPath);
+    if (entries.length === 0) {
+      return;
+    }
+    const complete = await Promise.all(requiredOutputArtifacts.map(async (relative) => {
+      try {
+        return (await fs.stat(path.join(outputPath, relative))).isFile();
+      } catch {
+        return false;
+      }
+    }));
+    if (!complete.every(Boolean)) {
+      throw new Error(`Output artifact set is not replaceable: ${outputPath}`);
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return;
+    }
+    throw error;
   }
 }
 

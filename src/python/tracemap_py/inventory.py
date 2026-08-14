@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import hashlib
+import json
 
 from .models import FileInventoryItem, ScanOptions
 from .pathing import matches_any, relative_to
@@ -109,14 +110,17 @@ def create_scan_id(
     scanner_version: str,
     hash_fn,
 ) -> str:
-    option_signature = "|".join(
-        [
-            ",".join(sorted(options.project_paths)),
-            ",".join(sorted(options.include_globs)),
-            ",".join(sorted(options.exclude_globs)),
-            str(options.max_file_byte_size),
-            str(options.no_metadata).lower(),
-        ]
+    option_signature = json.dumps(
+        {
+            "excludeGlobs": sorted(options.exclude_globs),
+            "includeGlobs": sorted(options.include_globs),
+            "maxFileByteSize": options.max_file_byte_size,
+            "noMetadata": options.no_metadata,
+            "projectPaths": sorted(options.project_paths),
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
     )
     return "scan-" + hash_fn(
         f"{repo_identity}|{commit_sha}|{source_digest}|{option_signature}|{scanner_version}",

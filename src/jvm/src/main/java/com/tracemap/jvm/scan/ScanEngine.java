@@ -42,6 +42,13 @@ import java.util.Map;
 import java.util.Set;
 
 public final class ScanEngine {
+    private static final List<String> REQUIRED_OUTPUT_ARTIFACTS = List.of(
+        "scan-manifest.json",
+        "facts.ndjson",
+        "index.sqlite",
+        "report.md",
+        "logs/analyzer.log");
+
     public ScanResult scan(ScanOptions options) throws Exception {
         return scan(options, () -> { }, () -> { });
     }
@@ -56,6 +63,7 @@ public final class ScanEngine {
             throw new IOException("Repository path does not exist: " + repo);
         }
         Path out = options.outputPath().toAbsolutePath().normalize();
+        validateOutputTarget(repo, out);
 
         GitMetadata git = GitMetadataProvider.read(repo);
         List<FileInventoryItem> inventory = FileInventory.collect(options);
@@ -167,6 +175,27 @@ public final class ScanEngine {
         }
     }
 
+    private static void validateOutputTarget(Path repo, Path out) throws IOException {
+        if (repo.startsWith(out)) {
+            throw new IOException("OutputArtifactSetNotReplaceable");
+        }
+        if (!Files.exists(out)) {
+            return;
+        }
+        if (!Files.isDirectory(out)) {
+            throw new IOException("OutputArtifactSetNotReplaceable");
+        }
+        try (var entries = Files.list(out)) {
+            if (entries.findAny().isEmpty()) {
+                return;
+            }
+        }
+        if (REQUIRED_OUTPUT_ARTIFACTS.stream().allMatch(relative -> Files.isRegularFile(out.resolve(relative)))) {
+            return;
+        }
+        throw new IOException("OutputArtifactSetNotReplaceable");
+    }
+
     private static void moveDirectory(Path source, Path target) throws IOException {
         try {
             Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
@@ -189,9 +218,9 @@ public final class ScanEngine {
     private static ScanManifest manifest(ScanOptions options, GitMetadata git, List<FileInventoryItem> inventory, String sourceSnapshotDigest, List<String> knownGaps, String analysisLevel, String buildStatus) {
         String repoIdentity = git.remoteUrl() == null ? git.repoName() : git.remoteUrl();
         String signature = String.join("|",
-            sortedPaths(options.projectPaths()).toString(),
-            options.includeGlobs().stream().sorted().toList().toString(),
-            options.excludeGlobs().stream().sorted().toList().toString(),
+            framedValues(sortedPaths(options.projectPaths())),
+            framedValues(options.includeGlobs()),
+            framedValues(options.excludeGlobs()),
             options.language(),
             "semantic=" + options.semantic(),
             "maxFileByteSize=" + options.maxFileByteSize());
@@ -222,6 +251,13 @@ public final class ScanEngine {
             Hashes.sha256(repo.toString(), 32),
             gitRootHash,
             sourceSnapshotDigest);
+    }
+
+    private static String framedValues(List<String> values) {
+        return values.stream()
+            .sorted()
+            .map(value -> value.getBytes(StandardCharsets.UTF_8).length + ":" + value)
+            .collect(java.util.stream.Collectors.joining("", values.size() + ":", ""));
     }
 
     private static String sourceSnapshotDigest(List<FileInventoryItem> inventory) throws Exception {

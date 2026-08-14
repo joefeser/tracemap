@@ -265,18 +265,26 @@ public enum SwiftScanEngine {
 
     private static func stableScanId(git: GitMetadata, options: SwiftScanOptions, sourceSnapshotDigest: String) -> String {
         let optionSignature = [
-            "project=\(options.projectFilters.sorted().joined(separator: ","))",
-            "include=\(options.includeGlobs.sorted().joined(separator: ","))",
-            "exclude=\(options.excludeGlobs.sorted().joined(separator: ","))",
+            "project=\(framedValues(options.projectFilters))",
+            "include=\(framedValues(options.includeGlobs))",
+            "exclude=\(framedValues(options.excludeGlobs))",
             "max=\(options.maxFileByteSize)"
         ].joined(separator: ";")
         return "swift-" + sha256Hex([
             TraceMapSwiftVersion.scanIdPrefix,
+            TraceMapSwiftVersion.scanner,
+            TraceMapSwiftVersion.extractorId,
+            TraceMapSwiftVersion.extractorVersion,
             git.repoIdentity,
             git.commitSha,
             optionSignature,
             sourceSnapshotDigest
         ].joined(separator: "\n"), length: 32)
+    }
+
+    private static func framedValues(_ values: [String]) -> String {
+        let sorted = values.sorted()
+        return "\(sorted.count):" + sorted.map { "\($0.utf8.count):\($0)" }.joined()
     }
 
     private static func sourceSnapshotDigest(inventory: [InventoryItem], scanRoot: URL) throws -> String {
@@ -3755,6 +3763,49 @@ public enum TraceMapSwiftSelfTests {
         try sourceMutationIsDetectedBeforePublishing()
         try unreadableSelectedInputStopsPublication()
         try artifactWriteFailurePreservesPriorOutput()
+        try outputSafetyAndScanIdentityAreDeterministic()
+    }
+
+    private static func outputSafetyAndScanIdentityAreDeterministic() throws {
+        let temporary = FileManager.default.temporaryDirectory.appendingPathComponent("tracemap-swift-identity-\(UUID().uuidString)")
+        let repo = temporary.appendingPathComponent("repo")
+        let sourceDirectory = repo.appendingPathComponent("Sources/App")
+        let source = sourceDirectory.appendingPathComponent("main.swift")
+        let arbitraryOutput = temporary.appendingPathComponent("existing")
+        defer { try? FileManager.default.removeItem(at: temporary) }
+        try FileManager.default.createDirectory(at: sourceDirectory, withIntermediateDirectories: true)
+        try "print(\"hello\")\n".write(to: source, atomically: true, encoding: .utf8)
+        _ = try runProcess(executable: "/usr/bin/git", arguments: ["-C", repo.path, "init"])
+        _ = try runProcess(executable: "/usr/bin/git", arguments: ["-C", repo.path, "add", "."])
+        _ = try runProcess(executable: "/usr/bin/git", arguments: ["-C", repo.path, "-c", "user.name=TraceMap", "-c", "user.email=fixture@example.invalid", "commit", "-m", "baseline"])
+        try FileManager.default.createDirectory(at: arbitraryOutput, withIntermediateDirectories: true)
+        let sentinel = arbitraryOutput.appendingPathComponent("keep.txt")
+        try "important\n".write(to: sentinel, atomically: true, encoding: .utf8)
+        do {
+            _ = try SwiftScanEngine.scan(options: SwiftScanOptions(repoPath: repo, outputPath: arbitraryOutput))
+            try require(false, "arbitrary output should be rejected")
+        } catch {
+            try require(FileManager.default.fileExists(atPath: sentinel.path), "arbitrary output must remain unchanged")
+        }
+
+        let oneOptions = SwiftScanOptions(repoPath: repo, outputPath: temporary.appendingPathComponent("one"), excludeGlobs: ["foo,bar"])
+        let twoOptions = SwiftScanOptions(repoPath: repo, outputPath: temporary.appendingPathComponent("two"), excludeGlobs: ["foo", "bar"])
+        let one = try SwiftScanEngine.scan(options: oneOptions)
+        let two = try SwiftScanEngine.scan(options: twoOptions)
+        try require(one.manifest.scanId != two.manifest.scanId, "option list framing must be unambiguous")
+
+        let optionSignature = ["project=0:", "include=0:", "exclude=1:7:foo,bar", "max=\(oneOptions.maxFileByteSize)"].joined(separator: ";")
+        let expected = "swift-" + sha256Hex([
+            TraceMapSwiftVersion.scanIdPrefix,
+            TraceMapSwiftVersion.scanner,
+            TraceMapSwiftVersion.extractorId,
+            TraceMapSwiftVersion.extractorVersion,
+            one.manifest.remoteUrl ?? one.manifest.repoName,
+            one.manifest.commitSha,
+            optionSignature,
+            one.manifest.sourceSnapshotDigest
+        ].joined(separator: "\n"), length: 32)
+        try require(one.manifest.scanId == expected, "scan identity must include concrete scanner and extractor versions")
     }
 
     private static func sourceMutationIsDetectedBeforePublishing() throws {
@@ -4024,6 +4075,8 @@ struct PlistMetadata {
 }
 
 enum OutputWriter {
+    private static let requiredArtifacts = ["scan-manifest.json", "facts.ndjson", "index.sqlite", "report.md", "logs/analyzer.log"]
+
     static func validateOutputPath(scanRoot: URL, gitRoot: URL, outputPath: URL) throws {
         let output = normalizedDirectoryPath(outputPath)
         let scanRootPath = normalizedDirectoryPath(scanRoot)
@@ -4036,6 +4089,22 @@ enum OutputWriter {
         }
         guard !isAncestor(output, of: scanRootPath), !isAncestor(output, of: gitRootPath) else {
             throw ScanError.invalidArguments("--out must not be an ancestor of the scan root or git root")
+        }
+        var isDirectory: ObjCBool = false
+        if FileManager.default.fileExists(atPath: outputPath.path, isDirectory: &isDirectory) {
+            guard isDirectory.boolValue else {
+                throw ScanError.invalidArguments("--out is not a replaceable TraceMap artifact set")
+            }
+            let entries = try FileManager.default.contentsOfDirectory(atPath: outputPath.path)
+            let complete = requiredArtifacts.allSatisfy {
+                var artifactIsDirectory: ObjCBool = false
+                return FileManager.default.fileExists(
+                    atPath: outputPath.appendingPathComponent($0).path,
+                    isDirectory: &artifactIsDirectory) && !artifactIsDirectory.boolValue
+            }
+            guard entries.isEmpty || complete else {
+                throw ScanError.invalidArguments("--out is not a replaceable TraceMap artifact set")
+            }
         }
     }
 
