@@ -2,8 +2,8 @@
 
 - Issue: #664
 - Branch: `codex/cross-adapter-scan-truth`
-- Base stack head: `a48ce71d9abb8605ea60db12c84a0835e2146082`
-- Validated integrated checkpoint: `cd30744bcd402d6c1ad69ef16397f481089d8050`
+- Integrated `origin/dev` prerequisite head: `1d45ba53755b95c3cfd5ccd7f0239bd57810cc21`
+- Validated integrated checkpoint before this state-only refresh: `e8505061d83fd8c673ca851d8531ec881573b61e`
 - Scope: five shipped adapters only; Go #665 deferred
 
 ## Evidence inventory
@@ -25,7 +25,7 @@
 - TypeScript: 35/35 tests passed; `npm run build` passed.
 - JVM: Gradle test suite passed with Java 21.
 - Swift: full smoke-test executable passed.
-- .NET: 1,546/1,546 solution tests passed on the integrated #674/#675/#667 stack.
+- .NET: 1,550/1,550 solution tests passed on the final integrated `origin/dev` stack.
 - The final #675 reduced Web Forms packet-coverage propagation is included;
   focused local-review/explorer tests passed 19/19 on the final integrated stack,
   including all exact-head failure-evidence regressions from #675 review.
@@ -39,19 +39,22 @@
   remained 30/30, TypeScript 35/35, JVM passed with Java 21, and the Swift
   executable smoke passed.
 
-Final prerequisite integration on 2026-08-13 includes Web Forms explorer head
-`a48ce71d9abb8605ea60db12c84a0835e2146082`. The first matrix invocation through
-the system Python truthfully returned `unsupported` because pytest was not
-installed in that interpreter; it did not report a product conformance failure.
-Following `docs/VALIDATION.md`, the matrix was rerun from an isolated temporary
-venv containing `src/python[dev]` and returned `supported` for all five adapters,
-reproducing the exact sanitized digest
-`59f0849c4eff9e1f9271c6949845095f865f330c7ce5c4cc5f7d7fb9f64d1f96`.
+Final prerequisite integration on 2026-08-13 includes merged Web Forms explorer
+PR #676 at exact feature head
+`625d3d8d4cb512c2ebde9d3d230b354f32e1b47c` and `origin/dev` merge
+`1d45ba53755b95c3cfd5ccd7f0239bd57810cc21`. The first earlier matrix invocation
+through the system Python truthfully returned `unsupported` because pytest was
+not installed in that interpreter; it did not report a product conformance
+failure. Following `docs/VALIDATION.md`, all authoritative reruns used an
+isolated temporary venv containing `src/python[dev]`.
 
-Exact integrated validation then passed: Python 30/30; TypeScript 35/35 plus
-build; JVM full tests with Java 21; Swift smoke; full .NET 1,549/1,549; public
-combined paths/reverse smoke; Python bytecode compilation; private-path guard;
-and `git diff --check`.
+The final post-merge matrix returned `supported` for all five adapters and
+reproduced the exact sanitized digest
+`59f0849c4eff9e1f9271c6949845095f865f330c7ce5c4cc5f7d7fb9f64d1f96`.
+Exact integrated validation then passed: full .NET 1,550/1,550; public combined
+paths/reverse smoke; Python bytecode compilation; private-path guard; and
+`git diff --check`. The matrix itself rebuilt and exercised the shipped .NET,
+JVM, Python, TypeScript, and Swift adapters at the final integrated checkpoint.
 
 ## Current implementation
 
