@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tracemap.tools/contracts/tracemap-version.v1.schema.json",
+  "title": "TraceMap installed version and local readiness",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "toolVersion", "scannerVersion", "distributionKind", "sourceState", "sourceCommit", "targetFramework", "host", "readiness", "limitations"],
+  "properties": {
+    "schemaVersion": { "const": "tracemap-version.v1" },
+    "toolVersion": { "type": "string", "minLength": 1 },
+    "scannerVersion": { "type": "string", "minLength": 1 },
+    "distributionKind": { "enum": ["source-build", "dotnet-tool", "framework-dependent-archive", "self-contained-archive", "offline-container", "unknown"] },
+    "sourceState": { "enum": ["clean", "dirty", "unavailable"] },
+    "sourceCommit": { "type": "string", "pattern": "^(unavailable|[0-9a-f]{40})$" },
+    "targetFramework": { "type": "string", "minLength": 1 },
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operatingSystem", "architecture", "runtimeVersion"],
+      "properties": {
+        "operatingSystem": { "enum": ["windows", "macos", "linux", "unknown"] },
+        "architecture": { "enum": ["x64", "x86", "arm64", "arm", "wasm", "s390x", "loongarch64", "ppc64le", "unknown"] },
+        "runtimeVersion": { "type": "string", "minLength": 1 }
+      }
+    },
+    "readiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outcome", "nextAction", "git", "msBuild"],
+      "properties": {
+        "outcome": { "enum": ["ready", "reduced", "unavailable"] },
+        "nextAction": { "enum": ["none", "install-git", "install-dotnet-sdk-or-use-reduced-analysis"] },
+        "git": { "$ref": "#/$defs/capability" },
+        "msBuild": { "$ref": "#/$defs/capability" }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "$defs": {
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": { "status": { "enum": ["available", "unavailable"] } }
+    }
+  }
+}

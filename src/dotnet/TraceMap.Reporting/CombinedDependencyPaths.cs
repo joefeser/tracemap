@@ -404,7 +404,8 @@ public static class CombinedDependencyPathReporter
         var connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = indexPath,
-            Mode = SqliteOpenMode.ReadOnly
+            Mode = SqliteOpenMode.ReadOnly,
+            Pooling = false
         }.ToString();
         await using var connection = new SqliteConnection(connectionString);
         await connection.OpenAsync(cancellationToken);

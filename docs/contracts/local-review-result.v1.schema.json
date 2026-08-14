@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tracemap.tools/contracts/local-review-result.v1.schema.json",
+  "title": "TraceMap guided local review result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "workflowId", "toolVersion", "distributionKind",
+    "claimLevel", "outcome", "coverage", "lastProvenSafeState",
+    "cleanupResult", "retryability", "nextAction", "stages", "artifacts",
+    "summary", "gaps", "limitations"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "local-review-result.v1" },
+    "workflowId": { "type": "string", "pattern": "^workflow-[0-9a-f]{20}$" },
+    "toolVersion": { "type": "string", "minLength": 1 },
+    "distributionKind": { "enum": ["source-build", "dotnet-tool", "framework-dependent-archive", "self-contained-archive", "offline-container", "unknown"] },
+    "repositoryIdentityHash": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+    "commitSha": { "type": ["string", "null"], "pattern": "^[0-9a-f]{7,64}$" },
+    "scanId": { "type": ["string", "null"], "minLength": 1 },
+    "sourceSnapshotDigest": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+    "claimLevel": { "const": "local-only" },
+    "outcome": { "enum": ["succeeded", "partial", "failed", "cancelled", "timed-out"] },
+    "coverage": { "enum": ["full", "reduced", "unknown"] },
+    "lastProvenSafeState": { "type": "string", "minLength": 1 },
+    "cleanupResult": { "enum": ["completed", "not-required", "failed", "unknown"] },
+    "retryability": { "enum": ["not-required", "retry-after-owner-review", "retry-after-correction", "not-retryable"] },
+    "nextAction": { "enum": ["review-generated-artifacts", "review-scan-gaps", "inspect-scan-receipt", "correct-input", "choose-new-output", "contact-owner"] },
+    "stages": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/stage" }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/artifact" }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["factCount", "gapCount", "artifactCount"],
+      "properties": {
+        "factCount": { "type": "integer", "minimum": 0 },
+        "gapCount": { "type": "integer", "minimum": 0 },
+        "artifactCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "gaps": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^LOCAL_REVIEW_[A-Z_]+$" }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "$defs": {
+    "inputHash": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relativePath", "sha256"],
+      "properties": {
+        "relativePath": { "type": "string", "pattern": "^(?!/)(?!.*\\\\).+$" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "stage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage", "outcome", "inputs", "outputKinds"],
+      "properties": {
+        "stage": { "enum": ["scan", "webforms-modernization", "explorer"] },
+        "outcome": { "enum": ["succeeded", "partial", "failed", "cancelled", "timed-out", "skipped", "unavailable"] },
+        "inputs": { "type": "array", "items": { "$ref": "#/$defs/inputHash" } },
+        "outputKinds": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifactKind", "relativePath", "sha256", "producerStage", "status"],
+      "properties": {
+        "artifactKind": { "enum": ["scan-manifest", "scan-execution-receipt", "facts", "scan-index", "webforms-modernization-packet", "static-html-explorer-file", "markdown-report", "diagnostic-log", "generated-file"] },
+        "relativePath": { "type": "string", "pattern": "^(?!/)(?!.*\\\\).+$" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "producerStage": { "enum": ["scan", "webforms-modernization", "explorer"] },
+        "status": { "enum": ["available", "partial", "unavailable", "skipped"] }
+      }
+    }
+  }
+}
