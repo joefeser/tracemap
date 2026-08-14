@@ -2,8 +2,8 @@
 
 - Issue: #664
 - Branch: `codex/cross-adapter-scan-truth`
-- Base stack head: `e0a8c06f0fe5b023edcd735deb3e16940f7a0fee`
-- Validated integrated checkpoint: `5484ad2de89c7cf8d7cd1c41f2ff05a43d925d92`
+- Base stack head: `a48ce71d9abb8605ea60db12c84a0835e2146082`
+- Validated integrated checkpoint: `cd30744bcd402d6c1ad69ef16397f481089d8050`
 - Scope: five shipped adapters only; Go #665 deferred
 
 ## Evidence inventory
@@ -38,6 +38,20 @@
   branches and reproduced the exact prior five-adapter readiness digest. Python
   remained 30/30, TypeScript 35/35, JVM passed with Java 21, and the Swift
   executable smoke passed.
+
+Final prerequisite integration on 2026-08-13 includes Web Forms explorer head
+`a48ce71d9abb8605ea60db12c84a0835e2146082`. The first matrix invocation through
+the system Python truthfully returned `unsupported` because pytest was not
+installed in that interpreter; it did not report a product conformance failure.
+Following `docs/VALIDATION.md`, the matrix was rerun from an isolated temporary
+venv containing `src/python[dev]` and returned `supported` for all five adapters,
+reproducing the exact sanitized digest
+`59f0849c4eff9e1f9271c6949845095f865f330c7ce5c4cc5f7d7fb9f64d1f96`.
+
+Exact integrated validation then passed: Python 30/30; TypeScript 35/35 plus
+build; JVM full tests with Java 21; Swift smoke; full .NET 1,549/1,549; public
+combined paths/reverse smoke; Python bytecode compilation; private-path guard;
+and `git diff --check`.
 
 ## Current implementation
 
