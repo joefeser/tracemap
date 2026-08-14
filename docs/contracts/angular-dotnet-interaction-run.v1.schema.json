@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tracemap.tools/contracts/angular-dotnet-interaction-run.v1.schema.json",
+  "title": "TraceMap Angular and .NET interaction review configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "sources"],
+  "properties": {
+    "schemaVersion": { "const": "angular-dotnet-interaction-run.v1" },
+    "sources": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 100,
+      "items": { "$ref": "#/$defs/source" }
+    },
+    "endpointPairs": {
+      "type": "array",
+      "maxItems": 100,
+      "items": { "$ref": "#/$defs/endpointPair" }
+    },
+    "propertyFlows": {
+      "type": "array",
+      "maxItems": 500,
+      "items": { "$ref": "#/$defs/propertyFlow" }
+    },
+    "routeFlows": {
+      "type": "array",
+      "maxItems": 500,
+      "items": { "$ref": "#/$defs/routeFlow" }
+    },
+    "paths": {
+      "type": "array",
+      "maxItems": 500,
+      "items": { "$ref": "#/$defs/pathQuery" }
+    },
+    "reports": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "combinedDependency": { "type": "boolean", "default": true },
+        "portfolio": { "type": "boolean", "default": true }
+      }
+    }
+  },
+  "$defs": {
+    "safeName": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "pathList": {
+      "type": "array",
+      "maxItems": 100,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/path" }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "kind", "repositoryPath"],
+      "properties": {
+        "label": { "$ref": "#/$defs/safeName" },
+        "kind": { "enum": ["typescript", "dotnet"] },
+        "repositoryPath": { "$ref": "#/$defs/path" },
+        "projects": { "$ref": "#/$defs/pathList" },
+        "solutions": { "$ref": "#/$defs/pathList" },
+        "include": { "$ref": "#/$defs/pathList" },
+        "exclude": { "$ref": "#/$defs/pathList" },
+        "targetFramework": { "type": "string", "minLength": 1, "maxLength": 120 }
+      }
+    },
+    "endpointPair": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "clientLabel", "serverLabel"],
+      "properties": {
+        "name": { "$ref": "#/$defs/safeName" },
+        "clientLabel": { "$ref": "#/$defs/safeName" },
+        "serverLabel": { "$ref": "#/$defs/safeName" }
+      }
+    },
+    "propertyFlow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "selector"],
+      "properties": {
+        "name": { "$ref": "#/$defs/safeName" },
+        "selector": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "sourceLabel": { "$ref": "#/$defs/safeName" },
+        "framework": { "enum": ["angular", "razor", "webforms", "any"] }
+      }
+    },
+    "routeFlow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "route"],
+      "properties": {
+        "name": { "$ref": "#/$defs/safeName" },
+        "route": { "type": "string", "minLength": 1, "maxLength": 500 }
+      }
+    },
+    "pathQuery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "fromEndpoint", "toSurface"],
+      "properties": {
+        "name": { "$ref": "#/$defs/safeName" },
+        "fromEndpoint": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "toSurface": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "sourcePair": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}:[a-z0-9][a-z0-9._-]{0,63}$" }
+      }
+    }
+  }
+}
