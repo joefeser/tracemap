@@ -41,6 +41,33 @@ public sealed class ScanOutputTransactionTests
         Assert.True(File.Exists(sentinel));
     }
 
+    [Fact]
+    public async Task Complete_artifacts_do_not_authorize_replacing_unknown_caller_files()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        var output = Path.Combine(temp.Path, "output");
+        Directory.CreateDirectory(repo);
+        await WritePacketAsync(output, "baseline");
+        var sentinel = Path.Combine(output, "caller-owned.txt");
+        await File.WriteAllTextAsync(sentinel, "keep");
+
+        var error = Assert.Throws<IOException>(() => ScanOutputTransaction.ValidateTarget(output, repo));
+
+        Assert.Equal("OutputArtifactSetNotReplaceable", error.Message);
+        Assert.Equal("keep", await File.ReadAllTextAsync(sentinel));
+    }
+
+    [Fact]
+    public void Failure_receipt_eligibility_never_propagates_target_validation_errors()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+
+        Assert.False(ScanOutputTransaction.CanWriteFailureReceipt("\0", repo));
+    }
+
     private static async Task WritePacketAsync(string staging, string value)
     {
         Directory.CreateDirectory(Path.Combine(staging, "logs"));

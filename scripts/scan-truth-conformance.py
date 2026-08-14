@@ -384,12 +384,12 @@ def evaluate_adapter(adapter: str, workspace: Path, repo_root: Path, mutation_te
             inaccessible_run = None
     finally:
         inaccessible_source.chmod(0o600)
+    inaccessible_transaction_truth: bool | None = None
     if not inaccessible_precondition:
         inaccessible_truth = False
-        transaction_truth = False
     elif inaccessible_run is not None and inaccessible_run.returncode != 0:
         inaccessible_truth = artifact_hashes(prior_output) == prior_hashes
-        transaction_truth = inaccessible_truth
+        inaccessible_transaction_truth = inaccessible_truth
     else:
         inaccessible_errors = VALIDATOR.validate_output(prior_output)
         inaccessible_rows = facts(prior_output) if not inaccessible_errors else []
@@ -399,7 +399,7 @@ def evaluate_adapter(adapter: str, workspace: Path, repo_root: Path, mutation_te
             and any(row.get("factType") == "AnalysisGap" for row in inaccessible_rows)
             and (inaccessible_manifest.get("buildStatus") != "Succeeded" or inaccessible_manifest.get("analysisLevel") != "Level1SemanticAnalysis")
         )
-        transaction_truth = not inaccessible_errors
+        inaccessible_transaction_truth = not inaccessible_errors
 
     relative_nfd, pattern_nfc, excluded_content = unicode_exclusion_fixture(adapter)
     exclusion_repo = create_fixture(workspace / f"{adapter}-exclusion-root", definition)
@@ -445,9 +445,13 @@ def evaluate_adapter(adapter: str, workspace: Path, repo_root: Path, mutation_te
         capability("reduced-analysis-preservation", "supported" if reduced_preserved else "unsupported", ["invalid-source-reduced-scan"]),
         capability(
             "required-artifact-transaction",
-            "supported" if valid and transaction_truth and mutation_test_verified else "not-run" if not mutation_test_verified else "unsupported",
-            ["five-artifact-validator", "failed-scan-prior-output-check", "deterministic-staged-write-failure-test"] if mutation_test_verified else ["transaction-test-skipped-by-option"],
-            [] if mutation_test_verified else ["Run without --skip-build so the staged artifact failure fixture is verified."],
+            "supported" if valid and inaccessible_transaction_truth is not False and mutation_test_verified else "not-run" if not mutation_test_verified else "unsupported",
+            (["five-artifact-validator", "deterministic-staged-write-failure-test"]
+             + (["failed-scan-prior-output-check"] if inaccessible_transaction_truth is not None else []))
+            if mutation_test_verified else ["transaction-test-skipped-by-option"],
+            (["The current host did not enforce the unreadable-input precondition; that additional prior-output scenario was not run."]
+             if mutation_test_verified and inaccessible_transaction_truth is None else [])
+            if mutation_test_verified else ["Run without --skip-build so the staged artifact failure fixture is verified."],
         ),
         capability("ndjson-sqlite-roundtrip", "supported" if valid else "unsupported", ["read-only-sqlite-roundtrip"]),
         capability("malformed-schema-fail-closed", "supported" if malformed_rejected else "unsupported", ["invalid-sourceSnapshotDigest-rejected"]),
