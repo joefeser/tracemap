@@ -107,6 +107,18 @@ public static partial class StaticHtmlEvidenceExplorer
             var authoritativeMatches = authoritativeCommitSha is null
                 ? 0
                 : orderedSources.Count(source => source.CommitSha!.Equals(authoritativeCommitSha, StringComparison.OrdinalIgnoreCase));
+            if (authoritativeCommitSha is not null && authoritativeMatches == 0)
+            {
+                gaps.Add(CreateGap(
+                    "reducer-impact-commit-conflict",
+                    ProvenanceConflictRuleId,
+                    "commit-conflict",
+                    artifactId,
+                    "reducer-results",
+                    "PartialAnalysis",
+                    "The reducer report does not contain the authoritative explorer commit, so its evidence remains associated with separate report sources.",
+                    [artifactId]));
+            }
             var sourceByKey = new Dictionary<string, (string SourceId, ReducerImpactSourceInput Source)>(StringComparer.Ordinal);
             for (var index = 0; index < orderedSources.Length; index++)
             {
