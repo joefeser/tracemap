@@ -320,6 +320,12 @@ public static class MarkdownReportWriter
 
         AddFactSection(
             lines,
+            "Web Forms Batch And Data-Movement Evidence",
+            result.Facts.Where(fact => fact.FactType == FactTypes.LegacyBatchDataMovementDeclared),
+            FormatLegacyBatchDataMovementFact);
+
+        AddFactSection(
+            lines,
             "Boilerplate Signals",
             result.Facts.Where(fact => fact.FactType == FactTypes.InfrastructureBoilerplate),
             fact => $"- `{fact.Properties.GetValueOrDefault("category") ?? "unknown"}` at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
@@ -391,6 +397,16 @@ public static class MarkdownReportWriter
             lines.Add("- Each route candidate or navigation reference candidate does not prove runtime route matching, IIS deployment, URL rewriting, authorization, browser behavior, JavaScript execution, page rendering, request handling, user reachability, or runtime impact.");
             lines.Add("- Identity/session declarations do not prove authentication, authorization, effective identity, session behavior, credential handling, runtime assignment, or production use.");
             lines.Add("- Raw URLs, hostnames, config values, local absolute paths, remotes, endpoint values, snippets, credentials, and secret-looking values are hashed or omitted.");
+        }
+
+        if (result.Facts.Any(fact => fact.RuleId == RuleIds.LegacyWebFormsBatchDataMovement))
+        {
+            lines.Add("");
+            lines.Add("## Web Forms Batch And Data-Movement Limitations");
+            lines.Add("");
+            lines.Add("- Batch/data-movement rows are deterministic static candidates from compiler-resolved calls, bounded syntax, checked-in configuration keys, message evidence, and package inventory.");
+            lines.Add("- They do not prove scheduling, execution, successful or complete data movement, retries, idempotency, checkpoint effectiveness, transaction outcome, monitoring, target state, production use, or target architecture suitability.");
+            lines.Add("- Raw schedules, paths, destinations, SQL, connection material, configuration values, source values, snippets, credentials, local absolute paths, and remotes are omitted or represented only by bounded hashes and categories.");
         }
 
         lines.Add("");
@@ -924,6 +940,15 @@ public static class MarkdownReportWriter
             fact.FactType);
         var path = CombinedReportHelpers.SafePath(fact.Evidence.FilePath);
         return $"- `{fact.FactType}` `{DisplayCodeValue(name)}` as static ASP.NET `{DisplayCodeValue(role)}` evidence ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{path}:{fact.Evidence.StartLine}`";
+    }
+
+    private static string FormatLegacyBatchDataMovementFact(CodeFact fact)
+    {
+        var surface = DisplayCodeValue(fact.Properties.GetValueOrDefault("surfaceKind") ?? "unknown");
+        var mechanism = DisplayCodeValue(fact.Properties.GetValueOrDefault("mechanism") ?? "unknown");
+        var operation = DisplayCodeValue(fact.Properties.GetValueOrDefault("operationKind") ?? "unknown");
+        var path = CombinedReportHelpers.SafePath(fact.Evidence.FilePath);
+        return $"- `{surface}` via `{mechanism}` / `{operation}` as static batch/data-movement evidence ({fact.EvidenceTier}, rule `{fact.RuleId}`) at `{path}:{fact.Evidence.StartLine}`";
     }
 
     private static string FormatLegacyDataMetadataFact(CodeFact fact)
