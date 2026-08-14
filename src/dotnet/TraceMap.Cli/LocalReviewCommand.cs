@@ -174,8 +174,9 @@ public static class LocalReviewCommand
 
             stages.Add(new("scan", Coverage(manifest) == "full" ? "succeeded" : "partial", [], ["scan-artifacts"]));
             lastSafeState = "scan-artifacts-verified";
+            var workflowCoverage = Coverage(manifest);
             var gaps = new SortedSet<string>(StringComparer.Ordinal);
-            if (Coverage(manifest) != "full")
+            if (workflowCoverage != "full")
             {
                 gaps.Add("LOCAL_REVIEW_SCAN_PARTIAL");
             }
@@ -190,9 +191,23 @@ public static class LocalReviewCommand
                         Path.Combine(staging, "webforms")),
                     cancellationToken);
                 VerifyUnchanged(scanDirectory, before);
+                var webFormsPacket = await ReadWebFormsPacketAsync(
+                    Path.Combine(staging, "webforms", "webforms-modernization.json"),
+                    cancellationToken);
+                var webFormsPartial = !string.Equals(
+                    webFormsPacket.Coverage,
+                    "bounded-static-webforms-modernization",
+                    StringComparison.Ordinal)
+                    || webFormsPacket.Summary.Truncated
+                    || webFormsPacket.Gaps.Count > 0;
+                if (webFormsPartial)
+                {
+                    workflowCoverage = "reduced";
+                    gaps.Add("LOCAL_REVIEW_WEBFORMS_PARTIAL");
+                }
                 stages.Add(new(
                     "webforms-modernization",
-                    "succeeded",
+                    webFormsPartial ? "partial" : "succeeded",
                     ToInputHashes(before, "scan"),
                     ["webforms-modernization-packet"]));
                 lastSafeState = "webforms-modernization-verified";
@@ -223,7 +238,7 @@ public static class LocalReviewCommand
 
             var artifacts = BuildArtifactRecords(staging);
             var (factCount, factGapCount) = CountFacts(Path.Combine(scanDirectory, "facts.ndjson"));
-            var coverage = Coverage(manifest);
+            var coverage = workflowCoverage;
             var version = TraceMapVersionInfo.Create();
             var outcome = coverage == "full" && gaps.Count == 0 ? "succeeded" : "partial";
             var workflowId = CreateWorkflowId(version, manifest, parsed, stages);
@@ -485,6 +500,15 @@ public static class LocalReviewCommand
         await using var stream = File.OpenRead(Path.Combine(scanDirectory, "scan-manifest.json"));
         return await JsonSerializer.DeserializeAsync<ScanManifest>(stream, ReadOptions, cancellationToken)
             ?? throw new LocalReviewException("LOCAL_REVIEW_IDENTITY_UNAVAILABLE");
+    }
+
+    private static async Task<WebFormsModernizationPacket> ReadWebFormsPacketAsync(
+        string path,
+        CancellationToken cancellationToken)
+    {
+        await using var stream = File.OpenRead(path);
+        return await JsonSerializer.DeserializeAsync<WebFormsModernizationPacket>(stream, ReadOptions, cancellationToken)
+            ?? throw new LocalReviewException("LOCAL_REVIEW_STAGE_FAILED");
     }
 
     private static void EnsureRequiredScanArtifacts(string scanDirectory)
