@@ -80,6 +80,7 @@ public sealed class LocalReviewCommandTests
         Assert.True(File.Exists(Path.Combine(review, "explorer", "index.html")));
 
         var standaloneWebForms = Path.Combine(temp.Path, "standalone-webforms");
+        var standaloneInput = Path.Combine(temp.Path, "standalone-input");
         var standaloneExplorer = Path.Combine(temp.Path, "standalone-explorer");
         Assert.Equal(0, await TraceMapCommand.RunAsync(
             [
@@ -89,10 +90,12 @@ public sealed class LocalReviewCommandTests
             ],
             TextWriter.Null,
             TextWriter.Null));
+        CopyDirectory(Path.Combine(review, "scan"), standaloneInput);
+        CopyDirectory(standaloneWebForms, standaloneInput);
         Assert.Equal(0, await TraceMapCommand.RunAsync(
             [
                 "explorer", "generate",
-                "--input", standaloneWebForms,
+                "--input", standaloneInput,
                 "--out", standaloneExplorer,
                 "--safety-profile", "hidden-local"
             ],
@@ -136,9 +139,14 @@ public sealed class LocalReviewCommandTests
         Assert.All(
             document.RootElement.GetProperty("stages")[1].GetProperty("inputs").EnumerateArray(),
             input => Assert.StartsWith("scan/", input.GetProperty("relativePath").GetString(), StringComparison.Ordinal));
-        Assert.All(
-            document.RootElement.GetProperty("stages")[2].GetProperty("inputs").EnumerateArray(),
-            input => Assert.StartsWith("webforms/", input.GetProperty("relativePath").GetString(), StringComparison.Ordinal));
+        var explorerInputs = document.RootElement.GetProperty("stages")[2].GetProperty("inputs").EnumerateArray()
+            .Select(input => input.GetProperty("relativePath").GetString()!)
+            .ToArray();
+        Assert.Contains(explorerInputs, path => path.StartsWith("scan/", StringComparison.Ordinal));
+        Assert.Contains(explorerInputs, path => path.StartsWith("webforms/", StringComparison.Ordinal));
+        Assert.All(explorerInputs, path => Assert.True(
+            path.StartsWith("scan/", StringComparison.Ordinal)
+            || path.StartsWith("webforms/", StringComparison.Ordinal)));
 
         using var explorerDocument = JsonDocument.Parse(
             await File.ReadAllTextAsync(Path.Combine(review, "explorer", "data", "explorer-data.json")));
@@ -755,6 +763,17 @@ public sealed class LocalReviewCommandTests
         RunGit(repo, "add", ".");
         RunGit(repo, "-c", "user.name=TraceMap", "-c", "user.email=fixture@example.invalid", "commit", "-m", "baseline");
         return repo;
+    }
+
+    private static void CopyDirectory(string source, string destination)
+    {
+        Directory.CreateDirectory(destination);
+        foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+        {
+            var target = Path.Combine(destination, Path.GetRelativePath(source, file));
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(file, target, overwrite: false);
+        }
     }
 
     private static void RunGit(string repo, params string[] arguments)

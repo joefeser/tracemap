@@ -796,7 +796,7 @@ public static partial class StaticHtmlEvidenceExplorer
 
         return new ExplorerBuildContext(
             safetyProfile,
-            manifest?.CommitSha is { } sha && IsUsableCommitSha(sha) ? sha : null,
+            sourceCommitSha,
             CoverageStatus(gaps, coverageLabels),
             coverageLabels.Count == 0 ? ["UnknownCoverage"] : coverageLabels.ToArray(),
             sources,
@@ -2304,7 +2304,12 @@ public static partial class StaticHtmlEvidenceExplorer
             && (reducerReport!.CoverageLabels.Contains("ReducerReducedCoverage", StringComparer.Ordinal)
                 || reducerReport.CoverageLabels.Contains("ReducerPartialCoverage", StringComparer.Ordinal)
                 || reducerReport.CoverageLabels.Contains("ReducerTruncated", StringComparer.Ordinal));
-        var evidenceArtifactProvided = factsProvided || compatiblePathsReport || compatibleReducerReport;
+        var evidenceArtifactProvided = factsProvided || compatiblePathsReport || compatibleReducerReport || compatibleWebFormsPacket;
+        var evidenceSupportIds = new List<string>();
+        if (factsProvided) evidenceSupportIds.Add("artifact:facts-ndjson");
+        if (compatiblePathsReport) evidenceSupportIds.Add("artifact:paths-report");
+        if (compatibleReducerReport) evidenceSupportIds.Add("artifact:reducer-impact-report");
+        if (compatibleWebFormsPacket) evidenceSupportIds.Add(WebFormsArtifactId);
         var evidenceRowsStatus = evidenceArtifactProvided
             ? pathReportPartial || reducerReportPartial
                 ? "partial"
@@ -2315,8 +2320,8 @@ public static partial class StaticHtmlEvidenceExplorer
         var evidenceRowsMessage = evidenceArtifactProvided
             ? context.EvidenceRows.Count == 0
                 ? "Compatible evidence artifacts were provided, but no static evidence rows were present under the current coverage."
-                : "Evidence rows are rendered from compatible fact, path, and reducer artifacts after safety filtering and deterministic ordering."
-            : "Evidence rows are unavailable because no compatible fact, path, or reducer artifact was provided.";
+                : "Evidence rows are rendered from compatible fact, path, reducer, and Web Forms packet artifacts after safety filtering and deterministic ordering."
+            : "Evidence rows are unavailable because no compatible fact, path, reducer, or Web Forms packet artifact was provided.";
         var rows = new List<ExplorerSectionStatus>
         {
             SectionStatus(
@@ -2361,21 +2366,7 @@ public static partial class StaticHtmlEvidenceExplorer
                 evidenceRowsStatus,
                 coverageLabel,
                 evidenceRowsMessage,
-                factsProvided && compatiblePathsReport && compatibleReducerReport
-                    ? ["artifact:facts-ndjson", "artifact:paths-report", "artifact:reducer-impact-report"]
-                    : factsProvided && compatiblePathsReport
-                        ? ["artifact:facts-ndjson", "artifact:paths-report"]
-                        : factsProvided && compatibleReducerReport
-                            ? ["artifact:facts-ndjson", "artifact:reducer-impact-report"]
-                            : compatiblePathsReport && compatibleReducerReport
-                                ? ["artifact:paths-report", "artifact:reducer-impact-report"]
-                    : factsProvided
-                        ? ["artifact:facts-ndjson"]
-                        : compatiblePathsReport
-                            ? ["artifact:paths-report"]
-                            : compatibleReducerReport
-                                ? ["artifact:reducer-impact-report"]
-                            : ["input-directory"]),
+                evidenceSupportIds.Count > 0 ? evidenceSupportIds.ToArray() : ["input-directory"]),
             SectionStatus(
                 "surfaces",
                 "Surfaces",
