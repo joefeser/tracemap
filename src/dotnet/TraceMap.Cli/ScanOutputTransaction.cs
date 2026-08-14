@@ -114,6 +114,8 @@ internal static class ScanOutputTransaction
             "index.sqlite",
             "report.md",
             "scan-receipt.json",
+            "sql-runbook.json",
+            "sql-runbook.md",
             "logs"
         };
         if (entries.Any(path => !allowedRootEntries.Contains(Path.GetFileName(path)))) return false;
