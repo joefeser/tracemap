@@ -45,6 +45,36 @@ try {
     Copy-Item -LiteralPath (Join-Path $TraceMapRoot ".gitignore") -Destination (Join-Path $angular ".gitignore")
     Copy-Item -LiteralPath (Join-Path $TraceMapRoot ".gitignore") -Destination (Join-Path $api ".gitignore")
 
+    $defaultExcludeDirectories = @(
+        ".vs",
+        "bin/debug",
+        "obj/debug",
+        "node_modules/package",
+        "dist/browser",
+        "coverage/unit",
+        "TestResults/run",
+        ".angular/cache",
+        ".next/server"
+    )
+    foreach ($repository in @($angular, $api)) {
+        $sentinelExtension = if ($repository -eq $angular) { ".ts" } else { ".cs" }
+        foreach ($directory in $defaultExcludeDirectories) {
+            $generatedDirectory = Join-Path $repository $directory
+            $sentinelName = "GeneratedChurnSentinel_" + ($directory -replace '[^A-Za-z0-9]', '_')
+            New-Item -ItemType Directory -Path $generatedDirectory -Force | Out-Null
+            [System.IO.File]::WriteAllText(
+                (Join-Path $generatedDirectory "$sentinelName$sentinelExtension"),
+                $(if ($sentinelExtension -eq ".ts") { "export const $sentinelName = true;`n" } else { "internal sealed class $sentinelName { }`n" }),
+                [System.Text.UTF8Encoding]::new($false))
+        }
+    }
+    $customExcludedDirectory = Join-Path $api "custom-generated"
+    New-Item -ItemType Directory -Path $customExcludedDirectory -Force | Out-Null
+    [System.IO.File]::WriteAllText(
+        (Join-Path $customExcludedDirectory "ConfiguredExcludeSentinel.cs"),
+        "internal sealed class ConfiguredExcludeSentinel { }`n",
+        [System.Text.UTF8Encoding]::new($false))
+
     foreach ($repository in @($angular, $api)) {
         Invoke-Git $repository @("init", "--quiet")
         Invoke-Git $repository @("config", "user.name", "TraceMap Fixture")
@@ -67,6 +97,7 @@ try {
                 kind = "dotnet"
                 repositoryPath = $api
                 projects = @("EndpointServerSample.csproj")
+                exclude = @("custom-generated/**", "**/obj/**")
             }
         )
         endpointPairs = @(
@@ -190,6 +221,13 @@ try {
         Assert-True ($result.outcome -eq "succeeded") "unexpected result outcome"
         Assert-True ($result.sources.Count -eq 2) "unexpected source count"
         Assert-True ($result.reports.Count -eq 6) "unexpected report count"
+        foreach ($source in @("angular-client", "dotnet-api")) {
+            $factsText = Get-Content -LiteralPath (Join-Path $output "scans/$source/facts.ndjson") -Raw
+            $unexpectedSentinels = @([regex]::Matches($factsText, 'GeneratedChurnSentinel_[A-Za-z0-9_]+') | ForEach-Object Value | Sort-Object -Unique)
+            Assert-True ($unexpectedSentinels.Count -eq 0) "default-excluded generated source was scanned for ${source}: $($unexpectedSentinels -join ', ')"
+        }
+        $dotnetFactsText = Get-Content -LiteralPath (Join-Path $output "scans/dotnet-api/facts.ndjson") -Raw
+        Assert-True (-not $dotnetFactsText.Contains("ConfiguredExcludeSentinel", [System.StringComparison]::Ordinal)) "configured exclusion was not preserved"
         Assert-True ($feedback.schemaVersion -eq "angular-dotnet-interaction-feedback.v1") "unexpected feedback schema"
         Assert-True ($feedback.reportCount -eq 6) "unexpected feedback report count"
         $operationalEventPath = Join-Path $output "logs/interaction-review-events.jsonl"
