@@ -86,6 +86,19 @@ rules:
       - Unsupported input gaps describe explorer compatibility only and do not prove that the artifact lacks evidence.
       - The explorer must not merge unsupported generated artifacts silently or render raw unsupported content.
 
+  - id: explorer.input.webforms-modernization-packet.v1
+    name: Static HTML explorer Web Forms modernization packet reader
+    description: Validates one bounded Web Forms modernization packet and projects its existing static project, surface, event-chain, downstream-boundary, identity/session, structural-candidate, gap, limitation, and provenance records into the local explorer.
+    evidenceTier: Tier2Structural
+    emits:
+      - compatible Web Forms explorer section
+      - Web Forms packet evidence rows
+      - Web Forms packet compatibility and gap rows
+    limitations:
+      - The reader composes existing packet evidence and performs no source scan, runtime observation, execution, impact reduction, business-capability classification, parity assessment, migration sizing, or target-architecture selection.
+      - Packet support does not prove runtime reachability, event firing, postback behavior, authorization, persistence, production use, workflow completeness, migration safety, security approval, release approval, or safety to change.
+      - Unsupported schema, identity, provenance, vocabulary, size, or collection contracts fail closed under explorer.input.unsupported-schema.v1 and are not partially guessed.
+
   - id: explorer.input.provenance-conflict.v1
     name: Static HTML explorer provenance conflict
     description: Records commit, source identity, schema, or claim-level conflicts between generated artifacts selected for the same explorer output.

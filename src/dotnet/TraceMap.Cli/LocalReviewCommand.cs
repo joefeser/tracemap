@@ -225,18 +225,58 @@ public static class LocalReviewCommand
             if (parsed.Explorer)
             {
                 activeStage = "explorer";
-                var before = HashDirectory(scanDirectory);
-                await stageServices.GenerateExplorerAsync(
-                    new StaticHtmlEvidenceExplorerOptions(
-                        scanDirectory,
-                        Path.Combine(staging, "explorer"),
-                        "hidden-local"),
-                    cancellationToken);
-                VerifyUnchanged(scanDirectory, before);
+                var scanBefore = HashDirectory(scanDirectory);
+                var webFormsDirectory = Path.Combine(staging, "webforms");
+                var webFormsBefore = parsed.WebFormsModernization
+                    ? HashDirectory(webFormsDirectory)
+                    : null;
+                var explorerInputDirectory = scanDirectory;
+                string? composedInputDirectory = null;
+                try
+                {
+                    if (parsed.WebFormsModernization)
+                    {
+                        composedInputDirectory = Path.Combine(
+                            parent,
+                            $".{Path.GetFileName(fullOutput)}.explorer-input-{Guid.NewGuid():N}");
+                        CopyDirectory(scanDirectory, composedInputDirectory);
+                        CopyDirectory(webFormsDirectory, composedInputDirectory);
+                        explorerInputDirectory = composedInputDirectory;
+                    }
+
+                    await stageServices.GenerateExplorerAsync(
+                        new StaticHtmlEvidenceExplorerOptions(
+                            explorerInputDirectory,
+                            Path.Combine(staging, "explorer"),
+                            "hidden-local"),
+                        cancellationToken);
+                }
+                finally
+                {
+                    if (composedInputDirectory is not null)
+                    {
+                        if (!TryCleanup(composedInputDirectory))
+                        {
+                            throw new LocalReviewException("LOCAL_REVIEW_CLEANUP_FAILED");
+                        }
+                    }
+                }
+
+                VerifyUnchanged(scanDirectory, scanBefore);
+                if (webFormsBefore is not null)
+                {
+                    VerifyUnchanged(webFormsDirectory, webFormsBefore);
+                }
+
+                var explorerInputs = ToInputHashes(scanBefore, "scan").ToList();
+                if (webFormsBefore is not null)
+                {
+                    explorerInputs.AddRange(ToInputHashes(webFormsBefore, "webforms"));
+                }
                 stages.Add(new(
                     "explorer",
                     "succeeded",
-                    ToInputHashes(before, "scan"),
+                    explorerInputs.AsReadOnly(),
                     ["static-html-explorer"]));
                 lastSafeState = "explorer-verified";
             }
@@ -993,6 +1033,22 @@ public static class LocalReviewCommand
         catch (Exception)
         {
             return false;
+        }
+    }
+
+    private static void CopyDirectory(string source, string destination)
+    {
+        Directory.CreateDirectory(destination);
+        foreach (var directory in Directory.EnumerateDirectories(source, "*", SearchOption.AllDirectories))
+        {
+            Directory.CreateDirectory(Path.Combine(destination, Path.GetRelativePath(source, directory)));
+        }
+
+        foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+        {
+            var target = Path.Combine(destination, Path.GetRelativePath(source, file));
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(file, target, overwrite: false);
         }
     }
 

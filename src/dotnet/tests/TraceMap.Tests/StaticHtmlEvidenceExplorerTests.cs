@@ -75,7 +75,7 @@ public sealed class StaticHtmlEvidenceExplorerTests
             limitation.RuleId == StaticHtmlEvidenceExplorer.CompatibilityLedgerRuleId
             && limitation.LimitationKind == "claim-level-metadata-unknown"
             && limitation.ClaimEffect == "claim-level");
-        Assert.Equal("tracemap-static-html-evidence-explorer.v4", result.Data.SchemaVersion);
+        Assert.Equal("tracemap-static-html-evidence-explorer.v5", result.Data.SchemaVersion);
         Assert.Contains("Compatibility Ledger", allGenerated);
         Assert.Contains("explorer.render.compatibility-ledger.v1", allGenerated);
         Assert.Contains("Local generated artifact", allGenerated);
@@ -433,7 +433,7 @@ public sealed class StaticHtmlEvidenceExplorerTests
 
         var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
 
-        Assert.Equal("tracemap-static-html-evidence-explorer.v4", result.Data.SchemaVersion);
+        Assert.Equal("tracemap-static-html-evidence-explorer.v5", result.Data.SchemaVersion);
         var artifact = Assert.Single(result.Data.Artifacts, row => row.ArtifactKind == "reducer-impact-report");
         Assert.Equal("contract-delta-impact/2.0", artifact.SchemaVersion);
         Assert.Equal("supported", artifact.Compatibility);
@@ -595,7 +595,7 @@ public sealed class StaticHtmlEvidenceExplorerTests
 
         var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output));
 
-        Assert.Equal("tracemap-static-html-evidence-explorer.v4", result.Data.SchemaVersion);
+        Assert.Equal("tracemap-static-html-evidence-explorer.v5", result.Data.SchemaVersion);
         var artifact = Assert.Single(result.Data.Artifacts, row => row.ArtifactKind == "paths-report");
         Assert.Equal("paths-report/1.0", artifact.SchemaVersion);
         Assert.Equal("supported", artifact.Compatibility);
@@ -916,6 +916,7 @@ public sealed class StaticHtmlEvidenceExplorerTests
                 "overview",
                 "sources",
                 "artifacts",
+                "webforms",
                 "evidence-rows",
                 "surfaces",
                 "paths",
@@ -1387,7 +1388,7 @@ public sealed class StaticHtmlEvidenceExplorerTests
 
         var result = await StaticHtmlEvidenceExplorer.GenerateAsync(new StaticHtmlEvidenceExplorerOptions(input, output, Force: true));
 
-        Assert.Equal("tracemap-static-html-evidence-explorer.v4", result.Manifest.SchemaVersion);
+        Assert.Equal("tracemap-static-html-evidence-explorer.v5", result.Manifest.SchemaVersion);
         Assert.DoesNotContain("prior generated output", await File.ReadAllTextAsync(Path.Combine(output, "index.html")));
     }
 
@@ -1646,7 +1647,7 @@ public sealed class StaticHtmlEvidenceExplorerTests
         await File.WriteAllTextAsync(Path.Combine(directory, "release-review.json"), json);
     }
 
-    private static async Task WriteReducerImpactArtifactAsync(
+    internal static async Task WriteReducerImpactArtifactAsync(
         string directory,
         string commitSha,
         bool includeGap = false,
@@ -1777,7 +1778,7 @@ public sealed class StaticHtmlEvidenceExplorerTests
         await File.WriteAllTextAsync(Path.Combine(directory, "impact-report.json"), json);
     }
 
-    private static async Task WritePathsReportArtifactAsync(
+    internal static async Task WritePathsReportArtifactAsync(
         string directory,
         string commitSha,
         bool invalidEdgeTarget = false,
