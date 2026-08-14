@@ -254,8 +254,9 @@ public enum SwiftScanEngine {
         let rawFacts = FactFactory.facts(manifest: manifest, inventory: inventory, gaps: gaps, toolchainDiagnostics: toolchain.diagnostics, scanRoot: repo, syntax: syntax, dependencies: dependencies, http: http, ui: ui, storage: storage)
         let facts = FactFactory.normalizeFacts(manifest: manifest, facts: rawFacts)
         try beforeSnapshotVerification()
+        let verifiedInventory = try InventoryBuilder.build(scanRoot: repo, gitRoot: git.gitRoot, options: options)
         guard try sourceSnapshotDigest(
-            inventory: inventory,
+            inventory: verifiedInventory,
             scanRoot: repo,
             maxFileByteSize: options.maxFileByteSize) == snapshotDigest else {
             throw ScanError.io("SourceSnapshotChangedDuringScan")
@@ -3825,6 +3826,7 @@ public enum TraceMapSwiftSelfTests {
     public static func run() throws {
         try collisionNormalizationIsDeterministicAndEvidenceBacked()
         try sourceMutationIsDetectedBeforePublishing()
+        try sourceCreationIsDetectedBeforePublishing()
         try unreadableSelectedInputStopsPublication()
         try artifactWriteFailurePreservesPriorOutput()
         try outputSafetyAndScanIdentityAreDeterministic()
@@ -3895,6 +3897,35 @@ public enum TraceMapSwiftSelfTests {
         } catch {
             try require(String(describing: error).contains("SourceSnapshotChangedDuringScan"), "source mutation should produce the typed failure")
             try require(!FileManager.default.fileExists(atPath: output.path), "source mutation should not publish output artifacts")
+        }
+    }
+
+    private static func sourceCreationIsDetectedBeforePublishing() throws {
+        let temporary = FileManager.default.temporaryDirectory.appendingPathComponent("tracemap-swift-creation-\(UUID().uuidString)")
+        let repo = temporary.appendingPathComponent("repo")
+        let sourceDirectory = repo.appendingPathComponent("Sources/App")
+        let source = sourceDirectory.appendingPathComponent("main.swift")
+        let output = temporary.appendingPathComponent("output")
+        defer { try? FileManager.default.removeItem(at: temporary) }
+        try FileManager.default.createDirectory(at: sourceDirectory, withIntermediateDirectories: true)
+        try "print(\"hello\")\n".write(to: source, atomically: true, encoding: .utf8)
+        _ = try runProcess(executable: "/usr/bin/git", arguments: ["-C", repo.path, "init"])
+        _ = try runProcess(executable: "/usr/bin/git", arguments: ["-C", repo.path, "add", "."])
+        _ = try runProcess(executable: "/usr/bin/git", arguments: ["-C", repo.path, "-c", "user.name=TraceMap", "-c", "user.email=fixture@example.invalid", "commit", "-m", "baseline"])
+
+        do {
+            _ = try SwiftScanEngine.scan(
+                options: SwiftScanOptions(repoPath: repo, outputPath: output),
+                beforeSnapshotVerification: {
+                    try "let added = true\n".write(
+                        to: sourceDirectory.appendingPathComponent("Added.swift"),
+                        atomically: true,
+                        encoding: .utf8)
+                })
+            try require(false, "source creation should fail before publishing")
+        } catch {
+            try require(String(describing: error).contains("SourceSnapshotChangedDuringScan"), "source creation should produce the typed failure")
+            try require(!FileManager.default.fileExists(atPath: output.path), "source creation should not publish output artifacts")
         }
     }
 

@@ -273,6 +273,21 @@ describe("ScanEngine", () => {
     expect(await fsp.readFile(path.join(output, "scan-manifest.json"))).toEqual(baselineManifest);
   });
 
+  it("fails before publishing when an eligible source is created during a scan", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    const output = path.join(root, "output");
+    await writeMiniRepo(repo);
+
+    await expect(scan(scanOptions(repo, output), {
+      beforeSnapshotVerification: async () => {
+        await fsp.writeFile(path.join(repo, "src", "added.ts"), "export const added = true;\n");
+      }
+    })).rejects.toThrow("SourceSnapshotChangedDuringScan");
+
+    await expect(fsp.stat(output)).rejects.toThrow();
+  });
+
   it("preserves prior output when a staged artifact write fails", async () => {
     const root = await tempDir();
     const repo = path.join(root, "repo");
