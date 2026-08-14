@@ -15,6 +15,7 @@ public sealed class TraceMapVersionTests
 
         Assert.Equal("tracemap-version.v1", first.SchemaVersion);
         Assert.Contains(first.SourceState, new[] { "clean", "dirty", "unavailable" });
+        Assert.True(first.SourceCommit == "unavailable" || first.SourceCommit.Length == 40);
         Assert.Equal("ready", first.Readiness.Outcome);
         Assert.Equal("none", first.Readiness.NextAction);
         Assert.Equal("available", first.Readiness.Git.Status);
@@ -58,6 +59,7 @@ public sealed class TraceMapVersionTests
         Assert.Equal(firstOutput.ToString(), secondOutput.ToString());
         using var document = JsonDocument.Parse(firstOutput.ToString());
         Assert.Equal("tracemap-version.v1", document.RootElement.GetProperty("schemaVersion").GetString());
+        Assert.Matches("^(unavailable|[0-9a-f]{40})$", document.RootElement.GetProperty("sourceCommit").GetString());
         Assert.Contains(
             document.RootElement.GetProperty("readiness").GetProperty("outcome").GetString(),
             new[] { "ready", "reduced", "unavailable" });
