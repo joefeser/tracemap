@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "scan-truth-conformance-profile.v1",
+  "profileId": "tracemap.scan-truth.v1",
+  "requiredArtifacts": [
+    "scan-manifest.json",
+    "facts.ndjson",
+    "index.sqlite",
+    "report.md",
+    "logs/analyzer.log"
+  ],
+  "authoritativeManifestFields": [
+    "scanId",
+    "commitSha",
+    "scannerVersion",
+    "analysisLevel",
+    "buildStatus",
+    "knownGaps",
+    "sourceSnapshotDigest"
+  ],
+  "nonAuthoritativeManifestFields": ["scannedAt"],
+  "requiredCapabilities": [
+    "concrete-git-authority",
+    "actual-analyzed-byte-identity",
+    "repeat-determinism",
+    "same-size-dirty-mutation",
+    "inaccessible-input-truth",
+    "source-mutation-detection",
+    "filesystem-correct-exclusion",
+    "reduced-analysis-preservation",
+    "required-artifact-transaction",
+    "ndjson-sqlite-roundtrip",
+    "malformed-schema-fail-closed",
+    "repository-relative-evidence"
+  ],
+  "statuses": ["required", "supported", "reduced", "unsupported", "not-applicable", "not-run"],
+  "ruleId": "adapter.scan-truth.conformance.v1",
+  "limitations": [
+    "Conformance proves deterministic scan-truth behavior for bounded synthetic fixtures; it does not prove semantic parity, build success, runtime reachability, execution, production behavior, or complete dependency coverage.",
+    "Toolchain-specific semantic ceilings remain adapter-owned and must be represented as reduced or not-applicable instead of normalized into false parity.",
+    "Go adapter work remains deferred until all required v1 capabilities pass or an owner explicitly accepts a documented exception."
+  ]
+}

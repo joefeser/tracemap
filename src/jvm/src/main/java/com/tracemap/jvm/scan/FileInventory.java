@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.FileSystems;
 import java.nio.file.PathMatcher;
 import java.nio.file.Path;
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -109,9 +110,17 @@ public final class FileInventory {
     }
 
     private static boolean globMatches(String glob, String relative) {
-        String normalized = glob.contains("/") ? glob : "**/" + glob;
+        String comparableGlob = fileSystemComparisonPath(glob);
+        String comparableRelative = fileSystemComparisonPath(relative);
+        String normalized = comparableGlob.contains("/") ? comparableGlob : "**/" + comparableGlob;
         PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:" + normalized);
-        return matcher.matches(Path.of(relative));
+        return matcher.matches(Path.of(comparableRelative));
+    }
+
+    private static String fileSystemComparisonPath(String value) {
+        return System.getProperty("os.name", "").toLowerCase().contains("mac")
+            ? Normalizer.normalize(value, Normalizer.Form.NFC)
+            : value;
     }
 
     private static boolean isIncluded(Path path) {
