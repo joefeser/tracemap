@@ -144,6 +144,8 @@ public static class LocalReviewCommand
 
         ScanManifest? manifest = null;
         var stages = new List<LocalReviewStage>();
+        var workflowCoverage = "unknown";
+        var gaps = new SortedSet<string>(StringComparer.Ordinal);
         var activeStage = "scan";
         var lastSafeState = "output-staged";
         try
@@ -155,7 +157,14 @@ public static class LocalReviewCommand
             var scanExit = await scanRunner(scanArguments, scanOutput, scanError, cancellationToken);
             if (scanExit != 0)
             {
-                var failed = BuildFailureResult(parsed, staging, "LOCAL_REVIEW_SCAN_FAILED", "scan-attempted", "inspect-scan-receipt");
+                var failureIdentity = await TryReadAuthoritativeFailureIdentityAsync(scanDirectory, cancellationToken);
+                var failed = BuildFailureResult(
+                    parsed,
+                    staging,
+                    failureIdentity,
+                    "LOCAL_REVIEW_SCAN_FAILED",
+                    "scan-attempted",
+                    "inspect-scan-receipt");
                 await WriteResultAsync(staging, failed, cancellationToken);
                 Publish(staging, fullOutput);
                 await WriteHumanAsync(failed, fullOutput, output);
@@ -164,18 +173,17 @@ public static class LocalReviewCommand
             }
 
             EnsureRequiredScanArtifacts(scanDirectory);
-            manifest = await ReadManifestAsync(scanDirectory, cancellationToken);
-            if (string.IsNullOrWhiteSpace(manifest.GitRootHash)
-                || string.IsNullOrWhiteSpace(manifest.SourceSnapshotDigest)
-                || string.IsNullOrWhiteSpace(manifest.CommitSha))
+            var candidateManifest = await ReadManifestAsync(scanDirectory, cancellationToken);
+            if (!TryCreateIdentity(candidateManifest, Coverage(candidateManifest), out _))
             {
                 throw new LocalReviewException("LOCAL_REVIEW_IDENTITY_UNAVAILABLE");
             }
 
+            manifest = candidateManifest;
+
             stages.Add(new("scan", Coverage(manifest) == "full" ? "succeeded" : "partial", [], ["scan-artifacts"]));
             lastSafeState = "scan-artifacts-verified";
-            var workflowCoverage = Coverage(manifest);
-            var gaps = new SortedSet<string>(StringComparer.Ordinal);
+            workflowCoverage = Coverage(manifest);
             if (workflowCoverage != "full")
             {
                 gaps.Add("LOCAL_REVIEW_SCAN_PARTIAL");
@@ -243,7 +251,7 @@ public static class LocalReviewCommand
                 workflowId,
                 version.ToolVersion,
                 version.DistributionKind,
-                manifest.GitRootHash,
+                manifest.GitRootHash!,
                 manifest.CommitSha,
                 manifest.ScanId,
                 manifest.SourceSnapshotDigest,
@@ -272,6 +280,8 @@ public static class LocalReviewCommand
                 fullOutput,
                 manifest,
                 stages,
+                workflowCoverage,
+                gaps,
                 activeStage,
                 "cancelled",
                 "LOCAL_REVIEW_CANCELLED",
@@ -288,6 +298,8 @@ public static class LocalReviewCommand
                 fullOutput,
                 manifest,
                 stages,
+                workflowCoverage,
+                gaps,
                 activeStage,
                 "failed",
                 exception.Code,
@@ -305,6 +317,8 @@ public static class LocalReviewCommand
                 fullOutput,
                 manifest,
                 stages,
+                workflowCoverage,
+                gaps,
                 activeStage,
                 "failed",
                 "LOCAL_REVIEW_STAGE_FAILED",
@@ -498,6 +512,118 @@ public static class LocalReviewCommand
             ?? throw new LocalReviewException("LOCAL_REVIEW_IDENTITY_UNAVAILABLE");
     }
 
+    private static async Task<LocalReviewIdentity?> TryReadAuthoritativeFailureIdentityAsync(
+        string scanDirectory,
+        CancellationToken cancellationToken)
+    {
+        var manifestPath = Path.Combine(scanDirectory, "scan-manifest.json");
+        var receiptPath = Path.Combine(scanDirectory, "scan-receipt.json");
+        var manifestExists = File.Exists(manifestPath);
+        var receiptExists = File.Exists(receiptPath);
+        LocalReviewIdentity? manifestIdentity = null;
+        LocalReviewIdentity? receiptIdentity = null;
+
+        try
+        {
+            if (manifestExists)
+            {
+                await using var stream = File.OpenRead(manifestPath);
+                var availableManifest = await JsonSerializer.DeserializeAsync<ScanManifest>(stream, ReadOptions, cancellationToken);
+                if (availableManifest is null
+                    || !TryCreateIdentity(availableManifest, Coverage(availableManifest), out var parsedManifestIdentity))
+                {
+                    return null;
+                }
+
+                manifestIdentity = parsedManifestIdentity;
+            }
+
+            if (receiptExists)
+            {
+                await using var stream = File.OpenRead(receiptPath);
+                var availableReceipt = await JsonSerializer.DeserializeAsync<ScanExecutionReceipt>(stream, ReadOptions, cancellationToken);
+                if (availableReceipt is null || !TryCreateIdentity(availableReceipt, out var parsedReceiptIdentity))
+                {
+                    return null;
+                }
+
+                receiptIdentity = parsedReceiptIdentity;
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
+        {
+            return null;
+        }
+
+        if (manifestIdentity is not null && receiptIdentity is not null)
+        {
+            if (!string.Equals(manifestIdentity.CommitSha, receiptIdentity.CommitSha, StringComparison.Ordinal)
+                || !string.Equals(manifestIdentity.ScanId, receiptIdentity.ScanId, StringComparison.Ordinal)
+                || (receiptIdentity.SourceSnapshotDigest is not null
+                    && !string.Equals(manifestIdentity.SourceSnapshotDigest, receiptIdentity.SourceSnapshotDigest, StringComparison.Ordinal)))
+            {
+                return null;
+            }
+
+            return manifestIdentity;
+        }
+
+        return manifestIdentity ?? receiptIdentity;
+    }
+
+    private static bool TryCreateIdentity(
+        ScanManifest manifest,
+        string coverage,
+        out LocalReviewIdentity identity)
+    {
+        if (!IsHex(manifest.GitRootHash, 32, 64)
+            || !IsHex(manifest.CommitSha, 7, 64)
+            || string.IsNullOrWhiteSpace(manifest.ScanId)
+            || !IsHex(manifest.SourceSnapshotDigest, 64, 64))
+        {
+            identity = null!;
+            return false;
+        }
+
+        identity = new(
+            manifest.GitRootHash!,
+            manifest.CommitSha,
+            manifest.ScanId,
+            manifest.SourceSnapshotDigest,
+            coverage);
+        return true;
+    }
+
+    private static bool TryCreateIdentity(
+        ScanExecutionReceipt receipt,
+        out LocalReviewIdentity identity)
+    {
+        if (!string.Equals(receipt.SchemaVersion, ScanReceiptSchema.Version, StringComparison.Ordinal)
+            || !string.Equals(receipt.RuleId, RuleIds.ScannerStageReceipt, StringComparison.Ordinal)
+            || !IsHex(receipt.RepositoryIdentityHash, 64, 64)
+            || !IsHex(receipt.CommitSha, 7, 64)
+            || string.IsNullOrWhiteSpace(receipt.RunId)
+            || (receipt.SourceSnapshotDigest is not null && !IsHex(receipt.SourceSnapshotDigest, 64, 64)))
+        {
+            identity = null!;
+            return false;
+        }
+
+        identity = new(
+            receipt.RepositoryIdentityHash!,
+            receipt.CommitSha,
+            receipt.RunId,
+            receipt.SourceSnapshotDigest,
+            "unknown");
+        return true;
+    }
+
+    private static bool IsHex(string? value, int minimumLength, int maximumLength) =>
+        value is not null
+        && value.Length >= minimumLength
+        && value.Length <= maximumLength
+        && value.All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f' or >= 'A' and <= 'F');
+
     private static async Task<WebFormsModernizationPacket> ReadWebFormsPacketAsync(
         string path,
         CancellationToken cancellationToken)
@@ -604,17 +730,33 @@ public static class LocalReviewCommand
         TraceMapVersionResult version,
         ScanManifest manifest,
         LocalReviewArguments arguments,
+        IReadOnlyList<LocalReviewStage> stages) =>
+        CreateWorkflowId(
+            version,
+            new LocalReviewIdentity(
+                manifest.GitRootHash!,
+                manifest.CommitSha,
+                manifest.ScanId,
+                manifest.SourceSnapshotDigest,
+                Coverage(manifest)),
+            arguments,
+            stages);
+
+    private static string CreateWorkflowId(
+        TraceMapVersionResult version,
+        LocalReviewIdentity identity,
+        LocalReviewArguments arguments,
         IReadOnlyList<LocalReviewStage> stages)
     {
-        var identity = string.Join("\n", new[]
+        var identityValue = string.Join("\n", new[]
         {
             SchemaVersion,
             version.ToolVersion,
             version.DistributionKind,
-            manifest.GitRootHash,
-            manifest.CommitSha,
-            manifest.ScanId,
-            manifest.SourceSnapshotDigest,
+            identity.RepositoryIdentityHash,
+            identity.CommitSha,
+            identity.ScanId,
+            identity.SourceSnapshotDigest ?? string.Empty,
             string.Join(',', arguments.IdentityPaths(arguments.Solutions)),
             string.Join(',', arguments.IdentityPaths(arguments.Projects)),
             string.Join(',', arguments.Includes.OrderBy(value => value, StringComparer.Ordinal)),
@@ -622,38 +764,40 @@ public static class LocalReviewCommand
             arguments.TargetFramework ?? string.Empty,
             string.Join(',', stages.Select(stage => $"{stage.Stage}:{stage.Outcome}"))
         });
-        return "workflow-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity))).ToLowerInvariant()[..20];
+        return "workflow-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identityValue))).ToLowerInvariant()[..20];
     }
 
     private static LocalReviewResult BuildFailureResult(
         LocalReviewArguments arguments,
         string staging,
+        LocalReviewIdentity? authoritativeIdentity,
         string gap,
         string lastSafeState,
         string nextAction)
     {
         var version = TraceMapVersionInfo.Create();
         var artifacts = BuildArtifactRecords(staging);
-        const string attemptScope = "identity-unavailable";
-        var identity = string.Join("\n", SchemaVersion, version.ToolVersion, gap, attemptScope, arguments.StageSignature());
-        var workflowId = "workflow-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity))).ToLowerInvariant()[..20];
+        LocalReviewStage[] stages = [new("scan", "failed", [], [])];
+        var workflowId = authoritativeIdentity is null
+            ? CreateUnknownFailureWorkflowId(version, arguments, gap)
+            : CreateWorkflowId(version, authoritativeIdentity, arguments, stages);
         return new LocalReviewResult(
             SchemaVersion,
             workflowId,
             version.ToolVersion,
             version.DistributionKind,
-            null,
-            null,
-            null,
-            null,
+            authoritativeIdentity?.RepositoryIdentityHash,
+            authoritativeIdentity?.CommitSha,
+            authoritativeIdentity?.ScanId,
+            authoritativeIdentity?.SourceSnapshotDigest,
             "local-only",
             "failed",
-            "unknown",
+            authoritativeIdentity?.Coverage ?? "unknown",
             lastSafeState,
             "completed",
             "retry-after-correction",
             nextAction,
-            [new("scan", "failed", [], [])],
+            stages,
             artifacts,
             new LocalReviewSummary(0, 0, artifacts.Count),
             [gap],
@@ -666,6 +810,8 @@ public static class LocalReviewCommand
         string outputPath,
         ScanManifest? manifest,
         IReadOnlyList<LocalReviewStage> completedStages,
+        string workflowCoverage,
+        IReadOnlyCollection<string> completedGaps,
         string activeStage,
         string outcome,
         string gap,
@@ -688,10 +834,9 @@ public static class LocalReviewCommand
             {
                 stages.Add(new(activeStage, outcome, [], []));
             }
-            var attemptScope = manifest?.GitRootHash
-                ?? "identity-unavailable";
-            var identity = string.Join("\n", SchemaVersion, version.ToolVersion, attemptScope, gap, arguments.StageSignature());
-            var workflowId = "workflow-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity))).ToLowerInvariant()[..20];
+            var workflowId = manifest is null
+                ? CreateUnknownFailureWorkflowId(version, arguments, gap)
+                : CreateWorkflowId(version, manifest, arguments, stages);
             var factsPath = Path.Combine(staging, "scan", "facts.ndjson");
             var counts = File.Exists(factsPath)
                 ? CountFacts(factsPath)
@@ -707,7 +852,7 @@ public static class LocalReviewCommand
                 manifest?.SourceSnapshotDigest,
                 "local-only",
                 outcome,
-                manifest is null ? "unknown" : Coverage(manifest),
+                manifest is null ? "unknown" : workflowCoverage,
                 lastSafeState,
                 "completed",
                 outcome == "cancelled" ? "not-retryable" : "retry-after-correction",
@@ -715,7 +860,7 @@ public static class LocalReviewCommand
                 stages.AsReadOnly(),
                 artifacts,
                 new LocalReviewSummary(counts.FactCount, counts.GapCount, artifacts.Count),
-                [gap],
+                completedGaps.Append(gap).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
                 Limitations());
             await WriteResultAsync(staging, result, CancellationToken.None);
             Publish(staging, outputPath);
@@ -725,6 +870,16 @@ public static class LocalReviewCommand
         {
             TryCleanup(staging);
         }
+    }
+
+    private static string CreateUnknownFailureWorkflowId(
+        TraceMapVersionResult version,
+        LocalReviewArguments arguments,
+        string gap)
+    {
+        const string attemptScope = "identity-unavailable";
+        var identity = string.Join("\n", SchemaVersion, version.ToolVersion, gap, attemptScope, arguments.StageSignature());
+        return "workflow-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity))).ToLowerInvariant()[..20];
     }
 
     private static string NextAction(string code) => code switch
@@ -812,6 +967,13 @@ public static class LocalReviewCommand
         using var stream = File.OpenRead(path);
         return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
     }
+
+    private sealed record LocalReviewIdentity(
+        string RepositoryIdentityHash,
+        string CommitSha,
+        string ScanId,
+        string? SourceSnapshotDigest,
+        string Coverage);
 
     private sealed record LocalReviewArguments(
         string RepositoryPath,
