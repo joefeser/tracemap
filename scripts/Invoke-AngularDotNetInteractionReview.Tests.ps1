@@ -120,6 +120,18 @@ try {
     Assert-True ($LASTEXITCODE -ne 0) "unsupported Web Forms property-flow framework was accepted"
     $config.propertyFlows[0].framework = "angular"
 
+    $config.propertyFlows[0].selector = "runnerId"
+    [System.IO.File]::WriteAllText($configPath, (($config | ConvertTo-Json -Depth 20) + "`n"), [System.Text.UTF8Encoding]::new($false))
+    & pwsh -NoProfile -File $runner -ConfigPath $configPath -TraceMapRoot $TraceMapRoot -OutputRoot $output1 -ValidateOnly 2>$null | Out-Null
+    Assert-True ($LASTEXITCODE -ne 0) "invalid property-flow selector was accepted"
+    $config.propertyFlows[0].selector = "field:runnerId"
+
+    $config.paths[0].toSurface = "unsupported-terminal"
+    [System.IO.File]::WriteAllText($configPath, (($config | ConvertTo-Json -Depth 20) + "`n"), [System.Text.UTF8Encoding]::new($false))
+    & pwsh -NoProfile -File $runner -ConfigPath $configPath -TraceMapRoot $TraceMapRoot -OutputRoot $output1 -ValidateOnly 2>$null | Out-Null
+    Assert-True ($LASTEXITCODE -ne 0) "unsupported terminal surface was accepted"
+    $config.paths[0].toSurface = "sql-query"
+
     $config.endpointPairs = @(0..100 | ForEach-Object {
         [ordered]@{ name = "pair-$($_.ToString('000'))"; clientLabel = "angular-client"; serverLabel = "dotnet-api" }
     })

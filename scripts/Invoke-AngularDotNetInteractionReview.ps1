@@ -31,6 +31,15 @@ $MaximumQueries = 500
 $AllowedEvidenceTiers = [System.Collections.Generic.HashSet[string]]::new(
     [string[]]@("Tier1Semantic", "Tier2Structural", "Tier3SyntaxOrTextual", "Tier4Unknown"),
     [System.StringComparer]::Ordinal)
+$AllowedTerminalSurfaces = [System.Collections.Generic.HashSet[string]]::new(
+    [string[]]@(
+        "sql-query", "sql-persistence", "http-route", "http-client", "package-config",
+        "wcf-operation", "asmx-service", "asmx-operation", "asmx-client", "asmx-config",
+        "asmx-metadata", "remoting-endpoint", "remoting-registration", "remoting-channel",
+        "remoting-object", "remoting-api", "legacy-data", "dependency-surface", "message-queue",
+        "message-topic", "message-subscription", "message-exchange", "message-stream",
+        "message-event", "message-channel", "message-unknown"),
+    [System.StringComparer]::Ordinal)
 
 function Stop-InteractionReview {
     param([Parameter(Mandatory = $true)][string]$Code)
@@ -91,10 +100,7 @@ function Resolve-RepositoryChildPath {
         Stop-InteractionReview "INTERACTION_RUN_SOURCE_SELECTION_UNAVAILABLE"
     }
     $candidate = [string](Resolve-Path -LiteralPath $candidate).ProviderPath
-    $prefix = $RepositoryPath.TrimEnd(
-        [System.IO.Path]::DirectorySeparatorChar,
-        [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
-    if (-not $candidate.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+    if (-not (Test-PathWithinRoot $candidate $RepositoryPath)) {
         Stop-InteractionReview "INTERACTION_RUN_SOURCE_SELECTION_OUTSIDE_REPOSITORY"
     }
     return $candidate
@@ -125,14 +131,49 @@ function Test-PathWithinRoot {
         [Parameter(Mandatory = $true)][string]$RootPath
     )
 
-    $candidate = [System.IO.Path]::GetFullPath($CandidatePath).TrimEnd(
-        [System.IO.Path]::DirectorySeparatorChar,
-        [System.IO.Path]::AltDirectorySeparatorChar)
-    $root = [System.IO.Path]::GetFullPath($RootPath).TrimEnd(
-        [System.IO.Path]::DirectorySeparatorChar,
-        [System.IO.Path]::AltDirectorySeparatorChar)
-    if ($candidate.Equals($root, [System.StringComparison]::OrdinalIgnoreCase)) { return $true }
-    return $candidate.StartsWith($root + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase)
+    $candidate = [System.IO.Path]::GetFullPath($CandidatePath)
+    $root = [System.IO.Path]::GetFullPath($RootPath)
+    $relative = [System.IO.Path]::GetRelativePath($root, $candidate)
+    if ($relative -eq ".") { return $true }
+    if ([System.IO.Path]::IsPathRooted($relative) -or $relative -eq "..") { return $false }
+    $parentPrefix = ".." + [System.IO.Path]::DirectorySeparatorChar
+    return -not $relative.StartsWith($parentPrefix, [System.StringComparison]::Ordinal)
+}
+
+function Get-FirstNonBlank {
+    param(
+        [AllowNull()][object[]]$Values,
+        [Parameter(Mandatory = $true)][string]$Fallback
+    )
+
+    foreach ($value in $Values) {
+        $text = [string]$value
+        if (-not [string]::IsNullOrWhiteSpace($text)) { return $text }
+    }
+    return $Fallback
+}
+
+function Test-PropertySelector {
+    param([Parameter(Mandatory = $true)][string]$Selector)
+
+    $trimmed = $Selector.Trim()
+    if (
+        $trimmed.Contains("`n", [System.StringComparison]::Ordinal) -or
+        $trimmed.Contains("`r", [System.StringComparison]::Ordinal) -or
+        $trimmed.Contains("://", [System.StringComparison]::Ordinal) -or
+        $trimmed -match '(^|[,\s])(/|~/|[A-Za-z]:\\)' -or
+        $trimmed -match '(?i)(password|secret|token|apikey|api_key|connectionstring)\s*[=:]'
+    ) {
+        return $false
+    }
+
+    $separator = $trimmed.IndexOf(':', [System.StringComparison]::Ordinal)
+    if ($separator -le 0) { return $false }
+    $kind = $trimmed.Substring(0, $separator)
+    $value = $trimmed.Substring($separator + 1).Trim()
+    if ($kind -cnotin @("field", "control", "binding", "model", "dto", "symbol", "fact")) { return $false }
+    if ($kind -cin @("model", "dto") -and -not $value.Contains('.', [System.StringComparison]::Ordinal)) { return $false }
+    return $true
 }
 
 function Get-ContainingGitRoot {
@@ -309,8 +350,14 @@ function Add-ReportSignals {
     foreach ($finding in $endpointRows) {
         $classification = [string](Get-PropertyValue $finding "classification" "unknown")
         if ($classification -in @("MatchedEndpoint", "OptionalSegmentMatch")) { continue }
-        $ruleId = [string](Get-PropertyValue $finding "ruleId" $script:FeedbackRuleId)
-        $tier = [string](Get-PropertyValue $finding "evidenceTier" (Get-PropertyValue $finding "clientEvidenceTier" (Get-PropertyValue $finding "serverEvidenceTier" "Tier4Unknown")))
+        $ruleId = Get-FirstNonBlank @(
+            (Get-PropertyValue $finding "ruleId" $null),
+            (Get-PropertyValue $finding "clientRuleId" $null),
+            (Get-PropertyValue $finding "serverRuleId" $null)) $script:FeedbackRuleId
+        $tier = Get-FirstNonBlank @(
+            (Get-PropertyValue $finding "evidenceTier" $null),
+            (Get-PropertyValue $finding "clientEvidenceTier" $null),
+            (Get-PropertyValue $finding "serverEvidenceTier" $null)) "Tier4Unknown"
         Add-UnresolvedSignal $Signals $Producer "endpoint-alignment" $classification $ruleId $tier $reportCoverage
     }
 }
@@ -498,7 +545,7 @@ foreach ($query in $propertyFlows) {
     $selector = [string](Get-PropertyValue $query "selector" "")
     $sourceLabel = [string](Get-PropertyValue $query "sourceLabel" "")
     $framework = [string](Get-PropertyValue $query "framework" "any")
-    if ($name -notmatch $SafeNamePattern -or -not $queryNames.Add("property:$name") -or [string]::IsNullOrWhiteSpace($selector)) { Stop-InteractionReview "INTERACTION_RUN_QUERY_INVALID" }
+    if ($name -notmatch $SafeNamePattern -or -not $queryNames.Add("property:$name") -or -not (Test-PropertySelector $selector)) { Stop-InteractionReview "INTERACTION_RUN_QUERY_INVALID" }
     if (-not [string]::IsNullOrWhiteSpace($sourceLabel) -and -not $sourceLabels.Contains($sourceLabel)) { Stop-InteractionReview "INTERACTION_RUN_QUERY_SOURCE_UNAVAILABLE" }
     if ($framework -notin @("angular", "razor", "any")) { Stop-InteractionReview "INTERACTION_RUN_QUERY_FRAMEWORK_UNSUPPORTED" }
 }
@@ -516,7 +563,7 @@ foreach ($query in $pathQueries) {
     $name = [string](Get-PropertyValue $query "name" "")
     $fromEndpoint = [string](Get-PropertyValue $query "fromEndpoint" "")
     $toSurface = [string](Get-PropertyValue $query "toSurface" "")
-    if ($name -notmatch $SafeNamePattern -or -not $queryNames.Add("path:$name") -or [string]::IsNullOrWhiteSpace($fromEndpoint) -or [string]::IsNullOrWhiteSpace($toSurface)) {
+    if ($name -notmatch $SafeNamePattern -or -not $queryNames.Add("path:$name") -or [string]::IsNullOrWhiteSpace($fromEndpoint) -or -not $script:AllowedTerminalSurfaces.Contains($toSurface.Trim())) {
         Stop-InteractionReview "INTERACTION_RUN_QUERY_INVALID"
     }
     $sourcePair = [string](Get-PropertyValue $query "sourcePair" "")

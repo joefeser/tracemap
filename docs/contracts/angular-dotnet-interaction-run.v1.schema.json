@@ -89,7 +89,12 @@
       "required": ["name", "selector"],
       "properties": {
         "name": { "$ref": "#/$defs/safeName" },
-        "selector": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "selector": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "pattern": "^(field|control|binding|model|dto|symbol|fact):"
+        },
         "sourceLabel": { "$ref": "#/$defs/safeName" },
         "framework": { "enum": ["angular", "razor", "any"] }
       }
@@ -110,7 +115,16 @@
       "properties": {
         "name": { "$ref": "#/$defs/safeName" },
         "fromEndpoint": { "type": "string", "minLength": 1, "maxLength": 500 },
-        "toSurface": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "toSurface": {
+          "enum": [
+            "sql-query", "sql-persistence", "http-route", "http-client", "package-config",
+            "wcf-operation", "asmx-service", "asmx-operation", "asmx-client", "asmx-config",
+            "asmx-metadata", "remoting-endpoint", "remoting-registration", "remoting-channel",
+            "remoting-object", "remoting-api", "legacy-data", "dependency-surface", "message-queue",
+            "message-topic", "message-subscription", "message-exchange", "message-stream",
+            "message-event", "message-channel", "message-unknown"
+          ]
+        },
         "sourcePair": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}:[a-z0-9][a-z0-9._-]{0,63}$" }
       }
     }
