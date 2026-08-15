@@ -1,5 +1,22 @@
 [
   {
+    "path": "/blog/successful-build-can-still-have-reduced-coverage/",
+    "title": "A Successful Build Can Still Have Reduced Feature Coverage",
+    "summary": "A concept-level guide separating product validation, target build state, analyzer capability states, and feature-level coverage in deterministic static evidence.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/legacy-dotnet/evidence/",
+    "limitations": [
+      "Build status and analysis level describe the selected scan scope only; capability rows are derived status evidence capped below Tier1Semantic and are not compiler observations.",
+      "Coverage-relative no-evidence outcomes distinguish 'not found' from 'not proven'; they do not establish absence, impact, or completeness for any surface."
+    ],
+    "nonClaims": [
+      "No runtime reachability, visibility, event-firing, DI-selection, query-execution, business-correctness, test-completeness, migration-success, parity, release-safety, production-behavior, or complete-coverage claim.",
+      "No private repository, employer, customer, path, source snippet, raw diagnostic, log, configuration value, credential, or LLM-based impact analysis."
+    ]
+  },
+  {
     "path": "/blog/modernizing-web-forms-without-running-it/",
     "title": "Modernizing Web Forms Without Running It",
     "summary": "A concept-level guide to inventorying an ASP.NET Web Forms application from declared markup, event bindings, candidate handlers, route and navigation surfaces, and toolchain coverage limits.",

@@ -1,5 +1,20 @@
 [
   {
+    "slug": "successful-build-can-still-have-reduced-coverage",
+    "category": "Legacy .NET evidence",
+    "title": "A Successful Build Can Still Have Reduced Feature Coverage",
+    "h1": "A successful build can still have reduced feature coverage",
+    "description": "Why a green build and complete feature-level static evidence are different claims: build status, analysis level, analyzer capability, and downstream coverage are separate layers.",
+    "ogDescription": "A public-safe concept guide to build status, analysis level, capability diagnostics, tier caps, coverage-relative no-evidence outcomes, and explicit non-claims.",
+    "cardDescription": "See how a clean compile stays separate from analyzer capability and feature coverage, and why reduced coverage never turns 'not found' into 'not there'.",
+    "hero": "A build answers whether a selected toolchain accepted selected inputs. It does not automatically prove that every binding, event flow, route, or downstream feature was understood.",
+    "published": "2026-08-15",
+    "publishedDisplay": "August 15, 2026",
+    "body": "articles/successful-build-can-still-have-reduced-coverage.html",
+    "calloutHeading": "Carry the layers into review.",
+    "calloutHtml": "Read <a href=\"/blog/modernizing-web-forms-without-running-it/\">what static evidence observes without running the app</a>, then use the <a href=\"/legacy-modernization/review-handoff/\">review handoff matrix</a> to turn each reduced row into an owner question."
+  },
+  {
     "slug": "modernizing-web-forms-without-running-it",
     "category": "Legacy .NET evidence",
     "title": "Modernizing Web Forms Without Running It",
