@@ -89,7 +89,9 @@ const rawMaterialPatterns = [
 ];
 // Whitespace-free variants for the tag-stripped tight surface. SQL keyword
 // patterns stay case-sensitive because lowercase prose fuses into matching
-// shapes once whitespace is removed.
+// shapes once whitespace is removed; the tag-joined surface below catches
+// markup-split keywords case-insensitively instead, so fused-scan case
+// sensitivity stays a documented limitation rather than a bypass.
 const tightRawMaterialPatterns = [
   /SELECT.+?FROM/,
   /(?:CREATE|ALTER|DROP|GRANT|REVOKE)(?:TABLE|VIEW|USER|ROLE|DATABASE|PROCEDURE|FUNCTION)/,
@@ -169,10 +171,11 @@ async function validateBlogIndex({ dist, errors }) {
   const card = html.match(new RegExp(`<a\\b[^>]*href\\s*=\\s*["']${escapeRegExp(reducedCoverageArticleRoute)}["'][^>]*>[\\s\\S]*?<\\/a>`, "i"))?.[0] ?? "";
   const cardNormalized = decodeBrowserEntities(card);
   scanSafety(
-    [normalizeRenderedText(cardNormalized), decodeHtmlEntities(cardNormalized)],
+    [normalizeRenderedText(cardNormalized), joinedText(cardNormalized), decodeHtmlEntities(cardNormalized)],
     errors,
     "blog/index.html",
-    [decodeHtmlEntities(cardNormalized), tightText(cardNormalized)]
+    [decodeHtmlEntities(cardNormalized), tightText(cardNormalized)],
+    tightText(cardNormalized)
   );
 }
 
@@ -214,7 +217,7 @@ function scanDiscoverySafety(entry, errors) {
   if (fields.length === 0) return;
   const surfaces = fields.map((value) => decodeHtmlEntities(decodeBrowserEntities(value)));
   const tight = fields.map((value) => tightText(decodeBrowserEntities(value)));
-  scanSafety(surfaces, errors, "routes-index.json", [...surfaces, ...tight]);
+  scanSafety(surfaces, errors, "routes-index.json", [...surfaces, ...tight], tight.join(" "));
 }
 
 async function validateArticle({ baseUrl, pagePath, errors }) {
@@ -255,7 +258,7 @@ async function validateArticle({ baseUrl, pagePath, errors }) {
   const words = rendered.split(/\s+/).filter(Boolean).length;
   if (words < 900 || words > 1800) errors.push(withEvidence(`Reduced coverage article word count must be between 900 and 1800 words, got ${words}`, pageArtifact));
   const tight = tightText(html);
-  scanSafety([rendered, metadata], errors, pageArtifact, [decoded, metadata, tight], tight);
+  scanSafety([rendered, joinedText(html), metadata], errors, pageArtifact, [decoded, metadata, tight], tight);
 }
 
 function scanSafety(surfaces, errors, artifact, privateSurfaces = surfaces, tightSurface = "") {
@@ -277,6 +280,13 @@ function scanSafety(surfaces, errors, artifact, privateSurfaces = surfaces, tigh
 // (for example "/Use<span>rs/") cannot evade the private/raw scans.
 function tightText(html) {
   return decodeHtmlEntities(stripTagsQuoteAware(String(html))).replace(/\s+/g, "");
+}
+
+// Tag-stripped surface that preserves whitespace so markup-split keywords
+// ("sel<span>ect</span>") rejoin as real words for the case-insensitive
+// raw-material patterns without fusing ordinary prose.
+function joinedText(html) {
+  return decodeHtmlEntities(stripTagsQuoteAware(String(html))).replace(/\s+/g, " ").trim();
 }
 
 function hasHref(html, href) {
