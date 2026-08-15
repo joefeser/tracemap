@@ -1,5 +1,20 @@
 [
   {
+    "slug": "modernizing-web-forms-without-running-it",
+    "category": "Legacy .NET evidence",
+    "title": "Modernizing Web Forms Without Running It",
+    "h1": "Modernizing Web Forms without running it",
+    "description": "How deterministic static evidence inventories an ASP.NET Web Forms application—declared controls, event bindings, candidate handlers, routes, and toolchain limits—without executing it.",
+    "ogDescription": "A public-safe concept guide to Web Forms modernization evidence: declared bindings, candidate handlers, tiered resolution, coverage labels, and explicit non-claims.",
+    "cardDescription": "See how declared controls, candidate handlers, tiered handler resolution, and explicit gaps support Web Forms inventory and modernization planning without runtime claims.",
+    "hero": "A Web Forms application can be inventoried from declared markup, code-behind, configuration, and toolchain evidence before anyone executes, rewrites, or migrates it.",
+    "published": "2026-08-15",
+    "publishedDisplay": "August 15, 2026",
+    "body": "articles/modernizing-web-forms-without-running-it.html",
+    "calloutHeading": "Carry the evidence into review.",
+    "calloutHtml": "Start with the <a href=\"/legacy-modernization/evidence-map/\">legacy modernization evidence map</a>, then use the <a href=\"/legacy-modernization/review-handoff/\">review handoff matrix</a> to turn each candidate into a bounded owner question."
+  },
+  {
     "slug": "what-tracemap-learned-from-graphify",
     "category": "External research",
     "title": "What TraceMap Learned from Graphify—Without Becoming Graphify",
