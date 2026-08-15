@@ -85,6 +85,7 @@ test("Reduced coverage validator rejects tokens split across markup tags and ent
   for (const [name, planted, expected] of [
     ["split private path", "<p>/Use<span>rs/</span>example</p>", /hard private material/],
     ["split sql keyword", "<p>SEL<span>ECT value </span>FROM private_table</p>", /raw or executable material/],
+    ["split lowercase sql keyword", "<p>sel<span>ect</span> value fr<span>om</span> private_table</p>", /raw or executable material/],
     ["entity-encoded private path", "<p>/Us&#101rs/example</p>", /hard private material/],
     ["entity-encoded claim word", "<p>TraceMap pr&#111ves the handler is reachable.</p>", /unsupported positive claim/]
   ]) {
@@ -167,6 +168,34 @@ test("Reduced coverage validator accepts attribute spacing and the supplied cano
   const errors = [];
   await validateReducedCoverageArticleDist({ baseUrl: "https://preview.example/", dist: join(root, "dist"), errors });
   assert.deepEqual(errors, []);
+});
+
+test("Reduced coverage validator tight-scans blog card and discovery strings", async (t) => {
+  await t.test("whitespace-free sql in blog card description", async (subtest) => {
+    const root = await createSiteFixture(subtest);
+    const path = join(root, "src", "_blog", "articles.json");
+    const articles = JSON.parse(await readFile(path, "utf8"));
+    articles.find((article) => article.slug === "successful-build-can-still-have-reduced-coverage").cardDescription = "SELECTsecretFROMprivate_table";
+    await writeFile(path, `${JSON.stringify(articles, null, 2)}\n`, "utf8");
+    await buildSite({ root, log() {} });
+    const errors = [];
+    await validateReducedCoverageArticleDist({ dist: join(root, "dist"), errors });
+    assert.match(errors.join("\n"), /raw or executable material/);
+    assert.match(errors.join("\n"), /blog\/index\.html/);
+  });
+
+  await t.test("whitespace-free sql in discovery summary", async (subtest) => {
+    const root = await createSiteFixture(subtest);
+    const path = join(root, "src", "_site", "discovery.json");
+    const entries = JSON.parse(await readFile(path, "utf8"));
+    entries.find((entry) => entry.path === "/blog/successful-build-can-still-have-reduced-coverage/").summary = "SELECTsecretFROMprivate_table";
+    await writeFile(path, `${JSON.stringify(entries, null, 2)}\n`, "utf8");
+    await buildSite({ root, log() {} });
+    const errors = [];
+    await validateReducedCoverageArticleDist({ dist: join(root, "dist"), errors });
+    assert.match(errors.join("\n"), /raw or executable material/);
+    assert.match(errors.join("\n"), /routes-index\.json/);
+  });
 });
 
 async function createSiteFixture(t) {

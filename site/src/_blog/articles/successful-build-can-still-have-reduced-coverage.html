@@ -80,12 +80,15 @@
     Downstream consumers therefore do not treat the build status alone as
     coverage. Full coverage in the reducer requires the conjunction of
     <code>Level1SemanticAnalysis</code>, <code>Succeeded</code>, and a real
-    commit identity. Anything less routes no-evidence outcomes to
-    <code>NoEvidenceReducedCoverage</code> instead of
+    commit identity. For a single-index reduction, anything less routes
+    no-evidence outcomes to <code>NoEvidenceReducedCoverage</code> instead of
     <code>NoEvidenceFullCoverage</code>, and the acceptance contract is
     explicit that reduced coverage never produces
-    <code>NoEvidenceFullCoverage</code>. In other words: when coverage is
-    reduced, “not found” must not be sold as “not there.”
+    <code>NoEvidenceFullCoverage</code>. Combined-index reduction reports the
+    same reduced-versus-full split through
+    <code>UnknownAnalysisGap</code> versus <code>NoImpactEvidence</code>. In
+    other words: when coverage is reduced, “not found” must not be sold as
+    “not there.”
   </p>
 </section>
 
