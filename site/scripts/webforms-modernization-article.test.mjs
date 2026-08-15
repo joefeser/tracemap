@@ -108,6 +108,37 @@ test("Web Forms modernization validator reports missing discovery entry instead 
   assert.match(errors.join("\n"), /discovery entry is missing/);
 });
 
+test("Web Forms modernization validator rejects semicolonless numeric entities", async (t) => {
+  for (const [name, planted, expected] of [
+    ["entity-encoded private path", "<p>/Us&#101rs/example</p>", /hard private material/],
+    ["entity-encoded claim word", "<p>TraceMap pr&#111ves the handler is reachable.</p>", /unsupported positive claim/]
+  ]) {
+    await t.test(name, async (subtest) => {
+      const root = await createSiteFixture(subtest);
+      const path = join(root, "src", "_blog", "articles", "modernizing-web-forms-without-running-it.html");
+      const html = await readFile(path, "utf8");
+      await writeFile(path, `${html}${planted}`, "utf8");
+      await buildSite({ root, log() {} });
+      const errors = [];
+      await validateWebformsModernizationArticleDist({ dist: join(root, "dist"), errors });
+      assert.match(errors.join("\n"), expected);
+    });
+  }
+});
+
+test("Web Forms modernization validator safety-scans discovery entry strings", async (t) => {
+  const root = await createSiteFixture(t);
+  const path = join(root, "src", "_site", "discovery.json");
+  const entries = JSON.parse(await readFile(path, "utf8"));
+  entries.find((entry) => entry.path === "/blog/modernizing-web-forms-without-running-it/").summary = "The migration succeeded.";
+  await writeFile(path, `${JSON.stringify(entries, null, 2)}\n`, "utf8");
+  await buildSite({ root, log() {} });
+  const errors = [];
+  await validateWebformsModernizationArticleDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /unsupported positive claim/);
+  assert.match(errors.join("\n"), /routes-index\.json/);
+});
+
 test("Web Forms modernization validator rejects discovery claim-level drift", async (t) => {
   const root = await createSiteFixture(t);
   const path = join(root, "src", "_site", "discovery.json");
