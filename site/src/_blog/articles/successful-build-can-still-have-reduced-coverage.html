@@ -109,13 +109,16 @@
   </p>
 
   <p>
-    Reduction also propagates honestly downstream. A flow, route, or data
-    surface extracted under a build status other than <code>Succeeded</code>
-    keeps a reduced coverage label on its own facts, and a report that lacks a
-    supported bridge for a composition records the missing capability rather
-    than an empty success. Each of these is a different failure shape than a
-    failed compile, and each deserves its own label rather than one shared
-    “build issue.”
+    Reduction also propagates honestly downstream where extractors carry build
+    awareness into their facts. A Web Forms flow projected under a build status
+    other than <code>Succeeded</code> keeps a reduced coverage label on its own
+    facts, and a report that lacks a supported bridge for a composition records
+    the missing capability rather than an empty success. Data-surface coverage
+    labels describe their own metadata completeness instead, so a static
+    mapping fact can stay <code>full</code> even when an unrelated C# build is
+    <code>FailedOrPartial</code>. Each of these is a different failure shape
+    than a failed compile, and each deserves its own label rather than one
+    shared “build issue.”
   </p>
 </section>
 
@@ -194,15 +197,16 @@
     <code>Succeeded</code> for the selected scope (target build state). The
     compiler resolves a code-behind type (semantic evidence). A control and its
     event attribute are observed in markup (structural evidence). The generated
-    designer file is missing, so
-    <code>GeneratedDesignerLinkage</code> reads <code>unknown</code> and the
-    handler connection stays a candidate rather than a resolved symbol
-    (capability and candidate). A downstream report asked to compose that flow
+    designer file is missing, so <code>GeneratedDesignerLinkage</code> reads
+    <code>unknown</code> (capability). The event attribute matches no
+    code-behind method, so the handler connection is recorded as a
+    <code>MissingWebFormsHandler</code> gap rather than a resolved symbol
+    (gap). A downstream report asked to compose that flow
     into a workflow view finds no supported bridge, so it records
     <code>DownstreamNoEvidenceCoverage</code> context and keeps the row
     coverage-relative (downstream coverage). The reviewer's packet ends with a
-    specific question: who can regenerate or supply the design-time linkage so
-    this flow can be re-scanned at full strength?
+    specific question: who can regenerate the design-time linkage and locate
+    the missing handler so this flow can be re-scanned at full strength?
   </p>
 
   <p>
