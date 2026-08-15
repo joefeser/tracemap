@@ -1,0 +1,224 @@
+<p>
+  <strong>Public claim level: concept.</strong>
+  This article describes how deterministic static evidence can help a team
+  understand and plan modernization of an ASP.NET Web Forms application without
+  executing it. Every rule ID, evidence tier, coverage label, and limitation
+  cited here comes from TraceMap's public specifications, merged pull requests,
+  and synthetic fixtures. The Web Forms evidence rows on the public
+  <a href="/legacy-modernization/evidence-map/">legacy modernization evidence
+  map</a> are currently labeled <code>hidden</code> pending checked-in public
+  proof paths, so this is a concept-level explanation, not a demo claim.
+</p>
+
+<section data-webforms-article-block="scattered-evidence">
+  <h2>The evidence for one button lives in many places.</h2>
+
+  <p>
+    A single user action in a Web Forms application is spread across distinct
+    evidence sources. The control is declared in markup. The event binding is an
+    attribute on that markup. The handler is a method in a code-behind file,
+    wired to a partial class that a designer file also claims to know about.
+    Navigation to the page may be registered in a global application class, a
+    configuration file, or a hard-coded URL in another page. The handler may
+    call a service client, a generated proxy, or a database operation defined
+    somewhere else entirely. Whether the project even loads in a modern
+    toolchain is itself evidence, recorded or lost.
+  </p>
+
+  <p>
+    Modernization fails quietly when a team treats any one of these sources as
+    the whole picture. The markup alone does not name the code path. The
+    code-behind alone does not prove the control renders. The build alone does
+    not prove the feature works. An inventory that survives contact with a real
+    legacy application has to keep these sources separate, cite each one, and
+    record where the join between them is uncertain.
+  </p>
+</section>
+
+<section data-webforms-article-block="identity-problem">
+  <h2>A button labeled “Save” is not an identity.</h2>
+
+  <p>
+    Labels are display text, not canonical identity. Ten pages can show a button
+    that reads <code>Save</code>. The stable identifiers are the declared control
+    ID in markup, the generated designer field, the bound event-handler name,
+    and the page type that owns them. Those identifiers only become an identity
+    when declared evidence links them, and every link in that chain can be
+    stale: designer files drift from markup, handlers share names across pages,
+    and lifecycle methods such as <code>Page_Load</code> depend on an explicit
+    <code>AutoEventWireup</code> setting rather than any visible subscription.
+  </p>
+
+  <p>
+    TraceMap's answer is to assemble identity from declared evidence with rule
+    IDs attached, and to refuse the join when the evidence is ambiguous. An
+    unmatched handler name is a <code>gap</code>, not a guess. A
+    convention-based lifecycle binding is only recorded when the wiring is
+    explicit, and even then it stays at a textual tier rather than being
+    promoted to compiler-resolved evidence.
+  </p>
+</section>
+
+<section data-webforms-article-block="observable-evidence">
+  <h2>What static evidence can observe, and at what tier.</h2>
+
+  <p>
+    Where evidence exists, TraceMap extracts it deterministically and labels it:
+    pages, controls, master pages, and user controls declared in Web Forms
+    markup (<code>legacy.webforms.inventory.v1</code>), declared event and
+    property bindings such as <code>OnClick</code> and
+    <code>OnTextChanged</code> (<code>legacy.webforms.event-binding.v1</code>),
+    candidate handlers resolved against code-behind symbols
+    (<code>legacy.webforms.handler-resolution.v1</code>), designer control
+    declarations, and composed event-flow rows that carry a classification, a
+    terminal surface kind, and supporting fact IDs
+    (<code>legacy.webforms.event-flow.v1</code>).
+  </p>
+
+  <p>
+    Around the pages themselves, classic ASP.NET route registrations
+    (<code>legacy.aspnet.route.v1</code>), handlers, page methods,
+    configuration surfaces, and static navigation references are recorded under
+    the <code>legacy.aspnet.*</code> rule family, and the toolchain's effect on
+    analysis is recorded under <code>analyzer.capability.*</code> rules such as
+    <code>analyzer.capability.syntax-fallback.v1</code> and
+    <code>analyzer.capability.downstream-coverage.v1</code>.
+  </p>
+
+  <p>
+    Every conclusion keeps its provenance: repository and commit identity,
+    repository-relative file paths and line spans, an extractor version, an
+    evidence tier from <code>Tier1Semantic</code> through
+    <code>Tier2Structural</code>, <code>Tier3SyntaxOrTextual</code>, and
+    <code>Tier4Unknown</code>, a coverage label, supporting fact IDs, and a
+    documented limitation. Where a value is sensitive, TraceMap stores a
+    context-separated hash or omits it; raw source snippets, raw SQL, and
+    configuration values are not public evidence.
+  </p>
+</section>
+
+<section data-webforms-article-block="handler-ladder">
+  <h2>Handler resolution is a ladder, and the weakest rung caps the chain.</h2>
+
+  <p>
+    Connecting a declared binding to a handler is not one step but a bounded
+    ladder. A <code>Tier1Semantic</code> match means a compiler-resolved method
+    symbol in the linked partial class. A <code>Tier2Structural</code> match
+    relies on page identity, method name, and a common event signature.
+    A <code>Tier3SyntaxOrTextual</code> match is a filename-and-method-name
+    agreement when the project cannot be loaded semantically. Anything
+    ambiguous, missing, or unsupported becomes a <code>Tier4Unknown</code> gap.
+  </p>
+
+  <p>
+    The binding itself stays declared evidence at a structural or textual tier.
+    A composed flow is classified from the resolved handler tier and the
+    terminal evidence: <code>StrongStaticEventFlow</code> requires a
+    <code>Tier1Semantic</code> handler and at least one
+    <code>Tier1Semantic</code> terminal, a syntax-tier handler downgrades the
+    flow to <code>NeedsReviewEventFlow</code>, anything between becomes
+    <code>ProbableStaticEventFlow</code>, and a flow with no terminal evidence
+    is recorded as <code>NoBackendEvidence</code> or, when coverage is reduced,
+    <code>UnknownAnalysisGap</code>. A binding that resolves through weaker
+    links does not disappear from the record—it keeps its own tier, its own
+    supporting fact IDs, and its documented limitation, so a review can see
+    where confidence drops instead of averaging it away.
+  </p>
+</section>
+
+<section data-webforms-article-block="example-chain">
+  <h2>A bounded example chain, with the unproven links marked.</h2>
+
+  <p>
+    In a synthetic fixture, a chain can be walked entirely from declared
+    evidence: a control is declared in markup with an event attribute; the
+    attribute names a candidate handler; the handler resolves against a
+    code-behind symbol at a recorded tier; a static call path leads from that
+    symbol toward a terminal surface—a data operation, a service operation, an
+    HTTP client, or a dependency surface—recorded as a surface kind and a hash,
+    not as raw text. The chain ends in a question a human can act on: who owns
+    this path, and what test covers it?
+  </p>
+
+  <p>
+    Every unproven link stays marked. The control being declared is not
+    evidence it is visible at runtime. The binding being declared is not
+    evidence the event fires. The handler resolving is not evidence it is
+    reachable in production. The call path being static is not evidence the
+    operation executes. The terminal surface being identified is not evidence a
+    specific implementation was selected or invoked. A chain with those marks is
+    still useful for planning; the same chain without them is a plausible wrong
+    graph.
+  </p>
+</section>
+
+<section data-webforms-article-block="coverage-gap">
+  <h2>A successful build can still mean reduced feature coverage.</h2>
+
+  <p>
+    Compilation success says the code the compiler can see type-checks. It says
+    nothing about markup that declares bindings no handler satisfies, handlers
+    no markup reaches, configuration that redirects traffic elsewhere, or
+    project files a modern toolchain refuses to load. In legacy .NET
+    repositories, failed or partial MSBuild project loading is a first-class
+    input, not a dead end: syntax fallback runs over the source, capability
+    diagnostics record what was attempted and what reduced semantic coverage,
+    and the scan is labeled reduced rather than clean.
+  </p>
+
+  <p>
+    A loud incomplete graph is safer than a plausible wrong graph. Knowing that
+    page event wiring is only textually resolved, or that a downstream surface
+    has no evidence at all, is what lets a team trust the parts that are
+    resolved and budget review time for the parts that are not. The
+    <a href="/limitations/">site limitations</a> and the
+    <a href="/legacy-dotnet/evidence/">legacy .NET evidence lane</a> document
+    these boundaries in detail.
+  </p>
+</section>
+
+<section data-webforms-article-block="why-useful">
+  <h2>Why this is useful before anyone rewrites code.</h2>
+
+  <p>
+    An evidence-backed inventory supports the work that actually gates
+    modernization: application inventory that does not depend on one person's
+    memory; bounded migration slices chosen from declared surfaces rather than
+    guesswork; owner interviews that start from a cited page, control, or call
+    path instead of a blank page; and a
+    <a href="/test-planning/">test-planning handoff</a> that lists which chains
+    need coverage before behavior moves.
+  </p>
+
+  <p>
+    It also surfaces missing evidence while missing evidence is still cheap.
+    A gap discovered before a rewrite becomes a question; the same gap
+    discovered after becomes a defect. The
+    <a href="/legacy-modernization/review-handoff/">review handoff matrix</a>
+    turns each of these rows into a bounded packet—review question, evidence to
+    bring, required proof field, limitation, owner, allowed wording, and stop
+    condition—so tribal knowledge becomes a reviewable artifact instead of the
+    only copy.
+  </p>
+</section>
+
+<section data-webforms-article-block="non-claims" data-webforms-article-boundary="non-claims" data-tm-boundary="claim-boundary">
+  <h2>What this evidence does not prove.</h2>
+
+  <p>
+    Static evidence does not prove that a page or control is visible at
+    runtime, that an event fired, or that a handler is reachable in production.
+    It does not prove that dependency injection selected a specific
+    implementation, that SQL or any other operation executed, or that any of it
+    matches business intent. It does not establish feature parity, migration
+    correctness, migration success, release safety, or complete application
+    coverage. Absence of evidence is not evidence of absence.
+  </p>
+
+  <p>
+    TraceMap core scanning and reduction add no LLM calls, embeddings, vector
+    databases, or prompt-based classification. See the
+    <a href="/static-vs-runtime/">static-versus-runtime boundary</a> for how
+    these claims are meant to be read.
+  </p>
+</section>
