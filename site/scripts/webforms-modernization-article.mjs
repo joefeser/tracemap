@@ -7,7 +7,8 @@ import {
   fileExists,
   normalizeBaseUrl,
   normalizeRenderedText,
-  readSitemapLocSet
+  readSitemapLocSet,
+  stripTagsQuoteAware
 } from "./validate-utils.mjs";
 
 export const webformsModernizationArticleSlug = "modernizing-web-forms-without-running-it";
@@ -78,6 +79,15 @@ const hardPrivatePatterns = [
   /\bgit@/i,
   /\bsk-[A-Za-z0-9_-]{12,}\b/i
 ];
+// Whitespace-free variants for the tag-stripped tight surface, where markup
+// like "SEL<span>ECT ... FROM" collapses to contiguous text. SQL keyword
+// patterns stay case-sensitive because lowercase prose ("was selected ...
+// from") fuses into matching shapes once whitespace is removed.
+const tightRawMaterialPatterns = [
+  /SELECT.+?FROM/,
+  /(?:CREATE|ALTER|DROP|GRANT|REVOKE)(?:TABLE|VIEW|USER|ROLE|DATABASE|PROCEDURE|FUNCTION)/,
+  /(?:Server|Data ?Source|Initial ?Catalog|User ?Id|Password|ConnectionString)=/i
+];
 
 export async function validateWebformsModernizationArticleDist({
   baseUrl = "https://tracemap.tools",
@@ -121,7 +131,12 @@ async function validateBlogIndex({ dist, errors }) {
     return;
   }
   const card = html.match(new RegExp(`<a\\b[^>]*href\\s*=\\s*["']${escapeRegExp(webformsModernizationArticleRoute)}["'][^>]*>[\\s\\S]*?<\\/a>`, "i"))?.[0] ?? "";
-  scanSafety([normalizeRenderedText(card), decodeHtmlEntities(card)], errors, "blog/index.html");
+  scanSafety(
+    [normalizeRenderedText(card), decodeHtmlEntities(card)],
+    errors,
+    "blog/index.html",
+    [decodeHtmlEntities(card), tightText(card)]
+  );
 }
 
 async function validateDiscovery({ dist, errors }) {
@@ -142,7 +157,7 @@ async function validateDiscovery({ dist, errors }) {
     return;
   }
   const entries = parsed.entries;
-  const entry = entries.find((candidate) => candidate.path === webformsModernizationArticleRoute);
+  const entry = entries.find((candidate) => candidate?.path === webformsModernizationArticleRoute);
   if (!entry) {
     errors.push(withEvidence("Web Forms modernization discovery entry is missing.", "routes-index.json"));
     return;
@@ -184,19 +199,29 @@ async function validateArticle({ baseUrl, pagePath, errors }) {
   }
   const words = rendered.split(/\s+/).filter(Boolean).length;
   if (words < 900 || words > 1800) errors.push(withEvidence(`Web Forms modernization article word count must be between 900 and 1800 words, got ${words}`, pageArtifact));
-  scanSafety([rendered, metadata], errors, pageArtifact, [decoded, metadata]);
+  const tight = tightText(html);
+  scanSafety([rendered, metadata], errors, pageArtifact, [decoded, metadata, tight], tight);
 }
 
-function scanSafety(surfaces, errors, artifact, privateSurfaces = surfaces) {
+function scanSafety(surfaces, errors, artifact, privateSurfaces = surfaces, tightSurface = "") {
   for (const pattern of forbiddenClaims) {
     if (surfaces.some((surface) => pattern.test(surface))) errors.push(withEvidence(`Web Forms modernization article contains unsupported positive claim: ${pattern}`, artifact));
   }
   for (const pattern of rawMaterialPatterns) {
     if (surfaces.some((surface) => pattern.test(surface))) errors.push(withEvidence(`Web Forms modernization article contains raw or executable material: ${pattern}`, artifact));
   }
+  for (const pattern of [...rawMaterialPatterns, ...tightRawMaterialPatterns]) {
+    if (tightSurface && pattern.test(tightSurface)) errors.push(withEvidence(`Web Forms modernization article contains raw or executable material: ${pattern}`, artifact));
+  }
   for (const pattern of hardPrivatePatterns) {
     if (privateSurfaces.some((surface) => pattern.test(surface))) errors.push(withEvidence(`Web Forms modernization article contains hard private material: ${pattern}`, artifact));
   }
+}
+
+// Tag-stripped, whitespace-collapsed surface so tokens split across markup
+// (for example "/Use<span>rs/") cannot evade the private/raw scans.
+function tightText(html) {
+  return decodeHtmlEntities(stripTagsQuoteAware(String(html))).replace(/\s+/g, "");
 }
 
 function hasHref(html, href) {

@@ -80,6 +80,34 @@ test("Web Forms modernization validator rejects planted private and executable m
   }
 });
 
+test("Web Forms modernization validator rejects tokens split across markup tags", async (t) => {
+  for (const [name, planted, expected] of [
+    ["split private path", "<p>/Use<span>rs/</span>example</p>", /hard private material/],
+    ["split sql keyword", "<p>SEL<span>ECT value </span>FROM private_table</p>", /raw or executable material/],
+    ["split credential token", "<p>Pas<span>sword</span>=leak-sentinel</p>", /raw or executable material/]
+  ]) {
+    await t.test(name, async (subtest) => {
+      const root = await createSiteFixture(subtest);
+      const path = join(root, "src", "_blog", "articles", "modernizing-web-forms-without-running-it.html");
+      const html = await readFile(path, "utf8");
+      await writeFile(path, `${html}${planted}`, "utf8");
+      await buildSite({ root, log() {} });
+      const errors = [];
+      await validateWebformsModernizationArticleDist({ dist: join(root, "dist"), errors });
+      assert.match(errors.join("\n"), expected);
+    });
+  }
+});
+
+test("Web Forms modernization validator reports missing discovery entry instead of crashing on null entries", async (t) => {
+  const root = await createSiteFixture(t);
+  await buildSite({ root, log() {} });
+  await writeFile(join(root, "dist", "routes-index.json"), JSON.stringify({ entries: [null] }), "utf8");
+  const errors = [];
+  await validateWebformsModernizationArticleDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /discovery entry is missing/);
+});
+
 test("Web Forms modernization validator rejects discovery claim-level drift", async (t) => {
   const root = await createSiteFixture(t);
   const path = join(root, "src", "_site", "discovery.json");

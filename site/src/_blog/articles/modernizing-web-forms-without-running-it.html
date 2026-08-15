@@ -111,12 +111,18 @@
   </p>
 
   <p>
-    A composed flow is never stronger than its weakest required evidence. The
-    classifications TraceMap emits—<code>StrongStaticEventFlow</code>,
-    <code>ProbableStaticEventFlow</code>, <code>NeedsReviewEventFlow</code>,
-    <code>NoBackendEvidence</code>, and
-    <code>UnknownAnalysisGap</code>—exist so that a review can see exactly where
-    confidence drops instead of averaging it away.
+    The binding itself stays declared evidence at a structural or textual tier.
+    A composed flow is classified from the resolved handler tier and the
+    terminal evidence: <code>StrongStaticEventFlow</code> requires a
+    <code>Tier1Semantic</code> handler and at least one
+    <code>Tier1Semantic</code> terminal, a syntax-tier handler downgrades the
+    flow to <code>NeedsReviewEventFlow</code>, anything between becomes
+    <code>ProbableStaticEventFlow</code>, and a flow with no terminal evidence
+    is recorded as <code>NoBackendEvidence</code> or, when coverage is reduced,
+    <code>UnknownAnalysisGap</code>. A binding that resolves through weaker
+    links does not disappear from the record—it keeps its own tier, its own
+    supporting fact IDs, and its documented limitation, so a review can see
+    where confidence drops instead of averaging it away.
   </p>
 </section>
 
