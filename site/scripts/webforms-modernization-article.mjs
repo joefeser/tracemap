@@ -89,6 +89,23 @@ const tightRawMaterialPatterns = [
   /(?:Server|Data ?Source|Initial ?Catalog|User ?Id|Password|ConnectionString)=/i
 ];
 
+// Browsers decode semicolonless numeric entities ("/Us&#101rs/"), so the
+// safety scans must decode them too or the rendered violation stays hidden.
+function decodeBrowserEntities(value) {
+  return String(value)
+    .replace(/&#x([0-9a-f]+);?/gi, (match, hex) => codePointText(Number.parseInt(hex, 16), match))
+    .replace(/&#([0-9]+);?/gi, (match, digits) => codePointText(Number.parseInt(digits, 10), match));
+}
+
+function codePointText(codePoint, fallback) {
+  if (!Number.isFinite(codePoint) || codePoint < 1 || codePoint > 0x10ffff) return fallback;
+  try {
+    return String.fromCodePoint(codePoint);
+  } catch {
+    return fallback;
+  }
+}
+
 export async function validateWebformsModernizationArticleDist({
   baseUrl = "https://tracemap.tools",
   dist,
@@ -131,11 +148,12 @@ async function validateBlogIndex({ dist, errors }) {
     return;
   }
   const card = html.match(new RegExp(`<a\\b[^>]*href\\s*=\\s*["']${escapeRegExp(webformsModernizationArticleRoute)}["'][^>]*>[\\s\\S]*?<\\/a>`, "i"))?.[0] ?? "";
+  const cardNormalized = decodeBrowserEntities(card);
   scanSafety(
-    [normalizeRenderedText(card), decodeHtmlEntities(card)],
+    [normalizeRenderedText(cardNormalized), decodeHtmlEntities(cardNormalized)],
     errors,
     "blog/index.html",
-    [decodeHtmlEntities(card), tightText(card)]
+    [decodeHtmlEntities(cardNormalized), tightText(cardNormalized)]
   );
 }
 
@@ -166,10 +184,23 @@ async function validateDiscovery({ dist, errors }) {
   if (entry.preferredProofPath !== "/legacy-modernization/evidence-map/") errors.push(withEvidence("Web Forms modernization preferred proof path must remain /legacy-modernization/evidence-map/.", "routes-index.json"));
   if (!Array.isArray(entry.limitations) || entry.limitations.length < 2) errors.push(withEvidence("Web Forms modernization discovery must include at least two limitations.", "routes-index.json"));
   if (!Array.isArray(entry.nonClaims) || entry.nonClaims.length < 2) errors.push(withEvidence("Web Forms modernization discovery must include at least two non-claims.", "routes-index.json"));
+  scanDiscoverySafety(entry, errors);
+}
+
+// The discovery entry is published copy: every string field gets the same
+// claim, raw-material, and private-material scans as the article body.
+function scanDiscoverySafety(entry, errors) {
+  const fields = [entry.title, entry.summary, entry.preferredProofPath, ...(entry.limitations ?? []), ...(entry.nonClaims ?? [])]
+    .filter((value) => typeof value === "string");
+  if (fields.length === 0) return;
+  const surfaces = fields.map((value) => decodeHtmlEntities(decodeBrowserEntities(value)));
+  const tight = fields.map((value) => tightText(decodeBrowserEntities(value)));
+  scanSafety(surfaces, errors, "routes-index.json", [...surfaces, ...tight]);
 }
 
 async function validateArticle({ baseUrl, pagePath, errors }) {
-  const html = await readFile(pagePath, "utf8");
+  const rawHtml = await readFile(pagePath, "utf8");
+  const html = decodeBrowserEntities(rawHtml);
   const decoded = decodeHtmlEntities(html);
   const rendered = normalizeRenderedText(html);
   const metadata = decodeHtmlEntities(
