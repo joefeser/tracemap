@@ -1,0 +1,266 @@
+<p>
+  <strong>Public claim level: concept.</strong>
+  This article explains why a green build and complete feature-level static
+  evidence are different claims, using TraceMap's checked-in contract, rule
+  catalog, and synthetic fixtures. A build answers whether a selected toolchain
+  accepted selected inputs. It does not automatically prove that every framework
+  convention, generated artifact, binding, event flow, route, dependency, or
+  downstream feature was understood by a static analyzer. The companion article
+  <a href="/blog/modernizing-web-forms-without-running-it/">modernizing Web
+  Forms without running it</a> showed what static evidence can observe; this one
+  is about what a clean compile does and does not add.
+</p>
+
+<section data-reduced-coverage-block="four-layers">
+  <h2>Four different questions are hiding inside “the build is green.”</h2>
+
+  <p>
+    In TraceMap's contract these are separate layers, and collapsing them is
+    where review mistakes enter:
+  </p>
+
+  <ol>
+    <li>
+      <strong>TraceMap's own build and tests.</strong> Whether the TraceMap
+      product compiled and its own test suite ran green. This says nothing
+      about any target repository.
+    </li>
+    <li>
+      <strong>Target-repository build state.</strong> Whether the selected
+      projects of the repository being scanned loaded or compiled well enough
+      for semantic analysis, recorded as a build status of
+      <code>Succeeded</code>, <code>FailedOrPartial</code>, or
+      <code>NotRun</code> next to an analysis level such as
+      <code>Level1SemanticAnalysis</code>,
+      <code>Level1SemanticAnalysisReduced</code>, or
+      <code>Level3SyntaxAnalysis</code>.
+    </li>
+    <li>
+      <strong>Analyzer capability.</strong> Which semantic, syntax-fallback,
+      project/config, package/restore, generated-design-time, legacy-toolchain,
+      and downstream-analysis capabilities were <code>available</code>,
+      <code>reduced</code>, <code>unavailable</code>,
+      <code>not-requested</code>, <code>unknown</code>, or
+      <code>not-applicable</code> during the scan.
+    </li>
+    <li>
+      <strong>Feature and downstream coverage.</strong> Whether one particular
+      page, event flow, route, data surface, dependency, or report composition
+      had enough evidence for its bounded claim, or carries a coverage label
+      and a gap instead.
+    </li>
+  </ol>
+
+  <p>
+    The manifest contract states the boundary directly:
+    <code>Level1SemanticAnalysis</code> and <code>Succeeded</code> mean the
+    scanner has full semantic evidence <em>for the selected scan scope</em>,
+    and compiler errors, unresolved dependencies, project-load failures,
+    skipped files, or syntax-only fallback must produce reduced coverage. A
+    build status is a statement about one layer, not a certificate about the
+    other three.
+  </p>
+</section>
+
+<section data-reduced-coverage-block="green-build-answer">
+  <h2>What <code>Succeeded</code> actually records.</h2>
+
+  <p>
+    For the .NET adapter, a build status of <code>Succeeded</code> records that
+    the workspace loaded the selected projects and the compiler reported no
+    errors for them. That is a meaningful, bounded fact. It is also an
+    incomplete review answer, because it does not establish runtime behavior,
+    business correctness, application completeness, analyzer feature support,
+    or complete downstream composition. A repository can compile cleanly while
+    a generated designer file is missing, a binding cannot be resolved, or a
+    report has no supported bridge for a surface it was asked about.
+  </p>
+
+  <p>
+    Downstream consumers therefore do not treat the build status alone as
+    coverage. Full coverage in the reducer requires the conjunction of
+    <code>Level1SemanticAnalysis</code>, <code>Succeeded</code>, and a real
+    commit identity. Anything less routes no-evidence outcomes to
+    <code>NoEvidenceReducedCoverage</code> instead of
+    <code>NoEvidenceFullCoverage</code>, and the acceptance contract is
+    explicit that reduced coverage never produces
+    <code>NoEvidenceFullCoverage</code>. In other words: when coverage is
+    reduced, “not found” must not be sold as “not there.”
+  </p>
+</section>
+
+<section data-reduced-coverage-block="mixed-strength-evidence">
+  <h2>Evidence can be strong in one area and reduced in another.</h2>
+
+  <p>
+    The layers move independently, which is the point of separating them.
+    Compiler-resolved symbols can coexist with missing generated or design-time
+    linkage: a code-behind type resolves at
+    <code>Tier1Semantic</code> while the designer linkage capability stays
+    <code>unknown</code> with an <code>unknown-gap</code> coverage effect.
+    Project and config inspection can remain <code>available</code> with a
+    <code>config-only</code> effect while semantic compilation is
+    <code>reduced</code>. Syntax fallback can preserve useful declarations,
+    member names, and markup facts without any of it being upgraded to semantic
+    evidence—the contract forbids upgrading tiers because a pattern is likely.
+  </p>
+
+  <p>
+    Reduction also propagates honestly downstream. A flow, route, or data
+    surface extracted under a build status other than <code>Succeeded</code>
+    keeps a reduced coverage label on its own facts, and a report that lacks a
+    supported bridge for a composition records the missing capability rather
+    than an empty success. Each of these is a different failure shape than a
+    failed compile, and each deserves its own label rather than one shared
+    “build issue.”
+  </p>
+</section>
+
+<section data-reduced-coverage-block="capability-facts">
+  <h2>Capability facts make the analyzer's own limits reviewable.</h2>
+
+  <p>
+    Capability diagnostics are deterministic, rule-backed rows that describe
+    what the analyzer could do during one scan, each with a capability code, a
+    state, a coverage effect, and a hard evidence-tier cap:
+  </p>
+
+  <ul>
+    <li>
+      <code>CSharpSemanticCompilation</code>, <code>MSBuildProjectLoad</code>,
+      and <code>ReferenceAssemblyResolution</code> under
+      <code>analyzer.capability.semantic.v1</code> — semantic compilation,
+      project load, and reference assembly capability, capped at
+      <code>Tier2Structural</code> because they are derived status rows, not
+      compiler symbol observations.
+    </li>
+    <li>
+      <code>SyntaxFallbackAvailable</code> under
+      <code>analyzer.capability.syntax-fallback.v1</code>, capped at
+      <code>Tier3SyntaxOrTextual</code> — fallback evidence exists, and it
+      cannot prove compiler-resolved behavior.
+    </li>
+    <li>
+      <code>LegacyProjectConfigInspection</code> under
+      <code>analyzer.capability.project-config.v1</code> and
+      <code>LegacyNuGetRestoreAwareness</code> under
+      <code>analyzer.capability.package-restore.v1</code> — static project and
+      package-shape awareness. Restore that was
+      <code>not-requested</code> is scan-option context, not evidence that
+      packages are missing.
+    </li>
+    <li>
+      <code>GeneratedDesignerLinkage</code> under
+      <code>analyzer.capability.generated-design-time.v1</code>, capped at
+      <code>Tier3SyntaxOrTextual</code> — missing, malformed, or unlinked
+      design-time artifacts cap confidence without suppressing valid syntax and
+      config facts.
+    </li>
+    <li>
+      <code>LegacyWebStackShape</code> under
+      <code>analyzer.capability.legacy-toolchain.v1</code> — static framework
+      and web-stack signals, informational unless observed scan behavior
+      reduced coverage.
+    </li>
+    <li>
+      <code>DownstreamNoEvidenceCoverage</code> under
+      <code>analyzer.capability.downstream-coverage.v1</code>, capped at
+      <code>Tier4Unknown</code> — emitted only when some other capability is
+      <code>reduced</code>, <code>unavailable</code>, or <code>unknown</code>,
+      telling downstream readers to keep no-evidence conclusions
+      coverage-relative.
+    </li>
+  </ul>
+
+  <p>
+    Sanitized build-environment rows under
+    <code>build.environment.workspace-diagnostic.v1</code> carry the categories
+    that explain <em>why</em> semantic coverage dropped, with the standing
+    limitation that they explain coverage, not runtime compatibility. The
+    <a href="/legacy-dotnet/evidence/">legacy .NET evidence lane</a> and the
+    <a href="/limitations/">site limitations</a> page keep the full lists.
+  </p>
+</section>
+
+<section data-reduced-coverage-block="bounded-example">
+  <h2>A bounded synthetic example, layer by layer.</h2>
+
+  <p>
+    Consider a synthetic legacy repository where the scan proceeds like this:
+    the project loads and compiles, so the build status is
+    <code>Succeeded</code> for the selected scope (target build state). The
+    compiler resolves a code-behind type (semantic evidence). A control and its
+    event attribute are observed in markup (structural evidence). The generated
+    designer file is stale or unlinked, so
+    <code>GeneratedDesignerLinkage</code> reads <code>unknown</code> and the
+    handler connection stays a candidate rather than a resolved symbol
+    (capability and candidate). A downstream report asked to compose that flow
+    into a workflow view finds no supported bridge, so it records
+    <code>DownstreamNoEvidenceCoverage</code> context and keeps the row
+    coverage-relative (downstream coverage). The reviewer's packet ends with a
+    specific question: who can regenerate or supply the design-time linkage so
+    this flow can be re-scanned at full strength?
+  </p>
+
+  <p>
+    Every step is labeled by layer and evidence strength—semantic,
+    structural, syntax fallback, candidate, or gap—and none of it came from
+    private validation. The useful output is not a verdict; it is the named,
+    bounded next action.
+  </p>
+</section>
+
+<section data-reduced-coverage-block="partial-evidence-useful">
+  <h2>Why partial evidence is still useful.</h2>
+
+  <p>
+    A scan with reduced coverage still produces an inventory of pages, routes,
+    bindings, and dependency surfaces that an owner interview can start from.
+    It still feeds migration planning with declared surfaces instead of
+    guesswork, and it identifies the missing generated files or toolchain
+    prerequisites that blocked deeper analysis—often the cheapest thing to fix
+    next. It supports selecting focused tests through the
+    <a href="/test-planning/">test-planning handoff</a>, and it keeps “not
+    found” honestly separated from “not proven.” The failure it prevents is
+    quiet: a green build being mistaken for complete understanding.
+  </p>
+</section>
+
+<section data-reduced-coverage-block="reduced-coverage-response">
+  <h2>What should happen when coverage is reduced.</h2>
+
+  <p>
+    TraceMap's contract answers this operationally: preserve the evidence that
+    is independently provable, emit rule-backed gaps for what is not, and keep
+    the repository and commit identity, source spans, and provenance attached
+    so the reduced result is still auditable. Identify the missing capability
+    by code and rule, give the reviewer a bounded next action, and never
+    silently convert missing analysis into a clean result. The
+    <a href="/legacy-modernization/evidence-map/">evidence map</a> shows which
+    surfaces currently have public proof paths, and the
+    <a href="/legacy-modernization/review-handoff/">review handoff matrix</a>
+    turns each reduced row into an owner question with a stop condition.
+  </p>
+</section>
+
+<section data-reduced-coverage-block="non-claims" data-reduced-coverage-boundary="non-claims" data-tm-boundary="claim-boundary">
+  <h2>What none of this can prove.</h2>
+
+  <p>
+    Neither a green build nor TraceMap's static evidence is proof of runtime
+    reachability; that a page or control was visible; that an event fired; that
+    dependency injection selected an implementation; that SQL or any other
+    operation executed; business correctness; test completeness; migration
+    success; feature parity; release safety; production behavior; or complete
+    application coverage. A clean compile of the analyzer's own product is a
+    separate fact from the target repository's build state, and both are
+    separate from what any one feature's evidence supports. See the
+    <a href="/static-vs-runtime/">static-versus-runtime boundary</a> for how
+    to read these claims.
+  </p>
+
+  <p>
+    TraceMap's scanner and reducer contain no LLM calls, embeddings, vector
+    databases, or prompt-based classification.
+  </p>
+</section>
