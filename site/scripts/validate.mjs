@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { buildSite, topNavigationLinks } from "./build.mjs";
 import { validateAdoptionPlaybookDist } from "./adoption-playbook.mjs";
 import { validateAccessSafeEvidenceAcquisitionDist } from "./access-safe-evidence-acquisition.mjs";
+import { validateWebformsModernizationArticleDist } from "./webforms-modernization-article.mjs";
 import { validateAccessFormFieldLineageDist } from "./access-form-field-lineage.mjs";
 import { validateAccessRebuildReadinessDist } from "./access-rebuild-readiness.mjs";
 import { validateBuildReviewWorkflowStoryDist } from "./build-review-workflow-story.mjs";
@@ -107,6 +108,7 @@ export async function validateDist({
   baseUrl = defaultBaseUrl,
   requireMsbuildBinlogEvidence = true,
   requireAccessSafeEvidenceAcquisition = true,
+  requireWebformsModernizationArticle = true,
   requireAccessFormFieldLineage = requireMsbuildBinlogEvidence,
   requireCsharpExtractionTruth = true,
   requireGraphHistoryBugs = true,
@@ -149,6 +151,9 @@ export async function validateDist({
     if (requireAccessSafeEvidenceAcquisition) {
       await validateAccessSafeEvidenceAcquisitionDist({ baseUrl: normalizedBaseUrl, dist, errors });
     }
+  if (requireWebformsModernizationArticle) {
+    await validateWebformsModernizationArticleDist({ baseUrl: normalizedBaseUrl, dist, errors });
+  }
   if (requireCsharpExtractionTruth) {
     await validateCsharpExtractionTruthDist({ baseUrl: normalizedBaseUrl, dist, errors });
   }

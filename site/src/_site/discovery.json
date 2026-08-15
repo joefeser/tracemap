@@ -1,5 +1,22 @@
 [
   {
+    "path": "/blog/modernizing-web-forms-without-running-it/",
+    "title": "Modernizing Web Forms Without Running It",
+    "summary": "A concept-level guide to inventorying an ASP.NET Web Forms application from declared markup, event bindings, candidate handlers, route and navigation surfaces, and toolchain coverage limits.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/legacy-modernization/evidence-map/",
+    "limitations": [
+      "Web Forms evidence rows are labeled hidden on the public evidence map until checked-in public proof paths exist; this article cites merged public specs and synthetic fixtures only.",
+      "Handler resolution and event-flow classification are capped by the weakest required evidence tier, and route evidence is currently syntax-tier only with multi-hop traversal deferred."
+    ],
+    "nonClaims": [
+      "No runtime visibility, event-firing, handler-reachability, DI-selection, query-execution, business-intent, feature-parity, migration-success, release-safety, or complete-coverage claim.",
+      "No private application, employer, customer, path, screenshot, source snippet, raw SQL, configuration value, or LLM-based impact analysis."
+    ]
+  },
+  {
     "path": "/blog/what-tracemap-learned-from-graphify/",
     "title": "What TraceMap Learned from Graphify—Without Becoming Graphify",
     "summary": "A concept-level research story distinguishing external persistent-graph lessons from independently implemented TraceMap evidence, fixtures, boundaries, and deliberate non-adoption decisions.",
