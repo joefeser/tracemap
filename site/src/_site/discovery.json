@@ -9,7 +9,7 @@
     "preferredProofPath": "/legacy-modernization/evidence-map/",
     "limitations": [
       "Web Forms evidence rows are labeled hidden on the public evidence map until checked-in public proof paths exist; this article cites merged public specs and synthetic fixtures only.",
-      "Handler resolution and event-flow classification are capped by the weakest required evidence tier, and route evidence is currently syntax-tier only with multi-hop traversal deferred."
+      "Event-flow classification follows the implemented ladder: StrongStaticEventFlow requires a Tier1Semantic handler plus Tier1Semantic terminal evidence, a syntax-tier handler downgrades to NeedsReviewEventFlow, and the declared binding keeps its own structural or textual tier. Route evidence is currently syntax-tier only and multi-hop traversal is deferred."
     ],
     "nonClaims": [
       "No runtime visibility, event-firing, handler-reachability, DI-selection, query-execution, business-intent, feature-parity, migration-success, release-safety, or complete-coverage claim.",
