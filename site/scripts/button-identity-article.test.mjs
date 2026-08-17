@@ -152,8 +152,37 @@ test("Button identity validator requires each structural section and the claim-b
     await buildSite({ root, log() {} });
     const errors = [];
     await validateButtonIdentityArticleDist({ dist: join(root, "dist"), errors });
-    assert.match(errors.join("\n"), /claim-boundary attributes/);
+    assert.match(errors.join("\n"), /must carry data-tm-boundary="claim-boundary"/);
   });
+
+  await t.test("dropped boundary attribute", async (subtest) => {
+    const root = await createSiteFixture(subtest);
+    const path = join(root, articleBodyPath);
+    const html = await readFile(path, "utf8");
+    await writeFile(path, html.replace(' data-save-identity-boundary="non-claims"', ""), "utf8");
+    await buildSite({ root, log() {} });
+    const errors = [];
+    await validateButtonIdentityArticleDist({ dist: join(root, "dist"), errors });
+    assert.match(errors.join("\n"), /must carry data-save-identity-boundary="non-claims"/);
+  });
+});
+
+test("Button identity validator accepts reordered boundary attributes", async (t) => {
+  const root = await createSiteFixture(t);
+  const path = join(root, articleBodyPath);
+  const html = await readFile(path, "utf8");
+  await writeFile(
+    path,
+    html.replace(
+      '<section data-save-identity-block="non-claims" data-save-identity-boundary="non-claims" data-tm-boundary="claim-boundary">',
+      '<section data-tm-boundary="claim-boundary" data-save-identity-boundary="non-claims" data-save-identity-block="non-claims">'
+    ),
+    "utf8"
+  );
+  await buildSite({ root, log() {} });
+  const errors = [];
+  await validateButtonIdentityArticleDist({ dist: join(root, "dist"), errors });
+  assert.deepEqual(errors, []);
 });
 
 test("Button identity validator requires the four-tier resolution ladder", async (t) => {
@@ -293,6 +322,32 @@ test("Button identity validator reports missing discovery entry instead of crash
   const errors = [];
   await validateButtonIdentityArticleDist({ dist: join(root, "dist"), errors });
   assert.match(errors.join("\n"), /discovery entry is missing/);
+});
+
+test("Button identity validator reports malformed discovery arrays instead of throwing", async (t) => {
+  const root = await createSiteFixture(t);
+  await buildSite({ root, log() {} });
+  await writeFile(
+    join(root, "dist", "routes-index.json"),
+    JSON.stringify({
+      entries: [
+        {
+          path: "/blog/a-button-named-save-is-not-an-identity/",
+          title: "A Button Named Save Is Not an Identity",
+          summary: "A concept-level identity guide.",
+          publicClaimLevel: "concept",
+          preferredProofPath: "/legacy-modernization/evidence-map/",
+          limitations: 5,
+          nonClaims: true
+        }
+      ]
+    }),
+    "utf8"
+  );
+  const errors = [];
+  await validateButtonIdentityArticleDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /at least two limitations/);
+  assert.match(errors.join("\n"), /at least two non-claims/);
 });
 
 test("Button identity validator rejects discovery claim-level and proof-path drift", async (t) => {
