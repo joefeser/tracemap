@@ -267,7 +267,7 @@ export async function validateDist({
   await validateTopNavigation({ dist, errors, htmlFiles });
 
   if (errors.length > 0) {
-    throw new Error(`Site validation failed:\n- ${errors.join("\n- ")}`);
+    throw new Error(`Site validation failed:\n- ${errors.map(formatValidationError).join("\n- ")}`);
   }
 
   return {
@@ -275,6 +275,12 @@ export async function validateDist({
     internalReferenceCount,
     sitemapUrlCount: sitemapUrls.length
   };
+}
+
+function formatValidationError(error) {
+  if (typeof error === "string") return error;
+  if (error && typeof error.message === "string") return error.message;
+  return JSON.stringify(error);
 }
 
 async function collectFiles(directory, errors) {

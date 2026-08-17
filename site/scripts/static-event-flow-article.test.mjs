@@ -23,6 +23,8 @@ test("Static event-flow article builds with eight sections, classifications, tie
 test("Static event-flow validator rejects unsupported runtime and release claims", async (t) => {
   for (const claim of [
     "TraceMap proves the event fires at runtime.",
+    "TraceMap proved the event fired at runtime.",
+    "Static event flow verified the event fired at runtime.",
     "The user reached the screen.",
     "The service is available in production.",
     "The migration succeeded.",
@@ -39,6 +41,17 @@ test("Static event-flow validator rejects unsupported runtime and release claims
       assert.match(errors.join("\n"), /unsupported positive claim/);
     });
   }
+});
+
+test("Static event-flow validator rejects ordinary UPDATE statements", async (t) => {
+  const root = await createSiteFixture(t);
+  const path = join(root, articleBodyPath);
+  const html = await readFile(path, "utf8");
+  await writeFile(path, `${html}<p>UPDATE customer_accounts SET status = 1</p>`, "utf8");
+  await buildSite({ root, log() {} });
+  const errors = [];
+  await validateStaticEventFlowArticleDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /raw or executable material/);
 });
 
 test("Static event-flow validator safety-scans metadata, blog card, and discovery strings", async (t) => {
@@ -69,6 +82,7 @@ test("Static event-flow validator catches tag-split and browser-decoded unsafe t
   for (const [name, planted, expected] of [
     ["tag-split claim", "<p>TraceMap pr<span>oves the event fires.</p>", /unsupported positive claim/],
     ["tag-split SQL", "<p>SEL<span>ECT value </span>FROM private_table</p>", /raw or executable material/],
+    ["mixed-case tight SQL", "<p>S E l E c T value F R O M private_table</p>", /raw or executable material/],
     ["tag-split private path", "<p>/Use<span>rs/example/private</span></p>", /hard private material/],
     ["numeric-entity claim", "<p>TraceMap pr&#111;ves the event fires.</p>", /unsupported positive claim/],
     ["numeric-entity private path", "<p>/Us&#101rs/example/private</p>", /hard private material/]
@@ -117,6 +131,35 @@ test("Static event-flow validator requires the claim-boundary attributes and tol
   }
 });
 
+test("Static event-flow validator treats metadata attribute order as insignificant", async (t) => {
+  const root = await createSiteFixture(t);
+  await buildSite({ root, log() {} });
+  const pagePath = join(root, "dist", "blog", staticEventFlowSlug(), "index.html");
+  const canonicalUrl = "https://tracemap.tools/blog/static-event-flow-what-it-proves/";
+  const html = await readFile(pagePath, "utf8");
+  const reordered = html
+    .replace(
+      `<link rel="canonical" href="${canonicalUrl}">`,
+      `<link href="${canonicalUrl}" rel="canonical">`
+    )
+    .replace(
+      '<meta property="og:title" content="Static Event Flow: What It Proves—and What It Does Not">',
+      '<meta content="Static Event Flow: What It Proves—and What It Does Not" property="og:title">'
+    )
+    .replace(
+      `<meta property="og:url" content="${canonicalUrl}">`,
+      `<meta content="${canonicalUrl}" property="og:url">`
+    )
+    .replace(
+      '<meta property="article:published_time" content="2026-08-17">',
+      '<meta content="2026-08-17" property="article:published_time">'
+    );
+  await writeFile(pagePath, reordered, "utf8");
+  const errors = [];
+  await validateStaticEventFlowArticleDist({ dist: join(root, "dist"), errors });
+  assert.deepEqual(errors, []);
+});
+
 test("Static event-flow validator requires every classification and tier label", async (t) => {
   for (const [name, oldText, newText, expected] of [
     ["classification", "<strong>StrongStaticEventFlow:</strong>", "<strong>Strong static flow:</strong>", /missing classification: StrongStaticEventFlow/],
@@ -144,6 +187,64 @@ test("Static event-flow validator rejects fake rule IDs", async (t) => {
   const errors = [];
   await validateStaticEventFlowArticleDist({ dist: join(root, "dist"), errors });
   assert.match(errors.join("\n"), /outside the verified catalog list: fake\.webforms\.flow\.v1/);
+});
+
+test("Static event-flow validator emits structured rule-linked findings", async (t) => {
+  const root = await createSiteFixture(t);
+  await buildSite({ root, log() {} });
+  await writeFile(join(root, "dist", "routes-index.json"), "{\"entries\": null}", "utf8");
+  const errors = [];
+  await validateStaticEventFlowArticleDist({ dist: join(root, "dist"), errors });
+  const finding = errors.find((error) => error.message?.includes("entries array"));
+  assert.ok(finding);
+  assert.equal(finding.rule_id, "legacy.webforms.event-flow.v1");
+  assert.equal(finding.evidence_tier, "Tier3SyntaxOrTextual");
+  assert.equal(finding.file_path, "routes-index.json");
+  assert.deepEqual(finding.line_span, { start: null, end: null });
+  assert.equal(typeof finding.commit_sha, "string");
+  assert.equal(finding.extractor_version, "static-event-flow-article-validator.v1");
+  assert.deepEqual(finding.evidence[0], {
+    rule_id: finding.rule_id,
+    evidence_tier: finding.evidence_tier,
+    file_path: finding.file_path,
+    line_span: finding.line_span,
+    commit_sha: finding.commit_sha,
+    extractor_version: finding.extractor_version
+  });
+  assert.match(errors.join("\n"), /entries array/);
+});
+
+test("Static event-flow validator requires actual anchors for required links", async (t) => {
+  await t.test("commented blog link does not satisfy blog-index validation", async (subtest) => {
+    const root = await createSiteFixture(subtest);
+    await buildSite({ root, log() {} });
+    const blogPath = join(root, "dist", "blog", "index.html");
+    const html = await readFile(blogPath, "utf8");
+    const link = html.match(new RegExp(`<a\\b[^>]*href\\s*=\\s*["']${articleRoute}["'][^>]*>[\\s\\S]*?<\\/a>`, "i"))?.[0];
+    assert.ok(link);
+    await writeFile(blogPath, html.replace(link, `<!-- ${link} -->`), "utf8");
+    const errors = [];
+    await validateStaticEventFlowArticleDist({ dist: join(root, "dist"), errors });
+    assert.match(errors.join("\n"), /blog index is missing article link/);
+  });
+
+  await t.test("scripted article link does not satisfy article validation", async (subtest) => {
+    const root = await createSiteFixture(subtest);
+    await buildSite({ root, log() {} });
+    const pagePath = join(root, "dist", "blog", staticEventFlowSlug(), "index.html");
+    const html = await readFile(pagePath, "utf8");
+    const route = "/evidence/";
+    const routePattern = new RegExp(`<a\\b[^>]*href\\s*=\\s*["']${route}["'][^>]*>[\\s\\S]*?<\\/a>`, "gi");
+    assert.match(html, routePattern);
+    await writeFile(
+      pagePath,
+      html.replace(routePattern, (link) => "<script>const spoofedLink = " + JSON.stringify(link) + ";</script>"),
+      "utf8"
+    );
+    const errors = [];
+    await validateStaticEventFlowArticleDist({ dist: join(root, "dist"), errors });
+    assert.match(errors.join("\n"), /article is missing required link: \/evidence\//);
+  });
 });
 
 test("Static event-flow validator reports malformed discovery arrays without throwing", async (t) => {
