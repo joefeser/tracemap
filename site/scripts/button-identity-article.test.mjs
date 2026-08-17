@@ -190,7 +190,13 @@ test("Button identity validator requires the four-tier resolution ladder", async
     const root = await createSiteFixture(subtest);
     const path = join(root, articleBodyPath);
     const html = await readFile(path, "utf8");
-    await writeFile(path, html.replace("<strong>Tier2Structural.</strong>", "<strong>Second tier.</strong>"), "utf8");
+    await writeFile(
+      path,
+      html
+        .replaceAll("<strong>Tier2Structural.</strong>", "<strong>Second tier.</strong>")
+        .replaceAll("<code>Tier2Structural</code>", "<code>Second tier</code>"),
+      "utf8"
+    );
     await buildSite({ root, log() {} });
     const errors = [];
     await validateButtonIdentityArticleDist({ dist: join(root, "dist"), errors });
