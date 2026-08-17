@@ -1,5 +1,22 @@
 [
   {
+    "path": "/blog/when-a-gap-has-no-honest-line-number/",
+    "title": "When a Gap Has No Honest Line Number",
+    "summary": "A concept-level guide to TraceMap's five location classes: exact source spans, supporting declaration spans, owning-container anchors, workspace/repository anchors, and unavailable spans.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/evidence/",
+    "limitations": [
+      "Anchors are provenance conventions documented by their owning rules; a container or workspace anchor at line 1 is not a source-line observation, and conventions differ per rule.",
+      "The article cites checked-in public contracts, rule catalog entries, and synthetic examples only; it does not describe private validation or any real repository scan."
+    ],
+    "nonClaims": [
+      "No causality, runtime reachability, execution, business-intent, ownership, fault, or complete-coverage claim from any path, span, or anchor.",
+      "No private repository, employer, customer, path, source snippet, raw diagnostic, log, configuration value, credential, or LLM-based impact analysis."
+    ]
+  },
+  {
     "path": "/blog/successful-build-can-still-have-reduced-coverage/",
     "title": "A Successful Build Can Still Have Reduced Feature Coverage",
     "summary": "A concept-level guide separating product validation, target build state, analyzer capability states, and feature-level coverage in deterministic static evidence.",

@@ -117,7 +117,7 @@ import { validateDist } from "./validate.mjs";
 test("validateDist accepts generated public sitemap and internal links", async () => {
   const root = await createDistFixture();
 
-  await validateDist({ requireGraphifyLessons: false, requireGapBecomesRule: false, requireReverseImpactDispatchStories: false, requireAccessRebuildReadiness: false, requireGraphHistoryBugs: false, requireCsharpExtractionTruth: false, requireAccessSafeEvidenceAcquisition: false, requireWebformsModernizationArticle: false, requireReducedCoverageArticle: false, requireMsbuildBinlogEvidence: false, root });
+  await validateDist({ requireGraphifyLessons: false, requireGapBecomesRule: false, requireReverseImpactDispatchStories: false, requireAccessRebuildReadiness: false, requireGraphHistoryBugs: false, requireCsharpExtractionTruth: false, requireAccessSafeEvidenceAcquisition: false, requireWebformsModernizationArticle: false, requireReducedCoverageArticle: false, requireGapLineNumberArticle: false, requireMsbuildBinlogEvidence: false, root });
 });
 
 test("validateDist reports missing dist directory through validation errors", async () => {
@@ -132,7 +132,7 @@ test("validateDist reports missing dist directory through validation errors", as
 test("validateDist normalizes trailing slash baseUrl values", async () => {
   const root = await createDistFixture();
 
-  await validateDist({ baseUrl: "https://tracemap.tools/", requireGraphifyLessons: false, requireGapBecomesRule: false, requireReverseImpactDispatchStories: false, requireAccessRebuildReadiness: false, requireGraphHistoryBugs: false, requireCsharpExtractionTruth: false, requireAccessSafeEvidenceAcquisition: false, requireWebformsModernizationArticle: false, requireReducedCoverageArticle: false, requireMsbuildBinlogEvidence: false, root });
+  await validateDist({ baseUrl: "https://tracemap.tools/", requireGraphifyLessons: false, requireGapBecomesRule: false, requireReverseImpactDispatchStories: false, requireAccessRebuildReadiness: false, requireGraphHistoryBugs: false, requireCsharpExtractionTruth: false, requireAccessSafeEvidenceAcquisition: false, requireWebformsModernizationArticle: false, requireReducedCoverageArticle: false, requireGapLineNumberArticle: false, requireMsbuildBinlogEvidence: false, root });
 });
 
 test("validateDist accepts directory links without trailing slashes", async () => {
@@ -140,7 +140,7 @@ test("validateDist accepts directory links without trailing slashes", async () =
     indexHtml: page('<a href="/docs">Docs</a>')
   });
 
-  await validateDist({ requireGraphifyLessons: false, requireGapBecomesRule: false, requireReverseImpactDispatchStories: false, requireAccessRebuildReadiness: false, requireGraphHistoryBugs: false, requireCsharpExtractionTruth: false, requireAccessSafeEvidenceAcquisition: false, requireWebformsModernizationArticle: false, requireReducedCoverageArticle: false, requireMsbuildBinlogEvidence: false, root });
+  await validateDist({ requireGraphifyLessons: false, requireGapBecomesRule: false, requireReverseImpactDispatchStories: false, requireAccessRebuildReadiness: false, requireGraphHistoryBugs: false, requireCsharpExtractionTruth: false, requireAccessSafeEvidenceAcquisition: false, requireWebformsModernizationArticle: false, requireReducedCoverageArticle: false, requireGapLineNumberArticle: false, requireMsbuildBinlogEvidence: false, root });
 });
 
 test("validateDist rejects sitemap URLs without generated files", async () => {

@@ -7,6 +7,7 @@ import { validateAdoptionPlaybookDist } from "./adoption-playbook.mjs";
 import { validateAccessSafeEvidenceAcquisitionDist } from "./access-safe-evidence-acquisition.mjs";
 import { validateWebformsModernizationArticleDist } from "./webforms-modernization-article.mjs";
 import { validateReducedCoverageArticleDist } from "./reduced-coverage-article.mjs";
+import { validateGapLineNumberArticleDist } from "./gap-line-number-article.mjs";
 import { validateAccessFormFieldLineageDist } from "./access-form-field-lineage.mjs";
 import { validateAccessRebuildReadinessDist } from "./access-rebuild-readiness.mjs";
 import { validateBuildReviewWorkflowStoryDist } from "./build-review-workflow-story.mjs";
@@ -111,6 +112,7 @@ export async function validateDist({
   requireAccessSafeEvidenceAcquisition = true,
   requireWebformsModernizationArticle = true,
   requireReducedCoverageArticle = true,
+  requireGapLineNumberArticle = true,
   requireAccessFormFieldLineage = requireMsbuildBinlogEvidence,
   requireCsharpExtractionTruth = true,
   requireGraphHistoryBugs = true,
@@ -158,6 +160,9 @@ export async function validateDist({
   }
   if (requireReducedCoverageArticle) {
     await validateReducedCoverageArticleDist({ baseUrl: normalizedBaseUrl, dist, errors });
+  }
+  if (requireGapLineNumberArticle) {
+    await validateGapLineNumberArticleDist({ baseUrl: normalizedBaseUrl, dist, errors });
   }
   if (requireCsharpExtractionTruth) {
     await validateCsharpExtractionTruthDist({ baseUrl: normalizedBaseUrl, dist, errors });
