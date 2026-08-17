@@ -45,6 +45,11 @@ export const staticEventFlowArticleRuleIds = [
   "csharp.semantic.callgraph.v1",
   "csharp.syntax.callgraph.v1"
 ];
+export const staticEventFlowArticleExtractorVersion = "static-event-flow-article-validator.v1";
+const staticEventFlowArticleFindingRuleId = "legacy.webforms.event-flow.v1";
+const staticEventFlowValidationCommitSha = /^[0-9a-f]{40}$/i.test(process.env.GITHUB_SHA ?? "")
+  ? process.env.GITHUB_SHA
+  : "unknown";
 const requiredClassifications = [
   "StrongStaticEventFlow",
   "ProbableStaticEventFlow",
@@ -84,7 +89,7 @@ const requiredText = [
 ];
 
 const forbiddenClaims = [
-  /\b(?:TraceMap|static event flow|the (?:path|chain|flow))\s+(?:directly\s+)?(?:prove|proves|confirm|confirms|guarantee|guarantees|establish|establishes|verify|verifies)\b/i,
+  /\b(?:TraceMap|static event flow|the (?:path|chain|flow))\s+(?:directly\s+)?(?:prove|proves|proved|confirm|confirms|confirmed|guarantee|guarantees|guaranteed|establish|establishes|established|verify|verifies|verified)\b/i,
   /\b(?:screen|event|handler|service|SQL|database|deployment|migration|release)\s+(?:is|was|has been)\s+(?:reachable|executed|available|successful|correct|approved|proven|confirmed)\b/i,
   /\b(?:migration succeeded|parity confirmed|safe to release|safe to migrate|fully covered|complete coverage)\b/i,
   /\buser\s+(?:clicked|reached|saw)\b/i,
@@ -93,14 +98,16 @@ const forbiddenClaims = [
 ];
 const rawMaterialPatterns = [
   /\bSELECT\s+.+\bFROM\b/i,
-  /\b(?:INSERT|UPDATE|DELETE)\s+(?:INTO|FROM)\b/i,
+  /\b(?:INSERT|DELETE)\s+(?:INTO|FROM)\b/i,
+  /\bUPDATE\s+\S+\s+SET\b/i,
   /\b(?:CREATE|ALTER|DROP|GRANT|REVOKE)\s+(?:TABLE|VIEW|USER|ROLE|DATABASE|PROCEDURE|FUNCTION)\b/i,
   /\b(?:Server|Data Source|Initial Catalog|User Id|Password|ConnectionString)\s*=/i
 ];
 const tightRawMaterialPatterns = [
-  /SELECT.+?FROM/,
-  /(?:INSERT|UPDATE|DELETE)(?:INTO|FROM)/,
-  /(?:CREATE|ALTER|DROP|GRANT|REVOKE)(?:TABLE|VIEW|USER|ROLE|DATABASE|PROCEDURE|FUNCTION)/,
+  /\bSELECT\s+.+\bFROM\b/i,
+  /\b(?:INSERT|DELETE)\s+(?:INTO|FROM)\b/i,
+  /\bUPDATE\s+\S+\s+SET\b/i,
+  /\b(?:CREATE|ALTER|DROP|GRANT|REVOKE)\s+(?:TABLE|VIEW|USER|ROLE|DATABASE|PROCEDURE|FUNCTION)\b/i,
   /(?:Server|Data ?Source|Initial ?Catalog|User ?Id|Password|ConnectionString)=/i
 ];
 const hardPrivatePatterns = [
@@ -157,7 +164,7 @@ async function validateBlogIndex({ dist, errors }) {
     errors.push(withEvidence(`Static event-flow blog index is missing article link: ${staticEventFlowArticleRoute}`, "blog/index.html"));
     return;
   }
-  const card = html.match(new RegExp(`<a\\b[^>]*href\\s*=\\s*["']${escapeRegExp(staticEventFlowArticleRoute)}["'][^>]*>[\\s\\S]*?<\\/a>`, "i"))?.[0] ?? "";
+  const card = findAnchorBlockByHref(html, staticEventFlowArticleRoute);
   const decodedCard = decodeBrowserEntities(card);
   const surfaces = [normalizeRenderedText(decodedCard), joinedText(decodedCard), decodeHtmlEntities(decodedCard)];
   scanSafety(surfaces, errors, "blog/index.html", surfaces, tightText(decodedCard));
@@ -226,16 +233,28 @@ async function validateArticle({ baseUrl, pagePath, errors }) {
   if (!html.includes("<title>Static Event Flow: What It Proves—and What It Does Not | TraceMap</title>")) {
     errors.push(withEvidence("Static event-flow article is missing expected title.", pageArtifact));
   }
-  if (!new RegExp(`<link\\b[^>]*rel=["']canonical["'][^>]*href=["']${escapeRegExp(baseUrl)}${escapeRegExp(staticEventFlowArticleRoute)}["']`, "i").test(html)) {
+  if (!hasTagWithAttributes(html, "link", {
+    rel: "canonical",
+    href: `${baseUrl}${staticEventFlowArticleRoute}`
+  })) {
     errors.push(withEvidence("Static event-flow article canonical URL is missing or incorrect.", pageArtifact));
   }
-  if (!new RegExp(`<meta\\b[^>]*property=["']og:title["'][^>]*content=["']Static Event Flow: What It Proves—and What It Does Not["']`, "i").test(html)) {
+  if (!hasTagWithAttributes(html, "meta", {
+    property: "og:title",
+    content: "Static Event Flow: What It Proves—and What It Does Not"
+  })) {
     errors.push(withEvidence("Static event-flow article Open Graph title is missing or incorrect.", pageArtifact));
   }
-  if (!new RegExp(`<meta\\b[^>]*property=["']og:url["'][^>]*content=["']${escapeRegExp(baseUrl)}${escapeRegExp(staticEventFlowArticleRoute)}["']`, "i").test(html)) {
+  if (!hasTagWithAttributes(html, "meta", {
+    property: "og:url",
+    content: `${baseUrl}${staticEventFlowArticleRoute}`
+  })) {
     errors.push(withEvidence("Static event-flow article Open Graph URL is missing or incorrect.", pageArtifact));
   }
-  if (!/property=["']article:published_time["']\s+content=["']\d{4}-\d{2}-\d{2}["']/.test(html)) {
+  if (!hasTagWithAttributePatterns(html, "meta", {
+    property: /article:published_time/,
+    content: /\d{4}-\d{2}-\d{2}/
+  })) {
     errors.push(withEvidence("Static event-flow article published-time metadata is missing.", pageArtifact));
   }
 
@@ -346,7 +365,103 @@ function codePointText(codePoint, fallback) {
 }
 
 function hasHref(html, route) {
-  return new RegExp(`href\\s*=\\s*["']${escapeRegExp(route)}["']`, "i").test(html);
+  return findAnchorByHref(html, route) !== null;
+}
+
+function findAnchorByHref(html, route) {
+  const hrefPattern = new RegExp(`\\bhref\\s*=\\s*["']${escapeRegExp(route)}["']`, "i");
+  return extractHtmlStartTags(html).find((tag) => tag.name === "a" && hrefPattern.test(tag.raw)) ?? null;
+}
+
+function findAnchorBlockByHref(html, route) {
+  const anchor = findAnchorByHref(html, route);
+  if (!anchor) return "";
+  const closingTag = findClosingTag(html, anchor.end + 1, "a");
+  return html.slice(anchor.start, closingTag?.end ?? anchor.end + 1);
+}
+
+function extractHtmlStartTags(html) {
+  const source = String(html);
+  const tags = [];
+  let index = 0;
+
+  while (index < source.length) {
+    const start = source.indexOf("<", index);
+    if (start < 0) break;
+    if (source.startsWith("<!--", start)) {
+      const commentEnd = source.indexOf("-->", start + 4);
+      index = commentEnd < 0 ? source.length : commentEnd + 3;
+      continue;
+    }
+
+    const end = findTagEnd(source, start);
+    if (end < 0) break;
+    const raw = source.slice(start, end + 1);
+    const match = raw.match(/^<\s*([a-z][a-z0-9:-]*)\b/i);
+    if (match) {
+      const name = match[1].toLowerCase();
+      if (name === "script" || name === "style") {
+        const closingTag = findClosingTag(source, end + 1, name);
+        index = closingTag?.end ?? source.length;
+        continue;
+      }
+      tags.push({ name, raw, start, end });
+    }
+    index = end + 1;
+  }
+
+  return tags;
+}
+
+function findTagEnd(source, start) {
+  let quote = "";
+  for (let index = start + 1; index < source.length; index += 1) {
+    const char = source[index];
+    if (quote) {
+      if (char === quote) quote = "";
+    } else if (char === '"' || char === "'") {
+      quote = char;
+    } else if (char === ">") {
+      return index;
+    }
+  }
+  return -1;
+}
+
+function findClosingTag(source, start, tagName) {
+  let index = start;
+  while (index < source.length) {
+    const tagStart = source.indexOf("<", index);
+    if (tagStart < 0) return null;
+    if (source.startsWith("<!--", tagStart)) {
+      const commentEnd = source.indexOf("-->", tagStart + 4);
+      index = commentEnd < 0 ? source.length : commentEnd + 3;
+      continue;
+    }
+    const end = findTagEnd(source, tagStart);
+    if (end < 0) return null;
+    const raw = source.slice(tagStart, end + 1);
+    if (new RegExp(`^<\\s*\\/\\s*${escapeRegExp(tagName)}\\b`, "i").test(raw)) {
+      return { start: tagStart, end };
+    }
+    index = end + 1;
+  }
+  return null;
+}
+
+function hasTagWithAttributes(html, tagName, attributes) {
+  return hasTagWithAttributePatterns(
+    html,
+    tagName,
+    Object.fromEntries(Object.entries(attributes).map(([name, value]) => [name, escapeRegExp(value)]))
+  );
+}
+
+function hasTagWithAttributePatterns(html, tagName, attributes) {
+  const lookaheads = Object.entries(attributes)
+    .map(([name, value]) => `(?=[^>]*\\b${escapeRegExp(name)}\\s*=\\s*["']${value.source ?? value}["'])`)
+    .join("");
+  return new RegExp(`<${escapeRegExp(tagName)}\\b${lookaheads}[^>]*>`, "i").test(html);
 }
 
 function joinedText(value) {
@@ -354,9 +469,32 @@ function joinedText(value) {
 }
 
 function tightText(value) {
-  return joinedText(value).replace(/\s+/g, "");
+  return joinedText(value).replace(/(^|\s)([A-Za-z](?:\s+[A-Za-z]){2,})(?=\s|$)/g, (_, prefix, letters) => (
+    prefix + letters.replace(/\s+/g, "")
+  ));
 }
 
 function withEvidence(message, artifact) {
-  return `${message} [evidence: ${artifact}]`;
+  const lineSpan = { start: null, end: null };
+  const evidence = {
+    rule_id: staticEventFlowArticleFindingRuleId,
+    evidence_tier: "Tier3SyntaxOrTextual",
+    file_path: artifact,
+    line_span: lineSpan,
+    commit_sha: staticEventFlowValidationCommitSha,
+    extractor_version: staticEventFlowArticleExtractorVersion
+  };
+  return {
+    message,
+    rule_id: evidence.rule_id,
+    evidence_tier: evidence.evidence_tier,
+    file_path: evidence.file_path,
+    line_span: lineSpan,
+    commit_sha: evidence.commit_sha,
+    extractor_version: evidence.extractor_version,
+    evidence: [evidence],
+    toString() {
+      return this.message + " [evidence: " + this.file_path + "]";
+    }
+  };
 }
