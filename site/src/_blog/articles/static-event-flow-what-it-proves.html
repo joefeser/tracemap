@@ -1,0 +1,298 @@
+<p>
+  <strong>Public claim level: concept.</strong>
+  Static event flow is a bounded evidence chain, not a replay of a web request.
+  It starts with a declared control event, follows the scoped handler identity,
+  connects only to static call or dependency evidence that is already indexed,
+  and ends at a bounded terminal surface when one is present. The composed row
+  can show that checked-in evidence supports a possible code path. It cannot
+  show that a person reaches the screen, that the event fires, or that the path
+  executes in production. This article explains the current implementation's
+  five flow classifications, their evidence tiers, and the owner questions
+  that remain when a hop is missing. Read it with the
+  <a href="/legacy-modernization/evidence-map/">legacy modernization evidence
+  map</a> and the <a href="/legacy-modernization/review-handoff/">review
+  handoff matrix</a>.
+</p>
+
+<section data-static-event-flow-block="event-question">
+  <h2>An event attribute starts a question.</h2>
+  <p>
+    A Web Forms event attribute is a declaration: a checked-in markup surface
+    records that a control names an event and a handler identifier. Under
+    <code>legacy.webforms.event-binding.v1</code>, that declaration keeps a
+    control identity, event name, handler name, file path, line span, rule ID,
+    and evidence tier. The record is useful even before a handler is resolved:
+    it gives a reviewer an inventory row, a bounded starting point, and a
+    concrete question about what evidence should be inspected next. The
+    inventory context is governed by
+    <code>legacy.webforms.inventory.v1</code>, which keeps that root tied to a
+    safe repository-relative surface.
+  </p>
+  <p>
+    The declaration does not prove that a control exists in the runtime control
+    tree, that a user or role can reach it, that a postback occurs, that event
+    bubbling selects the named handler, or that the handler executes. Static
+    declaration evidence is valuable precisely because it keeps those unknowns
+    visible instead of turning a name into a runtime conclusion. Duplicate
+    bindings remain separate facts, and malformed or dynamic wiring remains a
+    gap or needs-review condition.
+  </p>
+</section>
+
+<section data-static-event-flow-block="evidence-chain">
+  <h2>The evidence chain is bounded at every hop.</h2>
+  <ol data-static-event-flow-chain="bounded-chain">
+    <li>
+      <strong>declared:</strong> A control event declaration is recorded under
+      <code>legacy.webforms.event-binding.v1</code> with its evidence site or
+      span.
+    </li>
+    <li>
+      <strong>handler:</strong> The declaration is connected only to a scoped
+      handler-resolution fact under
+      <code>legacy.webforms.handler-resolution.v1</code>, or remains a
+      candidate or gap when that scope cannot be proven.
+    </li>
+    <li>
+      <strong>relationship:</strong> Existing direct call, object-creation,
+      service-reference, HTTP, SQL/query, configuration, or dependency facts
+      may supply static relationship evidence. Semantic call edges use
+      <code>csharp.semantic.callgraph.v1</code>; syntax-only edges use
+      <code>csharp.syntax.callgraph.v1</code>.
+    </li>
+    <li>
+      <strong>terminal:</strong> A bounded terminal surface is represented only
+      when the implementation finds direct handler evidence for it. Safe kinds
+      include <code>wcf-operation</code>, <code>sql-query</code>,
+      <code>http-client</code>, and <code>dependency-surface</code>; unsafe
+      names are hashed or omitted.
+    </li>
+    <li>
+      <strong>classification:</strong> The projection composes the available
+      evidence into a composed classification from the current static set,
+      while retaining coverage and limitations.
+    </li>
+    <li>
+      <strong>gap:</strong> A missing or reduced hop becomes an owner question,
+      not an invisible join or a runtime claim.
+    </li>
+  </ol>
+  <p>
+    Facts and edges carry their originating rule IDs, evidence tiers, safe file
+    paths and line spans, commit and extractor provenance, and stable IDs where
+    available. The projected flow also keeps deterministically ordered
+    <code>supportingFactIds</code>, <code>supportingEdgeIds</code>,
+    <code>ruleIds</code>, <code>evidenceTiers</code>, and a
+    <code>coverage</code> label. See the <a href="/evidence/">evidence
+    explorer</a> for the public evidence contract and the
+    <a href="/evidence/gaps/">gap guide</a> for why an unavailable hop stays
+    explicit.
+  </p>
+</section>
+
+<section data-static-event-flow-block="handler-identity">
+  <h2>Handler identity controls the root.</h2>
+  <p>
+    A semantic handler identity is compiler-backed Tier1 evidence under
+    <code>csharp.semantic.symbolidentity.v1</code>. It is stronger than a
+    structural match based on page/type identity and a compatible signature,
+    and stronger than a syntax match based on a linked code-behind filename and
+    method name. The page directive, markup file, linked code-behind scope,
+    partial type, method span, and binding fact all matter. The same method name
+    in another page or file is not an equivalent event root.
+  </p>
+  <p>
+    <code>legacy.webforms.handler-resolution.v1</code> keeps ambiguity fail
+    closed: multiple methods or partial-class candidates become an explicit
+    gap rather than an arbitrary winner. Designer fields under
+    <code>legacy.webforms.designer-control.v1</code> can support control
+    identity, but they are generated or stale-prone syntax evidence and do not
+    create a handler or backend flow by themselves. A path with the wrong root
+    can look complete while every downstream relationship belongs to another
+    page, so root identity is part of the evidence, not a display detail.
+  </p>
+</section>
+
+<section data-static-event-flow-block="weakest-hop">
+  <h2>The weakest required hop caps the path.</h2>
+  <p>
+    The four evidence tiers describe what a hop can support:
+  </p>
+  <ul>
+    <li><strong>Tier1Semantic:</strong> compiler-resolved symbol or call-edge
+      evidence when the project loads with the required references.</li>
+    <li><strong>Tier2Structural:</strong> a known page/type, signature, config,
+      service-reference, or framework shape without a compiler-resolved symbol.</li>
+    <li><strong>Tier3SyntaxOrTextual:</strong> syntax-only declarations,
+      filename-and-name matches, or syntax call edges whose receiver and
+      overload are not proven.</li>
+    <li><strong>Tier4Unknown:</strong> an explicit analysis gap when the needed
+      linkage or evidence cannot be established.</li>
+  </ul>
+  <p>
+    The flow fact records the weakest tier across its supporting facts and the
+    handler resolution. One semantic hop does not upgrade a syntax-only call,
+    a missing generated artifact, or an unproven dependency target. Missing
+    project loading, generated code, dynamic dispatch, reflection, delegates,
+    event bubbling, unsupported wiring, or multi-hop traversal remain
+    limitations that can sit under <code>coverage: Full</code> when
+    <code>BuildStatus == Succeeded</code>; a failed or partial build carries
+    <code>coverage: Reduced</code>. The current MVP prefers direct
+    handler-to-evidence facts and does not infer branch feasibility, runtime
+    dependency selection, or mutation.
+  </p>
+</section>
+
+<section data-static-event-flow-block="classifications">
+  <h2>What the current classifications mean.</h2>
+  <p>
+    These names are deterministic projections, not confidence percentages. The
+    current implementation first gathers direct handler-linked facts and
+    bounded terminal facts. Its terminal set includes WCF service-reference
+    mappings, SQL/query facts, HTTP calls, dependency facts, and config
+    bindings. It can also attach a WCF mapping when a direct call edge names the
+    mapped client symbol.
+  </p>
+  <ul>
+    <li>
+      <strong>StrongStaticEventFlow:</strong> at least one terminal exists, the
+      handler resolution is Tier1Semantic, and at least one terminal fact is
+      Tier1Semantic. This is the strongest current static composition; it is
+      still not proof of event firing or execution.
+    </li>
+    <li>
+      <strong>ProbableStaticEventFlow:</strong> a terminal exists, but the
+      Strong conditions do not hold and the handler resolution is not
+      Tier3SyntaxOrTextual. A Tier2 handler, or a Tier1 handler with a weaker
+      terminal hop, can land here. “Probable” names the evidence composition;
+      it is not a probability of runtime behavior.
+    </li>
+    <li>
+      <strong>NeedsReviewEventFlow:</strong> a terminal exists and the handler
+      resolution is Tier3SyntaxOrTextual. The direct static relationship is
+      useful review evidence, but the handler identity is syntax-level.
+    </li>
+    <li>
+      <strong>NoBackendEvidence:</strong> no bounded terminal is found while
+      the scan manifest reports <code>BuildStatus == Succeeded</code>; the flow
+      exposes <code>coverage: Full</code> under that implementation gate. This
+      means no indexed terminal was found under the selected scan, not that the
+      application has no backend behavior or that all applicable framework
+      behavior was analyzed.
+    </li>
+    <li>
+      <strong>UnknownAnalysisGap:</strong> no bounded terminal is found while
+      the manifest build status is not <code>Succeeded</code>; the flow exposes
+      <code>coverage: Reduced</code>. The missing or reduced evidence prevents a
+      credible absence conclusion. If a terminal is present despite reduced
+      coverage, the current implementation may retain a static-flow
+      classification while recording the reduced coverage and limitations; a
+      reduced label is never silently converted to full proof.
+    </li>
+  </ul>
+  <p>
+    This direct-projection behavior is documented by
+    <code>legacy.webforms.event-flow.v1</code>. The rule limitations remain
+    attached: call edges are static sites, service reachability is not tested,
+    SQL is not executed, and event lifecycle or dynamic dispatch is not
+    reconstructed.
+  </p>
+</section>
+
+<section data-static-event-flow-block="synthetic-example">
+  <h2>A bounded synthetic example.</h2>
+  <p>
+    Consider two generic Web Forms files in a synthetic application. The first
+    records a button event declaration and one handler in the linked page
+    scope. A syntax-only call edge candidate points from that handler to one
+    service-client call, and a structural service-reference fact supplies one
+    bounded <code>wcf-operation</code> terminal surface. The project does not
+    load semantically, so the call edge and terminal mapping are not
+    compiler-resolved.
+  </p>
+  <table data-static-event-flow-example="evidence">
+    <thead>
+      <tr><th>Question</th><th>Observed static evidence</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Root</td><td>Declared event and linked handler in the same page/type scope.</td></tr>
+      <tr><td>Relationship</td><td>One Tier3SyntaxOrTextual call-edge candidate from that handler.</td></tr>
+      <tr><td>Terminal</td><td>One Tier2Structural service-reference mapping to a bounded operation surface.</td></tr>
+      <tr><td>Weakest required hop</td><td>Tier3SyntaxOrTextual, because the call edge is syntax-only.</td></tr>
+      <tr><td>Classification</td><td>ProbableStaticEventFlow under the current direct-terminal conditions; coverage remains Reduced.</td></tr>
+      <tr><td>Coverage gap</td><td>Semantic project loading and compiler-resolved call identity are unavailable.</td></tr>
+      <tr><td>Owner question</td><td>Can the project/reference setup be restored so the service call and its runtime dependency selection can be reviewed?</td></tr>
+    </tbody>
+  </table>
+  <p>
+    The result is a reviewable possible path, not a claim that a user reaches
+    the page, that the handler fires, that the service responds, or that data
+    changes. If the same synthetic handler had no bounded terminal and the
+    manifest build status were not succeeded, the current implementation would
+    emit <code>UnknownAnalysisGap</code>; under a succeeded build it would emit
+    <code>NoBackendEvidence</code>. Those outcomes are coverage-relative and
+    should lead to different owner questions.
+  </p>
+</section>
+
+<section data-static-event-flow-block="useful-for-review">
+  <h2>What static event flow is good for.</h2>
+  <ul>
+    <li>scoping a review around a declared event and its evidence-backed
+      downstream surfaces;</li>
+    <li>building a modernization inventory of code areas that deserve human
+      inspection;</li>
+    <li>identifying static relationships and missing evidence to discuss with
+      an owner;</li>
+    <li>turning bounded paths into test-planning questions, such as where a
+      runtime check would distinguish a candidate call from an executed one;</li>
+    <li>locating reduced coverage before a team treats a no-evidence row as
+      absence; and</li>
+    <li>prioritizing where runtime validation may be useful without selecting
+      tests or declaring impact automatically.</li>
+  </ul>
+  <p>
+    Use the <a href="/legacy-modernization/review-handoff/">review handoff
+    matrix</a> to assign the next question, and the article on
+    <a href="/blog/successful-build-can-still-have-reduced-coverage/">successful
+    builds with reduced coverage</a> to keep build state separate from feature
+    coverage. The earlier <a href="/blog/modernizing-web-forms-without-running-it/">Web
+    Forms inventory guide</a> covers the broader static evidence lane; the
+    <a href="/blog/a-button-named-save-is-not-an-identity/">button identity
+    article</a> explains why the event root must stay scoped.
+  </p>
+</section>
+
+<section data-static-event-flow-block="non-claims" data-static-event-flow-boundary="non-claims" data-tm-boundary="claim-boundary">
+  <h2>What static event flow does not prove.</h2>
+  <p>
+    A static path or classification does not prove any of the following:
+  </p>
+  <ul>
+    <li>screen visibility;</li>
+    <li>user or role reachability;</li>
+    <li>event firing;</li>
+    <li>page lifecycle order;</li>
+    <li>event bubbling outcome;</li>
+    <li>branch feasibility;</li>
+    <li>runtime dependency selection;</li>
+    <li>service availability or response;</li>
+    <li>SQL execution;</li>
+    <li>database state or mutation;</li>
+    <li>deployment;</li>
+    <li>production usage;</li>
+    <li>migration correctness or parity;</li>
+    <li>business intent; or</li>
+    <li>release approval.</li>
+  </ul>
+  <p>
+    The article is synthetic and public-safe. It contains no private
+    repository, endpoint address, credential, credential-bearing configuration,
+    executable source or markup, source snippet, or production observation.
+    TraceMap's event-flow model remains deterministic static evidence with
+    rule IDs, tiers, spans, commit provenance, coverage labels, and documented
+    limitations; it is not an LLM, embedding, vector-database, or prompt-based
+    impact-analysis claim. For the product-wide boundary, read
+    <a href="/static-vs-runtime/">static versus runtime</a>.
+  </p>
+</section>

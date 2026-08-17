@@ -1,5 +1,20 @@
 [
   {
+    "slug": "static-event-flow-what-it-proves",
+    "category": "Legacy .NET evidence",
+    "title": "Static Event Flow: What It Proves—and What It Does Not",
+    "h1": "Static event flow: what it proves—and what it does not",
+    "description": "How a bounded Web Forms event-flow chain connects declarations, scoped handlers, static relationships, terminal surfaces, coverage, and explicit gaps without making runtime claims.",
+    "ogDescription": "A public-safe concept guide to TraceMap's five event-flow classifications, four evidence tiers, direct terminal evidence, coverage-relative gaps, and owner questions.",
+    "cardDescription": "See what a static event-flow path can support, why the weakest hop caps it, and where runtime validation is still required.",
+    "hero": "A static event-flow path can make checked-in relationships reviewable. It cannot turn a declaration into runtime behavior.",
+    "published": "2026-08-17",
+    "publishedDisplay": "August 17, 2026",
+    "body": "articles/static-event-flow-what-it-proves.html",
+    "calloutHeading": "Carry the flow boundary into review.",
+    "calloutHtml": "Start with the <a href=\"/legacy-modernization/evidence-map/\">legacy modernization evidence map</a>, compare the <a href=\"/legacy-modernization/review-handoff/\">review handoff matrix</a>, then use the <a href=\"/evidence/gaps/\">gap guide</a> when a hop is missing."
+  },
+  {
     "slug": "a-button-named-save-is-not-an-identity",
     "category": "Legacy .NET evidence",
     "title": "A Button Named Save Is Not an Identity",
