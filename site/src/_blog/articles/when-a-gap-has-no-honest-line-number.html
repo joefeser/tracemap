@@ -1,0 +1,284 @@
+<p>
+  <strong>Public claim level: concept.</strong>
+  TraceMap requires every fact to carry a location, but not every fact
+  describes a source line. This article explains how TraceMap preserves
+  location truth when evidence applies to a source declaration, a project,
+  a container, a repository, a workspace, or a downstream composition
+  rather than an exact line. The working principle is strict: a
+  precise-looking false location is worse than an explicit scope-level
+  anchor or an unavailable span. Companion articles own neighboring
+  ground—<a href="/blog/how-a-gap-becomes-a-rule/">how a gap becomes a
+  rule</a> owns the hardening lifecycle, and <a href="/blog/successful-build-can-still-have-reduced-coverage/">a
+  successful build can still have reduced feature coverage</a> owns build,
+  capability, and coverage distinctions. This article owns location
+  honesty and span readback.
+</p>
+
+<section data-gap-span-block="why-locations">
+  <h2>Why evidence systems want locations.</h2>
+  <p>
+    A location turns a claim into something a reviewer can check. A
+    repository-relative path, a one-based line span, a commit SHA, and a
+    rule ID together answer: which bytes, which version, which
+    interpretation? TraceMap's language adapter contract requires every
+    fact to carry a file path and line span plus extractor identity, and
+    to store snippet hashes rather than raw source by default. A span
+    supports the bounded declaration or relationship the fact represents,
+    and nothing more. A location is evidence provenance, not proof of
+    causality.
+  </p>
+</section>
+
+<section data-gap-span-block="why-no-line">
+  <h2>Why some evidence has no honest source line.</h2>
+  <p>
+    Three honest situations break the file-and-line model. A workspace
+    condition—project load failure, unresolved toolchain, a scan-scope
+    exclusion—is a property of the environment, not of one declaration.
+    A binary container such as a Microsoft Access database holds objects
+    with no source-file line model at all. And an older or downstream
+    artifact may retain a relationship without complete span metadata.
+    In each case a line number exists only if someone invents it. The
+    honest options are a labeled anchor at the correct scope, or an
+    explicit unavailable span—never a fabricated line.
+  </p>
+</section>
+
+<section data-gap-span-block="five-classes">
+  <h2>Five location classes.</h2>
+  <ol>
+    <li>
+      <strong>Exact source span.</strong> A parser, compiler, or
+      structured format supplies a real repository-relative file and a
+      one-based line range that bounds the declaration or relationship
+      represented by the fact, as with
+      <code>csharp.semantic.declarations.v1</code> at
+      <code>Tier1Semantic</code> or
+      <code>csharp.syntax.declarations.v1</code> at
+      <code>Tier3SyntaxOrTextual</code>.
+    </li>
+    <li>
+      <strong>Supporting declaration span.</strong> A wider diagnostic or
+      capability state can have an honest supporting project or config
+      declaration. The location anchors the supporting evidence; it does
+      not show that every consequence occurs on that line.
+    </li>
+    <li>
+      <strong>Owning-container anchor.</strong> A binary or
+      container-backed object has no source-file line model. Access
+      catalog objects anchor at the repository-relative database path at
+      span 1:1, and the rule catalog states the convention directly:
+      the owning database path at span 1:1 anchors the container and is
+      not a fabricated source line. Logical object identity—kind, safe
+      name, stable key—remains in structured properties.
+    </li>
+    <li>
+      <strong>Workspace/repository anchor.</strong> A project-load,
+      toolchain, inventory, or workspace-wide gap has no reliable source
+      file. TraceMap's documented convention anchors such facts at the
+      repository path <code>.</code> with line 1 and explicit scope
+      metadata such as <code>sourceScope</code> set to
+      <code>workspace</code>. That anchor is never presented as a real
+      source line.
+    </li>
+    <li>
+      <strong>Span unavailable.</strong> An older schema or downstream
+      artifact may lack usable span metadata. The honest output preserves
+      <code>unavailable</code> or an explicit compatibility/provenance
+      gap. Unavailable location metadata is not evidence absence.
+    </li>
+  </ol>
+  <p>
+    Line 1 can be an anchor without being a source-line claim. But not
+    every line-one span means the same thing: a real declaration that
+    starts on line 1, a container anchor, and a workspace convention are
+    three different facts. Verify every cited convention against its
+    owning rule or specification before reusing it.
+  </p>
+</section>
+
+<section data-gap-span-block="fabricated-precision">
+  <h2>Why fabricated precision is dangerous.</h2>
+  <p>
+    A precise-looking false location is worse than no location because it
+    is checkable in the wrong place. It sends a reviewer to a line that
+    never supported the claim, lets grouping and deduplication silently
+    merge unrelated facts, and upgrades a scope-level statement into a
+    line-level one that no extractor observed. Once a fabricated span is
+    persisted, every downstream report inherits the error as if it were
+    evidence. A downstream consumer must not strengthen an anchor into an
+    exact source claim. A producer must never substitute line zero, a
+    local host path, an undocumented line one, or an unrelated fact's
+    span for missing metadata.
+  </p>
+</section>
+
+<section data-gap-span-block="example-workspace">
+  <h2>Synthetic example A: a workspace toolchain diagnostic.</h2>
+  <ol>
+    <li>
+      <strong>gap:</strong> In a synthetic legacy repository, project
+      loading cannot resolve a required legacy toolchain, so semantic
+      extraction cannot complete for the scan scope.
+    </li>
+    <li>
+      <strong>unavailable:</strong> No single source declaration
+      explains the whole condition, so no exact one-based span exists to
+      cite.
+    </li>
+    <li>
+      <strong>workspace anchor:</strong> The diagnostic keeps the
+      documented workspace anchor—repository path <code>.</code>, line
+      1—with scope metadata, under rules such as
+      <code>build.environment.workspace-diagnostic.v1</code> or
+      <code>csharp.semantic.workspace.v1</code>.
+    </li>
+    <li>
+      <strong>supporting declaration:</strong> Where a project or config
+      declaration genuinely supports part of the state, a per-project
+      fact may anchor there; the location supports the declaration
+      without claiming every consequence occurs on that line.
+    </li>
+    <li>
+      <strong>gap:</strong> The tier ceiling and limitation stay
+      bounded—the workspace gap itself remains
+      <code>Tier4Unknown</code>, the categories explain why semantic
+      coverage was reduced, and they do not establish runtime
+      compatibility—leaving the reviewer a toolchain or project-owner
+      question, not a verdict.
+    </li>
+  </ol>
+</section>
+
+<section data-gap-span-block="example-container">
+  <h2>Synthetic example B: container evidence from an Access catalog.</h2>
+  <ol>
+    <li>
+      <strong>exact evidence:</strong> A neutral synthetic Access
+      database at a repository-relative path such as
+      <code>samples/access/catalog-sample.accdb</code> is observed as a
+      checked-in container under
+      <code>legacy.access.database.inventory.v1</code> at
+      <code>Tier2Structural</code>.
+    </li>
+    <li>
+      <strong>container anchor:</strong> A catalog object such as a table
+      anchors at the owning database path at span 1:1 under
+      <code>legacy.access.schema.v1</code>; line 1 anchors the
+      container.
+    </li>
+    <li>
+      <strong>container anchor:</strong> The logical object identity
+      stays in safe structured properties—object kind, safe name, stable
+      key—rather than in the line span.
+    </li>
+    <li>
+      <strong>exact evidence:</strong> Where VBA module text supplies
+      real line coordinates, <code>legacy.access.vba.v1</code> uses
+      those real module lines while keeping the database as the evidence
+      path.
+    </li>
+    <li>
+      <strong>gap:</strong> No source-line or runtime claim is made about
+      the anchored object; the row carries its documented limitation and
+      the open question stays with the container's owner.
+    </li>
+  </ol>
+</section>
+
+<section data-gap-span-block="example-unavailable">
+  <h2>Synthetic example C: an unavailable downstream span.</h2>
+  <ol>
+    <li>
+      <strong>exact evidence:</strong> A compatible older index retains a
+      relationship row together with whatever provenance it does carry.
+    </li>
+    <li>
+      <strong>unavailable:</strong> The artifact lacks complete span
+      metadata, so the location renders as
+      <code>unavailable</code> rather than a borrowed line.
+    </li>
+    <li>
+      <strong>gap:</strong> A compatibility or provenance gap keeps the
+      schema limitation visible, consistent with
+      <code>analyzer.capability.downstream-coverage.v1</code>, which
+      requires unsupported schema versions to surface as gaps rather
+      than being silently dropped.
+    </li>
+    <li>
+      <strong>gap:</strong> No unrelated location is substituted—not line
+      zero, not a local path, not another fact's span—and rules such as
+      <code>impact.reverse.gap.v1</code> retain real relationship
+      evidence locations only when available.
+    </li>
+    <li>
+      <strong>gap:</strong> Downstream composition stays
+      coverage-relative, leaving the producer question: who can re-emit
+      the artifact with complete span metadata.
+    </li>
+  </ol>
+</section>
+
+<section data-gap-span-block="persistence">
+  <h2>Persistence and downstream composition.</h2>
+  <p>
+    Anchors persist verbatim. A workspace or container anchor written to
+    machine-readable facts and the SQLite index keeps its path, span,
+    rule ID, tier, and limitations through readback, and the span is part
+    of each fact's stable identity. The cross-adapter conformance
+    contract requires rule ID, tier, path, span, extractor identity,
+    coverage, and limitations to survive persistence, and requires
+    missing fields to be reported as capability gaps rather than
+    manufactured. A complete location record therefore carries:
+    repository identity and commit SHA; scan ID where applicable; rule
+    ID; evidence tier; repository-relative path; a valid one-based span
+    where available; extractor ID and extractor version; supporting fact
+    IDs where available; scope or container metadata; and coverage with
+    limitations. The <a href="/outputs/">outputs reference</a> describes
+    where these fields land in the generated artifacts.
+  </p>
+</section>
+
+<section data-gap-span-block="reviewer-questions">
+  <h2>Questions reviewers should ask.</h2>
+  <ul>
+    <li>What does this location anchor—a declaration, a container, a
+      workspace, or nothing because the span is unavailable?</li>
+    <li>Which rule ID documents the convention, and what does that rule
+      say the span means?</li>
+    <li>What evidence tier and limitations travel with the row, and is
+      the claim scoped to the anchor rather than to a line?</li>
+    <li>Could this span have been borrowed, defaulted, or strengthened by
+      a downstream consumer?</li>
+  </ul>
+  <p>
+    The <a href="/evidence/gaps/">gap guide</a> and
+    <a href="/evidence/">evidence model</a> define the shared vocabulary,
+    and the <a href="/test-planning/">test-planning handoff</a> shows how
+    anchored rows become bounded questions rather than verdicts.
+  </p>
+</section>
+
+<section data-gap-span-block="non-claims" data-gap-span-boundary="non-claims" data-tm-boundary="claim-boundary">
+  <h2>What a location does not establish.</h2>
+  <p>
+    A path or span does not independently prove causality, runtime
+    reachability, execution, business intent, ownership, fault, or
+    complete coverage. It does not show that an anchored line contains
+    missing behavior, that line 1 caused a workspace or container
+    condition, or that an unavailable span means no evidence exists. The
+    examples here are synthetic and cite only checked-in public
+    contracts; see the <a href="/limitations/">site limitations</a> for
+    the product-wide boundaries.
+  </p>
+  <p>
+    This article includes no private repository, employer, customer,
+    application, service, database, machine, user, or object identity,
+    and no absolute path, source snippet, raw diagnostic, command
+    output, log, or configuration value. TraceMap's scanner and reducer
+    contain no LLM calls, embeddings, vector databases, or prompt-based
+    classification; the Access container story continues in
+    <a href="/blog/reverse-engineering-access-without-running-it/">reverse
+    engineering Access without running it</a>.
+  </p>
+</section>
