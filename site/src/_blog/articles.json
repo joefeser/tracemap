@@ -1,5 +1,20 @@
 [
   {
+    "slug": "when-a-gap-has-no-honest-line-number",
+    "category": "Evidence integrity",
+    "title": "When a Gap Has No Honest Line Number",
+    "h1": "When a gap has no honest line number",
+    "description": "How TraceMap keeps location truth when evidence applies to a declaration, project, container, repository, workspace, or downstream composition instead of an exact source line.",
+    "ogDescription": "A public-safe concept guide to exact spans, supporting declarations, container anchors, workspace anchors, unavailable spans, and span readback.",
+    "cardDescription": "See why a precise-looking false location is worse than a labeled anchor, and how five location classes keep provenance honest without line-number claims.",
+    "hero": "A precise-looking false location is worse than an explicit scope-level anchor or an unavailable span. Location honesty keeps evidence checkable at the scope it actually describes.",
+    "published": "2026-08-17",
+    "publishedDisplay": "August 17, 2026",
+    "body": "articles/when-a-gap-has-no-honest-line-number.html",
+    "calloutHeading": "Carry the location contract into review.",
+    "calloutHtml": "Read <a href=\"/blog/how-a-gap-becomes-a-rule/\">how a gap becomes a rule</a> and <a href=\"/blog/successful-build-can-still-have-reduced-coverage/\">why a successful build can still have reduced coverage</a>, then use the <a href=\"/evidence/gaps/\">gap guide</a> when a span is unavailable."
+  },
+  {
     "slug": "successful-build-can-still-have-reduced-coverage",
     "category": "Legacy .NET evidence",
     "title": "A Successful Build Can Still Have Reduced Feature Coverage",
