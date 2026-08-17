@@ -1,0 +1,296 @@
+<p>
+  <strong>Public claim level: concept.</strong>
+  A button that displays the caption <code>Save</code>, a control ID, a
+  handler name, or a simple method name is useful display evidence, but none
+  of them is globally unique identity. This article explains how TraceMap
+  scopes and resolves Web Forms button evidence through the page and control
+  declaration, the linked code-behind type, the handler symbol, the
+  relationship site, provenance, and coverage state—and why the correct
+  result under ambiguity is a gap, not an arbitrary match. Companion
+  articles own neighboring ground: <a href="/blog/modernizing-web-forms-without-running-it/">modernizing
+  Web Forms without running it</a> owns the inventory overview and
+  <a href="/blog/when-a-gap-has-no-honest-line-number/">when a gap has no
+  honest line number</a> owns location truth. This article owns identity
+  scoping and handler resolution, and the <a href="/legacy-modernization/evidence-map/">legacy
+  modernization evidence map</a> collects the proof surfaces.
+</p>
+
+<section data-save-identity-block="label-not-key">
+  <h2>Save is a label, not a global key.</h2>
+  <p>
+    A visible caption is written for humans, so it repeats freely: a legacy
+    application can show a button that reads <code>Save</code> on an accounts
+    page, a preferences page, and a dozen dialogs, and control IDs and handler
+    names repeat just as easily. Evidence identity is a different thing from a
+    label: it is what makes a statement about one button a statement about
+    only that button, at one declaration site, in one commit. The rule
+    catalog says this directly for
+    <code>legacy.webforms.inventory.v1</code>: surface and control identities
+    are derived from normalized repository-relative markup paths and
+    declaration sites, and page or control labels alone are not canonical
+    identity.
+  </p>
+  <p>
+    A repeated name is not itself a defect; collapsing identities is the
+    defect. If a tool joins a markup event attribute on one page to a
+    same-named code-behind method declared under a different page type, the
+    output is a convincing but false cross-page flow: the binding fact looks
+    resolved, the flow looks grounded, and every downstream report inherits a
+    relationship that no evidence site supports. The honest behavior is to
+    scope the match to the page that declares it, and to stop when the
+    scoping evidence runs out.
+  </p>
+</section>
+
+<section data-save-identity-block="identity-layers">
+  <h2>Identity exists at several layers.</h2>
+  <ol>
+    <li>
+      <strong>Visible caption or display label.</strong> Display evidence
+      only. It helps a reviewer recognize the control; it must never key a
+      join.
+    </li>
+    <li>
+      <strong>Control declaration and control ID.</strong> The server-control
+      declaration in markup, with its control ID and declaration line. The
+      control identity is derived from the owning markup surface plus the
+      control ID and its declaration site, so two same-named controls on
+      different pages stay distinct facts.
+    </li>
+    <li>
+      <strong>Markup file and page or control type.</strong> The
+      repository-relative markup file and the directive identity that links
+      it—<code>CodeBehind</code> or <code>CodeFile</code>, plus
+      <code>Inherits</code>—establish which page type owns the control.
+    </li>
+    <li>
+      <strong>Event name and binding fact identity.</strong> The event
+      attribute such as <code>OnClick</code> is recorded as its own binding
+      fact under <code>legacy.webforms.event-binding.v1</code>, with a stable
+      fact ID, a line span, and a surface-qualified control identity.
+    </li>
+    <li>
+      <strong>Linked code-behind scope.</strong> The partial class the
+      directive points to. Handler resolution only searches this scope, never
+      the whole repository.
+    </li>
+    <li>
+      <strong>Canonical handler method symbol.</strong> When semantic
+      evidence exists, the resolved method identity is a compiler-backed
+      symbol under <code>csharp.semantic.symbolidentity.v1</code>, carrying
+      assembly identity, containing symbol, member name, arity, and parameter
+      types—a <code>Tier1Semantic</code> ceiling.
+    </li>
+    <li>
+      <strong>Supporting fact IDs, rule IDs, evidence tier, line span,
+      commit, and extractor provenance.</strong> The audit ring around every
+      row: what was observed, where, by which rule, at which tier, from which
+      commit, by which extractor version.
+    </li>
+  </ol>
+</section>
+
+<section data-save-identity-block="resolution-ladder">
+  <h2>The handler-resolution ladder.</h2>
+  <p>
+    Connecting a declared binding to a handler is a bounded ladder, recorded
+    under <code>legacy.webforms.handler-resolution.v1</code>:
+  </p>
+  <ol>
+    <li>
+      <strong>Tier1Semantic.</strong> A compiler-resolved method symbol in
+      the linked partial class. Cross-file partial handlers require semantic
+      type and method evidence at the exact method span; syntax-only
+      cross-file matches remain explicit gaps.
+    </li>
+    <li>
+      <strong>Tier2Structural.</strong> Directive and page identity plus
+      method name and a compatible event signature, when the build cannot
+      resolve symbols.
+    </li>
+    <li>
+      <strong>Tier3SyntaxOrTextual.</strong> The linked code-behind filename
+      plus the method name, when only syntax is available.
+    </li>
+    <li>
+      <strong>Tier4Unknown.</strong> An explicit gap when candidates remain
+      ambiguous, the linkage is missing, markup is malformed, or the required
+      wiring evidence is unavailable.
+    </li>
+  </ol>
+  <p>
+    Weaker evidence must not be written as stronger identity. A filename and
+    method-name agreement never becomes a symbol claim, and designer
+    evidence—<code>legacy.webforms.designer-control.v1</code>, capped at
+    <code>Tier3SyntaxOrTextual</code>—is supporting evidence only, because
+    designer files can be generated, missing, stale, or mismatched with
+    markup.
+  </p>
+</section>
+
+<section data-save-identity-block="duplicates-preserved">
+  <h2>Duplicate evidence is preserved.</h2>
+  <p>
+    Two unrelated pages may both declare a control with the same ID, the same
+    event attribute, and a same-named handler. The extractor keeps each
+    declaration as its own deterministic fact: duplicate controls and
+    duplicate bindings remain separate evidence rows with stable IDs and
+    deterministic ordering, as the <code>legacy.webforms.event-binding.v1</code>
+    limitation states, and checked-in identity tests hold same-named pages to
+    exactly that—two bindings, two handler rows, distinct surface, control,
+    and handler identities, preserved through facts, the SQLite index, and
+    readback. Even two subscriptions written on one source line stay distinct
+    occurrences with stable fact IDs.
+  </p>
+  <p>
+    Deterministic ordering and stable fact IDs are provenance tools, not
+    permission to merge unrelated declarations. The moment same-named rows
+    collapse, the record stops describing the repository and starts
+    describing the tool's tolerance for ambiguity.
+  </p>
+</section>
+
+<section data-save-identity-block="fail-closed">
+  <h2>Ambiguity must fail closed.</h2>
+  <ul>
+    <li>Handlers are never matched globally by method name.</li>
+    <li>The first same-named method is never chosen as a winner.</li>
+    <li>Missing, stale, contradictory, malformed, or multiply matching
+      evidence becomes an explicit gap—missing handlers and ambiguous or
+      overloaded same-named candidates each keep their own gap kind and rule
+      ID.</li>
+    <li>"No resolved handler" under reduced coverage does not mean "no
+      handler exists"; it means the analysis could not resolve one and said
+      so.</li>
+  </ul>
+  <p>
+    Failing closed is what makes the resolved rows trustworthy. A reviewer
+    who sees a resolved handler knows the alternative—an ambiguity gap—was
+    available and not taken. The <a href="/evidence/gaps/">gap guide</a>
+    describes how gaps stay visible instead of disappearing into averages.
+  </p>
+</section>
+
+<section data-save-identity-block="synthetic-comparison">
+  <h2>A bounded synthetic comparison.</h2>
+  <p>
+    Consider two synthetic, unrelated Web Forms pages. Both display a button
+    captioned <code>Save</code>; both declare the control ID
+    <code>SaveButton</code> with an <code>OnClick</code> attribute naming a
+    handler <code>Save_Click</code>. The pages have different markup files,
+    different page/type identities, different code-behind scopes, and
+    distinct scoped handler identities. Two bounded chains show how scoped
+    evidence keeps the bindings separate.
+  </p>
+  <ol data-save-identity-chain="semantic-page">
+    <li>
+      <strong>structural:</strong> The accounts page's markup declares the
+      button with its control ID and a click binding at a recorded line span,
+      under <code>legacy.webforms.inventory.v1</code> and
+      <code>legacy.webforms.event-binding.v1</code>.
+    </li>
+    <li>
+      <strong>structural:</strong> A designer partial class on the same page
+      type declares a matching control field—supporting evidence only, at
+      <code>Tier3SyntaxOrTextual</code>.
+    </li>
+    <li>
+      <strong>semantic:</strong> The linked code-behind scope contains one
+      compatible method; the compiler resolves
+      <code>Save_Click</code> to a canonical method symbol at
+      <code>Tier1Semantic</code>, and the handler row cites the binding fact
+      ID as its supporting evidence.
+    </li>
+    <li>
+      <strong>gap:</strong> Nothing about the preferences page appears in
+      this chain, and no runtime behavior is claimed anywhere in it.
+    </li>
+  </ol>
+  <ol data-save-identity-chain="textual-page">
+    <li>
+      <strong>structural:</strong> The preferences page's markup declares its
+      own button and click binding at its own line span—a second, distinct
+      binding fact with its own stable ID.
+    </li>
+    <li>
+      <strong>candidate:</strong> Its linked code-behind file names a
+      same-named handler method, but the legacy project does not load
+      semantically, so no symbol identity is available, and the method does
+      not carry a compatible event signature, so the structural match is
+      unavailable too.
+    </li>
+    <li>
+      <strong>syntax/textual:</strong> Resolution falls back to the linked
+      code-behind filename plus method name and is recorded at
+      <code>Tier3SyntaxOrTextual</code>—scoped to that page, never matched
+      against the accounts page's handler. Had the method carried the
+      ordinary compatible event signature, the same failed load would record
+      <code>Tier2Structural</code>, not a symbol claim.
+    </li>
+    <li>
+      <strong>gap:</strong> The fail-closed promise is scoped. A same-named
+      overload in the linked code-behind file stops resolution as an
+      ambiguity gap rather than picking a winner. A same-named method in
+      another partial-class file follows the catalog limitation instead:
+      cross-file partial resolution requires exact semantic method evidence
+      at the method span, and syntax-only cross-file matches remain explicit
+      gaps.
+    </li>
+  </ol>
+  <p>
+    What distinguishes the two identities is exactly what the labels do not:
+    the markup file, the page and type identity from the directive, the
+    control identity derived from the declaration site, and the canonical
+    handler symbol when semantic evidence exists. A global name match would
+    have fused these chains into one convincing, wrong event-flow path.
+  </p>
+</section>
+
+<section data-save-identity-block="downstream-cost">
+  <h2>Why identity correctness matters downstream.</h2>
+  <p>
+    Identity errors compound. A false handler join feeds
+    <code>legacy.webforms.event-flow.v1</code> a wrong root, so the projected
+    flow carries supporting fact IDs that describe a different page; reverse
+    impact then reports dependents of a symbol that was never bound to that
+    markup; modernization scope inherits pages and handlers that were never
+    related; and a review reads confident output where the evidence said
+    nothing. False event-flow paths, false reverse-impact results, false
+    modernization scope, and false confidence all trace back to one skipped
+    scoping step.
+  </p>
+  <p>
+    Correct scoped identity supports bounded review questions instead: who
+    owns this page's handler, which binding facts cite it, what static call
+    and terminal-surface evidence the flow projection connects, and where
+    the chain downgrades to review tier—all without claiming any runtime
+    behavior. The <a href="/blog/what-depends-on-this-symbol/">reverse-impact
+    walkthrough</a> shows how canonical identity keeps those answers
+    reviewable, and the <a href="/legacy-dotnet/evidence/">legacy .NET
+    evidence lane</a> shows where the rows surface.
+  </p>
+</section>
+
+<section data-save-identity-block="non-claims" data-save-identity-boundary="non-claims" data-tm-boundary="claim-boundary">
+  <h2>What a name does not establish.</h2>
+  <p>
+    Static evidence does not prove that the button is visible at runtime, or
+    that a user can reach or click it. It does not prove that the event
+    fires, or which runtime branch executes. It does not prove persistence,
+    service reachability, SQL execution, deployment, feature parity, or
+    migration success. And it does not classify business intent from a
+    name—a handler called <code>Save_Click</code> earns no conclusion beyond
+    what its evidence cites. See the <a href="/limitations/">site
+    limitations</a> and the <a href="/static-vs-runtime/">static-versus-runtime
+    boundary</a> for the product-wide framing.
+  </p>
+  <p>
+    The comparison in this article is synthetic. It includes no private
+    repository, employer, customer, application, person, incident, or
+    configuration detail, and no absolute path, source snippet, raw markup,
+    raw SQL, credential, or executable example. TraceMap's scanner and
+    reducer contain no LLM calls, embeddings, vector databases, or
+    prompt-based classification; identity here is deterministic evidence
+    with rule IDs, tiers, spans, and limitations attached.
+  </p>
+</section>
