@@ -1,5 +1,20 @@
 [
   {
+    "slug": "a-button-named-save-is-not-an-identity",
+    "category": "Legacy .NET evidence",
+    "title": "A Button Named Save Is Not an Identity",
+    "h1": "A button named Save is not an identity",
+    "description": "Why a visible label, control ID, or handler name is display evidence rather than identity, and how scoped page, code-behind, and symbol evidence keeps same-named Web Forms buttons separate.",
+    "ogDescription": "A public-safe concept guide to identity layers, the four-tier handler-resolution ladder, duplicate evidence preservation, and fail-closed ambiguity gaps in Web Forms static evidence.",
+    "cardDescription": "See how two synthetic pages that both show a Save button keep distinct identities, and why ambiguity becomes a gap instead of an arbitrary match.",
+    "hero": "A label, a control ID, or a handler name helps a human recognize a button. Only scoped declaration, code-behind, and symbol evidence make it an identity.",
+    "published": "2026-08-17",
+    "publishedDisplay": "August 17, 2026",
+    "body": "articles/a-button-named-save-is-not-an-identity.html",
+    "calloutHeading": "Carry identity scoping into review.",
+    "calloutHtml": "Start with the <a href=\"/legacy-modernization/evidence-map/\">legacy modernization evidence map</a>, read <a href=\"/blog/modernizing-web-forms-without-running-it/\">the inventory overview</a>, then use the <a href=\"/evidence/gaps/\">gap guide</a> when a handler stays unresolved."
+  },
+  {
     "slug": "when-a-gap-has-no-honest-line-number",
     "category": "Evidence integrity",
     "title": "When a Gap Has No Honest Line Number",

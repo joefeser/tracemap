@@ -1,5 +1,22 @@
 [
   {
+    "path": "/blog/a-button-named-save-is-not-an-identity/",
+    "title": "A Button Named Save Is Not an Identity",
+    "summary": "A concept-level guide to Web Forms identity layers, the four-tier handler-resolution ladder, duplicate evidence preservation, and fail-closed ambiguity gaps for same-named controls and handlers.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/legacy-modernization/evidence-map/",
+    "limitations": [
+      "Identity scoping is documented by the Web Forms rule family and its tier ceilings; designer evidence is supporting-only at Tier3SyntaxOrTextual, and weaker resolution is never written as stronger identity.",
+      "The comparison uses synthetic pages only; it cites checked-in public specs, the rule catalog, and synthetic fixtures, not any private validation or real repository scan."
+    ],
+    "nonClaims": [
+      "No runtime visibility, user reachability, event-firing, branch-execution, persistence, service-reachability, SQL-execution, deployment, parity, migration-success, or business-intent claim from a label, control ID, or handler name.",
+      "No private repository, employer, customer, path, screenshot, source snippet, raw markup, raw SQL, configuration value, credential, or LLM-based impact analysis."
+    ]
+  },
+  {
     "path": "/blog/when-a-gap-has-no-honest-line-number/",
     "title": "When a Gap Has No Honest Line Number",
     "summary": "A concept-level guide to TraceMap's five location classes: exact source spans, supporting declaration spans, owning-container anchors, workspace/repository anchors, and unavailable spans.",
