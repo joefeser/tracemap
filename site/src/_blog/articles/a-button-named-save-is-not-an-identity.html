@@ -224,9 +224,13 @@
       against the accounts page's handler.
     </li>
     <li>
-      <strong>gap:</strong> If a same-named overload or a second partial
-      candidate appeared inside that scope, resolution would stop as an
-      ambiguity gap rather than pick a winner.
+      <strong>gap:</strong> The fail-closed promise is scoped. A same-named
+      overload in the linked code-behind file stops resolution as an
+      ambiguity gap rather than picking a winner. A same-named method in
+      another partial-class file follows the catalog limitation instead:
+      cross-file partial resolution requires exact semantic method evidence
+      at the method span, and syntax-only cross-file matches remain explicit
+      gaps.
     </li>
   </ol>
   <p>
