@@ -54,6 +54,17 @@ test("Static event-flow validator rejects ordinary UPDATE statements", async (t)
   assert.match(errors.join("\n"), /raw or executable material/);
 });
 
+test("Static event-flow validator rejects INSERT statements without INTO", async (t) => {
+  const root = await createSiteFixture(t);
+  const path = join(root, articleBodyPath);
+  const html = await readFile(path, "utf8");
+  await writeFile(path, `${html}<p>INSERT customer_accounts (status) VALUES (1)</p>`, "utf8");
+  await buildSite({ root, log() {} });
+  const errors = [];
+  await validateStaticEventFlowArticleDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /raw or executable material/);
+});
+
 test("Static event-flow validator safety-scans metadata, blog card, and discovery strings", async (t) => {
   for (const [surface, pathParts, field, planted, expectedArtifact] of [
     ["metadata", ["src", "_blog", "articles.json"], "description", "TraceMap proves the event fires.", /blog\/static-event-flow-what-it-proves\/index\.html/],
@@ -83,6 +94,8 @@ test("Static event-flow validator catches tag-split and browser-decoded unsafe t
     ["tag-split claim", "<p>TraceMap pr<span>oves the event fires.</p>", /unsupported positive claim/],
     ["tag-split SQL", "<p>SEL<span>ECT value </span>FROM private_table</p>", /raw or executable material/],
     ["mixed-case tight SQL", "<p>S E l E c T value F R O M private_table</p>", /raw or executable material/],
+    ["INSERT INTO", "<p>INSERT INTO customer_accounts DEFAULT VALUES</p>", /raw or executable material/],
+    ["tight INSERT without INTO", "<p>I N S E R T customer_accounts (status) V A L U E S (1)</p>", /raw or executable material/],
     ["tag-split private path", "<p>/Use<span>rs/example/private</span></p>", /hard private material/],
     ["numeric-entity claim", "<p>TraceMap pr&#111;ves the event fires.</p>", /unsupported positive claim/],
     ["numeric-entity private path", "<p>/Us&#101rs/example/private</p>", /hard private material/]
@@ -201,7 +214,7 @@ test("Static event-flow validator emits structured rule-linked findings", async 
   assert.equal(finding.evidence_tier, "Tier3SyntaxOrTextual");
   assert.equal(finding.file_path, "routes-index.json");
   assert.deepEqual(finding.line_span, { start: null, end: null });
-  assert.equal(typeof finding.commit_sha, "string");
+  assert.match(finding.commit_sha, /^[0-9a-f]{40}$/i);
   assert.equal(finding.extractor_version, "static-event-flow-article-validator.v1");
   assert.deepEqual(finding.evidence[0], {
     rule_id: finding.rule_id,
