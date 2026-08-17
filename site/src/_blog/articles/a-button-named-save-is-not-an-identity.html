@@ -215,13 +215,17 @@
     <li>
       <strong>candidate:</strong> Its linked code-behind file names a
       same-named handler method, but the legacy project does not load
-      semantically, so no symbol identity is available.
+      semantically, so no symbol identity is available, and the method does
+      not carry a compatible event signature, so the structural match is
+      unavailable too.
     </li>
     <li>
       <strong>syntax/textual:</strong> Resolution falls back to the linked
       code-behind filename plus method name and is recorded at
       <code>Tier3SyntaxOrTextual</code>—scoped to that page, never matched
-      against the accounts page's handler.
+      against the accounts page's handler. Had the method carried the
+      ordinary compatible event signature, the same failed load would record
+      <code>Tier2Structural</code>, not a symbol claim.
     </li>
     <li>
       <strong>gap:</strong> The fail-closed promise is scoped. A same-named
