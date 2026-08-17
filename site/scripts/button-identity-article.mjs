@@ -225,9 +225,16 @@ async function validateDiscovery({ dist, errors }) {
 
 // The discovery entry is published copy: every string field gets the same
 // claim, raw-material, and private-material scans as the article body.
+// Malformed array fields must not reach the spread: the earlier shape checks
+// have already recorded their errors, and a non-iterable value would throw.
 function scanDiscoverySafety(entry, errors) {
-  const fields = [entry.title, entry.summary, entry.preferredProofPath, ...(entry.limitations ?? []), ...(entry.nonClaims ?? [])]
-    .filter((value) => typeof value === "string");
+  const fields = [
+    entry.title,
+    entry.summary,
+    entry.preferredProofPath,
+    ...(Array.isArray(entry.limitations) ? entry.limitations : []),
+    ...(Array.isArray(entry.nonClaims) ? entry.nonClaims : [])
+  ].filter((value) => typeof value === "string");
   if (fields.length === 0) return;
   const surfaces = fields.map((value) => decodeHtmlEntities(decodeBrowserEntities(value)));
   const tight = fields.map((value) => tightText(decodeBrowserEntities(value)));
@@ -265,8 +272,18 @@ async function validateArticle({ baseUrl, pagePath, errors }) {
       errors.push(withEvidence(`Button identity article is missing required block: ${block}`, pageArtifact));
     }
   }
-  if (!new RegExp(`<section\\b[^>]*data-save-identity-block\\s*=\\s*["']non-claims["'][^>]*data-save-identity-boundary\\s*=\\s*["']non-claims["'][^>]*data-tm-boundary\\s*=\\s*["']claim-boundary["']`, "i").test(html)) {
-    errors.push(withEvidence("Button identity article non-claims block must carry the claim-boundary attributes.", pageArtifact));
+  // Attribute order inside the section start tag is not significant, so the
+  // boundary attributes are asserted independently within the extracted tag
+  // rather than through one ordered regex.
+  const nonClaimsStartTag =
+    html.match(/<section\b[^>]*>/gi)?.find((tag) => /data-save-identity-block\s*=\s*["']non-claims["']/i.test(tag)) ?? "";
+  for (const [attribute, value] of [
+    ["data-save-identity-boundary", "non-claims"],
+    ["data-tm-boundary", "claim-boundary"]
+  ]) {
+    if (!new RegExp(`${attribute}\\s*=\\s*["']${escapeRegExp(value)}["']`, "i").test(nonClaimsStartTag)) {
+      errors.push(withEvidence(`Button identity article non-claims block must carry ${attribute}="${value}".`, pageArtifact));
+    }
   }
   for (const [chain, labels] of Object.entries(chainBlocks)) {
     const chainHtml = html.match(new RegExp(`<ol\\b[^>]*data-save-identity-chain\\s*=\\s*["']${escapeRegExp(chain)}["'][\\s\\S]*?<\\/ol>`, "i"))?.[0] ?? "";
