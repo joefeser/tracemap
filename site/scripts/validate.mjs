@@ -9,6 +9,7 @@ import { validateWebformsModernizationArticleDist } from "./webforms-modernizati
 import { validateReducedCoverageArticleDist } from "./reduced-coverage-article.mjs";
 import { validateGapLineNumberArticleDist } from "./gap-line-number-article.mjs";
 import { validateButtonIdentityArticleDist } from "./button-identity-article.mjs";
+import { validateStaticEventFlowArticleDist } from "./static-event-flow-article.mjs";
 import { validateAccessFormFieldLineageDist } from "./access-form-field-lineage.mjs";
 import { validateAccessRebuildReadinessDist } from "./access-rebuild-readiness.mjs";
 import { validateBuildReviewWorkflowStoryDist } from "./build-review-workflow-story.mjs";
@@ -115,6 +116,7 @@ export async function validateDist({
   requireReducedCoverageArticle = true,
   requireGapLineNumberArticle = true,
   requireButtonIdentityArticle = true,
+  requireStaticEventFlowArticle = true,
   requireAccessFormFieldLineage = requireMsbuildBinlogEvidence,
   requireCsharpExtractionTruth = true,
   requireGraphHistoryBugs = true,
@@ -168,6 +170,9 @@ export async function validateDist({
   }
   if (requireButtonIdentityArticle) {
     await validateButtonIdentityArticleDist({ baseUrl: normalizedBaseUrl, dist, errors });
+  }
+  if (requireStaticEventFlowArticle) {
+    await validateStaticEventFlowArticleDist({ baseUrl: normalizedBaseUrl, dist, errors });
   }
   if (requireCsharpExtractionTruth) {
     await validateCsharpExtractionTruthDist({ baseUrl: normalizedBaseUrl, dist, errors });

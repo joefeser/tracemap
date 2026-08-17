@@ -1,5 +1,22 @@
 [
   {
+    "path": "/blog/static-event-flow-what-it-proves/",
+    "title": "Static Event Flow: What It Proves—and What It Does Not",
+    "summary": "A concept-level guide to bounded Web Forms event-flow chains, direct terminal evidence, the five current classifications, weakest-hop tiering, coverage gaps, and owner questions.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/legacy-modernization/evidence-map/",
+    "limitations": [
+      "The current event-flow projection prefers direct handler-linked facts and classifies terminal presence through implementation-specific BuildStatus and evidence-tier conditions; it does not perform full multi-hop runtime reachability analysis.",
+      "The article uses a synthetic Web Forms example and checked-in public implementation evidence only; static relationships, coverage labels, and terminal surfaces remain bounded evidence rather than runtime observations."
+    ],
+    "nonClaims": [
+      "No screen visibility, user or role reachability, event firing, lifecycle order, event bubbling, branch feasibility, dependency selection, service response, SQL execution, database mutation, deployment, production usage, migration parity, business intent, or release approval claim.",
+      "No private repository, endpoint address, credential, credential-bearing configuration, raw SQL, executable source or markup, source snippet, or LLM-based impact analysis."
+    ]
+  },
+  {
     "path": "/blog/a-button-named-save-is-not-an-identity/",
     "title": "A Button Named Save Is Not an Identity",
     "summary": "A concept-level guide to Web Forms identity layers, the four-tier handler-resolution ladder, duplicate evidence preservation, and fail-closed ambiguity gaps for same-named controls and handlers.",
