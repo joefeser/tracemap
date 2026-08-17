@@ -134,9 +134,12 @@
     handler resolution. One semantic hop does not upgrade a syntax-only call,
     a missing generated artifact, or an unproven dependency target. Missing
     project loading, generated code, dynamic dispatch, reflection, delegates,
-    event bubbling, unsupported wiring, or multi-hop traversal can reduce
-    coverage. The current MVP prefers direct handler-to-evidence facts and does
-    not infer branch feasibility, runtime dependency selection, or mutation.
+    event bubbling, unsupported wiring, or multi-hop traversal remain
+    limitations that can sit under <code>coverage: Full</code> when
+    <code>BuildStatus == Succeeded</code>; a failed or partial build carries
+    <code>coverage: Reduced</code>. The current MVP prefers direct
+    handler-to-evidence facts and does not infer branch feasibility, runtime
+    dependency selection, or mutation.
   </p>
 </section>
 

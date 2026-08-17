@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
@@ -47,9 +48,7 @@ export const staticEventFlowArticleRuleIds = [
 ];
 export const staticEventFlowArticleExtractorVersion = "static-event-flow-article-validator.v1";
 const staticEventFlowArticleFindingRuleId = "legacy.webforms.event-flow.v1";
-const staticEventFlowValidationCommitSha = /^[0-9a-f]{40}$/i.test(process.env.GITHUB_SHA ?? "")
-  ? process.env.GITHUB_SHA
-  : "unknown";
+const staticEventFlowValidationCommitSha = resolveValidationCommitSha();
 const requiredClassifications = [
   "StrongStaticEventFlow",
   "ProbableStaticEventFlow",
@@ -98,14 +97,18 @@ const forbiddenClaims = [
 ];
 const rawMaterialPatterns = [
   /\bSELECT\s+.+\bFROM\b/i,
-  /\b(?:INSERT|DELETE)\s+(?:INTO|FROM)\b/i,
+  /\bINSERT\s+INTO\b/i,
+  /\bINSERT(?:\s+INTO)?\s+\S+(?:\s*\([^)]*\))?\s+VALUES\b/i,
+  /\bDELETE\s+FROM\b/i,
   /\bUPDATE\s+\S+\s+SET\b/i,
   /\b(?:CREATE|ALTER|DROP|GRANT|REVOKE)\s+(?:TABLE|VIEW|USER|ROLE|DATABASE|PROCEDURE|FUNCTION)\b/i,
   /\b(?:Server|Data Source|Initial Catalog|User Id|Password|ConnectionString)\s*=/i
 ];
 const tightRawMaterialPatterns = [
   /\bSELECT\s+.+\bFROM\b/i,
-  /\b(?:INSERT|DELETE)\s+(?:INTO|FROM)\b/i,
+  /\bINSERT\s+INTO\b/i,
+  /\bINSERT(?:\s+INTO)?\s+\S+(?:\s*\([^)]*\))?\s+VALUES\b/i,
+  /\bDELETE\s+FROM\b/i,
   /\bUPDATE\s+\S+\s+SET\b/i,
   /\b(?:CREATE|ALTER|DROP|GRANT|REVOKE)\s+(?:TABLE|VIEW|USER|ROLE|DATABASE|PROCEDURE|FUNCTION)\b/i,
   /(?:Server|Data ?Source|Initial ?Catalog|User ?Id|Password|ConnectionString)=/i
@@ -497,4 +500,22 @@ function withEvidence(message, artifact) {
       return this.message + " [evidence: " + this.file_path + "]";
     }
   };
+}
+
+function resolveValidationCommitSha() {
+  const environmentSha = process.env.GITHUB_SHA ?? process.env.COMMIT_SHA ?? "";
+  if (/^[0-9a-f]{40}$/i.test(environmentSha)) return environmentSha;
+
+  try {
+    const repositorySha = execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+    if (/^[0-9a-f]{40}$/i.test(repositorySha)) return repositorySha;
+  } catch {
+    // The explicit error below keeps missing provenance fail-closed.
+  }
+
+  throw new Error("Static event-flow validation requires a full 40-character commit SHA from GITHUB_SHA, COMMIT_SHA, or git HEAD.");
 }
