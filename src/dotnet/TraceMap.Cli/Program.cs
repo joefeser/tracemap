@@ -276,9 +276,10 @@ public static class TraceMapCommand
             return 1;
         }
         ScanResult result;
+        var progress = ScanProgressAmbient.Current;
         try
         {
-            result = ScanEngine.Scan(scanOptions, receiptRecorder, cancellationToken);
+            result = ScanEngine.Scan(scanOptions, receiptRecorder, cancellationToken, progress);
         }
         catch (Exception ex)
         {
@@ -308,6 +309,7 @@ public static class TraceMapCommand
         }
         try
         {
+            progress?.StartStage(ScanProgressReporter.ScanOperation, ScanProgressStages.ArtifactWrite);
             using (var receiptOperation = receiptRecorder.StartStage("artifact-write", "output-directory-prepare", result.Manifest.AnalysisLevel, "occurred", "completed"))
             {
                 await RunReceiptStageAsync(receiptOperation, () =>
@@ -403,9 +405,23 @@ public static class TraceMapCommand
                         cancellationToken);
                 }
             });
+            progress?.FinishStage(
+                ScanProgressReporter.ScanOperation,
+                ScanProgressStages.ArtifactWrite,
+                "completed",
+                counts: new Dictionary<string, long> { ["facts"] = result.Facts.Count });
+            progress?.Emit(
+                ScanProgressReporter.ScanOperation,
+                ScanProgressStages.ScanPublication,
+                "completed");
         }
         catch (Exception ex)
         {
+            if (ex is not OperationCanceledException)
+            {
+                progress?.FailActiveStage(ScanProgressReporter.ScanOperation, "ARTIFACT_WRITE_FAILED");
+            }
+
             receiptRecorder.Complete(
                 ex is OperationCanceledException ? "cancelled" : ex is TimeoutException ? "timed-out" : "failed",
                 result.Manifest.AnalysisLevel,
@@ -2502,7 +2518,7 @@ public static class TraceMapCommand
     {
         return """
             Usage:
-              tracemap local-review run --repo <path> --out <new-output-root> [scan options] [--webforms-modernization] [--explorer]
+              tracemap local-review run --repo <path> --out <new-output-root> [scan options] [--webforms-modernization] [--explorer] [--diagnostic-progress <file>] [--timeout-seconds <30-86400>]
 
             Safe scan options:
               --solution <path>        Repeatable solution selection.
@@ -2510,6 +2526,25 @@ public static class TraceMapCommand
               --include <glob>         Repeatable inventory inclusion.
               --exclude <glob>         Repeatable inventory exclusion.
               --target-framework <tfm> Semantic target-framework selection.
+
+            Diagnostic options:
+              --diagnostic-progress <file>
+                                       Enables bounded, privacy-safe progress
+                                       diagnostics. Emits categorical progress
+                                       lines to stderr immediately and atomically
+                                       maintains a sanitized checkpoint file at
+                                       the given path. The path must live outside
+                                       the scanned repository and the review
+                                       output. The checkpoint is an operational
+                                       observation, not scan evidence.
+              --timeout-seconds <30-86400>
+                                       Fails the review with LOCAL_REVIEW_TIMEOUT
+                                       after a cooperative cancellation budget is
+                                       exceeded. Omitted means no timeout. A timed
+                                       out or cancelled run never publishes a
+                                       successful review; cancellation is
+                                       cooperative and cannot interrupt APIs that
+                                       ignore it.
 
             The v1 guided path never restores packages, accesses a network service,
             uploads artifacts, or overwrites an existing nonempty output. It emits
