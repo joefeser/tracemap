@@ -1,4 +1,112 @@
 // Full HTML5 named-character-reference table derived from Python's WHATWG-aligned html.entities.html5 data.
+export const browserLegacyNamedEntities = Object.freeze({
+  "Aacute": "\u00c1",
+  "aacute": "\u00e1",
+  "Acirc": "\u00c2",
+  "acirc": "\u00e2",
+  "acute": "\u00b4",
+  "AElig": "\u00c6",
+  "aelig": "\u00e6",
+  "Agrave": "\u00c0",
+  "agrave": "\u00e0",
+  "AMP": "&",
+  "amp": "&",
+  "Aring": "\u00c5",
+  "aring": "\u00e5",
+  "Atilde": "\u00c3",
+  "atilde": "\u00e3",
+  "Auml": "\u00c4",
+  "auml": "\u00e4",
+  "brvbar": "\u00a6",
+  "Ccedil": "\u00c7",
+  "ccedil": "\u00e7",
+  "cedil": "\u00b8",
+  "cent": "\u00a2",
+  "COPY": "\u00a9",
+  "copy": "\u00a9",
+  "curren": "\u00a4",
+  "deg": "\u00b0",
+  "divide": "\u00f7",
+  "Eacute": "\u00c9",
+  "eacute": "\u00e9",
+  "Ecirc": "\u00ca",
+  "ecirc": "\u00ea",
+  "Egrave": "\u00c8",
+  "egrave": "\u00e8",
+  "ETH": "\u00d0",
+  "eth": "\u00f0",
+  "Euml": "\u00cb",
+  "euml": "\u00eb",
+  "frac12": "\u00bd",
+  "frac14": "\u00bc",
+  "frac34": "\u00be",
+  "GT": ">",
+  "gt": ">",
+  "Iacute": "\u00cd",
+  "iacute": "\u00ed",
+  "Icirc": "\u00ce",
+  "icirc": "\u00ee",
+  "iexcl": "\u00a1",
+  "Igrave": "\u00cc",
+  "igrave": "\u00ec",
+  "iquest": "\u00bf",
+  "Iuml": "\u00cf",
+  "iuml": "\u00ef",
+  "laquo": "\u00ab",
+  "LT": "<",
+  "lt": "<",
+  "macr": "\u00af",
+  "micro": "\u00b5",
+  "middot": "\u00b7",
+  "nbsp": "\u00a0",
+  "not": "\u00ac",
+  "Ntilde": "\u00d1",
+  "ntilde": "\u00f1",
+  "Oacute": "\u00d3",
+  "oacute": "\u00f3",
+  "Ocirc": "\u00d4",
+  "ocirc": "\u00f4",
+  "Ograve": "\u00d2",
+  "ograve": "\u00f2",
+  "ordf": "\u00aa",
+  "ordm": "\u00ba",
+  "Oslash": "\u00d8",
+  "oslash": "\u00f8",
+  "Otilde": "\u00d5",
+  "otilde": "\u00f5",
+  "Ouml": "\u00d6",
+  "ouml": "\u00f6",
+  "para": "\u00b6",
+  "plusmn": "\u00b1",
+  "pound": "\u00a3",
+  "QUOT": "\"",
+  "quot": "\"",
+  "raquo": "\u00bb",
+  "REG": "\u00ae",
+  "reg": "\u00ae",
+  "sect": "\u00a7",
+  "shy": "\u00ad",
+  "sup1": "\u00b9",
+  "sup2": "\u00b2",
+  "sup3": "\u00b3",
+  "szlig": "\u00df",
+  "THORN": "\u00de",
+  "thorn": "\u00fe",
+  "times": "\u00d7",
+  "Uacute": "\u00da",
+  "uacute": "\u00fa",
+  "Ucirc": "\u00db",
+  "ucirc": "\u00fb",
+  "Ugrave": "\u00d9",
+  "ugrave": "\u00f9",
+  "uml": "\u00a8",
+  "Uuml": "\u00dc",
+  "uuml": "\u00fc",
+  "Yacute": "\u00dd",
+  "yacute": "\u00fd",
+  "yen": "\u00a5",
+  "yuml": "\u00ff"
+});
 export const browserNamedEntities = Object.freeze({
   "Aacute": "\u00c1",
   "aacute": "\u00e1",
@@ -2127,6 +2235,49 @@ export const browserNamedEntities = Object.freeze({
   "zwnj": "\u200c"
 });
 
+function longestLegacyEntityPrefix(value) {
+  for (let length = value.length; length > 0; length -= 1) {
+    const candidate = value.slice(0, length);
+    if (Object.hasOwn(browserLegacyNamedEntities, candidate)) return candidate;
+  }
+  return "";
+}
+
 export function decodeBrowserNamedEntities(value) {
-  return String(value).replace(/&([a-z][a-z0-9]+);?/gi, (entity, name) => browserNamedEntities[name] ?? entity);
+  const text = String(value);
+  let decoded = "";
+  let index = 0;
+  while (index < text.length) {
+    if (text[index] !== "&") {
+      decoded += text[index];
+      index += 1;
+      continue;
+    }
+
+    const match = text.slice(index).match(/^&([a-z][a-z0-9]*)(;?)/i);
+    if (!match) {
+      decoded += text[index];
+      index += 1;
+      continue;
+    }
+
+    const name = match[1];
+    const hasSemicolon = match[2] === ";";
+    if (hasSemicolon && Object.hasOwn(browserNamedEntities, name)) {
+      decoded += browserNamedEntities[name];
+      index += match[0].length;
+      continue;
+    }
+
+    const legacyName = longestLegacyEntityPrefix(name);
+    if (legacyName) {
+      decoded += browserLegacyNamedEntities[legacyName];
+      index += 1 + legacyName.length;
+      continue;
+    }
+
+    decoded += match[0];
+    index += match[0].length;
+  }
+  return decoded;
 }

@@ -127,6 +127,10 @@ test("validator scans article metadata, blog card, and discovery copy for claims
     ["article named private endpoint", ["src", "_blog", "articles", "before-adding-another-language-define-scan.html"], (value) => `${value}<p>https://service&period;internal/private</p>`, /private endpoint URL/],
     ["discovery named private endpoint", ["src", "_site", "discovery.json"], (value) => value.replace("A concept-level guide to the evidence", "https://service&period;internal/private. A concept-level guide to the evidence"), /private endpoint URL/],
     ["article named whitespace entity claim", ["src", "_blog", "articles", "before-adding-another-language-define-scan.html"], (value) => `${value}<p>TraceMap proves semantic&Tab;parity.</p>`, /unsupported positive/],
+    ["article semicolonless named entity prefix claim", ["src", "_blog", "articles", "before-adding-another-language-define-scan.html"], (value) => `${value}<p>TraceMap proves semantic&nbspparity.</p>`, /unsupported positive/],
+    ["article encoded private endpoint", ["src", "_blog", "articles", "before-adding-another-language-define-scan.html"], (value) => `${value}<p>https://service%2einternal/private</p>`, /private endpoint URL/],
+    ["discovery encoded private endpoint", ["src", "_site", "discovery.json"], (value) => value.replace("A concept-level guide to the evidence", "https://service%2einternal/private. A concept-level guide to the evidence"), /private endpoint URL/],
+    ["article encoded loopback endpoint", ["src", "_blog", "articles", "before-adding-another-language-define-scan.html"], (value) => `${value}<p>https://%31%32%37.0.0.1/private</p>`, /private endpoint URL/],
     ["complete dependency coverage claim", ["src", "_blog", "articles", "before-adding-another-language-define-scan.html"], (value) => `${value}<p>TraceMap proves complete dependency coverage.</p>`, /unsupported positive claim/]
   ];
   for (const [name, parts, mutate, expected] of cases) {

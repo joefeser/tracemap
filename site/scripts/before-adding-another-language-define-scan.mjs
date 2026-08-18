@@ -287,6 +287,11 @@ function findingPush(errors, finding) {
 
 function scanSafety(surfaces, errors, artifact, privateSurfaces = surfaces, tightSurface = "", source = "") {
   const claimSurfaces = tightSurface ? [...surfaces, tightSurface] : surfaces;
+  const normalizedPrivateSurfaces = privateSurfaces.flatMap((surface) => {
+    const text = String(surface);
+    const decoded = decodeUriEscapes(text);
+    return decoded === text ? [text] : [text, decoded];
+  });
   for (const pattern of forbiddenClaims) {
     if (claimSurfaces.some((surface) => testPattern(pattern, surface))) errors.push(withEvidence(`Article contains unsupported positive claim: ${pattern}`, artifact, "adapter.scan-truth.conformance.v1", findLineSpan(source, pattern, ["raw", "joined", "tight"])));
   }
@@ -301,10 +306,10 @@ function scanSafety(surfaces, errors, artifact, privateSurfaces = surfaces, tigh
     if (tightSurface && testPattern(pattern, tightSurface)) errors.push(withEvidence(`Article contains raw or executable material: ${pattern}`, artifact, "adapter.scan-truth.conformance.v1", findLineSpan(source, pattern, ["tight"])));
   }
   for (const pattern of hardPrivatePatterns) {
-    if (privateSurfaces.some((surface) => testPattern(pattern, surface))) errors.push(withEvidence(`Article contains hard private material: ${pattern}`, artifact, "adapter.scan-truth.conformance.v1", findLineSpan(source, pattern, ["raw", "joined", "tight"])));
+    if (normalizedPrivateSurfaces.some((surface) => testPattern(pattern, surface))) errors.push(withEvidence(`Article contains hard private material: ${pattern}`, artifact, "adapter.scan-truth.conformance.v1", findLineSpan(source, pattern, ["raw", "joined", "tight"])));
   }
   for (const pattern of privateEndpointPatterns) {
-    if (privateSurfaces.some((surface) => testPattern(pattern, surface))) errors.push(withEvidence(`Article contains private endpoint URL: ${pattern}`, artifact, "adapter.scan-truth.conformance.v1", findLineSpan(source, pattern, ["raw", "joined", "tight"])));
+    if (normalizedPrivateSurfaces.some((surface) => testPattern(pattern, surface))) errors.push(withEvidence(`Article contains private endpoint URL: ${pattern}`, artifact, "adapter.scan-truth.conformance.v1", findLineSpan(source, pattern, ["raw", "joined", "tight"])));
   }
 }
 
@@ -316,6 +321,14 @@ function decodeBrowserEntities(value) {
 
 function stripHtmlComments(value) {
   return String(value).replace(/<!--[\s\S]*?(?:-->|$)/g, "");
+}
+
+function decodeUriEscapes(value) {
+  try {
+    return decodeURIComponent(String(value));
+  } catch {
+    return String(value);
+  }
 }
 
 function hasAffirmativeProofClaim(value) {
@@ -427,18 +440,22 @@ function artifactLineSpan(source) {
 function findLineSpan(source, pattern, modes) {
   if (!source) return { start_line: 1, end_line: 1 };
   const lines = String(source).split(/\r?\n/);
+  const lineSurfaces = new Map(modes.map((mode) => [mode, lines.map((line) => surfaceForMode(line, mode))]));
   for (let start = 0; start < lines.length; start += 1) {
-    let window = "";
+    const windows = new Map(modes.map((mode) => [mode, ""]));
     for (let end = start; end < lines.length; end += 1) {
-      window += end === start ? lines[end] : `\n${lines[end]}`;
-      if (modes.some((mode) => testPattern(pattern, surfaceForMode(window, mode)))) return { start_line: start + 1, end_line: end + 1 };
+      for (const mode of modes) {
+        const linesForMode = lineSurfaces.get(mode);
+        windows.set(mode, `${windows.get(mode)}${end === start ? "" : "\n"}${linesForMode[end]}`);
+      }
+      if (modes.some((mode) => testPattern(pattern, windows.get(mode)))) return { start_line: start + 1, end_line: end + 1 };
     }
   }
   return artifactLineSpan(source);
 }
 
 function surfaceForMode(value, mode) {
-  const decoded = decodeBrowserEntities(value);
+  const decoded = decodeUriEscapes(decodeBrowserEntities(value));
   if (mode === "raw") return decoded;
   if (mode === "tight") return tightText(decoded);
   return joinedText(decoded);
