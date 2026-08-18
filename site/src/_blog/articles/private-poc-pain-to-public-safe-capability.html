@@ -1,0 +1,253 @@
+<p>
+  <strong>Public claim level: concept.</strong>
+  A private proof of concept can expose a useful failure class, but the private
+  observation is a research lead—not public evidence. The public capability
+  has to be rebuilt around a neutral problem statement, an independent
+  synthetic reproduction, deterministic rules, regression coverage, honest
+  evidence and coverage labels, and an owner-reviewed proof path. This article
+  follows that boundary from private pain to a bounded public claim. Start with
+  the <a href="/proof-paths/">proof-path index</a>, then compare the
+  <a href="/site-claim-guardrails/">site claim guardrails</a> and
+  <a href="/review-claim-checklist/">review claim checklist</a> before
+  repeating any public wording.
+</p>
+
+<section data-private-poc-block="private-signal">
+  <h2>1. Private pain is a signal, not public proof</h2>
+  <p>
+    A private POC may reveal that something is confusing, incomplete, unsafe,
+    nondeterministic, or incorrectly classified. That is valuable research
+    input. It can justify investigation, a backlog item, a design question, or
+    an owner conversation. It does not support a public product claim merely
+    because the observation was compelling, urgent, or witnessed by a trusted
+    team.
+  </p>
+  <p>
+    The first boundary is therefore a classification boundary: write down the
+    observation as private and provisional. Do not turn a local scan result,
+    screenshot, transcript, count, or narrative into a public success story.
+    The observation may be wrong, too narrow, tied to an unrepeatable setup, or
+    inseparable from private identity. A public capability needs its own
+    support. <code>legacy.baseline.safety-validation.v1</code> treats safety
+    validation as a guardrail for committed summaries, not authorization to
+    publish private scan artifacts; that is the right posture for the first
+    step too.
+  </p>
+</section>
+
+<section data-private-poc-block="abstract-failure-class">
+  <h2>2. Abstract the failure class</h2>
+  <p>
+    Remove the repository, organization, application, person, infrastructure,
+    path, object name, record value, configuration, and incident identity.
+    Describe the dangerous general behavior instead. A useful abstraction says
+    what a deterministic tool must not lose or overstate, without preserving a
+    private breadcrumb trail.
+  </p>
+  <ul>
+    <li>an in-scope source silently disappearing;</li>
+    <li>two identities collapsing because their labels match;</li>
+    <li>reduced coverage being presented as complete;</li>
+    <li>a generated artifact retaining unsafe material; or</li>
+    <li>a workflow requiring undocumented tribal knowledge.</li>
+  </ul>
+  <p>
+    These are generic failure categories, not disclosures of actual private
+    events. Redaction alone does not transform private evidence into public
+    proof. A redacted label, a hash, or an aggregate can still be enumerable,
+    correlatable, identity-bearing, or unsupported by a checked-in contract.
+    The abstraction must be reviewed for both meaning and disclosure risk
+    before it becomes a fixture or article claim.
+  </p>
+</section>
+
+<section data-private-poc-block="independent-reproduction">
+  <h2>3. Reproduce independently</h2>
+  <p>
+    Build the smallest synthetic fixture that exhibits the abstract failure
+    class. It must be newly designed for the public contract, not a renamed
+    copy of private source. The fixture should make the expected identities,
+    rule IDs, evidence tiers, provenance, spans, coverage, gaps, and
+    deterministic output observable. Counts can be useful, but counts alone do
+    not show whether identity, provenance, or a gap was preserved.
+  </p>
+  <p>
+    The fixture's test should assert the safe shape: which neutral input was in
+    scope, which rule-backed fact or gap was emitted, which tier and coverage
+    label survived, and whether repeated runs produce the same ordering and
+    artifact identity. <code>legacy.sample-smoke-catalog.safety-validation.v1</code>
+    validates catalog metadata, redaction, claim floors, and deterministic
+    output; its limitations also make clear that metadata validation does not
+    inspect raw sample repositories or raw scan output.
+  </p>
+  <p>
+    Keep the tier vocabulary exact: <code>Tier1Semantic</code> is
+    compiler-resolved semantic evidence, <code>Tier2Structural</code> is a
+    known structural pattern, <code>Tier3SyntaxOrTextual</code> is syntax or
+    textual evidence, and <code>Tier4Unknown</code> is an analysis gap. A
+    regression fixture and an owner/reviewer decision are separate records:
+    the first checks behavior deterministically, while the second decides
+    whether the checked-in evidence is safe to describe publicly.
+  </p>
+  <p>
+    If the failure cannot be reproduced independently, keep it private or
+    research-only. Do not promote the origin story, and do not imply that a
+    public reader can verify a behavior that the public fixture cannot show.
+    The <a href="/evidence/gaps/">gap guide</a> is the correct destination
+    when the public contract can record uncertainty but cannot resolve it.
+  </p>
+</section>
+
+<section data-private-poc-block="contract-chain">
+  <h2>4. Turn the failure into a contract</h2>
+  <p>
+    A failure becomes product work only when each promotion step is explicit.
+    The bounded chain is:
+  </p>
+  <ol data-private-poc-chain="promotion">
+    <li><strong>private observation:</strong> record the local signal as provisional research input.</li>
+    <li><strong>abstract failure hypothesis:</strong> remove identity and state the dangerous general behavior.</li>
+    <li><strong>synthetic fixture:</strong> create an independent neutral reproduction with a known expected outcome.</li>
+    <li><strong>rule/invariant:</strong> give the failure a deterministic invariant or versioned rule with documented limitations.</li>
+    <li><strong>implementation:</strong> make the product preserve or refuse the behavior the invariant describes.</li>
+    <li><strong>regression:</strong> check identities, rule IDs, tiers, provenance, spans, coverage, gaps, and deterministic output on every relevant change.</li>
+    <li><strong>public-safe candidate:</strong> assemble only the reviewed summary fields and attach the correct proof path and limitations.</li>
+    <li><strong>bounded claim:</strong> state the smallest public sentence that the checked-in evidence supports.</li>
+  </ol>
+  <p>
+    Every arrow requires review and may stop. A fixture without an invariant is
+    a test case, not a durable product contract. An implementation without a
+    regression is a hypothesis, not a stable capability. A public-safe
+    candidate without a proof path is a summary awaiting review, not a public
+    claim. <code>legacy.evidence-pack.claim-boundary.v1</code> records what an
+    evidence pack may say; it does not upgrade the underlying evidence tier.
+    For the broader hardening pattern, read
+    <a href="/blog/how-a-gap-becomes-a-rule/">how a gap becomes a rule</a> and
+    <a href="/blog/building-tracemap-under-review-pressure/">how review
+    pressure becomes reviewable work</a>.
+  </p>
+</section>
+
+<section data-private-poc-block="promotion-decision">
+  <h2>5. Promotion is a separate decision</h2>
+  <p>
+    Do not treat status words as a ladder that private evidence climbs by
+    itself. The repository uses several vocabularies for different contracts:
+  </p>
+  <table data-private-poc-vocabulary="promotion">
+    <thead>
+      <tr><th>Term</th><th>Bounded meaning</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>hidden</code></td><td>Omitted or abstracted detail that must not disclose private or unreleased proof.</td></tr>
+      <tr><td><code>local-only</code></td><td>A non-public source or identity context; it is not a public promotion grade.</td></tr>
+      <tr><td><code>demo-safe</code></td><td>Reviewed synthetic, public-document, or neutral material suitable for demos, but not automatically a public product claim.</td></tr>
+      <tr><td><code>public-safe</code></td><td>Reviewed public or synthetic source identity, pinned fixture or commit identity where required, passing safety checks, and safe downstream proof; human review still applies.</td></tr>
+      <tr><td><code>concept</code></td><td>Explanatory or future-facing public wording that is not presented as shipped or demo-backed behavior.</td></tr>
+      <tr><td><code>demo</code></td><td>Site wording backed by checked-in public demo proof or a public-safe generated demo summary, with limitations.</td></tr>
+      <tr><td><code>shipped</code></td><td>Site wording backed by main-true source behavior or source documentation, a public-safe proof path, and the required limitations.</td></tr>
+    </tbody>
+  </table>
+  <p>
+    These terms must stay attached to the contract that defines them. A private
+    or local artifact cannot promote itself. A catalog entry, hash, redacted
+    label, or validator pass alone is not public proof. The
+    <code>legacy.evidence-pack.safety-validation.v1</code> rule describes a
+    guardrail for redacted artifacts, while
+    <code>docs-export.gap.claim-level-hidden.v1</code> keeps hidden evidence
+    from being promoted by display names alone. Promotion requires the
+    repository's safety validation, claim-level review, proof path,
+    limitations, and owner decision.
+  </p>
+</section>
+
+<section data-private-poc-block="public-evidence">
+  <h2>6. What may survive into public evidence</h2>
+  <p>
+    Depending on the reviewed public-safe contract, a summary may retain a
+    neutral synthetic fixture identity, a rule ID or rule family, an evidence
+    tier, a coverage label, a limitation, a safe category or bounded aggregate,
+    a deterministic artifact identity, a public repository path or route, a
+    public proof path, or an owner question. These fields are useful because
+    they let a reader inspect the claim boundary without receiving the private
+    origin story.
+  </p>
+  <p>
+    None of those fields is always safe. Each remains subject to the governing
+    public-safe contract, its source context, its enumeration risk, and its
+    limitation. <code>public.demo.summary.v1</code> describes public demo
+    workflow status and artifact references, not scanner facts or runtime,
+    deployment, production, release, vulnerability, or compatibility proof.
+    Follow the <a href="/proof-source-catalog/">proof-source catalog</a> and
+    <a href="/evidence/">evidence explorer</a> to keep the surviving fields
+    connected to the route and evidence family that actually supports them.
+  </p>
+</section>
+
+<section data-private-poc-block="private-material">
+  <h2>7. What must remain private</h2>
+  <p>
+    Keep the following outside public copy and public-safe artifacts unless a
+    separate contract explicitly permits a reviewed abstraction:
+  </p>
+  <ul>
+    <li>private source, source snippets, raw facts, SQLite content, raw logs, and analyzer output;</li>
+    <li>local paths and remotes;</li>
+    <li>private repository, application, employer, customer, or person identity;</li>
+    <li>screenshots or narration from private systems;</li>
+    <li>configuration values, endpoint and infrastructure names;</li>
+    <li>credentials, connection strings, SQL, and record values;</li>
+    <li>hidden validation counts, chronology, and raw review transcripts;</li>
+    <li>incident details; and</li>
+    <li>private artifact hashes when they create an enumerable or correlatable identity.</li>
+  </ul>
+  <p>
+    A category-only statement can still be too revealing if the category is
+    unique, timed, or easy to correlate. The safe default is omission or a
+    neutral category with a limitation and owner handoff. The
+    <code>docs-export.validation.unsafe-value-rejected.v1</code> rule names
+    these storage boundaries as validation targets and rejects unsafe values;
+    it does not authorize publishing the rejected material.
+  </p>
+</section>
+
+<section
+  data-private-poc-block="claim-boundary"
+  data-private-poc-boundary="claim-boundary"
+  data-tm-boundary="claim-boundary"
+>
+  <h2>8. The public claim stays smaller than the lesson</h2>
+  <p>
+    One completely synthetic example makes the boundary concrete. Imagine a
+    neutral scan fixture in which an expected source is intentionally
+    inaccessible or unsupported while the first draft reports complete
+    coverage. That is a hypothesis about a failure class, not a description of
+    any private repository or incident. The independent fixture must require a
+    typed failure or explicit reduced coverage with a rule-backed gap. Its
+    regression asserts identity, rule ID, evidence tier, provenance, spans,
+    coverage, gap state, and deterministic output—not only a count. The product
+    implementation then preserves that invariant, and the public-safe summary
+    can say only that this synthetic contract keeps the coverage boundary
+    visible under the stated limitation.
+  </p>
+  <p>
+    The public claim is supported by the checked-in synthetic fixture and
+    contract, not by the private scan that suggested the investigation. The
+    lesson may be broad; the sentence remains bounded. It makes no customer
+    success claim, no claim about a private application, and no disclosure of
+    private behavior. It makes no runtime, production, deployment, migration,
+    compliance, vulnerability, or release-safety conclusion; it does not claim
+    prevalence; and it does not say that public-safe means risk-free or
+    automatically declassified. There is no production claim. <code>docs-export.validation.prohibited-claim-wording.v1</code>
+    supports this wording boundary, while the
+    <a href="/limitations/">limitations page</a> keeps unresolved questions
+    visible.
+  </p>
+  <p>
+    For adjacent hardening stories, read
+    <a href="/blog/what-a-proof-path-is/">what a proof path is</a> and
+    <a href="/blog/bugs-hiding-in-graph-history/">the bugs hiding in graph
+    history</a>. A private origin can inspire a public-safe capability, but
+    only the reviewed deterministic evidence path can carry the claim.
+  </p>
+</section>

@@ -1,5 +1,22 @@
 [
   {
+    "path": "/blog/private-poc-pain-to-public-safe-capability/",
+    "title": "How Private POC Pain Becomes Public-Safe Product Capability",
+    "summary": "A concept-level guide to separating private observation from abstract failure class, independent synthetic reproduction, deterministic contract, regression fixture, public-safe evidence candidate, and bounded claim.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The article describes a promotion contract, not a private scan result, generated evidence pack, product behavior guarantee, or authorization to publish local artifacts.",
+      "The synthetic example and checked-in rule vocabulary support a bounded concept explanation; they do not establish prevalence, complete scanner coverage, or any runtime or production conclusion."
+    ],
+    "nonClaims": [
+      "No customer success, private application, private behavior, runtime, production, deployment, migration, compliance, vulnerability, release-safety, prevalence, risk-free, or automatic declassification claim.",
+      "No private source, snippets, raw facts, SQLite content, raw logs, analyzer output, local paths, remotes, identity, screenshots, configuration, credentials, SQL, record values, hidden counts, chronology, transcripts, incident details, or correlatable private hash."
+    ]
+  },
+  {
     "path": "/blog/static-event-flow-what-it-proves/",
     "title": "Static Event Flow: What It Proves—and What It Does Not",
     "summary": "A concept-level guide to bounded Web Forms event-flow chains, direct terminal evidence, the five current classifications, weakest-hop tiering, coverage gaps, and owner questions.",

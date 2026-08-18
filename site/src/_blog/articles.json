@@ -1,5 +1,20 @@
 [
   {
+    "slug": "private-poc-pain-to-public-safe-capability",
+    "category": "Evidence engineering",
+    "title": "How Private POC Pain Becomes Public-Safe Product Capability",
+    "h1": "How Private POC Pain Becomes Public-Safe Product Capability",
+    "description": "How TraceMap turns a private research signal into a bounded public-safe capability claim through synthetic reproduction, deterministic contracts, regression evidence, and explicit owner review.",
+    "ogDescription": "A public-safe concept guide to separating private observation from independent synthetic reproduction, deterministic rules, regression fixtures, promotion states, and bounded claims.",
+    "cardDescription": "Follow the promotion boundary from private pain to synthetic fixture, rule, regression, public-safe summary, and owner-reviewed claim.",
+    "hero": "A private observation can start investigation. Only independently reproduced, deterministic, checked-in evidence can support a bounded public capability claim.",
+    "published": "2026-08-17",
+    "publishedDisplay": "August 17, 2026",
+    "body": "articles/private-poc-pain-to-public-safe-capability.html",
+    "calloutHeading": "Carry the promotion boundary into review.",
+    "calloutHtml": "Start with the <a href=\"/proof-paths/\">proof-path index</a>, then use the <a href=\"/review-claim-checklist/\">review claim checklist</a> to keep the final sentence bounded."
+  },
+  {
     "slug": "static-event-flow-what-it-proves",
     "category": "Legacy .NET evidence",
     "title": "Static Event Flow: What It Proves—and What It Does Not",
