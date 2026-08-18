@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import path from "node:path";
 import ts from "typescript";
 
 export interface CompilerHostCache {
@@ -12,10 +13,18 @@ export function createCompilerHostWithCache(
   cache: CompilerHostCache,
   maxFileByteSize: number,
   skippedFiles: Set<string>,
-  sourceFileAllowed: (fileName: string) => boolean = () => true
+  sourceFileAllowed: (fileName: string) => boolean = () => true,
+  capturedFileContents: ReadonlyMap<string, string> = new Map()
 ): ts.CompilerHost {
   const host = ts.createCompilerHost(options);
   const originalGetSourceFile = host.getSourceFile.bind(host);
+  const originalReadFile = host.readFile.bind(host);
+  host.readFile = (fileName) => {
+    const normalizedFileName = path.resolve(fileName);
+    return capturedFileContents.has(normalizedFileName)
+      ? capturedFileContents.get(normalizedFileName)
+      : originalReadFile(fileName);
+  };
   host.getParsedCommandLine = (fileName: string) => {
     const cached = cache.parsedCommandLines.get(fileName);
     if (cached) {
@@ -40,7 +49,10 @@ export function createCompilerHostWithCache(
     if (cached && cached[1] === target) {
       return cached[0];
     }
-    const sourceFile = originalGetSourceFile(fileName, languageVersion, onError, shouldCreateNewSourceFile);
+    const captured = capturedFileContents.get(path.resolve(fileName));
+    const sourceFile = capturedFileContents.has(path.resolve(fileName))
+      ? ts.createSourceFile(fileName, captured ?? "", target, true)
+      : originalGetSourceFile(fileName, languageVersion, onError, shouldCreateNewSourceFile);
     if (sourceFile) {
       cache.sourceFiles.set(fileName, [sourceFile, target]);
     }

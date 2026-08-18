@@ -6,6 +6,7 @@ import { spawnSync } from "node:child_process";
 import initSqlJs from "sql.js";
 import { describe, expect, it } from "vitest";
 import { scan } from "../src/scan/ScanEngine";
+import { compilerInputPath } from "../src/extractors/TypeScriptProjectLoader";
 import { FactTypes, ScanManifest } from "../src/facts/Models";
 import { RuleIds } from "../src/facts/RuleIds";
 import { exportIndex } from "../src/export/IndexExporter";
@@ -287,6 +288,37 @@ describe("ScanEngine", () => {
     })).rejects.toThrow("SourceSnapshotChangedDuringScan");
 
     await expect(fsp.stat(output)).rejects.toThrow();
+  });
+
+  it("binds semantic loading to the captured source bytes across an ABA mutation", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    await writeMiniRepo(repo);
+    const source = path.join(repo, "src", "sample.ts");
+    const original = await fsp.readFile(source, "utf8");
+    const transient = original.replace("Contract", "TransientContract");
+
+    const result = await scan(scanOptions(repo, path.join(root, "output")), {
+      afterInventoryCapture: async () => {
+        await fsp.writeFile(source, transient);
+      },
+      afterProjectLoad: async () => {
+        await fsp.writeFile(source, original);
+      }
+    });
+
+    expect(result.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.TypeDeclared, targetSymbol: "Contract" }));
+    expect(result.facts).not.toContainEqual(expect.objectContaining({ factType: FactTypes.TypeDeclared, targetSymbol: "TransientContract" }));
+  });
+
+  it("keeps external compiler input identities distinct when path tails collide", () => {
+    const repo = path.resolve("/workspace/repo");
+    const first = compilerInputPath(repo, "/workspace/one/lib/index.d.ts");
+    const second = compilerInputPath(repo, "/workspace/two/lib/index.d.ts");
+
+    expect(first).not.toBe(second);
+    expect(first).toMatch(/^external\/[0-9a-f]{32}\/index\.d\.ts$/);
+    expect(second).toMatch(/^external\/[0-9a-f]{32}\/index\.d\.ts$/);
   });
 
   it("fails before publishing when an eligible source is created during a scan", async () => {

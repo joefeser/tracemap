@@ -23,6 +23,7 @@ import { hash, hashBytes } from "../util/Hash";
 import { isUnderPath } from "../util/Paths";
 
 type ScanTestHooks = {
+  afterInventoryCapture?: () => void | Promise<void>;
   afterProjectLoad?: () => void | Promise<void>;
   beforeSnapshotVerification?: () => void | Promise<void>;
   afterManifestWrite?: () => void | Promise<void>;
@@ -31,6 +32,12 @@ type ScanTestHooks = {
 type SnapshotFileToken = {
   byteLength: number;
   digest: string;
+  text: string;
+};
+
+type CapturedInventoryFiles = {
+  tokens: ReadonlyMap<string, SnapshotFileToken>;
+  contents: ReadonlyMap<string, string>;
 };
 
 const requiredOutputArtifacts = ["scan-manifest.json", "facts.ndjson", "index.sqlite", "report.md", "logs/analyzer.log"] as const;
@@ -48,12 +55,13 @@ export async function scan(options: ScanOptions, testHooks: ScanTestHooks = {}):
   }
   const inventory = await collectFileInventory(options);
   const initialFileTokens = await captureInventoryFileTokens(inventory);
+  await testHooks.afterInventoryCapture?.();
   const projectSet = options.semantic
-    ? await loadProjectsWithFallback(repoPath, options, inventory)
+    ? await loadProjectsWithFallback(repoPath, options, inventory, initialFileTokens.contents)
     : { projects: [], compilerInputTokens: [], loadErrorHash: null };
   const projects = projectSet.projects;
   await testHooks.afterProjectLoad?.();
-  const sourceSnapshotDigest = await createSourceSnapshotDigest(inventory, projectSet.compilerInputTokens, initialFileTokens);
+  const sourceSnapshotDigest = await createSourceSnapshotDigest(inventory, projectSet.compilerInputTokens, initialFileTokens.tokens);
   const manifest: ScanManifest = {
     scanId: createScanId(git, sourceSnapshotDigest, options),
     repoName: git.repoName,
@@ -148,10 +156,11 @@ export async function scan(options: ScanOptions, testHooks: ScanTestHooks = {}):
 async function loadProjectsWithFallback(
   repoPath: string,
   options: ScanOptions,
-  inventory: readonly FileInventoryItem[]
+  inventory: readonly FileInventoryItem[],
+  capturedFileContents: ReadonlyMap<string, string> = new Map()
 ): Promise<LoadedProjectSet & { loadErrorHash: string | null }> {
   try {
-    return { ...(await loadTypeScriptProjects(repoPath, options, inventory)), loadErrorHash: null };
+    return { ...(await loadTypeScriptProjects(repoPath, options, inventory, capturedFileContents)), loadErrorHash: null };
   } catch (error) {
     const message = error instanceof Error ? `${error.name}:${error.message}` : "unknown-project-load-error";
     return { projects: [], compilerInputTokens: [], loadErrorHash: hash(message, 16) };
@@ -221,14 +230,18 @@ async function createSourceSnapshotDigest(
 
 async function captureInventoryFileTokens(
   inventory: readonly { absolutePath: string; skipped: boolean }[]
-): Promise<ReadonlyMap<string, SnapshotFileToken>> {
+): Promise<CapturedInventoryFiles> {
   const tokens = new Map<string, SnapshotFileToken>();
+  const contents = new Map<string, string>();
   for (const item of inventory) {
     if (item.skipped) continue;
     const content = await fs.readFile(item.absolutePath);
-    tokens.set(path.resolve(item.absolutePath), { byteLength: content.byteLength, digest: hashBytes(content) });
+    const normalizedPath = path.resolve(item.absolutePath);
+    const text = content.toString("utf8");
+    tokens.set(normalizedPath, { byteLength: content.byteLength, digest: hashBytes(content), text });
+    contents.set(normalizedPath, text);
   }
-  return tokens;
+  return { tokens, contents };
 }
 
 function createScanId(

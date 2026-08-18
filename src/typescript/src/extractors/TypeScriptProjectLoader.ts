@@ -3,7 +3,7 @@ import path from "node:path";
 import ts from "typescript";
 import { FileInventoryItem, ScanOptions } from "../facts/Models";
 import { createCompilerHostWithCache, CompilerHostCache } from "../util/CompilerHost";
-import { hashBytes } from "../util/Hash";
+import { hash, hashBytes } from "../util/Hash";
 import { isUnderPath, repoRelative } from "../util/Paths";
 
 export interface LoadedProject {
@@ -21,14 +21,19 @@ export interface LoadedProjectSet {
   compilerInputTokens: string[];
 }
 
-export async function loadTypeScriptProjects(repoPath: string, options: ScanOptions, inventory: readonly FileInventoryItem[]): Promise<LoadedProjectSet> {
+export async function loadTypeScriptProjects(
+  repoPath: string,
+  options: ScanOptions,
+  inventory: readonly FileInventoryItem[],
+  capturedFileContents: ReadonlyMap<string, string> = new Map()
+): Promise<LoadedProjectSet> {
   const projectPaths = discoverProjectPaths(repoPath, options, inventory);
   const visited = new Set<string>();
   const loaded: LoadedProject[] = [];
   const cache: CompilerHostCache = { parsedCommandLines: new Map(), sourceFiles: new Map(), configFiles: new Map() };
   const selectedPaths = new Set(inventory.filter((item) => !item.skipped).map((item) => path.resolve(item.absolutePath)));
   for (const projectPath of projectPaths) {
-    loadProjectRecursive(repoPath, projectPath, options, selectedPaths, cache, visited, loaded);
+    loadProjectRecursive(repoPath, projectPath, options, selectedPaths, capturedFileContents, cache, visited, loaded);
   }
   return {
     projects: loaded,
@@ -55,10 +60,13 @@ function compilerInputPath(repoPath: string, fileName: string): string {
     return repoRelative(repoPath, absolutePath);
   }
 
-  // Standard-library inputs live outside the checkout. Keep their identity
-  // machine-independent without publishing an absolute toolchain path.
-  return `external/${path.basename(path.dirname(absolutePath))}/${path.basename(absolutePath)}`;
+  // External inputs live outside the checkout. Hash the complete normalized
+  // path to keep colliding path tails distinct without publishing the path.
+  const normalizedExternalPath = absolutePath.replaceAll("\\", "/");
+  return `external/${hash(normalizedExternalPath, 32)}/${path.basename(absolutePath)}`;
 }
+
+export { compilerInputPath };
 
 export function discoverProjectPaths(repoPath: string, options: ScanOptions, inventory: readonly FileInventoryItem[]): string[] {
   if (options.projectPaths.length > 0) {
@@ -81,6 +89,7 @@ function loadProjectRecursive(
   projectPath: string,
   options: ScanOptions,
   selectedPaths: ReadonlySet<string>,
+  capturedFileContents: ReadonlyMap<string, string>,
   cache: CompilerHostCache,
   visited: Set<string>,
   loaded: LoadedProject[]
@@ -90,7 +99,7 @@ function loadProjectRecursive(
     return;
   }
   visited.add(normalizedProjectPath);
-  const config = ts.readConfigFile(normalizedProjectPath, ts.sys.readFile);
+  const config = ts.readConfigFile(normalizedProjectPath, (fileName) => readCapturedFile(fileName, capturedFileContents));
   if (config.error) {
     const parsed = emptyParsed(normalizedProjectPath);
     const program = ts.createProgram([], parsed.options);
@@ -110,7 +119,7 @@ function loadProjectRecursive(
     readDirectory: ts.sys.readDirectory,
     fileExists: ts.sys.fileExists,
     readFile: (fileName) => {
-      const text = ts.sys.readFile(fileName);
+      const text = readCapturedFile(fileName, capturedFileContents);
       if (text !== undefined) {
         cache.configFiles.set(path.resolve(fileName), text);
       }
@@ -123,7 +132,7 @@ function loadProjectRecursive(
     const referencePath = path.resolve(path.dirname(normalizedProjectPath), reference.path);
     const configPath = fs.existsSync(referencePath) && fs.statSync(referencePath).isDirectory() ? path.join(referencePath, "tsconfig.json") : referencePath;
     if (selectedPaths.has(path.resolve(configPath))) {
-      loadProjectRecursive(repoPath, configPath, options, selectedPaths, cache, visited, loaded);
+      loadProjectRecursive(repoPath, configPath, options, selectedPaths, capturedFileContents, cache, visited, loaded);
     }
   }
   parsed.fileNames = parsed.fileNames.filter((fileName) => selectedPaths.has(path.resolve(fileName)));
@@ -138,7 +147,8 @@ function loadProjectRecursive(
       return !isUnderPath(absoluteFileName, repoPath)
         || selectedPaths.has(absoluteFileName)
         || isCompilerDependencyInput(repoPath, absoluteFileName);
-    });
+    },
+    capturedFileContents);
   const program = ts.createProgram(parsed.fileNames, parsed.options, host);
   const diagnostics = [
     ...parsed.errors,
@@ -160,6 +170,13 @@ function loadProjectRecursive(
     diagnostics,
     skippedFiles
   });
+}
+
+function readCapturedFile(fileName: string, capturedFileContents: ReadonlyMap<string, string>): string | undefined {
+  const normalizedFileName = path.resolve(fileName);
+  return capturedFileContents.has(normalizedFileName)
+    ? capturedFileContents.get(normalizedFileName)
+    : ts.sys.readFile(fileName);
 }
 
 function isCompilerDependencyInput(repoPath: string, fileName: string): boolean {
