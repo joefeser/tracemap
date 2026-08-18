@@ -163,6 +163,12 @@ try {
     Assert-True ($LASTEXITCODE -ne 0) "empty property-flow selector value was accepted"
     $config.propertyFlows[0].selector = "field:runnerId"
 
+    $config.routeFlows[0].route = "GET /" + ("x" * 500)
+    [System.IO.File]::WriteAllText($configPath, (($config | ConvertTo-Json -Depth 20) + "`n"), [System.Text.UTF8Encoding]::new($false))
+    & pwsh -NoProfile -File $runner -ConfigPath $configPath -TraceMapRoot $TraceMapRoot -OutputRoot $output1 -ValidateOnly 2>$null | Out-Null
+    Assert-True ($LASTEXITCODE -ne 0) "route value above the contract limit was accepted"
+    $config.routeFlows[0].route = "GET /api/admin/runner/get-by-id/{}"
+
     $config.reports["combinedDependency"] = "false"
     [System.IO.File]::WriteAllText($configPath, (($config | ConvertTo-Json -Depth 20) + "`n"), [System.Text.UTF8Encoding]::new($false))
     & pwsh -NoProfile -File $runner -ConfigPath $configPath -TraceMapRoot $TraceMapRoot -OutputRoot $output1 -ValidateOnly 2>$null | Out-Null
@@ -225,7 +231,13 @@ try {
             "reports/endpoints/client-api/endpoint-report.json",
             "reports/property-flow/runner-id/property-flow-report.json",
             "reports/route-flow/runner-get/route-flow-report.json",
-            "reports/paths/runner-to-sql/paths-report.json")) {
+            "reports/paths/runner-to-sql/paths-report.json",
+            "feedback-evidence/dependency.json",
+            "feedback-evidence/portfolio.json",
+            "feedback-evidence/endpoint-alignment.json",
+            "feedback-evidence/property-flow.json",
+            "feedback-evidence/route-flow.json",
+            "feedback-evidence/dependency-path.json")) {
             Assert-True (Test-Path -LiteralPath (Join-Path $output $relative) -PathType Leaf) "missing output $relative"
         }
         $result = Get-Content -LiteralPath (Join-Path $output "interaction-run-result.json") -Raw | ConvertFrom-Json -Depth 100
@@ -248,6 +260,7 @@ try {
         foreach ($signal in $feedback.unresolvedSignals) {
             Assert-True ($signal.evidence.Count -ge 1) "feedback signal omitted evidence references"
             foreach ($evidence in $signal.evidence) {
+                Assert-True ([string]$evidence.file_path -ne "feedback-summary.json") "feedback signal used a self-referential placeholder"
                 Assert-True (-not [string]::IsNullOrWhiteSpace([string]$evidence.rule_id)) "feedback evidence omitted a rule ID"
                 Assert-True ([string]$evidence.commit_sha -match '^[0-9a-f]{40,64}$') "feedback evidence omitted a commit SHA"
                 Assert-True ([int]$evidence.line_span.start_line -ge 1 -and [int]$evidence.line_span.end_line -ge [int]$evidence.line_span.start_line) "feedback evidence had an invalid line span"

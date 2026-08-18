@@ -23,8 +23,14 @@ import { hash, hashBytes } from "../util/Hash";
 import { isUnderPath } from "../util/Paths";
 
 type ScanTestHooks = {
+  afterProjectLoad?: () => void | Promise<void>;
   beforeSnapshotVerification?: () => void | Promise<void>;
   afterManifestWrite?: () => void | Promise<void>;
+};
+
+type SnapshotFileToken = {
+  byteLength: number;
+  digest: string;
 };
 
 const requiredOutputArtifacts = ["scan-manifest.json", "facts.ndjson", "index.sqlite", "report.md", "logs/analyzer.log"] as const;
@@ -41,11 +47,13 @@ export async function scan(options: ScanOptions, testHooks: ScanTestHooks = {}):
     throw new Error("TraceMap TypeScript scan requires git commit SHA. Run inside a git checkout with at least one commit.");
   }
   const inventory = await collectFileInventory(options);
+  const initialFileTokens = await captureInventoryFileTokens(inventory);
   const projectSet = options.semantic
     ? await loadProjectsWithFallback(repoPath, options, inventory)
     : { projects: [], compilerInputTokens: [], loadErrorHash: null };
   const projects = projectSet.projects;
-  const sourceSnapshotDigest = await createSourceSnapshotDigest(inventory, projectSet.compilerInputTokens);
+  await testHooks.afterProjectLoad?.();
+  const sourceSnapshotDigest = await createSourceSnapshotDigest(inventory, projectSet.compilerInputTokens, initialFileTokens);
   const manifest: ScanManifest = {
     scanId: createScanId(git, sourceSnapshotDigest, options),
     repoName: git.repoName,
@@ -190,19 +198,37 @@ function normalizeManifestPath(value: string): string {
 
 async function createSourceSnapshotDigest(
   inventory: readonly { relativePath: string; absolutePath: string; kind: string; sizeBytes: number; skipped: boolean }[],
-  compilerInputTokens: readonly string[]
+  compilerInputTokens: readonly string[],
+  fileTokens?: ReadonlyMap<string, SnapshotFileToken>
 ): Promise<string> {
   const segments: string[] = ["scan-truth-source-snapshot/v2\0"];
   for (const item of [...inventory].sort((left, right) => left.relativePath < right.relativePath ? -1 : left.relativePath > right.relativePath ? 1 : 0)) {
     if (item.skipped) {
       segments.push(`${item.relativePath}\0${item.kind}\0${item.sizeBytes}\0skipped-before-analysis\0`);
     } else {
-      const content = await fs.readFile(item.absolutePath);
-      segments.push(`${item.relativePath}\0${item.kind}\0${content.byteLength}\0${hashBytes(content)}\0`);
+      const token = fileTokens?.get(path.resolve(item.absolutePath));
+      if (token) {
+        segments.push(`${item.relativePath}\0${item.kind}\0${token.byteLength}\0${token.digest}\0`);
+      } else {
+        const content = await fs.readFile(item.absolutePath);
+        segments.push(`${item.relativePath}\0${item.kind}\0${content.byteLength}\0${hashBytes(content)}\0`);
+      }
     }
   }
   segments.push("compiler-inputs\0", ...compilerInputTokens);
   return hashBytes(Buffer.from(segments.join(""), "utf8"));
+}
+
+async function captureInventoryFileTokens(
+  inventory: readonly { absolutePath: string; skipped: boolean }[]
+): Promise<ReadonlyMap<string, SnapshotFileToken>> {
+  const tokens = new Map<string, SnapshotFileToken>();
+  for (const item of inventory) {
+    if (item.skipped) continue;
+    const content = await fs.readFile(item.absolutePath);
+    tokens.set(path.resolve(item.absolutePath), { byteLength: content.byteLength, digest: hashBytes(content) });
+  }
+  return tokens;
 }
 
 function createScanId(
