@@ -1,5 +1,20 @@
 [
   {
+    "slug": "before-adding-another-language-define-scan",
+    "category": "Language adapters",
+    "title": "Before Adding Another Language, Define What “Scan” Means",
+    "h1": "Before Adding Another Language, Define What “Scan” Means",
+    "description": "A concept-level guide to the evidence, artifact, persistence, failure, and coverage contract that must define a trustworthy TraceMap scan before a language roadmap claim expands.",
+    "ogDescription": "A bounded concept guide to repository authority, selected-byte identity, five required artifacts, persisted evidence, visible failures, and language-adapter readiness outcomes.",
+    "cardDescription": "Define the scan contract first: authority, bytes, artifacts, persistence, failures, coverage, determinism, and downstream limits.",
+    "hero": "A language badge can count files. A trustworthy scan contract explains what was analyzed, what survived, what failed, and what the result can support.",
+    "published": "2026-08-18",
+    "publishedDisplay": "August 18, 2026",
+    "body": "articles/before-adding-another-language-define-scan.html",
+    "calloutHeading": "Define scan before expanding the roadmap.",
+    "calloutHtml": "Start with the <a href=\"/evidence/\">evidence surface</a>, then compare the <a href=\"/capabilities/\">capability boundary</a> and <a href=\"/roadmap/\">roadmap</a>."
+  },
+  {
     "slug": "private-poc-pain-to-public-safe-capability",
     "category": "Evidence engineering",
     "title": "How Private POC Pain Becomes Public-Safe Product Capability",

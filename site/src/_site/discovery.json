@@ -1,5 +1,22 @@
 [
   {
+    "path": "/blog/before-adding-another-language-define-scan/",
+    "title": "Before Adding Another Language, Define What “Scan” Means",
+    "summary": "A concept-level guide to the evidence, artifact, persistence, failure, and coverage contract that must define a trustworthy TraceMap scan before a language roadmap claim expands.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/evidence/",
+    "limitations": [
+      "The article describes a bounded cross-adapter conformance contract and offline synthetic validation; it does not report a private repository scan, semantic parity, complete dependency coverage, build success, runtime behavior, or production behavior.",
+      "Readiness outcomes remain adapter- and environment-specific; unsupported or not-run rows stay visible, and the deferred Go issue is not an implementation or support announcement."
+    ],
+    "nonClaims": [
+      "No claim that a language badge, parser, green command, or conformance row proves semantic equivalence, complete repository understanding, runtime reachability, execution, deployment, migration, release safety, security, or business intent.",
+      "No private source, raw facts, SQLite content, logs, local paths, remotes, endpoints, credentials, SQL, or runtime artifact is published or implied."
+    ]
+  },
+  {
     "path": "/blog/private-poc-pain-to-public-safe-capability/",
     "title": "How Private POC Pain Becomes Public-Safe Product Capability",
     "summary": "A concept-level guide to separating private observation from abstract failure class, independent synthetic reproduction, deterministic contract, regression fixture, public-safe evidence candidate, and bounded claim.",

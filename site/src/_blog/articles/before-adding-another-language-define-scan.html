@@ -1,0 +1,258 @@
+<p>
+  <strong>Public claim level: concept.</strong>
+  Adding a file extension, parser, or language badge is not the same as adding a
+  trustworthy TraceMap scanner. Before TraceMap says that another language is
+  supported, <em>scan</em> needs a stable, testable meaning: which repository was
+  authoritative, which bytes were analyzed, which artifacts were published,
+  which evidence survived persistence, what failed, and what a downstream
+  consumer can honestly do with the result. Start with the
+  <a href="/evidence/">evidence surface</a>, then compare the
+  <a href="/capabilities/">capability boundary</a> and the
+  <a href="/limitations/">limitations register</a>.
+</p>
+
+<section data-language-scan-block="extension-vs-contract">
+  <h2>1. A language badge is easy; a scan contract is hard</h2>
+  <p>
+    Counting files, matching a familiar syntax shape, or displaying a language
+    badge can be useful inventory. It answers a narrow question: a selected
+    repository contains files that look like a supported kind. It does not
+    automatically establish semantic analysis, complete dependency evidence,
+    or compatibility with a reducer. A language name is not a single boolean;
+    a scanner has several capabilities, failure modes, and evidence ceilings.
+  </p>
+  <p>
+    The repository's <code>file.inventory.v1</code> rule is therefore valuable
+    without being a semantic promise. Its limitation says that file presence is
+    structural evidence only and does not prove runtime usage. A useful adapter
+    can begin with inventory and syntax facts, then publish reduced or
+    unsupported capability rows where stronger analysis is unavailable. The
+    acceptance contract is what makes that expansion credible: it prevents a
+    badge, a parser, or a green command from silently becoming a broader claim.
+  </p>
+</section>
+
+<section data-language-scan-block="authority">
+  <h2>2. A scan needs authority</h2>
+  <p>
+    Every scan needs a concrete repository identity and commit SHA, a selected
+    byte set, normalized options, and scanner and extractor versions. Those
+    values belong in the authoritative part of <code>scan-manifest.json</code>.
+    The <code>adapter.scan-truth.conformance.v1</code> rule requires more than a
+    timestamp or a convenient label: the scan ID must be deterministic from the
+    repository authority, commit, actual analyzed-byte identity, normalized
+    options, and adapter version.
+  </p>
+  <p>
+    The selected-byte identity is a deterministic SHA-256 digest over framed
+    repository-relative paths, file kinds, lengths, and the actual bytes used by
+    the adapter. A same-size dirty mutation must change the digest and scan ID.
+    Commit SHA alone is insufficient for working-tree bytes: two scans can share
+    a commit while analyzing different local content. Exclusions and includes
+    must govern both inventory and parser or compiler inputs, while persisted
+    evidence keeps the real repository-relative spelling. <code>file.inventory.v1</code>
+    records structural inventory; the conformance rule adds the authority and
+    mutation contract that makes that inventory trustworthy as scan input.
+  </p>
+  <p>
+    This is also where a missing toolchain becomes visible. The capability
+    rules describe semantic compilation, syntax fallback, project/config
+    inspection, package/restore awareness, generated or design-time linkage,
+    legacy toolchain signals, and downstream coverage as separate observations.
+    They are not a license to collapse every adapter into one support label.
+  </p>
+</section>
+
+<section data-language-scan-block="artifacts">
+  <h2>3. A scan publishes one truthful artifact set</h2>
+  <p>
+    A conforming scan publishes exactly the five standard artifacts:
+    <code>scan-manifest.json</code>, <code>facts.ndjson</code>,
+    <code>index.sqlite</code>, <code>report.md</code>, and
+    <code>logs/analyzer.log</code>. The manifest carries scan authority and
+    capability truth. NDJSON carries machine-readable facts. SQLite provides a
+    queryable projection. The report explains the bounded result, and the log
+    records sanitized analyzer diagnostics without becoming a source dump.
+  </p>
+  <p>
+    Publication is transactional. An adapter stages a candidate packet in a
+    sibling temporary directory, verifies the selected snapshot again after
+    extraction, validates the required artifacts, and only then replaces the
+    completed output. A failed replacement attempt must not leave a plausible
+    new success. Malformed or incomplete output must not replace a prior
+    completed packet. A typed failure or explicit partial result is preferable
+    to silently omitting the changed input while retaining the old success
+    story. The conformance harness exercises this boundary with inaccessible
+    inputs and failed replacement attempts.
+  </p>
+  <p>
+    The <a href="/static-vs-runtime/">static-versus-runtime boundary</a> is
+    useful here: these artifacts describe what the selected static scan could
+    establish, not what an application later did at runtime. A valid packet is
+    a durable evidence boundary, not a deployment certificate.
+  </p>
+</section>
+
+<section data-language-scan-block="persistence">
+  <h2>4. Evidence must survive persistence</h2>
+  <p>
+    When an adapter emits a fact, the useful identity cannot disappear between
+    extraction and storage. Where applicable, persistence must retain the
+    deterministic fact ID, scan ID, repository and commit, fact type, rule ID,
+    evidence tier, direction-bearing source and target identities,
+    repository-relative path, line span, extractor ID and version, coverage,
+    limitations, and supporting identities. These fields make a fact reviewable
+    without publishing raw source snippets.
+  </p>
+  <p>
+    The round trip matters as much as the first write. <code>facts.ndjson</code>
+    and <code>index.sqlite</code> must not quietly disagree about fact IDs,
+    endpoints, rules, tiers, spans, extractor provenance, coverage, limitations,
+    or support IDs. Unknown or malformed schemas fail closed. If an adapter
+    cannot preserve one field, the result should say that the capability is
+    reduced, unsupported, or not-run; it must not manufacture a value that
+    makes the packet look more complete. The <a href="/evidence/gaps/">gap
+    guide</a> is the right destination for a missing bridge.
+  </p>
+</section>
+
+<section data-language-scan-block="failure">
+  <h2>5. Failure must remain visible</h2>
+  <p>
+    A compiler, project-load, parser, dependency, or semantic failure does not
+    always erase every useful observation. An adapter may preserve independently
+    provable structural or syntax evidence, emit rule-backed gaps, and mark
+    coverage reduced. It must not label the resulting packet as a full success
+    merely because one fallback parser returned rows. A missing tool is
+    <code>unsupported</code> or <code>not-run</code>, not passing by assumption.
+  </p>
+  <p>
+    The capability rules keep these meanings separate. The semantic capability
+    rule summarizes compilation and project-load conditions; its limitations
+    say that a derived status row is not a compiler-symbol observation. The
+    syntax-fallback rule preserves what syntax can show but cannot prove
+    compiler binding, runtime reachability, overload selection, or dependency
+    resolution. The project/config and package/restore rules cover static
+    metadata and restore awareness without proving arbitrary build execution,
+    vulnerability status, transitive closure, or deployment. Generated-design
+    time and legacy-toolchain signals remain bounded static guidance. The
+    downstream-coverage rule keeps no-evidence conclusions coverage-relative.
+  </p>
+  <p>
+    The checked-in rule IDs make those boundaries addressable:
+    <code>analyzer.capability.semantic.v1</code>,
+    <code>analyzer.capability.syntax-fallback.v1</code>,
+    <code>analyzer.capability.project-config.v1</code>,
+    <code>analyzer.capability.package-restore.v1</code>,
+    <code>analyzer.capability.generated-design-time.v1</code>,
+    <code>analyzer.capability.legacy-toolchain.v1</code>, and
+    <code>analyzer.capability.downstream-coverage.v1</code>. A capability row is
+    not only a count; it is a bounded statement with a rule, tier, limitation,
+    and coverage state.
+  </p>
+  <p>
+    Unreadable, changed, removed, or excluded inputs also need a visible state.
+    A selected file that cannot be inventoried or re-read should stop publication
+    or produce an explicitly partial result according to the adapter policy. An
+    excluded file is not the same as an unreadable file. An omitted file is not
+    evidence of absence. That distinction is central to a scan contract.
+  </p>
+</section>
+
+<section data-language-scan-block="shared-truth">
+  <h2>6. Shared truth does not mean semantic parity</h2>
+  <p>
+    .NET, JVM, Python, TypeScript, and Swift have different compilers,
+    project models, package systems, parser boundaries, and semantic ceilings.
+    A neutral conformance profile can define shared truth behavior—authority,
+    byte identity, artifacts, persistence, failure, safety, and determinism—
+    without pretending that every language proves equivalent relationships.
+  </p>
+  <p>
+    Adapters may use different internal implementations and documented fact-ID
+    formulas. Cross-language digest equality is not required because supported
+    inventories differ. Evidence tiers retain their actual meaning: a semantic
+    row in one ecosystem is not automatically equivalent to a syntax or
+    structural row in another. The conformance rule's limitation is explicit:
+    bounded synthetic validation does not prove semantic parity, build success,
+    runtime reachability, execution, production behavior, or complete
+    dependency coverage.
+  </p>
+</section>
+
+<section data-language-scan-block="readiness-matrix">
+  <h2>7. A readiness matrix comes before roadmap expansion</h2>
+  <p>
+    Before broadening a roadmap claim, run the offline synthetic matrix and
+    inspect the row-level result. The closed outcome vocabulary is
+    <code>required</code>, <code>supported</code>, <code>reduced</code>,
+    <code>unsupported</code>, <code>not-applicable</code>, and
+    <code>not-run</code>. A required row is green only when direct executable
+    evidence supports it.
+  </p>
+  <table data-language-scan-matrix="acceptance">
+    <thead>
+      <tr><th>Acceptance row</th><th>Required question</th><th>Truthful outcome</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Repository/commit authority</td><td>Is the concrete repository and commit bound to the packet?</td><td>required → supported or unsupported</td></tr>
+      <tr><td>Selected-byte digest</td><td>Do actual analyzed bytes and options affect deterministic identity?</td><td>required → supported or unsupported</td></tr>
+      <tr><td>Deterministic scan ID</td><td>Do repeated identical scans retain authoritative identity?</td><td>required → supported or unsupported</td></tr>
+      <tr><td>Mutation detection</td><td>Does a same-size dirty mutation change the digest and scan ID?</td><td>required → supported or unsupported</td></tr>
+      <tr><td>Inaccessible-input behavior</td><td>Does unreadable input fail or become an explicit partial state?</td><td>required → supported, reduced, or not-applicable</td></tr>
+      <tr><td>Include/exclude authority</td><td>Do selection rules reach inventory and semantic/parser inputs?</td><td>required → supported or unsupported</td></tr>
+      <tr><td>Five-artifact transaction</td><td>Can a failed replacement preserve the prior completed packet?</td><td>required → supported or unsupported</td></tr>
+      <tr><td>Rule/tier/provenance persistence</td><td>Do facts retain rule, tier, path, span, extractor, coverage, and limits?</td><td>required → supported, reduced, or unsupported</td></tr>
+      <tr><td>NDJSON/SQLite parity</td><td>Can a read-only round trip compare the same fact identities?</td><td>required → supported or unsupported</td></tr>
+      <tr><td>Reduced-coverage behavior</td><td>Do syntax facts and rule-backed gaps survive semantic failure?</td><td>required → supported, reduced, or unsupported</td></tr>
+      <tr><td>Private-path safety</td><td>Are local paths, remotes, credentials, endpoints, and raw material rejected?</td><td>required → supported or unsupported</td></tr>
+      <tr><td>Deterministic repeated runs</td><td>Do authoritative artifacts compare equal apart from documented display metadata?</td><td>required → supported or unsupported</td></tr>
+      <tr><td>Synthetic executable validation</td><td>Does an offline fixture exercise the contract without protected source?</td><td>required → supported, unsupported, or not-run</td></tr>
+      <tr><td>Downstream compatibility</td><td>Can consumers read the evidence, or is there an explicit capability gap?</td><td>required → supported, reduced, unsupported, or not-run</td></tr>
+    </tbody>
+  </table>
+  <p>
+    Consider a completely synthetic <strong>Language X</strong>. The weak claim
+    is: “The scanner found twelve source files and emitted JSON.” The conforming
+    questions are: which exact repository, commit, selected bytes, options, and
+    tool version were analyzed? Did all five artifacts publish transactionally?
+    Did facts preserve rules, tiers, paths, spans, and extractor provenance?
+    Did changed or unreadable input fail loudly? Did identical scans produce
+    deterministic identity? Did reduced semantic coverage remain visible? Can
+    downstream consumers read the evidence, or do they emit an explicit gap?
+    Those questions describe a credible scan without pretending that Language X
+    has semantic parity with another adapter.
+  </p>
+</section>
+
+<section data-language-scan-block="claim-boundary" data-language-scan-boundary="claim-boundary" data-tm-boundary="claim-boundary">
+  <h2>8. What passing this contract does not prove</h2>
+  <p>
+    Passing the matrix is an acceptance signal for bounded scan truth, not a
+    universal language-support certificate. It does not prove semantic parity
+    across languages, complete repository understanding, target build success,
+    runtime reachability, execution, production behavior, dependency
+    completeness, framework coverage, business intent, security or vulnerability
+    status, migration readiness, or release approval. It also does not prove
+    readiness for any specific unimplemented language.
+  </p>
+  <p>
+    Issue #665 remains deferred in the current conformance implementation state.
+    No Go adapter is implemented, promised, or described as supported here. A
+    future Go adapter—or any other future adapter—should pass the relevant
+    contract rows, or carry a documented owner-accepted exception, before
+    TraceMap makes a broad support statement. The <a href="/roadmap/">roadmap</a>
+    is a planning surface, not evidence of shipped capability. Compare the
+    existing <a href="/blog/successful-build-can-still-have-reduced-coverage/">reduced-coverage article</a>,
+    <a href="/blog/csharp-extraction-without-plausible-wrong-graphs/">C# identity article</a>,
+    <a href="/blog/bugs-hiding-in-graph-history/">graph-history article</a>, and
+    <a href="/blog/how-tracemap-reads-swift-api-clients/">Swift API-client article</a>
+    for examples of bounded adapter-specific evidence.
+  </p>
+  <p>
+    This article is a contract explanation, not a scan result. It uses checked-in
+    public contracts and completely synthetic Language X questions. It publishes
+    no private repository, source snippet, raw fact, SQLite content, analyzer
+    log, endpoint, credential, remote, or runtime observation.
+  </p>
+</section>
