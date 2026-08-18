@@ -530,7 +530,7 @@ public sealed class ScanProgressDiagnosticsTests
 
         reporter.Emit(
             "totally-unknown-operation",
-            "/Users/leaky/repositories/private-name",
+            "untrusted-stage-value-do-not-emit",
             "weird-state",
             ordinal: -5,
             counts: new Dictionary<string, long> { ["files"] = 7, ["passwords"] = 9 },
@@ -544,7 +544,7 @@ public sealed class ScanProgressDiagnosticsTests
         Assert.Equal(7, latest.GetProperty("counts").GetProperty("files").GetInt64());
         Assert.False(latest.GetProperty("counts").TryGetProperty("passwords", out _));
         Assert.Equal("CODE-WITH-SPACES----SYMBOLS", latest.GetProperty("failureCode").GetString());
-        Assert.DoesNotContain("private-name", string.Join('\n', progress.Lines()), StringComparison.Ordinal);
+        Assert.DoesNotContain("untrusted-stage-value-do-not-emit", string.Join('\n', progress.Lines()), StringComparison.Ordinal);
     }
 
     [Fact]
