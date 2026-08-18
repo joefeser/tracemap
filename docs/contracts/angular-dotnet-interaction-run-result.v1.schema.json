@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tracemap.tools/contracts/angular-dotnet-interaction-run-result.v1.schema.json",
+  "title": "TraceMap Angular and .NET interaction review result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "runId", "configSha256", "outcome",
+    "combinedIndexAvailable", "sources", "reports", "artifacts",
+    "nextAction", "limitations"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "angular-dotnet-interaction-run-result.v1" },
+    "runId": { "type": "string", "pattern": "^interaction-[0-9a-f]{20}$" },
+    "configSha256": { "$ref": "#/$defs/sha256" },
+    "outcome": { "enum": ["succeeded", "partial", "failed"] },
+    "failureCode": {
+      "type": ["string", "null"],
+      "pattern": "^INTERACTION_RUN_[A-Z_]+$"
+    },
+    "combinedIndexAvailable": { "type": "boolean" },
+    "sources": {
+      "type": "array",
+      "maxItems": 100,
+      "items": { "$ref": "#/$defs/source" }
+    },
+    "reports": {
+      "type": "array",
+      "maxItems": 1602,
+      "items": { "$ref": "#/$defs/report" }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/artifact" }
+    },
+    "nextAction": {
+      "enum": [
+        "review-generated-reports",
+        "review-feedback-summary",
+        "inspect-failure-code-and-retained-stage-output"
+      ]
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "relativePath": { "type": "string", "pattern": "^(?!/)(?!.*\\\\).+$" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label", "kind", "commitSha", "analysisLevel", "buildStatus",
+        "scanPath", "indexSha256"
+      ],
+      "properties": {
+        "label": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$" },
+        "kind": { "enum": ["typescript", "dotnet"] },
+        "commitSha": { "type": "string", "pattern": "^[0-9a-fA-F]{40,64}$" },
+        "analysisLevel": { "type": "string", "minLength": 1 },
+        "buildStatus": { "type": "string", "minLength": 1 },
+        "scanPath": { "$ref": "#/$defs/relativePath" },
+        "indexSha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "kind", "relativePath", "sha256"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$" },
+        "kind": {
+          "enum": [
+            "combined-dependency", "portfolio", "endpoint-alignment",
+            "property-flow", "route-flow", "dependency-path"
+          ]
+        },
+        "relativePath": { "$ref": "#/$defs/relativePath" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relativePath", "sha256"],
+      "properties": {
+        "relativePath": { "$ref": "#/$defs/relativePath" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  }
+}

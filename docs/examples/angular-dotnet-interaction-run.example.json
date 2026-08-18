@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "angular-dotnet-interaction-run.v1",
+  "sources": [
+    {
+      "label": "angular-client",
+      "kind": "typescript",
+      "repositoryPath": "../application-ui",
+      "projects": [
+        "tsconfig.json"
+      ]
+    },
+    {
+      "label": "dotnet-api",
+      "kind": "dotnet",
+      "repositoryPath": "../application-api",
+      "solutions": [
+        "Application.Api.sln"
+      ],
+      "exclude": [
+        "custom-generated/**"
+      ]
+    },
+    {
+      "label": "dotnet-worker",
+      "kind": "dotnet",
+      "repositoryPath": "../application-worker",
+      "solutions": [
+        "Application.Worker.sln"
+      ]
+    }
+  ],
+  "endpointPairs": [
+    {
+      "name": "client-to-api",
+      "clientLabel": "angular-client",
+      "serverLabel": "dotnet-api"
+    }
+  ],
+  "propertyFlows": [
+    {
+      "name": "save-binding",
+      "selector": "binding:save",
+      "sourceLabel": "angular-client",
+      "framework": "angular"
+    }
+  ],
+  "routeFlows": [
+    {
+      "name": "profile-save",
+      "route": "POST /api/profile"
+    }
+  ],
+  "paths": [
+    {
+      "name": "profile-to-sql",
+      "fromEndpoint": "POST /api/profile",
+      "toSurface": "sql-query",
+      "sourcePair": "angular-client:dotnet-api"
+    }
+  ],
+  "reports": {
+    "combinedDependency": true,
+    "portfolio": true
+  }
+}

@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { dirname, extname, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -5,6 +6,13 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { buildSite, topNavigationLinks } from "./build.mjs";
 import { validateAdoptionPlaybookDist } from "./adoption-playbook.mjs";
 import { validateAccessSafeEvidenceAcquisitionDist } from "./access-safe-evidence-acquisition.mjs";
+import { validateWebformsModernizationArticleDist } from "./webforms-modernization-article.mjs";
+import { validateReducedCoverageArticleDist } from "./reduced-coverage-article.mjs";
+import { validateGapLineNumberArticleDist } from "./gap-line-number-article.mjs";
+import { validateButtonIdentityArticleDist } from "./button-identity-article.mjs";
+import { validateStaticEventFlowArticleDist } from "./static-event-flow-article.mjs";
+import { validatePrivatePocPublicCapabilityArticleDist } from "./private-poc-public-capability-article.mjs";
+import { validateBeforeAddingAnotherLanguageDefineScanDist } from "./before-adding-another-language-define-scan.mjs";
 import { validateAccessFormFieldLineageDist } from "./access-form-field-lineage.mjs";
 import { validateAccessRebuildReadinessDist } from "./access-rebuild-readiness.mjs";
 import { validateBuildReviewWorkflowStoryDist } from "./build-review-workflow-story.mjs";
@@ -85,6 +93,7 @@ import { validateDemoSummary } from "./validate-demo-summary.mjs";
 
 const defaultRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const defaultBaseUrl = "https://tracemap.tools";
+const validationCommitSha = resolveValidationCommitSha(defaultRoot);
 export async function validateSite(options = {}) {
   const { log = console.log, root = defaultRoot } = options;
 
@@ -107,6 +116,13 @@ export async function validateDist({
   baseUrl = defaultBaseUrl,
   requireMsbuildBinlogEvidence = true,
   requireAccessSafeEvidenceAcquisition = true,
+  requireWebformsModernizationArticle = true,
+  requireReducedCoverageArticle = true,
+  requireGapLineNumberArticle = true,
+  requireButtonIdentityArticle = true,
+  requireStaticEventFlowArticle = true,
+  requirePrivatePocPublicCapabilityArticle = true,
+  requireBeforeAddingAnotherLanguageDefineScanArticle = true,
   requireAccessFormFieldLineage = requireMsbuildBinlogEvidence,
   requireCsharpExtractionTruth = true,
   requireGraphHistoryBugs = true,
@@ -149,6 +165,27 @@ export async function validateDist({
     if (requireAccessSafeEvidenceAcquisition) {
       await validateAccessSafeEvidenceAcquisitionDist({ baseUrl: normalizedBaseUrl, dist, errors });
     }
+  if (requireWebformsModernizationArticle) {
+    await validateWebformsModernizationArticleDist({ baseUrl: normalizedBaseUrl, dist, errors });
+  }
+  if (requireReducedCoverageArticle) {
+    await validateReducedCoverageArticleDist({ baseUrl: normalizedBaseUrl, dist, errors });
+  }
+  if (requireGapLineNumberArticle) {
+    await validateGapLineNumberArticleDist({ baseUrl: normalizedBaseUrl, dist, errors });
+  }
+  if (requireButtonIdentityArticle) {
+    await validateButtonIdentityArticleDist({ baseUrl: normalizedBaseUrl, dist, errors });
+  }
+  if (requireStaticEventFlowArticle) {
+    await validateStaticEventFlowArticleDist({ baseUrl: normalizedBaseUrl, dist, errors });
+  }
+  if (requirePrivatePocPublicCapabilityArticle) {
+    await validatePrivatePocPublicCapabilityArticleDist({ baseUrl: normalizedBaseUrl, dist, errors });
+  }
+  if (requireBeforeAddingAnotherLanguageDefineScanArticle) {
+    await validateBeforeAddingAnotherLanguageDefineScanDist({ baseUrl: normalizedBaseUrl, dist, errors });
+  }
   if (requireCsharpExtractionTruth) {
     await validateCsharpExtractionTruthDist({ baseUrl: normalizedBaseUrl, dist, errors });
   }
@@ -242,7 +279,7 @@ export async function validateDist({
   await validateTopNavigation({ dist, errors, htmlFiles });
 
   if (errors.length > 0) {
-    throw new Error(`Site validation failed:\n- ${errors.join("\n- ")}`);
+    throw new Error(`Site validation failed:\n- ${errors.map(formatValidationError).join("\n- ")}`);
   }
 
   return {
@@ -250,6 +287,55 @@ export async function validateDist({
     internalReferenceCount,
     sitemapUrlCount: sitemapUrls.length
   };
+}
+
+function formatValidationError(error) {
+  if (typeof error === "string") {
+    return `${error} ${JSON.stringify(createValidationEvidence())}`;
+  }
+  if (error && typeof error.message === "string") {
+    const reference = createValidationEvidence(error);
+    return `${error.message} ${JSON.stringify({ ...reference, evidence: error.evidence ?? [reference] })}`;
+  }
+  return `${JSON.stringify(error)} ${JSON.stringify(createValidationEvidence())}`;
+}
+
+function createValidationEvidence(error = {}) {
+  const lineSpan = error.line_span && Number.isInteger(error.line_span.start_line) && Number.isInteger(error.line_span.end_line)
+    && error.line_span.start_line >= 1 && error.line_span.end_line >= error.line_span.start_line
+    ? error.line_span
+    : { start_line: 1, end_line: 1 };
+  const evidenceTier = ["Tier1Semantic", "Tier2Structural", "Tier3SyntaxOrTextual", "Tier4Unknown"].includes(error.evidence_tier)
+    ? error.evidence_tier
+    : "Tier3SyntaxOrTextual";
+  const commitSha = /^[0-9a-f]{40,64}$/i.test(String(error.commit_sha ?? ""))
+    ? String(error.commit_sha).toLowerCase()
+    : validationCommitSha;
+  return {
+    rule_id: error.rule_id || "site.validation.v1",
+    evidence_tier: evidenceTier,
+    file_path: error.file_path || "site/dist",
+    line_span: lineSpan,
+    commit_sha: commitSha,
+    extractor_version: error.extractor_version || "site-validator.v1"
+  };
+}
+
+function resolveValidationCommitSha(repositoryPath) {
+  const environmentSha = process.env.GITHUB_SHA ?? process.env.COMMIT_SHA ?? "";
+  if (/^[0-9a-f]{40}$/i.test(environmentSha)) return environmentSha.toLowerCase();
+
+  try {
+    const repositorySha = execFileSync("git", ["-C", repositoryPath, "rev-parse", "HEAD"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+    if (/^[0-9a-f]{40}$/i.test(repositorySha)) return repositorySha.toLowerCase();
+  } catch {
+    // The validation error remains useful, but provenance must fail closed.
+  }
+
+  throw new Error("Site validation requires a full 40-character commit SHA from GITHUB_SHA, COMMIT_SHA, or git HEAD.");
 }
 
 async function collectFiles(directory, errors) {

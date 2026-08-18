@@ -1,5 +1,15 @@
 import { readFile, stat } from "node:fs/promises";
 
+import { browserNamedEntities } from "./browser-named-entities.mjs";
+
+// Keep the site validator vocabulary aligned with src/typescript/src/facts/Models.ts.
+export const EvidenceTiers = Object.freeze({
+  Tier1Semantic: "Tier1Semantic",
+  Tier2Structural: "Tier2Structural",
+  Tier3SyntaxOrTextual: "Tier3SyntaxOrTextual",
+  Tier4Unknown: "Tier4Unknown"
+});
+
 export async function fileExists(path) {
   try {
     return (await stat(path)).isFile();
@@ -37,20 +47,7 @@ export function decodeHtmlEntities(value) {
       return decodeCodePoint(Number.parseInt(normalized.slice(1), 10), entity);
     }
 
-    return (
-      {
-        amp: "&",
-        apos: "'",
-        backslash: "\\",
-        bsol: "\\",
-        colon: ":",
-        gt: ">",
-        lt: "<",
-        nbsp: " ",
-        quot: "\"",
-        sol: "/"
-      }[normalized] ?? entity
-    );
+    return browserNamedEntities[token] ?? entity;
   });
 }
 
