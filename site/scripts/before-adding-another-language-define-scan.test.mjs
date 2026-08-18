@@ -13,6 +13,7 @@ import {
 
 const siteRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const articleBodyPath = join("src", "_blog", "articles", "before-adding-another-language-define-scan.html");
+const machineLocalPath = ["/", "Users", "/"].join("") + "example/private-repo";
 
 test("language-scan contract article builds with registry, discovery, matrix, artifacts, and boundaries", async (t) => {
   const root = await createSiteFixture(t);
@@ -77,7 +78,7 @@ test("validator scans article metadata, blog card, and discovery copy for claims
     ["article claim", ["src", "_blog", "articles", "before-adding-another-language-define-scan.html"], (value) => `${value}<p>TraceMap guarantees complete coverage.</p>`, /unsupported positive claim/],
     ["metadata claim", ["src", "_blog", "articles.json"], (value) => value.replace("Define the scan contract first:", "TraceMap guarantees complete coverage:"), /unsupported positive claim/],
     ["discovery claim", ["src", "_site", "discovery.json"], (value) => value.replace("A concept-level guide to the evidence", "TraceMap guarantees complete coverage in the evidence"), /unsupported positive claim/],
-    ["article private path", ["src", "_blog", "articles", "before-adding-another-language-define-scan.html"], (value) => `${value}<p>/Users/example/private-repo</p>`, /hard private material/],
+    ["article private path", ["src", "_blog", "articles", "before-adding-another-language-define-scan.html"], (value) => `${value}<p>${machineLocalPath}</p>`, /hard private material/],
     ["metadata raw SQL", ["src", "_blog", "articles.json"], (value) => value.replace("Define the scan contract first:", "SELECT value FROM private_table. Define the scan contract first:"), /raw or executable material/],
     ["discovery raw SQL", ["src", "_site", "discovery.json"], (value) => value.replace("A concept-level guide to the evidence", "SELECT value FROM private_table. A concept-level guide to the evidence"), /raw or executable material/]
   ];
