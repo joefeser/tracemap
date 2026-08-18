@@ -139,7 +139,7 @@ prLoopPacket:
     # merge and is rendered by agent-control's merge executor separately.
     mergeMethod: merge_commit
   ownerOverrideAutoMerge:
-    enabled: true
+    enabled: false
     residualRiskCeiling: medium
 
 reviewerReturnPolicy:
