@@ -111,7 +111,7 @@ export async function validateDatabaseDesignReviewShowcaseDist({
   for (const [path, label] of [[storyPath, databaseDesignReviewRoute], [proofPath, databaseDesignReviewProofRoute], [assetPath, databaseDesignReviewAsset]]) {
     if (!(await fileExists(path))) errors.push(`Database design review showcase is missing: ${label}`);
   }
-  if (errors.some((error) => error.startsWith("Database design review showcase is missing:"))) return;
+  if (errors.some((error) => String(error?.message ?? error).startsWith("Database design review showcase is missing:"))) return;
 
   const storyHtml = await readFile(storyPath, "utf8");
   const proofHtml = await readFile(proofPath, "utf8");
