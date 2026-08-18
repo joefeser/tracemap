@@ -313,11 +313,13 @@ async function validateArticle({ baseUrl, pagePath, errors }) {
 }
 
 function scanSafety(surfaces, errors, artifact, privateSurfaces = surfaces, tightSurface = "") {
+  // Include a markup- and whitespace-collapsed claim surface so inline/block tags cannot split a forbidden phrase past detection.
+  const claimSurfaces = tightSurface ? [...surfaces, tightSurface] : surfaces;
   for (const pattern of forbiddenClaims) {
-    if (surfaces.some((surface) => pattern.test(surface))) errors.push(withEvidence(`Private POC article contains unsupported positive claim: ${pattern}`, artifact, "docs-export.validation.prohibited-claim-wording.v1"));
+    if (claimSurfaces.some((surface) => pattern.test(surface))) errors.push(withEvidence(`Private POC article contains unsupported positive claim: ${pattern}`, artifact, "docs-export.validation.prohibited-claim-wording.v1"));
   }
   for (const pattern of tightForbiddenClaimPatterns) {
-    if (tightSurface && pattern.test(tightSurface)) errors.push(withEvidence(`Private POC article contains unsupported positive claim: ${pattern}`, artifact, "docs-export.validation.prohibited-claim-wording.v1"));
+    if (claimSurfaces.some((surface) => pattern.test(surface))) errors.push(withEvidence(`Private POC article contains unsupported positive claim: ${pattern}`, artifact, "docs-export.validation.prohibited-claim-wording.v1"));
   }
   for (const pattern of rawMaterialPatterns) {
     if (surfaces.some((surface) => pattern.test(surface))) errors.push(withEvidence(`Private POC article contains raw or executable material: ${pattern}`, artifact, "docs-export.validation.unsafe-value-rejected.v1"));
