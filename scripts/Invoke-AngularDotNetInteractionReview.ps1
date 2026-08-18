@@ -420,10 +420,12 @@ function New-FeedbackEvidence {
     }
     $normalizedRule = if ([string]::IsNullOrWhiteSpace($RuleId)) { $script:FeedbackRuleId } else { $RuleId }
     $normalizedTier = if ($script:AllowedEvidenceTiers.Contains($EvidenceTier)) { $EvidenceTier } else { "Tier4Unknown" }
-    $normalizedCommit = if ($CommitSha -match '^[0-9a-fA-F]{40,64}$') { $CommitSha.ToLowerInvariant() } else {
-        $candidate = @($script:SourceCommitByLabel.Values | Sort-Object | Select-Object -First 1)
-        if ($candidate.Count -eq 1 -and [string]$candidate[0] -match '^[0-9a-fA-F]{40,64}$') { ([string]$candidate[0]).ToLowerInvariant() } else { "0" * 40 }
-    }
+    # Report evidence can summarize more than one repository. Use the
+    # deterministic source-snapshot authority for that case instead of
+    # attaching an unrelated repository commit to the finding.
+    $normalizedCommit = if ($CommitSha -match '^[0-9a-fA-F]{40,64}$') { $CommitSha.ToLowerInvariant() } elseif ($script:SourceSnapshotSha256 -match '^[0-9a-fA-F]{64}$') {
+        $script:SourceSnapshotSha256.ToLowerInvariant()
+    } else { "0" * 40 }
     $safeStart = [Math]::Max(1, $StartLine)
     $safeEnd = [Math]::Max($safeStart, $EndLine)
     return [ordered]@{
@@ -514,13 +516,15 @@ function Add-ReportSignals {
         [Parameter(Mandatory = $true)][string]$JsonPath,
         [Parameter(Mandatory = $true)][string]$Producer,
         [Parameter(Mandatory = $true)][hashtable]$Signals,
-        [Parameter(Mandatory = $true)][AllowEmptyCollection()][System.Collections.Generic.List[object]]$ReportStates
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][System.Collections.Generic.List[object]]$ReportStates,
+        [Parameter(Mandatory = $true)][int]$ReportSequence
     )
 
     $report = Get-Content -LiteralPath $JsonPath -Raw | ConvertFrom-Json -Depth 100
     # Query names are owner-controlled and must not enter the categorical
-    # feedback surface. Retain a producer-level sanitized alias for evidence.
-    $reportArtifactPath = "feedback-evidence/$Producer.json"
+    # feedback surface. Retain a distinct producer-plus-ordinal alias for
+    # each report so same-kind queries cannot overwrite one another.
+    $reportArtifactPath = "feedback-evidence/$Producer-$($ReportSequence.ToString('D4')).json"
     $reportArtifactAbsolutePath = Join-Path $script:StagingRoot $reportArtifactPath
     New-Item -ItemType Directory -Path (Split-Path -Parent $reportArtifactAbsolutePath) -Force | Out-Null
     Copy-Item -LiteralPath $JsonPath -Destination $reportArtifactAbsolutePath -Force
@@ -855,7 +859,7 @@ foreach ($query in $pathQueries) {
     $name = [string](Get-PropertyValue $query "name" "")
     $fromEndpoint = [string](Get-PropertyValue $query "fromEndpoint" "")
     $toSurface = [string](Get-PropertyValue $query "toSurface" "")
-    if ($name -notmatch $SafeNamePattern -or -not $queryNames.Add("path:$name") -or [string]::IsNullOrWhiteSpace($fromEndpoint) -or -not $script:AllowedTerminalSurfaces.Contains($toSurface.Trim())) {
+    if ($name -notmatch $SafeNamePattern -or -not $queryNames.Add("path:$name") -or [string]::IsNullOrWhiteSpace($fromEndpoint) -or $fromEndpoint.Length -gt 500 -or -not $script:AllowedTerminalSurfaces.Contains($toSurface.Trim())) {
         Stop-InteractionReview "INTERACTION_RUN_QUERY_INVALID"
     }
     $sourcePair = [string](Get-PropertyValue $query "sourcePair" "")
@@ -1014,7 +1018,7 @@ try {
             -Action {
                 Invoke-TraceMap @("report", "--index", $combinedIndex, "--out", $reportOut, "--format", "json") "INTERACTION_RUN_DEPENDENCY_REPORT_FAILED"
                 $jsonPath = Join-Path $reportOut "dependency-report.json"
-                Add-ReportSignals $jsonPath "dependency" $signals $reportStates
+                Add-ReportSignals $jsonPath "dependency" $signals $reportStates -ReportSequence ($reportResults.Count + 1)
                 $reportResults.Add([ordered]@{ name = "dependency"; kind = "combined-dependency"; relativePath = "reports/dependency/dependency-report.json"; sha256 = Get-Sha256File $jsonPath })
             }
     }
@@ -1034,7 +1038,7 @@ try {
             -Action {
                 Invoke-TraceMap $arguments.ToArray() "INTERACTION_RUN_PORTFOLIO_REPORT_FAILED"
                 $jsonPath = Join-Path $reportOut "portfolio-report.json"
-                Add-ReportSignals $jsonPath "portfolio" $signals $reportStates
+                Add-ReportSignals $jsonPath "portfolio" $signals $reportStates -ReportSequence ($reportResults.Count + 1)
                 $reportResults.Add([ordered]@{ name = "portfolio"; kind = "portfolio"; relativePath = "reports/portfolio/portfolio-report.json"; sha256 = Get-Sha256File $jsonPath })
             }
     }
@@ -1056,7 +1060,7 @@ try {
                     "--out", $reportOut,
                     "--format", "json") "INTERACTION_RUN_ENDPOINT_REPORT_FAILED"
                 $jsonPath = Join-Path $reportOut "endpoint-report.json"
-                Add-ReportSignals $jsonPath "endpoint-alignment" $signals $reportStates
+                Add-ReportSignals $jsonPath "endpoint-alignment" $signals $reportStates -ReportSequence ($reportResults.Count + 1)
                 $reportResults.Add([ordered]@{ name = $name; kind = "endpoint-alignment"; relativePath = "reports/endpoints/$name/endpoint-report.json"; sha256 = Get-Sha256File $jsonPath })
             }
     }
@@ -1075,7 +1079,7 @@ try {
             -Action {
                 Invoke-TraceMap $arguments.ToArray() "INTERACTION_RUN_PROPERTY_FLOW_FAILED"
                 $jsonPath = Join-Path $reportOut "property-flow-report.json"
-                Add-ReportSignals $jsonPath "property-flow" $signals $reportStates
+                Add-ReportSignals $jsonPath "property-flow" $signals $reportStates -ReportSequence ($reportResults.Count + 1)
                 $reportResults.Add([ordered]@{ name = $name; kind = "property-flow"; relativePath = "reports/property-flow/$name/property-flow-report.json"; sha256 = Get-Sha256File $jsonPath })
             }
     }
@@ -1088,7 +1092,7 @@ try {
             -Action {
                 Invoke-TraceMap @("route-flow", "--index", $combinedIndex, "--route", [string]$query.route, "--out", $reportOut, "--format", "json") "INTERACTION_RUN_ROUTE_FLOW_FAILED"
                 $jsonPath = Join-Path $reportOut "route-flow-report.json"
-                Add-ReportSignals $jsonPath "route-flow" $signals $reportStates
+                Add-ReportSignals $jsonPath "route-flow" $signals $reportStates -ReportSequence ($reportResults.Count + 1)
                 $reportResults.Add([ordered]@{ name = $name; kind = "route-flow"; relativePath = "reports/route-flow/$name/route-flow-report.json"; sha256 = Get-Sha256File $jsonPath })
             }
     }
@@ -1105,7 +1109,7 @@ try {
             -Action {
                 Invoke-TraceMap $arguments.ToArray() "INTERACTION_RUN_PATH_QUERY_FAILED"
                 $jsonPath = Join-Path $reportOut "paths-report.json"
-                Add-ReportSignals $jsonPath "dependency-path" $signals $reportStates
+                Add-ReportSignals $jsonPath "dependency-path" $signals $reportStates -ReportSequence ($reportResults.Count + 1)
                 $reportResults.Add([ordered]@{ name = $name; kind = "dependency-path"; relativePath = "reports/paths/$name/paths-report.json"; sha256 = Get-Sha256File $jsonPath })
             }
     }
