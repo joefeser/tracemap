@@ -189,6 +189,19 @@ try {
     & pwsh -NoProfile -File $runner -ConfigPath $configPath -TraceMapRoot $TraceMapRoot -OutputRoot $output1 -ValidateOnly | Out-Null
     Assert-True ($LASTEXITCODE -eq 0) "restored configuration validation failed"
 
+    $config.sources[0].repositoryPath = ""
+    [System.IO.File]::WriteAllText($configPath, (($config | ConvertTo-Json -Depth 20) + "`n"), [System.Text.UTF8Encoding]::new($false))
+    & pwsh -NoProfile -File $runner -ConfigPath $configPath -TraceMapRoot $TraceMapRoot -OutputRoot $output1 -ValidateOnly 2>$null | Out-Null
+    Assert-True ($LASTEXITCODE -ne 0) "missing source repositoryPath was accepted"
+    $config.sources[0].repositoryPath = $angular
+
+    $config.sources[0].include = @(0..100 | ForEach-Object { "include-$($_.ToString('000')).ts" })
+    [System.IO.File]::WriteAllText($configPath, (($config | ConvertTo-Json -Depth 20) + "`n"), [System.Text.UTF8Encoding]::new($false))
+    & pwsh -NoProfile -File $runner -ConfigPath $configPath -TraceMapRoot $TraceMapRoot -OutputRoot $output1 -ValidateOnly 2>$null | Out-Null
+    Assert-True ($LASTEXITCODE -ne 0) "source path list above the contract limit was accepted"
+    $config.sources[0].include = @()
+    [System.IO.File]::WriteAllText($configPath, (($config | ConvertTo-Json -Depth 20) + "`n"), [System.Text.UTF8Encoding]::new($false))
+
     & pwsh -NoProfile -File $runner -ConfigPath $configPath -TraceMapRoot $TraceMapRoot -OutputRoot (Join-Path $angular "unsafe-output") -ValidateOnly 2>$null | Out-Null
     $unsafeOutputExit = $LASTEXITCODE
     Assert-True ($unsafeOutputExit -ne 0) "output inside a source repository was accepted"
@@ -218,7 +231,7 @@ try {
         $result = Get-Content -LiteralPath (Join-Path $output "interaction-run-result.json") -Raw | ConvertFrom-Json -Depth 100
         $feedback = Get-Content -LiteralPath (Join-Path $output "feedback-summary.json") -Raw | ConvertFrom-Json -Depth 100
         Assert-True ($result.schemaVersion -eq "angular-dotnet-interaction-run-result.v1") "unexpected result schema"
-        Assert-True ($result.outcome -eq "succeeded") "unexpected result outcome"
+        Assert-True ($result.outcome -eq "partial") "unexpected result outcome"
         Assert-True ($result.sources.Count -eq 2) "unexpected source count"
         Assert-True ($result.reports.Count -eq 6) "unexpected report count"
         foreach ($source in @("angular-client", "dotnet-api")) {
@@ -229,7 +242,18 @@ try {
         $dotnetFactsText = Get-Content -LiteralPath (Join-Path $output "scans/dotnet-api/facts.ndjson") -Raw
         Assert-True (-not $dotnetFactsText.Contains("ConfiguredExcludeSentinel", [System.StringComparison]::Ordinal)) "configured exclusion was not preserved"
         Assert-True ($feedback.schemaVersion -eq "angular-dotnet-interaction-feedback.v1") "unexpected feedback schema"
+        Assert-True ($feedback.outcome -eq "partial") "feedback did not label reduced analysis as partial"
         Assert-True ($feedback.reportCount -eq 6) "unexpected feedback report count"
+        Assert-True ($feedback.sources.Count -eq 2) "feedback omitted source provenance"
+        foreach ($signal in $feedback.unresolvedSignals) {
+            Assert-True ($signal.evidence.Count -ge 1) "feedback signal omitted evidence references"
+            foreach ($evidence in $signal.evidence) {
+                Assert-True (-not [string]::IsNullOrWhiteSpace([string]$evidence.rule_id)) "feedback evidence omitted a rule ID"
+                Assert-True ([string]$evidence.commit_sha -match '^[0-9a-f]{40,64}$') "feedback evidence omitted a commit SHA"
+                Assert-True ([int]$evidence.line_span.start_line -ge 1 -and [int]$evidence.line_span.end_line -ge [int]$evidence.line_span.start_line) "feedback evidence had an invalid line span"
+                Assert-True (-not [string]::IsNullOrWhiteSpace([string]$evidence.extractor_version)) "feedback evidence omitted extractor version"
+            }
+        }
         $operationalEventPath = Join-Path $output "logs/interaction-review-events.jsonl"
         $operationalEvents = @(Get-Content -LiteralPath $operationalEventPath |
             Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
@@ -237,7 +261,7 @@ try {
         Assert-True ($operationalEvents.Count -eq 20) "unexpected operational event count"
         Assert-True ($operationalEvents[0].event -eq "run-started") "operational stream does not begin with run-started"
         Assert-True ($operationalEvents[-1].event -eq "run-completed") "operational stream does not end with run-completed"
-        Assert-True ($operationalEvents[-1].status -eq "succeeded") "operational stream has unexpected run outcome"
+        Assert-True ($operationalEvents[-1].status -eq "partial") "operational stream has unexpected run outcome"
         Assert-True ([long]$operationalEvents[-1].durationMilliseconds -ge 0) "operational stream omitted total duration"
         for ($eventIndex = 0; $eventIndex -lt $operationalEvents.Count; $eventIndex++) {
             $event = $operationalEvents[$eventIndex]
