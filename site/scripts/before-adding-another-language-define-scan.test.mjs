@@ -14,6 +14,8 @@ import {
 const siteRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const articleBodyPath = join("src", "_blog", "articles", "before-adding-another-language-define-scan.html");
 const machineLocalPath = ["/", "Users", "/"].join("") + "example/private-repo";
+const windowsNonCPath = ["D:", "\\", "Users", "\\", "example", "\\", "private-repo"].join("");
+const windowsNonCPathJson = JSON.stringify(windowsNonCPath).slice(1, -1);
 
 test("language-scan contract article builds with registry, discovery, matrix, artifacts, and boundaries", async (t) => {
   const root = await createSiteFixture(t);
@@ -48,7 +50,9 @@ test("validator fail-closes malformed discovery, missing artifacts, outcomes, an
     ["malformed discovery", async (root) => writeFile(join(root, "dist", "routes-index.json"), JSON.stringify({ entries: {} }), "utf8"), /must contain an entries array/],
     ["missing artifact", async (root) => mutateBody(root, (value) => value.replaceAll("index.sqlite", "index-database")), /missing required artifact: index\.sqlite/],
     ["missing outcome", async (root) => mutateBody(root, (value) => value.replaceAll("not-run", "not-executed")), /missing required outcome: not-run/],
-    ["fake rule", async (root) => mutateBody(root, (value) => `${value}<p>fake.rule.v1</p>`), /outside the verified catalog list: fake\.rule\.v1/]
+    ["fake rule", async (root) => mutateBody(root, (value) => `${value}<p>fake.rule.v1</p>`), /outside the verified catalog list: fake\.rule\.v1/],
+    ["mixed-case fake rule suffix", async (root) => mutateBody(root, (value) => `${value}<p>fake.rule.V1</p>`), /outside the verified catalog list: fake\.rule\.V1/],
+    ["mixed-case fake rule prefix", async (root) => mutateBody(root, (value) => `${value}<p>Fake.rule.v1</p>`), /outside the verified catalog list: Fake\.rule\.v1/]
   ];
   for (const [name, mutate, expected] of cases) {
     await t.test(name, async (subtest) => {
@@ -73,14 +77,30 @@ test("validator catches tag-split claims and numeric browser entities", async (t
   assert.match(errors.join("\n"), /unsupported positive claim/);
 });
 
+test("validator catches affirmative claims with alternate subjects", async (t) => {
+  const root = await createSiteFixture(t);
+  await buildSite({ root, log() {} });
+  const pagePath = join(root, "dist", "blog", "before-adding-another-language-define-scan", "index.html");
+  const original = await readFile(pagePath, "utf8");
+  await writeFile(pagePath, `${original}<p>Passing the matrix proves semantic parity.</p>`, "utf8");
+  const errors = [];
+  await validateBeforeAddingAnotherLanguageDefineScanDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /unsupported positive proof claim/);
+});
+
 test("validator scans article metadata, blog card, and discovery copy for claims and raw material", async (t) => {
   const cases = [
     ["article claim", ["src", "_blog", "articles", "before-adding-another-language-define-scan.html"], (value) => `${value}<p>TraceMap guarantees complete coverage.</p>`, /unsupported positive claim/],
     ["metadata claim", ["src", "_blog", "articles.json"], (value) => value.replace("Define the scan contract first:", "TraceMap guarantees complete coverage:"), /unsupported positive claim/],
     ["discovery claim", ["src", "_site", "discovery.json"], (value) => value.replace("A concept-level guide to the evidence", "TraceMap guarantees complete coverage in the evidence"), /unsupported positive claim/],
     ["article private path", ["src", "_blog", "articles", "before-adding-another-language-define-scan.html"], (value) => `${value}<p>${machineLocalPath}</p>`, /hard private material/],
+    ["article non-C Windows path", ["src", "_blog", "articles", "before-adding-another-language-define-scan.html"], (value) => `${value}<p>${windowsNonCPath}</p>`, /hard private material/],
+    ["discovery non-C Windows path", ["src", "_site", "discovery.json"], (value) => value.replace("A concept-level guide to the evidence", `${windowsNonCPathJson}. A concept-level guide to the evidence`), /hard private material/],
     ["metadata raw SQL", ["src", "_blog", "articles.json"], (value) => value.replace("Define the scan contract first:", "SELECT value FROM private_table. Define the scan contract first:"), /raw or executable material/],
-    ["discovery raw SQL", ["src", "_site", "discovery.json"], (value) => value.replace("A concept-level guide to the evidence", "SELECT value FROM private_table. A concept-level guide to the evidence"), /raw or executable material/]
+    ["discovery raw SQL", ["src", "_site", "discovery.json"], (value) => value.replace("A concept-level guide to the evidence", "SELECT value FROM private_table. A concept-level guide to the evidence"), /raw or executable material/],
+    ["article named private endpoint", ["src", "_blog", "articles", "before-adding-another-language-define-scan.html"], (value) => `${value}<p>https://service&period;internal/private</p>`, /private endpoint URL/],
+    ["discovery named private endpoint", ["src", "_site", "discovery.json"], (value) => value.replace("A concept-level guide to the evidence", "https://service&period;internal/private. A concept-level guide to the evidence"), /private endpoint URL/],
+    ["complete dependency coverage claim", ["src", "_blog", "articles", "before-adding-another-language-define-scan.html"], (value) => `${value}<p>TraceMap proves complete dependency coverage.</p>`, /unsupported positive claim/]
   ];
   for (const [name, parts, mutate, expected] of cases) {
     await t.test(name, async (subtest) => {
