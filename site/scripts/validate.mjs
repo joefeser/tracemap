@@ -10,6 +10,7 @@ import { validateReducedCoverageArticleDist } from "./reduced-coverage-article.m
 import { validateGapLineNumberArticleDist } from "./gap-line-number-article.mjs";
 import { validateButtonIdentityArticleDist } from "./button-identity-article.mjs";
 import { validateStaticEventFlowArticleDist } from "./static-event-flow-article.mjs";
+import { validatePrivatePocPublicCapabilityArticleDist } from "./private-poc-public-capability-article.mjs";
 import { validateAccessFormFieldLineageDist } from "./access-form-field-lineage.mjs";
 import { validateAccessRebuildReadinessDist } from "./access-rebuild-readiness.mjs";
 import { validateBuildReviewWorkflowStoryDist } from "./build-review-workflow-story.mjs";
@@ -117,6 +118,7 @@ export async function validateDist({
   requireGapLineNumberArticle = true,
   requireButtonIdentityArticle = true,
   requireStaticEventFlowArticle = true,
+  requirePrivatePocPublicCapabilityArticle = true,
   requireAccessFormFieldLineage = requireMsbuildBinlogEvidence,
   requireCsharpExtractionTruth = true,
   requireGraphHistoryBugs = true,
@@ -173,6 +175,9 @@ export async function validateDist({
   }
   if (requireStaticEventFlowArticle) {
     await validateStaticEventFlowArticleDist({ baseUrl: normalizedBaseUrl, dist, errors });
+  }
+  if (requirePrivatePocPublicCapabilityArticle) {
+    await validatePrivatePocPublicCapabilityArticleDist({ baseUrl: normalizedBaseUrl, dist, errors });
   }
   if (requireCsharpExtractionTruth) {
     await validateCsharpExtractionTruthDist({ baseUrl: normalizedBaseUrl, dist, errors });
