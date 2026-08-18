@@ -84,7 +84,7 @@ public static class ScanEngine
             progress?.StartStage(ScanProgressReporter.ScanOperation, ScanProgressStages.SourceSnapshotCapture);
             try
             {
-                semanticInputSnapshot = CaptureSemanticInputSnapshot(repoPath, fullInventory);
+                semanticInputSnapshot = CaptureSemanticInputSnapshot(repoPath, fullInventory, cancellationToken);
             }
             catch (SourceInventoryException ex)
             {
@@ -115,7 +115,7 @@ public static class ScanEngine
                     ? semanticToolchainReducedCoverage ? "semantic-reduced" : "semantic"
                     : semanticToolchainReducedCoverage ? "syntax-reduced" : "syntax";
                 cancellationToken.ThrowIfCancellationRequested();
-                VerifySemanticInputSnapshot(repoPath, fullInventory, semanticResult, semanticInputSnapshot);
+                VerifySemanticInputSnapshot(repoPath, fullInventory, semanticResult, semanticInputSnapshot, cancellationToken);
                 semanticOperation.Complete(semanticToolchainReducedCoverage
                     ? TraceMapDiagnosticOutcome.Partial
                     : TraceMapDiagnosticOutcome.Succeeded);
@@ -167,7 +167,8 @@ public static class ScanEngine
                 repoPath,
                 refreshedFullInventory,
                 semanticResult,
-                semanticInputSnapshot);
+                semanticInputSnapshot,
+                cancellationToken);
             fullInventory = refreshedFullInventory;
             inventory = refreshedInventory;
             authoritativeSnapshotInventory = refreshedSnapshotInventory;
@@ -484,13 +485,14 @@ public static class ScanEngine
 
     internal static IReadOnlyDictionary<string, string> CaptureSemanticInputSnapshot(
         string repoPath,
-        IReadOnlyList<FileInventoryItem> inventory)
+        IReadOnlyList<FileInventoryItem> inventory,
+        CancellationToken cancellationToken = default)
     {
         return inventory
             .Where(item => FileInventory.IsCSharpKind(item.Kind) || IsSemanticMetadataKind(item.Kind))
             .ToDictionary(
                 item => item.RelativePath,
-                item => CreateSourceSnapshotDigest(repoPath, [item]),
+                item => CreateSourceSnapshotDigest(repoPath, [item], cancellationToken),
                 StringComparer.Ordinal);
     }
 
@@ -498,7 +500,8 @@ public static class ScanEngine
         string repoPath,
         IReadOnlyList<FileInventoryItem> inventory,
         SemanticExtractionResult semanticResult,
-        IReadOnlyDictionary<string, string> baseline)
+        IReadOnlyDictionary<string, string> baseline,
+        CancellationToken cancellationToken = default)
     {
         var protectedPaths = GetSemanticallyAnalyzedFiles(semanticResult)
             .Concat(semanticResult.CompilationInputFiles?.AsEnumerable() ?? Enumerable.Empty<string>())
@@ -510,12 +513,13 @@ public static class ScanEngine
         {
             foreach (var path in protectedPaths)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (path.StartsWith("__external__/", StringComparison.Ordinal))
                     continue;
 
                 if (!baseline.TryGetValue(path, out var expected)
                     || !itemsByPath.TryGetValue(path, out var item)
-                    || !string.Equals(expected, CreateSourceSnapshotDigest(repoPath, [item]), StringComparison.Ordinal))
+                    || !string.Equals(expected, CreateSourceSnapshotDigest(repoPath, [item], cancellationToken), StringComparison.Ordinal))
                 {
                     throw new SourceSnapshotException();
                 }

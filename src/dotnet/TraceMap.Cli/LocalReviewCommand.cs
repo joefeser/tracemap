@@ -159,8 +159,8 @@ public static class LocalReviewCommand
         {
             timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutTimer = timeProvider.CreateTimer(
-                static state => TryCancel((CancellationTokenSource)state!),
-                timeoutSource,
+                static state => TryTimeout((TimeoutState)state!),
+                new TimeoutState(timeoutSource, progress),
                 TimeSpan.FromSeconds(timeoutSeconds),
                 TimeSpan.FromMilliseconds(-1));
         }
@@ -216,17 +216,31 @@ public static class LocalReviewCommand
         }
     }
 
-    private static void TryCancel(CancellationTokenSource source)
+    /// <summary>
+    /// Timeout deadline callback. Cancellation is cooperative: when an
+    /// underlying API ignores the token, no OperationCanceledException ever
+    /// reaches the workflow, so the timeout observation is recorded here to
+    /// keep the checkpoint truthful for exactly those stuck runs.
+    /// </summary>
+    private static void TryTimeout(TimeoutState state)
     {
         try
         {
-            source.Cancel();
+            state.Source.Cancel();
         }
         catch (Exception exception) when (exception is ObjectDisposedException)
         {
             // The workflow already completed before the timeout budget fired.
+            return;
         }
+
+        state.Progress?.FinishActiveStage(
+            ScanProgressReporter.LocalReviewOperation,
+            "timed-out",
+            "LOCAL_REVIEW_TIMEOUT");
     }
+
+    private sealed record TimeoutState(CancellationTokenSource Source, ScanProgressReporter? Progress);
 
     private static async Task<int> RunStagesAsync(
         LocalReviewArguments parsed,
@@ -289,6 +303,7 @@ public static class LocalReviewCommand
             }
 
             EnsureRequiredScanArtifacts(scanDirectory);
+            effectiveToken.ThrowIfCancellationRequested();
             var candidateManifest = await ReadManifestAsync(scanDirectory, cancellationToken);
             authoritativeIdentity = await ReadAuthoritativeIdentityAsync(
                 scanDirectory,
@@ -321,6 +336,7 @@ public static class LocalReviewCommand
                         Path.Combine(scanDirectory, "index.sqlite"),
                         Path.Combine(staging, "webforms")),
                     effectiveToken);
+                effectiveToken.ThrowIfCancellationRequested();
                 VerifyUnchanged(scanDirectory, before);
                 var webFormsPacket = await ReadWebFormsPacketAsync(
                     Path.Combine(staging, "webforms", "webforms-modernization.json"),
@@ -390,6 +406,7 @@ public static class LocalReviewCommand
                     }
                 }
 
+                effectiveToken.ThrowIfCancellationRequested();
                 VerifyUnchanged(scanDirectory, scanBefore);
                 if (webFormsBefore is not null)
                 {
@@ -415,6 +432,9 @@ public static class LocalReviewCommand
 
             var artifacts = BuildArtifactRecords(staging);
             var (factCount, factGapCount) = CountFacts(Path.Combine(scanDirectory, "facts.ndjson"));
+            // A stage that ignored cancellation may have returned normally after
+            // the deadline; a timed-out run must never publish success.
+            effectiveToken.ThrowIfCancellationRequested();
             var coverage = workflowCoverage;
             var version = TraceMapVersionInfo.Create();
             var outcome = coverage == "full" && gaps.Count == 0 ? "succeeded" : "partial";
@@ -632,7 +652,12 @@ public static class LocalReviewCommand
                 ResolveDirectoryPath(requestedParent),
                 Path.GetFileName(requested));
         }
-        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException or LocalReviewException)
+        catch (Exception exception) when (exception is ArgumentException
+            or NotSupportedException
+            or PathTooLongException
+            or IOException
+            or UnauthorizedAccessException
+            or LocalReviewException)
         {
             throw new LocalReviewException("LOCAL_REVIEW_PROGRESS_PATH_UNSAFE");
         }
@@ -651,7 +676,12 @@ public static class LocalReviewCommand
         {
             repository = ResolveDirectoryPath(Path.GetFullPath(repositoryPath)).TrimEnd(Path.DirectorySeparatorChar);
         }
-        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException or LocalReviewException)
+        catch (Exception exception) when (exception is ArgumentException
+            or NotSupportedException
+            or PathTooLongException
+            or IOException
+            or UnauthorizedAccessException
+            or LocalReviewException)
         {
             throw new LocalReviewException("LOCAL_REVIEW_PROGRESS_PATH_UNSAFE");
         }
