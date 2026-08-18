@@ -7,6 +7,7 @@ import test from "node:test";
 
 import { buildSite } from "./build.mjs";
 import { validatePrivatePocPublicCapabilityArticleDist } from "./private-poc-public-capability-article.mjs";
+import { EvidenceTiers } from "./validate-utils.mjs";
 
 const siteRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const articleBodyPath = join("src", "_blog", "articles", "private-poc-pain-to-public-safe-capability.html");
@@ -66,6 +67,38 @@ test("Private POC validator rejects raw executable material", async (t) => {
   const errors = [];
   await validatePrivatePocPublicCapabilityArticleDist({ dist: join(root, "dist"), errors });
   assert.match(errors.join("\n"), /raw or executable material/);
+});
+
+test("Private POC validator catches tag-split claims and lowercase SQL", async (t) => {
+  const root = await createSiteFixture(t);
+  const path = join(root, articleBodyPath);
+  const html = await readFile(path, "utf8");
+  await writeFile(
+    path,
+    `${html}<p>Trace<span></span>Map<div></div>proves<div></div>private material is safe to deploy.</p><p>se<span></span>lect<div></div>value<div></div>fr<span></span>om private_table</p>`,
+    "utf8"
+  );
+  await buildSite({ root, log() {} });
+  const errors = [];
+  await validatePrivatePocPublicCapabilityArticleDist({ dist: join(root, "dist"), errors });
+  assert.ok(errors.some((error) => error.message.includes("unsupported positive claim") && error.message.includes("TraceMap")));
+  assert.match(errors.join("\n"), /raw or executable material/);
+});
+
+test("Private POC validator emits catalogued tiers and integer artifact spans", async (t) => {
+  const root = await createSiteFixture(t);
+  const path = join(root, articleBodyPath);
+  const html = await readFile(path, "utf8");
+  await writeFile(path, html.replace('data-private-poc-block="private-signal"', 'data-private-poc-block="missing-signal"'), "utf8");
+  await buildSite({ root, log() {} });
+  const errors = [];
+  await validatePrivatePocPublicCapabilityArticleDist({ dist: join(root, "dist"), errors });
+  const finding = errors.find((error) => error.message.includes("missing required section: private-signal"));
+  assert.ok(finding);
+  assert.deepEqual(finding.line_span, { start_line: 1, end_line: 1 });
+  assert.equal(finding.evidence_tier, EvidenceTiers.Tier4Unknown);
+  assert.deepEqual(finding.evidence[0].line_span, { start_line: 1, end_line: 1 });
+  assert.ok(Object.values(EvidenceTiers).includes(finding.evidence[0].evidence_tier));
 });
 
 test("Private POC validator requires the exact public proof path", async (t) => {

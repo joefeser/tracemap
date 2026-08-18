@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 
 import {
   decodeHtmlEntities,
+  EvidenceTiers,
   escapeRegExp,
   fileExists,
   normalizeBaseUrl,
@@ -62,6 +63,11 @@ export const privatePocPublicCapabilityArticleRuleIds = [
 ];
 export const privatePocPublicCapabilityArticleExtractorVersion = "private-poc-public-capability-article-validator.v1";
 const findingRuleId = "legacy.evidence-pack.claim-boundary.v1";
+const evidenceTierByRuleId = Object.freeze({
+  [findingRuleId]: EvidenceTiers.Tier4Unknown,
+  "docs-export.validation.unsafe-value-rejected.v1": EvidenceTiers.Tier4Unknown,
+  "docs-export.validation.prohibited-claim-wording.v1": EvidenceTiers.Tier4Unknown
+});
 const validationCommitSha = resolveValidationCommitSha();
 const requiredText = [
   "Public claim level: concept",
@@ -100,6 +106,12 @@ const forbiddenClaims = [
   /\b(?:TraceMap|this article|the public capability)\b[^.]{0,80}\bcomplete coverage\b/i,
   /\b(?:customer|private application|runtime|production|deployment|migration|compliance|vulnerability|release)\s+(?:is|was|has been)\s+(?:proven|confirmed|safe|validated|established)\b/i
 ];
+const tightForbiddenClaimPatterns = [
+  /(?:TraceMap|thisarticle|thesynthetic(?:fixture|contract)|thepublic-safe(?:summary|candidate))(?:proves|confirms|establishes|guarantees|validates)/i,
+  /(?:safetorelease|safetodeploy|safetomigrate|production-ready)/i,
+  /(?:TraceMap|thisarticle|thepubliccapability)completecoverage/i,
+  /(?:customer|privateapplication|runtime|production|deployment|migration|compliance|vulnerability|release)(?:is|was|hasbeen)(?:proven|confirmed|safe|validated|established)/i
+];
 const rawMaterialPatterns = [
   /\bSELECT\s+.+\bFROM\b/i,
   /\bINSERT\s+INTO\b/i,
@@ -109,11 +121,11 @@ const rawMaterialPatterns = [
   /\b(?:Server|Data Source|Initial Catalog|User Id|Password|ConnectionString)\s*=/i
 ];
 const tightRawMaterialPatterns = [
-  /SELECT.+?FROM/,
-  /INSERTINTO/,
-  /DELETEFROM/,
-  /UPDATE\S+SET/,
-  /(?:CREATE|ALTER|DROP|GRANT|REVOKE)(?:TABLE|VIEW|USER|ROLE|DATABASE|PROCEDURE|FUNCTION)/,
+  /SELECT.+?FROM/i,
+  /INSERTINTO/i,
+  /DELETEFROM/i,
+  /UPDATE\S+SET/i,
+  /(?:CREATE|ALTER|DROP|GRANT|REVOKE)(?:TABLE|VIEW|USER|ROLE|DATABASE|PROCEDURE|FUNCTION)/i,
   /(?:Server|Data ?Source|Initial ?Catalog|User ?Id|Password|ConnectionString)=/i
 ];
 const hardPrivatePatterns = [
@@ -304,6 +316,9 @@ function scanSafety(surfaces, errors, artifact, privateSurfaces = surfaces, tigh
   for (const pattern of forbiddenClaims) {
     if (surfaces.some((surface) => pattern.test(surface))) errors.push(withEvidence(`Private POC article contains unsupported positive claim: ${pattern}`, artifact, "docs-export.validation.prohibited-claim-wording.v1"));
   }
+  for (const pattern of tightForbiddenClaimPatterns) {
+    if (tightSurface && pattern.test(tightSurface)) errors.push(withEvidence(`Private POC article contains unsupported positive claim: ${pattern}`, artifact, "docs-export.validation.prohibited-claim-wording.v1"));
+  }
   for (const pattern of rawMaterialPatterns) {
     if (surfaces.some((surface) => pattern.test(surface))) errors.push(withEvidence(`Private POC article contains raw or executable material: ${pattern}`, artifact, "docs-export.validation.unsafe-value-rejected.v1"));
   }
@@ -401,10 +416,12 @@ function tightText(value) {
 }
 
 function withEvidence(message, artifact, ruleId = findingRuleId) {
-  const lineSpan = { start: null, end: null };
+  // These checks validate generated artifacts as a whole; line 1 is their deterministic artifact-level anchor.
+  const lineSpan = { start_line: 1, end_line: 1 };
+  const evidenceTier = evidenceTierByRuleId[ruleId] ?? EvidenceTiers.Tier4Unknown;
   const evidence = {
     rule_id: ruleId,
-    evidence_tier: "Tier3SyntaxOrTextual",
+    evidence_tier: evidenceTier,
     file_path: artifact,
     line_span: lineSpan,
     commit_sha: validationCommitSha,
