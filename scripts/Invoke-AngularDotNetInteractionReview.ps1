@@ -460,8 +460,11 @@ function Add-UnresolvedSignal {
         $script:SignalEvidenceByKey[$key] = [System.Collections.Generic.List[object]]::new()
     }
     $evidenceRows = $script:SignalEvidenceByKey[$key]
-    if ($evidenceRows.Count -eq 0) { $evidenceRows.Add((New-FeedbackEvidence -RuleId $normalizedRule -EvidenceTier $normalizedTier)) }
-    if ($null -ne $Evidence -and $evidenceRows.Count -lt 4) { $evidenceRows.Add($Evidence) }
+    if ($evidenceRows.Count -eq 0) {
+        if ($null -ne $Evidence) { $evidenceRows.Add($Evidence) }
+        else { $evidenceRows.Add((New-FeedbackEvidence -RuleId $normalizedRule -EvidenceTier $normalizedTier)) }
+    }
+    elseif ($null -ne $Evidence -and $evidenceRows.Count -lt 4) { $evidenceRows.Add($Evidence) }
 }
 
 function Add-ScanGapSignals {
@@ -491,11 +494,16 @@ function Add-ScanGapSignals {
         if ($null -ne $factEvidence) { $lineSpan = Get-PropertyValue $factEvidence "line_span" (Get-PropertyValue $factEvidence "lineSpan" $null) }
         $startLine = 1
         $endLine = 1
-        if ($null -ne $lineSpan) {
-            $startLine = [int](Get-PropertyValue $lineSpan "start_line" (Get-PropertyValue $lineSpan "startLine" 1))
-            $endLine = [int](Get-PropertyValue $lineSpan "end_line" (Get-PropertyValue $lineSpan "endLine" $startLine))
+        if ($null -ne $factEvidence) {
+            $startLine = [int](Get-PropertyValue $factEvidence "startLine" 1)
+            $endLine = [int](Get-PropertyValue $factEvidence "endLine" $startLine)
         }
-        $artifactPath = [System.IO.Path]::GetRelativePath($script:StagingRoot, $FactsPath).Replace('\', '/')
+        if ($null -ne $lineSpan) {
+            $startLine = [int](Get-PropertyValue $lineSpan "start_line" (Get-PropertyValue $lineSpan "startLine" $startLine))
+            $endLine = [int](Get-PropertyValue $lineSpan "end_line" (Get-PropertyValue $lineSpan "endLine" $endLine))
+        }
+        $artifactPath = if ($null -eq $factEvidence) { [System.IO.Path]::GetRelativePath($script:StagingRoot, $FactsPath).Replace('\', '/') } else { [string](Get-PropertyValue $factEvidence "filePath" "") }
+        if ([string]::IsNullOrWhiteSpace($artifactPath)) { $artifactPath = [System.IO.Path]::GetRelativePath($script:StagingRoot, $FactsPath).Replace('\', '/') }
         $evidence = New-FeedbackEvidence -ArtifactPath $artifactPath -CommitSha $CommitSha -RuleId $ruleId -EvidenceTier $tier -StartLine $startLine -EndLine $endLine
         Add-UnresolvedSignal $Signals "scan" "analysis-gap" $classification $ruleId $tier $coverage 1 $evidence
     }
@@ -511,8 +519,11 @@ function Add-ReportSignals {
 
     $report = Get-Content -LiteralPath $JsonPath -Raw | ConvertFrom-Json -Depth 100
     # Query names are owner-controlled and must not enter the categorical
-    # feedback surface. Keep report evidence at a producer-level path.
-    $reportArtifactPath = "reports/$Producer/report.json"
+    # feedback surface. Retain a producer-level sanitized alias for evidence.
+    $reportArtifactPath = "feedback-evidence/$Producer.json"
+    $reportArtifactAbsolutePath = Join-Path $script:StagingRoot $reportArtifactPath
+    New-Item -ItemType Directory -Path (Split-Path -Parent $reportArtifactAbsolutePath) -Force | Out-Null
+    Copy-Item -LiteralPath $JsonPath -Destination $reportArtifactAbsolutePath -Force
     $summary = Get-PropertyValue $report "summary" $null
     $reportCoverage = if ($null -eq $summary) {
         [string](Get-PropertyValue $report "reportCoverage" "unknown")
@@ -833,7 +844,8 @@ foreach ($query in $propertyFlows) {
 foreach ($query in $routeFlows) {
     Assert-KnownProperties $query @("name", "route") "INTERACTION_RUN_ROUTE_FLOW_PROPERTY_UNSUPPORTED"
     $name = [string](Get-PropertyValue $query "name" "")
-    if ($name -notmatch $SafeNamePattern -or -not $queryNames.Add("route:$name") -or [string]::IsNullOrWhiteSpace([string](Get-PropertyValue $query "route" ""))) {
+    $route = [string](Get-PropertyValue $query "route" "")
+    if ($name -notmatch $SafeNamePattern -or -not $queryNames.Add("route:$name") -or [string]::IsNullOrWhiteSpace($route) -or $route.Length -gt 500) {
         Stop-InteractionReview "INTERACTION_RUN_QUERY_INVALID"
     }
 }

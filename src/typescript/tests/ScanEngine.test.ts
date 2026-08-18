@@ -272,6 +272,23 @@ describe("ScanEngine", () => {
     expect(await fsp.readFile(path.join(output, "scan-manifest.json"))).toEqual(baselineManifest);
   });
 
+  it("fails when selected source bytes mutate after semantic loading", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    const output = path.join(root, "output");
+    await writeMiniRepo(repo);
+    const source = path.join(repo, "src", "sample.ts");
+
+    await expect(scan(scanOptions(repo, output), {
+      afterProjectLoad: async () => {
+        const original = await fsp.readFile(source, "utf8");
+        await fsp.writeFile(source, original.replace("value = 1", "value = 2"));
+      }
+    })).rejects.toThrow("SourceSnapshotChangedDuringScan");
+
+    await expect(fsp.stat(output)).rejects.toThrow();
+  });
+
   it("fails before publishing when an eligible source is created during a scan", async () => {
     const root = await tempDir();
     const repo = path.join(root, "repo");
