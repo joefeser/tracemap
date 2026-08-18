@@ -82,6 +82,12 @@ try {
         Invoke-Git $repository @("add", ".")
         Invoke-Git $repository @("commit", "--quiet", "-m", "fixture")
     }
+    $sourceCommitRows = @(
+        "angular-client=$((& git -C $angular rev-parse HEAD).Trim())",
+        "dotnet-api=$((& git -C $api rev-parse HEAD).Trim())")
+    $snapshotHasher = [System.Security.Cryptography.SHA256]::Create()
+    $expectedSourceSnapshotSha256 = ([Convert]::ToHexString($snapshotHasher.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($sourceCommitRows -join "`n")))).ToLowerInvariant()
+    $snapshotHasher.Dispose()
 
     $config = [ordered]@{
         schemaVersion = "angular-dotnet-interaction-run.v1"
@@ -119,6 +125,10 @@ try {
             [ordered]@{
                 name = "runner-get"
                 route = "GET /api/admin/runner/get-by-id/{}"
+            },
+            [ordered]@{
+                name = "runner-list"
+                route = "GET /api/admin/runner/list"
             }
         )
         paths = @(
@@ -168,6 +178,12 @@ try {
     & pwsh -NoProfile -File $runner -ConfigPath $configPath -TraceMapRoot $TraceMapRoot -OutputRoot $output1 -ValidateOnly 2>$null | Out-Null
     Assert-True ($LASTEXITCODE -ne 0) "route value above the contract limit was accepted"
     $config.routeFlows[0].route = "GET /api/admin/runner/get-by-id/{}"
+
+    $config.paths[0].fromEndpoint = "GET /" + ("x" * 500)
+    [System.IO.File]::WriteAllText($configPath, (($config | ConvertTo-Json -Depth 20) + "`n"), [System.Text.UTF8Encoding]::new($false))
+    & pwsh -NoProfile -File $runner -ConfigPath $configPath -TraceMapRoot $TraceMapRoot -OutputRoot $output1 -ValidateOnly 2>$null | Out-Null
+    Assert-True ($LASTEXITCODE -ne 0) "path-query endpoint above the contract limit was accepted"
+    $config.paths[0].fromEndpoint = "GET /api/admin/runner/get-by-id/{}"
 
     $config.reports["combinedDependency"] = "false"
     [System.IO.File]::WriteAllText($configPath, (($config | ConvertTo-Json -Depth 20) + "`n"), [System.Text.UTF8Encoding]::new($false))
@@ -232,12 +248,13 @@ try {
             "reports/property-flow/runner-id/property-flow-report.json",
             "reports/route-flow/runner-get/route-flow-report.json",
             "reports/paths/runner-to-sql/paths-report.json",
-            "feedback-evidence/dependency.json",
-            "feedback-evidence/portfolio.json",
-            "feedback-evidence/endpoint-alignment.json",
-            "feedback-evidence/property-flow.json",
-            "feedback-evidence/route-flow.json",
-            "feedback-evidence/dependency-path.json")) {
+            "feedback-evidence/dependency-0001.json",
+            "feedback-evidence/portfolio-0002.json",
+            "feedback-evidence/endpoint-alignment-0003.json",
+            "feedback-evidence/property-flow-0004.json",
+            "feedback-evidence/route-flow-0005.json",
+            "feedback-evidence/route-flow-0006.json",
+            "feedback-evidence/dependency-path-0007.json")) {
             Assert-True (Test-Path -LiteralPath (Join-Path $output $relative) -PathType Leaf) "missing output $relative"
         }
         $result = Get-Content -LiteralPath (Join-Path $output "interaction-run-result.json") -Raw | ConvertFrom-Json -Depth 100
@@ -245,7 +262,7 @@ try {
         Assert-True ($result.schemaVersion -eq "angular-dotnet-interaction-run-result.v1") "unexpected result schema"
         Assert-True ($result.outcome -eq "partial") "unexpected result outcome"
         Assert-True ($result.sources.Count -eq 2) "unexpected source count"
-        Assert-True ($result.reports.Count -eq 6) "unexpected report count"
+        Assert-True ($result.reports.Count -eq 7) "unexpected report count"
         foreach ($source in @("angular-client", "dotnet-api")) {
             $factsText = Get-Content -LiteralPath (Join-Path $output "scans/$source/facts.ndjson") -Raw
             $unexpectedSentinels = @([regex]::Matches($factsText, 'GeneratedChurnSentinel_[A-Za-z0-9_]+') | ForEach-Object Value | Sort-Object -Unique)
@@ -255,7 +272,7 @@ try {
         Assert-True (-not $dotnetFactsText.Contains("ConfiguredExcludeSentinel", [System.StringComparison]::Ordinal)) "configured exclusion was not preserved"
         Assert-True ($feedback.schemaVersion -eq "angular-dotnet-interaction-feedback.v1") "unexpected feedback schema"
         Assert-True ($feedback.outcome -eq "partial") "feedback did not label reduced analysis as partial"
-        Assert-True ($feedback.reportCount -eq 6) "unexpected feedback report count"
+        Assert-True ($feedback.reportCount -eq 7) "unexpected feedback report count"
         Assert-True ($feedback.sources.Count -eq 2) "feedback omitted source provenance"
         foreach ($signal in $feedback.unresolvedSignals) {
             Assert-True ($signal.evidence.Count -ge 1) "feedback signal omitted evidence references"
@@ -267,11 +284,14 @@ try {
                 Assert-True (-not [string]::IsNullOrWhiteSpace([string]$evidence.extractor_version)) "feedback evidence omitted extractor version"
             }
         }
+        $reportEvidence = @($feedback.unresolvedSignals | ForEach-Object { $_.evidence } | Where-Object { [string]$_.file_path -like "feedback-evidence/*" })
+        Assert-True ($reportEvidence.Count -gt 0) "report evidence references were not retained"
+        Assert-True (@($reportEvidence | Where-Object { [string]$_.commit_sha -ne $expectedSourceSnapshotSha256 }).Count -eq 0) "report evidence used an unrelated source commit"
         $operationalEventPath = Join-Path $output "logs/interaction-review-events.jsonl"
         $operationalEvents = @(Get-Content -LiteralPath $operationalEventPath |
             Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
             ForEach-Object { $_ | ConvertFrom-Json -Depth 20 })
-        Assert-True ($operationalEvents.Count -eq 20) "unexpected operational event count"
+        Assert-True ($operationalEvents.Count -eq 22) "unexpected operational event count"
         Assert-True ($operationalEvents[0].event -eq "run-started") "operational stream does not begin with run-started"
         Assert-True ($operationalEvents[-1].event -eq "run-completed") "operational stream does not end with run-completed"
         Assert-True ($operationalEvents[-1].status -eq "partial") "operational stream has unexpected run outcome"
@@ -286,7 +306,7 @@ try {
         $sourceScanEvents = @($operationalEvents | Where-Object { $_.event -eq "operation-completed" -and $_.stage -eq "source-scan" })
         Assert-True ($sourceScanEvents.Count -eq 2) "source scan timings are incomplete"
         Assert-True (@($sourceScanEvents | Where-Object { [string]$_.sourceCommitSha -match '^[0-9a-fA-F]{40,64}$' }).Count -eq 2) "source scan events omitted exact commits"
-        Assert-True (@($operationalEvents | Where-Object { $_.event -eq "operation-completed" -and $_.stage -eq "report" }).Count -eq 6) "report timings are incomplete"
+        Assert-True (@($operationalEvents | Where-Object { $_.event -eq "operation-completed" -and $_.stage -eq "report" }).Count -eq 7) "report timings are incomplete"
         Assert-True (@($result.artifacts | Where-Object { $_.relativePath -in @("execution-summary.md", "logs/interaction-review-events.jsonl") }).Count -eq 0) "nondeterministic telemetry entered the deterministic artifact inventory"
         $reportStateKeys = @($feedback.reportStates | ForEach-Object { "$($_.producer)|$($_.classification)|$($_.coverage)|$($_.truncated)" })
         $sortedReportStateKeys = @($feedback.reportStates |
