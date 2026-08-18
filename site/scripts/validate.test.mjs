@@ -117,14 +117,41 @@ import { validateDist } from "./validate.mjs";
 test("validateDist accepts generated public sitemap and internal links", async () => {
   const root = await createDistFixture();
 
-  await validateDist({ requireGraphifyLessons: false, requireGapBecomesRule: false, requireReverseImpactDispatchStories: false, requireAccessRebuildReadiness: false, requireGraphHistoryBugs: false, requireCsharpExtractionTruth: false, requireAccessSafeEvidenceAcquisition: false, requireWebformsModernizationArticle: false, requireReducedCoverageArticle: false, requireGapLineNumberArticle: false, requireButtonIdentityArticle: false, requireStaticEventFlowArticle: false, requirePrivatePocPublicCapabilityArticle: false, requireMsbuildBinlogEvidence: false, root });
+  await validateDist({ requireGraphifyLessons: false, requireGapBecomesRule: false, requireReverseImpactDispatchStories: false, requireAccessRebuildReadiness: false, requireGraphHistoryBugs: false, requireCsharpExtractionTruth: false, requireAccessSafeEvidenceAcquisition: false, requireWebformsModernizationArticle: false, requireReducedCoverageArticle: false, requireGapLineNumberArticle: false, requireButtonIdentityArticle: false, requireStaticEventFlowArticle: false, requirePrivatePocPublicCapabilityArticle: false, requireBeforeAddingAnotherLanguageDefineScanArticle: false, requireMsbuildBinlogEvidence: false, root });
+});
+
+test("validateDist wires the language-scan contract article validator", async () => {
+  const root = await createDistFixture();
+
+  await assert.rejects(
+    validateDist({
+      requireMsbuildBinlogEvidence: false,
+      requireAccessSafeEvidenceAcquisition: false,
+      requireWebformsModernizationArticle: false,
+      requireReducedCoverageArticle: false,
+      requireGapLineNumberArticle: false,
+      requireButtonIdentityArticle: false,
+      requireStaticEventFlowArticle: false,
+      requirePrivatePocPublicCapabilityArticle: false,
+      requireBeforeAddingAnotherLanguageDefineScanArticle: true,
+      requireAccessFormFieldLineage: false,
+      requireCsharpExtractionTruth: false,
+      requireGraphHistoryBugs: false,
+      requireReverseImpactDispatchStories: false,
+      requireGapBecomesRule: false,
+      requireGraphifyLessons: false,
+      requireAccessRebuildReadiness: false,
+      root
+    }),
+    /Language-scan contract article is missing required route/
+  );
 });
 
 test("validateDist reports missing dist directory through validation errors", async () => {
   const root = await mkdtemp(join(tmpdir(), "tracemap-site-validate-test-"));
 
   await assert.rejects(
-    validateDist({ requireStaticEventFlowArticle: false, requirePrivatePocPublicCapabilityArticle: false, root }),
+    validateDist({ requireStaticEventFlowArticle: false, requirePrivatePocPublicCapabilityArticle: false, requireBeforeAddingAnotherLanguageDefineScanArticle: false, root }),
     /Site validation failed:\n- Unable to read generated output directory .*dist/
   );
 });
@@ -132,7 +159,7 @@ test("validateDist reports missing dist directory through validation errors", as
 test("validateDist normalizes trailing slash baseUrl values", async () => {
   const root = await createDistFixture();
 
-  await validateDist({ baseUrl: "https://tracemap.tools/", requireGraphifyLessons: false, requireGapBecomesRule: false, requireReverseImpactDispatchStories: false, requireAccessRebuildReadiness: false, requireGraphHistoryBugs: false, requireCsharpExtractionTruth: false, requireAccessSafeEvidenceAcquisition: false, requireWebformsModernizationArticle: false, requireReducedCoverageArticle: false, requireGapLineNumberArticle: false, requireButtonIdentityArticle: false, requireStaticEventFlowArticle: false, requirePrivatePocPublicCapabilityArticle: false, requireMsbuildBinlogEvidence: false, root });
+  await validateDist({ baseUrl: "https://tracemap.tools/", requireGraphifyLessons: false, requireGapBecomesRule: false, requireReverseImpactDispatchStories: false, requireAccessRebuildReadiness: false, requireGraphHistoryBugs: false, requireCsharpExtractionTruth: false, requireAccessSafeEvidenceAcquisition: false, requireWebformsModernizationArticle: false, requireReducedCoverageArticle: false, requireGapLineNumberArticle: false, requireButtonIdentityArticle: false, requireStaticEventFlowArticle: false, requirePrivatePocPublicCapabilityArticle: false, requireBeforeAddingAnotherLanguageDefineScanArticle: false, requireMsbuildBinlogEvidence: false, root });
 });
 
 test("validateDist accepts directory links without trailing slashes", async () => {
@@ -140,7 +167,7 @@ test("validateDist accepts directory links without trailing slashes", async () =
     indexHtml: page('<a href="/docs">Docs</a>')
   });
 
-  await validateDist({ requireGraphifyLessons: false, requireGapBecomesRule: false, requireReverseImpactDispatchStories: false, requireAccessRebuildReadiness: false, requireGraphHistoryBugs: false, requireCsharpExtractionTruth: false, requireAccessSafeEvidenceAcquisition: false, requireWebformsModernizationArticle: false, requireReducedCoverageArticle: false, requireGapLineNumberArticle: false, requireButtonIdentityArticle: false, requireStaticEventFlowArticle: false, requirePrivatePocPublicCapabilityArticle: false, requireMsbuildBinlogEvidence: false, root });
+  await validateDist({ requireGraphifyLessons: false, requireGapBecomesRule: false, requireReverseImpactDispatchStories: false, requireAccessRebuildReadiness: false, requireGraphHistoryBugs: false, requireCsharpExtractionTruth: false, requireAccessSafeEvidenceAcquisition: false, requireWebformsModernizationArticle: false, requireReducedCoverageArticle: false, requireGapLineNumberArticle: false, requireButtonIdentityArticle: false, requireStaticEventFlowArticle: false, requirePrivatePocPublicCapabilityArticle: false, requireBeforeAddingAnotherLanguageDefineScanArticle: false, requireMsbuildBinlogEvidence: false, root });
 });
 
 test("validateDist rejects sitemap URLs without generated files", async () => {
@@ -149,7 +176,7 @@ test("validateDist rejects sitemap URLs without generated files", async () => {
   });
 
   await assert.rejects(
-    validateDist({ requireStaticEventFlowArticle: false, requirePrivatePocPublicCapabilityArticle: false, root }),
+    validateDist({ requireStaticEventFlowArticle: false, requirePrivatePocPublicCapabilityArticle: false, requireBeforeAddingAnotherLanguageDefineScanArticle: false, root }),
     /Sitemap URL has no generated file: https:\/\/tracemap\.tools\/missing\//
   );
 });
@@ -160,7 +187,7 @@ test("validateDist rejects broken internal HTML links", async () => {
   });
 
   await assert.rejects(
-    validateDist({ requireStaticEventFlowArticle: false, requirePrivatePocPublicCapabilityArticle: false, root }),
+    validateDist({ requireStaticEventFlowArticle: false, requirePrivatePocPublicCapabilityArticle: false, requireBeforeAddingAnotherLanguageDefineScanArticle: false, root }),
     /index\.html references missing path: \/missing\//
   );
 });
@@ -170,7 +197,7 @@ test("validateDist rejects generated HTML without top navigation", async () => {
     docsHtml: "<p>Docs</p>"
   });
 
-  await assert.rejects(validateDist({ requireStaticEventFlowArticle: false, requirePrivatePocPublicCapabilityArticle: false, root }), /docs\/index\.html is missing <nav class="top-nav">/);
+  await assert.rejects(validateDist({ requireStaticEventFlowArticle: false, requirePrivatePocPublicCapabilityArticle: false, requireBeforeAddingAnotherLanguageDefineScanArticle: false, root }), /docs\/index\.html is missing <nav class="top-nav">/);
 });
 
 test("validateDist rejects stale top navigation", async () => {
@@ -181,7 +208,7 @@ test("validateDist rejects stale top navigation", async () => {
   });
 
   await assert.rejects(
-    validateDist({ requireStaticEventFlowArticle: false, requirePrivatePocPublicCapabilityArticle: false, root }),
+    validateDist({ requireStaticEventFlowArticle: false, requirePrivatePocPublicCapabilityArticle: false, requireBeforeAddingAnotherLanguageDefineScanArticle: false, root }),
     /docs\/index\.html top navigation does not match the canonical links/
   );
 });
@@ -192,7 +219,7 @@ test("validateDist requires robots sitemap directive", async () => {
   });
 
   await assert.rejects(
-    validateDist({ requireStaticEventFlowArticle: false, requirePrivatePocPublicCapabilityArticle: false, root }),
+    validateDist({ requireStaticEventFlowArticle: false, requirePrivatePocPublicCapabilityArticle: false, requireBeforeAddingAnotherLanguageDefineScanArticle: false, root }),
     /robots\.txt must include "Sitemap: https:\/\/tracemap\.tools\/sitemap\.xml"/
   );
 });
