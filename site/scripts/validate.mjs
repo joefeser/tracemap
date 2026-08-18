@@ -284,7 +284,20 @@ export async function validateDist({
 
 function formatValidationError(error) {
   if (typeof error === "string") return error;
-  if (error && typeof error.message === "string") return error.message;
+  if (error && typeof error.message === "string") {
+    if (error.rule_id && error.evidence_tier && error.file_path && error.line_span && error.commit_sha && error.extractor_version) {
+      return `${error.message} ${JSON.stringify({
+        rule_id: error.rule_id,
+        evidence_tier: error.evidence_tier,
+        file_path: error.file_path,
+        line_span: error.line_span,
+        commit_sha: error.commit_sha,
+        extractor_version: error.extractor_version,
+        evidence: error.evidence
+      })}`;
+    }
+    return error.message;
+  }
   return JSON.stringify(error);
 }
 

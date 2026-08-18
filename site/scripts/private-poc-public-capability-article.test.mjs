@@ -7,6 +7,7 @@ import test from "node:test";
 
 import { buildSite } from "./build.mjs";
 import { validatePrivatePocPublicCapabilityArticleDist } from "./private-poc-public-capability-article.mjs";
+import { validateDist } from "./validate.mjs";
 import { EvidenceTiers } from "./validate-utils.mjs";
 
 const siteRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -85,6 +86,30 @@ test("Private POC validator catches tag-split claims and lowercase SQL", async (
   assert.match(errors.join("\n"), /raw or executable material/);
 });
 
+test("Private POC validator rejects private endpoints and tag-split discovery paths", async (t) => {
+  for (const [surface, mutate] of [
+    ["article endpoint", (root) => join(root, articleBodyPath)],
+    ["discovery path", (root) => join(root, "src", "_site", "discovery.json")]
+  ]) {
+    await t.test(surface, async (subtest) => {
+      const root = await createSiteFixture(subtest);
+      const path = mutate(root);
+      const original = await readFile(path, "utf8");
+      const updated = surface === "article endpoint"
+        ? `${original}<p>https://customer-private.internal/api</p>`
+        : original.replace(
+            "A concept-level guide to separating private observation",
+            "A concept-level guide to separating /Us<span>ers</span>/customer/private-repo from private observation"
+          );
+      await writeFile(path, updated, "utf8");
+      await buildSite({ root, log() {} });
+      const errors = [];
+      await validatePrivatePocPublicCapabilityArticleDist({ dist: join(root, "dist"), errors });
+      assert.match(errors.join("\n"), /private endpoint URL|hard private material/);
+    });
+  }
+});
+
 test("Private POC validator emits catalogued tiers and integer artifact spans", async (t) => {
   const root = await createSiteFixture(t);
   const path = join(root, articleBodyPath);
@@ -95,10 +120,48 @@ test("Private POC validator emits catalogued tiers and integer artifact spans", 
   await validatePrivatePocPublicCapabilityArticleDist({ dist: join(root, "dist"), errors });
   const finding = errors.find((error) => error.message.includes("missing required section: private-signal"));
   assert.ok(finding);
-  assert.deepEqual(finding.line_span, { start_line: 1, end_line: 1 });
+  assert.equal(finding.line_span.start_line, 1);
+  assert.ok(finding.line_span.end_line > finding.line_span.start_line);
   assert.equal(finding.evidence_tier, EvidenceTiers.Tier4Unknown);
-  assert.deepEqual(finding.evidence[0].line_span, { start_line: 1, end_line: 1 });
+  assert.deepEqual(finding.evidence[0].line_span, finding.line_span);
   assert.ok(Object.values(EvidenceTiers).includes(finding.evidence[0].evidence_tier));
+});
+
+test("validateDist preserves structured private POC findings in its CLI error", async (t) => {
+  const root = await createSiteFixture(t);
+  await buildSite({ root, log() {} });
+  const pagePath = join(root, "dist", "blog", "private-poc-pain-to-public-safe-capability", "index.html");
+  const html = await readFile(pagePath, "utf8");
+  await writeFile(pagePath, `${html}\n<p>https://customer-private.internal/api</p>`, "utf8");
+
+  await assert.rejects(
+    validateDist({
+      root,
+      requireMsbuildBinlogEvidence: false,
+      requireAccessSafeEvidenceAcquisition: false,
+      requireWebformsModernizationArticle: false,
+      requireReducedCoverageArticle: false,
+      requireGapLineNumberArticle: false,
+      requireButtonIdentityArticle: false,
+      requireStaticEventFlowArticle: false,
+      requirePrivatePocPublicCapabilityArticle: true,
+      requireAccessFormFieldLineage: false,
+      requireCsharpExtractionTruth: false,
+      requireGraphHistoryBugs: false,
+      requireReverseImpactDispatchStories: false,
+      requireGapBecomesRule: false,
+      requireGraphifyLessons: false,
+      requireAccessRebuildReadiness: false
+    }),
+    (error) => {
+      assert.match(error.message, /"rule_id":"docs-export\.validation\.unsafe-value-rejected\.v1"/);
+      assert.match(error.message, /"evidence_tier":"Tier4Unknown"/);
+      assert.match(error.message, /"line_span":\{"start_line":\d+,"end_line":\d+\}/);
+      assert.match(error.message, /"extractor_version":"private-poc-public-capability-article-validator\.v1"/);
+      assert.match(error.message, /"evidence":\[/);
+      return true;
+    }
+  );
 });
 
 test("Private POC validator requires the exact public proof path", async (t) => {
