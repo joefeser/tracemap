@@ -31,6 +31,7 @@ $script:OperationalEventSequence = 0
 $script:OperationalEvents = [System.Collections.Generic.List[object]]::new()
 $script:SourceSnapshotSha256 = $null
 $script:SourceCommitByLabel = @{}
+$script:SourceManifestSnapshotByLabel = @{}
 $script:PartialAnalysis = $false
 $SafeNamePattern = '^[a-z0-9][a-z0-9._-]{0,63}$'
 $MaximumSources = 100
@@ -351,6 +352,28 @@ function Write-OperationalEvent {
         $script:OperationalTelemetryDisabled = $true
         $script:OperationalEventPath = $null
         Write-Verbose "interaction operational telemetry disabled after a write failure"
+    }
+}
+
+function Update-OperationalIdentity {
+    param([Parameter(Mandatory = $true)][string]$RunId)
+
+    if ($script:OperationalTelemetryDisabled -or [string]::IsNullOrWhiteSpace([string]$script:OperationalEventPath)) { return }
+    foreach ($record in $script:OperationalEvents) {
+        $record.runId = $RunId
+        $record.sourceSnapshotSha256 = $script:SourceSnapshotSha256
+    }
+    try {
+        $lines = @($script:OperationalEvents | ForEach-Object { $_ | ConvertTo-Json -Compress -Depth 10 })
+        [System.IO.File]::WriteAllText(
+            $script:OperationalEventPath,
+            (($lines -join "`n") + "`n"),
+            [System.Text.UTF8Encoding]::new($false))
+    }
+    catch {
+        $script:OperationalTelemetryDisabled = $true
+        $script:OperationalEventPath = $null
+        Write-Verbose "interaction operational telemetry disabled after identity rewrite failure"
     }
 }
 
@@ -840,7 +863,7 @@ foreach ($query in $propertyFlows) {
     $selector = [string](Get-PropertyValue $query "selector" "")
     $sourceLabel = [string](Get-PropertyValue $query "sourceLabel" "")
     $framework = [string](Get-PropertyValue $query "framework" "any")
-    if ($name -notmatch $SafeNamePattern -or -not $queryNames.Add("property:$name") -or -not (Test-PropertySelector $selector)) { Stop-InteractionReview "INTERACTION_RUN_QUERY_INVALID" }
+    if ($name -notmatch $SafeNamePattern -or -not $queryNames.Add("property:$name") -or $selector.Length -gt 500 -or -not (Test-PropertySelector $selector)) { Stop-InteractionReview "INTERACTION_RUN_QUERY_INVALID" }
     if (-not [string]::IsNullOrWhiteSpace($sourceLabel) -and -not $sourceLabels.Contains($sourceLabel)) { Stop-InteractionReview "INTERACTION_RUN_QUERY_SOURCE_UNAVAILABLE" }
     if ($framework -notin @("angular", "razor", "any")) { Stop-InteractionReview "INTERACTION_RUN_QUERY_FRAMEWORK_UNSUPPORTED" }
 }
@@ -975,6 +998,9 @@ try {
                 if ([string](Get-PropertyValue $manifest "commitSha" "") -ne $source.commitSha) { Stop-InteractionReview "INTERACTION_RUN_SCAN_COMMIT_MISMATCH" }
                 $analysisLevel = [string](Get-PropertyValue $manifest "analysisLevel" "unknown")
                 $buildStatus = [string](Get-PropertyValue $manifest "buildStatus" "unknown")
+                $sourceSnapshotDigest = [string](Get-PropertyValue $manifest "sourceSnapshotDigest" "")
+                if ($sourceSnapshotDigest -notmatch '^[0-9a-fA-F]{64}$') { Stop-InteractionReview "INTERACTION_RUN_SCAN_SNAPSHOT_INVALID" }
+                $script:SourceManifestSnapshotByLabel[$source.label] = $sourceSnapshotDigest.ToLowerInvariant()
                 if ($analysisLevel -match "Reduced|Syntax" -or $buildStatus -in @("FailedOrPartial", "Failed")) {
                     $script:PartialAnalysis = $true
                 }
@@ -1004,6 +1030,14 @@ try {
     }
     $combineArguments.Add("--out")
     $combineArguments.Add($combinedIndex)
+
+    $sourceSnapshotRows = @($sourceResults | Sort-Object label | ForEach-Object {
+        "$($_.label)=$($_.commitSha)|$($script:SourceManifestSnapshotByLabel[$_.label])"
+    })
+    $script:SourceSnapshotSha256 = Get-Sha256Text ($sourceSnapshotRows -join "`n")
+    $runId = "interaction-" + (Get-Sha256Text ($configSha256 + "|" + ($sourceCommits -join "|") + "|" + $script:SourceSnapshotSha256)).Substring(0, 20)
+    Update-OperationalIdentity $runId
+
     Invoke-TimedOperation -RunId $runId -Stage "combine" -Operation "combine" `
         -FailureCode "INTERACTION_RUN_COMBINE_FAILED" `
         -Action { Invoke-TraceMap $combineArguments.ToArray() "INTERACTION_RUN_COMBINE_FAILED" }

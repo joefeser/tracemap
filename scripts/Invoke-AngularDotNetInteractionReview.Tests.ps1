@@ -82,12 +82,6 @@ try {
         Invoke-Git $repository @("add", ".")
         Invoke-Git $repository @("commit", "--quiet", "-m", "fixture")
     }
-    $sourceCommitRows = @(
-        "angular-client=$((& git -C $angular rev-parse HEAD).Trim())",
-        "dotnet-api=$((& git -C $api rev-parse HEAD).Trim())")
-    $snapshotHasher = [System.Security.Cryptography.SHA256]::Create()
-    $expectedSourceSnapshotSha256 = ([Convert]::ToHexString($snapshotHasher.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($sourceCommitRows -join "`n")))).ToLowerInvariant()
-    $snapshotHasher.Dispose()
 
     $config = [ordered]@{
         schemaVersion = "angular-dotnet-interaction-run.v1"
@@ -171,6 +165,12 @@ try {
     [System.IO.File]::WriteAllText($configPath, (($config | ConvertTo-Json -Depth 20) + "`n"), [System.Text.UTF8Encoding]::new($false))
     & pwsh -NoProfile -File $runner -ConfigPath $configPath -TraceMapRoot $TraceMapRoot -OutputRoot $output1 -ValidateOnly 2>$null | Out-Null
     Assert-True ($LASTEXITCODE -ne 0) "empty property-flow selector value was accepted"
+    $config.propertyFlows[0].selector = "field:runnerId"
+
+    $config.propertyFlows[0].selector = "field:" + ("x" * 500)
+    [System.IO.File]::WriteAllText($configPath, (($config | ConvertTo-Json -Depth 20) + "`n"), [System.Text.UTF8Encoding]::new($false))
+    & pwsh -NoProfile -File $runner -ConfigPath $configPath -TraceMapRoot $TraceMapRoot -OutputRoot $output1 -ValidateOnly 2>$null | Out-Null
+    Assert-True ($LASTEXITCODE -ne 0) "property-flow selector above the contract limit was accepted"
     $config.propertyFlows[0].selector = "field:runnerId"
 
     $config.routeFlows[0].route = "GET /" + ("x" * 500)
@@ -286,6 +286,13 @@ try {
         }
         $reportEvidence = @($feedback.unresolvedSignals | ForEach-Object { $_.evidence } | Where-Object { [string]$_.file_path -like "feedback-evidence/*" })
         Assert-True ($reportEvidence.Count -gt 0) "report evidence references were not retained"
+        $sourceSnapshotRows = @(
+            "angular-client=$((& git -C $angular rev-parse HEAD).Trim())|$((Get-Content -LiteralPath (Join-Path $output "scans/angular-client/scan-manifest.json") -Raw | ConvertFrom-Json).sourceSnapshotDigest)",
+            "dotnet-api=$((& git -C $api rev-parse HEAD).Trim())|$((Get-Content -LiteralPath (Join-Path $output "scans/dotnet-api/scan-manifest.json") -Raw | ConvertFrom-Json).sourceSnapshotDigest)"
+        )
+        $snapshotHasher = [System.Security.Cryptography.SHA256]::Create()
+        $expectedSourceSnapshotSha256 = ([Convert]::ToHexString($snapshotHasher.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($sourceSnapshotRows -join "`n")))).ToLowerInvariant()
+        $snapshotHasher.Dispose()
         Assert-True (@($reportEvidence | Where-Object { [string]$_.commit_sha -ne $expectedSourceSnapshotSha256 }).Count -eq 0) "report evidence used an unrelated source commit"
         $operationalEventPath = Join-Path $output "logs/interaction-review-events.jsonl"
         $operationalEvents = @(Get-Content -LiteralPath $operationalEventPath |
