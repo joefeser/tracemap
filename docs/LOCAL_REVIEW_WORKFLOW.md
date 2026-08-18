@@ -105,7 +105,10 @@ diagnostics:
   reporting only the categorical stage, elapsed milliseconds, the last
   completed stage, and the monotonic sequence. Heartbeats are produced by a
   background timer, so they continue while the scan thread is blocked inside
-  MSBuildWorkspace or Roslyn waits.
+  MSBuildWorkspace or Roslyn waits. Stages nest: completing an inner stage
+  (for example one project's compilation) restores the enclosing stage
+  (project load, then the workflow scan), so document-level Roslyn work stays
+  observable between inner stages.
 
 The checkpoint path must be a file path outside the scanned repository and
 outside the review output (including hidden staging siblings). Paths inside
@@ -179,11 +182,15 @@ path through this channel.
 Cancellation is cooperative. Unblocking relies on cancellation-aware waits at
 MSBuild/Roslyn seams and cancellation checks at stage boundaries; an API that
 demonstrably ignores its cancellation token cannot be interrupted in-process,
-and TraceMap does not abort threads or kill itself. If a stage never observes
-the token, the process may remain alive even though the checkpoint already
-records `timed-out`; treat the checkpoint, not process liveness, as the
-authoritative observation. External cancellation (`Ctrl-C`) keeps its
-existing behavior and records `LOCAL_REVIEW_CANCELLED`.
+and TraceMap does not abort threads or kill itself. Two guarantees hold even
+in that ignored-token case: the timeout deadline callback itself records the
+`timed-out` observation in the checkpoint (so a stuck run is never reported
+as merely busy), and every stage boundary plus the finalization step check
+the timeout token, so an expired run can never publish a successful review.
+If a blocked stage never observes the token the process may remain alive;
+treat the checkpoint, not process liveness, as the authoritative observation.
+External cancellation (`Ctrl-C`) keeps its existing behavior and records
+`LOCAL_REVIEW_CANCELLED`.
 
 ### Typed Failure Codes
 

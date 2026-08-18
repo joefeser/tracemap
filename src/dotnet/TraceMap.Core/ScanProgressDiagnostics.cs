@@ -115,12 +115,10 @@ public sealed class ScanProgressReporter : IDisposable
     private readonly TimeProvider timeProvider;
     private readonly List<ScanProgressEvent> history = [];
     private readonly ITimer? heartbeatTimer;
+    private readonly List<(string Stage, string Operation, int? Ordinal)> activeStages = [];
     private long sequence;
     private long startedAt;
-    private string? activeStage;
     private string? lastSuccessfulStage;
-    private string heartbeatOperation = LocalReviewOperation;
-    private int? heartbeatOrdinal;
     private bool disposed;
 
     public ScanProgressReporter(
@@ -162,7 +160,7 @@ public sealed class ScanProgressReporter : IDisposable
 
     /// <summary>
     /// True while a categorical stage is active. Heartbeat observations are
-    /// only produced between StartStage and a terminal or completed state.
+    /// only produced while at least one stage is on the active stack.
     /// </summary>
     public bool IsStageActive
     {
@@ -170,7 +168,7 @@ public sealed class ScanProgressReporter : IDisposable
         {
             lock (gate)
             {
-                return activeStage is not null;
+                return activeStages.Count > 0;
             }
         }
     }
@@ -200,21 +198,20 @@ public sealed class ScanProgressReporter : IDisposable
         EmitCore(operation, stage, state, ordinal, counts, failureCode);
 
     /// <summary>
-    /// Emits a terminal observation for whichever categorical stage is currently
-    /// active. This keeps failure and timeout observations truthful when the
-    /// exact failing boundary inside a stage is unknown. If no stage is active,
-    /// the observation is dropped.
+    /// Emits a terminal observation for the innermost active categorical stage.
+    /// If no stage is active, the observation is dropped.
     /// </summary>
     public void FinishActiveStage(string operation, string state, string? failureCode = null)
     {
         lock (gate)
         {
-            if (disposed || activeStage is null)
+            if (disposed || activeStages.Count == 0)
             {
                 return;
             }
 
-            EmitUnderLock(operation, activeStage, state, heartbeatOrdinal, null, failureCode);
+            var innermost = activeStages[^1];
+            EmitUnderLock(operation, innermost.Stage, state, innermost.Ordinal, null, failureCode);
         }
     }
 
@@ -257,6 +254,7 @@ public sealed class ScanProgressReporter : IDisposable
         var normalizedStage = IsKnownStage(stage) ? stage : "other";
         var normalizedState = NormalizeAllowed(state, States, "failed");
         var normalizedCode = failureCode is null ? null : NormalizeCode(failureCode);
+        var normalizedOrdinal = NormalizeOrdinal(ordinal);
         var scanProgressEvent = new ScanProgressEvent(
             ScanProgressSchema.Version,
             ++sequence,
@@ -267,21 +265,23 @@ public sealed class ScanProgressReporter : IDisposable
             NormalizeCounts(counts),
             normalizedCode,
             lastSuccessfulStage,
-            NormalizeOrdinal(ordinal));
+            normalizedOrdinal);
         if (normalizedState == "started")
         {
-            activeStage = normalizedStage;
-            heartbeatOperation = normalizedOperation;
-            heartbeatOrdinal = NormalizeOrdinal(ordinal);
+            // Nested stages stack: completing an inner stage restores the
+            // enclosing stage so heartbeats continue through the outer work.
+            activeStages.Add((normalizedStage, normalizedOperation, normalizedOrdinal));
         }
         else if (normalizedState is "completed" or "partial")
         {
-            activeStage = null;
+            PopStage(normalizedStage);
             lastSuccessfulStage = normalizedStage;
         }
         else if (normalizedState is "failed" or "cancelled" or "timed-out")
         {
-            activeStage = null;
+            // A terminal enclosing-stage outcome ends every nested stage above
+            // it as well; the search removes the deepest match plus its nest.
+            PopStage(normalizedStage);
         }
 
         if (normalizedState != "heartbeat")
@@ -293,24 +293,54 @@ public sealed class ScanProgressReporter : IDisposable
             }
         }
 
-        console?.WriteLine(FormatConsoleLine(scanProgressEvent));
+        WriteConsoleBestEffort(FormatConsoleLine(scanProgressEvent));
         WriteCheckpointLocked(new ScanProgressCheckpoint(
             ScanProgressSchema.Version,
             scanProgressEvent,
             history.ToArray()));
     }
 
-    /// <summary>Reports the active stage, elapsed time, and last completed stage. Rate-limited by the heartbeat timer.</summary>
+    private void PopStage(string stage)
+    {
+        for (var index = activeStages.Count - 1; index >= 0; index--)
+        {
+            if (activeStages[index].Stage == stage)
+            {
+                activeStages.RemoveRange(index, activeStages.Count - index);
+                return;
+            }
+        }
+    }
+
+    private void WriteConsoleBestEffort(string line)
+    {
+        if (console is null)
+        {
+            return;
+        }
+
+        try
+        {
+            console.WriteLine(line);
+        }
+        catch (Exception exception) when (exception is IOException or ObjectDisposedException or InvalidOperationException)
+        {
+            // Diagnostics must never fail or alter the authoritative scan.
+        }
+    }
+
+    /// <summary>Reports the innermost active stage, elapsed time, and last completed stage. Rate-limited by the heartbeat timer.</summary>
     public void EmitHeartbeat()
     {
         lock (gate)
         {
-            if (disposed || activeStage is null)
+            if (disposed || activeStages.Count == 0)
             {
                 return;
             }
 
-            EmitUnderLock(heartbeatOperation, activeStage, "heartbeat", heartbeatOrdinal, null, null);
+            var innermost = activeStages[^1];
+            EmitUnderLock(innermost.Operation, innermost.Stage, "heartbeat", innermost.Ordinal, null, null);
         }
     }
 

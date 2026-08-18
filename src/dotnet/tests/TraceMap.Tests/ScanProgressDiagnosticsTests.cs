@@ -408,8 +408,138 @@ public sealed class ScanProgressDiagnosticsTests
         var second = OrdinalTrail(secondCheckpoint);
         Assert.NotEmpty(first);
         Assert.Equal(first, second);
-        Assert.Contains(first, entry => entry.stage == "project-load" && entry.ordinal == 1);
-        Assert.Contains(first, entry => entry.stage == "project-load" && entry.ordinal == 2);
+        Assert.Contains(first, entry => entry.stage == "solution-load" && entry.ordinal == 1);
+        // Projects loaded through the solution must carry deterministic
+        // one-based compilation ordinals, not name identities.
+        Assert.Contains(first, entry => entry.stage == "compilation" && entry.ordinal == 1);
+        Assert.Contains(first, entry => entry.stage == "compilation" && entry.ordinal == 2);
+    }
+
+    [Fact]
+    public void Nested_stage_completion_restores_the_enclosing_stage_for_heartbeats()
+    {
+        using var temp = new TempDirectory();
+        var checkpointPath = Path.Combine(temp.Path, "progress.json");
+        var time = new ManualTimeProvider();
+        using var progress = new ConcurrentStringWriter();
+        using var reporter = new ScanProgressReporter(progress, checkpointPath, time);
+
+        reporter.StartStage(ScanProgressReporter.LocalReviewOperation, ScanProgressStages.Scan);
+        reporter.StartStage(ScanProgressReporter.ScanOperation, ScanProgressStages.ProjectLoad, 1);
+        reporter.StartStage(ScanProgressReporter.ScanOperation, ScanProgressStages.Compilation, 1);
+        reporter.FinishStage(
+            ScanProgressReporter.ScanOperation,
+            ScanProgressStages.Compilation,
+            "completed",
+            ordinal: 1);
+
+        // After the nested compilation stage completes, document-level Roslyn
+        // waits must stay observable through the enclosing stages.
+        time.Advance(TimeSpan.FromSeconds(15));
+        var heartbeat = progress.Lines().Last(line => line.Contains("state=heartbeat", StringComparison.Ordinal));
+        Assert.Contains("stage=project-load ordinal=1", heartbeat, StringComparison.Ordinal);
+        Assert.Contains("lastSuccessfulStage=compilation", heartbeat, StringComparison.Ordinal);
+
+        reporter.FinishStage(
+            ScanProgressReporter.ScanOperation,
+            ScanProgressStages.ProjectLoad,
+            "completed",
+            ordinal: 1);
+        time.Advance(TimeSpan.FromSeconds(15));
+        var enclosing = progress.Lines().Last(line => line.Contains("state=heartbeat", StringComparison.Ordinal));
+        Assert.Contains("op=local-review stage=scan ", enclosing, StringComparison.Ordinal);
+
+        reporter.FinishStage(ScanProgressReporter.LocalReviewOperation, ScanProgressStages.Scan, "completed");
+        var linesBeforeExpiry = progress.Lines().Count;
+        time.Advance(TimeSpan.FromSeconds(45));
+        Assert.All(
+            progress.Lines().Skip(linesBeforeExpiry),
+            line => Assert.DoesNotContain("state=heartbeat", line, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Timeout_deadline_records_timed_out_even_when_the_runner_ignores_cancellation()
+    {
+        using var temp = new TempDirectory();
+        var repo = CreateRepository(temp.Path, repoName: "plain-repo");
+        var review = Path.Combine(temp.Path, "review");
+        var checkpoint = Path.Combine(temp.Path, "progress.json");
+        var time = new ManualTimeProvider();
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var progress = new ConcurrentStringWriter();
+        using var error = new StringWriter();
+
+        var run = LocalReviewCommand.RunAsync(
+            [
+                "run", "--repo", repo, "--out", review,
+                "--diagnostic-progress", checkpoint,
+                "--timeout-seconds", "30"
+            ],
+            TextWriter.Null,
+            error,
+            async (args, stdout, stderr, token) =>
+            {
+                // Deliberately ignores the token, like an API that blocks
+                // without honoring cancellation.
+                await release.Task;
+                await WriteSyntheticScanAsync(args[Array.IndexOf(args, "--out") + 1], CancellationToken.None);
+                return 0;
+            },
+            progressConsole: progress,
+            timeProvider: time);
+
+        time.Advance(TimeSpan.FromSeconds(31));
+        // The deadline callback must record the timeout observation even
+        // though no OperationCanceledException can reach the workflow yet.
+        for (var attempt = 0; attempt < 200; attempt++)
+        {
+            if (File.Exists(checkpoint)
+                && (await File.ReadAllTextAsync(checkpoint)).Contains("\"state\": \"timed-out\"", StringComparison.Ordinal))
+            {
+                break;
+            }
+
+            await Task.Delay(10);
+        }
+
+        var stuckCheckpoint = ParseCheckpoint(checkpoint).RootElement.GetProperty("latest");
+        Assert.Equal("timed-out", stuckCheckpoint.GetProperty("state").GetString());
+        Assert.Equal("staging-initialized", stuckCheckpoint.GetProperty("lastSuccessfulStage").GetString());
+        Assert.False(Directory.Exists(review), "no output may be published while the run is stuck");
+
+        release.SetResult();
+        Assert.Equal(1, await run);
+        Assert.Contains("LOCAL_REVIEW_TIMEOUT", error.ToString(), StringComparison.Ordinal);
+        using var result = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(review, "local-review-result.json")));
+        Assert.Equal("timed-out", result.RootElement.GetProperty("outcome").GetString());
+    }
+
+    [Fact]
+    public async Task Failing_progress_console_never_fails_the_scan()
+    {
+        using var temp = new TempDirectory();
+        var repo = CreateRepository(temp.Path, repoName: "plain-repo");
+        var review = Path.Combine(temp.Path, "review");
+        var checkpoint = Path.Combine(temp.Path, "progress.json");
+        using var failingConsole = new ThrowingTextWriter();
+
+        var exit = await LocalReviewCommand.RunAsync(
+            ["run", "--repo", repo, "--out", review, "--diagnostic-progress", checkpoint],
+            TextWriter.Null,
+            TextWriter.Null,
+            ScanRunner,
+            progressConsole: failingConsole);
+
+        Assert.Equal(0, exit);
+        Assert.True(File.Exists(checkpoint));
+        Assert.True(File.Exists(Path.Combine(review, "local-review-result.json")));
+    }
+
+    private sealed class ThrowingTextWriter : TextWriter
+    {
+        public override Encoding Encoding => Encoding.UTF8;
+
+        public override void WriteLine(string? value) => throw new IOException("diagnostic console closed");
     }
 
     [Fact]
@@ -758,9 +888,34 @@ public sealed class ScanProgressDiagnosticsTests
         if (extraProjects is { Length: > 0 })
         {
             Directory.CreateDirectory(Path.Combine(repo, projectName));
+            var projectGuids = extraProjects
+                .Select((name, index) => (name, guid: $"{index + 1:00000000}-0000-0000-0000-000000000000"))
+                .ToArray();
             File.WriteAllText(Path.Combine(repo, projectName, $"{projectName}.sln"), string.Join(Environment.NewLine,
-                "Microsoft Visual Studio Solution File, Format Version 12.0",
-                extraProjects.Select(name => $"Project(\"{{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}}\") = \"{name}\", \"{name}\\{name}.csproj\", \"{{{name}}}\"")));
+                new[]
+                {
+                    "Microsoft Visual Studio Solution File, Format Version 12.00",
+                    "# Visual Studio Version 17",
+                    "VisualStudioVersion = 17.0.31903.59",
+                    "MinimumVisualStudioVersion = 10.0.40219.1"
+                }
+                .Concat(projectGuids.SelectMany(entry => new[]
+                {
+                    $"Project(\"{{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}}\") = \"{entry.name}\", \"..\\{entry.name}\\{entry.name}.csproj\", \"{{{entry.guid}}}\"",
+                    "EndProject"
+                }))
+                .Concat(["Global"])
+                .Concat(["    GlobalSection(SolutionConfigurationPlatforms) = preSolution"])
+                .Concat(["        Debug|Any CPU = Debug|Any CPU"])
+                .Concat(["    EndGlobalSection"])
+                .Concat(["    GlobalSection(ProjectConfigurationPlatforms) = postSolution"])
+                .Concat(projectGuids.SelectMany(entry => new[]
+                {
+                    $"        {{{entry.guid}}}.Debug|Any CPU.ActiveCfg = Debug|Any CPU",
+                    $"        {{{entry.guid}}}.Debug|Any CPU.Build.0 = Debug|Any CPU"
+                }))
+                .Concat(["    EndGlobalSection"])
+                .Concat(["EndGlobal"])));
             foreach (var name in extraProjects)
             {
                 WriteProject(name);
