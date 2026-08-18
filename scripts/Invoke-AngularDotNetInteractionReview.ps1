@@ -31,6 +31,7 @@ $script:OperationalEventSequence = 0
 $script:OperationalEvents = [System.Collections.Generic.List[object]]::new()
 $script:SourceSnapshotSha256 = $null
 $script:SourceCommitByLabel = @{}
+$script:PartialAnalysis = $false
 $SafeNamePattern = '^[a-z0-9][a-z0-9._-]{0,63}$'
 $MaximumSources = 100
 $MaximumEndpointPairs = 100
@@ -117,6 +118,32 @@ function Get-EffectiveSourceExcludes {
         if ($seen.Add($value)) { $effective.Add($value) }
     }
     return $effective.ToArray()
+}
+
+function Get-ValidatedPathList {
+    param(
+        [Parameter(Mandatory = $true)]$Source,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+
+    $property = $Source.PSObject.Properties[$Name]
+    if ($null -eq $property) { return @() }
+    if ($property.Value -is [string] -or $null -eq $property.Value) {
+        Stop-InteractionReview "INTERACTION_RUN_SOURCE_PATH_LIST_INVALID"
+    }
+    $values = @(ConvertTo-Array $property.Value)
+    if ($values.Count -gt 100) { Stop-InteractionReview "INTERACTION_RUN_SOURCE_PATH_LIST_INVALID" }
+    $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+    $validated = [System.Collections.Generic.List[string]]::new()
+    foreach ($item in $values) {
+        if ($item -isnot [string]) { Stop-InteractionReview "INTERACTION_RUN_SOURCE_PATH_LIST_INVALID" }
+        $value = [string]$item
+        if ([string]::IsNullOrWhiteSpace($value) -or $value.Length -gt 2048 -or -not $seen.Add($value)) {
+            Stop-InteractionReview "INTERACTION_RUN_SOURCE_PATH_LIST_INVALID"
+        }
+        $validated.Add($value)
+    }
+    return $validated.ToArray()
 }
 
 function Resolve-ConfiguredPath {
@@ -254,8 +281,15 @@ function Invoke-CheckedCommand {
         [Parameter(Mandatory = $true)][string]$FailureCode
     )
 
-    & $FilePath @Arguments
-    if ($LASTEXITCODE -ne 0) { Stop-InteractionReview $FailureCode }
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $FilePath
+    $startInfo.UseShellExecute = $false
+    foreach ($argument in $Arguments) { [void]$startInfo.ArgumentList.Add([string]$argument) }
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    if (-not $process.Start()) { Stop-InteractionReview $FailureCode }
+    $process.WaitForExit()
+    if ($process.ExitCode -ne 0) { Stop-InteractionReview $FailureCode }
 }
 
 function Invoke-TraceMap {
@@ -370,6 +404,38 @@ function Add-Count {
     else { $Counts[$Key] = $Amount }
 }
 
+function New-FeedbackEvidence {
+    param(
+        [string]$ArtifactPath = "feedback-summary.json",
+        [string]$CommitSha = "",
+        [string]$RuleId = $script:FeedbackRuleId,
+        [string]$EvidenceTier = "Tier4Unknown",
+        [int]$StartLine = 1,
+        [int]$EndLine = 1
+    )
+
+    $normalizedArtifact = if ([string]::IsNullOrWhiteSpace($ArtifactPath)) { "feedback-summary.json" } else { $ArtifactPath.Replace('\', '/') }
+    if ([System.IO.Path]::IsPathRooted($normalizedArtifact) -or $normalizedArtifact -eq ".." -or $normalizedArtifact.StartsWith("../", [System.StringComparison]::Ordinal)) {
+        $normalizedArtifact = "feedback-summary.json"
+    }
+    $normalizedRule = if ([string]::IsNullOrWhiteSpace($RuleId)) { $script:FeedbackRuleId } else { $RuleId }
+    $normalizedTier = if ($script:AllowedEvidenceTiers.Contains($EvidenceTier)) { $EvidenceTier } else { "Tier4Unknown" }
+    $normalizedCommit = if ($CommitSha -match '^[0-9a-fA-F]{40,64}$') { $CommitSha.ToLowerInvariant() } else {
+        $candidate = @($script:SourceCommitByLabel.Values | Sort-Object | Select-Object -First 1)
+        if ($candidate.Count -eq 1 -and [string]$candidate[0] -match '^[0-9a-fA-F]{40,64}$') { ([string]$candidate[0]).ToLowerInvariant() } else { "0" * 40 }
+    }
+    $safeStart = [Math]::Max(1, $StartLine)
+    $safeEnd = [Math]::Max($safeStart, $EndLine)
+    return [ordered]@{
+        rule_id = $normalizedRule
+        evidence_tier = $normalizedTier
+        file_path = $normalizedArtifact
+        line_span = [ordered]@{ start_line = $safeStart; end_line = $safeEnd }
+        commit_sha = $normalizedCommit
+        extractor_version = "interaction-review.v1"
+    }
+}
+
 function Add-UnresolvedSignal {
     param(
         [Parameter(Mandatory = $true)][hashtable]$Signals,
@@ -379,7 +445,8 @@ function Add-UnresolvedSignal {
         [string]$RuleId = $script:FeedbackRuleId,
         [string]$EvidenceTier = "Tier4Unknown",
         [string]$Coverage = "unknown",
-        [int]$Count = 1
+        [int]$Count = 1,
+        [AllowNull()][object]$Evidence = $null
     )
 
     $normalizedKind = if ([string]::IsNullOrWhiteSpace($Kind)) { "unknown" } else { $Kind }
@@ -387,13 +454,21 @@ function Add-UnresolvedSignal {
     $normalizedRule = if ([string]::IsNullOrWhiteSpace($RuleId)) { $script:FeedbackRuleId } else { $RuleId }
     $normalizedTier = if ($script:AllowedEvidenceTiers.Contains($EvidenceTier)) { $EvidenceTier } else { "Tier4Unknown" }
     $normalizedCoverage = if ([string]::IsNullOrWhiteSpace($Coverage)) { "unknown" } else { $Coverage }
-    Add-Count $Signals "$Producer|$normalizedKind|$normalizedClassification|$normalizedRule|$normalizedTier|$normalizedCoverage" $Count
+    $key = "$Producer|$normalizedKind|$normalizedClassification|$normalizedRule|$normalizedTier|$normalizedCoverage"
+    Add-Count $Signals $key $Count
+    if (-not $script:SignalEvidenceByKey.ContainsKey($key)) {
+        $script:SignalEvidenceByKey[$key] = [System.Collections.Generic.List[object]]::new()
+    }
+    $evidenceRows = $script:SignalEvidenceByKey[$key]
+    if ($evidenceRows.Count -eq 0) { $evidenceRows.Add((New-FeedbackEvidence -RuleId $normalizedRule -EvidenceTier $normalizedTier)) }
+    if ($null -ne $Evidence -and $evidenceRows.Count -lt 4) { $evidenceRows.Add($Evidence) }
 }
 
 function Add-ScanGapSignals {
     param(
         [Parameter(Mandatory = $true)][string]$FactsPath,
-        [Parameter(Mandatory = $true)][hashtable]$Signals
+        [Parameter(Mandatory = $true)][hashtable]$Signals,
+        [Parameter(Mandatory = $true)][string]$CommitSha
     )
 
     foreach ($line in [System.IO.File]::ReadLines($FactsPath)) {
@@ -411,7 +486,18 @@ function Add-ScanGapSignals {
         }
         $tier = [string](Get-PropertyValue $fact "evidenceTier" "Tier4Unknown")
         $coverage = if ($null -eq $properties) { "unknown" } else { [string](Get-PropertyValue $properties "coverageLabel" "unknown") }
-        Add-UnresolvedSignal $Signals "scan" "analysis-gap" $classification $ruleId $tier $coverage
+        $factEvidence = Get-PropertyValue $fact "evidence" $null
+        $lineSpan = $null
+        if ($null -ne $factEvidence) { $lineSpan = Get-PropertyValue $factEvidence "line_span" (Get-PropertyValue $factEvidence "lineSpan" $null) }
+        $startLine = 1
+        $endLine = 1
+        if ($null -ne $lineSpan) {
+            $startLine = [int](Get-PropertyValue $lineSpan "start_line" (Get-PropertyValue $lineSpan "startLine" 1))
+            $endLine = [int](Get-PropertyValue $lineSpan "end_line" (Get-PropertyValue $lineSpan "endLine" $startLine))
+        }
+        $artifactPath = [System.IO.Path]::GetRelativePath($script:StagingRoot, $FactsPath).Replace('\', '/')
+        $evidence = New-FeedbackEvidence -ArtifactPath $artifactPath -CommitSha $CommitSha -RuleId $ruleId -EvidenceTier $tier -StartLine $startLine -EndLine $endLine
+        Add-UnresolvedSignal $Signals "scan" "analysis-gap" $classification $ruleId $tier $coverage 1 $evidence
     }
 }
 
@@ -424,6 +510,9 @@ function Add-ReportSignals {
     )
 
     $report = Get-Content -LiteralPath $JsonPath -Raw | ConvertFrom-Json -Depth 100
+    # Query names are owner-controlled and must not enter the categorical
+    # feedback surface. Keep report evidence at a producer-level path.
+    $reportArtifactPath = "reports/$Producer/report.json"
     $summary = Get-PropertyValue $report "summary" $null
     $reportCoverage = if ($null -eq $summary) {
         [string](Get-PropertyValue $report "reportCoverage" "unknown")
@@ -441,7 +530,9 @@ function Add-ReportSignals {
             coverage = $coverage
             truncated = $truncated
         })
-        if ($truncated) { Add-UnresolvedSignal $Signals $Producer "limit" "TruncatedByLimit" $script:FeedbackRuleId "Tier4Unknown" $coverage }
+        if ($truncated) {
+            Add-UnresolvedSignal $Signals $Producer "limit" "TruncatedByLimit" $script:FeedbackRuleId "Tier4Unknown" $coverage 1 (New-FeedbackEvidence -ArtifactPath $reportArtifactPath)
+        }
     }
     else {
         $ReportStates.Add([ordered]@{
@@ -458,21 +549,21 @@ function Add-ReportSignals {
         $ruleId = [string](Get-PropertyValue $gap "ruleId" $script:FeedbackRuleId)
         $tier = [string](Get-PropertyValue $gap "evidenceTier" "Tier4Unknown")
         $coverage = [string](Get-PropertyValue $gap "coverage" (Get-PropertyValue $gap "coverageLabel" $reportCoverage))
-        Add-UnresolvedSignal $Signals $Producer $kind $classification $ruleId $tier $coverage
+        Add-UnresolvedSignal $Signals $Producer $kind $classification $ruleId $tier $coverage 1 (New-FeedbackEvidence -ArtifactPath $reportArtifactPath -RuleId $ruleId -EvidenceTier $tier)
     }
 
     foreach ($gap in (ConvertTo-Array (Get-PropertyValue $report "knownGaps" @()))) {
         $kind = [string](Get-PropertyValue $gap "category" "known-gap")
         if ($kind.EndsWith(":available", [System.StringComparison]::OrdinalIgnoreCase)) { continue }
         $count = [int](Get-PropertyValue $gap "count" 1)
-        Add-UnresolvedSignal $Signals $Producer $kind "UnknownAnalysisGap" $script:FeedbackRuleId "Tier4Unknown" $reportCoverage $count
+        Add-UnresolvedSignal $Signals $Producer $kind "UnknownAnalysisGap" $script:FeedbackRuleId "Tier4Unknown" $reportCoverage $count (New-FeedbackEvidence -ArtifactPath $reportArtifactPath)
     }
 
     foreach ($review in (ConvertTo-Array (Get-PropertyValue $report "needsReview" @()))) {
         $kind = [string](Get-PropertyValue $review "reviewKind" "needs-review")
         $ruleId = [string](Get-PropertyValue $review "ruleId" $script:FeedbackRuleId)
         $tier = [string](Get-PropertyValue $review "evidenceTier" "Tier4Unknown")
-        Add-UnresolvedSignal $Signals $Producer $kind "NeedsReview" $ruleId $tier $reportCoverage
+        Add-UnresolvedSignal $Signals $Producer $kind "NeedsReview" $ruleId $tier $reportCoverage 1 (New-FeedbackEvidence -ArtifactPath $reportArtifactPath -RuleId $ruleId -EvidenceTier $tier)
     }
 
     $endpointRows = @(ConvertTo-Array (Get-PropertyValue $report "endpointFindings" (Get-PropertyValue $report "findings" @())))
@@ -493,7 +584,7 @@ function Add-ReportSignals {
             (Get-PropertyValue $finding "evidenceTier" $null),
             (Get-PropertyValue $finding "clientEvidenceTier" $null),
             (Get-PropertyValue $finding "serverEvidenceTier" $null)) "Tier4Unknown"
-        Add-UnresolvedSignal $Signals $Producer "endpoint-alignment" $classification $ruleId $tier $reportCoverage
+        Add-UnresolvedSignal $Signals $Producer "endpoint-alignment" $classification $ruleId $tier $reportCoverage 1 (New-FeedbackEvidence -ArtifactPath $reportArtifactPath -RuleId $ruleId -EvidenceTier $tier)
     }
 }
 
@@ -505,7 +596,10 @@ function Convert-CountsToRows {
 }
 
 function Convert-SignalsToRows {
-    param([Parameter(Mandatory = $true)][hashtable]$Signals)
+    param(
+        [Parameter(Mandatory = $true)][hashtable]$Signals,
+        [Parameter(Mandatory = $true)][hashtable]$EvidenceByKey
+    )
     return @($Signals.GetEnumerator() |
         Sort-Object Name |
         ForEach-Object {
@@ -518,6 +612,7 @@ function Convert-SignalsToRows {
                 evidenceTier = $parts[4]
                 coverage = $parts[5]
                 count = [int]$_.Value
+                evidence = @($EvidenceByKey[[string]$_.Name])
             }
         })
 }
@@ -646,7 +741,11 @@ foreach ($source in $sources) {
     $kind = [string](Get-PropertyValue $source "kind" "")
     if ($label -notmatch $SafeNamePattern -or -not $sourceLabels.Add($label)) { Stop-InteractionReview "INTERACTION_RUN_SOURCE_LABEL_INVALID" }
     if ($kind -notin @("typescript", "dotnet")) { Stop-InteractionReview "INTERACTION_RUN_SOURCE_KIND_UNSUPPORTED" }
-    $repositoryPath = Resolve-ConfiguredPath $configDirectory ([string](Get-PropertyValue $source "repositoryPath" ""))
+    $repositoryPathValue = Get-PropertyValue $source "repositoryPath" $null
+    if ($repositoryPathValue -isnot [string] -or [string]::IsNullOrWhiteSpace([string]$repositoryPathValue)) {
+        Stop-InteractionReview "INTERACTION_RUN_SOURCE_REPOSITORY_PATH_INVALID"
+    }
+    $repositoryPath = Resolve-ConfiguredPath $configDirectory ([string]$repositoryPathValue)
     if (-not (Test-Path -LiteralPath $repositoryPath -PathType Container)) { Stop-InteractionReview "INTERACTION_RUN_SOURCE_REPOSITORY_UNAVAILABLE" }
     $gitRoot = Get-GitValue $repositoryPath @("rev-parse", "--show-toplevel") "INTERACTION_RUN_SOURCE_GIT_ROOT_UNAVAILABLE"
     $gitPrefixOutput = @(& git -C $repositoryPath rev-parse --show-prefix)
@@ -660,8 +759,12 @@ foreach ($source in $sources) {
     if ($LASTEXITCODE -ne 0) { Stop-InteractionReview "INTERACTION_RUN_SOURCE_STATUS_UNAVAILABLE" }
     if ($workingTree.Count -gt 0) { Stop-InteractionReview "INTERACTION_RUN_SOURCE_DIRTY" }
 
-    $projects = @((ConvertTo-Array (Get-PropertyValue $source "projects" @())) | ForEach-Object { Resolve-RepositoryChildPath $repositoryPath ([string]$_) })
-    $solutions = @((ConvertTo-Array (Get-PropertyValue $source "solutions" @())) | ForEach-Object { Resolve-RepositoryChildPath $repositoryPath ([string]$_) })
+    $projectPaths = Get-ValidatedPathList $source "projects"
+    $solutionPaths = Get-ValidatedPathList $source "solutions"
+    $includePaths = Get-ValidatedPathList $source "include"
+    $excludePaths = Get-ValidatedPathList $source "exclude"
+    $projects = @($projectPaths | ForEach-Object { Resolve-RepositoryChildPath $repositoryPath $_ })
+    $solutions = @($solutionPaths | ForEach-Object { Resolve-RepositoryChildPath $repositoryPath $_ })
     $targetFramework = [string](Get-PropertyValue $source "targetFramework" "")
     if ($kind -eq "typescript" -and ($solutions.Count -gt 0 -or -not [string]::IsNullOrWhiteSpace($targetFramework))) {
         Stop-InteractionReview "INTERACTION_RUN_TYPESCRIPT_SELECTION_INVALID"
@@ -674,8 +777,8 @@ foreach ($source in $sources) {
         commitSha = $commitSha
         projects = $projects
         solutions = $solutions
-        include = @((ConvertTo-Array (Get-PropertyValue $source "include" @())) | ForEach-Object { [string]$_ })
-        exclude = @(Get-EffectiveSourceExcludes (Get-PropertyValue $source "exclude" @()))
+        include = @($includePaths)
+        exclude = @(Get-EffectiveSourceExcludes $excludePaths)
         targetFramework = $targetFramework
     })
 }
@@ -793,6 +896,7 @@ if ([string]::IsNullOrWhiteSpace($outputParent)) { Stop-InteractionReview "INTER
 New-Item -ItemType Directory -Path $outputParent -Force | Out-Null
 $staging = Join-Path $outputParent ("." + [System.IO.Path]::GetFileName($OutputRoot) + ".interaction-" + [System.Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $staging | Out-Null
+$script:StagingRoot = $staging
 $logsRoot = Join-Path $staging "logs"
 New-Item -ItemType Directory -Path $logsRoot | Out-Null
 $script:OperationalEventPath = Join-Path $logsRoot "interaction-review-events.jsonl"
@@ -803,6 +907,7 @@ $sourceResults = [System.Collections.Generic.List[object]]::new()
 $reportResults = [System.Collections.Generic.List[object]]::new()
 $reportStates = [System.Collections.Generic.List[object]]::new()
 $signals = @{}
+$script:SignalEvidenceByKey = @{}
 $sourceKindCounts = @{}
 $scanStateCounts = @{}
 $failureCode = $null
@@ -848,14 +953,18 @@ try {
                 $indexPath = Join-Path $scanOutput "index.sqlite"
                 foreach ($required in @($manifestPath, $factsPath, $indexPath, (Join-Path $scanOutput "report.md"), (Join-Path $scanOutput "logs/analyzer.log"))) {
                     if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { Stop-InteractionReview "INTERACTION_RUN_SCAN_ARTIFACT_MISSING" }
+                    if ((Get-Item -LiteralPath $required).Length -le 0) { Stop-InteractionReview "INTERACTION_RUN_SCAN_ARTIFACT_EMPTY" }
                 }
                 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json -Depth 50
                 if ([string](Get-PropertyValue $manifest "commitSha" "") -ne $source.commitSha) { Stop-InteractionReview "INTERACTION_RUN_SCAN_COMMIT_MISMATCH" }
                 $analysisLevel = [string](Get-PropertyValue $manifest "analysisLevel" "unknown")
                 $buildStatus = [string](Get-PropertyValue $manifest "buildStatus" "unknown")
+                if ($analysisLevel -match "Reduced|Syntax" -or $buildStatus -in @("FailedOrPartial", "Failed")) {
+                    $script:PartialAnalysis = $true
+                }
                 Add-Count $sourceKindCounts $source.kind
                 Add-Count $scanStateCounts "$analysisLevel|$buildStatus"
-                Add-ScanGapSignals $factsPath $signals
+                Add-ScanGapSignals $factsPath $signals $source.commitSha
                 $sourceResults.Add([ordered]@{
                     label = $source.label
                     kind = $source.kind
@@ -999,6 +1108,8 @@ catch {
     }
 }
 
+if ($outcome -eq "succeeded" -and $script:PartialAnalysis) { $outcome = "partial" }
+
 try {
     $feedback = [ordered]@{
         schemaVersion = $FeedbackSchemaVersion
@@ -1013,7 +1124,16 @@ try {
             { [string]$_.classification },
             { [string]$_.coverage },
             { [bool]$_.truncated })
-        unresolvedSignals = @(Convert-SignalsToRows $signals)
+        sources = @($sourceResults | Sort-Object label | ForEach-Object {
+            [ordered]@{
+                label = $_.label
+                kind = $_.kind
+                commitSha = $_.commitSha
+                analysisLevel = $_.analysisLevel
+                buildStatus = $_.buildStatus
+            }
+        })
+        unresolvedSignals = @(Convert-SignalsToRows $signals $script:SignalEvidenceByKey)
         failureCode = $failureCode
         limitations = @(
             "Counts are categorical projections and may include the same underlying gap in more than one report.",
@@ -1046,7 +1166,7 @@ try {
         sources = @($sourceResults | Sort-Object label)
         reports = @($reportResults | Sort-Object kind, name)
         artifacts = $artifacts
-        nextAction = if ($outcome -eq "succeeded" -and $signals.Count -eq 0) { "review-generated-reports" } elseif ($outcome -eq "succeeded") { "review-feedback-summary" } else { "inspect-failure-code-and-retained-stage-output" }
+        nextAction = if ($outcome -eq "succeeded" -and $signals.Count -eq 0) { "review-generated-reports" } elseif ($outcome -in @("succeeded", "partial")) { "review-feedback-summary" } else { "inspect-failure-code-and-retained-stage-output" }
         limitations = @(
             "This run composes deterministic static evidence and does not prove runtime execution, reachability, correctness, ownership, or migration safety.",
             "Generated reports can contain private repository-relative identifiers and must remain in owner-controlled storage."
@@ -1080,4 +1200,4 @@ Write-Output "interaction-review=$outcome;runId=$runId;sourceCount=$($resolvedSo
 if ($null -ne $failureCode) { Write-Output "failureCode=$failureCode" }
 Write-Output "output=$OutputRoot"
 
-if ($outcome -ne "succeeded") { exit 1 }
+if ($outcome -eq "failed") { exit 1 }

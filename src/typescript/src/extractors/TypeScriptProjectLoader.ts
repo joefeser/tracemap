@@ -35,18 +35,29 @@ export async function loadTypeScriptProjects(repoPath: string, options: ScanOpti
     compilerInputTokens: [
       ...[...cache.sourceFiles.entries()]
         .filter(([fileName]) => !selectedPaths.has(path.resolve(fileName)))
-        .map(([, [sourceFile]]) => {
+        .map(([fileName, [sourceFile]]) => {
           const analyzedText = Buffer.from(sourceFile.text, "utf8");
-          return `source\0${analyzedText.byteLength}\0${hashBytes(analyzedText)}\0`;
+          return `source\0${compilerInputPath(repoPath, fileName)}\0${analyzedText.byteLength}\0${hashBytes(analyzedText)}\0`;
         }),
       ...[...cache.configFiles.entries()]
         .filter(([fileName]) => !selectedPaths.has(path.resolve(fileName)))
-        .map(([, configText]) => {
+        .map(([fileName, configText]) => {
           const analyzedText = Buffer.from(configText, "utf8");
-          return `config\0${analyzedText.byteLength}\0${hashBytes(analyzedText)}\0`;
+          return `config\0${compilerInputPath(repoPath, fileName)}\0${analyzedText.byteLength}\0${hashBytes(analyzedText)}\0`;
         })
     ].sort()
   };
+}
+
+function compilerInputPath(repoPath: string, fileName: string): string {
+  const absolutePath = path.resolve(fileName);
+  if (isUnderPath(absolutePath, repoPath)) {
+    return repoRelative(repoPath, absolutePath);
+  }
+
+  // Standard-library inputs live outside the checkout. Keep their identity
+  // machine-independent without publishing an absolute toolchain path.
+  return `external/${path.basename(path.dirname(absolutePath))}/${path.basename(absolutePath)}`;
 }
 
 export function discoverProjectPaths(repoPath: string, options: ScanOptions, inventory: readonly FileInventoryItem[]): string[] {

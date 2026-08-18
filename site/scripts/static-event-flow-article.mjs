@@ -9,7 +9,8 @@ import {
   normalizeBaseUrl,
   normalizeRenderedText,
   readSitemapLocSet,
-  stripTagsQuoteAware
+  stripTagsQuoteAware,
+  EvidenceTiers
 } from "./validate-utils.mjs";
 
 export const staticEventFlowArticleSlug = "static-event-flow-what-it-proves";
@@ -478,10 +479,10 @@ function tightText(value) {
 }
 
 function withEvidence(message, artifact) {
-  const lineSpan = { start: null, end: null };
+  const lineSpan = { start_line: 1, end_line: 1 };
   const evidence = {
     rule_id: staticEventFlowArticleFindingRuleId,
-    evidence_tier: "Tier3SyntaxOrTextual",
+    evidence_tier: EvidenceTiers.Tier3SyntaxOrTextual,
     file_path: artifact,
     line_span: lineSpan,
     commit_sha: staticEventFlowValidationCommitSha,

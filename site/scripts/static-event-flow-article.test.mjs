@@ -213,7 +213,7 @@ test("Static event-flow validator emits structured rule-linked findings", async 
   assert.equal(finding.rule_id, "legacy.webforms.event-flow.v1");
   assert.equal(finding.evidence_tier, "Tier3SyntaxOrTextual");
   assert.equal(finding.file_path, "routes-index.json");
-  assert.deepEqual(finding.line_span, { start: null, end: null });
+  assert.deepEqual(finding.line_span, { start_line: 1, end_line: 1 });
   assert.match(finding.commit_sha, /^[0-9a-f]{40}$/i);
   assert.equal(finding.extractor_version, "static-event-flow-article-validator.v1");
   assert.deepEqual(finding.evidence[0], {

@@ -13,7 +13,7 @@
     "schemaVersion": { "const": "angular-dotnet-interaction-run-result.v1" },
     "runId": { "type": "string", "pattern": "^interaction-[0-9a-f]{20}$" },
     "configSha256": { "$ref": "#/$defs/sha256" },
-    "outcome": { "enum": ["succeeded", "failed"] },
+    "outcome": { "enum": ["succeeded", "partial", "failed"] },
     "failureCode": {
       "type": ["string", "null"],
       "pattern": "^INTERACTION_RUN_[A-Z_]+$"

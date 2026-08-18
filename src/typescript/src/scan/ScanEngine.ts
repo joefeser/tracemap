@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { CodeFact, EvidenceTiers, FactTypes, ScanManifest, ScanOptions, ScanResult } from "../facts/Models";
+import { CodeFact, EvidenceTiers, FactTypes, FileInventoryItem, ScanManifest, ScanOptions, ScanResult } from "../facts/Models";
 import { createEvidence, createFact } from "../facts/FactFactory";
 import { RuleIds, ScannerVersions } from "../facts/RuleIds";
 import { collectFileInventory } from "./FileInventory";
@@ -9,7 +9,7 @@ import { AnalysisGapCollector } from "./AnalysisGapCollector";
 import { aggregateDiagnostics } from "./DiagnosticAggregator";
 import { extractPackageFacts } from "../extractors/PackageJsonExtractor";
 import { extractConfigFacts } from "../extractors/ConfigExtractor";
-import { loadTypeScriptProjects } from "../extractors/TypeScriptProjectLoader";
+import { LoadedProjectSet, loadTypeScriptProjects } from "../extractors/TypeScriptProjectLoader";
 import { extractSyntaxFacts } from "../extractors/TypeScriptSyntaxExtractor";
 import { extractSemanticFacts } from "../extractors/TypeScriptSemanticExtractor";
 import { extractIntegrationFacts } from "../extractors/IntegrationExtractor";
@@ -42,8 +42,8 @@ export async function scan(options: ScanOptions, testHooks: ScanTestHooks = {}):
   }
   const inventory = await collectFileInventory(options);
   const projectSet = options.semantic
-    ? await loadTypeScriptProjects(repoPath, options, inventory)
-    : { projects: [], compilerInputTokens: [] };
+    ? await loadProjectsWithFallback(repoPath, options, inventory)
+    : { projects: [], compilerInputTokens: [], loadErrorHash: null };
   const projects = projectSet.projects;
   const sourceSnapshotDigest = await createSourceSnapshotDigest(inventory, projectSet.compilerInputTokens);
   const manifest: ScanManifest = {
@@ -66,6 +66,11 @@ export async function scan(options: ScanOptions, testHooks: ScanTestHooks = {}):
     sourceSnapshotDigest
   };
   const gapCollector = new AnalysisGapCollector();
+  if (projectSet.loadErrorHash) {
+    gapCollector.add(manifest, "project-load", "Semantic project loading failed; syntax and non-code extraction continued.", ".", 1, {
+      errorHash: projectSet.loadErrorHash
+    });
+  }
   for (const gitGap of git.knownGaps) {
     gapCollector.add(manifest, "git-metadata", gitGap);
   }
@@ -115,8 +120,8 @@ export async function scan(options: ScanOptions, testHooks: ScanTestHooks = {}):
   await testHooks.beforeSnapshotVerification?.();
   const verifiedInventory = await collectFileInventory(options);
   const verifiedProjectSet = options.semantic
-    ? await loadTypeScriptProjects(repoPath, options, verifiedInventory)
-    : { projects: [], compilerInputTokens: [] };
+    ? await loadProjectsWithFallback(repoPath, options, verifiedInventory)
+    : { projects: [], compilerInputTokens: [], loadErrorHash: null };
   if (await createSourceSnapshotDigest(verifiedInventory, verifiedProjectSet.compilerInputTokens) !== sourceSnapshotDigest) {
     throw new Error("SourceSnapshotChangedDuringScan");
   }
@@ -130,6 +135,19 @@ export async function scan(options: ScanOptions, testHooks: ScanTestHooks = {}):
     await fs.writeFile(path.join(stagingPath, "logs", "analyzer.log"), analyzerLog(result), "utf8");
   });
   return result;
+}
+
+async function loadProjectsWithFallback(
+  repoPath: string,
+  options: ScanOptions,
+  inventory: readonly FileInventoryItem[]
+): Promise<LoadedProjectSet & { loadErrorHash: string | null }> {
+  try {
+    return { ...(await loadTypeScriptProjects(repoPath, options, inventory)), loadErrorHash: null };
+  } catch (error) {
+    const message = error instanceof Error ? `${error.name}:${error.message}` : "unknown-project-load-error";
+    return { projects: [], compilerInputTokens: [], loadErrorHash: hash(message, 16) };
+  }
 }
 
 async function writeOutputTransaction(outputPath: string, write: (stagingPath: string) => Promise<void>): Promise<void> {
