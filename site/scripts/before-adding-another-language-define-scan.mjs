@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
+import { decodeBrowserNamedEntities } from "./browser-named-entities.mjs";
 import {
   decodeHtmlEntities,
   EvidenceTiers,
@@ -122,21 +123,6 @@ const privateEndpointPatterns = [
   /\bhttps?:\/\/(?:private|localhost|127(?:\.\d{1,3}){3}|10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?::\d+)?(?:[/?#\s"'<>]|$)/i
 ];
 const genericForbiddenProofPattern = /\b(?:proves?|confirms?|establishes?|guarantees?|supports?|demonstrates?)\b[^.!?]{0,120}\b(?:semantic parity|complete coverage|complete repository understanding|complete dependency coverage|runtime(?: behavior| reachability)?|production behavior|execution|build success)\b/i;
-const browserNamedEntities = Object.freeze({
-  amp: "&",
-  apos: "'",
-  backslash: "\\",
-  bsol: "\\",
-  colon: ":",
-  gt: ">",
-  lt: "<",
-  nbsp: " ",
-  period: ".",
-  quot: '"',
-  semi: ";",
-  sol: "/"
-});
-
 export async function validateBeforeAddingAnotherLanguageDefineScanDist({
   baseUrl = "https://tracemap.tools",
   dist,
@@ -240,8 +226,8 @@ async function validateDiscovery({ dist, errors }) {
 
 async function validateArticle({ baseUrl, pagePath, errors }) {
   const rawHtml = await readFile(pagePath, "utf8");
-  const html = rawHtml;
-  const browserDecodedHtml = decodeBrowserEntities(rawHtml);
+  const html = stripHtmlComments(rawHtml);
+  const browserDecodedHtml = decodeBrowserEntities(html);
   const artifactSpan = artifactLineSpan(rawHtml);
   const finding = (message, lineSpan = artifactSpan) => withEvidence(message, pageArtifact, undefined, lineSpan);
   const rendered = normalizeRenderedText(browserDecodedHtml);
@@ -323,10 +309,13 @@ function scanSafety(surfaces, errors, artifact, privateSurfaces = surfaces, tigh
 }
 
 function decodeBrowserEntities(value) {
-  return String(value)
+  return decodeBrowserNamedEntities(String(value)
     .replace(/&#x([0-9a-f]+);?/gi, (match, hex) => codePointText(Number.parseInt(hex, 16), match))
-    .replace(/&#([0-9]+);?/gi, (match, digits) => codePointText(Number.parseInt(digits, 10), match))
-    .replace(/&([a-z][a-z0-9]+);?/gi, (match, name) => browserNamedEntities[name.toLowerCase()] ?? match);
+    .replace(/&#([0-9]+);?/gi, (match, digits) => codePointText(Number.parseInt(digits, 10), match)));
+}
+
+function stripHtmlComments(value) {
+  return String(value).replace(/<!--[\s\S]*?(?:-->|$)/g, "");
 }
 
 function hasAffirmativeProofClaim(value) {

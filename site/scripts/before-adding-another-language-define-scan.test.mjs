@@ -45,6 +45,32 @@ test("validator accepts reordered boundary attributes but rejects missing bounda
   assert.match(rejected.join("\n"), /must carry data-language-scan-boundary|must carry data-tm-boundary/);
 });
 
+test("validator ignores commented-out required article content", async (t) => {
+  const root = await createSiteFixture(t);
+  const path = join(root, articleBodyPath);
+  const original = await readFile(path, "utf8");
+  const matrixStart = original.indexOf('<section data-language-scan-block="readiness-matrix">');
+  const matrixEnd = original.indexOf("</section>", matrixStart) + "</section>".length;
+  assert.ok(matrixStart >= 0);
+  assert.ok(matrixEnd > matrixStart);
+  await writeFile(path, `${original.slice(0, matrixStart)}<!--${original.slice(matrixStart, matrixEnd)}-->${original.slice(matrixEnd)}`, "utf8");
+  await buildSite({ root, log() {} });
+  const errors = [];
+  await validateBeforeAddingAnotherLanguageDefineScanDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /missing required section: readiness-matrix|missing the acceptance readiness matrix/);
+});
+
+test("validator does not count commented-out required text", async (t) => {
+  const root = await createSiteFixture(t);
+  const path = join(root, articleBodyPath);
+  const original = await readFile(path, "utf8");
+  await writeFile(path, original.replace("Deterministic scan ID", "<!--Deterministic scan ID-->"), "utf8");
+  await buildSite({ root, log() {} });
+  const errors = [];
+  await validateBeforeAddingAnotherLanguageDefineScanDist({ dist: join(root, "dist"), errors });
+  assert.match(errors.join("\n"), /missing required text: deterministic scan ID/);
+});
+
 test("validator fail-closes malformed discovery, missing artifacts, outcomes, and fake rules", async (t) => {
   const cases = [
     ["malformed discovery", async (root) => writeFile(join(root, "dist", "routes-index.json"), JSON.stringify({ entries: {} }), "utf8"), /must contain an entries array/],
@@ -100,6 +126,7 @@ test("validator scans article metadata, blog card, and discovery copy for claims
     ["discovery raw SQL", ["src", "_site", "discovery.json"], (value) => value.replace("A concept-level guide to the evidence", "SELECT value FROM private_table. A concept-level guide to the evidence"), /raw or executable material/],
     ["article named private endpoint", ["src", "_blog", "articles", "before-adding-another-language-define-scan.html"], (value) => `${value}<p>https://service&period;internal/private</p>`, /private endpoint URL/],
     ["discovery named private endpoint", ["src", "_site", "discovery.json"], (value) => value.replace("A concept-level guide to the evidence", "https://service&period;internal/private. A concept-level guide to the evidence"), /private endpoint URL/],
+    ["article named whitespace entity claim", ["src", "_blog", "articles", "before-adding-another-language-define-scan.html"], (value) => `${value}<p>TraceMap proves semantic&Tab;parity.</p>`, /unsupported positive/],
     ["complete dependency coverage claim", ["src", "_blog", "articles", "before-adding-another-language-define-scan.html"], (value) => `${value}<p>TraceMap proves complete dependency coverage.</p>`, /unsupported positive claim/]
   ];
   for (const [name, parts, mutate, expected] of cases) {
