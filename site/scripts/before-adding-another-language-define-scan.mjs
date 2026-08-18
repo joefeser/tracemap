@@ -83,14 +83,14 @@ const requiredText = [
   "deferred"
 ];
 const forbiddenClaims = [
-  /\b(?:TraceMap|this article|the scan|the adapter|the conformance profile|the contract|the result)\b[^.!?]{0,120}\b(?:proves?|confirms?|establishes?|guarantees?|supports?|demonstrates?)\b[^.!?]{0,120}\b(?:semantic parity|complete coverage|complete repository understanding|runtime|production|execution|build success)\b/i,
-  /\b(?:semantic parity|complete coverage|complete repository understanding|runtime behavior|production behavior)\b[^.!?]{0,100}\b(?:is|are)\b[^.!?]{0,50}\b(?:proven|guaranteed|established|supported|confirmed)\b/i,
+  /\b(?:TraceMap|this article|the scan|the adapter|the conformance profile|the contract|the result)\b[^.!?]{0,120}\b(?:proves?|confirms?|establishes?|guarantees?|supports?|demonstrates?)\b[^.!?]{0,120}\b(?:semantic parity|complete coverage|complete repository understanding|complete dependency coverage|runtime|production|execution|build success)\b/i,
+  /\b(?:semantic parity|complete coverage|complete repository understanding|complete dependency coverage|runtime behavior|production behavior)\b[^.!?]{0,100}\b(?:is|are)\b[^.!?]{0,50}\b(?:proven|guaranteed|established|supported|confirmed)\b/i,
   /\b(?:TraceMap's|the|a|this)\s+Go(?:\s+adapter)?[^.!?]{0,100}\b(?:implemented|supported|ready|shipped|available|complete|finished)\b/i,
   /\bIssue\s*#?665\b[^.!?]{0,100}\b(?:implemented|supported|ready|shipped|closed|complete|finished)\b/i
 ];
 const tightForbiddenClaims = [
-  /(?:tracemap|thisarticle|thescan|theadapter|theconformanceprofile|thecontract|theresult)(?:proves?|confirms?|establishes?|guarantees?|supports?|demonstrates?)(?:semanticparity|completecoverage|completerepositoryunderstanding|runtime|production|execution|buildsuccess)/i,
-  /(?:semanticparity|completecoverage|completerepositoryunderstanding|runtimebehavior|productionbehavior)(?:is|are)(?:proven|guaranteed|established|supported|confirmed)/i,
+  /(?:tracemap|thisarticle|thescan|theadapter|theconformanceprofile|thecontract|theresult)(?:proves?|confirms?|establishes?|guarantees?|supports?|demonstrates?)(?:semanticparity|completecoverage|completerepositoryunderstanding|completedependencycoverage|runtime|production|execution|buildsuccess)/i,
+  /(?:semanticparity|completecoverage|completerepositoryunderstanding|completedependencycoverage|runtimebehavior|productionbehavior)(?:is|are)(?:proven|guaranteed|established|supported|confirmed)/i,
   /(?:tracemaps|the|a|this)go(?:adapter)?(?:implemented|supported|ready|shipped|available|complete|finished)/i,
   /issue#?665(?:implemented|supported|ready|shipped|closed|complete|finished)/i
 ];
@@ -112,7 +112,7 @@ const hardPrivatePatterns = [
   /\/tmp\//i,
   /\/var\/folders\//i,
   /~\//,
-  /\bC:\\/i,
+  /\b[A-Za-z]:[\\/]/i,
   /\bfile:\/\//i,
   /\bgit@/i,
   /\bsk-[A-Za-z0-9_-]{12,}\b/i
@@ -121,6 +121,21 @@ const privateEndpointPatterns = [
   /\bhttps?:\/\/[a-z0-9.-]*(?:\.internal|\.intranet|\.local|\.private|[-.]private)(?::\d+)?(?:[/?#\s"'<>]|$)/i,
   /\bhttps?:\/\/(?:private|localhost|127(?:\.\d{1,3}){3}|10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?::\d+)?(?:[/?#\s"'<>]|$)/i
 ];
+const genericForbiddenProofPattern = /\b(?:proves?|confirms?|establishes?|guarantees?|supports?|demonstrates?)\b[^.!?]{0,120}\b(?:semantic parity|complete coverage|complete repository understanding|complete dependency coverage|runtime(?: behavior| reachability)?|production behavior|execution|build success)\b/i;
+const browserNamedEntities = Object.freeze({
+  amp: "&",
+  apos: "'",
+  backslash: "\\",
+  bsol: "\\",
+  colon: ":",
+  gt: ">",
+  lt: "<",
+  nbsp: " ",
+  period: ".",
+  quot: '"',
+  semi: ";",
+  sol: "/"
+});
 
 export async function validateBeforeAddingAnotherLanguageDefineScanDist({
   baseUrl = "https://tracemap.tools",
@@ -173,11 +188,11 @@ async function validateBlogIndex({ dist, errors }) {
     errors.push(withEvidence("Blog index card is missing the language-scan contract article title.", "blog/index.html", undefined, artifactLineSpan(html)));
   }
   scanSafety(
-    [normalizeRenderedText(card), joinedText(card), decodeHtmlEntities(card)],
+    [normalizeRenderedText(decodeBrowserEntities(card)), joinedText(decodeBrowserEntities(card)), decodeHtmlEntities(decodeBrowserEntities(card))],
     errors,
     "blog/index.html",
-    [decodeHtmlEntities(card), tightText(card)],
-    tightText(card),
+    [decodeHtmlEntities(decodeBrowserEntities(card)), tightText(decodeBrowserEntities(card))],
+    tightText(decodeBrowserEntities(card)),
     html
   );
 }
@@ -225,13 +240,14 @@ async function validateDiscovery({ dist, errors }) {
 
 async function validateArticle({ baseUrl, pagePath, errors }) {
   const rawHtml = await readFile(pagePath, "utf8");
-  const html = decodeBrowserEntities(rawHtml);
+  const html = rawHtml;
+  const browserDecodedHtml = decodeBrowserEntities(rawHtml);
   const artifactSpan = artifactLineSpan(rawHtml);
   const finding = (message, lineSpan = artifactSpan) => withEvidence(message, pageArtifact, undefined, lineSpan);
-  const rendered = normalizeRenderedText(html);
-  const decoded = decodeHtmlEntities(html);
+  const rendered = normalizeRenderedText(browserDecodedHtml);
+  const decoded = decodeHtmlEntities(browserDecodedHtml);
   const metadata = decodeHtmlEntities(
-    [...(html.match(/<head\b[^>]*>[\s\S]*?<\/head>/i)?.[0] ?? "").matchAll(/\bcontent\s*=\s*(["'])(.*?)\1/gi)]
+    [...decodeBrowserEntities(html.match(/<head\b[^>]*>[\s\S]*?<\/head>/i)?.[0] ?? "").matchAll(/\bcontent\s*=\s*(["'])(.*?)\1/gi)]
       .map((match) => match[2])
       .join(" ")
   );
@@ -267,7 +283,7 @@ async function validateArticle({ baseUrl, pagePath, errors }) {
   for (const ruleId of beforeAddingAnotherLanguageDefineScanRuleIds) {
     if (!rendered.includes(ruleId)) findingPush(errors, finding(`Article is missing required rule ID: ${ruleId}`));
   }
-  for (const token of new Set(rendered.match(/\b[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\.[a-z0-9-]+)+\.v\d+\b/g) ?? [])) {
+  for (const token of new Set(rendered.match(/\b[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?:\.[a-z0-9-]+)+\.v\d+\b/gi) ?? [])) {
     if (!beforeAddingAnotherLanguageDefineScanRuleIds.includes(token)) findingPush(errors, finding(`Article cites a rule ID outside the verified catalog list: ${token}`));
   }
   for (const link of beforeAddingAnotherLanguageDefineScanArticleRequiredLinks) {
@@ -276,7 +292,7 @@ async function validateArticle({ baseUrl, pagePath, errors }) {
 
   const words = rendered.split(/\s+/).filter(Boolean).length;
   if (words < 1500 || words > 2400) findingPush(errors, finding(`Article word count must be between 1500 and 2400 words, got ${words}`));
-  scanSafety([rendered, joinedText(html), decoded, metadata], errors, pageArtifact, [decoded, metadata, tightText(html)], tightText(html), rawHtml);
+  scanSafety([rendered, joinedText(browserDecodedHtml), decoded, metadata], errors, pageArtifact, [decoded, metadata, tightText(browserDecodedHtml)], tightText(browserDecodedHtml), rawHtml);
 }
 
 function findingPush(errors, finding) {
@@ -288,6 +304,7 @@ function scanSafety(surfaces, errors, artifact, privateSurfaces = surfaces, tigh
   for (const pattern of forbiddenClaims) {
     if (claimSurfaces.some((surface) => testPattern(pattern, surface))) errors.push(withEvidence(`Article contains unsupported positive claim: ${pattern}`, artifact, "adapter.scan-truth.conformance.v1", findLineSpan(source, pattern, ["raw", "joined", "tight"])));
   }
+  if (claimSurfaces.some((surface) => hasAffirmativeProofClaim(surface))) errors.push(withEvidence("Article contains unsupported positive proof claim", artifact, "adapter.scan-truth.conformance.v1", findLineSpan(source, genericForbiddenProofPattern, ["raw", "joined", "tight"])));
   for (const pattern of tightForbiddenClaims) {
     if (claimSurfaces.some((surface) => testPattern(pattern, surface))) errors.push(withEvidence(`Article contains unsupported positive claim: ${pattern}`, artifact, "adapter.scan-truth.conformance.v1", findLineSpan(source, pattern, ["tight"])));
   }
@@ -308,7 +325,24 @@ function scanSafety(surfaces, errors, artifact, privateSurfaces = surfaces, tigh
 function decodeBrowserEntities(value) {
   return String(value)
     .replace(/&#x([0-9a-f]+);?/gi, (match, hex) => codePointText(Number.parseInt(hex, 16), match))
-    .replace(/&#([0-9]+);?/gi, (match, digits) => codePointText(Number.parseInt(digits, 10), match));
+    .replace(/&#([0-9]+);?/gi, (match, digits) => codePointText(Number.parseInt(digits, 10), match))
+    .replace(/&([a-z][a-z0-9]+);?/gi, (match, name) => browserNamedEntities[name.toLowerCase()] ?? match);
+}
+
+function hasAffirmativeProofClaim(value) {
+  const text = String(value);
+  const pattern = new RegExp(genericForbiddenProofPattern.source, `${genericForbiddenProofPattern.flags.replace("g", "")}g`);
+  let match;
+  while ((match = pattern.exec(text)) !== null) {
+    const sentenceStart = Math.max(text.lastIndexOf(".", match.index - 1), text.lastIndexOf("!", match.index - 1), text.lastIndexOf("?", match.index - 1), text.lastIndexOf("\n", match.index - 1)) + 1;
+    const prefix = text.slice(sentenceStart, match.index);
+    if (
+      !/\b(?:does|do|did)\s+not\s*$/i.test(prefix) &&
+      !/\b(?:never|cannot|can't|without)\s*$/i.test(prefix) &&
+      !/\bno\s+(?:claim|statement|evidence|proof)\b/i.test(prefix)
+    ) return true;
+  }
+  return false;
 }
 
 function codePointText(codePoint, fallback) {
