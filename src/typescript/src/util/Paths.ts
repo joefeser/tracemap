@@ -32,15 +32,25 @@ export function matchesSimpleGlob(relativePath: string, glob: string): boolean {
   if (pattern === normalized) {
     return true;
   }
-  if (pattern.endsWith("/**")) {
-    const prefix = pattern.slice(0, -2);
-    return normalized === prefix.slice(0, -1) || normalized.startsWith(prefix);
+  if (pattern.endsWith("/**") && normalized === pattern.slice(0, -3)) {
+    return true;
   }
   if (pattern.startsWith("**/*.")) {
     return normalized.endsWith(pattern.slice(4));
   }
   if (pattern.startsWith("*.")) {
     return normalized.endsWith(pattern.slice(1));
+  }
+  if (pattern.includes("*")) {
+    const expression = pattern
+      .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+      .replaceAll("**/", "\u0000")
+      .replaceAll("**", "\u0001")
+      .replaceAll("*", "\u0002")
+      .replaceAll("\u0000", "(?:.*/)?")
+      .replaceAll("\u0001", ".*")
+      .replaceAll("\u0002", "[^/]*");
+    return new RegExp(`^${expression}$`).test(normalized);
   }
   return normalized.includes(pattern);
 }

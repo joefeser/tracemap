@@ -1,7 +1,8 @@
-# The one-pass Qodo posture and bounded current-head Codex recovery require the
-# reviewed ACK v0.4.4 stable line. Do not accept an older or prerelease build.
+# The one-pass Qodo posture and bounded current-head Codex recovery require a
+# reviewed ACK stable line: v0.4.4 or the released v0.5.0. Do not accept an
+# older or prerelease build.
 agentControl:
-  requiredVersion: ">=0.4.4 <0.5.0"
+  requiredVersion: ">=0.4.4 <0.6.0"
   channel: stable
   allowPrerelease: false
   requiredCapabilities:
@@ -138,7 +139,7 @@ prLoopPacket:
     # merge and is rendered by agent-control's merge executor separately.
     mergeMethod: merge_commit
   ownerOverrideAutoMerge:
-    enabled: true
+    enabled: false
     residualRiskCeiling: medium
 
 reviewerReturnPolicy:

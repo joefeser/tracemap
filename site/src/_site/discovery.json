@@ -1,5 +1,124 @@
 [
   {
+    "path": "/blog/before-adding-another-language-define-scan/",
+    "title": "Before Adding Another Language, Define What “Scan” Means",
+    "summary": "A concept-level guide to the evidence, artifact, persistence, failure, and coverage contract that must define a trustworthy TraceMap scan before a language roadmap claim expands.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/evidence/",
+    "limitations": [
+      "The article describes a bounded cross-adapter conformance contract and offline synthetic validation; it does not report a private repository scan, semantic parity, complete dependency coverage, build success, runtime behavior, or production behavior.",
+      "Readiness outcomes remain adapter- and environment-specific; unsupported or not-run rows stay visible, and the deferred Go issue is not an implementation or support announcement."
+    ],
+    "nonClaims": [
+      "No claim that a language badge, parser, green command, or conformance row proves semantic equivalence, complete repository understanding, runtime reachability, execution, deployment, migration, release safety, security, or business intent.",
+      "No private source, raw facts, SQLite content, logs, local paths, remotes, endpoints, credentials, SQL, or runtime artifact is published or implied."
+    ]
+  },
+  {
+    "path": "/blog/private-poc-pain-to-public-safe-capability/",
+    "title": "How Private POC Pain Becomes Public-Safe Product Capability",
+    "summary": "A concept-level guide to separating private observation from abstract failure class, independent synthetic reproduction, deterministic contract, regression fixture, public-safe evidence candidate, and bounded claim.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/proof-paths/",
+    "limitations": [
+      "The article describes a promotion contract, not a private scan result, generated evidence pack, product behavior guarantee, or authorization to publish local artifacts.",
+      "The synthetic example and checked-in rule vocabulary support a bounded concept explanation; they do not establish prevalence, complete scanner coverage, or any runtime or production conclusion."
+    ],
+    "nonClaims": [
+      "No customer success, private application, private behavior, runtime, production, deployment, migration, compliance, vulnerability, release-safety, prevalence, risk-free, or automatic declassification claim.",
+      "No private source, snippets, raw facts, SQLite content, raw logs, analyzer output, local paths, remotes, identity, screenshots, configuration, credentials, SQL, record values, hidden counts, chronology, transcripts, incident details, or correlatable private hash."
+    ]
+  },
+  {
+    "path": "/blog/static-event-flow-what-it-proves/",
+    "title": "Static Event Flow: What It Proves—and What It Does Not",
+    "summary": "A concept-level guide to bounded Web Forms event-flow chains, direct terminal evidence, the five current classifications, weakest-hop tiering, coverage gaps, and owner questions.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/legacy-modernization/evidence-map/",
+    "limitations": [
+      "The current event-flow projection prefers direct handler-linked facts and classifies terminal presence through implementation-specific BuildStatus and evidence-tier conditions; it does not perform full multi-hop runtime reachability analysis.",
+      "The article uses a synthetic Web Forms example and checked-in public implementation evidence only; static relationships, coverage labels, and terminal surfaces remain bounded evidence rather than runtime observations."
+    ],
+    "nonClaims": [
+      "No screen visibility, user or role reachability, event firing, lifecycle order, event bubbling, branch feasibility, dependency selection, service response, SQL execution, database mutation, deployment, production usage, migration parity, business intent, or release approval claim.",
+      "No private repository, endpoint address, credential, credential-bearing configuration, raw SQL, executable source or markup, source snippet, or LLM-based impact analysis."
+    ]
+  },
+  {
+    "path": "/blog/a-button-named-save-is-not-an-identity/",
+    "title": "A Button Named Save Is Not an Identity",
+    "summary": "A concept-level guide to Web Forms identity layers, the four-tier handler-resolution ladder, duplicate evidence preservation, and fail-closed ambiguity gaps for same-named controls and handlers.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/legacy-modernization/evidence-map/",
+    "limitations": [
+      "Identity scoping is documented by the Web Forms rule family and its tier ceilings; designer evidence is supporting-only at Tier3SyntaxOrTextual, and weaker resolution is never written as stronger identity.",
+      "The comparison uses synthetic pages only; it cites checked-in public specs, the rule catalog, and synthetic fixtures, not any private validation or real repository scan."
+    ],
+    "nonClaims": [
+      "No runtime visibility, user reachability, event-firing, branch-execution, persistence, service-reachability, SQL-execution, deployment, parity, migration-success, or business-intent claim from a label, control ID, or handler name.",
+      "No private repository, employer, customer, path, screenshot, source snippet, raw markup, raw SQL, configuration value, credential, or LLM-based impact analysis."
+    ]
+  },
+  {
+    "path": "/blog/when-a-gap-has-no-honest-line-number/",
+    "title": "When a Gap Has No Honest Line Number",
+    "summary": "A concept-level guide to TraceMap's five location classes: exact source spans, supporting declaration spans, owning-container anchors, workspace/repository anchors, and unavailable spans.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/evidence/",
+    "limitations": [
+      "Anchors are provenance conventions documented by their owning rules; a container or workspace anchor at line 1 is not a source-line observation, and conventions differ per rule.",
+      "The article cites checked-in public contracts, rule catalog entries, and synthetic examples only; it does not describe private validation or any real repository scan."
+    ],
+    "nonClaims": [
+      "No causality, runtime reachability, execution, business-intent, ownership, fault, or complete-coverage claim from any path, span, or anchor.",
+      "No private repository, employer, customer, path, source snippet, raw diagnostic, log, configuration value, credential, or LLM-based impact analysis."
+    ]
+  },
+  {
+    "path": "/blog/successful-build-can-still-have-reduced-coverage/",
+    "title": "A Successful Build Can Still Have Reduced Feature Coverage",
+    "summary": "A concept-level guide separating product validation, target build state, analyzer capability states, and feature-level coverage in deterministic static evidence.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "evidence",
+    "preferredProofPath": "/legacy-dotnet/evidence/",
+    "limitations": [
+      "Build status and analysis level describe the selected scan scope only; capability rows are derived status evidence capped below Tier1Semantic and are not compiler observations.",
+      "Coverage-relative no-evidence outcomes distinguish 'not found' from 'not proven'; they do not establish absence, impact, or completeness for any surface."
+    ],
+    "nonClaims": [
+      "No runtime reachability, visibility, event-firing, DI-selection, query-execution, business-correctness, test-completeness, migration-success, parity, release-safety, production-behavior, or complete-coverage claim.",
+      "No private repository, employer, customer, path, source snippet, raw diagnostic, log, configuration value, credential, or LLM-based impact analysis."
+    ]
+  },
+  {
+    "path": "/blog/modernizing-web-forms-without-running-it/",
+    "title": "Modernizing Web Forms Without Running It",
+    "summary": "A concept-level guide to inventorying an ASP.NET Web Forms application from declared markup, event bindings, candidate handlers, route and navigation surfaces, and toolchain coverage limits.",
+    "publicClaimLevel": "concept",
+    "sourceType": "site-page",
+    "hintCategory": "use-case",
+    "preferredProofPath": "/legacy-modernization/evidence-map/",
+    "limitations": [
+      "Web Forms evidence rows are labeled hidden on the public evidence map until checked-in public proof paths exist; this article cites merged public specs and synthetic fixtures only.",
+      "Event-flow classification follows the implemented ladder: StrongStaticEventFlow requires a Tier1Semantic handler plus Tier1Semantic terminal evidence, a syntax-tier handler downgrades to NeedsReviewEventFlow, and the declared binding keeps its own structural or textual tier. Route evidence is currently syntax-tier only and multi-hop traversal is deferred."
+    ],
+    "nonClaims": [
+      "No runtime visibility, event-firing, handler-reachability, DI-selection, query-execution, business-intent, feature-parity, migration-success, release-safety, or complete-coverage claim.",
+      "No private application, employer, customer, path, screenshot, source snippet, raw SQL, configuration value, or LLM-based impact analysis."
+    ]
+  },
+  {
     "path": "/blog/what-tracemap-learned-from-graphify/",
     "title": "What TraceMap Learned from Graphify—Without Becoming Graphify",
     "summary": "A concept-level research story distinguishing external persistent-graph lessons from independently implemented TraceMap evidence, fixtures, boundaries, and deliberate non-adoption decisions.",

@@ -69,7 +69,7 @@ internal static class ScanOutputTransaction
             ValidateTarget(outputPath, repoPath);
             return true;
         }
-        catch (IOException)
+        catch (Exception)
         {
             return false;
         }

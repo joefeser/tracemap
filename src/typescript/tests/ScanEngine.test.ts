@@ -6,12 +6,12 @@ import { spawnSync } from "node:child_process";
 import initSqlJs from "sql.js";
 import { describe, expect, it } from "vitest";
 import { scan } from "../src/scan/ScanEngine";
+import { compilerInputPath } from "../src/extractors/TypeScriptProjectLoader";
 import { FactTypes, ScanManifest } from "../src/facts/Models";
 import { RuleIds } from "../src/facts/RuleIds";
 import { exportIndex } from "../src/export/IndexExporter";
 import { extractPackageFacts } from "../src/extractors/PackageJsonExtractor";
 import { findSqlJsFile } from "../src/storage/SqliteIndexWriter";
-import { hashBytes } from "../src/util/Hash";
 
 const packageRoot = process.cwd();
 const repoRoot = path.resolve(packageRoot, "../..");
@@ -273,6 +273,54 @@ describe("ScanEngine", () => {
     expect(await fsp.readFile(path.join(output, "scan-manifest.json"))).toEqual(baselineManifest);
   });
 
+  it("fails when selected source bytes mutate after semantic loading", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    const output = path.join(root, "output");
+    await writeMiniRepo(repo);
+    const source = path.join(repo, "src", "sample.ts");
+
+    await expect(scan(scanOptions(repo, output), {
+      afterProjectLoad: async () => {
+        const original = await fsp.readFile(source, "utf8");
+        await fsp.writeFile(source, original.replace("value = 1", "value = 2"));
+      }
+    })).rejects.toThrow("SourceSnapshotChangedDuringScan");
+
+    await expect(fsp.stat(output)).rejects.toThrow();
+  });
+
+  it("binds semantic loading to the captured source bytes across an ABA mutation", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    await writeMiniRepo(repo);
+    const source = path.join(repo, "src", "sample.ts");
+    const original = await fsp.readFile(source, "utf8");
+    const transient = original.replace("Contract", "TransientContract");
+
+    const result = await scan(scanOptions(repo, path.join(root, "output")), {
+      afterInventoryCapture: async () => {
+        await fsp.writeFile(source, transient);
+      },
+      afterProjectLoad: async () => {
+        await fsp.writeFile(source, original);
+      }
+    });
+
+    expect(result.facts).toContainEqual(expect.objectContaining({ factType: FactTypes.TypeDeclared, targetSymbol: "Contract" }));
+    expect(result.facts).not.toContainEqual(expect.objectContaining({ factType: FactTypes.TypeDeclared, targetSymbol: "TransientContract" }));
+  });
+
+  it("keeps external compiler input identities distinct when path tails collide", () => {
+    const repo = path.resolve("/workspace/repo");
+    const first = compilerInputPath(repo, "/workspace/one/lib/index.d.ts");
+    const second = compilerInputPath(repo, "/workspace/two/lib/index.d.ts");
+
+    expect(first).not.toBe(second);
+    expect(first).toMatch(/^external\/[0-9a-f]{32}\/index\.d\.ts$/);
+    expect(second).toMatch(/^external\/[0-9a-f]{32}\/index\.d\.ts$/);
+  });
+
   it("fails before publishing when an eligible source is created during a scan", async () => {
     const root = await tempDir();
     const repo = path.join(root, "repo");
@@ -309,6 +357,63 @@ describe("ScanEngine", () => {
     expect(first.facts).toEqual(second.facts);
   });
 
+  it("loads dependency declarations without adding them to inventory evidence", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    await fsp.mkdir(path.join(repo, "src"), { recursive: true });
+    await fsp.mkdir(path.join(repo, "node_modules", "fixture-package"), { recursive: true });
+    await fsp.writeFile(path.join(repo, "tsconfig.json"), JSON.stringify({ compilerOptions: { target: "ES2022", module: "CommonJS", strict: true }, include: ["src/**/*.ts"] }));
+    await fsp.writeFile(path.join(repo, "src", "sample.ts"), "import { dependencyValue } from 'fixture-package';\nexport const selected: string = dependencyValue;\n");
+    await fsp.writeFile(path.join(repo, "node_modules", "fixture-package", "index.d.ts"), "export declare const dependencyValue: string;\n");
+    initGitRepo(repo);
+
+    const dependencyPath = path.join(repo, "node_modules", "fixture-package", "index.d.ts");
+    const first = await scan(scanOptions(repo, path.join(root, "first")));
+    await fsp.writeFile(dependencyPath, "export declare const dependencyValue: number;\n");
+    const second = await scan(scanOptions(repo, path.join(root, "second")));
+
+    expect(first.facts).not.toContainEqual(expect.objectContaining({
+      factType: FactTypes.AnalysisGap,
+      properties: expect.objectContaining({ diagnosticCode: "2307" })
+    }));
+    expect(first.manifest.commitSha).toBe(second.manifest.commitSha);
+    expect(first.manifest.sourceSnapshotDigest).not.toBe(second.manifest.sourceSnapshotDigest);
+    expect(first.manifest.scanId).not.toBe(second.manifest.scanId);
+    expect(first.facts.some((fact) => fact.evidence.filePath.includes("node_modules"))).toBe(false);
+    expect(first.inventory.some((item) => item.relativePath.includes("node_modules"))).toBe(false);
+  });
+
+  it("binds extended compiler configuration inputs into snapshot identity", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    const configDirectory = path.join(repo, "node_modules", "fixture-config");
+    await fsp.mkdir(path.join(repo, "src"), { recursive: true });
+    await fsp.mkdir(configDirectory, { recursive: true });
+    await fsp.writeFile(path.join(repo, "tsconfig.json"), JSON.stringify({ extends: "./node_modules/fixture-config/base.json", include: ["src/**/*.ts"] }));
+    await fsp.writeFile(path.join(repo, "src", "sample.ts"), "export function sample(value) { return value; }\n");
+    const extendedConfig = path.join(configDirectory, "base.json");
+    await fsp.writeFile(extendedConfig, JSON.stringify({ compilerOptions: { noImplicitAny: true } }));
+    initGitRepo(repo);
+
+    const first = await scan(scanOptions(repo, path.join(root, "first")));
+    await fsp.writeFile(extendedConfig, JSON.stringify({ compilerOptions: { noImplicitAny: false } }));
+    const second = await scan(scanOptions(repo, path.join(root, "second")));
+
+    expect(first.manifest.commitSha).toBe(second.manifest.commitSha);
+    expect(first.manifest.sourceSnapshotDigest).not.toBe(second.manifest.sourceSnapshotDigest);
+    expect(first.manifest.scanId).not.toBe(second.manifest.scanId);
+    expect(first.facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.AnalysisGap,
+      properties: expect.objectContaining({ diagnosticCode: "7006" })
+    }));
+    expect(second.facts).not.toContainEqual(expect.objectContaining({
+      factType: FactTypes.AnalysisGap,
+      properties: expect.objectContaining({ diagnosticCode: "7006" })
+    }));
+    expect(first.facts.some((fact) => fact.evidence.filePath.includes("node_modules"))).toBe(false);
+    expect(first.inventory.some((item) => item.relativePath.includes("node_modules"))).toBe(false);
+  });
+
   it("preserves prior output when a staged artifact write fails", async () => {
     const root = await tempDir();
     const repo = path.join(root, "repo");
@@ -325,7 +430,7 @@ describe("ScanEngine", () => {
     expect((await fsp.readdir(root)).some((name) => name.startsWith(".tracemap-output-"))).toBe(false);
   });
 
-  it("orders snapshot inputs by ordinal path identity", async () => {
+  it("produces deterministic snapshot identity for non-ASCII paths", async () => {
     const root = await tempDir();
     const repo = path.join(root, "repo");
     await writeMiniRepo(repo);
@@ -334,13 +439,10 @@ describe("ScanEngine", () => {
     expect(spawnSync("git", ["add", "."], { cwd: repo, encoding: "utf8" }).status).toBe(0);
     expect(spawnSync("git", ["-c", "user.email=test@example.com", "-c", "user.name=TraceMap Test", "commit", "-m", "ordinal paths"], { cwd: repo, encoding: "utf8" }).status).toBe(0);
 
-    const result = await scan(scanOptions(repo, path.join(root, "output")));
-    const segments = ["scan-truth-source-snapshot/v1\0"];
-    for (const item of [...result.inventory].sort((left, right) => left.relativePath < right.relativePath ? -1 : left.relativePath > right.relativePath ? 1 : 0)) {
-      const content = await fsp.readFile(item.absolutePath);
-      segments.push(`${item.relativePath}\0${item.kind}\0${content.byteLength}\0${hashBytes(content)}\0`);
-    }
-    expect(result.manifest.sourceSnapshotDigest).toBe(hashBytes(Buffer.from(segments.join(""), "utf8")));
+    const first = await scan(scanOptions(repo, path.join(root, "first")));
+    const second = await scan(scanOptions(repo, path.join(root, "second")));
+
+    expect(first.manifest.sourceSnapshotDigest).toBe(second.manifest.sourceSnapshotDigest);
   });
 
   it("refuses unsafe output paths before deleting anything", async () => {

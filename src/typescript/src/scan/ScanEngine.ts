@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { CodeFact, EvidenceTiers, FactTypes, ScanManifest, ScanOptions, ScanResult } from "../facts/Models";
+import { CodeFact, EvidenceTiers, FactTypes, FileInventoryItem, ScanManifest, ScanOptions, ScanResult } from "../facts/Models";
 import { createEvidence, createFact } from "../facts/FactFactory";
 import { RuleIds, ScannerVersions } from "../facts/RuleIds";
 import { collectFileInventory } from "./FileInventory";
@@ -9,7 +9,7 @@ import { AnalysisGapCollector } from "./AnalysisGapCollector";
 import { aggregateDiagnostics } from "./DiagnosticAggregator";
 import { extractPackageFacts } from "../extractors/PackageJsonExtractor";
 import { extractConfigFacts } from "../extractors/ConfigExtractor";
-import { loadTypeScriptProjects } from "../extractors/TypeScriptProjectLoader";
+import { LoadedProjectSet, loadTypeScriptProjects } from "../extractors/TypeScriptProjectLoader";
 import { extractSyntaxFacts } from "../extractors/TypeScriptSyntaxExtractor";
 import { extractSemanticFacts } from "../extractors/TypeScriptSemanticExtractor";
 import { extractIntegrationFacts } from "../extractors/IntegrationExtractor";
@@ -23,8 +23,21 @@ import { hash, hashBytes } from "../util/Hash";
 import { isUnderPath } from "../util/Paths";
 
 type ScanTestHooks = {
+  afterInventoryCapture?: () => void | Promise<void>;
+  afterProjectLoad?: () => void | Promise<void>;
   beforeSnapshotVerification?: () => void | Promise<void>;
   afterManifestWrite?: () => void | Promise<void>;
+};
+
+type SnapshotFileToken = {
+  byteLength: number;
+  digest: string;
+  text: string;
+};
+
+type CapturedInventoryFiles = {
+  tokens: ReadonlyMap<string, SnapshotFileToken>;
+  contents: ReadonlyMap<string, string>;
 };
 
 const requiredOutputArtifacts = ["scan-manifest.json", "facts.ndjson", "index.sqlite", "report.md", "logs/analyzer.log"] as const;
@@ -41,7 +54,14 @@ export async function scan(options: ScanOptions, testHooks: ScanTestHooks = {}):
     throw new Error("TraceMap TypeScript scan requires git commit SHA. Run inside a git checkout with at least one commit.");
   }
   const inventory = await collectFileInventory(options);
-  const sourceSnapshotDigest = await createSourceSnapshotDigest(inventory);
+  const initialFileTokens = await captureInventoryFileTokens(inventory);
+  await testHooks.afterInventoryCapture?.();
+  const projectSet = options.semantic
+    ? await loadProjectsWithFallback(repoPath, options, inventory, initialFileTokens.contents)
+    : { projects: [], compilerInputTokens: [], loadErrorHash: null };
+  const projects = projectSet.projects;
+  await testHooks.afterProjectLoad?.();
+  const sourceSnapshotDigest = await createSourceSnapshotDigest(inventory, projectSet.compilerInputTokens, initialFileTokens.tokens);
   const manifest: ScanManifest = {
     scanId: createScanId(git, sourceSnapshotDigest, options),
     repoName: git.repoName,
@@ -62,6 +82,11 @@ export async function scan(options: ScanOptions, testHooks: ScanTestHooks = {}):
     sourceSnapshotDigest
   };
   const gapCollector = new AnalysisGapCollector();
+  if (projectSet.loadErrorHash) {
+    gapCollector.add(manifest, "project-load", "Semantic project loading failed; syntax and non-code extraction continued.", ".", 1, {
+      errorHash: projectSet.loadErrorHash
+    });
+  }
   for (const gitGap of git.knownGaps) {
     gapCollector.add(manifest, "git-metadata", gitGap);
   }
@@ -75,7 +100,6 @@ export async function scan(options: ScanOptions, testHooks: ScanTestHooks = {}):
   facts.push(...await extractConfigFacts(manifest, inventory));
   facts.push(...await extractBase44Facts(manifest, inventory));
 
-  const projects = options.semantic ? await loadTypeScriptProjects(repoPath, options, inventory) : [];
   manifest.projects = projects.map((project) => project.projectPath).sort();
   manifest.targetFrameworks = [...new Set(projects.map((project) => String(project.parsed.options.target ? project.parsed.options.target : "default")))].sort();
   if (options.semantic && projects.length === 0) {
@@ -111,7 +135,10 @@ export async function scan(options: ScanOptions, testHooks: ScanTestHooks = {}):
   const result: ScanResult = { manifest, facts: dedupeFacts(facts), inventory };
   await testHooks.beforeSnapshotVerification?.();
   const verifiedInventory = await collectFileInventory(options);
-  if (await createSourceSnapshotDigest(verifiedInventory) !== sourceSnapshotDigest) {
+  const verifiedProjectSet = options.semantic
+    ? await loadProjectsWithFallback(repoPath, options, verifiedInventory)
+    : { projects: [], compilerInputTokens: [], loadErrorHash: null };
+  if (await createSourceSnapshotDigest(verifiedInventory, verifiedProjectSet.compilerInputTokens) !== sourceSnapshotDigest) {
     throw new Error("SourceSnapshotChangedDuringScan");
   }
   await writeOutputTransaction(outputPath, async (stagingPath) => {
@@ -124,6 +151,20 @@ export async function scan(options: ScanOptions, testHooks: ScanTestHooks = {}):
     await fs.writeFile(path.join(stagingPath, "logs", "analyzer.log"), analyzerLog(result), "utf8");
   });
   return result;
+}
+
+async function loadProjectsWithFallback(
+  repoPath: string,
+  options: ScanOptions,
+  inventory: readonly FileInventoryItem[],
+  capturedFileContents: ReadonlyMap<string, string> = new Map()
+): Promise<LoadedProjectSet & { loadErrorHash: string | null }> {
+  try {
+    return { ...(await loadTypeScriptProjects(repoPath, options, inventory, capturedFileContents)), loadErrorHash: null };
+  } catch (error) {
+    const message = error instanceof Error ? `${error.name}:${error.message}` : "unknown-project-load-error";
+    return { projects: [], compilerInputTokens: [], loadErrorHash: hash(message, 16) };
+  }
 }
 
 async function writeOutputTransaction(outputPath: string, write: (stagingPath: string) => Promise<void>): Promise<void> {
@@ -165,18 +206,42 @@ function normalizeManifestPath(value: string): string {
 }
 
 async function createSourceSnapshotDigest(
-  inventory: readonly { relativePath: string; absolutePath: string; kind: string; sizeBytes: number; skipped: boolean }[]
+  inventory: readonly { relativePath: string; absolutePath: string; kind: string; sizeBytes: number; skipped: boolean }[],
+  compilerInputTokens: readonly string[],
+  fileTokens?: ReadonlyMap<string, SnapshotFileToken>
 ): Promise<string> {
-  const segments: string[] = ["scan-truth-source-snapshot/v1\0"];
+  const segments: string[] = ["scan-truth-source-snapshot/v2\0"];
   for (const item of [...inventory].sort((left, right) => left.relativePath < right.relativePath ? -1 : left.relativePath > right.relativePath ? 1 : 0)) {
     if (item.skipped) {
       segments.push(`${item.relativePath}\0${item.kind}\0${item.sizeBytes}\0skipped-before-analysis\0`);
     } else {
-      const content = await fs.readFile(item.absolutePath);
-      segments.push(`${item.relativePath}\0${item.kind}\0${content.byteLength}\0${hashBytes(content)}\0`);
+      const token = fileTokens?.get(path.resolve(item.absolutePath));
+      if (token) {
+        segments.push(`${item.relativePath}\0${item.kind}\0${token.byteLength}\0${token.digest}\0`);
+      } else {
+        const content = await fs.readFile(item.absolutePath);
+        segments.push(`${item.relativePath}\0${item.kind}\0${content.byteLength}\0${hashBytes(content)}\0`);
+      }
     }
   }
+  segments.push("compiler-inputs\0", ...compilerInputTokens);
   return hashBytes(Buffer.from(segments.join(""), "utf8"));
+}
+
+async function captureInventoryFileTokens(
+  inventory: readonly { absolutePath: string; skipped: boolean }[]
+): Promise<CapturedInventoryFiles> {
+  const tokens = new Map<string, SnapshotFileToken>();
+  const contents = new Map<string, string>();
+  for (const item of inventory) {
+    if (item.skipped) continue;
+    const content = await fs.readFile(item.absolutePath);
+    const normalizedPath = path.resolve(item.absolutePath);
+    const text = content.toString("utf8");
+    tokens.set(normalizedPath, { byteLength: content.byteLength, digest: hashBytes(content), text });
+    contents.set(normalizedPath, text);
+  }
+  return { tokens, contents };
 }
 
 function createScanId(

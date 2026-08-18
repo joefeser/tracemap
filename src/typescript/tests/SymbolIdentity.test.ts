@@ -36,5 +36,12 @@ describe("TypeScriptSymbolIdentityProvider", () => {
     expect(matchesSimpleGlob("src/app/file.ts", "src/**")).toBe(true);
     expect(matchesSimpleGlob("src", "src/**")).toBe(true);
     expect(matchesSimpleGlob("src-other/file.ts", "src/**")).toBe(false);
+    expect(matchesSimpleGlob("bin/file.ts", "**/bin/**")).toBe(true);
+    expect(matchesSimpleGlob("src/bin/file.ts", "**/bin/**")).toBe(true);
+    expect(matchesSimpleGlob("src/binary/file.ts", "**/bin/**")).toBe(false);
+    expect(matchesSimpleGlob("TestResults/run/result.xml", "**/TestResults/**")).toBe(true);
+    expect(matchesSimpleGlob("src/app/file.ts", "*.ts")).toBe(true);
+    expect(matchesSimpleGlob("src/app/file.spec.ts", "*.spec.ts")).toBe(true);
+    expect(matchesSimpleGlob("src/app/file.tsx", "*.ts")).toBe(false);
   });
 });
