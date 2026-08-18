@@ -144,9 +144,12 @@ public static class CSharpSemanticExtractor
         string repoPath,
         IReadOnlyList<FileInventoryItem> inventory,
         ScanOptions? options = null,
-        IReadOnlyList<FileInventoryItem>? fullInventory = null)
+        IReadOnlyList<FileInventoryItem>? fullInventory = null,
+        CancellationToken cancellationToken = default,
+        ScanProgressReporter? progress = null)
     {
         options ??= new ScanOptions(repoPath, ".");
+        cancellationToken.ThrowIfCancellationRequested();
         var facts = new List<SemanticFactCandidate>();
         var gaps = new List<SemanticFactCandidate>();
         var analyzedFiles = new HashSet<string>(StringComparer.Ordinal);
@@ -193,12 +196,12 @@ public static class CSharpSemanticExtractor
             return new SemanticExtractionResult(facts, gaps, Attempted: false, ReducedCoverage: false, AnalyzedFiles: analyzedFiles);
         }
 
-        if (!TryRegisterMsBuild(gaps))
+        if (!TryRegisterMsBuild(gaps, progress))
         {
             return new SemanticExtractionResult(facts, gaps, Attempted: true, ReducedCoverage: true, AnalyzedFiles: analyzedFiles);
         }
 
-        RunRestoreIfRequested(repoPath, projects, solutions, options, gaps);
+        RunRestoreIfRequested(repoPath, projects, solutions, options, gaps, cancellationToken);
 
         var workspaceProperties = string.IsNullOrWhiteSpace(options.TargetFramework)
             ? null
@@ -222,13 +225,22 @@ public static class CSharpSemanticExtractor
 
         if (solutions.Length > 0)
         {
-            foreach (var solutionItem in solutions)
+            for (var solutionIndex = 0; solutionIndex < solutions.Length; solutionIndex++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+                var solutionItem = solutions[solutionIndex];
+                var solutionOrdinal = solutionIndex + 1;
                 attempted = true;
                 var solutionPath = Path.Combine(repoPath, solutionItem.RelativePath);
+                progress?.StartStage(
+                    ScanProgressReporter.ScanOperation,
+                    ScanProgressStages.SolutionLoad,
+                    solutionOrdinal);
                 try
                 {
-                    var solution = workspace.OpenSolutionAsync(solutionPath).GetAwaiter().GetResult();
+                    var solution = BlockOnWorkspaceWait(
+                        workspace.OpenSolutionAsync(solutionPath, cancellationToken: cancellationToken),
+                        cancellationToken);
                     ExtractSolution(
                         repoPath,
                         solution,
@@ -242,7 +254,18 @@ public static class CSharpSemanticExtractor
                         analyzedFiles,
                         compilationInputFiles,
                         protectedSourceSpans,
-                        options.ProjectPaths is { Count: > 0 } ? selectedProjectPaths : null);
+                        options.ProjectPaths is { Count: > 0 } ? selectedProjectPaths : null,
+                        cancellationToken,
+                        progress);
+                    progress?.FinishStage(
+                        ScanProgressReporter.ScanOperation,
+                        ScanProgressStages.SolutionLoad,
+                        "completed",
+                        ordinal: solutionOrdinal);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
                 }
                 catch (Exception ex) when (IsWorkspaceException(ex))
                 {
@@ -250,18 +273,36 @@ public static class CSharpSemanticExtractor
                         solutionItem.RelativePath,
                         $"Unable to load solution with MSBuildWorkspace: {ex.Message}",
                         "SolutionLoadFailed"));
+                    progress?.FinishStage(
+                        ScanProgressReporter.ScanOperation,
+                        ScanProgressStages.SolutionLoad,
+                        "failed",
+                        ordinal: solutionOrdinal,
+                        failureCode: "SOLUTION_LOAD_FAILED");
                 }
             }
         }
 
         var shouldLoadStandaloneProjects = options.SolutionPaths is not { Count: > 0 };
-        foreach (var projectItem in shouldLoadStandaloneProjects ? projects.Where(project => !loadedProjectPaths.Contains(project.RelativePath)) : [])
+        var standaloneProjects = shouldLoadStandaloneProjects
+            ? projects.Where(project => !loadedProjectPaths.Contains(project.RelativePath)).ToArray()
+            : [];
+        for (var projectIndex = 0; projectIndex < standaloneProjects.Length; projectIndex++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            var projectItem = standaloneProjects[projectIndex];
+            var projectOrdinal = projectIndex + 1;
             attempted = true;
             var projectPath = Path.Combine(repoPath, projectItem.RelativePath);
+            progress?.StartStage(
+                ScanProgressReporter.ScanOperation,
+                ScanProgressStages.ProjectLoad,
+                projectOrdinal);
             try
             {
-                var project = workspace.OpenProjectAsync(projectPath).GetAwaiter().GetResult();
+                var project = BlockOnWorkspaceWait(
+                    workspace.OpenProjectAsync(projectPath, cancellationToken: cancellationToken),
+                    cancellationToken);
                 var filteredSolution = RemoveExplicitlyExcludedSourceDocuments(
                     repoPath,
                     project.Solution,
@@ -279,8 +320,20 @@ public static class CSharpSemanticExtractor
                     gaps,
                     analyzedFiles,
                     compilationInputFiles,
-                    protectedSourceSpans);
+                    protectedSourceSpans,
+                    projectOrdinal,
+                    cancellationToken,
+                    progress);
                 loadedProjectPaths.Add(projectItem.RelativePath);
+                progress?.FinishStage(
+                    ScanProgressReporter.ScanOperation,
+                    ScanProgressStages.ProjectLoad,
+                    "completed",
+                    ordinal: projectOrdinal);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex) when (IsWorkspaceException(ex))
             {
@@ -288,6 +341,12 @@ public static class CSharpSemanticExtractor
                     projectItem.RelativePath,
                     $"Unable to load project with MSBuildWorkspace: {ex.Message}",
                     "ProjectLoadFailed"));
+                progress?.FinishStage(
+                    ScanProgressReporter.ScanOperation,
+                    ScanProgressStages.ProjectLoad,
+                    "failed",
+                    ordinal: projectOrdinal,
+                    failureCode: "PROJECT_LOAD_FAILED");
             }
         }
 
@@ -324,10 +383,12 @@ public static class CSharpSemanticExtractor
             .ToArray();
     }
 
-    private static bool TryRegisterMsBuild(List<SemanticFactCandidate> gaps)
+    private static bool TryRegisterMsBuild(List<SemanticFactCandidate> gaps, ScanProgressReporter? progress)
     {
+        progress?.StartStage(ScanProgressReporter.ScanOperation, ScanProgressStages.MsBuildRegistration);
         if (MsBuildRuntimeRegistration.TryRegister(out var error))
         {
+            progress?.FinishStage(ScanProgressReporter.ScanOperation, ScanProgressStages.MsBuildRegistration, "completed");
             return true;
         }
 
@@ -335,6 +396,11 @@ public static class CSharpSemanticExtractor
             ".",
             $"Unable to register MSBuild for Roslyn semantic analysis: {error}",
             "MSBuildRegistrationFailed"));
+        progress?.FinishStage(
+            ScanProgressReporter.ScanOperation,
+            ScanProgressStages.MsBuildRegistration,
+            "failed",
+            failureCode: "MSBUILD_REGISTRATION_FAILED");
         return false;
     }
 
@@ -343,7 +409,8 @@ public static class CSharpSemanticExtractor
         IReadOnlyList<FileInventoryItem> projects,
         IReadOnlyList<FileInventoryItem> solutions,
         ScanOptions options,
-        List<SemanticFactCandidate> gaps)
+        List<SemanticFactCandidate> gaps,
+        CancellationToken cancellationToken)
     {
         if (!options.Restore)
         {
@@ -433,7 +500,9 @@ public static class CSharpSemanticExtractor
         HashSet<string> analyzedFiles,
         HashSet<string> compilationInputFiles,
         List<ProtectedSourceSpan> protectedSourceSpans,
-        IReadOnlySet<string>? selectedProjectPaths)
+        IReadOnlySet<string>? selectedProjectPaths,
+        CancellationToken cancellationToken,
+        ScanProgressReporter? progress)
     {
         solution = RemoveExplicitlyExcludedSourceDocuments(
             repoPath,
@@ -443,6 +512,7 @@ public static class CSharpSemanticExtractor
         explicitlyExcludedSourcePaths.UnionWith(excludedPaths);
         foreach (var project in solution.Projects.OrderBy(project => ToRelativePath(repoPath, project.FilePath), StringComparer.Ordinal))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var relativeProjectPath = ToRelativePath(repoPath, project.FilePath);
             if (selectedProjectPaths is not null && !selectedProjectPaths.Contains(relativeProjectPath))
             {
@@ -458,7 +528,10 @@ public static class CSharpSemanticExtractor
                 gaps,
                 analyzedFiles,
                 compilationInputFiles,
-                protectedSourceSpans);
+                protectedSourceSpans,
+                projectOrdinal: null,
+                cancellationToken,
+                progress);
             if (!string.IsNullOrWhiteSpace(project.FilePath))
             {
                 loadedProjectPaths.Add(relativeProjectPath);
@@ -475,13 +548,21 @@ public static class CSharpSemanticExtractor
         List<SemanticFactCandidate> gaps,
         HashSet<string> analyzedFiles,
         HashSet<string> compilationInputFiles,
-        List<ProtectedSourceSpan> protectedSourceSpans)
+        List<ProtectedSourceSpan> protectedSourceSpans,
+        int? projectOrdinal,
+        CancellationToken cancellationToken,
+        ScanProgressReporter? progress)
     {
         var projectPath = ToRelativePath(repoPath, project.FilePath);
         Compilation? compilation;
+        progress?.StartStage(ScanProgressReporter.ScanOperation, ScanProgressStages.Compilation, projectOrdinal);
         try
         {
-            compilation = project.GetCompilationAsync().GetAwaiter().GetResult();
+            compilation = BlockOnWorkspaceWait(project.GetCompilationAsync(cancellationToken), cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex) when (IsWorkspaceException(ex))
         {
@@ -490,21 +571,39 @@ public static class CSharpSemanticExtractor
                 $"Unable to create Roslyn compilation for project: {ex.Message}",
                 "CompilationCreateFailed",
                 projectPath));
+            progress?.FinishStage(
+                ScanProgressReporter.ScanOperation,
+                ScanProgressStages.Compilation,
+                "failed",
+                ordinal: projectOrdinal,
+                failureCode: "COMPILATION_CREATE_FAILED");
             return;
         }
 
         if (compilation is null)
         {
             gaps.Add(CreateGap(projectPath, "Roslyn returned no compilation for project.", "CompilationMissing", projectPath));
+            progress?.FinishStage(
+                ScanProgressReporter.ScanOperation,
+                ScanProgressStages.Compilation,
+                "failed",
+                ordinal: projectOrdinal,
+                failureCode: "COMPILATION_MISSING");
             return;
         }
 
         AddCompilationDiagnostics(repoPath, projectPath, compilation, gaps);
+        progress?.FinishStage(
+            ScanProgressReporter.ScanOperation,
+            ScanProgressStages.Compilation,
+            "completed",
+            ordinal: projectOrdinal);
 
         foreach (var document in project.Documents.OrderBy(document => ToRelativePath(repoPath, document.FilePath), StringComparer.Ordinal))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var projection = ToRelativePathProjection(repoPath, document.FilePath);
-            if (!projection.IsExternal && !IsCompilerGeneratedDocument(document))
+            if (!projection.IsExternal && !IsCompilerGeneratedDocument(document, cancellationToken))
             {
                 compilationInputFiles.Add(
                     compilationInputPaths.TryGetValue(projection.Path, out var canonicalCompilationInputPath)
@@ -528,7 +627,8 @@ public static class CSharpSemanticExtractor
                 gaps,
                 analyzedFiles,
                 protectedSourceSpans,
-                canonicalEvidencePath);
+                canonicalEvidencePath,
+                cancellationToken);
         }
     }
 
@@ -608,9 +708,10 @@ public static class CSharpSemanticExtractor
         List<SemanticFactCandidate> gaps,
         HashSet<string> analyzedFiles,
         List<ProtectedSourceSpan> protectedSourceSpans,
-        string? canonicalEvidencePath)
+        string? canonicalEvidencePath,
+        CancellationToken cancellationToken)
     {
-        if (!document.SupportsSyntaxTree || IsCompilerGeneratedDocument(document))
+        if (!document.SupportsSyntaxTree || IsCompilerGeneratedDocument(document, cancellationToken))
         {
             return;
         }
@@ -629,8 +730,12 @@ public static class CSharpSemanticExtractor
         SyntaxNode? root;
         try
         {
-            tree = document.GetSyntaxTreeAsync().GetAwaiter().GetResult();
+            tree = BlockOnWorkspaceWait(document.GetSyntaxTreeAsync(cancellationToken), cancellationToken);
             root = tree is null ? null : tree.GetRoot();
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex) when (IsWorkspaceException(ex))
         {
@@ -5088,7 +5193,7 @@ public static class CSharpSemanticExtractor
         });
     }
 
-    private static bool IsCompilerGeneratedDocument(Document document)
+    private static bool IsCompilerGeneratedDocument(Document document, CancellationToken cancellationToken)
     {
         if (!IsGeneratedSource(document.FilePath))
         {
@@ -5097,13 +5202,13 @@ public static class CSharpSemanticExtractor
 
         try
         {
-            var text = document.GetTextAsync().GetAwaiter().GetResult();
+            var text = BlockOnWorkspaceWait(document.GetTextAsync(cancellationToken), cancellationToken);
             var prefixLength = Math.Min(text.Length, 512);
             var prefix = text.ToString(new Microsoft.CodeAnalysis.Text.TextSpan(0, prefixLength));
             return prefix.Contains("<auto-generated", StringComparison.OrdinalIgnoreCase)
                 || prefix.Contains("<autogenerated", StringComparison.OrdinalIgnoreCase);
         }
-        catch (Exception ex) when (IsWorkspaceException(ex))
+        catch (Exception ex) when (ex is OperationCanceledException || IsWorkspaceException(ex))
         {
             // Preserve the prior fail-closed posture for generated-named files
             // whose source text cannot be inspected safely.
@@ -5126,6 +5231,14 @@ public static class CSharpSemanticExtractor
             || fileName.EndsWith(".AssemblyInfo.cs", StringComparison.OrdinalIgnoreCase)
             || fileName.EndsWith(".AssemblyAttributes.cs", StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// Blocks on a MSBuildWorkspace/Roslyn wait while honoring cancellation.
+    /// Cancellation unblocks the caller promptly; the underlying Roslyn work may
+    /// continue in the background because these APIs cannot be aborted.
+    /// </summary>
+    private static T BlockOnWorkspaceWait<T>(Task<T> task, CancellationToken cancellationToken) =>
+        task.WaitAsync(cancellationToken).GetAwaiter().GetResult();
 
     private static bool IsWorkspaceException(Exception ex)
     {

@@ -18,7 +18,9 @@ tracemap local-review run \
   [--exclude <glob>] \
   [--target-framework <tfm>] \
   [--webforms-modernization] \
-  [--explorer]
+  [--explorer] \
+  [--diagnostic-progress <file>] \
+  [--timeout-seconds <30-86400>]
 ```
 
 The v1 safe path intentionally does not accept `--restore`. It does not upload
@@ -72,6 +74,149 @@ JSON and Markdown omit them.
 - The Web Forms packet and ordinary explorer stages call the same producers as
   their standalone commands. #667 remains responsible for rendering the Web
   Forms packet itself in the explorer.
+
+## Hidden Staging and Long Runs
+
+The workflow intentionally buffers scanner output and writes into a hidden
+staging sibling named `.<output>.local-review-<guid>`. Until the atomic
+publication rename, the requested output directory does not exist.
+
+An empty or absent requested output during execution is therefore **not**
+proof that no work occurred. A run that stays active for minutes may be
+blocked in MSBuild workspace loading, Roslyn compilation, or source snapshot
+verification inside the hidden staging directory. Use `--diagnostic-progress`
+to observe those stages live instead of inferring from the output path.
+
+## Diagnostic Progress
+
+`--diagnostic-progress <file>` enables bounded, privacy-safe progress
+diagnostics:
+
+- Progress lines are written **immediately to stderr**, never through the
+  buffered scan output capture, so they appear while a scan is still running.
+- A sanitized checkpoint file is maintained atomically (temp file plus
+  rename) at the operator-selected path and remains available after
+  cancellation, timeout, ordinary failure, or manual process termination. It
+  is retained on successful completion.
+- The checkpoint follows
+  `docs/contracts/tracemap-scan-progress.v1.schema.json` and contains the
+  latest event plus at most 32 recent non-heartbeat events.
+- While a stage is active, a heartbeat line is emitted every 15 seconds
+  reporting only the categorical stage, elapsed milliseconds, the last
+  completed stage, and the monotonic sequence. Heartbeats are produced by a
+  background timer, so they continue while the scan thread is blocked inside
+  MSBuildWorkspace or Roslyn waits.
+
+The checkpoint path must be a file path outside the scanned repository and
+outside the review output (including hidden staging siblings). Paths inside
+either tree, existing directories, and staging-directory names are rejected
+with `LOCAL_REVIEW_PROGRESS_PATH_UNSAFE` before any scanning starts.
+
+### Privacy Boundary
+
+Progress events are operational observations, **not** TraceMap evidence
+facts. They carry no evidence tier, no rule ID, and no scan conclusion. Each
+event contains only bounded categorical data:
+
+- schema version, monotonic sequence, operation (`scan` or `local-review`),
+  stage catalog value, state, elapsed milliseconds;
+- optional aggregate counts (`files`, `solutions`, `projects`, `facts`,
+  `gaps`);
+- an optional categorical failure code;
+- the last successful stage;
+- a deterministic ordinal for repeated solution/project/compilation work.
+
+The contract contains no absolute or relative source paths, no repository,
+project, or solution names, no filenames or symbols, no source values, no
+command lines, no exception messages, no environment values, and no
+credentials, URLs, or identity-derived hashes. Unknown stage names normalize
+to `other`, unknown count keys are dropped, and failure codes are reduced to
+uppercase categorical tokens, so even a programming mistake cannot leak a
+path through this channel.
+
+### Stage Catalog
+
+| Stage | Meaning |
+| --- | --- |
+| `arguments-validated` | Arguments parsed and timeout value validated. |
+| `output-authorized` | Output path validated against the safety rules. |
+| `staging-initialized` | Hidden staging sibling created. |
+| `scan` | Workflow scan stage (guided local review operation). |
+| `repository-identity` | Git metadata detection and binding. |
+| `inventory` | File inventory collection and scope application. |
+| `source-snapshot-capture` | Pre-semantic input snapshot capture. |
+| `project-selection` | Scoped solution/project selection counts. |
+| `msbuild-registration` | MSBuild runtime registration for Roslyn. |
+| `solution-load` | One MSBuild workspace solution load (by ordinal). |
+| `project-load` | One MSBuild workspace project load (by ordinal). |
+| `compilation` | One Roslyn compilation retrieval (by ordinal). |
+| `syntax-fallback` | C# syntax-only extraction. |
+| `specialized-extraction` | Deterministic specialized extractors. |
+| `source-verification` | Pre- and post-extraction snapshot verification. |
+| `artifact-write` | Scan artifact writing inside the output transaction. |
+| `scan-publication` | Scan output transaction completed. |
+| `webforms-modernization` | Web Forms modernization packet stage. |
+| `explorer` | Static HTML explorer stage. |
+| `local-review-publication` | Guided review published by directory rename. |
+
+## Timeout and Cancellation
+
+`--timeout-seconds <30-86400>` bounds the whole guided run:
+
+- Omitting the option keeps the previous no-timeout behavior.
+- Values outside the bounds, or non-numeric values, fail before scanning with
+  `LOCAL_REVIEW_TIMEOUT_INVALID`.
+- The timeout creates a cancellation token linked with external cancellation
+  and passes it through the scan engine, the semantic extractor, MSBuild
+  workspace open operations, Roslyn compilation, syntax-tree, and text
+  retrieval, and the downstream stages.
+- On timeout the workflow emits a `timed-out` progress event carrying the
+  exact last successful stage, preserves the sanitized checkpoint, returns
+  the typed failure `LOCAL_REVIEW_TIMEOUT`, and publishes a `timed-out`
+  local-review result. It never publishes an incomplete scan or modernization
+  packet as successful.
+
+Cancellation is cooperative. Unblocking relies on cancellation-aware waits at
+MSBuild/Roslyn seams and cancellation checks at stage boundaries; an API that
+demonstrably ignores its cancellation token cannot be interrupted in-process,
+and TraceMap does not abort threads or kill itself. If a stage never observes
+the token, the process may remain alive even though the checkpoint already
+records `timed-out`; treat the checkpoint, not process liveness, as the
+authoritative observation. External cancellation (`Ctrl-C`) keeps its
+existing behavior and records `LOCAL_REVIEW_CANCELLED`.
+
+### Typed Failure Codes
+
+Workflow-level typed failures (returned on stderr and recorded in the
+portable result and progress events):
+
+- `LOCAL_REVIEW_TIMEOUT` — the `--timeout-seconds` budget elapsed; the last
+  successful categorical stage is preserved in the progress checkpoint.
+- `LOCAL_REVIEW_TIMEOUT_INVALID` — `--timeout-seconds` was non-numeric or
+  outside 30–86400; rejected before scanning.
+- `LOCAL_REVIEW_PROGRESS_PATH_UNSAFE` — `--diagnostic-progress` pointed
+  inside the scanned repository, the review output (including hidden staging
+  siblings), an existing directory, or an invalid path; rejected before
+  scanning.
+- `LOCAL_REVIEW_CANCELLED`, `LOCAL_REVIEW_SCAN_FAILED`,
+  `LOCAL_REVIEW_OUTPUT_UNSAFE`, `LOCAL_REVIEW_ARGUMENT_INVALID`, and the
+  stage failure codes keep their existing meanings.
+
+Progress-event categorical failure codes emitted by scan-internal stages:
+`MSBUILD_REGISTRATION_FAILED`, `SOLUTION_LOAD_FAILED`,
+`PROJECT_LOAD_FAILED`, `COMPILATION_CREATE_FAILED`, `COMPILATION_MISSING`,
+`SCAN_DISCOVERY_FAILED`, `SEMANTIC_STAGE_FAILED`,
+`SOURCE_VERIFICATION_FAILED`, and `ARTIFACT_WRITE_FAILED`. These mirror the
+scanner's existing gap kinds; they are operational observations, not evidence
+facts.
+
+## Reporting a Stuck Run
+
+When a run looks stuck, report only the sanitized checkpoint file (plus the
+console progress lines if captured). It answers: is it alive, what stage is
+active, what completed last, how long it has been there, and whether it timed
+out or failed. Do not share the scanned repository, the hidden staging
+directory, or raw console output that may embed local paths.
 
 ## Interpretation
 

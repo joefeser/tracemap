@@ -92,6 +92,65 @@ Troubleshooting:
 - If .NET or TypeScript build restore fails, run the build/test commands above directly to restore local toolchain dependencies and inspect their native diagnostics.
 - Reduced sample scan and report coverage is expected for samples that intentionally rely on syntax fallback or missing framework packages. The summary labels those sections as partial while preserving rule-backed evidence counts.
 
+## Local Review Progress Diagnostics Smoke
+
+Run this when changing `LocalReviewCommand`, `ScanProgressReporter`,
+`ScanEngine` progress instrumentation, or the Roslyn cancellation seams:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter 'FullyQualifiedName~ScanProgressDiagnosticsTests|FullyQualifiedName~LocalReviewCommandTests'
+```
+
+Expected coverage:
+
+- progress lines reach the immediate progress console (stderr) before a
+  blocking scan completes, and never route through the buffered scan output
+  capture;
+- heartbeats every 15 seconds report only categorical stage, elapsed
+  milliseconds, last completed stage, and sequence, with bounded checkpoint
+  history (heartbeats excluded, at most 32 events);
+- the sanitized checkpoint contains no repository, project, path, or symbol
+  values supplied by adversarial fixtures;
+- the durable checkpoint exists before final publication and survives
+  cancellation and timeout with the exact last successful categorical stage;
+- `--timeout-seconds` returns the typed `LOCAL_REVIEW_TIMEOUT` failure and
+  never publishes a successful review; invalid bounds and unsafe progress
+  paths fail closed before scanning;
+- solution, project, and compilation ordinals are deterministic across runs;
+- enabled diagnostics leave deterministic evidence bytes unchanged (facts and
+  report byte-identical; manifest and receipt compared after normalizing the
+  pre-existing `scannedAt` and stage-duration observations).
+
+For a manual synthetic Web Forms smoke with diagnostics enabled (the fixture
+is synthesized on the fly; tests build equivalent ones):
+
+```bash
+mkdir -p /tmp/tracemap-webforms-smoke && cd /tmp/tracemap-webforms-smoke
+cat > Sample.csproj <<'EOF'
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+</Project>
+EOF
+printf '<%%@ Page Language="C#" CodeBehind="Default.aspx.cs" Inherits="Sample.Default" %%><asp:Button ID="Save" runat="server" OnClick="Save_Click" />' > Default.aspx
+printf 'namespace Sample; public class Default { protected void Save_Click(object sender, System.EventArgs e) { } }' > Default.aspx.cs
+git init -q . && git add . && git -c user.name=TraceMap -c user.email=smoke@example.invalid commit -qm smoke
+
+dotnet run --project <repository-root>/src/dotnet/TraceMap.Cli -- local-review run \
+  --repo /tmp/tracemap-webforms-smoke \
+  --out /tmp/tracemap-review-smoke \
+  --webforms-modernization \
+  --diagnostic-progress /tmp/tracemap-review-progress.json \
+  --timeout-seconds 600
+```
+
+The run must emit `tracemap-progress ...` lines to stderr immediately, keep
+`/tmp/tracemap-review-progress.json` valid per
+`docs/contracts/tracemap-scan-progress.v1.schema.json` throughout, and leave
+the checkpoint behind with `local-review-publication` completed on success.
+An empty `/tmp/tracemap-review-smoke` during execution is expected: work is
+staged in a hidden sibling until the atomic publication rename.
+
 ## MSBuild Binary-Log Evidence
 
 For changes to explicit `.binlog` ingestion, run the focused synthetic suite:

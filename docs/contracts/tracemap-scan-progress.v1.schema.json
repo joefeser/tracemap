@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tracemap.tools/contracts/tracemap-scan-progress.v1.schema.json",
+  "title": "TraceMap scan progress checkpoint",
+  "description": "Sanitized operational progress checkpoint for scan and local-review runs. Progress events are operational observations, not TraceMap evidence facts: they carry no evidence tier, no rule ID, and no scan conclusion. Every field is bounded categorical data. The contract intentionally excludes source paths, repository/project/solution names, filenames, symbols, source values, command lines, exception messages, environment values, credentials, URLs, and identity-derived hashes.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "latest", "history"],
+  "properties": {
+    "schemaVersion": {
+      "const": "tracemap-scan-progress/v1"
+    },
+    "latest": {
+      "$ref": "#/$defs/event"
+    },
+    "history": {
+      "type": "array",
+      "maxItems": 32,
+      "description": "Most recent non-heartbeat events, oldest first. Heartbeats never enter history so the checkpoint stays bounded.",
+      "items": {
+        "$ref": "#/$defs/event"
+      }
+    }
+  },
+  "$defs": {
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "sequence", "operation", "stage", "state", "elapsedMilliseconds"],
+      "properties": {
+        "schemaVersion": {
+          "const": "tracemap-scan-progress/v1"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Monotonic per-run sequence number."
+        },
+        "operation": {
+          "enum": ["scan", "local-review"]
+        },
+        "stage": {
+          "enum": [
+            "arguments-validated",
+            "output-authorized",
+            "staging-initialized",
+            "scan",
+            "repository-identity",
+            "inventory",
+            "source-snapshot-capture",
+            "project-selection",
+            "msbuild-registration",
+            "solution-load",
+            "project-load",
+            "compilation",
+            "syntax-fallback",
+            "specialized-extraction",
+            "source-verification",
+            "artifact-write",
+            "scan-publication",
+            "webforms-modernization",
+            "explorer",
+            "local-review-publication",
+            "other"
+          ]
+        },
+        "state": {
+          "enum": ["started", "heartbeat", "completed", "partial", "failed", "cancelled", "timed-out"]
+        },
+        "elapsedMilliseconds": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Monotonic elapsed time since diagnostics started. A local observation, not deterministic evidence."
+        },
+        "counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Optional aggregate item counts. Keys are fixed catalog values; unknown keys are dropped before serialization.",
+          "properties": {
+            "files": { "type": "integer", "minimum": 0 },
+            "solutions": { "type": "integer", "minimum": 0 },
+            "projects": { "type": "integer", "minimum": 0 },
+            "facts": { "type": "integer", "minimum": 0 },
+            "gaps": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "failureCode": {
+          "type": "string",
+          "pattern": "^[A-Z0-9_-]{1,64}$",
+          "description": "Categorical typed failure code such as LOCAL_REVIEW_SCAN_FAILED or PROJECT_LOAD_FAILED. Never contains exception text."
+        },
+        "lastSuccessfulStage": {
+          "$comment": "Stage catalog value of the last stage that reached completed or partial, or null before any stage completes.",
+          "enum": [
+            "arguments-validated",
+            "output-authorized",
+            "staging-initialized",
+            "scan",
+            "repository-identity",
+            "inventory",
+            "source-snapshot-capture",
+            "project-selection",
+            "msbuild-registration",
+            "solution-load",
+            "project-load",
+            "compilation",
+            "syntax-fallback",
+            "specialized-extraction",
+            "source-verification",
+            "artifact-write",
+            "scan-publication",
+            "webforms-modernization",
+            "explorer",
+            "local-review-publication",
+            null
+          ]
+        },
+        "ordinal": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000,
+          "description": "Deterministic one-based position of repeated work (solution, project, or compilation) in the scanner's sorted order. Never a name."
+        }
+      }
+    }
+  }
+}
