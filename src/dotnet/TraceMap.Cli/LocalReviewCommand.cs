@@ -90,7 +90,9 @@ public static class LocalReviewCommand
         "--project",
         "--include",
         "--exclude",
-        "--target-framework"
+        "--target-framework",
+        "--diagnostic-progress",
+        "--timeout-seconds"
     };
 
     public static async Task<int> RunAsync(
@@ -99,11 +101,14 @@ public static class LocalReviewCommand
         TextWriter error,
         LocalReviewScanRunner scanRunner,
         CancellationToken cancellationToken = default,
-        LocalReviewStageServices? stageServices = null)
+        LocalReviewStageServices? stageServices = null,
+        TextWriter? progressConsole = null,
+        TimeProvider? timeProvider = null)
     {
         stageServices ??= new LocalReviewStageServices(
             async (options, token) => { _ = await WebFormsModernizationPacketReporter.WriteAsync(options, token); },
             async (options, token) => { _ = await StaticHtmlEvidenceExplorer.GenerateAsync(options, token); });
+        timeProvider ??= TimeProvider.System;
         if (args.Length == 0 || !string.Equals(args[0], "run", StringComparison.OrdinalIgnoreCase))
         {
             await error.WriteLineAsync("error: LOCAL_REVIEW_ARGUMENT_INVALID; expected 'local-review run'.");
@@ -112,9 +117,11 @@ public static class LocalReviewCommand
 
         LocalReviewArguments parsed;
         string fullOutput;
+        int timeoutSeconds;
         try
         {
             parsed = Parse(args.Skip(1).ToArray());
+            timeoutSeconds = ValidateTimeoutSeconds(parsed.TimeoutSeconds);
             fullOutput = ValidateOutput(parsed.RepositoryPath, parsed.OutputPath);
         }
         catch (LocalReviewException exception)
@@ -123,24 +130,135 @@ public static class LocalReviewCommand
             return 1;
         }
 
+        ScanProgressReporter? progress = null;
+        if (parsed.DiagnosticProgressPath is not null)
+        {
+            try
+            {
+                var checkpointPath = ValidateDiagnosticProgressPath(parsed.RepositoryPath, fullOutput, parsed.DiagnosticProgressPath);
+                progress = new ScanProgressReporter(progressConsole ?? Console.Error, checkpointPath, timeProvider);
+                progress.Emit(
+                    ScanProgressReporter.LocalReviewOperation,
+                    ScanProgressStages.ArgumentsValidated,
+                    "completed");
+                progress.Emit(
+                    ScanProgressReporter.LocalReviewOperation,
+                    ScanProgressStages.OutputAuthorized,
+                    "completed");
+            }
+            catch (LocalReviewException exception)
+            {
+                await error.WriteLineAsync($"error: {exception.Code}");
+                return 1;
+            }
+        }
+
+        CancellationTokenSource? timeoutSource = null;
+        ITimer? timeoutTimer = null;
+        if (timeoutSeconds > 0)
+        {
+            timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutTimer = timeProvider.CreateTimer(
+                static state => TryTimeout((TimeoutState)state!),
+                new TimeoutState(timeoutSource, progress),
+                TimeSpan.FromSeconds(timeoutSeconds),
+                TimeSpan.FromMilliseconds(-1));
+        }
+
+        var effectiveToken = timeoutSource?.Token ?? cancellationToken;
         var parent = Path.GetDirectoryName(fullOutput)!;
         var staging = Path.Combine(parent, $".{Path.GetFileName(fullOutput)}.local-review-{Guid.NewGuid():N}");
         try
         {
-            Directory.CreateDirectory(parent);
-            if (Directory.Exists(fullOutput))
+            try
             {
-                Directory.Delete(fullOutput);
+                Directory.CreateDirectory(parent);
+                if (Directory.Exists(fullOutput))
+                {
+                    Directory.Delete(fullOutput);
+                }
+
+                Directory.CreateDirectory(staging);
+            }
+            catch (Exception)
+            {
+                progress?.Emit(
+                    ScanProgressReporter.LocalReviewOperation,
+                    ScanProgressStages.StagingInitialized,
+                    "failed",
+                    failureCode: "LOCAL_REVIEW_OUTPUT_UNSAFE");
+                await error.WriteLineAsync("error: LOCAL_REVIEW_OUTPUT_UNSAFE");
+                return 1;
             }
 
-            Directory.CreateDirectory(staging);
+            progress?.Emit(
+                ScanProgressReporter.LocalReviewOperation,
+                ScanProgressStages.StagingInitialized,
+                "completed");
+            return await RunStagesAsync(
+                parsed,
+                staging,
+                fullOutput,
+                output,
+                error,
+                scanRunner,
+                stageServices,
+                progress,
+                cancellationToken,
+                timeoutSource,
+                timeoutTimer,
+                effectiveToken);
         }
-        catch (Exception)
+        finally
         {
-            await error.WriteLineAsync("error: LOCAL_REVIEW_OUTPUT_UNSAFE");
-            return 1;
+            timeoutTimer?.Dispose();
+            progress?.Dispose();
+            timeoutSource?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Timeout deadline callback. Cancellation is cooperative: when an
+    /// underlying API ignores the token, no OperationCanceledException ever
+    /// reaches the workflow, so the timeout observation is recorded here to
+    /// keep the checkpoint truthful for exactly those stuck runs. Every active
+    /// stage is ended so later heartbeats cannot overwrite the terminal
+    /// timed-out observation while the process stays blocked.
+    /// </summary>
+    private static void TryTimeout(TimeoutState state)
+    {
+        try
+        {
+            state.Source.Cancel();
+        }
+        catch (Exception exception) when (exception is ObjectDisposedException)
+        {
+            // The workflow already completed before the timeout budget fired.
+            return;
         }
 
+        state.Progress?.FinishAllStages(
+            ScanProgressReporter.LocalReviewOperation,
+            "timed-out",
+            "LOCAL_REVIEW_TIMEOUT");
+    }
+
+    private sealed record TimeoutState(CancellationTokenSource Source, ScanProgressReporter? Progress);
+
+    private static async Task<int> RunStagesAsync(
+        LocalReviewArguments parsed,
+        string staging,
+        string fullOutput,
+        TextWriter output,
+        TextWriter error,
+        LocalReviewScanRunner scanRunner,
+        LocalReviewStageServices stageServices,
+        ScanProgressReporter? progress,
+        CancellationToken cancellationToken,
+        CancellationTokenSource? timeoutSource,
+        ITimer? timeoutTimer,
+        CancellationToken effectiveToken)
+    {
         ScanManifest? manifest = null;
         LocalReviewIdentity? authoritativeIdentity = null;
         var stages = new List<LocalReviewStage>();
@@ -154,9 +272,29 @@ public static class LocalReviewCommand
             var scanArguments = parsed.ToScanArguments(scanDirectory);
             using var scanOutput = new StringWriter();
             using var scanError = new StringWriter();
-            var scanExit = await scanRunner(scanArguments, scanOutput, scanError, cancellationToken);
+            progress?.StartStage(ScanProgressReporter.LocalReviewOperation, ScanProgressStages.Scan);
+            ScanProgressAmbient.Current = progress;
+            int scanExit;
+            try
+            {
+                scanExit = await scanRunner(scanArguments, scanOutput, scanError, effectiveToken);
+            }
+            finally
+            {
+                ScanProgressAmbient.Current = null;
+            }
+
             if (scanExit != 0)
             {
+                // A timeout that expired while the runner ignored cancellation
+                // must be reported as LOCAL_REVIEW_TIMEOUT even when the
+                // blocked operation later fails with a nonzero exit.
+                effectiveToken.ThrowIfCancellationRequested();
+                progress?.FinishStage(
+                    ScanProgressReporter.LocalReviewOperation,
+                    ScanProgressStages.Scan,
+                    "failed",
+                    failureCode: "LOCAL_REVIEW_SCAN_FAILED");
                 var failureIdentity = await TryReadAuthoritativeFailureIdentityAsync(scanDirectory, cancellationToken);
                 var failed = BuildFailureResult(
                     parsed,
@@ -173,6 +311,7 @@ public static class LocalReviewCommand
             }
 
             EnsureRequiredScanArtifacts(scanDirectory);
+            effectiveToken.ThrowIfCancellationRequested();
             var candidateManifest = await ReadManifestAsync(scanDirectory, cancellationToken);
             authoritativeIdentity = await ReadAuthoritativeIdentityAsync(
                 scanDirectory,
@@ -184,6 +323,10 @@ public static class LocalReviewCommand
             stages.Add(new("scan", Coverage(manifest) == "full" ? "succeeded" : "partial", [], ["scan-artifacts"]));
             lastSafeState = "scan-artifacts-verified";
             workflowCoverage = Coverage(manifest);
+            progress?.FinishStage(
+                ScanProgressReporter.LocalReviewOperation,
+                ScanProgressStages.Scan,
+                workflowCoverage == "full" ? "completed" : "partial");
             if (workflowCoverage != "full")
             {
                 gaps.Add("LOCAL_REVIEW_SCAN_PARTIAL");
@@ -192,12 +335,16 @@ public static class LocalReviewCommand
             if (parsed.WebFormsModernization)
             {
                 activeStage = "webforms-modernization";
+                progress?.StartStage(
+                    ScanProgressReporter.LocalReviewOperation,
+                    ScanProgressStages.WebFormsModernization);
                 var before = HashDirectory(scanDirectory);
                 await stageServices.WriteWebFormsAsync(
                     new WebFormsModernizationOptions(
                         Path.Combine(scanDirectory, "index.sqlite"),
                         Path.Combine(staging, "webforms")),
-                    cancellationToken);
+                    effectiveToken);
+                effectiveToken.ThrowIfCancellationRequested();
                 VerifyUnchanged(scanDirectory, before);
                 var webFormsPacket = await ReadWebFormsPacketAsync(
                     Path.Combine(staging, "webforms", "webforms-modernization.json"),
@@ -219,11 +366,16 @@ public static class LocalReviewCommand
                     ToInputHashes(before, "scan"),
                     ["webforms-modernization-packet"]));
                 lastSafeState = "webforms-modernization-verified";
+                progress?.FinishStage(
+                    ScanProgressReporter.LocalReviewOperation,
+                    ScanProgressStages.WebFormsModernization,
+                    webFormsPartial ? "partial" : "completed");
             }
 
             if (parsed.Explorer)
             {
                 activeStage = "explorer";
+                progress?.StartStage(ScanProgressReporter.LocalReviewOperation, ScanProgressStages.Explorer);
                 var scanBefore = HashDirectory(scanDirectory);
                 var webFormsDirectory = Path.Combine(staging, "webforms");
                 var webFormsBefore = parsed.WebFormsModernization
@@ -235,8 +387,9 @@ public static class LocalReviewCommand
                 {
                     if (parsed.WebFormsModernization)
                     {
+                        var outputParent = Path.GetDirectoryName(fullOutput)!;
                         composedInputDirectory = Path.Combine(
-                            parent,
+                            outputParent,
                             $".{Path.GetFileName(fullOutput)}.explorer-input-{Guid.NewGuid():N}");
                         CopyDirectory(scanDirectory, composedInputDirectory);
                         CopyDirectory(webFormsDirectory, composedInputDirectory);
@@ -248,7 +401,7 @@ public static class LocalReviewCommand
                             explorerInputDirectory,
                             Path.Combine(staging, "explorer"),
                             "hidden-local"),
-                        cancellationToken);
+                        effectiveToken);
                 }
                 finally
                 {
@@ -261,6 +414,7 @@ public static class LocalReviewCommand
                     }
                 }
 
+                effectiveToken.ThrowIfCancellationRequested();
                 VerifyUnchanged(scanDirectory, scanBefore);
                 if (webFormsBefore is not null)
                 {
@@ -278,10 +432,17 @@ public static class LocalReviewCommand
                     explorerInputs.AsReadOnly(),
                     ["static-html-explorer"]));
                 lastSafeState = "explorer-verified";
+                progress?.FinishStage(
+                    ScanProgressReporter.LocalReviewOperation,
+                    ScanProgressStages.Explorer,
+                    "completed");
             }
 
             var artifacts = BuildArtifactRecords(staging);
             var (factCount, factGapCount) = CountFacts(Path.Combine(scanDirectory, "facts.ndjson"));
+            // A stage that ignored cancellation may have returned normally after
+            // the deadline; a timed-out run must never publish success.
+            effectiveToken.ThrowIfCancellationRequested();
             var coverage = workflowCoverage;
             var version = TraceMapVersionInfo.Create();
             var outcome = coverage == "full" && gaps.Count == 0 ? "succeeded" : "partial";
@@ -307,13 +468,28 @@ public static class LocalReviewCommand
                 new LocalReviewSummary(factCount, factGapCount, artifacts.Count),
                 gaps.ToArray(),
                 Limitations());
-            await WriteResultAsync(staging, result, cancellationToken);
+            // The final writes observe the timeout token so a deadline that
+            // fires mid-write unwinds to the timeout path instead of
+            // publishing success. Disarm the deadline timer right before the
+            // publication rename and recheck: no new timeout may arm during
+            // the atomic move itself.
+            await WriteResultAsync(staging, result, effectiveToken);
+            timeoutTimer?.Dispose();
+            effectiveToken.ThrowIfCancellationRequested();
             Publish(staging, fullOutput);
+            progress?.Emit(
+                ScanProgressReporter.LocalReviewOperation,
+                ScanProgressStages.LocalReviewPublication,
+                "completed");
             await WriteHumanAsync(result, fullOutput, output);
             return 0;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            progress?.FinishStage(
+                ScanProgressReporter.LocalReviewOperation,
+                WorkflowProgressStage(activeStage),
+                "cancelled");
             await TryPublishStageFailureAsync(
                 parsed,
                 staging,
@@ -327,11 +503,44 @@ public static class LocalReviewCommand
                 "LOCAL_REVIEW_CANCELLED",
                 lastSafeState,
                 "contact-owner",
-                output);
+                output,
+                CancellationToken.None);
             throw;
+        }
+        catch (OperationCanceledException) when (timeoutSource is not null
+            && timeoutSource.IsCancellationRequested
+            && !cancellationToken.IsCancellationRequested)
+        {
+            progress?.FinishStage(
+                ScanProgressReporter.LocalReviewOperation,
+                WorkflowProgressStage(activeStage),
+                "timed-out",
+                failureCode: "LOCAL_REVIEW_TIMEOUT");
+            await TryPublishStageFailureAsync(
+                parsed,
+                staging,
+                fullOutput,
+                authoritativeIdentity,
+                stages,
+                workflowCoverage,
+                gaps,
+                activeStage,
+                "timed-out",
+                "LOCAL_REVIEW_TIMEOUT",
+                lastSafeState,
+                "increase-timeout-or-contact-owner",
+                output,
+                CancellationToken.None);
+            await error.WriteLineAsync("error: LOCAL_REVIEW_TIMEOUT");
+            return 1;
         }
         catch (LocalReviewException exception)
         {
+            progress?.FinishStage(
+                ScanProgressReporter.LocalReviewOperation,
+                WorkflowProgressStage(activeStage),
+                "failed",
+                failureCode: exception.Code);
             await TryPublishStageFailureAsync(
                 parsed,
                 staging,
@@ -345,13 +554,19 @@ public static class LocalReviewCommand
                 exception.Code,
                 lastSafeState,
                 NextAction(exception.Code),
-                output);
+                output,
+                cancellationToken);
             await error.WriteLineAsync($"error: {exception.Code}");
             return 1;
         }
         catch (Exception exception)
         {
             var failure = ClassifyStageFailure(activeStage, exception);
+            progress?.FinishStage(
+                ScanProgressReporter.LocalReviewOperation,
+                WorkflowProgressStage(activeStage),
+                "failed",
+                failureCode: failure.Code);
             await TryPublishStageFailureAsync(
                 parsed,
                 staging,
@@ -365,7 +580,8 @@ public static class LocalReviewCommand
                 failure.Code,
                 lastSafeState,
                 failure.NextAction,
-                output);
+                output,
+                cancellationToken);
             await error.WriteLineAsync($"error: {failure.Code}");
             return 1;
         }
@@ -411,7 +627,92 @@ public static class LocalReviewCommand
             Many(values, "--exclude"),
             OptionalSingle(values, "--target-framework"),
             flags.Contains("--webforms-modernization"),
-            flags.Contains("--explorer"));
+            flags.Contains("--explorer"),
+            OptionalSingle(values, "--diagnostic-progress"),
+            OptionalSingle(values, "--timeout-seconds"));
+    }
+
+    internal const int MinimumTimeoutSeconds = 30;
+    internal const int MaximumTimeoutSeconds = 86400;
+
+    internal static int ValidateTimeoutSeconds(string? value)
+    {
+        if (value is null)
+        {
+            return 0;
+        }
+
+        if (!int.TryParse(value, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var seconds)
+            || seconds < MinimumTimeoutSeconds
+            || seconds > MaximumTimeoutSeconds)
+        {
+            throw new LocalReviewException("LOCAL_REVIEW_TIMEOUT_INVALID");
+        }
+
+        return seconds;
+    }
+
+    internal static string ValidateDiagnosticProgressPath(
+        string repositoryPath,
+        string authorizedOutput,
+        string requestedPath)
+    {
+        string full;
+        try
+        {
+            var requested = Path.GetFullPath(requestedPath);
+            var requestedParent = Path.GetDirectoryName(requested)
+                ?? throw new LocalReviewException("LOCAL_REVIEW_PROGRESS_PATH_UNSAFE");
+            full = Path.Combine(
+                ResolveDirectoryPath(requestedParent),
+                Path.GetFileName(requested));
+        }
+        catch (Exception exception) when (exception is ArgumentException
+            or NotSupportedException
+            or PathTooLongException
+            or IOException
+            or UnauthorizedAccessException
+            or LocalReviewException)
+        {
+            throw new LocalReviewException("LOCAL_REVIEW_PROGRESS_PATH_UNSAFE");
+        }
+
+        if (string.IsNullOrWhiteSpace(Path.GetFileName(full))
+            || Directory.Exists(full))
+        {
+            throw new LocalReviewException("LOCAL_REVIEW_PROGRESS_PATH_UNSAFE");
+        }
+
+        var comparison = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        string repository;
+        try
+        {
+            repository = ResolveDirectoryPath(Path.GetFullPath(repositoryPath)).TrimEnd(Path.DirectorySeparatorChar);
+        }
+        catch (Exception exception) when (exception is ArgumentException
+            or NotSupportedException
+            or PathTooLongException
+            or IOException
+            or UnauthorizedAccessException
+            or LocalReviewException)
+        {
+            throw new LocalReviewException("LOCAL_REVIEW_PROGRESS_PATH_UNSAFE");
+        }
+
+        if (IsWithin(full, repository, comparison)
+            || IsWithin(full, authorizedOutput.TrimEnd(Path.DirectorySeparatorChar), comparison)
+            || string.Equals(full, authorizedOutput.TrimEnd(Path.DirectorySeparatorChar), comparison)
+            || full.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                .Any(component => component.Contains(".local-review-", StringComparison.Ordinal)
+                    || component.Contains(".tracemap-", StringComparison.Ordinal)
+                    || component.Contains(".explorer-input-", StringComparison.Ordinal)))
+        {
+            throw new LocalReviewException("LOCAL_REVIEW_PROGRESS_PATH_UNSAFE");
+        }
+
+        return full;
     }
 
     private static string Single(Dictionary<string, List<string>> values, string key)
@@ -862,6 +1163,13 @@ public static class LocalReviewCommand
             Limitations());
     }
 
+    private static string WorkflowProgressStage(string activeStage) => activeStage switch
+    {
+        "webforms-modernization" => ScanProgressStages.WebFormsModernization,
+        "explorer" => ScanProgressStages.Explorer,
+        _ => ScanProgressStages.Scan
+    };
+
     private static async Task TryPublishStageFailureAsync(
         LocalReviewArguments arguments,
         string staging,
@@ -875,7 +1183,8 @@ public static class LocalReviewCommand
         string gap,
         string lastSafeState,
         string nextAction,
-        TextWriter output)
+        TextWriter output,
+        CancellationToken cancellationToken)
     {
         if (!Directory.Exists(staging) || FileSystemEntryExists(outputPath))
         {
@@ -920,7 +1229,7 @@ public static class LocalReviewCommand
                 new LocalReviewSummary(counts.FactCount, counts.GapCount, artifacts.Count),
                 completedGaps.Append(gap).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
                 Limitations());
-            await WriteResultAsync(staging, result, CancellationToken.None);
+            await WriteResultAsync(staging, result, cancellationToken);
             Publish(staging, outputPath);
             await WriteHumanAsync(result, outputPath, output);
         }
@@ -1075,7 +1384,9 @@ public static class LocalReviewCommand
         IReadOnlyList<string> Excludes,
         string? TargetFramework,
         bool WebFormsModernization,
-        bool Explorer)
+        bool Explorer,
+        string? DiagnosticProgressPath,
+        string? TimeoutSeconds)
     {
         public string[] ToScanArguments(string outputPath)
         {
