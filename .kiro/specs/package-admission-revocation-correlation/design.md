@@ -54,7 +54,7 @@ Field rules:
 - `version`: required, exactly `package-decision.v1`. Anything else: `DecisionInputSchemaUnsupported`, whole input rejected.
 - `records`: required, non-empty array, each element an object. Unknown top-level or record properties: `DecisionInputMalformed` for that record. No free-text fields exist in the schema; there is no `notes`, `description`, or `message` field, so there is nothing to sanitize or trust.
 - `decisionId`: required, `^[a-z0-9][a-z0-9._:-]{3,80}$`. Producer-scoped; uniqueness is enforced per `(producer.id, decisionId)`.
-- `decisionKind`: required, closed set `admit | reject | revoke` (v1). `quarantine` is an open owner decision (§14).
+- `decisionKind`: required, closed set `admit | reject | revoke | quarantine` (v1). `quarantine` is a non-terminal externally supplied state. TraceMap validates, correlates, and reports it, but never enforces, blocks, approves, or treats it as terminal admission or revocation. The other three values retain their external semantics; TraceMap does not make the decision.
 - `ecosystem`: required, closed to the documented adapter values (`nuget`, `npm`, `python`, `maven`, `gradle`, `swift`). Unknown ecosystem: `DecisionInputMalformed` (the record cannot correlate).
 - `packageName`: required, must pass the safe-identifier policy (`LegacyDataSafeValues.IsSafeIdentifier` shape plus npm scope support `@scope/name`). Path-shaped names, URL-bearing names, credential fragments: `DecisionInputIdentityUnsafe`.
 - `artifactVersion`: required, exact resolved version string, must pass the existing safe-version shape; ranges (`^`, `~`, `>=`), URLs, `git+...`, `${...}`: `DecisionInputMalformed`. A decision is always about one exact artifact version.
@@ -81,7 +81,7 @@ TraceMap computes, for each admitted record, `recordDigest = sha256-canonical-js
 
 `DecisionInputSchemaUnsupported`, `DecisionInputMalformed`, `DecisionInputDigestMismatch`, `DecisionInputDecisionKindUnsupported`, `DecisionInputIdentityUnsafe`, `DecisionInputDuplicateConflict`, `DecisionInputLimitReached`, `DecisionInputReadFailed`.
 
-`DecisionInputDecisionKindUnsupported` is distinct from `DecisionInputMalformed` so that a future `quarantine` kind is a clean, countable compatibility signal rather than generic garbage.
+`DecisionInputDecisionKindUnsupported` remains distinct from `DecisionInputMalformed` so unsupported future vocabulary is a clean, countable compatibility signal rather than generic garbage. V1's accepted `quarantine` value is non-terminal and does not change correlation rungs or grant TraceMap admission/revocation authority.
 
 ## 3. Advisory profile contract (`advisory-profile.v1`, optional input)
 
@@ -157,11 +157,13 @@ Lockfiles are only read, never solved: no package-manager execution, no restore,
 
 ### 5.2 Digest caveats per format (documented, enforced)
 
-- npm `package-lock.json` integrity (`sha512-...`) is the registry tarball integrity: eligible for exact matches.
+- npm `package-lock.json` integrity (`sha512-...`) is the registry tarball integrity: eligible for exact matches. npm lockfiles are the first exact-digest-capable adapter implementation.
 - NuGet `packages.lock.json` has resolved versions but no content hash: `resolvedVersion` yes, digest gap always.
 - Gradle `gradle.lockfile` has resolved versions without hashes; `gradle/verification-metadata.xml` carries artifact SHA-256s and is the JVM digest source when checked in (slice 8 evaluates; stop condition if parsing proves non-deterministic).
 - Python `uv.lock`/`poetry.lock` carry source hashes in current formats (slice 7 evaluates the exact field semantics; a hash over source distribution is only eligible for exact match if the decision record uses the same artifact form — recorded as a limitation, otherwise rendered with `matchBasis` possible).
 - Swift `Package.resolved` has no digests; `Podfile.lock` SPEC CHECKSUMS are podspec checksums, not artifact digests, and MUST be stored as `specChecksum` only, never as `artifactDigest`.
+
+Adapter delivery order is npm lockfiles first, then NuGet, followed by Swift, Python, and JVM slices. This is an implementation ordering decision, not a claim that an adapter can prove exact identity before its slice ships; until each slice lands, its audited capabilities and explicit gaps in Requirement 10 remain authoritative.
 
 ## 6. Correlation algorithm
 
@@ -234,7 +236,7 @@ The neutral shared envelope is the `package-decision.v1` format itself. Later sp
 ```yaml
 - id: package.decision.record.v1
   name: External package decision record admission
-  description: Validates versioned package-decision.v1 admission, rejection, and revocation records from an external governance producer, computes canonical record digests, and classifies rejected input without trusting producer claims.
+  description: Validates versioned package-decision.v1 admission, rejection, revocation, and non-terminal quarantine records from an external governance producer, computes canonical record digests, and classifies rejected input without trusting producer claims.
   evidenceTier: Tier4Unknown
   emits:
     - PackageDecisionRecord
@@ -282,7 +284,7 @@ tracemap package-decision
 
 Defaults follow house conventions: `--max-findings 200`, `--max-gaps 1000`, path/reverse defaults from the existing commands, Markdown default with both files for directory output, SQLite opened `Mode=ReadOnly`, `--out` must not alias any input.
 
-Exit codes: 0 normally; 1 with `--exit-code` when any exact, possible, digest-mismatch, or runtime-unproven rows exist; 1 always for validation/parse/file/schema/connection errors (mirroring `diff`/`reverse`/`package-impact`).
+Exit codes: 0 normally; with `--exit-code`, 1 only when an `ExactArtifactMatch` correlates to an external `reject` or `revoke` record. Possible/ambiguous matches, digest mismatches, stale or runtime-unproven references, gaps, and non-terminal `quarantine` records remain review evidence and do not cause non-zero by default. Validation/parse/file/schema/connection errors return 1 regardless of the option. Any broader future policy selector is deferred to an explicit contract.
 
 ## 9. Output contracts
 
@@ -388,16 +390,15 @@ Fixtures use `example.invalid` hosts, synthetic digests, and synthetic SHAs; no 
 - No wall clock: `--as-of` is the only time input when supplied; `decisionTimeUtc`/`scannedAt` are input data.
 - Outputs byte-stable; ordering per §6.3; IDs are namespaced hashes; no timestamps, process IDs, or enumeration order.
 
-## 14. Open owner decisions
+## 14. Remaining owner decisions
 
-1. **`quarantine` decision kind**: 88mph vocabulary includes quarantine. V1 accepts `admit | reject | revoke`; adding `quarantine` is a one-line vocabulary change plus tests, but changes exit-code/summary semantics. Owner decision before slice 2.
-2. **Exit-code policy on possible matches**: current design fires `--exit-code` on exact, possible, mismatch, and runtime-unproven. If owners want exact-only, it is a summary predicate change. Decide before slice 2.
-3. **First digest-capable adapter**: recommendation npm (`package-lock.json` v2/v3) because integrity is native. Confirm before slice 4.
-4. **Gradle `verification-metadata.xml`**: adopt only if parsing is deterministic and offline; stop condition in slice 8.
-5. **Python lockfile scope** (`uv.lock` vs `poetry.lock` vs both) and whether source-distribution hashes are eligible for exact matching or only `matchBasis` context. Decide at slice 7 with format evidence.
-6. **Supersession semantics**: v1 renders chain context only; computing "currently effective decision" per artifact is a producer-side concern unless owners want TraceMap to resolve chains (adds `effective-decision` rollups).
-7. **Deployment-reference input timing**: contract is designed here (§4) but may be deferred to a late slice or dropped if owners want a separate spec.
-8. **Command naming**: `package-decision` chosen to parallel `package-impact`; alternative `decision-impact` rejected to keep package-tooling verbs together. Confirm at slice 1.
+The four decisions requested for this specification patch are resolved in §§2, 5, 8, and 17. These independent follow-ups remain open:
+
+1. **Gradle `verification-metadata.xml`**: adopt only if parsing is deterministic and offline; stop condition in slice 8.
+2. **Python lockfile scope** (`uv.lock` vs `poetry.lock` vs both) and whether source-distribution hashes are eligible for exact matching or only `matchBasis` context. Decide at slice 7 with format evidence.
+3. **Supersession semantics**: v1 renders chain context only; computing "currently effective decision" per artifact is a producer-side concern unless owners want TraceMap to resolve chains (adds `effective-decision` rollups).
+4. **Deployment-reference input timing**: contract is designed here (§4) but may be deferred to a late slice or dropped if owners want a separate spec.
+5. **Command naming**: `package-decision` chosen to parallel `package-impact`; alternative `decision-impact` rejected to keep package-tooling verbs together. Confirm at slice 1.
 
 ## 15. Relationship to existing specs and issues
 
@@ -415,5 +416,18 @@ Fixtures use `example.invalid` hosts, synthetic digests, and synthetic SHAs; no 
 - Composition: single index, combined index, portfolio manifest, comparison mode; duplicate identity; unknown commit SHA.
 - CLI: flag validation, mutually exclusive input modes, output format rules, exit codes, truncation caps.
 - Fixtures: F1–F15 with committed expected-output assertions; determinism test runs the full matrix twice.
+- Vocabulary/exit behavior: accepted `quarantine` records render as non-terminal external state and do not produce a non-zero `--exit-code`; only exact `reject`/`revoke` matches do.
 - Privacy: negative greps for adversarial values across all outputs; `./scripts/check-private-paths.sh`.
 - Rule catalog: entries present with limitations before any emission; emitted-rule-to-catalog resolution test (house pattern).
+
+## 17. Implementation delivery grouping
+
+The specification PR is separate. The 13 implementation slices in `tasks.md` remain independently testable and retain their own validation gates, stop conditions, rule-catalog updates, and limitation updates. For delivery, they are grouped into roughly five implementation PRs:
+
+1. **PR 1 — record reader, correlation engine, CLI, and synthetic fixtures:** slices 1–2.
+2. **PR 2 — npm exact-artifact evidence and combined/portfolio/path consumers:** slices 3–4 and 9.
+3. **PR 3 — NuGet and Swift:** slices 5–6.
+4. **PR 4 — Python and JVM:** slices 7–8.
+5. **PR 5 — before/after, advisory/deployment references, docs, and closure:** slices 10–13.
+
+This grouping reduces review and merge overhead without combining evidence contracts or skipping gates. In particular, adapter capability work remains ecosystem-specific, the three new rule contracts retain their ownership boundaries, and no PR may introduce package downloads or execution, malware/vulnerability claims, admission enforcement, automatic remediation, runtime-load claims, private or secret material, or LLM-based analysis.
