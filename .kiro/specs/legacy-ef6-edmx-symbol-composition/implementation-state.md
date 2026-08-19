@@ -8,13 +8,18 @@ spec start; worktree `../tracemap-spec-680`)
 Primary issue: #680 (Part of; spec-only PR, issue stays open)
 Public claim level: hidden until implemented and reviewed
 Owner review: corrections applied on top of the initial spec commit
-(`eb7cde831c414d08ee39c6c4e4a3550089a416a3`)
+(`eb7cde831c414d08ee39c6c4e4a3550089a416a3`); owner-selected Luna xHigh
+review completed against exact head
+`f72571ba7010452ce55ea110f420797f6960d087` and all accepted P1/P2 findings
+were patched as one spec-only batch.
 
 ## Scope State
 
-Specification delivered; owner review corrections applied (namespace evidence
-ladder, bounded property-symbol direction, resolved Q1/Q2/Q4, editorial
-cleanup). Implementation explicitly deferred to future PRs against this spec.
+Specification delivered; owner and Luna review corrections applied (namespace
+evidence ladder and provenance, collision guard, deterministic SSDL storage
+type identity, staged bounded property-symbol direction, association scope gap,
+resolved Q1/Q2/Q4, editorial cleanup). Implementation explicitly deferred to
+future PRs against this spec.
 Nothing in this PR implements product code, changes extractors, rules, docs
 outside this folder, or closes #680.
 
@@ -111,10 +116,12 @@ New narrowly versioned rule: `legacy.data.edmx.symbol-composition.v1`.
 
 ## Evidence-Tier Decision
 
-- `MapsToConceptualEntity` / `MapsToConceptualProperty`: Tier1Semantic only,
-  never emitted from syntax-only evidence (gaps instead). The Tier1 states
-  the compiler-resolved CLR endpoint join only; it does not upgrade, re-tier,
-  or re-host the Tier2 CSDL descriptor fact.
+- `MapsToConceptualEntity` / `MapsToConceptualProperty`: capped at
+  Tier2Structural and emitted at the weakest supporting tier because the target
+  CSDL descriptor remains Tier2. A Tier1 semantic attribute bridge does not
+  upgrade that descriptor; proven generation metadata may reduce the edge
+  further; the scoped equality convention is Tier2 because it requires an
+  explicit Tier2 generated-file link. Tier3 syntax fallback is ineligible.
 - `MapsToStorageTable` / `MapsToStorageColumn`: capped at Tier2Structural
   (weakest-link cap over Tier2 MSL/SSDL descriptors).
 - Gaps: Tier4Unknown.
@@ -142,15 +149,19 @@ controlling ladder (design D4/D4.1), tried in order:
    implementation must enumerate and prove exact sources before this
    mechanism ever matches.
 3. Exact qualified-name equality, only as a documented supported convention
-   scoped to generated-code candidates already linked to that EDMX by the
-   shipped generated-file convention.
+   scoped to generated-code candidates linked to that EDMX by one exact Tier2
+   `explicit-generated-file` fact; Tier3 type-name syntax fallback is not
+   composition authority.
 4. Otherwise: reduced-coverage gap `UnresolvedGeneratedNamespace`, no edge.
 
-Never global simple-name matching; display labels are never identity;
-duplicate qualified types across assemblies fail closed under every
-mechanism. Fixture coverage: namespace parity (F1), attribute bridge with
-divergent namespace (F14), no-bridge gap (F15), simple names across
-namespaces (F5), qualified names across assemblies (F6).
+Never global simple-name matching; display labels are never identity. The
+selected bridge fact is required in `supportingFactIds` and determines
+weakest-link tier/coverage. Duplicate qualified types across assemblies fail
+closed under every mechanism; distinct scan-relative project/compilation
+scopes sharing a canonical ID also fail closed, covering identical assembly
+name/version. Fixture coverage: namespace parity and bridge provenance (F1),
+attribute bridge with divergent namespace (F14), no-bridge gap (F15), simple
+names across namespaces (F5), same-ID assembly collisions (F6).
 
 ## Resolved Owner Decisions (Review Corrections)
 
@@ -162,13 +173,15 @@ namespaces (F5), qualified names across assemblies (F6).
   deterministic cycles, and fail-closed selectors. No reducer or runtime
   claims.
 - Q2 resolved: bounded semantic property-symbol emission during the existing
-  C# semantic pass for types proven eligible (DbSet/IDbSet entity arguments,
-  supported generated identity attributes, or designer/generated-file
-  scoping); no global property inventory; no implied compilation-backed
-  post-pass seam (any such seam is an explicit task with lifecycle, memory,
-  determinism, and cancellation requirements). Missing semantic property
-  evidence is a typed gap (`MissingSemanticPropertyEvidence`), never name
-  attachment.
+  C# semantic pass for types proven eligible or inventory-visible as generated
+  file candidates (DbSet/IDbSet entity arguments, supported generated identity
+  attributes, or the bounded generated/designer file-shape convention). After
+  the metadata extractor runs, composition intersects file-shape candidates
+  with one exact Tier2 generated-file link. No global property inventory and no
+  implied compilation-backed post-pass seam (any such seam is an explicit task
+  with lifecycle, memory, determinism, and cancellation requirements). Missing
+  semantic property evidence is a typed gap
+  (`MissingSemanticPropertyEvidence`), never name attachment.
 - Q4 resolved: test-local synthetic fixtures for the first implementation; no
   maintained `samples/` fixture; a future sample/demo fixture requires a
   separate public-proof and smoke-maintenance decision.
@@ -187,13 +200,18 @@ namespaces (F5), qualified names across assemblies (F6).
 - Reducer untouched; reporting/release-review only through existing
   consumers; no new consumer invented.
 
-## Unresolved Owner Questions
+## Review Outcome
 
-- Q3 (open, deferred): Kiro model reviews (`claude-opus-4.8`,
-  `claude-sonnet-4.6`) of this spec have not been run; they stay deferred
-  until these corrections are committed and re-reviewed by the owner. Prompts
-  are ready in `review-prompts.md`. No Kiro, ACK, Codex, Qodo, or other
-  reviewer loops were run for this correction pass.
+- Q3 resolved by owner direction: one fresh read-only Luna xHigh review ran
+  against exact head `f72571ba7010452ce55ea110f420797f6960d087`.
+- Accepted findings: bridge provenance/tier/coverage (P1); same-name/version
+  assembly collision (P1); deterministic SSDL storage-type identity (P2);
+  semantic-pass/generated-link ordering (P2); association gap contract (P2).
+  All five are reflected in requirements, design, tasks, fixtures, and review
+  prompts.
+- Kiro prompts remain available in `review-prompts.md` for an optional later
+  advisory review. No Kiro, ACK, Codex, Qodo, or hosted reviewer loop was run
+  for this correction pass.
 
 ## Validation Completed (spec PR)
 
@@ -206,11 +224,14 @@ namespaces (F5), qualified names across assemblies (F6).
   premises (see tasks 0.7):
   `dotnet test src/dotnet/TraceMap.sln --filter "FullyQualifiedName~LegacyDataMetadataExtractorTests|FullyQualifiedName~LegacyDataModelRuleCatalogTests|FullyQualifiedName~CSharpSemanticExtractorTests"`
   — Passed: 69, Failed: 0, Skipped: 0 (net10.0).
-- Correction-pass premise checks (no code changed, so no test rerun was
-  required): confirmed no EF generated-type attribute read exists today
+- Correction-pass premise checks (no product code changed): confirmed no EF
+  generated-type attribute read exists today
   (attribute-argument helpers are the precedent), and confirmed the
   semantic-before-legacy-data extraction ordering at
   `src/dotnet/TraceMap.Core/ScanEngine.cs:791-793`.
+- Post-Luna correction validation reran the focused existing
+  EF/EDMX/legacy-data filter above: Passed 69, Failed 0, Skipped 0. Private-path
+  guard, spec-only diff-scope check, and `git diff --check` also passed.
 - No markdown lint tooling exists in the repository (checked for
   `.markdownlint*`, `.prettierrc*`, `.editorconfig`, and CI workflows);
   hand-formatting follows the neighboring spec style (hard-wrapped ~78–80
@@ -223,4 +244,5 @@ namespaces (F5), qualified names across assemblies (F6).
   stage, persistence/consumer wiring, test-local fixtures, tests, docs, and
   catalog entry creation.
 - Issue #680 remains open; this PR is "Part of #680" only.
-- Kiro model reviews (Q3) until the owner re-reviews these corrections.
+- Optional Kiro advisory review; the owner-selected Luna xHigh review and its
+  accepted corrections are complete.

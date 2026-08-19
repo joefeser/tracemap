@@ -25,10 +25,9 @@ runway for future implementation PRs. Do not close #680 with this PR.
       `implementation-state.md`.
 - [x] 0.8 Commit, push, and open a draft PR to `dev` marked "Part of #680"
       (not "Closes"); do not tag reviewers; do not run ACK; do not merge.
-- [ ] 0.9 Run Kiro spec reviews (`claude-opus-4.8`, `claude-sonnet-4.6`) via
-      `scripts/kiro-review.mjs`, or leave to the owner; record the outcome in
-      `implementation-state.md`. (Deferred until owner corrections are
-      committed and re-reviewed; see Q3.)
+- [x] 0.9 Run the owner-selected exact-head Luna xHigh specification review,
+      record its findings, and patch all accepted P1/P2 findings. Kiro review
+      prompts remain available for an optional later advisory review.
 - [x] 0.10 Apply the owner's specification review corrections: the namespace
       evidence ladder (D4/D4.1), bounded semantic property emission (D5),
       resolved Q1/Q2/Q4 decisions, and editorial/contract cleanup.
@@ -54,6 +53,10 @@ runway for future implementation PRs. Do not close #680 with this PR.
         ceilings not upgraded; generated/custom namespaces without a
         deterministic bridge gap closed).
   - [ ] 1.3 Add the `legacy-data-composition/0.1.0` scanner version constant.
+  - [ ] 1.4 Extend the semantic-declaration rule/catalog contract only for the
+        bounded mechanism-1 safe/hash conceptual-identity properties; raw
+        attribute text is never retained. The declaration fact then serves as
+        `namespaceBridgeFactId` without adding a duplicate bridge fact.
 
 - [ ] 2. Extend EDMX parsing with canonical resolution inputs.
       Requirements: 2, 3.
@@ -62,34 +65,49 @@ runway for future implementation PRs. Do not close #680 with this PR.
         surface the resolved conceptual type on the mapping facts.
   - [ ] 2.2 Resolve `MappingFragment/@StoreEntitySet` through the SSDL
         storage container and carry the resolved SSDL entity set identity
-        (stable model key) and table descriptor on the mapping facts.
+        (stable model key) and table descriptor on the mapping facts. Add the
+        same deterministic `storageEntityTypeIdentity` to the SSDL entity-set
+        and column descriptors so column resolution is scoped to the resolved
+        storage type rather than a global name or transient side channel.
   - [ ] 2.3 Keep existing descriptor facts, tiers, and gap behavior unchanged
         apart from additive properties.
 
 - [ ] 3. Build the composition stage.
       Requirements: 1, 2, 3, 4.
   - [ ] 3.1 Add bounded semantic property-symbol emission during the existing
-        C# semantic pass for entity types proven eligible for EF/EDMX
+        C# semantic pass for entity types proven eligible or candidate for EF/EDMX
         composition (`DbSet<T>`/`IDbSet<T>` entity arguments, supported
-        generated conceptual identity attributes, or designer/generated-file
-        scoping); canonical member symbol IDs, containing type identity,
+        generated conceptual identity attributes, or the inventory-visible
+        generated/designer file-shape convention). After generated-link facts
+        exist, intersect file-shape candidates with one exact Tier2
+        `explicit-generated-file` link; never treat Tier3 syntax fallback as
+        composition authority. Preserve canonical member symbol IDs, containing type identity,
         assembly identity, source span, and compiler provenance. No global
         property inventory.
   - [ ] 3.2 Implement the namespace evidence ladder exactly as designed
         (D4/D4.1): mechanism 1 bounded semantic attribute read
         (`EdmEntityTypeAttribute` family — an explicit bounded extractor
-        addition), mechanism 2 only with enumerated, proven deterministic
+        addition that enriches Tier1 declaration evidence), mechanism 2 only
+        with enumerated, proven deterministic
         generation/project metadata reads, mechanism 3 scoped qualified-name
-        equality convention, mechanism 4 typed gap. Single-assembly
-        uniqueness, exact member lookup, and entity-set/type/fragment/
+        equality convention, mechanism 4 typed gap. Include the selected bridge
+        fact in provenance. Detect canonical-ID collisions across distinct
+        scan-relative project/compilation scopes, including identical assembly
+        name/version, before accepting uniqueness. Preserve exact member lookup,
+        and entity-set/type/fragment/
         store-set/scalar resolution per D4.
-  - [ ] 3.3 Emit `MapsToConceptualEntity`, `MapsToConceptualProperty` at
-        Tier1 and `MapsToStorageTable`, `MapsToStorageColumn` at Tier2 with
-        the full evidence envelope and complete ordered supporting fact
-        chains.
+  - [ ] 3.3 Emit `MapsToConceptualEntity` and `MapsToConceptualProperty` at the
+        weakest supporting tier capped at Tier2, and emit
+        `MapsToStorageTable` and `MapsToStorageColumn` capped at Tier2, with
+        the full evidence envelope and complete ordered supporting fact chains,
+        including bridge evidence; compute tier and coverage from the weakest
+        supporting fact.
   - [ ] 3.4 Emit fail-closed gaps for every D9 table row; no edge may be
         emitted from syntax-only or ambiguous joins; missing semantic
-        property evidence is a typed gap, never name attachment.
+        property evidence is a typed gap, never name attachment. Association
+        association/provider mappings emit an explicit composition-owned
+        `UnsupportedLegacyOrmMappingShape` gap while existing facts remain
+        unchanged.
   - [ ] 3.5 Only if a compilation-backed composition seam proves unavoidable:
         add it as an explicit separate task with documented lifecycle, memory
         bounds, determinism, and cancellation requirements. No such seam
@@ -116,7 +134,10 @@ runway for future implementation PRs. Do not close #680 with this PR.
         in `System.Data.Entity`); no maintained `samples/` fixture in the
         first implementation (resolved Q4).
   - [ ] 5.2 Implement cases F1–F15 asserting identity, endpoints, provenance,
-        spans, tiers, rule IDs, supporting fact IDs, gaps, and coverage.
+        spans, tiers, rule IDs, supporting fact IDs, gaps, and coverage,
+        including bridge IDs/weakest-link tier, identical assembly name/version
+        across distinct compilation scopes, SSDL same-column-name decoys,
+        staged property-candidate intersection, and association scope gaps.
   - [ ] 5.3 Add persistence round-trip, reverse-impact, path, and determinism
         tests.
 
