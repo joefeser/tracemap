@@ -39,6 +39,9 @@ runway for future implementation PRs. Do not close #680 with this PR.
       composition-owned `LegacyDataGeneratedFileScope` bridge fact
       (file-level scoping only); identity stays proven only by Tier1
       declarations. Added fixture F16.
+- [ ] 0.12 Hold the PR in draft per owner directive; after the focused
+      validation, the owner runs one final review before the PR leaves
+      draft. Record the outcome in `implementation-state.md`.
 
 ## Implementation Tasks
 
