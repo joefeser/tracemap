@@ -154,6 +154,59 @@ describe("ScanEngine", () => {
     }));
   });
 
+  it("extracts npm package-lock v2/v3 identity metadata without fetching packages", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    await fsp.mkdir(repo, { recursive: true });
+    const packagePath = path.join(repo, "package.json");
+    const lockPath = path.join(repo, "package-lock.json");
+    await fsp.writeFile(packagePath, JSON.stringify({ name: "fixture", dependencies: { express: "^4.0.0" } }, null, 2));
+    await fsp.writeFile(lockPath, JSON.stringify({
+      name: "fixture",
+      lockfileVersion: 3,
+      packages: {
+        "": { dependencies: { express: "^4.0.0" } },
+        "node_modules/express": {
+          version: "4.18.2",
+          resolved: "https://registry.npmjs.org/express/-/express-4.18.2.tgz",
+          integrity: "sha512-" + "A".repeat(86)
+        },
+        "node_modules/express/node_modules/accepts": {
+          version: "1.3.8",
+          resolved: "https://registry.npmjs.org/accepts/-/accepts-1.3.8.tgz"
+        }
+      }
+    }, null, 2));
+    const inventory = [
+      { absolutePath: packagePath, kind: "package-json", relativePath: "package.json", sizeBytes: (await fsp.stat(packagePath)).size, skipped: false },
+      { absolutePath: lockPath, kind: "package-lock", relativePath: "package-lock.json", sizeBytes: (await fsp.stat(lockPath)).size, skipped: false }
+    ];
+    const facts = await extractPackageFacts(manifest("npm-lock"), repo, inventory);
+    expect(facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.PackageReferenced,
+      properties: expect.objectContaining({
+        manifestKind: "package-lock.json",
+        packageName: "express",
+        resolvedVersion: "4.18.2",
+        dependencyRelation: "direct",
+        dependencyPathDepth: "1",
+        registryOrigin: "registry.npmjs.org",
+        artifactDigestAlgorithm: "sha512-base64",
+        artifactDigest: "A".repeat(86),
+        lockfileHash: expect.stringMatching(/^[0-9a-f]{32}$/)
+      })
+    }));
+    expect(facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.PackageReferenced,
+      properties: expect.objectContaining({ packageName: "accepts", dependencyRelation: "transitive", dependencyPathDepth: "2" })
+    }));
+    expect(facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.AnalysisGap,
+      properties: expect.objectContaining({ category: "LockfileDigestUnavailable" })
+    }));
+    expect(JSON.stringify(facts)).not.toContain("express-4.18.2.tgz");
+  });
+
   it("can be reduced by the existing .NET reducer with review-tier fan-out handling", async () => {
     const out = await tempDir();
     await scan({

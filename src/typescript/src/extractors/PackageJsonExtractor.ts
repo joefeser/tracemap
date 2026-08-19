@@ -141,7 +141,156 @@ export async function extractPackageFacts(manifest: ScanManifest, repoPath: stri
       );
     }
   }
+  facts.push(...await extractPackageLockFacts(manifest, repoPath, inventory));
   return facts;
+}
+
+/**
+ * Reads npm lockfile v2/v3 metadata only.  This intentionally does not resolve,
+ * fetch, or verify a tarball: integrity is the registry-declared value copied
+ * from package-lock.json and is never treated as content verification.
+ */
+async function extractPackageLockFacts(manifest: ScanManifest, repoPath: string, inventory: readonly FileInventoryItem[]): Promise<CodeFact[]> {
+  const facts: CodeFact[] = [];
+  for (const item of inventory.filter((file) => path.basename(file.relativePath) === "package-lock.json")) {
+    try {
+      const text = await fs.readFile(item.absolutePath, "utf8");
+      const json = JSON.parse(text) as Record<string, unknown>;
+      const lockfileVersion = typeof json.lockfileVersion === "number" ? json.lockfileVersion : Number(json.lockfileVersion);
+      const packages = json.packages;
+      if ((lockfileVersion !== 2 && lockfileVersion !== 3) || !packages || typeof packages !== "object" || Array.isArray(packages)) {
+        facts.push(lockfileGap(manifest, item, "package-lock-unsupported", "package-lock.json must be npm lockfile v2 or v3 with a packages map."));
+        continue;
+      }
+      const root = await readRootPackageJson(item.absolutePath, repoPath);
+      const directNames = declaredDependencyNames(root);
+      const lockHash = hash(text, 32);
+      for (const packagePath of Object.keys(packages as Record<string, unknown>).sort()) {
+        if (!packagePath || packagePath === "") continue;
+        const entry = (packages as Record<string, unknown>)[packagePath];
+        if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+        const packageName = packageNameFromLockPath(packagePath);
+        if (!packageName) continue;
+        const properties = entry as Record<string, unknown>;
+        const version = typeof properties.version === "string" ? properties.version.trim() : "";
+        if (!version) {
+          facts.push(lockfileGap(manifest, item, "package-lock-entry-version-missing", "npm lockfile package entry did not provide a resolved version."));
+          continue;
+        }
+        const integrity = typeof properties.integrity === "string" ? properties.integrity.trim() : "";
+        const digest = parseSha512Integrity(integrity);
+        const resolved = typeof properties.resolved === "string" ? properties.resolved.trim() : "";
+        const registryOrigin = hostOnlyOrigin(resolved);
+        const depth = dependencyPathDepth(packagePath);
+        const evidenceLine = lineOf(text, packagePath.replaceAll("\\", "/"));
+        const packageProperties: Record<string, string> = {
+          dependencyGroup: directNames.has(packageName) ? "dependencies" : "lockfile",
+          dependencyRelation: directNames.has(packageName) ? "direct" : "transitive",
+          dependencyPathDepth: String(depth),
+          ecosystem: "npm",
+          manifestKind: "package-lock.json",
+          packageManager: "npm",
+          packageName,
+          resolvedVersion: version,
+          lockfilePath: item.relativePath,
+          lockfileHash: lockHash,
+          sourceKind: "lockfile",
+          surfaceKind: "package-config",
+          version
+        };
+        if (registryOrigin) packageProperties.registryOrigin = registryOrigin;
+        if (digest) {
+          packageProperties.artifactDigestAlgorithm = "sha512-base64";
+          packageProperties.artifactDigest = digest;
+        } else {
+          facts.push(lockfileGap(manifest, item, "LockfileDigestUnavailable", "npm lockfile entry did not provide a supported sha512 integrity value.", packageName, evidenceLine));
+        }
+        facts.push(createFact(
+          manifest,
+          FactTypes.PackageReferenced,
+          RuleIds.TypeScriptPackage,
+          EvidenceTiers.Tier2Structural,
+          createEvidence(item.relativePath, evidenceLine, evidenceLine, "typescript-package-lock", ScannerVersions.TypeScriptPackageExtractor),
+          { targetSymbol: packageName, properties: packageProperties }
+        ));
+      }
+    } catch {
+      facts.push(lockfileGap(manifest, item, "package-lock-parse", "npm package-lock.json could not be admitted as bounded metadata."));
+    }
+  }
+  return facts;
+}
+
+async function readRootPackageJson(lockfilePath: string, repoPath: string): Promise<Record<string, unknown>> {
+  const root = path.dirname(lockfilePath);
+  const candidates = [path.join(root, "package.json"), path.join(repoPath, "package.json")];
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(await fs.readFile(candidate, "utf8")) as Record<string, unknown>;
+    } catch {
+      // A lockfile can be nested under a workspace; try the repository root.
+    }
+  }
+  return {};
+}
+
+function declaredDependencyNames(json: Record<string, unknown>): Set<string> {
+  const names = new Set<string>();
+  for (const section of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
+    const values = json[section];
+    if (!values || typeof values !== "object" || Array.isArray(values)) continue;
+    for (const name of Object.keys(values as Record<string, unknown>)) names.add(name);
+  }
+  return names;
+}
+
+function packageNameFromLockPath(packagePath: string): string | null {
+  const segments = packagePath.split("/").filter(Boolean);
+  for (let i = segments.length - 1; i >= 0; i--) {
+    if (segments[i] === "node_modules" && segments[i + 1]) {
+      const name = segments[i + 1].startsWith("@") && segments[i + 2] ? `${segments[i + 1]}/${segments[i + 2]}` : segments[i + 1];
+      return isSafePackageName(name) ? name : null;
+    }
+  }
+  return null;
+}
+
+function dependencyPathDepth(packagePath: string): number {
+  return Math.max(1, packagePath.split("/").filter((segment) => segment === "node_modules").length);
+}
+
+function parseSha512Integrity(value: string): string | null {
+  if (!value.startsWith("sha512-")) return null;
+  const digest = value.slice("sha512-".length);
+  return digest.length > 0 && digest.length <= 128 && /^[A-Za-z0-9+/]+={0,2}$/.test(digest) ? digest : null;
+}
+
+function hostOnlyOrigin(value: string): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    if (url.username || url.password || url.port) return null;
+    const host = url.hostname.toLowerCase();
+    return /^[a-z0-9.-]+$/.test(host) ? host : null;
+  } catch {
+    return null;
+  }
+}
+
+function isSafePackageName(value: string): boolean {
+  return value.length > 0 && value.length <= 160 && /^(?:@[a-z0-9._-]+\/)?[a-z0-9._-]+$/i.test(value);
+}
+
+function lockfileGap(manifest: ScanManifest, item: FileInventoryItem, category: string, message: string, packageName?: string, line = 1): CodeFact {
+  return createFact(
+    manifest,
+    FactTypes.AnalysisGap,
+    RuleIds.TypeScriptPackage,
+    EvidenceTiers.Tier4Unknown,
+    createEvidence(item.relativePath, line, line, "typescript-package-lock", ScannerVersions.TypeScriptPackageExtractor),
+    { targetSymbol: packageName ?? undefined, properties: { category, messageHash: hash(message, 16) } }
+  );
 }
 
 function dependencyScope(section: string): string {
