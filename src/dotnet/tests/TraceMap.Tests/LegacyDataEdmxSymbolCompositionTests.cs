@@ -109,7 +109,13 @@ public sealed class LegacyDataEdmxSymbolCompositionTests
             fact.FactType == FactTypes.SymbolRelationship
             && fact.Properties.GetValueOrDefault("relationshipKind") == "MapsToStorageColumn"
             && fact.Properties.GetValueOrDefault("targetSymbolDisplayName") == "CustomerId");
-        Assert.Equal(customerColumn.Properties["stableModelKey"], columnEdge.Properties["targetSymbolId"]);
+        var entityTable = result.Facts.Single(fact =>
+            fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.Properties.GetValueOrDefault("mappingKind") == "entity-table");
+        var qualifiedColumnKey = "ldm:" + FactFactory.Hash(
+            customerColumn.Properties["stableModelKey"] + "\u001f" + entityTable.Properties["storageEntityTypeIdentity"],
+            32);
+        Assert.Equal(qualifiedColumnKey, columnEdge.Properties["targetSymbolId"]);
         Assert.NotEqual(auditColumn.Properties["stableModelKey"], columnEdge.Properties["targetSymbolId"]);
         Assert.Equal("EdmxStorageColumn", columnEdge.Properties["targetSymbolKind"]);
     }
@@ -997,6 +1003,134 @@ public sealed class LegacyDataEdmxSymbolCompositionTests
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.LegacyDataEdmxSymbolComposition
             && fact.Properties.GetValueOrDefault("classification") == "MissingGeneratedCode");
+    }
+
+    [Fact]
+    public void Member_target_keys_stay_distinct_across_same_named_entities()
+    {
+        using var fixture = new Ef6Fixture();
+        fixture.Csdl = """
+                <edmx:ConceptualModels>
+                  <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm" Namespace="ModelA">
+                    <EntityContainer Name="ModelContainer">
+                      <EntitySet Name="CustomersA" EntityType="ModelA.Customer" />
+                      <EntitySet Name="CustomersB" EntityType="ModelB.Customer" />
+                    </EntityContainer>
+                    <EntityType Name="Customer"><Property Name="Id" Type="Int32" /></EntityType>
+                  </Schema>
+                  <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm" Namespace="ModelB">
+                    <EntityType Name="Customer"><Property Name="Id" Type="Int32" /></EntityType>
+                  </Schema>
+                </edmx:ConceptualModels>
+            """;
+        fixture.Ssdl = """
+                <edmx:StorageModels>
+                  <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm/ssdl" Namespace="StoreOne">
+                    <EntityContainer Name="StoreContainer"><EntitySet Name="Customers" EntityType="StoreOne.CustomerTable" Table="dbo.One" /></EntityContainer>
+                    <EntityType Name="CustomerTable"><Property Name="Id" Type="int" /></EntityType>
+                  </Schema>
+                  <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm/ssdl" Namespace="StoreTwo">
+                    <EntityType Name="CustomerTable"><Property Name="Id" Type="int" /></EntityType>
+                  </Schema>
+                </edmx:StorageModels>
+            """;
+        fixture.Msl = """
+                <edmx:Mappings>
+                  <Mapping xmlns="http://schemas.microsoft.com/ado/2009/11/mapping/cs">
+                    <EntityContainerMapping StorageEntityContainer="StoreContainer" CdmEntityContainer="ModelContainer">
+                      <EntitySetMapping Name="CustomersA">
+                        <EntityTypeMapping TypeName="ModelA.Customer">
+                          <MappingFragment StoreEntitySet="Customers">
+                            <ScalarProperty Name="Id" ColumnName="Id" />
+                          </MappingFragment>
+                        </EntityTypeMapping>
+                      </EntitySetMapping>
+                      <EntitySetMapping Name="CustomersB">
+                        <EntityTypeMapping TypeName="ModelB.Customer">
+                          <MappingFragment StoreEntitySet="Customers">
+                            <ScalarProperty Name="Id" ColumnName="Id" />
+                          </MappingFragment>
+                        </EntityTypeMapping>
+                      </EntitySetMapping>
+                    </EntityContainerMapping>
+                  </Mapping>
+                </edmx:Mappings>
+            """;
+        fixture.DesignerCode = """
+            namespace ModelA
+            {
+                public class Customer
+                {
+                    public int Id { get; set; }
+                }
+            }
+
+            namespace ModelB
+            {
+                public class Customer
+                {
+                    public int Id { get; set; }
+                }
+            }
+            """;
+        var result = fixture.Scan();
+
+        var conceptualPropertyEdges = result.Facts
+            .Where(fact => fact.FactType == FactTypes.SymbolRelationship
+                && fact.Properties.GetValueOrDefault("relationshipKind") == "MapsToConceptualProperty")
+            .ToArray();
+        Assert.Equal(2, conceptualPropertyEdges.Length);
+        var conceptualTargets = conceptualPropertyEdges.Select(edge => edge.Properties["targetSymbolId"]).ToHashSet(StringComparer.Ordinal);
+        Assert.Equal(2, conceptualTargets.Count);
+        Assert.All(conceptualTargets, target => Assert.StartsWith("ldm:", target));
+
+        var propertyDeclarations = result.Facts
+            .Where(fact => fact.FactType == FactTypes.LegacyDataColumnDeclared
+                && fact.Properties.GetValueOrDefault("sourceSection") == "CSDL"
+                && fact.Properties.GetValueOrDefault("propertyName") == "Id")
+            .ToArray();
+        Assert.Equal(2, propertyDeclarations.Length);
+        var descriptorKeys = propertyDeclarations.Select(fact => fact.Properties["stableModelKey"]).ToHashSet(StringComparer.Ordinal);
+        if (descriptorKeys.Count == 1)
+        {
+            Assert.All(conceptualTargets, target => Assert.DoesNotContain(target, descriptorKeys, StringComparer.Ordinal));
+        }
+    }
+
+    [Fact]
+    public void Redacted_namespace_identities_compose_through_equal_hashes()
+    {
+        using var fixture = new Ef6Fixture();
+        fixture.Csdl = """
+                <edmx:ConceptualModels>
+                  <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm" Namespace="Model.Secret">
+                    <EntityContainer Name="ModelContainer"><EntitySet Name="Customers" EntityType="Model.Secret.Customer" /></EntityContainer>
+                    <EntityType Name="Customer"><Property Name="CustomerId" Type="Int32" /></EntityType>
+                  </Schema>
+                </edmx:ConceptualModels>
+            """;
+        fixture.DesignerCode = null;
+        fixture.ExtraFiles["AttributeBearer.cs"] = """
+            using System.Data.Entity.Core.Objects.DataClasses;
+
+            namespace App.Data;
+
+            [EdmEntityType(NamespaceName = "Model.Secret", Name = "Customer")]
+            public class Customer
+            {
+                public int CustomerId { get; set; }
+            }
+            """;
+        var result = fixture.Scan();
+
+        var conceptual = result.Facts.SingleOrDefault(fact =>
+            fact.FactType == FactTypes.SymbolRelationship
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "MapsToConceptualEntity");
+        Assert.NotNull(conceptual);
+        Assert.Equal("semantic-attribute", conceptual.Properties["namespaceBridgeMechanism"]);
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataEdmxSymbolComposition
+            && fact.Properties.GetValueOrDefault("classification") is "UnresolvedGeneratedNamespace" or "MissingGeneratedCode");
     }
 
     [Fact]

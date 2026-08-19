@@ -527,7 +527,7 @@ internal static class LegacyDataEdmxSymbolComposition
                 clrProperty,
                 Display(propertyMapping.Properties, "propertyName", "propertyHash"),
                 EdmxSymbolCompositionVocabulary.TargetKindConceptualProperty,
-                conceptualProperty.Properties.GetValueOrDefault("stableModelKey") ?? string.Empty,
+                QualifiedMemberTargetKey(conceptualProperty, ConceptualNamespaceQualifier(entity)),
                 clrProperty.Evidence.FilePath,
                 clrProperty.Evidence.StartLine,
                 clrProperty.Evidence.EndLine,
@@ -558,7 +558,7 @@ internal static class LegacyDataEdmxSymbolComposition
                 clrProperty,
                 Display(storageColumn.Properties, "columnName", "columnHash"),
                 EdmxSymbolCompositionVocabulary.TargetKindStorageColumn,
-                storageColumn.Properties.GetValueOrDefault("stableModelKey") ?? string.Empty,
+                QualifiedMemberTargetKey(storageColumn, storageIdentity),
                 propertyMapping.Evidence.FilePath,
                 propertyMapping.Evidence.StartLine,
                 propertyMapping.Evidence.EndLine,
@@ -785,6 +785,18 @@ internal static class LegacyDataEdmxSymbolComposition
         return values.All(label => string.Equals(label, "full", StringComparison.Ordinal)) ? "full" : "unknown";
     }
 
+    private static string QualifiedMemberTargetKey(CodeFact descriptor, string qualifier)
+    {
+        var key = descriptor.Properties.GetValueOrDefault("stableModelKey") ?? string.Empty;
+        return string.IsNullOrWhiteSpace(qualifier)
+            ? key
+            : "ldm:" + FactFactory.Hash(key + "\u001f" + qualifier, 32);
+    }
+
+    private static string ConceptualNamespaceQualifier(CodeFact entity) =>
+        entity.Properties.GetValueOrDefault("containerName")
+            ?? (entity.Properties.TryGetValue("containerHash", out var containerHash) ? "hash:" + containerHash : string.Empty);
+
     private static bool SchemaNamespaceMatches(IReadOnlyDictionary<string, string> property, IReadOnlyDictionary<string, string> entity)
     {
         var propertyNamespace = property.GetValueOrDefault("schemaNamespace");
@@ -822,6 +834,11 @@ internal static class LegacyDataEdmxSymbolComposition
         if (rightValue is not null && leftHashValue is not null)
         {
             return string.Equals(FactFactory.Hash(rightValue, 32), leftHashValue, StringComparison.Ordinal);
+        }
+
+        if (leftHashValue is not null && rightHashValue is not null)
+        {
+            return string.Equals(leftHashValue, rightHashValue, StringComparison.Ordinal);
         }
 
         return false;

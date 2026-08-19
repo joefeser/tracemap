@@ -134,12 +134,30 @@ Patched the exact-head findings on `12e0f052`:
   `EdmEntityType`-shaped attribute in non-designer files (baz follow-up
   on the earlier fix).
 
+## Head Review Fixes (third implementation review round)
+
+Patched the two exact-head findings on `9f6adc40`:
+
+- Member edge target keys are schema-qualified: the shipped descriptor
+  `stableModelKey` for CSDL properties (and SSDL columns) omits the schema
+  namespace, so identically named members on `ModelA.Customer` and
+  `ModelB.Customer` previously shared one key and merged in the symbol
+  inventory. Composed `MapsToConceptualProperty` targets now derive
+  `ldm:{hash(stableModelKey, conceptual namespace)}` and
+  `MapsToStorageColumn` targets derive
+  `ldm:{hash(stableModelKey, storageEntityTypeIdentity)}` while descriptor
+  facts themselves stay unchanged (Codex P1).
+- `ValuesMatch` compares hash-to-hash when both sides of an identity are
+  redacted, so equal redacted namespaces (for example a privacy-filtered
+  conceptual namespace on both the attribute bridge and the descriptor)
+  compose instead of reporting misleading gaps (Codex P2).
+
 ## Validation
 
 - `dotnet build src/dotnet/TraceMap.sln` — 0 errors.
-- `dotnet test src/dotnet/TraceMap.sln` — Passed: 1613, Failed: 0, Skipped: 0
-  (net10.0) after the second review-fix commit (26 composition fixtures
-  including alias, cross-schema property, and attribute-lookalike cases).
+- `dotnet test src/dotnet/TraceMap.sln` — Passed: 1615, Failed: 0, Skipped: 0
+  (net10.0) after the third review-fix commit (28 composition fixtures
+  including distinct member target keys and redacted-namespace hashing).
 - Focused suites: `LegacyDataEdmxSymbolCompositionTests` (18: F1-F18 plus
   the split-mapping/missing-property-evidence coverage case),
   `LegacyDataMetadataExtractorTests` (59), `LegacyDataModelRuleCatalogTests`
