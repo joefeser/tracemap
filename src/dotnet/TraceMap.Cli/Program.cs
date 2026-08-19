@@ -58,6 +58,7 @@ public static class TraceMapCommand
                 "access-review" => AccessReviewHelp(),
                 "portfolio" => PortfolioHelp(),
                 "package-impact" => PackageImpactHelp(),
+                "package-decision" => PackageDecisionHelp(),
                 "vault" => VaultHelp(),
                 "docs-export" => DocsExportHelp(),
                 "contract-diff" => ContractDiffHelp(),
@@ -66,7 +67,7 @@ public static class TraceMapCommand
                 "explorer" => ExplorerHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "version" or "local-review" or "report" or "database-design-review" or "webforms-modernization" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
+            return command is "scan" or "version" or "local-review" or "report" or "database-design-review" or "webforms-modernization" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "package-decision" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
         }
 
         using var commandOperation = TraceMapDiagnostics.StartCommand(command);
@@ -98,6 +99,7 @@ public static class TraceMapCommand
                 "access-review" => await RunAccessReviewAsync(rest, output, error, cancellationToken),
                 "portfolio" => await RunPortfolioAsync(rest, output, error, cancellationToken),
                 "package-impact" => await RunPackageImpactAsync(rest, output, error, cancellationToken),
+                "package-decision" => await RunPackageDecisionAsync(rest, output, error, cancellationToken),
                 "vault" => await RunVaultAsync(rest, output, error, cancellationToken),
                 "docs-export" => await RunDocsExportAsync(rest, output, error, cancellationToken),
                 "contract-diff" => await RunContractDiffAsync(rest, output, error, cancellationToken),
@@ -1447,6 +1449,50 @@ public static class TraceMapCommand
         return values.HasFlag("--exit-code") && result.HasFindings ? 1 : 0;
     }
 
+    private static async Task<int> RunPackageDecisionAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        var values = ParseOptions(args);
+        if (!values.TryGetValue("--decision", out var decisionPath) || string.IsNullOrWhiteSpace(decisionPath))
+        {
+            await error.WriteLineAsync("error: package-decision requires --decision <path>.");
+            return 1;
+        }
+        if (!values.TryGetValue("--index", out var indexPath) || string.IsNullOrWhiteSpace(indexPath))
+        {
+            await error.WriteLineAsync("error: package-decision requires --index <path>.");
+            return 1;
+        }
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: package-decision requires --out <path>.");
+            return 1;
+        }
+        var format = values.GetValueOrDefault("--format") ?? "markdown";
+        if (!format.Equals("markdown", StringComparison.OrdinalIgnoreCase) && !format.Equals("md", StringComparison.OrdinalIgnoreCase) && !format.Equals("json", StringComparison.OrdinalIgnoreCase))
+        {
+            await error.WriteLineAsync("error: package-decision --format must be markdown or json.");
+            return 1;
+        }
+        var result = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(
+            decisionPath,
+            indexPath,
+            outputPath,
+            format,
+            values.GetValueOrDefault("--source"),
+            values.GetValueOrDefault("--ecosystem"),
+            values.GetValueOrDefault("--decision-id"),
+            values.GetValueOrDefault("--classification"),
+            ParsePositiveInt(values, "--max-findings", 200),
+            ParsePositiveInt(values, "--max-gaps", 1000),
+            values.HasFlag("--exit-code"),
+            values.GetValueOrDefault("--as-of")), cancellationToken);
+        await output.WriteLineAsync($"TraceMap package-decision completed: {result.MarkdownPath ?? result.JsonPath}");
+        await output.WriteLineAsync($"Exact matches: {result.Report.Summary.ExactCount}");
+        await output.WriteLineAsync($"Possible matches: {result.Report.Summary.PossibleCount}");
+        await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
+        return values.HasFlag("--exit-code") && result.ExitCodeTriggered ? 1 : 0;
+    }
+
     private static async Task<int> RunVaultAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
     {
         if (args.Length == 0 || IsHelp(args[0]))
@@ -2462,6 +2508,7 @@ public static class TraceMapCommand
               tracemap access-review create --scan-output <access-scan-directory> --out <bundle-directory>
               tracemap portfolio --out <path> (--index <index.sqlite> --label <label> ... | --manifest <portfolio.json>)
               tracemap package-impact --index <index.sqlite> --package-delta <delta.json> --out <path>
+              tracemap package-decision --decision <package-decision.json> --index <index.sqlite> --out <path> [--format <markdown|json>] [selectors]
               tracemap vault export --combined-index <combined.sqlite> --out <vault-output>
               tracemap docs-export --index <index-or-combined.sqlite> --out <docs-output>
               tracemap baseline create --scan-output <path> --label <neutral-slug> --purpose <neutral-slug> --out <path>
@@ -2493,6 +2540,7 @@ public static class TraceMapCommand
               access-review Compose an existing Access scan into a private local review bundle.
               portfolio Summarize dependency evidence across many TraceMap indexes.
               package-impact Report static package upgrade evidence from indexed package declarations.
+              package-decision Correlate external package decision records with one static index.
               vault    Export deterministic Markdown evidence notes and graph.json from existing TraceMap evidence.
               docs-export Generate deterministic Markdown and JSONL evidence docs for external ingestion.
               baseline Create, validate, and compare redacted legacy baseline summaries.
@@ -3130,6 +3178,36 @@ public static class TraceMapCommand
 
             Outputs:
               package-impact-report.md and/or package-impact-report.json
+            """;
+    }
+
+    private static string PackageDecisionHelp()
+    {
+        return """
+            Usage:
+              tracemap package-decision --decision <package-decision.json> --index <index.sqlite> --out <path> [--format <markdown|json>] [selectors]
+
+            Required:
+              --decision <path>          package-decision.v1 external record file.
+              --index <path>             TraceMap single index (read-only in PR1).
+              --out <path>               Output directory or file path.
+
+            Optional:
+              --format <value>           markdown or json. Directory outputs write both.
+              --source <label>           Filter source label (single-index default is default).
+              --ecosystem <name>         Filter ecosystem.
+              --decision-id <id>         Filter producer-scoped decision ID.
+              --classification <rung>    Filter output correlation rung.
+              --max-findings <n>         Correlation row cap. Default: 200.
+              --max-gaps <n>             Gap row cap. Default: 1000.
+              --as-of <RFC3339 UTC>      Deterministic effectiveness context.
+              --exit-code                Return 1 only for exact reject/revoke matches.
+
+            Outputs:
+              package-decision-report.md and/or package-decision-report.json
+
+            The command reports producer-supplied state and static evidence only. It does not
+            authenticate producers, fetch or execute packages, or enforce admission/revocation.
             """;
     }
 

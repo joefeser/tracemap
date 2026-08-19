@@ -1,0 +1,17 @@
+{
+  "version": "package-decision.v1",
+  "records": [
+    {
+      "decisionId": "dec-sample-possible",
+      "decisionKind": "admit",
+      "ecosystem": "npm",
+      "packageName": "@example/lib",
+      "artifactVersion": "1.2.3",
+      "producer": {
+        "id": "sample-producer",
+        "policyVersion": "2026-08"
+      },
+      "decisionTimeUtc": "2026-08-18T00:00:00Z"
+    }
+  ]
+}
