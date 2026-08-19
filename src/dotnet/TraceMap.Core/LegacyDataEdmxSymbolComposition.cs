@@ -387,6 +387,14 @@ internal static class LegacyDataEdmxSymbolComposition
             return;
         }
 
+        if (entityTable.Properties.TryGetValue("unsupportedShapeNames", out var unsupportedShapeNames))
+        {
+            AddCompositionGap(manifest, output, gapKeys, path, entityTable.Evidence.StartLine,
+                "UnsupportedLegacyOrmMappingShape",
+                $"Unsupported EDMX mapping shape(s): {unsupportedShapeNames}.");
+            return;
+        }
+
         if (namespaceClear is not null
             && !ValuesMatch(entityTable.Properties, "resolvedConceptualTypeName", "resolvedConceptualTypeHash",
                 new Dictionary<string, string>(StringComparer.Ordinal)

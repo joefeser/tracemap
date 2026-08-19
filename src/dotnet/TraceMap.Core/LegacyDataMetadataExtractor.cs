@@ -605,8 +605,8 @@ public static class LegacyDataMetadataExtractor
             ? "reduced"
             : "full";
         var inheritedEdmxTypeNames = csdlSchemas
-            .SelectMany(schema => schema.Elements().Where(element => element.Name.LocalName == "EntityType" && !string.IsNullOrWhiteSpace(AttributeValue(element, "BaseType"))))
-            .Select(element => AttributeValue(element, "Name"))
+            .SelectMany(schema => schema.Elements().Where(element => element.Name.LocalName == "EntityType" && !string.IsNullOrWhiteSpace(AttributeValue(element, "BaseType")))
+                .Select(element => QualifiedEdmxTypeName(AttributeValue(schema, "Namespace"), AttributeValue(element, "Name"))))
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .Select(name => name!)
             .ToHashSet(StringComparer.Ordinal);
@@ -614,7 +614,7 @@ public static class LegacyDataMetadataExtractor
         foreach (var entity in csdlSchemas.SelectMany(schema => schema.Elements().Where(element => element.Name.LocalName == "EntityType")).OrderBy(GetLine).ThenBy(element => AttributeValue(element, "Name"), StringComparer.Ordinal))
         {
             var name = AttributeValue(entity, "Name") ?? "entity";
-            var inheritedEntity = inheritedEdmxTypeNames.Contains(name);
+            var inheritedEntity = inheritedEdmxTypeNames.Contains(QualifiedEdmxTypeName(AttributeValue(entity.Parent, "Namespace"), name));
             var entityCoverageLabel = inheritedEntity ? "reduced" : coverageLabel;
             if (inheritedEntity)
             {
@@ -652,9 +652,13 @@ public static class LegacyDataMetadataExtractor
             }
         }
 
-        foreach (var association in csdlSchemas.SelectMany(schema => schema.Elements().Where(element => element.Name.LocalName == "Association")).OrderBy(GetLine))
+        foreach (var (schema, association) in csdlSchemas
+                     .SelectMany(schema => schema.Elements()
+                         .Where(element => element.Name.LocalName == "Association")
+                         .Select(association => (Schema: schema, Association: association)))
+                     .OrderBy(item => GetLine(item.Association)))
         {
-            AddEdmxAssociationFact(manifest, facts, item.RelativePath, metadataHash, metadataFact.FactId, coverageLabel, inheritedEdmxTypeNames, association);
+            AddEdmxAssociationFact(manifest, facts, item.RelativePath, metadataHash, metadataFact.FactId, coverageLabel, inheritedEdmxTypeNames, AttributeValue(schema, "Namespace"), association);
         }
 
         foreach (var set in conceptualContainers.SelectMany(container => container.Elements().Where(element => element.Name.LocalName == "EntitySet")).OrderBy(GetLine))
@@ -750,6 +754,19 @@ public static class LegacyDataMetadataExtractor
 
     private static string StorageEntityTypeIdentity(string relativePath, string schemaNamespace, string storageTypeName) =>
         "ssdl-type:" + FactFactory.Hash($"{relativePath}\u001f{schemaNamespace}\u001f{storageTypeName}", 24);
+
+    private static string QualifiedEdmxTypeName(string? schemaNamespace, string? typeName)
+    {
+        if (string.IsNullOrWhiteSpace(typeName))
+        {
+            return string.Empty;
+        }
+
+        var value = typeName.Trim();
+        return value.Contains('.', StringComparison.Ordinal) || string.IsNullOrWhiteSpace(schemaNamespace)
+            ? value
+            : $"{schemaNamespace}.{value}";
+    }
 
     private static IReadOnlyDictionary<string, IReadOnlyList<string>> BuildConceptualTypeLookup(IReadOnlyList<XElement> csdlSchemas)
     {
@@ -907,6 +924,13 @@ public static class LegacyDataMetadataExtractor
             }
 
             var fragment = fragments[0];
+            var unsupportedShapeNames = entitySetMapping
+                .Descendants()
+                .Where(element => element.Name.LocalName is "Condition" or "ComplexProperty" or "FunctionImportMapping" or "ModificationFunctionMapping")
+                .Select(element => element.Name.LocalName)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(name => name, StringComparer.Ordinal)
+                .ToArray();
             var storeSet = AttributeValue(fragment, "StoreEntitySet") ?? "storage";
             var storageContainerName = AttributeValue(
                 entitySetMapping.Ancestors().FirstOrDefault(element => element.Name.LocalName == "EntityContainerMapping"),
@@ -930,6 +954,10 @@ public static class LegacyDataMetadataExtractor
             mappingProps["typeNamePresent"] = typeNames.Length > 0 ? "True" : "False";
             mappingProps["typeNameIsTypeOf"] = typeName.StartsWith("IsTypeOf(", StringComparison.Ordinal) ? "True" : "False";
             mappingProps["storeEntitySetResolved"] = resolvedStoreSet is not null ? "True" : "False";
+            if (unsupportedShapeNames.Length > 0)
+            {
+                mappingProps["unsupportedShapeNames"] = string.Join(";", unsupportedShapeNames);
+            }
             if (resolvedConceptualTypeNames.Count == 1)
             {
                 AddSafeName(mappingProps, "resolvedConceptualTypeName", "resolvedConceptualTypeHash", resolvedConceptualTypeNames[0]);
@@ -954,6 +982,10 @@ public static class LegacyDataMetadataExtractor
                 var properties = MetadataProperties("Edmx", metadataHash, "property-column");
                 properties["sourceSection"] = "MSL";
                 properties["mappingKind"] = "property-column";
+                if (unsupportedShapeNames.Length > 0)
+                {
+                    properties["unsupportedShapeNames"] = string.Join(";", unsupportedShapeNames);
+                }
                 if (resolvedStoreSet is not null)
                 {
                     properties["storageEntityTypeIdentity"] = resolvedStoreSet.StorageEntityTypeIdentity;
@@ -982,6 +1014,7 @@ public static class LegacyDataMetadataExtractor
         string sourceMetadataFactId,
         string coverageLabel,
         IReadOnlySet<string> inheritedEdmxTypeNames,
+        string? schemaNamespace,
         XElement association)
     {
         var associationName = AttributeValue(association, "Name") ?? "association";
@@ -1026,8 +1059,10 @@ public static class LegacyDataMetadataExtractor
             return;
         }
 
-        var firstType = LocalName(AttributeValue(ends[0], "Type"));
-        var secondType = LocalName(AttributeValue(ends[1], "Type"));
+        var firstTypeReference = AttributeValue(ends[0], "Type");
+        var secondTypeReference = AttributeValue(ends[1], "Type");
+        var firstType = LocalName(firstTypeReference);
+        var secondType = LocalName(secondTypeReference);
         var relationshipDecision = ClassifyEdmxRelationship(
             "csdl-association",
             EdmxEndpointState(firstType),
@@ -1048,8 +1083,8 @@ public static class LegacyDataMetadataExtractor
         }
 
         var relationshipCoverageLabel = coverageLabel;
-        var inheritedEndpoint = (!string.IsNullOrWhiteSpace(firstType) && inheritedEdmxTypeNames.Contains(firstType))
-            || (!string.IsNullOrWhiteSpace(secondType) && inheritedEdmxTypeNames.Contains(secondType));
+        var inheritedEndpoint = inheritedEdmxTypeNames.Contains(QualifiedEdmxTypeName(schemaNamespace, firstTypeReference))
+            || inheritedEdmxTypeNames.Contains(QualifiedEdmxTypeName(schemaNamespace, secondTypeReference));
         if (relationshipDecision.Decision != LegacyRelationshipDecision.EmitRelationship
             || inheritedEndpoint)
         {

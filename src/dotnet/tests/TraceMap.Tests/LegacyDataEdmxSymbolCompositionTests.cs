@@ -426,6 +426,153 @@ public sealed class LegacyDataEdmxSymbolCompositionTests
     }
 
     [Fact]
+    public void Unsupported_mapping_shapes_fail_closed_per_mapping_and_leave_siblings_composable()
+    {
+        using var fixture = new Ef6Fixture
+        {
+            Csdl = """
+                <edmx:ConceptualModels>
+                  <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm" Namespace="Model">
+                    <EntityContainer Name="ModelContainer">
+                      <EntitySet Name="Customers" EntityType="Model.Customer" />
+                      <EntitySet Name="Orders" EntityType="Model.Order" />
+                    </EntityContainer>
+                    <EntityType Name="Customer"><Property Name="Id" Type="Int32" /></EntityType>
+                    <EntityType Name="Order"><Property Name="Id" Type="Int32" /></EntityType>
+                  </Schema>
+                </edmx:ConceptualModels>
+                """,
+            Ssdl = """
+                <edmx:StorageModels>
+                  <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm/ssdl" Namespace="Store">
+                    <EntityContainer Name="StoreContainer">
+                      <EntitySet Name="Customers" EntityType="Store.CustomerTable" Table="dbo.Customers" />
+                      <EntitySet Name="Orders" EntityType="Store.OrderTable" Table="dbo.Orders" />
+                    </EntityContainer>
+                    <EntityType Name="CustomerTable"><Property Name="Id" Type="int" /></EntityType>
+                    <EntityType Name="OrderTable"><Property Name="Id" Type="int" /></EntityType>
+                  </Schema>
+                </edmx:StorageModels>
+                """,
+            Msl = """
+                <edmx:Mappings>
+                  <Mapping xmlns="http://schemas.microsoft.com/ado/2009/11/mapping/cs">
+                    <EntityContainerMapping StorageEntityContainer="StoreContainer" CdmEntityContainer="ModelContainer">
+                      <EntitySetMapping Name="Customers">
+                        <EntityTypeMapping TypeName="Model.Customer">
+                          <MappingFragment StoreEntitySet="Customers">
+                            <Condition ColumnName="TenantId" IsNull="false" />
+                            <ComplexProperty Name="Address">
+                              <ScalarProperty Name="Id" ColumnName="Id" />
+                            </ComplexProperty>
+                            <ScalarProperty Name="Id" ColumnName="Id" />
+                          </MappingFragment>
+                        </EntityTypeMapping>
+                      </EntitySetMapping>
+                      <EntitySetMapping Name="Orders">
+                        <EntityTypeMapping TypeName="Model.Order">
+                          <MappingFragment StoreEntitySet="Orders">
+                            <ScalarProperty Name="Id" ColumnName="Id" />
+                          </MappingFragment>
+                        </EntityTypeMapping>
+                      </EntitySetMapping>
+                    </EntityContainerMapping>
+                  </Mapping>
+                </edmx:Mappings>
+                """,
+            DesignerCode = """
+                namespace Model;
+                public class Customer { public int Id { get; set; } }
+                public class Order { public int Id { get; set; } }
+                """
+        };
+
+        var result = fixture.Scan();
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataEdmx
+            && fact.Properties.GetValueOrDefault("classification") == "UnsupportedLegacyOrmMappingShape"
+            && fact.Properties.GetValueOrDefault("message")!.Contains("Condition", StringComparison.Ordinal));
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.Properties.GetValueOrDefault("mappingKind") == "entity-table"
+            && fact.Properties.GetValueOrDefault("entityName") == "Customers"
+            && fact.Properties.GetValueOrDefault("unsupportedShapeNames") == "ComplexProperty;Condition");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.SymbolRelationship
+            && fact.Properties.GetValueOrDefault("relationshipKind") is "MapsToStorageTable" or "MapsToStorageColumn"
+            && fact.Properties.GetValueOrDefault("sourceSymbol") == "global::Model.Customer");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.SymbolRelationship
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "MapsToStorageTable"
+            && fact.Properties.GetValueOrDefault("sourceSymbol") == "global::Model.Order");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.SymbolRelationship
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "MapsToStorageColumn"
+            && fact.Properties.GetValueOrDefault("sourceSymbol") == "global::Model.Order.Id");
+    }
+
+    [Fact]
+    public void Inherited_entity_exclusion_is_qualified_by_csdl_namespace()
+    {
+        using var fixture = new Ef6Fixture
+        {
+            Csdl = """
+                <edmx:ConceptualModels>
+                  <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm" Namespace="ModelA">
+                    <EntityContainer Name="ModelContainer">
+                      <EntitySet Name="CustomersA" EntityType="ModelA.Customer" />
+                      <EntitySet Name="CustomersB" EntityType="ModelB.Customer" />
+                    </EntityContainer>
+                    <EntityType Name="BaseCustomer"><Property Name="Id" Type="Int32" /></EntityType>
+                    <EntityType Name="Customer" BaseType="ModelA.BaseCustomer"><Property Name="Id" Type="Int32" /></EntityType>
+                  </Schema>
+                  <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm" Namespace="ModelB">
+                    <EntityType Name="Customer"><Property Name="Id" Type="Int32" /></EntityType>
+                  </Schema>
+                </edmx:ConceptualModels>
+                """,
+            Msl = """
+                <edmx:Mappings>
+                  <Mapping xmlns="http://schemas.microsoft.com/ado/2009/11/mapping/cs">
+                    <EntityContainerMapping StorageEntityContainer="StoreContainer" CdmEntityContainer="ModelContainer">
+                      <EntitySetMapping Name="CustomersA">
+                        <EntityTypeMapping TypeName="ModelA.Customer">
+                          <MappingFragment StoreEntitySet="Customers">
+                            <ScalarProperty Name="Id" ColumnName="Id" />
+                          </MappingFragment>
+                        </EntityTypeMapping>
+                      </EntitySetMapping>
+                      <EntitySetMapping Name="CustomersB">
+                        <EntityTypeMapping TypeName="ModelB.Customer">
+                          <MappingFragment StoreEntitySet="Customers">
+                            <ScalarProperty Name="Id" ColumnName="Id" />
+                          </MappingFragment>
+                        </EntityTypeMapping>
+                      </EntitySetMapping>
+                    </EntityContainerMapping>
+                  </Mapping>
+                </edmx:Mappings>
+                """,
+            DesignerCode = """
+                namespace ModelA { public class Customer { public int Id { get; set; } } }
+                namespace ModelB { public class Customer { public int Id { get; set; } } }
+                """
+        };
+
+        var result = fixture.Scan();
+        var composed = result.Facts.Where(fact => fact.FactType == FactTypes.SymbolRelationship
+                && fact.RuleId == RuleIds.LegacyDataEdmxSymbolComposition)
+            .ToArray();
+
+        Assert.DoesNotContain(composed, fact => fact.Properties.GetValueOrDefault("sourceSymbol") == "global::ModelA.Customer");
+        Assert.Contains(composed, fact => fact.Properties.GetValueOrDefault("sourceSymbol") == "global::ModelB.Customer"
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "MapsToConceptualEntity");
+        Assert.Contains(composed, fact => fact.Properties.GetValueOrDefault("sourceSymbol") == "global::ModelB.Customer"
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "MapsToStorageTable");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataEdmx
+            && fact.Properties.GetValueOrDefault("classification") == "UnsupportedLegacyOrmMappingShape"
+            && fact.Properties.GetValueOrDefault("message")!.Contains("inherited", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void F09_missing_generated_code_stays_partial_without_edges()
     {
         using var fixture = new Ef6Fixture();
