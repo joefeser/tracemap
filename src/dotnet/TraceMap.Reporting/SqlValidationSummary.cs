@@ -221,12 +221,13 @@ public static partial class SqlValidationSummaryReader
 
     public static string ComputeDigest(string json)
     {
-        var node = JsonNode.Parse(json) ?? throw new JsonException("JSON root is required.");
-        if (node["artifact"] is not JsonObject artifact || !artifact.ContainsKey("digest"))
+        using var document = JsonDocument.Parse(json);
+        if (document.RootElement.ValueKind != JsonValueKind.Object
+            || !document.RootElement.TryGetProperty("artifact", out var artifact)
+            || artifact.ValueKind != JsonValueKind.Object
+            || !artifact.TryGetProperty("digest", out _))
             throw new JsonException("artifact.digest is required.");
-        artifact["digest"] = string.Empty;
-        var canonical = Canonicalize(node).ToJsonString(new JsonSerializerOptions { WriteIndented = false });
-        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical))).ToLowerInvariant();
+        return CanonicalJsonDigest.Compute(json, "artifact.digest");
     }
 
     public static bool TryParseTimestamp(string? text, out DateTimeOffset value)
@@ -342,20 +343,6 @@ public static partial class SqlValidationSummaryReader
     private static string StableId(params string[] parts) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join('\u001f', parts)))).ToLowerInvariant()[..24];
     private static string ContextKey(SqlValidationTargetContext context) => string.Join('|', context.Engine, context.ServerRole, context.DatabaseRole, context.SchemaRole, context.ExecutionMode);
     private static string ObservationKey(SqlValidationObservation observation) => string.Join('\u001f', observation.Repository, observation.CommitSha, ContextKey(observation.TargetContext), observation.AssertionCode);
-
-    private static JsonNode Canonicalize(JsonNode node)
-    {
-        if (node is JsonObject obj)
-        {
-            var sorted = new JsonObject();
-            foreach (var property in obj.OrderBy(property => property.Key, StringComparer.Ordinal))
-                sorted[property.Key] = property.Value is null ? null : Canonicalize(property.Value);
-            return sorted;
-        }
-        if (node is JsonArray array)
-            return new JsonArray(array.Select(item => item is null ? null : Canonicalize(item)).ToArray());
-        return node.DeepClone();
-    }
 
     private static void RequireObject(JsonElement element, string name)
     {
