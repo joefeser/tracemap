@@ -1056,7 +1056,13 @@ dotnet test src/dotnet/TraceMap.sln
 git diff --check
 ```
 
-Checked-in fixtures should cover DBML entities/tables/columns/associations/routines, EDMX CSDL/SSDL/MSL mappings and unsupported shapes, typed DataSet XSD gating, TableAdapter command hashing, normalized model identity keys, config provider/connection metadata, generated-code links, unsupported old ORM descriptor gaps, malformed XML, DTD/entity rejection, deterministic output, and privacy suppression in facts, reports, logs, and SQLite.
+When changing the EF6 EDMX symbol composition (`legacy.data.edmx.symbol-composition.v1`), also run the focused suites:
+
+```bash
+dotnet test src/dotnet/TraceMap.sln --filter "FullyQualifiedName~LegacyDataEdmxSymbolCompositionTests|FullyQualifiedName~LegacyDataMetadataExtractorTests|FullyQualifiedName~LegacyDataModelRuleCatalogTests|FullyQualifiedName~CSharpSemanticExtractorTests|FullyQualifiedName~ReverseImpactTraversalTests"
+```
+
+Checked-in fixtures should cover DBML entities/tables/columns/associations/routines, EDMX CSDL/SSDL/MSL mappings and unsupported shapes, typed DataSet XSD gating, TableAdapter command hashing, normalized model identity keys, config provider/connection metadata, generated-code links, unsupported old ORM descriptor gaps, malformed XML, DTD/entity rejection, deterministic output, and privacy suppression in facts, reports, logs, and SQLite. EF6 composition fixtures additionally cover the F1-F18 matrix: namespace-parity and attribute-bridged composition, decoy type names, SSDL storage-type identity joins, same simple names across namespaces, identical assembly name/version across compilation scopes, scope decoys in sibling directories and prefix siblings, per-EDMX compiler availability in multi-project scans, ambiguous and unsupported fail-closed gaps, persistence round-trip through `symbol_relationships` and `combined_dependency_edges`, and reverse-impact traversal with hop provenance and mid-traversal member expansion.
 
 Useful inspection queries:
 

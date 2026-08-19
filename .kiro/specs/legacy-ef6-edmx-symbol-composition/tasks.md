@@ -39,9 +39,6 @@ runway for future implementation PRs. Do not close #680 with this PR.
       composition-owned `LegacyDataGeneratedFileScope` bridge fact
       (file-level scoping only); identity stays proven only by Tier1
       declarations. Added fixture F16.
-- [ ] 0.12 Hold the PR in draft per owner directive; after the focused
-      validation, the owner runs one final review before the PR leaves
-      draft. Record the outcome in `implementation-state.md`.
 - [x] 0.13 Patch the second automated-review round on the exact head: scope
       decoys from the repo-wide prefix convention (Qodo High — tightened to
       the same-directory `{edmxBaseName}.Designer.cs` rule), per-EDMX
@@ -56,12 +53,12 @@ runway for future implementation PRs. Do not close #680 with this PR.
 
 ## Implementation Tasks
 
-- [ ] 1. Add the rule catalog entry and constants.
+- [x] 1. Add the rule catalog entry and constants.
       Requirements: 5, 10.
-  - [ ] 1.1 Add `RuleIds.LegacyDataEdmxSymbolComposition` and the four
+  - [x] 1.1 Add `RuleIds.LegacyDataEdmxSymbolComposition` and the four
         relationship kind constants; assert them in the legacy-data rule
         catalog tests.
-  - [ ] 1.2 Add the `legacy.data.edmx.symbol-composition.v1` entry to
+  - [x] 1.2 Add the `legacy.data.edmx.symbol-composition.v1` entry to
         `rules/rule-catalog.yml` with emits (`SymbolRelationship`,
         `LegacyDataGeneratedFileScope`, `AnalysisGap`), tiers, gap
         classifications
@@ -76,29 +73,29 @@ runway for future implementation PRs. Do not close #680 with this PR.
         no runtime claims; no global short-name matching; descriptor
         ceilings not upgraded; generated/custom namespaces without a
         deterministic bridge gap closed).
-  - [ ] 1.3 Add the `legacy-data-composition/0.1.0` scanner version constant.
-  - [ ] 1.4 Extend the semantic-declaration rule/catalog contract only for the
+  - [x] 1.3 Add the `legacy-data-composition/0.1.0` scanner version constant.
+  - [x] 1.4 Extend the semantic-declaration rule/catalog contract only for the
         bounded mechanism-1 safe/hash conceptual-identity properties; raw
         attribute text is never retained. The declaration fact then serves as
         `namespaceBridgeFactId` without adding a duplicate bridge fact.
 
-- [ ] 2. Extend EDMX parsing with canonical resolution inputs.
+- [x] 2. Extend EDMX parsing with canonical resolution inputs.
       Requirements: 2, 3.
-  - [ ] 2.1 Read `EntityTypeMapping/@TypeName` in `AddEdmxMappings` (existing
+  - [x] 2.1 Read `EntityTypeMapping/@TypeName` in `AddEdmxMappings` (existing
         extractor; no second parser), preserve `IsTypeOf` detection, and
         surface the resolved conceptual type on the mapping facts.
-  - [ ] 2.2 Resolve `MappingFragment/@StoreEntitySet` through the SSDL
+  - [x] 2.2 Resolve `MappingFragment/@StoreEntitySet` through the SSDL
         storage container and carry the resolved SSDL entity set identity
         (stable model key) and table descriptor on the mapping facts. Add the
         same deterministic `storageEntityTypeIdentity` to the SSDL entity-set
         and column descriptors so column resolution is scoped to the resolved
         storage type rather than a global name or transient side channel.
-  - [ ] 2.3 Keep existing descriptor facts, tiers, and gap behavior unchanged
+  - [x] 2.3 Keep existing descriptor facts, tiers, and gap behavior unchanged
         apart from additive properties.
 
-- [ ] 3. Build the composition stage.
+- [x] 3. Build the composition stage.
       Requirements: 1, 2, 3, 4.
-  - [ ] 3.1 Add bounded semantic property-symbol emission during the existing
+  - [x] 3.1 Add bounded semantic property-symbol emission during the existing
         C# semantic pass for entity types proven eligible or candidate for
         EF/EDMX composition (`DbSet<T>`/`IDbSet<T>` entity arguments,
         supported generated conceptual identity attributes, or the
@@ -109,7 +106,7 @@ runway for future implementation PRs. Do not close #680 with this PR.
         authority. Preserve canonical member symbol IDs, containing type
         identity, assembly identity, source span, and compiler provenance.
         No global property inventory.
-  - [ ] 3.2 Implement the namespace evidence ladder exactly as designed
+  - [x] 3.2 Implement the namespace evidence ladder exactly as designed
         (D4/D4.1): mechanism 1 bounded semantic attribute read
         (`EdmEntityTypeAttribute` family — an explicit bounded extractor
         addition that enriches Tier1 declaration evidence), mechanism 2 only
@@ -122,19 +119,19 @@ runway for future implementation PRs. Do not close #680 with this PR.
         name/version, before accepting uniqueness. Preserve exact member lookup,
         and entity-set/type/fragment/
         store-set/scalar resolution per D4.
-  - [ ] 3.3 Emit `MapsToConceptualEntity` and `MapsToConceptualProperty` at the
+  - [x] 3.3 Emit `MapsToConceptualEntity` and `MapsToConceptualProperty` at the
         weakest supporting tier capped at Tier2, and emit
         `MapsToStorageTable` and `MapsToStorageColumn` capped at Tier2, with
         the full evidence envelope and complete ordered supporting fact chains,
         including bridge evidence; compute tier and coverage from the weakest
         supporting fact.
-  - [ ] 3.4 Emit fail-closed gaps for every D9 table row; no edge may be
+  - [x] 3.4 Emit fail-closed gaps for every D9 table row; no edge may be
         emitted from syntax-only or ambiguous joins; missing semantic
         property evidence is a typed gap, never name attachment.
         Association/provider mappings emit an explicit composition-owned
         `UnsupportedLegacyOrmMappingShape` gap while existing facts remain
         unchanged.
-  - [ ] 3.5 Emit the `LegacyDataGeneratedFileScope` bridge fact per EDMX
+  - [x] 3.5 Emit the `LegacyDataGeneratedFileScope` bridge fact per EDMX
         document using the tightened same-directory rule — only inventory
         `.designer.cs` files in the EDMX's scan-relative directory whose
         base name is exactly `{edmxBaseName}.Designer` (ordinal) — recording
@@ -144,7 +141,7 @@ runway for future implementation PRs. Do not close #680 with this PR.
         (no CLR identity content); empty scope sets emit no fact. Test
         determinism plus the F16 collision and F17 decoy guards (other
         directories/projects and prefix siblings are never candidates).
-  - [ ] 3.6 Evaluate compiler availability per EDMX scope using the
+  - [x] 3.6 Evaluate compiler availability per EDMX scope using the
         per-file semantic-coverage record (the `semanticallyAnalyzedFiles`
         set from `ScanEngine.cs:214/:757`): scoped files without Tier1
         declarations and without confirmed coverage emit
@@ -153,19 +150,19 @@ runway for future implementation PRs. Do not close #680 with this PR.
         `MissingGeneratedCode` and covered files with only divergent
         declarations emit `UnresolvedGeneratedNamespace`. Cover with the F18
         multi-project fixture.
-  - [ ] 3.7 Only if a compilation-backed composition seam proves unavoidable:
+  - [x] 3.7 Only if a compilation-backed composition seam proves unavoidable:
         add it as an explicit separate task with documented lifecycle, memory
         bounds, determinism, and cancellation requirements. No such seam
         exists today and none is implied.
 
-- [ ] 4. Wire persistence and consumers.
+- [x] 4. Wire persistence and consumers.
       Requirements: 6, 8.
-  - [ ] 4.1 Verify `symbol_relationships` rows, combined import, and
+  - [x] 4.1 Verify `symbol_relationships` rows, combined import, and
         `combined_dependency_edges` rows with direction and kind preserved;
         extend only if a gap is proven.
-  - [ ] 4.2 Ensure `NormalizeEdgeKind` passes the four new kinds through
+  - [x] 4.2 Ensure `NormalizeEdgeKind` passes the four new kinds through
         unchanged in path graphs.
-  - [ ] 4.3 Add the opt-in `mapping` reverse-impact filter (resolved Q1) and
+  - [x] 4.3 Add the opt-in `mapping` reverse-impact filter (resolved Q1) and
         traverse the four kinds upstream with hop provenance, preserving
         direct/transitive distinction, per-hop evidence, deterministic cycle
         handling, and fail-closed selectors; default filters unchanged and
@@ -174,15 +171,15 @@ runway for future implementation PRs. Do not close #680 with this PR.
         `tracemap.reverse-impact.v1`), and add deterministic bounded
         contained-member expansion for CLR entity types reached
         mid-traversal so table seeds reach callers (F12).
-  - [ ] 4.4 Confirm no reducer allowlist changes and no new consumer.
+  - [x] 4.4 Confirm no reducer allowlist changes and no new consumer.
 
-- [ ] 5. Add the fixture matrix and tests.
+- [x] 5. Add the fixture matrix and tests.
       Requirements: 9.
-  - [ ] 5.1 Create test-local synthetic EF6 database-first fixtures (EDMX +
+  - [x] 5.1 Create test-local synthetic EF6 database-first fixtures (EDMX +
         generated entities + `DbContext` with `DbSet<T>`/`IDbSet<T>` stubs
         in `System.Data.Entity`); no maintained `samples/` fixture in the
         first implementation (resolved Q4).
-  - [ ] 5.2 Implement cases F1–F18 asserting identity, endpoints, provenance,
+  - [x] 5.2 Implement cases F1–F18 asserting identity, endpoints, provenance,
         spans, tiers, rule IDs, supporting fact IDs, gaps, and coverage,
         including bridge IDs/weakest-link tier, identical assembly name/version
         across distinct compilation scopes, scoped-candidate duplicate symbol
@@ -190,19 +187,19 @@ runway for future implementation PRs. Do not close #680 with this PR.
         compiler unavailability, SSDL same-column-name decoys,
         staged property-candidate intersection, hop provenance fields, and
         association scope gaps.
-  - [ ] 5.3 Add persistence round-trip, reverse-impact, path, and determinism
+  - [x] 5.3 Add persistence round-trip, reverse-impact, path, and determinism
         tests.
 
-- [ ] 6. Update documentation and validation.
+- [x] 6. Update documentation and validation.
       Requirements: 10, 11.
-  - [ ] 6.1 Update `docs/LANGUAGE_ADAPTER_CONTRACT.md` with the composed fact
+  - [x] 6.1 Update `docs/LANGUAGE_ADAPTER_CONTRACT.md` with the composed fact
         contract and tier ceilings.
-  - [ ] 6.2 Add focused validation filters and fixture expectations to
+  - [x] 6.2 Add focused validation filters and fixture expectations to
         `docs/VALIDATION.md`.
-  - [ ] 6.3 Run the pinned checks: build, full .NET suite, focused legacy
+  - [x] 6.3 Run the pinned checks: build, full .NET suite, focused legacy
         data/EF/graph/combined-path/reverse-impact filters,
         `./scripts/check-private-paths.sh`, `git diff --check`.
-  - [ ] 6.4 Update this file and `implementation-state.md` as implementation
+  - [x] 6.4 Update this file and `implementation-state.md` as implementation
         lands.
 
 ## Definition Of Done (implementation PRs)
