@@ -662,6 +662,7 @@ public static class LegacyDataMetadataExtractor
             var properties = MetadataProperties("Edmx", metadataHash, "csdl-entity-set");
             properties["sourceSection"] = "CSDL";
             AddSafeName(properties, "entityName", "entityHash", name);
+            AddSafeName(properties, "entityTypeReference", "entityTypeReferenceHash", AttributeValue(set, "EntityType"));
             AddSafeName(properties, "entityTypeName", "entityTypeHash", LocalName(AttributeValue(set, "EntityType")));
             AddModelIdentity(properties, "Edmx", "entity", "conceptual", item.RelativePath, "edmx-csdl-entity-set", name, AttributeValue(set.Parent, "Name"), metadataFact.FactId, Parts(("entity-set", name), ("entity-type", LocalName(AttributeValue(set, "EntityType"))), ("container", AttributeValue(set.Parent, "Name"))), coverageLabel);
             facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataEntityDeclared, RuleIds.LegacyDataEdmx, item.RelativePath, set, TargetFrom(properties, "entityName", "entityHash"), properties));
