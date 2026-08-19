@@ -139,32 +139,51 @@ join, so that composition is reproducible and auditable.
 
 Acceptance criteria:
 
-1. CLR entity reconciliation SHALL use exact equality between the CSDL
-   namespace-qualified entity type name (`Schema/@Namespace` +
-   `EntityType/@Name`) and the compiler-resolved CLR namespace-qualified type
-   name, over Tier1 `TypeDeclared`-grade symbol evidence.
-2. CLR entity reconciliation SHALL additionally require that all matching
-   declarations resolve to a single assembly identity; multiple assemblies with
-   the same qualified name SHALL fail closed.
-3. CLR property reconciliation SHALL resolve the member symbol within the
-   already-reconciled containing entity type only, by exact member name; global
-   or cross-type name matching SHALL NOT occur.
-4. CSDL `EntitySet/@EntityType` SHALL resolve either as a namespace-qualified
+1. CLR entity reconciliation SHALL resolve the generated CLR type to the CSDL
+   conceptual type through a deterministic evidence ladder, tried in order:
+   1. explicit compiler-resolved EF generated-type metadata exposing the exact
+      conceptual namespace and type identity — for example the
+      `EdmEntityType(NamespaceName=..., Name=...)` attribute family emitted by
+      attribute-bearing EF6 generation styles — read through bounded semantic
+      attribute evidence;
+   2. deterministic checked-in generation or project metadata, only where the
+      scanner can actually read it and only when it proves the generated CLR
+      namespace/type relationship to the EDMX;
+   3. exact equality between the CSDL namespace-qualified entity type name
+      (`Schema/@Namespace` + `EntityType/@Name`) and the compiler-resolved CLR
+      namespace-qualified type name, applied only as a documented supported
+      convention and only over generated-code candidates already scoped to
+      that EDMX by the shipped generated-file linkage convention;
+   4. if no mechanism proves a unique mapping, an explicit reduced-coverage
+      `AnalysisGap` SHALL be emitted and no composed edge SHALL be produced.
+2. The ladder SHALL never fall back to global simple-name matching, and
+   display labels SHALL never serve as identity.
+3. Duplicate qualified types across assemblies SHALL fail closed regardless of
+   which ladder mechanism produced the match.
+4. The spec SHALL clearly separate currently available evidence, evidence
+   requiring a bounded extractor addition, unsupported shapes, and future
+   possibilities, and SHALL NOT claim support for metadata mechanisms the
+   scanner cannot read.
+5. CLR property reconciliation SHALL resolve the member symbol within the
+   already-reconciled containing entity type only, by exact member name over
+   compiler-resolved property symbol evidence; global or cross-type name
+   matching SHALL NOT occur.
+6. CSDL `EntitySet/@EntityType` SHALL resolve either as a namespace-qualified
    name across conceptual schemas or as a simple name within the containing
    schema, requiring exactly one candidate.
-5. MSL `EntityTypeMapping/@TypeName` SHALL be read and honored as the
+7. MSL `EntityTypeMapping/@TypeName` SHALL be read and honored as the
    conceptual type of the mapping; `EntitySetMapping/@Name` SHALL be treated as
    a conceptual entity-set name, never as a CLR type name.
-6. `MappingFragment/@StoreEntitySet` SHALL be resolved through the SSDL storage
+8. `MappingFragment/@StoreEntitySet` SHALL be resolved through the SSDL storage
    entity container to exactly one SSDL entity set before any physical table
    descriptor is reported; the table name SHALL come from the resolved SSDL
    entity set (`Table` attribute, else `Name`).
-7. MSL `ScalarProperty/@Name` SHALL resolve to exactly one CSDL property on the
-   reconciled entity type, and `ScalarProperty/@ColumnName` SHALL resolve to
-   exactly one SSDL column on the storage entity type referenced by the
+9. MSL `ScalarProperty/@Name` SHALL resolve to exactly one CSDL property on
+   the reconciled entity type, and `ScalarProperty/@ColumnName` SHALL resolve
+   to exactly one SSDL column on the storage entity type referenced by the
    resolved store entity set.
-8. No join anywhere in the composition SHALL use global short-name matching,
-   case folding, prefix or suffix trimming, or fuzzy matching of any kind.
+10. No join anywhere in the composition SHALL use global short-name matching,
+    case folding, prefix or suffix trimming, or fuzzy matching of any kind.
 
 ### Requirement 3: Fail-Closed Behavior
 
@@ -189,14 +208,20 @@ Acceptance criteria:
    MSBuild load) SHALL produce an explicit composition-unavailable gap and no
    composed edges; the composition SHALL NOT fall back to syntax-only or
    short-name joins.
-6. Inherited entities (CSDL `BaseType`), split mappings, multiple mapping
+6. A generated or custom CLR namespace that no ladder mechanism can
+   deterministically bridge to the CSDL conceptual identity SHALL produce an
+   explicit reduced-coverage gap and no composed edge; this is a documented
+   limitation, not a recovered join.
+7. A reconciled entity member without compiler-resolved property symbol
+   evidence SHALL produce a typed gap rather than name attachment.
+8. Inherited entities (CSDL `BaseType`), split mappings, multiple mapping
    fragments for one reconciled type, `IsTypeOf(...)` type names, conditional
    mappings (`Condition`), complex types (`ComplexProperty`), function imports
    and modification-function mappings, association mappings, provider
    extensions, and malformed or incomplete EDMX SHALL each fail closed with an
    existing or spec-defined gap classification and no composed edge for the
    affected chain.
-7. Every fail-closed outcome SHALL be an `AnalysisGap` fact with a rule ID,
+9. Every fail-closed outcome SHALL be an `AnalysisGap` fact with a rule ID,
    classification, message, span, and `coverage=reduced`; none SHALL silently
    drop evidence.
 
@@ -221,8 +246,8 @@ Acceptance criteria:
 4. Composition SHALL NOT upgrade any existing EDMX descriptor fact, generated
   link fact, or downstream classification beyond its existing tier ceiling;
   descriptor facts remain `Tier2Structural` under `legacy.data.edmx.v1`.
-5. Supporting fact IDs SHALL reference the ordered chain of upstream facts
-  (CLR declaration evidence, CSDL entity/property, CSDL entity set where
+5. Supporting fact IDs SHALL reference the complete ordered chain of upstream
+  facts (CLR declaration evidence, CSDL entity/property, CSDL entity set where
   applicable, MSL mapping, SSDL entity set or column) so every hop is
   traceable.
 
@@ -265,9 +290,11 @@ Acceptance criteria:
 4. Path reporting SHALL traverse composed edges with rule and tier evidence
    retained per hop.
 5. Reverse-impact traversal SHALL traverse composed relationships upstream
-   (storage descriptor toward CLR symbol toward code) under an explicitly
-   documented filter decision, without inventing a new consumer or runtime
-   claims.
+   (storage descriptor toward CLR symbol toward code) under a new opt-in
+   `mapping` relationship filter with existing default filters unchanged; the
+   filter SHALL preserve the existing contract's direct/transitive
+   distinction, per-hop evidence, deterministic cycle handling, and
+   fail-closed selector behavior, and SHALL NOT add runtime claims.
 6. Reporting and release-review surfaces SHALL only consume composed facts
    where existing consumer contracts already apply; no new consumer SHALL be
    introduced to complete this spec.
@@ -310,22 +337,28 @@ guarantee, so that regressions are caught at the assertion level.
 
 Acceptance criteria:
 
-1. A synthetic EF6 database-first fixture (checked-in EDMX plus generated
-   entity code plus a derived `DbContext` with `DbSet<T>`/`IDbSet<T>` stubs in
-   the `System.Data.Entity` namespace) SHALL be added under `samples/`.
-2. The matrix SHALL cover, at minimum: exact entity-to-table composition; exact
-   property-to-column composition; `EntityTypeMapping/@TypeName` honored over
-   `EntitySetMapping/@Name`; `StoreEntitySet` resolved through SSDL to the
-   physical table; same simple names across namespaces not colliding; same
-   names across assemblies failing closed; ambiguous joins producing explicit
-   gaps; split, inherited, conditional, `IsTypeOf`, complex, function, provider
-   extension, and association shapes failing closed; missing generated code
-   remaining partial; missing compiler evidence failing closed; direction
-   surviving serialization and persistence; reverse-impact and path traversal
-   retaining member-level mapping evidence; deterministic output across
-   repeated scans.
-3. Tests SHALL assert identity, endpoints, provenance, spans, tiers, rule IDs,
-   supporting fact IDs, gaps, and coverage labels — not only counts.
+1. Synthetic EF6 database-first fixtures (checked-in EDMX plus generated
+   entity code plus a derived `DbContext` with `DbSet<T>`/`IDbSet<T>` stubs
+   in the `System.Data.Entity` namespace) SHALL be test-local in the first
+   implementation; a maintained `samples/` fixture SHALL require a separate
+   public-proof and smoke-maintenance decision.
+2. The matrix SHALL cover, at minimum: exact entity-to-table composition;
+   exact property-to-column composition; `EntityTypeMapping/@TypeName`
+   honored over `EntitySetMapping/@Name`; `StoreEntitySet` resolved through
+   SSDL to the physical table; CLR namespace equal to CSDL namespace under
+   the documented equality convention; CLR namespace intentionally different
+   but bridged by explicit supported generated metadata; custom/generated
+   namespace with no deterministic bridge producing a gap; same simple names
+   across namespaces not colliding; same names across assemblies failing
+   closed; ambiguous joins producing explicit gaps; split, inherited,
+   conditional, `IsTypeOf`, complex, function, provider extension, and
+   association shapes failing closed; missing generated code remaining
+   partial; missing compiler evidence failing closed; direction surviving
+   serialization and persistence; reverse-impact and path traversal retaining
+   member-level mapping evidence; deterministic output across repeated
+   scans.
+3. Tests SHALL assert identity, endpoints, provenance, spans, tiers, rule
+   IDs, supporting fact IDs, gaps, and coverage labels — not only counts.
 
 ### Requirement 10: Documentation And Catalog Updates
 
@@ -335,8 +368,9 @@ and its limits, so that I do not re-derive or over-trust it.
 Acceptance criteria:
 
 1. `rules/rule-catalog.yml` SHALL gain the new rule entry with limitations,
-   including the static-design-time-only boundary and the no-runtime-claim
-   rule.
+   including the static-design-time-only boundary, the no-runtime-claim rule,
+   and the documented limitation that generated/custom CLR namespace
+   reconciliation without explicit metadata gaps closed rather than guessing.
 2. `docs/LANGUAGE_ADAPTER_CONTRACT.md` SHALL document the composed fact
    contract and tier ceilings.
 3. `docs/VALIDATION.md` SHALL gain the focused validation commands and fixture

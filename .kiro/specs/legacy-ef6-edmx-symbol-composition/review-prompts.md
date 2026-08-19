@@ -37,19 +37,25 @@ Review the specification packet in
 `.kiro/specs/legacy-ef6-edmx-symbol-composition/` for implementation planning
 readiness. Check:
 
-1. Are the reconciliation rules in `design.md` D4 exact and mechanically
-   implementable (qualified-name equality, single-assembly uniqueness,
-   entity-set/type/fragment/store-set/scalar resolution) with no room for
-   interpretation?
-2. Does every fail-closed row in the D9 table map to a requirement, a gap
+1. Are the reconciliation rules in `design.md` D4/D4.1 — the namespace
+   evidence ladder (explicit generated-type metadata, proven deterministic
+   generation/project metadata, scoped qualified-name equality convention,
+   typed gap fallback), single-assembly uniqueness, and
+   entity-set/type/fragment/store-set/scalar resolution — exact and
+   mechanically implementable with no room for interpretation?
+2. Is the D4.1 separation between currently available evidence, evidence
+   requiring a bounded extractor addition, unsupported shapes, and future
+   possibilities airtight, with no claimed metadata read the scanner cannot
+   perform today?
+3. Does every fail-closed row in the D9 table map to a requirement, a gap
    classification, and a fixture case?
-3. Is the evidence contract in D7 complete for every composed kind (rule ID,
+4. Is the evidence contract in D7 complete for every composed kind (rule ID,
    tier, span, extractor version, supporting fact IDs, coverage, limitations)?
-4. Are the four relationship kinds, their directions, and their target
+5. Are the four relationship kinds, their directions, and their target
    descriptor scopes unambiguous for persistence and reverse traversal?
-5. Is the fixture matrix F1–F13 sufficient to prove the acceptance criteria of
+6. Is the fixture matrix F1–F15 sufficient to prove the acceptance criteria of
    issue #680, and are the assertions identity-level rather than count-level?
-6. Are any implementation steps missing, mis-ordered, or undersized in
+7. Are any implementation steps missing, mis-ordered, or undersized in
    `tasks.md`?
 
 Return: blockers, important findings, suggested edits, and missing tests.
@@ -64,19 +70,30 @@ Verify against the actual code on the base commit:
    `rules/rule-catalog.yml` and the contract docs?
 2. Tier ceilings: do the Tier1 conceptual edges and Tier2-capped storage edges
    respect the principle that composition never upgrades EDMX descriptor facts
-   beyond Tier2Structural? Is any tier assignment overclaiming?
-3. Static-only claims: does any requirement, decision, or fixture imply
+   beyond Tier2Structural? Does any statement imply the Tier2 CSDL descriptor
+   itself was upgraded or re-hosted by a Tier1 conceptual edge? Is any tier
+   assignment overclaiming?
+3. Namespace ladder: verify D4/D4.1 against the repository — confirm the
+   design separates currently available evidence from bounded extractor
+   additions, claims no metadata read the scanner cannot perform today
+   (attribute or generation/project), and fails closed with
+   `UnresolvedGeneratedNamespace` for custom namespaces without a
+   deterministic bridge.
+4. Static-only claims: does any requirement, decision, or fixture imply
    runtime model loading, database access, generated-code execution, schema
    existence, or EDMX deployment/currency? Any overclaim must be flagged.
-4. Consumer behavior: is reusing `SymbolRelationship` persistence
+5. Consumer behavior: is reusing `SymbolRelationship` persistence
    (`symbol_relationships`, `combined_symbol_relationships`,
-   `combined_dependency_edges`) sound, and is the proposed opt-in `mapping`
+   `combined_dependency_edges`) sound, and is the resolved opt-in `mapping`
    reverse-impact filter consistent with `tracemap.reverse-impact.v1`'s closed
-   contract and its Tier1 canonical boundary gating?
-5. Fail-closed coverage: enumerate any ambiguous or unsupported join shape
+   contract, with defaults unchanged and the existing `database` filter
+   untouched (its edges being deterministic static compiler evidence of
+   database operation call patterns, not runtime proof)?
+6. Fail-closed coverage: enumerate any ambiguous or unsupported join shape
    missing from the D9 table, including shapes a reviewer could plausibly
-   encounter in checked-in EF6 EDMX files.
-6. Privacy: could any composed property leak snippets, connection strings,
+   encounter in checked-in EF6 EDMX files (including generated/custom
+   namespace shapes and missing semantic property evidence).
+7. Privacy: could any composed property leak snippets, connection strings,
    provider secrets, local paths, or private identifiers? Is the safe
    display-name policy applied on both endpoints?
 
@@ -92,16 +109,21 @@ composition. Focus on:
 1. Global short-name matching: confirm no requirement, decision, or fixture
    permits simple-name, case-insensitive, or fuzzy joins between CLR symbols
    and EDMX descriptors.
-2. Determinism: confirm fact identity, ordering, and gap deduplication rules
+2. Namespace bridging: confirm divergent generated/custom CLR namespaces
+   compose only through explicit ladder evidence (supported generated-type
+   metadata, proven deterministic generation/project metadata, or the scoped
+   equality convention) and otherwise produce `UnresolvedGeneratedNamespace`
+   gaps, never edges.
+3. Determinism: confirm fact identity, ordering, and gap deduplication rules
    guarantee identical output across repeated scans of the same commit.
-3. False positives: identify any scenario where a composed entity-to-table or
+4. False positives: identify any scenario where a composed entity-to-table or
    property-to-column edge could be wrong rather than merely incomplete (for
    example, duplicate qualified names, multi-container models, generated code
    that diverges from the EDMX, or decoy type names), and confirm the spec
    fails closed there.
-4. False negatives loudness: confirm every no-edge outcome has a rule-backed
+5. False negatives loudness: confirm every no-edge outcome has a rule-backed
    gap so silence is never mistaken for proof of no mapping.
-5. Secret leakage: confirm the composed property set contains only safe
+6. Secret leakage: confirm the composed property set contains only safe
    identifiers, hashes, keys, IDs, and closed-vocabulary codes.
 
 Return actionable findings with exact file and section references.

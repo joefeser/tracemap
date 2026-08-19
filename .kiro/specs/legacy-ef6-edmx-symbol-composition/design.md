@@ -34,8 +34,11 @@ entity-to-table path.
 
 - No runtime EF model loading, generated-code execution, database access, SQL
   or migration execution.
-- No claim that the EDMX is deployed, current, provider-compatible, or used at
-  runtime.
+- No claim that the EDMX is deployed, current, provider-compatible, or used
+  at runtime.
+- No runtime reachability, query behavior, lazy-loading, change-tracking,
+  schema-existence, or production-state claims (all non-claims of #680 are
+  preserved).
 - No second EDMX parser; EDMX reads extend `LegacyDataMetadataExtractor` only.
 - No duplication or re-tiering of existing `LegacyData*` descriptor facts.
 - No association, function-import, or modification-function composition.
@@ -184,12 +187,12 @@ the shipped property contract:
   passes, `hash:` form otherwise). Registering the target block lets
   `symbols`/`combined_symbols` display joins resolve; the view's `coalesce`
   guarantees edge presence regardless.
-- End-to-end edges carry `supportingFactIds` listing the ordered chain of
-  upstream facts: CLR declaration evidence, `edmx-csdl-entity`,
-  `edmx-csdl-entity-set`, `edmx-msl-entity-table`, `edmx-ssdl-entity-set` for
-  `MapsToStorageTable`; CLR property evidence, `edmx-csdl-property`,
-  `edmx-msl-property-column`, `edmx-ssdl-column` for `MapsToStorageColumn`.
-  Conceptual-only edges carry their prefix chains.
+- End-to-end edges carry `supportingFactIds` listing the complete ordered
+  static chain of upstream facts: CLR declaration evidence,
+  `edmx-csdl-entity`, `edmx-csdl-entity-set`, `edmx-msl-entity-table`,
+  `edmx-ssdl-entity-set` for `MapsToStorageTable`; CLR property evidence,
+  `edmx-csdl-property`, `edmx-msl-property-column`, `edmx-ssdl-column` for
+  `MapsToStorageColumn`. Conceptual-only edges carry their prefix chains.
 
 This rides the existing persistence path unchanged: `facts.ndjson` standard
 serialization, `symbol_relationships` rows, verbatim combined import, view
@@ -234,81 +237,149 @@ canonical CLR property symbol          (Tier1 member symbol ID)
 
 ### D4. Exact reconciliation rules
 
-Order of resolution (all joins exact-string, ordinal comparison):
+General resolution principle: every resolution step below must produce
+exactly one candidate; zero or multiple candidates fail closed with the
+classification stated for that step. All joins are exact ordinal string
+comparisons.
 
 1. CLR entity pool: Tier1 `TypeDeclared` facts from
    `csharp.semantic.declarations.v1` (compiler-resolved symbol ID + namespace
    + assembly identity). Syntax-only declarations are ineligible. When the
    scan has no Tier1 symbol evidence at all, emit one composition-unavailable
    gap per EDMX file and stop (no edges).
-2. CLR-to-CSDL entity join: exact equality between
-   `{CSDL Schema/@Namespace}.{EntityType/@Name}` and the CLR namespace
-   qualified type name. All matches must agree on a single assembly identity
-   (`{assemblyName}` plus version when present):
-   - exactly one symbol -> reconciled;
-   - matches in more than one assembly -> gap `AmbiguousClrSymbolReconciliation`;
-   - no match -> gap `MissingGeneratedCode` (scan stays partial).
+2. CLR-to-CSDL entity reconciliation follows the namespace evidence ladder
+   (owner review correction; controlling rule). Generated CLR namespaces may
+   legitimately differ from the CSDL namespace (T4 generation, custom-tool
+   namespace configuration, generation style), so exact qualified equality is
+   only one ladder mechanism, not the general rule. The ladder is tried in
+   order and stops at the first mechanism that proves a unique mapping:
+   - Mechanism 1 (preferred): explicit compiler-resolved EF generated-type
+     metadata exposing the exact conceptual namespace and type identity —
+     the `System.Data.Entity.Core.Objects.DataClasses.EdmEntityTypeAttribute`
+     family with `NamespaceName`/`Name` named arguments, or equivalent
+     compiler-visible conceptual identity emitted by attribute-bearing EF6
+     generation styles (ObjectContext/EntityObject and self-tracking
+     styles). The conceptual identity comes from the attribute, so a divergent
+     CLR namespace still reconciles. Requires a bounded semantic attribute
+     read (the extractor's existing attribute-argument helpers are the
+     precedent); not implemented today.
+   - Mechanism 2: deterministic checked-in generation or project metadata
+     that proves the generated CLR namespace/type relationship to the EDMX.
+     No such read exists today. The implementation PR must enumerate and
+     prove the exact sources it reads; until such an addition lands, this
+     mechanism contributes no matches and must not be assumed to exist.
+   - Mechanism 3: exact equality between
+     `{CSDL Schema/@Namespace}.{EntityType/@Name}` and the CLR
+     namespace-qualified type name — a documented supported convention, not a
+     general truth. It applies only over generated-code candidates already
+     scoped to that EDMX by the shipped designer/generated-file convention
+     (`legacy.data.generated-link.v1` scoping), and it is always a
+     qualified full-name comparison, never a simple-name comparison.
+   - Mechanism 4 (fallback): if no mechanism proves a unique mapping, emit a
+     reduced-coverage gap classified `UnresolvedGeneratedNamespace` and no
+     composed edge.
+   Regardless of mechanism: matches across more than one assembly identity
+   fail closed (`AmbiguousClrSymbolReconciliation`); no candidate at all
+   within the mechanism-3 scope yields `MissingGeneratedCode`;
    `DbSetDeclared`/`DbContextDeclared` facts may corroborate (their
-   `entityTypeSymbolId` must equal the reconciled ID when present) but are not
-   required; entities without a `DbSet` still compose.
-3. CLR property pool: members declared on the reconciled entity symbol,
-   resolved from the same Roslyn compilation (see D5), keyed by containing
-   symbol ID + exact member name. No cross-type lookup.
+   `entityTypeSymbolId` must equal the reconciled ID when present) but are
+   not required; entities without a `DbSet` still compose.
+3. CLR property pool: canonical member symbols declared on the reconciled
+   entity type, emitted as bounded semantic property-symbol evidence during
+   the existing semantic pass (see D5), keyed by containing symbol ID + exact
+   member name. No cross-type lookup. Missing semantic property evidence for
+   a reconciled member yields a typed gap
+   (`MissingSemanticPropertyEvidence`), never name attachment.
 4. CSDL `EntitySet/@EntityType` resolution: if the attribute value contains a
    namespace qualifier, resolve across conceptual schemas by exact qualified
    name; otherwise resolve by exact simple name within the containing schema.
-   Zero or multiple candidates -> gap `AmbiguousLegacyDataModelIdentity`.
+   Failures classify `AmbiguousLegacyDataModelIdentity`.
 5. MSL resolution per `EntitySetMapping`:
    - `EntitySetMapping/@Name` must resolve to exactly one CSDL entity set
      (conceptual container uniqueness is already enforced).
    - `EntityTypeMapping/@TypeName` must be present and plain (not
      `IsTypeOf(...)`); it must resolve by rule 4 semantics to the same CSDL
      entity type referenced by that entity set. `IsTypeOf(...)` -> gap
-     `UnsupportedLegacyOrmMappingShape` (hierarchy mapping). Missing or
-     unresolvable TypeName -> gap `AmbiguousLegacyDataModelIdentity`.
-     Mismatch between TypeName and the entity set's type -> gap
+     `UnsupportedLegacyOrmMappingShape` (hierarchy mapping). Missing,
+     unresolvable, or mismatched TypeName -> gap
      `AmbiguousLegacyDataModelIdentity`.
    - The reconciled type must be covered by exactly one `MappingFragment`
-     across its EntityTypeMapping(s); zero or multiple -> gap
+     across its EntityTypeMapping(s); failures -> gap
      `AmbiguousLegacyDataModelIdentity` (split mappings stay unsupported).
    - Existing whole-EDMX gates stay in force (single conceptual and storage
      container, sections present, no `Condition`/`ComplexProperty`/
      `FunctionImportMapping` under the mapping).
 6. `MappingFragment/@StoreEntitySet` resolution: resolve to exactly one SSDL
-   entity set by exact name within the single storage container. Zero or
-   multiple candidates -> gap `AmbiguousLegacyDataModelIdentity`. The physical
-   table descriptor is the resolved set's `storageObjectName`
-   (`Table` attribute, else `Name`) — never the raw MSL string.
+   entity set by exact name within the single storage container; failures
+   classify `AmbiguousLegacyDataModelIdentity`. The physical table descriptor
+   is the resolved set's `storageObjectName` (`Table` attribute, else
+   `Name`) — never the raw MSL string.
 7. `ScalarProperty` resolution: `Name` must resolve to exactly one CSDL
    `Property` on the reconciled entity type (NavigationProperty is not a
-   scalar property and does not compose); `ColumnName` must resolve to exactly
-   one SSDL `Property` on the storage entity type referenced by the resolved
-   store entity set. Zero or multiple candidates -> gap
-   `AmbiguousLegacyDataModelIdentity` for that member; other members compose
-   independently.
+   scalar property and does not compose); `ColumnName` must resolve to
+   exactly one SSDL `Property` on the storage entity type referenced by the
+   resolved store entity set. Per-member failures classify
+   `AmbiguousLegacyDataModelIdentity`; sibling members compose independently.
+
+#### D4.1 Namespace reconciliation evidence availability
+
+To avoid claiming support for metadata the scanner cannot read, the ladder's
+evidence is bucketed explicitly:
+
+- Currently available (no extractor change): Tier1 `TypeDeclared` symbol
+  blocks, `DbSetDeclared` entity symbol blocks, designer/generated-file
+  scoping from `legacy.data.generated-link.v1`, and the EDMX descriptors
+  themselves. Mechanism 3 (scoped qualified equality) is evaluable with
+  today's evidence once the composition stage exists.
+- Requires a bounded extractor addition: mechanism 1 attribute reads
+  (`EdmEntityTypeAttribute` family) and any mechanism 2 generation/project
+  metadata read. Each addition is an explicit implementation task with its
+  own tests and catalog notes.
+- Unsupported shapes: attribute-less POCO generation (the common
+  DbContext-generator output) with a CLR namespace differing from the CSDL
+  namespace and no readable deterministic bridge — gap
+  (`UnresolvedGeneratedNamespace`), never a guessed join.
+- Future possibilities (explicitly not claimed): generic T4 template
+  interpretation, EDMX designer custom annotations, provider manifest
+  details.
 
 ### D5. Composition stage and the bounded CLR property inventory
 
-The composition runs as a dedicated post-extraction stage (recommended: a new
-`LegacyDataSymbolComposition` pass invoked from `ScanEngine` after
-`LegacyDataMetadataExtractor.Extract`, with access to the per-project Roslyn
-compilation the semantic extractor already uses). It:
+Owner resolution (Q2): the preferred direction is bounded semantic
+property-symbol emission during the existing C# semantic analysis. Current
+compilations are not retained as a general post-extraction service, so a
+compilation-backed post-pass is not an "easy option" and is not assumed.
 
-- consumes emitted LegacyData descriptor facts (never re-parsing the EDMX) and
-  the Tier1 CLR symbol inventory;
-- resolves property member symbols for reconciled entity types only, bounded
-  to those types (this closes the "no semantic PropertyDeclared today" input
-  gap without emitting a global member inventory);
-- emits the four composed kinds plus gaps;
-- records provenance under its own extractor identity, recommended
-  `ScannerVersions.LegacyDataSymbolComposition = "legacy-data-composition/0.1.0"`
-  so spans and tier ceilings are attributable to the composition rather than
-  to the metadata parser.
-
-Implementation mechanism for the bounded property inventory (in-extractor
-emission vs post-pass lookup) is left to the implementation PR provided the
-contract holds: canonical member symbol IDs, single-compilation resolution,
-no syntax fallback.
+- During the existing semantic pass, entity types proven eligible for
+  EF/EDMX composition emit canonical property-symbol evidence: member symbol
+  ID, containing type symbol ID, exact member name, assembly identity, source
+  span, and compiler provenance (Tier1). Eligibility is compiler- or
+  inventory-visible and bounded to any of:
+  (a) the type appears as a `DbSet<T>`/`IDbSet<T>` entity type argument;
+  (b) the type carries supported generated conceptual identity attributes
+      (mechanism 1 of the D4 ladder);
+  (c) the declaring file is scoped to an EDMX by the shipped
+      designer/generated-file convention.
+  No global semantic property inventory is added merely for this feature.
+- Ordering note (verified on the base commit): semantic facts materialize
+  before `LegacyDataMetadataExtractor.Extract` runs
+  (`src/dotnet/TraceMap.Core/ScanEngine.cs:791-793`), so eligibility cannot be
+  keyed on EDMX descriptor facts; signals (a)–(c) do not require them.
+- Syntax-only `PropertyDeclared` facts remain ineligible for canonical
+  composition. A reconciled entity member without semantic property evidence
+  produces a typed gap (`MissingSemanticPropertyEvidence`) rather than name
+  attachment.
+- If the implementation later needs a compilation-backed composition seam (a
+  retained compilation available after extraction), that seam is an explicit
+  separate task with documented lifecycle, memory bounds, determinism, and
+  cancellation requirements. No such seam exists today and this design does
+  not imply one.
+- The composition stage itself consumes the emitted symbol evidence and the
+  LegacyData descriptor facts (never re-parsing the EDMX), emits the four
+  composed kinds plus gaps, and records provenance under its own extractor
+  identity, recommended `ScannerVersions.LegacyDataSymbolComposition =
+  "legacy-data-composition/0.1.0"`, so spans and tier ceilings are
+  attributable to the composition rather than to the metadata parser.
 
 ### D6. Tier model and ceilings
 
@@ -325,7 +396,14 @@ no syntax fallback.
 - Ceilings preserved: EDMX descriptors remain Tier2 under
   `legacy.data.edmx.v1`; `LegacyDataGeneratedCodeLinked` keeps its Tier2/Tier3
   model; linkage tiers never upgrade descriptor tiers; composed edges never
-  upgrade any supporting fact.
+  upgrade any supporting fact. The Tier1 on conceptual edges is a statement
+  about the compiler-resolved CLR endpoint join only — it does not upgrade,
+  re-tier, or re-host the Tier2 CSDL descriptor fact, which remains a
+  separate fact under its own rule and tier.
+- Documented limitation: generated or custom CLR namespaces that no D4
+  ladder mechanism can deterministically bridge to the conceptual identity
+  gap closed (`UnresolvedGeneratedNamespace`); the composition does not
+  recover them by name similarity.
 
 ### D7. Evidence contract per composed fact
 
@@ -359,17 +437,20 @@ span, and `runtimeProof=False`, matching the shipped `AddGap` envelope.
 - Path reporting: composed edges join the graph through the existing view
   read; `NormalizeEdgeKind` must pass the new kinds through unchanged with
   rule/tier evidence retained per hop.
-- Reverse impact: decision — traverse the four kinds upstream under a new
-  `mapping` filter value added to
+- Reverse impact: owner resolution (Q1) — add a new opt-in `mapping` filter
+  value to
   `ReverseImpactContract.SupportedRelationshipFilters` (additive to the closed
   set; default filters unchanged, so `mapping` is opt-in exactly like
   `http`/`database`). Hop kind = relationship kind; hop directions reuse the
-  shipped `OriginalDirection`/`TraversalDirection` pair.
-  Rejected alternative: reusing the `database` filter. Rejected because
-  today's `database` hops are Tier1 canonical runtime-operation boundary facts
-  (`IsCanonicalSemanticBoundaryFact` gating); mixing static design-time
-  mapping edges would blur runtime-operation semantics — the overclaim the
-  non-claims boundary forbids. Recorded as owner question Q1.
+  shipped `OriginalDirection`/`TraversalDirection` pair. The filter must
+  preserve the existing contract's direct/transitive distinction, per-hop
+  evidence, deterministic cycle handling, and fail-closed selector behavior.
+  The existing `database` filter is NOT reused: its
+  `DatabaseOperationCandidate` edges are deterministic static compiler
+  evidence of database operation call patterns — not proof of runtime
+  execution — and merging static design-time mapping edges into that filter
+  would blur two distinct static evidence families. No reducer or runtime
+  claims are added.
 - Reducer: no change. Composed facts are deliberately absent from
   `DefiniteUsageFactTypes`/`ProbableSemanticFactTypes`; adding them is a
   separate reducer decision (deferred follow-up).
@@ -381,10 +462,12 @@ span, and `runtimeProof=False`, matching the shipped `AddGap` envelope.
 | Situation | Outcome | Classification |
 | --- | --- | --- |
 | Same simple name in multiple namespaces | qualified join only; unmatched side gaps | `AmbiguousClrSymbolReconciliation` or `MissingGeneratedCode` |
-| Same qualified name in multiple assemblies | gap, no edge | `AmbiguousClrSymbolReconciliation` |
+| Same qualified name in multiple assemblies | gap, no edge (any ladder mechanism) | `AmbiguousClrSymbolReconciliation` |
 | Partial classes in one assembly | merges to one symbol; composes | — |
+| Generated/custom namespace with no deterministic bridge | reduced-coverage gap, no edge | `UnresolvedGeneratedNamespace` (new) |
 | Missing generated code | gap, partial scan, descriptors unchanged | `MissingGeneratedCode` |
 | No Tier1 compiler evidence in scan | one gap per EDMX file, no edges | `ClrSymbolEvidenceUnavailable` (new) |
+| Reconciled member without semantic property evidence | typed gap, no property edge | `MissingSemanticPropertyEvidence` (new) |
 | Inherited CSDL entity (BaseType) | no composed chain (existing gap stands) | `UnsupportedLegacyOrmMappingShape` |
 | Split mapping / multiple fragments | gap, no edge | `AmbiguousLegacyDataModelIdentity` |
 | `IsTypeOf(...)` TypeName | gap, no edge | `UnsupportedLegacyOrmMappingShape` |
@@ -398,9 +481,17 @@ span, and `runtimeProof=False`, matching the shipped `AddGap` envelope.
 | Store entity set unresolved in SSDL | gap, no edge | `AmbiguousLegacyDataModelIdentity` |
 | ScalarProperty/column unresolved | per-member gap; siblings compose | `AmbiguousLegacyDataModelIdentity` |
 
-New gap classifications owned by the composition rule:
-`AmbiguousClrSymbolReconciliation`, `ClrSymbolEvidenceUnavailable`. All others
-are existing closed vocabulary reused unchanged.
+Gap classification ownership: `AmbiguousClrSymbolReconciliation`,
+`ClrSymbolEvidenceUnavailable`, `UnresolvedGeneratedNamespace`, and
+`MissingSemanticPropertyEvidence` are new classifications owned and
+catalogued by `legacy.data.edmx.symbol-composition.v1`. The reused
+classifications (`AmbiguousLegacyDataModelIdentity`,
+`UnsupportedLegacyOrmMappingShape`, `MissingGeneratedCode`,
+`MalformedLegacyDataMetadata`, `UnsupportedLegacyDataMetadataVersion`) keep
+their primary ownership and documented meaning under their current rules
+(`legacy.data.edmx.v1` and `legacy.data.generated-link.v1`); the composition
+rule's catalog entry lists them as reused values it may emit, so every
+emitted gap has exactly one rule ID and a documented classification source.
 
 ### D10. Privacy and safe values
 
@@ -424,14 +515,15 @@ are existing closed vocabulary reused unchanged.
 
 ## Testing Strategy
 
-Fixture matrix (synthetic EF6 database-first repo under
-`samples/ef6-edmx-composition/`, plus inline test repositories in tests;
-`System.Data.Entity` stubs defined in fixture code so no EF6 package is
-required):
+Fixture matrix (owner resolution Q4: test-local synthetic repositories in the
+tests project for the first implementation — no maintained `samples/` fixture;
+a future sample/demo fixture requires a separate public-proof and
+smoke-maintenance decision; `System.Data.Entity` stubs defined in fixture code
+so no EF6 package is required):
 
 | # | Case | Proves |
 | --- | --- | --- |
-| F1 | Happy path entity | exact CLR entity -> CSDL type -> set -> MSL -> SSDL set -> table; endpoints, span, tier, rule, supporting IDs |
+| F1 | Happy path entity (namespace parity via the documented equality convention, D4 mechanism 3) | exact CLR entity -> CSDL type -> set -> MSL -> SSDL set -> table; endpoints, span, tier, rule, supporting IDs |
 | F2 | Happy path property | exact CLR property -> CSDL property -> ScalarProperty -> SSDL column |
 | F3 | Decoy type name | `EntityTypeMapping/@TypeName="Model.Customer"` with `EntitySetMapping/@Name="Customers"` and a decoy CLR type `Customers`; only `Customer` composes |
 | F4 | Table via SSDL | `StoreEntitySet="Customers"` where the SSDL set has `Table="dbo.CustomerTable"`; composed edge targets the SSDL set and reports that table |
@@ -444,6 +536,8 @@ required):
 | F11 | Persistence round-trip | `facts.ndjson` reload + `index.sqlite` readback + combined import; direction source=CLR target=descriptor unchanged; view rows carry the kind |
 | F12 | Traversal | reverse impact from table selector reaches CLR entity then callers (direct + transitive); member-level property/column path retained in path reporting |
 | F13 | Determinism | two scans of the same commit produce identical fact IDs and properties |
+| F14 | Attribute bridge, divergent namespace | CLR namespace `App.Data` differs from CSDL namespace `Model`; generated type carries `EdmEntityType(NamespaceName="Model", Name="Customer")`; composes via D4 mechanism 1 |
+| F15 | Divergent namespace, no bridge | CLR namespace `App.Data` differs from CSDL namespace `Model`, attribute-less POCO generation, no deterministic generation metadata; gap `UnresolvedGeneratedNamespace`, no edge, descriptors unchanged |
 
 Assertions must check identity, endpoints, provenance (extractor ID/version),
 spans, tiers, rule IDs, supporting fact IDs, gap classifications, and coverage
@@ -459,3 +553,7 @@ labels — not only counts.
 - Reducer classification of composed edges.
 - EF Core, DBML, typed DataSet, NHibernate composition.
 - Any UI, site, or release-reporting changes beyond existing consumers.
+- A maintained `samples/` or demo fixture (requires a separate public-proof
+  and smoke-maintenance decision).
+- Generic T4 template interpretation and EDMX designer custom-annotation
+  reads (future possibilities, explicitly not claimed).

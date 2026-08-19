@@ -7,12 +7,16 @@ Base SHA: `1b79f4e62f9d544e120197d95b2d099e0300be1d` (fresh `origin/dev` at
 spec start; worktree `../tracemap-spec-680`)
 Primary issue: #680 (Part of; spec-only PR, issue stays open)
 Public claim level: hidden until implemented and reviewed
+Owner review: corrections applied on top of the initial spec commit
+(`eb7cde831c414d08ee39c6c4e4a3550089a416a3`)
 
 ## Scope State
 
-Specification delivered; implementation explicitly deferred to future PRs
-against this spec. Nothing in this PR implements product code, changes
-extractors, rules, docs outside this folder, or closes #680.
+Specification delivered; owner review corrections applied (namespace evidence
+ladder, bounded property-symbol direction, resolved Q1/Q2/Q4, editorial
+cleanup). Implementation explicitly deferred to future PRs against this spec.
+Nothing in this PR implements product code, changes extractors, rules, docs
+outside this folder, or closes #680.
 
 ## Inspected Files And Contracts (spec premises)
 
@@ -30,6 +34,14 @@ EF6 CLR side:
 - `src/dotnet/TraceMap.Core/CSharpSyntaxExtractor.cs` — syntax
   `TypeDeclared`/`PropertyDeclared` carry no canonical identity (ineligible
   for composition).
+- `src/dotnet/TraceMap.Core/CSharpSemanticExtractor.cs` attribute-argument
+  helpers (`GetAttributeStringArgument`, `GetAttributeConstantStringArgument`)
+  — existing precedent for the bounded mechanism-1 attribute read; no
+  EF generated-type attribute (`EdmEntityTypeAttribute` family) is read
+  anywhere today.
+- `src/dotnet/TraceMap.Core/ScanEngine.cs:791-793` — semantic facts
+  materialize before `LegacyDataMetadataExtractor.Extract`, so composition
+  eligibility cannot be keyed on EDMX descriptor facts (verified for D5).
 
 EDMX side:
 
@@ -100,12 +112,66 @@ New narrowly versioned rule: `legacy.data.edmx.symbol-composition.v1`.
 ## Evidence-Tier Decision
 
 - `MapsToConceptualEntity` / `MapsToConceptualProperty`: Tier1Semantic only,
-  never emitted from syntax-only evidence (gaps instead).
+  never emitted from syntax-only evidence (gaps instead). The Tier1 states
+  the compiler-resolved CLR endpoint join only; it does not upgrade, re-tier,
+  or re-host the Tier2 CSDL descriptor fact.
 - `MapsToStorageTable` / `MapsToStorageColumn`: capped at Tier2Structural
   (weakest-link cap over Tier2 MSL/SSDL descriptors).
 - Gaps: Tier4Unknown.
 - EDMX descriptor facts, generated-link facts, and downstream classifications
   are never upgraded; descriptor ceiling stays Tier2Structural.
+- Documented limitation: generated/custom CLR namespaces without a
+  deterministic ladder bridge gap closed (`UnresolvedGeneratedNamespace`);
+  the composition does not recover them by name similarity.
+
+## Namespace Reconciliation Ladder (owner review correction)
+
+Exact qualified-name equality is a documented convention, not the general
+rule, because generated CLR namespaces may differ from the CSDL namespace
+(T4 generation, custom-tool namespace configuration, generation style). The
+controlling ladder (design D4/D4.1), tried in order:
+
+1. Explicit compiler-resolved EF generated-type metadata exposing conceptual
+   namespace/type identity (the
+   `System.Data.Entity.Core.Objects.DataClasses.EdmEntityTypeAttribute`
+   family with `NamespaceName`/`Name`, or equivalent compiler-visible
+   identity) — requires a bounded semantic attribute read; not implemented
+   today.
+2. Deterministic checked-in generation/project metadata proving the
+   generated CLR namespace/type relationship — no read exists today; the
+   implementation must enumerate and prove exact sources before this
+   mechanism ever matches.
+3. Exact qualified-name equality, only as a documented supported convention
+   scoped to generated-code candidates already linked to that EDMX by the
+   shipped generated-file convention.
+4. Otherwise: reduced-coverage gap `UnresolvedGeneratedNamespace`, no edge.
+
+Never global simple-name matching; display labels are never identity;
+duplicate qualified types across assemblies fail closed under every
+mechanism. Fixture coverage: namespace parity (F1), attribute bridge with
+divergent namespace (F14), no-bridge gap (F15), simple names across
+namespaces (F5), qualified names across assemblies (F6).
+
+## Resolved Owner Decisions (Review Corrections)
+
+- Q1 resolved: reverse impact gains a new opt-in `mapping` filter; defaults
+  unchanged; the existing `database` filter is not reused. Existing
+  `DatabaseOperationCandidate` edges are deterministic static compiler
+  evidence of database operation call patterns — not runtime proof. The
+  filter preserves direct/transitive distinction, per-hop evidence,
+  deterministic cycles, and fail-closed selectors. No reducer or runtime
+  claims.
+- Q2 resolved: bounded semantic property-symbol emission during the existing
+  C# semantic pass for types proven eligible (DbSet/IDbSet entity arguments,
+  supported generated identity attributes, or designer/generated-file
+  scoping); no global property inventory; no implied compilation-backed
+  post-pass seam (any such seam is an explicit task with lifecycle, memory,
+  determinism, and cancellation requirements). Missing semantic property
+  evidence is a typed gap (`MissingSemanticPropertyEvidence`), never name
+  attachment.
+- Q4 resolved: test-local synthetic fixtures for the first implementation; no
+  maintained `samples/` fixture; a future sample/demo fixture requires a
+  separate public-proof and smoke-maintenance decision.
 
 ## Consumer And Persistence Decisions
 
@@ -117,38 +183,34 @@ New narrowly versioned rule: `legacy.data.edmx.symbol-composition.v1`.
   preserved, no reverse rows).
 - Path graphs consume them through the existing view; `NormalizeEdgeKind`
   must pass the four new kinds through unchanged.
-- Reverse impact: recommended opt-in `mapping` filter (additive to the closed
-  set; defaults unchanged); rejected reusing `database` to avoid diluting its
-  Tier1 runtime-operation semantics. See Q1.
+- Reverse impact: opt-in `mapping` filter per the resolved Q1 above.
 - Reducer untouched; reporting/release-review only through existing
   consumers; no new consumer invented.
 
 ## Unresolved Owner Questions
 
-- Q1: Reverse-impact filter for composed edges — accept the recommended new
-  opt-in `mapping` filter, or reuse `database`, or exclude reverse-impact
-  traversal from the first implementation PR?
-- Q2: Mechanism for the bounded CLR property inventory (post-pass lookup
-  against the Roslyn compilation vs bounded semantic emission) — contract is
-  fixed by D5, mechanism left to the implementation PR.
-- Q3: Kiro model reviews (`claude-opus-4.8`, `claude-sonnet-4.6`) of this spec
-  were not run in this draft (dispatch validation list did not include them
-  and review tooling is owner-gated); prompts are ready in
-  `review-prompts.md`. Owner to run or waive.
-- Q4: Fixture home — `samples/ef6-edmx-composition/` as designed, or
-  test-local fixtures only, given `samples/` participates in smoke catalogs.
+- Q3 (open, deferred): Kiro model reviews (`claude-opus-4.8`,
+  `claude-sonnet-4.6`) of this spec have not been run; they stay deferred
+  until these corrections are committed and re-reviewed by the owner. Prompts
+  are ready in `review-prompts.md`. No Kiro, ACK, Codex, Qodo, or other
+  reviewer loops were run for this correction pass.
 
 ## Validation Completed (spec PR)
 
 - `git fetch origin`; `origin/dev` verified at
   `1b79f4e62f9d544e120197d95b2d099e0300be1d`; clean isolated worktree from
   that SHA; diff scope limited to this spec folder.
-- `git diff --check` — clean.
-- `./scripts/check-private-paths.sh` — clean.
+- `git diff --check` — clean (initial spec commit and correction commit).
+- `./scripts/check-private-paths.sh` — clean (both commits).
 - Focused existing EF/EDMX/legacy-data tests run to verify specification
   premises (see tasks 0.7):
   `dotnet test src/dotnet/TraceMap.sln --filter "FullyQualifiedName~LegacyDataMetadataExtractorTests|FullyQualifiedName~LegacyDataModelRuleCatalogTests|FullyQualifiedName~CSharpSemanticExtractorTests"`
   — Passed: 69, Failed: 0, Skipped: 0 (net10.0).
+- Correction-pass premise checks (no code changed, so no test rerun was
+  required): confirmed no EF generated-type attribute read exists today
+  (attribute-argument helpers are the precedent), and confirmed the
+  semantic-before-legacy-data extraction ordering at
+  `src/dotnet/TraceMap.Core/ScanEngine.cs:791-793`.
 - No markdown lint tooling exists in the repository (checked for
   `.markdownlint*`, `.prettierrc*`, `.editorconfig`, and CI workflows);
   hand-formatting follows the neighboring spec style (hard-wrapped ~78–80
@@ -156,7 +218,9 @@ New narrowly versioned rule: `legacy.data.edmx.symbol-composition.v1`.
 
 ## Explicitly Deferred
 
-- All implementation (tasks 1–6): EDMX parsing additions, composition stage,
-  persistence/consumer wiring, fixtures, tests, docs, and catalog entry
-  creation.
+- All implementation (tasks 1–6): EDMX parsing additions, bounded semantic
+  property emission, namespace ladder mechanisms 1–2 reads, composition
+  stage, persistence/consumer wiring, test-local fixtures, tests, docs, and
+  catalog entry creation.
 - Issue #680 remains open; this PR is "Part of #680" only.
+- Kiro model reviews (Q3) until the owner re-reviews these corrections.
