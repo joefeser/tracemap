@@ -85,7 +85,7 @@ public sealed record PackageDecisionSource(
     string SourceIndexId,
     string ScanId,
     string RepoIdentityHash,
-    string CommitSha,
+    string? CommitSha,
     string ScannerVersion,
     string? Language,
     string AnalysisLevel,
@@ -107,7 +107,7 @@ public sealed record PackageDecisionCorrelationRow(
     string SourceIndexId,
     string ScanId,
     string RepoIdentityHash,
-    string CommitSha,
+    string? CommitSha,
     string DependencyRelation,
     PackageDecisionEvidence Evidence,
     bool SnapshotPredatesDecision,
@@ -119,8 +119,8 @@ public sealed record PackageDecisionEvidence(
     string FactType,
     string RuleId,
     string EvidenceTier,
-    string ExtractorId,
-    string ExtractorVersion,
+    string? ExtractorId,
+    string? ExtractorVersion,
     string FilePath,
     int StartLine,
     int EndLine,
@@ -133,10 +133,26 @@ public sealed record PackageDecisionEvidence(
     string? VersionHash = null);
 
 public sealed record PackageDecisionNote(string Code, string Message);
-public sealed record PackageDecisionExclusion(string RowId, string Classification, string SourceLabel, string SourceIndexId, string ScanId, string CommitSha, string RuleId, string EvidenceTier, string Message);
-public sealed record PackageDecisionStaleReference(string RowId, string Classification, string DecisionId, string SourceLabel, string ScanId, string CommitSha, string RuleId, string EvidenceTier, bool SnapshotPredatesDecision, string Message);
+public sealed record PackageDecisionExclusion(string RowId, string Classification, string SourceLabel, string SourceIndexId, string ScanId, string? CommitSha, string RuleId, string EvidenceTier, string Message);
+public sealed record PackageDecisionStaleReference(string RowId, string Classification, string DecisionId, string SourceLabel, string ScanId, string? CommitSha, string RuleId, string EvidenceTier, bool SnapshotPredatesDecision, string Message);
 public sealed record PackageDecisionExternalReference(string RowId, string Classification, string RuleId, string EvidenceTier, string Message);
-public sealed record PackageDecisionGap(string GapId, string Classification, string Message, string RuleId, string EvidenceTier, string? DecisionId = null, string? SourceLabel = null, string? Ecosystem = null);
+public sealed record PackageDecisionGap(
+    string GapId,
+    string Classification,
+    string Message,
+    string RuleId,
+    string EvidenceTier,
+    string? DecisionId = null,
+    string? SourceLabel = null,
+    string? Ecosystem = null,
+    string? SourceIndexId = null,
+    string? ScanId = null,
+    string? CommitSha = null,
+    string? ExtractorId = null,
+    string? ExtractorVersion = null,
+    string? FilePath = null,
+    int? StartLine = null,
+    int? EndLine = null);
 
 public sealed record PackageDecisionSummary(
     int SourceCount,
@@ -182,15 +198,18 @@ public static class PackageDecisionCorrelationReporter
         if (string.IsNullOrWhiteSpace(options.OutputPath)) throw new ArgumentException("package-decision requires --out <path>.", nameof(options));
         var format = options.Format.Equals("md", StringComparison.OrdinalIgnoreCase) ? "markdown" : options.Format.ToLowerInvariant();
         if (format is not "markdown" and not "json") throw new ArgumentException("package-decision --format must be markdown or json.", nameof(options));
+        RejectOutputAlias(options.DecisionPath, options.IndexPath, options.OutputPath);
         DateTimeOffset? asOf = null;
         if (!string.IsNullOrWhiteSpace(options.AsOf))
         {
-            if (!DateTimeOffset.TryParse(options.AsOf, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedAsOf) || parsedAsOf.Offset != TimeSpan.Zero)
+            if (!TryParseAsOf(options.AsOf, out var parsedAsOf))
                 throw new InvalidDataException("package-decision --as-of must be RFC3339 UTC.");
             asOf = parsedAsOf;
         }
 
         var admission = await PackageDecisionRecordReader.ReadAsync(options.DecisionPath, cancellationToken);
+        if (!admission.Accepted)
+            throw new InvalidDataException("package-decision decision input admission failed.");
         var index = await ReadIndexAsync(options.IndexPath, cancellationToken);
         var sources = index.Sources.OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceIndexId, StringComparer.Ordinal).ToArray();
         if (!string.IsNullOrWhiteSpace(options.Source))
@@ -205,8 +224,9 @@ public static class PackageDecisionCorrelationReporter
             .ThenBy(record => record.ProducerId, StringComparer.Ordinal)
             .ThenBy(record => record.DecisionId, StringComparer.Ordinal)
             .ToArray();
+        var boundedAdmissionGaps = admission.Gaps.OrderBy(gap => gap.GapId, StringComparer.Ordinal).Take(Math.Max(1, options.MaxGaps)).ToArray();
         var recordRows = admission.Records.Select(record => ToRecordRow(record, records.Contains(record) ? null : "SelectorNoMatch")).Cast<PackageDecisionRecordRow>().ToList();
-        foreach (var gap in admission.Gaps)
+        foreach (var gap in boundedAdmissionGaps)
             recordRows.Add(new PackageDecisionRecordRow(gap.DecisionId, null, null, null, null, null, null, null, gap.ProducerId, null, null, null, gap.Classification, gap.RuleId, gap.EvidenceTier));
 
         var exact = new List<PackageDecisionCorrelationRow>();
@@ -215,9 +235,11 @@ public static class PackageDecisionCorrelationReporter
         var ambiguous = new List<PackageDecisionCorrelationRow>();
         var excluded = new List<PackageDecisionExclusion>();
         var stale = new List<PackageDecisionStaleReference>();
-        var gaps = admission.Gaps.Select(gap => new PackageDecisionGap(gap.GapId, gap.Classification, gap.Message, gap.RuleId, gap.EvidenceTier, gap.DecisionId)).ToList();
+        var gaps = boundedAdmissionGaps.Select(gap => new PackageDecisionGap(gap.GapId, gap.Classification, gap.Message, gap.RuleId, gap.EvidenceTier, gap.DecisionId)).ToList();
         var findingCapReached = false;
-        var gapCapReached = gaps.Count >= options.MaxGaps;
+        var gapCapReached = admission.Gaps.Count > Math.Max(1, options.MaxGaps);
+        if (sources.Length == 0 && options.Source is not null)
+            AddGap(gaps, options.MaxGaps, ref gapCapReached, new PackageDecisionGap($"pd-selector-source:{Hash(options.Source)}", "SelectorNoMatch", "The requested source selector matched no source snapshot.", RuleId, EvidenceTiers.Tier4Unknown, SourceLabel: options.Source));
         foreach (var record in records)
         {
             foreach (var source in sources)
@@ -227,16 +249,21 @@ public static class PackageDecisionCorrelationReporter
                     && string.Equals(NormalizeName(record.Ecosystem, record.PackageName), NormalizeName(record.Ecosystem, fact.Properties.GetValueOrDefault("packageName") ?? string.Empty), StringComparison.Ordinal)).ToArray();
 
                 var capabilityFacts = rows.Length == 0 ? sourceFacts : rows;
+                if (!FullCommit(source.CommitSha))
+                {
+                    AddGap(gaps, options.MaxGaps, ref gapCapReached, SourceGap("UnknownAnalysisGap", "The source snapshot does not provide a full commit SHA; correlation is unavailable.", record, source));
+                    continue;
+                }
                 if (capabilityFacts.All(fact => string.IsNullOrWhiteSpace(fact.Properties.GetValueOrDefault("artifactDigest"))))
-                    AddGap(gaps, options.MaxGaps, ref gapCapReached, new PackageDecisionGap(GapId("LockfileDigestUnavailable", record, source), "LockfileDigestUnavailable", "The selected package evidence does not provide an artifact digest capability.", RuleId, EvidenceTiers.Tier4Unknown, record.DecisionId, source.Label, record.Ecosystem));
+                    AddGap(gaps, options.MaxGaps, ref gapCapReached, SourceGap("LockfileDigestUnavailable", "The selected package evidence does not provide an artifact digest capability.", record, source));
                 if (capabilityFacts.All(fact => !fact.Properties.ContainsKey("dependencyRelation")))
-                    AddGap(gaps, options.MaxGaps, ref gapCapReached, new PackageDecisionGap(GapId("DirectTransitiveUnavailable", record, source), "DirectTransitiveUnavailable", "The selected package evidence does not prove direct versus transitive dependency relation.", RuleId, EvidenceTiers.Tier4Unknown, record.DecisionId, source.Label, record.Ecosystem));
+                    AddGap(gaps, options.MaxGaps, ref gapCapReached, SourceGap("DirectTransitiveUnavailable", "The selected package evidence does not prove direct versus transitive dependency relation.", record, source));
 
                 if (rows.Length == 0)
                 {
-                    if (SourceHasCredibilityGap(source, index.KnownGaps.Where(gap => gap.SourceIndexId == source.SourceIndexId)))
+                    if (SourceHasCredibilityGap(source, index.KnownGaps.Where(gap => gap.SourceIndexId == source.SourceIndexId)) || !HasEcosystemCapability(sourceFacts, record.Ecosystem))
                     {
-                        AddGap(gaps, options.MaxGaps, ref gapCapReached, new PackageDecisionGap(GapId("UnknownAnalysisGap", record, source), "UnknownAnalysisGap", "No matching package evidence was found under reduced or unverified source coverage.", RuleId, EvidenceTiers.Tier4Unknown, record.DecisionId, source.Label, record.Ecosystem));
+                        AddGap(gaps, options.MaxGaps, ref gapCapReached, SourceGap("UnknownAnalysisGap", "No matching package evidence was found under reduced coverage or unsupported ecosystem capability.", record, source));
                     }
                     else
                     {
@@ -266,8 +293,14 @@ public static class PackageDecisionCorrelationReporter
             }
         }
 
-        if (records.Length == 0 && (options.Source is not null || options.Ecosystem is not null || options.DecisionId is not null))
-            AddGap(gaps, options.MaxGaps, ref gapCapReached, new PackageDecisionGap($"pd-selector:{Hash("selector")}", "SelectorNoMatch", "The requested selector matched no admitted decision record.", RuleId, EvidenceTiers.Tier4Unknown));
+        if (options.Ecosystem is not null && !admission.Records.Any(record => string.Equals(record.Ecosystem, options.Ecosystem, StringComparison.OrdinalIgnoreCase)))
+            AddGap(gaps, options.MaxGaps, ref gapCapReached, new PackageDecisionGap($"pd-selector-ecosystem:{Hash(options.Ecosystem)}", "SelectorNoMatch", "The requested ecosystem selector matched no admitted decision record.", RuleId, EvidenceTiers.Tier4Unknown, Ecosystem: options.Ecosystem));
+        if (options.DecisionId is not null && !admission.Records.Any(record => string.Equals(record.DecisionId, options.DecisionId, StringComparison.Ordinal)))
+            AddGap(gaps, options.MaxGaps, ref gapCapReached, new PackageDecisionGap($"pd-selector-decision:{Hash(options.DecisionId)}", "SelectorNoMatch", "The requested decision selector matched no admitted decision record.", RuleId, EvidenceTiers.Tier4Unknown, DecisionId: options.DecisionId));
+        if (options.Classification is not null && CountRows(Filter(exact, options.Classification), Filter(mismatch, options.Classification), Filter(possible, options.Classification), Filter(ambiguous, options.Classification)) == 0)
+            AddGap(gaps, options.MaxGaps, ref gapCapReached, new PackageDecisionGap($"pd-selector-classification:{Hash(options.Classification)}", "SelectorNoMatch", "The requested classification selector matched no correlation row.", RuleId, EvidenceTiers.Tier4Unknown));
+        if (records.Length == 0 && options.Source is null && options.Ecosystem is null && options.DecisionId is null)
+            AddGap(gaps, options.MaxGaps, ref gapCapReached, new PackageDecisionGap($"pd-selector:{Hash("selector")}", "SelectorNoMatch", "No admitted decision record was available for correlation.", RuleId, EvidenceTiers.Tier4Unknown));
         if (findingCapReached)
             AddGap(gaps, options.MaxGaps, ref gapCapReached, new PackageDecisionGap($"pd-cap:{Hash("findings")}", "TruncatedByLimit", "The package decision correlation finding limit was reached; coverage gaps remain reported.", RuleId, EvidenceTiers.Tier4Unknown));
 
@@ -297,14 +330,16 @@ public static class PackageDecisionCorrelationReporter
         var properties = fact.Properties;
         var resolved = properties.GetValueOrDefault("resolvedVersion");
         var version = properties.GetValueOrDefault("version");
+        var resolvedVersionEqual = resolved is not null && string.Equals(resolved.Trim(), record.ArtifactVersion.Trim(), StringComparison.Ordinal);
+        var declaredVersionEqual = resolved is null && version is not null && IsLiteralVersion(version) && string.Equals(version.Trim(), record.ArtifactVersion.Trim(), StringComparison.Ordinal);
         var evidenceVersion = resolved ?? version;
         var evidenceDigest = properties.GetValueOrDefault("artifactDigest");
         var evidenceAlgorithm = properties.GetValueOrDefault("artifactDigestAlgorithm");
-        var versionEqual = string.Equals(evidenceVersion?.Trim(), record.ArtifactVersion.Trim(), StringComparison.Ordinal);
         var digestEqual = record.ArtifactDigest is not null && evidenceDigest is not null && string.Equals(record.ArtifactDigestAlgorithm, evidenceAlgorithm, StringComparison.Ordinal) && CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(record.ArtifactDigest), Encoding.UTF8.GetBytes(evidenceDigest));
+        var versionEqual = resolvedVersionEqual || declaredVersionEqual;
         var digestMismatch = record.ArtifactDigest is not null && evidenceDigest is not null && versionEqual && !digestEqual;
-        var classification = digestEqual && versionEqual ? "ExactArtifactMatch" : digestMismatch ? "ArtifactDigestMismatch" : versionEqual ? "PossibleNameVersionMatch" : "AmbiguousIdentity";
-        var matchBasis = classification == "PossibleNameVersionMatch" ? (resolved is not null ? "resolved-version" : version is not null && IsLiteralVersion(version) ? "declared-exact" : null) : null;
+        var classification = digestEqual && resolvedVersionEqual ? "ExactArtifactMatch" : digestMismatch ? "ArtifactDigestMismatch" : versionEqual ? "PossibleNameVersionMatch" : "AmbiguousIdentity";
+        var matchBasis = classification == "PossibleNameVersionMatch" ? (resolvedVersionEqual ? "resolved-version" : declaredVersionEqual ? "declared-exact" : null) : null;
         if (classification == "PossibleNameVersionMatch" && matchBasis is null) classification = "AmbiguousIdentity";
         var origin = properties.GetValueOrDefault("registryOrigin");
         var originJoin = record.RegistryOrigin is null || origin is null ? "absent" : string.Equals(record.RegistryOrigin, origin, StringComparison.OrdinalIgnoreCase) ? "exact" : "origin-mismatch";
@@ -315,11 +350,11 @@ public static class PackageDecisionCorrelationReporter
         if (properties.ContainsKey("lockfilePath") && evidenceDigest is null) notes.Add(new("LockfileDigestUnavailable", "Lockfile evidence does not include an artifact digest."));
         if (!properties.ContainsKey("dependencyRelation")) notes.Add(new("DirectTransitiveUnavailable", "Direct versus transitive relation is not proven by this evidence."));
         var stale = scannedAt.HasValue && scannedAt.Value < record.DecisionTimeUtc;
-        var rowId = $"pd:{Hash(string.Join('\u001f', record.ProducerId, record.DecisionId, source.SourceIndexId))}";
+        var rowId = $"pdr:{Hash(string.Join('\u001f', record.ProducerId, record.DecisionId, source.SourceIndexId, fact.CombinedFactId))}";
         var safeResolvedVersion = IsLiteralVersion(resolved ?? string.Empty) ? resolved : null;
         var safeVersion = IsLiteralVersion(version ?? string.Empty) ? version : null;
         var safeVersionHash = SafeVersionHash(properties.GetValueOrDefault("versionHash")) ?? (version is not null && safeVersion is null ? $"version-hash:{Hash(version)}" : null);
-        var evidence = new PackageDecisionEvidence(fact.CombinedFactId, fact.OriginalFactId, fact.FactType, fact.RuleId, fact.EvidenceTier, source.ScannerVersion, source.ScannerVersion, CombinedReportHelpers.SafePath(fact.FilePath), fact.StartLine, fact.EndLine, safeResolvedVersion, SafeProperty(properties, "lockfilePath"), SafeLockfileHash(properties.GetValueOrDefault("lockfileHash")), evidenceAlgorithm, SafeDigest(evidenceDigest, evidenceAlgorithm), safeVersion, safeVersionHash);
+        var evidence = new PackageDecisionEvidence(fact.CombinedFactId, fact.OriginalFactId, fact.FactType, fact.RuleId, fact.EvidenceTier, fact.ExtractorId, fact.ExtractorVersion, CombinedReportHelpers.SafePath(fact.FilePath), fact.StartLine, fact.EndLine, safeResolvedVersion, SafeProperty(properties, "lockfilePath"), SafeLockfileHash(properties.GetValueOrDefault("lockfileHash")), evidenceAlgorithm, SafeDigest(evidenceDigest, evidenceAlgorithm), safeVersion, safeVersionHash);
         return new PackageDecisionCorrelationRow(rowId, classification, matchBasis, record.DecisionId, record.DecisionKind, record.Ecosystem, record.PackageName, record.ArtifactVersion, originJoin, source.Label, source.SourceIndexId, source.ScanId, $"repo-hash:{CombinedReportHelpers.Hash(source.RepoName, 16)}", SafeCommit(source.CommitSha), properties.GetValueOrDefault("dependencyRelation") ?? "unknown", evidence, stale, notes.OrderBy(note => note.Code, StringComparer.Ordinal).ToArray());
     }
 
@@ -329,16 +364,65 @@ public static class PackageDecisionCorrelationReporter
     private static string? SafeDigest(string? value, string? algorithm) => value is not null && ((algorithm == "sha256" && value.Length == 64 && value.All(character => character is >= 'a' and <= 'f' or >= '0' and <= '9')) || (algorithm == "sha512-base64" && value.Length <= 128 && value.All(character => char.IsLetterOrDigit(character) || character is '+' or '/' or '='))) ? value : null;
     private static bool IsLiteralVersion(string version) => !version.Contains('^') && !version.Contains('~') && !version.Contains('>') && !version.Contains('<') && !version.Contains('*') && !version.Contains("git", StringComparison.OrdinalIgnoreCase) && !version.Contains("${", StringComparison.Ordinal);
     private static string NormalizeName(string ecosystem, string value) => ecosystem.ToLowerInvariant() switch { "nuget" or "npm" => value.Trim().ToLowerInvariant(), "python" => value.Trim().ToLowerInvariant().Replace('-', '_').Replace('.', '_'), _ => value.Trim() };
-    private static string SafeCommit(string value) => string.IsNullOrWhiteSpace(value) ? "unknown" : value.Length is 40 or 64 && value.All(Uri.IsHexDigit) ? value.ToLowerInvariant() : "commit-hash:" + CombinedReportHelpers.Hash(value, 16);
+    private static string? SafeCommit(string value) => FullCommit(value) ? value.ToLowerInvariant() : null;
     private static string Hash(string value) => CombinedReportHelpers.Hash(value, 24);
     private static string GapId(string kind, PackageDecisionRecord record, CombinedReportSource source) => $"pd-gap:{Hash(string.Join('\u001f', kind, record.DecisionId, source.SourceIndexId))}";
     private static int CountRows(params IReadOnlyCollection<PackageDecisionCorrelationRow>[] rows) => rows.Sum(row => row.Count);
     private static IReadOnlyList<PackageDecisionCorrelationRow> Filter(List<PackageDecisionCorrelationRow> rows, string? classification) => rows.Where(row => string.IsNullOrWhiteSpace(classification) || string.Equals(row.Classification, classification, StringComparison.OrdinalIgnoreCase)).OrderBy(row => row.SourceLabel, StringComparer.Ordinal).ThenBy(row => row.Evidence.FilePath, StringComparer.Ordinal).ThenBy(row => row.Evidence.StartLine).ThenBy(row => row.RowId, StringComparer.Ordinal).ToArray();
-    private static void AddGap(List<PackageDecisionGap> gaps, int max, ref bool capReached, PackageDecisionGap gap) { if (gaps.Count < max) gaps.Add(gap); else capReached = true; }
+    private static void AddGap(List<PackageDecisionGap> gaps, int max, ref bool capReached, PackageDecisionGap gap) { if (gaps.Count < Math.Max(1, max)) gaps.Add(gap); else capReached = true; }
 
     private static bool SourceHasCredibilityGap(CombinedReportSource source, IEnumerable<CombinedKnownGapRow> knownGaps) => !FullCommit(source.CommitSha) || !string.Equals(source.BuildStatus, "Succeeded", StringComparison.OrdinalIgnoreCase) || !string.Equals(source.AnalysisLevel, "Level1SemanticAnalysis", StringComparison.OrdinalIgnoreCase) || knownGaps.Any();
     private static bool FullCommit(string value) => !string.IsNullOrWhiteSpace(value) && value.Length is 40 or 64 && value.All(Uri.IsHexDigit);
     private static PackageDecisionSource ToSource(CombinedReportSource source, DateTimeOffset? scannedAt, IEnumerable<CombinedKnownGapRow> gaps) => new(source.Label, source.SourceIndexId, source.ScanId, $"repo-hash:{CombinedReportHelpers.Hash(source.RepoName, 16)}", SafeCommit(source.CommitSha), source.ScannerVersion, source.Language, source.AnalysisLevel, source.BuildStatus, SourceHasCredibilityGap(source, gaps) ? "ReducedCoverage" : "FullEvidenceAvailable", scannedAt?.ToString("O", CultureInfo.InvariantCulture));
+
+    private static PackageDecisionGap SourceGap(string classification, string message, PackageDecisionRecord record, CombinedReportSource source) =>
+        new(GapId(classification, record, source), classification, message, RuleId, EvidenceTiers.Tier4Unknown, record.DecisionId, source.Label, record.Ecosystem, source.SourceIndexId, source.ScanId, SafeCommit(source.CommitSha));
+
+    private static bool HasEcosystemCapability(IEnumerable<CombinedFactRow> facts, string ecosystem) => facts.Any(fact => string.Equals(fact.Properties.GetValueOrDefault("ecosystem"), ecosystem, StringComparison.OrdinalIgnoreCase));
+
+    private static bool TryParseAsOf(string value, out DateTimeOffset parsed)
+    {
+        var formats = new[]
+        {
+            "yyyy-MM-dd'T'HH:mm:ss'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z'",
+            "yyyy-MM-dd'T'HH:mm:sszzz",
+            "yyyy-MM-dd'T'HH:mm:ss.FFFFFFFzzz"
+        };
+        return DateTimeOffset.TryParseExact(value, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out parsed)
+            && parsed.Offset == TimeSpan.Zero;
+    }
+
+    private static void RejectOutputAlias(string decisionPath, string indexPath, string outputPath)
+    {
+        var fullOutput = Path.GetFullPath(outputPath);
+        if (Directory.Exists(fullOutput) || string.IsNullOrWhiteSpace(Path.GetExtension(fullOutput)))
+            return;
+
+        var outputIdentity = FileIdentity(fullOutput);
+        if (outputIdentity is not null && (PathIdentityEquals(outputIdentity, FileIdentity(decisionPath)) || PathIdentityEquals(outputIdentity, FileIdentity(indexPath))))
+            throw new InvalidDataException("package-decision --out must not alias the decision or index input.");
+    }
+
+    private static string? FileIdentity(string path)
+    {
+        var fullPath = Path.GetFullPath(path);
+        try
+        {
+            var target = new FileInfo(fullPath).ResolveLinkTarget(true);
+            return target?.FullName ?? fullPath;
+        }
+        catch (IOException)
+        {
+            return fullPath;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return fullPath;
+        }
+    }
+
+    private static bool PathIdentityEquals(string? left, string? right) => left is not null && right is not null && string.Equals(left, right, StringComparison.Ordinal);
 
     private static async Task<IndexRead> ReadIndexAsync(string path, CancellationToken cancellationToken)
     {
@@ -360,10 +444,14 @@ public static class PackageDecisionCorrelationReporter
         var manifest = JsonSerializer.Deserialize<ScanManifest>(manifestJson, JsonOptions) ?? throw new InvalidDataException("TraceMap scan manifest could not be parsed.");
         var source = new CombinedReportSource("default", "default", CombinedReportHelpers.Hash(manifest.RemoteUrl ?? manifest.RepoName, 16), manifest.ScanId, manifest.RepoName, manifest.RemoteUrl, manifest.Branch, manifest.CommitSha, manifest.ScannerVersion, LanguageFromScanner(manifest.ScannerVersion), LanguageFromScanner(manifest.ScannerVersion), false, manifest.ScanRootRelativePath, manifest.ScanRootPathHash, manifest.GitRootHash, manifest.AnalysisLevel, manifest.BuildStatus);
         await using var factCommand = connection.CreateCommand();
-        factCommand.CommandText = "select fact_id, scan_id, repo, commit_sha, fact_type, rule_id, evidence_tier, source_symbol, target_symbol, contract_element, file_path, start_line, end_line, properties_json from facts order by file_path, start_line, fact_type, fact_id;";
+        var hasExtractorId = await ColumnExistsAsync(connection, "facts", "extractor_id", cancellationToken);
+        var hasExtractorVersion = await ColumnExistsAsync(connection, "facts", "extractor_version", cancellationToken);
+        var extractorIdExpression = hasExtractorId ? "extractor_id" : "null";
+        var extractorVersionExpression = hasExtractorVersion ? "extractor_version" : "null";
+        factCommand.CommandText = $"select fact_id, scan_id, repo, commit_sha, fact_type, rule_id, evidence_tier, source_symbol, target_symbol, contract_element, file_path, start_line, end_line, properties_json, {extractorVersionExpression}, {extractorIdExpression} from facts order by file_path, start_line, fact_type, fact_id;";
         var facts = new List<CombinedFactRow>();
         await using var reader = await factCommand.ExecuteReaderAsync(cancellationToken);
-        while (await reader.ReadAsync(cancellationToken)) facts.Add(new CombinedFactRow(reader.GetString(0), "default", "default", reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.IsDBNull(7) ? null : reader.GetString(7), reader.IsDBNull(8) ? null : reader.GetString(8), reader.IsDBNull(9) ? null : reader.GetString(9), reader.GetString(10), reader.GetInt32(11), reader.GetInt32(12), ParseProperties(reader.GetString(13)), manifest.ScannerVersion));
+        while (await reader.ReadAsync(cancellationToken)) facts.Add(new CombinedFactRow(reader.GetString(0), "default", "default", reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.IsDBNull(7) ? null : reader.GetString(7), reader.IsDBNull(8) ? null : reader.GetString(8), reader.IsDBNull(9) ? null : reader.GetString(9), reader.GetString(10), reader.GetInt32(11), reader.GetInt32(12), ParseProperties(reader.GetString(13)), reader.IsDBNull(14) ? null : reader.GetString(14), reader.IsDBNull(15) ? null : reader.GetString(15)));
         var known = manifest.KnownGaps.Select((gap, index) => new CombinedKnownGapRow("default", "default", $"manifest-gap-{index + 1}", 1, gap)).ToArray();
         return new IndexRead([source], facts, known, new Dictionary<string, DateTimeOffset?>(StringComparer.Ordinal) { ["default"] = manifest.ScannedAt });
     }
@@ -371,6 +459,7 @@ public static class PackageDecisionCorrelationReporter
     private static DateTimeOffset? ParseScannedAt(CombinedReadResult read, CombinedReportSource source) => null;
     private static string? LanguageFromScanner(string scanner) => scanner.Contains("typescript", StringComparison.OrdinalIgnoreCase) ? "typescript" : scanner.Contains("python", StringComparison.OrdinalIgnoreCase) ? "python" : scanner.Contains("jvm", StringComparison.OrdinalIgnoreCase) ? "jvm" : "csharp";
     private static async Task<bool> TableExists(SqliteConnection connection, string name, CancellationToken cancellationToken) { await using var command = connection.CreateCommand(); command.CommandText = "select count(*) from sqlite_master where type='table' and name=$name;"; command.Parameters.AddWithValue("$name", name); return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken)) > 0; }
+    private static async Task<bool> ColumnExistsAsync(SqliteConnection connection, string table, string column, CancellationToken cancellationToken) { await using var command = connection.CreateCommand(); command.CommandText = "select count(*) from pragma_table_info($table) where name = $column;"; command.Parameters.AddWithValue("$table", table); command.Parameters.AddWithValue("$column", column); return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken)) > 0; }
     private static IReadOnlyDictionary<string, string> ParseProperties(string json) => JsonSerializer.Deserialize<Dictionary<string, string?>>(json, JsonOptions)?.Where(pair => pair.Value is not null).ToDictionary(pair => pair.Key, pair => pair.Value!, StringComparer.Ordinal) ?? new Dictionary<string, string>(StringComparer.Ordinal);
     private sealed record IndexRead(IReadOnlyList<CombinedReportSource> Sources, IReadOnlyList<CombinedFactRow> Facts, IReadOnlyList<CombinedKnownGapRow> KnownGaps, IReadOnlyDictionary<string, DateTimeOffset?> ScannedAt);
 

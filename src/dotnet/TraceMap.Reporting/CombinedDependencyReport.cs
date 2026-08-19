@@ -255,7 +255,8 @@ internal sealed record CombinedFactRow(
     int StartLine,
     int EndLine,
     IReadOnlyDictionary<string, string> Properties,
-    string? ExtractorVersion = null);
+    string? ExtractorVersion = null,
+    string? ExtractorId = null);
 
 internal sealed record EndpointCandidate(
     CombinedFactRow Fact,
@@ -437,8 +438,9 @@ public static class CombinedDependencyReporter
             knownGaps.AddRange(ReadKnownGaps(row.Source, row.ManifestJson, warnings));
         }
 
+        var hasFactExtractorId = await ColumnExistsAsync(connection, "combined_facts", "extractor_id", cancellationToken);
         var hasFactExtractorVersion = await ColumnExistsAsync(connection, "combined_facts", "extractor_version", cancellationToken);
-        var facts = await ReadFactsAsync(connection, hasFactExtractorVersion, cancellationToken);
+        var facts = await ReadFactsAsync(connection, hasFactExtractorId, hasFactExtractorVersion, cancellationToken);
         knownGaps.AddRange(ReadAnalyzerCapabilityKnownGaps(sources, facts, warnings));
         var edges = await ReadEdgesAsync(connection, cancellationToken);
         var valueOriginCounts = await ReadValueOriginEvidenceCountsAsync(connection, cancellationToken);
@@ -608,10 +610,12 @@ public static class CombinedDependencyReporter
 
     private static async Task<IReadOnlyList<CombinedFactRow>> ReadFactsAsync(
         SqliteConnection connection,
+        bool hasExtractorId,
         bool hasExtractorVersion,
         CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
+        var extractorIdExpression = hasExtractorId ? "facts.extractor_id" : "null";
         var extractorVersionExpression = hasExtractorVersion ? "facts.extractor_version" : "null";
         command.CommandText = $$"""
             select facts.combined_fact_id,
@@ -631,6 +635,7 @@ public static class CombinedDependencyReporter
                    facts.start_line,
                    facts.end_line,
                    facts.properties_json,
+                   {{extractorIdExpression}},
                    {{extractorVersionExpression}}
             from combined_facts facts
             join index_sources sources on sources.source_index_id = facts.source_index_id
@@ -658,6 +663,7 @@ public static class CombinedDependencyReporter
                 reader.GetInt32(14),
                 reader.GetInt32(15),
                 ParseProperties(reader.GetString(16)),
+                reader.IsDBNull(18) ? null : reader.GetString(18),
                 reader.IsDBNull(17) ? null : reader.GetString(17)));
         }
 
