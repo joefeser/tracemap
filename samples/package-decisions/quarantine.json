@@ -1,0 +1,17 @@
+{
+  "version": "package-decision.v1",
+  "records": [
+    {
+      "decisionId": "dec-sample-quarantine",
+      "decisionKind": "quarantine",
+      "ecosystem": "nuget",
+      "packageName": "Example.Package",
+      "artifactVersion": "2.0.0",
+      "producer": {
+        "id": "sample-producer",
+        "policyVersion": "2026-08"
+      },
+      "decisionTimeUtc": "2026-08-18T00:00:00Z"
+    }
+  ]
+}
