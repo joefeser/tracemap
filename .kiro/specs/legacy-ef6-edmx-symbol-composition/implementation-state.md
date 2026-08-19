@@ -81,7 +81,8 @@ the branch above:
 - `dotnet build src/dotnet/TraceMap.sln` — 0 errors.
 - `dotnet test src/dotnet/TraceMap.sln` — Passed: 1604, Failed: 0, Skipped: 0
   (net10.0) after the final code commit.
-- Focused suites: `LegacyDataEdmxSymbolCompositionTests` (17: F1-F18),
+- Focused suites: `LegacyDataEdmxSymbolCompositionTests` (18: F1-F18 plus
+  the split-mapping/missing-property-evidence coverage case),
   `LegacyDataMetadataExtractorTests` (59), `LegacyDataModelRuleCatalogTests`
   (6), `CSharpSemanticExtractorTests`, `ReverseImpactTraversalTests`,
   `CombineTests`, `CliTests` — all green.
