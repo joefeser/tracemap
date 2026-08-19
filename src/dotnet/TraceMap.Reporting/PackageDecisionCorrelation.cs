@@ -182,6 +182,13 @@ public static class PackageDecisionCorrelationReporter
         if (string.IsNullOrWhiteSpace(options.OutputPath)) throw new ArgumentException("package-decision requires --out <path>.", nameof(options));
         var format = options.Format.Equals("md", StringComparison.OrdinalIgnoreCase) ? "markdown" : options.Format.ToLowerInvariant();
         if (format is not "markdown" and not "json") throw new ArgumentException("package-decision --format must be markdown or json.", nameof(options));
+        DateTimeOffset? asOf = null;
+        if (!string.IsNullOrWhiteSpace(options.AsOf))
+        {
+            if (!DateTimeOffset.TryParse(options.AsOf, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedAsOf) || parsedAsOf.Offset != TimeSpan.Zero)
+                throw new InvalidDataException("package-decision --as-of must be RFC3339 UTC.");
+            asOf = parsedAsOf;
+        }
 
         var admission = await PackageDecisionRecordReader.ReadAsync(options.DecisionPath, cancellationToken);
         var index = await ReadIndexAsync(options.IndexPath, cancellationToken);
@@ -245,7 +252,7 @@ public static class PackageDecisionCorrelationReporter
                         findingCapReached = true;
                         break;
                     }
-                    var row = Correlate(record, source, fact, index.ScannedAt.GetValueOrDefault(source.SourceIndexId));
+                    var row = Correlate(record, source, fact, index.ScannedAt.GetValueOrDefault(source.SourceIndexId), asOf);
                     switch (row.Classification)
                     {
                         case "ExactArtifactMatch": exact.Add(row); break;
@@ -285,7 +292,7 @@ public static class PackageDecisionCorrelationReporter
 
     private static PackageDecisionRecordRow ToRecordRow(PackageDecisionRecord record, string? classification) => new(record.DecisionId, record.DecisionKind, record.Ecosystem, record.PackageName, record.ArtifactVersion, record.RegistryOrigin, record.ArtifactDigestAlgorithm, record.ArtifactDigest, record.ProducerId, record.PolicyVersion, record.DecisionTimeUtc.ToString("O", CultureInfo.InvariantCulture), record.RecordDigest, classification, PackageDecisionRecordReader.RuleId, PackageDecisionRecordReader.EvidenceTier, record.SupersedesDecisionId, record.SourceRepoHash, record.SourceCommitSha);
 
-    private static PackageDecisionCorrelationRow Correlate(PackageDecisionRecord record, CombinedReportSource source, CombinedFactRow fact, DateTimeOffset? scannedAt)
+    private static PackageDecisionCorrelationRow Correlate(PackageDecisionRecord record, CombinedReportSource source, CombinedFactRow fact, DateTimeOffset? scannedAt, DateTimeOffset? asOf)
     {
         var properties = fact.Properties;
         var resolved = properties.GetValueOrDefault("resolvedVersion");
@@ -303,7 +310,8 @@ public static class PackageDecisionCorrelationReporter
         var originJoin = record.RegistryOrigin is null || origin is null ? "absent" : string.Equals(record.RegistryOrigin, origin, StringComparison.OrdinalIgnoreCase) ? "exact" : "origin-mismatch";
         var notes = new List<PackageDecisionNote>();
         if (originJoin == "origin-mismatch") notes.Add(new("registry-origin-mismatch", "Registry origins differ; the possible rung is capped unless digests are equal."));
-        if (classification == "AmbiguousIdentity") notes.Add(new("version-unknown", "Name evidence exists but exact version evidence is unavailable; TraceMap does not resolve ranges."));
+        if (classification == "AmbiguousIdentity") notes.Add(new(digestEqual ? "digest-version-conflict" : "version-unknown", digestEqual ? "Artifact digest matched but version evidence conflicted; TraceMap did not choose an identity." : "Name evidence exists but exact version evidence is unavailable; TraceMap does not resolve ranges."));
+        if (asOf.HasValue && record.DecisionTimeUtc > asOf.Value) notes.Add(new("not-yet-effective", "The producer-declared decision time is later than the supplied deterministic --as-of value."));
         if (properties.ContainsKey("lockfilePath") && evidenceDigest is null) notes.Add(new("LockfileDigestUnavailable", "Lockfile evidence does not include an artifact digest."));
         if (!properties.ContainsKey("dependencyRelation")) notes.Add(new("DirectTransitiveUnavailable", "Direct versus transitive relation is not proven by this evidence."));
         var stale = scannedAt.HasValue && scannedAt.Value < record.DecisionTimeUtc;
