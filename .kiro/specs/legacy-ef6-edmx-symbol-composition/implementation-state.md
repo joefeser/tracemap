@@ -109,12 +109,37 @@ Patched the exact-head automated review findings on `84225324`:
   silent (Qodo Medium x2); the paths are defensive because compilations
   that produce semantic facts resolve their declared symbols.
 
+## Head Review Fixes (second implementation review round)
+
+Patched the exact-head findings on `12e0f052`:
+
+- SSDL and CSDL schema aliases now resolve in entity-type references:
+  `Schema Alias="Self"` with `EntitySet EntityType="Self.Customer"` (and
+  the conceptual `Alias="M"` form in TypeName/entity-set references)
+  resolve to the aliased schema's canonical type before identities are
+  built, so otherwise-valid ScalarProperty mappings keep their column
+  edges (Codex P1).
+- Conceptual property candidates scope by schema-qualified entity
+  identity (additive `schemaNamespace` on csdl-property facts, matched
+  against the entity's conceptual namespace; namespace-less models match
+  when both sides are absent), so same-named entities in separate
+  conceptual schemas no longer produce cross-schema ambiguity gaps
+  (Codex P2).
+- `EdmEntityTypeAttribute` recognition accepts only the exact attribute
+  class name within `System.Data.Entity.Core.Objects.DataClasses` or the
+  legacy `System.Data.Objects.DataClasses` namespace; substring and
+  namespace-prefix lookalikes no longer authorize the mechanism-1 bridge
+  (Codex P2).
+- The null-symbol candidate gap also fires for declarations carrying an
+  `EdmEntityType`-shaped attribute in non-designer files (baz follow-up
+  on the earlier fix).
+
 ## Validation
 
 - `dotnet build src/dotnet/TraceMap.sln` — 0 errors.
-- `dotnet test src/dotnet/TraceMap.sln` — Passed: 1610, Failed: 0, Skipped: 0
-  (net10.0) after the review-fix commit (23 composition fixtures including
-  the new regression cases).
+- `dotnet test src/dotnet/TraceMap.sln` — Passed: 1613, Failed: 0, Skipped: 0
+  (net10.0) after the second review-fix commit (26 composition fixtures
+  including alias, cross-schema property, and attribute-lookalike cases).
 - Focused suites: `LegacyDataEdmxSymbolCompositionTests` (18: F1-F18 plus
   the split-mapping/missing-property-evidence coverage case),
   `LegacyDataMetadataExtractorTests` (59), `LegacyDataModelRuleCatalogTests`

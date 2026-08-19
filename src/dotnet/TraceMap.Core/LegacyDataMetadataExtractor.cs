@@ -639,6 +639,7 @@ public static class LegacyDataMetadataExtractor
                 var columnProps = MetadataProperties("Edmx", metadataHash, "csdl-property");
                 columnProps["sourceSection"] = "CSDL";
                 AddSafeName(columnProps, "entityName", "entityHash", name);
+                AddSafeName(columnProps, "schemaNamespace", "schemaNamespaceHash", AttributeValue(entity.Parent, "Namespace"));
                 AddSafeName(columnProps, "propertyName", "propertyHash", propertyName);
                 AddOptional(columnProps, "descriptorKind", property.Name.LocalName);
                 if (inheritedEntity)
@@ -770,6 +771,19 @@ public static class LegacyDataMetadataExtractor
                 : new[] { name };
         }
 
+        foreach (var schema in csdlSchemas
+                     .Select(item => (Alias: AttributeValue(item, "Alias"), Namespace: AttributeValue(item, "Namespace") ?? string.Empty))
+                     .Where(item => !string.IsNullOrWhiteSpace(item.Alias) && !string.IsNullOrEmpty(item.Namespace)))
+        {
+            foreach (var name in canonicalNames.Where(name => name.StartsWith(schema.Namespace + ".", StringComparison.Ordinal)))
+            {
+                var aliasQualified = schema.Alias + name[schema.Namespace.Length..];
+                lookup["qualified:" + aliasQualified] = lookup.TryGetValue("qualified:" + aliasQualified, out var existing)
+                    ? existing.Append(name).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray()
+                    : new[] { name };
+            }
+        }
+
         return lookup;
     }
 
@@ -783,16 +797,31 @@ public static class LegacyDataMetadataExtractor
 
         var candidates = csdlSchemas
             .SelectMany(schema => schema.Elements().Where(element => element.Name.LocalName == "EntityType")
-                .Select(element => (Namespace: AttributeValue(schema, "Namespace") ?? string.Empty, Name: AttributeValue(element, "Name") ?? string.Empty))
+                .Select(element => (Namespace: AttributeValue(schema, "Namespace") ?? string.Empty, Alias: AttributeValue(schema, "Alias") ?? string.Empty, Name: AttributeValue(element, "Name") ?? string.Empty))
                 .Where(type => !string.IsNullOrWhiteSpace(type.Name)))
-            .Where(type => reference.Contains('.', StringComparison.Ordinal)
-                ? string.Equals(string.IsNullOrWhiteSpace(type.Namespace) ? type.Name : $"{type.Namespace}.{type.Name}", reference, StringComparison.Ordinal)
-                : string.Equals(type.Name, reference, StringComparison.Ordinal) && string.Equals(type.Namespace, containingSchemaNamespace, StringComparison.Ordinal))
+            .Where(type => MatchesSchemaQualifiedReference(reference, type.Namespace, type.Alias, type.Name)
+                || (!reference.Contains('.', StringComparison.Ordinal)
+                    && string.Equals(type.Name, reference, StringComparison.Ordinal)
+                    && string.Equals(type.Namespace, containingSchemaNamespace, StringComparison.Ordinal)))
             .Select(type => string.IsNullOrWhiteSpace(type.Namespace) ? type.Name : $"{type.Namespace}.{type.Name}")
             .Distinct(StringComparer.Ordinal)
             .OrderBy(name => name, StringComparer.Ordinal)
             .ToArray();
         return candidates.Length == 1 ? candidates[0] : reference;
+    }
+
+    private static bool MatchesSchemaQualifiedReference(string reference, string namespaceName, string alias, string typeName)
+    {
+        if (!reference.Contains('.', StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var separator = reference.LastIndexOf('.');
+        var prefix = reference[..separator];
+        return (string.Equals(prefix, namespaceName, StringComparison.Ordinal)
+                || (!string.IsNullOrWhiteSpace(alias) && string.Equals(prefix, alias, StringComparison.Ordinal)))
+            && string.Equals(reference[(separator + 1)..], typeName, StringComparison.Ordinal);
     }
 
     private static (string Namespace, string Name)? ResolveStorageEntityType(IReadOnlyList<XElement> ssdlSchemas, string containingSchemaNamespace, string? entityTypeReference)
@@ -805,11 +834,12 @@ public static class LegacyDataMetadataExtractor
 
         var candidates = ssdlSchemas
             .SelectMany(schema => schema.Elements().Where(element => element.Name.LocalName == "EntityType")
-                .Select(element => (Namespace: AttributeValue(schema, "Namespace") ?? string.Empty, Name: AttributeValue(element, "Name") ?? string.Empty))
+                .Select(element => (Namespace: AttributeValue(schema, "Namespace") ?? string.Empty, Alias: AttributeValue(schema, "Alias") ?? string.Empty, Name: AttributeValue(element, "Name") ?? string.Empty))
                 .Where(type => !string.IsNullOrWhiteSpace(type.Name)))
-            .Where(type => reference.Contains('.', StringComparison.Ordinal)
-                ? string.Equals(string.IsNullOrWhiteSpace(type.Namespace) ? type.Name : $"{type.Namespace}.{type.Name}", reference, StringComparison.Ordinal)
-                : string.Equals(type.Name, reference, StringComparison.Ordinal) && string.Equals(type.Namespace, containingSchemaNamespace, StringComparison.Ordinal))
+            .Where(type => MatchesSchemaQualifiedReference(reference, type.Namespace, type.Alias, type.Name)
+                || (!reference.Contains('.', StringComparison.Ordinal)
+                    && string.Equals(type.Name, reference, StringComparison.Ordinal)
+                    && string.Equals(type.Namespace, containingSchemaNamespace, StringComparison.Ordinal)))
             .Select(type => (type.Namespace, type.Name))
             .Distinct()
             .OrderBy(type => type.Namespace, StringComparer.Ordinal)
