@@ -2,14 +2,14 @@
 
 ## Status
 
-Grouped implementation PR1 is authorized by Joe after specification PR #698
-merged. This state note is the resume point for the record reader, deterministic
-single-index correlation, CLI, and synthetic fixture work only.
+Grouped implementation PR1 and the grouped PR2 scope are authorized by Joe
+after specification PR #698 merged. This state note is the resume point for
+the shipped record/correlation core plus combined/portfolio/npm/path work.
 
 ## Current implementation branch
 
-- Branch: `codex/package-decision-correlation-core`
-- Base: `origin/dev` at `c6148ee8c8084839c8be97bd89d8e603f077530e`
+- Branch: `codex/package-decision-npm-composition`
+- Base: `origin/dev` at `f42987ed0801e6a02ab9c626bdbe47dff523eeb7`
 - Target: `dev`
 - Delivery: ready-for-review PR, `Part of #690` (never draft)
 
@@ -35,6 +35,22 @@ single-index correlation, CLI, and synthetic fixture work only.
   `reject` or `revoke`; quarantine, admit, possible, ambiguous, mismatch,
   exclusion, and unknown rows never trigger it.
 
+## Shipped grouped PR2 scope
+
+- Combined indexes and repeatable `--index`/`--label` inputs are expanded
+  in-memory through the existing combined package-config projection, retaining
+  container/original source labels, source identity, coverage, and selectors.
+- Portfolio manifest v1.0 inputs reuse its relative-path and identity-hint
+  contract. Duplicate source identity and unknown commits are explicit
+  `UnknownAnalysisGap` coverage, never exclusion.
+- TypeScript/npm parses package-lock.json v2/v3 offline. Lockfile facts carry
+  resolved versions, lockfile path/hash, host-only registry origin, the
+  registry-declared sha512 integrity value, direct/transitive relation, and
+  proven dependency path depth. No package content is fetched or verified.
+- `--include-paths` and `--include-reverse` attach bounded existing graph
+  inventory context with dedicated statuses and preserved truncation/gaps;
+  context never upgrades an exact/possible/mismatch/ambiguous rung.
+
 ## Owner decisions recorded
 
 - `quarantine` is accepted as an externally supplied non-terminal state and is
@@ -54,12 +70,20 @@ single-index correlation, CLI, and synthetic fixture work only.
   existing SQL validation tests remain the regression gate.
 - Final full test, format, private-path, and diff checks are required before
   pushing this branch.
+- PR2 validation run so far: `dotnet restore src/dotnet/TraceMap.sln`,
+  `dotnet build src/dotnet/TraceMap.sln --no-restore`, focused package,
+  portfolio, path, and reverse .NET tests (100 passed), and
+  `npm run check --prefix src/typescript` (48 passed).
 
 ## Limitations and deferred work
 
-PR1 does not add npm/NuGet/Swift/Python/JVM lockfile extraction, combined or
-portfolio inputs, path/reverse consumers, before/after comparison, advisory
+PR2 intentionally does not add NuGet/Swift/Python/JVM lockfile extraction,
+before/after comparison, advisory
 profiles, deployment references, or adapter capability upgrades. Those are
-grouped PR2–PR5 work and must not be checked off here. Until adapter slices
-ship, production package facts cannot produce exact matches and capability gaps
-are intentionally emitted.
+grouped PR3–PR5 work and must not be checked off here. npm lockfile integrity
+is producer/registry-declared metadata, not TraceMap content verification;
+workspace/embedded lockfile shapes outside the v2/v3 `packages` map emit an
+analysis gap. Path/reverse context is static graph evidence only and does not
+prove runtime reachability or enforcement. Before adapter evidence is
+available, production package facts remain possible/ambiguous with explicit
+capability gaps.
