@@ -508,6 +508,7 @@ internal static class LegacyDataEdmxSymbolComposition
             var conceptualCandidates = csdlProperties
                 .Where(property => property.Evidence.FilePath == entity.Evidence.FilePath
                     && ValuesMatch(property.Properties, "entityName", "entityHash", entity.Properties, "entityName", "entityHash")
+                    && SchemaNamespaceMatches(property.Properties, entity.Properties)
                     && property.Properties.GetValueOrDefault("descriptorKind") != "NavigationProperty"
                     && ValuesMatch(property.Properties, "propertyName", "propertyHash", propertyMapping.Properties, "propertyName", "propertyHash"))
                 .ToArray();
@@ -782,6 +783,18 @@ internal static class LegacyDataEdmxSymbolComposition
         }
 
         return values.All(label => string.Equals(label, "full", StringComparison.Ordinal)) ? "full" : "unknown";
+    }
+
+    private static bool SchemaNamespaceMatches(IReadOnlyDictionary<string, string> property, IReadOnlyDictionary<string, string> entity)
+    {
+        var propertyNamespace = property.GetValueOrDefault("schemaNamespace");
+        var entityNamespace = entity.GetValueOrDefault("containerName");
+        if (propertyNamespace is null && entityNamespace is null)
+        {
+            return true;
+        }
+
+        return ValuesMatch(property, "schemaNamespace", "schemaNamespaceHash", entity, "containerName", "containerHash");
     }
 
     private static bool ValuesMatch(

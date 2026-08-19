@@ -837,7 +837,10 @@ public static class CSharpSemanticExtractor
         {
             if (model.GetDeclaredSymbol(declaration) is not INamedTypeSymbol symbol)
             {
-                if (designerShapedFile)
+                var carriesEdmAttributeSyntax = declaration.AttributeLists
+                    .SelectMany(list => list.Attributes)
+                    .Any(attribute => attribute.Name.ToString() is "EdmEntityType" or "EdmEntityTypeAttribute");
+                if (designerShapedFile || carriesEdmAttributeSyntax)
                 {
                     facts.Add(CreateGap(
                         filePath,
@@ -905,19 +908,24 @@ public static class CSharpSemanticExtractor
         }
     }
 
+    private static readonly HashSet<string> SupportedEdmEntityTypeAttributeNamespaces = new(StringComparer.Ordinal)
+    {
+        "System.Data.Entity.Core.Objects.DataClasses",
+        "System.Data.Objects.DataClasses"
+    };
+
     private static (string NamespaceName, string Name)? TryGetEdmEntityTypeIdentity(INamedTypeSymbol symbol)
     {
         foreach (var attribute in symbol.GetAttributes())
         {
             if (attribute.AttributeClass is not { } attributeClass
-                || (attributeClass.Name is not ("EdmEntityTypeAttribute" or "EdmEntityType")
-                    && attributeClass.ToDisplayString().Contains("EdmEntityTypeAttribute", StringComparison.Ordinal) is false))
+                || attributeClass.Name is not ("EdmEntityTypeAttribute" or "EdmEntityType"))
             {
                 continue;
             }
 
             var attributeNamespace = attributeClass.ContainingNamespace?.ToDisplayString() ?? string.Empty;
-            if (!attributeNamespace.StartsWith("System.Data.Entity", StringComparison.Ordinal))
+            if (!SupportedEdmEntityTypeAttributeNamespaces.Contains(attributeNamespace))
             {
                 continue;
             }
