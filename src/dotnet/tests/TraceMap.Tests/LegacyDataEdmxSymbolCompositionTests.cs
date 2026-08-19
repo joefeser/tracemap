@@ -574,6 +574,70 @@ public sealed class LegacyDataEdmxSymbolCompositionTests
     }
 
     [Fact]
+    public void F08b_missing_property_evidence_and_split_mappings_gap_closed()
+    {
+        using var fixture = new Ef6Fixture();
+        fixture.Csdl = """
+                <edmx:ConceptualModels>
+                  <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm" Namespace="Model">
+                    <EntityContainer Name="ModelContainer">
+                      <EntitySet Name="Customers" EntityType="Model.Customer" />
+                      <EntitySet Name="Orders" EntityType="Model.Order" />
+                    </EntityContainer>
+                    <EntityType Name="Customer">
+                      <Property Name="CustomerId" Type="Int32" />
+                      <Property Name="LegacyOnly" Type="String" />
+                    </EntityType>
+                    <EntityType Name="Order"><Property Name="OrderId" Type="Int32" /></EntityType>
+                  </Schema>
+                </edmx:ConceptualModels>
+            """;
+        fixture.Msl = """
+                <edmx:Mappings>
+                  <Mapping xmlns="http://schemas.microsoft.com/ado/2009/11/mapping/cs">
+                    <EntityContainerMapping StorageEntityContainer="StoreContainer" CdmEntityContainer="ModelContainer">
+                      <EntitySetMapping Name="Customers">
+                        <EntityTypeMapping TypeName="Model.Customer">
+                          <MappingFragment StoreEntitySet="Customers">
+                            <ScalarProperty Name="CustomerId" ColumnName="CustomerId" />
+                            <ScalarProperty Name="LegacyOnly" ColumnName="Name" />
+                          </MappingFragment>
+                        </EntityTypeMapping>
+                      </EntitySetMapping>
+                      <EntitySetMapping Name="Orders">
+                        <EntityTypeMapping TypeName="Model.Order">
+                          <MappingFragment StoreEntitySet="Customers">
+                            <ScalarProperty Name="OrderId" ColumnName="CustomerId" />
+                          </MappingFragment>
+                          <MappingFragment StoreEntitySet="Customers">
+                            <ScalarProperty Name="OrderId" ColumnName="Name" />
+                          </MappingFragment>
+                        </EntityTypeMapping>
+                      </EntitySetMapping>
+                    </EntityContainerMapping>
+                  </Mapping>
+                </edmx:Mappings>
+            """;
+        var result = fixture.Scan();
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataEdmxSymbolComposition
+            && fact.Properties.GetValueOrDefault("classification") == "MissingSemanticPropertyEvidence"
+            && fact.Properties.GetValueOrDefault("message")!.Contains("LegacyOnly", StringComparison.Ordinal));
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.SymbolRelationship
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "MapsToStorageColumn"
+            && fact.Properties.GetValueOrDefault("targetSymbolDisplayName") == "CustomerId");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataEdmx
+            && fact.Properties.GetValueOrDefault("classification") == "AmbiguousLegacyDataModelIdentity"
+            && fact.Properties.GetValueOrDefault("message")!.Contains("exactly one MappingFragment", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.SymbolRelationship
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "MapsToConceptualEntity"
+            && fact.Properties.GetValueOrDefault("sourceSymbol")!.Contains("Order", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void F13_repeated_scans_are_deterministic()
     {
         using var fixture = new Ef6Fixture();
