@@ -16,6 +16,14 @@ public sealed class SqlValidationSummaryTests
     private static readonly SqlValidationTargetContext Context = new("postgresql", "archive-target", "archive-data", "archive", "manual");
 
     [Fact]
+    public void Sql_validation_canonical_digest_bytes_remain_unchanged()
+    {
+        const string json = "{\"z\":true,\"artifact\":{\"other\":\"x\",\"digest\":\"000\"},\"array\":[2,1]}";
+
+        Assert.Equal("ce8433d62a48af87dd929b5490922443f875e543a7b847df1ab3f58ffdfd5411", SqlValidationSummaryReader.ComputeDigest(json));
+    }
+
+    [Fact]
     public async Task Valid_summary_is_deterministic_and_stays_separate_from_static_evidence()
     {
         using var temp = new TempDirectory();

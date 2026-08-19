@@ -430,6 +430,8 @@ public static class RuleIds
     public const string DatabaseSqlOperatorRunbookPacket = "database.sql.operator-runbook-packet.v1";
     public const string DatabaseSqlValidationSummaryObservation = "database.sql.validation-summary.observation.v1";
     public const string DatabaseSqlValidationSummaryGap = "database.sql.validation-summary.gap.v1";
+    public const string PackageDecisionRecord = "package.decision.record.v1";
+    public const string PackageDecisionCorrelation = "package.decision.correlation.v1";
     public const string ConfigKey = "config.key.v1";
     public const string LegacyWcfConfig = "legacy.wcf.config.v1";
     public const string LegacyWcfContract = "legacy.wcf.contract.v1";

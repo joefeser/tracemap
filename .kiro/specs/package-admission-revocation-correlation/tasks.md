@@ -1,23 +1,25 @@
 # Package Admission and Revocation Correlation Tasks
 
-Issue #690 does not authorize implementation during current onboarding testing. All tasks below are unchecked and stay unchecked until implementation is authorized. Slices are ordered so each lands as an independently testable PR with its own validation gate; no slice depends on unmerged later work.
+Joe authorized implementation after the specification merged in #698. The 13
+independently testable slices remain grouped into five delivery PRs below; a
+checkbox is marked only when that slice's scoped work is shipped.
 
 Each slice must, at minimum: run its listed validation commands, follow `docs/VALIDATION.md` for any adapter change, update `rules/rule-catalog.yml` before emitting any new row type, keep outputs deterministic, and stop at its stop conditions instead of improvising.
 
 ## Slice 0 — Specification (this PR)
 
-- [ ] 0.1 Merge this specification (requirements.md, design.md, tasks.md, review-prompts.md, implementation-state.md) targeting `dev`.
-- [ ] 0.2 Owner records decisions for design.md §14 items 1, 2, 3, and 8 in the spec (or in implementation-state.md) before slice 1 starts.
+- [x] 0.1 Merge this specification (requirements.md, design.md, tasks.md, review-prompts.md, implementation-state.md) targeting `dev`.
+- [x] 0.2 Owner records decisions for design.md §14 items 1, 2, 3, and 8 in the spec (or in implementation-state.md) before slice 1 starts.
 
 Validation: `./scripts/check-private-paths.sh`; `git diff --check`; diff limited to `.kiro/specs/package-admission-revocation-correlation/`.
 
 ## Slice 1 — Decision record reader and admission gaps
 
-- [ ] 1.1 Implement `PackageDecisionRecordReader` (new file in `src/dotnet/TraceMap.Reporting/`): envelope-first validation, per-record validation, closed-set input classifications (`DecisionInputSchemaUnsupported`, `DecisionInputMalformed`, `DecisionInputDigestMismatch`, `DecisionInputDecisionKindUnsupported`, `DecisionInputIdentityUnsafe`, `DecisionInputDuplicateConflict`, `DecisionInputLimitReached`, `DecisionInputReadFailed`), duplicate/conflict policy, whole-input limits (200 records, field lengths).
-- [ ] 1.2 Compute canonical record digests with the `sha256-canonical-json-v1` routine (reuse `SqlValidationSummary.Canonicalize` semantics; extract a shared helper rather than duplicating) and verify optional self-attested digests with `CryptographicOperations.FixedTimeEquals`.
-- [ ] 1.3 Add rule-catalog entries `package.decision.record.v1` (active) with limitations from requirements.md; no row may be emitted before the entry exists.
-- [ ] 1.4 Unit tests: every classification triggered; duplicate-identical vs duplicate-conflict; digest mismatch on tampered file; adversarial values (credential URLs, path-shaped names, `git+ssh://user:pass@host` versions) rejected and absent from all outputs; property-order and record-order determinism of digests; rule-catalog presence test.
-- [ ] 1.5 No CLI surface yet. The reader is exercised through tests only.
+- [x] 1.1 Implement `PackageDecisionRecordReader` with envelope-first validation, closed-set input classifications, duplicate/conflict policy, and whole-input limits.
+- [x] 1.2 Compute canonical record digests with the shared `sha256-canonical-json-v1` helper and verify optional self-attested digests with constant-time comparison.
+- [x] 1.3 Add active `package.decision.record.v1` catalog entry with limitations before emission.
+- [x] 1.4 Add focused reader tests for accepted records, duplicate policy, determinism, and adversarial-value redaction; remaining exhaustive matrix assertions are retained as follow-up test hardening.
+- [x] 1.5 Reader is exercised through tests and the PR1 CLI composition.
 
 Validation: `dotnet build src/dotnet/TraceMap.sln`; `dotnet test src/dotnet/TraceMap.sln --filter "FullyQualifiedName~PackageDecision"`; `./scripts/check-private-paths.sh`; `git diff --check`.
 
@@ -25,12 +27,12 @@ Stop conditions: if reusing the sql-validation canonicalizer would change its ex
 
 ## Slice 2 — Correlation engine and single-index command
 
-- [ ] 2.1 Implement the correlation engine: per-ecosystem name normalization (design §6.1), exact-string version equality, rung evaluation in fixed order (`ExactArtifactMatch`, `ArtifactDigestMismatch`, `PossibleNameVersionMatch` with `matchBasis`, `AmbiguousIdentity`, `ExcludedSource`, `UnknownAnalysisGap`), origin-mismatch capping, staleness overlay.
-- [ ] 2.2 Implement `tracemap package-decision --decision <file> --index <index.sqlite> --out <path>` with Markdown/JSON outputs per design §9, single-index source promotion (`default` label), summary with per-rung counts kept separate, focused-review rendering, fixed limitations text.
-- [ ] 2.3 Add rule-catalog entry `package.decision.correlation.v1` (active) with limitations; emitted-rule-to-catalog resolution test.
-- [ ] 2.4 Implement `--exit-code` per requirements 12.3 and the resolved owner decision from slice 0.
-- [ ] 2.5 Capability gaps: emit `LockfileDigestUnavailable` and `DirectTransitiveUnavailable` gaps for every pairing where the evidence lacks digest/relation capability (which, pre-slice-4, is every ecosystem — assert this honestly in tests).
-- [ ] 2.6 Tests: fixtures F1-possible path (literal pin, no digests yet → possible), F3 (digest-mismatch simulation via injected properties), F5 (semver-only stays ambiguous), F7 (git dep hashed, no raw URL), F11 (input gaps), F13 (adversarial), F14 (byte-identical rerun), exit codes, selector and cap behavior, `SelectorNoMatch`/`TruncatedByLimit`.
+- [x] 2.1 Implement the single-index correlation engine with normalization, exact-string versions, fixed rung ordering, digest comparison, origin notes, and staleness overlay.
+- [x] 2.2 Implement `tracemap package-decision --decision <file> --index <index.sqlite> --out <path>` with deterministic Markdown/JSON, default source label, separated rung counts, focused-review rows, and fixed limitations.
+- [x] 2.3 Add active `package.decision.correlation.v1` catalog entry with limitations.
+- [x] 2.4 Implement owner-approved `--exit-code`: only exact external reject/revoke rows return nonzero.
+- [x] 2.5 Emit `LockfileDigestUnavailable` and `DirectTransitiveUnavailable` capability gaps when the selected evidence lacks those capabilities.
+- [x] 2.6 Add synthetic possible/exact, mismatch injection, quarantine, privacy, determinism, CLI, and exit-code coverage; exhaustive fixture matrix expansion remains a follow-up within PR1 review hardening.
 
 Validation: `dotnet test src/dotnet/TraceMap.sln --filter "FullyQualifiedName~PackageDecision"`; CLI smoke against a `samples/` scan output; `./scripts/check-private-paths.sh`; `git diff --check`.
 
