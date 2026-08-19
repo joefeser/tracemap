@@ -12,6 +12,7 @@ the shipped record/correlation core plus combined/portfolio/npm/path work.
 - Base: `origin/dev` at `f42987ed0801e6a02ab9c626bdbe47dff523eeb7`
 - Target: `dev`
 - Delivery: ready-for-review PR, `Part of #690` (never draft)
+- Head before final state-only update: `497a2eb068081951d03dabceeb2afd5a1730a0be`
 
 ## Shipped PR1 scope
 
@@ -74,6 +75,13 @@ the shipped record/correlation core plus combined/portfolio/npm/path work.
   `dotnet build src/dotnet/TraceMap.sln --no-restore`, focused package,
   portfolio, path, and reverse .NET tests (100 passed), and
   `npm run check --prefix src/typescript` (48 passed).
+- Final PR2 validation: full `dotnet test src/dotnet/TraceMap.sln` (1,629
+  passed), full TypeScript check (48 passed), TypeScript lockfile scan plus
+  `scripts/validate-adapter-artifacts.py`, combined/report/package-decision
+  CLI smoke with optional context, `./scripts/check-private-paths.sh`, and
+  `git diff --check`. Targeted format verification passed for Reporting and
+  test files; the existing CLI project reports unrelated whitespace findings
+  outside the changed package-decision region.
 
 ## Limitations and deferred work
 
