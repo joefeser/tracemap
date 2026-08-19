@@ -605,8 +605,8 @@ public static class LegacyDataMetadataExtractor
             ? "reduced"
             : "full";
         var inheritedEdmxTypeNames = csdlSchemas
-            .SelectMany(schema => schema.Elements().Where(element => element.Name.LocalName == "EntityType" && !string.IsNullOrWhiteSpace(AttributeValue(element, "BaseType"))))
-            .Select(element => AttributeValue(element, "Name"))
+            .SelectMany(schema => schema.Elements().Where(element => element.Name.LocalName == "EntityType" && !string.IsNullOrWhiteSpace(AttributeValue(element, "BaseType")))
+                .Select(element => QualifiedEdmxTypeName(AttributeValue(schema, "Namespace"), AttributeValue(element, "Name"))))
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .Select(name => name!)
             .ToHashSet(StringComparer.Ordinal);
@@ -614,7 +614,7 @@ public static class LegacyDataMetadataExtractor
         foreach (var entity in csdlSchemas.SelectMany(schema => schema.Elements().Where(element => element.Name.LocalName == "EntityType")).OrderBy(GetLine).ThenBy(element => AttributeValue(element, "Name"), StringComparer.Ordinal))
         {
             var name = AttributeValue(entity, "Name") ?? "entity";
-            var inheritedEntity = inheritedEdmxTypeNames.Contains(name);
+            var inheritedEntity = inheritedEdmxTypeNames.Contains(QualifiedEdmxTypeName(AttributeValue(entity.Parent, "Namespace"), name));
             var entityCoverageLabel = inheritedEntity ? "reduced" : coverageLabel;
             if (inheritedEntity)
             {
@@ -639,6 +639,7 @@ public static class LegacyDataMetadataExtractor
                 var columnProps = MetadataProperties("Edmx", metadataHash, "csdl-property");
                 columnProps["sourceSection"] = "CSDL";
                 AddSafeName(columnProps, "entityName", "entityHash", name);
+                AddSafeName(columnProps, "schemaNamespace", "schemaNamespaceHash", AttributeValue(entity.Parent, "Namespace"));
                 AddSafeName(columnProps, "propertyName", "propertyHash", propertyName);
                 AddOptional(columnProps, "descriptorKind", property.Name.LocalName);
                 if (inheritedEntity)
@@ -651,21 +652,57 @@ public static class LegacyDataMetadataExtractor
             }
         }
 
-        foreach (var association in csdlSchemas.SelectMany(schema => schema.Elements().Where(element => element.Name.LocalName == "Association")).OrderBy(GetLine))
+        foreach (var (schema, association) in csdlSchemas
+                     .SelectMany(schema => schema.Elements()
+                         .Where(element => element.Name.LocalName == "Association")
+                         .Select(association => (Schema: schema, Association: association)))
+                     .OrderBy(item => GetLine(item.Association)))
         {
-            AddEdmxAssociationFact(manifest, facts, item.RelativePath, metadataHash, metadataFact.FactId, coverageLabel, inheritedEdmxTypeNames, association);
+            AddEdmxAssociationFact(manifest, facts, item.RelativePath, metadataHash, metadataFact.FactId, coverageLabel, inheritedEdmxTypeNames, AttributeValue(schema, "Namespace"), association);
         }
 
         foreach (var set in conceptualContainers.SelectMany(container => container.Elements().Where(element => element.Name.LocalName == "EntitySet")).OrderBy(GetLine))
         {
             var name = AttributeValue(set, "Name") ?? "entity-set";
+            var entitySetSchemaNamespace = AttributeValue(set.Parent?.Parent, "Namespace") ?? string.Empty;
+            var entitySetReference = ResolveConceptualTypeReference(csdlSchemas, entitySetSchemaNamespace, AttributeValue(set, "EntityType"));
             var properties = MetadataProperties("Edmx", metadataHash, "csdl-entity-set");
             properties["sourceSection"] = "CSDL";
             AddSafeName(properties, "entityName", "entityHash", name);
+            AddSafeName(properties, "entityTypeReference", "entityTypeReferenceHash", entitySetReference);
             AddSafeName(properties, "entityTypeName", "entityTypeHash", LocalName(AttributeValue(set, "EntityType")));
             AddModelIdentity(properties, "Edmx", "entity", "conceptual", item.RelativePath, "edmx-csdl-entity-set", name, AttributeValue(set.Parent, "Name"), metadataFact.FactId, Parts(("entity-set", name), ("entity-type", LocalName(AttributeValue(set, "EntityType"))), ("container", AttributeValue(set.Parent, "Name"))), coverageLabel);
             facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataEntityDeclared, RuleIds.LegacyDataEdmx, item.RelativePath, set, TargetFrom(properties, "entityName", "entityHash"), properties));
         }
+
+        var storageEntitySets = storageContainers
+            .SelectMany(container => container.Elements().Where(element => element.Name.LocalName == "EntitySet"))
+            .Select(set =>
+            {
+                var setName = AttributeValue(set, "Name") ?? string.Empty;
+                var schemaNamespace = AttributeValue(set.Parent?.Parent, "Namespace") ?? string.Empty;
+                var entityTypeReference = AttributeValue(set, "EntityType") ?? string.Empty;
+                var resolvedStorageType = ResolveStorageEntityType(ssdlSchemas, schemaNamespace, entityTypeReference);
+                var identitySource = resolvedStorageType is { } resolved
+                    ? resolved.Name
+                    : entityTypeReference;
+                return new EdmxStoreSetDescriptor(
+                    set,
+                    AttributeValue(set.Parent, "Name") ?? string.Empty,
+                    setName,
+                    schemaNamespace,
+                    entityTypeReference,
+                    resolvedStorageType is { } resolvedType ? resolvedType.Namespace : string.Empty,
+                    identitySource,
+                    StorageEntityTypeIdentity(item.RelativePath, resolvedStorageType is { } resolvedNs ? resolvedNs.Namespace : schemaNamespace, identitySource),
+                    AttributeValue(set, "Table") ?? setName);
+            })
+            .ToArray();
+        var storeSetsByName = storageEntitySets.ToLookup(
+            descriptor => string.IsNullOrWhiteSpace(descriptor.ContainerName)
+                ? "name:" + descriptor.SetName
+                : "container:" + descriptor.ContainerName + "\u001f" + descriptor.SetName,
+            StringComparer.Ordinal);
 
         foreach (var set in storageContainers.SelectMany(container => container.Elements().Where(element => element.Name.LocalName == "EntitySet")).OrderBy(GetLine))
         {
@@ -673,6 +710,9 @@ public static class LegacyDataMetadataExtractor
             var properties = MetadataProperties("Edmx", metadataHash, "ssdl-entity-set");
             properties["sourceSection"] = "SSDL";
             properties["storageObjectKind"] = "TableOrView";
+            properties["storageEntityTypeIdentity"] = storageEntitySets
+                .First(descriptor => ReferenceEquals(descriptor.Element, set))
+                .StorageEntityTypeIdentity;
             AddSafeName(properties, "storageObjectName", "storageObjectHash", tableName);
             AddSafeName(properties, "entitySetName", "entitySetHash", AttributeValue(set, "Name"));
             AddHashOnly(properties, "providerNameHash", AttributeValue(set, "Schema"));
@@ -683,11 +723,13 @@ public static class LegacyDataMetadataExtractor
         foreach (var entity in ssdlSchemas.SelectMany(schema => schema.Elements().Where(element => element.Name.LocalName == "EntityType")).OrderBy(GetLine).ThenBy(element => AttributeValue(element, "Name"), StringComparer.Ordinal))
         {
             var storageType = AttributeValue(entity, "Name") ?? "storage-type";
+            var storageTypeIdentity = StorageEntityTypeIdentity(item.RelativePath, AttributeValue(entity.Parent, "Namespace") ?? string.Empty, storageType);
             foreach (var property in entity.Elements().Where(element => element.Name.LocalName == "Property").OrderBy(GetLine))
             {
                 var columnName = AttributeValue(property, "Name") ?? "column";
                 var properties = MetadataProperties("Edmx", metadataHash, "ssdl-column");
                 properties["sourceSection"] = "SSDL";
+                properties["storageEntityTypeIdentity"] = storageTypeIdentity;
                 AddSafeName(properties, "storageObjectName", "storageObjectHash", storageType);
                 AddSafeName(properties, "columnName", "columnHash", columnName);
                 AddModelIdentity(properties, "Edmx", "column", "storage", item.RelativePath, "edmx-ssdl-column", columnName, storageType, metadataFact.FactId, Parts(("storage-type", storageType), ("column", columnName)), coverageLabel);
@@ -706,13 +748,163 @@ public static class LegacyDataMetadataExtractor
             facts.Add(CreateLegacyFact(manifest, FactTypes.LegacyDataStorageObjectDeclared, RuleIds.LegacyDataEdmx, item.RelativePath, function, TargetFrom(properties, "storageObjectName", "storageObjectHash"), properties));
         }
 
-        AddEdmxMappings(manifest, facts, item.RelativePath, metadataHash, metadataFact.FactId, coverageLabel, mappingElements);
+        var conceptualTypeLookup = BuildConceptualTypeLookup(csdlSchemas);
+        AddEdmxMappings(manifest, facts, item.RelativePath, metadataHash, metadataFact.FactId, coverageLabel, mappingElements, conceptualTypeLookup, storeSetsByName);
     }
 
-    private static void AddEdmxMappings(ScanManifest manifest, List<CodeFact> facts, string relativePath, string metadataHash, string sourceMetadataFactId, string coverageLabel, IReadOnlyList<XElement> mappingElements)
+    private static string StorageEntityTypeIdentity(string relativePath, string schemaNamespace, string storageTypeName) =>
+        "ssdl-type:" + FactFactory.Hash($"{relativePath}\u001f{schemaNamespace}\u001f{storageTypeName}", 24);
+
+    private static string QualifiedEdmxTypeName(string? schemaNamespace, string? typeName)
+    {
+        if (string.IsNullOrWhiteSpace(typeName))
+        {
+            return string.Empty;
+        }
+
+        var value = typeName.Trim();
+        return value.Contains('.', StringComparison.Ordinal) || string.IsNullOrWhiteSpace(schemaNamespace)
+            ? value
+            : $"{schemaNamespace}.{value}";
+    }
+
+    private static IReadOnlyDictionary<string, IReadOnlyList<string>> BuildConceptualTypeLookup(IReadOnlyList<XElement> csdlSchemas)
+    {
+        var canonicalNames = csdlSchemas
+            .SelectMany(schema => schema.Elements().Where(element => element.Name.LocalName == "EntityType")
+                .Select(element => (Namespace: AttributeValue(schema, "Namespace") ?? string.Empty, Name: AttributeValue(element, "Name") ?? string.Empty))
+                .Where(type => !string.IsNullOrWhiteSpace(type.Name))
+                .Select(type => string.IsNullOrWhiteSpace(type.Namespace) ? type.Name : $"{type.Namespace}.{type.Name}"))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+        var lookup = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+        foreach (var name in canonicalNames)
+        {
+            lookup["qualified:" + name] = new[] { name };
+            var simple = name.Contains('.') ? name[(name.LastIndexOf('.') + 1)..] : name;
+            lookup["simple:" + simple] = lookup.TryGetValue("simple:" + simple, out var existing)
+                ? existing.Append(name).ToArray()
+                : new[] { name };
+        }
+
+        foreach (var schema in csdlSchemas
+                     .Select(item => (Alias: AttributeValue(item, "Alias"), Namespace: AttributeValue(item, "Namespace") ?? string.Empty))
+                     .Where(item => !string.IsNullOrWhiteSpace(item.Alias) && !string.IsNullOrEmpty(item.Namespace)))
+        {
+            foreach (var name in canonicalNames.Where(name => name.StartsWith(schema.Namespace + ".", StringComparison.Ordinal)))
+            {
+                var aliasQualified = schema.Alias + name[schema.Namespace.Length..];
+                lookup["qualified:" + aliasQualified] = lookup.TryGetValue("qualified:" + aliasQualified, out var existing)
+                    ? existing.Append(name).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray()
+                    : new[] { name };
+            }
+        }
+
+        return lookup;
+    }
+
+    private static string ResolveConceptualTypeReference(IReadOnlyList<XElement> csdlSchemas, string containingSchemaNamespace, string? entityTypeReference)
+    {
+        var reference = entityTypeReference?.Trim();
+        if (string.IsNullOrWhiteSpace(reference))
+        {
+            return reference ?? string.Empty;
+        }
+
+        var candidates = csdlSchemas
+            .SelectMany(schema => schema.Elements().Where(element => element.Name.LocalName == "EntityType")
+                .Select(element => (Namespace: AttributeValue(schema, "Namespace") ?? string.Empty, Alias: AttributeValue(schema, "Alias") ?? string.Empty, Name: AttributeValue(element, "Name") ?? string.Empty))
+                .Where(type => !string.IsNullOrWhiteSpace(type.Name)))
+            .Where(type => MatchesSchemaQualifiedReference(reference, type.Namespace, type.Alias, type.Name)
+                || (!reference.Contains('.', StringComparison.Ordinal)
+                    && string.Equals(type.Name, reference, StringComparison.Ordinal)
+                    && string.Equals(type.Namespace, containingSchemaNamespace, StringComparison.Ordinal)))
+            .Select(type => string.IsNullOrWhiteSpace(type.Namespace) ? type.Name : $"{type.Namespace}.{type.Name}")
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+        return candidates.Length == 1 ? candidates[0] : reference;
+    }
+
+    private static bool MatchesSchemaQualifiedReference(string reference, string namespaceName, string alias, string typeName)
+    {
+        if (!reference.Contains('.', StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var separator = reference.LastIndexOf('.');
+        var prefix = reference[..separator];
+        return (string.Equals(prefix, namespaceName, StringComparison.Ordinal)
+                || (!string.IsNullOrWhiteSpace(alias) && string.Equals(prefix, alias, StringComparison.Ordinal)))
+            && string.Equals(reference[(separator + 1)..], typeName, StringComparison.Ordinal);
+    }
+
+    private static (string Namespace, string Name)? ResolveStorageEntityType(IReadOnlyList<XElement> ssdlSchemas, string containingSchemaNamespace, string? entityTypeReference)
+    {
+        var reference = entityTypeReference?.Trim();
+        if (string.IsNullOrWhiteSpace(reference))
+        {
+            return null;
+        }
+
+        var candidates = ssdlSchemas
+            .SelectMany(schema => schema.Elements().Where(element => element.Name.LocalName == "EntityType")
+                .Select(element => (Namespace: AttributeValue(schema, "Namespace") ?? string.Empty, Alias: AttributeValue(schema, "Alias") ?? string.Empty, Name: AttributeValue(element, "Name") ?? string.Empty))
+                .Where(type => !string.IsNullOrWhiteSpace(type.Name)))
+            .Where(type => MatchesSchemaQualifiedReference(reference, type.Namespace, type.Alias, type.Name)
+                || (!reference.Contains('.', StringComparison.Ordinal)
+                    && string.Equals(type.Name, reference, StringComparison.Ordinal)
+                    && string.Equals(type.Namespace, containingSchemaNamespace, StringComparison.Ordinal)))
+            .Select(type => (type.Namespace, type.Name))
+            .Distinct()
+            .OrderBy(type => type.Namespace, StringComparer.Ordinal)
+            .ThenBy(type => type.Name, StringComparer.Ordinal)
+            .ToArray();
+        return candidates.Length == 1 ? candidates[0] : null;
+    }
+
+    private static IReadOnlyList<string> ResolveConceptualTypeNames(IReadOnlyDictionary<string, IReadOnlyList<string>> conceptualTypeLookup, string typeName)
+    {
+        if (string.IsNullOrWhiteSpace(typeName))
+        {
+            return Array.Empty<string>();
+        }
+
+        var isTypeOf = typeName.StartsWith("IsTypeOf(", StringComparison.Ordinal) && typeName.EndsWith(")", StringComparison.Ordinal);
+        var value = isTypeOf ? typeName["IsTypeOf(".Length..^1] : typeName;
+        if (conceptualTypeLookup.TryGetValue("qualified:" + value, out var qualified) && qualified.Count > 0)
+        {
+            return qualified;
+        }
+
+        // A qualified reference that did not match exactly must not fall back to a
+        // simple-name lookup in another namespace; only unqualified references
+        // resolve by simple name.
+        if (value.Contains('.', StringComparison.Ordinal))
+        {
+            return Array.Empty<string>();
+        }
+
+        return conceptualTypeLookup.TryGetValue("simple:" + value, out var simple)
+            ? simple
+            : Array.Empty<string>();
+    }
+
+    private static void AddEdmxMappings(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        string relativePath,
+        string metadataHash,
+        string sourceMetadataFactId,
+        string coverageLabel,
+        IReadOnlyList<XElement> mappingElements,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> conceptualTypeLookup,
+        ILookup<string, EdmxStoreSetDescriptor> storeSetsByName)
     {
         var unsupportedMappings = mappingElements.SelectMany(mapping => mapping.Descendants())
-            .Where(element => element.Name.LocalName is "Condition" or "ComplexProperty" or "FunctionImportMapping")
+            .Where(element => element.Name.LocalName is "Condition" or "ComplexProperty" or "FunctionImportMapping" or "ModificationFunctionMapping")
             .OrderBy(GetLine)
             .ToArray();
         foreach (var unsupported in unsupportedMappings)
@@ -732,10 +924,52 @@ public static class LegacyDataMetadataExtractor
             }
 
             var fragment = fragments[0];
+            var unsupportedShapeNames = entitySetMapping
+                .Descendants()
+                .Where(element => element.Name.LocalName is "Condition" or "ComplexProperty" or "FunctionImportMapping" or "ModificationFunctionMapping")
+                .Select(element => element.Name.LocalName)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(name => name, StringComparer.Ordinal)
+                .ToArray();
             var storeSet = AttributeValue(fragment, "StoreEntitySet") ?? "storage";
+            var storageContainerName = AttributeValue(
+                entitySetMapping.Ancestors().FirstOrDefault(element => element.Name.LocalName == "EntityContainerMapping"),
+                "StorageEntityContainer") ?? string.Empty;
+            var storeSetDescriptors = (string.IsNullOrWhiteSpace(storageContainerName)
+                ? storeSetsByName["name:" + storeSet]
+                : storeSetsByName["container:" + storageContainerName + "\u001f" + storeSet]).ToArray();
+            var resolvedStoreSet = storeSetDescriptors.Length == 1 ? storeSetDescriptors[0] : null;
+            var typeNames = entitySetMapping.Descendants()
+                .Where(element => element.Name.LocalName == "EntityTypeMapping")
+                .Select(element => AttributeValue(element, "TypeName") ?? string.Empty)
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray();
+            var typeName = typeNames.Length >= 1 ? typeNames[0] : string.Empty;
+            var resolvedConceptualTypeNames = typeNames.Length == 1 ? ResolveConceptualTypeNames(conceptualTypeLookup, typeName) : Array.Empty<string>();
             var mappingProps = MetadataProperties("Edmx", metadataHash, "entity-table");
             mappingProps["sourceSection"] = "MSL";
             mappingProps["mappingKind"] = "entity-table";
+            mappingProps["typeNamePresent"] = typeNames.Length > 0 ? "True" : "False";
+            mappingProps["typeNameIsTypeOf"] = typeName.StartsWith("IsTypeOf(", StringComparison.Ordinal) ? "True" : "False";
+            mappingProps["storeEntitySetResolved"] = resolvedStoreSet is not null ? "True" : "False";
+            if (unsupportedShapeNames.Length > 0)
+            {
+                mappingProps["unsupportedShapeNames"] = string.Join(";", unsupportedShapeNames);
+            }
+            if (resolvedConceptualTypeNames.Count == 1)
+            {
+                AddSafeName(mappingProps, "resolvedConceptualTypeName", "resolvedConceptualTypeHash", resolvedConceptualTypeNames[0]);
+            }
+
+            if (resolvedStoreSet is not null)
+            {
+                AddSafeName(mappingProps, "resolvedStoreEntitySetName", "resolvedStoreEntitySetHash", resolvedStoreSet.SetName);
+                AddSafeName(mappingProps, "resolvedTableName", "resolvedTableHash", resolvedStoreSet.TableName);
+                mappingProps["storageEntityTypeIdentity"] = resolvedStoreSet.StorageEntityTypeIdentity;
+            }
+
             AddSafeName(mappingProps, "entityName", "entityHash", entitySetName);
             AddSafeName(mappingProps, "tableName", "tableHash", storeSet);
             AddModelIdentity(mappingProps, "Edmx", "entity", "mapping", relativePath, "edmx-msl-entity-table", entitySetName, storeSet, sourceMetadataFactId, Parts(("entity-set", entitySetName), ("store-set", storeSet)), mappingCoverageLabel);
@@ -748,6 +982,15 @@ public static class LegacyDataMetadataExtractor
                 var properties = MetadataProperties("Edmx", metadataHash, "property-column");
                 properties["sourceSection"] = "MSL";
                 properties["mappingKind"] = "property-column";
+                if (unsupportedShapeNames.Length > 0)
+                {
+                    properties["unsupportedShapeNames"] = string.Join(";", unsupportedShapeNames);
+                }
+                if (resolvedStoreSet is not null)
+                {
+                    properties["storageEntityTypeIdentity"] = resolvedStoreSet.StorageEntityTypeIdentity;
+                }
+
                 AddSafeName(properties, "entityName", "entityHash", entitySetName);
                 AddSafeName(properties, "tableName", "tableHash", storeSet);
                 AddSafeName(properties, "propertyName", "propertyHash", propertyName);
@@ -771,6 +1014,7 @@ public static class LegacyDataMetadataExtractor
         string sourceMetadataFactId,
         string coverageLabel,
         IReadOnlySet<string> inheritedEdmxTypeNames,
+        string? schemaNamespace,
         XElement association)
     {
         var associationName = AttributeValue(association, "Name") ?? "association";
@@ -815,8 +1059,10 @@ public static class LegacyDataMetadataExtractor
             return;
         }
 
-        var firstType = LocalName(AttributeValue(ends[0], "Type"));
-        var secondType = LocalName(AttributeValue(ends[1], "Type"));
+        var firstTypeReference = AttributeValue(ends[0], "Type");
+        var secondTypeReference = AttributeValue(ends[1], "Type");
+        var firstType = LocalName(firstTypeReference);
+        var secondType = LocalName(secondTypeReference);
         var relationshipDecision = ClassifyEdmxRelationship(
             "csdl-association",
             EdmxEndpointState(firstType),
@@ -837,8 +1083,8 @@ public static class LegacyDataMetadataExtractor
         }
 
         var relationshipCoverageLabel = coverageLabel;
-        var inheritedEndpoint = (!string.IsNullOrWhiteSpace(firstType) && inheritedEdmxTypeNames.Contains(firstType))
-            || (!string.IsNullOrWhiteSpace(secondType) && inheritedEdmxTypeNames.Contains(secondType));
+        var inheritedEndpoint = inheritedEdmxTypeNames.Contains(QualifiedEdmxTypeName(schemaNamespace, firstTypeReference))
+            || inheritedEdmxTypeNames.Contains(QualifiedEdmxTypeName(schemaNamespace, secondTypeReference));
         if (relationshipDecision.Decision != LegacyRelationshipDecision.EmitRelationship
             || inheritedEndpoint)
         {
@@ -2943,6 +3189,17 @@ public static class LegacyDataMetadataExtractor
     private sealed record TypedDataSetIndicatorResult(bool HasIntrinsicIndicator, bool HasDescriptorContent);
 
     private sealed record ConstraintDefinition(XElement Element, string Name, string? Table, IReadOnlyList<string?> Fields);
+
+    private sealed record EdmxStoreSetDescriptor(
+        XElement Element,
+        string ContainerName,
+        string SetName,
+        string SchemaNamespace,
+        string EntitySetTypeReference,
+        string ResolvedStorageTypeNamespace,
+        string ResolvedStorageTypeName,
+        string StorageEntityTypeIdentity,
+        string TableName);
 
     private sealed record GeneratedCandidate(string FilePath, IReadOnlyDictionary<string, IReadOnlyList<int>> TypeLines)
     {

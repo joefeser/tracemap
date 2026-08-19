@@ -791,6 +791,7 @@ public static class ScanEngine
         facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, semanticResult.GapFacts));
         facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, semanticResult.Facts));
         facts.AddRange(FilterProtectedEvidence(LegacyDataMetadataExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges));
+        facts.AddRange(FilterProtectedEvidence(LegacyDataEdmxSymbolComposition.Extract(manifest, inventory, facts, semanticallyAnalyzedFiles), protectedLineRanges));
         facts.AddRange(FilterProtectedEvidence(LegacyWebFormsExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges));
         facts.AddRange(FilterProtectedEvidence(LegacyWinFormsExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges));
         facts.AddRange(FilterProtectedEvidence(LegacyAspNetExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges));

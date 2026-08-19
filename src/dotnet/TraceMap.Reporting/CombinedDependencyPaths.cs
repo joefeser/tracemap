@@ -4113,6 +4113,10 @@ public static class CombinedDependencyPathReporter
             "implementsinterface" => "implements",
             "implementsinterfacemember" => "implements",
             "extendsinterface" => "inherits",
+            "mapstoconceptualentity" => "MapsToConceptualEntity",
+            "mapstoconceptualproperty" => "MapsToConceptualProperty",
+            "mapstostoragetable" => "MapsToStorageTable",
+            "mapstostoragecolumn" => "MapsToStorageColumn",
             _ => normalized
         };
     }

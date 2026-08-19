@@ -2941,7 +2941,7 @@ public static class TraceMapCommand
               --out <result.json>        New file for machine-readable tracemap.reverse-impact.v1 output.
 
             Optional:
-              --relation <value>         calls, references, inheritance, http, or database. Repeat or comma-separate.
+              --relation <value>         calls, references, inheritance, http, database, or mapping. Repeat or comma-separate.
               --exclude-contained-members Do not expand a type seed to proven directly contained members.
               --max-input-facts <n>      Maximum facts loaded, from 1 through 1000000. Default: 1000000.
               --max-traversal-states <n> Processed states, from 1 through 1000000. Default: 100000.
