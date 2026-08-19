@@ -405,11 +405,13 @@ public static class ReverseImpactTraversal
                     && symbols.GetValueOrDefault(edge.SourceSymbolId) is { } reachedType
                     && TypeSeedKinds.Contains(reachedType.SymbolKind))
                 {
-                    foreach (var member in symbols.Values
-                                 .Where(candidate => string.Equals(candidate.ContainingSymbolId, edge.SourceSymbolId, StringComparison.Ordinal)
-                                     && MemberKinds.Contains(candidate.SymbolKind))
-                                 .OrderBy(candidate => candidate.SymbolId, StringComparer.Ordinal)
-                                 .Take(Math.Max(0, options.MaxFrontierSize - frontier.Count)))
+                    var capacity = Math.Max(0, options.MaxFrontierSize - frontier.Count);
+                    var containedMembers = symbols.Values
+                        .Where(candidate => string.Equals(candidate.ContainingSymbolId, edge.SourceSymbolId, StringComparison.Ordinal)
+                            && MemberKinds.Contains(candidate.SymbolKind))
+                        .OrderBy(candidate => candidate.SymbolId, StringComparer.Ordinal)
+                        .ToArray();
+                    foreach (var member in containedMembers.Take(capacity))
                     {
                         if (!visitedStates.Add((state.TraversalSeedSymbolId, member.SymbolId)))
                         {
@@ -418,6 +420,20 @@ public static class ReverseImpactTraversal
 
                         visitedSymbols.Add(member.SymbolId);
                         frontier.Enqueue(new TraversalState(member.SymbolId, state.TraversalSeedSymbolId, path));
+                    }
+
+                    var omittedMember = containedMembers.Skip(capacity).FirstOrDefault(member =>
+                        !visitedStates.Contains((state.TraversalSeedSymbolId, member.SymbolId)));
+                    if (omittedMember is not null)
+                    {
+                        AddTruncationGap(
+                            truncationGaps,
+                            truncatedReasons,
+                            ReverseImpactTruncationReasons.Frontier,
+                            options.MaxFrontierSize,
+                            $"The traversal frontier reached the configured limit of {options.MaxFrontierSize}; contained member `{omittedMember.SymbolId}` of mapping-reached type `{edge.SourceSymbolId}` was omitted.",
+                            [state.TraversalSeedSymbolId, edge.SourceSymbolId, omittedMember.SymbolId],
+                            FirstFactForSymbol(facts, omittedMember.SymbolId));
                     }
                 }
                 impacts.Add(new ReverseImpactItem(

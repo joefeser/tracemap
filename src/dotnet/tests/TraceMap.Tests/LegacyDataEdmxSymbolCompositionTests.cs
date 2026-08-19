@@ -638,6 +638,194 @@ public sealed class LegacyDataEdmxSymbolCompositionTests
     }
 
     [Fact]
+    public void Simple_entity_type_references_and_qualified_storage_types_resolve_within_scope()
+    {
+        using var fixture = new Ef6Fixture();
+        fixture.Csdl = """
+                <edmx:ConceptualModels>
+                  <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm" Namespace="Model">
+                    <EntityContainer Name="ModelContainer"><EntitySet Name="Customers" EntityType="Customer" /></EntityContainer>
+                    <EntityType Name="Customer"><Property Name="CustomerId" Type="Int32" /></EntityType>
+                  </Schema>
+                </edmx:ConceptualModels>
+            """;
+        fixture.Ssdl = """
+                <edmx:StorageModels>
+                  <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm/ssdl" Namespace="Store.One">
+                    <EntityContainer Name="StoreContainer"><EntitySet Name="Customers" EntityType="Store.One.CustomerTable" Table="dbo.One" /></EntityContainer>
+                    <EntityType Name="CustomerTable"><Property Name="CustomerId" Type="int" /></EntityType>
+                  </Schema>
+                  <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm/ssdl" Namespace="Store.Two">
+                    <EntityType Name="CustomerTable"><Property Name="CustomerId" Type="int" /></EntityType>
+                  </Schema>
+                </edmx:StorageModels>
+            """;
+        var result = fixture.Scan();
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.SymbolRelationship
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "MapsToConceptualEntity"
+            && fact.Properties.GetValueOrDefault("sourceSymbol")!.Contains("Model.Customer", StringComparison.Ordinal));
+        var storage = result.Facts.Single(fact => fact.FactType == FactTypes.SymbolRelationship
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "MapsToStorageTable");
+        Assert.Equal("dbo.One", storage.TargetSymbol);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.SymbolRelationship
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "MapsToStorageColumn");
+
+        using var mismatch = new Ef6Fixture();
+        mismatch.Ssdl = """
+                <edmx:StorageModels>
+                  <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm/ssdl" Namespace="Store.One">
+                    <EntityContainer Name="StoreContainer"><EntitySet Name="Customers" EntityType="Store.Other.CustomerTable" Table="dbo.Wrong" /></EntityContainer>
+                    <EntityType Name="Other"><Property Name="OtherId" Type="int" /></EntityType>
+                  </Schema>
+                  <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm/ssdl" Namespace="Store.Two">
+                    <EntityType Name="CustomerTable"><Property Name="CustomerId" Type="int" /></EntityType>
+                  </Schema>
+                </edmx:StorageModels>
+            """;
+        var mismatchResult = mismatch.Scan();
+        // The qualified reference Store.Other.CustomerTable matches no storage
+        // type in any schema namespace, so the storage type identity cannot
+        // join any SSDL column: members fail closed instead of guessing.
+        Assert.Contains(mismatchResult.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataEdmxSymbolComposition
+            && fact.Properties.GetValueOrDefault("classification") == "AmbiguousLegacyDataModelIdentity"
+            && fact.Properties.GetValueOrDefault("message")!.Contains("SSDL column", StringComparison.Ordinal));
+        Assert.DoesNotContain(mismatchResult.Facts, fact =>
+            fact.FactType == FactTypes.SymbolRelationship
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "MapsToStorageColumn");
+    }
+
+    [Fact]
+    public void Qualified_type_name_mismatch_never_falls_back_to_simple_names()
+    {
+        using var fixture = new Ef6Fixture();
+        fixture.Msl = """
+                <edmx:Mappings>
+                  <Mapping xmlns="http://schemas.microsoft.com/ado/2009/11/mapping/cs">
+                    <EntityContainerMapping StorageEntityContainer="StoreContainer" CdmEntityContainer="ModelContainer">
+                      <EntitySetMapping Name="Customers">
+                        <EntityTypeMapping TypeName="Other.Customer">
+                          <MappingFragment StoreEntitySet="Customers">
+                            <ScalarProperty Name="CustomerId" ColumnName="CustomerId" />
+                          </MappingFragment>
+                        </EntityTypeMapping>
+                      </EntitySetMapping>
+                    </EntityContainerMapping>
+                  </Mapping>
+                </edmx:Mappings>
+            """;
+        var result = fixture.Scan();
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataEdmxSymbolComposition
+            && fact.Properties.GetValueOrDefault("classification") == "AmbiguousLegacyDataModelIdentity"
+            && fact.Properties.GetValueOrDefault("message")!.Contains("did not resolve to conceptual entity", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.SymbolRelationship
+            && fact.Properties.GetValueOrDefault("relationshipKind") is "MapsToStorageTable" or "MapsToStorageColumn");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.SymbolRelationship
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "MapsToConceptualEntity");
+    }
+
+    [Fact]
+    public void Msl_member_without_cdsl_property_gaps_and_skips_property_edges()
+    {
+        using var fixture = new Ef6Fixture();
+        fixture.Msl = """
+                <edmx:Mappings>
+                  <Mapping xmlns="http://schemas.microsoft.com/ado/2009/11/mapping/cs">
+                    <EntityContainerMapping StorageEntityContainer="StoreContainer" CdmEntityContainer="ModelContainer">
+                      <EntitySetMapping Name="Customers">
+                        <EntityTypeMapping TypeName="Model.Customer">
+                          <MappingFragment StoreEntitySet="Customers">
+                            <ScalarProperty Name="CustomerId" ColumnName="CustomerId" />
+                            <ScalarProperty Name="StaleMember" ColumnName="Name" />
+                          </MappingFragment>
+                        </EntityTypeMapping>
+                      </EntitySetMapping>
+                    </EntityContainerMapping>
+                  </Mapping>
+                </edmx:Mappings>
+            """;
+        fixture.DesignerCode = """
+            namespace Model;
+
+            public class Customer
+            {
+                public int CustomerId { get; set; }
+                public string StaleMember { get; set; } = "";
+            }
+            """;
+        var result = fixture.Scan();
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataEdmxSymbolComposition
+            && fact.Properties.GetValueOrDefault("classification") == "AmbiguousLegacyDataModelIdentity"
+            && fact.Properties.GetValueOrDefault("message")!.Contains("StaleMember", StringComparison.Ordinal));
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.SymbolRelationship
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "MapsToConceptualProperty"
+            && fact.Properties.GetValueOrDefault("targetSymbolDisplayName") == "CustomerId");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.SymbolRelationship
+            && fact.Properties.GetValueOrDefault("relationshipKind") is "MapsToConceptualProperty" or "MapsToStorageColumn"
+            && fact.Properties.GetValueOrDefault("targetSymbolDisplayName") == "StaleMember");
+    }
+
+    [Fact]
+    public void Storage_column_edges_carry_the_complete_supporting_chain()
+    {
+        using var fixture = new Ef6Fixture();
+        var result = fixture.Scan();
+
+        var columnEdge = result.Facts.Single(fact =>
+            fact.FactType == FactTypes.SymbolRelationship
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "MapsToStorageColumn"
+            && fact.Properties.GetValueOrDefault("targetSymbolDisplayName") == "CustomerId");
+        var supporting = columnEdge.Properties["supportingFactIds"].Split(';', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Equal(9, supporting.Length);
+        var clrProperty = result.Facts.Single(fact => fact.FactType == FactTypes.SymbolRelationship
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "MapsToConceptualProperty"
+            && fact.Properties.GetValueOrDefault("targetSymbolDisplayName") == "CustomerId");
+        Assert.Equal(clrProperty.Properties["sourceSymbolId"], columnEdge.Properties["sourceSymbolId"]);
+        Assert.Contains(result.Facts.Single(fact => fact.FactType == FactTypes.LegacyDataColumnDeclared
+            && fact.Properties.GetValueOrDefault("sourceSection") == "CSDL"
+            && fact.Properties.GetValueOrDefault("propertyName") == "CustomerId").FactId, supporting);
+        Assert.Contains(result.Facts.Single(fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.Properties.GetValueOrDefault("mappingKind") == "entity-table").FactId, supporting);
+        Assert.Contains(result.Facts.Single(fact => fact.FactType == FactTypes.LegacyDataStorageObjectDeclared
+            && fact.Properties.GetValueOrDefault("descriptorKind") == "ssdl-entity-set").FactId, supporting);
+    }
+
+    [Fact]
+    public void Mapping_member_expansion_reports_frontier_truncation()
+    {
+        using var fixture = new Ef6Fixture();
+        fixture.ExtraFiles["CustomerQueries.cs"] = """
+            namespace Ef6Sample;
+
+            public static class CustomerQueries
+            {
+                public static int ReadCustomer(Model.Customer customer)
+                {
+                    return customer.CustomerId;
+                }
+            }
+            """;
+        var result = fixture.Scan();
+        var storageTable = result.Facts.Single(fact =>
+            fact.FactType == FactTypes.SymbolRelationship
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "MapsToStorageTable");
+
+        var analysis = ReverseImpactTraversal.Analyze(
+            result.Facts.ToArray(),
+            new ReverseImpactOptions(storageTable.Properties["targetSymbolId"], 5, ["mapping", "references"], MaxFrontierSize: 1));
+
+        Assert.True(analysis.Truncated);
+        Assert.Contains(analysis.Gaps, gap => gap.TruncationReason == "frontier"
+            && gap.Message.Contains("contained member", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void F13_repeated_scans_are_deterministic()
     {
         using var fixture = new Ef6Fixture();
