@@ -321,6 +321,7 @@ public static class FactTypes
     public const string LegacyDataMappingDeclared = nameof(LegacyDataMappingDeclared);
     public const string LegacyDataProviderConfigDeclared = nameof(LegacyDataProviderConfigDeclared);
     public const string LegacyDataGeneratedCodeLinked = nameof(LegacyDataGeneratedCodeLinked);
+    public const string LegacyDataGeneratedFileScope = nameof(LegacyDataGeneratedFileScope);
     public const string AccessQueryDeclared = nameof(AccessQueryDeclared);
     public const string AccessQueryDependencyCandidate = nameof(AccessQueryDependencyCandidate);
     public const string AccessQueryOutputDeclared = nameof(AccessQueryOutputDeclared);
@@ -475,6 +476,7 @@ public static class RuleIds
     public const string LegacyDataMetadataInventory = "legacy.data.metadata.inventory.v1";
     public const string LegacyDataDbml = "legacy.data.dbml.v1";
     public const string LegacyDataEdmx = "legacy.data.edmx.v1";
+    public const string LegacyDataEdmxSymbolComposition = "legacy.data.edmx.symbol-composition.v1";
     public const string LegacyDataTypedDataSet = "legacy.data.typed-dataset.v1";
     public const string LegacyDataConfig = "legacy.data.config.v1";
     public const string LegacyDataGeneratedLink = "legacy.data.generated-link.v1";
@@ -561,6 +563,7 @@ public static class ScannerVersions
     public const string LegacyAspNetExtractor = "legacy-aspnet/0.2.0";
     public const string LegacyBatchDataMovementExtractor = "legacy-batch-data-movement/0.1.0";
     public const string LegacyDataExtractor = "legacy-data/0.1.0";
+    public const string LegacyDataSymbolComposition = "legacy-data-composition/0.1.0";
     public const string AccessExtractor = "legacy-access/0.3.2";
     public const string EndpointAlignment = "endpoint-alignment/0.1.0";
     public const string RazorBindingExtractor = "csharp-razor-binding/0.1.0";

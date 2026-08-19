@@ -142,6 +142,58 @@ public sealed class LegacyDataModelRuleCatalogTests
         return match.Groups[1].Value;
     }
 
+    [Fact]
+    public void Rule_catalog_documents_edmx_symbol_composition_contract()
+    {
+        Assert.Equal("legacy.data.edmx.symbol-composition.v1", RuleIds.LegacyDataEdmxSymbolComposition);
+        Assert.Equal("legacy-data-composition/0.1.0", ScannerVersions.LegacyDataSymbolComposition);
+        Assert.Equal("LegacyDataGeneratedFileScope", FactTypes.LegacyDataGeneratedFileScope);
+
+        var catalog = File.ReadAllText(Path.Combine(FindRepoRoot(), "rules", "rule-catalog.yml"));
+        var block = RuleBlock(catalog, RuleIds.LegacyDataEdmxSymbolComposition);
+
+        Assert.Contains("limitations:", block, StringComparison.Ordinal);
+        AssertCatalogList(block, "emits",
+        [
+            FactTypes.SymbolRelationship,
+            FactTypes.LegacyDataGeneratedFileScope,
+            FactTypes.AnalysisGap
+        ]);
+        AssertCatalogList(block, "relationshipKinds",
+        [
+            EdmxSymbolCompositionVocabulary.MapsToConceptualEntity,
+            EdmxSymbolCompositionVocabulary.MapsToConceptualProperty,
+            EdmxSymbolCompositionVocabulary.MapsToStorageTable,
+            EdmxSymbolCompositionVocabulary.MapsToStorageColumn
+        ]);
+
+        foreach (var value in new[]
+                 {
+                     EdmxSymbolCompositionVocabulary.BridgeMechanismSemanticAttribute,
+                     EdmxSymbolCompositionVocabulary.BridgeMechanismGenerationMetadata,
+                     EdmxSymbolCompositionVocabulary.BridgeMechanismGeneratedFileScope,
+                     EdmxSymbolCompositionVocabulary.ClassificationAmbiguousClrSymbolReconciliation,
+                     EdmxSymbolCompositionVocabulary.ClassificationClrSymbolEvidenceUnavailable,
+                     EdmxSymbolCompositionVocabulary.ClassificationUnresolvedGeneratedNamespace,
+                     EdmxSymbolCompositionVocabulary.ClassificationMissingSemanticPropertyEvidence,
+                     "AmbiguousLegacyDataModelIdentity",
+                     "UnsupportedLegacyOrmMappingShape",
+                     "MissingGeneratedCode",
+                     "MalformedLegacyDataMetadata",
+                     "UnsupportedLegacyDataMetadataVersion"
+                 })
+        {
+            Assert.Contains(value, block, StringComparison.Ordinal);
+        }
+
+        Assert.Contains("namespaceBridgeFactId", block, StringComparison.Ordinal);
+        Assert.Contains("same-directory exact-base designer-file scope only", block, StringComparison.Ordinal);
+        Assert.Contains("never global short-name", block, StringComparison.Ordinal);
+        Assert.Contains("fail closed as AmbiguousClrSymbolReconciliation", block, StringComparison.Ordinal);
+        Assert.Contains("never identity evidence", block, StringComparison.Ordinal);
+        Assert.Contains("never reported as missing code", block, StringComparison.Ordinal);
+    }
+
     private static void AssertCatalogList(string ruleBlock, string key, IReadOnlyList<string> expected)
     {
         var match = Regex.Match(
