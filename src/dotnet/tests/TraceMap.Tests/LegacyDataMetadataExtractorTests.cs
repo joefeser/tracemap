@@ -320,6 +320,166 @@ public sealed class LegacyDataMetadataExtractorTests
     }
 
     [Fact]
+    public void Scan_resolves_edmx_type_name_and_store_entity_set_additively()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Model.edmx"), """
+            <edmx:Edmx xmlns:edmx="http://schemas.microsoft.com/ado/2009/11/edmx" Version="3.0">
+              <edmx:Runtime>
+                <edmx:ConceptualModels>
+                  <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm" Namespace="Model">
+                    <EntityContainer Name="ModelContainer"><EntitySet Name="Customers" EntityType="Model.Customer" /></EntityContainer>
+                    <EntityType Name="Customer"><Property Name="CustomerId" Type="Int32" /></EntityType>
+                  </Schema>
+                </edmx:ConceptualModels>
+                <edmx:StorageModels>
+                  <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm/ssdl" Namespace="Store">
+                    <EntityContainer Name="StoreContainer"><EntitySet Name="Customers" EntityType="Store.CustomerTable" Table="dbo.CustomerTable" /></EntityContainer>
+                    <EntityType Name="CustomerTable"><Property Name="CustomerId" Type="int" /></EntityType>
+                  </Schema>
+                </edmx:StorageModels>
+                <edmx:Mappings>
+                  <Mapping xmlns="http://schemas.microsoft.com/ado/2009/11/mapping/cs">
+                    <EntityContainerMapping StorageEntityContainer="StoreContainer" CdmEntityContainer="ModelContainer">
+                      <EntitySetMapping Name="Customers">
+                        <EntityTypeMapping TypeName="Model.Customer">
+                          <MappingFragment StoreEntitySet="Customers">
+                            <ScalarProperty Name="CustomerId" ColumnName="CustomerId" />
+                          </MappingFragment>
+                        </EntityTypeMapping>
+                      </EntitySetMapping>
+                    </EntityContainerMapping>
+                  </Mapping>
+                </edmx:Mappings>
+              </edmx:Runtime>
+            </edmx:Edmx>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+
+        var entityTable = result.Facts.Single(fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.Properties.GetValueOrDefault("mappingKind") == "entity-table");
+        Assert.Equal("True", entityTable.Properties.GetValueOrDefault("typeNamePresent"));
+        Assert.Equal("False", entityTable.Properties.GetValueOrDefault("typeNameIsTypeOf"));
+        Assert.Equal("Model.Customer", entityTable.Properties.GetValueOrDefault("resolvedConceptualTypeName"));
+        Assert.Equal("True", entityTable.Properties.GetValueOrDefault("storeEntitySetResolved"));
+        Assert.Equal("Customers", entityTable.Properties.GetValueOrDefault("resolvedStoreEntitySetName"));
+        Assert.Equal("dbo.CustomerTable", entityTable.Properties.GetValueOrDefault("resolvedTableName"));
+        var storageIdentity = entityTable.Properties.GetValueOrDefault("storageEntityTypeIdentity");
+        Assert.False(string.IsNullOrWhiteSpace(storageIdentity));
+        Assert.StartsWith("ssdl-type:", storageIdentity, StringComparison.Ordinal);
+
+        var storageSet = result.Facts.Single(fact => fact.FactType == FactTypes.LegacyDataStorageObjectDeclared
+            && fact.Properties.GetValueOrDefault("descriptorKind") == "ssdl-entity-set");
+        Assert.Equal(storageIdentity, storageSet.Properties.GetValueOrDefault("storageEntityTypeIdentity"));
+
+        var storageColumn = result.Facts.Single(fact => fact.FactType == FactTypes.LegacyDataColumnDeclared
+            && fact.Properties.GetValueOrDefault("descriptorKind") == "ssdl-column");
+        Assert.Equal(storageIdentity, storageColumn.Properties.GetValueOrDefault("storageEntityTypeIdentity"));
+
+        var propertyColumn = result.Facts.Single(fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.Properties.GetValueOrDefault("mappingKind") == "property-column");
+        Assert.Equal(storageIdentity, propertyColumn.Properties.GetValueOrDefault("storageEntityTypeIdentity"));
+    }
+
+    [Fact]
+    public void Scan_marks_istypeof_and_unresolved_store_sets_additively()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Model.edmx"), """
+            <edmx:Edmx xmlns:edmx="http://schemas.microsoft.com/ado/2009/11/edmx" Version="3.0">
+              <edmx:Runtime>
+                <edmx:ConceptualModels>
+                  <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm" Namespace="Model">
+                    <EntityContainer Name="ModelContainer"><EntitySet Name="Customers" EntityType="Model.Customer" /></EntityContainer>
+                    <EntityType Name="Customer"><Property Name="CustomerId" Type="Int32" /></EntityType>
+                  </Schema>
+                </edmx:ConceptualModels>
+                <edmx:StorageModels>
+                  <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm/ssdl" Namespace="Store">
+                    <EntityContainer Name="StoreContainer"><EntitySet Name="Customers" EntityType="Store.CustomerTable" Table="CustomerTable" /></EntityContainer>
+                    <EntityType Name="CustomerTable"><Property Name="CustomerId" Type="int" /></EntityType>
+                  </Schema>
+                </edmx:StorageModels>
+                <edmx:Mappings>
+                  <Mapping xmlns="http://schemas.microsoft.com/ado/2009/11/mapping/cs">
+                    <EntityContainerMapping StorageEntityContainer="StoreContainer" CdmEntityContainer="ModelContainer">
+                      <EntitySetMapping Name="Customers">
+                        <EntityTypeMapping TypeName="IsTypeOf(Model.Customer)">
+                          <MappingFragment StoreEntitySet="NoSuchSet">
+                            <ScalarProperty Name="CustomerId" ColumnName="CustomerId" />
+                          </MappingFragment>
+                        </EntityTypeMapping>
+                      </EntitySetMapping>
+                    </EntityContainerMapping>
+                  </Mapping>
+                </edmx:Mappings>
+              </edmx:Runtime>
+            </edmx:Edmx>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+
+        var entityTable = result.Facts.Single(fact => fact.FactType == FactTypes.LegacyDataMappingDeclared
+            && fact.Properties.GetValueOrDefault("mappingKind") == "entity-table");
+        Assert.Equal("True", entityTable.Properties.GetValueOrDefault("typeNamePresent"));
+        Assert.Equal("True", entityTable.Properties.GetValueOrDefault("typeNameIsTypeOf"));
+        Assert.Equal("Model.Customer", entityTable.Properties.GetValueOrDefault("resolvedConceptualTypeName"));
+        Assert.Equal("False", entityTable.Properties.GetValueOrDefault("storeEntitySetResolved"));
+        Assert.False(entityTable.Properties.ContainsKey("resolvedStoreEntitySetName"));
+        Assert.False(entityTable.Properties.ContainsKey("storageEntityTypeIdentity"));
+    }
+
+    [Fact]
+    public void Scan_gaps_modification_function_mapping_shapes()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Model.edmx"), """
+            <edmx:Edmx xmlns:edmx="http://schemas.microsoft.com/ado/2009/11/edmx" Version="3.0">
+              <edmx:Runtime>
+                <edmx:ConceptualModels>
+                  <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm" Namespace="Model">
+                    <EntityContainer Name="ModelContainer"><EntitySet Name="Customers" EntityType="Model.Customer" /></EntityContainer>
+                    <EntityType Name="Customer"><Property Name="CustomerId" Type="Int32" /></EntityType>
+                  </Schema>
+                </edmx:ConceptualModels>
+                <edmx:StorageModels>
+                  <Schema xmlns="http://schemas.microsoft.com/ado/2009/11/edm/ssdl" Namespace="Store">
+                    <EntityContainer Name="StoreContainer"><EntitySet Name="Customers" EntityType="Store.CustomerTable" Table="CustomerTable" /></EntityContainer>
+                    <EntityType Name="CustomerTable"><Property Name="CustomerId" Type="int" /></EntityType>
+                  </Schema>
+                </edmx:StorageModels>
+                <edmx:Mappings>
+                  <Mapping xmlns="http://schemas.microsoft.com/ado/2009/11/mapping/cs">
+                    <EntityContainerMapping StorageEntityContainer="StoreContainer" CdmEntityContainer="ModelContainer">
+                      <EntitySetMapping Name="Customers">
+                        <EntityTypeMapping TypeName="Model.Customer">
+                          <MappingFragment StoreEntitySet="Customers">
+                            <ScalarProperty Name="CustomerId" ColumnName="CustomerId" />
+                          </MappingFragment>
+                        </EntityTypeMapping>
+                        <EntityTypeMapping TypeName="Model.Customer">
+                          <ModificationFunctionMapping>
+                            <InsertFunction FunctionName="Store.InsertCustomer" />
+                          </ModificationFunctionMapping>
+                        </EntityTypeMapping>
+                      </EntitySetMapping>
+                    </EntityContainerMapping>
+                  </Mapping>
+                </edmx:Mappings>
+              </edmx:Runtime>
+            </edmx:Edmx>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyDataEdmx
+            && fact.Properties.GetValueOrDefault("classification") == "UnsupportedLegacyOrmMappingShape"
+            && fact.Properties.GetValueOrDefault("message") == "Unsupported EDMX mapping shape: ModificationFunctionMapping.");
+    }
+
+    [Fact]
     public async Task Scan_extracts_config_provider_metadata_without_storing_secrets_in_sqlite_or_report()
     {
         using var temp = new TempDirectory();

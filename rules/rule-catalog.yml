@@ -1849,6 +1849,41 @@ rules:
       - Safe reducer-facing properties include entityName, typeName, tableName, storageObjectName, propertyName, fieldName, columnName, mappingKind, and hash variants for unsafe identifiers.
       - Namespace URIs, provider details, unsafe identifiers, and raw metadata content are hashed or omitted.
 
+  - id: legacy.data.edmx.symbol-composition.v1
+    name: Legacy EF6 EDMX symbol composition
+    description: Composes compiler-resolved EF6 CLR entity and property symbols with checked-in EDMX CSDL, SSDL, and MSL evidence through deterministic namespace reconciliation and a persisted generated-file scope bridge.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - SymbolRelationship
+      - LegacyDataGeneratedFileScope
+      - AnalysisGap
+    relationshipKinds:
+      - MapsToConceptualEntity
+      - MapsToConceptualProperty
+      - MapsToStorageTable
+      - MapsToStorageColumn
+    limitations:
+      - Composition is static design-time evidence and does not prove EF runtime model loading, generated-code execution, query execution, lazy loading, change tracking, database access, schema existence, EDMX deployment, currency, or provider compatibility.
+      - Composed conceptual and storage edges are capped at Tier2Structural through the weakest supporting link; EDMX descriptors remain Tier2Structural under legacy.data.edmx.v1 and generated links keep their legacy.data.generated-link.v1 tiers; no composition upgrades any existing fact or classification.
+      - Reconciliation is namespace-qualified and never global short-name, case-folded, prefix-trimmed, or fuzzy; display labels are never identity; duplicate qualified types across assemblies or distinct compilation scopes sharing one canonical ID fail closed as AmbiguousClrSymbolReconciliation.
+      - Generated or custom CLR namespaces without a deterministic bridge (compiler-resolved generated-type metadata, proven deterministic generation or project metadata, or the same-directory equality convention) gap closed as UnresolvedGeneratedNamespace; scoped files that are semantically covered but declaration-free gap as MissingGeneratedCode; scoped files without confirmed semantic coverage gap as ClrSymbolEvidenceUnavailable so failed analysis is never reported as missing code.
+      - The LegacyDataGeneratedFileScope fact proves same-directory exact-base designer-file scope only (never CLR identity); legacy.data.generated-link.v1 facts of any tier are corroboration only and never identity evidence.
+      - Bridge provenance is explicit and required; every composed edge carries namespaceBridgeFactId within supportingFactIds and namespaceBridgeMechanism of semantic-attribute, generation-metadata, or generated-file-scope.
+      - Mechanism-2 generation or project metadata support requires a proven deterministic read; until enumerated and implemented it contributes no matches, and IsTypeOf, split, conditional, complex, function, association, provider-extension, and malformed shapes fail closed with explicit gaps.
+      - Safe reducer-facing properties include relationshipKind, relationshipSource, sourceSymbolId, targetSymbolId, targetSymbolLanguage, targetSymbolKind, namespaceBridgeFactId, namespaceBridgeMechanism, supportingFactIds, coverageLabel, limitations, scopeRule, scopedFilePaths, and hash variants for unsafe identifiers.
+    gapClassifications:
+      owned:
+        - AmbiguousClrSymbolReconciliation
+        - ClrSymbolEvidenceUnavailable
+        - UnresolvedGeneratedNamespace
+        - MissingSemanticPropertyEvidence
+      reused:
+        - AmbiguousLegacyDataModelIdentity
+        - UnsupportedLegacyOrmMappingShape
+        - MissingGeneratedCode
+        - MalformedLegacyDataMetadata
+        - UnsupportedLegacyDataMetadataVersion
+
   - id: legacy.data.typed-dataset.v1
     name: Legacy typed DataSet and TableAdapter metadata
     description: Extracts safe typed DataSet table/column/relation, TableAdapter, command descriptor, and complete static command-text hash/shape evidence.
@@ -3509,11 +3544,14 @@ rules:
     evidenceTier: Tier1Semantic
     emits:
       - TypeDeclared
+      - PropertyDeclared
     limitations:
       - Requires project load and enough references to create a Roslyn compilation.
       - Generated source excluded from inventory is not reported.
       - External Roslyn source paths use deterministic synthetic identities; original host-local paths are omitted, and same-named unrecognized external sources can share an identity.
       - Each external source document also emits a `csharp.semantic.workspace.v1` gap because repository presence and immutable source identity are not established.
+      - Type declarations carrying an EF6 EdmEntityType generated-identity attribute additionally expose safe-or-hash generatedConceptualNamespace and generatedConceptualName properties; raw attribute text is never retained.
+      - PropertyDeclared facts are emitted only for bounded EF/EDMX composition candidates (generated-identity attributes, in-file DbSet or IDbSet entity arguments, or designer-shaped files) with canonical member symbol IDs; no global property inventory exists under this rule.
 
   - id: csharp.semantic.workspace.v1
     name: C# semantic workspace gaps

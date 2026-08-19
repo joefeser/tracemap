@@ -785,6 +785,21 @@ public static class CSharpSemanticExtractor
                 continue;
             }
 
+            var properties = AddSymbolProperties(
+                new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["name"] = symbol.Name,
+                    ["namespace"] = symbol.ContainingNamespace?.IsGlobalNamespace == false ? symbol.ContainingNamespace.ToDisplayString() : string.Empty,
+                    ["typeKind"] = symbol.TypeKind.ToString()
+                },
+                "target",
+                symbol);
+            if (TryGetEdmEntityTypeIdentity(symbol) is { } conceptualIdentity)
+            {
+                LegacyDataSafeValues.AddSafeOrHash(properties, "generatedConceptualNamespace", "generatedConceptualNamespaceHash", conceptualIdentity.NamespaceName);
+                LegacyDataSafeValues.AddSafeOrHash(properties, "generatedConceptualName", "generatedConceptualNameHash", conceptualIdentity.Name);
+            }
+
             facts.Add(CreateSemanticFact(
                 FactTypes.TypeDeclared,
                 RuleIds.CSharpSemanticDeclarations,
@@ -792,16 +807,158 @@ public static class CSharpSemanticExtractor
                 filePath,
                 declaration,
                 targetSymbol: symbol.ToDisplayString(SymbolFormat),
-                properties: AddSymbolProperties(
-                    new SortedDictionary<string, string>(StringComparer.Ordinal)
-                    {
-                        ["name"] = symbol.Name,
-                        ["namespace"] = symbol.ContainingNamespace?.IsGlobalNamespace == false ? symbol.ContainingNamespace.ToDisplayString() : string.Empty,
-                        ["typeKind"] = symbol.TypeKind.ToString()
-                    },
-                    "target",
-                    symbol)));
+                properties: properties));
         }
+    }
+
+    private static void AddEdmxCompositionCandidateFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        // Bounded eligibility per design D5: only entity types carrying EF6
+        // generated conceptual identity attributes, types referenced in this
+        // file as DbSet/IDbSet entity arguments, or declarations in
+        // designer-shaped files. No global property inventory is emitted.
+        var dbSetEntityTypeIds = root.DescendantNodes().OfType<PropertyDeclarationSyntax>()
+            .Select(property => model.GetDeclaredSymbol(property))
+            .Where(propertySymbol => propertySymbol is not null && IsDbSetType(propertySymbol.Type))
+            .Select(propertySymbol => propertySymbol!.Type is INamedTypeSymbol { TypeArguments.Length: 1 } dbSetType
+                ? dbSetType.TypeArguments[0]
+                : null)
+            .Where(entityType => entityType is not null)
+            .Select(entityType => entityType!.ToDisplayString(SymbolFormat))
+            .ToHashSet(StringComparer.Ordinal);
+        var designerShapedFile = Path.GetFileName(filePath).EndsWith(".designer.cs", StringComparison.OrdinalIgnoreCase);
+
+        foreach (var declaration in root.DescendantNodes().OfType<TypeDeclarationSyntax>())
+        {
+            if (model.GetDeclaredSymbol(declaration) is not INamedTypeSymbol symbol)
+            {
+                var carriesEdmAttributeSyntax = declaration.AttributeLists
+                    .SelectMany(list => list.Attributes)
+                    .Any(attribute => attribute.Name.ToString() is "EdmEntityType" or "EdmEntityTypeAttribute");
+                if (designerShapedFile || carriesEdmAttributeSyntax)
+                {
+                    facts.Add(CreateGap(
+                        filePath,
+                        $"A type declaration in an EDMX generated-code candidate file did not resolve to a compiler symbol at line {declaration.GetLocation().GetLineSpan().StartLinePosition.Line + 1}; EF6 composition evidence for it is unavailable.",
+                        "EdmxCandidateSymbolResolution",
+                        projectPath,
+                        declaration.GetLocation().GetLineSpan().StartLinePosition.Line + 1));
+                }
+
+                continue;
+            }
+
+            var attributeBearing = TryGetEdmEntityTypeIdentity(symbol) is not null;
+            var dbSetCandidate = dbSetEntityTypeIds.Contains(symbol.ToDisplayString(SymbolFormat));
+            if (!attributeBearing && !dbSetCandidate && !designerShapedFile)
+            {
+                continue;
+            }
+
+            foreach (var property in symbol.GetMembers().OfType<IPropertySymbol>())
+            {
+                if (!ReferenceEquals(property.ContainingType, symbol)
+                    || !property.Locations.Any(location => location.SourceTree == root.SyntaxTree))
+                {
+                    continue;
+                }
+
+                var declarationSyntax = property.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() as BasePropertyDeclarationSyntax;
+                if (declarationSyntax is null)
+                {
+                    continue;
+                }
+
+                if (model.GetDeclaredSymbol(declarationSyntax) is not IPropertySymbol resolvedProperty || !ReferenceEquals(resolvedProperty, property))
+                {
+                    facts.Add(CreateGap(
+                        filePath,
+                        $"A property declaration on EDMX composition candidate {symbol.ToDisplayString(SymbolFormat)} did not resolve to a compiler symbol; member evidence for it is unavailable.",
+                        "EdmxCandidateSymbolResolution",
+                        projectPath,
+                        declarationSyntax.GetLocation().GetLineSpan().StartLinePosition.Line + 1));
+                    continue;
+                }
+
+                var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["name"] = property.Name,
+                    ["propertyName"] = property.Name,
+                    ["edmxCompositionCandidate"] = "True",
+                    ["candidateSignal"] = attributeBearing ? "generated-identity-attribute" : dbSetCandidate ? "dbset-entity-argument" : "designer-shaped-file"
+                };
+                AddSymbolProperties(properties, "target", property);
+                AddSymbolProperties(properties, "containingType", symbol);
+                facts.Add(CreateSemanticFact(
+                    FactTypes.PropertyDeclared,
+                    RuleIds.CSharpSemanticDeclarations,
+                    projectPath,
+                    filePath,
+                    declarationSyntax,
+                    sourceSymbol: symbol.ToDisplayString(SymbolFormat),
+                    targetSymbol: property.ToDisplayString(SymbolFormat),
+                    contractElement: property.Name,
+                    properties: properties));
+            }
+        }
+    }
+
+    private static readonly HashSet<string> SupportedEdmEntityTypeAttributeNamespaces = new(StringComparer.Ordinal)
+    {
+        "System.Data.Entity.Core.Objects.DataClasses",
+        "System.Data.Objects.DataClasses"
+    };
+
+    private static (string NamespaceName, string Name)? TryGetEdmEntityTypeIdentity(INamedTypeSymbol symbol)
+    {
+        foreach (var attribute in symbol.GetAttributes())
+        {
+            if (attribute.AttributeClass is not { } attributeClass
+                || attributeClass.Name is not ("EdmEntityTypeAttribute" or "EdmEntityType"))
+            {
+                continue;
+            }
+
+            var attributeNamespace = attributeClass.ContainingNamespace?.ToDisplayString() ?? string.Empty;
+            if (!SupportedEdmEntityTypeAttributeNamespaces.Contains(attributeNamespace))
+            {
+                continue;
+            }
+
+            string? namespaceName = null;
+            string? name = null;
+            foreach (var argument in attribute.NamedArguments)
+            {
+                if (argument.Key == "NamespaceName" && argument.Value.Value is string namespaceValue)
+                {
+                    namespaceName = namespaceValue;
+                }
+                else if (argument.Key == "Name" && argument.Value.Value is string nameValue)
+                {
+                    name = nameValue;
+                }
+            }
+
+            if (namespaceName is null && attribute.ConstructorArguments.Length == 2
+                && attribute.ConstructorArguments[0].Value is string constructorNamespace
+                && attribute.ConstructorArguments[1].Value is string constructorName)
+            {
+                namespaceName = constructorNamespace;
+                name ??= constructorName;
+            }
+
+            if (!string.IsNullOrWhiteSpace(namespaceName) && !string.IsNullOrWhiteSpace(name))
+            {
+                return (namespaceName!, name!);
+            }
+        }
+
+        return null;
     }
 
     private static void AddSymbolRelationshipFacts(
@@ -1467,6 +1624,7 @@ public static class CSharpSemanticExtractor
         List<SemanticFactCandidate> facts)
     {
         AddDbContextFacts(projectPath, filePath, root, model, facts);
+        AddEdmxCompositionCandidateFacts(projectPath, filePath, root, model, facts);
         AddIntegrationInvocationFacts(projectPath, filePath, root, model, facts);
         AddSqlCommandFacts(projectPath, filePath, root, model, facts);
     }
