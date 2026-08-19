@@ -27,8 +27,11 @@ runway for future implementation PRs. Do not close #680 with this PR.
       (not "Closes"); do not tag reviewers; do not run ACK; do not merge.
 - [ ] 0.9 Run Kiro spec reviews (`claude-opus-4.8`, `claude-sonnet-4.6`) via
       `scripts/kiro-review.mjs`, or leave to the owner; record the outcome in
-      `implementation-state.md`. (Deferred to owner for this draft; see
-      unresolved questions.)
+      `implementation-state.md`. (Deferred until owner corrections are
+      committed and re-reviewed; see Q3.)
+- [x] 0.10 Apply the owner's specification review corrections: the namespace
+      evidence ladder (D4/D4.1), bounded semantic property emission (D5),
+      resolved Q1/Q2/Q4 decisions, and editorial/contract cleanup.
 
 ## Implementation Tasks
 
@@ -39,10 +42,17 @@ runway for future implementation PRs. Do not close #680 with this PR.
         catalog tests.
   - [ ] 1.2 Add the `legacy.data.edmx.symbol-composition.v1` entry to
         `rules/rule-catalog.yml` with emits, tiers, gap classifications
-        (`AmbiguousClrSymbolReconciliation`, `ClrSymbolEvidenceUnavailable`,
-        plus reused classifications), safe properties, and limitations
-        (static design time only; no runtime claims; no global short-name
-        matching; descriptor ceilings not upgraded).
+        (new: `AmbiguousClrSymbolReconciliation`,
+        `ClrSymbolEvidenceUnavailable`, `UnresolvedGeneratedNamespace`,
+        `MissingSemanticPropertyEvidence`; reused:
+        `AmbiguousLegacyDataModelIdentity`,
+        `UnsupportedLegacyOrmMappingShape`, `MissingGeneratedCode`,
+        `MalformedLegacyDataMetadata`,
+        `UnsupportedLegacyDataMetadataVersion` — with explicit ownership
+        notes), safe properties, and limitations (static design time only;
+        no runtime claims; no global short-name matching; descriptor
+        ceilings not upgraded; generated/custom namespaces without a
+        deterministic bridge gap closed).
   - [ ] 1.3 Add the `legacy-data-composition/0.1.0` scanner version constant.
 
 - [ ] 2. Extend EDMX parsing with canonical resolution inputs.
@@ -58,17 +68,32 @@ runway for future implementation PRs. Do not close #680 with this PR.
 
 - [ ] 3. Build the composition stage.
       Requirements: 1, 2, 3, 4.
-  - [ ] 3.1 Add the bounded post-extraction composition pass with access to
-        the Tier1 symbol inventory and the Roslyn compilation for reconciled
-        entity types only.
-  - [ ] 3.2 Implement the reconciliation algorithm exactly as designed
-        (qualified-name equality, single-assembly uniqueness, exact member
-        lookup, entity-set/type/fragment/store-set/scalar resolution).
+  - [ ] 3.1 Add bounded semantic property-symbol emission during the existing
+        C# semantic pass for entity types proven eligible for EF/EDMX
+        composition (`DbSet<T>`/`IDbSet<T>` entity arguments, supported
+        generated conceptual identity attributes, or designer/generated-file
+        scoping); canonical member symbol IDs, containing type identity,
+        assembly identity, source span, and compiler provenance. No global
+        property inventory.
+  - [ ] 3.2 Implement the namespace evidence ladder exactly as designed
+        (D4/D4.1): mechanism 1 bounded semantic attribute read
+        (`EdmEntityTypeAttribute` family — an explicit bounded extractor
+        addition), mechanism 2 only with enumerated, proven deterministic
+        generation/project metadata reads, mechanism 3 scoped qualified-name
+        equality convention, mechanism 4 typed gap. Single-assembly
+        uniqueness, exact member lookup, and entity-set/type/fragment/
+        store-set/scalar resolution per D4.
   - [ ] 3.3 Emit `MapsToConceptualEntity`, `MapsToConceptualProperty` at
         Tier1 and `MapsToStorageTable`, `MapsToStorageColumn` at Tier2 with
-        the full evidence envelope and supporting fact chains.
+        the full evidence envelope and complete ordered supporting fact
+        chains.
   - [ ] 3.4 Emit fail-closed gaps for every D9 table row; no edge may be
-        emitted from syntax-only or ambiguous joins.
+        emitted from syntax-only or ambiguous joins; missing semantic
+        property evidence is a typed gap, never name attachment.
+  - [ ] 3.5 Only if a compilation-backed composition seam proves unavoidable:
+        add it as an explicit separate task with documented lifecycle, memory
+        bounds, determinism, and cancellation requirements. No such seam
+        exists today and none is implied.
 
 - [ ] 4. Wire persistence and consumers.
       Requirements: 6, 8.
@@ -77,17 +102,20 @@ runway for future implementation PRs. Do not close #680 with this PR.
         extend only if a gap is proven.
   - [ ] 4.2 Ensure `NormalizeEdgeKind` passes the four new kinds through
         unchanged in path graphs.
-  - [ ] 4.3 Add the opt-in `mapping` reverse-impact filter (or the owner's
-        chosen alternative from Q1) and traverse the four kinds upstream with
-        hop provenance.
+  - [ ] 4.3 Add the opt-in `mapping` reverse-impact filter (resolved Q1) and
+        traverse the four kinds upstream with hop provenance, preserving
+        direct/transitive distinction, per-hop evidence, deterministic cycle
+        handling, and fail-closed selectors; default filters unchanged and
+        `database` untouched.
   - [ ] 4.4 Confirm no reducer allowlist changes and no new consumer.
 
 - [ ] 5. Add the fixture matrix and tests.
       Requirements: 9.
-  - [ ] 5.1 Add `samples/ef6-edmx-composition/` (EDMX + generated entities +
-        `DbContext` with `DbSet<T>`/`IDbSet<T>` stubs in
-        `System.Data.Entity`).
-  - [ ] 5.2 Implement cases F1–F13 asserting identity, endpoints, provenance,
+  - [ ] 5.1 Create test-local synthetic EF6 database-first fixtures (EDMX +
+        generated entities + `DbContext` with `DbSet<T>`/`IDbSet<T>` stubs
+        in `System.Data.Entity`); no maintained `samples/` fixture in the
+        first implementation (resolved Q4).
+  - [ ] 5.2 Implement cases F1–F15 asserting identity, endpoints, provenance,
         spans, tiers, rule IDs, supporting fact IDs, gaps, and coverage.
   - [ ] 5.3 Add persistence round-trip, reverse-impact, path, and determinism
         tests.
@@ -119,6 +147,10 @@ runway for future implementation PRs. Do not close #680 with this PR.
 - Reducer classification of composed edges (separate reducer decision).
 - Association, function-import, and modification-function mapping composition.
 - Freshness/consistency checks between EDMX and generated code.
+- Mechanism 2 enumeration: proven deterministic generation/project metadata
+  reads for namespace bridging (bounded extractor addition when justified).
+- A maintained `samples/` or demo fixture (separate public-proof and
+  smoke-maintenance decision).
 - Extending the identity chain to DBML, typed DataSet, and NHibernate models.
 - Kiro model reviews of this spec (owner-run; prompts in
   `review-prompts.md`).
