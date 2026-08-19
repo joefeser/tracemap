@@ -634,6 +634,51 @@ public sealed class ScanProgressDiagnosticsTests
     }
 
     [Fact]
+    public async Task Timeout_during_a_downstream_stage_reports_timeout_not_success()
+    {
+        using var temp = new TempDirectory();
+        var repo = CreateRepository(temp.Path, repoName: "plain-repo");
+        var review = Path.Combine(temp.Path, "review");
+        var checkpoint = Path.Combine(temp.Path, "progress.json");
+        var time = new ManualTimeProvider();
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var progress = new ConcurrentStringWriter();
+        using var error = new StringWriter();
+        var services = new LocalReviewStageServices(
+            async (options, token) =>
+            {
+                // Downstream producer that ignores the token and blocks.
+                await release.Task;
+            },
+            (options, token) => Task.CompletedTask);
+
+        var run = LocalReviewCommand.RunAsync(
+            [
+                "run", "--repo", repo, "--out", review,
+                "--webforms-modernization",
+                "--diagnostic-progress", checkpoint,
+                "--timeout-seconds", "30"
+            ],
+            TextWriter.Null,
+            error,
+            ScanRunner,
+            stageServices: services,
+            progressConsole: progress,
+            timeProvider: time);
+
+        time.Advance(TimeSpan.FromSeconds(31));
+        var stuck = ParseCheckpoint(checkpoint).RootElement.GetProperty("latest");
+        Assert.Equal("timed-out", stuck.GetProperty("state").GetString());
+        Assert.False(Directory.Exists(review), "no success output while the stage is blocked");
+
+        release.SetResult();
+        Assert.Equal(1, await run);
+        Assert.Contains("LOCAL_REVIEW_TIMEOUT", error.ToString(), StringComparison.Ordinal);
+        using var result = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(review, "local-review-result.json")));
+        Assert.Equal("timed-out", result.RootElement.GetProperty("outcome").GetString());
+    }
+
+    [Fact]
     public async Task Failing_progress_console_never_fails_the_scan()
     {
         using var temp = new TempDirectory();
@@ -770,7 +815,7 @@ public sealed class ScanProgressDiagnosticsTests
     }
 
     [Fact]
-    public void Reporter_normalizes_unknown_categorical_values()
+    public async Task Reporter_normalizes_unknown_categorical_values()
     {
         using var temp = new TempDirectory();
         var checkpointPath = Path.Combine(temp.Path, "progress.json");
@@ -785,15 +830,29 @@ public sealed class ScanProgressDiagnosticsTests
             counts: new Dictionary<string, long> { ["files"] = 7, ["passwords"] = 9 },
             failureCode: "code with spaces && symbols");
 
+        var afterCounts = ParseCheckpoint(checkpointPath).RootElement.GetProperty("latest");
+        Assert.Equal(7, afterCounts.GetProperty("counts").GetProperty("files").GetInt64());
+        Assert.False(afterCounts.GetProperty("counts").TryGetProperty("passwords", out _));
+
+        // A sensitive value passed as a failure code by mistake must collapse
+        // to UNKNOWN instead of leaking its alphanumeric content.
+        reporter.Emit(
+            ScanProgressReporter.LocalReviewOperation,
+            ScanProgressStages.Scan,
+            "failed",
+            failureCode: "/home/leaky/path/Private.cs");
+
         var latest = ParseCheckpoint(checkpointPath).RootElement.GetProperty("latest");
-        Assert.Equal("scan", latest.GetProperty("operation").GetString());
-        Assert.Equal("other", latest.GetProperty("stage").GetString());
+        Assert.Equal("local-review", latest.GetProperty("operation").GetString());
+        Assert.Equal("scan", latest.GetProperty("stage").GetString());
         Assert.Equal("failed", latest.GetProperty("state").GetString());
-        Assert.Equal(0, latest.GetProperty("ordinal").GetInt32());
-        Assert.Equal(7, latest.GetProperty("counts").GetProperty("files").GetInt64());
-        Assert.False(latest.GetProperty("counts").TryGetProperty("passwords", out _));
-        Assert.Equal("CODE-WITH-SPACES----SYMBOLS", latest.GetProperty("failureCode").GetString());
-        Assert.DoesNotContain("untrusted-stage-value-do-not-emit", string.Join('\n', progress.Lines()), StringComparison.Ordinal);
+        Assert.False(latest.TryGetProperty("ordinal", out _));
+        Assert.Equal("UNKNOWN", latest.GetProperty("failureCode").GetString());
+        var observed = string.Join('\n', progress.Lines())
+            + await File.ReadAllTextAsync(checkpointPath);
+        Assert.DoesNotContain("HOME-LEAKY", observed, StringComparison.Ordinal);
+        Assert.DoesNotContain("PRIVATE", observed, StringComparison.Ordinal);
+        Assert.DoesNotContain("untrusted-stage-value-do-not-emit", observed, StringComparison.Ordinal);
     }
 
     [Fact]

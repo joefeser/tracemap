@@ -133,9 +133,10 @@ The contract contains no absolute or relative source paths, no repository,
 project, or solution names, no filenames or symbols, no source values, no
 command lines, no exception messages, no environment values, and no
 credentials, URLs, or identity-derived hashes. Unknown stage names normalize
-to `other`, unknown count keys are dropped, and failure codes are reduced to
-uppercase categorical tokens, so even a programming mistake cannot leak a
-path through this channel.
+to `other`, unknown count keys are dropped, and failure codes are checked
+against a closed catalog — anything else, including a path or exception text
+passed by mistake, collapses to `UNKNOWN` — so even a programming mistake
+cannot leak a value through this channel.
 
 ### Stage Catalog
 
@@ -187,8 +188,11 @@ in that ignored-token case: the timeout deadline callback records the
 `timed-out` observation in the checkpoint, ends every active stage, and
 latches the diagnostics terminal — a scanner thread that keeps running after
 the deadline cannot restart heartbeats or overwrite the terminal observation —
-and every stage boundary plus the finalization step check the timeout token,
-so an expired run can never publish a successful review. If a blocked stage
+every stage boundary and the finalization step check the timeout token, the
+final result writes observe the timeout token, and the deadline timer is
+disarmed and the token rechecked immediately before the atomic publication
+rename, so an expired run can never publish a successful review. If a blocked
+stage
 never observes the token the process may remain alive; treat the checkpoint,
 not process liveness, as the authoritative observation. External cancellation
 (`Ctrl-C`) keeps its existing behavior and records `LOCAL_REVIEW_CANCELLED`.
