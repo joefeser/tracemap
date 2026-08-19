@@ -3544,11 +3544,14 @@ rules:
     evidenceTier: Tier1Semantic
     emits:
       - TypeDeclared
+      - PropertyDeclared
     limitations:
       - Requires project load and enough references to create a Roslyn compilation.
       - Generated source excluded from inventory is not reported.
       - External Roslyn source paths use deterministic synthetic identities; original host-local paths are omitted, and same-named unrecognized external sources can share an identity.
       - Each external source document also emits a `csharp.semantic.workspace.v1` gap because repository presence and immutable source identity are not established.
+      - Type declarations carrying an EF6 EdmEntityType generated-identity attribute additionally expose safe-or-hash generatedConceptualNamespace and generatedConceptualName properties; raw attribute text is never retained.
+      - PropertyDeclared facts are emitted only for bounded EF/EDMX composition candidates (generated-identity attributes, in-file DbSet or IDbSet entity arguments, or designer-shaped files) with canonical member symbol IDs; no global property inventory exists under this rule.
 
   - id: csharp.semantic.workspace.v1
     name: C# semantic workspace gaps
