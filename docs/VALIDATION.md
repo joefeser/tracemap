@@ -1608,16 +1608,19 @@ not attach to PostgreSQL objects. Confirm outputs contain no protected source
 symbol, raw SQL, local path, or claims of application, ordering, rollback,
 generated SQL, compatibility, safety, database state, or approval.
 
-### Package decision correlation (PR1)
+### Package decision correlation (PR1 + PR2)
 
-The external `package-decision.v1` reader and single-index correlation command
-are deterministic, read-only, and offline. Run the focused suite and CLI help
-check before reviewing generated artifacts:
+The external `package-decision.v1` reader and single/combined/portfolio
+correlation command are deterministic, read-only, and offline. TypeScript npm
+lockfile evidence is registry-declared metadata only; TraceMap does not fetch
+or verify package content. Run the focused suite and CLI help check before
+reviewing generated artifacts:
 
 ```bash
 dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
   --filter FullyQualifiedName~PackageDecision
 dotnet run --project src/dotnet/TraceMap.Cli -- package-decision --help
+npm run check --prefix src/typescript
 ```
 
 For a synthetic scan output, run:
@@ -1625,12 +1628,24 @@ For a synthetic scan output, run:
 ```bash
 tracemap package-decision --decision <package-decision.json> \
   --index <index.sqlite> --out <report-directory> [--format json] [--exit-code]
+
+tracemap package-decision --decision <package-decision.json> \
+  --index <web.sqlite> --label web \
+  --index <api.sqlite> --label api \
+  --out <report-directory> --include-paths --include-reverse
+
+tracemap package-decision --decision <package-decision.json> \
+  --manifest <portfolio.json> --out <report-directory>
 ```
 
 Verify `package-decision-report.json` and `.md` preserve separate exact,
 digest-mismatch, possible, ambiguous, excluded, and unknown sections; every
 row carries rule, tier, span, and commit provenance; and missing digest or
-direct/transitive capability is an explicit gap. `--exit-code` is nonzero only
+direct/transitive capability is an explicit gap. Lockfile rows preserve the
+resolved version, host-only registry origin, lockfile path/hash, declared
+integrity digest, direct/transitive relation, and proven path depth. Optional
+path/reverse context is bounded graph evidence and never upgrades a rung.
+`--exit-code` is nonzero only
 for an exact match tied to an external `reject` or `revoke` record. The command
 does not fetch, execute, authenticate, approve, block, or enforce packages.
 
