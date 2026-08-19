@@ -1242,6 +1242,41 @@ public sealed class LegacyDataEdmxSymbolCompositionTests
         {
             Assert.All(conceptualTargets, target => Assert.DoesNotContain(target, descriptorKeys, StringComparer.Ordinal));
         }
+
+        // The cited harm was the symbol inventory merging both members onto
+        // one identity, letting reverse impact return callers from both
+        // models. Prove the persisted inventory keeps them distinct.
+        var indexPath = Path.Combine(fixture.TempPath, "distinct-members", "index.sqlite");
+        Directory.CreateDirectory(Path.GetDirectoryName(indexPath)!);
+        SqliteIndexWriter.Write(indexPath, result.Manifest, result.Facts);
+        using (var connection = new SqliteConnection($"Data Source={indexPath}"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                select count(distinct symbol_id)
+                from symbols
+                where symbol_id in (@first, @second) and language = 'edmx'
+                """;
+            var first = command.CreateParameter();
+            first.ParameterName = "@first";
+            first.Value = conceptualTargets.First();
+            command.Parameters.Add(first);
+            var second = command.CreateParameter();
+            second.ParameterName = "@second";
+            second.Value = conceptualTargets.Last();
+            command.Parameters.Add(second);
+            Assert.Equal(2L, Convert.ToInt64(command.ExecuteScalar()));
+
+            command.Parameters.Clear();
+            command.CommandText = """
+                select count(distinct target_symbol_id)
+                from symbol_relationships
+                where rule_id = 'legacy.data.edmx.symbol-composition.v1'
+                  and relationship_kind = 'MapsToConceptualProperty'
+                """;
+            Assert.Equal(2L, Convert.ToInt64(command.ExecuteScalar()));
+        }
     }
 
     [Fact]
@@ -1275,6 +1310,13 @@ public sealed class LegacyDataEdmxSymbolCompositionTests
             && fact.Properties.GetValueOrDefault("relationshipKind") == "MapsToConceptualEntity");
         Assert.NotNull(conceptual);
         Assert.Equal("semantic-attribute", conceptual.Properties["namespaceBridgeMechanism"]);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.SymbolRelationship
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "MapsToStorageTable"
+            && fact.Properties.GetValueOrDefault("namespaceBridgeMechanism") == "semantic-attribute");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.SymbolRelationship
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "MapsToConceptualProperty");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.SymbolRelationship
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "MapsToStorageColumn");
         Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.LegacyDataEdmxSymbolComposition
             && fact.Properties.GetValueOrDefault("classification") is "UnresolvedGeneratedNamespace" or "MissingGeneratedCode");

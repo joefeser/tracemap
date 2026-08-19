@@ -152,6 +152,22 @@ Patched the two exact-head findings on `9f6adc40`:
   conceptual namespace on both the attribute bridge and the descriptor)
   compose instead of reporting misleading gaps (Codex P2).
 
+## Head Review Fixes (fourth round: closure evidence)
+
+The two threads re-anchored onto head `4d6ebaeb` (the owner's unsupported-
+mapping/inheritance-join commit, whose parent is the fixing commit
+`f811c985`) were confirmed already fixed at that head; this round adds
+explicit closure evidence on top of the head:
+
+- The distinct member target identity test now also proves the harm the
+  P1 cited cannot occur end-to-end: the persisted `symbols` inventory
+  keeps the two same-named conceptual properties as distinct `edmx`
+  symbol rows, and `symbol_relationships` holds two distinct member
+  target identities.
+- The redacted-namespace hash test now proves the P2 path composes the
+  complete chain (table, conceptual property, and storage column edges
+  through the semantic-attribute bridge), not only the entity edge.
+
 ## Validation
 
 - `dotnet build src/dotnet/TraceMap.sln` — 0 errors.
