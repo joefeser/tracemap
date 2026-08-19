@@ -211,11 +211,20 @@ the shipped property contract:
   `LegacyDataGeneratedFileScope` (descriptorKind
   `edmx-generated-file-scope`, Tier2Structural): one per EDMX document,
   recording `sourceMetadataFactId` (the EDMX inventory fact), the closed
-  `scopeRule` code `designer-file-convention`, and the ordered scan-relative
-  `scopedFilePaths` computed with the exact shipped convention (inventory
-  designer files whose base name starts with the EDMX base name — the
-  `IsDesigner` check plus the same prefix rule `AddGeneratedCodeLinks`
-  applies). It is file-level scoping only: it carries no CLR symbol IDs,
+  `scopeRule` code `same-directory-designer-file`, and the ordered
+  scan-relative `scopedFilePaths` computed with a deterministic rule that is
+  deliberately narrower than the shipped linkage convention: inventory
+  `.designer.cs` files that sit in the same scan-relative directory as the
+  EDMX and whose file name without extension is exactly
+  `{edmxBaseName}.Designer` (ordinal comparison) — for `Model.edmx`, only a
+  `Model.Designer.cs` beside it. The shipped repo-wide case-insensitive
+  basename-prefix convention (`AddGeneratedCodeLinks`) is NOT reused for
+  composition scope: it can admit unrelated designer files from other
+  directories or projects (`Other.Project.Model.Designer.cs`) and prefix
+  siblings (`Model2.Designer.cs` starts with `Model`), either of which could
+  become a false sole candidate. That shipped convention stays unchanged for
+  its own `legacy.data.generated-link.v1` rule. The scope fact
+  is file-level scoping only: it carries no CLR symbol IDs,
   namespaces, assembly identities, or type names, and makes no identity
   claim. Candidate-to-symbol identity is proven exclusively by the Tier1
   declaration facts inside the scoped files (qualified equality,
@@ -278,9 +287,19 @@ comparisons.
 
 1. CLR entity pool: Tier1 `TypeDeclared` facts from
    `csharp.semantic.declarations.v1` (compiler-resolved symbol ID + namespace
-   + assembly identity). Syntax-only declarations are ineligible. When the
-   scan has no Tier1 symbol evidence at all, emit one composition-unavailable
-   gap per EDMX file and stop (no edges).
+   + assembly identity). Syntax-only declarations are ineligible. Compiler
+   availability is evaluated per EDMX scope, not scan-wide. When the scan has
+   no Tier1 symbol evidence at all, emit one composition-unavailable gap per
+   EDMX file and stop (no edges). Additionally, when an EDMX's scoped files
+   carry no Tier1 declarations and the scan's per-file semantic-coverage
+   record (the `semanticallyAnalyzedFiles` set that already feeds
+   integration syntax extraction, `ScanEngine.cs:214/:757`) shows those
+   files — or their project — were not semantically analyzed (for example a
+   failed MSBuild load in a multi-project scan where other projects produced
+   Tier1 facts), that EDMX emits `ClrSymbolEvidenceUnavailable` and no edges:
+   failed analysis must never be presented as absent generated code.
+   `MissingGeneratedCode` applies only when semantic coverage over the
+   scoped files is confirmed and they still declare nothing.
 2. CLR-to-CSDL entity reconciliation follows the namespace evidence ladder
    (owner review correction; controlling rule). Generated CLR namespaces may
    legitimately differ from the CSDL namespace (T4 generation, custom-tool
@@ -310,8 +329,8 @@ comparisons.
      namespace-qualified type name — a documented supported convention, not a
      general truth. It applies only over Tier1 declarations whose declaring
      files are scoped to that EDMX by the composition's
-     `LegacyDataGeneratedFileScope` bridge fact (D2; the deterministic
-     designer-file convention), it is always a qualified full-name
+     `LegacyDataGeneratedFileScope` bridge fact (D2; the tightened
+     same-directory designer-file rule), it is always a qualified full-name
      comparison never a simple-name comparison, and identity is proven only
      by the canonical symbol evidence below — the scope fact and any
      `legacy.data.generated-link.v1` fact never authorize identity.
@@ -326,8 +345,13 @@ comparisons.
    identical name/version — are ambiguous and produce no edge. Missing scope
    evidence when duplicate declarations exist also fails closed. This is a
    composition guard, not a silent change to the repository-wide symbol-ID
-   format. No candidate at all
-   within the mechanism-3 scope yields `MissingGeneratedCode`;
+   format. Classification for empty results is deterministic: scoped files
+   that contain Tier1 declarations but no qualified match — generated code
+   exists under a divergent, unbridged namespace — yield
+   `UnresolvedGeneratedNamespace` (mechanism 4); scoped files confirmed
+   semantically covered but declaring nothing yield `MissingGeneratedCode`;
+   scoped files without confirmed semantic coverage yield
+   `ClrSymbolEvidenceUnavailable` (rule 1).
    `DbSetDeclared`/`DbContextDeclared` facts may corroborate (their
    `entityTypeSymbolId` must equal the reconciled ID when present) but are
    not required; entities without a `DbSet` still compose.
@@ -381,7 +405,8 @@ evidence is bucketed explicitly:
 
 - Currently available (no extractor change): Tier1 `TypeDeclared` symbol
   blocks, `DbSetDeclared` entity symbol blocks, the inventory-visible
-  designer/generated-file convention, and the EDMX descriptors themselves.
+  same-directory designer-file rule, the per-file semantic-coverage record
+  (`semanticallyAnalyzedFiles`), and the EDMX descriptors themselves.
   Mechanism 3 is evaluable once the composition stage exists: it emits its
   own `LegacyDataGeneratedFileScope` bridge fact from those inputs, so no
   `legacy.data.generated-link.v1` change is required (and EDMX links are
@@ -415,9 +440,11 @@ compilation-backed post-pass is not an "easy option" and is not assumed.
   (a) the type appears as a `DbSet<T>`/`IDbSet<T>` entity type argument;
   (b) the type carries supported generated conceptual identity attributes
       (mechanism 1 of the D4 ladder);
-  (c) the declaring file is an inventory-visible generated/designer candidate
-      under the same bounded file-shape convention used by the shipped
-      generated-link extractor.
+  (c) the declaring file is an inventory-visible designer-shaped candidate
+      (deliberately broader than mechanism-3 scope: emitting extra
+      property-symbol evidence is harmless, while only the tightened
+      `LegacyDataGeneratedFileScope` rule in D2 admits mechanism-3
+      candidates).
   No global semantic property inventory is added merely for this feature.
 - Ordering note (verified on the base commit): semantic facts materialize
   before `LegacyDataMetadataExtractor.Extract` runs
@@ -518,6 +545,21 @@ span, and `runtimeProof=False`, matching the shipped `AddGap` envelope.
   execution — and merging static design-time mapping edges into that filter
   would blur two distinct static evidence families. No reducer or runtime
   claims are added.
+- Reverse-impact hop provenance: `ReverseImpactHop` today carries only the
+  fact ID and evidence envelope — no supporting-fact fields — so merely
+  registering the four kinds under `mapping` would drop the bridge and
+  descriptor chain from traversal output. The implementation extends the hop
+  contract additively with `supportingFactIds` (and
+  `namespaceBridgeFactId` when the traversed fact carries one), serialized
+  in the `tracemap.reverse-impact.v1` output; consumers that ignore the new
+  field are unaffected.
+- Mid-traversal type expansion: contained-member expansion today applies
+  only to the original seed (`ReverseImpactTraversal.cs:299-308`), so a
+  table seed reaching a CLR entity could not generically continue to
+  callers. The `mapping` filter deterministically expands a CLR entity type
+  reached mid-traversal to its bounded contained members, mirroring the seed
+  expansion (same frontier bounds, same ordering); property/column paths
+  continue through existing `references` edges without expansion.
 - Reducer: no change. Composed facts are deliberately absent from
   `DefiniteUsageFactTypes`/`ProbableSemanticFactTypes`; adding them is a
   separate reducer decision (deferred follow-up).
@@ -531,8 +573,10 @@ span, and `runtimeProof=False`, matching the shipped `AddGap` envelope.
 | Same simple name in multiple namespaces | qualified join only; unmatched side gaps | `AmbiguousClrSymbolReconciliation` or `MissingGeneratedCode` |
 | Same qualified name in multiple assemblies or distinct compilation scopes sharing one canonical ID | gap, no edge (any ladder mechanism) | `AmbiguousClrSymbolReconciliation` |
 | Partial classes in one assembly | merges to one symbol; composes | — |
-| Generated/custom namespace with no deterministic bridge | reduced-coverage gap, no edge | `UnresolvedGeneratedNamespace` (new) |
-| Missing generated code | gap, partial scan, descriptors unchanged | `MissingGeneratedCode` |
+| Scoped declarations exist but no qualified match and no bridge (divergent namespace) | reduced-coverage gap, no edge | `UnresolvedGeneratedNamespace` (new) |
+| Scoped files confirmed semantically covered but declaration-free (generated code absent) | gap, partial scan, descriptors unchanged | `MissingGeneratedCode` |
+| Scoped files lack Tier1 declarations and lack confirmed semantic coverage (e.g., their project failed MSBuild load in a multi-project scan) | gap, no edge; failed analysis never reported as missing code | `ClrSymbolEvidenceUnavailable` (new) |
+| Unrelated designer files in other directories/projects or prefix siblings enter no scope | never candidates; outcome follows the rows above for the true scope | — (scope rule prevents) |
 | No Tier1 compiler evidence in scan | one gap per EDMX file, no edges | `ClrSymbolEvidenceUnavailable` (new) |
 | Reconciled member without semantic property evidence | typed gap, no property edge | `MissingSemanticPropertyEvidence` (new) |
 | Inherited CSDL entity (BaseType) | no composed chain (existing gap stands) | `UnsupportedLegacyOrmMappingShape` |
@@ -601,11 +645,13 @@ so no EF6 package is required):
 | F9 | Missing generated code | EDMX entity with no CLR type anywhere; `MissingGeneratedCode`, partial coverage, descriptors unchanged |
 | F10 | No compiler evidence | build-failure fixture; one composition-unavailable gap, no short-name fallback |
 | F11 | Persistence round-trip | `facts.ndjson` reload + `index.sqlite` readback + combined import; direction source=CLR target=descriptor unchanged; view rows carry the kind |
-| F12 | Traversal | reverse impact from table selector reaches CLR entity then callers (direct + transitive); member-level property/column path retained in path reporting |
+| F12 | Traversal | reverse impact from table selector reaches CLR entity then callers (direct + transitive) via deterministic mid-traversal contained-member expansion; hops carry `supportingFactIds` and the bridge fact ID; member-level property/column path retained through existing `references` edges in path reporting |
 | F13 | Determinism | two scans of the same commit produce identical fact IDs and properties |
 | F14 | Attribute bridge, divergent namespace | CLR namespace `App.Data` differs from CSDL namespace `Model`; generated type carries `EdmEntityType(NamespaceName="Model", Name="Customer")`; composes via D4 mechanism 1 with the Tier1 attribute fact in `supportingFactIds`; the composed edge remains Tier2 because the CSDL descriptor is Tier2 |
 | F15 | Divergent namespace, no bridge | CLR namespace `App.Data` differs from CSDL namespace `Model`, attribute-less POCO generation, no deterministic generation metadata; gap `UnresolvedGeneratedNamespace`, no edge, descriptors unchanged |
 | F16 | Scoped-candidate collisions and identity | within one EDMX's scoped files the qualified match yields two distinct canonical symbol IDs (and, separately, the same canonical ID in two compilation scopes with identical assembly name/version) — both fail closed with `AmbiguousClrSymbolReconciliation` gaps and no edge; a same-qualified-name declaration in an unscoped file is never a candidate, proving no global join |
+| F17 | Scope decoys | an unrelated `Other.Project.Model.Designer.cs` in a different directory, a cross-project `Model.Designer.cs` elsewhere, and a same-directory prefix sibling such as `ModelArchive.Designer.cs` or `Model2.Designer.cs` — all containing the same qualified CLR type — are never scope candidates; with the true `Model.Designer.cs` absent the outcome is a gap (`UnresolvedGeneratedNamespace` or `MissingGeneratedCode` per the deterministic distinction), never a decoy edge |
+| F18 | Per-EDMX compiler availability | multi-project scan where the EDMX's own project fails MSBuild load while another project produces Tier1 facts; the EDMX yields `ClrSymbolEvidenceUnavailable` (not `MissingGeneratedCode` or `UnresolvedGeneratedNamespace`) and no edges; the healthy project's EDMX still composes |
 
 Assertions must check identity, endpoints, provenance (extractor ID/version),
 spans, tiers, rule IDs, supporting fact IDs, gap classifications, and coverage

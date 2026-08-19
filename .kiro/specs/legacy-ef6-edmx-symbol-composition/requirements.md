@@ -157,7 +157,10 @@ Acceptance criteria:
       namespace-qualified type name, applied only as a documented supported
       convention and only over Tier1 declarations whose declaring files are
       scoped to that EDMX by a persisted, composition-owned generated-file
-      scope bridge fact (deterministic designer-file convention); that scope
+      scope bridge fact using the tightened same-directory designer-file rule
+      (only `{edmxBaseName}.Designer.cs` beside the EDMX, ordinal comparison);
+      unrelated designer files in other directories or projects and
+      prefix-sibling files SHALL never be scope candidates; that scope
       evidence and any `legacy.data.generated-link.v1` fact SHALL be file
       scoping or corroboration only and SHALL NEVER authorize CLR identity;
    4. if no mechanism proves a unique mapping, an explicit reduced-coverage
@@ -218,13 +221,24 @@ Acceptance criteria:
 3. Partial classes within one assembly SHALL reconcile to the single merged
    Roslyn symbol; partial declarations spanning multiple assemblies SHALL fail
    closed per criterion 2.
-4. Missing generated code (no compiler-resolved CLR type for a CSDL entity
-   within the scan) SHALL produce a `MissingGeneratedCode` gap, keep the scan
-   partial, and leave existing descriptor facts unchanged.
-5. Missing compiler evidence (semantic analysis unavailable, for example failed
-   MSBuild load) SHALL produce an explicit composition-unavailable gap and no
-   composed edges; the composition SHALL NOT fall back to syntax-only or
-   short-name joins.
+4. Missing generated code SHALL be classified deterministically against
+   divergent namespaces: scoped files that are confirmed semantically
+   covered but declare no CLR type for the CSDL entity SHALL produce a
+   `MissingGeneratedCode` gap, keep the scan partial, and leave existing
+   descriptor facts unchanged; scoped files that DO contain Tier1
+   declarations under a divergent namespace with no deterministic bridge
+   SHALL instead produce the reduced-coverage `UnresolvedGeneratedNamespace`
+   gap of criterion 6.
+5. Missing compiler evidence SHALL be evaluated per EDMX scope, not
+   scan-wide: when the scan has no Tier1 symbol evidence at all, every EDMX
+   produces an explicit composition-unavailable gap with no composed edges;
+   and when an EDMX's scoped generated files carry no Tier1 declarations
+   because they or their project were not semantically analyzed (for example
+   a failed MSBuild load in a multi-project scan where other projects
+   produced Tier1 facts), that EDMX SHALL produce
+   `ClrSymbolEvidenceUnavailable` — failed analysis SHALL NEVER be reported
+   as missing generated code. The composition SHALL NOT fall back to
+   syntax-only or short-name joins.
 6. A generated or custom CLR namespace that no ladder mechanism can
    deterministically bridge to the CSDL conceptual identity SHALL produce an
    explicit reduced-coverage gap and no composed edge; this is a documented
@@ -319,10 +333,16 @@ Acceptance criteria:
    filter SHALL preserve the existing contract's direct/transitive
    distinction, per-hop evidence, deterministic cycle handling, and
    fail-closed selector behavior, and SHALL NOT add runtime claims.
-6. Reporting and release-review surfaces SHALL only consume composed facts
+6. Hops over composed edges SHALL retain `supportingFactIds` and the
+   namespace bridge fact ID through an additive reverse-impact hop-contract
+   extension (serialized in `tracemap.reverse-impact.v1`; consumers ignoring
+   the new fields are unaffected), and the `mapping` filter SHALL
+   deterministically expand a CLR entity type reached mid-traversal to its
+   bounded contained members so table seeds can reach callers.
+7. Reporting and release-review surfaces SHALL only consume composed facts
    where existing consumer contracts already apply; no new consumer SHALL be
    introduced to complete this spec.
-7. Edge direction SHALL survive serialization, persistence, combination, and
+8. Edge direction SHALL survive serialization, persistence, combination, and
    readback unchanged in every consumer.
 
 ### Requirement 7: Privacy And Safe Values
@@ -377,8 +397,11 @@ Acceptance criteria:
    producing a gap; same simple names across namespaces not colliding; same
    names across assemblies failing closed, including identical assembly
    name/version in distinct compilation scopes and duplicate distinct symbol
-   IDs within one scope set; ambiguous joins producing explicit gaps; an
-   SSDL decoy column with the same name on a different storage type not
+   IDs within one scope set; unrelated cross-directory, cross-project, and
+   prefix-sibling designer files never entering composition scope; per-EDMX
+   compiler unavailability in multi-project scans classifying as
+   composition-unavailable rather than missing code; ambiguous joins
+   producing explicit gaps; an SSDL decoy column with the same name on a different storage type not
    cross-wiring; split, inherited,
    conditional, `IsTypeOf`, complex, function, provider extension, and
    association shapes producing explicit composition-owned scope gaps and no

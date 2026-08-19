@@ -56,10 +56,11 @@ readiness. Check:
    tier, span, extractor version, supporting fact IDs, coverage, limitations)?
 5. Are the four relationship kinds, their directions, and their target
    descriptor scopes unambiguous for persistence and reverse traversal?
-6. Is the fixture matrix F1–F16 sufficient to prove the acceptance criteria of
+6. Is the fixture matrix F1–F18 sufficient to prove the acceptance criteria of
    issue #680, including SSDL same-column-name decoys, staged generated-file
-   candidate intersection, and scoped-candidate duplicate/collision guards,
-   and are the assertions identity-level rather than
+   candidate intersection, scope decoys excluded by the same-directory rule,
+   per-EDMX compiler unavailability, and scoped-candidate duplicate/collision
+   guards, and are the assertions identity-level rather than
    count-level?
 7. Are any implementation steps missing, mis-ordered, or undersized in
    `tasks.md`?
