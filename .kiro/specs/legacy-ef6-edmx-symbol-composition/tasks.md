@@ -31,6 +31,14 @@ runway for future implementation PRs. Do not close #680 with this PR.
 - [x] 0.10 Apply the owner's specification review corrections: the namespace
       evidence ladder (D4/D4.1), bounded semantic property emission (D5),
       resolved Q1/Q2/Q4 decisions, and editorial/contract cleanup.
+- [x] 0.11 Patch the exact-head automated review findings: the Tier2
+      `explicit-generated-file` bridge requirement was unsatisfiable for EDMX
+      (Codex P1 — EDMX descriptors never carry `generatedCodeFileName`, so
+      EDMX links are always Tier3 fallback) and generated-link facts carry no
+      CLR identity regardless of tier (Qodo High). Mechanism 3 now uses a
+      composition-owned `LegacyDataGeneratedFileScope` bridge fact
+      (file-level scoping only); identity stays proven only by Tier1
+      declarations. Added fixture F16.
 
 ## Implementation Tasks
 
@@ -40,7 +48,9 @@ runway for future implementation PRs. Do not close #680 with this PR.
         relationship kind constants; assert them in the legacy-data rule
         catalog tests.
   - [ ] 1.2 Add the `legacy.data.edmx.symbol-composition.v1` entry to
-        `rules/rule-catalog.yml` with emits, tiers, gap classifications
+        `rules/rule-catalog.yml` with emits (`SymbolRelationship`,
+        `LegacyDataGeneratedFileScope`, `AnalysisGap`), tiers, gap
+        classifications
         (new: `AmbiguousClrSymbolReconciliation`,
         `ClrSymbolEvidenceUnavailable`, `UnresolvedGeneratedNamespace`,
         `MissingSemanticPropertyEvidence`; reused:
@@ -75,22 +85,24 @@ runway for future implementation PRs. Do not close #680 with this PR.
 - [ ] 3. Build the composition stage.
       Requirements: 1, 2, 3, 4.
   - [ ] 3.1 Add bounded semantic property-symbol emission during the existing
-        C# semantic pass for entity types proven eligible or candidate for EF/EDMX
-        composition (`DbSet<T>`/`IDbSet<T>` entity arguments, supported
-        generated conceptual identity attributes, or the inventory-visible
-        generated/designer file-shape convention). After generated-link facts
-        exist, intersect file-shape candidates with one exact Tier2
-        `explicit-generated-file` link; never treat Tier3 syntax fallback as
-        composition authority. Preserve canonical member symbol IDs, containing type identity,
-        assembly identity, source span, and compiler provenance. No global
-        property inventory.
+        C# semantic pass for entity types proven eligible or candidate for
+        EF/EDMX composition (`DbSet<T>`/`IDbSet<T>` entity arguments,
+        supported generated conceptual identity attributes, or the
+        inventory-visible generated/designer file-shape convention). After
+        the metadata extractor runs, intersect file-shape candidates with
+        the EDMX's `LegacyDataGeneratedFileScope` bridge fact; generated-link
+        facts of any tier are corroboration only and never identity
+        authority. Preserve canonical member symbol IDs, containing type
+        identity, assembly identity, source span, and compiler provenance.
+        No global property inventory.
   - [ ] 3.2 Implement the namespace evidence ladder exactly as designed
         (D4/D4.1): mechanism 1 bounded semantic attribute read
         (`EdmEntityTypeAttribute` family — an explicit bounded extractor
         addition that enriches Tier1 declaration evidence), mechanism 2 only
         with enumerated, proven deterministic
         generation/project metadata reads, mechanism 3 scoped qualified-name
-        equality convention, mechanism 4 typed gap. Include the selected bridge
+        equality over declarations in `LegacyDataGeneratedFileScope` files,
+        mechanism 4 typed gap. Include the selected bridge
         fact in provenance. Detect canonical-ID collisions across distinct
         scan-relative project/compilation scopes, including identical assembly
         name/version, before accepting uniqueness. Preserve exact member lookup,
@@ -104,11 +116,17 @@ runway for future implementation PRs. Do not close #680 with this PR.
         supporting fact.
   - [ ] 3.4 Emit fail-closed gaps for every D9 table row; no edge may be
         emitted from syntax-only or ambiguous joins; missing semantic
-        property evidence is a typed gap, never name attachment. Association
-        association/provider mappings emit an explicit composition-owned
+        property evidence is a typed gap, never name attachment.
+        Association/provider mappings emit an explicit composition-owned
         `UnsupportedLegacyOrmMappingShape` gap while existing facts remain
         unchanged.
-  - [ ] 3.5 Only if a compilation-backed composition seam proves unavoidable:
+  - [ ] 3.5 Emit the `LegacyDataGeneratedFileScope` bridge fact per EDMX
+        document from the deterministic designer-file convention
+        (`sourceMetadataFactId`, closed `scopeRule` code, ordered
+        scan-relative `scopedFilePaths`), Tier2Structural, file-level
+        scoping only (no CLR identity content); empty scope sets emit no
+        fact. Test determinism and the F16 collision guards against it.
+  - [ ] 3.6 Only if a compilation-backed composition seam proves unavoidable:
         add it as an explicit separate task with documented lifecycle, memory
         bounds, determinism, and cancellation requirements. No such seam
         exists today and none is implied.
@@ -133,10 +151,11 @@ runway for future implementation PRs. Do not close #680 with this PR.
         generated entities + `DbContext` with `DbSet<T>`/`IDbSet<T>` stubs
         in `System.Data.Entity`); no maintained `samples/` fixture in the
         first implementation (resolved Q4).
-  - [ ] 5.2 Implement cases F1–F15 asserting identity, endpoints, provenance,
+  - [ ] 5.2 Implement cases F1–F16 asserting identity, endpoints, provenance,
         spans, tiers, rule IDs, supporting fact IDs, gaps, and coverage,
         including bridge IDs/weakest-link tier, identical assembly name/version
-        across distinct compilation scopes, SSDL same-column-name decoys,
+        across distinct compilation scopes, scoped-candidate duplicate symbol
+        IDs, SSDL same-column-name decoys,
         staged property-candidate intersection, and association scope gaps.
   - [ ] 5.3 Add persistence round-trip, reverse-impact, path, and determinism
         tests.

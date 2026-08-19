@@ -11,15 +11,19 @@ Owner review: corrections applied on top of the initial spec commit
 (`eb7cde831c414d08ee39c6c4e4a3550089a416a3`); owner-selected Luna xHigh
 review completed against exact head
 `f72571ba7010452ce55ea110f420797f6960d087` and all accepted P1/P2 findings
-were patched as one spec-only batch.
+were patched as one spec-only batch (`81f23ee773d8ecbaec512525fc7f39dc487aa3e0`).
+Exact-head automated review findings on that batch (Codex P1 unsatisfiable
+Tier2 EDMX bridge; Qodo High generated-link identity) were patched next; see
+Review Outcome.
 
 ## Scope State
 
 Specification delivered; owner and Luna review corrections applied (namespace
 evidence ladder and provenance, collision guard, deterministic SSDL storage
 type identity, staged bounded property-symbol direction, association scope gap,
-resolved Q1/Q2/Q4, editorial cleanup). Implementation explicitly deferred to
-future PRs against this spec.
+resolved Q1/Q2/Q4, editorial cleanup), followed by exact-head automated review
+fixes (composition-owned `LegacyDataGeneratedFileScope` bridge). Implementation
+explicitly deferred to future PRs against this spec.
 Nothing in this PR implements product code, changes extractors, rules, docs
 outside this folder, or closes #680.
 
@@ -120,8 +124,9 @@ New narrowly versioned rule: `legacy.data.edmx.symbol-composition.v1`.
   Tier2Structural and emitted at the weakest supporting tier because the target
   CSDL descriptor remains Tier2. A Tier1 semantic attribute bridge does not
   upgrade that descriptor; proven generation metadata may reduce the edge
-  further; the scoped equality convention is Tier2 because it requires an
-  explicit Tier2 generated-file link. Tier3 syntax fallback is ineligible.
+  further; the scoped equality convention is Tier2 through its
+  `LegacyDataGeneratedFileScope` bridge fact. Tier3 syntax fallback is
+  ineligible.
 - `MapsToStorageTable` / `MapsToStorageColumn`: capped at Tier2Structural
   (weakest-link cap over Tier2 MSL/SSDL descriptors).
 - Gaps: Tier4Unknown.
@@ -149,9 +154,13 @@ controlling ladder (design D4/D4.1), tried in order:
    implementation must enumerate and prove exact sources before this
    mechanism ever matches.
 3. Exact qualified-name equality, only as a documented supported convention
-   scoped to generated-code candidates linked to that EDMX by one exact Tier2
-   `explicit-generated-file` fact; Tier3 type-name syntax fallback is not
-   composition authority.
+   over Tier1 declarations in files scoped to that EDMX by the
+   composition-owned `LegacyDataGeneratedFileScope` bridge fact (D2; the
+   deterministic designer-file convention, file-level scoping only). Neither
+   that scope fact nor any `legacy.data.generated-link.v1` fact (any tier)
+   authorizes CLR identity; EDMX links are always the Tier3
+   `type-name-syntax-fallback` today because EDMX descriptors never carry
+   `generatedCodeFileName`.
 4. Otherwise: reduced-coverage gap `UnresolvedGeneratedNamespace`, no edge.
 
 Never global simple-name matching; display labels are never identity. The
@@ -177,7 +186,9 @@ names across namespaces (F5), same-ID assembly collisions (F6).
   file candidates (DbSet/IDbSet entity arguments, supported generated identity
   attributes, or the bounded generated/designer file-shape convention). After
   the metadata extractor runs, composition intersects file-shape candidates
-  with one exact Tier2 generated-file link. No global property inventory and no
+  with the EDMX's `LegacyDataGeneratedFileScope` bridge fact (file scoping
+  only; generated-link facts are corroboration, never identity). No global
+  property inventory and no
   implied compilation-backed post-pass seam (any such seam is an explicit task
   with lifecycle, memory, determinism, and cancellation requirements). Missing
   semantic property evidence is a typed gap
@@ -209,9 +220,34 @@ names across namespaces (F5), same-ID assembly collisions (F6).
   semantic-pass/generated-link ordering (P2); association gap contract (P2).
   All five are reflected in requirements, design, tasks, fixtures, and review
   prompts.
+- Exact-head automated review follow-up on `81f23ee773d8ecbaec512525fc7f39dc487aa3e0`:
+  - Codex P1 (unsatisfiable bridge): the Luna batch required mechanism 3 to
+    present an `explicit-generated-file` Tier2 generated-link, but
+    `AddGeneratedCodeLinks` emits that linkKind only when the descriptor
+    carries `generatedCodeFileName`, and `ExtractEdmx` never sets it (only
+    DBML's `AddGeneratedHints` does) — so EDMX links are always the Tier3
+    `type-name-syntax-fallback` and the required bridge could never exist.
+    Verified against `LegacyDataMetadataExtractor.cs:1383-1448`/`:2395-2400`
+    and the full `ExtractEdmx` body.
+  - Qodo High (no CLR identity in the link): the generated-link contract
+    persists only metadata fact ID, expected type name, generated filename,
+    and link kind — no canonical symbol ID, namespace, assembly identity, or
+    compilation scope — so it cannot authorize candidate-to-symbol identity
+    at any tier.
+  - Resolution: mechanism 3's bridge is now the composition-owned
+    `LegacyDataGeneratedFileScope` fact (Tier2, persisted, auditable via
+    `namespaceBridgeFactId`/`namespaceBridgeMechanism=generated-file-scope`),
+    computing file-level scope with the exact shipped designer-file
+    convention. It carries no CLR identity; identity is proven solely by
+    Tier1 declarations in scoped files (qualified equality, canonical-ID
+    dedup, compilation-scope guard, single-assembly uniqueness). Generated-link
+    facts of any tier are corroboration only. Fixture F16 added for
+    scoped-candidate duplicate/collision fail-closed behavior; F1 asserts the
+    bridge provenance and candidate-to-symbol identity.
 - Kiro prompts remain available in `review-prompts.md` for an optional later
-  advisory review. No Kiro, ACK, Codex, Qodo, or hosted reviewer loop was run
-  for this correction pass.
+  advisory review. No Kiro, ACK, or hosted reviewer loop was run by the spec
+  author for this correction pass; the Codex/Qodo findings above were posted
+  on the PR by repository automation and were addressed spec-only.
 
 ## Validation Completed (spec PR)
 
@@ -232,6 +268,11 @@ names across namespaces (F5), same-ID assembly collisions (F6).
 - Post-Luna correction validation reran the focused existing
   EF/EDMX/legacy-data filter above: Passed 69, Failed 0, Skipped 0. Private-path
   guard, spec-only diff-scope check, and `git diff --check` also passed.
+- Automated-review-fix validation (this pass): no product code changed; the
+  new premises were verified directly against source (EDMX never emits
+  `explicit-generated-file`; the generated-link property set). `git diff
+  --check`, `./scripts/check-private-paths.sh`, and the spec-only diff-scope
+  check rerun clean.
 - No markdown lint tooling exists in the repository (checked for
   `.markdownlint*`, `.prettierrc*`, `.editorconfig`, and CI workflows);
   hand-formatting follows the neighboring spec style (hard-wrapped ~78–80

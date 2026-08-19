@@ -155,8 +155,11 @@ Acceptance criteria:
    3. exact equality between the CSDL namespace-qualified entity type name
       (`Schema/@Namespace` + `EntityType/@Name`) and the compiler-resolved CLR
       namespace-qualified type name, applied only as a documented supported
-      convention and only over generated-code candidates already scoped to
-      that EDMX by the shipped generated-file linkage convention;
+      convention and only over Tier1 declarations whose declaring files are
+      scoped to that EDMX by a persisted, composition-owned generated-file
+      scope bridge fact (deterministic designer-file convention); that scope
+      evidence and any `legacy.data.generated-link.v1` fact SHALL be file
+      scoping or corroboration only and SHALL NEVER authorize CLR identity;
    4. if no mechanism proves a unique mapping, an explicit reduced-coverage
       `AnalysisGap` SHALL be emitted and no composed edge SHALL be produced.
 2. The ladder SHALL never fall back to global simple-name matching, and
@@ -367,13 +370,16 @@ Acceptance criteria:
    exact property-to-column composition; `EntityTypeMapping/@TypeName`
    honored over `EntitySetMapping/@Name`; `StoreEntitySet` resolved through
    SSDL to the physical table; CLR namespace equal to CSDL namespace under
-   the documented equality convention; CLR namespace intentionally different
-   but bridged by explicit supported generated metadata; custom/generated
-   namespace with no deterministic bridge producing a gap; same simple names
-   across namespaces not colliding; same names across assemblies failing
-   closed, including identical assembly name/version in distinct compilation
-   scopes; ambiguous joins producing explicit gaps; an SSDL decoy column with
-   the same name on a different storage type not cross-wiring; split, inherited,
+   the documented equality convention with the generated-file scope bridge
+   fact recorded as the namespace-bridge evidence; CLR namespace
+   intentionally different but bridged by explicit supported generated
+   metadata; custom/generated namespace with no deterministic bridge
+   producing a gap; same simple names across namespaces not colliding; same
+   names across assemblies failing closed, including identical assembly
+   name/version in distinct compilation scopes and duplicate distinct symbol
+   IDs within one scope set; ambiguous joins producing explicit gaps; an
+   SSDL decoy column with the same name on a different storage type not
+   cross-wiring; split, inherited,
    conditional, `IsTypeOf`, complex, function, provider extension, and
    association shapes producing explicit composition-owned scope gaps and no
    edges; missing generated code remaining partial; missing compiler evidence

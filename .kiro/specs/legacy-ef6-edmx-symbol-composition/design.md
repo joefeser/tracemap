@@ -130,8 +130,9 @@ Persistence and consumers:
 
 Decision: one new narrowly versioned rule owns the composition.
 
-- Emits: `SymbolRelationship` (composed edges), `AnalysisGap` (fail-closed
-  outcomes).
+- Emits: `SymbolRelationship` (composed edges),
+  `LegacyDataGeneratedFileScope` (the mechanism-3 file-scope bridge fact
+  defined in D2), `AnalysisGap` (fail-closed outcomes).
 - Evidence tiers: weakest-link composition capped at `Tier2Structural` for
   both CLR-to-conceptual and CLR-to-storage edges because every chain includes
   a Tier2 EDMX descriptor; `Tier4Unknown` for gaps.
@@ -196,14 +197,36 @@ the shipped property contract:
   `edmx-msl-property-column`, `edmx-ssdl-column` for
   `MapsToStorageColumn`. Conceptual-only edges carry their prefix chains. The
   bridge evidence is the bounded semantic attribute fact for mechanism 1, the
-  proven generation/project metadata fact for mechanism 2, or the explicit
-  Tier2 generated-file link for mechanism 3. A bridge is never implicit.
+  proven generation/project metadata fact for mechanism 2, or the
+  composition-owned `LegacyDataGeneratedFileScope` fact for mechanism 3. A
+  bridge is never implicit.
   `namespaceBridgeFactId` identifies that fact and must occur in
   `supportingFactIds`; `namespaceBridgeMechanism` is one of the closed values
-  `semantic-attribute | generation-metadata | explicit-generated-file`. For
+  `semantic-attribute | generation-metadata | generated-file-scope`. For
   mechanism 1, the bounded attribute read may enrich the Tier1 declaration
   fact, in which case the same fact ID serves both declaration and bridge roles
   and occurs once in the ordered list.
+
+- The mechanism-3 bridge is a new composition-owned fact,
+  `LegacyDataGeneratedFileScope` (descriptorKind
+  `edmx-generated-file-scope`, Tier2Structural): one per EDMX document,
+  recording `sourceMetadataFactId` (the EDMX inventory fact), the closed
+  `scopeRule` code `designer-file-convention`, and the ordered scan-relative
+  `scopedFilePaths` computed with the exact shipped convention (inventory
+  designer files whose base name starts with the EDMX base name — the
+  `IsDesigner` check plus the same prefix rule `AddGeneratedCodeLinks`
+  applies). It is file-level scoping only: it carries no CLR symbol IDs,
+  namespaces, assembly identities, or type names, and makes no identity
+  claim. Candidate-to-symbol identity is proven exclusively by the Tier1
+  declaration facts inside the scoped files (qualified equality,
+  canonical-ID dedup, compilation-scope guard, single-assembly uniqueness).
+  `legacy.data.generated-link.v1` facts of any tier are corroborating
+  context only — never composition inputs and never identity evidence —
+  because that contract persists only descriptor-to-file/type-name linkage
+  (verified on the base commit: EDMX descriptors never carry
+  `generatedCodeFileName`, so EDMX links are always the Tier3
+  `type-name-syntax-fallback`, never `explicit-generated-file`). An empty
+  scope set emits no bridge fact, and mechanism 3 then yields no candidates.
 
 This rides the existing persistence path unchanged: `facts.ndjson` standard
 serialization, `symbol_relationships` rows, verbatim combined import, view
@@ -285,13 +308,13 @@ comparisons.
    - Mechanism 3: exact equality between
      `{CSDL Schema/@Namespace}.{EntityType/@Name}` and the CLR
      namespace-qualified type name — a documented supported convention, not a
-     general truth. It applies only over generated-code candidates already
-     scoped to that EDMX by the shipped designer/generated-file convention
-     (`legacy.data.generated-link.v1` scoping), requires the explicit-generated-
-     file Tier2 link (the Tier3 type-name syntax fallback is insufficient and
-     yields `UnresolvedGeneratedNamespace`), and
-     it is always a qualified full-name comparison, never a simple-name
-     comparison.
+     general truth. It applies only over Tier1 declarations whose declaring
+     files are scoped to that EDMX by the composition's
+     `LegacyDataGeneratedFileScope` bridge fact (D2; the deterministic
+     designer-file convention), it is always a qualified full-name
+     comparison never a simple-name comparison, and identity is proven only
+     by the canonical symbol evidence below — the scope fact and any
+     `legacy.data.generated-link.v1` fact never authorize identity.
    - Mechanism 4 (fallback): if no mechanism proves a unique mapping, emit a
      reduced-coverage gap classified `UnresolvedGeneratedNamespace` and no
      composed edge.
@@ -357,10 +380,13 @@ To avoid claiming support for metadata the scanner cannot read, the ladder's
 evidence is bucketed explicitly:
 
 - Currently available (no extractor change): Tier1 `TypeDeclared` symbol
-  blocks, `DbSetDeclared` entity symbol blocks, designer/generated-file
-  scoping from `legacy.data.generated-link.v1`, and the EDMX descriptors
-  themselves. Mechanism 3 (scoped qualified equality) is evaluable with
-  today's evidence once the composition stage exists.
+  blocks, `DbSetDeclared` entity symbol blocks, the inventory-visible
+  designer/generated-file convention, and the EDMX descriptors themselves.
+  Mechanism 3 is evaluable once the composition stage exists: it emits its
+  own `LegacyDataGeneratedFileScope` bridge fact from those inputs, so no
+  `legacy.data.generated-link.v1` change is required (and EDMX links are
+  always Tier3 today, so a generated-link-dependent bridge could never
+  exist).
 - Requires a bounded extractor addition: mechanism 1 attribute reads
   (`EdmEntityTypeAttribute` family) and any mechanism 2 generation/project
   metadata read. Each addition is an explicit implementation task with its
@@ -398,11 +424,11 @@ compilation-backed post-pass is not an "easy option" and is not assumed.
   (`src/dotnet/TraceMap.Core/ScanEngine.cs:791-793`), so eligibility cannot be
   keyed on EDMX descriptor facts or a generated-link fact. Signals (a)–(c) do
   not require those later facts. After `LegacyDataMetadataExtractor.Extract`
-  emits the actual generated-file links, composition intersects candidates
-  admitted by (c) with one exact Tier2 `explicit-generated-file` link to the
-  current EDMX. Unlinked, ambiguous, or Tier3 syntax-fallback candidates do not
-  compose. This staged intersection is explicit and requires no retained
-  compilation.
+  runs, composition intersects candidates admitted by (c) with the EDMX's
+  own `LegacyDataGeneratedFileScope` bridge fact (D2): only declarations in
+  scoped files are mechanism-3 candidates, and neither that scope fact nor
+  any `legacy.data.generated-link.v1` fact contributes identity. This staged
+  intersection is explicit and requires no retained compilation.
 - Syntax-only `PropertyDeclared` facts remain ineligible for canonical
   composition. A reconciled entity member without semantic property evidence
   produces a typed gap (`MissingSemanticPropertyEvidence`) rather than name
@@ -425,9 +451,9 @@ compilation-backed post-pass is not an "easy option" and is not assumed.
   `Tier2Structural`, with the emitted tier equal to the weakest supporting
   fact. Even mechanism 1 is Tier2 because the target CSDL descriptor remains
   Tier2. Mechanism 2 may reduce the edge further when its proved metadata fact
-  is weaker; mechanism 3 is Tier2 through its required explicit generated-file
-  link. Tier3 generated-link fallback is ineligible and emits a gap rather
-  than an edge.
+  is weaker; mechanism 3 is Tier2 through its `LegacyDataGeneratedFileScope`
+  bridge fact. Tier3 generated-link fallback is ineligible and emits a gap
+  rather than an edge.
 - `MapsToStorageTable`, `MapsToStorageColumn`: capped at `Tier2Structural` —
   they transit MSL/SSDL descriptor evidence that is Tier2 structural
   (weakest-link cap, matching the `legacy.data.model.relationship.v1`
@@ -458,7 +484,7 @@ compilation-backed post-pass is not an "easy option" and is not assumed.
 | commitSha | scan manifest commit SHA (as all facts) |
 | supportingFactIds | ordered upstream chain including `namespaceBridgeFactId` (D2); duplicate IDs occur once |
 | namespaceBridgeFactId | exact supporting fact that proves the selected bridge; required and present in `supportingFactIds` |
-| namespaceBridgeMechanism | closed code: `semantic-attribute`, `generation-metadata`, or `explicit-generated-file` |
+| namespaceBridgeMechanism | closed code: `semantic-attribute`, `generation-metadata`, or `generated-file-scope` |
 | coverageLabel | weakest coverage in the complete supporting chain; `reduced` when the bridge or any descriptor is reduced |
 | limitations | closed codes: `edmx-static-design-time` (always), `generated-code-freshness-unverified` (always), `conceptual-descriptor-structural` (conceptual edges), `namespace-bridge-structural` (mechanism 2/3), `storage-join-structural` (storage edges) |
 
@@ -564,7 +590,7 @@ so no EF6 package is required):
 
 | # | Case | Proves |
 | --- | --- | --- |
-| F1 | Happy path entity (namespace parity via the documented equality convention, D4 mechanism 3) | exact CLR entity -> CSDL type -> set -> MSL -> SSDL set -> table; explicit generated-file bridge ID in supporting chain; Tier2 bridge cap; endpoints, span, tier, rule, coverage |
+| F1 | Happy path entity (namespace parity via the documented equality convention, D4 mechanism 3) | exact CLR entity -> CSDL type -> set -> MSL -> SSDL set -> table; `namespaceBridgeMechanism=generated-file-scope` with the scope fact as `namespaceBridgeFactId` in the supporting chain; composed `sourceSymbolId` equals the scoped Tier1 declaration's symbol ID; Tier2 bridge cap; endpoints, span, tier, rule, coverage |
 | F2 | Happy path property | exact CLR property -> CSDL property -> ScalarProperty -> SSDL column; decoy same-named column on a different SSDL storage type does not cross-wire |
 | F3 | Decoy type name | `EntityTypeMapping/@TypeName="Model.Customer"` with `EntitySetMapping/@Name="Customers"` and a decoy CLR type `Customers`; only `Customer` composes |
 | F4 | Table via SSDL | `StoreEntitySet="Customers"` where the SSDL set has `Table="dbo.CustomerTable"`; composed edge targets the SSDL set and reports that table |
@@ -579,6 +605,7 @@ so no EF6 package is required):
 | F13 | Determinism | two scans of the same commit produce identical fact IDs and properties |
 | F14 | Attribute bridge, divergent namespace | CLR namespace `App.Data` differs from CSDL namespace `Model`; generated type carries `EdmEntityType(NamespaceName="Model", Name="Customer")`; composes via D4 mechanism 1 with the Tier1 attribute fact in `supportingFactIds`; the composed edge remains Tier2 because the CSDL descriptor is Tier2 |
 | F15 | Divergent namespace, no bridge | CLR namespace `App.Data` differs from CSDL namespace `Model`, attribute-less POCO generation, no deterministic generation metadata; gap `UnresolvedGeneratedNamespace`, no edge, descriptors unchanged |
+| F16 | Scoped-candidate collisions and identity | within one EDMX's scoped files the qualified match yields two distinct canonical symbol IDs (and, separately, the same canonical ID in two compilation scopes with identical assembly name/version) — both fail closed with `AmbiguousClrSymbolReconciliation` gaps and no edge; a same-qualified-name declaration in an unscoped file is never a candidate, proving no global join |
 
 Assertions must check identity, endpoints, provenance (extractor ID/version),
 spans, tiers, rule IDs, supporting fact IDs, gap classifications, and coverage

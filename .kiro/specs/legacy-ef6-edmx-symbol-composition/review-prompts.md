@@ -56,9 +56,10 @@ readiness. Check:
    tier, span, extractor version, supporting fact IDs, coverage, limitations)?
 5. Are the four relationship kinds, their directions, and their target
    descriptor scopes unambiguous for persistence and reverse traversal?
-6. Is the fixture matrix F1–F15 sufficient to prove the acceptance criteria of
-   issue #680, including SSDL same-column-name decoys and staged generated-file
-   candidate intersection, and are the assertions identity-level rather than
+6. Is the fixture matrix F1–F16 sufficient to prove the acceptance criteria of
+   issue #680, including SSDL same-column-name decoys, staged generated-file
+   candidate intersection, and scoped-candidate duplicate/collision guards,
+   and are the assertions identity-level rather than
    count-level?
 7. Are any implementation steps missing, mis-ordered, or undersized in
    `tasks.md`?
@@ -84,7 +85,11 @@ Verify against the actual code on the base commit:
    (attribute or generation/project), and fails closed with
    `UnresolvedGeneratedNamespace` for custom namespaces without a
    deterministic bridge. Confirm the selected bridge is an explicit supporting
-   fact and that Tier3 generated-link fallback cannot authorize composition.
+   fact, that Tier3 generated-link fallback cannot authorize composition, and
+   that the mechanism-3 `LegacyDataGeneratedFileScope` bridge is file-level
+   scoping only — no CLR symbol IDs, namespaces, assemblies, or type names —
+   with identity proven solely by Tier1 declarations (duplicate symbol IDs and
+   same-ID multi-scope collisions fail closed).
 4. Static-only claims: does any requirement, decision, or fixture imply
    runtime model loading, database access, generated-code execution, schema
    existence, or EDMX deployment/currency? Any overclaim must be flagged.
