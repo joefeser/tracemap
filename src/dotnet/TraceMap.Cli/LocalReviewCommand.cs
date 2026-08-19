@@ -284,6 +284,10 @@ public static class LocalReviewCommand
 
             if (scanExit != 0)
             {
+                // A timeout that expired while the runner ignored cancellation
+                // must be reported as LOCAL_REVIEW_TIMEOUT even when the
+                // blocked operation later fails with a nonzero exit.
+                effectiveToken.ThrowIfCancellationRequested();
                 progress?.FinishStage(
                     ScanProgressReporter.LocalReviewOperation,
                     ScanProgressStages.Scan,

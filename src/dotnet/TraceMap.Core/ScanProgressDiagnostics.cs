@@ -119,6 +119,7 @@ public sealed class ScanProgressReporter : IDisposable
     private long sequence;
     private long startedAt;
     private string? lastSuccessfulStage;
+    private bool terminalLatched;
     private bool disposed;
 
     public ScanProgressReporter(
@@ -217,12 +218,14 @@ public sealed class ScanProgressReporter : IDisposable
 
     /// <summary>
     /// Emits a terminal observation for the innermost active stage and ends
-    /// every active stage. Used for workflow-terminal outcomes such as the
-    /// timeout deadline, where the budget for the whole run has elapsed:
-    /// later heartbeats must not overwrite the terminal observation in the
-    /// checkpoint, so an indefinitely stuck run keeps reporting timed-out.
-    /// When no stage is active the observation falls back to the enclosing
-    /// workflow scan stage.
+    /// every active stage, then latches the reporter terminal. Used for
+    /// workflow-terminal outcomes such as the timeout deadline, where the
+    /// budget for the whole run has elapsed: the scanner thread may continue
+    /// briefly through an API that ignored cancellation, so later stage
+    /// transitions and heartbeats are dropped instead of overwriting the
+    /// terminal observation in the checkpoint. Only further timed-out
+    /// observations are accepted after the latch. When no stage is active the
+    /// observation falls back to the enclosing workflow scan stage.
     /// </summary>
     public void FinishAllStages(string operation, string state, string? failureCode = null)
     {
@@ -238,6 +241,7 @@ public sealed class ScanProgressReporter : IDisposable
                 : (Stage: ScanProgressStages.Scan, Operation: operation, Ordinal: (int?)null);
             activeStages.Clear();
             EmitUnderLock(operation, innermost.Stage, state, innermost.Ordinal, null, failureCode);
+            terminalLatched = true;
         }
     }
 
@@ -279,6 +283,14 @@ public sealed class ScanProgressReporter : IDisposable
         var normalizedOperation = NormalizeAllowed(operation, Operations, "scan");
         var normalizedStage = IsKnownStage(stage) ? stage : "other";
         var normalizedState = NormalizeAllowed(state, States, "failed");
+        if (terminalLatched && normalizedState != "timed-out")
+        {
+            // The run's budget ended; post-terminal stage transitions and
+            // heartbeats from a scanner thread that ignored cancellation must
+            // not overwrite the terminal observation.
+            return;
+        }
+
         var normalizedCode = failureCode is null ? null : NormalizeCode(failureCode);
         var normalizedOrdinal = NormalizeOrdinal(ordinal);
         var scanProgressEvent = new ScanProgressEvent(
@@ -360,7 +372,7 @@ public sealed class ScanProgressReporter : IDisposable
     {
         lock (gate)
         {
-            if (disposed || activeStages.Count == 0)
+            if (disposed || terminalLatched || activeStages.Count == 0)
             {
                 return;
             }

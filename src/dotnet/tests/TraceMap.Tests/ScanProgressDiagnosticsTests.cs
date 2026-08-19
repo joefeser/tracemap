@@ -494,6 +494,83 @@ public sealed class ScanProgressDiagnosticsTests
     }
 
     [Fact]
+    public void Terminal_timeout_latch_suppresses_post_timeout_stage_transitions()
+    {
+        using var temp = new TempDirectory();
+        var checkpointPath = Path.Combine(temp.Path, "progress.json");
+        var time = new ManualTimeProvider();
+        using var progress = new ConcurrentStringWriter();
+        using var reporter = new ScanProgressReporter(progress, checkpointPath, time);
+
+        reporter.StartStage(ScanProgressReporter.LocalReviewOperation, ScanProgressStages.Scan);
+        reporter.StartStage(ScanProgressReporter.ScanOperation, ScanProgressStages.RepositoryIdentity);
+        reporter.FinishAllStages(
+            ScanProgressReporter.LocalReviewOperation,
+            "timed-out",
+            "LOCAL_REVIEW_TIMEOUT");
+
+        // A scanner thread that ignored cancellation may keep emitting stage
+        // transitions; the latch must drop them instead of letting later
+        // heartbeats overwrite the terminal observation.
+        var linesBefore = progress.Lines().Count;
+        reporter.FinishStage(
+            ScanProgressReporter.ScanOperation,
+            ScanProgressStages.RepositoryIdentity,
+            "completed");
+        reporter.StartStage(ScanProgressReporter.ScanOperation, ScanProgressStages.Inventory);
+        for (var beat = 0; beat < 3; beat++)
+        {
+            time.Advance(TimeSpan.FromSeconds(15));
+        }
+
+        Assert.Empty(progress.Lines().Skip(linesBefore));
+        var latest = ParseCheckpoint(checkpointPath).RootElement.GetProperty("latest");
+        Assert.Equal("timed-out", latest.GetProperty("state").GetString());
+        Assert.Equal("repository-identity", latest.GetProperty("stage").GetString());
+    }
+
+    [Fact]
+    public async Task Timeout_while_runner_fails_normally_reports_timeout_not_scan_failure()
+    {
+        using var temp = new TempDirectory();
+        var repo = CreateRepository(temp.Path, repoName: "plain-repo");
+        var review = Path.Combine(temp.Path, "review");
+        var checkpoint = Path.Combine(temp.Path, "progress.json");
+        var time = new ManualTimeProvider();
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var progress = new ConcurrentStringWriter();
+        using var error = new StringWriter();
+
+        var run = LocalReviewCommand.RunAsync(
+            [
+                "run", "--repo", repo, "--out", review,
+                "--diagnostic-progress", checkpoint,
+                "--timeout-seconds", "30"
+            ],
+            TextWriter.Null,
+            error,
+            async (args, stdout, stderr, token) =>
+            {
+                // Ignores the token like a blocked API, then fails normally
+                // with a nonzero exit once unblocked.
+                await release.Task;
+                return 1;
+            },
+            progressConsole: progress,
+            timeProvider: time);
+
+        time.Advance(TimeSpan.FromSeconds(31));
+        release.SetResult();
+        Assert.Equal(1, await run);
+        Assert.Contains("LOCAL_REVIEW_TIMEOUT", error.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("LOCAL_REVIEW_SCAN_FAILED", error.ToString(), StringComparison.Ordinal);
+        using var result = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(review, "local-review-result.json")));
+        Assert.Equal("timed-out", result.RootElement.GetProperty("outcome").GetString());
+        var latest = ParseCheckpoint(checkpoint).RootElement.GetProperty("latest");
+        Assert.Equal("timed-out", latest.GetProperty("state").GetString());
+    }
+
+    [Fact]
     public async Task Timeout_deadline_records_timed_out_even_when_the_runner_ignores_cancellation()
     {
         using var temp = new TempDirectory();

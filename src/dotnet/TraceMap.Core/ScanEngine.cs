@@ -38,6 +38,7 @@ public static class ScanEngine
                 cancellationToken.ThrowIfCancellationRequested();
                 progress?.StartStage(ScanProgressReporter.ScanOperation, ScanProgressStages.RepositoryIdentity);
                 git = GitMetadataProvider.Detect(repoPath);
+                cancellationToken.ThrowIfCancellationRequested();
                 receiptRecorder?.Bind(git);
                 progress?.FinishStage(
                     ScanProgressReporter.ScanOperation,
