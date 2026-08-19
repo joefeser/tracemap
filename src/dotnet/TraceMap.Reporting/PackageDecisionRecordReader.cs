@@ -290,7 +290,7 @@ public static partial class PackageDecisionRecordReader
     [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9._+~-]{0,127}$", RegexOptions.CultureInvariant)] private static partial Regex Version();
     [GeneratedRegex("^[A-Za-z0-9.-]+(?::[0-9]{1,5})?$", RegexOptions.CultureInvariant)] private static partial Regex Origin();
     [GeneratedRegex("^[a-f0-9]{64}$", RegexOptions.CultureInvariant)] private static partial Regex Sha256();
-    [GeneratedRegex("^[a-f0-9]{40}|[a-f0-9]{64}$", RegexOptions.CultureInvariant)] private static partial Regex Sha();
+    [GeneratedRegex("^(?:[a-f0-9]{40}|[a-f0-9]{64})$", RegexOptions.CultureInvariant)] private static partial Regex Sha();
     [GeneratedRegex("^[A-Za-z0-9+/]+={0,2}$", RegexOptions.CultureInvariant)] private static partial Regex Base64();
     [GeneratedRegex("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,7})?Z$", RegexOptions.CultureInvariant)] private static partial Regex Rfc3339();
 
