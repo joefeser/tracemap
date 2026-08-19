@@ -136,6 +136,50 @@ public sealed class PackageDecisionTests
     }
 
     [Fact]
+    public async Task Composition_preserves_labels_portfolio_identity_and_optional_context()
+    {
+        using var temp = new TempDirectory();
+        var firstIndex = Path.Combine(temp.Path, "first.sqlite");
+        var secondIndex = Path.Combine(temp.Path, "second.sqlite");
+        var decisionPath = Path.Combine(temp.Path, "decision.json");
+        var manifestPath = Path.Combine(temp.Path, "portfolio.json");
+        var first = Manifest("first", "typescript-scanner");
+        var second = Manifest("second", "typescript-scanner");
+        var digest = new string('a', 64);
+        SqliteIndexWriter.Write(firstIndex, first, [DigestPackageFact(first, "example", "1.0.0", digest)]);
+        SqliteIndexWriter.Write(secondIndex, second, [PackageFact(second, "other", "npm", "package.json", "dependencies", "1.0.0")]);
+        await File.WriteAllTextAsync(decisionPath, "{\"version\":\"package-decision.v1\",\"records\":[{\"decisionId\":\"dec-composed\",\"decisionKind\":\"reject\",\"ecosystem\":\"npm\",\"packageName\":\"example\",\"artifactVersion\":\"1.0.0\",\"artifactDigestAlgorithm\":\"sha256\",\"artifactDigest\":\"" + digest + "\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\"}]}");
+        await File.WriteAllTextAsync(manifestPath, "{\"version\":\"1.0\",\"portfolioId\":\"fixture\",\"snapshotId\":\"one\",\"inputs\":[{\"label\":\"web\",\"indexPath\":\"first.sqlite\"},{\"label\":\"api\",\"indexPath\":\"second.sqlite\"}]}");
+
+        var repeated = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(
+            decisionPath,
+            firstIndex,
+            Path.Combine(temp.Path, "repeated"),
+            IndexPaths: [firstIndex, secondIndex],
+            Labels: ["web", "api"],
+            IncludePaths: true,
+            IncludeReverse: true));
+        Assert.Contains(repeated.Report.Sources, source => source.Label == "web" && source.ContainerLabel == "web");
+        Assert.Contains(repeated.Report.Sources, source => source.Label == "api" && source.ContainerLabel == "api");
+        Assert.Single(repeated.Report.ExactMatches);
+        Assert.Equal("web", repeated.Report.ExactMatches[0].SourceLabel);
+        Assert.Equal("available", ((PackageDecisionContext)repeated.Report.PathContext!).Status);
+        Assert.Equal("available", ((PackageDecisionContext)repeated.Report.ReverseContext!).Status);
+
+        var portfolio = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(
+            decisionPath,
+            string.Empty,
+            Path.Combine(temp.Path, "portfolio"),
+            ManifestPath: manifestPath));
+        Assert.Equal(2, portfolio.Report.Summary.SourceCount);
+        Assert.Contains(portfolio.Report.ExactMatches, row => row.SourceLabel == "web");
+        Assert.Contains(portfolio.Report.ExcludedSources, row => row.SourceLabel == "api");
+        var json = await File.ReadAllTextAsync(Path.Combine(temp.Path, "portfolio", "package-decision-report.json"));
+        Assert.DoesNotContain(firstIndex, json, StringComparison.Ordinal);
+        Assert.DoesNotContain(secondIndex, json, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Correlation_fails_closed_for_invalid_envelope_and_protects_inputs()
     {
         using var temp = new TempDirectory();
@@ -218,6 +262,8 @@ public sealed class PackageDecisionTests
     private static ScanManifest Manifest(string repo, string scannerVersion) => new($"scan-{repo}", repo, null, "main", new string('0', 40), scannerVersion, DateTimeOffset.Parse("2026-08-01T00:00:00Z"), "Level1SemanticAnalysis", "Succeeded", [], [], [], []);
 
     private static CodeFact PackageFact(ScanManifest manifest, string name, string ecosystem, string file, string group, string version) => new($"pkg-{manifest.RepoName}-{name}", manifest.ScanId, manifest.RepoName, manifest.CommitSha, null, FactTypes.PackageReferenced, RuleIds.ProjectFile, EvidenceTiers.Tier2Structural, null, name, "PackageManifest", new EvidenceSpan(file, 5, 5, null, "TestExtractor", "1.0.0"), new SortedDictionary<string, string>(StringComparer.Ordinal) { ["dependencyGroup"] = group, ["ecosystem"] = ecosystem, ["manifestKind"] = "package.json", ["packageName"] = name, ["packageManager"] = ecosystem, ["sourceKind"] = "manifest", ["surfaceKind"] = "package-config", ["version"] = version });
+
+    private static CodeFact DigestPackageFact(ScanManifest manifest, string name, string version, string digest) => new($"pkg-{manifest.RepoName}-{name}", manifest.ScanId, manifest.RepoName, manifest.CommitSha, null, FactTypes.PackageReferenced, RuleIds.ProjectFile, EvidenceTiers.Tier2Structural, null, name, "PackageManifest", new EvidenceSpan("package-lock.json", 5, 5, null, "TestExtractor", "1.0.0"), new SortedDictionary<string, string>(StringComparer.Ordinal) { ["dependencyGroup"] = "dependencies", ["dependencyRelation"] = "direct", ["ecosystem"] = "npm", ["manifestKind"] = "package-lock.json", ["packageName"] = name, ["packageManager"] = "npm", ["sourceKind"] = "lockfile", ["surfaceKind"] = "package-config", ["resolvedVersion"] = version, ["version"] = version, ["artifactDigestAlgorithm"] = "sha256", ["artifactDigest"] = digest, ["lockfilePath"] = "package-lock.json", ["lockfileHash"] = new string('b', 32) });
 
     private static string FindRepoRoot()
     {

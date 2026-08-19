@@ -1,0 +1,12 @@
+{
+  "version": "1.0",
+  "portfolioId": "package-decision-pr2",
+  "snapshotId": "synthetic",
+  "inputs": [
+    {
+      "label": "npm-lock-fixture",
+      "indexPath": "npm-lock-fixture/index.sqlite",
+      "expectedCommitSha": "0000000000000000000000000000000000000000"
+    }
+  ]
+}
