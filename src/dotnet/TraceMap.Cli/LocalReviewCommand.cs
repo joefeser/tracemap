@@ -206,6 +206,7 @@ public static class LocalReviewCommand
                 progress,
                 cancellationToken,
                 timeoutSource,
+                timeoutTimer,
                 effectiveToken);
         }
         finally
@@ -255,6 +256,7 @@ public static class LocalReviewCommand
         ScanProgressReporter? progress,
         CancellationToken cancellationToken,
         CancellationTokenSource? timeoutSource,
+        ITimer? timeoutTimer,
         CancellationToken effectiveToken)
     {
         ScanManifest? manifest = null;
@@ -466,7 +468,14 @@ public static class LocalReviewCommand
                 new LocalReviewSummary(factCount, factGapCount, artifacts.Count),
                 gaps.ToArray(),
                 Limitations());
-            await WriteResultAsync(staging, result, cancellationToken);
+            // The final writes observe the timeout token so a deadline that
+            // fires mid-write unwinds to the timeout path instead of
+            // publishing success. Disarm the deadline timer right before the
+            // publication rename and recheck: no new timeout may arm during
+            // the atomic move itself.
+            await WriteResultAsync(staging, result, effectiveToken);
+            timeoutTimer?.Dispose();
+            effectiveToken.ThrowIfCancellationRequested();
             Publish(staging, fullOutput);
             progress?.Emit(
                 ScanProgressReporter.LocalReviewOperation,

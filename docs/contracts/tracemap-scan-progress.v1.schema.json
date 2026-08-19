@@ -86,8 +86,8 @@
         },
         "failureCode": {
           "type": "string",
-          "pattern": "^[A-Z0-9_-]{1,64}$",
-          "description": "Categorical typed failure code such as LOCAL_REVIEW_SCAN_FAILED or PROJECT_LOAD_FAILED. Never contains exception text."
+          "pattern": "^(LOCAL_REVIEW_[A-Z_]+|MSBUILD_REGISTRATION_FAILED|SOLUTION_LOAD_FAILED|PROJECT_LOAD_FAILED|COMPILATION_CREATE_FAILED|COMPILATION_MISSING|SCAN_DISCOVERY_FAILED|SEMANTIC_STAGE_FAILED|SOURCE_VERIFICATION_FAILED|ARTIFACT_WRITE_FAILED|UNKNOWN)$",
+          "description": "Categorical typed failure code from a closed catalog. Values outside the catalog - including paths, exception messages, or any other text passed by mistake - normalize to UNKNOWN before serialization. Never contains exception text."
         },
         "lastSuccessfulStage": {
           "$comment": "Stage catalog value of the last stage that reached completed or partial, or null before any stage completes.",

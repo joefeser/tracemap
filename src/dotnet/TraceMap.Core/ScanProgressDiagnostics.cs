@@ -108,6 +108,38 @@ public sealed class ScanProgressReporter : IDisposable
     {
         "files", "solutions", "projects", "facts", "gaps"
     };
+    private static readonly HashSet<string> FailureCodes = new(StringComparer.Ordinal)
+    {
+        // Workflow-level local-review codes.
+        "LOCAL_REVIEW_ARGUMENT_INVALID",
+        "LOCAL_REVIEW_CANCELLED",
+        "LOCAL_REVIEW_CLEANUP_FAILED",
+        "LOCAL_REVIEW_EXPLORER_FAILED",
+        "LOCAL_REVIEW_EXPLORER_INPUT_INCOMPATIBLE",
+        "LOCAL_REVIEW_IDENTITY_UNAVAILABLE",
+        "LOCAL_REVIEW_INPUT_MUTATED",
+        "LOCAL_REVIEW_OUTPUT_COLLISION",
+        "LOCAL_REVIEW_OUTPUT_UNSAFE",
+        "LOCAL_REVIEW_PROGRESS_PATH_UNSAFE",
+        "LOCAL_REVIEW_SCAN_FAILED",
+        "LOCAL_REVIEW_SCAN_PARTIAL",
+        "LOCAL_REVIEW_STAGE_FAILED",
+        "LOCAL_REVIEW_TIMEOUT",
+        "LOCAL_REVIEW_TIMEOUT_INVALID",
+        "LOCAL_REVIEW_WEBFORMS_FAILED",
+        "LOCAL_REVIEW_WEBFORMS_INPUT_INCOMPATIBLE",
+        "LOCAL_REVIEW_WEBFORMS_PARTIAL",
+        // Scan-internal categorical codes.
+        "ARTIFACT_WRITE_FAILED",
+        "COMPILATION_CREATE_FAILED",
+        "COMPILATION_MISSING",
+        "MSBUILD_REGISTRATION_FAILED",
+        "PROJECT_LOAD_FAILED",
+        "SCAN_DISCOVERY_FAILED",
+        "SEMANTIC_STAGE_FAILED",
+        "SOLUTION_LOAD_FAILED",
+        "SOURCE_VERIFICATION_FAILED"
+    };
 
     private readonly object gate = new();
     private readonly TextWriter? console;
@@ -558,17 +590,18 @@ public sealed class ScanProgressReporter : IDisposable
     private static string NormalizeAllowed(string value, IReadOnlySet<string> allowed, string fallback) =>
         allowed.Contains(value) ? value : fallback;
 
+    /// <summary>
+    /// Failure codes are a closed catalog. Anything outside the catalog —
+    /// including a path, exception message, or other sensitive value passed by
+    /// mistake — collapses to UNKNOWN so arbitrary text can never reach the
+    /// console or the checkpoint through this channel.
+    /// </summary>
     private static string NormalizeCode(string value)
     {
         var normalized = new string(value.Trim().ToUpperInvariant()
             .Select(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_' ? character : '-')
             .ToArray()).Trim('-');
-        if (normalized.Length == 0)
-        {
-            return "UNKNOWN";
-        }
-
-        return normalized.Length > 64 ? normalized[..64] : normalized;
+        return FailureCodes.Contains(normalized) ? normalized : "UNKNOWN";
     }
 }
 
