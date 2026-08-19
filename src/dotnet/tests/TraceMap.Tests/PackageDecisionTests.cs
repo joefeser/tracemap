@@ -59,7 +59,10 @@ public sealed class PackageDecisionTests
         Assert.Equal("DecisionInputSchemaUnsupported", PackageDecisionRecordReader.Read("{}").Gaps.Single().Classification);
         Assert.Equal("DecisionInputReadFailed", (await PackageDecisionRecordReader.ReadAsync(Path.Combine(Path.GetTempPath(), "missing-package-decision.json"))).Gaps.Single().Classification);
         Assert.Equal("DecisionInputDecisionKindUnsupported", PackageDecisionRecordReader.Read("{\"version\":\"package-decision.v1\",\"records\":[{\"decisionId\":\"dec-kind\",\"decisionKind\":\"future\",\"ecosystem\":\"npm\",\"packageName\":\"example\",\"artifactVersion\":\"1.0.0\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\"}]} ").Gaps.Single().Classification);
-        Assert.Equal("DecisionInputLimitReached", PackageDecisionRecordReader.Read("{\"version\":\"package-decision.v1\",\"records\":[{\"decisionId\":\"dec-long\",\"decisionKind\":\"admit\",\"ecosystem\":\"npm\",\"packageName\":\"example\",\"artifactVersion\":\"1.0.0\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\",\"recordDigest\":\"" + new string('a', 257) + "\"}]} ").Gaps.Single().Classification);
+        var limited = PackageDecisionRecordReader.Read("{\"version\":\"package-decision.v1\",\"records\":[{\"decisionId\":\"dec-long\",\"decisionKind\":\"admit\",\"ecosystem\":\"npm\",\"packageName\":\"example\",\"artifactVersion\":\"1.0.0\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\",\"recordDigest\":\"" + new string('a', 257) + "\"}]} ");
+        Assert.Equal("DecisionInputLimitReached", limited.Gaps.Single().Classification);
+        Assert.False(limited.Accepted);
+        Assert.Equal("DecisionInputMalformed", PackageDecisionRecordReader.Read("{\"version\":\"package-decision.v1\",\"records\":[{\"decisionId\":\"dec-sha512\",\"decisionKind\":\"admit\",\"ecosystem\":\"npm\",\"packageName\":\"example\",\"artifactVersion\":\"1.0.0\",\"artifactDigestAlgorithm\":\"sha512-base64\",\"artifactDigest\":\"AAAA\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\"}]} ").Gaps.Single().Classification);
 
         var root = JsonNode.Parse("{\"version\":\"package-decision.v1\",\"records\":[{\"decisionId\":\"dec-digest\",\"decisionKind\":\"admit\",\"ecosystem\":\"npm\",\"packageName\":\"example\",\"artifactVersion\":\"1.0.0\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\",\"recordDigest\":\"" + new string('0', 64) + "\"}]}")!.AsObject();
         var record = root["records"]![0]!.AsObject();
@@ -113,7 +116,7 @@ public sealed class PackageDecisionTests
             ["packageManager"] = "npm",
             ["sourceKind"] = "manifest",
             ["surfaceKind"] = "package-config",
-            ["version"] = "1.0.0",
+            ["resolvedVersion"] = "1.0.0",
             ["artifactDigestAlgorithm"] = "sha256",
             ["artifactDigest"] = new string('a', 64)
         };
@@ -127,6 +130,48 @@ public sealed class PackageDecisionTests
 
         Assert.Equal(1, exit);
         Assert.Empty(stderr.ToString());
+        var report = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(output, "package-decision-report.json")))!;
+        Assert.Equal("TestExtractor", report["exactMatches"]![0]!["evidence"]!["extractorId"]!.GetValue<string>());
+        Assert.Equal("1.0.0", report["exactMatches"]![0]!["evidence"]!["resolvedVersion"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Correlation_fails_closed_for_invalid_envelope_and_protects_inputs()
+    {
+        using var temp = new TempDirectory();
+        var decisionPath = Path.Combine(temp.Path, "decision.json");
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        var manifest = Manifest("fixture", "typescript-scanner");
+        SqliteIndexWriter.Write(indexPath, manifest, [PackageFact(manifest, "example", "npm", "package.json", "dependencies", "1.0.0")]);
+        await File.WriteAllTextAsync(decisionPath, "{}");
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decisionPath, indexPath, Path.Combine(temp.Path, "report"))));
+
+        var validDecision = "{\"version\":\"package-decision.v1\",\"records\":[{\"decisionId\":\"dec-alias\",\"decisionKind\":\"admit\",\"ecosystem\":\"npm\",\"packageName\":\"example\",\"artifactVersion\":\"1.0.0\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\"}]}";
+        await File.WriteAllTextAsync(decisionPath, validDecision);
+        await Assert.ThrowsAsync<InvalidDataException>(() => PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decisionPath, indexPath, decisionPath)));
+        Assert.Equal(validDecision, await File.ReadAllTextAsync(decisionPath));
+    }
+
+    [Fact]
+    public async Task Correlation_reports_selector_and_ecosystem_capability_gaps()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        var decisionPath = Path.Combine(temp.Path, "decision.json");
+        var manifest = Manifest("fixture", "typescript-scanner");
+        SqliteIndexWriter.Write(indexPath, manifest, [PackageFact(manifest, "example", "npm", "package.json", "dependencies", "1.0.0")]);
+        await File.WriteAllTextAsync(decisionPath, "{\"version\":\"package-decision.v1\",\"records\":[{\"decisionId\":\"dec-selector\",\"decisionKind\":\"admit\",\"ecosystem\":\"nuget\",\"packageName\":\"Example.Package\",\"artifactVersion\":\"1.0.0\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\"}]} ");
+
+        var report = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decisionPath, indexPath, Path.Combine(temp.Path, "report"), Source: "missing", Classification: "ExactArtifactMatch"));
+
+        Assert.Contains(report.Report.Gaps, gap => gap.Classification == "SelectorNoMatch" && gap.SourceLabel == "missing");
+        Assert.Contains(report.Report.Gaps, gap => gap.Classification == "SelectorNoMatch" && gap.Message.Contains("classification", StringComparison.Ordinal));
+        Assert.Empty(report.Report.ExcludedSources);
+
+        var capabilityReport = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decisionPath, indexPath, Path.Combine(temp.Path, "capability")));
+        Assert.Contains(capabilityReport.Report.Gaps, gap => gap.Classification == "UnknownAnalysisGap");
+        Assert.Empty(capabilityReport.Report.ExcludedSources);
     }
 
     [Fact]

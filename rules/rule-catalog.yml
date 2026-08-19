@@ -5293,7 +5293,7 @@ rules:
     status: active
     name: Package decision exact-artifact correlation
     description: Correlates admitted package decisions with PackageReferenced static evidence in a single TraceMap index using a fixed exact-versus-possible ladder.
-    evidenceTier: Inherits weakest supporting evidence tier
+    evidenceTier: Tier4Unknown
     emits:
       - PackageDecisionCorrelation
       - PackageDecisionGap

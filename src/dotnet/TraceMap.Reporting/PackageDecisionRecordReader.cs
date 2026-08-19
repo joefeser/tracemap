@@ -119,6 +119,9 @@ public static partial class PackageDecisionRecordReader
             foreach (var candidate in candidates.Where(candidate => candidate.Gap is not null))
                 gaps.Add(candidate.Gap!);
 
+            if (gaps.Any(gap => gap.Classification == "DecisionInputLimitReached"))
+                return new PackageDecisionRecordAdmission([], gaps.OrderBy(gap => gap.GapId, StringComparer.Ordinal).ToArray(), false, CanonicalJsonDigest.Compute(json));
+
             foreach (var group in accepted.GroupBy(item => item.Key, StringComparer.Ordinal).OrderBy(group => group.Key, StringComparer.Ordinal))
             {
                 var distinct = group.Select(item => item.Digest).Distinct(StringComparer.Ordinal).ToArray();
@@ -186,7 +189,7 @@ public static partial class PackageDecisionRecordReader
                 return Invalid("DecisionInputMalformed", "A package decision digest pair was invalid.", ordinal, decisionId);
             if (algorithm == "sha256" && (digest!.Length != 64 || !Sha256().IsMatch(digest)))
                 return Invalid("DecisionInputMalformed", "A package decision SHA-256 digest was invalid.", ordinal, decisionId);
-            if (algorithm == "sha512-base64" && (!Base64().IsMatch(digest!) || digest!.Length > 128))
+            if (algorithm == "sha512-base64" && !IsSha512Base64(digest!))
                 return Invalid("DecisionInputMalformed", "A package decision SHA-512 digest was invalid.", ordinal, decisionId);
 
             if (!element.TryGetProperty("producer", out var producer) || producer.ValueKind != JsonValueKind.Object)
@@ -281,6 +284,18 @@ public static partial class PackageDecisionRecordReader
     private static bool SafePackageName(string value) => (PackageName().IsMatch(value) || NpmPackageName().IsMatch(value)) && !value.Contains("://", StringComparison.Ordinal);
     private static bool SafeArtifactVersion(string value) => Version().IsMatch(value) && !value.Contains("://", StringComparison.Ordinal) && !value.StartsWith("git+", StringComparison.OrdinalIgnoreCase) && !value.Contains("${", StringComparison.Ordinal) && !value.Contains('@', StringComparison.Ordinal) && !value.StartsWith("/", StringComparison.Ordinal) && !value.StartsWith("./", StringComparison.Ordinal) && !value.StartsWith("../", StringComparison.Ordinal) && !value.Contains('^') && !value.Contains('>') && !value.Contains('<');
     private static bool SafeOrigin(string value) => value == "unknown" || Origin().IsMatch(value);
+    private static bool IsSha512Base64(string value)
+    {
+        if (value.Length > 128 || !Base64().IsMatch(value)) return false;
+        try
+        {
+            return Convert.FromBase64String(value).Length == 64;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
 
     [GeneratedRegex("^[a-z0-9][a-z0-9._:-]{3,80}$", RegexOptions.CultureInvariant)] private static partial Regex DecisionId();
     [GeneratedRegex("^[a-z0-9][a-z0-9._-]{1,64}$", RegexOptions.CultureInvariant)] private static partial Regex ProducerId();
