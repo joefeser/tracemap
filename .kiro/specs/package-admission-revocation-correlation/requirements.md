@@ -12,7 +12,7 @@ This spec extends the evidence model of `.kiro/specs/package-dependency-surfaces
 
 ## Definitions
 
-- **External decision record**: a versioned, producer-authored record (`package-decision.v1`) that states an admission, rejection, or revocation decision about one exact package artifact.
+- **External decision record**: a versioned, producer-authored record (`package-decision.v1`) that states an admission, rejection, revocation, or non-terminal quarantine state about one exact package artifact. TraceMap reports the supplied state but does not enforce it.
 - **Artifact identity**: the tuple that uniquely identifies a package artifact: ecosystem, normalized package name, exact resolved version, registry origin, and artifact digest. A name and version alone are never artifact identity.
 - **Evidence ladder**: the closed correlation classification set defined in Requirement 4. Exact and possible matches are distinct rungs and are never collapsed.
 - **Producer**: the external authority that authored the decision record (for example the 88mph package governance service). Producer identity is bounded metadata, not a trust claim TraceMap verifies.
@@ -28,6 +28,18 @@ This spec extends the evidence model of `.kiro/specs/package-dependency-surfaces
 6. Render bounded, versioned external advisory claims (framework-implied exposure profiles) as external rule claims with exact producer and version provenance, never as TraceMap-proven facts.
 7. Render optional external build/deployment references as runtime-unproven references; never claim a deployed runtime actually loaded a package.
 8. Preserve the established privacy, redaction, hashing, and deterministic-serialization guarantees.
+
+## Implementation delivery grouping
+
+The 13 implementation slices in `tasks.md` remain independently testable, independently gated, and independently updateable. They are grouped into roughly five implementation PRs to keep review and merge overhead bounded; grouping is a delivery plan, not permission to combine evidence contracts, skip a slice's validation gate, or defer a required limitation update.
+
+1. **PR 1 — record reader, correlation engine, CLI, and synthetic fixtures:** slices 1–2, including the record contract, single-index correlation, command surface, exit-code behavior, and the initial fixture assertions.
+2. **PR 2 — npm exact-artifact evidence and composition consumers:** slices 3–4 and 9, covering combined/portfolio inputs, npm lockfile integrity, and bounded path/reverse context.
+3. **PR 3 — NuGet and Swift adapter evidence:** slices 5–6, with each adapter's catalog, limitations, and validation gate kept distinct.
+4. **PR 4 — Python and JVM adapter evidence:** slices 7–8, with format-specific digest eligibility and stop conditions preserved.
+5. **PR 5 — comparison, advisory/deployment references, and closure:** slices 10–13, covering before/after replacement, external advisory claims, runtime-unproven references, documentation, acceptance, and final gates.
+
+The specification PR is separate from these implementation groupings. No grouping changes rule ownership or permits package downloads, execution, runtime claims, admission enforcement, or other non-goals.
 
 ## Non-goals
 
@@ -49,7 +61,7 @@ This spec extends the evidence model of `.kiro/specs/package-dependency-surfaces
 
 1.1. TraceMap SHALL accept a decision record file declared as `"version": "package-decision.v1"` containing a non-empty `records` array. Each record SHALL be self-contained and carry, at minimum: `decisionId`, `decisionKind`, `ecosystem`, `packageName`, `artifactVersion`, `producer.id`, `producer.policyVersion`, and `decisionTimeUtc`.
 
-1.2. `decisionKind` SHALL be a closed vocabulary. V1 accepts `admit`, `reject`, and `revoke`. Whether to also accept `quarantine` is an owner decision recorded in design.md "Open owner decisions" and MUST NOT be implemented speculatively.
+1.2. `decisionKind` SHALL be a closed vocabulary. V1 accepts `admit`, `reject`, `revoke`, and `quarantine`. `quarantine` is a non-terminal state supplied by the external producer: TraceMap MAY validate, correlate, and report it, but SHALL NOT enforce, block, approve, or treat it as terminal admission or revocation. `admit`, `reject`, and `revoke` retain their respective external semantics; TraceMap reports them without making the decision.
 
 1.3. Each record SHALL carry the artifact identity block when the producer knows it: `registryOrigin` (host-only string), `artifactDigestAlgorithm` (closed set: `sha256`, `sha512-base64`), and `artifactDigest` (value matching the declared algorithm's canonical encoding). A record without a digest SHALL remain admissible and SHALL be correlated at no stronger than the possible rung forever, by construction.
 
@@ -179,7 +191,7 @@ This spec extends the evidence model of `.kiro/specs/package-dependency-surfaces
 
 12.2. Caps SHALL follow the existing `--max-*` convention (`--max-findings`, `--max-gaps`, plus path/reverse caps when context is requested). Truncation SHALL emit `TruncatedByLimit` and SHALL never suppress coverage gaps.
 
-12.3. With `--exit-code`, the command SHALL return 1 when any `ExactArtifactMatch`, `PossibleNameVersionMatch`, `ArtifactDigestMismatch`, or `RuntimeUnprovenReference` rows exist; otherwise 0. Validation, parse, file, schema, and connection errors SHALL always return non-zero regardless of `--exit-code`.
+12.3. With `--exit-code`, v1 SHALL return 1 only when at least one `ExactArtifactMatch` row correlates to an external `reject` or `revoke` decision record; otherwise it SHALL return 0. Possible or ambiguous matches, digest mismatches, excluded sources, analysis gaps, stale overlays, runtime-unproven references, and `quarantine` records SHALL remain review evidence and SHALL NOT cause non-zero by default. Validation, parse, file, schema, and connection errors SHALL always return non-zero regardless of `--exit-code`. Any broader policy selector is deferred and SHALL require an explicit future contract; it SHALL NOT be inferred from this option.
 
 12.4. `--as-of`, when supplied, SHALL be the only clock input. Absence of `--as-of` SHALL produce no time-dependent output; staleness then relies only on record-versus-scan fields per Requirement 4.2.
 
@@ -201,7 +213,7 @@ This spec extends the evidence model of `.kiro/specs/package-dependency-surfaces
 
 ### Requirement 15: Synthetic fixture matrix
 
-15.1. The spec's fixtures SHALL cover, at minimum: admitted artifact A with digest-bound evidence; a later-revoked artifact B; same name and version with a different artifact digest; a direct dependency; a transitive (lockfile-only) dependency; a semver-only, missing-lockfile case that stays ambiguous; missing or unsupported integrity; a non-registry/git dependency; a stale scan; a multi-repository portfolio; a before/after artifact replacement; malformed and untrusted decision records; one framework-implied advisory claim; privacy/redaction adversarial values; and a determinism check proving repeated runs are byte-identical.
+15.1. The spec's fixtures SHALL cover, at minimum: admitted artifact A with digest-bound evidence; a later-revoked artifact B; a non-terminal `quarantine` record whose report does not trigger `--exit-code`; same name and version with a different artifact digest; a direct dependency; a transitive (lockfile-only) dependency; a semver-only, missing-lockfile case that stays ambiguous; missing or unsupported integrity; a non-registry/git dependency; a stale scan; a multi-repository portfolio; a before/after artifact replacement; malformed and untrusted decision records; one framework-implied advisory claim; privacy/redaction adversarial values; and a determinism check proving repeated runs are byte-identical.
 
 15.2. Fixtures SHALL live under `samples/package-decisions/` with committed expected-output assertions in tests, and SHALL NOT contain real registry credentials, private paths, or real customer data.
 
