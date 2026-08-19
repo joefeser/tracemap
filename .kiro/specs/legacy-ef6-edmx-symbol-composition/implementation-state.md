@@ -253,10 +253,47 @@ names across namespaces (F5), same-ID assembly collisions (F6).
     facts of any tier are corroboration only. Fixture F16 added for
     scoped-candidate duplicate/collision fail-closed behavior; F1 asserts the
     bridge provenance and candidate-to-symbol identity.
+- Second automated-review round (Codex on `732d35e3`, Qodo on `4e4ceb29`;
+  the two baz-reviewer comments confirmed the first-round fixes as
+  addressed):
+  - Qodo High (scope decoys): the `LegacyDataGeneratedFileScope` rule had
+    copied the shipped repo-wide, case-insensitive basename-prefix
+    convention, admitting unrelated designer files from other
+    directories/projects and prefix siblings as candidates. Fixed by
+    tightening the scope rule to same-directory exact-base designer files
+    only (`{edmxBaseName}.Designer.cs`, ordinal), closed code
+    `same-directory-designer-file`; the shipped prefix convention stays
+    unchanged for `legacy.data.generated-link.v1`. Fixture F17.
+  - Codex P1 (per-EDMX compiler availability): the no-Tier1 check was
+    scan-global, so a multi-project scan with one healthy project and one
+    failed-load project would misreport the EDMX's project as
+    missing/divergent code. Fixed by scoping availability per EDMX using the
+    existing per-file semantic-coverage record
+    (`semanticallyAnalyzedFiles`, `ScanEngine.cs:214/:757`):
+    uncovered scoped files yield `ClrSymbolEvidenceUnavailable`, never
+    `MissingGeneratedCode`. Fixture F18.
+  - Codex P2 (classification conflict): "no candidate at all yields
+    `MissingGeneratedCode`" contradicted the mechanism-4/F15 contract for
+    divergent-namespace declarations. Fixed with a deterministic
+    declaration-presence distinction: declarations present without a
+    qualified match -> `UnresolvedGeneratedNamespace`; covered but
+    declaration-free -> `MissingGeneratedCode`; uncovered ->
+    `ClrSymbolEvidenceUnavailable`. D4/D9/R3 aligned.
+  - Codex P2 (hop provenance): `ReverseImpactHop` has no supporting-fact
+    fields, so mapping hops would drop the bridge/descriptor chain. Fixed by
+    an explicit additive hop-contract extension
+    (`supportingFactIds`/`namespaceBridgeFactId`) in D8, R6.6, and task 4.3.
+  - Codex P2 (mid-traversal expansion): contained-member expansion applies
+    only to the original seed (`ReverseImpactTraversal.cs:299-308`), so F12's
+    table-to-callers path could not pass. Fixed by specifying deterministic
+    bounded contained-member expansion for entity types reached
+    mid-traversal under the `mapping` filter (D8, R6.6, task 4.3, F12).
+  All five were verified against source before editing and patched as one
+  spec-only commit.
 - Kiro prompts remain available in `review-prompts.md` for an optional later
   advisory review. No Kiro, ACK, or hosted reviewer loop was run by the spec
-  author for this correction pass; the Codex/Qodo findings above were posted
-  on the PR by repository automation and were addressed spec-only.
+  author for this correction pass; the Codex/Qodo/baz findings above were
+  posted on the PR by repository automation and were addressed spec-only.
 
 ## Validation Completed (spec PR)
 
@@ -288,6 +325,13 @@ names across namespaces (F5), same-ID assembly collisions (F6).
   CSharpSemanticExtractorTests | ReverseImpactTraversalTests` —
   Passed: 110, Failed: 0, Skipped: 0 (net10.0); `git diff --check`,
   private-path guard, and spec-only diff scope clean.
+- Second-round fix validation: no product code changed; new premises
+  verified directly against source (repo-wide prefix filter with no
+  directory constraint in `AddGeneratedCodeLinks`; seed-only member
+  expansion at `ReverseImpactTraversal.cs:299-308`; `ReverseImpactHop` field
+  set; `semanticallyAnalyzedFiles` at `ScanEngine.cs:214/:757`). `git diff
+  --check`, private-path guard, and spec-only diff scope rerun clean; the
+  focused 110-test filter rerun is recorded in the PR body.
 - No markdown lint tooling exists in the repository (checked for
   `.markdownlint*`, `.prettierrc*`, `.editorconfig`, and CI workflows);
   hand-formatting follows the neighboring spec style (hard-wrapped ~78–80

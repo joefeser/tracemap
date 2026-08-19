@@ -42,6 +42,17 @@ runway for future implementation PRs. Do not close #680 with this PR.
 - [ ] 0.12 Hold the PR in draft per owner directive; after the focused
       validation, the owner runs one final review before the PR leaves
       draft. Record the outcome in `implementation-state.md`.
+- [x] 0.13 Patch the second automated-review round on the exact head: scope
+      decoys from the repo-wide prefix convention (Qodo High — tightened to
+      the same-directory `{edmxBaseName}.Designer.cs` rule), per-EDMX
+      compiler availability (Codex P1 — `semanticallyAnalyzedFiles`-scoped
+      `ClrSymbolEvidenceUnavailable`), the
+      `UnresolvedGeneratedNamespace`/`MissingGeneratedCode` classification
+      conflict (Codex P2 — deterministic declaration-presence distinction),
+      reverse-impact hop provenance fields (Codex P2 — additive
+      `supportingFactIds`/`namespaceBridgeFactId` hop extension), and
+      mid-traversal type expansion for caller reachability (Codex P2).
+      Fixtures F17/F18 added; F12 extended.
 
 ## Implementation Tasks
 
@@ -124,12 +135,25 @@ runway for future implementation PRs. Do not close #680 with this PR.
         `UnsupportedLegacyOrmMappingShape` gap while existing facts remain
         unchanged.
   - [ ] 3.5 Emit the `LegacyDataGeneratedFileScope` bridge fact per EDMX
-        document from the deterministic designer-file convention
-        (`sourceMetadataFactId`, closed `scopeRule` code, ordered
-        scan-relative `scopedFilePaths`), Tier2Structural, file-level
-        scoping only (no CLR identity content); empty scope sets emit no
-        fact. Test determinism and the F16 collision guards against it.
-  - [ ] 3.6 Only if a compilation-backed composition seam proves unavoidable:
+        document using the tightened same-directory rule — only inventory
+        `.designer.cs` files in the EDMX's scan-relative directory whose
+        base name is exactly `{edmxBaseName}.Designer` (ordinal) — recording
+        `sourceMetadataFactId`, the closed `scopeRule` code
+        `same-directory-designer-file`, and ordered scan-relative
+        `scopedFilePaths`, at Tier2Structural with file-level scoping only
+        (no CLR identity content); empty scope sets emit no fact. Test
+        determinism plus the F16 collision and F17 decoy guards (other
+        directories/projects and prefix siblings are never candidates).
+  - [ ] 3.6 Evaluate compiler availability per EDMX scope using the
+        per-file semantic-coverage record (the `semanticallyAnalyzedFiles`
+        set from `ScanEngine.cs:214/:757`): scoped files without Tier1
+        declarations and without confirmed coverage emit
+        `ClrSymbolEvidenceUnavailable` — never `MissingGeneratedCode` —
+        while covered-but-declaration-free scoped files emit
+        `MissingGeneratedCode` and covered files with only divergent
+        declarations emit `UnresolvedGeneratedNamespace`. Cover with the F18
+        multi-project fixture.
+  - [ ] 3.7 Only if a compilation-backed composition seam proves unavoidable:
         add it as an explicit separate task with documented lifecycle, memory
         bounds, determinism, and cancellation requirements. No such seam
         exists today and none is implied.
@@ -145,7 +169,11 @@ runway for future implementation PRs. Do not close #680 with this PR.
         traverse the four kinds upstream with hop provenance, preserving
         direct/transitive distinction, per-hop evidence, deterministic cycle
         handling, and fail-closed selectors; default filters unchanged and
-        `database` untouched.
+        `database` untouched. Extend the hop contract additively with
+        `supportingFactIds` and `namespaceBridgeFactId` (serialized in
+        `tracemap.reverse-impact.v1`), and add deterministic bounded
+        contained-member expansion for CLR entity types reached
+        mid-traversal so table seeds reach callers (F12).
   - [ ] 4.4 Confirm no reducer allowlist changes and no new consumer.
 
 - [ ] 5. Add the fixture matrix and tests.
@@ -154,12 +182,14 @@ runway for future implementation PRs. Do not close #680 with this PR.
         generated entities + `DbContext` with `DbSet<T>`/`IDbSet<T>` stubs
         in `System.Data.Entity`); no maintained `samples/` fixture in the
         first implementation (resolved Q4).
-  - [ ] 5.2 Implement cases F1–F16 asserting identity, endpoints, provenance,
+  - [ ] 5.2 Implement cases F1–F18 asserting identity, endpoints, provenance,
         spans, tiers, rule IDs, supporting fact IDs, gaps, and coverage,
         including bridge IDs/weakest-link tier, identical assembly name/version
         across distinct compilation scopes, scoped-candidate duplicate symbol
-        IDs, SSDL same-column-name decoys,
-        staged property-candidate intersection, and association scope gaps.
+        IDs, scope decoys excluded by the same-directory rule, per-EDMX
+        compiler unavailability, SSDL same-column-name decoys,
+        staged property-candidate intersection, hop provenance fields, and
+        association scope gaps.
   - [ ] 5.3 Add persistence round-trip, reverse-impact, path, and determinism
         tests.
 
