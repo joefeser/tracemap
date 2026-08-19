@@ -5275,6 +5275,36 @@ rules:
       - Exact package-name matching can miss aliases, relocated packages, shaded dependencies, generated manifests, imported build files, and dynamically declared dependencies.
       - No vulnerability database, registry, changelog, license, LLM, embedding, vector, or prompt-based analysis is used.
 
+  - id: package.decision.record.v1
+    status: active
+    name: External package decision record admission
+    description: Validates versioned package-decision.v1 records, computes canonical record digests, and classifies rejected input without trusting producer claims.
+    evidenceTier: Tier4Unknown
+    emits:
+      - PackageDecisionRecord
+      - PackageDecisionInputGap
+    limitations:
+      - Record digests prove canonical input integrity only; they do not authenticate the producer or confer admission, rejection, revocation, or quarantine authority.
+      - The accepted decision vocabulary is closed to admit, reject, revoke, and non-terminal quarantine; unsupported values fail closed.
+      - Safe metadata validation rejects credentials, raw URLs, paths, free text, and executable material; rejected values are not rendered.
+      - The reader does not resolve supersession chains or infer an effective decision.
+
+  - id: package.decision.correlation.v1
+    status: active
+    name: Package decision exact-artifact correlation
+    description: Correlates admitted package decisions with PackageReferenced static evidence in a single TraceMap index using a fixed exact-versus-possible ladder.
+    evidenceTier: Inherits weakest supporting evidence tier
+    emits:
+      - PackageDecisionCorrelation
+      - PackageDecisionGap
+      - PackageDecisionArtifactChange
+    limitations:
+      - Exact and possible matches remain separate; missing adapter digest or dependency-relation capability is an explicit gap.
+      - Correlation is static snapshot evidence and does not prove restore, execution, runtime loading, deployment, safety, or business impact.
+      - Reduced coverage and unknown commit identity produce analysis gaps rather than excluded-source conclusions.
+      - Origin metadata is bounded and does not authenticate a registry or producer. Version comparisons are exact strings; semantic versioning is not interpreted.
+      - The command is read-only reporting and never enforces external admission, rejection, revocation, or quarantine decisions.
+
   - id: legacy.baseline.redacted-manifest.v1
     name: Legacy baseline redacted manifest
     description: Creates deterministic redacted legacy baseline manifests from TraceMap scan outputs using neutral labels and aggregate evidence counts.
