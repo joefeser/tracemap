@@ -9,12 +9,15 @@ Primary issue: #680 (Part of; spec-only PR, issue stays open)
 Public claim level: hidden until implemented and reviewed
 Owner review: corrections applied on top of the initial spec commit
 (`eb7cde831c414d08ee39c6c4e4a3550089a416a3`); owner-selected Luna xHigh
-review completed against exact head
-`f72571ba7010452ce55ea110f420797f6960d087` and all accepted P1/P2 findings
-were patched as one spec-only batch (`81f23ee773d8ecbaec512525fc7f39dc487aa3e0`).
+reviewed exact head `f72571ba7010452ce55ea110f420797f6960d087` read-only
+(two P1, three P2 findings — all accepted as valid specification defects)
+and its patch landed as one spec-only batch
+(`81f23ee773d8ecbaec512525fc7f39dc487aa3e0`, authored by Luna xHigh).
 Exact-head automated review findings on that batch (Codex P1 unsatisfiable
-Tier2 EDMX bridge; Qodo High generated-link identity) were patched next; see
-Review Outcome.
+Tier2 EDMX bridge; Qodo High generated-link identity) were patched next
+(`732d35e3db84ebf2f91a69e8f90b1720560366e2`); see Review Outcome. Owner
+directive: the PR stays in draft until the final review after focused
+validation.
 
 ## Scope State
 
@@ -22,8 +25,10 @@ Specification delivered; owner and Luna review corrections applied (namespace
 evidence ladder and provenance, collision guard, deterministic SSDL storage
 type identity, staged bounded property-symbol direction, association scope gap,
 resolved Q1/Q2/Q4, editorial cleanup), followed by exact-head automated review
-fixes (composition-owned `LegacyDataGeneratedFileScope` bridge). Implementation
-explicitly deferred to future PRs against this spec.
+fixes (composition-owned `LegacyDataGeneratedFileScope` bridge). All five
+Luna findings re-verified intact at the current head. The PR is held in draft
+per owner direction; one final review is pending before it leaves draft.
+Implementation is explicitly deferred to future PRs against this spec.
 Nothing in this PR implements product code, changes extractors, rules, docs
 outside this folder, or closes #680.
 
@@ -214,12 +219,16 @@ names across namespaces (F5), same-ID assembly collisions (F6).
 ## Review Outcome
 
 - Q3 resolved by owner direction: one fresh read-only Luna xHigh review ran
-  against exact head `f72571ba7010452ce55ea110f420797f6960d087`.
+  against exact head `f72571ba7010452ce55ea110f420797f6960d087` (no files or
+  GitHub state changed during that review).
 - Accepted findings: bridge provenance/tier/coverage (P1); same-name/version
   assembly collision (P1); deterministic SSDL storage-type identity (P2);
   semantic-pass/generated-link ordering (P2); association gap contract (P2).
-  All five are reflected in requirements, design, tasks, fixtures, and review
-  prompts.
+  The owner confirmed all five are valid specification defects, not review
+  noise; Luna xHigh corrected them together as the spec-only batch
+  `81f23ee773d8ecbaec512525fc7f39dc487aa3e0`. All five corrections were
+  re-verified intact at head `732d35e3db84ebf2f91a69e8f90b1720560366e2`
+  after the automated-review fixes.
 - Exact-head automated review follow-up on `81f23ee773d8ecbaec512525fc7f39dc487aa3e0`:
   - Codex P1 (unsatisfiable bridge): the Luna batch required mechanism 3 to
     present an `explicit-generated-file` Tier2 generated-link, but
@@ -273,6 +282,12 @@ names across namespaces (F5), same-ID assembly collisions (F6).
   `explicit-generated-file`; the generated-link property set). `git diff
   --check`, `./scripts/check-private-paths.sh`, and the spec-only diff-scope
   check rerun clean.
+- Draft-hold validation (owner directive after Luna attribution): reran the
+  focused filter extended with reverse-impact traversal —
+  `LegacyDataMetadataExtractorTests | LegacyDataModelRuleCatalogTests |
+  CSharpSemanticExtractorTests | ReverseImpactTraversalTests` —
+  Passed: 110, Failed: 0, Skipped: 0 (net10.0); `git diff --check`,
+  private-path guard, and spec-only diff scope clean.
 - No markdown lint tooling exists in the repository (checked for
   `.markdownlint*`, `.prettierrc*`, `.editorconfig`, and CI workflows);
   hand-formatting follows the neighboring spec style (hard-wrapped ~78–80
@@ -285,5 +300,6 @@ names across namespaces (F5), same-ID assembly collisions (F6).
   stage, persistence/consumer wiring, test-local fixtures, tests, docs, and
   catalog entry creation.
 - Issue #680 remains open; this PR is "Part of #680" only.
-- Optional Kiro advisory review; the owner-selected Luna xHigh review and its
-  accepted corrections are complete.
+- PR stays in draft per owner directive until one final review follows the
+  focused validation; the owner-selected Luna xHigh review and its accepted
+  corrections are complete, as are the exact-head automated review fixes.
