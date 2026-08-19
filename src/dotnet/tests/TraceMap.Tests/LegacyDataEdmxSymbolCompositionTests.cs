@@ -1,4 +1,7 @@
+using Microsoft.Data.Sqlite;
+using TraceMap.Cli;
 using TraceMap.Core;
+using TraceMap.Storage;
 
 namespace TraceMap.Tests;
 
@@ -450,6 +453,127 @@ public sealed class LegacyDataEdmxSymbolCompositionTests
     }
 
     [Fact]
+    public async Task F11_composed_relationships_survive_persistence_and_combine_with_direction_preserved()
+    {
+        using var fixture = new Ef6Fixture();
+        var result = fixture.Scan();
+        var indexPath = Path.Combine(fixture.TempPath, "roundtrip", "index.sqlite");
+        Directory.CreateDirectory(Path.GetDirectoryName(indexPath)!);
+        SqliteIndexWriter.Write(indexPath, result.Manifest, result.Facts);
+
+        await using (var connection = new SqliteConnection($"Data Source={indexPath}"))
+        {
+            await connection.OpenAsync();
+            var rows = await ReadRowsAsync(connection, """
+                select source_symbol_id, target_symbol_id, relationship_kind, rule_id, evidence_tier
+                from symbol_relationships
+                where rule_id = 'legacy.data.edmx.symbol-composition.v1'
+                order by relationship_kind
+                """);
+            Assert.Equal(6, rows.Count);
+            Assert.All(rows, row => Assert.Equal("Tier2Structural", row["evidence_tier"]));
+            Assert.Contains(rows, row => row["relationship_kind"] == "MapsToStorageTable"
+                && row["source_symbol_id"].StartsWith("csharp type ", StringComparison.Ordinal)
+                && row["target_symbol_id"].StartsWith("ldm:", StringComparison.Ordinal));
+            Assert.Contains(rows, row => row["relationship_kind"] == "MapsToStorageColumn"
+                && row["source_symbol_id"].StartsWith("csharp property ", StringComparison.Ordinal));
+            var ldmTargets = rows.Select(row => row["target_symbol_id"]).ToHashSet(StringComparer.Ordinal);
+            Assert.All(ldmTargets, target => Assert.StartsWith("ldm:", target));
+            var symbolRows = await ReadRowsAsync(connection, """
+                select count(*) as total
+                from symbols
+                where symbol_id like 'ldm:%' and language = 'edmx'
+                """);
+            Assert.True(long.Parse(symbolRows[0]["total"]) >= 6);
+        }
+
+        var combinedPath = Path.Combine(fixture.TempPath, "roundtrip", "combined.sqlite");
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var exitCode = await TraceMapCommand.RunAsync(
+            ["combine", "--index", indexPath, "--label", "ef6-sample", "--out", combinedPath],
+            output,
+            error);
+        Assert.Equal(0, exitCode);
+        Assert.Equal(string.Empty, error.ToString());
+
+        await using (var connection = new SqliteConnection($"Data Source={combinedPath}"))
+        {
+            await connection.OpenAsync();
+            var edges = await ReadRowsAsync(connection, """
+                select edge_kind, source_symbol, target_symbol, rule_id
+                from combined_dependency_edges
+                where rule_id = 'legacy.data.edmx.symbol-composition.v1'
+                order by edge_kind
+                """);
+            Assert.Equal(6, edges.Count);
+            Assert.Contains(edges, edge => edge["edge_kind"] == "MapsToStorageTable"
+                && edge["source_symbol"].Contains("Customer", StringComparison.Ordinal)
+                && edge["target_symbol"] == "dbo.CustomerTable");
+            Assert.Contains(edges, edge => edge["edge_kind"] == "MapsToConceptualEntity"
+                && edge["target_symbol"] == "Customer");
+        }
+    }
+
+    [Fact]
+    public void F12_reverse_impact_traverses_table_to_entity_to_callers_with_hop_provenance()
+    {
+        using var fixture = new Ef6Fixture();
+        fixture.ExtraFiles["CustomerQueries.cs"] = """
+            namespace Ef6Sample;
+
+            public static class CustomerQueries
+            {
+                public static int ReadCustomer(Model.Customer customer)
+                {
+                    return customer.CustomerId;
+                }
+            }
+            """;
+        var result = fixture.Scan();
+
+        var storageTable = result.Facts.Single(fact =>
+            fact.FactType == FactTypes.SymbolRelationship
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "MapsToStorageTable");
+        var tableKey = storageTable.Properties["targetSymbolId"];
+        var scope = result.Facts.Single(fact => fact.FactType == FactTypes.LegacyDataGeneratedFileScope);
+
+        var analysis = ReverseImpactTraversal.Analyze(
+            result.Facts.ToArray(),
+            new ReverseImpactOptions(tableKey, 5, ["mapping", "references"]));
+
+        Assert.Equal("Resolved", analysis.Resolution);
+        var typeImpact = analysis.Impacts.Single(impact => impact.Symbol.SymbolId.StartsWith("csharp type ", StringComparison.Ordinal));
+        Assert.True(typeImpact.IsDirect);
+        Assert.Contains(analysis.Impacts, impact => impact.Symbol.DisplayName.Contains("ReadCustomer", StringComparison.Ordinal));
+
+        var storageColumn = result.Facts.Single(fact =>
+            fact.FactType == FactTypes.SymbolRelationship
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "MapsToStorageColumn"
+            && fact.Properties.GetValueOrDefault("targetSymbolDisplayName") == "CustomerId");
+        var memberAnalysis = ReverseImpactTraversal.Analyze(
+            result.Facts.ToArray(),
+            new ReverseImpactOptions(storageColumn.Properties["targetSymbolId"], 5, ["mapping", "references"]));
+        var propertyImpact = Assert.Single(memberAnalysis.Impacts, impact =>
+            impact.Symbol.SymbolId.StartsWith("csharp property ", StringComparison.Ordinal));
+        Assert.True(propertyImpact.IsDirect);
+        Assert.Contains(memberAnalysis.Impacts, impact => impact.Symbol.DisplayName.Contains("ReadCustomer", StringComparison.Ordinal));
+        var mappingHop = Assert.Single(typeImpact.Path);
+        Assert.Equal("MapsToStorageTable", mappingHop.RelationshipKind);
+        Assert.Equal("mapping", mappingHop.RelationshipFilter);
+        Assert.Equal("SourceToTarget", mappingHop.OriginalDirection);
+        Assert.Equal("TargetToSource", mappingHop.TraversalDirection);
+        Assert.Equal(storageTable.FactId, mappingHop.FactId);
+        Assert.Contains(scope.FactId, mappingHop.SupportingFactIds, StringComparison.Ordinal);
+        Assert.Equal(scope.FactId, mappingHop.NamespaceBridgeFactId);
+
+        var callerImpact = analysis.Impacts.Single(impact => impact.Symbol.DisplayName.Contains("ReadCustomer", StringComparison.Ordinal));
+        Assert.False(callerImpact.IsDirect);
+        Assert.Contains(callerImpact.Path, hop => hop.RelationshipFilter == "mapping");
+        Assert.Contains(callerImpact.Path, hop => hop.RelationshipFilter == "references");
+    }
+
+    [Fact]
     public void F13_repeated_scans_are_deterministic()
     {
         using var fixture = new Ef6Fixture();
@@ -648,6 +772,26 @@ public sealed class LegacyDataEdmxSymbolCompositionTests
             && fact.RuleId == RuleIds.LegacyDataEdmxSymbolComposition
             && fact.Properties.GetValueOrDefault("classification") is "MissingGeneratedCode" or "UnresolvedGeneratedNamespace"
             && fact.Evidence.FilePath == Path.Combine("Broken", "Model.edmx"));
+    }
+
+    private static async Task<List<Dictionary<string, string>>> ReadRowsAsync(SqliteConnection connection, string sql)
+    {
+        var rows = new List<Dictionary<string, string>>();
+        await using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            var row = new Dictionary<string, string>(StringComparer.Ordinal);
+            for (var index = 0; index < reader.FieldCount; index++)
+            {
+                row[reader.GetName(index)] = reader.GetValue(index)?.ToString() ?? string.Empty;
+            }
+
+            rows.Add(row);
+        }
+
+        return rows;
     }
 
     private sealed class Ef6Fixture : IDisposable

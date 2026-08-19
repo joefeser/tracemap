@@ -78,6 +78,7 @@ public static class ReverseImpactContract
         "database",
         "http",
         "inheritance",
+        "mapping",
         "references"
     ]);
 
@@ -154,7 +155,9 @@ public sealed record ReverseImpactHop(
     string TraversalDirection,
     string RuleId,
     string EvidenceTier,
-    ReverseImpactEvidence Evidence);
+    ReverseImpactEvidence Evidence,
+    string SupportingFactIds = "",
+    string? NamespaceBridgeFactId = null);
 
 public sealed record ReverseImpactEvidence(
     string RuleId,
@@ -205,9 +208,18 @@ public static class ReverseImpactTraversal
     private const string Http = "http";
     private const string References = "references";
     private const string Inheritance = "inheritance";
+    private const string Mapping = "mapping";
 
     private static readonly string[] DefaultFilters = [Calls, Inheritance, References];
     private static readonly string[] SymbolRoles = ["source", "target", "argument", "parameter", "origin", "constructor"];
+    private static readonly HashSet<string> MappingRelationshipKinds = new(StringComparer.Ordinal)
+    {
+        EdmxSymbolCompositionVocabulary.MapsToConceptualEntity,
+        EdmxSymbolCompositionVocabulary.MapsToConceptualProperty,
+        EdmxSymbolCompositionVocabulary.MapsToStorageTable,
+        EdmxSymbolCompositionVocabulary.MapsToStorageColumn
+    };
+
     private static readonly HashSet<string> ImpactRelationshipKinds = new(StringComparer.Ordinal)
     {
         "ExtendsClass",
@@ -389,6 +401,25 @@ public static class ReverseImpactTraversal
                 visitedSymbols.Add(edge.SourceSymbolId);
                 var path = state.Path.Append(edge).ToArray();
                 var symbol = symbols.GetValueOrDefault(edge.SourceSymbolId) ?? UnknownSymbol(edge.SourceSymbolId);
+                if (edge.RelationshipFilter == Mapping
+                    && symbols.GetValueOrDefault(edge.SourceSymbolId) is { } reachedType
+                    && TypeSeedKinds.Contains(reachedType.SymbolKind))
+                {
+                    foreach (var member in symbols.Values
+                                 .Where(candidate => string.Equals(candidate.ContainingSymbolId, edge.SourceSymbolId, StringComparison.Ordinal)
+                                     && MemberKinds.Contains(candidate.SymbolKind))
+                                 .OrderBy(candidate => candidate.SymbolId, StringComparer.Ordinal)
+                                 .Take(Math.Max(0, options.MaxFrontierSize - frontier.Count)))
+                    {
+                        if (!visitedStates.Add((state.TraversalSeedSymbolId, member.SymbolId)))
+                        {
+                            continue;
+                        }
+
+                        visitedSymbols.Add(member.SymbolId);
+                        frontier.Enqueue(new TraversalState(member.SymbolId, state.TraversalSeedSymbolId, path));
+                    }
+                }
                 impacts.Add(new ReverseImpactItem(
                     symbol,
                     path.Length,
@@ -821,6 +852,11 @@ public static class ReverseImpactTraversal
         if (fact.FactType == FactTypes.SymbolRelationship)
         {
             var kind = Property(fact, "relationshipKind");
+            if (kind is not null && MappingRelationshipKinds.Contains(kind))
+            {
+                return (kind, Mapping);
+            }
+
             return kind is not null && ImpactRelationshipKinds.Contains(kind) ? (kind, Inheritance) : null;
         }
 
@@ -849,7 +885,9 @@ public static class ReverseImpactTraversal
         "TargetToSource",
         edge.Fact.RuleId,
         edge.Fact.EvidenceTier,
-        ToEvidence(edge.Fact.Evidence, edge.Fact.RuleId));
+        ToEvidence(edge.Fact.Evidence, edge.Fact.RuleId),
+        Property(edge.Fact, "supportingFactIds") ?? string.Empty,
+        Property(edge.Fact, "namespaceBridgeFactId"));
 
     private static ReverseImpactGap FromAnalysisGap(CodeFact fact, IReadOnlyList<string> relatedIds) => new(
         fact.FactId,
