@@ -184,8 +184,9 @@ MSBuild/Roslyn seams and cancellation checks at stage boundaries; an API that
 demonstrably ignores its cancellation token cannot be interrupted in-process,
 and TraceMap does not abort threads or kill itself. Two guarantees hold even
 in that ignored-token case: the timeout deadline callback records the
-`timed-out` observation in the checkpoint and ends every active stage, so a
-stuck run keeps reporting `timed-out` (later heartbeats cannot overwrite it),
+`timed-out` observation in the checkpoint, ends every active stage, and
+latches the diagnostics terminal — a scanner thread that keeps running after
+the deadline cannot restart heartbeats or overwrite the terminal observation —
 and every stage boundary plus the finalization step check the timeout token,
 so an expired run can never publish a successful review. If a blocked stage
 never observes the token the process may remain alive; treat the checkpoint,
