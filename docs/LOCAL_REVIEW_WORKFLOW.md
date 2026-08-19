@@ -183,14 +183,14 @@ Cancellation is cooperative. Unblocking relies on cancellation-aware waits at
 MSBuild/Roslyn seams and cancellation checks at stage boundaries; an API that
 demonstrably ignores its cancellation token cannot be interrupted in-process,
 and TraceMap does not abort threads or kill itself. Two guarantees hold even
-in that ignored-token case: the timeout deadline callback itself records the
-`timed-out` observation in the checkpoint (so a stuck run is never reported
-as merely busy), and every stage boundary plus the finalization step check
-the timeout token, so an expired run can never publish a successful review.
-If a blocked stage never observes the token the process may remain alive;
-treat the checkpoint, not process liveness, as the authoritative observation.
-External cancellation (`Ctrl-C`) keeps its existing behavior and records
-`LOCAL_REVIEW_CANCELLED`.
+in that ignored-token case: the timeout deadline callback records the
+`timed-out` observation in the checkpoint and ends every active stage, so a
+stuck run keeps reporting `timed-out` (later heartbeats cannot overwrite it),
+and every stage boundary plus the finalization step check the timeout token,
+so an expired run can never publish a successful review. If a blocked stage
+never observes the token the process may remain alive; treat the checkpoint,
+not process liveness, as the authoritative observation. External cancellation
+(`Ctrl-C`) keeps its existing behavior and records `LOCAL_REVIEW_CANCELLED`.
 
 ### Typed Failure Codes
 

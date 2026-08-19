@@ -458,6 +458,42 @@ public sealed class ScanProgressDiagnosticsTests
     }
 
     [Fact]
+    public void Timeout_during_a_nested_stage_keeps_the_terminal_observation_latest()
+    {
+        using var temp = new TempDirectory();
+        var checkpointPath = Path.Combine(temp.Path, "progress.json");
+        var time = new ManualTimeProvider();
+        using var progress = new ConcurrentStringWriter();
+        using var reporter = new ScanProgressReporter(progress, checkpointPath, time);
+
+        reporter.StartStage(ScanProgressReporter.LocalReviewOperation, ScanProgressStages.Scan);
+        reporter.StartStage(ScanProgressReporter.ScanOperation, ScanProgressStages.SolutionLoad, 1);
+        reporter.StartStage(ScanProgressReporter.ScanOperation, ScanProgressStages.Compilation, 2);
+
+        // The deadline callback ends every active stage at once so a stuck run
+        // keeps reporting timed-out instead of looking busy again.
+        reporter.FinishAllStages(
+            ScanProgressReporter.LocalReviewOperation,
+            "timed-out",
+            "LOCAL_REVIEW_TIMEOUT");
+
+        var linesBefore = progress.Lines().Count;
+        for (var beat = 0; beat < 3; beat++)
+        {
+            time.Advance(TimeSpan.FromSeconds(15));
+        }
+
+        Assert.All(
+            progress.Lines().Skip(linesBefore),
+            line => Assert.DoesNotContain("state=heartbeat", line, StringComparison.Ordinal));
+        var latest = ParseCheckpoint(checkpointPath).RootElement.GetProperty("latest");
+        Assert.Equal("timed-out", latest.GetProperty("state").GetString());
+        Assert.Equal("compilation", latest.GetProperty("stage").GetString());
+        Assert.Equal(2, latest.GetProperty("ordinal").GetInt32());
+        Assert.False(latest.TryGetProperty("lastSuccessfulStage", out _));
+    }
+
+    [Fact]
     public async Task Timeout_deadline_records_timed_out_even_when_the_runner_ignores_cancellation()
     {
         using var temp = new TempDirectory();
@@ -506,6 +542,12 @@ public sealed class ScanProgressDiagnosticsTests
         Assert.Equal("timed-out", stuckCheckpoint.GetProperty("state").GetString());
         Assert.Equal("staging-initialized", stuckCheckpoint.GetProperty("lastSuccessfulStage").GetString());
         Assert.False(Directory.Exists(review), "no output may be published while the run is stuck");
+
+        // Later heartbeats must not overwrite the terminal timed-out
+        // observation while the process stays blocked in the runner.
+        time.Advance(TimeSpan.FromSeconds(60));
+        var stillStuck = ParseCheckpoint(checkpoint).RootElement.GetProperty("latest");
+        Assert.Equal("timed-out", stillStuck.GetProperty("state").GetString());
 
         release.SetResult();
         Assert.Equal(1, await run);

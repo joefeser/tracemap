@@ -215,6 +215,32 @@ public sealed class ScanProgressReporter : IDisposable
         }
     }
 
+    /// <summary>
+    /// Emits a terminal observation for the innermost active stage and ends
+    /// every active stage. Used for workflow-terminal outcomes such as the
+    /// timeout deadline, where the budget for the whole run has elapsed:
+    /// later heartbeats must not overwrite the terminal observation in the
+    /// checkpoint, so an indefinitely stuck run keeps reporting timed-out.
+    /// When no stage is active the observation falls back to the enclosing
+    /// workflow scan stage.
+    /// </summary>
+    public void FinishAllStages(string operation, string state, string? failureCode = null)
+    {
+        lock (gate)
+        {
+            if (disposed)
+            {
+                return;
+            }
+
+            var innermost = activeStages.Count > 0
+                ? activeStages[^1]
+                : (Stage: ScanProgressStages.Scan, Operation: operation, Ordinal: (int?)null);
+            activeStages.Clear();
+            EmitUnderLock(operation, innermost.Stage, state, innermost.Ordinal, null, failureCode);
+        }
+    }
+
     /// <summary>Fails whichever categorical stage is currently active.</summary>
     public void FailActiveStage(string operation, string failureCode) =>
         FinishActiveStage(operation, "failed", failureCode);
