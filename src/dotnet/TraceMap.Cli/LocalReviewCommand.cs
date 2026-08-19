@@ -220,7 +220,9 @@ public static class LocalReviewCommand
     /// Timeout deadline callback. Cancellation is cooperative: when an
     /// underlying API ignores the token, no OperationCanceledException ever
     /// reaches the workflow, so the timeout observation is recorded here to
-    /// keep the checkpoint truthful for exactly those stuck runs.
+    /// keep the checkpoint truthful for exactly those stuck runs. Every active
+    /// stage is ended so later heartbeats cannot overwrite the terminal
+    /// timed-out observation while the process stays blocked.
     /// </summary>
     private static void TryTimeout(TimeoutState state)
     {
@@ -234,7 +236,7 @@ public static class LocalReviewCommand
             return;
         }
 
-        state.Progress?.FinishActiveStage(
+        state.Progress?.FinishAllStages(
             ScanProgressReporter.LocalReviewOperation,
             "timed-out",
             "LOCAL_REVIEW_TIMEOUT");
