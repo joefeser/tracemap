@@ -43,18 +43,23 @@ readiness. Check:
    typed gap fallback), single-assembly uniqueness, and
    entity-set/type/fragment/store-set/scalar resolution — exact and
    mechanically implementable with no room for interpretation?
+   In particular, does every emitted edge name a `namespaceBridgeFactId` that
+   appears in `supportingFactIds` and controls weakest-link tier and coverage?
 2. Is the D4.1 separation between currently available evidence, evidence
    requiring a bounded extractor addition, unsupported shapes, and future
    possibilities airtight, with no claimed metadata read the scanner cannot
    perform today?
 3. Does every fail-closed row in the D9 table map to a requirement, a gap
-   classification, and a fixture case?
+   classification, and a fixture case, including association mappings and
+   same-name/version assemblies in distinct compilation scopes?
 4. Is the evidence contract in D7 complete for every composed kind (rule ID,
    tier, span, extractor version, supporting fact IDs, coverage, limitations)?
 5. Are the four relationship kinds, their directions, and their target
    descriptor scopes unambiguous for persistence and reverse traversal?
 6. Is the fixture matrix F1–F15 sufficient to prove the acceptance criteria of
-   issue #680, and are the assertions identity-level rather than count-level?
+   issue #680, including SSDL same-column-name decoys and staged generated-file
+   candidate intersection, and are the assertions identity-level rather than
+   count-level?
 7. Are any implementation steps missing, mis-ordered, or undersized in
    `tasks.md`?
 
@@ -68,17 +73,18 @@ Verify against the actual code on the base commit:
 1. Rule decision: is a new `legacy.data.edmx.symbol-composition.v1` justified
    over extending `legacy.data.generated-link.v1`, per the catalog entries in
    `rules/rule-catalog.yml` and the contract docs?
-2. Tier ceilings: do the Tier1 conceptual edges and Tier2-capped storage edges
-   respect the principle that composition never upgrades EDMX descriptor facts
-   beyond Tier2Structural? Does any statement imply the Tier2 CSDL descriptor
-   itself was upgraded or re-hosted by a Tier1 conceptual edge? Is any tier
-   assignment overclaiming?
+2. Tier ceilings: do the Tier2-capped conceptual and storage edges respect the
+   principle that composition never upgrades EDMX descriptor facts beyond
+   Tier2Structural? Confirm conceptual edges use the weakest tier of the CLR
+   declaration, selected namespace bridge, and CSDL descriptor, and that no
+   mechanism claims a Tier1 composed edge.
 3. Namespace ladder: verify D4/D4.1 against the repository — confirm the
    design separates currently available evidence from bounded extractor
    additions, claims no metadata read the scanner cannot perform today
    (attribute or generation/project), and fails closed with
    `UnresolvedGeneratedNamespace` for custom namespaces without a
-   deterministic bridge.
+   deterministic bridge. Confirm the selected bridge is an explicit supporting
+   fact and that Tier3 generated-link fallback cannot authorize composition.
 4. Static-only claims: does any requirement, decision, or fixture imply
    runtime model loading, database access, generated-code execution, schema
    existence, or EDMX deployment/currency? Any overclaim must be flagged.
@@ -92,7 +98,9 @@ Verify against the actual code on the base commit:
 6. Fail-closed coverage: enumerate any ambiguous or unsupported join shape
    missing from the D9 table, including shapes a reviewer could plausibly
    encounter in checked-in EF6 EDMX files (including generated/custom
-   namespace shapes and missing semantic property evidence).
+   namespace shapes, canonical-ID collisions across same-name/version
+   assemblies, SSDL column names repeated across storage types, association
+   mappings, and missing semantic property evidence).
 7. Privacy: could any composed property leak snippets, connection strings,
    provider secrets, local paths, or private identifiers? Is the safe
    display-name policy applied on both endpoints?
@@ -119,8 +127,9 @@ composition. Focus on:
 4. False positives: identify any scenario where a composed entity-to-table or
    property-to-column edge could be wrong rather than merely incomplete (for
    example, duplicate qualified names, multi-container models, generated code
-   that diverges from the EDMX, or decoy type names), and confirm the spec
-   fails closed there.
+   that diverges from the EDMX, same-name/version assembly collisions, SSDL
+   same-column-name decoys, or decoy type names), and confirm the spec fails
+   closed there.
 5. False negatives loudness: confirm every no-edge outcome has a rule-backed
    gap so silence is never mistaken for proof of no mapping.
 6. Secret leakage: confirm the composed property set contains only safe

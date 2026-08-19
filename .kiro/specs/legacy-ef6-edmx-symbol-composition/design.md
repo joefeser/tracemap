@@ -132,9 +132,9 @@ Decision: one new narrowly versioned rule owns the composition.
 
 - Emits: `SymbolRelationship` (composed edges), `AnalysisGap` (fail-closed
   outcomes).
-- Evidence tiers: `Tier1Semantic` for CLR-to-conceptual edges,
-  `Tier2Structural` for end-to-end CLR-to-storage edges, `Tier4Unknown` for
-  gaps.
+- Evidence tiers: weakest-link composition capped at `Tier2Structural` for
+  both CLR-to-conceptual and CLR-to-storage edges because every chain includes
+  a Tier2 EDMX descriptor; `Tier4Unknown` for gaps.
 
 Rejected alternative: extend `legacy.data.generated-link.v1` with a
 compiler-resolved `linkKind`. Rejected because:
@@ -188,11 +188,22 @@ the shipped property contract:
   `symbols`/`combined_symbols` display joins resolve; the view's `coalesce`
   guarantees edge presence regardless.
 - End-to-end edges carry `supportingFactIds` listing the complete ordered
-  static chain of upstream facts: CLR declaration evidence,
+  static chain of upstream facts: CLR declaration evidence, the exact selected
+  namespace-bridge evidence,
   `edmx-csdl-entity`, `edmx-csdl-entity-set`, `edmx-msl-entity-table`,
   `edmx-ssdl-entity-set` for `MapsToStorageTable`; CLR property evidence,
-  `edmx-csdl-property`, `edmx-msl-property-column`, `edmx-ssdl-column` for
-  `MapsToStorageColumn`. Conceptual-only edges carry their prefix chains.
+  the entity's selected namespace-bridge evidence, `edmx-csdl-property`,
+  `edmx-msl-property-column`, `edmx-ssdl-column` for
+  `MapsToStorageColumn`. Conceptual-only edges carry their prefix chains. The
+  bridge evidence is the bounded semantic attribute fact for mechanism 1, the
+  proven generation/project metadata fact for mechanism 2, or the explicit
+  Tier2 generated-file link for mechanism 3. A bridge is never implicit.
+  `namespaceBridgeFactId` identifies that fact and must occur in
+  `supportingFactIds`; `namespaceBridgeMechanism` is one of the closed values
+  `semantic-attribute | generation-metadata | explicit-generated-file`. For
+  mechanism 1, the bounded attribute read may enrich the Tier1 declaration
+  fact, in which case the same fact ID serves both declaration and bridge roles
+  and occurs once in the ordered list.
 
 This rides the existing persistence path unchanged: `facts.ndjson` standard
 serialization, `symbol_relationships` rows, verbatim combined import, view
@@ -218,7 +229,7 @@ fact, all auditable from the composed edges):
 
 ```text
 canonical CLR entity symbol            (Tier1 TypeDeclared symbol ID)
-  -> CSDL entity type                  (MapsToConceptualEntity, Tier1)
+  -> CSDL entity type                  (MapsToConceptualEntity, Tier2 ceiling)
   -> CSDL entity set                   (supporting edmx-csdl-entity-set fact)
   -> MSL EntitySetMapping / EntityTypeMapping / MappingFragment
                                         (supporting edmx-msl-entity-table fact)
@@ -230,7 +241,7 @@ Property chain:
 
 ```text
 canonical CLR property symbol          (Tier1 member symbol ID)
-  -> CSDL property                     (MapsToConceptualProperty, Tier1)
+  -> CSDL property                     (MapsToConceptualProperty, Tier2 ceiling)
   -> MSL ScalarProperty                (supporting edmx-msl-property-column fact)
   -> SSDL column descriptor            (MapsToStorageColumn, Tier2)
 ```
@@ -262,7 +273,10 @@ comparisons.
      styles). The conceptual identity comes from the attribute, so a divergent
      CLR namespace still reconciles. Requires a bounded semantic attribute
      read (the extractor's existing attribute-argument helpers are the
-     precedent); not implemented today.
+     precedent); not implemented today. The read adds safe/hash conceptual-
+     identity properties to the Tier1 declaration evidence under its existing
+     rule/catalog contract, so that declaration fact is also the selected
+     bridge fact; raw attribute text is not retained.
    - Mechanism 2: deterministic checked-in generation or project metadata
      that proves the generated CLR namespace/type relationship to the EDMX.
      No such read exists today. The implementation PR must enumerate and
@@ -273,13 +287,23 @@ comparisons.
      namespace-qualified type name — a documented supported convention, not a
      general truth. It applies only over generated-code candidates already
      scoped to that EDMX by the shipped designer/generated-file convention
-     (`legacy.data.generated-link.v1` scoping), and it is always a
-     qualified full-name comparison, never a simple-name comparison.
+     (`legacy.data.generated-link.v1` scoping), requires the explicit-generated-
+     file Tier2 link (the Tier3 type-name syntax fallback is insufficient and
+     yields `UnresolvedGeneratedNamespace`), and
+     it is always a qualified full-name comparison, never a simple-name
+     comparison.
    - Mechanism 4 (fallback): if no mechanism proves a unique mapping, emit a
      reduced-coverage gap classified `UnresolvedGeneratedNamespace` and no
      composed edge.
    Regardless of mechanism: matches across more than one assembly identity
-   fail closed (`AmbiguousClrSymbolReconciliation`); no candidate at all
+   fail closed (`AmbiguousClrSymbolReconciliation`). Before uniqueness is
+   accepted, declarations are grouped by canonical symbol ID and distinct
+   scan-relative compilation scope (`CodeFact.ProjectPath` from the semantic
+   fact). Two scopes sharing the same canonical ID — including assemblies with
+   identical name/version — are ambiguous and produce no edge. Missing scope
+   evidence when duplicate declarations exist also fails closed. This is a
+   composition guard, not a silent change to the repository-wide symbol-ID
+   format. No candidate at all
    within the mechanism-3 scope yields `MissingGeneratedCode`;
    `DbSetDeclared`/`DbContextDeclared` facts may corroborate (their
    `entityTypeSymbolId` must equal the reconciled ID when present) but are
@@ -313,12 +337,18 @@ comparisons.
    entity set by exact name within the single storage container; failures
    classify `AmbiguousLegacyDataModelIdentity`. The physical table descriptor
    is the resolved set's `storageObjectName` (`Table` attribute, else
-   `Name`) — never the raw MSL string.
+   `Name`) — never the raw MSL string. Parsing adds a
+   `storageEntityTypeIdentity` value to the SSDL entity-set descriptor: a
+   deterministic, non-display key derived from document identity, SSDL schema
+   namespace, and the exact `EntitySet/@EntityType` reference.
 7. `ScalarProperty` resolution: `Name` must resolve to exactly one CSDL
    `Property` on the reconciled entity type (NavigationProperty is not a
    scalar property and does not compose); `ColumnName` must resolve to
-   exactly one SSDL `Property` on the storage entity type referenced by the
-   resolved store entity set. Per-member failures classify
+   exactly one SSDL `Property` whose descriptor carries the same
+   `storageEntityTypeIdentity` as the resolved store entity set. The parser adds
+   that key to both descriptor families; composition never performs a global
+   column-name join and never depends on an unpersisted side channel.
+   Per-member failures classify
    `AmbiguousLegacyDataModelIdentity`; sibling members compose independently.
 
 #### D4.1 Namespace reconciliation evidence availability
@@ -350,21 +380,29 @@ property-symbol emission during the existing C# semantic analysis. Current
 compilations are not retained as a general post-extraction service, so a
 compilation-backed post-pass is not an "easy option" and is not assumed.
 
-- During the existing semantic pass, entity types proven eligible for
-  EF/EDMX composition emit canonical property-symbol evidence: member symbol
+- During the existing semantic pass, entity types proven eligible or boundedly
+  candidate for EF/EDMX composition emit canonical property-symbol evidence:
+  member symbol
   ID, containing type symbol ID, exact member name, assembly identity, source
   span, and compiler provenance (Tier1). Eligibility is compiler- or
   inventory-visible and bounded to any of:
   (a) the type appears as a `DbSet<T>`/`IDbSet<T>` entity type argument;
   (b) the type carries supported generated conceptual identity attributes
       (mechanism 1 of the D4 ladder);
-  (c) the declaring file is scoped to an EDMX by the shipped
-      designer/generated-file convention.
+  (c) the declaring file is an inventory-visible generated/designer candidate
+      under the same bounded file-shape convention used by the shipped
+      generated-link extractor.
   No global semantic property inventory is added merely for this feature.
 - Ordering note (verified on the base commit): semantic facts materialize
   before `LegacyDataMetadataExtractor.Extract` runs
   (`src/dotnet/TraceMap.Core/ScanEngine.cs:791-793`), so eligibility cannot be
-  keyed on EDMX descriptor facts; signals (a)–(c) do not require them.
+  keyed on EDMX descriptor facts or a generated-link fact. Signals (a)–(c) do
+  not require those later facts. After `LegacyDataMetadataExtractor.Extract`
+  emits the actual generated-file links, composition intersects candidates
+  admitted by (c) with one exact Tier2 `explicit-generated-file` link to the
+  current EDMX. Unlinked, ambiguous, or Tier3 syntax-fallback candidates do not
+  compose. This staged intersection is explicit and requires no retained
+  compilation.
 - Syntax-only `PropertyDeclared` facts remain ineligible for canonical
   composition. A reconciled entity member without semantic property evidence
   produces a typed gap (`MissingSemanticPropertyEvidence`) rather than name
@@ -383,11 +421,13 @@ compilation-backed post-pass is not an "easy option" and is not assumed.
 
 ### D6. Tier model and ceilings
 
-- `MapsToConceptualEntity`, `MapsToConceptualProperty`: `Tier1Semantic` — the
-  CLR endpoint is compiler-resolved and every join is exact. These edges are
-  never emitted from syntax-only evidence; syntax-only situations emit gaps
-  instead. This satisfies "compiler-resolved composition may be
-  Tier1Semantic".
+- `MapsToConceptualEntity`, `MapsToConceptualProperty`: capped at
+  `Tier2Structural`, with the emitted tier equal to the weakest supporting
+  fact. Even mechanism 1 is Tier2 because the target CSDL descriptor remains
+  Tier2. Mechanism 2 may reduce the edge further when its proved metadata fact
+  is weaker; mechanism 3 is Tier2 through its required explicit generated-file
+  link. Tier3 generated-link fallback is ineligible and emits a gap rather
+  than an edge.
 - `MapsToStorageTable`, `MapsToStorageColumn`: capped at `Tier2Structural` —
   they transit MSL/SSDL descriptor evidence that is Tier2 structural
   (weakest-link cap, matching the `legacy.data.model.relationship.v1`
@@ -396,10 +436,9 @@ compilation-backed post-pass is not an "easy option" and is not assumed.
 - Ceilings preserved: EDMX descriptors remain Tier2 under
   `legacy.data.edmx.v1`; `LegacyDataGeneratedCodeLinked` keeps its Tier2/Tier3
   model; linkage tiers never upgrade descriptor tiers; composed edges never
-  upgrade any supporting fact. The Tier1 on conceptual edges is a statement
-  about the compiler-resolved CLR endpoint join only — it does not upgrade,
-  re-tier, or re-host the Tier2 CSDL descriptor fact, which remains a
-  separate fact under its own rule and tier.
+  upgrade any supporting fact. Compiler-resolved CLR endpoints remain Tier1
+  source evidence, but the composed conceptual edge is Tier2 or weaker because
+  it joins that source to a Tier2 CSDL descriptor.
 - Documented limitation: generated or custom CLR namespaces that no D4
   ladder mechanism can deterministically bridge to the conceptual identity
   gap closed (`UnresolvedGeneratedNamespace`); the composition does not
@@ -417,9 +456,11 @@ compilation-backed post-pass is not an "easy option" and is not assumed.
 | evidence span | CLR declaration span for conceptual edges; MSL `MappingFragment`/`ScalarProperty` span for storage edges (the load-bearing join) |
 | extractor | `legacy-data-composition/0.1.0` (span extractor ID/version) |
 | commitSha | scan manifest commit SHA (as all facts) |
-| supportingFactIds | ordered upstream chain (D2) |
-| coverageLabel | `full`, or `reduced` when any supporting descriptor is reduced |
-| limitations | closed codes: `edmx-static-design-time` (always), `generated-code-freshness-unverified` (always), `storage-join-structural` (storage edges) |
+| supportingFactIds | ordered upstream chain including `namespaceBridgeFactId` (D2); duplicate IDs occur once |
+| namespaceBridgeFactId | exact supporting fact that proves the selected bridge; required and present in `supportingFactIds` |
+| namespaceBridgeMechanism | closed code: `semantic-attribute`, `generation-metadata`, or `explicit-generated-file` |
+| coverageLabel | weakest coverage in the complete supporting chain; `reduced` when the bridge or any descriptor is reduced |
+| limitations | closed codes: `edmx-static-design-time` (always), `generated-code-freshness-unverified` (always), `conceptual-descriptor-structural` (conceptual edges), `namespace-bridge-structural` (mechanism 2/3), `storage-join-structural` (storage edges) |
 
 Gap facts carry `classification`, `message`, `coverage=reduced`, the anchor
 span, and `runtimeProof=False`, matching the shipped `AddGap` envelope.
@@ -462,7 +503,7 @@ span, and `runtimeProof=False`, matching the shipped `AddGap` envelope.
 | Situation | Outcome | Classification |
 | --- | --- | --- |
 | Same simple name in multiple namespaces | qualified join only; unmatched side gaps | `AmbiguousClrSymbolReconciliation` or `MissingGeneratedCode` |
-| Same qualified name in multiple assemblies | gap, no edge (any ladder mechanism) | `AmbiguousClrSymbolReconciliation` |
+| Same qualified name in multiple assemblies or distinct compilation scopes sharing one canonical ID | gap, no edge (any ladder mechanism) | `AmbiguousClrSymbolReconciliation` |
 | Partial classes in one assembly | merges to one symbol; composes | — |
 | Generated/custom namespace with no deterministic bridge | reduced-coverage gap, no edge | `UnresolvedGeneratedNamespace` (new) |
 | Missing generated code | gap, partial scan, descriptors unchanged | `MissingGeneratedCode` |
@@ -474,8 +515,8 @@ span, and `runtimeProof=False`, matching the shipped `AddGap` envelope.
 | Conditional mapping (`Condition`) | gap, no edge (existing) | `UnsupportedLegacyOrmMappingShape` |
 | Complex types (`ComplexProperty`) | gap, no edge (existing) | `UnsupportedLegacyOrmMappingShape` |
 | Function imports / modification functions | gap, no edge (existing) | `UnsupportedLegacyOrmMappingShape` |
-| Association mappings | out of composed scope; existing behavior unchanged | existing |
-| Provider extensions | out of composed scope; hashed/omitted as today | existing |
+| Association mappings | explicit composition-owned scope gap, no composed edge; existing descriptor/relationship facts unchanged | `UnsupportedLegacyOrmMappingShape` |
+| Provider extensions | explicit composition-owned scope gap, no composed edge; hashed/omitted source handling unchanged | `UnsupportedLegacyOrmMappingShape` |
 | Malformed/incomplete EDMX | gap, no edge (existing) | `MalformedLegacyDataMetadata` / `UnsupportedLegacyDataMetadataVersion` |
 | TypeName missing/mismatched/unresolvable | gap, no edge | `AmbiguousLegacyDataModelIdentity` |
 | Store entity set unresolved in SSDL | gap, no edge | `AmbiguousLegacyDataModelIdentity` |
@@ -523,20 +564,20 @@ so no EF6 package is required):
 
 | # | Case | Proves |
 | --- | --- | --- |
-| F1 | Happy path entity (namespace parity via the documented equality convention, D4 mechanism 3) | exact CLR entity -> CSDL type -> set -> MSL -> SSDL set -> table; endpoints, span, tier, rule, supporting IDs |
-| F2 | Happy path property | exact CLR property -> CSDL property -> ScalarProperty -> SSDL column |
+| F1 | Happy path entity (namespace parity via the documented equality convention, D4 mechanism 3) | exact CLR entity -> CSDL type -> set -> MSL -> SSDL set -> table; explicit generated-file bridge ID in supporting chain; Tier2 bridge cap; endpoints, span, tier, rule, coverage |
+| F2 | Happy path property | exact CLR property -> CSDL property -> ScalarProperty -> SSDL column; decoy same-named column on a different SSDL storage type does not cross-wire |
 | F3 | Decoy type name | `EntityTypeMapping/@TypeName="Model.Customer"` with `EntitySetMapping/@Name="Customers"` and a decoy CLR type `Customers`; only `Customer` composes |
 | F4 | Table via SSDL | `StoreEntitySet="Customers"` where the SSDL set has `Table="dbo.CustomerTable"`; composed edge targets the SSDL set and reports that table |
 | F5 | Namespaces | `ModelA.Customer` and `ModelB.Customer` both compose to their own chains; no cross-wiring |
-| F6 | Assemblies | two assemblies each declaring `Model.Customer`; gap `AmbiguousClrSymbolReconciliation`, no edge |
+| F6 | Assemblies | two distinct project/compilation scopes with identical assembly name/version each declare `Model.Customer` and therefore share the shipped canonical ID; gap `AmbiguousClrSymbolReconciliation`, no edge |
 | F7 | Ambiguity | entity set referencing a missing type; TypeName mismatch; unresolved store set; per-member scalar mismatches — explicit gaps |
-| F8 | Unsupported shapes | split fragments, inherited entity, `Condition`, `IsTypeOf`, `ComplexProperty`, `FunctionImportMapping`/modification functions, association mapping, provider extension — fail closed, no edges, existing gaps intact |
+| F8 | Unsupported shapes | split fragments, inherited entity, `Condition`, `IsTypeOf`, `ComplexProperty`, `FunctionImportMapping`/modification functions, association mapping, provider extension — fail closed and no edges; association/provider shapes emit an explicit composition-owned `UnsupportedLegacyOrmMappingShape` gap while existing facts remain intact |
 | F9 | Missing generated code | EDMX entity with no CLR type anywhere; `MissingGeneratedCode`, partial coverage, descriptors unchanged |
 | F10 | No compiler evidence | build-failure fixture; one composition-unavailable gap, no short-name fallback |
 | F11 | Persistence round-trip | `facts.ndjson` reload + `index.sqlite` readback + combined import; direction source=CLR target=descriptor unchanged; view rows carry the kind |
 | F12 | Traversal | reverse impact from table selector reaches CLR entity then callers (direct + transitive); member-level property/column path retained in path reporting |
 | F13 | Determinism | two scans of the same commit produce identical fact IDs and properties |
-| F14 | Attribute bridge, divergent namespace | CLR namespace `App.Data` differs from CSDL namespace `Model`; generated type carries `EdmEntityType(NamespaceName="Model", Name="Customer")`; composes via D4 mechanism 1 |
+| F14 | Attribute bridge, divergent namespace | CLR namespace `App.Data` differs from CSDL namespace `Model`; generated type carries `EdmEntityType(NamespaceName="Model", Name="Customer")`; composes via D4 mechanism 1 with the Tier1 attribute fact in `supportingFactIds`; the composed edge remains Tier2 because the CSDL descriptor is Tier2 |
 | F15 | Divergent namespace, no bridge | CLR namespace `App.Data` differs from CSDL namespace `Model`, attribute-less POCO generation, no deterministic generation metadata; gap `UnresolvedGeneratedNamespace`, no edge, descriptors unchanged |
 
 Assertions must check identity, endpoints, provenance (extractor ID/version),

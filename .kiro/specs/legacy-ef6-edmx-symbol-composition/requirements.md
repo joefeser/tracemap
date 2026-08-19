@@ -129,6 +129,9 @@ Acceptance criteria:
 3. Every hop SHALL preserve rule ID, evidence tier, file span, commit SHA,
    extractor version, supporting fact IDs, coverage label, and limitations,
    either on the composed fact or on its supporting descriptor facts.
+   The exact namespace-bridge fact selected by the reconciliation ladder SHALL
+   be present in the ordered supporting-fact chain and SHALL participate in the
+   composed fact's weakest-link tier and coverage calculation.
 4. The chain SHALL be static design-time evidence only, with
    `runtimeProof=False` and no runtime claims.
 
@@ -159,7 +162,11 @@ Acceptance criteria:
 2. The ladder SHALL never fall back to global simple-name matching, and
    display labels SHALL never serve as identity.
 3. Duplicate qualified types across assemblies SHALL fail closed regardless of
-   which ladder mechanism produced the match.
+   which ladder mechanism produced the match. Because the shipped canonical
+   symbol ID contains assembly name and version but not a project/compilation
+   discriminator, composition SHALL also detect declarations with the same
+   canonical symbol ID in distinct scan-relative compilation scopes and fail
+   closed rather than treating the collapsed ID as unique.
 4. The spec SHALL clearly separate currently available evidence, evidence
    requiring a bounded extractor addition, unsupported shapes, and future
    possibilities, and SHALL NOT claim support for metadata mechanisms the
@@ -177,11 +184,15 @@ Acceptance criteria:
 8. `MappingFragment/@StoreEntitySet` SHALL be resolved through the SSDL storage
    entity container to exactly one SSDL entity set before any physical table
    descriptor is reported; the table name SHALL come from the resolved SSDL
-   entity set (`Table` attribute, else `Name`).
+   entity set (`Table` attribute, else `Name`). The SSDL entity-set descriptor
+   SHALL carry a deterministic storage-entity-type identity key derived from
+   its exact `EntityType` reference and document scope.
 9. MSL `ScalarProperty/@Name` SHALL resolve to exactly one CSDL property on
    the reconciled entity type, and `ScalarProperty/@ColumnName` SHALL resolve
    to exactly one SSDL column on the storage entity type referenced by the
-   resolved store entity set.
+   resolved store entity set. SSDL column descriptors SHALL carry the same
+   storage-entity-type identity key so this join does not depend on a global
+   column name or an undocumented in-memory side channel.
 10. No join anywhere in the composition SHALL use global short-name matching,
     case folding, prefix or suffix trimming, or fuzzy matching of any kind.
 
@@ -197,7 +208,10 @@ Acceptance criteria:
    only against its exact namespace-qualified counterpart, and unmatched names
    produce gaps, not fallbacks.
 2. Duplicate types across assemblies with the same qualified name SHALL produce
-   an explicit composition-owned gap and no composed edges for that type.
+   an explicit composition-owned gap and no composed edges for that type,
+   including distinct projects/compilations whose assemblies share the same
+   name and version and therefore currently produce the same canonical symbol
+   ID.
 3. Partial classes within one assembly SHALL reconcile to the single merged
    Roslyn symbol; partial declarations spanning multiple assemblies SHALL fail
    closed per criterion 2.
@@ -237,9 +251,10 @@ Acceptance criteria:
   commit SHA, extractor ID and version, supporting fact IDs, coverage label,
   and limitations.
 2. Composed CLR-to-conceptual relationships (entity and property) SHALL be
-  permitted at `Tier1Semantic` only when the CLR endpoint is compiler-resolved
-  and every join is deterministic; they SHALL NOT be emitted from syntax-only
-  evidence.
+  capped at `Tier2Structural` because the target CSDL descriptor is Tier2.
+  Their emitted tier SHALL be the weakest tier in the complete supporting
+  chain. Syntax-only generated-link fallback SHALL NOT authorize a composed
+  edge.
 3. Composed end-to-end CLR-to-storage relationships (table and column) SHALL be
   capped at `Tier2Structural` because they transit Tier2 EDMX descriptor
   evidence.
@@ -247,9 +262,15 @@ Acceptance criteria:
   link fact, or downstream classification beyond its existing tier ceiling;
   descriptor facts remain `Tier2Structural` under `legacy.data.edmx.v1`.
 5. Supporting fact IDs SHALL reference the complete ordered chain of upstream
-  facts (CLR declaration evidence, CSDL entity/property, CSDL entity set where
-  applicable, MSL mapping, SSDL entity set or column) so every hop is
-  traceable.
+  facts (CLR declaration evidence, the selected namespace-bridge evidence,
+  CSDL entity/property, CSDL entity set where applicable, MSL mapping, SSDL
+  entity set or column) so every hop is traceable. Coverage SHALL be the weakest
+  coverage label in that same chain; absent bridge evidence SHALL fail closed.
+6. Every composed fact SHALL carry `namespaceBridgeFactId` and the closed-code
+   `namespaceBridgeMechanism`; the bridge ID SHALL occur in
+   `supportingFactIds`. When a Tier1 declaration fact also carries the bounded
+   semantic attribute evidence, that fact MAY fill both roles without being
+   duplicated in the ordered ID list.
 
 ### Requirement 5: Rule Decision
 
@@ -350,10 +371,13 @@ Acceptance criteria:
    but bridged by explicit supported generated metadata; custom/generated
    namespace with no deterministic bridge producing a gap; same simple names
    across namespaces not colliding; same names across assemblies failing
-   closed; ambiguous joins producing explicit gaps; split, inherited,
+   closed, including identical assembly name/version in distinct compilation
+   scopes; ambiguous joins producing explicit gaps; an SSDL decoy column with
+   the same name on a different storage type not cross-wiring; split, inherited,
    conditional, `IsTypeOf`, complex, function, provider extension, and
-   association shapes failing closed; missing generated code remaining
-   partial; missing compiler evidence failing closed; direction surviving
+   association shapes producing explicit composition-owned scope gaps and no
+   edges; missing generated code remaining partial; missing compiler evidence
+   failing closed; direction surviving
    serialization and persistence; reverse-impact and path traversal retaining
    member-level mapping evidence; deterministic output across repeated
    scans.
