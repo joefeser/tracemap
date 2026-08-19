@@ -76,11 +76,45 @@ the branch above:
   hop-contract fields are additive and serialize in
   `tracemap.reverse-impact.v1` output.
 
+## Head Review Fixes (first implementation review round)
+
+Patched the exact-head automated review findings on `84225324`:
+
+- Qualified `EntityTypeMapping/@TypeName` values that match no conceptual
+  type no longer fall back to simple-name resolution in another namespace
+  (Codex P1); unqualified references still resolve by simple name.
+- MSL members now require exactly one CSDL property descriptor on the
+  reconciled entity before any property edge emits; missing or duplicated
+  descriptors emit `AmbiguousLegacyDataModelIdentity` and skip both member
+  edges (Codex P1, Qodo High) instead of asserting a relationship to the
+  MSL mapping descriptor.
+- CSDL `EntitySet/@EntityType` references (qualified or simple) are resolved
+  by the parser to canonical names within the containing schema, so simple
+  references compose and duplicate simple names across schemas stay
+  ambiguous (Codex P2).
+- SSDL `EntitySet/@EntityType` storage types resolve namespace-aware
+  (qualified exact, unqualified within the containing schema), and MSL
+  `StoreEntitySet` lookups are scoped by the enclosing
+  `EntityContainerMapping/@StorageEntityContainer` (Qodo High x2);
+  unresolved references fail closed through column-resolution gaps.
+- Storage-column supporting chains now include the complete CLR/bridge/
+  CSDL entity/property/entity-set/MSL entity-table/property-mapping/SSDL
+  entity-set/column chain with weakest-link coverage over the same chain
+  (Qodo High).
+- Reverse-impact mid-traversal member expansion reports a bounded-frontier
+  truncation gap naming the first omitted contained member (Codex P2).
+- Designer-shaped candidate files whose type or property declarations fail
+  Roslyn symbol resolution emit `csharp.semantic.workspace.v1` gaps
+  (`EdmxCandidateSymbolResolution`) so partial semantic failure is never
+  silent (Qodo Medium x2); the paths are defensive because compilations
+  that produce semantic facts resolve their declared symbols.
+
 ## Validation
 
 - `dotnet build src/dotnet/TraceMap.sln` — 0 errors.
-- `dotnet test src/dotnet/TraceMap.sln` — Passed: 1604, Failed: 0, Skipped: 0
-  (net10.0) after the final code commit.
+- `dotnet test src/dotnet/TraceMap.sln` — Passed: 1610, Failed: 0, Skipped: 0
+  (net10.0) after the review-fix commit (23 composition fixtures including
+  the new regression cases).
 - Focused suites: `LegacyDataEdmxSymbolCompositionTests` (18: F1-F18 plus
   the split-mapping/missing-property-evidence coverage case),
   `LegacyDataMetadataExtractorTests` (59), `LegacyDataModelRuleCatalogTests`

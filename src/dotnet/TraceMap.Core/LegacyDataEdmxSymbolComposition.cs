@@ -445,6 +445,7 @@ internal static class LegacyDataEdmxSymbolComposition
             manifest,
             entity,
             entitySet,
+            storeSet,
             entityTable,
             storageIdentity,
             declaration,
@@ -463,6 +464,7 @@ internal static class LegacyDataEdmxSymbolComposition
         ScanManifest manifest,
         CodeFact entity,
         CodeFact entitySet,
+        CodeFact storeSet,
         CodeFact entityTable,
         string storageIdentity,
         CodeFact declaration,
@@ -503,24 +505,35 @@ internal static class LegacyDataEdmxSymbolComposition
             }
 
             var clrProperty = clrProperties[0];
-            var conceptualTarget = FindConceptualPropertyFact(entity, propertyMapping, csdlProperties);
-            string[] supporting = conceptualTarget is null
-                ? [clrProperty.FactId, bridge.FactId, propertyMapping.FactId]
-                : [clrProperty.FactId, bridge.FactId, conceptualTarget.FactId, propertyMapping.FactId];
+            var conceptualCandidates = csdlProperties
+                .Where(property => property.Evidence.FilePath == entity.Evidence.FilePath
+                    && ValuesMatch(property.Properties, "entityName", "entityHash", entity.Properties, "entityName", "entityHash")
+                    && property.Properties.GetValueOrDefault("descriptorKind") != "NavigationProperty"
+                    && ValuesMatch(property.Properties, "propertyName", "propertyHash", propertyMapping.Properties, "propertyName", "propertyHash"))
+                .ToArray();
+            if (conceptualCandidates.Length != 1)
+            {
+                AddCompositionGap(manifest, output, gapKeys, path, propertyMapping.Evidence.StartLine,
+                    "AmbiguousLegacyDataModelIdentity",
+                    $"The CSDL property for member {Display(propertyMapping.Properties, "propertyName", "propertyHash")} did not resolve to exactly one candidate on the reconciled entity.");
+                continue;
+            }
+
+            var conceptualProperty = conceptualCandidates[0];
             output.Add(CreateComposedRelationship(
                 manifest,
                 EdmxSymbolCompositionVocabulary.MapsToConceptualProperty,
                 clrProperty,
                 Display(propertyMapping.Properties, "propertyName", "propertyHash"),
                 EdmxSymbolCompositionVocabulary.TargetKindConceptualProperty,
-                conceptualTarget?.Properties.GetValueOrDefault("stableModelKey") ?? propertyMapping.Properties.GetValueOrDefault("stableModelKey") ?? string.Empty,
+                conceptualProperty.Properties.GetValueOrDefault("stableModelKey") ?? string.Empty,
                 clrProperty.Evidence.FilePath,
                 clrProperty.Evidence.StartLine,
                 clrProperty.Evidence.EndLine,
-                supporting,
+                [clrProperty.FactId, bridge.FactId, entity.FactId, conceptualProperty.FactId],
                 bridge.FactId,
                 bridgeMechanism,
-                WeakestCoverage(entity.Properties.GetValueOrDefault("coverageLabel"), clrProperty.Properties.GetValueOrDefault("coverageLabel")),
+                WeakestCoverage(entity.Properties.GetValueOrDefault("coverageLabel"), clrProperty.Properties.GetValueOrDefault("coverageLabel"), conceptualProperty.Properties.GetValueOrDefault("coverageLabel")),
                 withConceptualLimitation: true,
                 withBridgeStructuralLimitation: bridgeMechanism != EdmxSymbolCompositionVocabulary.BridgeMechanismSemanticAttribute,
                 withStorageLimitation: false));
@@ -548,26 +561,14 @@ internal static class LegacyDataEdmxSymbolComposition
                 propertyMapping.Evidence.FilePath,
                 propertyMapping.Evidence.StartLine,
                 propertyMapping.Evidence.EndLine,
-                [clrProperty.FactId, bridge.FactId, entity.FactId, entitySet.FactId, propertyMapping.FactId, storageColumn.FactId],
+                [clrProperty.FactId, bridge.FactId, entity.FactId, entitySet.FactId, conceptualProperty.FactId, entityTable.FactId, propertyMapping.FactId, storeSet.FactId, storageColumn.FactId],
                 bridge.FactId,
                 bridgeMechanism,
-                WeakestCoverage(entity.Properties.GetValueOrDefault("coverageLabel"), entityTable.Properties.GetValueOrDefault("coverageLabel"), storageColumn.Properties.GetValueOrDefault("coverageLabel")),
+                WeakestCoverage(entity.Properties.GetValueOrDefault("coverageLabel"), entitySet.Properties.GetValueOrDefault("coverageLabel"), conceptualProperty.Properties.GetValueOrDefault("coverageLabel"), entityTable.Properties.GetValueOrDefault("coverageLabel"), propertyMapping.Properties.GetValueOrDefault("coverageLabel"), storeSet.Properties.GetValueOrDefault("coverageLabel"), storageColumn.Properties.GetValueOrDefault("coverageLabel")),
                 withConceptualLimitation: false,
                 withBridgeStructuralLimitation: bridgeMechanism != EdmxSymbolCompositionVocabulary.BridgeMechanismSemanticAttribute,
                 withStorageLimitation: true));
         }
-    }
-
-    private static CodeFact? FindConceptualPropertyFact(CodeFact entity, CodeFact propertyMapping, IReadOnlyList<CodeFact> csdlProperties)
-    {
-        return csdlProperties
-            .Where(property => property.Evidence.FilePath == entity.Evidence.FilePath
-                && ValuesMatch(property.Properties, "entityName", "entityHash", entity.Properties, "entityName", "entityHash")
-                && property.Properties.GetValueOrDefault("descriptorKind") != "NavigationProperty"
-                && ValuesMatch(property.Properties, "propertyName", "propertyHash", propertyMapping.Properties, "propertyName", "propertyHash"))
-            .OrderBy(property => property.Evidence.StartLine)
-            .ThenBy(property => property.FactId, StringComparer.Ordinal)
-            .FirstOrDefault();
     }
 
     private static void AddNoCandidateGap(

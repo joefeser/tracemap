@@ -837,6 +837,16 @@ public static class CSharpSemanticExtractor
         {
             if (model.GetDeclaredSymbol(declaration) is not INamedTypeSymbol symbol)
             {
+                if (designerShapedFile)
+                {
+                    facts.Add(CreateGap(
+                        filePath,
+                        $"A type declaration in an EDMX generated-code candidate file did not resolve to a compiler symbol at line {declaration.GetLocation().GetLineSpan().StartLinePosition.Line + 1}; EF6 composition evidence for it is unavailable.",
+                        "EdmxCandidateSymbolResolution",
+                        projectPath,
+                        declaration.GetLocation().GetLineSpan().StartLinePosition.Line + 1));
+                }
+
                 continue;
             }
 
@@ -858,6 +868,17 @@ public static class CSharpSemanticExtractor
                 var declarationSyntax = property.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() as BasePropertyDeclarationSyntax;
                 if (declarationSyntax is null)
                 {
+                    continue;
+                }
+
+                if (model.GetDeclaredSymbol(declarationSyntax) is not IPropertySymbol resolvedProperty || !ReferenceEquals(resolvedProperty, property))
+                {
+                    facts.Add(CreateGap(
+                        filePath,
+                        $"A property declaration on EDMX composition candidate {symbol.ToDisplayString(SymbolFormat)} did not resolve to a compiler symbol; member evidence for it is unavailable.",
+                        "EdmxCandidateSymbolResolution",
+                        projectPath,
+                        declarationSyntax.GetLocation().GetLineSpan().StartLinePosition.Line + 1));
                     continue;
                 }
 
