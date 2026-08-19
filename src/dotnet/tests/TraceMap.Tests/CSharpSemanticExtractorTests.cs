@@ -468,6 +468,122 @@ public sealed class CSharpSemanticExtractorTests
     }
 
     [Fact]
+    public void Scan_emits_bounded_edmx_composition_candidate_property_evidence()
+    {
+        using var temp = new TempDirectory();
+        Directory.CreateDirectory(Path.Combine(temp.Path, "src", "Ef6Sample"));
+        File.WriteAllText(Path.Combine(temp.Path, "src", "Ef6Sample", "Ef6Sample.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <ImplicitUsings>enable</ImplicitUsings>
+                <Nullable>enable</Nullable>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "src", "Ef6Sample", "Ef6Stubs.cs"), """
+            using System;
+
+            namespace System.Data.Entity
+            {
+                public abstract class DbContext { }
+                public sealed class DbSet<TEntity> { }
+            }
+
+            namespace System.Data.Entity.Core.Objects.DataClasses
+            {
+                [AttributeUsage(AttributeTargets.Class)]
+                public sealed class EdmEntityTypeAttribute : Attribute
+                {
+                    public string NamespaceName { get; set; } = "";
+                    public string Name { get; set; } = "";
+                }
+            }
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "src", "Ef6Sample", "Model.Designer.cs"), """
+            namespace Model;
+
+            public partial class Customer
+            {
+                public int CustomerId { get; set; }
+                public string Name { get; set; } = "";
+            }
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "src", "Ef6Sample", "AttributeBearer.cs"), """
+            using System.Data.Entity.Core.Objects.DataClasses;
+
+            namespace App.Data;
+
+            [EdmEntityType(NamespaceName = "Model", Name = "Order")]
+            public partial class Order
+            {
+                public int OrderId { get; set; }
+            }
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "src", "Ef6Sample", "SameFileContext.cs"), """
+            namespace Ef6Sample;
+
+            public sealed class InventoryContext : System.Data.Entity.DbContext
+            {
+                public System.Data.Entity.DbSet<Widget> Widgets { get; set; } = new();
+            }
+
+            public sealed class Widget
+            {
+                public int WidgetId { get; set; }
+            }
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "src", "Ef6Sample", "Plain.cs"), """
+            namespace Ef6Sample;
+
+            public sealed class PlainPoco
+            {
+                public string Label { get; set; } = "";
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")));
+
+        Assert.Equal("Level1SemanticAnalysis", result.Manifest.AnalysisLevel);
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.TypeDeclared
+            && fact.RuleId == RuleIds.CSharpSemanticDeclarations
+            && fact.TargetSymbol == "global::App.Data.Order"
+            && fact.Properties.GetValueOrDefault("generatedConceptualNamespace") == "Model"
+            && fact.Properties.GetValueOrDefault("generatedConceptualName") == "Order");
+
+        var customerType = result.Facts.Single(fact =>
+            fact.FactType == FactTypes.TypeDeclared
+            && fact.TargetSymbol == "global::Model.Customer");
+        var customerTypeId = customerType.Properties["targetSymbolId"];
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.PropertyDeclared
+            && fact.RuleId == RuleIds.CSharpSemanticDeclarations
+            && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+            && fact.ContractElement == "CustomerId"
+            && fact.Properties.GetValueOrDefault("edmxCompositionCandidate") == "True"
+            && fact.Properties.GetValueOrDefault("candidateSignal") == "designer-shaped-file"
+            && fact.Properties.GetValueOrDefault("targetSymbolId")!.StartsWith("csharp property ", StringComparison.Ordinal)
+            && fact.Properties.GetValueOrDefault("containingTypeSymbolId") == customerTypeId);
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.PropertyDeclared
+            && fact.RuleId == RuleIds.CSharpSemanticDeclarations
+            && fact.Properties.GetValueOrDefault("candidateSignal") == "generated-identity-attribute"
+            && fact.ContractElement == "OrderId");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.PropertyDeclared
+            && fact.RuleId == RuleIds.CSharpSemanticDeclarations
+            && fact.Properties.GetValueOrDefault("candidateSignal") == "dbset-entity-argument"
+            && fact.ContractElement == "WidgetId");
+
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.PropertyDeclared
+            && fact.RuleId == RuleIds.CSharpSemanticDeclarations
+            && fact.ContractElement == "Label");
+    }
+
+    [Fact]
     public void Scan_extracts_bounded_ef_entity_table_and_column_mappings_with_explicit_gaps()
     {
         using var temp = new TempDirectory();
