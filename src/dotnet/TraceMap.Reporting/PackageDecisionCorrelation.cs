@@ -597,10 +597,11 @@ public static class PackageDecisionCorrelationReporter
             {
                 var digest = pair.fact.Properties.GetValueOrDefault("artifactDigest");
                 var algorithm = pair.fact.Properties.GetValueOrDefault("artifactDigestAlgorithm");
-                var digestMatches = reference.ArtifactDigest is not null && digest is not null
+                var nameVersionMatches = NameVersionJoin(pair.fact);
+                var digestMatches = nameVersionMatches && reference.ArtifactDigest is not null && digest is not null
                     && string.Equals(reference.ArtifactDigestAlgorithm, algorithm, StringComparison.Ordinal)
                     && FixedTimeDigestEquals(reference.ArtifactDigest, digest);
-                return (pair.source, pair.fact, digestMatches, nameVersionMatches: NameVersionJoin(pair.fact));
+                return (pair.source, pair.fact, digestMatches, nameVersionMatches);
             }).ToArray();
             var identityJoined = evaluated.Where(pair => pair.digestMatches || pair.nameVersionMatches).ToArray();
             var joinBasis = identityJoined.Any(pair => pair.digestMatches) ? "digest" : identityJoined.Length > 0 ? "name-version" : "unmatched";
@@ -1397,7 +1398,7 @@ public static class PackageDecisionCorrelationReporter
             {
                 var sourceId = multiple ? $"{CombinedReportHelpers.Hash(spec.Label, 12)}:{source.SourceIndexId}" : source.SourceIndexId;
                 if (spec.Side is not null && spec.BaseLabel is not null)
-                    sourceSides[sourceId] = new PackageDecisionSourceSide(spec.Side, SafeInputLabel(spec.BaseLabel));
+                    sourceSides[sourceId] = new PackageDecisionSourceSide(spec.Side, ComparisonPairLabel(spec.BaseLabel, source.Label));
                 // Comparison sides compose "before/<label>"/"after/<label>"; each part is safety-checked
                 // separately because the composed spec label is not itself a single safe identifier.
                 var safeSpecLabel = spec.Side is null ? SafeInputLabel(spec.Label) : $"{spec.Side}/{SafeInputLabel(spec.BaseLabel ?? spec.Label)}";
@@ -1455,6 +1456,11 @@ public static class PackageDecisionCorrelationReporter
                 ? trimmed
                 : $"source-label-hash:{CombinedReportHelpers.Hash(trimmed, 16)}";
     }
+
+    private static string ComparisonPairLabel(string manifestLabel, string expandedSourceLabel) =>
+        expandedSourceLabel == "default"
+            ? SafeInputLabel(manifestLabel)
+            : $"pair-{CombinedReportHelpers.Hash(string.Join('\u001f', manifestLabel, expandedSourceLabel), 16)}";
 
     private static string InputIdentity(IReadOnlyList<PackageInputSpec> specs, string? manifestPath, string? beforeManifestPath, string? afterManifestPath)
     {
