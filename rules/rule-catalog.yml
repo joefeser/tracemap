@@ -4785,8 +4785,9 @@ rules:
       - Direct URLs, editable installs, local paths, and dynamic declarations are represented as hash-only metadata or gaps; raw values are not rendered.
       - uv.lock extraction is bounded to lock format version 1 and poetry.lock to lock-versions 1.0/1.1/2.0/2.1; unsupported versions, malformed or truncated TOML, unsafe names, non-registry sources, and entries without a literal resolved version emit analysis gaps instead of guessed facts.
       - uv.lock and poetry.lock artifact hashes are wheel or source-distribution form specific and are never emitted as artifact digests; a decision record cannot identify the artifact form, so this evidence can never prove an exact artifact match.
-      - Direct versus transitive for uv.lock comes only from the lockfile's own root-package dependency declarations, and for poetry.lock only by cross-referencing pyproject.toml declarations parsed in the same scan; when neither is available the relation stays unproven with a DirectTransitiveUnavailable gap, and a transitive label relies on the root declarations being complete.
-      - The uv.lock root project entry is the scanned project itself and emits no dependency row; Pipfile is inventoried but unsupported and emits an unsupported-metadata gap; Pipfile.lock is not inventoried or parsed.
+      - Direct versus transitive for uv.lock comes only from well-typed dependency declarations on a proven root/workspace entry, and for poetry.lock only by cross-referencing the sibling pyproject.toml; when neither is available the relation stays unproven with a DirectTransitiveUnavailable gap, and a transitive label relies on the root declarations being complete.
+      - Proven uv.lock root/workspace entries emit no dependency row; other editable, virtual, Git, URL, path, or directory sources emit unsupported-source gaps. Poetry entries without a source use the default registry semantics, bounded legacy registry sources retain host-only origin, and other source types emit unsupported-source gaps.
+      - Pipfile is inventoried but unsupported and emits an unsupported-metadata gap; Pipfile.lock is not inventoried or parsed.
 
   - id: python.ast.declarations.v1
     name: Python AST declarations
