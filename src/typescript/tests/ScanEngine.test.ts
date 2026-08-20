@@ -161,7 +161,13 @@ describe("ScanEngine", () => {
     await fsp.mkdir(repo, { recursive: true });
     const packagePath = path.join(repo, "package.json");
     const lockPath = path.join(repo, "package-lock.json");
-    await fsp.writeFile(packagePath, JSON.stringify({ name: "fixture", dependencies: { express: "^4.0.0" } }, null, 2));
+    await fsp.writeFile(packagePath, JSON.stringify({
+      name: "fixture",
+      dependencies: { express: "^4.0.0" },
+      devDependencies: { "dev-tool": "1.0.0" },
+      optionalDependencies: { "optional-tool": "1.0.0" },
+      peerDependencies: { "peer-tool": "1.0.0" }
+    }, null, 2));
     const sha512Digest = Buffer.alloc(64, 0x2a).toString("base64");
     await fsp.writeFile(lockPath, JSON.stringify({
       name: "fixture",
@@ -173,6 +179,11 @@ describe("ScanEngine", () => {
           resolved: "https://registry.npmjs.org/express/-/express-4.18.2.tgz",
           integrity: "sha512-" + sha512Digest
         },
+        "node_modules/dev-tool": { version: "1.0.0" },
+        "node_modules/optional-tool": { version: "1.0.0" },
+        "node_modules/peer-tool": { version: "1.0.0" },
+        "node_modules/versionless-one": {},
+        "node_modules/versionless-two": { resolved: "https://registry.npmjs.org/versionless-two" },
         "node_modules/bar": {
           version: "2.0.0"
         },
@@ -205,6 +216,22 @@ describe("ScanEngine", () => {
         lockfileHash: expect.stringMatching(/^[0-9a-f]{32}$/)
       })
     }));
+    expect(facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.PackageReferenced,
+      properties: expect.objectContaining({ packageName: "dev-tool", dependencyRelation: "direct", dependencyGroup: "devDependencies" })
+    }));
+    expect(facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.PackageReferenced,
+      properties: expect.objectContaining({ packageName: "optional-tool", dependencyRelation: "direct", dependencyGroup: "optionalDependencies" })
+    }));
+    expect(facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.PackageReferenced,
+      properties: expect.objectContaining({ packageName: "peer-tool", dependencyRelation: "direct", dependencyGroup: "peerDependencies" })
+    }));
+    const missingVersionGaps = facts.filter((fact) => fact.factType === FactTypes.AnalysisGap && fact.properties.category === "package-lock-entry-version-missing");
+    expect(missingVersionGaps).toHaveLength(2);
+    expect(missingVersionGaps.map((fact) => fact.targetSymbol).sort()).toEqual(["versionless-one", "versionless-two"]);
+    expect(new Set(missingVersionGaps.map((fact) => fact.evidence.startLine)).size).toBe(2);
     expect(facts).toContainEqual(expect.objectContaining({
       factType: FactTypes.PackageReferenced,
       properties: expect.objectContaining({ packageName: "accepts", dependencyRelation: "transitive", dependencyPathDepth: "2" })

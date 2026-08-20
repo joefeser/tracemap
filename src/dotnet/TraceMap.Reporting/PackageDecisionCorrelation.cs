@@ -1,7 +1,9 @@
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Win32.SafeHandles;
 using Microsoft.Data.Sqlite;
 using TraceMap.Core;
 
@@ -700,12 +702,22 @@ public static class PackageDecisionCorrelationReporter
         var outputCandidates = Directory.Exists(fullOutput) || string.IsNullOrWhiteSpace(Path.GetExtension(fullOutput))
             ? new[] { Path.Combine(fullOutput, "package-decision-report.md"), Path.Combine(fullOutput, "package-decision-report.json") }
             : [fullOutput];
-        var inputIdentities = new[] { decisionPath }.Concat(inputPaths).Select(FileIdentity).ToArray();
-        if (outputCandidates.Select(FileIdentity).Any(outputIdentity => inputIdentities.Any(inputIdentity => PathIdentityEquals(outputIdentity, inputIdentity))))
+        var inputIdentities = new[] { decisionPath }.Concat(inputPaths).Select(InputFileIdentity).ToArray();
+        if (outputCandidates.Select(OutputFileIdentity).Any(outputIdentity => inputIdentities.Any(inputIdentity => FileIdentityEquals(outputIdentity, inputIdentity))))
             throw new InvalidDataException("package-decision --out must not alias a decision, manifest, or index input.");
     }
 
-    private static string? FileIdentity(string path)
+    private static FileIdentityRecord InputFileIdentity(string path)
+    {
+        var identity = ReadFileIdentity(path);
+        if (identity.FileSystemId is null)
+            throw new InvalidDataException("package-decision could not establish the filesystem identity of an input.");
+        return identity;
+    }
+
+    private static FileIdentityRecord OutputFileIdentity(string path) => ReadFileIdentity(path);
+
+    private static FileIdentityRecord ReadFileIdentity(string path)
     {
         var fullPath = Path.GetFullPath(path);
         try
@@ -713,7 +725,8 @@ public static class PackageDecisionCorrelationReporter
             for (var pass = 0; pass < 32; pass++)
             {
                 var resolved = ResolvePathLinks(fullPath);
-                if (string.Equals(resolved, fullPath, StringComparison.Ordinal)) return resolved;
+                if (string.Equals(resolved, fullPath, StringComparison.Ordinal))
+                    return new FileIdentityRecord(resolved, ExistingFileSystemId(resolved));
                 fullPath = resolved;
             }
 
@@ -726,6 +739,34 @@ public static class PackageDecisionCorrelationReporter
         catch (UnauthorizedAccessException exception)
         {
             throw new InvalidDataException("package-decision could not establish a stable file identity for alias protection.", exception);
+        }
+    }
+
+    private static FileSystemId? ExistingFileSystemId(string path)
+    {
+        if (!File.Exists(path)) return null;
+        using var handle = File.OpenHandle(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        if (OperatingSystem.IsWindows())
+        {
+            if (!GetFileInformationByHandle(handle, out var information))
+                throw new IOException("Could not read the Windows file identity.", Marshal.GetExceptionForHR(Marshal.GetHRForLastWin32Error()));
+            return new FileSystemId(
+                information.VolumeSerialNumber,
+                ((ulong)information.FileIndexHigh << 32) | information.FileIndexLow);
+        }
+
+        var buffer = Marshal.AllocHGlobal(256);
+        try
+        {
+            if (FStat(handle.DangerousGetHandle().ToInt32(), buffer) != 0)
+                throw new IOException("Could not read the Unix file identity.", Marshal.GetExceptionForHR(Marshal.GetHRForLastWin32Error()));
+            return OperatingSystem.IsMacOS()
+                ? new FileSystemId(unchecked((uint)Marshal.ReadInt32(buffer, 0)), unchecked((ulong)Marshal.ReadInt64(buffer, 8)))
+                : new FileSystemId(unchecked((ulong)Marshal.ReadInt64(buffer, 0)), unchecked((ulong)Marshal.ReadInt64(buffer, 8)));
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(buffer);
         }
     }
 
@@ -749,15 +790,39 @@ public static class PackageDecisionCorrelationReporter
         return Path.GetFullPath(current);
     }
 
-    private static bool PathIdentityEquals(string? left, string? right) =>
-        left is not null
-        && right is not null
-        && string.Equals(
-            left,
-            right,
+    private static bool FileIdentityEquals(FileIdentityRecord left, FileIdentityRecord right) =>
+        (left.FileSystemId is not null && left.FileSystemId == right.FileSystemId)
+        || string.Equals(
+            left.CanonicalPath,
+            right.CanonicalPath,
             OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
                 ? StringComparison.OrdinalIgnoreCase
                 : StringComparison.Ordinal);
+
+    private sealed record FileIdentityRecord(string CanonicalPath, FileSystemId? FileSystemId);
+    private sealed record FileSystemId(ulong Volume, ulong File);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ByHandleFileInformation
+    {
+        public uint FileAttributes;
+        public System.Runtime.InteropServices.ComTypes.FILETIME CreationTime;
+        public System.Runtime.InteropServices.ComTypes.FILETIME LastAccessTime;
+        public System.Runtime.InteropServices.ComTypes.FILETIME LastWriteTime;
+        public uint VolumeSerialNumber;
+        public uint FileSizeHigh;
+        public uint FileSizeLow;
+        public uint NumberOfLinks;
+        public uint FileIndexHigh;
+        public uint FileIndexLow;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetFileInformationByHandle(SafeFileHandle file, out ByHandleFileInformation information);
+
+    [DllImport("libc", EntryPoint = "fstat", SetLastError = true)]
+    private static extern int FStat(int fileDescriptor, IntPtr buffer);
 
     private static IReadOnlyList<PackageInputSpec> ResolveInputSpecs(PackageDecisionOptions options)
     {
