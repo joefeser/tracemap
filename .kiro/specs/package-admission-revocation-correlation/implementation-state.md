@@ -152,6 +152,12 @@ diff guards passed. Local `swift test` remains unavailable in this shell
 because its active toolchain cannot load `XCTest`; exact-head Swift CI is the
 platform test authority for this branch.
 
+The subsequent exact-head CocoaPods review pass added two fail-closed cases:
+PODS parent rows may end in the standard dependency-list colon without losing
+their bounded resolved version, while repeated SPEC CHECKSUMS names discard
+all competing values rather than selecting an arbitrary checksum. The Swift
+build and adversarial smoke executable passed with both shapes.
+
 ## Limitations and deferred work
 
 - NuGet lockfile `contentHash` is package-content metadata, not a registry

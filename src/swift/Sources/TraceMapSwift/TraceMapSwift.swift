@@ -2659,6 +2659,11 @@ enum DependencyExtractor {
                   let name = firstCapture(#"^\s{2}([A-Za-z0-9_.+-]+):"#, in: line) else {
                 continue
             }
+            if !checksumNames.insert(name).inserted {
+                duplicateChecksum = true
+                specChecksums.removeValue(forKey: name)
+                continue
+            }
             let value = firstCapture(#"^\s{2}[A-Za-z0-9_.+-]+:\s*([0-9A-Za-z]+)\s*$"#, in: line)
             if let value, isPodspecChecksum(value) {
                 specChecksums[name] = value.lowercased()
@@ -2676,14 +2681,11 @@ enum DependencyExtractor {
             }
             guard section == "PODS" || section == "DEPENDENCIES" || section == "SPEC CHECKSUMS" else { continue }
             if section == "SPEC CHECKSUMS" {
-                if let name = firstCapture(#"^\s{2}([A-Za-z0-9_.+-]+):"#, in: line), !checksumNames.insert(name).inserted {
-                    duplicateChecksum = true
-                }
                 continue
             }
             guard let name = firstCapture(#"^\s{2}-\s+([A-Za-z0-9_.+-]+)"#, in: line) else { continue }
             let safe = isSafeLabel(name) ? name : nil
-            let parenVersion = section == "PODS" ? firstCapture(#"\(([A-Za-z0-9.+-]+)\)\s*$"#, in: line) : nil
+            let parenVersion = section == "PODS" ? firstCapture(#"\(([A-Za-z0-9.+-]+)\)\s*:?\s*$"#, in: line) : nil
             let resolvedVersion = parenVersion.flatMap { isSafeLiteralVersion($0) ? $0 : nil }
             var properties = baseProperties(
                 packageManager: "cocoapods",
