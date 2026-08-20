@@ -62,6 +62,8 @@ final class GradleLockfileTest {
             && "LockfileDigestUnavailable".equals(fact.properties().get("gapKind"))));
         assertTrue(result.facts().stream().anyMatch(fact -> FactTypes.ANALYSIS_GAP.equals(fact.factType())
             && "DirectTransitiveUnavailable".equals(fact.properties().get("gapKind"))));
+        assertTrue(result.manifest().knownGaps().contains("LockfileDigestUnavailable: gradle.lockfile"));
+        assertTrue(result.manifest().knownGaps().contains("DirectTransitiveUnavailable: gradle.lockfile"));
     }
 
     @Test
@@ -73,6 +75,8 @@ final class GradleLockfileTest {
             empty=annotationProcessor
             com.example:no-version:=compileClasspath
             ../etc/passwd:evil:1.0.0=runtimeClasspath
+            com.example:empty-config:1.0.0=
+            com.example:bad-config:1.0.0=runtimeClasspath=extra
             """);
 
         assertEquals(1, result.facts().stream()
@@ -83,7 +87,7 @@ final class GradleLockfileTest {
             .filter(fact -> FactTypes.ANALYSIS_GAP.equals(fact.factType()))
             .map(fact -> fact.properties().get("gapKind"))
             .toList();
-        assertEquals(3, gapKinds.stream().filter("GradleLockRowMalformed"::equals).count());
+        assertEquals(5, gapKinds.stream().filter("GradleLockRowMalformed"::equals).count());
         assertEquals(1, gapKinds.stream().filter("GradleLockRowUnsupported"::equals).count());
         assertTrue(gapKinds.contains("LockfileDigestUnavailable"));
         assertTrue(gapKinds.contains("DirectTransitiveUnavailable"));

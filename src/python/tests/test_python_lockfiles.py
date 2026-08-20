@@ -139,7 +139,7 @@ def test_uv_lock_emits_resolved_versions_with_proven_direct_and_transitive(tmp_p
     assert requests.evidence.extractor_version == "python-lockfile/0.1.0"
     assert requests.evidence.file_path == "uv.lock"
     assert requests.evidence.start_line == 19  # the [[package]] header line of the requests entry
-    assert gaps == []
+    assert gaps == ["LockfileDigestUnavailable: uv.lock"]
 
 
 def test_uv_and_poetry_lockfile_hashes_are_never_artifact_digests(tmp_path: Path) -> None:
@@ -471,6 +471,27 @@ def test_poetry_malformed_group_dependencies_leave_relations_unproven(tmp_path: 
     assert "DirectTransitiveUnavailable" in {fact.properties["gapKind"] for fact in _gap_facts(facts)}
 
 
+def test_poetry_same_name_lock_variants_leave_declared_relation_unproven(tmp_path: Path) -> None:
+    lock = tmp_path / "poetry.lock"
+    lock.write_text(
+        POETRY_LOCK.replace(
+            "[metadata]",
+            '[[package]]\nname = "requests"\nversion = "1.0.0"\noptional = false\npython-versions = "<3.11"\nfiles = []\n\n[metadata]',
+        ),
+        encoding="utf-8",
+    )
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text('[tool.poetry.dependencies]\nrequests = "^2.32"\n', encoding="utf-8")
+    gaps: list[str] = []
+
+    facts = read_lockfiles(tmp_path, _manifest("poetry-ambiguous-variants"), [lock], [pyproject], gaps)
+
+    assert all("dependencyRelation" not in fact.properties for fact in _by_name(facts, "requests"))
+    assert _by_name(facts, "urllib3")[0].properties["dependencyRelation"] == "transitive"
+    assert "DirectTransitiveUnavailable: poetry.lock" in gaps
+    assert "DirectTransitiveUnavailable" in {fact.properties["gapKind"] for fact in _gap_facts(facts)}
+
+
 def test_poetry_lock_uses_only_its_sibling_pyproject_in_monorepos(tmp_path: Path) -> None:
     app_a = tmp_path / "app-a"
     app_b = tmp_path / "app-b"
@@ -602,6 +623,7 @@ def test_scan_emits_pipfile_unsupported_metadata_gap_and_lockfile_facts(tmp_path
     assert any('"gapKind":"unsupported-metadata"' in line for line in ndjson)
     assert any('"resolvedVersion":"2.32.3"' in line for line in ndjson)
     assert manifest.projects == ["Pipfile", "pyproject.toml"]
+    assert "LockfileDigestUnavailable: uv.lock" in manifest.known_gaps
 
 
 def _git(repo: Path, *arguments: str) -> None:

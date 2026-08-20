@@ -152,7 +152,7 @@ def _uv_lock_facts(
         for fact in facts
         if fact.fact_type == FactTypes.PACKAGE_REFERENCED
     )
-    facts.extend(_capability_gaps(manifest, rel, facts, relation_proven=relation_proven))
+    facts.extend(_capability_gaps(manifest, rel, facts, gaps, relation_proven=relation_proven))
     return facts
 
 
@@ -172,7 +172,6 @@ def _poetry_lock_facts(
     if lock_version not in SUPPORTED_POETRY_LOCK_VERSIONS or not isinstance(packages, list):
         gaps.append(f"PythonLockUnsupported: {rel}: poetry.lock lock-version {lock_version!r}")
         return [_gap_fact(manifest, rel, 1, "python-lock-unsupported", f"poetry.lock lock-version {lock_version!r} is not supported")]
-    relation_proven = declaration_complete
     facts: list[CodeFact] = []
     for index, package in enumerate(packages):
         line = _entry_line(header_lines, index, len(packages))
@@ -214,12 +213,15 @@ def _poetry_lock_facts(
                 "poetry",
                 lockfile_hash,
                 registry_origin=registry_origin,
-                dependency_relation=(
-                    ("direct" if _normalize_name(name) in declared else "transitive") if relation_proven else None
-                ),
+                dependency_relation=_poetry_dependency_relation(index, package, packages, declared, declaration_complete),
             )
         )
-    facts.extend(_capability_gaps(manifest, rel, facts, relation_proven=relation_proven))
+    relation_proven = declaration_complete and all(
+        fact.properties.get("dependencyRelation") in {"direct", "transitive"}
+        for fact in facts
+        if fact.fact_type == FactTypes.PACKAGE_REFERENCED
+    )
+    facts.extend(_capability_gaps(manifest, rel, facts, gaps, relation_proven=relation_proven))
     return facts
 
 
@@ -273,9 +275,17 @@ def _lockfile_fact(
     )
 
 
-def _capability_gaps(manifest: ScanManifest, rel: str, facts: list[CodeFact], *, relation_proven: bool) -> list[CodeFact]:
+def _capability_gaps(
+    manifest: ScanManifest,
+    rel: str,
+    facts: list[CodeFact],
+    gaps: list[str],
+    *,
+    relation_proven: bool,
+) -> list[CodeFact]:
     if not any(fact.fact_type == FactTypes.PACKAGE_REFERENCED for fact in facts):
         return []
+    gaps.append(f"LockfileDigestUnavailable: {rel}")
     result = [
         _gap_fact(
             manifest,
@@ -286,6 +296,7 @@ def _capability_gaps(manifest: ScanManifest, rel: str, facts: list[CodeFact], *,
         )
     ]
     if not relation_proven:
+        gaps.append(f"DirectTransitiveUnavailable: {rel}")
         result.append(
             _gap_fact(
                 manifest,
@@ -498,6 +509,34 @@ def _uv_descriptor_matches(descriptor: dict, package: dict) -> bool:
         if descriptor_origin is None or package_origin is None or descriptor_origin != package_origin:
             return False
     return True
+
+
+def _poetry_dependency_relation(
+    index: int,
+    package: dict,
+    packages: list,
+    declared: set[str],
+    declaration_complete: bool,
+) -> str | None:
+    if not declaration_complete:
+        return None
+    name = package.get("name")
+    if not isinstance(name, str):
+        return None
+    normalized = _normalize_name(name)
+    if normalized not in declared:
+        return "transitive"
+    matching_indexes = [
+        candidate_index
+        for candidate_index, candidate in enumerate(packages)
+        if isinstance(candidate, dict)
+        and isinstance(candidate.get("name"), str)
+        and _normalize_name(candidate["name"]) == normalized
+        and isinstance(candidate.get("version"), str)
+        and bool(candidate["version"].strip())
+        and _poetry_registry_source(candidate.get("source"))[0]
+    ]
+    return "direct" if matching_indexes == [index] else None
 
 
 def _is_registry_source(source: object) -> bool:

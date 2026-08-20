@@ -34,9 +34,10 @@ public sealed class PackageDecisionTests
         var admitted = PackageDecisionRecordReader.Read("{\"version\":\"package-decision.v1\",\"records\":["
             + "{\"decisionId\":\"dec-hyphen\",\"decisionKind\":\"admit\",\"ecosystem\":\"npm\",\"packageName\":\"left-pad\",\"artifactVersion\":\"1.0.0\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\"},"
             + "{\"decisionId\":\"dec-python\",\"decisionKind\":\"admit\",\"ecosystem\":\"python\",\"packageName\":\"flask-sqlalchemy\",\"artifactVersion\":\"3.0.3\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\"},"
+            + "{\"decisionId\":\"dec-digit\",\"decisionKind\":\"admit\",\"ecosystem\":\"python\",\"packageName\":\"3d-toolkit\",\"artifactVersion\":\"1.0.0\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\"},"
             + "{\"decisionId\":\"dec-gradle\",\"decisionKind\":\"admit\",\"ecosystem\":\"gradle\",\"packageName\":\"org.springframework:spring-web\",\"artifactVersion\":\"6.2.0\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\"}"
             + "]}");
-        Assert.Equal(3, admitted.Records.Count);
+        Assert.Equal(4, admitted.Records.Count);
         Assert.Empty(admitted.Gaps);
 
         var rejected = PackageDecisionRecordReader.Read("{\"version\":\"package-decision.v1\",\"records\":["

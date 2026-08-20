@@ -4533,10 +4533,11 @@ rules:
       - Gradle extraction is literal-only; version catalogs, convention plugins, buildSrc, composite builds, and interpolation are reduced-coverage gaps.
       - Dependency metadata is structural and does not prove the dependency is resolved on the scanner classpath.
       - JVM package facts do not prove Maven/Gradle execution, dependency cache contents, transitive dependency resolution, runtime class loading, or deployment.
-      - gradle.lockfile rows carry exact resolved versions, lockfile path, and a lockfile content hash only; the format has no artifact digest and its configuration names do not prove direct versus transitive, so both capabilities are reported as explicit analysis gaps.
+      - gradle.lockfile rows carry exact resolved versions, lockfile path, and a lockfile content hash only; coordinates and non-empty comma-separated configuration names must satisfy closed safe shapes, while malformed rows emit gaps instead of facts.
+      - The format has no artifact digest and its configuration names do not prove direct versus transitive, so both capabilities are reported as explicit fact and manifest analysis gaps.
       - gradle/verification-metadata.xml is inventoried but not consumed for digests: its per-artifact checksums cannot be correlated to a package-decision record because the record contract does not identify the artifact form (module jar, sources, POM, classifier), so JVM evidence can never prove an exact artifact match from verification metadata.
       - Maven has no standard lockfile; Maven scans emit a MavenLockfileUnavailable capability gap and Maven rows keep declared build-file evidence only.
-      - Malformed or unsupported gradle.lockfile rows (including the empty= placeholder notation and unsafe coordinates) emit GradleLockRow gaps and downgrade scan coverage instead of guessing rows.
+      - Malformed or unsupported gradle.lockfile rows (including the empty= placeholder notation, unsafe coordinates, and empty or malformed configuration suffixes) emit GradleLockRow gaps and downgrade scan coverage instead of guessing rows.
 
   - id: jvm.config.v1
     name: JVM config files
@@ -4787,6 +4788,8 @@ rules:
       - uv.lock and poetry.lock artifact hashes are wheel or source-distribution form specific and are never emitted as artifact digests; a decision record cannot identify the artifact form, so this evidence can never prove an exact artifact match.
       - Direct versus transitive for uv.lock comes only from complete, well-typed main, development-group, and optional-group dependency declarations on proven root/workspace entries; version and registry qualifiers are used only when they uniquely identify a locked registry package, while ambiguous same-name candidates remain unclassified with a DirectTransitiveUnavailable gap.
       - Direct versus transitive for poetry.lock comes only from complete sibling pyproject.toml project, optional, Poetry main, legacy development, and named-group dependency declarations; malformed, dynamic, missing, or incomplete declarations leave every relation unproven with a DirectTransitiveUnavailable gap rather than labeling undeclared rows transitive.
+      - A declared Poetry name with multiple eligible same-name lock rows remains unclassified because TraceMap does not interpret version constraints or environment markers; ambiguity emits DirectTransitiveUnavailable instead of labeling every variant direct.
+      - Python lockfile digest and relation limitations are recorded in both rule-backed facts and manifest known gaps so machine and human coverage summaries remain consistent.
       - Proven uv.lock root/workspace entries emit no dependency row; other editable, virtual, Git, URL, path, or directory sources emit unsupported-source gaps. Poetry entries without a source use the default registry semantics, bounded legacy registry sources retain host-only origin, and other source types emit unsupported-source gaps.
       - Pipfile is inventoried but unsupported and emits an unsupported-metadata gap; Pipfile.lock is not inventoried or parsed.
 
