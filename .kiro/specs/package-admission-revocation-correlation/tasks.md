@@ -77,16 +77,16 @@ Validation: Swift matrix from `docs/VALIDATION.md` (build, smoke tests, sample s
 
 ## Slice 7 — Python lockfile resolved versions
 
-- [ ] 7.1 Implement `uv.lock` and/or `poetry.lock` parsing per the resolved owner decision (design §14 item 5): `resolvedVersion`, lockfile identity, `dependencyRelation`; treat source-distribution hashes per the decision (exact-eligible only if the record's digest form matches; otherwise `matchBasis` context).
-- [ ] 7.2 Fix the silent `Pipfile` skip: emit an `AnalysisGap` (`unsupported-metadata`) instead of silence, per the no-silence rule.
-- [ ] 7.3 Update `python.package.metadata.v1` catalog entry; validation via temp venv pytest (`python3 -m venv /tmp/tracemap-python-venv && .../pip install -e "src/python[dev]" && pytest src/python/tests`) plus `scripts/smoke-python-endpoints.sh` and `validate-adapter-artifacts.py`.
+- [x] 7.1 Implement `uv.lock` and/or `poetry.lock` parsing per the resolved owner decision (design §14 item 5): `resolvedVersion`, lockfile identity, `dependencyRelation`; treat source-distribution hashes per the decision (exact-eligible only if the record's digest form matches; otherwise `matchBasis` context).
+- [x] 7.2 Fix the silent `Pipfile` skip: emit an `AnalysisGap` (`unsupported-metadata`) instead of silence, per the no-silence rule.
+- [x] 7.3 Update `python.package.metadata.v1` catalog entry; validation via temp venv pytest (`python3 -m venv /tmp/tracemap-python-venv && .../pip install -e "src/python[dev]" && pytest src/python/tests`) plus `scripts/smoke-python-endpoints.sh` and `validate-adapter-artifacts.py`.
 
 Stop conditions: if lock hash field semantics cannot be verified deterministically offline, ship resolved versions only and record the digest question as an open item.
 
 ## Slice 8 — JVM resolved versions and (conditionally) verification metadata
 
-- [ ] 8.1 Parse `gradle.lockfile` resolved versions and, if the slice-8 evaluation confirms determinism, `gradle/verification-metadata.xml` artifact SHA-256s as `artifactDigest`; Maven has no standard lockfile — document and emit the capability gap.
-- [ ] 8.2 Update `jvm.buildfile.v1` catalog entry and JVM validation matrix (Java 21 Homebrew path per AGENTS.md).
+- [x] 8.1 Parse `gradle.lockfile` resolved versions and, if the slice-8 evaluation confirms determinism, `gradle/verification-metadata.xml` artifact SHA-256s as `artifactDigest`; Maven has no standard lockfile — document and emit the capability gap.
+- [x] 8.2 Update `jvm.buildfile.v1` catalog entry and JVM validation matrix (Java 21 Homebrew path per AGENTS.md).
 
 Stop conditions: if `verification-metadata.xml` parsing is not deterministic offline (transform-generated formatting variance, for example), ship `gradle.lockfile` resolved versions only, emit the digest capability gap, and record the decision.
 
