@@ -411,14 +411,32 @@ def _add_poetry_dependency_table(declared: set[str], values: object) -> bool:
     if not isinstance(values, dict):
         return False
     valid = True
-    for key in values:
+    for key, value in values.items():
         if not isinstance(key, str) or not _SAFE_NAME.match(key):
+            valid = False
+            continue
+        if not _valid_poetry_dependency_value(value):
             valid = False
             continue
         normalized = _normalize_name(key)
         if normalized != "python":
             declared.add(normalized)
     return valid
+
+
+def _valid_poetry_dependency_value(value: object) -> bool:
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, dict):
+        return bool(value) and all(
+            isinstance(key, str)
+            and isinstance(item, (str, bool, list))
+            and (not isinstance(item, list) or all(isinstance(entry, str) for entry in item))
+            for key, item in value.items()
+        )
+    if isinstance(value, list):
+        return bool(value) and all(_valid_poetry_dependency_value(item) for item in value)
+    return False
 
 
 def _root_dependency_descriptors(package: dict) -> tuple[list[dict], bool]:
@@ -540,7 +558,11 @@ def _poetry_dependency_relation(
 
 
 def _is_registry_source(source: object) -> bool:
-    return isinstance(source, dict) and isinstance(source.get("registry"), str)
+    return (
+        isinstance(source, dict)
+        and isinstance(source.get("registry"), str)
+        and _registry_origin(source["registry"]) is not None
+    )
 
 
 def _poetry_registry_source(source: object) -> tuple[bool, str | None]:
@@ -626,11 +648,11 @@ def _normalize_relative_source_path(value: str) -> str | None:
 def _registry_origin(url: str) -> str | None:
     try:
         parsed = urlsplit(url)
+        if not parsed.hostname:
+            return None
+        candidate = parsed.hostname.lower() + (f":{parsed.port}" if parsed.port else "")
     except ValueError:
         return None
-    if not parsed.hostname:
-        return None
-    candidate = parsed.hostname.lower() + (f":{parsed.port}" if parsed.port else "")
     return candidate if _SAFE_HOST.match(candidate) else None
 
 
