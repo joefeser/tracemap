@@ -300,7 +300,7 @@ public static partial class PackageDecisionRecordReader
     [GeneratedRegex("^[a-z0-9][a-z0-9._:-]{3,80}$", RegexOptions.CultureInvariant)] private static partial Regex DecisionId();
     [GeneratedRegex("^[a-z0-9][a-z0-9._-]{1,64}$", RegexOptions.CultureInvariant)] private static partial Regex ProducerId();
     [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9._+-]{0,31}$", RegexOptions.CultureInvariant)] private static partial Regex PolicyVersion();
-    [GeneratedRegex("^[A-Za-z_][A-Za-z0-9_.$+]*(?::[A-Za-z0-9_.$+]+)?$", RegexOptions.CultureInvariant)] private static partial Regex PackageName();
+    [GeneratedRegex("^[A-Za-z0-9_][A-Za-z0-9_.$+-]*(?::[A-Za-z0-9_.$+-]+)?$", RegexOptions.CultureInvariant)] private static partial Regex PackageName();
     [GeneratedRegex("^@[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$", RegexOptions.CultureInvariant)] private static partial Regex NpmPackageName();
     [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9._+~-]{0,127}$", RegexOptions.CultureInvariant)] private static partial Regex Version();
     [GeneratedRegex("^[A-Za-z0-9.-]+(?::[0-9]{1,5})?$", RegexOptions.CultureInvariant)] private static partial Regex Origin();

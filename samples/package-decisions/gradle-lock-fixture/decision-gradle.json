@@ -1,0 +1,32 @@
+{
+  "version": "package-decision.v1",
+  "records": [
+    {
+      "decisionId": "dec-gradle-fixture-digest",
+      "decisionKind": "reject",
+      "ecosystem": "gradle",
+      "packageName": "org.springframework:spring-web",
+      "artifactVersion": "6.2.0",
+      "registryOrigin": "repo1.maven.org",
+      "artifactDigestAlgorithm": "sha256",
+      "artifactDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "producer": {
+        "id": "sample-producer",
+        "policyVersion": "2026-08"
+      },
+      "decisionTimeUtc": "2026-08-18T00:00:00Z"
+    },
+    {
+      "decisionId": "dec-gradle-fixture-undigested",
+      "decisionKind": "quarantine",
+      "ecosystem": "gradle",
+      "packageName": "com.example:fixture-lib",
+      "artifactVersion": "1.2.3",
+      "producer": {
+        "id": "sample-producer",
+        "policyVersion": "2026-08"
+      },
+      "decisionTimeUtc": "2026-08-18T00:00:00Z"
+    }
+  ]
+}
