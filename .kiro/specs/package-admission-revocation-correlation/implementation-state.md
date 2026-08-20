@@ -126,7 +126,9 @@ resolved-evidence slices, and the Python + JVM adapter evidence slices.
   `python-lock-entry-resolved-missing`, `python-lock-entry-source-unsupported`
   (git/url/path/directory sources), plus per-lockfile
   `LockfileDigestUnavailable` and (when unproven)
-  `DirectTransitiveUnavailable` capability gaps. Unsafe resolved versions are
+  `DirectTransitiveUnavailable` capability gaps. Both limitations are also
+  recorded in the manifest gap collector so the report and fact stream agree.
+  Unsafe resolved versions are
   hashed (`versionHash` + `redactionReason=unsafe-package-version`) instead
   of emitted.
 - Python Pipfile fix (task 7.2): an inventoried `Pipfile` now emits an
@@ -144,10 +146,12 @@ resolved-evidence slices, and the Python + JVM adapter evidence slices.
   `GradleLockfileExtractor`/`jvm-gradle-lockfile/0.1.0`. The format proves
   neither digests nor direct/transitive, so every parsed lockfile emits
   `LockfileDigestUnavailable` and `DirectTransitiveUnavailable` capability
-  gap facts and rows carry no `dependencyRelation`/`artifactDigest`.
+  gap facts, records both in the manifest gap collector, and carries no
+  `dependencyRelation`/`artifactDigest` on package rows.
   Collector gaps (coverage-downgrading, matching existing JVM vocabulary):
   `GradleLockParseFailed`, `GradleLockRowMalformed` (unparseable rows,
-  missing version, unsafe coordinates), and `GradleLockRowUnsupported` (the
+  missing version, unsafe coordinates, or empty/malformed configuration
+  lists), and `GradleLockRowUnsupported` (the
   Gradle `empty=` placeholder notation). Unsafe versions hash like existing
   JVM rows. `gradle/verification-metadata.xml` is inventoried through its
   pre-existing generic `XmlConfig` treatment only and is never consumed for
@@ -224,7 +228,8 @@ resolved-evidence slices, and the Python + JVM adapter evidence slices.
   evidence only.
 - PR4 record admission fix: the `package-decision.v1` reader's package-name
   pattern now admits hyphens in non-leading positions (`left-pad`,
-  `flask-sqlalchemy`, `org.springframework:spring-web`). The previous pattern
+  `flask-sqlalchemy`, `org.springframework:spring-web`) and digit-leading
+  distribution names. The previous pattern
   rejected every hyphenated Maven/Gradle artifact and hyphenated Python/npm
   name at admission even though design §6.1's normalization contract expects
   them. The widening is additive (no previously admitted shape is rejected;
@@ -342,6 +347,13 @@ malformed Poetry group tables. Relation evidence is now emitted only after the
 entire recognized declaration surface is structurally complete; ambiguity or
 dynamic/incomplete declarations retain the package evidence but omit the
 relation and emit `DirectTransitiveUnavailable`.
+
+A subsequent exact-head consistency batch keeps declared Poetry packages
+unclassified when more than one eligible same-name lock row exists, records
+Python and Gradle capability limitations in both facts and manifest gap
+collectors, rejects Gradle rows with empty or malformed configuration lists,
+and aligns decision admission with digit-leading names emitted by the Python
+adapter.
 
 ## Limitations and deferred work
 

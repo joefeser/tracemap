@@ -33,6 +33,7 @@ import java.util.regex.Pattern;
 public final class GradleLockfileExtractor {
     private static final Pattern COORDINATE = Pattern.compile("^([^:=]+):([^:=]+):([^:=]+)$");
     private static final Pattern SAFE_COORDINATE_PART = Pattern.compile("[A-Za-z0-9][A-Za-z0-9_.-]*");
+    private static final Pattern SAFE_CONFIGURATION_LIST = Pattern.compile("[A-Za-z0-9][A-Za-z0-9_.-]*(?:,[A-Za-z0-9][A-Za-z0-9_.-]*)*");
     private static final String DIGEST_GAP_MESSAGE =
         "gradle.lockfile provides resolved versions only; artifact digests are not available from this format";
     private static final String RELATION_GAP_MESSAGE =
@@ -80,6 +81,11 @@ public final class GradleLockfileExtractor {
                 gaps.add("GradleLockRowUnsupported: " + file.relativePath() + ":" + (i + 1));
                 continue;
             }
+            String configurations = line.substring(separator + 1).trim();
+            if (!SAFE_CONFIGURATION_LIST.matcher(configurations).matches()) {
+                gaps.add("GradleLockRowMalformed: " + file.relativePath() + ":" + (i + 1));
+                continue;
+            }
             var matcher = COORDINATE.matcher(coordinate);
             if (!matcher.matches()) {
                 gaps.add("GradleLockRowMalformed: " + file.relativePath() + ":" + (i + 1));
@@ -124,6 +130,8 @@ public final class GradleLockfileExtractor {
         if (emittedRow) {
             facts.add(capabilityGap(manifest, file, "LockfileDigestUnavailable", DIGEST_GAP_MESSAGE));
             facts.add(capabilityGap(manifest, file, "DirectTransitiveUnavailable", RELATION_GAP_MESSAGE));
+            gaps.add("LockfileDigestUnavailable: " + file.relativePath());
+            gaps.add("DirectTransitiveUnavailable: " + file.relativePath());
         }
     }
 
