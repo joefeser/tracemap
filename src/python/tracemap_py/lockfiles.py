@@ -60,6 +60,7 @@ def read_lockfiles(
                     )
                 )
             elif path.name == POETRY_LOCK:
+                declared, declaration_complete = _declared_names_for_lockfile(path, pyproject_files)
                 facts.extend(
                     _poetry_lock_facts(
                         manifest,
@@ -67,7 +68,8 @@ def read_lockfiles(
                         data,
                         header_lines,
                         lockfile_hash,
-                        _declared_names_for_lockfile(path, pyproject_files),
+                        declared,
+                        declaration_complete,
                         gaps,
                     )
                 )
@@ -91,19 +93,20 @@ def _uv_lock_facts(
     if version not in SUPPORTED_UV_LOCK_VERSIONS or not isinstance(packages, list):
         gaps.append(f"PythonLockUnsupported: {rel}: uv.lock format version {version!r}")
         return [_gap_fact(manifest, rel, 1, "python-lock-unsupported", f"uv.lock format version {version!r} is not supported")]
-    direct_names: set[str] = set()
-    relation_proven = False
+    direct_descriptors: list[dict] = []
+    declarations_complete = True
+    roots_present = False
     for package in packages:
         if not isinstance(package, dict):
             continue
         source = package.get("source")
         if not _is_uv_workspace_source(source, workspace_source_paths):
             continue
-        for key in ("dependencies", "dev-dependencies"):
-            values = package.get(key)
-            if isinstance(values, list):
-                relation_proven = True
-                direct_names.update(_root_dependency_names(values))
+        roots_present = True
+        descriptors, complete = _root_dependency_descriptors(package)
+        direct_descriptors.extend(descriptors)
+        declarations_complete = declarations_complete and complete
+    declarations_complete = roots_present and declarations_complete
     facts: list[CodeFact] = []
     for index, package in enumerate(packages):
         line = _entry_line(header_lines, index, len(packages))
@@ -141,11 +144,14 @@ def _uv_lock_facts(
                 "uv",
                 lockfile_hash,
                 registry_origin=_registry_origin(source.get("registry")) if isinstance(source.get("registry"), str) else None,
-                dependency_relation=(
-                    ("direct" if _normalize_name(name) in direct_names else "transitive") if relation_proven else None
-                ),
+                dependency_relation=_uv_dependency_relation(index, package, packages, direct_descriptors, declarations_complete),
             )
         )
+    relation_proven = declarations_complete and all(
+        fact.properties.get("dependencyRelation") in {"direct", "transitive"}
+        for fact in facts
+        if fact.fact_type == FactTypes.PACKAGE_REFERENCED
+    )
     facts.extend(_capability_gaps(manifest, rel, facts, relation_proven=relation_proven))
     return facts
 
@@ -157,6 +163,7 @@ def _poetry_lock_facts(
     header_lines: list[int],
     lockfile_hash: str,
     declared: set[str],
+    declaration_complete: bool,
     gaps: list[str],
 ) -> list[CodeFact]:
     metadata = data.get("metadata")
@@ -165,7 +172,7 @@ def _poetry_lock_facts(
     if lock_version not in SUPPORTED_POETRY_LOCK_VERSIONS or not isinstance(packages, list):
         gaps.append(f"PythonLockUnsupported: {rel}: poetry.lock lock-version {lock_version!r}")
         return [_gap_fact(manifest, rel, 1, "python-lock-unsupported", f"poetry.lock lock-version {lock_version!r} is not supported")]
-    relation_proven = bool(declared)
+    relation_proven = declaration_complete
     facts: list[CodeFact] = []
     for index, package in enumerate(packages):
         line = _entry_line(header_lines, index, len(packages))
@@ -303,65 +310,194 @@ def _gap_fact(manifest: ScanManifest, rel: str, line: int, kind: str, message: s
     )
 
 
-def _declared_names_for_lockfile(lockfile: Path, pyproject_files: list[Path]) -> set[str]:
+def _declared_names_for_lockfile(lockfile: Path, pyproject_files: list[Path]) -> tuple[set[str], bool]:
     manifest = lockfile.with_name("pyproject.toml").resolve()
     available = {path.resolve() for path in pyproject_files}
-    return _declared_pyproject_names([manifest]) if manifest in available else set()
+    return _declared_pyproject_names([manifest]) if manifest in available else (set(), False)
 
 
-def _declared_pyproject_names(pyproject_files: list[Path]) -> set[str]:
+def _declared_pyproject_names(pyproject_files: list[Path]) -> tuple[set[str], bool]:
     declared: set[str] = set()
+    complete = True
+    declaration_surface_present = False
     for path in sorted(pyproject_files):
         try:
             data = tomllib.loads(path.read_text(encoding="utf-8"))
         except Exception:
-            continue
+            return declared, False
         if not isinstance(data, dict):
-            continue
+            return declared, False
         project = data.get("project")
-        if not isinstance(project, dict):
+        if project is not None and not isinstance(project, dict):
+            complete = False
             project = {}
-        declared.update(_names_from_requirement_list(project.get("dependencies")))
-        optional = project.get("optional-dependencies", {})
-        if isinstance(optional, dict):
+        project = project or {}
+        if "dependencies" in project:
+            declaration_surface_present = True
+            names, valid = _names_from_requirement_list(project.get("dependencies"))
+            declared.update(names)
+            complete = complete and valid
+        dynamic = project.get("dynamic")
+        if dynamic is not None:
+            if not isinstance(dynamic, list) or any(not isinstance(value, str) for value in dynamic):
+                complete = False
+            elif "dependencies" in dynamic:
+                complete = False
+        optional = project.get("optional-dependencies")
+        if optional is not None:
+            declaration_surface_present = True
+            if not isinstance(optional, dict):
+                complete = False
+                optional = {}
             for values in optional.values():
-                declared.update(_names_from_requirement_list(values))
+                names, valid = _names_from_requirement_list(values)
+                declared.update(names)
+                complete = complete and valid
         tool = data.get("tool")
-        if not isinstance(tool, dict):
+        if tool is not None and not isinstance(tool, dict):
+            complete = False
             tool = {}
+        tool = tool or {}
         poetry = tool.get("poetry")
-        if not isinstance(poetry, dict):
+        if poetry is not None and not isinstance(poetry, dict):
+            complete = False
             poetry = {}
-        poetry_dependencies = poetry.get("dependencies", {})
-        if isinstance(poetry_dependencies, dict):
-            for key in poetry_dependencies:
-                normalized = _normalize_name(str(key))
-                if normalized and normalized != "python":
-                    declared.add(normalized)
-    return declared
+        poetry = poetry or {}
+        for key in ("dependencies", "dev-dependencies"):
+            if key not in poetry:
+                continue
+            declaration_surface_present = True
+            complete = _add_poetry_dependency_table(declared, poetry.get(key)) and complete
+        groups = poetry.get("group")
+        if groups is not None:
+            declaration_surface_present = True
+            if not isinstance(groups, dict):
+                complete = False
+                groups = {}
+            for group in groups.values():
+                if not isinstance(group, dict) or "dependencies" not in group:
+                    complete = False
+                    continue
+                complete = _add_poetry_dependency_table(declared, group.get("dependencies")) and complete
+    return declared, declaration_surface_present and complete
 
 
-def _names_from_requirement_list(values: object) -> set[str]:
+def _names_from_requirement_list(values: object) -> tuple[set[str], bool]:
     names: set[str] = set()
     if not isinstance(values, list):
-        return names
+        return names, False
     for value in values:
-        name, _ = _parse_requirement(str(value))
-        if name:
-            names.add(_normalize_name(name))
-    return names
+        if not isinstance(value, str):
+            return names, False
+        name, _ = _parse_requirement(value)
+        if not name:
+            return names, False
+        names.add(_normalize_name(name))
+    return names, True
 
 
-def _root_dependency_names(values: object) -> set[str]:
-    names: set[str] = set()
-    if not isinstance(values, list):
-        return names
-    for value in values:
-        if isinstance(value, dict):
-            name = value.get("name")
-            if isinstance(name, str):
-                names.add(_normalize_name(name))
-    return names
+def _add_poetry_dependency_table(declared: set[str], values: object) -> bool:
+    if not isinstance(values, dict):
+        return False
+    valid = True
+    for key in values:
+        if not isinstance(key, str) or not _SAFE_NAME.match(key):
+            valid = False
+            continue
+        normalized = _normalize_name(key)
+        if normalized != "python":
+            declared.add(normalized)
+    return valid
+
+
+def _root_dependency_descriptors(package: dict) -> tuple[list[dict], bool]:
+    descriptors: list[dict] = []
+    present = False
+    complete = True
+    for key in ("dependencies", "dev-dependencies", "optional-dependencies"):
+        if key not in package:
+            continue
+        present = True
+        values = package.get(key)
+        groups = values.values() if isinstance(values, dict) else [values]
+        for group in groups:
+            if not isinstance(group, list):
+                complete = False
+                continue
+            for value in group:
+                if not isinstance(value, dict):
+                    complete = False
+                    continue
+                name = value.get("name")
+                if not isinstance(name, str) or not _SAFE_NAME.match(name):
+                    complete = False
+                    continue
+                descriptors.append(value)
+    return descriptors, present and complete
+
+
+def _uv_dependency_relation(
+    index: int,
+    package: dict,
+    packages: list,
+    descriptors: list[dict],
+    declarations_complete: bool,
+) -> str | None:
+    name = package.get("name")
+    if not isinstance(name, str):
+        return None
+    normalized = _normalize_name(name)
+    same_name_descriptors = [
+        descriptor
+        for descriptor in descriptors
+        if isinstance(descriptor.get("name"), str) and _normalize_name(descriptor["name"]) == normalized
+    ]
+    if not same_name_descriptors:
+        return "transitive" if declarations_complete else None
+
+    candidate_indexes = [
+        candidate_index
+        for candidate_index, candidate in enumerate(packages)
+        if isinstance(candidate, dict)
+        and isinstance(candidate.get("name"), str)
+        and _normalize_name(candidate["name"]) == normalized
+        and _is_registry_source(candidate.get("source"))
+    ]
+    ambiguous_indexes: set[int] = set()
+    for descriptor in same_name_descriptors:
+        matching = [
+            candidate_index
+            for candidate_index in candidate_indexes
+            if _uv_descriptor_matches(descriptor, packages[candidate_index])
+        ]
+        if len(matching) == 1 and matching[0] == index:
+            return "direct"
+        if len(matching) > 1:
+            ambiguous_indexes.update(matching)
+    if index in ambiguous_indexes:
+        return None
+    return "transitive" if declarations_complete else None
+
+
+def _uv_descriptor_matches(descriptor: dict, package: dict) -> bool:
+    descriptor_version = descriptor.get("version")
+    if descriptor_version is not None:
+        if not isinstance(descriptor_version, str) or package.get("version") != descriptor_version:
+            return False
+    descriptor_source = descriptor.get("source")
+    if descriptor_source is not None:
+        if not isinstance(descriptor_source, dict):
+            return False
+        descriptor_registry = descriptor_source.get("registry")
+        package_source = package.get("source")
+        package_registry = package_source.get("registry") if isinstance(package_source, dict) else None
+        if not isinstance(descriptor_registry, str) or not isinstance(package_registry, str):
+            return False
+        descriptor_origin = _registry_origin(descriptor_registry)
+        package_origin = _registry_origin(package_registry)
+        if descriptor_origin is None or package_origin is None or descriptor_origin != package_origin:
+            return False
+    return True
 
 
 def _is_registry_source(source: object) -> bool:

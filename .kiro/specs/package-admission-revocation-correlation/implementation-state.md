@@ -194,12 +194,15 @@ resolved-evidence slices, and the Python + JVM adapter evidence slices.
   deterministic 32-hex lockfile content hash, with a per-lockfile
   `LockfileDigestUnavailable` capability gap.
 - PR4 relation evidence: `dependencyRelation` is emitted only where proven.
-  `uv.lock` proves it from well-typed `dependencies`/`dev-dependencies`
-  declarations on the root or a declared workspace entry (direct) versus
-  everything else (transitive); an unrelated editable source is an explicit
-  unsupported-source gap. `poetry.lock` cannot prove it from the lockfile, so
-  direct/transitive is derived only by cross-referencing the sibling
-  `pyproject.toml` dependency declarations (the design §5.1
+  `uv.lock` proves it from complete, well-typed main/development-group/
+  optional-group declarations on the root or a declared workspace entry.
+  Version and registry qualifiers select a direct dependency only when they
+  uniquely identify one locked registry package; ambiguous same-name rows stay
+  unclassified with a capability gap. An unrelated editable source is an
+  explicit unsupported-source gap. `poetry.lock` cannot prove the relation
+  from the lockfile, so direct/transitive is derived only by cross-referencing
+  complete sibling `pyproject.toml` project, optional, Poetry main, legacy
+  development, and named-group declarations (the design §5.1
   "direct = declared in a root manifest" rule); when neither proof exists the
   property is omitted and a `DirectTransitiveUnavailable` gap is emitted.
   Monorepo manifests are never unioned across lockfiles. TOML-valid but
@@ -332,6 +335,14 @@ skipped as local project identity. The Python suite passed 53/53, the endpoint
 smoke completed, the focused package-decision/rule-catalog suite passed 28/28,
 the full .NET suite passed 1,641/1,641, and private-path/diff guards passed.
 
+The next exact-head review remediation added five fail-closed declaration
+fixtures: uv grouped development dependencies, qualifier-selected same-name
+versions, ambiguous unqualified same-name versions, Poetry named groups, and
+malformed Poetry group tables. Relation evidence is now emitted only after the
+entire recognized declaration surface is structurally complete; ambiguity or
+dynamic/incomplete declarations retain the package evidence but omit the
+relation and emit `DirectTransitiveUnavailable`.
+
 ## Limitations and deferred work
 
 - NuGet lockfile `contentHash` is package-content metadata, not a registry
@@ -344,8 +355,9 @@ the full .NET suite passed 1,641/1,641, and private-path/diff guards passed.
   `DirectTransitiveUnavailable` gap.
 - Python `uv.lock`/`poetry.lock` wheel and source-distribution hashes are
   artifact-form specific and are never emitted as `artifactDigest`; Python
-  evidence can never produce `ExactArtifactMatch`. `poetry.lock` transitive
-  labels rely on the parsed pyproject root declarations being complete.
+  evidence can never produce `ExactArtifactMatch`. uv and Poetry transitive
+  labels require complete root declaration surfaces; same-name uv variants
+  require unique version/registry qualification before any direct label.
 - JVM `gradle.lockfile` has no digests and no direct/transitive proof;
   `gradle/verification-metadata.xml` digest correlation stays deferred until a
   decision-record contract can identify the artifact form (jar/POM/sources/
