@@ -61,17 +61,17 @@ Stop conditions: if npm lockfile parsing cannot be deterministic offline for v2/
 
 ## Slice 5 — NuGet `packages.lock.json` resolved versions
 
-- [ ] 5.1 Parse `packages.lock.json` content (today presence-only): emit `PackageReferenced` with `sourceKind=lockfile`, `resolvedVersion`, `lockfilePath`, `lockfileHash`, `dependencyRelation` (direct = `DependencyType=Direct`/root project references per lock format; transitive otherwise). NuGet lockfiles carry no artifact content hash: always emit `LockfileDigestUnavailable` capability gap for nuget.
-- [ ] 5.2 Update `project.file.v1` catalog entry and `docs/VALIDATION.md`.
-- [ ] 5.3 Tests: resolved-version possible matches; direct/transitive from lock rows; digest-unavailable gap; presence-diagnostics unchanged.
+- [x] 5.1 Parse `packages.lock.json` content (today presence-only): emit `PackageReferenced` with `sourceKind=lockfile`, `resolvedVersion`, `lockfilePath`, `lockfileHash`, `dependencyRelation` (direct = `DependencyType=Direct`/root project references per lock format; transitive otherwise). NuGet lockfiles carry no artifact content hash: always emit `LockfileDigestUnavailable` capability gap for nuget.
+- [x] 5.2 Update `project.file.v1` catalog entry and `docs/VALIDATION.md`.
+- [x] 5.3 Tests: resolved-version possible matches; direct/transitive from lock rows; digest-unavailable gap; presence-diagnostics unchanged.
 
 Validation: `dotnet test src/dotnet/TraceMap.sln --filter "FullyQualifiedName~PackageDecision|FullyQualifiedName~ScanEngine"`; `./scripts/check-private-paths.sh`; `git diff --check`.
 
 ## Slice 6 — Swift resolved identities (no artifact digests)
 
-- [ ] 6.1 Promote safe literal resolved versions from `Package.resolved` pins and Podfile.lock version lines into `resolvedVersion` on the existing lockfile facts; keep revision/location values hashed; capture `specChecksum` (podspec checksum) as its own labeled property with the documented never-an-artifact-digest limitation.
-- [ ] 6.2 Update `swift.dependency.lockfile.*` catalog entries and `docs/VALIDATION.md` Swift smokes (`tracemap-swift-smoke-tests`, `samples/swift-*` runs).
-- [ ] 6.3 Tests: possible matches with `resolved-version` basis; no exact match ever claimed from Swift evidence; schema v3 gap unchanged.
+- [x] 6.1 Promote safe literal resolved versions from `Package.resolved` pins and Podfile.lock version lines into `resolvedVersion` on the existing lockfile facts; keep revision/location values hashed; capture `specChecksum` (podspec checksum) as its own labeled property with the documented never-an-artifact-digest limitation.
+- [x] 6.2 Update `swift.dependency.lockfile.*` catalog entries and `docs/VALIDATION.md` Swift smokes (`tracemap-swift-smoke-tests`, `samples/swift-*` runs).
+- [x] 6.3 Tests: possible matches with `resolved-version` basis; no exact match ever claimed from Swift evidence; schema v3 gap unchanged.
 
 Validation: Swift matrix from `docs/VALIDATION.md` (build, smoke tests, sample scans, `validate-adapter-artifacts.py`); `./scripts/check-private-paths.sh`; `git diff --check`.
 
