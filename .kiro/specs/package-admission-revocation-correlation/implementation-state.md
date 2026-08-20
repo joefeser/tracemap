@@ -141,6 +141,17 @@ PR3 validation run on this branch:
 - `./scripts/check-private-paths.sh`; `git diff --check`; targeted
   `dotnet format` verification for changed C# files.
 
+Exact-head review remediation additionally proved that malformed NuGet
+lockfiles downgrade the manifest to reduced/partial coverage, unsafe resolved
+values are accepted only by a bounded NuGet-version allowlist and retain only
+normalized hash evidence, and Carthage prerelease/build-qualified literals use
+the same bounded Swift resolved-version predicate. The focused NuGet/package
+decision suite passed 7 tests, the full .NET suite passed 1,637 tests, the
+Swift build and smoke executable passed, and the private-path, formatting, and
+diff guards passed. Local `swift test` remains unavailable in this shell
+because its active toolchain cannot load `XCTest`; exact-head Swift CI is the
+platform test authority for this branch.
+
 ## Limitations and deferred work
 
 - NuGet lockfile `contentHash` is package-content metadata, not a registry

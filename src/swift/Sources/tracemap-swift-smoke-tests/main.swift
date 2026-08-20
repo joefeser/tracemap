@@ -478,7 +478,7 @@ struct TraceMapSwiftSmokeTests {
             "Cartfile.resolved": """
             github "ReactiveX/RxSwift" "6.0.0"
             git "https://example.invalid/UtilityKit.git" "abcdef123456"
-            binary "https://example.invalid/BinaryKit.json" "2.0.0"
+            binary "https://example.invalid/BinaryKit.json" "2.0.0+build.4"
             """
 	        ])
 	        let out = fixture.temp.url.appendingPathComponent("scan")
@@ -512,6 +512,7 @@ struct TraceMapSwiftSmokeTests {
 		        assert(rxPod?.properties["resolvedVersion"] == "6.0.0" && rxPod?.properties["specChecksum"] == "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" && rxPod?.properties["specChecksumKind"] == "podspec-sha1")
 		        assert(lockfileEntries.contains { $0.evidence.filePath == "Podfile.lock" && $0.properties["sourceSection"] == "DEPENDENCIES" && $0.properties["normalizedDependencyIdentity"] == "RxSwift" && $0.properties["resolvedVersion"] == nil })
 		        assert(lockfileEntries.contains { $0.evidence.filePath == "Cartfile.resolved" && $0.properties["version"] == "6.0.0" && $0.properties["resolvedVersion"] == "6.0.0" })
+		        assert(lockfileEntries.contains { $0.evidence.filePath == "Cartfile.resolved" && $0.properties["sourceKind"] == "binary" && $0.properties["resolvedVersion"] == "2.0.0+build.4" })
 		        let revisionCart = lockfileEntries.first { $0.evidence.filePath == "Cartfile.resolved" && $0.properties["normalizedDependencyIdentity"] == "UtilityKit" }
 		        assert(revisionCart?.properties["resolvedVersion"] == nil && revisionCart?.properties["versionHash"]?.count == 64)
 		        assert(result.facts.allSatisfy { $0.properties["artifactDigest"] == nil && $0.properties["artifactDigestAlgorithm"] == nil })
