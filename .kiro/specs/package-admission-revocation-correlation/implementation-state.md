@@ -2,19 +2,218 @@
 
 ## Status
 
-Grouped implementation PR1, PR2, and PR3 are merged into `dev`. The grouped
-PR4 scope (Python and JVM lockfile resolved evidence, slices 7–8) is shipped
-on this branch. This state note is the resume point for the shipped
-record/correlation core, combined/portfolio/npm/path work, the NuGet + Swift
-resolved-evidence slices, and the Python + JVM adapter evidence slices.
+Grouped implementation PR1, PR2, PR3, and PR4 are merged into `dev`. The
+grouped PR5 scope (slices 10–13: before/after artifact replacement, external
+advisory claims, runtime-unproven deployment references, docs/acceptance
+closure, and the capability-matrix refresh) is shipped on this branch. Task
+4.4 remains open (see below); all other slices in `tasks.md` are checked.
 
 ## Current implementation branch
 
-- Branch: `codex/package-decision-python-jvm-evidence`
-- Base: `origin/dev` at `7da398abbc723870043abdd06d659d14969154fc` (PR #701)
+- Branch: `codex/package-decision-comparison-external-claims`
+- Base: `origin/dev` at `035d0ea175f3378b078583e967580869ad40c252` (PR #702)
 - Target: `dev`
 - Delivery: ready-for-review PR, `Part of #690` (never draft)
-- Head before final state-only update: see the final commit of the PR4 branch.
+
+## Shipped grouped PR5 scope (this branch, slices 10–13)
+
+- Slice 10 (before/after artifact replacement): `--before-manifest` and
+  `--after-manifest` are required together, mutually exclusive with
+  `--index`/`--manifest` (CLI and reporter both fail closed), and compose the
+  two portfolio manifests through the existing manifest validation, label
+  uniqueness, source expansion, and identity-hint rules with `before/`/`after/`
+  label prefixes. Sources render as `before/<label>`/`after/<label>`
+  (container/original split preserved; each label part is safety-checked
+  separately so pairing labels never hash wholesale). Correlation runs through
+  the unchanged evidence ladder; comparison context never alters the
+  exact/possible/mismatch rungs. `ArtifactReplaced` is emitted only when both
+  sides have version-matching rows that are digest-bound with exactly one
+  distinct digest per side, the digests differ, and the paired label has one
+  source per side with equal repo identity; unchanged digest pairs emit no
+  row. Digest-absent evidence yields `PossibleArtifactChange`
+  `possible-only` rows (or `added`/`removed` when one side has no
+  version-matching evidence at all) that never claim replacement. Ambiguity
+  fails closed and downgrades: same-label repo-identity differences emit an
+  `IdentityAmbiguous` gap and force `AmbiguousIdentityChange`
+  `identity-ambiguous`; multiple sources per side emit an
+  `UnknownAnalysisGap` label-pairing gap; duplicate scan identity or unknown
+  commit on a side blocks the pairing; one side with multiple distinct
+  digests is downgraded with a `digest-ambiguous-side` note. A label that
+  exists on both sides but has one side filtered out by `--source` produces
+  no change row (an unseen side is not an absent side). Every change row
+  carries both evidence chains and the fixed wording "cross-snapshot
+  portfolio evidence, not a single coherent release state". Change rows are
+  capped by `--max-findings` with a `TruncatedByLimit` gap; pairing data
+  stays complete past the correlation render cap so truncated runs never
+  derive added/removed changes from a partial view.
+- Slice 11 (advisory profile external claims): `PackageDecisionAdvisoryProfileReader`
+  admits the closed `advisory-profile.v1` envelope (producer id/version,
+  bounded non-empty claims, 200-claim whole-input limit) with the closed
+  grammar: `versionPredicate.kind` is `exact` (one literal version field) or
+  `any` (no version field); `claimKind` is only
+  `framework-implied-server-surface`; `claimParams` is exactly one bounded
+  `framework`. Unknown fields — including severity, CVE, vulnerability,
+  exploitability, remediation, runtime, and trust shapes — are rejected, not
+  ignored. Claims render only in the dedicated "Advisory Claims (external)"
+  section with producer identity, profile version, the
+  `sha256-canonical-json-v1` profile digest, rule `package.decision.advisory.v1`,
+  and `Tier3SyntaxOrTextual`; they never become facts, never alter rungs,
+  summaries, paths, reverse context, or exit codes, and TraceMap performs no
+  enrichment, semver interpretation, registry access, or LLM calls.
+- Slice 12 (deployment references): `PackageDecisionDeploymentReferenceReader`
+  admits the closed `package-deployment-reference.v1` envelope with bounded
+  reference IDs, safe artifact identity (ecosystem, safe package name, exact
+  version, host-only origin, both-or-neither digest pair), producer identity,
+  optional hashed `sourceRepo`, and optional full 40/64-hex `commitSha`.
+  `referenceKind` is closed to `build-attachment` and `deployment-manifest`;
+  runtime-load and observed-execution kinds are rejected as
+  `DecisionInputMalformed`. Every admitted reference renders as a
+  `RuntimeUnprovenReference` row under `package.decision.correlation.v1`
+  with the fixed limitation "TraceMap did not verify the build, deployment,
+  installation, reachability, or runtime load", a bounded join detail
+  (`digest` when a constant-time digest join hits, else `name-version`,
+  else `unmatched`), bounded matched source labels/fact IDs (the commit-SHA
+  join attaches portfolio sources as provenance only), and hashed repo
+  provenance. References never create facts, never upgrade a rung, never
+  count as exact matches, never fire `--exit-code`, and are scoped by
+  `--ecosystem` only (they are not decision correlation rows). Duplicate
+  identical references dedupe; conflicting duplicates reject every copy.
+- Slice 13 (docs and closure): README command inventory and example;
+  `docs/ACCEPTANCE.md` package-decision acceptance section;
+  `docs/VALIDATION.md` PR5 smoke section; active
+  `package.decision.advisory.v1` catalog entry plus correlation-rule
+  limitations for `RuntimeUnprovenReference`, `PackageDecisionExternalReference`,
+  and the cross-snapshot wording; requirements.md Requirement 10 capability
+  matrix refreshed to the shipped adapter state and the stale
+  "specification only" status paragraph replaced.
+- Report contract additions (version 1.0, additive only): `mode` renders
+  `DecisionComparisonV1` in comparison mode; `advisoryClaims` and
+  `artifactChanges` remain `null` and `runtimeUnprovenReferences` remains
+  `[]` in snapshot mode; `summary.artifactChangeCount` is a new additive
+  integer (0 in snapshot mode); the Markdown summary now renders the stale,
+  runtime-unproven, and artifact-change counts that requirement 11.5 already
+  mandated as separate, and the PR1 placeholder texts for the advisory and
+  before/after sections were replaced with fixed contract wording. These
+  markdown/summary changes are the only snapshot-mode byte differences and
+  are documented here and in the PR.
+
+## Owner decisions recorded (PR5)
+
+- Deployment-reference timing is approved; slice 12 shipped in PR5
+  (design §14 item 7 resolved).
+- Supersession remains producer-side context only; PR5 does not compute an
+  authoritative "currently effective decision".
+- External advisory and deployment records are untrusted bounded metadata,
+  never TraceMap facts or authority.
+- Task 4.4 stays open; see below.
+
+## Validation (PR5)
+
+Run on this branch:
+
+- `dotnet build src/dotnet/TraceMap.sln` — 0 errors/warnings.
+- `dotnet test src/dotnet/TraceMap.sln` — 1,654 passed (1,641 pre-existing
+  plus 13 new comparison/advisory/deployment tests); focused
+  `FullyQualifiedName~PackageDecision` suites pass (60 tests including the
+  portfolio regression filter).
+- `npm run check --prefix src/typescript` — build plus 49 vitest tests pass
+  (no TypeScript source changed in PR5; the adapter was used for the smoke).
+- CLI smokes over a synthetic npm-lock repo scanned at two commits (before:
+  registry integrity `AAAA…==`, after: canonical `AQEB…==`):
+  - exact before/after replacement: `ArtifactReplaced` with both digests,
+    both evidence chains, and the cross-snapshot wording; before side exact,
+    after side `ArtifactDigestMismatch`;
+  - possible-only change for the digest-absent transitive row;
+  - advisory profile: two claims rendered with producer/version/digest
+    provenance and the external-opinion limitation;
+  - deployment references: two `RuntimeUnprovenReference` rows with the fixed
+    limitation; quarantine-plus-references run exits 0;
+  - combined use of comparison + advisory + deployment references;
+  - `--exit-code` matrix: exact `revoke` exits 1, admit-only exits 0,
+    quarantine/advisory/references never exit non-zero, and mixed/half
+    comparison inputs are rejected with exit 1;
+  - every generated JSON and Markdown output byte-identical on repeat runs
+    (the only repeat delta observed was the echoed `--exit-code` query flag
+    when the flag itself differed between runs);
+  - no `example.invalid` URL, temp path, or absolute path appears in any
+    generated artifact.
+- `./scripts/check-private-paths.sh` — passed; `git diff --check` — clean.
+- Targeted `dotnet format --verify-no-changes`: zero findings in the changed
+  reporting/reader/test files; `Program.cs` shows 206 pre-existing whitespace
+  findings identical to pristine `origin/dev` (verified in a detached base
+  worktree), none introduced by this branch.
+
+## Task 4.4 disposition (re-verified on this branch)
+
+Re-ran the pinned TypeScript smoke evidence against
+`scip-typescript` @ `891eb4293709a6a587bf4468dfa1b45a85182fd9`:
+
+- The pinned commit ships `yarn.lock` and no `package-lock.json`; a fresh
+  TypeScript scan of the pinned checkout (14,060 facts) produces zero
+  lockfile-sourced `PackageReferenced` rows, so no npm-lockfile evidence
+  smoke is possible over that immutable fixture.
+- `python3 scripts/validate-adapter-artifacts.py <scan-output>` exits 1 with
+  nine `local-absolute-path` findings in unrelated semantic facts (indices
+  1328, 5814, 9007, 9243, 11013; e.g. `typescript.semantic.methodinvocation.v1`
+  properties), pre-existing and unrelated to package-decision work.
+
+Closing 4.4 would require either changing the pinned sample fixture or
+absorbing the unrelated absolute-path cleanup into this PR; both are out of
+scope per the owner instruction. 4.4 remains open under #690 and is the only
+unchecked task in `tasks.md`.
+
+## Limitations and deferred work
+
+- NuGet lockfile `contentHash` is package-content metadata, not a registry
+  artifact digest; NuGet evidence can never produce `ExactArtifactMatch`.
+- SwiftPM versions, CocoaPods versions and podspec checksums, and Carthage
+  versions do not prove downloaded artifact bytes; Swift evidence can never
+  produce `ExactArtifactMatch`. `specChecksum` is lineage metadata only.
+- Direct/transitive for Swift remains unproven (no `dependencyRelation` on
+  Swift facts); the correlation reports the explicit
+  `DirectTransitiveUnavailable` gap.
+- Python `uv.lock`/`poetry.lock` wheel and source-distribution hashes are
+  artifact-form specific and are never emitted as `artifactDigest`; Python
+  evidence can never produce `ExactArtifactMatch`. uv and Poetry transitive
+  labels require complete root declaration surfaces; same-name uv variants
+  require unique version/registry qualification before any direct label.
+- JVM `gradle.lockfile` has no digests and no direct/transitive proof;
+  `gradle/verification-metadata.xml` digest correlation stays deferred until
+  a decision-record contract can identify the artifact form (jar/POM/sources/
+  classifier). JVM evidence can never produce `ExactArtifactMatch` today.
+- `Pipfile.lock` is not inventoried or parsed; `Pipfile` is inventoried with
+  an explicit `unsupported-metadata` gap only.
+- Advisory claims remain external producer opinions; deployment references
+  remain runtime-unproven; digests prove integrity, not producer
+  authenticity; possible matches remain possible; cross-snapshot comparison
+  evidence is not a single coherent release state.
+- Task 4.4 remains open exactly as recorded above; #690 must not close while
+  it is open.
+- Derived persistence behind `--write-derived`, effective-decision
+  supersession rollups, release-review composition of decision-derived
+  context, the shared external-evidence envelope refactor with #689, and
+  safe-metadata allowlist additions for lockfile properties in
+  `diff`/`reverse` rendering remain deferred follow-ups.
+- Path/reverse context is static graph evidence only and does not prove
+  runtime reachability or enforcement.
+
+## Historical per-PR notes
+
+## Status (PR1–PR4 history)
+
+Grouped implementation PR1, PR2, and PR3 are merged into `dev`. The grouped
+PR4 scope (Python and JVM lockfile resolved evidence, slices 7–8) shipped on
+`codex/package-decision-python-jvm-evidence` targeting `dev` (base
+`7da398abbc723870043abdd06d659d14969154fc`, PR #701). The per-PR scope,
+owner decisions, and validation notes for PR1–PR4 are preserved below.
+
+## Limitations and deferred work (PR4-era history)
+
+The per-ecosystem digest and relation limitations above were first recorded in
+the PR2–PR4 notes and remain authoritative. PR4 intentionally did not
+implement slices 10–13 (they are the PR5 scope shipped above), and task 4.4
+was left open in PR2 with the pinned-commit and shared-validator blockers
+that PR5 re-verified above.
 
 ## Shipped PR1 scope
 
@@ -360,35 +559,3 @@ lockfile-unavailable limitation in the manifest collector as well as facts.
 Nested Poetry constraint fields and uv version/source/marker qualifiers are
 also type-checked before relation proof; malformed qualifier values retain
 package evidence but omit relation labels with `DirectTransitiveUnavailable`.
-
-## Limitations and deferred work
-
-- NuGet lockfile `contentHash` is package-content metadata, not a registry
-  artifact digest; NuGet evidence can never produce `ExactArtifactMatch`.
-- SwiftPM versions, CocoaPods versions and podspec checksums, and Carthage
-  versions do not prove downloaded artifact bytes; Swift evidence can never
-  produce `ExactArtifactMatch`. `specChecksum` is lineage metadata only.
-- Direct/transitive for Swift remains unproven (no `dependencyRelation` on
-  Swift facts); the correlation reports the explicit
-  `DirectTransitiveUnavailable` gap.
-- Python `uv.lock`/`poetry.lock` wheel and source-distribution hashes are
-  artifact-form specific and are never emitted as `artifactDigest`; Python
-  evidence can never produce `ExactArtifactMatch`. uv and Poetry transitive
-  labels require complete root declaration surfaces; same-name uv variants
-  require unique version/registry qualification before any direct label.
-- JVM `gradle.lockfile` has no digests and no direct/transitive proof;
-  `gradle/verification-metadata.xml` digest correlation stays deferred until a
-  decision-record contract can identify the artifact form (jar/POM/sources/
-  classifier). JVM evidence can never produce `ExactArtifactMatch` today.
-- `Pipfile.lock` is not inventoried or parsed; `Pipfile` is inventoried with
-  an explicit `unsupported-metadata` gap only.
-- PR4 intentionally does not implement slices 10–13: before/after artifact
-  replacement, advisory profiles, deployment references, docs/acceptance
-  closure, and the final capability-matrix refresh remain grouped PR5 work
-  and must not be checked off here.
-- Task 4.4 remains open exactly as recorded in PR2: the pinned
-  `scip-typescript` commit has no `package-lock.json` and the shared artifact
-  validator reported pre-existing unrelated absolute-path findings; PR3 and
-  PR4 did not revisit it.
-- Path/reverse context is static graph evidence only and does not prove
-  runtime reachability or enforcement.

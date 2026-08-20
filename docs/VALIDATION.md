@@ -1797,6 +1797,70 @@ stays 0; a scanned `pom.xml` additionally emits a `MavenLockfileUnavailable`
 capability gap while its declared build-file rows are unchanged; and repeated
 correlation runs are byte-identical.
 
+### Package decision correlation (PR5: comparison, advisory, deployment references)
+
+The before/after comparison mode, external advisory claims, and deployment
+references are deterministic, read-only, and offline. Comparison rows are
+cross-snapshot portfolio evidence, advisory claims are external producer
+opinions, and deployment references are runtime-unproven lineage metadata.
+Run the focused suite:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~PackageDecision
+```
+
+The committed fixtures are `samples/package-decisions/comparison/`
+(before/after portfolio manifests plus `decision-comparison.json`),
+`advisory-profile-example.json`, and `deployment-references-example.json`;
+the focused tests build the synthetic indexes in a temp directory, copy the
+committed manifests next to them, and assert the committed expected shapes.
+
+For a synthetic comparison smoke, create two scan outputs (or any two
+portfolio-manifest-paired index sets), then run:
+
+```bash
+tracemap package-decision \
+  --decision samples/package-decisions/comparison/decision-comparison.json \
+  --before-manifest <before-portfolio.json> \
+  --after-manifest <after-portfolio.json> \
+  --out <report-directory> [--exit-code]
+```
+
+Confirm: `ArtifactReplaced` appears only when both sides are digest-bound
+with equal name and exact version and differing digests (each change row
+carries both evidence chains and the fixed wording "cross-snapshot
+portfolio evidence, not a single coherent release state"); digest-absent
+evidence yields possible-only change rows that never claim replacement;
+unchanged digest pairs produce no change row; added/removed evidence is
+labeled possible; same-label repo-identity differences emit an
+`IdentityAmbiguous` gap and downgrade the change classification; mixing
+`--before-manifest`/`--after-manifest` with `--index`/`--manifest`, or
+supplying only one of the pair, fails closed; the snapshot-mode
+exact/possible/mismatch rungs are unchanged by comparison context.
+
+For the advisory and deployment-reference smoke over any snapshot input:
+
+```bash
+tracemap package-decision --decision <package-decision.json> \
+  --index <index.sqlite> \
+  --advisory-profile samples/package-decisions/advisory-profile-example.json \
+  --deployment-references samples/package-decisions/deployment-references-example.json \
+  --out <report-directory> [--exit-code]
+```
+
+Confirm: the Advisory Claims (external) section renders producer identity,
+profile version, canonical profile digest, and the external-opinion
+limitation, and the claims never appear as facts or correlation rows and
+never change rung counts, summary counts, path/reverse context, or the
+exit code; every deployment reference renders as `RuntimeUnprovenReference`
+with the fixed limitation "TraceMap did not verify the build, deployment,
+installation, reachability, or runtime load", carries hashed source-repo
+provenance, a bounded digest or name-version join detail, and never counts
+as an exact match; `runtime-load`/`observed-execution` reference kinds and
+severity/CVE-shaped advisory fields are rejected with closed-set input
+gaps; repeat runs are byte-identical (JSON and Markdown).
+
 ### Cross-adapter scan-truth conformance
 
 For changes to adapter inventory, scan identity, snapshot verification,
