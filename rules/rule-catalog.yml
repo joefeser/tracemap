@@ -4522,7 +4522,7 @@ rules:
 
   - id: jvm.buildfile.v1
     name: JVM build file metadata
-    description: Extracts local Maven and literal Gradle module/dependency metadata without running build tools.
+    description: Extracts local Maven and literal Gradle module/dependency metadata plus bounded offline gradle.lockfile resolved versions without running build tools.
     evidenceTier: Tier2Structural
     emits:
       - ProjectDeclared
@@ -4533,6 +4533,10 @@ rules:
       - Gradle extraction is literal-only; version catalogs, convention plugins, buildSrc, composite builds, and interpolation are reduced-coverage gaps.
       - Dependency metadata is structural and does not prove the dependency is resolved on the scanner classpath.
       - JVM package facts do not prove Maven/Gradle execution, dependency cache contents, transitive dependency resolution, runtime class loading, or deployment.
+      - gradle.lockfile rows carry exact resolved versions, lockfile path, and a lockfile content hash only; the format has no artifact digest and its configuration names do not prove direct versus transitive, so both capabilities are reported as explicit analysis gaps.
+      - gradle/verification-metadata.xml is inventoried but not consumed for digests: its per-artifact checksums cannot be correlated to a package-decision record because the record contract does not identify the artifact form (module jar, sources, POM, classifier), so JVM evidence can never prove an exact artifact match from verification metadata.
+      - Maven has no standard lockfile; Maven scans emit a MavenLockfileUnavailable capability gap and Maven rows keep declared build-file evidence only.
+      - Malformed or unsupported gradle.lockfile rows (including the empty= placeholder notation and unsafe coordinates) emit GradleLockRow gaps and downgrade scan coverage instead of guessing rows.
 
   - id: jvm.config.v1
     name: JVM config files
@@ -4770,7 +4774,7 @@ rules:
 
   - id: python.package.metadata.v1
     name: Python package metadata
-    description: Emits Python package dependency facts from pyproject.toml, setup.cfg, setup.py literals, and requirements files.
+    description: Emits Python package dependency facts from pyproject.toml, setup.cfg, setup.py literals, requirements files, and bounded offline uv.lock/poetry.lock resolved-version extraction.
     evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
     emits:
       - PackageReferenced
@@ -4779,6 +4783,10 @@ rules:
       - setup.py is parsed for literal dependency lists only and is never executed.
       - Dependency resolution, extras, lockfile solving, environment markers, and installed package versions are not proven.
       - Direct URLs, editable installs, local paths, and dynamic declarations are represented as hash-only metadata or gaps; raw values are not rendered.
+      - uv.lock extraction is bounded to lock format version 1 and poetry.lock to lock-versions 1.0/1.1/2.0/2.1; unsupported versions, malformed or truncated TOML, unsafe names, non-registry sources, and entries without a literal resolved version emit analysis gaps instead of guessed facts.
+      - uv.lock and poetry.lock artifact hashes are wheel or source-distribution form specific and are never emitted as artifact digests; a decision record cannot identify the artifact form, so this evidence can never prove an exact artifact match.
+      - Direct versus transitive for uv.lock comes only from the lockfile's own root-package dependency declarations, and for poetry.lock only by cross-referencing pyproject.toml declarations parsed in the same scan; when neither is available the relation stays unproven with a DirectTransitiveUnavailable gap, and a transitive label relies on the root declarations being complete.
+      - The uv.lock root project entry is the scanned project itself and emits no dependency row; Pipfile is inventoried but unsupported and emits an unsupported-metadata gap; Pipfile.lock is not inventoried or parsed.
 
   - id: python.ast.declarations.v1
     name: Python AST declarations
