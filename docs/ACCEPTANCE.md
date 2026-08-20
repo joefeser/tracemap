@@ -440,6 +440,21 @@ For every successful `tracemap endpoints --client-index <client> --server-index 
 
 Endpoint alignment is static code evidence only. It does not prove runtime routing, middleware behavior, reverse proxies, auth policies, deployment base paths, CORS behavior, feature flags, or whether a route executes.
 
+## Package Decision Correlation Acceptance
+
+For every `tracemap package-decision` run (single index, combined index, repeatable `--index`/`--label`, `--manifest`, or `--before-manifest`/`--after-manifest` comparison), verify:
+
+- `package-decision-report.md` and/or `package-decision-report.json` follow the version 1.0 contract: fixed section order, sorted arrays, preserved empty arrays, no generated timestamps, and byte-identical output for repeated identical runs.
+- exact, digest-mismatch, possible, and ambiguous rows are never merged or summed; every row carries its rule ID, evidence tier, source label, scan ID, repo identity hash, commit SHA, file span, and evidence chain.
+- a digest-absent record or evidence side can never produce `ExactArtifactMatch`; missing digest or direct/transitive capability is an explicit gap, never silence.
+- `--exit-code` returns 1 only when an `ExactArtifactMatch` correlates to an external `reject` or `revoke` record; `quarantine`, admit, possible, ambiguous, mismatch, excluded, stale, runtime-unproven, and gap rows never cause non-zero; validation and input errors return non-zero regardless.
+- before/after changes: `ArtifactReplaced` only when both sides are digest-bound with equal name and exact version and differing digests; digest-absent evidence yields possible-only change rows that never claim replacement; every change row states it is cross-snapshot portfolio evidence, not a single coherent release state; identity ambiguity fails closed and downgrades the classification.
+- advisory claims render only in the dedicated external section with producer identity, profile version, and canonical profile digest; they never become facts or correlation rows and never alter rungs, summaries, paths, reverse context, or exit codes; severity, CVE, vulnerability, exploitability, remediation, runtime, and trust-shaped input fields are rejected.
+- deployment references render only as `RuntimeUnprovenReference` rows with the fixed limitation that TraceMap did not verify the build, deployment, installation, reachability, or runtime load; references never create facts, upgrade a rung, count as exact matches, or trigger `--exit-code`; runtime-load and observed-execution claims are rejected.
+- rejected decision, advisory, or reference input is a closed-set gap row; no record is silently dropped; adversarial values never appear in any output artifact.
+
+Package decision correlation is static snapshot evidence only. It does not authenticate producers, fetch or execute packages, verify builds, deployments, installations, reachability, or runtime loading, assign vulnerability, severity, safety, remediation, approval, or authority conclusions, or enforce admission, rejection, revocation, or quarantine decisions. Digests prove integrity, not producer authenticity. Possible matches remain possible. Cross-snapshot evidence is not a single coherent release state.
+
 ## Included Sample Repos
 
 ### `samples/modern-sample`
