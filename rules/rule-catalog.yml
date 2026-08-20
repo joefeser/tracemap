@@ -5597,7 +5597,7 @@ rules:
   - id: swift.dependency.lockfile.swiftpm.v1
     status: active
     name: SwiftPM dependency lockfile row
-    description: Records per-pin dependency rows from supported checked-in Package.resolved v1/v2 JSON schemas.
+    description: Records per-pin dependency rows from supported checked-in Package.resolved v1/v2 JSON schemas, promoting safe literal state versions to resolvedVersion.
     evidenceTier: Tier2Structural
     emits:
       - SwiftDependencyLockfileEntryDeclared
@@ -5605,11 +5605,12 @@ rules:
       - Lockfile rows are checked-in static metadata only and do not prove packages are restored, installed, linked, loaded, compatible, licensed, vulnerable, fresh, reachable, or used at runtime.
       - Unsupported schema versions, malformed JSON, duplicate pins, and missing expected pin fields emit dependency analysis gaps.
       - Raw locations, URLs, hostnames, remotes, credentials, revisions, and private labels are omitted or represented only by hashes/status flags.
+      - resolvedVersion is the checked-in literal state.version only; SwiftPM lockfiles carry no artifact digest and never prove downloaded artifact bytes, so exact-artifact matching is unavailable for SwiftPM evidence.
 
   - id: swift.dependency.lockfile.text.v1
     status: active
     name: Swift text dependency lockfile row
-    description: Records per-entry dependency rows from checked-in Podfile.lock and Cartfile.resolved text metadata using conservative section or line scanning.
+    description: Records per-entry dependency rows from checked-in Podfile.lock and Cartfile.resolved text metadata using conservative section or line scanning, promoting safe literal resolved versions.
     evidenceTier: Tier3SyntaxOrTextual
     emits:
       - SwiftDependencyLockfileEntryDeclared
@@ -5617,6 +5618,8 @@ rules:
       - Text lockfile rows are syntax/text evidence only and do not prove package restore, install, transitive completeness, compatibility, license, vulnerability, freshness, link, load, runtime use, production use, or impact.
       - Unknown sections, malformed entries, duplicate checksum keys, unsafe locations, and unsupported text shapes emit gaps or hash-only evidence.
       - Raw source URLs, hostnames, remotes, local paths, snippets, credentials, and private labels are omitted or represented only by hashes/status flags.
+      - Podfile.lock resolvedVersion values come from PODS entries only; SPEC CHECKSUMS are recorded as explicitly labeled podspec SHA-1 metadata (specChecksum), never as an artifact digest, and CocoaPods/Carthage versions never prove downloaded artifact bytes.
+      - Cartfile resolvedVersion values are safe semver literals from Cartfile.resolved only; revision-only or unresolved values stay hashed and never masquerade as resolved semantic versions.
 
   - id: swift.dependency.analysis-gap.v1
     status: active
