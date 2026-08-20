@@ -1,0 +1,31 @@
+{
+  "version": "package-decision.v1",
+  "records": [
+    {
+      "decisionId": "dec-swift-fixture-swiftpm",
+      "decisionKind": "revoke",
+      "ecosystem": "swift",
+      "packageName": "alamofire",
+      "artifactVersion": "5.0.0",
+      "artifactDigestAlgorithm": "sha256",
+      "artifactDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "producer": {
+        "id": "sample-producer",
+        "policyVersion": "2026-08"
+      },
+      "decisionTimeUtc": "2026-08-18T00:00:00Z"
+    },
+    {
+      "decisionId": "dec-swift-fixture-cocoapods",
+      "decisionKind": "admit",
+      "ecosystem": "swift",
+      "packageName": "Alamofire",
+      "artifactVersion": "5.0.0",
+      "producer": {
+        "id": "sample-producer",
+        "policyVersion": "2026-08"
+      },
+      "decisionTimeUtc": "2026-08-18T00:00:00Z"
+    }
+  ]
+}

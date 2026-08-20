@@ -225,6 +225,13 @@ public static class ScanEngine
             .OrderBy(gap => gap, StringComparer.Ordinal)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
+        var nugetLockfiles = ProjectFileReader.ReadNuGetLockfiles(repoPath, inventory);
+        var nugetLockfileGaps = nugetLockfiles.Gaps
+            .Select(gap => $"NuGet lockfile analysis reported `{gap.Category}`.")
+            .OrderBy(gap => gap, StringComparer.Ordinal)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var nugetLockfileReducedCoverage = nugetLockfileGaps.Length > 0;
         var migrationFallbackReducedCoverage = migrationFallbackGaps.Length > 0;
         var semanticBuildReducedCoverage = semanticResult.GapFacts.Any(gap =>
             gap.RuleId != RuleIds.DatabaseFrameworkMigrationGap
@@ -233,8 +240,14 @@ public static class ScanEngine
             ? semanticBuildReducedCoverage ? "FailedOrPartial" : "Succeeded"
             : "NotRun";
         var semanticAnalysisLevel = semanticResult.Attempted
-            ? semanticToolchainReducedCoverage || migrationFallbackReducedCoverage ? "Level1SemanticAnalysisReduced" : "Level1SemanticAnalysis"
-            : migrationFallbackReducedCoverage ? "Level3SyntaxAnalysisReduced" : "Level3SyntaxAnalysis";
+            ? semanticToolchainReducedCoverage || migrationFallbackReducedCoverage || nugetLockfileReducedCoverage ? "Level1SemanticAnalysisReduced" : "Level1SemanticAnalysis"
+            : migrationFallbackReducedCoverage || nugetLockfileReducedCoverage ? "Level3SyntaxAnalysisReduced" : "Level3SyntaxAnalysis";
+        var provisionalBuildStatus = nugetLockfileReducedCoverage ? "FailedOrPartial" : semanticBuildStatus;
+        var provisionalKnownGaps = semanticKnownGaps
+            .Concat(nugetLockfileGaps)
+            .OrderBy(gap => gap, StringComparer.Ordinal)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
 
         var provisionalManifest = new ScanManifest(
             CreateScanId(git, inventory, sourceSnapshotDigest, options),
@@ -245,11 +258,11 @@ public static class ScanEngine
             ScannerVersions.TraceMap,
             DateTimeOffset.UtcNow,
             semanticAnalysisLevel,
-            semanticBuildStatus,
+            provisionalBuildStatus,
             solutions,
             projects,
             targetFrameworks,
-            semanticKnownGaps,
+            provisionalKnownGaps,
             GetScanRootRelativePath(repoPath, git),
             FactFactory.Hash(repoPath, 32),
             string.IsNullOrWhiteSpace(git.GitRootPath) ? null : FactFactory.Hash(Path.GetFullPath(git.GitRootPath), 32),
@@ -264,7 +277,7 @@ public static class ScanEngine
             fact.FactType == FactTypes.MsBuildBinlogObserved
             && fact.Properties.GetValueOrDefault("recordedBuildResult") == "failed");
         var binlogReducedCoverage = binlogRecordedFailure || binlogGaps.Length > 0;
-        var knownGaps = semanticKnownGaps
+        var knownGaps = provisionalKnownGaps
             .Concat(binlogGaps)
             .Concat(binlogRecordedFailure ? ["An explicitly supplied MSBuild binlog recorded a failed build."] : [])
             .OrderBy(gap => gap, StringComparer.Ordinal)
@@ -275,7 +288,7 @@ public static class ScanEngine
             AnalysisLevel = binlogReducedCoverage && !semanticToolchainReducedCoverage
                 ? semanticResult.Attempted ? "Level1SemanticAnalysisReduced" : "Level3SyntaxAnalysisReduced"
                 : semanticAnalysisLevel,
-            BuildStatus = binlogReducedCoverage ? "FailedOrPartial" : semanticBuildStatus,
+            BuildStatus = binlogReducedCoverage || nugetLockfileReducedCoverage ? "FailedOrPartial" : semanticBuildStatus,
             KnownGaps = knownGaps
         };
 
@@ -292,6 +305,7 @@ public static class ScanEngine
                     inventory,
                     targetFrameworkInfos,
                     ProjectFileReader.ReadPackageReferences(repoPath, inventory),
+                    nugetLockfiles,
                     knownGaps,
                     repoPath,
                     semanticResult,
@@ -584,6 +598,7 @@ public static class ScanEngine
         IReadOnlyList<FileInventoryItem> inventory,
         IReadOnlyList<TargetFrameworkInfo> targetFrameworks,
         IReadOnlyList<PackageReferenceInfo> packageReferences,
+        NuGetLockfileReadResult nugetLockfiles,
         IReadOnlyList<string> knownGaps,
         string repoPath,
         SemanticExtractionResult semanticResult,
@@ -751,6 +766,73 @@ public static class ScanEngine
                 projectPath: item.ProjectPath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) ? item.ProjectPath : null,
                 targetSymbol: item.PackageName,
                 properties: packageProperties));
+        }
+
+        foreach (var entry in nugetLockfiles.Entries)
+        {
+            // Lockfile rows carry resolved versions only; packages.lock.json has no registry artifact
+            // digest (its contentHash is package-content metadata and is never emitted here).
+            var lockfileProperties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["dependencyGroup"] = "lockfile",
+                ["dependencyRelation"] = entry.DependencyRelation,
+                ["ecosystem"] = "nuget",
+                ["lockfileHash"] = entry.LockfileHash,
+                ["lockfilePath"] = entry.LockfilePath,
+                ["manifestKind"] = "packages.lock.json",
+                ["package"] = entry.PackageName,
+                ["packageManager"] = "nuget",
+                ["packageName"] = entry.PackageName,
+                ["sourceKind"] = "lockfile",
+                ["surfaceKind"] = "package-config",
+                ["targetFramework"] = entry.TargetFramework
+            };
+            if (entry.DependencyCount > 0)
+            {
+                lockfileProperties["dependencyCount"] = entry.DependencyCount.ToString();
+                if (entry.DependencyNames is not null)
+                {
+                    lockfileProperties["dependencyNames"] = entry.DependencyNames;
+                }
+            }
+
+            if (entry.ResolvedVersion is not null)
+            {
+                lockfileProperties["resolvedVersion"] = entry.ResolvedVersion;
+                lockfileProperties["version"] = entry.ResolvedVersion;
+            }
+            else
+            {
+                lockfileProperties["redactionReason"] = "unsafe-package-version";
+                if (!string.IsNullOrWhiteSpace(entry.ResolvedVersionHash))
+                {
+                    lockfileProperties["versionHash"] = $"version-hash:{entry.ResolvedVersionHash}";
+                }
+            }
+
+            facts.Add(FactFactory.Create(
+                manifest,
+                FactTypes.PackageReferenced,
+                RuleIds.ProjectFile,
+                EvidenceTiers.Tier2Structural,
+                new EvidenceSpan(entry.LockfilePath, entry.Line, entry.Line, null, "NuGetLockfileExtractor", ScannerVersions.NuGetLockfileExtractor),
+                targetSymbol: entry.PackageName,
+                properties: lockfileProperties));
+        }
+
+        foreach (var gap in nugetLockfiles.Gaps)
+        {
+            facts.Add(FactFactory.Create(
+                manifest,
+                FactTypes.AnalysisGap,
+                RuleIds.ProjectFile,
+                EvidenceTiers.Tier4Unknown,
+                new EvidenceSpan(gap.LockfilePath, gap.Line, gap.Line, null, "NuGetLockfileExtractor", ScannerVersions.NuGetLockfileExtractor),
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["gapKind"] = gap.Category,
+                    ["message"] = gap.Message
+                }));
         }
 
         facts.AddRange(BuildEnvironmentDiagnosticExtractor.Extract(repoPath, manifest, inventory, semanticResult));

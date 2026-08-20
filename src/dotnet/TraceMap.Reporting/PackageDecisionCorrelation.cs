@@ -216,6 +216,7 @@ public sealed record PackageDecisionSummary(
 public static class PackageDecisionCorrelationReporter
 {
     public const string RuleId = "package.decision.correlation.v1";
+    private const string SwiftDependencyLockfileFactType = "SwiftDependencyLockfileEntryDeclared";
     private const string Version = "1.0";
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -294,7 +295,7 @@ public static class PackageDecisionCorrelationReporter
         {
             foreach (var source in sources)
             {
-                var sourceFacts = index.Facts.Where(fact => fact.SourceIndexId == source.SourceIndexId && fact.FactType == FactTypes.PackageReferenced).ToArray();
+                var sourceFacts = PackageEvidenceRows(index.Facts, source.SourceIndexId);
                 var rows = sourceFacts.Where(fact => string.Equals(fact.Properties.GetValueOrDefault("ecosystem"), record.Ecosystem, StringComparison.OrdinalIgnoreCase)
                     && string.Equals(NormalizeName(record.Ecosystem, record.PackageName), NormalizeName(record.Ecosystem, fact.Properties.GetValueOrDefault("packageName") ?? string.Empty), StringComparison.Ordinal)).ToArray();
                 var sourceGaps = index.KnownGaps.Where(gap => gap.SourceIndexId == source.SourceIndexId).ToArray();
@@ -421,7 +422,15 @@ public static class PackageDecisionCorrelationReporter
 
     private static string? SafeProperty(IReadOnlyDictionary<string, string> properties, string key) => properties.TryGetValue(key, out var value) && value.Length <= 160 && !Path.IsPathRooted(value) && !value.StartsWith("C:\\", StringComparison.OrdinalIgnoreCase) && !value.Contains("://", StringComparison.Ordinal) ? value : null;
     private static string? SafeLockfileHash(string? value) => value is not null && value.Length == 32 && value.All(character => character is >= 'a' and <= 'f' or >= '0' and <= '9') ? value : null;
-    private static string? SafeVersionHash(string? value) => value is not null && value.StartsWith("version-hash:", StringComparison.Ordinal) && value.Length <= 80 && value[13..].All(character => character is >= 'a' and <= 'f' or >= '0' and <= '9') ? value : null;
+    private static string? SafeVersionHash(string? value)
+    {
+        if (value is null)
+            return null;
+        var hash = value.StartsWith("version-hash:", StringComparison.Ordinal) ? value[13..] : value;
+        return hash.Length is 32 or 64 && hash.All(character => character is >= 'a' and <= 'f' or >= '0' and <= '9')
+            ? $"version-hash:{hash}"
+            : null;
+    }
     private static string? SafeDigest(string? value, string? algorithm) => value is not null && ((algorithm == "sha256" && value.Length == 64 && value.All(character => character is >= 'a' and <= 'f' or >= '0' and <= '9')) || (algorithm == "sha512-base64" && value.Length <= 128 && value.All(character => char.IsLetterOrDigit(character) || character is '+' or '/' or '='))) ? value : null;
     private static bool IsLiteralVersion(string version) => !version.Contains('^') && !version.Contains('~') && !version.Contains('>') && !version.Contains('<') && !version.Contains('*') && !version.Contains("git", StringComparison.OrdinalIgnoreCase) && !version.Contains("${", StringComparison.Ordinal);
     private static string NormalizeName(string ecosystem, string value) => ecosystem.ToLowerInvariant() switch { "nuget" or "npm" => value.Trim().ToLowerInvariant(), "python" => value.Trim().ToLowerInvariant().Replace('-', '_').Replace('.', '_'), _ => value.Trim() };
@@ -446,6 +455,38 @@ public static class PackageDecisionCorrelationReporter
         new(GapId(classification, record, source), classification, message, RuleId, EvidenceTiers.Tier4Unknown, record.DecisionId, source.Label, record.Ecosystem, source.SourceIndexId, source.ScanId, SafeCommit(source.CommitSha));
 
     private static bool HasEcosystemCapability(IEnumerable<CombinedFactRow> facts, string ecosystem) => facts.Any(fact => string.Equals(fact.Properties.GetValueOrDefault("ecosystem"), ecosystem, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// The correlation's package-evidence rows: native PackageReferenced facts plus Swift lockfile
+    /// facts projected through the smallest deterministic seam. Swift lockfile rows never carry an
+    /// artifact digest, so they can only ever correlate at the possible rung.
+    /// </summary>
+    private static IReadOnlyList<CombinedFactRow> PackageEvidenceRows(IEnumerable<CombinedFactRow> facts, string sourceIndexId) =>
+        facts.Where(fact => fact.SourceIndexId == sourceIndexId)
+            .Select(fact => fact.FactType == FactTypes.PackageReferenced ? fact : ProjectSwiftLockfileEvidence(fact))
+            .OfType<CombinedFactRow>()
+            .ToArray();
+
+    private static CombinedFactRow? ProjectSwiftLockfileEvidence(CombinedFactRow fact)
+    {
+        if (fact.FactType != SwiftDependencyLockfileFactType)
+        {
+            return null;
+        }
+
+        var properties = new Dictionary<string, string>(fact.Properties, StringComparer.Ordinal)
+        {
+            ["ecosystem"] = "swift"
+        };
+        if (!properties.ContainsKey("packageName")
+            && properties.TryGetValue("normalizedDependencyIdentity", out var identity)
+            && !string.IsNullOrWhiteSpace(identity))
+        {
+            properties["packageName"] = identity;
+        }
+
+        return fact with { Properties = properties };
+    }
 
     private static bool SourceMatches(string label, string selector)
     {
