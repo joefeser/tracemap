@@ -75,13 +75,17 @@ the shipped record/correlation core plus combined/portfolio/npm/path work.
   `dotnet build src/dotnet/TraceMap.sln --no-restore`, focused package,
   portfolio, path, and reverse .NET tests (100 passed), and
   `npm run check --prefix src/typescript` (48 passed).
-- Final PR2 validation: full `dotnet test src/dotnet/TraceMap.sln` (1,629
-  passed), full TypeScript check (48 passed), TypeScript lockfile scan plus
-  `scripts/validate-adapter-artifacts.py`, combined/report/package-decision
-  CLI smoke with optional context, `./scripts/check-private-paths.sh`, and
-  `git diff --check`. Targeted format verification passed for Reporting and
-  test files; the existing CLI project reports unrelated whitespace findings
-  outside the changed package-decision region.
+- Review-fix validation: focused package-decision tests (12 passed), full
+  TypeScript check (49 passed), and targeted .NET format verification passed.
+  The pinned `scip-typescript` commit
+  `891eb4293709a6a587bf4468dfa1b45a85182fd9` scanned successfully with 14,060
+  facts, but contains no `package-lock.json`; the shared artifact validator
+  then reported pre-existing local-absolute-path findings in unrelated facts.
+  That run therefore does not prove npm lockfile extraction and task 4.4 is
+  reopened rather than overstated. The checked-in v2/v3 lockfile fixture is
+  the current deterministic npm regression gate. Full .NET passed (1,630
+  tests), the public combined paths/reverse smoke passed, the private-path
+  guard passed, and `git diff --check` was clean before the review-fix commit.
 
 ## Limitations and deferred work
 
