@@ -219,6 +219,14 @@ public sealed class PackageDecisionTests
         Assert.Equal("TestExtractor", path.ExtractorId);
         Assert.Equal("1.0.0", path.ExtractorVersion);
         Assert.NotEmpty(path.SupportingFactIds);
+        Assert.Equal(CombinedDependencyPathClassifications.ProbableStaticPath, path.Classification);
+        Assert.Equal("combined.paths.surface-evidence.v1", path.RuleId);
+        Assert.Contains("combined.paths.surface-evidence.v1", path.RuleIds!);
+
+        var reversePath = Assert.Single(((PackageDecisionContext)result.Report.ReverseContext!).Rows, row => row.PackageName == "example");
+        Assert.Equal(CombinedReverseClassifications.NeedsReviewReversePath, reversePath.Classification);
+        Assert.Equal(CombinedReverseReporter.PathRuleId, reversePath.RuleId);
+        Assert.Contains(CombinedReverseReporter.PathRuleId, reversePath.RuleIds!);
 
         var repeated = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(
             decisionPath,
@@ -274,6 +282,19 @@ public sealed class PackageDecisionTests
         var derivedManifestBytes = await File.ReadAllBytesAsync(derivedManifest);
         await Assert.ThrowsAsync<InvalidDataException>(() => PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decisionPath, string.Empty, derivedOutput, ManifestPath: derivedManifest)));
         Assert.Equal(derivedManifestBytes, await File.ReadAllBytesAsync(derivedManifest));
+
+        if (!OperatingSystem.IsWindows())
+        {
+            var actualOutput = Path.Combine(temp.Path, "actual-output");
+            Directory.CreateDirectory(actualOutput);
+            var linkedManifest = Path.Combine(actualOutput, "package-decision-report.json");
+            await File.WriteAllTextAsync(linkedManifest, "{\"version\":\"1.0\",\"portfolioId\":\"fixture\",\"snapshotId\":\"one\",\"inputs\":[{\"label\":\"app\",\"indexPath\":\"../index.sqlite\"}]}");
+            var linkedManifestBytes = await File.ReadAllBytesAsync(linkedManifest);
+            var linkedOutput = Path.Combine(temp.Path, "linked-output");
+            Directory.CreateSymbolicLink(linkedOutput, actualOutput);
+            await Assert.ThrowsAsync<InvalidDataException>(() => PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decisionPath, string.Empty, linkedOutput, ManifestPath: linkedManifest)));
+            Assert.Equal(linkedManifestBytes, await File.ReadAllBytesAsync(linkedManifest));
+        }
 
         const string unsafeLabel = "/private/client-app";
         var safeLabelReport = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(

@@ -131,7 +131,8 @@ public sealed record PackageDecisionContextRow(
     int EndLine,
     string? CommitSha,
     string? ExtractorId,
-    string? ExtractorVersion);
+    string? ExtractorVersion,
+    IReadOnlyList<string>? RuleIds = null);
 
 public sealed record PackageDecisionCorrelationRow(
     string RowId,
@@ -503,6 +504,9 @@ public static class PackageDecisionCorrelationReporter
                 StringComparer.Ordinal);
         var contextRows = new List<PackageDecisionContextRow>();
         var gaps = new List<PackageDecisionGap>();
+        var sourcesById = graph.Sources
+            .GroupBy(source => source.SourceIndexId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
         var roots = new HashSet<string>(StringComparer.Ordinal);
         var pathsByRoot = new Dictionary<string, int>(StringComparer.Ordinal);
         var omitted = 0;
@@ -558,14 +562,23 @@ public static class PackageDecisionCorrelationReporter
                     var pathEdges = pathEdgeIds.Select(id => graph.Edges.Single(edge => edge.EdgeId == id)).ToArray();
                     var supportingFactIds = pathNodes.Select(pathNode => pathNode.CombinedFactId)
                         .OfType<string>()
+                        .Concat(pathEdges.SelectMany(edge => edge.SupportingFactIds))
                         .Append(pair.row.Evidence.FactId)
                         .Distinct(StringComparer.Ordinal)
                         .OrderBy(id => id, StringComparer.Ordinal)
                         .ToArray();
+                    var ruleIds = pathEdges.Select(edge => edge.RuleId)
+                        .Concat(reverse ? [CombinedReverseReporter.PathRuleId] : [])
+                        .Distinct(StringComparer.Ordinal)
+                        .OrderBy(id => id, StringComparer.Ordinal)
+                        .ToArray();
+                    var pathClassification = reverse
+                        ? CombinedReverseReporter.ClassifyPath(pathEdges, pathNodes, sourcesById)
+                        : CombinedDependencyPathReporter.Classify(pathEdges);
                     contextRows.Add(new PackageDecisionContextRow(
                         $"pd-context:{Hash(string.Join('\u001f', reverse ? "reverse" : "paths", pair.row.RowId, string.Join('|', pathNodeIds), string.Join('|', pathEdgeIds)))}",
-                        reverse ? "ReverseContextAvailable" : "PathContextAvailable",
-                        reverse ? "combined.reverse.surface.v1" : "combined.paths.surface-evidence.v1",
+                        pathClassification,
+                        reverse ? CombinedReverseReporter.PathRuleId : "combined.paths.surface-evidence.v1",
                         WeakestTier(pathNodes.Select(pathNode => pathNode.EvidenceTier).Concat(pathEdges.Select(edge => edge.EvidenceTier)).Append(pair.row.Evidence.EvidenceTier)),
                         pair.row.SourceLabel,
                         pair.row.SourceIndexId,
@@ -587,7 +600,8 @@ public static class PackageDecisionCorrelationReporter
                         pair.row.Evidence.EndLine,
                         pair.row.CommitSha,
                         pair.row.Evidence.ExtractorId,
-                        pair.row.Evidence.ExtractorVersion));
+                        pair.row.Evidence.ExtractorVersion,
+                        ruleIds));
                     continue;
                 }
 
@@ -696,17 +710,43 @@ public static class PackageDecisionCorrelationReporter
         var fullPath = Path.GetFullPath(path);
         try
         {
-            var target = new FileInfo(fullPath).ResolveLinkTarget(true);
-            return target?.FullName ?? fullPath;
+            for (var pass = 0; pass < 32; pass++)
+            {
+                var resolved = ResolvePathLinks(fullPath);
+                if (string.Equals(resolved, fullPath, StringComparison.Ordinal)) return resolved;
+                fullPath = resolved;
+            }
+
+            throw new InvalidDataException("package-decision could not establish a stable file identity for alias protection.");
         }
-        catch (IOException)
+        catch (IOException exception)
         {
-            return fullPath;
+            throw new InvalidDataException("package-decision could not establish a stable file identity for alias protection.", exception);
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException exception)
         {
-            return fullPath;
+            throw new InvalidDataException("package-decision could not establish a stable file identity for alias protection.", exception);
         }
+    }
+
+    private static string ResolvePathLinks(string fullPath)
+    {
+        var root = Path.GetPathRoot(fullPath);
+        if (string.IsNullOrWhiteSpace(root)) return fullPath;
+
+        var current = root;
+        foreach (var segment in Path.GetRelativePath(root, fullPath).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+        {
+            if (string.IsNullOrWhiteSpace(segment) || segment == ".") continue;
+            var candidate = Path.Combine(current, segment);
+            FileSystemInfo entry = Directory.Exists(candidate)
+                ? new DirectoryInfo(candidate)
+                : new FileInfo(candidate);
+            var target = entry.Exists ? entry.ResolveLinkTarget(true) : null;
+            current = target?.FullName ?? candidate;
+        }
+
+        return Path.GetFullPath(current);
     }
 
     private static bool PathIdentityEquals(string? left, string? right) =>

@@ -2718,7 +2718,7 @@ public static class CombinedDependencyPathReporter
         };
     }
 
-    private static string Classify(IReadOnlyList<CombinedPathEdge> edges)
+    internal static string Classify(IReadOnlyList<CombinedPathEdge> edges)
     {
         if (edges.Any(edge => edge.Classification == CombinedEndpointClassifications.UnknownAnalysisGap))
         {
