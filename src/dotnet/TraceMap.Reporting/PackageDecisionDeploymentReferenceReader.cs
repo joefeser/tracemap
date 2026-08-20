@@ -245,7 +245,7 @@ public static partial class PackageDecisionDeploymentReferenceReader
     private static bool SafeProducerId(string value) => ProducerId().IsMatch(value);
     private static bool SafeProducerVersion(string value) => ProducerVersion().IsMatch(value);
     private static bool SafePackageName(string value) => (PackageName().IsMatch(value) || NpmPackageName().IsMatch(value)) && !value.Contains("://", StringComparison.Ordinal);
-    private static bool SafeArtifactVersion(string value) => Version().IsMatch(value) && !value.Contains("://", StringComparison.Ordinal) && !value.StartsWith("git+", StringComparison.OrdinalIgnoreCase) && !value.Contains("${", StringComparison.Ordinal) && !value.Contains('@', StringComparison.Ordinal) && !value.StartsWith("/", StringComparison.Ordinal) && !value.StartsWith("./", StringComparison.Ordinal) && !value.StartsWith("../", StringComparison.Ordinal) && !value.Contains('^') && !value.Contains('>') && !value.Contains('<');
+    private static bool SafeArtifactVersion(string value) => Version().IsMatch(value) && !value.Contains("://", StringComparison.Ordinal) && !value.StartsWith("git+", StringComparison.OrdinalIgnoreCase) && !value.Contains("${", StringComparison.Ordinal) && !value.Contains('@', StringComparison.Ordinal) && !value.StartsWith("/", StringComparison.Ordinal) && !value.StartsWith("./", StringComparison.Ordinal) && !value.StartsWith("../", StringComparison.Ordinal) && !value.Contains('^') && !value.Contains('>') && !value.Contains('<') && !value.Contains('~');
     private static bool SafeOrigin(string value) => value == "unknown" || Origin().IsMatch(value);
     private static bool IsSha512Base64(string value)
     {

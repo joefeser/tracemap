@@ -134,12 +134,13 @@ public sealed class PackageDecisionComparisonExternalClaimsTests
             Reference("ref-version", $"\"referenceKind\":\"build-attachment\",\"artifactVersion\":\"{secret}\""),
             Reference("ref-repo", "\"referenceKind\":\"build-attachment\",\"artifactVersion\":\"1.0.0\",\"sourceRepo\":\"https://user:pass@example.invalid/repo.git\""),
             Reference("ref-commit", "\"referenceKind\":\"build-attachment\",\"artifactVersion\":\"1.0.0\",\"commitSha\":\"deadbeef\""),
-            Reference("ref-digest", "\"referenceKind\":\"build-attachment\",\"artifactVersion\":\"1.0.0\",\"artifactDigestAlgorithm\":\"sha256\",\"artifactDigest\":\"AAAA\"")
+            Reference("ref-digest", "\"referenceKind\":\"build-attachment\",\"artifactVersion\":\"1.0.0\",\"artifactDigestAlgorithm\":\"sha256\",\"artifactDigest\":\"AAAA\""),
+            Reference("ref-range", "\"referenceKind\":\"build-attachment\",\"artifactVersion\":\"~1.2.3\"")
         };
         var rejected = PackageDecisionDeploymentReferenceReader.Read("{\"version\":\"package-deployment-reference.v1\",\"producer\":{\"id\":\"producer\",\"version\":\"1\"},\"references\":[" + string.Join(",", rejectedReferences) + "]}");
         Assert.True(rejected.Accepted);
         Assert.Empty(rejected.References);
-        Assert.Equal(11, rejected.Gaps.Count);
+        Assert.Equal(12, rejected.Gaps.Count);
         Assert.Contains(rejected.Gaps, gap => gap.Classification == "DecisionInputIdentityUnsafe");
         Assert.Contains(rejected.Gaps, gap => gap.Classification == "DecisionInputMalformed");
         Assert.DoesNotContain(rejected.Gaps, gap => gap.Message.Contains(secret, StringComparison.Ordinal));
@@ -267,6 +268,27 @@ public sealed class PackageDecisionComparisonExternalClaimsTests
     }
 
     [Fact]
+    public async Task Deployment_reference_digest_join_fails_closed_for_malformed_index_digest_length()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        var decisionPath = Path.Combine(temp.Path, "decision.json");
+        var referencesPath = Path.Combine(temp.Path, "references.json");
+        var manifest = Manifest("deploy-malformed-digest", "1212121212121212121212121212121212121212");
+        SqliteIndexWriter.Write(indexPath, manifest, [DigestFact(manifest, "example", "1.0.0", "short")]);
+        await File.WriteAllTextAsync(decisionPath, RejectRecord("dec-unrelated", "other", "1.0.0", null));
+        await File.WriteAllTextAsync(referencesPath, "{\"version\":\"package-deployment-reference.v1\",\"producer\":{\"id\":\"producer\",\"version\":\"1\"},\"references\":[{"
+            + "\"referenceId\":\"ref-malformed-digest\",\"referenceKind\":\"build-attachment\",\"ecosystem\":\"npm\",\"packageName\":\"example\",\"artifactVersion\":\"1.0.0\","
+            + "\"artifactDigestAlgorithm\":\"sha256\",\"artifactDigest\":\"" + new string('a', 64) + "\"}]}");
+
+        var result = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(
+            decisionPath, indexPath, Path.Combine(temp.Path, "report"), DeploymentReferencesPath: referencesPath));
+
+        var reference = Assert.Single(result.Report.RuntimeUnprovenReferences);
+        Assert.Equal("name-version", reference.JoinBasis);
+    }
+
+    [Fact]
     public async Task Comparison_mode_emits_exact_replacement_possible_only_and_skips_unchanged()
     {
         using var temp = new TempDirectory();
@@ -318,6 +340,78 @@ public sealed class PackageDecisionComparisonExternalClaimsTests
         Assert.Equal(await File.ReadAllTextAsync(Path.Combine(temp.Path, "report", "package-decision-report.md")), await File.ReadAllTextAsync(Path.Combine(temp.Path, "repeated", "package-decision-report.md")));
         Assert.Equal(JsonSerializer.Serialize(result.Report.ArtifactChanges), JsonSerializer.Serialize(repeated.Report.ArtifactChanges));
         Assert.DoesNotContain(temp.Path, json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Comparison_replacement_sides_select_the_digest_evidence_used_by_the_claim()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var beforeManifest = Path.Combine(temp.Path, "before.json");
+        var afterManifest = Path.Combine(temp.Path, "after.json");
+        var decisionPath = Path.Combine(temp.Path, "decision.json");
+        var before = Manifest("mixed-evidence", "1313131313131313131313131313131313131313");
+        var after = Manifest("mixed-evidence", "1414141414141414141414141414141414141414");
+        SqliteIndexWriter.Write(beforeIndex, before, [
+            PackageFact(before, "example", "npm", "aaa-package.json", 1, "1.0.0"),
+            DigestFact(before, "example", "1.0.0", new string('a', 64))
+        ]);
+        SqliteIndexWriter.Write(afterIndex, after, [
+            PackageFact(after, "example", "npm", "aaa-package.json", 1, "1.0.0"),
+            DigestFact(after, "example", "1.0.0", new string('b', 64))
+        ]);
+        await File.WriteAllTextAsync(beforeManifest, "{\"version\":\"1.0\",\"inputs\":[{\"label\":\"web\",\"indexPath\":\"before.sqlite\"}]}");
+        await File.WriteAllTextAsync(afterManifest, "{\"version\":\"1.0\",\"inputs\":[{\"label\":\"web\",\"indexPath\":\"after.sqlite\"}]}");
+        await File.WriteAllTextAsync(decisionPath, "{\"version\":\"package-decision.v1\",\"records\":[" + RecordJson("dec-mixed", "example") + "]}");
+
+        var result = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(
+            decisionPath, string.Empty, Path.Combine(temp.Path, "report"), BeforeManifestPath: beforeManifest, AfterManifestPath: afterManifest));
+
+        var replacement = Assert.Single(result.Report.ArtifactChanges!);
+        Assert.Equal("ArtifactReplaced", replacement.Classification);
+        Assert.Equal(new string('a', 64), replacement.Before!.Evidence.ArtifactDigest);
+        Assert.Equal(new string('b', 64), replacement.After!.Evidence.ArtifactDigest);
+        Assert.Equal("package-lock.json", replacement.Before.Evidence.FilePath);
+        Assert.Equal("package-lock.json", replacement.After.Evidence.FilePath);
+    }
+
+    [Fact]
+    public async Task Comparison_identity_preserves_before_and_after_manifest_roles()
+    {
+        using var temp = new TempDirectory();
+        var (decisionPath, beforeManifest, afterManifest) = await WriteComparisonFixtureAsync(temp);
+        var forward = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(
+            decisionPath, string.Empty, Path.Combine(temp.Path, "forward"), BeforeManifestPath: beforeManifest, AfterManifestPath: afterManifest));
+        var reversed = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(
+            decisionPath, string.Empty, Path.Combine(temp.Path, "reversed"), BeforeManifestPath: afterManifest, AfterManifestPath: beforeManifest));
+
+        Assert.NotEqual(forward.Report.Query.IndexPathHash, reversed.Report.Query.IndexPathHash);
+    }
+
+    [Fact]
+    public async Task Comparison_pairing_limit_emits_gap_and_suppresses_change_claim()
+    {
+        using var temp = new TempDirectory();
+        var beforeIndex = Path.Combine(temp.Path, "before.sqlite");
+        var afterIndex = Path.Combine(temp.Path, "after.sqlite");
+        var beforeManifest = Path.Combine(temp.Path, "before.json");
+        var afterManifest = Path.Combine(temp.Path, "after.json");
+        var decisionPath = Path.Combine(temp.Path, "decision.json");
+        var before = Manifest("large-evidence", "1515151515151515151515151515151515151515");
+        var after = Manifest("large-evidence", "1616161616161616161616161616161616161616");
+        var beforeFacts = Enumerable.Range(1, 1001).Select(index => PackageFact(before, "example", "npm", $"package-{index:D4}.json", index, "1.0.0")).ToArray();
+        SqliteIndexWriter.Write(beforeIndex, before, beforeFacts);
+        SqliteIndexWriter.Write(afterIndex, after, [PackageFact(after, "example", "npm", "package.json", 1, "1.0.0")]);
+        await File.WriteAllTextAsync(beforeManifest, "{\"version\":\"1.0\",\"inputs\":[{\"label\":\"web\",\"indexPath\":\"before.sqlite\"}]}");
+        await File.WriteAllTextAsync(afterManifest, "{\"version\":\"1.0\",\"inputs\":[{\"label\":\"web\",\"indexPath\":\"after.sqlite\"}]}");
+        await File.WriteAllTextAsync(decisionPath, "{\"version\":\"package-decision.v1\",\"records\":[" + RecordJson("dec-large", "example") + "]}");
+
+        var result = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(
+            decisionPath, string.Empty, Path.Combine(temp.Path, "report"), BeforeManifestPath: beforeManifest, AfterManifestPath: afterManifest));
+
+        Assert.Empty(result.Report.ArtifactChanges!);
+        Assert.Contains(result.Report.Gaps, gap => gap.Classification == "TruncatedByLimit" && gap.Message.Contains("comparison fact limit", StringComparison.Ordinal));
     }
 
     [Fact]

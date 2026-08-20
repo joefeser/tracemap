@@ -5323,6 +5323,7 @@ rules:
       - Reduced coverage and unknown commit identity produce analysis gaps rather than excluded-source conclusions.
       - Origin metadata is bounded and does not authenticate a registry or producer. Version comparisons are exact strings; semantic versioning is not interpreted.
       - Before/after artifact changes are cross-snapshot portfolio evidence, not a single coherent release state; ArtifactReplaced requires digest-bound evidence on both sides with equal name and exact version, and possible-only changes never claim replacement.
+      - Before/after comparison retains bounded evidence representatives and examines at most 1000 matching facts per decision/source pairing; exceeding that bound emits TruncatedByLimit and suppresses the affected change claim.
       - Deployment references render as RuntimeUnprovenReference lineage metadata; TraceMap did not verify the build, deployment, installation, reachability, or runtime load, and references never upgrade a rung, count as exact matches, or trigger --exit-code.
       - The command is read-only reporting and never enforces external admission, rejection, revocation, or quarantine decisions.
 
