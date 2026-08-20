@@ -186,6 +186,7 @@ final class GradleLockfileTest {
             && "pom.xml".equals(fact.evidence().filePath())));
         assertTrue(result.facts().stream().anyMatch(fact -> FactTypes.PACKAGE_REFERENCED.equals(fact.factType())
             && "org.springframework:spring-web".equals(fact.properties().get("packageName"))));
+        assertTrue(result.manifest().knownGaps().contains("MavenLockfileUnavailable: pom.xml"));
         assertEquals("Level3SyntaxAnalysis", result.manifest().analysisLevel());
         assertEquals("NotRun", result.manifest().buildStatus());
     }

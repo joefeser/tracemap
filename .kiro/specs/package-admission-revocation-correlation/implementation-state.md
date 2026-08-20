@@ -157,9 +157,8 @@ resolved-evidence slices, and the Python + JVM adapter evidence slices.
   pre-existing generic `XmlConfig` treatment only and is never consumed for
   digests (see owner decisions).
 - Maven: every scanned `pom.xml` emits a `MavenLockfileUnavailable`
-  capability gap fact (direct fact under `jvm.buildfile.v1`, not a collector
-  gap, so analysis levels and existing Maven build-file evidence are
-  unchanged); Maven rows keep their existing declared build-file evidence and
+  capability gap fact under `jvm.buildfile.v1` and the matching manifest gap;
+  Maven rows keep their existing declared build-file evidence and
   the correlation engine reports `LockfileDigestUnavailable`/
   `DirectTransitiveUnavailable` per maven pairing.
 - End-to-end composition reuses the existing `PackageReferenced` projection
@@ -222,9 +221,8 @@ resolved-evidence slices, and the Python + JVM adapter evidence slices.
   `XmlConfig` inventory treatment; `gradle.lockfile` resolved versions ship
   with `LockfileDigestUnavailable` and the digest work stays deferred.
 - PR4 Maven: Maven has no standard lockfile; every scanned `pom.xml` emits a
-  `MavenLockfileUnavailable` capability gap fact (direct, not a
-  coverage-downgrading collector gap, so existing Maven build evidence and
-  analysis levels are unchanged) and Maven rows keep declared build-file
+  `MavenLockfileUnavailable` capability gap fact and matching
+  manifest-visible gap; Maven rows keep declared build-file
   evidence only.
 - PR4 record admission fix: the `package-decision.v1` reader's package-name
   pattern now admits hyphens in non-leading positions (`left-pad`,
@@ -354,6 +352,11 @@ Python and Gradle capability limitations in both facts and manifest gap
 collectors, rejects Gradle rows with empty or malformed configuration lists,
 and aligns decision admission with digit-leading names emitted by the Python
 adapter.
+
+The final consistency fixes validate Poetry dependency values before declaring
+the manifest surface complete, classify invalid registry ports as unsupported
+sources without discarding the rest of a lockfile, and record Maven's existing
+lockfile-unavailable limitation in the manifest collector as well as facts.
 
 ## Limitations and deferred work
 

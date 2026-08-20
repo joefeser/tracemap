@@ -115,6 +115,7 @@ public final class BuildFileExtractor {
                     depProps));
             }
             facts.add(mavenLockfileCapabilityGap(manifest, file));
+            gaps.add("MavenLockfileUnavailable: " + file.relativePath());
         } catch (Exception exception) {
             gaps.add("MavenParseFailed: " + file.relativePath() + " (" + exception.getClass().getSimpleName() + ")");
         }

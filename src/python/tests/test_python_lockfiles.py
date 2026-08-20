@@ -471,6 +471,38 @@ def test_poetry_malformed_group_dependencies_leave_relations_unproven(tmp_path: 
     assert "DirectTransitiveUnavailable" in {fact.properties["gapKind"] for fact in _gap_facts(facts)}
 
 
+def test_poetry_invalid_dependency_value_leaves_relations_unproven(tmp_path: Path) -> None:
+    lock = tmp_path / "poetry.lock"
+    lock.write_text(POETRY_LOCK, encoding="utf-8")
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text('[tool.poetry.dependencies]\nrequests = false\n', encoding="utf-8")
+
+    facts = read_lockfiles(tmp_path, _manifest("poetry-invalid-value"), [lock], [pyproject], [])
+
+    assert all("dependencyRelation" not in fact.properties for fact in _package_facts(facts))
+    assert "DirectTransitiveUnavailable" in {fact.properties["gapKind"] for fact in _gap_facts(facts)}
+
+
+def test_invalid_registry_port_emits_source_gap_without_discarding_lockfile(tmp_path: Path) -> None:
+    lock = tmp_path / "uv.lock"
+    lock.write_text(
+        "version = 1\n"
+        '\n[[package]]\nname = "fixture"\nversion = "0.1.0"\nsource = { virtual = "." }\n'
+        'dependencies = [{ name = "requests" }]\n'
+        '\n[[package]]\nname = "requests"\nversion = "2.32.3"\nsource = { registry = "https://packages.example.invalid:bad/simple" }\n'
+        '\n[[package]]\nname = "urllib3"\nversion = "2.2.2"\nsource = { registry = "https://pypi.org/simple" }\n',
+        encoding="utf-8",
+    )
+    gaps: list[str] = []
+
+    facts = read_lockfiles(tmp_path, _manifest("uv-invalid-registry-port"), [lock], [], gaps)
+
+    assert _by_name(facts, "requests") == []
+    assert _by_name(facts, "urllib3")[0].properties["dependencyRelation"] == "transitive"
+    assert any(gap.startswith("PythonLockEntrySourceUnsupported:") for gap in gaps)
+    assert not any(gap.startswith("PythonLockParseFailed:") for gap in gaps)
+
+
 def test_poetry_same_name_lock_variants_leave_declared_relation_unproven(tmp_path: Path) -> None:
     lock = tmp_path / "poetry.lock"
     lock.write_text(
