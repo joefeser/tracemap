@@ -389,7 +389,7 @@ public static class ProjectFileReader
         var dependencyNamesJoined = safeDependencyNames.Length == 0 || safeDependencyNames.Sum(name => name.Length + 1) > 256
             ? null
             : string.Join(',', safeDependencyNames);
-        var unsafeResolved = IsUnsafePackageVersion(resolved);
+        var unsafeResolved = !IsSafeNuGetResolvedVersion(resolved);
         entries.Add(new NuGetLockfileEntry(
             relativePath,
             packageName,
@@ -455,19 +455,10 @@ public static class ProjectFileReader
             && SafeLockfileTargetFrameworkPattern.IsMatch(value);
     }
 
-    private static bool IsUnsafePackageVersion(string value)
+    private static bool IsSafeNuGetResolvedVersion(string value)
     {
-        return value.Contains("://", StringComparison.Ordinal)
-            || value.Contains('\\', StringComparison.Ordinal)
-            || value.StartsWith("/", StringComparison.Ordinal)
-            || value.StartsWith("./", StringComparison.Ordinal)
-            || value.StartsWith("../", StringComparison.Ordinal)
-            || value.StartsWith("file:", StringComparison.OrdinalIgnoreCase)
-            || value.StartsWith("git+", StringComparison.OrdinalIgnoreCase)
-            || value.Contains("${", StringComparison.Ordinal)
-            || value.Contains("$(", StringComparison.Ordinal)
-            || value.Contains('%', StringComparison.Ordinal)
-            || value.Contains(' ');
+        return value.Length is > 0 and <= 128
+            && SafeNuGetResolvedVersionPattern.IsMatch(value);
     }
 
     private sealed class LockfileLineCursor(byte[] bytes)
@@ -491,6 +482,7 @@ public static class ProjectFileReader
 
     private static readonly Regex SafeNuGetPackageIdPattern = new("^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", RegexOptions.Compiled | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
     private static readonly Regex SafeLockfileTargetFrameworkPattern = new("^[A-Za-z0-9][A-Za-z0-9._/+,-]{0,127}$", RegexOptions.Compiled | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+    private static readonly Regex SafeNuGetResolvedVersionPattern = new("^[0-9]+(?:\\.[0-9]+){0,3}(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?(?:\\+[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$", RegexOptions.Compiled | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
 
     private static bool TryLoadXml(string fullPath, out XDocument document)
     {

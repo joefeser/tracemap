@@ -2725,7 +2725,7 @@ enum DependencyExtractor {
             gaps.append(gap("swift-dependency-lockfile-malformed", item, 1, item.endLine, "Podfile.lock SPEC CHECKSUMS contains duplicate pod names; checksum hash input was deduplicated."))
         }
         if checksumUnusable {
-            gaps.append(gap("swift-dependency-lockfile-checksum-unusable", item, 1, item.endLine, "Podfile.lock SPEC CHECKSUMS contains values that are not valid podspec SHA-1 digests; they were not recorded."))
+            gaps.append(gap("swift-dependency-lockfile-checksum-unusable", item, 1, item.endLine, "Podfile.lock SPEC CHECKSUMS contains some values that are not valid podspec SHA-1 digests; those values were skipped while valid checksums were retained."))
         }
         return DependencyExtraction(records: records, gaps: gaps)
     }
@@ -2755,14 +2755,14 @@ enum DependencyExtractor {
                 identity: safe,
                 identityHash: sha256Hex(location),
                 identityStatus: safe == nil ? "hashed" : "safe",
-                versionStatus: versionPart == nil ? "absent" : (isSemVer(versionPart!) && resolved ? "present" : "hashed"),
-                revisionStatus: resolved ? (versionPart == nil ? "absent" : (isSemVer(versionPart!) ? "absent" : "hashed")) : "absent",
+                versionStatus: versionPart == nil ? "absent" : (isSafeLiteralVersion(versionPart!) && resolved ? "present" : "hashed"),
+                revisionStatus: resolved ? (versionPart == nil ? "absent" : (isSafeLiteralVersion(versionPart!) ? "absent" : "hashed")) : "absent",
                 sourceLocationStatus: sourceKind == "binary" || location.contains("://") || location.contains("/") ? "hashed" : "unknown"
             )
             properties["sourceKind"] = ["github", "git", "binary"].contains(sourceKind) ? sourceKind : "unknown"
             properties["occurrenceIndex"] = String(records.count + 1)
             properties["sourceLocationHash"] = sha256Hex(location)
-            if let versionPart, isSemVer(versionPart), resolved {
+            if let versionPart, isSafeLiteralVersion(versionPart), resolved {
                 properties["version"] = versionPart
                 properties["resolvedVersion"] = versionPart
             } else if let versionPart {

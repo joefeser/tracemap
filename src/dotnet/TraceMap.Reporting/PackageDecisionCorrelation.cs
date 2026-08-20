@@ -422,7 +422,15 @@ public static class PackageDecisionCorrelationReporter
 
     private static string? SafeProperty(IReadOnlyDictionary<string, string> properties, string key) => properties.TryGetValue(key, out var value) && value.Length <= 160 && !Path.IsPathRooted(value) && !value.StartsWith("C:\\", StringComparison.OrdinalIgnoreCase) && !value.Contains("://", StringComparison.Ordinal) ? value : null;
     private static string? SafeLockfileHash(string? value) => value is not null && value.Length == 32 && value.All(character => character is >= 'a' and <= 'f' or >= '0' and <= '9') ? value : null;
-    private static string? SafeVersionHash(string? value) => value is not null && value.StartsWith("version-hash:", StringComparison.Ordinal) && value.Length <= 80 && value[13..].All(character => character is >= 'a' and <= 'f' or >= '0' and <= '9') ? value : null;
+    private static string? SafeVersionHash(string? value)
+    {
+        if (value is null)
+            return null;
+        var hash = value.StartsWith("version-hash:", StringComparison.Ordinal) ? value[13..] : value;
+        return hash.Length is 32 or 64 && hash.All(character => character is >= 'a' and <= 'f' or >= '0' and <= '9')
+            ? $"version-hash:{hash}"
+            : null;
+    }
     private static string? SafeDigest(string? value, string? algorithm) => value is not null && ((algorithm == "sha256" && value.Length == 64 && value.All(character => character is >= 'a' and <= 'f' or >= '0' and <= '9')) || (algorithm == "sha512-base64" && value.Length <= 128 && value.All(character => char.IsLetterOrDigit(character) || character is '+' or '/' or '='))) ? value : null;
     private static bool IsLiteralVersion(string version) => !version.Contains('^') && !version.Contains('~') && !version.Contains('>') && !version.Contains('<') && !version.Contains('*') && !version.Contains("git", StringComparison.OrdinalIgnoreCase) && !version.Contains("${", StringComparison.Ordinal);
     private static string NormalizeName(string ecosystem, string value) => ecosystem.ToLowerInvariant() switch { "nuget" or "npm" => value.Trim().ToLowerInvariant(), "python" => value.Trim().ToLowerInvariant().Replace('-', '_').Replace('.', '_'), _ => value.Trim() };

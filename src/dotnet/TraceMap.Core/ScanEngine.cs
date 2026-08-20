@@ -225,6 +225,13 @@ public static class ScanEngine
             .OrderBy(gap => gap, StringComparer.Ordinal)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
+        var nugetLockfiles = ProjectFileReader.ReadNuGetLockfiles(repoPath, inventory);
+        var nugetLockfileGaps = nugetLockfiles.Gaps
+            .Select(gap => $"NuGet lockfile analysis reported `{gap.Category}`.")
+            .OrderBy(gap => gap, StringComparer.Ordinal)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var nugetLockfileReducedCoverage = nugetLockfileGaps.Length > 0;
         var migrationFallbackReducedCoverage = migrationFallbackGaps.Length > 0;
         var semanticBuildReducedCoverage = semanticResult.GapFacts.Any(gap =>
             gap.RuleId != RuleIds.DatabaseFrameworkMigrationGap
@@ -233,8 +240,14 @@ public static class ScanEngine
             ? semanticBuildReducedCoverage ? "FailedOrPartial" : "Succeeded"
             : "NotRun";
         var semanticAnalysisLevel = semanticResult.Attempted
-            ? semanticToolchainReducedCoverage || migrationFallbackReducedCoverage ? "Level1SemanticAnalysisReduced" : "Level1SemanticAnalysis"
-            : migrationFallbackReducedCoverage ? "Level3SyntaxAnalysisReduced" : "Level3SyntaxAnalysis";
+            ? semanticToolchainReducedCoverage || migrationFallbackReducedCoverage || nugetLockfileReducedCoverage ? "Level1SemanticAnalysisReduced" : "Level1SemanticAnalysis"
+            : migrationFallbackReducedCoverage || nugetLockfileReducedCoverage ? "Level3SyntaxAnalysisReduced" : "Level3SyntaxAnalysis";
+        var provisionalBuildStatus = nugetLockfileReducedCoverage ? "FailedOrPartial" : semanticBuildStatus;
+        var provisionalKnownGaps = semanticKnownGaps
+            .Concat(nugetLockfileGaps)
+            .OrderBy(gap => gap, StringComparer.Ordinal)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
 
         var provisionalManifest = new ScanManifest(
             CreateScanId(git, inventory, sourceSnapshotDigest, options),
@@ -245,11 +258,11 @@ public static class ScanEngine
             ScannerVersions.TraceMap,
             DateTimeOffset.UtcNow,
             semanticAnalysisLevel,
-            semanticBuildStatus,
+            provisionalBuildStatus,
             solutions,
             projects,
             targetFrameworks,
-            semanticKnownGaps,
+            provisionalKnownGaps,
             GetScanRootRelativePath(repoPath, git),
             FactFactory.Hash(repoPath, 32),
             string.IsNullOrWhiteSpace(git.GitRootPath) ? null : FactFactory.Hash(Path.GetFullPath(git.GitRootPath), 32),
@@ -264,7 +277,7 @@ public static class ScanEngine
             fact.FactType == FactTypes.MsBuildBinlogObserved
             && fact.Properties.GetValueOrDefault("recordedBuildResult") == "failed");
         var binlogReducedCoverage = binlogRecordedFailure || binlogGaps.Length > 0;
-        var knownGaps = semanticKnownGaps
+        var knownGaps = provisionalKnownGaps
             .Concat(binlogGaps)
             .Concat(binlogRecordedFailure ? ["An explicitly supplied MSBuild binlog recorded a failed build."] : [])
             .OrderBy(gap => gap, StringComparer.Ordinal)
@@ -275,7 +288,7 @@ public static class ScanEngine
             AnalysisLevel = binlogReducedCoverage && !semanticToolchainReducedCoverage
                 ? semanticResult.Attempted ? "Level1SemanticAnalysisReduced" : "Level3SyntaxAnalysisReduced"
                 : semanticAnalysisLevel,
-            BuildStatus = binlogReducedCoverage ? "FailedOrPartial" : semanticBuildStatus,
+            BuildStatus = binlogReducedCoverage || nugetLockfileReducedCoverage ? "FailedOrPartial" : semanticBuildStatus,
             KnownGaps = knownGaps
         };
 
@@ -292,7 +305,7 @@ public static class ScanEngine
                     inventory,
                     targetFrameworkInfos,
                     ProjectFileReader.ReadPackageReferences(repoPath, inventory),
-                    ProjectFileReader.ReadNuGetLockfiles(repoPath, inventory),
+                    nugetLockfiles,
                     knownGaps,
                     repoPath,
                     semanticResult,
@@ -791,7 +804,10 @@ public static class ScanEngine
             else
             {
                 lockfileProperties["redactionReason"] = "unsafe-package-version";
-                lockfileProperties["versionHash"] = entry.ResolvedVersionHash ?? string.Empty;
+                if (!string.IsNullOrWhiteSpace(entry.ResolvedVersionHash))
+                {
+                    lockfileProperties["versionHash"] = $"version-hash:{entry.ResolvedVersionHash}";
+                }
             }
 
             facts.Add(FactFactory.Create(

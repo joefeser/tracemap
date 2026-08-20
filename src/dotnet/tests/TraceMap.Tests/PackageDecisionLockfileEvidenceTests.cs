@@ -94,7 +94,8 @@ public sealed class PackageDecisionLockfileEvidenceTests
                 "net8.0": {
                   "../unsafe/name": { "type": "Direct", "resolved": "1.0.0" },
                   "Safe.Missing": { "type": "Direct" },
-                  "Safe.UnsafeVersion": { "type": "Project", "resolved": "git+ssh://user:pass@example.invalid/x" }
+                  "Safe.UnsafeVersion": { "type": "Project", "resolved": "git+ssh://user:pass@example.invalid/x" },
+                  "Safe.PathVersion": { "type": "Direct", "resolved": "C:/synthetic-user/token" }
                 }
               }
             }
@@ -109,11 +110,14 @@ public sealed class PackageDecisionLockfileEvidenceTests
             new FileInventoryItem("d/packages.lock.json", "PackagesLock", 1)
         });
 
-        Assert.DoesNotContain(result.Entries, entry => entry.PackageName != "Safe.UnsafeVersion");
-        var hashed = Assert.Single(result.Entries);
-        Assert.Equal("unknown", Assert.Single(result.Entries, entry => entry.PackageName == "Safe.UnsafeVersion").DependencyRelation);
+        Assert.Equal(2, result.Entries.Count);
+        var hashed = Assert.Single(result.Entries, entry => entry.PackageName == "Safe.UnsafeVersion");
+        Assert.Equal("unknown", hashed.DependencyRelation);
         Assert.Null(hashed.ResolvedVersion);
         Assert.Equal(32, hashed.ResolvedVersionHash!.Length);
+        var pathVersion = Assert.Single(result.Entries, entry => entry.PackageName == "Safe.PathVersion");
+        Assert.Null(pathVersion.ResolvedVersion);
+        Assert.Equal(32, pathVersion.ResolvedVersionHash!.Length);
         var categories = result.Gaps.Select(gap => gap.Category).OrderBy(category => category, StringComparer.Ordinal).ToArray();
         Assert.Contains("packages-lock-parse", categories);
         Assert.Contains("packages-lock-unsupported", categories);
@@ -123,6 +127,7 @@ public sealed class PackageDecisionLockfileEvidenceTests
             .Concat(result.Entries.SelectMany(entry => (IEnumerable<string>)[entry.PackageName, entry.ResolvedVersion ?? string.Empty, entry.ResolvedVersionHash ?? string.Empty])));
         Assert.DoesNotContain("git+ssh://user:pass@example.invalid", serialized, StringComparison.Ordinal);
         Assert.DoesNotContain("../unsafe/name", serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain("C:/synthetic-user/token", serialized, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -143,7 +148,7 @@ public sealed class PackageDecisionLockfileEvidenceTests
         {
             Assert.Equal(RuleIds.ProjectFile, fact.RuleId);
             Assert.Equal(EvidenceTiers.Tier2Structural, fact.EvidenceTier);
-            Assert.Equal("nuget-lockfile/0.1.0", fact.Evidence.ExtractorVersion);
+            Assert.Equal(ScannerVersions.NuGetLockfileExtractor, fact.Evidence.ExtractorVersion);
             Assert.Equal("packages.lock.json", fact.Properties["manifestKind"]);
             Assert.Equal("nuget", fact.Properties["ecosystem"]);
             Assert.True(fact.Properties.ContainsKey("lockfilePath"));
@@ -163,6 +168,63 @@ public sealed class PackageDecisionLockfileEvidenceTests
             && fact.Properties.GetValueOrDefault("diagnosticCode") == "PackagesLockPresent"
             && fact.Properties.GetValueOrDefault("safeObservedValue") == "packages.lock.json"
             && fact.Evidence.FilePath == "src/packages.lock.json");
+    }
+
+    [Fact]
+    public void Scan_marks_malformed_lockfile_evidence_as_reduced_coverage()
+    {
+        using var temp = new TempDirectory();
+        var repo = CreateScannedRepo(temp, "{ \"version\": 2, \"dependencies\": ");
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.Equal("FailedOrPartial", result.Manifest.BuildStatus);
+        Assert.EndsWith("Reduced", result.Manifest.AnalysisLevel, StringComparison.Ordinal);
+        Assert.Contains(result.Manifest.KnownGaps, gap => gap.Contains("packages-lock-parse", StringComparison.Ordinal));
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.Evidence.FilePath == "src/packages.lock.json"
+            && fact.Properties.GetValueOrDefault("gapKind") == "packages-lock-parse");
+    }
+
+    [Fact]
+    public async Task PackageDecision_preserves_redacted_lockfile_version_hash_without_source_text()
+    {
+        using var temp = new TempDirectory();
+        var repo = CreateScannedRepo(temp, """
+            {
+              "version": 2,
+              "dependencies": {
+                "net8.0": {
+                  "Example.Private": { "type": "Direct", "resolved": "C:/synthetic-user/token" }
+                }
+              }
+            }
+            """);
+        var scan = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "scan")));
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(indexPath, scan.Manifest, scan.Facts);
+        var decisionPath = Path.Combine(temp.Path, "decision.json");
+        await File.WriteAllTextAsync(decisionPath, """
+            {
+              "version": "package-decision.v1",
+              "records": [{
+                "decisionId": "dec-redacted",
+                "decisionKind": "reject",
+                "ecosystem": "nuget",
+                "packageName": "Example.Private",
+                "artifactVersion": "1.0.0",
+                "producer": { "id": "sample-producer", "policyVersion": "2026-08" },
+                "decisionTimeUtc": "2026-08-18T00:00:00Z"
+              }]
+            }
+            """);
+
+        var result = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decisionPath, indexPath, Path.Combine(temp.Path, "report")));
+
+        var row = Assert.Single(result.Report.AmbiguousReferences);
+        Assert.Matches("^version-hash:[0-9a-f]{32}$", row.Evidence.VersionHash);
+        var json = await File.ReadAllTextAsync(Path.Combine(temp.Path, "report", "package-decision-report.json"));
+        Assert.DoesNotContain("C:/synthetic-user/token", json, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -218,7 +280,7 @@ public sealed class PackageDecisionLockfileEvidenceTests
             Assert.Equal("project.file.v1", row.Evidence.RuleId);
             Assert.Equal(EvidenceTiers.Tier2Structural, row.Evidence.EvidenceTier);
             Assert.Equal("NuGetLockfileExtractor", row.Evidence.ExtractorId);
-            Assert.Equal("nuget-lockfile/0.1.0", row.Evidence.ExtractorVersion);
+            Assert.Equal(ScannerVersions.NuGetLockfileExtractor, row.Evidence.ExtractorVersion);
             Assert.Equal("src/packages.lock.json", row.Evidence.LockfilePath);
             Assert.Equal(32, row.Evidence.LockfileHash!.Length);
             Assert.Null(row.Evidence.ArtifactDigest);
