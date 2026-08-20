@@ -236,6 +236,148 @@ public sealed class PackageDecisionLockfileEvidenceTests
         Assert.Equal(json, await File.ReadAllTextAsync(Path.Combine(temp.Path, "report-repeat", "package-decision-report.json")));
     }
 
+    [Fact]
+    public async Task PackageDecision_correlates_swift_lockfile_rows_through_the_projection_seam()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        var decisionPath = Path.Combine(temp.Path, "decision.json");
+        var manifest = new ScanManifest(
+            "scan-swift",
+            "swift-fixture",
+            null,
+            "main",
+            new string('0', 40),
+            "tracemap-swift 0.1.0",
+            DateTimeOffset.Parse("2026-08-01T00:00:00Z"),
+            "Level3SyntaxAnalysis",
+            "Succeeded",
+            [],
+            [],
+            [],
+            []);
+        var swiftpmPin = SwiftLockfileFact(
+            manifest,
+            "swift-pin-alamofire",
+            "Package.resolved",
+            5,
+            "swift.dependency.lockfile.swiftpm.v1",
+            EvidenceTiers.Tier2Structural,
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["declarationKind"] = "swiftpm-lockfile-pin",
+                ["dependencyIdentityHash"] = new string('a', 64),
+                ["dependencyIdentityStatus"] = "safe",
+                ["normalizedDependencyIdentity"] = "alamofire",
+                ["packageManager"] = "swiftpm",
+                ["resolvedVersion"] = "5.0.0",
+                ["revisionHash"] = new string('b', 64),
+                ["sourceLocationHash"] = new string('c', 64),
+                ["sourceMetadataKind"] = "Package.resolved"
+            });
+        var podLock = SwiftLockfileFact(
+            manifest,
+            "pod-lock-alamofire",
+            "Podfile.lock",
+            2,
+            "swift.dependency.lockfile.text.v1",
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["declarationKind"] = "podfile-lock-entry",
+                ["dependencyIdentityHash"] = new string('d', 64),
+                ["dependencyIdentityStatus"] = "safe",
+                ["normalizedDependencyIdentity"] = "Alamofire",
+                ["packageManager"] = "cocoapods",
+                ["resolvedVersion"] = "5.0.0",
+                ["sourceMetadataKind"] = "Podfile.lock",
+                ["sourceSection"] = "PODS",
+                ["specChecksum"] = new string('e', 40),
+                ["specChecksumKind"] = "podspec-sha1"
+            });
+        var cartRevision = SwiftLockfileFact(
+            manifest,
+            "cart-utilitykit",
+            "Cartfile.resolved",
+            2,
+            "swift.dependency.lockfile.text.v1",
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["declarationKind"] = "cartfile-resolved-entry",
+                ["dependencyIdentityHash"] = new string('f', 64),
+                ["dependencyIdentityStatus"] = "safe",
+                ["normalizedDependencyIdentity"] = "UtilityKit",
+                ["packageManager"] = "carthage",
+                ["sourceMetadataKind"] = "Cartfile.resolved",
+                ["versionHash"] = new string('1', 64)
+            });
+        SqliteIndexWriter.Write(indexPath, manifest, [swiftpmPin, podLock, cartRevision]);
+        await File.WriteAllTextAsync(decisionPath, """
+            {
+              "version": "package-decision.v1",
+              "records": [
+                {
+                  "decisionId": "dec-swiftpm",
+                  "decisionKind": "revoke",
+                  "ecosystem": "swift",
+                  "packageName": "alamofire",
+                  "artifactVersion": "5.0.0",
+                  "artifactDigestAlgorithm": "sha256",
+                  "artifactDigest": "8888888888888888888888888888888888888888888888888888888888888888",
+                  "producer": { "id": "sample-producer", "policyVersion": "2026-08" },
+                  "decisionTimeUtc": "2026-08-18T00:00:00Z"
+                },
+                {
+                  "decisionId": "dec-cocoapods",
+                  "decisionKind": "admit",
+                  "ecosystem": "swift",
+                  "packageName": "Alamofire",
+                  "artifactVersion": "5.0.0",
+                  "producer": { "id": "sample-producer", "policyVersion": "2026-08" },
+                  "decisionTimeUtc": "2026-08-18T00:00:00Z"
+                },
+                {
+                  "decisionId": "dec-carthage",
+                  "decisionKind": "quarantine",
+                  "ecosystem": "swift",
+                  "packageName": "UtilityKit",
+                  "artifactVersion": "9.9.9",
+                  "producer": { "id": "sample-producer", "policyVersion": "2026-08" },
+                  "decisionTimeUtc": "2026-08-18T00:00:00Z"
+                }
+              ]
+            }
+            """);
+
+        var result = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decisionPath, indexPath, Path.Combine(temp.Path, "report")));
+
+        Assert.Empty(result.Report.ExactMatches);
+        var swiftpmRow = Assert.Single(result.Report.PossibleMatches, row => row.DecisionId == "dec-swiftpm");
+        Assert.Equal("resolved-version", swiftpmRow.MatchBasis);
+        Assert.Equal("swift.dependency.lockfile.swiftpm.v1", swiftpmRow.Evidence.RuleId);
+        Assert.Equal(EvidenceTiers.Tier2Structural, swiftpmRow.Evidence.EvidenceTier);
+        Assert.Equal("SwiftDependencyLockfileEntryDeclared", swiftpmRow.Evidence.FactType);
+        Assert.Equal("Package.resolved", swiftpmRow.Evidence.FilePath);
+        Assert.Equal(5, swiftpmRow.Evidence.StartLine);
+        Assert.Null(swiftpmRow.Evidence.ArtifactDigest);
+        Assert.Equal("unknown", swiftpmRow.DependencyRelation);
+        var podRow = Assert.Single(result.Report.PossibleMatches, row => row.DecisionId == "dec-cocoapods");
+        Assert.Equal("Podfile.lock", podRow.Evidence.FilePath);
+        Assert.Equal("5.0.0", podRow.Evidence.ResolvedVersion);
+        Assert.Null(podRow.Evidence.ArtifactDigest);
+        var carthageRow = Assert.Single(result.Report.AmbiguousReferences, row => row.DecisionId == "dec-carthage");
+        Assert.Equal("Cartfile.resolved", carthageRow.Evidence.FilePath);
+        Assert.Contains(carthageRow.Notes, note => note.Code == "version-unknown");
+        Assert.DoesNotContain(result.Report.PossibleMatches, row => row.DecisionId == "dec-carthage");
+        Assert.Contains(result.Report.Gaps, gap => gap.Classification == "LockfileDigestUnavailable");
+        Assert.Contains(result.Report.Gaps, gap => gap.Classification == "DirectTransitiveUnavailable");
+        Assert.False(result.ExitCodeTriggered);
+        var json = await File.ReadAllTextAsync(Path.Combine(temp.Path, "report", "package-decision-report.json"));
+        Assert.DoesNotContain(new string('e', 40), json, StringComparison.Ordinal);
+        Assert.DoesNotContain(new string('a', 64), json, StringComparison.Ordinal);
+    }
+
     private static string CreateScannedRepo(TempDirectory temp, string lockfileContent)
     {
         var repo = Path.Combine(temp.Path, "repo");
