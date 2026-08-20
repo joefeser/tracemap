@@ -220,6 +220,17 @@ public sealed class PackageDecisionTests
         Assert.Equal("1.0.0", path.ExtractorVersion);
         Assert.NotEmpty(path.SupportingFactIds);
 
+        var repeated = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(
+            decisionPath,
+            combinedIndex,
+            Path.Combine(temp.Path, "repeated-combined"),
+            IndexPaths: [combinedIndex, combinedIndex],
+            Labels: ["first", "second"],
+            IncludePaths: true));
+        Assert.Contains(repeated.Report.Gaps, gap => gap.Message.Contains("Duplicate portfolio source identity", StringComparison.Ordinal));
+        Assert.NotEmpty(((PackageDecisionContext)repeated.Report.PathContext!).Rows);
+        Assert.DoesNotContain(((PackageDecisionContext)repeated.Report.PathContext!).Gaps, gap => gap.Message.Contains("inventory was unavailable", StringComparison.Ordinal));
+
         var bounded = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(
             decisionPath, combinedIndex, Path.Combine(temp.Path, "bounded"), IncludePaths: true, MaxDepth: 1));
         Assert.Equal("truncated", ((PackageDecisionContext)bounded.Report.PathContext!).Status);
@@ -255,6 +266,12 @@ public sealed class PackageDecisionTests
             Assert.Equal(manifestBytes, await File.ReadAllBytesAsync(manifestPath));
         }
         await Assert.ThrowsAsync<InvalidDataException>(() => PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decisionPath, indexPath, Path.Combine(temp.Path, "labels"), IndexPaths: [indexPath, indexPath], Labels: ["app", "app"])));
+
+        const string unsafeLabel = "/private/client-app";
+        var safeLabelReport = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(
+            decisionPath, indexPath, Path.Combine(temp.Path, "safe-label"), IndexPaths: [indexPath], Labels: [unsafeLabel]));
+        Assert.StartsWith("source-label-hash:", Assert.Single(safeLabelReport.Report.Sources).Label, StringComparison.Ordinal);
+        Assert.DoesNotContain(unsafeLabel, await File.ReadAllTextAsync(Path.Combine(temp.Path, "safe-label", "package-decision-report.json")), StringComparison.Ordinal);
     }
 
     [Fact]
