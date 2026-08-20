@@ -260,7 +260,7 @@ public static class PackageDecisionCorrelationReporter
         var index = await ReadInputsAsync(inputSpecs, cancellationToken);
         var sources = index.Sources.OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceIndexId, StringComparer.Ordinal).ToArray();
         if (!string.IsNullOrWhiteSpace(options.Source))
-            sources = sources.Where(source => SourceMatches(source.Label, options.Source)).ToArray();
+            sources = sources.Where(source => SourceMatches(index.RawLabels.GetValueOrDefault(source.SourceIndexId) ?? source.Label, options.Source)).ToArray();
 
         var records = admission.Records
             .Where(record => string.IsNullOrWhiteSpace(options.Ecosystem) || string.Equals(record.Ecosystem, options.Ecosystem, StringComparison.OrdinalIgnoreCase))
@@ -286,7 +286,7 @@ public static class PackageDecisionCorrelationReporter
         var findingCapReached = false;
         var gapCapReached = admission.Gaps.Count > Math.Max(1, options.MaxGaps);
         if (sources.Length == 0 && options.Source is not null)
-            AddGap(gaps, options.MaxGaps, ref gapCapReached, new PackageDecisionGap($"pd-selector-source:{Hash(options.Source)}", "SelectorNoMatch", "The requested source selector matched no source snapshot.", RuleId, EvidenceTiers.Tier4Unknown, SourceLabel: options.Source));
+            AddGap(gaps, options.MaxGaps, ref gapCapReached, new PackageDecisionGap($"pd-selector-source:{Hash(options.Source)}", "SelectorNoMatch", "The requested source selector matched no source snapshot.", RuleId, EvidenceTiers.Tier4Unknown, SourceLabel: SafeInputLabel(options.Source)));
         foreach (var record in records)
         {
             foreach (var source in sources)
@@ -366,7 +366,7 @@ public static class PackageDecisionCorrelationReporter
         var reverseContext = options.IncludeReverse ? BuildContext(index, contextRows, options, reverse: true) : null;
         var report = new PackageDecisionDocument(
             "package-decision-correlation", Version, "DecisionSnapshotV1",
-            new PackageDecisionQuery($"value-hash:{CombinedReportHelpers.Hash(options.DecisionPath, 16)}", $"value-hash:{InputIdentity(inputSpecs, options.ManifestPath)}", options.Source ?? "default", options.Ecosystem, options.DecisionId, options.Classification, options.MaxFindings, options.MaxGaps, options.ExitCode, options.AsOf),
+            new PackageDecisionQuery($"value-hash:{CombinedReportHelpers.Hash(options.DecisionPath, 16)}", $"value-hash:{InputIdentity(inputSpecs, options.ManifestPath)}", options.Source is null ? "default" : SafeInputLabel(options.Source), options.Ecosystem, options.DecisionId, options.Classification, options.MaxFindings, options.MaxGaps, options.ExitCode, options.AsOf),
             recordRows.OrderBy(row => row.Classification ?? string.Empty, StringComparer.Ordinal).ThenBy(row => row.ProducerId ?? string.Empty, StringComparer.Ordinal).ThenBy(row => row.DecisionId ?? string.Empty, StringComparer.Ordinal).ToArray(),
             sources.Select(source => ToSource(source, index.ScannedAt.GetValueOrDefault(source.SourceIndexId), index.KnownGaps.Where(gap => gap.SourceIndexId == source.SourceIndexId))).ToArray(),
             selectedExact, selectedMismatch, selectedPossible, selectedAmbiguous,
@@ -683,11 +683,11 @@ public static class PackageDecisionCorrelationReporter
     private static void RejectOutputAlias(string decisionPath, IReadOnlyList<string> inputPaths, string outputPath)
     {
         var fullOutput = Path.GetFullPath(outputPath);
-        if (Directory.Exists(fullOutput) || string.IsNullOrWhiteSpace(Path.GetExtension(fullOutput)))
-            return;
-
-        var outputIdentity = FileIdentity(fullOutput);
-        if (outputIdentity is not null && new[] { decisionPath }.Concat(inputPaths).Any(inputPath => PathIdentityEquals(outputIdentity, FileIdentity(inputPath))))
+        var outputCandidates = Directory.Exists(fullOutput) || string.IsNullOrWhiteSpace(Path.GetExtension(fullOutput))
+            ? new[] { Path.Combine(fullOutput, "package-decision-report.md"), Path.Combine(fullOutput, "package-decision-report.json") }
+            : [fullOutput];
+        var inputIdentities = new[] { decisionPath }.Concat(inputPaths).Select(FileIdentity).ToArray();
+        if (outputCandidates.Select(FileIdentity).Any(outputIdentity => inputIdentities.Any(inputIdentity => PathIdentityEquals(outputIdentity, inputIdentity))))
             throw new InvalidDataException("package-decision --out must not alias a decision, manifest, or index input.");
     }
 
@@ -750,6 +750,7 @@ public static class PackageDecisionCorrelationReporter
         var edges = new List<CombinedDependencyEdgeRow>();
         var knownGaps = new List<CombinedKnownGapRow>();
         var scannedAt = new Dictionary<string, DateTimeOffset?>(StringComparer.Ordinal);
+        var rawLabels = new Dictionary<string, string>(StringComparer.Ordinal);
         var identities = new Dictionary<string, CombinedReportSource>(StringComparer.Ordinal);
         foreach (var spec in specs.OrderBy(spec => spec.Label, StringComparer.Ordinal))
         {
@@ -759,6 +760,7 @@ public static class PackageDecisionCorrelationReporter
                 var sourceId = multiple ? $"{CombinedReportHelpers.Hash(spec.Label, 12)}:{source.SourceIndexId}" : source.SourceIndexId;
                 var safeSpecLabel = SafeInputLabel(spec.Label);
                 var safeSourceLabel = SafeInputLabel(source.Label);
+                var rawLabel = source.Label == "default" ? spec.Label : spec.Label == "default" ? source.Label : $"{spec.Label}/{source.Label}";
                 var displayLabel = source.Label == "default" ? safeSpecLabel : spec.Label == "default" ? safeSourceLabel : $"{safeSpecLabel}/{safeSourceLabel}";
                 var composed = source with { SourceIndexId = sourceId, Label = displayLabel };
                 var identity = FullCommit(source.CommitSha)
@@ -777,6 +779,7 @@ public static class PackageDecisionCorrelationReporter
                 if (!string.IsNullOrWhiteSpace(spec.ExpectedRepoIdentity) && !string.Equals(spec.ExpectedRepoIdentity, $"repo-hash:{CombinedReportHelpers.Hash(source.RepoName, 16)}", StringComparison.Ordinal))
                     knownGaps.Add(new CombinedKnownGapRow(sourceId, displayLabel, "ExpectedRepoIdentityMismatch", 1, "Portfolio manifest repository hint did not match the source snapshot."));
                 sources.Add(composed);
+                rawLabels[sourceId] = rawLabel;
                 var sourceFacts = read.Facts.Where(fact => fact.SourceIndexId == source.SourceIndexId)
                     .Select(fact => fact with
                     {
@@ -796,7 +799,7 @@ public static class PackageDecisionCorrelationReporter
                 if (read.ScannedAt.TryGetValue(source.SourceIndexId, out var scanned)) scannedAt[sourceId] = scanned;
             }
         }
-        return new IndexRead(sources, facts, edges, knownGaps, scannedAt);
+        return new IndexRead(sources, facts, edges, knownGaps, scannedAt, rawLabels);
     }
 
     private static string NamespacedEvidenceId(string sourceId, string evidenceId) =>
@@ -875,7 +878,7 @@ public static class PackageDecisionCorrelationReporter
         {
             var read = await CombinedDependencyReporter.ReadAsync(connection, cancellationToken);
             var scanned = await ReadCombinedScannedAtAsync(connection, cancellationToken);
-            return new IndexRead(read.Sources, read.Facts, read.Edges, read.KnownGaps, scanned);
+            return new IndexRead(read.Sources, read.Facts, read.Edges, read.KnownGaps, scanned, read.Sources.ToDictionary(source => source.SourceIndexId, source => source.Label, StringComparer.Ordinal));
         }
         if (!await TableExists(connection, "scan_manifest", cancellationToken) || !await TableExists(connection, "facts", cancellationToken)) throw new InvalidDataException("package-decision requires a TraceMap single index or combined index.");
         await using var manifestCommand = connection.CreateCommand();
@@ -893,7 +896,7 @@ public static class PackageDecisionCorrelationReporter
         await using var reader = await factCommand.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken)) facts.Add(new CombinedFactRow(reader.GetString(0), "default", "default", reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.IsDBNull(7) ? null : reader.GetString(7), reader.IsDBNull(8) ? null : reader.GetString(8), reader.IsDBNull(9) ? null : reader.GetString(9), reader.GetString(10), reader.GetInt32(11), reader.GetInt32(12), ParseProperties(reader.GetString(13)), reader.IsDBNull(14) ? null : reader.GetString(14), reader.IsDBNull(15) ? null : reader.GetString(15)));
         var known = manifest.KnownGaps.Select((gap, index) => new CombinedKnownGapRow("default", "default", $"manifest-gap-{index + 1}", 1, gap)).ToArray();
-        return new IndexRead([source], facts, [], known, new Dictionary<string, DateTimeOffset?>(StringComparer.Ordinal) { ["default"] = manifest.ScannedAt });
+        return new IndexRead([source], facts, [], known, new Dictionary<string, DateTimeOffset?>(StringComparer.Ordinal) { ["default"] = manifest.ScannedAt }, new Dictionary<string, string>(StringComparer.Ordinal) { ["default"] = "default" });
     }
 
     private static async Task<IReadOnlyDictionary<string, DateTimeOffset?>> ReadCombinedScannedAtAsync(SqliteConnection connection, CancellationToken cancellationToken)
@@ -921,7 +924,7 @@ public static class PackageDecisionCorrelationReporter
     private static async Task<bool> TableExists(SqliteConnection connection, string name, CancellationToken cancellationToken) { await using var command = connection.CreateCommand(); command.CommandText = "select count(*) from sqlite_master where type='table' and name=$name;"; command.Parameters.AddWithValue("$name", name); return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken)) > 0; }
     private static async Task<bool> ColumnExistsAsync(SqliteConnection connection, string table, string column, CancellationToken cancellationToken) { await using var command = connection.CreateCommand(); command.CommandText = "select count(*) from pragma_table_info($table) where name = $column;"; command.Parameters.AddWithValue("$table", table); command.Parameters.AddWithValue("$column", column); return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken)) > 0; }
     private static IReadOnlyDictionary<string, string> ParseProperties(string json) => JsonSerializer.Deserialize<Dictionary<string, string?>>(json, JsonOptions)?.Where(pair => pair.Value is not null).ToDictionary(pair => pair.Key, pair => pair.Value!, StringComparer.Ordinal) ?? new Dictionary<string, string>(StringComparer.Ordinal);
-    private sealed record IndexRead(IReadOnlyList<CombinedReportSource> Sources, IReadOnlyList<CombinedFactRow> Facts, IReadOnlyList<CombinedDependencyEdgeRow> Edges, IReadOnlyList<CombinedKnownGapRow> KnownGaps, IReadOnlyDictionary<string, DateTimeOffset?> ScannedAt);
+    private sealed record IndexRead(IReadOnlyList<CombinedReportSource> Sources, IReadOnlyList<CombinedFactRow> Facts, IReadOnlyList<CombinedDependencyEdgeRow> Edges, IReadOnlyList<CombinedKnownGapRow> KnownGaps, IReadOnlyDictionary<string, DateTimeOffset?> ScannedAt, IReadOnlyDictionary<string, string> RawLabels);
 
     private static string RenderMarkdown(PackageDecisionDocument report)
     {
