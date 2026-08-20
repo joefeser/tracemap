@@ -197,16 +197,20 @@ public sealed class PackageDecisionTests
         var manifest = Manifest("context", "tracemap");
         var digest = new string('c', 64);
         var package = DigestPackageFact(manifest, "example", "1.0.0", digest) with { SourceSymbol = "method:terminal" };
+        var otherPackage = DigestPackageFact(manifest, "other", "2.0.0", new string('d', 64)) with { SourceSymbol = "method:terminal" };
         var first = RelationshipFact(manifest, "call-root", "method:root", "method:middle", 10);
         var second = RelationshipFact(manifest, "call-middle", "method:middle", "method:terminal", 20);
-        SqliteIndexWriter.Write(sourceIndex, manifest, [first, second, package]);
+        SqliteIndexWriter.Write(sourceIndex, manifest, [first, second, package, otherPackage]);
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([sourceIndex], combinedIndex, ["app"]));
-        await File.WriteAllTextAsync(decisionPath, "{\"version\":\"package-decision.v1\",\"records\":[{\"decisionId\":\"dec-context\",\"decisionKind\":\"reject\",\"ecosystem\":\"npm\",\"packageName\":\"example\",\"artifactVersion\":\"1.0.0\",\"artifactDigestAlgorithm\":\"sha256\",\"artifactDigest\":\"" + digest + "\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\"}]}");
+        await File.WriteAllTextAsync(decisionPath, "{\"version\":\"package-decision.v1\",\"records\":[{\"decisionId\":\"dec-context\",\"decisionKind\":\"reject\",\"ecosystem\":\"npm\",\"packageName\":\"example\",\"artifactVersion\":\"1.0.0\",\"artifactDigestAlgorithm\":\"sha256\",\"artifactDigest\":\"" + digest + "\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\"},{\"decisionId\":\"dec-other\",\"decisionKind\":\"reject\",\"ecosystem\":\"npm\",\"packageName\":\"other\",\"artifactVersion\":\"2.0.0\",\"artifactDigestAlgorithm\":\"sha256\",\"artifactDigest\":\"" + new string('d', 64) + "\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\"}]}");
 
         var result = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(
-            decisionPath, combinedIndex, Path.Combine(temp.Path, "report"), IncludePaths: true, IncludeReverse: true, MaxDepth: 8));
+            decisionPath, combinedIndex, Path.Combine(temp.Path, "report"), IncludePaths: true, IncludeReverse: true, MaxDepth: 8, MaxPaths: 1));
 
-        var path = Assert.Single(((PackageDecisionContext)result.Report.PathContext!).Rows);
+        var pathContext = (PackageDecisionContext)result.Report.PathContext!;
+        var path = Assert.Single(pathContext.Rows);
+        Assert.Equal("truncated", pathContext.Status);
+        Assert.DoesNotContain(pathContext.Gaps, gap => gap.Classification == "UnknownAnalysisGap" && gap.Message.StartsWith("No bounded static", StringComparison.Ordinal));
         Assert.Equal("3", path.Metadata.Single(pair => pair.Key == "pathLength").Value);
         Assert.True(path.SupportingEdgeIds.Count >= 3);
         Assert.Equal("package-lock.json", path.FilePath);
@@ -244,6 +248,12 @@ public sealed class PackageDecisionTests
         var manifestBytes = await File.ReadAllBytesAsync(manifestPath);
         await Assert.ThrowsAsync<InvalidDataException>(() => PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decisionPath, string.Empty, manifestPath, ManifestPath: manifestPath)));
         Assert.Equal(manifestBytes, await File.ReadAllBytesAsync(manifestPath));
+        if (OperatingSystem.IsWindows() || OperatingSystem.IsMacOS())
+        {
+            var caseVariant = Path.Combine(temp.Path, "PORTFOLIO.JSON");
+            await Assert.ThrowsAsync<InvalidDataException>(() => PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decisionPath, string.Empty, caseVariant, ManifestPath: manifestPath)));
+            Assert.Equal(manifestBytes, await File.ReadAllBytesAsync(manifestPath));
+        }
         await Assert.ThrowsAsync<InvalidDataException>(() => PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decisionPath, indexPath, Path.Combine(temp.Path, "labels"), IndexPaths: [indexPath, indexPath], Labels: ["app", "app"])));
     }
 
