@@ -167,7 +167,7 @@ async function extractPackageLockFacts(manifest: ScanManifest, repoPath: string,
         continue;
       }
       const root = await readRootPackageJson(item.absolutePath, repoPath);
-      const directNames = declaredDependencyNames(root);
+      const directGroups = declaredDependencyGroups(root);
       const lockHash = hash(text, 32);
       for (const packagePath of Object.keys(packages as Record<string, unknown>).sort()) {
         if (!packagePath || packagePath === "") continue;
@@ -176,9 +176,10 @@ async function extractPackageLockFacts(manifest: ScanManifest, repoPath: string,
         const packageName = packageNameFromLockPath(packagePath);
         if (!packageName) continue;
         const properties = entry as Record<string, unknown>;
+        const evidenceLine = lineOf(text, packagePath.replaceAll("\\", "/"));
         const version = typeof properties.version === "string" ? properties.version.trim() : "";
         if (!version) {
-          facts.push(lockfileGap(manifest, item, "package-lock-entry-version-missing", "npm lockfile package entry did not provide a resolved version."));
+          facts.push(lockfileGap(manifest, item, "package-lock-entry-version-missing", "npm lockfile package entry did not provide a resolved version.", packageName, evidenceLine));
           continue;
         }
         const integrity = typeof properties.integrity === "string" ? properties.integrity.trim() : "";
@@ -186,10 +187,11 @@ async function extractPackageLockFacts(manifest: ScanManifest, repoPath: string,
         const resolved = typeof properties.resolved === "string" ? properties.resolved.trim() : "";
         const registryOrigin = hostOnlyOrigin(resolved);
         const depth = dependencyPathDepth(packagePath);
-        const evidenceLine = lineOf(text, packagePath.replaceAll("\\", "/"));
+        const direct = isDirectLockEntry(packagePath, packageName, directGroups);
+        const declaredGroups = directGroups.get(packageName) ?? [];
         const packageProperties: Record<string, string> = {
-          dependencyGroup: isDirectLockEntry(packagePath, packageName, directNames) ? "dependencies" : "lockfile",
-          dependencyRelation: isDirectLockEntry(packagePath, packageName, directNames) ? "direct" : "transitive",
+          dependencyGroup: direct ? (declaredGroups.length === 1 ? declaredGroups[0] : "multiple") : "lockfile",
+          dependencyRelation: direct ? "direct" : "transitive",
           dependencyPathDepth: String(depth),
           ecosystem: "npm",
           manifestKind: "package-lock.json",
@@ -202,6 +204,7 @@ async function extractPackageLockFacts(manifest: ScanManifest, repoPath: string,
           surfaceKind: "package-config",
           version
         };
+        if (direct && declaredGroups.length > 1) packageProperties.dependencyGroups = declaredGroups.join(",");
         if (registryOrigin) packageProperties.registryOrigin = registryOrigin;
         if (digest) {
           packageProperties.artifactDigestAlgorithm = "sha512-base64";
@@ -238,14 +241,17 @@ async function readRootPackageJson(lockfilePath: string, repoPath: string): Prom
   return {};
 }
 
-function declaredDependencyNames(json: Record<string, unknown>): Set<string> {
-  const names = new Set<string>();
+function declaredDependencyGroups(json: Record<string, unknown>): Map<string, string[]> {
+  const groups = new Map<string, string[]>();
   for (const section of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
     const values = json[section];
     if (!values || typeof values !== "object" || Array.isArray(values)) continue;
-    for (const name of Object.keys(values as Record<string, unknown>)) names.add(name);
+    for (const name of Object.keys(values as Record<string, unknown>).sort()) {
+      const current = groups.get(name) ?? [];
+      if (!current.includes(section)) groups.set(name, [...current, section].sort());
+    }
   }
-  return names;
+  return groups;
 }
 
 function packageNameFromLockPath(packagePath: string): string | null {
@@ -263,8 +269,8 @@ function dependencyPathDepth(packagePath: string): number {
   return Math.max(1, packagePath.split("/").filter((segment) => segment === "node_modules").length);
 }
 
-function isDirectLockEntry(packagePath: string, packageName: string, directNames: ReadonlySet<string>): boolean {
-  if (!directNames.has(packageName) || dependencyPathDepth(packagePath) !== 1) return false;
+function isDirectLockEntry(packagePath: string, packageName: string, directGroups: ReadonlyMap<string, readonly string[]>): boolean {
+  if (!directGroups.has(packageName) || dependencyPathDepth(packagePath) !== 1) return false;
   return packagePath.replaceAll("\\", "/") === `node_modules/${packageName}`;
 }
 

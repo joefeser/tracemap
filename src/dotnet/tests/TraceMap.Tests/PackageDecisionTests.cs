@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Data.Sqlite;
@@ -262,6 +263,11 @@ public sealed class PackageDecisionTests
         await Assert.ThrowsAsync<InvalidDataException>(() => PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decisionPath, indexPath, decisionPath)));
         Assert.Equal(validDecision, await File.ReadAllTextAsync(decisionPath));
 
+        var hardLinkOutput = Path.Combine(temp.Path, "hard-link-output.json");
+        CreateHardLink(hardLinkOutput, decisionPath);
+        await Assert.ThrowsAsync<InvalidDataException>(() => PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decisionPath, indexPath, hardLinkOutput)));
+        Assert.Equal(validDecision, await File.ReadAllTextAsync(decisionPath));
+
         var manifestPath = Path.Combine(temp.Path, "portfolio.json");
         await File.WriteAllTextAsync(manifestPath, "{\"version\":\"1.0\",\"portfolioId\":\"fixture\",\"snapshotId\":\"one\",\"inputs\":[{\"label\":\"app\",\"indexPath\":\"index.sqlite\"}]}");
         var manifestBytes = await File.ReadAllBytesAsync(manifestPath);
@@ -385,4 +391,19 @@ public sealed class PackageDecisionTests
         }
         throw new InvalidOperationException("TraceMap repository root was not found.");
     }
+
+    private static void CreateHardLink(string linkPath, string existingPath)
+    {
+        var succeeded = OperatingSystem.IsWindows()
+            ? CreateHardLinkWindows(linkPath, existingPath, IntPtr.Zero)
+            : Link(existingPath, linkPath) == 0;
+        if (!succeeded) throw new IOException("The hard-link test fixture could not be created.");
+    }
+
+    [DllImport("kernel32.dll", EntryPoint = "CreateHardLinkW", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool CreateHardLinkWindows(string fileName, string existingFileName, IntPtr securityAttributes);
+
+    [DllImport("libc", EntryPoint = "link", SetLastError = true)]
+    private static extern int Link(string existingPath, string linkPath);
 }
