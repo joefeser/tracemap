@@ -2533,6 +2533,8 @@ enum DependencyExtractor {
             }
             let state = pin["state"] as? [String: Any] ?? [:]
             let location = pin["location"] as? String ?? pin["repositoryURL"] as? String
+            let stateVersion = state["version"] as? String
+            let resolvedVersion = stateVersion.flatMap { isSafeLiteralVersion($0) ? $0 : nil }
             let safe = isSafeLabel(identity) ? identity : nil
             let offset = keyOffsets.indices.contains(index) ? keyOffsets[index] : 0
             let line = lineNumber(atUTF16Offset: offset, in: text)
@@ -2543,7 +2545,7 @@ enum DependencyExtractor {
                 identity: safe,
                 identityHash: sha256Hex(identity),
                 identityStatus: safe == nil ? "hashed" : "safe",
-                versionStatus: state["version"] == nil ? "absent" : "present",
+                versionStatus: stateVersion == nil ? "absent" : (resolvedVersion == nil ? "hashed" : "present"),
                 revisionStatus: state["revision"] == nil ? "absent" : "hashed",
                 sourceLocationStatus: location == nil ? "unknown" : "hashed"
             )
@@ -2555,6 +2557,13 @@ enum DependencyExtractor {
             }
             if let revision = state["revision"] as? String {
                 properties["revisionHash"] = sha256Hex(revision)
+            }
+            // A safe literal state.version is copied to resolvedVersion verbatim; revisions and
+            // locations stay hashed because they are not resolved semantic versions.
+            if let resolvedVersion {
+                properties["resolvedVersion"] = resolvedVersion
+            } else if let stateVersion {
+                properties["versionHash"] = sha256Hex(stateVersion)
             }
             records.append(DependencyRecord(
                 factType: "SwiftDependencyLockfileEntryDeclared",
@@ -2636,7 +2645,28 @@ enum DependencyExtractor {
         var section = ""
         var checksumNames: Set<String> = []
         var duplicateChecksum = false
+        var specChecksums: [String: String] = [:]
+        var checksumUnusable = false
         let lines = text.components(separatedBy: "\n")
+        // SPEC CHECKSUMS appear after PODS, so validate them in a deterministic pre-pass before
+        // attaching them to PODS rows as explicitly labeled podspec metadata.
+        for line in lines {
+            if let heading = firstCapture(#"^([A-Z][A-Z0-9 _-]+):\s*$"#, in: line) {
+                section = heading
+                continue
+            }
+            guard section == "SPEC CHECKSUMS",
+                  let name = firstCapture(#"^\s{2}([A-Za-z0-9_.+-]+):"#, in: line) else {
+                continue
+            }
+            let value = firstCapture(#"^\s{2}[A-Za-z0-9_.+-]+:\s*([0-9A-Za-z]+)\s*$"#, in: line)
+            if let value, isPodspecChecksum(value) {
+                specChecksums[name] = value.lowercased()
+            } else {
+                checksumUnusable = true
+            }
+        }
+        section = ""
         var utf16Offset = 0
         for (lineIndex, line) in lines.enumerated() {
             defer { utf16Offset += line.utf16.count + 1 }
@@ -2653,6 +2683,8 @@ enum DependencyExtractor {
             }
             guard let name = firstCapture(#"^\s{2}-\s+([A-Za-z0-9_.+-]+)"#, in: line) else { continue }
             let safe = isSafeLabel(name) ? name : nil
+            let parenVersion = section == "PODS" ? firstCapture(#"\(([A-Za-z0-9.+-]+)\)\s*$"#, in: line) : nil
+            let resolvedVersion = parenVersion.flatMap { isSafeLiteralVersion($0) ? $0 : nil }
             var properties = baseProperties(
                 packageManager: "cocoapods",
                 sourceMetadataKind: "Podfile.lock",
@@ -2660,12 +2692,23 @@ enum DependencyExtractor {
                 identity: safe,
                 identityHash: sha256Hex(name),
                 identityStatus: safe == nil ? "hashed" : "safe",
-                versionStatus: line.contains("(") ? "present" : "absent",
+                versionStatus: resolvedVersion != nil ? "present" : (parenVersion != nil ? "hashed" : (line.contains("(") ? "present" : "absent")),
                 revisionStatus: "absent",
                 sourceLocationStatus: "absent"
             )
             properties["sourceSection"] = safeSection(section) ?? sha256Hex(section)
             properties["occurrenceIndex"] = String(records.count + 1)
+            if let resolvedVersion {
+                properties["resolvedVersion"] = resolvedVersion
+            } else if let parenVersion {
+                properties["versionHash"] = sha256Hex(parenVersion)
+            }
+            if section == "PODS", let checksum = specChecksums[name] {
+                // A podspec checksum is explicitly labeled metadata; it is never an artifact digest
+                // and never proves the downloaded artifact bytes.
+                properties["specChecksum"] = checksum
+                properties["specChecksumKind"] = "podspec-sha1"
+            }
             records.append(DependencyRecord(
                 factType: "SwiftDependencyLockfileEntryDeclared",
                 ruleId: RuleIds.dependencyLockfileText,
@@ -2680,6 +2723,9 @@ enum DependencyExtractor {
         }
         if duplicateChecksum {
             gaps.append(gap("swift-dependency-lockfile-malformed", item, 1, item.endLine, "Podfile.lock SPEC CHECKSUMS contains duplicate pod names; checksum hash input was deduplicated."))
+        }
+        if checksumUnusable {
+            gaps.append(gap("swift-dependency-lockfile-checksum-unusable", item, 1, item.endLine, "Podfile.lock SPEC CHECKSUMS contains values that are not valid podspec SHA-1 digests; they were not recorded."))
         }
         return DependencyExtraction(records: records, gaps: gaps)
     }
@@ -2718,6 +2764,7 @@ enum DependencyExtractor {
             properties["sourceLocationHash"] = sha256Hex(location)
             if let versionPart, isSemVer(versionPart), resolved {
                 properties["version"] = versionPart
+                properties["resolvedVersion"] = versionPart
             } else if let versionPart {
                 properties["versionHash"] = sha256Hex(versionPart)
             }
@@ -5062,6 +5109,17 @@ func safeSection(_ value: String) -> String? {
 
 func isSemVer(_ value: String) -> Bool {
     value.range(of: #"^[0-9]+(\.[0-9]+){1,2}([.-][A-Za-z0-9]+)?$"#, options: .regularExpression) != nil
+}
+
+/// A safe literal resolved version: bounded semver-shaped text with no URL, path, interpolation, or
+/// revision material. Revisions and locations stay hashed because they are not resolved versions.
+func isSafeLiteralVersion(_ value: String) -> Bool {
+    guard value.count <= 64 else { return false }
+    return value.range(of: #"^[0-9]+(\.[0-9]+){1,3}(-[A-Za-z0-9.+-]+)?(\+[A-Za-z0-9.+-]+)?$"#, options: .regularExpression) != nil
+}
+
+func isPodspecChecksum(_ value: String) -> Bool {
+    value.count == 40 && value.range(of: "^[0-9a-fA-F]{40}$", options: .regularExpression) != nil
 }
 
 func parsePodIdentities(_ text: String) -> [String] {
