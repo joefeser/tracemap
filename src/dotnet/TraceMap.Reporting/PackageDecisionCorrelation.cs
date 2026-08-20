@@ -757,7 +757,9 @@ public static class PackageDecisionCorrelationReporter
             foreach (var source in read.Sources.OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceIndexId, StringComparer.Ordinal))
             {
                 var sourceId = multiple ? $"{CombinedReportHelpers.Hash(spec.Label, 12)}:{source.SourceIndexId}" : source.SourceIndexId;
-                var displayLabel = source.Label == "default" ? spec.Label : spec.Label == "default" ? source.Label : $"{spec.Label}/{source.Label}";
+                var safeSpecLabel = SafeInputLabel(spec.Label);
+                var safeSourceLabel = SafeInputLabel(source.Label);
+                var displayLabel = source.Label == "default" ? safeSpecLabel : spec.Label == "default" ? safeSourceLabel : $"{safeSpecLabel}/{safeSourceLabel}";
                 var composed = source with { SourceIndexId = sourceId, Label = displayLabel };
                 var identity = FullCommit(source.CommitSha)
                     ? $"repo:{source.RepoName}:commit:{source.CommitSha.ToLowerInvariant()}"
@@ -776,15 +778,37 @@ public static class PackageDecisionCorrelationReporter
                     knownGaps.Add(new CombinedKnownGapRow(sourceId, displayLabel, "ExpectedRepoIdentityMismatch", 1, "Portfolio manifest repository hint did not match the source snapshot."));
                 sources.Add(composed);
                 var sourceFacts = read.Facts.Where(fact => fact.SourceIndexId == source.SourceIndexId)
-                    .Select(fact => fact with { SourceIndexId = sourceId, SourceLabel = displayLabel })
+                    .Select(fact => fact with
+                    {
+                        SourceIndexId = sourceId,
+                        SourceLabel = displayLabel,
+                        CombinedFactId = multiple ? NamespacedEvidenceId(sourceId, fact.CombinedFactId) : fact.CombinedFactId
+                    })
                     .ToArray();
                 facts.AddRange(sourceFacts);
-                edges.AddRange(read.Edges.Where(edge => edge.SourceIndexId == source.SourceIndexId).Select(edge => edge with { SourceIndexId = sourceId, SourceLabel = displayLabel }));
+                edges.AddRange(read.Edges.Where(edge => edge.SourceIndexId == source.SourceIndexId).Select(edge => edge with
+                {
+                    SourceIndexId = sourceId,
+                    SourceLabel = displayLabel,
+                    EdgeId = multiple ? NamespacedEvidenceId(sourceId, edge.EdgeId) : edge.EdgeId
+                }));
                 knownGaps.AddRange(read.KnownGaps.Where(gap => gap.SourceIndexId == source.SourceIndexId).Select(gap => gap with { SourceIndexId = sourceId, SourceLabel = displayLabel }));
                 if (read.ScannedAt.TryGetValue(source.SourceIndexId, out var scanned)) scannedAt[sourceId] = scanned;
             }
         }
         return new IndexRead(sources, facts, edges, knownGaps, scannedAt);
+    }
+
+    private static string NamespacedEvidenceId(string sourceId, string evidenceId) =>
+        $"composed:{CombinedReportHelpers.Hash(sourceId, 16)}:{evidenceId}";
+
+    private static string SafeInputLabel(string value)
+    {
+        var trimmed = value.Trim();
+        return trimmed.Length is > 0 and <= 128
+            && trimmed.All(character => char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or '-')
+                ? trimmed
+                : $"source-label-hash:{CombinedReportHelpers.Hash(trimmed, 16)}";
     }
 
     private static string InputIdentity(IReadOnlyList<PackageInputSpec> specs, string? manifestPath)
