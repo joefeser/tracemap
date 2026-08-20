@@ -114,9 +114,25 @@ public final class BuildFileExtractor {
                     null,
                     depProps));
             }
+            facts.add(mavenLockfileCapabilityGap(manifest, file));
         } catch (Exception exception) {
             gaps.add("MavenParseFailed: " + file.relativePath() + " (" + exception.getClass().getSimpleName() + ")");
         }
+    }
+
+    private static CodeFact mavenLockfileCapabilityGap(ScanManifest manifest, FileInventoryItem file) {
+        String message = "Maven has no standard lockfile; resolved-version and artifact-digest lockfile evidence is unavailable for Maven dependencies";
+        return FactFactory.create(
+            manifest,
+            FactTypes.ANALYSIS_GAP,
+            RuleIds.BUILD_FILE,
+            EvidenceTiers.TIER4_UNKNOWN,
+            FactFactory.evidence(file.relativePath(), 1, 1, "BuildFileExtractor", ScannerVersions.BUILD_FILE),
+            file.relativePath(),
+            null,
+            "MavenLockfileUnavailable:" + file.relativePath(),
+            null,
+            props("gapKind", "MavenLockfileUnavailable", "message", message, "messageHash", Hashes.sha256(message, 32)));
     }
 
     private static void extractGradle(ScanManifest manifest, FileInventoryItem file, List<CodeFact> facts, AnalysisGapCollector gaps) {
@@ -275,7 +291,7 @@ public final class BuildFileExtractor {
         }
     }
 
-    private static boolean unsafePackageVersion(String value) {
+    static boolean unsafePackageVersion(String value) {
         String lower = value.toLowerCase();
         return value.contains("://")
             || value.contains("\\")
