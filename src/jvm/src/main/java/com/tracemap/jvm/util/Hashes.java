@@ -10,9 +10,13 @@ public final class Hashes {
     }
 
     public static String sha256(String value, int length) {
+        return sha256(value.getBytes(StandardCharsets.UTF_8), length);
+    }
+
+    public static String sha256(byte[] value, int length) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            String hex = HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
+            String hex = HexFormat.of().formatHex(digest.digest(value));
             return hex.substring(0, Math.min(length, hex.length()));
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 is not available", exception);

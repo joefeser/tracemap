@@ -19,7 +19,7 @@ public final class FileInventory {
     private static final Set<String> EXCLUDED_DIRS = Set.of(
         ".git", "target", "build", ".gradle", "node_modules", "dist", "out", ".idea", ".vscode", ".tracemap");
     private static final Set<String> INCLUDED_NAMES = Set.of(
-        "pom.xml", "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts", "gradle.properties");
+        "pom.xml", "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts", "gradle.properties", "gradle.lockfile");
     private static final Set<String> INCLUDED_EXTENSIONS = Set.of(
         ".java", ".kt", ".kts", ".properties", ".yml", ".yaml", ".json", ".xml", ".sql");
 
@@ -96,10 +96,10 @@ public final class FileInventory {
             return true;
         }
         if ("java".equals(lowerLanguage)) {
-            return relative.endsWith(".java") || relative.endsWith("pom.xml") || relative.endsWith(".gradle") || relative.endsWith(".gradle.kts") || isConfig(relative);
+            return relative.endsWith(".java") || relative.endsWith("pom.xml") || relative.endsWith(".gradle") || relative.endsWith(".gradle.kts") || relative.endsWith("gradle.lockfile") || isConfig(relative);
         }
         if ("kotlin".equals(lowerLanguage)) {
-            return relative.endsWith(".kt") || relative.endsWith(".kts") || relative.endsWith(".gradle") || relative.endsWith(".gradle.kts") || isConfig(relative);
+            return relative.endsWith(".kt") || relative.endsWith(".kts") || relative.endsWith(".gradle") || relative.endsWith(".gradle.kts") || relative.endsWith("gradle.lockfile") || isConfig(relative);
         }
         return true;
     }
@@ -158,6 +158,7 @@ public final class FileInventory {
         if (lower.endsWith(".kt")) return "Kotlin";
         if (lower.endsWith(".kts")) return "KotlinScript";
         if (lower.equals("pom.xml")) return "MavenProject";
+        if (lower.equals("gradle.lockfile")) return "GradleLockfile";
         if (lower.startsWith("build.gradle")) return "GradleBuild";
         if (lower.startsWith("settings.gradle")) return "GradleSettings";
         if (lower.endsWith(".properties")) return "PropertiesConfig";
