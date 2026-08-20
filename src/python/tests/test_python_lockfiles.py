@@ -186,6 +186,85 @@ def test_uv_root_with_malformed_dependency_shape_does_not_prove_relations(tmp_pa
     assert "DirectTransitiveUnavailable" in {fact.properties["gapKind"] for fact in _gap_facts(facts)}
 
 
+def test_uv_grouped_dev_dependencies_are_direct(tmp_path: Path) -> None:
+    lock = tmp_path / "uv.lock"
+    lock.write_text(
+        "version = 1\n"
+        '\n[[package]]\nname = "fixture"\nversion = "0.1.0"\nsource = { virtual = "." }\n'
+        'dependencies = [{ name = "requests" }]\ndev-dependencies = { dev = [{ name = "pytest" }] }\n'
+        '\n[[package]]\nname = "requests"\nversion = "2.32.3"\nsource = { registry = "https://pypi.org/simple" }\n'
+        '\n[[package]]\nname = "pytest"\nversion = "8.3.0"\nsource = { registry = "https://pypi.org/simple" }\n'
+        '\n[[package]]\nname = "urllib3"\nversion = "2.2.2"\nsource = { registry = "https://pypi.org/simple" }\n',
+        encoding="utf-8",
+    )
+
+    facts = read_lockfiles(tmp_path, _manifest("uv-dev-groups"), [lock], [], [])
+
+    assert _by_name(facts, "requests")[0].properties["dependencyRelation"] == "direct"
+    assert _by_name(facts, "pytest")[0].properties["dependencyRelation"] == "direct"
+    assert _by_name(facts, "urllib3")[0].properties["dependencyRelation"] == "transitive"
+    assert "DirectTransitiveUnavailable" not in {fact.properties["gapKind"] for fact in _gap_facts(facts)}
+
+
+def test_uv_dependency_version_qualifier_selects_one_same_name_candidate(tmp_path: Path) -> None:
+    lock = tmp_path / "uv.lock"
+    lock.write_text(
+        "version = 1\n"
+        '\n[[package]]\nname = "fixture"\nversion = "0.1.0"\nsource = { virtual = "." }\n'
+        'dependencies = [{ name = "shared", version = "2.0.0" }]\n'
+        '\n[[package]]\nname = "shared"\nversion = "1.0.0"\nsource = { registry = "https://pypi.org/simple" }\n'
+        '\n[[package]]\nname = "shared"\nversion = "2.0.0"\nsource = { registry = "https://pypi.org/simple" }\n',
+        encoding="utf-8",
+    )
+
+    facts = read_lockfiles(tmp_path, _manifest("uv-version-qualified"), [lock], [], [])
+
+    relations = {
+        fact.properties["resolvedVersion"]: fact.properties["dependencyRelation"]
+        for fact in _by_name(facts, "shared")
+    }
+    assert relations == {"1.0.0": "transitive", "2.0.0": "direct"}
+    assert "DirectTransitiveUnavailable" not in {fact.properties["gapKind"] for fact in _gap_facts(facts)}
+
+
+def test_uv_unqualified_same_name_candidates_leave_relation_unproven(tmp_path: Path) -> None:
+    lock = tmp_path / "uv.lock"
+    lock.write_text(
+        "version = 1\n"
+        '\n[[package]]\nname = "fixture"\nversion = "0.1.0"\nsource = { virtual = "." }\n'
+        'dependencies = [{ name = "shared" }]\n'
+        '\n[[package]]\nname = "shared"\nversion = "1.0.0"\nsource = { registry = "https://pypi.org/simple" }\n'
+        '\n[[package]]\nname = "shared"\nversion = "2.0.0"\nsource = { registry = "https://pypi.org/simple" }\n',
+        encoding="utf-8",
+    )
+
+    facts = read_lockfiles(tmp_path, _manifest("uv-name-ambiguous"), [lock], [], [])
+
+    assert all("dependencyRelation" not in fact.properties for fact in _by_name(facts, "shared"))
+    assert "DirectTransitiveUnavailable" in {fact.properties["gapKind"] for fact in _gap_facts(facts)}
+
+
+def test_uv_dependency_registry_qualifier_selects_one_same_name_candidate(tmp_path: Path) -> None:
+    lock = tmp_path / "uv.lock"
+    lock.write_text(
+        "version = 1\n"
+        '\n[[package]]\nname = "fixture"\nversion = "0.1.0"\nsource = { virtual = "." }\n'
+        'dependencies = [{ name = "shared", version = "2.0.0", source = { registry = "https://packages.example.invalid/simple" } }]\n'
+        '\n[[package]]\nname = "shared"\nversion = "2.0.0"\nsource = { registry = "https://pypi.org/simple" }\n'
+        '\n[[package]]\nname = "shared"\nversion = "2.0.0"\nsource = { registry = "https://packages.example.invalid/simple" }\n',
+        encoding="utf-8",
+    )
+
+    facts = read_lockfiles(tmp_path, _manifest("uv-registry-qualified"), [lock], [], [])
+
+    relations = {
+        fact.properties["registryOrigin"]: fact.properties["dependencyRelation"]
+        for fact in _by_name(facts, "shared")
+    }
+    assert relations == {"pypi.org": "transitive", "packages.example.invalid": "direct"}
+    assert "DirectTransitiveUnavailable" not in {fact.properties["gapKind"] for fact in _gap_facts(facts)}
+
+
 def test_uv_lock_non_registry_sources_emit_explicit_gaps(tmp_path: Path) -> None:
     lock = tmp_path / "uv.lock"
     lock.write_text(
@@ -357,6 +436,39 @@ def test_poetry_lock_relations_come_from_pyproject_declarations(tmp_path: Path) 
     gap_kinds = {fact.properties["gapKind"] for fact in _gap_facts(facts)}
     assert "LockfileDigestUnavailable" in gap_kinds
     assert "DirectTransitiveUnavailable" not in gap_kinds
+
+
+def test_poetry_group_dependencies_are_direct(tmp_path: Path) -> None:
+    lock = tmp_path / "poetry.lock"
+    lock.write_text(POETRY_LOCK, encoding="utf-8")
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        '[tool.poetry.dependencies]\npython = ">=3.11"\n'
+        '[tool.poetry.group.test.dependencies]\nrequests = "^2.32"\n',
+        encoding="utf-8",
+    )
+
+    facts = read_lockfiles(tmp_path, _manifest("poetry-groups"), [lock], [pyproject], [])
+
+    assert _by_name(facts, "requests")[0].properties["dependencyRelation"] == "direct"
+    assert _by_name(facts, "urllib3")[0].properties["dependencyRelation"] == "transitive"
+    assert "DirectTransitiveUnavailable" not in {fact.properties["gapKind"] for fact in _gap_facts(facts)}
+
+
+def test_poetry_malformed_group_dependencies_leave_relations_unproven(tmp_path: Path) -> None:
+    lock = tmp_path / "poetry.lock"
+    lock.write_text(POETRY_LOCK, encoding="utf-8")
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        '[tool.poetry.dependencies]\nrequests = "^2.32"\n'
+        '[tool.poetry.group.test]\ndependencies = ["urllib3"]\n',
+        encoding="utf-8",
+    )
+
+    facts = read_lockfiles(tmp_path, _manifest("poetry-malformed-group"), [lock], [pyproject], [])
+
+    assert all("dependencyRelation" not in fact.properties for fact in _package_facts(facts))
+    assert "DirectTransitiveUnavailable" in {fact.properties["gapKind"] for fact in _gap_facts(facts)}
 
 
 def test_poetry_lock_uses_only_its_sibling_pyproject_in_monorepos(tmp_path: Path) -> None:

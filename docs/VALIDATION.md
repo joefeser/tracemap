@@ -1733,8 +1733,10 @@ relation is unproven) and never produce `ExactArtifactMatch` or
 Adapter validation (Python): the temp venv pytest suite above covers the
 uv/poetry happy paths, malformed/truncated/unsupported lockfiles, unsafe names
 and versions, non-registry sources, duplicate entries, wheel-versus-sdist hash
-ambiguity, absent relation proof, Pipfile `unsupported-metadata`, and repeated
-deterministic output. Adapter validation (JVM): `gradle -p src/jvm test`
+ambiguity, uv development groups and qualifier-aware same-name resolution,
+Poetry main/development/named groups, incomplete declaration gaps, absent
+relation proof, Pipfile `unsupported-metadata`, and repeated deterministic
+output. Adapter validation (JVM): `gradle -p src/jvm test`
 covers gradle.lockfile rows, malformed/unsupported/unsafe rows, duplicate and
 conflicting coordinates, Maven capability gaps, verification-metadata
 non-consumption, and repeat-scan determinism.
