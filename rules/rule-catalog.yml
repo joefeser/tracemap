@@ -5310,18 +5310,33 @@ rules:
   - id: package.decision.correlation.v1
     status: active
     name: Package decision exact-artifact correlation
-    description: Correlates admitted package decisions with PackageReferenced static evidence in a single TraceMap index using a fixed exact-versus-possible ladder.
+    description: Correlates admitted package decisions with PackageReferenced static evidence in single, combined, portfolio, and before/after comparison inputs using a fixed exact-versus-possible ladder.
     evidenceTier: Tier4Unknown
     emits:
       - PackageDecisionCorrelation
       - PackageDecisionGap
       - PackageDecisionArtifactChange
+      - PackageDecisionExternalReference
     limitations:
       - Exact and possible matches remain separate; missing adapter digest or dependency-relation capability is an explicit gap.
       - Correlation is static snapshot evidence and does not prove restore, execution, runtime loading, deployment, safety, or business impact.
       - Reduced coverage and unknown commit identity produce analysis gaps rather than excluded-source conclusions.
       - Origin metadata is bounded and does not authenticate a registry or producer. Version comparisons are exact strings; semantic versioning is not interpreted.
+      - Before/after artifact changes are cross-snapshot portfolio evidence, not a single coherent release state; ArtifactReplaced requires digest-bound evidence on both sides with equal name and exact version, and possible-only changes never claim replacement.
+      - Deployment references render as RuntimeUnprovenReference lineage metadata; TraceMap did not verify the build, deployment, installation, reachability, or runtime load, and references never upgrade a rung, count as exact matches, or trigger --exit-code.
       - The command is read-only reporting and never enforces external admission, rejection, revocation, or quarantine decisions.
+
+  - id: package.decision.advisory.v1
+    status: active
+    name: External framework-implied exposure advisory claims
+    description: Renders bounded, versioned external advisory claims such as framework-implied server surfaces with exact producer and profile provenance; never converts them into TraceMap-proven facts, rungs, or vulnerability statements.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - PackageDecisionAdvisoryClaim
+    limitations:
+      - Advisory claims are external producer opinions; TraceMap neither validates nor endorses them, and the profile digest proves input integrity only, not producer authenticity or authority.
+      - The claim grammar is closed to exact/any version predicates and the framework-implied-server-surface claim kind with a bounded framework parameter; severity, CVE, vulnerability, exploitability, remediation, runtime, and trust-shaped fields are rejected.
+      - Claims never merge into CodeFacts, correlation rungs, summaries, path or reverse context, or exit-code behavior, and TraceMap never invents, enriches, or extrapolates claims.
 
   - id: legacy.baseline.redacted-manifest.v1
     name: Legacy baseline redacted manifest
