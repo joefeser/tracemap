@@ -271,6 +271,7 @@ public static class PackageDecisionCorrelationReporter
     private const string CrossSnapshotWording = "cross-snapshot portfolio evidence, not a single coherent release state";
     private const string RuntimeUnprovenLimitation = "TraceMap did not verify the build, deployment, installation, reachability, or runtime load.";
     private const string AdvisoryLimitation = "Advisory claims are external producer opinions rendered with producer provenance; TraceMap neither validates nor endorses them and never converts them into facts, rungs, vulnerabilities, or severity statements.";
+    private const int MaxComparisonFactsPerPairing = 1000;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -286,6 +287,7 @@ public static class PackageDecisionCorrelationReporter
         "Record digests prove record and artifact-identity integrity; they do not authenticate the producer or confer authority. Provenance is lineage, not trust.",
         "scannedAt is producer-declared and non-authoritative; staleness flags are advisory context.",
         "Adapter capability varies by ecosystem. Missing lockfile digest and direct/transitive capability are reported as explicit gaps.",
+        $"Before/after comparison retains bounded evidence representatives and examines at most {MaxComparisonFactsPerPairing} matching facts per decision/source pairing; exceeding that bound emits TruncatedByLimit and suppresses the affected change claim.",
         "This command is read-only evidence reporting and never grants admission, rejection, revocation, blocking, approval, or enforcement authority."
     ];
 
@@ -381,13 +383,18 @@ public static class PackageDecisionCorrelationReporter
         var findingCapReached = false;
         var gapCapReached = admission.Gaps.Count + externalInputGaps.Length > Math.Max(1, options.MaxGaps);
         var pairingRows = new Dictionary<(string RecordKey, string SourceIndexId), List<PackageDecisionCorrelationRow>>();
+        var truncatedPairings = new HashSet<(string RecordKey, string SourceIndexId)>();
         var blockedSources = new HashSet<string>(StringComparer.Ordinal);
         if (sources.Length == 0 && options.Source is not null)
             AddGap(gaps, options.MaxGaps, ref gapCapReached, new PackageDecisionGap($"pd-selector-source:{Hash(options.Source)}", "SelectorNoMatch", "The requested source selector matched no source snapshot.", RuleId, EvidenceTiers.Tier4Unknown, SourceLabel: SafeInputLabel(options.Source)));
         foreach (var record in records)
         {
+            if (findingCapReached && !comparisonMode)
+                break;
             foreach (var source in sources)
             {
+                if (findingCapReached && !comparisonMode)
+                    break;
                 var recordKey = $"{record.ProducerId}\u001f{record.DecisionId}";
                 if (!pairingRows.TryAdd((recordKey, source.SourceIndexId), []))
                     pairingRows[(recordKey, source.SourceIndexId)] = [];
@@ -427,15 +434,34 @@ public static class PackageDecisionCorrelationReporter
                     continue;
                 }
 
+                var processedPairingFacts = 0;
                 foreach (var fact in rows)
                 {
+                    if (comparisonMode && processedPairingFacts++ >= MaxComparisonFactsPerPairing)
+                    {
+                        truncatedPairings.Add((recordKey, source.SourceIndexId));
+                        AddGap(gaps, options.MaxGaps, ref gapCapReached, new PackageDecisionGap(
+                            $"pd-comparison-cap:{Hash(string.Join('\u001f', recordKey, source.SourceIndexId))}",
+                            "TruncatedByLimit",
+                            "The comparison fact limit was reached for one decision/source pairing; no artifact change is claimed for that pairing.",
+                            RuleId,
+                            EvidenceTiers.Tier4Unknown,
+                            DecisionId: record.DecisionId,
+                            SourceLabel: source.Label,
+                            SourceIndexId: source.SourceIndexId,
+                            ScanId: source.ScanId,
+                            CommitSha: SafeCommit(source.CommitSha)));
+                        break;
+                    }
+
                     var row = Correlate(record, source, fact, index.ScannedAt.GetValueOrDefault(source.SourceIndexId), asOf);
-                    // Pairing data stays complete past the render cap so comparison-mode change rows are
-                    // never derived from a truncated view; only the rendered sections honor the cap.
-                    pairingRows[(recordKey, source.SourceIndexId)].Add(row);
+                    if (comparisonMode)
+                        AddPairingRepresentative(pairingRows[(recordKey, source.SourceIndexId)], row);
                     if (CountRows(exact, mismatch, possible, ambiguous) >= options.MaxFindings)
                     {
                         findingCapReached = true;
+                        if (!comparisonMode)
+                            break;
                         continue;
                     }
 
@@ -469,7 +495,7 @@ public static class PackageDecisionCorrelationReporter
         var selectedAmbiguous = Filter(ambiguous, options.Classification);
         var runtimeUnproven = BuildRuntimeUnprovenReferences(deploymentReferences, index, sources, options.Ecosystem);
         var artifactChanges = comparisonMode
-            ? BuildArtifactChanges(records, unfilteredSources, sources, pairingRows, blockedSources, index, options, gaps, ref gapCapReached)
+            ? BuildArtifactChanges(records, unfilteredSources, sources, pairingRows, truncatedPairings, blockedSources, index, options, gaps, ref gapCapReached)
             : null;
         var contextRows = selectedExact.Concat(selectedMismatch).Concat(selectedPossible).Concat(selectedAmbiguous).ToArray();
         var pathContext = options.IncludePaths ? BuildContext(index, contextRows, options, reverse: false) : null;
@@ -510,7 +536,7 @@ public static class PackageDecisionCorrelationReporter
         var evidenceVersion = resolved ?? version;
         var evidenceDigest = properties.GetValueOrDefault("artifactDigest");
         var evidenceAlgorithm = properties.GetValueOrDefault("artifactDigestAlgorithm");
-        var digestEqual = record.ArtifactDigest is not null && evidenceDigest is not null && string.Equals(record.ArtifactDigestAlgorithm, evidenceAlgorithm, StringComparison.Ordinal) && CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(record.ArtifactDigest), Encoding.UTF8.GetBytes(evidenceDigest));
+        var digestEqual = record.ArtifactDigest is not null && evidenceDigest is not null && string.Equals(record.ArtifactDigestAlgorithm, evidenceAlgorithm, StringComparison.Ordinal) && FixedTimeDigestEquals(record.ArtifactDigest, evidenceDigest);
         var versionEqual = resolvedVersionEqual || declaredVersionEqual;
         var digestMismatch = record.ArtifactDigest is not null && evidenceDigest is not null && versionEqual && !digestEqual;
         var classification = digestEqual && resolvedVersionEqual ? "ExactArtifactMatch" : digestMismatch ? "ArtifactDigestMismatch" : versionEqual ? "PossibleNameVersionMatch" : "AmbiguousIdentity";
@@ -558,14 +584,6 @@ public static class PackageDecisionCorrelationReporter
                         && string.Equals(NormalizeName(reference.Ecosystem, reference.PackageName), NormalizeName(reference.Ecosystem, fact.Properties.GetValueOrDefault("packageName") ?? string.Empty), StringComparison.Ordinal))
                     .Select(fact => (entry.source, fact)))
                 .ToArray();
-            bool DigestJoin(CombinedFactRow fact)
-            {
-                var digest = fact.Properties.GetValueOrDefault("artifactDigest");
-                var algorithm = fact.Properties.GetValueOrDefault("artifactDigestAlgorithm");
-                return reference.ArtifactDigest is not null && digest is not null && string.Equals(reference.ArtifactDigestAlgorithm, algorithm, StringComparison.Ordinal)
-                    && CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(reference.ArtifactDigest), Encoding.UTF8.GetBytes(digest));
-            }
-
             bool NameVersionJoin(CombinedFactRow fact)
             {
                 var resolved = fact.Properties.GetValueOrDefault("resolvedVersion");
@@ -575,8 +593,17 @@ public static class PackageDecisionCorrelationReporter
                 return resolvedEqual || declaredEqual;
             }
 
-            var identityJoined = joined.Where(pair => DigestJoin(pair.fact) || NameVersionJoin(pair.fact)).ToArray();
-            var joinBasis = identityJoined.Any(pair => DigestJoin(pair.fact)) ? "digest" : identityJoined.Length > 0 ? "name-version" : "unmatched";
+            var evaluated = joined.Select(pair =>
+            {
+                var digest = pair.fact.Properties.GetValueOrDefault("artifactDigest");
+                var algorithm = pair.fact.Properties.GetValueOrDefault("artifactDigestAlgorithm");
+                var digestMatches = reference.ArtifactDigest is not null && digest is not null
+                    && string.Equals(reference.ArtifactDigestAlgorithm, algorithm, StringComparison.Ordinal)
+                    && FixedTimeDigestEquals(reference.ArtifactDigest, digest);
+                return (pair.source, pair.fact, digestMatches, nameVersionMatches: NameVersionJoin(pair.fact));
+            }).ToArray();
+            var identityJoined = evaluated.Where(pair => pair.digestMatches || pair.nameVersionMatches).ToArray();
+            var joinBasis = identityJoined.Any(pair => pair.digestMatches) ? "digest" : identityJoined.Length > 0 ? "name-version" : "unmatched";
             var matchedLabels = identityJoined.Select(pair => pair.source.Label)
                 .Concat(sources.Where(source => reference.CommitSha is not null && FullCommit(source.CommitSha) && string.Equals(source.CommitSha, reference.CommitSha, StringComparison.OrdinalIgnoreCase)).Select(source => source.Label))
                 .Distinct(StringComparer.Ordinal)
@@ -623,6 +650,7 @@ public static class PackageDecisionCorrelationReporter
         IReadOnlyList<CombinedReportSource> unfilteredSources,
         IReadOnlyList<CombinedReportSource> selectedSources,
         IReadOnlyDictionary<(string RecordKey, string SourceIndexId), List<PackageDecisionCorrelationRow>> pairingRows,
+        IReadOnlySet<(string RecordKey, string SourceIndexId)> truncatedPairings,
         IReadOnlySet<string> blockedSources,
         IndexRead index,
         PackageDecisionOptions options,
@@ -676,6 +704,10 @@ public static class PackageDecisionCorrelationReporter
                     continue;
                 var blockedSide = before.Any(source => blockedSources.Contains(source.SourceIndexId)) || after.Any(source => blockedSources.Contains(source.SourceIndexId));
                 var bothSidesInScope = before.Length == 1 && after.Length == 1 && beforeSelected && afterSelected;
+                var truncatedSide = before.Any(source => truncatedPairings.Contains((recordKey, source.SourceIndexId)))
+                    || after.Any(source => truncatedPairings.Contains((recordKey, source.SourceIndexId)));
+                if (truncatedSide)
+                    continue;
                 if (blockedSide && bothSidesInScope)
                 {
                     AddGap(gaps, options.MaxGaps, ref gapCapReached, new PackageDecisionGap(
@@ -716,12 +748,12 @@ public static class PackageDecisionCorrelationReporter
                 }
                 else
                 {
-                    beforeSide = ChangeSide("before", BestRow(beforeMatch));
-                    afterSide = ChangeSide("after", BestRow(afterMatch));
                     var beforeDigests = DistinctDigests(beforeMatch);
                     var afterDigests = DistinctDigests(afterMatch);
                     if (beforeDigests.Count > 1 || afterDigests.Count > 1)
                     {
+                        beforeSide = ChangeSide("before", BestRow(beforeMatch));
+                        afterSide = ChangeSide("after", BestRow(afterMatch));
                         changeKind = "identity-ambiguous";
                         notes.Add(new("digest-ambiguous-side", "One comparison side carries multiple distinct artifact digests for the decided name and version; TraceMap did not choose an identity."));
                     }
@@ -729,10 +761,14 @@ public static class PackageDecisionCorrelationReporter
                     {
                         if (string.Equals(beforeDigests[0], afterDigests[0], StringComparison.Ordinal))
                             continue;
+                        beforeSide = ChangeSide("before", BestRowForDigest(beforeMatch, beforeDigests[0]));
+                        afterSide = ChangeSide("after", BestRowForDigest(afterMatch, afterDigests[0]));
                         changeKind = "artifact-replaced";
                     }
                     else
                     {
+                        beforeSide = ChangeSide("before", BestRow(beforeMatch));
+                        afterSide = ChangeSide("after", BestRow(afterMatch));
                         if (Fingerprint(BestRow(beforeMatch)) == Fingerprint(BestRow(afterMatch)))
                             continue;
                         changeKind = "possible-only";
@@ -814,6 +850,37 @@ public static class PackageDecisionCorrelationReporter
 
     private static PackageDecisionCorrelationRow BestRow(IReadOnlyList<PackageDecisionCorrelationRow> rows) =>
         rows.OrderBy(row => RungRank(row.Classification)).ThenBy(row => row.Evidence.FilePath, StringComparer.Ordinal).ThenBy(row => row.Evidence.StartLine).ThenBy(row => row.RowId, StringComparer.Ordinal).First();
+
+    private static PackageDecisionCorrelationRow BestRowForDigest(IReadOnlyList<PackageDecisionCorrelationRow> rows, string digest) =>
+        BestRow(rows.Where(row => string.Equals(row.Evidence.ArtifactDigest, digest, StringComparison.Ordinal)).ToArray());
+
+    private static void AddPairingRepresentative(List<PackageDecisionCorrelationRow> rows, PackageDecisionCorrelationRow candidate)
+    {
+        if (candidate.Classification is not ("ExactArtifactMatch" or "ArtifactDigestMismatch" or "PossibleNameVersionMatch"))
+            return;
+
+        var digest = candidate.Evidence.ArtifactDigest;
+        var matchingIndex = rows.FindIndex(row => string.Equals(row.Evidence.ArtifactDigest, digest, StringComparison.Ordinal));
+        if (matchingIndex >= 0)
+        {
+            if (CompareRows(candidate, rows[matchingIndex]) < 0)
+                rows[matchingIndex] = candidate;
+            return;
+        }
+
+        if (digest is null || rows.Count(row => row.Evidence.ArtifactDigest is not null) < 2)
+            rows.Add(candidate);
+    }
+
+    private static int CompareRows(PackageDecisionCorrelationRow left, PackageDecisionCorrelationRow right)
+    {
+        var rank = RungRank(left.Classification).CompareTo(RungRank(right.Classification));
+        if (rank != 0) return rank;
+        var path = string.Compare(left.Evidence.FilePath, right.Evidence.FilePath, StringComparison.Ordinal);
+        if (path != 0) return path;
+        var line = left.Evidence.StartLine.CompareTo(right.Evidence.StartLine);
+        return line != 0 ? line : string.Compare(left.RowId, right.RowId, StringComparison.Ordinal);
+    }
 
     private static int RungRank(string classification) => classification switch
     {
@@ -1389,15 +1456,26 @@ public static class PackageDecisionCorrelationReporter
                 : $"source-label-hash:{CombinedReportHelpers.Hash(trimmed, 16)}";
     }
 
-    private static string InputIdentity(IReadOnlyList<PackageInputSpec> specs, params string?[] manifestPaths)
+    private static string InputIdentity(IReadOnlyList<PackageInputSpec> specs, string? manifestPath, string? beforeManifestPath, string? afterManifestPath)
     {
         var components = new List<string>();
-        foreach (var manifestPath in manifestPaths.Where(path => !string.IsNullOrWhiteSpace(path)).OrderBy(path => path, StringComparer.Ordinal))
-            components.Add($"manifest:{FileContentHash(manifestPath!)}");
+        if (!string.IsNullOrWhiteSpace(manifestPath))
+            components.Add($"manifest:{FileContentHash(manifestPath)}");
+        if (!string.IsNullOrWhiteSpace(beforeManifestPath))
+            components.Add($"before-manifest:{FileContentHash(beforeManifestPath)}");
+        if (!string.IsNullOrWhiteSpace(afterManifestPath))
+            components.Add($"after-manifest:{FileContentHash(afterManifestPath)}");
         components.AddRange(specs
             .OrderBy(spec => spec.Label, StringComparer.Ordinal)
             .Select(spec => string.Join('\u001f', spec.Label, FileContentHash(spec.IndexPath), spec.ExpectedRepoIdentity ?? string.Empty, spec.ExpectedCommitSha ?? string.Empty)));
         return CombinedReportHelpers.Hash(string.Join('\u001e', components), 16);
+    }
+
+    private static bool FixedTimeDigestEquals(string left, string right)
+    {
+        var leftBytes = Encoding.UTF8.GetBytes(left);
+        var rightBytes = Encoding.UTF8.GetBytes(right);
+        return leftBytes.Length == rightBytes.Length && CryptographicOperations.FixedTimeEquals(leftBytes, rightBytes);
     }
 
     private static string FileContentHash(string path)

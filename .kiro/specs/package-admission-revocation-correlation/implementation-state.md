@@ -43,9 +43,12 @@ closure, and the capability-matrix refresh) is shipped on this branch. Task
   no change row (an unseen side is not an absent side). Every change row
   carries both evidence chains and the fixed wording "cross-snapshot
   portfolio evidence, not a single coherent release state". Change rows are
-  capped by `--max-findings` with a `TruncatedByLimit` gap; pairing data
-  stays complete past the correlation render cap so truncated runs never
-  derive added/removed changes from a partial view.
+  capped by `--max-findings` with a `TruncatedByLimit` gap. Comparison keeps
+  at most one deterministic representative for missing-digest evidence and
+  two distinct digest representatives per decision/source pairing, examines
+  at most 1000 matching facts per pairing, and emits `TruncatedByLimit` while
+  suppressing that pairing's change claim if the examination bound is reached.
+  Snapshot mode stops correlation work at the render cap.
 - Slice 11 (advisory profile external claims): `PackageDecisionAdvisoryProfileReader`
   admits the closed `advisory-profile.v1` envelope (producer id/version,
   bounded non-empty claims, 200-claim whole-input limit) with the closed
