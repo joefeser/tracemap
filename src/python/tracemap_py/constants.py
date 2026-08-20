@@ -63,6 +63,7 @@ class ScannerVersions:
     REPO = "python-repo/0.1.0"
     INVENTORY = "python-inventory/0.1.0"
     METADATA = "python-metadata/0.1.0"
+    LOCKFILE = "python-lockfile/0.1.0"
     CONFIG = "python-config/0.1.0"
     AST = "python-ast/0.1.0"
     INTEGRATION = "python-integration/0.1.0"
