@@ -29,6 +29,27 @@ public sealed class PackageDecisionTests
     }
 
     [Fact]
+    public void Reader_accepts_hyphenated_and_coordinate_names_but_not_unsafe_shapes()
+    {
+        var admitted = PackageDecisionRecordReader.Read("{\"version\":\"package-decision.v1\",\"records\":["
+            + "{\"decisionId\":\"dec-hyphen\",\"decisionKind\":\"admit\",\"ecosystem\":\"npm\",\"packageName\":\"left-pad\",\"artifactVersion\":\"1.0.0\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\"},"
+            + "{\"decisionId\":\"dec-python\",\"decisionKind\":\"admit\",\"ecosystem\":\"python\",\"packageName\":\"flask-sqlalchemy\",\"artifactVersion\":\"3.0.3\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\"},"
+            + "{\"decisionId\":\"dec-digit\",\"decisionKind\":\"admit\",\"ecosystem\":\"python\",\"packageName\":\"3d-toolkit\",\"artifactVersion\":\"1.0.0\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\"},"
+            + "{\"decisionId\":\"dec-gradle\",\"decisionKind\":\"admit\",\"ecosystem\":\"gradle\",\"packageName\":\"org.springframework:spring-web\",\"artifactVersion\":\"6.2.0\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\"}"
+            + "]}");
+        Assert.Equal(4, admitted.Records.Count);
+        Assert.Empty(admitted.Gaps);
+
+        var rejected = PackageDecisionRecordReader.Read("{\"version\":\"package-decision.v1\",\"records\":["
+            + "{\"decisionId\":\"dec-lead-hyphen\",\"decisionKind\":\"admit\",\"ecosystem\":\"npm\",\"packageName\":\"-bad\",\"artifactVersion\":\"1.0.0\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\"},"
+            + "{\"decisionId\":\"dec-double-colon\",\"decisionKind\":\"admit\",\"ecosystem\":\"maven\",\"packageName\":\"g:a:v\",\"artifactVersion\":\"1.0.0\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\"},"
+            + "{\"decisionId\":\"dec-path\",\"decisionKind\":\"admit\",\"ecosystem\":\"npm\",\"packageName\":\"a/b\",\"artifactVersion\":\"1.0.0\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\"}"
+            + "]}");
+        Assert.Empty(rejected.Records);
+        Assert.All(rejected.Gaps, gap => Assert.Equal("DecisionInputIdentityUnsafe", gap.Classification));
+    }
+
+    [Fact]
     public void Reader_rejects_unsafe_values_without_echoing_them()
     {
         const string secret = "git+ssh://user:pass@example.invalid/private/path";

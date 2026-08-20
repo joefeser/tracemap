@@ -49,6 +49,9 @@ def read_package_metadata(repo: Path, manifest: ScanManifest, files: list[Path],
             elif path.name == "setup.py":
                 gaps.append(f"Dynamic setup.py metadata not executed: {rel}")
                 facts.append(_gap_fact(manifest, rel, "dynamic-setup", "setup.py was not executed"))
+            elif path.name == "Pipfile":
+                gaps.append(f"UnsupportedPythonMetadata: {rel}: Pipfile")
+                facts.append(_gap_fact(manifest, rel, "unsupported-metadata", "Pipfile is inventoried but not supported; no package evidence was extracted"))
         except Exception as exc:
             gaps.append(f"PythonMetadataParseFailed: {rel}: {type(exc).__name__}")
             facts.append(_gap_fact(manifest, rel, "metadata-parse", type(exc).__name__))

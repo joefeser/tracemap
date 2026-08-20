@@ -25,6 +25,7 @@ EXCLUDED_DIRS = {
 CONFIG_EXTENSIONS = {".env", ".ini", ".cfg", ".toml", ".yaml", ".yml", ".json"}
 SQL_EXTENSIONS = {".sql"}
 METADATA_NAMES = {"pyproject.toml", "setup.cfg", "setup.py", "Pipfile"}
+LOCKFILE_NAMES = {"uv.lock", "poetry.lock"}
 
 
 def discover_inventory(repo: Path, options: ScanOptions) -> list[FileInventoryItem]:
@@ -72,6 +73,8 @@ def classify(path: Path) -> str | None:
         return "PythonSource"
     if suffix == ".pyi":
         return "PythonStub"
+    if name in LOCKFILE_NAMES:
+        return "PythonLockfile"
     if name in METADATA_NAMES or name.startswith("requirements") and name.endswith(".txt"):
         return "PythonMetadata"
     if suffix in SQL_EXTENSIONS:

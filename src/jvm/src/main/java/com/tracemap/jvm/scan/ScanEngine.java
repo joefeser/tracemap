@@ -2,6 +2,7 @@ package com.tracemap.jvm.scan;
 
 import com.tracemap.jvm.extract.BuildFileExtractor;
 import com.tracemap.jvm.extract.ConfigExtractor;
+import com.tracemap.jvm.extract.GradleLockfileExtractor;
 import com.tracemap.jvm.extract.JavaSemanticExtractor;
 import com.tracemap.jvm.extract.JavaSyntaxExtractor;
 import com.tracemap.jvm.extract.KotlinSyntaxExtractor;
@@ -80,6 +81,7 @@ public final class ScanEngine {
         List<CodeFact> facts = new ArrayList<>();
         facts.addAll(fileFacts(provisional, inventory));
         facts.addAll(BuildFileExtractor.extract(provisional, inventory, gaps));
+        facts.addAll(GradleLockfileExtractor.extract(provisional, inventory, gaps));
         facts.addAll(ConfigExtractor.extract(provisional, inventory, gaps));
         facts.addAll(SqlResourceExtractor.extract(provisional, inventory, gaps));
         facts.addAll(JavaSyntaxExtractor.extract(provisional, inventory));

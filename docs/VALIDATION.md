@@ -1716,6 +1716,87 @@ on the evidence rows; no `ExactArtifactMatch` is possible; unsupported
 `Package.resolved` schemas keep their gap; and outputs stay byte-deterministic
 with no raw URLs, revisions, or non-hex checksum values.
 
+### Package decision correlation (PR4: Python + JVM resolved evidence)
+
+Python `uv.lock`/`poetry.lock` and JVM `gradle.lockfile` rows carry resolved
+versions, lockfile path/hash, and (Python only, where proven) a direct or
+transitive relation. None of these formats can prove an artifact digest against
+a `package-decision.v1` record: Python lockfile hashes are wheel/sdist
+artifact-form specific, `gradle.lockfile` has no hashes, and
+`gradle/verification-metadata.xml` checksums cannot be tied to the record's
+unnamed artifact form. Both ecosystems therefore correlate at
+`PossibleNameVersionMatch` with `matchBasis=resolved-version` plus
+`LockfileDigestUnavailable` (and `DirectTransitiveUnavailable` where the
+relation is unproven) and never produce `ExactArtifactMatch` or
+`ArtifactDigestMismatch`.
+
+Adapter validation (Python): the temp venv pytest suite above covers the
+uv/poetry happy paths, malformed/truncated/unsupported lockfiles, unsafe names
+and versions, non-registry sources, duplicate entries, wheel-versus-sdist hash
+ambiguity, uv development groups and qualifier-aware same-name resolution,
+Poetry main/development/named groups, incomplete declaration gaps, absent
+relation proof, Pipfile `unsupported-metadata`, and repeated deterministic
+output. Adapter validation (JVM): `gradle -p src/jvm test`
+covers gradle.lockfile rows, malformed/unsupported/unsafe rows, duplicate and
+conflicting coordinates, Maven capability gaps, verification-metadata
+non-consumption, and repeat-scan determinism.
+
+For the Python end-to-end smoke, copy the fixture into a temporary git repo,
+scan it with the Python adapter, validate the artifacts, and correlate:
+
+```bash
+smoke_root="$(mktemp -d)"
+mkdir -p "$smoke_root/repo"
+cp samples/package-decisions/python-lock-fixture/pyproject.toml \
+   samples/package-decisions/python-lock-fixture/uv.lock "$smoke_root/repo/"
+git -C "$smoke_root/repo" init
+git -C "$smoke_root/repo" add .
+git -C "$smoke_root/repo" -c user.email=tracemap@example.invalid \
+  -c user.name=TraceMap commit -m fixture
+/tmp/tracemap-python-venv/bin/python -m tracemap_py.cli scan \
+  --repo "$smoke_root/repo" --out "$smoke_root/scan"
+python3 scripts/validate-adapter-artifacts.py "$smoke_root/scan"
+dotnet run --project src/dotnet/TraceMap.Cli -- package-decision \
+  --decision samples/package-decisions/python-lock-fixture/decision-python.json \
+  --index "$smoke_root/scan/index.sqlite" \
+  --out "$smoke_root/decision-report" --exit-code
+```
+
+Confirm: `requests` (whose revoke record carries the sha256 value that equals
+the lockfile's synthetic sdist hash) and `urllib3` correlate only as
+`resolved-version` possible matches; the `requests` rows carry
+`dependencyRelation=direct` and `urllib3` `transitive` (proven from well-typed
+dependency declarations on the uv.lock root entry); every matched pairing reports
+`LockfileDigestUnavailable`; the exit code stays 0; no `artifactDigest`
+appears anywhere; and re-running the correlation produces byte-identical
+outputs. A repository with an inventoried `Pipfile` emits an
+`unsupported-metadata` analysis gap instead of silence.
+
+For the Gradle end-to-end smoke, install the JVM scanner distribution, scan
+the fixture repo, validate the artifacts, and correlate:
+
+```bash
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \
+  gradle -p src/jvm installDist
+src/jvm/build/install/tracemap-jvm/bin/tracemap-jvm scan \
+  --repo samples/package-decisions/gradle-lock-fixture \
+  --out /tmp/tracemap-gradle-lock-fixture
+python3 scripts/validate-adapter-artifacts.py /tmp/tracemap-gradle-lock-fixture
+dotnet run --project src/dotnet/TraceMap.Cli -- package-decision \
+  --decision samples/package-decisions/gradle-lock-fixture/decision-gradle.json \
+  --index /tmp/tracemap-gradle-lock-fixture/index.sqlite \
+  --out /tmp/tracemap-gradle-decision-report --exit-code
+```
+
+Confirm: `org.springframework:spring-web` (whose reject record carries a
+sha256 digest) and `com.example:fixture-lib` correlate only as
+`resolved-version` possible matches under `jvm.buildfile.v1` with the
+`GradleLockfileExtractor` provenance; every matched pairing reports
+`LockfileDigestUnavailable` and `DirectTransitiveUnavailable`; the exit code
+stays 0; a scanned `pom.xml` additionally emits a `MavenLockfileUnavailable`
+capability gap while its declared build-file rows are unchanged; and repeated
+correlation runs are byte-identical.
+
 ### Cross-adapter scan-truth conformance
 
 For changes to adapter inventory, scan identity, snapshot verification,

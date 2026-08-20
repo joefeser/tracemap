@@ -16,3 +16,13 @@ content.
   `samples/swift-dependency-surfaces` scan output (SwiftPM `alamofire` pin and
   CocoaPods `Alamofire` pod). Swift evidence never yields an artifact digest,
   so correlation stays possible-only.
+- `python-lock-fixture/`: PR4 Python `uv.lock` fixture (a root project with a
+  direct `requests`, a direct `flask`, and a transitive `urllib3`) plus
+  `decision-python.json`. The revoke record's sha256 digest deliberately equals
+  the lockfile's synthetic source-distribution hash: uv.lock/poetry.lock hashes
+  are wheel/sdist artifact-form specific, so they are never emitted as artifact
+  digests and correlation stays possible-only.
+- `gradle-lock-fixture/`: PR4 Gradle `gradle.lockfile` fixture plus
+  `decision-gradle.json`. gradle.lockfile provides resolved versions only; the
+  reject record's sha256 digest still correlates possible-only because the
+  format and the decision record cannot prove the same artifact form.
