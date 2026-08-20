@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "dependencies": {
+    "net8.0": {
+      "Example.Package": {
+        "type": "Direct",
+        "requested": "[1.2.3, )",
+        "resolved": "1.2.3",
+        "contentHash": "fixture-content-hash-that-is-never-an-artifact-digest==",
+        "dependencies": {
+          "Example.Transitive": "2.0.0"
+        }
+      },
+      "Example.Transitive": {
+        "type": "Transitive",
+        "resolved": "2.0.0",
+        "contentHash": "another-fixture-content-hash=="
+      }
+    },
+    "net9.0": {
+      "Example.Package": {
+        "type": "Direct",
+        "requested": "[1.2.3, )",
+        "resolved": "1.2.3",
+        "contentHash": "net9-fixture-content-hash=="
+      }
+    }
+  }
+}
