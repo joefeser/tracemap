@@ -4201,7 +4201,7 @@ rules:
 
   - id: typescript.package.v1
     name: TypeScript package metadata
-    description: Reads package.json package identity, dependencies, and script key facts without storing raw script commands.
+    description: Reads bounded package.json and npm package-lock.json v2/v3 package identity and dependency metadata without storing raw script commands or registry URLs.
     evidenceTier: Tier2Structural
     emits:
       - ProjectDeclared
@@ -4211,8 +4211,9 @@ rules:
     limitations:
       - Package scripts are stored as hashes and key paths only.
       - Package metadata is structural evidence; it does not prove runtime loading.
-      - Package dependency rows are static package.json declarations and do not prove install, lockfile resolution, bundler inclusion, import/use, or deployment.
-      - Workspace resolution, registry metadata, package-manager execution, and transitive dependency solving are out of scope.
+      - Package dependency rows are static declarations or lockfile metadata and do not prove install, package content, bundler inclusion, import/use, or deployment.
+      - Lockfile integrity is registry-declared tarball metadata; TraceMap does not fetch or verify package content.
+      - npm lockfile extraction is offline and bounded to v2/v3; dependency solving, workspace resolution, and package-manager execution are out of scope.
 
   - id: typescript.config.v1
     name: TypeScript config keys

@@ -38,22 +38,22 @@ Validation: `dotnet test src/dotnet/TraceMap.sln --filter "FullyQualifiedName~Pa
 
 Stop conditions: none expected. If exact/possible separation cannot be preserved through some summary path, stop and fix the summary rather than merging counts.
 
-## Slice 3 — Combined index and portfolio manifest inputs
+## Slice 3 — Combined index and portfolio manifest inputs (PR2)
 
-- [ ] 3.1 Accept combined indexes and repeatable `--index`/`--label` pairs; expand `index_sources` preserving container/original labels; reuse the package-config surface projection path that `package-impact` uses.
-- [ ] 3.2 Accept `--manifest <portfolio.json>` (v1.0 format, existing label/path/identity-hint rules); portfolio-style source rows with coverage status; duplicate-identity → `UnknownAnalysisGap`; unknown commit SHA → `UnknownAnalysisGap`.
-- [ ] 3.3 Fixture F9 (two-repo portfolio) with committed expected-output assertions; per-source excluded-vs-gap coverage behavior tests; `--source`, `--ecosystem`, `--decision-id`, `--classification` selectors.
+- [x] 3.1 Accept combined indexes and repeatable `--index`/`--label` pairs; expand `index_sources` preserving container/original labels; reuse the package-config surface projection path that `package-impact` uses.
+- [x] 3.2 Accept `--manifest <portfolio.json>` (v1.0 format, existing label/path/identity-hint rules); portfolio-style source rows with coverage status; duplicate-identity → `UnknownAnalysisGap`; unknown commit SHA → `UnknownAnalysisGap`.
+- [x] 3.3 Fixture F9 (two-repo portfolio) with committed expected-output assertions; per-source excluded-vs-gap coverage behavior tests; `--source`, `--ecosystem`, `--decision-id`, `--classification` selectors.
 
 Validation: `dotnet test src/dotnet/TraceMap.sln --filter "FullyQualifiedName~PackageDecision"`; focused portfolio regression `dotnet test src/dotnet/TraceMap.sln --filter "FullyQualifiedName~PortfolioReport"`; `./scripts/check-private-paths.sh`; `git diff --check`.
 
 Stop conditions: if portfolio manifest reuse requires changing the portfolio reader's public behavior, stop and propose an additive local reader instead of mutating portfolio semantics.
 
-## Slice 4 — npm lockfile artifact identity (first digest-capable adapter)
+## Slice 4 — npm lockfile artifact identity (first digest-capable adapter, PR2)
 
-- [ ] 4.1 Extend the TypeScript adapter with `package-lock.json` (v2/v3) extraction emitting `PackageReferenced` rows with `sourceKind=lockfile`, `resolvedVersion`, `lockfilePath`, `lockfileHash`, `registryOrigin` (host-only from `resolved`), `artifactDigestAlgorithm=sha512-base64`, `artifactDigest`, `dependencyRelation` (direct = also declared in `package.json`; transitive = lockfile-only), `dependencyPathDepth` where recorded.
-- [ ] 4.2 Update `typescript.package.v1` catalog entry (emits + limitations: lockfile is checked-in metadata; integrity is the registry-declared tarball integrity, not content verified by TraceMap; no solving) and `docs/VALIDATION.md` smoke entries.
-- [ ] 4.3 End-to-end fixtures F1 (exact + direct), F2 (revoked artifact B), F4 (transitive), F6 (missing integrity → gap + possible), F3 (same name/version, different digest → `ArtifactDigestMismatch`): prove the rung changes when only the digest changes.
-- [ ] 4.4 Adapter validation per `docs/VALIDATION.md`: `npm run check --prefix src/typescript`; pinned TypeScript smokes; `python3 scripts/validate-adapter-artifacts.py <scan-output>`; combined combine/report/paths smoke.
+- [x] 4.1 Extend the TypeScript adapter with `package-lock.json` (v2/v3) extraction emitting `PackageReferenced` rows with `sourceKind=lockfile`, `resolvedVersion`, `lockfilePath`, `lockfileHash`, `registryOrigin` (host-only from `resolved`), `artifactDigestAlgorithm=sha512-base64`, `artifactDigest`, `dependencyRelation` (direct = also declared in `package.json`; transitive = lockfile-only), `dependencyPathDepth` where recorded.
+- [x] 4.2 Update `typescript.package.v1` catalog entry (emits + limitations: lockfile is checked-in metadata; integrity is the registry-declared tarball integrity, not content verified by TraceMap; no solving) and `docs/VALIDATION.md` smoke entries.
+- [x] 4.3 End-to-end fixtures F1 (exact + direct), F2 (revoked artifact B), F4 (transitive), F6 (missing integrity → gap + possible), F3 (same name/version, different digest → `ArtifactDigestMismatch`): prove the rung changes when only the digest changes.
+- [ ] 4.4 Adapter validation per `docs/VALIDATION.md`: `npm run check --prefix src/typescript`; pinned TypeScript smokes; `python3 scripts/validate-adapter-artifacts.py <scan-output>`; combined combine/report/paths smoke. The focused adapter suite and checked-in lockfile fixture pass. The pinned `scip-typescript` scan completes, but that pinned commit has no `package-lock.json`, and artifact validation currently reports pre-existing absolute-path findings in unrelated facts; see `implementation-state.md`. Keep this task open until a reviewed pinned npm-lockfile smoke exists and the shared validator passes.
 
 Validation: adapter matrix commands above plus `dotnet test src/dotnet/TraceMap.sln --filter "FullyQualifiedName~PackageDecision"`; `./scripts/check-private-paths.sh`; `git diff --check`.
 
@@ -90,10 +90,10 @@ Stop conditions: if lock hash field semantics cannot be verified deterministical
 
 Stop conditions: if `verification-metadata.xml` parsing is not deterministic offline (transform-generated formatting variance, for example), ship `gradle.lockfile` resolved versions only, emit the digest capability gap, and record the decision.
 
-## Slice 9 — Optional path and reverse context
+## Slice 9 — Optional path and reverse context (PR2)
 
-- [ ] 9.1 `--include-paths`/`--include-reverse` over combined inputs reusing the existing graph inventory and bounds; dedicated report sections; path context never upgrades rungs; `TruncatedByLimit` preserved.
-- [ ] 9.2 Tests: attachment to matched `package-config` surfaces; unavailable/truncated statuses; determinism with path context enabled.
+- [x] 9.1 `--include-paths`/`--include-reverse` over combined inputs reusing the existing graph inventory and bounds; dedicated report sections; path context never upgrades rungs; `TruncatedByLimit` preserved.
+- [x] 9.2 Tests: attachment to matched `package-config` surfaces; unavailable/truncated statuses; determinism with path context enabled.
 
 Validation: `dotnet test src/dotnet/TraceMap.sln --filter "FullyQualifiedName~CombinedDependencyPath|FullyQualifiedName~CombinedReverseQuery|FullyQualifiedName~PackageDecision"`.
 

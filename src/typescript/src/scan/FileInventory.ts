@@ -55,7 +55,7 @@ async function visit(root: string, current: string, outputPath: string, options:
 }
 
 function isSupported(relativePath: string): boolean {
-  if (path.basename(relativePath) === "package.json") {
+  if (path.basename(relativePath) === "package.json" || path.basename(relativePath) === "package-lock.json") {
     return true;
   }
   if (/^tsconfig.*\.json$/.test(path.basename(relativePath))) {
@@ -88,6 +88,9 @@ function kindFor(relativePath: string): string {
   }
   if (path.basename(relativePath) === "package.json") {
     return "package-json";
+  }
+  if (path.basename(relativePath) === "package-lock.json") {
+    return "package-lock";
   }
   return "json-config";
 }

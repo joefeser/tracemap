@@ -1,7 +1,9 @@
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Data.Sqlite;
 using TraceMap.Cli;
+using TraceMap.Combine;
 using TraceMap.Core;
 using TraceMap.Reporting;
 using TraceMap.Storage;
@@ -136,6 +138,115 @@ public sealed class PackageDecisionTests
     }
 
     [Fact]
+    public async Task Composition_preserves_labels_portfolio_identity_and_optional_context()
+    {
+        using var temp = new TempDirectory();
+        var firstIndex = Path.Combine(temp.Path, "first.sqlite");
+        var secondIndex = Path.Combine(temp.Path, "second.sqlite");
+        var decisionPath = Path.Combine(temp.Path, "decision.json");
+        var manifestPath = Path.Combine(temp.Path, "portfolio.json");
+        var first = Manifest("first", "typescript-scanner");
+        var second = Manifest("second", "typescript-scanner");
+        var digest = new string('a', 64);
+        SqliteIndexWriter.Write(firstIndex, first, [DigestPackageFact(first, "example", "1.0.0", digest)]);
+        SqliteIndexWriter.Write(secondIndex, second, [PackageFact(second, "other", "npm", "package.json", "dependencies", "1.0.0")]);
+        await File.WriteAllTextAsync(decisionPath, "{\"version\":\"package-decision.v1\",\"records\":[{\"decisionId\":\"dec-composed\",\"decisionKind\":\"reject\",\"ecosystem\":\"npm\",\"packageName\":\"example\",\"artifactVersion\":\"1.0.0\",\"artifactDigestAlgorithm\":\"sha256\",\"artifactDigest\":\"" + digest + "\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\"}]}");
+        await File.WriteAllTextAsync(manifestPath, "{\"version\":\"1.0\",\"portfolioId\":\"fixture\",\"snapshotId\":\"one\",\"inputs\":[{\"label\":\"web\",\"indexPath\":\"first.sqlite\"},{\"label\":\"api\",\"indexPath\":\"second.sqlite\"}]}");
+
+        var repeated = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(
+            decisionPath,
+            firstIndex,
+            Path.Combine(temp.Path, "repeated"),
+            IndexPaths: [firstIndex, secondIndex],
+            Labels: ["web", "api"],
+            IncludePaths: true,
+            IncludeReverse: true));
+        Assert.Contains(repeated.Report.Sources, source => source.Label == "web" && source.ContainerLabel == "web");
+        Assert.Contains(repeated.Report.Sources, source => source.Label == "api" && source.ContainerLabel == "api");
+        Assert.Single(repeated.Report.ExactMatches);
+        Assert.Equal("web", repeated.Report.ExactMatches[0].SourceLabel);
+        Assert.Equal("unavailable", ((PackageDecisionContext)repeated.Report.PathContext!).Status);
+        Assert.Equal("unavailable", ((PackageDecisionContext)repeated.Report.ReverseContext!).Status);
+        Assert.Contains(((PackageDecisionContext)repeated.Report.PathContext!).Gaps, gap => gap.Classification == "UnknownAnalysisGap" && gap.SupportingFactIds!.Count > 0);
+
+        var portfolio = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(
+            decisionPath,
+            string.Empty,
+            Path.Combine(temp.Path, "portfolio"),
+            ManifestPath: manifestPath));
+        Assert.Equal(2, portfolio.Report.Summary.SourceCount);
+        Assert.Contains(portfolio.Report.ExactMatches, row => row.SourceLabel == "web");
+        Assert.Contains(portfolio.Report.ExcludedSources, row => row.SourceLabel == "api");
+        var json = await File.ReadAllTextAsync(Path.Combine(temp.Path, "portfolio", "package-decision-report.json"));
+        Assert.DoesNotContain(firstIndex, json, StringComparison.Ordinal);
+        Assert.DoesNotContain(secondIndex, json, StringComparison.Ordinal);
+
+        var secondManifestPath = Path.Combine(temp.Path, "portfolio-second.json");
+        await File.WriteAllTextAsync(secondManifestPath, "{\"version\":\"1.0\",\"portfolioId\":\"fixture\",\"snapshotId\":\"two\",\"inputs\":[{\"label\":\"web\",\"indexPath\":\"first.sqlite\"},{\"label\":\"api\",\"indexPath\":\"second.sqlite\"}]}");
+        var secondPortfolio = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(
+            decisionPath, string.Empty, Path.Combine(temp.Path, "portfolio-second"), ManifestPath: secondManifestPath));
+        Assert.NotEqual(portfolio.Report.Query.IndexPathHash, secondPortfolio.Report.Query.IndexPathHash);
+    }
+
+    [Fact]
+    public async Task Context_traverses_bounded_combined_graph_and_preserves_provenance()
+    {
+        using var temp = new TempDirectory();
+        var sourceIndex = Path.Combine(temp.Path, "source.sqlite");
+        var combinedIndex = Path.Combine(temp.Path, "combined.sqlite");
+        var decisionPath = Path.Combine(temp.Path, "decision.json");
+        var manifest = Manifest("context", "tracemap");
+        var digest = new string('c', 64);
+        var package = DigestPackageFact(manifest, "example", "1.0.0", digest) with { SourceSymbol = "method:terminal" };
+        var otherPackage = DigestPackageFact(manifest, "other", "2.0.0", new string('d', 64)) with { SourceSymbol = "method:terminal" };
+        var first = RelationshipFact(manifest, "call-root", "method:root", "method:middle", 10);
+        var second = RelationshipFact(manifest, "call-middle", "method:middle", "method:terminal", 20);
+        SqliteIndexWriter.Write(sourceIndex, manifest, [first, second, package, otherPackage]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([sourceIndex], combinedIndex, ["app"]));
+        await File.WriteAllTextAsync(decisionPath, "{\"version\":\"package-decision.v1\",\"records\":[{\"decisionId\":\"dec-context\",\"decisionKind\":\"reject\",\"ecosystem\":\"npm\",\"packageName\":\"example\",\"artifactVersion\":\"1.0.0\",\"artifactDigestAlgorithm\":\"sha256\",\"artifactDigest\":\"" + digest + "\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\"},{\"decisionId\":\"dec-other\",\"decisionKind\":\"reject\",\"ecosystem\":\"npm\",\"packageName\":\"other\",\"artifactVersion\":\"2.0.0\",\"artifactDigestAlgorithm\":\"sha256\",\"artifactDigest\":\"" + new string('d', 64) + "\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\"}]}");
+
+        var result = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(
+            decisionPath, combinedIndex, Path.Combine(temp.Path, "report"), IncludePaths: true, IncludeReverse: true, MaxDepth: 8, MaxPaths: 1));
+
+        var pathContext = (PackageDecisionContext)result.Report.PathContext!;
+        var path = Assert.Single(pathContext.Rows);
+        Assert.Equal("truncated", pathContext.Status);
+        Assert.DoesNotContain(pathContext.Gaps, gap => gap.Classification == "UnknownAnalysisGap" && gap.Message.StartsWith("No bounded static", StringComparison.Ordinal));
+        Assert.Equal("3", path.Metadata.Single(pair => pair.Key == "pathLength").Value);
+        Assert.True(path.SupportingEdgeIds.Count >= 3);
+        Assert.Equal("package-lock.json", path.FilePath);
+        Assert.Equal(5, path.StartLine);
+        Assert.Equal(manifest.CommitSha, path.CommitSha);
+        Assert.Equal("TestExtractor", path.ExtractorId);
+        Assert.Equal("1.0.0", path.ExtractorVersion);
+        Assert.NotEmpty(path.SupportingFactIds);
+        Assert.Equal(CombinedDependencyPathClassifications.ProbableStaticPath, path.Classification);
+        Assert.Equal("combined.paths.surface-evidence.v1", path.RuleId);
+        Assert.Contains("combined.paths.surface-evidence.v1", path.RuleIds!);
+
+        var reversePath = Assert.Single(((PackageDecisionContext)result.Report.ReverseContext!).Rows, row => row.PackageName == "example");
+        Assert.Equal(CombinedReverseClassifications.NeedsReviewReversePath, reversePath.Classification);
+        Assert.Equal(CombinedReverseReporter.PathRuleId, reversePath.RuleId);
+        Assert.Contains(CombinedReverseReporter.PathRuleId, reversePath.RuleIds!);
+
+        var repeated = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(
+            decisionPath,
+            combinedIndex,
+            Path.Combine(temp.Path, "repeated-combined"),
+            IndexPaths: [combinedIndex, combinedIndex],
+            Labels: ["first", "second"],
+            IncludePaths: true));
+        Assert.Contains(repeated.Report.Gaps, gap => gap.Message.Contains("Duplicate portfolio source identity", StringComparison.Ordinal));
+        Assert.NotEmpty(((PackageDecisionContext)repeated.Report.PathContext!).Rows);
+        Assert.DoesNotContain(((PackageDecisionContext)repeated.Report.PathContext!).Gaps, gap => gap.Message.Contains("inventory was unavailable", StringComparison.Ordinal));
+
+        var bounded = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(
+            decisionPath, combinedIndex, Path.Combine(temp.Path, "bounded"), IncludePaths: true, MaxDepth: 1));
+        Assert.Equal("truncated", ((PackageDecisionContext)bounded.Report.PathContext!).Status);
+        Assert.Contains(((PackageDecisionContext)bounded.Report.PathContext!).Gaps, gap => gap.Classification == "TruncatedByLimit");
+    }
+
+    [Fact]
     public async Task Correlation_fails_closed_for_invalid_envelope_and_protects_inputs()
     {
         using var temp = new TempDirectory();
@@ -151,6 +262,52 @@ public sealed class PackageDecisionTests
         await File.WriteAllTextAsync(decisionPath, validDecision);
         await Assert.ThrowsAsync<InvalidDataException>(() => PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decisionPath, indexPath, decisionPath)));
         Assert.Equal(validDecision, await File.ReadAllTextAsync(decisionPath));
+
+        var hardLinkOutput = Path.Combine(temp.Path, "hard-link-output.json");
+        CreateHardLink(hardLinkOutput, decisionPath);
+        await Assert.ThrowsAsync<InvalidDataException>(() => PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decisionPath, indexPath, hardLinkOutput)));
+        Assert.Equal(validDecision, await File.ReadAllTextAsync(decisionPath));
+
+        var manifestPath = Path.Combine(temp.Path, "portfolio.json");
+        await File.WriteAllTextAsync(manifestPath, "{\"version\":\"1.0\",\"portfolioId\":\"fixture\",\"snapshotId\":\"one\",\"inputs\":[{\"label\":\"app\",\"indexPath\":\"index.sqlite\"}]}");
+        var manifestBytes = await File.ReadAllBytesAsync(manifestPath);
+        await Assert.ThrowsAsync<InvalidDataException>(() => PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decisionPath, string.Empty, manifestPath, ManifestPath: manifestPath)));
+        Assert.Equal(manifestBytes, await File.ReadAllBytesAsync(manifestPath));
+        if (OperatingSystem.IsWindows() || OperatingSystem.IsMacOS())
+        {
+            var caseVariant = Path.Combine(temp.Path, "PORTFOLIO.JSON");
+            await Assert.ThrowsAsync<InvalidDataException>(() => PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decisionPath, string.Empty, caseVariant, ManifestPath: manifestPath)));
+            Assert.Equal(manifestBytes, await File.ReadAllBytesAsync(manifestPath));
+        }
+        await Assert.ThrowsAsync<InvalidDataException>(() => PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decisionPath, indexPath, Path.Combine(temp.Path, "labels"), IndexPaths: [indexPath, indexPath], Labels: ["app", "app"])));
+
+        var derivedOutput = Path.Combine(temp.Path, "derived-output");
+        Directory.CreateDirectory(derivedOutput);
+        var derivedManifest = Path.Combine(derivedOutput, "package-decision-report.json");
+        await File.WriteAllTextAsync(derivedManifest, "{\"version\":\"1.0\",\"portfolioId\":\"fixture\",\"snapshotId\":\"one\",\"inputs\":[{\"label\":\"app\",\"indexPath\":\"../index.sqlite\"}]}");
+        var derivedManifestBytes = await File.ReadAllBytesAsync(derivedManifest);
+        await Assert.ThrowsAsync<InvalidDataException>(() => PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decisionPath, string.Empty, derivedOutput, ManifestPath: derivedManifest)));
+        Assert.Equal(derivedManifestBytes, await File.ReadAllBytesAsync(derivedManifest));
+
+        if (!OperatingSystem.IsWindows())
+        {
+            var actualOutput = Path.Combine(temp.Path, "actual-output");
+            Directory.CreateDirectory(actualOutput);
+            var linkedManifest = Path.Combine(actualOutput, "package-decision-report.json");
+            await File.WriteAllTextAsync(linkedManifest, "{\"version\":\"1.0\",\"portfolioId\":\"fixture\",\"snapshotId\":\"one\",\"inputs\":[{\"label\":\"app\",\"indexPath\":\"../index.sqlite\"}]}");
+            var linkedManifestBytes = await File.ReadAllBytesAsync(linkedManifest);
+            var linkedOutput = Path.Combine(temp.Path, "linked-output");
+            Directory.CreateSymbolicLink(linkedOutput, actualOutput);
+            await Assert.ThrowsAsync<InvalidDataException>(() => PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decisionPath, string.Empty, linkedOutput, ManifestPath: linkedManifest)));
+            Assert.Equal(linkedManifestBytes, await File.ReadAllBytesAsync(linkedManifest));
+        }
+
+        const string unsafeLabel = "/private/client-app";
+        var safeLabelReport = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(
+            decisionPath, indexPath, Path.Combine(temp.Path, "safe-label"), Source: unsafeLabel, IndexPaths: [indexPath], Labels: [unsafeLabel]));
+        Assert.StartsWith("source-label-hash:", Assert.Single(safeLabelReport.Report.Sources).Label, StringComparison.Ordinal);
+        Assert.StartsWith("source-label-hash:", safeLabelReport.Report.Query.Source, StringComparison.Ordinal);
+        Assert.DoesNotContain(unsafeLabel, await File.ReadAllTextAsync(Path.Combine(temp.Path, "safe-label", "package-decision-report.json")), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -219,6 +376,11 @@ public sealed class PackageDecisionTests
 
     private static CodeFact PackageFact(ScanManifest manifest, string name, string ecosystem, string file, string group, string version) => new($"pkg-{manifest.RepoName}-{name}", manifest.ScanId, manifest.RepoName, manifest.CommitSha, null, FactTypes.PackageReferenced, RuleIds.ProjectFile, EvidenceTiers.Tier2Structural, null, name, "PackageManifest", new EvidenceSpan(file, 5, 5, null, "TestExtractor", "1.0.0"), new SortedDictionary<string, string>(StringComparer.Ordinal) { ["dependencyGroup"] = group, ["ecosystem"] = ecosystem, ["manifestKind"] = "package.json", ["packageName"] = name, ["packageManager"] = ecosystem, ["sourceKind"] = "manifest", ["surfaceKind"] = "package-config", ["version"] = version });
 
+    private static CodeFact DigestPackageFact(ScanManifest manifest, string name, string version, string digest) => new($"pkg-{manifest.RepoName}-{name}", manifest.ScanId, manifest.RepoName, manifest.CommitSha, null, FactTypes.PackageReferenced, RuleIds.ProjectFile, EvidenceTiers.Tier2Structural, null, name, "PackageManifest", new EvidenceSpan("package-lock.json", 5, 5, null, "TestExtractor", "1.0.0"), new SortedDictionary<string, string>(StringComparer.Ordinal) { ["dependencyGroup"] = "dependencies", ["dependencyRelation"] = "direct", ["ecosystem"] = "npm", ["manifestKind"] = "package-lock.json", ["packageName"] = name, ["packageManager"] = "npm", ["sourceKind"] = "lockfile", ["surfaceKind"] = "package-config", ["resolvedVersion"] = version, ["version"] = version, ["artifactDigestAlgorithm"] = "sha256", ["artifactDigest"] = digest, ["lockfilePath"] = "package-lock.json", ["lockfileHash"] = new string('b', 32) });
+
+    private static CodeFact RelationshipFact(ScanManifest manifest, string id, string source, string target, int line) =>
+        new(id, manifest.ScanId, manifest.RepoName, manifest.CommitSha, null, FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, EvidenceTiers.Tier1Semantic, source, target, "Calls", new EvidenceSpan("Flow.cs", line, line, null, "TestExtractor", "1.0.0"), new SortedDictionary<string, string>(StringComparer.Ordinal));
+
     private static string FindRepoRoot()
     {
         var current = new DirectoryInfo(AppContext.BaseDirectory);
@@ -229,4 +391,19 @@ public sealed class PackageDecisionTests
         }
         throw new InvalidOperationException("TraceMap repository root was not found.");
     }
+
+    private static void CreateHardLink(string linkPath, string existingPath)
+    {
+        var succeeded = OperatingSystem.IsWindows()
+            ? CreateHardLinkWindows(linkPath, existingPath, IntPtr.Zero)
+            : Link(existingPath, linkPath) == 0;
+        if (!succeeded) throw new IOException("The hard-link test fixture could not be created.");
+    }
+
+    [DllImport("kernel32.dll", EntryPoint = "CreateHardLinkW", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool CreateHardLinkWindows(string fileName, string existingFileName, IntPtr securityAttributes);
+
+    [DllImport("libc", EntryPoint = "link", SetLastError = true)]
+    private static extern int Link(string existingPath, string linkPath);
 }
