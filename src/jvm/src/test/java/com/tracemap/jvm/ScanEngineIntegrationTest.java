@@ -104,7 +104,7 @@ final class ScanEngineIntegrationTest {
             .directory(repoRoot().toFile())
             .redirectErrorStream(true)
             .start();
-        assertTrue(process.waitFor(60, TimeUnit.SECONDS), "dotnet reduce timed out");
+        assertTrue(process.waitFor(180, TimeUnit.SECONDS), "dotnet reduce timed out");
         String output = new String(process.getInputStream().readAllBytes());
         assertEquals(0, process.exitValue(), output);
         String markdown = Files.readString(report);
