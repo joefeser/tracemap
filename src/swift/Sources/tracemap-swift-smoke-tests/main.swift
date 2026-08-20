@@ -459,16 +459,17 @@ struct TraceMapSwiftSmokeTests {
             "Podfile.lock": """
             PODS:
               - Alamofire (5.0.0)
-              - RxSwift (6.0.0)
+              - RxSwift (6.0.0):
 
             DEPENDENCIES:
               - Alamofire
               - RxSwift
 
             SPEC CHECKSUMS:
-              Alamofire: publicchecksum1
-              Alamofire: duplicatechecksum
+              Alamofire: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+              Alamofire: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
               RxSwift: eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+              BadChecksum: publicchecksum1
             """,
             "Cartfile": """
             github "AcmeSecret/PaymentsSDK" ~> 1.0
