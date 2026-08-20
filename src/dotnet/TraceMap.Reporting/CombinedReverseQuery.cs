@@ -183,7 +183,7 @@ public static class CombinedReverseReporter
     private const string Version = "1.0";
     private const string SurfaceRuleId = "combined.reverse.surface.v1";
     private const string RootRuleId = "combined.reverse.root.v1";
-    private const string PathRuleId = "combined.reverse.path.v1";
+    internal const string PathRuleId = "combined.reverse.path.v1";
     private const string SelectorRuleId = "combined.reverse.selector.v1";
     private const string TruncationRuleId = "combined.reverse.truncation.v1";
     private const string IdentityRuleId = "combined.reverse.identity.v1";
@@ -1139,7 +1139,7 @@ public static class CombinedReverseReporter
             : CombinedReverseClassifications.SelectedSurfaceEvidence;
     }
 
-    private static string ClassifyPath(
+    internal static string ClassifyPath(
         IReadOnlyList<CombinedPathEdge> edges,
         IReadOnlyList<CombinedPathNode> nodes,
         IReadOnlyDictionary<string, CombinedReportSource> sourcesById)

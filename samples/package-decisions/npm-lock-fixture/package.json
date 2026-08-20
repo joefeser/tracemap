@@ -1,0 +1,7 @@
+{
+  "name": "tracemap-npm-lock-fixture",
+  "version": "1.0.0",
+  "dependencies": {
+    "fixture-direct": "^1.2.3"
+  }
+}

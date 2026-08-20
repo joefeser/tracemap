@@ -1457,9 +1457,22 @@ public static class TraceMapCommand
             await error.WriteLineAsync("error: package-decision requires --decision <path>.");
             return 1;
         }
-        if (!values.TryGetValue("--index", out var indexPath) || string.IsNullOrWhiteSpace(indexPath))
+        var indexes = values.GetMany("--index");
+        var labels = values.GetMany("--label");
+        var manifestPath = values.GetValueOrDefault("--manifest");
+        if (indexes.Count == 0 && string.IsNullOrWhiteSpace(manifestPath))
         {
-            await error.WriteLineAsync("error: package-decision requires --index <path>.");
+            await error.WriteLineAsync("error: package-decision requires --index <path> or --manifest <portfolio.json>.");
+            return 1;
+        }
+        if (!string.IsNullOrWhiteSpace(manifestPath) && indexes.Count > 0)
+        {
+            await error.WriteLineAsync("error: package-decision --manifest cannot be mixed with --index.");
+            return 1;
+        }
+        if (indexes.Count > 1 && labels.Count != indexes.Count || labels.Count > 0 && labels.Count != indexes.Count)
+        {
+            await error.WriteLineAsync("error: package-decision requires one --label for each --index.");
             return 1;
         }
         if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
@@ -1475,7 +1488,7 @@ public static class TraceMapCommand
         }
         var result = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(
             decisionPath,
-            indexPath,
+            indexes.FirstOrDefault() ?? string.Empty,
             outputPath,
             format,
             values.GetValueOrDefault("--source"),
@@ -1485,7 +1498,17 @@ public static class TraceMapCommand
             ParsePositiveInt(values, "--max-findings", 200),
             ParsePositiveInt(values, "--max-gaps", 1000),
             values.HasFlag("--exit-code"),
-            values.GetValueOrDefault("--as-of")), cancellationToken);
+            values.GetValueOrDefault("--as-of"),
+            indexes,
+            labels,
+            manifestPath,
+            values.HasFlag("--include-paths"),
+            values.HasFlag("--include-reverse"),
+            ParsePositiveInt(values, "--max-depth", 8),
+            ParsePositiveInt(values, "--max-paths", 100),
+            ParsePositiveInt(values, "--max-frontier", 10000),
+            ParsePositiveInt(values, "--max-roots", 100),
+            ParsePositiveInt(values, "--max-paths-per-root", 5)), cancellationToken);
         await output.WriteLineAsync($"TraceMap package-decision completed: {result.MarkdownPath ?? result.JsonPath}");
         await output.WriteLineAsync($"Exact matches: {result.Report.Summary.ExactCount}");
         await output.WriteLineAsync($"Possible matches: {result.Report.Summary.PossibleCount}");
@@ -2540,7 +2563,7 @@ public static class TraceMapCommand
               access-review Compose an existing Access scan into a private local review bundle.
               portfolio Summarize dependency evidence across many TraceMap indexes.
               package-impact Report static package upgrade evidence from indexed package declarations.
-              package-decision Correlate external package decision records with one static index.
+              package-decision Correlate external package decision records with static, combined, or portfolio inputs.
               vault    Export deterministic Markdown evidence notes and graph.json from existing TraceMap evidence.
               docs-export Generate deterministic Markdown and JSONL evidence docs for external ingestion.
               baseline Create, validate, and compare redacted legacy baseline summaries.
@@ -3185,23 +3208,32 @@ public static class TraceMapCommand
     {
         return """
             Usage:
-              tracemap package-decision --decision <package-decision.json> --index <index.sqlite> --out <path> [--format <markdown|json>] [selectors]
+              tracemap package-decision --decision <package-decision.json> (--index <index.sqlite> --label <label> ... | --manifest <portfolio.json>) --out <path> [options]
 
             Required:
               --decision <path>          package-decision.v1 external record file.
-              --index <path>             TraceMap single index (read-only in PR1).
+              --index <path>             TraceMap single/combined index; repeat with one --label per input.
+              --label <label>            Stable input label; repeat in the same order as --index.
+              --manifest <path>          Existing portfolio manifest v1.0; mutually exclusive with --index.
               --out <path>               Output directory or file path.
 
             Optional:
               --format <value>           markdown or json. Directory outputs write both.
-              --source <label>           Filter source label (single-index default is default).
+              --source <label>           Filter source, container, or original source label.
               --ecosystem <name>         Filter ecosystem.
               --decision-id <id>         Filter producer-scoped decision ID.
               --classification <rung>    Filter output correlation rung.
               --max-findings <n>         Correlation row cap. Default: 200.
               --max-gaps <n>             Gap row cap. Default: 1000.
+              --include-paths            Attach bounded package-config graph context.
+              --include-reverse          Attach bounded reverse graph context.
+              --max-depth <n>            Optional context traversal bound. Default: 8.
+              --max-paths <n>             Optional forward context row cap. Default: 100.
+              --max-frontier <n>          Optional graph frontier bound. Default: 10000.
+              --max-roots <n>             Optional reverse context row cap. Default: 100.
+              --max-paths-per-root <n>    Optional reverse path bound. Default: 5.
               --as-of <RFC3339 UTC>      Deterministic effectiveness context.
-              --exit-code                Return 1 only for exact reject/revoke matches.
+              --exit-code                Return 1 only for exact reject/revoke matches; quarantine is non-terminal.
 
             Outputs:
               package-decision-report.md and/or package-decision-report.json

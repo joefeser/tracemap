@@ -1,0 +1,22 @@
+{
+  "lockfileVersion": 3,
+  "direct": {
+    "packageName": "fixture-direct",
+    "resolvedVersion": "1.2.3",
+    "dependencyRelation": "direct",
+    "dependencyPathDepth": "1",
+    "registryOrigin": "registry.npmjs.org",
+    "artifactDigestAlgorithm": "sha512-base64"
+  },
+  "transitive": {
+    "packageName": "fixture-transitive",
+    "resolvedVersion": "0.4.5",
+    "dependencyRelation": "transitive",
+    "dependencyPathDepth": "2",
+    "capabilityGap": "LockfileDigestUnavailable"
+  },
+  "limitations": [
+    "integrity is registry-declared metadata",
+    "package content is not fetched or verified"
+  ]
+}
