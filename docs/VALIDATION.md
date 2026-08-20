@@ -1763,8 +1763,8 @@ dotnet run --project src/dotnet/TraceMap.Cli -- package-decision \
 Confirm: `requests` (whose revoke record carries the sha256 value that equals
 the lockfile's synthetic sdist hash) and `urllib3` correlate only as
 `resolved-version` possible matches; the `requests` rows carry
-`dependencyRelation=direct` and `urllib3` `transitive` (proven from the uv.lock
-root package's own dependency declarations); every matched pairing reports
+`dependencyRelation=direct` and `urllib3` `transitive` (proven from well-typed
+dependency declarations on the uv.lock root entry); every matched pairing reports
 `LockfileDigestUnavailable`; the exit code stays 0; no `artifactDigest`
 appears anywhere; and re-running the correlation produces byte-identical
 outputs. A repository with an inventoried `Pipfile` emits an

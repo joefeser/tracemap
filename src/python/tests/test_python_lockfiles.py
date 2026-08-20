@@ -170,6 +170,22 @@ def test_uv_lock_without_root_entry_emits_relation_capability_gap(tmp_path: Path
     assert "DirectTransitiveUnavailable" in gap_kinds
 
 
+def test_uv_root_with_malformed_dependency_shape_does_not_prove_relations(tmp_path: Path) -> None:
+    lock = tmp_path / "uv.lock"
+    lock.write_text(
+        "version = 1\n"
+        '\n[[package]]\nname = "fixture"\nversion = "0.1.0"\nsource = { virtual = "." }\ndependencies = "requests"\n'
+        '\n[[package]]\nname = "requests"\nversion = "2.32.3"\nsource = { registry = "https://pypi.org/simple" }\n',
+        encoding="utf-8",
+    )
+
+    facts = read_lockfiles(tmp_path, _manifest("uv-malformed-root"), [lock], [], [])
+
+    requests = _by_name(facts, "requests")[0]
+    assert "dependencyRelation" not in requests.properties
+    assert "DirectTransitiveUnavailable" in {fact.properties["gapKind"] for fact in _gap_facts(facts)}
+
+
 def test_uv_lock_non_registry_sources_emit_explicit_gaps(tmp_path: Path) -> None:
     lock = tmp_path / "uv.lock"
     lock.write_text(
@@ -184,6 +200,59 @@ def test_uv_lock_non_registry_sources_emit_explicit_gaps(tmp_path: Path) -> None
     assert _package_facts(facts) == []
     source_gaps = [fact for fact in _gap_facts(facts) if fact.properties["gapKind"] == "python-lock-entry-source-unsupported"]
     assert len(source_gaps) == 2
+
+
+def test_uv_editable_dependency_is_not_silently_treated_as_the_project_root(tmp_path: Path) -> None:
+    lock = tmp_path / "uv.lock"
+    lock.write_text(
+        "version = 1\n"
+        '\n[[package]]\nname = "fixture"\nversion = "0.1.0"\nsource = { editable = "." }\ndependencies = [{ name = "shared-lib" }, { name = "requests" }]\n'
+        '\n[[package]]\nname = "shared-lib"\nversion = "0.2.0"\nsource = { editable = "../shared-lib" }\n'
+        '\n[[package]]\nname = "requests"\nversion = "2.32.3"\nsource = { registry = "https://pypi.org/simple" }\n',
+        encoding="utf-8",
+    )
+
+    facts = read_lockfiles(tmp_path, _manifest("uv-editable-dependency"), [lock], [], [])
+
+    assert {fact.properties["packageName"] for fact in _package_facts(facts)} == {"requests"}
+    assert _by_name(facts, "requests")[0].properties["dependencyRelation"] == "direct"
+    source_gaps = [fact for fact in _gap_facts(facts) if fact.properties["gapKind"] == "python-lock-entry-source-unsupported"]
+    assert len(source_gaps) == 1
+
+
+def test_uv_skips_only_declared_non_excluded_workspace_entries(tmp_path: Path) -> None:
+    root_manifest = tmp_path / "pyproject.toml"
+    member_manifest = tmp_path / "packages" / "member" / "pyproject.toml"
+    excluded_manifest = tmp_path / "packages" / "excluded" / "pyproject.toml"
+    member_manifest.parent.mkdir(parents=True)
+    excluded_manifest.parent.mkdir(parents=True)
+    root_manifest.write_text(
+        '[project]\nname = "fixture"\n[tool.uv.workspace]\nmembers = ["packages/*"]\nexclude = ["packages/excluded"]\n',
+        encoding="utf-8",
+    )
+    member_manifest.write_text('[project]\nname = "member"\n', encoding="utf-8")
+    excluded_manifest.write_text('[project]\nname = "excluded"\n', encoding="utf-8")
+    lock = tmp_path / "uv.lock"
+    lock.write_text(
+        "version = 1\n"
+        '\n[[package]]\nname = "fixture"\nversion = "0.1.0"\nsource = { virtual = "." }\ndependencies = [{ name = "requests" }]\n'
+        '\n[[package]]\nname = "member"\nversion = "0.1.0"\nsource = { editable = "packages/member" }\n'
+        '\n[[package]]\nname = "excluded"\nversion = "0.1.0"\nsource = { editable = "packages/excluded" }\n'
+        '\n[[package]]\nname = "requests"\nversion = "2.32.3"\nsource = { registry = "https://pypi.org/simple" }\n',
+        encoding="utf-8",
+    )
+
+    facts = read_lockfiles(
+        tmp_path,
+        _manifest("uv-workspace"),
+        [lock],
+        [root_manifest, member_manifest, excluded_manifest],
+        [],
+    )
+
+    assert {fact.properties["packageName"] for fact in _package_facts(facts)} == {"requests"}
+    source_gaps = [fact for fact in _gap_facts(facts) if fact.properties["gapKind"] == "python-lock-entry-source-unsupported"]
+    assert len(source_gaps) == 1
 
 
 def test_uv_lock_unsupported_version_fails_closed(tmp_path: Path) -> None:
@@ -288,6 +357,71 @@ def test_poetry_lock_relations_come_from_pyproject_declarations(tmp_path: Path) 
     gap_kinds = {fact.properties["gapKind"] for fact in _gap_facts(facts)}
     assert "LockfileDigestUnavailable" in gap_kinds
     assert "DirectTransitiveUnavailable" not in gap_kinds
+
+
+def test_poetry_lock_uses_only_its_sibling_pyproject_in_monorepos(tmp_path: Path) -> None:
+    app_a = tmp_path / "app-a"
+    app_b = tmp_path / "app-b"
+    app_a.mkdir()
+    app_b.mkdir()
+    lock_a = app_a / "poetry.lock"
+    lock_b = app_b / "poetry.lock"
+    lock_a.write_text(POETRY_LOCK, encoding="utf-8")
+    lock_b.write_text(POETRY_LOCK, encoding="utf-8")
+    manifest_a = app_a / "pyproject.toml"
+    manifest_b = app_b / "pyproject.toml"
+    manifest_a.write_text('[project]\ndependencies = ["requests"]\n', encoding="utf-8")
+    manifest_b.write_text('[project]\ndependencies = ["urllib3"]\n', encoding="utf-8")
+
+    facts = read_lockfiles(
+        tmp_path,
+        _manifest("poetry-monorepo"),
+        [lock_a, lock_b],
+        [manifest_a, manifest_b],
+        [],
+    )
+
+    by_file_and_name = {
+        (fact.evidence.file_path, fact.properties["packageName"]): fact.properties["dependencyRelation"]
+        for fact in _package_facts(facts)
+    }
+    assert by_file_and_name[("app-a/poetry.lock", "requests")] == "direct"
+    assert by_file_and_name[("app-a/poetry.lock", "urllib3")] == "transitive"
+    assert by_file_and_name[("app-b/poetry.lock", "requests")] == "transitive"
+    assert by_file_and_name[("app-b/poetry.lock", "urllib3")] == "direct"
+
+
+def test_poetry_non_registry_sources_fail_closed(tmp_path: Path) -> None:
+    lock = tmp_path / "poetry.lock"
+    content = POETRY_LOCK.replace(
+        'name = "requests"\nversion = "2.32.3"',
+        'name = "requests"\nversion = "2.32.3"\nsource = { type = "git", url = "https://example.invalid/fork.git" }',
+    ).replace(
+        'name = "urllib3"\nversion = "2.2.2"',
+        'name = "urllib3"\nversion = "2.2.2"\nsource = { type = "legacy", url = "https://packages.example.invalid/simple" }',
+    )
+    lock.write_text(content, encoding="utf-8")
+
+    facts = read_lockfiles(tmp_path, _manifest("poetry-sources"), [lock], [], [])
+
+    assert _by_name(facts, "requests") == []
+    urllib3 = _by_name(facts, "urllib3")[0]
+    assert urllib3.properties["registryOrigin"] == "packages.example.invalid"
+    source_gaps = [fact for fact in _gap_facts(facts) if fact.properties["gapKind"] == "python-lock-entry-source-unsupported"]
+    assert len(source_gaps) == 1
+
+
+def test_malformed_pyproject_tables_do_not_abort_poetry_lock_extraction(tmp_path: Path) -> None:
+    lock = tmp_path / "poetry.lock"
+    lock.write_text(POETRY_LOCK, encoding="utf-8")
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text('project = "dynamic"\ntool = "invalid"\n', encoding="utf-8")
+
+    facts = read_lockfiles(tmp_path, _manifest("poetry-malformed-manifest"), [lock], [pyproject], [])
+
+    assert {fact.properties["packageName"] for fact in _package_facts(facts)} == {"requests", "urllib3"}
+    assert all("dependencyRelation" not in fact.properties for fact in _package_facts(facts))
+    assert "DirectTransitiveUnavailable" in {fact.properties["gapKind"] for fact in _gap_facts(facts)}
 
 
 def test_poetry_lock_without_pyproject_emits_relation_capability_gap(tmp_path: Path) -> None:

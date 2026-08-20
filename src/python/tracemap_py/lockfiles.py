@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import re
 import tomllib
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from urllib.parse import urlsplit
 
 from .constants import EvidenceTiers, FactTypes, RuleIds, ScannerVersions
@@ -39,7 +39,6 @@ def read_lockfiles(
     gaps: list[str],
 ) -> list[CodeFact]:
     facts: list[CodeFact] = []
-    declared = _declared_pyproject_names(repo, pyproject_files)
     for path in sorted(files):
         rel = _rel(path, repo)
         try:
@@ -49,9 +48,29 @@ def read_lockfiles(
             lockfile_hash = sha256_bytes(raw, 32)
             header_lines = _package_header_lines(text)
             if path.name == UV_LOCK:
-                facts.extend(_uv_lock_facts(manifest, rel, data, header_lines, lockfile_hash, gaps))
+                facts.extend(
+                    _uv_lock_facts(
+                        manifest,
+                        rel,
+                        data,
+                        header_lines,
+                        lockfile_hash,
+                        _uv_workspace_source_paths(path, pyproject_files),
+                        gaps,
+                    )
+                )
             elif path.name == POETRY_LOCK:
-                facts.extend(_poetry_lock_facts(manifest, rel, data, header_lines, lockfile_hash, declared, gaps))
+                facts.extend(
+                    _poetry_lock_facts(
+                        manifest,
+                        rel,
+                        data,
+                        header_lines,
+                        lockfile_hash,
+                        _declared_names_for_lockfile(path, pyproject_files),
+                        gaps,
+                    )
+                )
         except Exception as exc:
             gaps.append(f"PythonLockParseFailed: {rel}: {type(exc).__name__}")
             facts.append(_gap_fact(manifest, rel, 1, "python-lock-parse", f"{path.name} could not be parsed: {type(exc).__name__}"))
@@ -64,6 +83,7 @@ def _uv_lock_facts(
     data: dict,
     header_lines: list[int],
     lockfile_hash: str,
+    workspace_source_paths: set[str],
     gaps: list[str],
 ) -> list[CodeFact]:
     version = data.get("version")
@@ -72,16 +92,18 @@ def _uv_lock_facts(
         gaps.append(f"PythonLockUnsupported: {rel}: uv.lock format version {version!r}")
         return [_gap_fact(manifest, rel, 1, "python-lock-unsupported", f"uv.lock format version {version!r} is not supported")]
     direct_names: set[str] = set()
-    roots_present = False
+    relation_proven = False
     for package in packages:
         if not isinstance(package, dict):
             continue
         source = package.get("source")
-        if not isinstance(source, dict) or not ("virtual" in source or "editable" in source):
+        if not _is_uv_workspace_source(source, workspace_source_paths):
             continue
-        roots_present = True
         for key in ("dependencies", "dev-dependencies"):
-            direct_names.update(_root_dependency_names(package.get(key)))
+            values = package.get(key)
+            if isinstance(values, list):
+                relation_proven = True
+                direct_names.update(_root_dependency_names(values))
     facts: list[CodeFact] = []
     for index, package in enumerate(packages):
         line = _entry_line(header_lines, index, len(packages))
@@ -90,7 +112,7 @@ def _uv_lock_facts(
             facts.append(_gap_fact(manifest, rel, line, "python-lock-entry-unsafe", f"uv.lock entry {index} is not a package table"))
             continue
         source = package.get("source")
-        if isinstance(source, dict) and ("virtual" in source or "editable" in source):
+        if _is_uv_workspace_source(source, workspace_source_paths):
             # The project's own root entry is not a referenced package; its
             # identity is emitted from pyproject.toml manifest evidence.
             continue
@@ -120,11 +142,11 @@ def _uv_lock_facts(
                 lockfile_hash,
                 registry_origin=_registry_origin(source.get("registry")) if isinstance(source.get("registry"), str) else None,
                 dependency_relation=(
-                    ("direct" if _normalize_name(name) in direct_names else "transitive") if roots_present else None
+                    ("direct" if _normalize_name(name) in direct_names else "transitive") if relation_proven else None
                 ),
             )
         )
-    facts.extend(_capability_gaps(manifest, rel, facts, relation_proven=roots_present))
+    facts.extend(_capability_gaps(manifest, rel, facts, relation_proven=relation_proven))
     return facts
 
 
@@ -151,6 +173,19 @@ def _poetry_lock_facts(
             gaps.append(f"PythonLockEntryUnsafe: {rel}: entry {index}")
             facts.append(_gap_fact(manifest, rel, line, "python-lock-entry-unsafe", f"poetry.lock entry {index} is not a package table"))
             continue
+        source_supported, registry_origin = _poetry_registry_source(package.get("source"))
+        if not source_supported:
+            gaps.append(f"PythonLockEntrySourceUnsupported: {rel}: entry {index}")
+            facts.append(
+                _gap_fact(
+                    manifest,
+                    rel,
+                    line,
+                    "python-lock-entry-source-unsupported",
+                    f"poetry.lock entry {index} does not resolve from a supported registry source",
+                )
+            )
+            continue
         name = package.get("name")
         if not isinstance(name, str) or not _SAFE_NAME.match(name):
             gaps.append(f"PythonLockEntryUnsafe: {rel}: entry {index}")
@@ -171,7 +206,7 @@ def _poetry_lock_facts(
                 POETRY_LOCK,
                 "poetry",
                 lockfile_hash,
-                registry_origin=None,
+                registry_origin=registry_origin,
                 dependency_relation=(
                     ("direct" if _normalize_name(name) in declared else "transitive") if relation_proven else None
                 ),
@@ -268,20 +303,35 @@ def _gap_fact(manifest: ScanManifest, rel: str, line: int, kind: str, message: s
     )
 
 
-def _declared_pyproject_names(repo: Path, pyproject_files: list[Path]) -> set[str]:
+def _declared_names_for_lockfile(lockfile: Path, pyproject_files: list[Path]) -> set[str]:
+    manifest = lockfile.with_name("pyproject.toml").resolve()
+    available = {path.resolve() for path in pyproject_files}
+    return _declared_pyproject_names([manifest]) if manifest in available else set()
+
+
+def _declared_pyproject_names(pyproject_files: list[Path]) -> set[str]:
     declared: set[str] = set()
     for path in sorted(pyproject_files):
         try:
             data = tomllib.loads(path.read_text(encoding="utf-8"))
         except Exception:
             continue
-        project = data.get("project", {})
+        if not isinstance(data, dict):
+            continue
+        project = data.get("project")
+        if not isinstance(project, dict):
+            project = {}
         declared.update(_names_from_requirement_list(project.get("dependencies")))
         optional = project.get("optional-dependencies", {})
         if isinstance(optional, dict):
             for values in optional.values():
                 declared.update(_names_from_requirement_list(values))
-        poetry = data.get("tool", {}).get("poetry", {})
+        tool = data.get("tool")
+        if not isinstance(tool, dict):
+            tool = {}
+        poetry = tool.get("poetry")
+        if not isinstance(poetry, dict):
+            poetry = {}
         poetry_dependencies = poetry.get("dependencies", {})
         if isinstance(poetry_dependencies, dict):
             for key in poetry_dependencies:
@@ -316,6 +366,86 @@ def _root_dependency_names(values: object) -> set[str]:
 
 def _is_registry_source(source: object) -> bool:
     return isinstance(source, dict) and isinstance(source.get("registry"), str)
+
+
+def _poetry_registry_source(source: object) -> tuple[bool, str | None]:
+    if source is None:
+        return True, None
+    if not isinstance(source, dict) or source.get("type") != "legacy":
+        return False, None
+    url = source.get("url")
+    if not isinstance(url, str):
+        return False, None
+    origin = _registry_origin(url)
+    return (True, origin) if origin else (False, None)
+
+
+def _uv_workspace_source_paths(lockfile: Path, pyproject_files: list[Path]) -> set[str]:
+    result = {"."}
+    lock_root = lockfile.parent.resolve()
+    available = {path.resolve() for path in pyproject_files}
+    root_manifest = lockfile.with_name("pyproject.toml").resolve()
+    if root_manifest not in available:
+        return result
+    try:
+        data = tomllib.loads(root_manifest.read_text(encoding="utf-8"))
+    except Exception:
+        return result
+    tool = data.get("tool") if isinstance(data, dict) else None
+    uv = tool.get("uv") if isinstance(tool, dict) else None
+    workspace = uv.get("workspace") if isinstance(uv, dict) else None
+    member_patterns = _workspace_patterns(workspace, "members")
+    exclude_patterns = _workspace_patterns(workspace, "exclude")
+    for path in available:
+        try:
+            relative = path.parent.relative_to(lock_root)
+        except ValueError:
+            continue
+        normalized = relative.as_posix()
+        member = PurePosixPath(normalized)
+        if (
+            normalized
+            and any(member.match(pattern) for pattern in member_patterns)
+            and not any(member.match(pattern) for pattern in exclude_patterns)
+        ):
+            result.add(normalized)
+    return result
+
+
+def _is_uv_workspace_source(source: object, workspace_source_paths: set[str]) -> bool:
+    if not isinstance(source, dict):
+        return False
+    for key in ("virtual", "editable"):
+        value = source.get(key)
+        if not isinstance(value, str):
+            continue
+        normalized = _normalize_relative_source_path(value)
+        if normalized is None:
+            continue
+        if normalized in workspace_source_paths:
+            return True
+    return False
+
+
+def _workspace_patterns(workspace: object, key: str) -> list[str]:
+    values = workspace.get(key) if isinstance(workspace, dict) else None
+    if not isinstance(values, list):
+        return []
+    result: list[str] = []
+    for value in values:
+        if not isinstance(value, str):
+            continue
+        normalized = value.replace("\\", "/").removeprefix("./").rstrip("/")
+        if normalized and not normalized.startswith("/") and all(part != ".." for part in normalized.split("/")):
+            result.append(normalized)
+    return result
+
+
+def _normalize_relative_source_path(value: str) -> str | None:
+    normalized = value.replace("\\", "/").removeprefix("./").rstrip("/") or "."
+    if normalized.startswith("/") or any(part == ".." for part in normalized.split("/")):
+        return None
+    return normalized
 
 
 def _registry_origin(url: str) -> str | None:

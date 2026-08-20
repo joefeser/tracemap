@@ -194,13 +194,18 @@ resolved-evidence slices, and the Python + JVM adapter evidence slices.
   deterministic 32-hex lockfile content hash, with a per-lockfile
   `LockfileDigestUnavailable` capability gap.
 - PR4 relation evidence: `dependencyRelation` is emitted only where proven.
-  `uv.lock` proves it from the lockfile's own root-package
-  `dependencies`/`dev-dependencies` declarations (direct) versus everything
-  else (transitive); `poetry.lock` cannot prove it from the lockfile, so
-  direct/transitive is derived only by cross-referencing `pyproject.toml`
-  dependency declarations parsed in the same scan (the design §5.1
+  `uv.lock` proves it from well-typed `dependencies`/`dev-dependencies`
+  declarations on the root or a declared workspace entry (direct) versus
+  everything else (transitive); an unrelated editable source is an explicit
+  unsupported-source gap. `poetry.lock` cannot prove it from the lockfile, so
+  direct/transitive is derived only by cross-referencing the sibling
+  `pyproject.toml` dependency declarations (the design §5.1
   "direct = declared in a root manifest" rule); when neither proof exists the
   property is omitted and a `DirectTransitiveUnavailable` gap is emitted.
+  Monorepo manifests are never unioned across lockfiles. TOML-valid but
+  schema-invalid pyproject sections fail closed without aborting the scan, and
+  Poetry Git/path/URL/directory sources emit unsupported-source gaps rather
+  than registry-style package evidence.
 - PR4 digest eligibility (slice 8 evaluation): `gradle/verification-metadata.xml`
   is NOT consumed for digests. Parsing could be bounded offline, but a
   component typically carries several artifacts (module jar, POM, sources,
@@ -316,6 +321,16 @@ PR4 validation run on this branch:
   Java formatter is configured in this repository (pytest and `gradle test`
   are the respective gates).
 - Local `swift test` availability was not needed for PR4 (no Swift changes).
+
+Exact-head review remediation added six adversarial Python cases: each Poetry
+lockfile now uses only its sibling manifest in a monorepo; malformed but valid
+pyproject table shapes cannot abort extraction; non-registry Poetry sources
+fail closed while bounded legacy registries retain only host origin; uv root
+relations require a well-typed dependency list; unrelated editable sources
+emit gaps; and only root or declared, non-excluded uv workspace entries are
+skipped as local project identity. The Python suite passed 53/53, the endpoint
+smoke completed, the focused package-decision/rule-catalog suite passed 28/28,
+the full .NET suite passed 1,641/1,641, and private-path/diff guards passed.
 
 ## Limitations and deferred work
 
