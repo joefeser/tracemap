@@ -480,6 +480,17 @@ public sealed class PackageDecisionComparisonExternalClaimsTests
         Assert.All(result.Report.ArtifactChanges, change => Assert.Equal("ArtifactReplaced", change.Classification));
         Assert.DoesNotContain(result.Report.Gaps, gap => gap.Message.Contains("multiple sources on one side", StringComparison.Ordinal));
         Assert.Equal(2, result.Report.ArtifactChanges.Select(change => change.SourceLabel).Distinct(StringComparer.Ordinal).Count());
+
+        var manifestSelected = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(
+            decisionPath, string.Empty, Path.Combine(temp.Path, "manifest-selected"), BeforeManifestPath: beforeManifest, AfterManifestPath: afterManifest, Source: "services"));
+        Assert.Equal(2, manifestSelected.Report.ArtifactChanges!.Count);
+        Assert.DoesNotContain(manifestSelected.Report.Gaps, gap => gap.Classification == "SelectorNoMatch");
+
+        var expandedSelected = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(
+            decisionPath, string.Empty, Path.Combine(temp.Path, "expanded-selected"), BeforeManifestPath: beforeManifest, AfterManifestPath: afterManifest, Source: "api"));
+        var expandedChange = Assert.Single(expandedSelected.Report.ArtifactChanges!);
+        Assert.Equal("dec-api", expandedChange.DecisionId);
+        Assert.DoesNotContain(expandedSelected.Report.Gaps, gap => gap.Classification == "SelectorNoMatch");
     }
 
     [Fact]

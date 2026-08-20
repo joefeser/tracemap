@@ -976,8 +976,14 @@ public static class PackageDecisionCorrelationReporter
     private static bool SourceMatches(string label, string selector)
     {
         if (string.Equals(label, selector, StringComparison.Ordinal)) return true;
-        var separator = label.IndexOf('/', StringComparison.Ordinal);
-        return separator > 0 && (string.Equals(label[..separator], selector, StringComparison.Ordinal) || string.Equals(label[(separator + 1)..], selector, StringComparison.Ordinal));
+        var segments = label.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Contains(selector, StringComparer.Ordinal)) return true;
+        for (var index = 1; index < segments.Length; index++)
+        {
+            if (string.Equals(string.Join('/', segments[index..]), selector, StringComparison.Ordinal))
+                return true;
+        }
+        return false;
     }
 
     private static PackageDecisionContext BuildContext(IndexRead index, IReadOnlyList<PackageDecisionCorrelationRow> rows, PackageDecisionOptions options, bool reverse)
