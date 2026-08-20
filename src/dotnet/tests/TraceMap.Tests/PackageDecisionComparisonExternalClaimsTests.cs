@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Data.Sqlite;
 using TraceMap.Cli;
+using TraceMap.Combine;
 using TraceMap.Core;
 using TraceMap.Reporting;
 using TraceMap.Storage;
@@ -41,6 +42,10 @@ public sealed class PackageDecisionComparisonExternalClaimsTests
         Assert.Null(any.VersionPredicateVersion);
         Assert.Equal(first.Claims[0].ProfileDigest, second.Claims[0].ProfileDigest);
         Assert.Equal(first.Claims, second.Claims);
+
+        var prerelease = PackageDecisionAdvisoryProfileReader.Read("{\"version\":\"advisory-profile.v1\",\"producer\":{\"id\":\"producer\",\"version\":\"1\"},\"claims\":["
+            + Claim("claim-prerelease", predicate: "{\"kind\":\"exact\",\"version\":\"1.2.3-beta.1\"}") + "]}");
+        Assert.Equal("1.2.3-beta.1", Assert.Single(prerelease.Claims).VersionPredicateVersion);
     }
 
     [Fact]
@@ -112,6 +117,10 @@ public sealed class PackageDecisionComparisonExternalClaimsTests
         Assert.Equal("deployment-manifest", deploy.ReferenceKind);
         Assert.Null(deploy.SourceRepoHash);
         Assert.Null(deploy.CommitSha);
+
+        var prerelease = PackageDecisionDeploymentReferenceReader.Read("{\"version\":\"package-deployment-reference.v1\",\"producer\":{\"id\":\"producer\",\"version\":\"1\"},\"references\":["
+            + Reference("ref-prerelease", "\"referenceKind\":\"build-attachment\",\"artifactVersion\":\"1.2.3-beta.1\"") + "]}");
+        Assert.Equal("1.2.3-beta.1", Assert.Single(prerelease.References).ArtifactVersion);
     }
 
     [Fact]
@@ -289,6 +298,28 @@ public sealed class PackageDecisionComparisonExternalClaimsTests
     }
 
     [Fact]
+    public async Task Deployment_reference_digest_join_requires_the_same_exact_version()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        var decisionPath = Path.Combine(temp.Path, "decision.json");
+        var referencesPath = Path.Combine(temp.Path, "references.json");
+        var manifest = Manifest("deploy-version-conflict", "1717171717171717171717171717171717171717");
+        SqliteIndexWriter.Write(indexPath, manifest, [DigestFact(manifest, "example", "2.0.0", new string('a', 64))]);
+        await File.WriteAllTextAsync(decisionPath, RejectRecord("dec-unrelated", "other", "1.0.0", null));
+        await File.WriteAllTextAsync(referencesPath, "{\"version\":\"package-deployment-reference.v1\",\"producer\":{\"id\":\"producer\",\"version\":\"1\"},\"references\":[{"
+            + "\"referenceId\":\"ref-version-conflict\",\"referenceKind\":\"build-attachment\",\"ecosystem\":\"npm\",\"packageName\":\"example\",\"artifactVersion\":\"1.0.0\","
+            + "\"artifactDigestAlgorithm\":\"sha256\",\"artifactDigest\":\"" + new string('a', 64) + "\"}]}");
+
+        var result = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(
+            decisionPath, indexPath, Path.Combine(temp.Path, "report"), DeploymentReferencesPath: referencesPath));
+
+        var reference = Assert.Single(result.Report.RuntimeUnprovenReferences);
+        Assert.Equal("unmatched", reference.JoinBasis);
+        Assert.Empty(reference.MatchedFactIds!);
+    }
+
+    [Fact]
     public async Task Comparison_mode_emits_exact_replacement_possible_only_and_skips_unchanged()
     {
         using var temp = new TempDirectory();
@@ -412,6 +443,43 @@ public sealed class PackageDecisionComparisonExternalClaimsTests
 
         Assert.Empty(result.Report.ArtifactChanges!);
         Assert.Contains(result.Report.Gaps, gap => gap.Classification == "TruncatedByLimit" && gap.Message.Contains("comparison fact limit", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Comparison_pairs_expanded_combined_index_sources_individually()
+    {
+        using var temp = new TempDirectory();
+        var beforeApiIndex = Path.Combine(temp.Path, "before-api.sqlite");
+        var beforeWebIndex = Path.Combine(temp.Path, "before-web.sqlite");
+        var afterApiIndex = Path.Combine(temp.Path, "after-api.sqlite");
+        var afterWebIndex = Path.Combine(temp.Path, "after-web.sqlite");
+        var beforeCombined = Path.Combine(temp.Path, "before-combined.sqlite");
+        var afterCombined = Path.Combine(temp.Path, "after-combined.sqlite");
+        var beforeManifest = Path.Combine(temp.Path, "before.json");
+        var afterManifest = Path.Combine(temp.Path, "after.json");
+        var decisionPath = Path.Combine(temp.Path, "decision.json");
+        var beforeApi = Manifest("combined-api", "1818181818181818181818181818181818181818");
+        var beforeWeb = Manifest("combined-web", "1919191919191919191919191919191919191919");
+        var afterApi = Manifest("combined-api", "2020202020202020202020202020202020202020");
+        var afterWeb = Manifest("combined-web", "2121212121212121212121212121212121212121");
+        SqliteIndexWriter.Write(beforeApiIndex, beforeApi, [DigestFact(beforeApi, "api-package", "1.0.0", new string('a', 64))]);
+        SqliteIndexWriter.Write(beforeWebIndex, beforeWeb, [DigestFact(beforeWeb, "web-package", "1.0.0", new string('b', 64))]);
+        SqliteIndexWriter.Write(afterApiIndex, afterApi, [DigestFact(afterApi, "api-package", "1.0.0", new string('c', 64))]);
+        SqliteIndexWriter.Write(afterWebIndex, afterWeb, [DigestFact(afterWeb, "web-package", "1.0.0", new string('d', 64))]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([beforeApiIndex, beforeWebIndex], beforeCombined, ["api", "web"]));
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([afterApiIndex, afterWebIndex], afterCombined, ["api", "web"]));
+        await File.WriteAllTextAsync(beforeManifest, "{\"version\":\"1.0\",\"inputs\":[{\"label\":\"services\",\"indexPath\":\"before-combined.sqlite\"}]}");
+        await File.WriteAllTextAsync(afterManifest, "{\"version\":\"1.0\",\"inputs\":[{\"label\":\"services\",\"indexPath\":\"after-combined.sqlite\"}]}");
+        await File.WriteAllTextAsync(decisionPath, "{\"version\":\"package-decision.v1\",\"records\":["
+            + RecordJson("dec-api", "api-package") + "," + RecordJson("dec-web", "web-package") + "]}");
+
+        var result = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(
+            decisionPath, string.Empty, Path.Combine(temp.Path, "report"), BeforeManifestPath: beforeManifest, AfterManifestPath: afterManifest));
+
+        Assert.Equal(2, result.Report.ArtifactChanges!.Count);
+        Assert.All(result.Report.ArtifactChanges, change => Assert.Equal("ArtifactReplaced", change.Classification));
+        Assert.DoesNotContain(result.Report.Gaps, gap => gap.Message.Contains("multiple sources on one side", StringComparison.Ordinal));
+        Assert.Equal(2, result.Report.ArtifactChanges.Select(change => change.SourceLabel).Distinct(StringComparer.Ordinal).Count());
     }
 
     [Fact]

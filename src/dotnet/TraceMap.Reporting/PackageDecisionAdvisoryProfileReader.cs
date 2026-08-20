@@ -225,7 +225,7 @@ public static partial class PackageDecisionAdvisoryProfileReader
     [GeneratedRegex("^[a-z0-9][a-z0-9._-]{1,40}$", RegexOptions.CultureInvariant)] private static partial Regex Framework();
     [GeneratedRegex("^[A-Za-z0-9_][A-Za-z0-9_.$+-]*(?::[A-Za-z0-9_.$+-]+)?$", RegexOptions.CultureInvariant)] private static partial Regex PackageName();
     [GeneratedRegex("^@[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$", RegexOptions.CultureInvariant)] private static partial Regex NpmPackageName();
-    [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9._+~]{0,127}$", RegexOptions.CultureInvariant)] private static partial Regex Version();
+    [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9._+~-]{0,127}$", RegexOptions.CultureInvariant)] private static partial Regex Version();
 
     private sealed record ClaimCandidate(PackageDecisionAdvisoryClaim? Claim, PackageDecisionInputGap? Gap);
     private sealed class ValidationException(string classification, string message) : Exception(message)
