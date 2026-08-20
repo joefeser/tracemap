@@ -512,7 +512,7 @@ public static class PackageDecisionCorrelationReporter
             var queue = new Queue<ContextTraversalState>();
             queue.Enqueue(new ContextTraversalState(node.NodeId, [node.NodeId], []));
             var visitedStates = 0;
-            var foundPath = false;
+            var reachedRoot = false;
             while (queue.Count > 0)
             {
                 if (queue.Count > Math.Max(1, options.MaxFrontier) || ++visitedStates > Math.Max(1, options.MaxFrontier))
@@ -528,6 +528,7 @@ public static class PackageDecisionCorrelationReporter
                 var candidates = allIncoming.Where(edge => !state.NodeIds.Contains(edge.FromNodeId, StringComparer.Ordinal)).ToArray();
                 if (allIncoming.Length == 0 && state.EdgeIds.Count > 0)
                 {
+                    reachedRoot = true;
                     var rootId = current.NodeId;
                     if (reverse)
                     {
@@ -551,7 +552,6 @@ public static class PackageDecisionCorrelationReporter
                         continue;
                     }
 
-                    foundPath = true;
                     var pathNodeIds = state.NodeIds.Reverse().ToArray();
                     var pathEdgeIds = state.EdgeIds.Reverse().ToArray();
                     var pathNodes = pathNodeIds.Select(id => nodesById[id]).ToArray();
@@ -602,7 +602,7 @@ public static class PackageDecisionCorrelationReporter
                     queue.Enqueue(new ContextTraversalState(edge.FromNodeId, [.. state.NodeIds, edge.FromNodeId], [.. state.EdgeIds, edge.EdgeId]));
             }
 
-            if (!foundPath)
+            if (!reachedRoot)
                 gaps.Add(ContextGap("no-path", pair.row, CombinedDependencyPathClassifications.UnknownAnalysisGap, $"No bounded static {(reverse ? "reverse" : "forward")} path reached a graph root for the package-config surface."));
         }
 
@@ -709,7 +709,15 @@ public static class PackageDecisionCorrelationReporter
         }
     }
 
-    private static bool PathIdentityEquals(string? left, string? right) => left is not null && right is not null && string.Equals(left, right, StringComparison.Ordinal);
+    private static bool PathIdentityEquals(string? left, string? right) =>
+        left is not null
+        && right is not null
+        && string.Equals(
+            left,
+            right,
+            OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal);
 
     private static IReadOnlyList<PackageInputSpec> ResolveInputSpecs(PackageDecisionOptions options)
     {
