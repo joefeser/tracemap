@@ -267,10 +267,19 @@ public sealed class PackageDecisionTests
         }
         await Assert.ThrowsAsync<InvalidDataException>(() => PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decisionPath, indexPath, Path.Combine(temp.Path, "labels"), IndexPaths: [indexPath, indexPath], Labels: ["app", "app"])));
 
+        var derivedOutput = Path.Combine(temp.Path, "derived-output");
+        Directory.CreateDirectory(derivedOutput);
+        var derivedManifest = Path.Combine(derivedOutput, "package-decision-report.json");
+        await File.WriteAllTextAsync(derivedManifest, "{\"version\":\"1.0\",\"portfolioId\":\"fixture\",\"snapshotId\":\"one\",\"inputs\":[{\"label\":\"app\",\"indexPath\":\"../index.sqlite\"}]}");
+        var derivedManifestBytes = await File.ReadAllBytesAsync(derivedManifest);
+        await Assert.ThrowsAsync<InvalidDataException>(() => PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decisionPath, string.Empty, derivedOutput, ManifestPath: derivedManifest)));
+        Assert.Equal(derivedManifestBytes, await File.ReadAllBytesAsync(derivedManifest));
+
         const string unsafeLabel = "/private/client-app";
         var safeLabelReport = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(
-            decisionPath, indexPath, Path.Combine(temp.Path, "safe-label"), IndexPaths: [indexPath], Labels: [unsafeLabel]));
+            decisionPath, indexPath, Path.Combine(temp.Path, "safe-label"), Source: unsafeLabel, IndexPaths: [indexPath], Labels: [unsafeLabel]));
         Assert.StartsWith("source-label-hash:", Assert.Single(safeLabelReport.Report.Sources).Label, StringComparison.Ordinal);
+        Assert.StartsWith("source-label-hash:", safeLabelReport.Report.Query.Source, StringComparison.Ordinal);
         Assert.DoesNotContain(unsafeLabel, await File.ReadAllTextAsync(Path.Combine(temp.Path, "safe-label", "package-decision-report.json")), StringComparison.Ordinal);
     }
 
