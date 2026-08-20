@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Data.Sqlite;
 using TraceMap.Cli;
+using TraceMap.Combine;
 using TraceMap.Core;
 using TraceMap.Reporting;
 using TraceMap.Storage;
@@ -163,8 +164,9 @@ public sealed class PackageDecisionTests
         Assert.Contains(repeated.Report.Sources, source => source.Label == "api" && source.ContainerLabel == "api");
         Assert.Single(repeated.Report.ExactMatches);
         Assert.Equal("web", repeated.Report.ExactMatches[0].SourceLabel);
-        Assert.Equal("available", ((PackageDecisionContext)repeated.Report.PathContext!).Status);
-        Assert.Equal("available", ((PackageDecisionContext)repeated.Report.ReverseContext!).Status);
+        Assert.Equal("unavailable", ((PackageDecisionContext)repeated.Report.PathContext!).Status);
+        Assert.Equal("unavailable", ((PackageDecisionContext)repeated.Report.ReverseContext!).Status);
+        Assert.Contains(((PackageDecisionContext)repeated.Report.PathContext!).Gaps, gap => gap.Classification == "UnknownAnalysisGap" && gap.SupportingFactIds!.Count > 0);
 
         var portfolio = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(
             decisionPath,
@@ -177,6 +179,47 @@ public sealed class PackageDecisionTests
         var json = await File.ReadAllTextAsync(Path.Combine(temp.Path, "portfolio", "package-decision-report.json"));
         Assert.DoesNotContain(firstIndex, json, StringComparison.Ordinal);
         Assert.DoesNotContain(secondIndex, json, StringComparison.Ordinal);
+
+        var secondManifestPath = Path.Combine(temp.Path, "portfolio-second.json");
+        await File.WriteAllTextAsync(secondManifestPath, "{\"version\":\"1.0\",\"portfolioId\":\"fixture\",\"snapshotId\":\"two\",\"inputs\":[{\"label\":\"web\",\"indexPath\":\"first.sqlite\"},{\"label\":\"api\",\"indexPath\":\"second.sqlite\"}]}");
+        var secondPortfolio = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(
+            decisionPath, string.Empty, Path.Combine(temp.Path, "portfolio-second"), ManifestPath: secondManifestPath));
+        Assert.NotEqual(portfolio.Report.Query.IndexPathHash, secondPortfolio.Report.Query.IndexPathHash);
+    }
+
+    [Fact]
+    public async Task Context_traverses_bounded_combined_graph_and_preserves_provenance()
+    {
+        using var temp = new TempDirectory();
+        var sourceIndex = Path.Combine(temp.Path, "source.sqlite");
+        var combinedIndex = Path.Combine(temp.Path, "combined.sqlite");
+        var decisionPath = Path.Combine(temp.Path, "decision.json");
+        var manifest = Manifest("context", "tracemap");
+        var digest = new string('c', 64);
+        var package = DigestPackageFact(manifest, "example", "1.0.0", digest) with { SourceSymbol = "method:terminal" };
+        var first = RelationshipFact(manifest, "call-root", "method:root", "method:middle", 10);
+        var second = RelationshipFact(manifest, "call-middle", "method:middle", "method:terminal", 20);
+        SqliteIndexWriter.Write(sourceIndex, manifest, [first, second, package]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([sourceIndex], combinedIndex, ["app"]));
+        await File.WriteAllTextAsync(decisionPath, "{\"version\":\"package-decision.v1\",\"records\":[{\"decisionId\":\"dec-context\",\"decisionKind\":\"reject\",\"ecosystem\":\"npm\",\"packageName\":\"example\",\"artifactVersion\":\"1.0.0\",\"artifactDigestAlgorithm\":\"sha256\",\"artifactDigest\":\"" + digest + "\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\"}]}");
+
+        var result = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(
+            decisionPath, combinedIndex, Path.Combine(temp.Path, "report"), IncludePaths: true, IncludeReverse: true, MaxDepth: 8));
+
+        var path = Assert.Single(((PackageDecisionContext)result.Report.PathContext!).Rows);
+        Assert.Equal("3", path.Metadata.Single(pair => pair.Key == "pathLength").Value);
+        Assert.True(path.SupportingEdgeIds.Count >= 3);
+        Assert.Equal("package-lock.json", path.FilePath);
+        Assert.Equal(5, path.StartLine);
+        Assert.Equal(manifest.CommitSha, path.CommitSha);
+        Assert.Equal("TestExtractor", path.ExtractorId);
+        Assert.Equal("1.0.0", path.ExtractorVersion);
+        Assert.NotEmpty(path.SupportingFactIds);
+
+        var bounded = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(
+            decisionPath, combinedIndex, Path.Combine(temp.Path, "bounded"), IncludePaths: true, MaxDepth: 1));
+        Assert.Equal("truncated", ((PackageDecisionContext)bounded.Report.PathContext!).Status);
+        Assert.Contains(((PackageDecisionContext)bounded.Report.PathContext!).Gaps, gap => gap.Classification == "TruncatedByLimit");
     }
 
     [Fact]
@@ -195,6 +238,13 @@ public sealed class PackageDecisionTests
         await File.WriteAllTextAsync(decisionPath, validDecision);
         await Assert.ThrowsAsync<InvalidDataException>(() => PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decisionPath, indexPath, decisionPath)));
         Assert.Equal(validDecision, await File.ReadAllTextAsync(decisionPath));
+
+        var manifestPath = Path.Combine(temp.Path, "portfolio.json");
+        await File.WriteAllTextAsync(manifestPath, "{\"version\":\"1.0\",\"portfolioId\":\"fixture\",\"snapshotId\":\"one\",\"inputs\":[{\"label\":\"app\",\"indexPath\":\"index.sqlite\"}]}");
+        var manifestBytes = await File.ReadAllBytesAsync(manifestPath);
+        await Assert.ThrowsAsync<InvalidDataException>(() => PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decisionPath, string.Empty, manifestPath, ManifestPath: manifestPath)));
+        Assert.Equal(manifestBytes, await File.ReadAllBytesAsync(manifestPath));
+        await Assert.ThrowsAsync<InvalidDataException>(() => PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decisionPath, indexPath, Path.Combine(temp.Path, "labels"), IndexPaths: [indexPath, indexPath], Labels: ["app", "app"])));
     }
 
     [Fact]
@@ -264,6 +314,9 @@ public sealed class PackageDecisionTests
     private static CodeFact PackageFact(ScanManifest manifest, string name, string ecosystem, string file, string group, string version) => new($"pkg-{manifest.RepoName}-{name}", manifest.ScanId, manifest.RepoName, manifest.CommitSha, null, FactTypes.PackageReferenced, RuleIds.ProjectFile, EvidenceTiers.Tier2Structural, null, name, "PackageManifest", new EvidenceSpan(file, 5, 5, null, "TestExtractor", "1.0.0"), new SortedDictionary<string, string>(StringComparer.Ordinal) { ["dependencyGroup"] = group, ["ecosystem"] = ecosystem, ["manifestKind"] = "package.json", ["packageName"] = name, ["packageManager"] = ecosystem, ["sourceKind"] = "manifest", ["surfaceKind"] = "package-config", ["version"] = version });
 
     private static CodeFact DigestPackageFact(ScanManifest manifest, string name, string version, string digest) => new($"pkg-{manifest.RepoName}-{name}", manifest.ScanId, manifest.RepoName, manifest.CommitSha, null, FactTypes.PackageReferenced, RuleIds.ProjectFile, EvidenceTiers.Tier2Structural, null, name, "PackageManifest", new EvidenceSpan("package-lock.json", 5, 5, null, "TestExtractor", "1.0.0"), new SortedDictionary<string, string>(StringComparer.Ordinal) { ["dependencyGroup"] = "dependencies", ["dependencyRelation"] = "direct", ["ecosystem"] = "npm", ["manifestKind"] = "package-lock.json", ["packageName"] = name, ["packageManager"] = "npm", ["sourceKind"] = "lockfile", ["surfaceKind"] = "package-config", ["resolvedVersion"] = version, ["version"] = version, ["artifactDigestAlgorithm"] = "sha256", ["artifactDigest"] = digest, ["lockfilePath"] = "package-lock.json", ["lockfileHash"] = new string('b', 32) });
+
+    private static CodeFact RelationshipFact(ScanManifest manifest, string id, string source, string target, int line) =>
+        new(id, manifest.ScanId, manifest.RepoName, manifest.CommitSha, null, FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, EvidenceTiers.Tier1Semantic, source, target, "Calls", new EvidenceSpan("Flow.cs", line, line, null, "TestExtractor", "1.0.0"), new SortedDictionary<string, string>(StringComparer.Ordinal));
 
     private static string FindRepoRoot()
     {

@@ -12,6 +12,7 @@ import { RuleIds } from "../src/facts/RuleIds";
 import { exportIndex } from "../src/export/IndexExporter";
 import { extractPackageFacts } from "../src/extractors/PackageJsonExtractor";
 import { findSqlJsFile } from "../src/storage/SqliteIndexWriter";
+import { collectFileInventory } from "../src/scan/FileInventory";
 
 const packageRoot = process.cwd();
 const repoRoot = path.resolve(packageRoot, "../..");
@@ -161,6 +162,7 @@ describe("ScanEngine", () => {
     const packagePath = path.join(repo, "package.json");
     const lockPath = path.join(repo, "package-lock.json");
     await fsp.writeFile(packagePath, JSON.stringify({ name: "fixture", dependencies: { express: "^4.0.0" } }, null, 2));
+    const sha512Digest = Buffer.alloc(64, 0x2a).toString("base64");
     await fsp.writeFile(lockPath, JSON.stringify({
       name: "fixture",
       lockfileVersion: 3,
@@ -169,7 +171,14 @@ describe("ScanEngine", () => {
         "node_modules/express": {
           version: "4.18.2",
           resolved: "https://registry.npmjs.org/express/-/express-4.18.2.tgz",
-          integrity: "sha512-" + "A".repeat(86)
+          integrity: "sha512-" + sha512Digest
+        },
+        "node_modules/bar": {
+          version: "2.0.0"
+        },
+        "node_modules/bar/node_modules/express": {
+          version: "3.0.0",
+          integrity: "sha512-AAAA"
         },
         "node_modules/express/node_modules/accepts": {
           version: "1.3.8",
@@ -192,7 +201,7 @@ describe("ScanEngine", () => {
         dependencyPathDepth: "1",
         registryOrigin: "registry.npmjs.org",
         artifactDigestAlgorithm: "sha512-base64",
-        artifactDigest: "A".repeat(86),
+        artifactDigest: sha512Digest,
         lockfileHash: expect.stringMatching(/^[0-9a-f]{32}$/)
       })
     }));
@@ -201,10 +210,38 @@ describe("ScanEngine", () => {
       properties: expect.objectContaining({ packageName: "accepts", dependencyRelation: "transitive", dependencyPathDepth: "2" })
     }));
     expect(facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.PackageReferenced,
+      properties: expect.objectContaining({ packageName: "express", resolvedVersion: "3.0.0", dependencyRelation: "transitive", dependencyPathDepth: "2" })
+    }));
+    expect(facts).toContainEqual(expect.objectContaining({
       factType: FactTypes.AnalysisGap,
       properties: expect.objectContaining({ category: "LockfileDigestUnavailable" })
     }));
     expect(JSON.stringify(facts)).not.toContain("express-4.18.2.tgz");
+  });
+
+  it("admits package-lock through production inventory and preserves size bounds", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    const output = path.join(root, "out");
+    await fsp.mkdir(repo, { recursive: true });
+    await fsp.writeFile(path.join(repo, "package.json"), JSON.stringify({ name: "fixture", dependencies: { example: "1.0.0" } }));
+    await fsp.writeFile(path.join(repo, "package-lock.json"), JSON.stringify({ lockfileVersion: 3, packages: { "node_modules/example": { version: "1.0.0" } } }));
+    const options = { repoPath: repo, outputPath: output, projectPaths: [], includeGlobs: [], excludeGlobs: [], maxFileByteSize: 16, semantic: false };
+
+    const inventory = await collectFileInventory(options);
+    const lockfile = inventory.find((item) => item.relativePath === "package-lock.json");
+    expect(lockfile).toEqual(expect.objectContaining({ kind: "package-lock", skipped: true }));
+
+    const facts = await extractPackageFacts(manifest("bounded-lock"), repo, inventory);
+    expect(facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.AnalysisGap,
+      properties: expect.objectContaining({ category: "package-lock-size-limit" })
+    }));
+    expect(facts).not.toContainEqual(expect.objectContaining({
+      factType: FactTypes.PackageReferenced,
+      properties: expect.objectContaining({ sourceKind: "lockfile" })
+    }));
   });
 
   it("can be reduced by the existing .NET reducer with review-tier fan-out handling", async () => {

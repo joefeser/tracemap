@@ -125,7 +125,13 @@ public sealed record PackageDecisionContextRow(
     string Message,
     IReadOnlyList<string> SupportingFactIds,
     IReadOnlyList<string> SupportingEdgeIds,
-    IReadOnlyList<KeyValuePair<string, string>> Metadata);
+    IReadOnlyList<KeyValuePair<string, string>> Metadata,
+    string FilePath,
+    int StartLine,
+    int EndLine,
+    string? CommitSha,
+    string? ExtractorId,
+    string? ExtractorVersion);
 
 public sealed record PackageDecisionCorrelationRow(
     string RowId,
@@ -186,7 +192,8 @@ public sealed record PackageDecisionGap(
     string? ExtractorVersion = null,
     string? FilePath = null,
     int? StartLine = null,
-    int? EndLine = null);
+    int? EndLine = null,
+    IReadOnlyList<string>? SupportingFactIds = null);
 
 public sealed record PackageDecisionSummary(
     int SourceCount,
@@ -237,7 +244,8 @@ public static class PackageDecisionCorrelationReporter
             throw new ArgumentException("package-decision requires one --label for each --index.", nameof(options));
         if (!string.IsNullOrWhiteSpace(options.ManifestPath) && inputPaths.Count > 0)
             throw new ArgumentException("package-decision --manifest cannot be mixed with --index inputs.", nameof(options));
-        RejectOutputAlias(options.DecisionPath, inputPaths, options.OutputPath);
+        var inputSpecs = ResolveInputSpecs(options);
+        RejectOutputAlias(options.DecisionPath, inputSpecs.Select(spec => spec.IndexPath).Append(options.ManifestPath).OfType<string>().ToArray(), options.OutputPath);
         DateTimeOffset? asOf = null;
         if (!string.IsNullOrWhiteSpace(options.AsOf))
         {
@@ -249,7 +257,7 @@ public static class PackageDecisionCorrelationReporter
         var admission = await PackageDecisionRecordReader.ReadAsync(options.DecisionPath, cancellationToken);
         if (!admission.Accepted)
             throw new InvalidDataException("package-decision decision input admission failed.");
-        var index = await ReadInputsAsync(options, cancellationToken);
+        var index = await ReadInputsAsync(inputSpecs, cancellationToken);
         var sources = index.Sources.OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceIndexId, StringComparer.Ordinal).ToArray();
         if (!string.IsNullOrWhiteSpace(options.Source))
             sources = sources.Where(source => SourceMatches(source.Label, options.Source)).ToArray();
@@ -358,7 +366,7 @@ public static class PackageDecisionCorrelationReporter
         var reverseContext = options.IncludeReverse ? BuildContext(index, contextRows, options, reverse: true) : null;
         var report = new PackageDecisionDocument(
             "package-decision-correlation", Version, "DecisionSnapshotV1",
-            new PackageDecisionQuery($"value-hash:{CombinedReportHelpers.Hash(options.DecisionPath, 16)}", $"value-hash:{CombinedReportHelpers.Hash(string.Join('\u001f', inputPaths), 16)}", options.Source ?? "default", options.Ecosystem, options.DecisionId, options.Classification, options.MaxFindings, options.MaxGaps, options.ExitCode, options.AsOf),
+            new PackageDecisionQuery($"value-hash:{CombinedReportHelpers.Hash(options.DecisionPath, 16)}", $"value-hash:{InputIdentity(inputSpecs, options.ManifestPath)}", options.Source ?? "default", options.Ecosystem, options.DecisionId, options.Classification, options.MaxFindings, options.MaxGaps, options.ExitCode, options.AsOf),
             recordRows.OrderBy(row => row.Classification ?? string.Empty, StringComparer.Ordinal).ThenBy(row => row.ProducerId ?? string.Empty, StringComparer.Ordinal).ThenBy(row => row.DecisionId ?? string.Empty, StringComparer.Ordinal).ToArray(),
             sources.Select(source => ToSource(source, index.ScannedAt.GetValueOrDefault(source.SourceIndexId), index.KnownGaps.Where(gap => gap.SourceIndexId == source.SourceIndexId))).ToArray(),
             selectedExact, selectedMismatch, selectedPossible, selectedAmbiguous,
@@ -453,11 +461,27 @@ public static class PackageDecisionCorrelationReporter
         }
         catch
         {
+            var evidence = rows.FirstOrDefault();
             return new PackageDecisionContext(
                 "unavailable",
                 "UnknownAnalysisGap",
                 [],
-                [new PackageDecisionGap($"pd-context-unavailable:{Hash(reverse ? "reverse" : "paths")}", "UnknownAnalysisGap", "The existing combined dependency graph inventory was unavailable for optional context.", RuleId, EvidenceTiers.Tier4Unknown)],
+                [new PackageDecisionGap(
+                    $"pd-context-unavailable:{Hash(reverse ? "reverse" : "paths")}",
+                    "UnknownAnalysisGap",
+                    "The existing combined dependency graph inventory was unavailable for optional context.",
+                    RuleId,
+                    EvidenceTiers.Tier4Unknown,
+                    SourceLabel: evidence?.SourceLabel,
+                    SourceIndexId: evidence?.SourceIndexId,
+                    ScanId: evidence?.ScanId,
+                    CommitSha: evidence?.CommitSha,
+                    ExtractorId: evidence?.Evidence.ExtractorId,
+                    ExtractorVersion: evidence?.Evidence.ExtractorVersion,
+                    FilePath: evidence?.Evidence.FilePath,
+                    StartLine: evidence?.Evidence.StartLine,
+                    EndLine: evidence?.Evidence.EndLine,
+                    SupportingFactIds: evidence is null ? [] : [evidence.Evidence.FactId])],
                 0,
                 ["Optional context is static graph evidence only and never changes a package correlation rung."]);
         }
@@ -470,48 +494,168 @@ public static class PackageDecisionCorrelationReporter
             .ThenBy(pair => pair.row.Evidence.StartLine)
             .ThenBy(pair => pair.row.RowId, StringComparer.Ordinal)
             .ToArray();
-        var cap = Math.Max(1, reverse ? options.MaxRoots : options.MaxPaths);
-        var omitted = Math.Max(0, selected.Length - cap);
-        var contextRows = selected.Take(cap).Select(pair =>
+        var nodesById = graph.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        var incoming = graph.Edges
+            .GroupBy(edge => edge.ToNodeId, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group.OrderBy(edge => edge.EdgeKind, StringComparer.Ordinal).ThenBy(edge => edge.EdgeId, StringComparer.Ordinal).ToArray(),
+                StringComparer.Ordinal);
+        var contextRows = new List<PackageDecisionContextRow>();
+        var gaps = new List<PackageDecisionGap>();
+        var roots = new HashSet<string>(StringComparer.Ordinal);
+        var pathsByRoot = new Dictionary<string, int>(StringComparer.Ordinal);
+        var omitted = 0;
+        foreach (var pair in selected)
         {
             var node = pair.node!;
-            var edgeIds = graph.Edges.Where(edge => edge.FromNodeId == node.NodeId || edge.ToNodeId == node.NodeId).Select(edge => edge.EdgeId).OrderBy(id => id, StringComparer.Ordinal).Take(Math.Max(1, options.MaxFrontier)).ToArray();
-            return new PackageDecisionContextRow(
-                $"pd-context:{Hash(string.Join('\u001f', reverse ? "reverse" : "paths", pair.row.RowId))}",
-                reverse ? "ReverseContextAvailable" : "PathContextAvailable",
-                reverse ? "combined.reverse.surface.v1" : "combined.paths.surface-evidence.v1",
-                node.EvidenceTier ?? EvidenceTiers.Tier4Unknown,
-                pair.row.SourceLabel,
-                pair.row.SourceIndexId,
-                pair.row.Evidence.FactId,
-                pair.row.PackageName,
-                reverse ? "Bounded reverse graph context attached to the package-config surface." : "Bounded graph context attached to the package-config surface.",
-                [pair.row.Evidence.FactId],
-                edgeIds,
-                CombinedReportHelpers.SortedMetadata([
-                    new("nodeId", node.NodeId),
-                    new("nodeKind", node.NodeKind),
-                    new("maxDepth", options.MaxDepth.ToString(CultureInfo.InvariantCulture)),
-                    new("sourceLabel", node.SourceLabel)
-                ]));
-        }).ToArray();
-        var gaps = new List<PackageDecisionGap>();
+            var queue = new Queue<ContextTraversalState>();
+            queue.Enqueue(new ContextTraversalState(node.NodeId, [node.NodeId], []));
+            var visitedStates = 0;
+            var foundPath = false;
+            while (queue.Count > 0)
+            {
+                if (queue.Count > Math.Max(1, options.MaxFrontier) || ++visitedStates > Math.Max(1, options.MaxFrontier))
+                {
+                    omitted++;
+                    gaps.Add(ContextGap("frontier", pair.row, "TruncatedByLimit", "Optional graph context reached the deterministic frontier limit."));
+                    break;
+                }
+
+                var state = queue.Dequeue();
+                if (!nodesById.TryGetValue(state.NodeId, out var current)) continue;
+                var allIncoming = incoming.TryGetValue(current.NodeId, out var incomingEdges) ? incomingEdges : [];
+                var candidates = allIncoming.Where(edge => !state.NodeIds.Contains(edge.FromNodeId, StringComparer.Ordinal)).ToArray();
+                if (allIncoming.Length == 0 && state.EdgeIds.Count > 0)
+                {
+                    var rootId = current.NodeId;
+                    if (reverse)
+                    {
+                        if (!roots.Contains(rootId) && roots.Count >= Math.Max(1, options.MaxRoots))
+                        {
+                            omitted++;
+                            continue;
+                        }
+                        roots.Add(rootId);
+                        pathsByRoot.TryGetValue(rootId, out var pathCount);
+                        if (pathCount >= Math.Max(1, options.MaxPathsPerRoot))
+                        {
+                            omitted++;
+                            continue;
+                        }
+                        pathsByRoot[rootId] = pathCount + 1;
+                    }
+                    else if (contextRows.Count >= Math.Max(1, options.MaxPaths))
+                    {
+                        omitted++;
+                        continue;
+                    }
+
+                    foundPath = true;
+                    var pathNodeIds = state.NodeIds.Reverse().ToArray();
+                    var pathEdgeIds = state.EdgeIds.Reverse().ToArray();
+                    var pathNodes = pathNodeIds.Select(id => nodesById[id]).ToArray();
+                    var pathEdges = pathEdgeIds.Select(id => graph.Edges.Single(edge => edge.EdgeId == id)).ToArray();
+                    var supportingFactIds = pathNodes.Select(pathNode => pathNode.CombinedFactId)
+                        .OfType<string>()
+                        .Append(pair.row.Evidence.FactId)
+                        .Distinct(StringComparer.Ordinal)
+                        .OrderBy(id => id, StringComparer.Ordinal)
+                        .ToArray();
+                    contextRows.Add(new PackageDecisionContextRow(
+                        $"pd-context:{Hash(string.Join('\u001f', reverse ? "reverse" : "paths", pair.row.RowId, string.Join('|', pathNodeIds), string.Join('|', pathEdgeIds)))}",
+                        reverse ? "ReverseContextAvailable" : "PathContextAvailable",
+                        reverse ? "combined.reverse.surface.v1" : "combined.paths.surface-evidence.v1",
+                        WeakestTier(pathNodes.Select(pathNode => pathNode.EvidenceTier).Concat(pathEdges.Select(edge => edge.EvidenceTier)).Append(pair.row.Evidence.EvidenceTier)),
+                        pair.row.SourceLabel,
+                        pair.row.SourceIndexId,
+                        pair.row.Evidence.FactId,
+                        pair.row.PackageName,
+                        reverse ? "Bounded reverse traversal found a static path from a graph root to the package-config surface." : "Bounded forward path evidence connects a graph root to the package-config surface.",
+                        supportingFactIds,
+                        pathEdgeIds,
+                        CombinedReportHelpers.SortedMetadata([
+                            new("direction", reverse ? "reverse-from-package-surface" : "forward-to-package-surface"),
+                            new("rootNodeId", rootId),
+                            new("packageNodeId", node.NodeId),
+                            new("pathLength", pathEdgeIds.Length.ToString(CultureInfo.InvariantCulture)),
+                            new("maxDepth", options.MaxDepth.ToString(CultureInfo.InvariantCulture)),
+                            new("sourceLabel", node.SourceLabel)
+                        ]),
+                        pair.row.Evidence.FilePath,
+                        pair.row.Evidence.StartLine,
+                        pair.row.Evidence.EndLine,
+                        pair.row.CommitSha,
+                        pair.row.Evidence.ExtractorId,
+                        pair.row.Evidence.ExtractorVersion));
+                    continue;
+                }
+
+                if (state.EdgeIds.Count >= Math.Max(1, options.MaxDepth))
+                {
+                    omitted++;
+                    gaps.Add(ContextGap("depth", pair.row, "TruncatedByLimit", "Optional graph context reached the deterministic depth limit."));
+                    continue;
+                }
+
+                foreach (var edge in candidates)
+                    queue.Enqueue(new ContextTraversalState(edge.FromNodeId, [.. state.NodeIds, edge.FromNodeId], [.. state.EdgeIds, edge.EdgeId]));
+            }
+
+            if (!foundPath)
+                gaps.Add(ContextGap("no-path", pair.row, CombinedDependencyPathClassifications.UnknownAnalysisGap, $"No bounded static {(reverse ? "reverse" : "forward")} path reached a graph root for the package-config surface."));
+        }
+
+        foreach (var missing in rows.Where(row => selected.All(pair => !ReferenceEquals(pair.row, row))))
+            gaps.Add(ContextGap("surface-unavailable", missing, CombinedDependencyPathClassifications.UnknownAnalysisGap, "The correlated package fact did not map to a package-config graph surface."));
+
         foreach (var gap in graph.Gaps.Where(gap => gap.Classification is "TruncatedByLimit" or CombinedDependencyPathClassifications.UnknownAnalysisGap))
         {
-            gaps.Add(new PackageDecisionGap($"pd-context-gap:{Hash(gap.GapId)}", gap.Classification, gap.Message, gap.RuleId ?? RuleId, gap.EvidenceTier ?? EvidenceTiers.Tier4Unknown, SourceLabel: gap.SourceLabel, SourceIndexId: gap.SourceIndexId, FilePath: gap.FilePath, StartLine: gap.StartLine, EndLine: gap.EndLine));
+            gaps.Add(new PackageDecisionGap($"pd-context-gap:{Hash(gap.GapId)}", gap.Classification, gap.Message, gap.RuleId ?? RuleId, gap.EvidenceTier ?? EvidenceTiers.Tier4Unknown, SourceLabel: gap.SourceLabel, SourceIndexId: gap.SourceIndexId, CommitSha: gap.CommitSha, ExtractorVersion: gap.ExtractorVersion, FilePath: gap.FilePath, StartLine: gap.StartLine, EndLine: gap.EndLine, SupportingFactIds: gap.EffectiveSupportingFactIds));
         }
         if (omitted > 0)
         {
             gaps.Add(new PackageDecisionGap($"pd-context-truncated:{Hash(reverse ? "reverse" : "paths")}", "TruncatedByLimit", $"Optional {(reverse ? "reverse" : "path")} context exceeded its deterministic cap; {omitted} context rows were omitted.", RuleId, EvidenceTiers.Tier4Unknown));
         }
-        if (contextRows.Length == 0)
+        if (contextRows.Count == 0)
         {
             gaps.Add(new PackageDecisionGap($"pd-context-selector:{Hash(reverse ? "reverse" : "paths")}", "UnknownAnalysisGap", $"No package-config surface was available for optional {(reverse ? "reverse" : "path")} context.", RuleId, EvidenceTiers.Tier4Unknown));
         }
-        var status = omitted > 0 ? "truncated" : contextRows.Length > 0 ? "available" : "unavailable";
-        var classification = gaps.Any(gap => gap.Classification == "UnknownAnalysisGap") ? "UnknownAnalysisGap" : omitted > 0 ? "TruncatedByLimit" : contextRows.Length > 0 ? "Available" : "UnknownAnalysisGap";
-        return new PackageDecisionContext(status, classification, contextRows, gaps.OrderBy(gap => gap.GapId, StringComparer.Ordinal).ToArray(), omitted, ["Optional context is static graph evidence only; it does not prove runtime reachability and never upgrades a correlation rung."]);
+        var status = omitted > 0 ? "truncated" : contextRows.Count > 0 ? "available" : "unavailable";
+        var classification = gaps.Any(gap => gap.Classification == "UnknownAnalysisGap") ? "UnknownAnalysisGap" : omitted > 0 ? "TruncatedByLimit" : contextRows.Count > 0 ? "Available" : "UnknownAnalysisGap";
+        return new PackageDecisionContext(status, classification, contextRows.OrderBy(row => row.ContextId, StringComparer.Ordinal).ToArray(), gaps.GroupBy(gap => gap.GapId, StringComparer.Ordinal).Select(group => group.First()).OrderBy(gap => gap.GapId, StringComparer.Ordinal).ToArray(), omitted, ["Optional context is static graph evidence only; it does not prove runtime reachability and never upgrades a correlation rung."]);
     }
+
+    private static PackageDecisionGap ContextGap(string reason, PackageDecisionCorrelationRow row, string classification, string message) =>
+        new(
+            $"pd-context-{reason}:{Hash(row.RowId)}",
+            classification,
+            message,
+            RuleId,
+            EvidenceTiers.Tier4Unknown,
+            row.DecisionId,
+            row.SourceLabel,
+            row.Ecosystem,
+            row.SourceIndexId,
+            row.ScanId,
+            row.CommitSha,
+            row.Evidence.ExtractorId,
+            row.Evidence.ExtractorVersion,
+            row.Evidence.FilePath,
+            row.Evidence.StartLine,
+            row.Evidence.EndLine,
+            [row.Evidence.FactId]);
+
+    private static string WeakestTier(IEnumerable<string?> tiers)
+    {
+        var values = tiers.OfType<string>().ToArray();
+        if (values.Contains(EvidenceTiers.Tier4Unknown, StringComparer.Ordinal)) return EvidenceTiers.Tier4Unknown;
+        if (values.Contains(EvidenceTiers.Tier3SyntaxOrTextual, StringComparer.Ordinal)) return EvidenceTiers.Tier3SyntaxOrTextual;
+        if (values.Contains(EvidenceTiers.Tier2Structural, StringComparer.Ordinal)) return EvidenceTiers.Tier2Structural;
+        return EvidenceTiers.Tier1Semantic;
+    }
+
+    private sealed record ContextTraversalState(string NodeId, IReadOnlyList<string> NodeIds, IReadOnlyList<string> EdgeIds);
 
     private static bool TryParseAsOf(string value, out DateTimeOffset parsed)
     {
@@ -536,15 +680,15 @@ public static class PackageDecisionCorrelationReporter
         return string.IsNullOrWhiteSpace(options.IndexPath) ? [] : [options.IndexPath];
     }
 
-    private static void RejectOutputAlias(string decisionPath, IReadOnlyList<string> indexPaths, string outputPath)
+    private static void RejectOutputAlias(string decisionPath, IReadOnlyList<string> inputPaths, string outputPath)
     {
         var fullOutput = Path.GetFullPath(outputPath);
         if (Directory.Exists(fullOutput) || string.IsNullOrWhiteSpace(Path.GetExtension(fullOutput)))
             return;
 
         var outputIdentity = FileIdentity(fullOutput);
-        if (outputIdentity is not null && (PathIdentityEquals(outputIdentity, FileIdentity(decisionPath)) || indexPaths.Any(indexPath => PathIdentityEquals(outputIdentity, FileIdentity(indexPath)))))
-            throw new InvalidDataException("package-decision --out must not alias the decision or index input.");
+        if (outputIdentity is not null && new[] { decisionPath }.Concat(inputPaths).Any(inputPath => PathIdentityEquals(outputIdentity, FileIdentity(inputPath))))
+            throw new InvalidDataException("package-decision --out must not alias a decision, manifest, or index input.");
     }
 
     private static string? FileIdentity(string path)
@@ -567,7 +711,7 @@ public static class PackageDecisionCorrelationReporter
 
     private static bool PathIdentityEquals(string? left, string? right) => left is not null && right is not null && string.Equals(left, right, StringComparison.Ordinal);
 
-    private static async Task<IndexRead> ReadInputsAsync(PackageDecisionOptions options, CancellationToken cancellationToken)
+    private static IReadOnlyList<PackageInputSpec> ResolveInputSpecs(PackageDecisionOptions options)
     {
         var specs = new List<PackageInputSpec>();
         if (!string.IsNullOrWhiteSpace(options.ManifestPath))
@@ -585,6 +729,13 @@ public static class PackageDecisionCorrelationReporter
         }
 
         if (specs.Count == 0) throw new InvalidDataException("package-decision did not receive any readable index input.");
+        if (specs.GroupBy(spec => spec.Label, StringComparer.Ordinal).Any(group => group.Count() > 1))
+            throw new InvalidDataException("package-decision inputs contain duplicate labels.");
+        return specs;
+    }
+
+    private static async Task<IndexRead> ReadInputsAsync(IReadOnlyList<PackageInputSpec> specs, CancellationToken cancellationToken)
+    {
         var multiple = specs.Count > 1;
         var sources = new List<CombinedReportSource>();
         var facts = new List<CombinedFactRow>();
@@ -600,7 +751,9 @@ public static class PackageDecisionCorrelationReporter
                 var sourceId = multiple ? $"{CombinedReportHelpers.Hash(spec.Label, 12)}:{source.SourceIndexId}" : source.SourceIndexId;
                 var displayLabel = source.Label == "default" ? spec.Label : spec.Label == "default" ? source.Label : $"{spec.Label}/{source.Label}";
                 var composed = source with { SourceIndexId = sourceId, Label = displayLabel };
-                var identity = FullCommit(source.CommitSha) ? $"scan:{source.ScanId}" : $"repo:{source.RepoName}:commit:{source.CommitSha}";
+                var identity = FullCommit(source.CommitSha)
+                    ? $"repo:{source.RepoName}:commit:{source.CommitSha.ToLowerInvariant()}"
+                    : $"scan:{source.ScanId}";
                 if (identities.ContainsKey(identity))
                 {
                     knownGaps.Add(new CombinedKnownGapRow(sourceId, displayLabel, "DuplicateSourceIdentity", 1, "Portfolio inputs contain duplicate scan identity; this pairing is not correlated."));
@@ -624,6 +777,22 @@ public static class PackageDecisionCorrelationReporter
             }
         }
         return new IndexRead(sources, facts, edges, knownGaps, scannedAt);
+    }
+
+    private static string InputIdentity(IReadOnlyList<PackageInputSpec> specs, string? manifestPath)
+    {
+        var components = new List<string>();
+        if (!string.IsNullOrWhiteSpace(manifestPath)) components.Add($"manifest:{FileContentHash(manifestPath)}");
+        components.AddRange(specs
+            .OrderBy(spec => spec.Label, StringComparer.Ordinal)
+            .Select(spec => string.Join('\u001f', spec.Label, FileContentHash(spec.IndexPath), spec.ExpectedRepoIdentity ?? string.Empty, spec.ExpectedCommitSha ?? string.Empty)));
+        return CombinedReportHelpers.Hash(string.Join('\u001e', components), 16);
+    }
+
+    private static string FileContentHash(string path)
+    {
+        using var stream = File.OpenRead(path);
+        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
     }
 
     private static IReadOnlyList<PackageInputSpec> ReadPortfolioManifest(string path)

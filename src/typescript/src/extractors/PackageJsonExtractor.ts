@@ -153,6 +153,10 @@ export async function extractPackageFacts(manifest: ScanManifest, repoPath: stri
 async function extractPackageLockFacts(manifest: ScanManifest, repoPath: string, inventory: readonly FileInventoryItem[]): Promise<CodeFact[]> {
   const facts: CodeFact[] = [];
   for (const item of inventory.filter((file) => path.basename(file.relativePath) === "package-lock.json")) {
+    if (item.skipped) {
+      facts.push(lockfileGap(manifest, item, "package-lock-size-limit", "npm package-lock.json exceeded the configured inventory file-size limit."));
+      continue;
+    }
     try {
       const text = await fs.readFile(item.absolutePath, "utf8");
       const json = JSON.parse(text) as Record<string, unknown>;
@@ -184,8 +188,8 @@ async function extractPackageLockFacts(manifest: ScanManifest, repoPath: string,
         const depth = dependencyPathDepth(packagePath);
         const evidenceLine = lineOf(text, packagePath.replaceAll("\\", "/"));
         const packageProperties: Record<string, string> = {
-          dependencyGroup: directNames.has(packageName) ? "dependencies" : "lockfile",
-          dependencyRelation: directNames.has(packageName) ? "direct" : "transitive",
+          dependencyGroup: isDirectLockEntry(packagePath, packageName, directNames) ? "dependencies" : "lockfile",
+          dependencyRelation: isDirectLockEntry(packagePath, packageName, directNames) ? "direct" : "transitive",
           dependencyPathDepth: String(depth),
           ecosystem: "npm",
           manifestKind: "package-lock.json",
@@ -259,10 +263,23 @@ function dependencyPathDepth(packagePath: string): number {
   return Math.max(1, packagePath.split("/").filter((segment) => segment === "node_modules").length);
 }
 
+function isDirectLockEntry(packagePath: string, packageName: string, directNames: ReadonlySet<string>): boolean {
+  if (!directNames.has(packageName) || dependencyPathDepth(packagePath) !== 1) return false;
+  return packagePath.replaceAll("\\", "/") === `node_modules/${packageName}`;
+}
+
 function parseSha512Integrity(value: string): string | null {
   if (!value.startsWith("sha512-")) return null;
   const digest = value.slice("sha512-".length);
-  return digest.length > 0 && digest.length <= 128 && /^[A-Za-z0-9+/]+={0,2}$/.test(digest) ? digest : null;
+  if (digest.length === 0 || digest.length > 128 || !/^[A-Za-z0-9+/]+={0,2}$/.test(digest)) return null;
+  try {
+    const decoded = Buffer.from(digest, "base64");
+    const canonical = decoded.toString("base64");
+    const normalizedInput = digest.replace(/=+$/, "");
+    return decoded.length === 64 && canonical.replace(/=+$/, "") === normalizedInput ? canonical : null;
+  } catch {
+    return null;
+  }
 }
 
 function hostOnlyOrigin(value: string): string | null {
