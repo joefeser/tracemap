@@ -1649,6 +1649,73 @@ path/reverse context is bounded graph evidence and never upgrades a rung.
 for an exact match tied to an external `reject` or `revoke` record. The command
 does not fetch, execute, authenticate, approve, block, or enforce packages.
 
+### Package decision correlation (PR3: NuGet + Swift resolved evidence)
+
+NuGet `packages.lock.json` and Swift lockfile evidence never prove an artifact
+digest (NuGet `contentHash` is package-content metadata, a podspec checksum is
+a podspec SHA-1, and SwiftPM/Carthage lockfiles carry no digest at all), so
+both ecosystems correlate at `PossibleNameVersionMatch` with
+`matchBasis=resolved-version` plus a `LockfileDigestUnavailable` gap and never
+produce `ExactArtifactMatch`. Run the focused suites:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~PackageDecision
+swift run --package-path src/swift tracemap-swift-smoke-tests
+```
+
+For the synthetic NuGet lockfile end-to-end smoke (offline, no restore):
+
+```bash
+smoke_root="$(mktemp -d)"
+mkdir -p "$smoke_root/repo/src"
+cp samples/package-decisions/nuget-lock-fixture/App.csproj "$smoke_root/repo/src/"
+cp samples/package-decisions/nuget-lock-fixture/packages.lock.json "$smoke_root/repo/src/"
+git -C "$smoke_root/repo" init -q
+git -C "$smoke_root/repo" add .
+git -C "$smoke_root/repo" -c user.email=tracemap@example.invalid \
+  -c user.name=TraceMap commit -qm fixture
+dotnet run --project src/dotnet/TraceMap.Cli -- scan \
+  --repo "$smoke_root/repo" --out "$smoke_root/scan"
+dotnet run --project src/dotnet/TraceMap.Cli -- package-decision \
+  --decision samples/package-decisions/nuget-lock-fixture/decision-nuget.json \
+  --index "$smoke_root/scan/index.sqlite" \
+  --out "$smoke_root/decision-report" --exit-code
+```
+
+Confirm: the direct record yields `resolved-version` possible rows for both
+target frameworks with `dependencyRelation=direct`, the transitive record
+yields `dependencyRelation=transitive`, `LockfileDigestUnavailable` and
+`DirectTransitiveUnavailable`-bounded behavior stay explicit, the lockfile
+`contentHash` values never appear in facts or reports, the exit code stays 0
+(possible matches never trigger `--exit-code`), and repeated runs are
+byte-identical.
+
+For the Swift composed-consumer smoke, scan the checked-in dependency-surfaces
+sample and correlate it through the Swift lockfile projection seam:
+
+```bash
+swift run --package-path src/swift tracemap-swift scan \
+  --repo samples/swift-dependency-surfaces \
+  --out /tmp/tracemap-swift-dependency-surfaces-pr3
+python3 scripts/validate-adapter-artifacts.py /tmp/tracemap-swift-dependency-surfaces-pr3
+dotnet run --project src/dotnet/TraceMap.Cli -- package-decision \
+  --decision samples/package-decisions/swift-possible.json \
+  --index /tmp/tracemap-swift-dependency-surfaces-pr3/index.sqlite \
+  --out /tmp/tracemap-swift-decision-report
+```
+
+Confirm: SwiftPM `Package.resolved` pins, `Podfile.lock` PODS entries, and
+`Cartfile.resolved` semver literals carry `resolvedVersion` (v1 and v2
+`Package.resolved` schemas); revision-only, branch-only, and unsafe values
+stay hashed with no `resolvedVersion`; `SPEC CHECKSUMS` render only as
+explicitly labeled `specChecksum`/`specChecksumKind=podspec-sha1` metadata and
+never as `artifactDigest`; the swift decision records correlate only as
+`resolved-version` possible matches with the Swift lockfile rule IDs and tiers
+on the evidence rows; no `ExactArtifactMatch` is possible; unsupported
+`Package.resolved` schemas keep their gap; and outputs stay byte-deterministic
+with no raw URLs, revisions, or non-hex checksum values.
+
 ### Cross-adapter scan-truth conformance
 
 For changes to adapter inventory, scan identity, snapshot verification,

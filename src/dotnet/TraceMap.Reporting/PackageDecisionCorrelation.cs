@@ -216,6 +216,7 @@ public sealed record PackageDecisionSummary(
 public static class PackageDecisionCorrelationReporter
 {
     public const string RuleId = "package.decision.correlation.v1";
+    private const string SwiftDependencyLockfileFactType = "SwiftDependencyLockfileEntryDeclared";
     private const string Version = "1.0";
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -294,7 +295,7 @@ public static class PackageDecisionCorrelationReporter
         {
             foreach (var source in sources)
             {
-                var sourceFacts = index.Facts.Where(fact => fact.SourceIndexId == source.SourceIndexId && fact.FactType == FactTypes.PackageReferenced).ToArray();
+                var sourceFacts = PackageEvidenceRows(index.Facts, source.SourceIndexId);
                 var rows = sourceFacts.Where(fact => string.Equals(fact.Properties.GetValueOrDefault("ecosystem"), record.Ecosystem, StringComparison.OrdinalIgnoreCase)
                     && string.Equals(NormalizeName(record.Ecosystem, record.PackageName), NormalizeName(record.Ecosystem, fact.Properties.GetValueOrDefault("packageName") ?? string.Empty), StringComparison.Ordinal)).ToArray();
                 var sourceGaps = index.KnownGaps.Where(gap => gap.SourceIndexId == source.SourceIndexId).ToArray();
@@ -446,6 +447,38 @@ public static class PackageDecisionCorrelationReporter
         new(GapId(classification, record, source), classification, message, RuleId, EvidenceTiers.Tier4Unknown, record.DecisionId, source.Label, record.Ecosystem, source.SourceIndexId, source.ScanId, SafeCommit(source.CommitSha));
 
     private static bool HasEcosystemCapability(IEnumerable<CombinedFactRow> facts, string ecosystem) => facts.Any(fact => string.Equals(fact.Properties.GetValueOrDefault("ecosystem"), ecosystem, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// The correlation's package-evidence rows: native PackageReferenced facts plus Swift lockfile
+    /// facts projected through the smallest deterministic seam. Swift lockfile rows never carry an
+    /// artifact digest, so they can only ever correlate at the possible rung.
+    /// </summary>
+    private static IReadOnlyList<CombinedFactRow> PackageEvidenceRows(IEnumerable<CombinedFactRow> facts, string sourceIndexId) =>
+        facts.Where(fact => fact.SourceIndexId == sourceIndexId)
+            .Select(fact => fact.FactType == FactTypes.PackageReferenced ? fact : ProjectSwiftLockfileEvidence(fact))
+            .OfType<CombinedFactRow>()
+            .ToArray();
+
+    private static CombinedFactRow? ProjectSwiftLockfileEvidence(CombinedFactRow fact)
+    {
+        if (fact.FactType != SwiftDependencyLockfileFactType)
+        {
+            return null;
+        }
+
+        var properties = new Dictionary<string, string>(fact.Properties, StringComparer.Ordinal)
+        {
+            ["ecosystem"] = "swift"
+        };
+        if (!properties.ContainsKey("packageName")
+            && properties.TryGetValue("normalizedDependencyIdentity", out var identity)
+            && !string.IsNullOrWhiteSpace(identity))
+        {
+            properties["packageName"] = identity;
+        }
+
+        return fact with { Properties = properties };
+    }
 
     private static bool SourceMatches(string label, string selector)
     {
