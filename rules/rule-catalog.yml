@@ -3182,17 +3182,21 @@ rules:
 
   - id: project.file.v1
     name: Project file inventory
-    description: Reads solution and C# project declarations, target frameworks, and package references from project files and packages.config.
+    description: Reads solution and C# project declarations, target frameworks, and package references from project files, packages.config, and checked-in packages.lock.json resolved-version metadata.
     evidenceTier: Tier2Structural
     emits:
       - SolutionDeclared
       - ProjectDeclared
       - TargetFrameworkDeclared
       - PackageReferenced
+      - AnalysisGap
     limitations:
       - XML files that cannot be parsed are still inventoried but do not emit project metadata facts.
       - Conditional MSBuild properties are not evaluated in Milestone 1.
       - PackageReferenced facts are static project-file or packages.config declarations and do not prove NuGet restore, resolved transitive dependencies, runtime loading, or deployment.
+      - packages.lock.json rows are checked-in lockfile metadata only; the direct/transitive relation comes from the lockfile's own type field and never from package presence alone.
+      - NuGet packages.lock.json carries no registry artifact digest; its contentHash is package-content metadata and is never emitted as artifactDigest, so exact-artifact matching is unavailable for NuGet evidence.
+      - packages.lock.json extraction is offline and deterministic; restore, dependency solving, package-manager execution, and network access are out of scope, and malformed, unsupported, truncated, or unsafe lockfile shapes emit analysis gaps.
       - Central package management, imported props/targets, and unresolved property interpolation may reduce package metadata precision.
 
   - id: csharp.syntax.memberaccess.v1
