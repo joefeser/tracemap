@@ -357,6 +357,9 @@ The final consistency fixes validate Poetry dependency values before declaring
 the manifest surface complete, classify invalid registry ports as unsupported
 sources without discarding the rest of a lockfile, and record Maven's existing
 lockfile-unavailable limitation in the manifest collector as well as facts.
+Nested Poetry constraint fields and uv version/source/marker qualifiers are
+also type-checked before relation proof; malformed qualifier values retain
+package evidence but omit relation labels with `DirectTransitiveUnavailable`.
 
 ## Limitations and deferred work
 

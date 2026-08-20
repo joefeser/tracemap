@@ -428,12 +428,19 @@ def _valid_poetry_dependency_value(value: object) -> bool:
     if isinstance(value, str):
         return bool(value.strip())
     if isinstance(value, dict):
-        return bool(value) and all(
-            isinstance(key, str)
-            and isinstance(item, (str, bool, list))
-            and (not isinstance(item, list) or all(isinstance(entry, str) for entry in item))
-            for key, item in value.items()
-        )
+        if not value:
+            return False
+        string_keys = {"version", "python", "markers", "source", "git", "path", "url", "branch", "tag", "rev"}
+        boolean_keys = {"optional", "develop", "allow-prereleases"}
+        for key, item in value.items():
+            if key in string_keys and isinstance(item, str) and item.strip():
+                continue
+            if key in boolean_keys and isinstance(item, bool):
+                continue
+            if key == "extras" and isinstance(item, list) and all(isinstance(entry, str) for entry in item):
+                continue
+            return False
+        return True
     if isinstance(value, list):
         return bool(value) and all(_valid_poetry_dependency_value(item) for item in value)
     return False
@@ -458,11 +465,28 @@ def _root_dependency_descriptors(package: dict) -> tuple[list[dict], bool]:
                     complete = False
                     continue
                 name = value.get("name")
-                if not isinstance(name, str) or not _SAFE_NAME.match(name):
+                if not isinstance(name, str) or not _SAFE_NAME.match(name) or not _valid_uv_dependency_descriptor(value):
                     complete = False
                     continue
                 descriptors.append(value)
     return descriptors, present and complete
+
+
+def _valid_uv_dependency_descriptor(descriptor: dict) -> bool:
+    version = descriptor.get("version")
+    if version is not None and (not isinstance(version, str) or not version.strip()):
+        return False
+    source = descriptor.get("source")
+    if source is not None:
+        if not isinstance(source, dict):
+            return False
+        registry = source.get("registry")
+        if registry is not None and (not isinstance(registry, str) or _registry_origin(registry) is None):
+            return False
+    marker = descriptor.get("marker")
+    if marker is not None and not isinstance(marker, str):
+        return False
+    return True
 
 
 def _uv_dependency_relation(
