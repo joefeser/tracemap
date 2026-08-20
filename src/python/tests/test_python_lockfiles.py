@@ -186,6 +186,22 @@ def test_uv_root_with_malformed_dependency_shape_does_not_prove_relations(tmp_pa
     assert "DirectTransitiveUnavailable" in {fact.properties["gapKind"] for fact in _gap_facts(facts)}
 
 
+def test_uv_malformed_dependency_qualifier_does_not_prove_relations(tmp_path: Path) -> None:
+    lock = tmp_path / "uv.lock"
+    lock.write_text(
+        "version = 1\n"
+        '\n[[package]]\nname = "fixture"\nversion = "0.1.0"\nsource = { virtual = "." }\n'
+        'dependencies = [{ name = "requests", version = false }]\n'
+        '\n[[package]]\nname = "requests"\nversion = "2.32.3"\nsource = { registry = "https://pypi.org/simple" }\n',
+        encoding="utf-8",
+    )
+
+    facts = read_lockfiles(tmp_path, _manifest("uv-malformed-qualifier"), [lock], [], [])
+
+    assert "dependencyRelation" not in _by_name(facts, "requests")[0].properties
+    assert "DirectTransitiveUnavailable" in {fact.properties["gapKind"] for fact in _gap_facts(facts)}
+
+
 def test_uv_grouped_dev_dependencies_are_direct(tmp_path: Path) -> None:
     lock = tmp_path / "uv.lock"
     lock.write_text(
@@ -478,6 +494,18 @@ def test_poetry_invalid_dependency_value_leaves_relations_unproven(tmp_path: Pat
     pyproject.write_text('[tool.poetry.dependencies]\nrequests = false\n', encoding="utf-8")
 
     facts = read_lockfiles(tmp_path, _manifest("poetry-invalid-value"), [lock], [pyproject], [])
+
+    assert all("dependencyRelation" not in fact.properties for fact in _package_facts(facts))
+    assert "DirectTransitiveUnavailable" in {fact.properties["gapKind"] for fact in _gap_facts(facts)}
+
+
+def test_poetry_invalid_nested_dependency_value_leaves_relations_unproven(tmp_path: Path) -> None:
+    lock = tmp_path / "poetry.lock"
+    lock.write_text(POETRY_LOCK, encoding="utf-8")
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text('[tool.poetry.dependencies]\nrequests = { version = false }\n', encoding="utf-8")
+
+    facts = read_lockfiles(tmp_path, _manifest("poetry-invalid-nested-value"), [lock], [pyproject], [])
 
     assert all("dependencyRelation" not in fact.properties for fact in _package_facts(facts))
     assert "DirectTransitiveUnavailable" in {fact.properties["gapKind"] for fact in _gap_facts(facts)}
