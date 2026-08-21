@@ -9,8 +9,61 @@ TS_CLI="${ROOT_DIR}/src/typescript/dist/src/cli.js"
 JVM_CLI="${ROOT_DIR}/src/jvm/build/install/tracemap-jvm/bin/tracemap-jvm"
 JDK21_HOME="${JAVA_HOME:-"/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home"}"
 PYTHON_BIN="${TRACEMAP_PYTHON:-python3}"
+SELECTED_REPOS="${TRACEMAP_OSS_SMOKE_REPOS:-}"
+KNOWN_REPOS=(
+  "ProjectExtensions.Azure.ServiceBus"
+  "fluentjdf"
+  "scip-typescript"
+  "axios-npm-lock"
+  "scip-java"
+  "spring-petclinic"
+  "okio"
+  "full-stack-fastapi-template"
+  "microblog"
+  "sqlalchemy"
+)
+
+validate_selection() {
+  [[ -z "$SELECTED_REPOS" ]] && return 0
+
+  local selected
+  IFS=',' read -r -a selected <<< "$SELECTED_REPOS"
+  local candidate known
+  for candidate in "${selected[@]}"; do
+    [[ -n "$candidate" ]] || {
+      printf 'TRACEMAP_OSS_SMOKE_REPOS contains an empty label.\n' >&2
+      return 1
+    }
+    for known in "${KNOWN_REPOS[@]}"; do
+      [[ "$candidate" == "$known" ]] && break
+    done
+    if [[ "$candidate" != "$known" ]]; then
+      printf 'Unknown TRACEMAP_OSS_SMOKE_REPOS label: %s\n' "$candidate" >&2
+      return 1
+    fi
+  done
+}
+
+validate_selection
 
 mkdir -p "$CACHE_ROOT" "$OUT_ROOT"
+
+should_scan() {
+  local label="$1"
+  if [[ -z "$SELECTED_REPOS" ]]; then
+    return 0
+  fi
+
+  local selected
+  IFS=',' read -r -a selected <<< "$SELECTED_REPOS"
+  local candidate
+  for candidate in "${selected[@]}"; do
+    if [[ "$candidate" == "$label" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
 
 if [[ "${TRACEMAP_SKIP_BUILD:-0}" != "1" ]]; then
   dotnet build "$ROOT_DIR/src/dotnet/TraceMap.sln"
@@ -98,6 +151,7 @@ print_summary() {
 
 scan_dotnet() {
   local label="$1"
+  should_scan "$label" || return 0
   local url="$2"
   local sha="$3"
   local repo
@@ -111,6 +165,7 @@ scan_dotnet() {
 
 scan_typescript() {
   local label="$1"
+  should_scan "$label" || return 0
   local url="$2"
   local sha="$3"
   local repo
@@ -124,6 +179,7 @@ scan_typescript() {
 
 scan_jvm() {
   local label="$1"
+  should_scan "$label" || return 0
   local url="$2"
   local sha="$3"
   local repo
@@ -137,6 +193,7 @@ scan_jvm() {
 
 scan_python() {
   local label="$1"
+  should_scan "$label" || return 0
   local url="$2"
   local sha="$3"
   local scan_subdir="${4:-"."}"
