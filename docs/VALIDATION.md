@@ -1664,7 +1664,15 @@ checkout may use the network; after checkout all scanning is offline. Do not
 run npm, lifecycle scripts, builds, tests, binaries, or any package-manager
 command in the scanned checkout. Keep the clone and every generated artifact
 under one temporary directory and delete that directory after recording the
-results.
+results. Pass the script paths below rather than using its persistent default
+cache/output roots:
+
+```bash
+smoke_root="$(mktemp -d)"
+scripts/smoke-open-source-repos.sh "$smoke_root/cache" "$smoke_root/out"
+# Record the required results, then remove only this mktemp-created root.
+rm -rf "$smoke_root"
+```
 
 The pinned scan must contain all five standard scan artifacts and pass:
 
@@ -1685,9 +1693,11 @@ verified by TraceMap.
 For downstream composition, derive one temporary `package-decision.v1` reject
 record from an eligible public lockfile row (copy only its ecosystem, package
 name, exact version, digest algorithm, and digest). Scan the checked-in
-`samples/typescript-modern-sample` with the same built adapter, then run:
+`samples/typescript-modern-sample` with the same built adapter and validate
+that second scan output before combining it, then run:
 
 ```bash
+python3 scripts/validate-adapter-artifacts.py <synthetic-typescript-scan-output>
 dotnet run --project src/dotnet/TraceMap.Cli -- combine \
   --index <axios-npm-lock-scan-output>/index.sqlite --label axios-npm-lock \
   --index <synthetic-typescript-scan-output>/index.sqlite --label synthetic-typescript \
