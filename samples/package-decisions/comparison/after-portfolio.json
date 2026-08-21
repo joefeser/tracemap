@@ -1,0 +1,11 @@
+{
+  "version": "1.0",
+  "portfolioId": "package-decision-comparison",
+  "snapshotId": "after",
+  "inputs": [
+    {
+      "label": "web",
+      "indexPath": "after-web.sqlite"
+    }
+  ]
+}

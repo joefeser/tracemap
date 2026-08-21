@@ -53,7 +53,7 @@ Stop conditions: if portfolio manifest reuse requires changing the portfolio rea
 - [x] 4.1 Extend the TypeScript adapter with `package-lock.json` (v2/v3) extraction emitting `PackageReferenced` rows with `sourceKind=lockfile`, `resolvedVersion`, `lockfilePath`, `lockfileHash`, `registryOrigin` (host-only from `resolved`), `artifactDigestAlgorithm=sha512-base64`, `artifactDigest`, `dependencyRelation` (direct = also declared in `package.json`; transitive = lockfile-only), `dependencyPathDepth` where recorded.
 - [x] 4.2 Update `typescript.package.v1` catalog entry (emits + limitations: lockfile is checked-in metadata; integrity is the registry-declared tarball integrity, not content verified by TraceMap; no solving) and `docs/VALIDATION.md` smoke entries.
 - [x] 4.3 End-to-end fixtures F1 (exact + direct), F2 (revoked artifact B), F4 (transitive), F6 (missing integrity → gap + possible), F3 (same name/version, different digest → `ArtifactDigestMismatch`): prove the rung changes when only the digest changes.
-- [ ] 4.4 Adapter validation per `docs/VALIDATION.md`: `npm run check --prefix src/typescript`; pinned TypeScript smokes; `python3 scripts/validate-adapter-artifacts.py <scan-output>`; combined combine/report/paths smoke. The focused adapter suite and checked-in lockfile fixture pass. The pinned `scip-typescript` scan completes, but that pinned commit has no `package-lock.json`, and artifact validation currently reports pre-existing absolute-path findings in unrelated facts; see `implementation-state.md`. Keep this task open until a reviewed pinned npm-lockfile smoke exists and the shared validator passes.
+- [ ] 4.4 Adapter validation per `docs/VALIDATION.md`: `npm run check --prefix src/typescript`; pinned TypeScript smokes; `python3 scripts/validate-adapter-artifacts.py <scan-output>`; combined combine/report/paths smoke. The focused adapter suite and checked-in lockfile fixture pass. The pinned `scip-typescript` scan completes, but that pinned commit has no `package-lock.json`, and artifact validation currently reports pre-existing absolute-path findings in unrelated facts; see `implementation-state.md`. Keep this task open until a reviewed pinned npm-lockfile smoke exists and the shared validator passes. PR5 re-verified both blockers against the pinned commit `891eb4293709a6a587bf4468dfa1b45a85182fd9`: a fresh scan yields zero lockfile-sourced `PackageReferenced` rows (the repo ships `yarn.lock`, not `package-lock.json`) and the shared validator exits 1 with nine `local-absolute-path` findings in unrelated semantic facts.
 
 Validation: adapter matrix commands above plus `dotnet test src/dotnet/TraceMap.sln --filter "FullyQualifiedName~PackageDecision"`; `./scripts/check-private-paths.sh`; `git diff --check`.
 
@@ -99,26 +99,26 @@ Validation: `dotnet test src/dotnet/TraceMap.sln --filter "FullyQualifiedName~Co
 
 ## Slice 10 — Before/after artifact replacement
 
-- [ ] 10.1 `--before-manifest`/`--after-manifest` comparison mode: per design §6.6; `ArtifactReplaced` exact-label rows only when both sides are digest-bound; possible-only change rows otherwise; cross-snapshot wording.
-- [ ] 10.2 Fixture F10 with committed expected output; identity-mismatch downgrade per portfolio comparison rules.
+- [x] 10.1 `--before-manifest`/`--after-manifest` comparison mode: per design §6.6; `ArtifactReplaced` exact-label rows only when both sides are digest-bound; possible-only change rows otherwise; cross-snapshot wording.
+- [x] 10.2 Fixture F10 with committed expected output; identity-mismatch downgrade per portfolio comparison rules.
 
 Validation: package-decision and portfolio-focused tests; `./scripts/check-private-paths.sh`; `git diff --check`.
 
 ## Slice 11 — Advisory profile external claims
 
-- [ ] 11.1 `advisory-profile.v1` reader with the closed grammar (`exact`/`any` predicates, `framework-implied-server-surface`, bounded params); rule `package.decision.advisory.v1` (active) with external-claim limitations; dedicated report section; never merged into rungs or facts.
-- [ ] 11.2 Fixture F12; rejection tests for out-of-grammar claims; severity/CVE-shaped fields rejected by closed schema.
+- [x] 11.1 `advisory-profile.v1` reader with the closed grammar (`exact`/`any` predicates, `framework-implied-server-surface`, bounded params); rule `package.decision.advisory.v1` (active) with external-claim limitations; dedicated report section; never merged into rungs or facts.
+- [x] 11.2 Fixture F12; rejection tests for out-of-grammar claims; severity/CVE-shaped fields rejected by closed schema.
 
 ## Slice 12 — Deployment references (runtime-unproven)
 
-- [ ] 12.1 `package-deployment-reference.v1` reader per design §4; all rows `RuntimeUnprovenReference` with the fixed limitation; optional commit-SHA join to portfolio sources as provenance only; runtime-load claims rejected.
-- [ ] 12.2 Fixture F15; exit-code inclusion per requirements 12.3; per the slice-0 owner decision, confirm or defer this slice's timing (design §14 item 7).
+- [x] 12.1 `package-deployment-reference.v1` reader per design §4; all rows `RuntimeUnprovenReference` with the fixed limitation; optional commit-SHA join to portfolio sources as provenance only; runtime-load claims rejected.
+- [x] 12.2 Fixture F15; exit-code inclusion per requirements 12.3; per the slice-0 owner decision, deployment-reference timing was approved and shipped in PR5 (design §14 item 7 resolved).
 
 ## Slice 13 — Docs, acceptance, and closure
 
-- [ ] 13.1 Update `docs/ACCEPTANCE.md` with `tracemap package-decision` acceptance criteria; README command list; `docs/VALIDATION.md` full matrix entries for changed adapters.
-- [ ] 13.2 Final capability matrix refresh in requirements.md (Requirement 10) to reflect shipped adapter slices; implementation-state.md closure note.
-- [ ] 13.3 Full gate: `dotnet build src/dotnet/TraceMap.sln`; `dotnet test src/dotnet/TraceMap.sln`; `./scripts/check-private-paths.sh`; `git diff --check`; the `docs/VALIDATION.md` required local commands for every touched adapter.
+- [x] 13.1 Update `docs/ACCEPTANCE.md` with `tracemap package-decision` acceptance criteria; README command list; `docs/VALIDATION.md` full matrix entries for changed adapters.
+- [x] 13.2 Final capability matrix refresh in requirements.md (Requirement 10) to reflect shipped adapter slices; implementation-state.md closure note.
+- [x] 13.3 Full gate: `dotnet build src/dotnet/TraceMap.sln`; `dotnet test src/dotnet/TraceMap.sln`; `./scripts/check-private-paths.sh`; `git diff --check`; the `docs/VALIDATION.md` required local commands for every touched adapter.
 
 ## Deferred follow-ups (not in this spec's slices)
 

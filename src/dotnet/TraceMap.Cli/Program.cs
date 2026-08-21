@@ -1460,7 +1460,17 @@ public static class TraceMapCommand
         var indexes = values.GetMany("--index");
         var labels = values.GetMany("--label");
         var manifestPath = values.GetValueOrDefault("--manifest");
-        if (indexes.Count == 0 && string.IsNullOrWhiteSpace(manifestPath))
+        var beforeManifestPath = values.GetValueOrDefault("--before-manifest");
+        var afterManifestPath = values.GetValueOrDefault("--after-manifest");
+        var advisoryProfilePath = values.GetValueOrDefault("--advisory-profile");
+        var deploymentReferencesPath = values.GetValueOrDefault("--deployment-references");
+        var comparisonRequested = !string.IsNullOrWhiteSpace(beforeManifestPath) || !string.IsNullOrWhiteSpace(afterManifestPath);
+        if (comparisonRequested && (string.IsNullOrWhiteSpace(beforeManifestPath) || string.IsNullOrWhiteSpace(afterManifestPath)))
+        {
+            await error.WriteLineAsync("error: package-decision requires --before-manifest and --after-manifest together.");
+            return 1;
+        }
+        if (indexes.Count == 0 && string.IsNullOrWhiteSpace(manifestPath) && !comparisonRequested)
         {
             await error.WriteLineAsync("error: package-decision requires --index <path> or --manifest <portfolio.json>.");
             return 1;
@@ -1468,6 +1478,11 @@ public static class TraceMapCommand
         if (!string.IsNullOrWhiteSpace(manifestPath) && indexes.Count > 0)
         {
             await error.WriteLineAsync("error: package-decision --manifest cannot be mixed with --index.");
+            return 1;
+        }
+        if (comparisonRequested && (indexes.Count > 0 || !string.IsNullOrWhiteSpace(manifestPath)))
+        {
+            await error.WriteLineAsync("error: package-decision --before-manifest/--after-manifest cannot be mixed with --index or --manifest.");
             return 1;
         }
         if (indexes.Count > 1 && labels.Count != indexes.Count || labels.Count > 0 && labels.Count != indexes.Count)
@@ -1508,7 +1523,11 @@ public static class TraceMapCommand
             ParsePositiveInt(values, "--max-paths", 100),
             ParsePositiveInt(values, "--max-frontier", 10000),
             ParsePositiveInt(values, "--max-roots", 100),
-            ParsePositiveInt(values, "--max-paths-per-root", 5)), cancellationToken);
+            ParsePositiveInt(values, "--max-paths-per-root", 5),
+            beforeManifestPath,
+            afterManifestPath,
+            advisoryProfilePath,
+            deploymentReferencesPath), cancellationToken);
         await output.WriteLineAsync($"TraceMap package-decision completed: {result.MarkdownPath ?? result.JsonPath}");
         await output.WriteLineAsync($"Exact matches: {result.Report.Summary.ExactCount}");
         await output.WriteLineAsync($"Possible matches: {result.Report.Summary.PossibleCount}");
@@ -3208,30 +3227,35 @@ public static class TraceMapCommand
     {
         return """
             Usage:
-              tracemap package-decision --decision <package-decision.json> (--index <index.sqlite> --label <label> ... | --manifest <portfolio.json>) --out <path> [options]
+              tracemap package-decision --decision <package-decision.json> (--index <index.sqlite> --label <label> ... | --manifest <portfolio.json> | --before-manifest <p.json> --after-manifest <p.json>) --out <path> [options]
 
             Required:
               --decision <path>          package-decision.v1 external record file.
               --index <path>             TraceMap single/combined index; repeat with one --label per input.
               --label <label>            Stable input label; repeat in the same order as --index.
               --manifest <path>          Existing portfolio manifest v1.0; mutually exclusive with --index.
+              --before-manifest <path>   Portfolio manifest v1.0 for the before snapshot; paired with --after-manifest.
+              --after-manifest <path>    Portfolio manifest v1.0 for the after snapshot; mutually exclusive with --index/--manifest.
               --out <path>               Output directory or file path.
 
             Optional:
               --format <value>           markdown or json. Directory outputs write both.
               --source <label>           Filter source, container, or original source label.
-              --ecosystem <name>         Filter ecosystem.
+              --ecosystem <name>         Filter ecosystem (also scopes deployment references).
               --decision-id <id>         Filter producer-scoped decision ID.
               --classification <rung>    Filter output correlation rung.
-              --max-findings <n>         Correlation row cap. Default: 200.
+              --advisory-profile <path>  advisory-profile.v1 external claims file; rendered as external opinions only.
+              --deployment-references <path>
+                                         package-deployment-reference.v1 file; all rows render as RuntimeUnprovenReference.
+              --max-findings <n>         Correlation row and artifact change cap. Default: 200.
               --max-gaps <n>             Gap row cap. Default: 1000.
               --include-paths            Attach bounded package-config graph context.
               --include-reverse          Attach bounded reverse graph context.
               --max-depth <n>            Optional context traversal bound. Default: 8.
-              --max-paths <n>             Optional forward context row cap. Default: 100.
-              --max-frontier <n>          Optional graph frontier bound. Default: 10000.
-              --max-roots <n>             Optional reverse context row cap. Default: 100.
-              --max-paths-per-root <n>    Optional reverse path bound. Default: 5.
+              --max-paths <n>            Optional forward context row cap. Default: 100.
+              --max-frontier <n>         Optional graph frontier bound. Default: 10000.
+              --max-roots <n>            Optional reverse context row cap. Default: 100.
+              --max-paths-per-root <n>   Optional reverse path bound. Default: 5.
               --as-of <RFC3339 UTC>      Deterministic effectiveness context.
               --exit-code                Return 1 only for exact reject/revoke matches; quarantine is non-terminal.
 
@@ -3240,6 +3264,9 @@ public static class TraceMapCommand
 
             The command reports producer-supplied state and static evidence only. It does not
             authenticate producers, fetch or execute packages, or enforce admission/revocation.
+            Before/after artifact changes are cross-snapshot portfolio evidence, not a single
+            coherent release state. Advisory claims are external producer opinions. Deployment
+            references are runtime-unproven and never count as exact matches.
             """;
     }
 

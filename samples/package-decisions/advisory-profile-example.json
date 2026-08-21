@@ -1,0 +1,34 @@
+{
+  "version": "advisory-profile.v1",
+  "producer": {
+    "id": "example-advisory-producer",
+    "version": "2026.08.1"
+  },
+  "claims": [
+    {
+      "claimId": "claim-next-rsc-001",
+      "ecosystem": "npm",
+      "packageName": "next",
+      "versionPredicate": {
+        "kind": "exact",
+        "version": "14.2.3"
+      },
+      "claimKind": "framework-implied-server-surface",
+      "claimParams": {
+        "framework": "next-rsc"
+      }
+    },
+    {
+      "claimId": "claim-render-any-002",
+      "ecosystem": "npm",
+      "packageName": "@example/render",
+      "versionPredicate": {
+        "kind": "any"
+      },
+      "claimKind": "framework-implied-server-surface",
+      "claimParams": {
+        "framework": "example-ssr"
+      }
+    }
+  ]
+}
