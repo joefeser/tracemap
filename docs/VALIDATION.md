@@ -1670,7 +1670,7 @@ default cache/output roots:
 ```bash
 smoke_root="$(mktemp -d)"
 trap 'test -n "${smoke_root:-}" && test -d "$smoke_root" && rm -rf -- "$smoke_root"' EXIT
-TRACEMAP_OSS_SMOKE_REPOS=axios-npm-lock \
+TRACEMAP_SKIP_BUILD=1 TRACEMAP_OSS_SMOKE_REPOS=axios-npm-lock \
   scripts/smoke-open-source-repos.sh "$smoke_root/cache" "$smoke_root/out"
 axios_npm_lock_scan="$smoke_root/out/axios-npm-lock"
 ```
