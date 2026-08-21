@@ -10,6 +10,41 @@ JVM_CLI="${ROOT_DIR}/src/jvm/build/install/tracemap-jvm/bin/tracemap-jvm"
 JDK21_HOME="${JAVA_HOME:-"/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home"}"
 PYTHON_BIN="${TRACEMAP_PYTHON:-python3}"
 SELECTED_REPOS="${TRACEMAP_OSS_SMOKE_REPOS:-}"
+KNOWN_REPOS=(
+  "ProjectExtensions.Azure.ServiceBus"
+  "fluentjdf"
+  "scip-typescript"
+  "axios-npm-lock"
+  "scip-java"
+  "spring-petclinic"
+  "okio"
+  "full-stack-fastapi-template"
+  "microblog"
+  "sqlalchemy"
+)
+
+validate_selection() {
+  [[ -z "$SELECTED_REPOS" ]] && return 0
+
+  local selected
+  IFS=',' read -r -a selected <<< "$SELECTED_REPOS"
+  local candidate known
+  for candidate in "${selected[@]}"; do
+    [[ -n "$candidate" ]] || {
+      printf 'TRACEMAP_OSS_SMOKE_REPOS contains an empty label.\n' >&2
+      return 1
+    }
+    for known in "${KNOWN_REPOS[@]}"; do
+      [[ "$candidate" == "$known" ]] && break
+    done
+    if [[ "$candidate" != "$known" ]]; then
+      printf 'Unknown TRACEMAP_OSS_SMOKE_REPOS label: %s\n' "$candidate" >&2
+      return 1
+    fi
+  done
+}
+
+validate_selection
 
 mkdir -p "$CACHE_ROOT" "$OUT_ROOT"
 
