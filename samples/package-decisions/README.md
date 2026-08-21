@@ -26,3 +26,14 @@ content.
   `decision-gradle.json`. gradle.lockfile provides resolved versions only; the
   reject record's sha256 digest still correlates possible-only because the
   format and the decision record cannot prove the same artifact form.
+- `comparison/`: PR5 before/after fixture (F10). The two portfolio manifests
+  reference `before-web.sqlite`/`after-web.sqlite` (synthetic indexes built by
+  the tests or a smoke next to the copied manifests); `decision-comparison.json`
+  covers an exact digest replacement, a possible-only evidence change, and an
+  unchanged digest pair.
+- `advisory-profile-example.json`: PR5 advisory fixture (F12) with one exact
+  and one `any` `framework-implied-server-surface` claim. Claims are external
+  producer opinions and never become facts or correlation rows.
+- `deployment-references-example.json`: PR5 deployment-reference fixture
+  (F15) with a digest-bearing `build-attachment` and an unmatched
+  `deployment-manifest`. Every reference is runtime-unproven lineage metadata.

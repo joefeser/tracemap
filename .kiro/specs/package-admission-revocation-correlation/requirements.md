@@ -2,7 +2,7 @@
 
 GitHub issue: #690 (`High: correlate package admission and revocation evidence across portfolio paths`).
 
-Status: specification only. Issue #690 does not authorize implementation during current onboarding testing. Every task in `tasks.md` is unchecked and stays unchecked until implementation is authorized.
+Status: implemented. Joe authorized implementation after the specification merged in #698; grouped implementation PRs PR1–PR5 shipped the record reader, correlation engine, composition and adapter evidence slices, comparison mode, external advisory claims, deployment references, and closure. `tasks.md` tracks the shipped slices; task 4.4 (reviewed pinned npm-lockfile smoke validation) remains open under issue #690.
 
 ## Summary
 
@@ -155,18 +155,18 @@ The specification PR is separate from these implementation groupings. No groupin
 
 ### Requirement 10: Adapter capability matrix and gap policy
 
-10.1. The report SHALL be honest about per-adapter capability. The matrix below is the audited capability at `dev` commit `5ca869d9` and SHALL be maintained as adapters gain capability:
+10.1. The report SHALL be honest about per-adapter capability. The matrix below was originally audited at `dev` commit `5ca869d9` and has been maintained as adapter slices shipped (npm in PR2, NuGet/Swift in PR3, Python/JVM in PR4); it reflects the shipped capability as of the PR5 closure:
 
 | Capability | .NET/NuGet | npm/TypeScript | JVM/Maven/Gradle | Python/pip | Swift |
 | --- | --- | --- | --- | --- | --- |
 | Manifests parsed (content) | `.csproj`, `packages.config` | `package.json` | `pom.xml`, literal Gradle | `pyproject.toml`, `setup.cfg`, `requirements*.txt` | `Package.swift`, `Package.resolved` (v1/v2), `Podfile`, `Podfile.lock`, `Cartfile(.resolved)` |
 | Declared version ranges | yes | yes | yes | yes | yes (Tier3 manifest) |
-| Exact resolved versions | no | no | no | no | partial (Carthage semver literal; SwiftPM versions reduced to status flags) |
-| Lockfile content parsing | no (`packages.lock.json` presence only) | no | no | no | yes (SwiftPM resolved, Podfile.lock, Cartfile.resolved) |
-| Lockfile identity (path/hash) | no | no | no | no | partial (`manifestHash` for `Package.swift` only) |
-| Registry origin | no | no | no | no | no (URLs hashed or omitted) |
-| Artifact/tarball digest or integrity | no | no | no | no | no (Podfile.lock SPEC CHECKSUMS are not captured; they are podspec checksums, not artifact digests) |
-| Direct/transitive distinction | no | no | no | no | no |
+| Exact resolved versions | yes (`packages.lock.json`) | yes (`package-lock.json`) | yes (`gradle.lockfile`; Maven has no standard lockfile) | yes (`uv.lock`, `poetry.lock`) | partial (safe literal pins from `Package.resolved`, `Podfile.lock`, Cartfile; revisions/branches stay hashed) |
+| Lockfile content parsing | yes (`packages.lock.json` schemas 1–2) | yes (v2/v3) | yes (`gradle.lockfile`) | yes (`uv.lock`, `poetry.lock`; `Pipfile` is an explicit unsupported-metadata gap) | yes (SwiftPM resolved, Podfile.lock, Cartfile.resolved) |
+| Lockfile identity (path/hash) | yes | yes | yes (gradle) | yes | partial (`manifestHash` for `Package.swift` only) |
+| Registry origin | no | yes (host-only from lockfile `resolved`) | no | partial (host-only for uv registry URLs) | no (URLs hashed or omitted) |
+| Artifact/tarball digest or integrity | no (`contentHash` never read as evidence) | yes (registry-declared `integrity`, sha512-base64) | no (`verification-metadata.xml` not consumed; artifact form not identifiable) | no (wheel/sdist hashes are artifact-form specific and never emitted as artifact digests) | no (Podfile.lock SPEC CHECKSUMS are podspec checksums, stored only as labeled `specChecksum`, never artifact digests) |
+| Direct/transitive distinction | yes (from lockfile `type`) | yes (root manifest cross-reference) | no | yes where declarations prove it (uv groups/qualifiers, Poetry complete sibling manifests); otherwise explicit gap | no |
 | Import/usage linkage to package | no | no | no (framework-tier upgrade only) | partial heuristic (internal tier upgrade; no usage fact) | no |
 
 10.2. Correlation over a capability the adapter lacks SHALL emit an explicit gap naming the missing capability (for example `LockfileDigestUnavailable`, `DirectTransitiveUnavailable`), never silence, and never a guessed match.

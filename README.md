@@ -198,6 +198,24 @@ dotnet run --project src/dotnet/TraceMap.Cli -- package-impact \
 
 The package impact command writes `package-impact-report.md` and `package-impact-report.json` when `--out` is a directory. It matches `package-delta.v1` changes against indexed `PackageReferenced`/`package-config` evidence and reports source labels, commit SHAs, rule IDs, evidence tiers, file spans, safe version metadata, gaps, and limitations. Package impact reports are static evidence inventories; they do not infer compatibility, transitive dependency resolution, runtime loading, vulnerabilities, licenses, deployment, or release approval.
 
+Correlate external package admission/revocation decisions with indexed package evidence:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Cli -- package-decision \
+  --decision samples/package-decisions/possible-admit.json \
+  --index .tracemap/index.sqlite \
+  --out .tracemap-package-decision
+dotnet run --project src/dotnet/TraceMap.Cli -- package-decision \
+  --decision samples/package-decisions/comparison/decision-comparison.json \
+  --before-manifest before-portfolio.json \
+  --after-manifest after-portfolio.json \
+  --advisory-profile samples/package-decisions/advisory-profile-example.json \
+  --deployment-references samples/package-decisions/deployment-references-example.json \
+  --out .tracemap-package-decision-comparison
+```
+
+The package decision command writes `package-decision-report.md` and `package-decision-report.json` when `--out` is a directory. It reads a producer-authored `package-decision.v1` file read-only and correlates each record's artifact identity against `PackageReferenced`/`package-config` evidence in single, combined, portfolio, or before/after comparison inputs, keeping exact, digest-mismatch, possible, and ambiguous rows separate with their evidence chains. `--exit-code` returns 1 only for an exact match tied to an external `reject` or `revoke` record. Advisory claims render as external producer opinions only; deployment references render as runtime-unproven lineage metadata. Package decision reports are static snapshot evidence: they do not authenticate producers, fetch or execute packages, verify builds or deployments, prove runtime loading, assign severity or vulnerability meaning, or enforce admission and revocation decisions.
+
 The combined dependency paths command writes `paths-report.md` and `paths-report.json` when `--out` is a directory. It follows static evidence from endpoint, symbol, or source selectors to terminal dependency surfaces such as `sql-query`, `http-client`, `http-route`, and `package-config`. Paths are evidence trails, not runtime traces.
 
 The combined reverse query command writes `reverse-report.md` and `reverse-report.json` when `--out` is a directory. It starts from dependency surfaces and walks static evidence backward to endpoints, symbols, sources, or all supported roots. Reverse paths answer "what static roots can reach this dependency evidence?" and remain coverage-relative rather than runtime usage proof.

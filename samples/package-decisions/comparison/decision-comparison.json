@@ -1,0 +1,46 @@
+{
+  "version": "package-decision.v1",
+  "records": [
+    {
+      "decisionId": "dec-compare-replaced",
+      "decisionKind": "revoke",
+      "ecosystem": "npm",
+      "packageName": "@example/lib",
+      "artifactVersion": "2.14.0",
+      "registryOrigin": "registry.npmjs.org",
+      "artifactDigestAlgorithm": "sha256",
+      "artifactDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "producer": {
+        "id": "example-governance",
+        "policyVersion": "2026-08"
+      },
+      "decisionTimeUtc": "2026-08-18T00:00:00Z"
+    },
+    {
+      "decisionId": "dec-compare-possible",
+      "decisionKind": "reject",
+      "ecosystem": "npm",
+      "packageName": "fixture-possible",
+      "artifactVersion": "1.0.0",
+      "producer": {
+        "id": "example-governance",
+        "policyVersion": "2026-08"
+      },
+      "decisionTimeUtc": "2026-08-18T00:00:00Z"
+    },
+    {
+      "decisionId": "dec-compare-unchanged",
+      "decisionKind": "admit",
+      "ecosystem": "npm",
+      "packageName": "fixture-stable",
+      "artifactVersion": "3.1.4",
+      "artifactDigestAlgorithm": "sha256",
+      "artifactDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "producer": {
+        "id": "example-governance",
+        "policyVersion": "2026-08"
+      },
+      "decisionTimeUtc": "2026-08-18T00:00:00Z"
+    }
+  ]
+}
