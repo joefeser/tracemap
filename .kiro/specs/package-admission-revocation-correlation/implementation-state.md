@@ -5,13 +5,14 @@
 Grouped implementation PR1, PR2, PR3, and PR4 are merged into `dev`. The
 grouped PR5 scope (slices 10–13: before/after artifact replacement, external
 advisory claims, runtime-unproven deployment references, docs/acceptance
-closure, and the capability-matrix refresh) is shipped on this branch. Task
-4.4 remains open (see below); all other slices in `tasks.md` are checked.
+closure, and the capability-matrix refresh) is shipped on this branch. The
+final task 4.4 validation is now complete; all implementation tasks in
+`tasks.md` are checked.
 
 ## Current implementation branch
 
-- Branch: `codex/package-decision-comparison-external-claims`
-- Base: `origin/dev` at `035d0ea175f3378b078583e967580869ad40c252` (PR #702)
+- Branch: `codex/package-decision-pinned-npm-validation`
+- Base: `origin/dev` at `0cad7b38546c19750a37e0d19bfa4b2080b19113` (PR #703)
 - Target: `dev`
 - Delivery: ready-for-review PR, `Part of #690` (never draft)
 
@@ -146,7 +147,7 @@ Run on this branch:
   findings identical to pristine `origin/dev` (verified in a detached base
   worktree), none introduced by this branch.
 
-## Task 4.4 disposition (re-verified on this branch)
+## Historical Task 4.4 blocker (before pinned npm-lock fixture)
 
 Re-ran the pinned TypeScript smoke evidence against
 `scip-typescript` @ `891eb4293709a6a587bf4468dfa1b45a85182fd9`:
@@ -160,10 +161,51 @@ Re-ran the pinned TypeScript smoke evidence against
   1328, 5814, 9007, 9243, 11013; e.g. `typescript.semantic.methodinvocation.v1`
   properties), pre-existing and unrelated to package-decision work.
 
-Closing 4.4 would require either changing the pinned sample fixture or
-absorbing the unrelated absolute-path cleanup into this PR; both are out of
-scope per the owner instruction. 4.4 remains open under #690 and is the only
-unchecked task in `tasks.md`.
+At that time, closing 4.4 would have required either changing the pinned sample
+fixture or absorbing the unrelated absolute-path cleanup into the PR. The
+separate reviewed npm-lock smoke below resolves that validation gap without
+special-casing the former fixture or weakening the validator.
+
+## Task 4.4 completed: pinned npm-lockfile smoke
+
+- Fixture: neutral label `axios-npm-lock`; public repository
+  `https://github.com/axios/axios.git`, MIT license, commit
+  `84a9f3b9a4f3244b8c8e818f557d64c7b964fb25`.
+- Suitability: the modest, widely used JavaScript/TypeScript repository ships
+  `package.json` and a committed npm `package-lock.json` v3 with both direct
+  and transitive entries. The scan only read checked-in metadata. It did not
+  run npm, lifecycle scripts, builds, tests, binaries, or package-manager
+  commands in the checkout; it did not download or verify tarballs.
+- `npm run check --prefix src/typescript` passed: TypeScript build plus 49
+  Vitest tests.
+- The built TypeScript adapter scanned the exact checkout offline and emitted
+  all five standard artifacts. The manifest recorded
+  `Level1SemanticAnalysisReduced` / `FailedOrPartial`, preserving reduced
+  coverage rather than claiming a successful build.
+- `python3 scripts/validate-adapter-artifacts.py <scan-output>` passed with
+  zero unsafe/private-path findings.
+- The scan emitted 1,270 lockfile-sourced `PackageReferenced` facts: 60 direct,
+  1,210 transitive, and 1,235 sha512-base64 digest-eligible. Observed rows
+  carried `typescript.package.v1`, Tier 2, relative lockfile spans, full commit
+  provenance, `typescript-package-lock` / `typescript-package/0.1.0`, stable
+  fact IDs, resolved version, lockfile path/hash, host-only registry origin
+  where supplied, and registry-declared integrity metadata.
+- A temporary decision record derived from an eligible direct lockfile row
+  produced one `ExactArtifactMatch` in `tracemap package-decision`. A combined
+  index of the pinned scan plus a built-adapter scan of the checked-in
+  `samples/typescript-modern-sample` produced its dependency report and
+  preserved both source labels. With `--include-paths --include-reverse`, both
+  optional contexts were `unavailable` with typed `UnknownAnalysisGap` rows;
+  no path or reverse relationship was invented.
+- Repeating combine, report, and package-decision commands with identical
+  inputs produced byte-identical dependency Markdown and package-decision JSON
+  and Markdown reports.
+- The external checkout, temporary decision record, combined indexes, and all
+  generated outputs were kept below one temporary directory and removed after
+  validation. Only the public URL, full SHA, neutral label, expected coverage,
+  and bounded instructions are committed.
+
+Task 4.4 is checked. All implementation tasks for Part of #690 are complete.
 
 ## Limitations and deferred work
 
@@ -190,8 +232,8 @@ unchecked task in `tasks.md`.
   remain runtime-unproven; digests prove integrity, not producer
   authenticity; possible matches remain possible; cross-snapshot comparison
   evidence is not a single coherent release state.
-- Task 4.4 remains open exactly as recorded above; #690 must not close while
-  it is open.
+- All implementation tasks for Part of #690 are complete. This branch does not
+  close #690.
 - Derived persistence behind `--write-derived`, effective-decision
   supersession rollups, release-review composition of decision-derived
   context, the shared external-evidence envelope refactor with #689, and

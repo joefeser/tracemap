@@ -1089,6 +1089,7 @@ The script uses exact commit SHAs so results are comparable over time.
 | `ProjectExtensions.Azure.ServiceBus` | C# | `https://github.com/ProjectExtensions/ProjectExtensions.Azure.ServiceBus.git` | `2a8e72c8f5680edf2096b05ac08c39d47a95cef8` | usually `Level1SemanticAnalysisReduced` |
 | `fluentjdf` | C# | `https://github.com/joefeser/fluentjdf.git` | `9490e699a89bb21f4aabf198173fc6382f84a53f` | usually `Level1SemanticAnalysisReduced` |
 | `scip-typescript` | TypeScript | `https://github.com/sourcegraph/scip-typescript.git` | `891eb4293709a6a587bf4468dfa1b45a85182fd9` | usually `Level1SemanticAnalysisReduced` |
+| `axios-npm-lock` | JavaScript/TypeScript | `https://github.com/axios/axios.git` | `84a9f3b9a4f3244b8c8e818f557d64c7b964fb25` | usually `Level1SemanticAnalysisReduced`; committed npm `package-lock.json` v3 evidence |
 | `scip-java` | JVM | `https://github.com/sourcegraph/scip-java.git` | `825463cb15d540d45c680593aad1f634330435cf` | usually `Level1SemanticAnalysisReduced` |
 | `spring-petclinic` | JVM | `https://github.com/spring-projects/spring-petclinic.git` | `a2c2ef994340d3970eb6db51247456a51bb161f8` | usually `Level1SemanticAnalysisReduced` |
 | `okio` | JVM/Kotlin | `https://github.com/square/okio.git` | `cad7ff1057307142149b1a28dfcb49117e89b0d3` | usually reduced or syntax fallback for Kotlin-heavy areas |
@@ -1097,6 +1098,12 @@ The script uses exact commit SHAs so results are comparable over time.
 | `sqlalchemy` | Python | `https://github.com/sqlalchemy/sqlalchemy.git` | `bfe559a7e4d69e5699c390ac9cafd2a5a2d38078` | `Level1SemanticAnalysisReduced` |
 
 Reduced coverage is acceptable for OSS smoke when project/dependency/classpath gaps are recorded as `AnalysisGap` facts. A successful smoke means the scan completes, artifacts exist, the manifest is honest about coverage, and important relationship tables can be queried.
+
+`axios-npm-lock` is a modest MIT-licensed, widely used JavaScript HTTP client.
+The pinned revision contains both `package.json` and a committed npm lockfile v3
+with direct and transitive package entries. It is a metadata-only fixture: the
+smoke neither runs package-manager commands inside the checkout nor fetches,
+executes, or verifies package content.
 
 ## JVM Smoke Expectations
 
@@ -1648,6 +1655,57 @@ path/reverse context is bounded graph evidence and never upgrades a rung.
 `--exit-code` is nonzero only
 for an exact match tied to an external `reject` or `revoke` record. The command
 does not fetch, execute, authenticate, approve, block, or enforce packages.
+
+#### Pinned npm-lockfile admission and composition smoke
+
+After `npm run check --prefix src/typescript`, use the built adapter and the
+`axios-npm-lock` entry in `scripts/smoke-open-source-repos.sh`. Clone and
+checkout may use the network; after checkout all scanning is offline. Do not
+run npm, lifecycle scripts, builds, tests, binaries, or any package-manager
+command in the scanned checkout. Keep the clone and every generated artifact
+under one temporary directory and delete that directory after recording the
+results.
+
+The pinned scan must contain all five standard scan artifacts and pass:
+
+```bash
+python3 scripts/validate-adapter-artifacts.py <axios-npm-lock-scan-output>
+```
+
+Inspect the lockfile-sourced `PackageReferenced` facts. Require
+`sourceKind=lockfile`, exact `resolvedVersion`, `lockfilePath`, `lockfileHash`,
+host-only `registryOrigin` when the lock entry records one,
+`artifactDigestAlgorithm=sha512-base64` plus an eligible declared integrity
+digest, and proven direct/transitive `dependencyRelation`. Each row must retain
+the `typescript.package.v1` rule, Tier 2 evidence, repository-relative lockfile
+span, pinned full commit SHA, extractor identity/version, and deterministic fact
+ID. Registry-declared integrity is metadata only, never downloaded or content
+verified by TraceMap.
+
+For downstream composition, derive one temporary `package-decision.v1` reject
+record from an eligible public lockfile row (copy only its ecosystem, package
+name, exact version, digest algorithm, and digest). Scan the checked-in
+`samples/typescript-modern-sample` with the same built adapter, then run:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Cli -- combine \
+  --index <axios-npm-lock-scan-output>/index.sqlite --label axios-npm-lock \
+  --index <synthetic-typescript-scan-output>/index.sqlite --label synthetic-typescript \
+  --out <temporary-root>/combined.sqlite
+python3 scripts/validate-adapter-artifacts.py <axios-npm-lock-scan-output>
+dotnet run --project src/dotnet/TraceMap.Cli -- report \
+  --index <temporary-root>/combined.sqlite --out <temporary-root>/combined-report
+dotnet run --project src/dotnet/TraceMap.Cli -- package-decision \
+  --decision <temporary-decision.json> --index <temporary-root>/combined.sqlite \
+  --out <temporary-root>/decision-report --include-paths --include-reverse
+```
+
+Require one `ExactArtifactMatch` for the generated record. The combined report
+must preserve both source labels. If the selected package-config fact has no
+graph attachment, the path/reverse result must be a typed unavailable gap, not
+an invented path or reverse relationship. Repeat the scan-independent combine,
+report, and package-decision commands with identical inputs and require
+byte-identical report outputs.
 
 ### Package decision correlation (PR3: NuGet + Swift resolved evidence)
 
