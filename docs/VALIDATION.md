@@ -1664,20 +1664,25 @@ checkout may use the network; after checkout all scanning is offline. Do not
 run npm, lifecycle scripts, builds, tests, binaries, or any package-manager
 command in the scanned checkout. Keep the clone and every generated artifact
 under one temporary directory and delete that directory after recording the
-results. Pass the script paths below rather than using its persistent default
-cache/output roots:
+results. Pass the script paths below rather than using the script's persistent
+default cache/output roots:
 
 ```bash
 smoke_root="$(mktemp -d)"
-scripts/smoke-open-source-repos.sh "$smoke_root/cache" "$smoke_root/out"
-# Record the required results, then remove only this mktemp-created root.
-rm -rf "$smoke_root"
+trap 'test -n "${smoke_root:-}" && test -d "$smoke_root" && rm -rf -- "$smoke_root"' EXIT
+TRACEMAP_OSS_SMOKE_REPOS=axios-npm-lock \
+  scripts/smoke-open-source-repos.sh "$smoke_root/cache" "$smoke_root/out"
+axios_npm_lock_scan="$smoke_root/out/axios-npm-lock"
 ```
+
+The selector accepts a comma-separated list of documented labels; omit it to
+run the complete OSS matrix. Keep this shell open through the validation below
+so the trap removes only the mktemp-created root after results are recorded.
 
 The pinned scan must contain all five standard scan artifacts and pass:
 
 ```bash
-python3 scripts/validate-adapter-artifacts.py <axios-npm-lock-scan-output>
+python3 scripts/validate-adapter-artifacts.py "$axios_npm_lock_scan"
 ```
 
 Inspect the lockfile-sourced `PackageReferenced` facts. Require
@@ -1697,17 +1702,19 @@ name, exact version, digest algorithm, and digest). Scan the checked-in
 that second scan output before combining it, then run:
 
 ```bash
-python3 scripts/validate-adapter-artifacts.py <synthetic-typescript-scan-output>
+synthetic_typescript_scan="$smoke_root/synthetic-typescript-scan"
+node src/typescript/dist/src/cli.js scan \
+  --repo samples/typescript-modern-sample --out "$synthetic_typescript_scan"
+python3 scripts/validate-adapter-artifacts.py "$synthetic_typescript_scan"
 dotnet run --project src/dotnet/TraceMap.Cli -- combine \
-  --index <axios-npm-lock-scan-output>/index.sqlite --label axios-npm-lock \
-  --index <synthetic-typescript-scan-output>/index.sqlite --label synthetic-typescript \
-  --out <temporary-root>/combined.sqlite
-python3 scripts/validate-adapter-artifacts.py <axios-npm-lock-scan-output>
+  --index "$axios_npm_lock_scan/index.sqlite" --label axios-npm-lock \
+  --index "$synthetic_typescript_scan/index.sqlite" --label synthetic-typescript \
+  --out "$smoke_root/combined.sqlite"
 dotnet run --project src/dotnet/TraceMap.Cli -- report \
-  --index <temporary-root>/combined.sqlite --out <temporary-root>/combined-report
+  --index "$smoke_root/combined.sqlite" --out "$smoke_root/combined-report"
 dotnet run --project src/dotnet/TraceMap.Cli -- package-decision \
-  --decision <temporary-decision.json> --index <temporary-root>/combined.sqlite \
-  --out <temporary-root>/decision-report --include-paths --include-reverse
+  --decision <temporary-decision.json> --index "$smoke_root/combined.sqlite" \
+  --out "$smoke_root/decision-report" --include-paths --include-reverse
 ```
 
 Require one `ExactArtifactMatch` for the generated record. The combined report
