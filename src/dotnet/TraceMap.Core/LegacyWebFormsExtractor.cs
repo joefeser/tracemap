@@ -345,7 +345,7 @@ public static partial class LegacyWebFormsExtractor
                     line,
                     FactFactory.Hash(match.Value, 32),
                     match.Index,
-                    FindControlExtent(activeMarkup, match)));
+                    match.Index + match.Length));
                 if (controlType.Equals("Content", StringComparison.OrdinalIgnoreCase)
                     && SafeIdentifier(attrs.GetValueOrDefault("ContentPlaceHolderID")) is null)
                 {
@@ -1016,12 +1016,23 @@ public static partial class LegacyWebFormsExtractor
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
         var controlFactsByIdentity = controlFacts
             .Where(fact => fact.TargetSymbol is not null)
-            .ToDictionary(fact => fact.TargetSymbol!, StringComparer.Ordinal);
+            .GroupBy(fact => fact.TargetSymbol!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
 
         foreach (var control in page.Controls.Where(control => control.DataSourceId is not null))
         {
             var sourceIdentity = ControlIdentity(SurfaceIdentity(page.FilePath), control);
-            var sourceFact = controlFactsByIdentity.GetValueOrDefault(sourceIdentity);
+            var sourceFact = FindControlFact(controlFactsByIdentity, sourceIdentity, control);
+            if ((controlsById.GetValueOrDefault(control.ControlId) ?? []).Length != 1)
+            {
+                facts.Add(CreateGap(
+                    manifest,
+                    page.FilePath,
+                    control.Line,
+                    "AmbiguousWebFormsDataBindingSource",
+                    "A DataSourceID source control uses a duplicate same-surface ID; TraceMap did not choose one source control."));
+                continue;
+            }
             var matches = controlsById.GetValueOrDefault(control.DataSourceId!) ?? [];
             if (matches.Length != 1)
             {
@@ -1038,7 +1049,7 @@ public static partial class LegacyWebFormsExtractor
 
             var target = matches[0];
             var targetIdentity = ControlIdentity(SurfaceIdentity(page.FilePath), target);
-            var targetFact = controlFactsByIdentity.GetValueOrDefault(targetIdentity);
+            var targetFact = FindControlFact(controlFactsByIdentity, targetIdentity, target);
             facts.Add(CreateStaticCompositionFact(
                 manifest,
                 FactTypes.WebFormsDataBindingCandidate,
@@ -1057,16 +1068,15 @@ public static partial class LegacyWebFormsExtractor
 
         foreach (var binding in page.DataBindings)
         {
-            var enclosingControls = binding.EnclosingControlId is null
-                ? []
-                : controlsById.GetValueOrDefault(binding.EnclosingControlId) ?? [];
-            var enclosing = enclosingControls.Length == 1 ? enclosingControls[0] : null;
+            var enclosing = binding.EnclosingControlSyntaxStart is null
+                ? null
+                : page.Controls.SingleOrDefault(control => control.SyntaxStart == binding.EnclosingControlSyntaxStart);
             var sourceIdentity = enclosing is null
                 ? SurfaceIdentity(page.FilePath)
                 : ControlIdentity(SurfaceIdentity(page.FilePath), enclosing);
             var sourceFact = enclosing is null
                 ? pageFact
-                : controlFactsByIdentity.GetValueOrDefault(sourceIdentity) ?? pageFact;
+                : FindControlFact(controlFactsByIdentity, sourceIdentity, enclosing) ?? pageFact;
             var targetIdentity = $"webforms-binding-field:{binding.FieldHash}";
             var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
@@ -1077,9 +1087,10 @@ public static partial class LegacyWebFormsExtractor
                 ["supportingFactIds"] = string.Join(",", new[] { pageFact.FactId, sourceFact.FactId }.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal)),
                 ["ruleLimitations"] = "Eval/Bind literal evidence is a static field-expression candidate and does not prove a data source, successful evaluation, returned value, rendering, or runtime reachability."
             };
-            if (binding.EnclosingControlId is not null)
+            if (enclosing is not null)
             {
                 properties["enclosingControlIdentity"] = sourceIdentity;
+                properties["enclosingControlLine"] = enclosing.Line.ToString();
             }
             facts.Add(FactFactory.Create(
                 manifest,
@@ -1137,6 +1148,11 @@ public static partial class LegacyWebFormsExtractor
             }
 
             var line = statement.SyntaxTree.GetLineSpan(statement.Condition.Span).StartLinePosition.Line + 1;
+            if (HasLocalIsPostBackShadow(method.Declaration))
+            {
+                facts.Add(CreateGap(manifest, method.FilePath, line, "AmbiguousWebFormsIsPostBackReceiver", "A local or parameter shadows IsPostBack in this method; TraceMap did not treat the condition as Page lifecycle evidence."));
+                continue;
+            }
             if (!IsNotPostBackCondition(statement.Condition))
             {
                 facts.Add(CreateGap(manifest, method.FilePath, line, "UnsupportedWebFormsIsPostBackCondition", "An IsPostBack condition is visible, but it is outside the bounded static !IsPostBack shape."));
@@ -1172,7 +1188,7 @@ public static partial class LegacyWebFormsExtractor
         WebFormsPage page,
         WebFormsMethod method,
         CodeFact pageFact,
-        IReadOnlyDictionary<string, CodeFact> controlFactsByIdentity,
+        IReadOnlyDictionary<string, CodeFact[]> controlFactsByIdentity,
         IReadOnlyDictionary<string, WebFormsControl[]> controlsById,
         List<CodeFact> facts)
     {
@@ -1185,6 +1201,11 @@ public static partial class LegacyWebFormsExtractor
             }
 
             var line = invocation.SyntaxTree.GetLineSpan(invocation.Span).StartLinePosition.Line + 1;
+            if (!HasSupportedClientScriptReceiver(invocation))
+            {
+                facts.Add(CreateGap(manifest, method.FilePath, line, "AmbiguousWebFormsClientScriptRegistrationReceiver", "A client-script-like method name has no supported Page, ClientScript, or ScriptManager receiver; TraceMap did not classify it as a registration."));
+                continue;
+            }
             var payloadExpression = ClientScriptPayloadExpression(invocation, methodName);
             if (payloadExpression is not LiteralExpressionSyntax payloadLiteral
                 || !payloadLiteral.IsKind(SyntaxKind.StringLiteralExpression))
@@ -1197,7 +1218,7 @@ public static partial class LegacyWebFormsExtractor
             var payloadHash = FactFactory.Hash(payload, 32);
             var sourceIdentity = StructuralHandlerIdentity(page, method.MethodName, method.FilePath, method.Line);
             var targetIdentity = $"webforms-client-script:{payloadHash}";
-            var branchContext = invocation.Ancestors().OfType<IfStatementSyntax>().Any(statement => IsNotPostBackCondition(statement.Condition))
+            var branchContext = IsInsideNotPostBackTrueBranch(invocation, method)
                 ? "inside-not-is-postback-syntax"
                 : "not-observed";
             facts.Add(CreateStaticCompositionFact(
@@ -1245,7 +1266,7 @@ public static partial class LegacyWebFormsExtractor
         ScanManifest manifest,
         WebFormsPage page,
         CodeFact pageFact,
-        IReadOnlyDictionary<string, CodeFact> controlFactsByIdentity,
+        IReadOnlyDictionary<string, CodeFact[]> controlFactsByIdentity,
         IReadOnlyDictionary<string, WebFormsControl[]> controlsById,
         WebFormsPostBackTarget target,
         List<CodeFact> facts)
@@ -1255,7 +1276,7 @@ public static partial class LegacyWebFormsExtractor
         var targetIdentity = matchedControl is null
             ? $"webforms-postback-target:{target.TargetHash}"
             : ControlIdentity(SurfaceIdentity(page.FilePath), matchedControl);
-        var targetFact = matchedControl is null ? null : controlFactsByIdentity.GetValueOrDefault(targetIdentity);
+        var targetFact = matchedControl is null ? null : FindControlFact(controlFactsByIdentity, targetIdentity, matchedControl);
         facts.Add(CreateStaticCompositionFact(
             manifest,
             FactTypes.WebFormsPostBackTargetCandidate,
@@ -1331,14 +1352,42 @@ public static partial class LegacyWebFormsExtractor
         }
 
         if (methodName is "RegisterStartupScript" or "RegisterClientScriptBlock"
-            && arguments[^1].Expression is LiteralExpressionSyntax trailingBoolean
-            && (trailingBoolean.IsKind(SyntaxKind.TrueLiteralExpression)
-                || trailingBoolean.IsKind(SyntaxKind.FalseLiteralExpression)))
+            && arguments.Count >= 4)
         {
-            return arguments.Count >= 2 ? arguments[^2].Expression : null;
+            return arguments[^2].Expression;
         }
 
         return arguments[^1].Expression;
+    }
+
+    private static bool HasSupportedClientScriptReceiver(InvocationExpressionSyntax invocation)
+    {
+        if (invocation.Expression is not MemberAccessExpressionSyntax memberAccess)
+        {
+            return false;
+        }
+
+        var receiver = memberAccess.Expression.ToString();
+        return receiver.Equals("ClientScript", StringComparison.Ordinal)
+            || receiver.Equals("ScriptManager", StringComparison.Ordinal)
+            || receiver.Equals("Page", StringComparison.Ordinal)
+            || receiver.Equals("this.Page", StringComparison.Ordinal)
+            || receiver.Equals("this.ClientScript", StringComparison.Ordinal)
+            || receiver.Equals("base.ClientScript", StringComparison.Ordinal)
+            || receiver.Equals("Page.ClientScript", StringComparison.Ordinal);
+    }
+
+    private static CodeFact? FindControlFact(
+        IReadOnlyDictionary<string, CodeFact[]> controlFactsByIdentity,
+        string identity,
+        WebFormsControl control)
+    {
+        var candidates = controlFactsByIdentity.GetValueOrDefault(identity) ?? [];
+        var exact = candidates
+            .Where(fact => fact.Evidence.StartLine == control.Line
+                && fact.Evidence.SnippetHash == control.SnippetHash)
+            .ToArray();
+        return exact.Length == 1 ? exact[0] : null;
     }
 
     private static string ResolveHandlerIdentity(
@@ -1773,26 +1822,14 @@ public static partial class LegacyWebFormsExtractor
             "UnsupportedWebFormsEventAttribute" or "DynamicWebFormsEventSubscription"
                 or "UnsupportedWebFormsEventSubscription" or "UnknownWebFormsEventSubscriptionReceiver"
                 or "AmbiguousWebFormsEventSubscriptionReceiver" => RuleIds.LegacyWebFormsEventBinding,
-            "UnsupportedWebFormsIsPostBackCondition" => RuleIds.LegacyWebFormsLifecycleContext,
-            "DynamicWebFormsClientScriptRegistration" => RuleIds.LegacyWebFormsClientScript,
+            "UnsupportedWebFormsIsPostBackCondition" or "AmbiguousWebFormsIsPostBackReceiver" => RuleIds.LegacyWebFormsLifecycleContext,
+            "DynamicWebFormsClientScriptRegistration" or "AmbiguousWebFormsClientScriptRegistrationReceiver" => RuleIds.LegacyWebFormsClientScript,
             "UnresolvedWebFormsPostBackTarget" or "AmbiguousWebFormsPostBackTarget"
                 or "DynamicWebFormsPostBackTarget" => RuleIds.LegacyWebFormsPostBackTarget,
-            "UnresolvedWebFormsDataSourceId" or "AmbiguousWebFormsDataSourceId"
+            "UnresolvedWebFormsDataSourceId" or "AmbiguousWebFormsDataSourceId" or "AmbiguousWebFormsDataBindingSource"
                 or "DynamicWebFormsDataBindingExpression" => RuleIds.LegacyWebFormsDataBinding,
             _ => RuleIds.LegacyWebFormsHandlerResolution
         };
-    }
-
-    private static int FindControlExtent(string markup, Match openingTag)
-    {
-        if (openingTag.Value.TrimEnd().EndsWith("/>", StringComparison.Ordinal))
-        {
-            return openingTag.Index + openingTag.Length;
-        }
-
-        var closing = $"</{openingTag.Groups["prefix"].Value}:{openingTag.Groups["type"].Value}";
-        var closingIndex = markup.IndexOf(closing, openingTag.Index + openingTag.Length, StringComparison.OrdinalIgnoreCase);
-        return closingIndex < 0 ? openingTag.Index + openingTag.Length : closingIndex + closing.Length;
     }
 
     private static IReadOnlyList<WebFormsDataBinding> ParseDataBindings(
@@ -1812,15 +1849,16 @@ public static partial class LegacyWebFormsExtractor
                 continue;
             }
             var enclosing = controls
-                .Where(control => control.SyntaxStart <= match.Index && control.SyntaxEnd >= match.Index + match.Length)
+                .Where(control => control.SyntaxStart <= match.Index && control.OpeningSyntaxEnd >= match.Index + match.Length)
                 .OrderByDescending(control => control.SyntaxStart)
-                .ThenBy(control => control.SyntaxEnd)
+                .ThenBy(control => control.OpeningSyntaxEnd)
                 .FirstOrDefault();
             results.Add(new WebFormsDataBinding(
                 match.Groups["kind"].Value,
                 FactFactory.Hash(value, 32),
                 value.Length,
                 enclosing?.ControlId,
+                enclosing?.SyntaxStart,
                 LineAt(source, match.Index),
                 FactFactory.Hash(match.Value, 32)));
         }
@@ -1887,6 +1925,33 @@ public static partial class LegacyWebFormsExtractor
         expression.DescendantNodesAndSelf()
             .OfType<IdentifierNameSyntax>()
             .Any(identifier => identifier.Identifier.ValueText == "IsPostBack");
+
+    private static bool HasLocalIsPostBackShadow(MethodDeclarationSyntax method) =>
+        method.ParameterList.Parameters.Any(parameter => parameter.Identifier.ValueText == "IsPostBack")
+        || method.DescendantNodes().OfType<VariableDeclaratorSyntax>()
+            .Any(variable => variable.Identifier.ValueText == "IsPostBack")
+        || method.DescendantNodes().OfType<LocalFunctionStatementSyntax>()
+            .Any(local => local.Identifier.ValueText == "IsPostBack");
+
+    private static bool IsInsideNotPostBackTrueBranch(SyntaxNode node, WebFormsMethod method)
+    {
+        if (HasLocalIsPostBackShadow(method.Declaration))
+        {
+            return false;
+        }
+
+        foreach (var statement in node.Ancestors().OfType<IfStatementSyntax>())
+        {
+            if (!IsNotPostBackCondition(statement.Condition))
+            {
+                continue;
+            }
+
+            return statement.Statement.Span.Contains(node.Span);
+        }
+
+        return false;
+    }
 
     private static bool IsNotPostBackCondition(ExpressionSyntax expression)
     {
@@ -2514,13 +2579,13 @@ public static partial class LegacyWebFormsExtractor
     [GeneratedRegex(@"^On[A-Za-z][A-Za-z0-9_]{0,63}$", RegexOptions.IgnoreCase)]
     private static partial Regex BoundedStaticEventAttributeRegex();
 
-    [GeneratedRegex("""<%#\s*(?<kind>Eval|Bind)\s*\(\s*(?:"(?<dq>[^"]+)"|'(?<sq>[^']+)')""", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    [GeneratedRegex("""<%#\s*(?<kind>Eval|Bind)\s*\(\s*(?:"(?<dq>[^"]+)"|'(?<sq>[^']+)')\s*(?=,|\))""", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex DataBindingLiteralRegex();
 
     [GeneratedRegex(@"<%#\s*(?<kind>Eval|Bind)\s*\(", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex DataBindingInvocationRegex();
 
-    [GeneratedRegex("""__doPostBack\s*\(\s*(?:"(?<dq>[^"]+)"|'(?<sq>[^']+)')""", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    [GeneratedRegex("""__doPostBack\s*\(\s*(?:"(?<dq>[^"]+)"|'(?<sq>[^']+)')\s*(?=,)""", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex PostBackLiteralRegex();
 
     [GeneratedRegex(@"__doPostBack\s*\(", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
@@ -2641,13 +2706,14 @@ public static partial class LegacyWebFormsExtractor
         int Line,
         string? SnippetHash,
         int SyntaxStart,
-        int SyntaxEnd);
+        int OpeningSyntaxEnd);
 
     private sealed record WebFormsDataBinding(
         string BindingKind,
         string FieldHash,
         int FieldLength,
         string? EnclosingControlId,
+        int? EnclosingControlSyntaxStart,
         int Line,
         string SnippetHash);
 
