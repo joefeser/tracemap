@@ -740,6 +740,188 @@ public sealed class ScanProgressDiagnosticsTests
         Assert.Equal(
             NormalizeField(plainReceipt.RootElement, "durationMilliseconds").ToString(),
             NormalizeField(diagnosticReceipt.RootElement, "durationMilliseconds").ToString());
+        Assert.True(File.Exists(checkpoint + ".performance.json"));
+    }
+
+    [Fact]
+    public void Performance_receipt_identifies_slowest_terminal_extractor_and_retains_heartbeats()
+    {
+        using var temp = new TempDirectory();
+        var checkpoint = Path.Combine(temp.Path, "progress.json");
+        var time = new ManualTimeProvider();
+        using var progress = new ConcurrentStringWriter();
+        using var reporter = new ScanProgressReporter(progress, checkpoint, time);
+
+        reporter.StartStage(ScanProgressReporter.ScanOperation, ScanProgressStages.SpecializedExtraction);
+        reporter.ObserveExtractor(
+            ScanPerformanceExtractors.CSharpIntegrationSyntax,
+            1,
+            12,
+            () =>
+            {
+                time.Advance(TimeSpan.FromSeconds(2));
+                return [];
+            });
+        reporter.ObserveExtractor(
+            ScanPerformanceExtractors.LegacyWebForms,
+            2,
+            12,
+            () =>
+            {
+                time.Advance(TimeSpan.FromSeconds(16));
+                return [];
+            });
+        reporter.FinishStage(
+            ScanProgressReporter.ScanOperation,
+            ScanProgressStages.SpecializedExtraction,
+            "completed");
+
+        var receipt = Assert.IsType<ScanPerformanceReceipt>(reporter.ReadPerformanceReceipt());
+        Assert.Equal("complete", receipt.TimingCoverage);
+        Assert.True(receipt.HeartbeatObserved);
+        Assert.Equal(1, receipt.HeartbeatCount);
+        Assert.Equal(2, receipt.ExtractorTimings.Count);
+        Assert.Equal(ScanPerformanceExtractors.LegacyWebForms, receipt.SlowestExtractor?.Extractor);
+        Assert.Equal(16_000, receipt.SlowestExtractor?.ElapsedMilliseconds);
+        Assert.Equal("inspect-specialized-extractor", receipt.NextAction);
+        Assert.Contains(progress.Lines(), line =>
+            line.Contains("tracemap-performance tracemap-scan-performance/v1", StringComparison.Ordinal)
+            && line.Contains("slowestExtractor=legacy-webforms", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Performance_receipt_normalizes_untrusted_identity_and_failure_without_leaking_values()
+    {
+        using var temp = new TempDirectory();
+        var checkpoint = Path.Combine(temp.Path, "progress.json");
+        var time = new ManualTimeProvider();
+        using var progress = new ConcurrentStringWriter();
+        using var reporter = new ScanProgressReporter(progress, checkpoint, time);
+
+        reporter.StartStage(ScanProgressReporter.ScanOperation, ScanProgressStages.SpecializedExtraction);
+        var exception = Assert.Throws<InvalidOperationException>(() => reporter.ObserveExtractor(
+            "private-repository/secret-file.cs",
+            1,
+            7,
+            () =>
+            {
+                time.Advance(TimeSpan.FromSeconds(3));
+                throw new InvalidOperationException("private exception content");
+            }));
+        Assert.Equal("private exception content", exception.Message);
+        reporter.FinishStage(
+            ScanProgressReporter.ScanOperation,
+            ScanProgressStages.SpecializedExtraction,
+            "failed",
+            failureCode: "SEMANTIC_STAGE_FAILED");
+
+        var receiptPath = checkpoint + ".performance.json";
+        var serialized = File.ReadAllText(receiptPath);
+        var receipt = Assert.IsType<ScanPerformanceReceipt>(reporter.ReadPerformanceReceipt());
+        var timing = Assert.Single(receipt.ExtractorTimings);
+        Assert.Equal("other", timing.Extractor);
+        Assert.Equal("unavailable", timing.ExtractorVersion);
+        Assert.Equal("failed", timing.State);
+        Assert.DoesNotContain("private-repository", serialized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("secret-file", serialized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("exception content", serialized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(temp.Path, serialized, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Performance_receipt_survives_progress_history_rotation_and_timeout()
+    {
+        using var temp = new TempDirectory();
+        var checkpoint = Path.Combine(temp.Path, "progress.json");
+        var time = new ManualTimeProvider();
+        using var reporter = new ScanProgressReporter(TextWriter.Null, checkpoint, time);
+
+        reporter.StartStage(ScanProgressReporter.LocalReviewOperation, ScanProgressStages.Scan);
+        reporter.StartStage(ScanProgressReporter.ScanOperation, ScanProgressStages.SpecializedExtraction);
+        for (var index = 0; index < ScanProgressSchema.MaxHistoryEvents + 10; index++)
+        {
+            reporter.StartStage(ScanProgressReporter.ScanOperation, ScanProgressStages.ProjectLoad, index + 1);
+            reporter.FinishStage(
+                ScanProgressReporter.ScanOperation,
+                ScanProgressStages.ProjectLoad,
+                "completed",
+                ordinal: index + 1);
+        }
+
+        time.Advance(TimeSpan.FromSeconds(30));
+        reporter.FinishAllStages(
+            ScanProgressReporter.LocalReviewOperation,
+            "timed-out",
+            "LOCAL_REVIEW_TIMEOUT");
+
+        var receipt = Assert.IsType<ScanPerformanceReceipt>(reporter.ReadPerformanceReceipt());
+        Assert.Equal("timed-out", receipt.RunState);
+        Assert.True(receipt.HeartbeatObserved);
+        Assert.Equal(2, receipt.HeartbeatCount);
+        Assert.Equal("unavailable", receipt.TimingCoverage);
+        Assert.Equal(
+            ScanProgressSchema.MaxHistoryEvents,
+            ParseCheckpoint(checkpoint).RootElement.GetProperty("history").GetArrayLength());
+    }
+
+    [Fact]
+    public void Performance_receipt_records_cancellation_and_bounds_timing_rows()
+    {
+        using var temp = new TempDirectory();
+        var checkpoint = Path.Combine(temp.Path, "progress.json");
+        var time = new ManualTimeProvider();
+        using var reporter = new ScanProgressReporter(TextWriter.Null, checkpoint, time);
+
+        reporter.StartStage(ScanProgressReporter.ScanOperation, ScanProgressStages.SpecializedExtraction);
+        Assert.Throws<OperationCanceledException>(() => reporter.ObserveExtractor(
+            ScanPerformanceExtractors.LegacyWcf,
+            1,
+            1,
+            () => throw new OperationCanceledException()));
+        for (var ordinal = 2; ordinal <= ScanPerformanceSchema.MaxExtractorTimings + 2; ordinal++)
+        {
+            reporter.ObserveExtractor(
+                ScanPerformanceExtractors.Config,
+                ordinal,
+                1,
+                () => []);
+        }
+
+        reporter.FinishStage(
+            ScanProgressReporter.ScanOperation,
+            ScanProgressStages.SpecializedExtraction,
+            "partial");
+
+        var receipt = Assert.IsType<ScanPerformanceReceipt>(reporter.ReadPerformanceReceipt());
+        Assert.True(receipt.TimingsTruncated);
+        Assert.Equal(ScanPerformanceSchema.MaxExtractorTimings, receipt.ExtractorTimings.Count);
+        Assert.Equal("cancelled", receipt.ExtractorTimings[0].State);
+        Assert.Equal("partial", receipt.TimingCoverage);
+    }
+
+    [Fact]
+    public void Performance_receipt_keeps_timeout_boundary_when_blocked_extractor_returns_late()
+    {
+        using var temp = new TempDirectory();
+        var time = new ManualTimeProvider();
+        var tracker = new ScanPerformanceTracker(Path.Combine(temp.Path, "performance.json"), time);
+
+        tracker.StartExtractor(ScanPerformanceExtractors.LegacyWebForms, 1, 9);
+        time.Advance(TimeSpan.FromSeconds(30));
+        tracker.RecordProgress(ScanProgressStages.SpecializedExtraction, "timed-out");
+        tracker.FinishExtractor(
+            ScanPerformanceExtractors.LegacyWebForms,
+            1,
+            "completed",
+            []);
+
+        var receipt = tracker.ReadReceipt();
+        Assert.Equal("timed-out", receipt.RunState);
+        Assert.Equal("unavailable", receipt.TimingCoverage);
+        Assert.NotNull(receipt.ActiveExtractor);
+        Assert.Equal(ScanPerformanceExtractors.LegacyWebForms, receipt.ActiveExtractor.Extractor);
+        Assert.Null(receipt.SlowestExtractor);
+        Assert.Empty(receipt.ExtractorTimings);
     }
 
     private static JsonDocument NormalizeField(JsonElement element, string fieldName)
@@ -895,6 +1077,29 @@ public sealed class ScanProgressDiagnosticsTests
         Assert.Equal(
             32,
             document.RootElement.GetProperty("properties").GetProperty("history").GetProperty("maxItems").GetInt32());
+    }
+
+    [Fact]
+    public void Performance_schema_is_closed_versioned_and_bounded()
+    {
+        var root = FindRepositoryRoot();
+        using var document = JsonDocument.Parse(File.ReadAllText(
+            Path.Combine(root, "docs", "contracts", "tracemap-scan-performance.v1.schema.json")));
+
+        Assert.False(document.RootElement.GetProperty("additionalProperties").GetBoolean());
+        Assert.Equal(
+            ScanPerformanceSchema.Version,
+            document.RootElement.GetProperty("properties").GetProperty("schemaVersion").GetProperty("const").GetString());
+        Assert.Equal(
+            ScanPerformanceSchema.MaxExtractorTimings,
+            document.RootElement.GetProperty("properties").GetProperty("extractorTimings").GetProperty("maxItems").GetInt32());
+        Assert.False(document.RootElement.GetProperty("$defs").GetProperty("timing").GetProperty("additionalProperties").GetBoolean());
+        Assert.False(document.RootElement.GetProperty("$defs").GetProperty("activeExtractor").GetProperty("additionalProperties").GetBoolean());
+        var serialized = document.RootElement.ToString();
+        foreach (var forbidden in new[] { "filePath", "repository", "project", "solution", "symbol", "route", "commandLine", "exception" })
+        {
+            Assert.DoesNotContain($"\"{forbidden}\"", serialized, StringComparison.Ordinal);
+        }
     }
 
     private static string FindRepositoryRoot()
