@@ -2091,7 +2091,7 @@ rules:
 
   - id: legacy.webforms.inventory.v1
     name: Legacy WebForms file and page inventory
-    description: Inventories WebForms markup, code-behind, designer files, directives, static server controls, and safe page linkage metadata.
+    description: Inventories WebForms markup, code-behind, designer files, directives, static server controls, checked-in configuration registrations, and safe page linkage metadata.
     evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
     emits:
       - WebFormsPageDeclared
@@ -2104,30 +2104,33 @@ rules:
       - Malformed or unreadable markup is an analysis gap, not proof that no WebForms page, control, or handler exists.
       - Page titles are represented only by presence and a bounded digest; raw display text is not stored.
       - Surface and control identities are derived from normalized repository-relative markup paths and declaration sites; page or control labels alone are not canonical identity.
+      - Configuration registrations include static tagPrefix/tagName/src declarations and bounded namespace/assembly declarations inherited from ancestor web.config files; namespace/assembly composition requires one exact syntax-visible qualified type in a project whose declared assembly identity matches.
+      - Missing, ambiguous, linked, wildcard, generated-only, or unsafe namespace/assembly candidates remain gaps; missing in-scope assembly evidence is distinguished from a missing qualified type within a known assembly, but neither category proves the dependency is absent at runtime.
+      - TraceMap does not guess from a simple type or assembly label.
 
   - id: legacy.webforms.composition.v1
     name: Legacy WebForms static composition declarations
-    description: Records bounded master-page, content-placeholder, and registered user-control composition declared by checked-in WebForms markup.
+    description: Records bounded master-page, content-placeholder, and registered user-control composition declared by checked-in WebForms markup or ancestor web.config files.
     evidenceTier: Tier2Structural or Tier4Unknown
     emits:
       - WebFormsCompositionDeclared
       - AnalysisGap
     limitations:
       - Composition facts describe static markup declarations and do not prove runtime loading, rendering, control construction, navigation, event firing, deployment, or production use.
-      - Registered user-control and master-page targets are repository-relative declarations; missing, dynamic, unsafe, malformed, or out-of-scope targets remain explicit analysis gaps.
+      - Registered user-control and master-page targets are repository-relative declarations; registered assembly controls require exact namespace, type, and project assembly evidence. Missing, dynamic, unsafe, malformed, conflicting, or out-of-scope targets remain explicit analysis gaps.
       - ContentPlaceHolderID is a declared target candidate and is not proof that the referenced master page contains a compatible runtime placeholder.
       - Raw markup, page titles, source snippets, local absolute paths, URLs, configuration values, and unsafe expressions are omitted or hashed.
 
   - id: legacy.webforms.event-binding.v1
     name: Legacy WebForms static event binding evidence
-    description: Extracts supported static WebForms server-control event attributes and bounded code-behind control subscriptions such as OnClick, OnCommand, OnLoad, OnInit, and Button.Click += Handler with surface-qualified control identities, handler identities, and line spans.
+    description: Extracts supported static WebForms server-control event attributes, bounded Tier3 event-like OnX candidates, and bounded code-behind control subscriptions such as OnClick, OnCommand, OnLoad, OnInit, and Button.Click += Handler with surface-qualified control identities, handler identities, and line spans.
     evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
     emits:
       - WebFormsEventBindingDeclared
       - AnalysisGap
     limitations:
       - Event bindings are static declarations and do not prove that a control exists at runtime, a user can reach the event, event bubbling occurs, or the handler executes.
-      - Unsupported event-like attributes, dynamic wiring, generated controls, data-bound command names, and unsafe handler values are needs-review or gap evidence rather than guessed handlers.
+      - Safe OnX attributes outside the representative event allowlist are Tier3 event-like candidates, not proof that the target control exposes that server event; client-side, malformed, dynamic, generated, and unsafe shapes remain gaps rather than guessed handlers.
       - Duplicate controls or duplicate bindings are preserved as separate evidence rows with deterministic IDs; TraceMap does not collapse them into a single runtime control.
       - Explicit control subscriptions are limited to statically named receivers, representative events, and named handlers on the linked markup surface; lambdas, delegate expressions, unknown receivers, ambiguous controls, and dynamic wiring remain explicit gaps.
 
@@ -2220,6 +2223,7 @@ rules:
     limitations:
       - WinForms surface inventory is static repository evidence and does not prove runtime form creation, visibility, user reachability, authorization, deployment, or production usage.
       - Syntax and designer fallback can be reduced by failed MSBuild load, stale generated files, missing partial classes, malformed C#, duplicate type identities, or unsupported generated shapes.
+      - Syntax-only recognition of unqualified `Form`, `UserControl`, `Control`, `ApplicationContext`, or `Component` bases requires a matching `System.Windows.Forms` or `System.ComponentModel` namespace import; aliases, inherited framework identity hidden behind a custom base, and ambiguous framework names remain unsupported rather than being matched by simple name.
       - File paths are repo-relative; raw source snippets, local absolute paths, raw remotes, resource values, config values, URLs, endpoint addresses, and secrets are omitted.
 
   - id: legacy.winforms.control.v1
@@ -3569,6 +3573,7 @@ rules:
       - Native workspace messages are sanitized to stable categories before shareable artifacts are written; raw local paths, remotes, package sources, config values, credentials, and source-like snippets are omitted.
       - Source documents outside the repository use deterministic synthetic evidence paths derived from bounded non-host descriptors. The original path is not retained, and same-named unrecognized external sources can share an identity.
       - Explicit scan-scope gaps report only a categorical omitted-document count at repository evidence path `.`; they do not identify excluded source files, prove build failure, or describe runtime behavior.
+      - Project-declared C# inputs missing from the captured inventory emit a project-scoped `CompilationInputUnavailable` gap; the missing path is not retained, and the gap does not prove why the input is absent.
       - Exclusion comparison follows detected host path case semantics and macOS Unicode-equivalence semantics without rewriting persisted evidence paths. Unicode-distinct names remain distinct on hosts whose filesystems treat them as distinct.
 
   - id: build.environment.target-framework.v1
@@ -3628,7 +3633,7 @@ rules:
 
   - id: build.environment.workspace-diagnostic.v1
     name: Build environment workspace diagnostics
-    description: Records sanitized MSBuildWorkspace, SDK resolution, reference assembly, restore, and compilation setup categories that explain reduced semantic coverage.
+    description: Records sanitized MSBuildWorkspace, legacy Web Application/import/evaluation, SDK resolution, reference assembly, restore, and compilation setup categories that explain reduced semantic coverage.
     evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - BuildEnvironmentDiagnostic
@@ -3636,6 +3641,8 @@ rules:
       - Workspace diagnostics are sanitized categories and do not include raw native output, local paths, private repository names, remotes, package sources, config values, credentials, or source snippets.
       - Categories explain why semantic coverage was reduced; they do not prove runtime compatibility or absence of repository evidence.
       - Syntax, config, SQL, WCF, and WebForms fallback facts remain valid within their own evidence tiers.
+      - Legacy workspace categories are bounded pattern classifications of sanitized native diagnostics; they identify likely prerequisite classes, not a proven repair or compatible build environment.
+      - LegacyWorkspacePrerequisitesUnresolved is emitted only when an otherwise uncategorized workspace failure shares project identity with static legacy framework, project-format, import, or toolset evidence; it does not identify the exact missing prerequisite.
 
   - id: build.msbuild-binlog.observation.v1
     name: Bounded MSBuild binary-log observation

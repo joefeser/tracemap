@@ -147,6 +147,7 @@ public sealed class ScanProgressReporter : IDisposable
     private readonly TimeProvider timeProvider;
     private readonly List<ScanProgressEvent> history = [];
     private readonly ITimer? heartbeatTimer;
+    private readonly ScanPerformanceTracker? performanceTracker;
     private readonly List<(string Stage, string Operation, int? Ordinal)> activeStages = [];
     private long sequence;
     private long startedAt;
@@ -163,6 +164,9 @@ public sealed class ScanProgressReporter : IDisposable
         this.console = console;
         this.checkpointPath = checkpointPath;
         this.timeProvider = timeProvider ?? TimeProvider.System;
+        performanceTracker = checkpointPath is null
+            ? null
+            : new ScanPerformanceTracker(checkpointPath + ".performance.json", this.timeProvider);
         var interval = heartbeatInterval ?? TimeSpan.FromSeconds(15);
         if (interval <= TimeSpan.Zero)
         {
@@ -189,6 +193,31 @@ public sealed class ScanProgressReporter : IDisposable
                 null,
                 null),
             []));
+    }
+
+    public IReadOnlyList<CodeFact> ObserveExtractor(
+        string extractor,
+        int ordinal,
+        long inputCount,
+        Func<IReadOnlyList<CodeFact>> extract)
+    {
+        performanceTracker?.StartExtractor(extractor, ordinal, inputCount);
+        try
+        {
+            var facts = extract();
+            performanceTracker?.FinishExtractor(extractor, ordinal, "completed", facts);
+            return facts;
+        }
+        catch (OperationCanceledException)
+        {
+            performanceTracker?.FinishExtractor(extractor, ordinal, "cancelled", null);
+            throw;
+        }
+        catch
+        {
+            performanceTracker?.FinishExtractor(extractor, ordinal, "failed", null);
+            throw;
+        }
     }
 
     /// <summary>
@@ -363,7 +392,17 @@ public sealed class ScanProgressReporter : IDisposable
             }
         }
 
+        else
+        {
+            performanceTracker?.RecordHeartbeat();
+        }
+
         WriteConsoleBestEffort(FormatConsoleLine(scanProgressEvent));
+        var performanceSummary = performanceTracker?.RecordProgress(normalizedStage, normalizedState);
+        if (performanceSummary is not null)
+        {
+            WriteConsoleBestEffort(performanceSummary);
+        }
         WriteCheckpointLocked(new ScanProgressCheckpoint(
             ScanProgressSchema.Version,
             scanProgressEvent,
@@ -434,6 +473,8 @@ public sealed class ScanProgressReporter : IDisposable
             }
         }
     }
+
+    public ScanPerformanceReceipt? ReadPerformanceReceipt() => performanceTracker?.ReadReceipt();
 
     public void Dispose()
     {

@@ -39,6 +39,7 @@ public static class BuildEnvironmentDiagnosticExtractor
         diagnostics.AddRange(ReadRestoreDiagnostics(inventory));
         diagnostics.AddRange(ReadGeneratedFileDiagnostics(repoPath, inventory));
         diagnostics.AddRange(ReadWorkspaceDiagnostics(semanticResult.GapFacts));
+        diagnostics = CorroborateLegacyWorkspaceFailures(diagnostics);
 
         return diagnostics
             .OrderBy(item => item.DiagnosticKind, StringComparer.Ordinal)
@@ -62,9 +63,13 @@ public static class BuildEnvironmentDiagnosticExtractor
             "MSBuildRegistrationFailed" => "MSBuildRegistrationFailed",
             "RestoreFailed" => CategorizeRestoreFailure(raw),
             "CompilationCreateFailed" or "CompilationMissing" => "CompilationCreationFailed",
+            "CompilationInputUnavailable" => "CompilationInputUnavailable",
             "CompilationDiagnostic" when IsReferenceAssemblyDiagnostic(raw, diagnosticId) => "MissingReferenceAssemblies",
             "WorkspaceDiagnostic" or "ProjectLoadFailed" or "SolutionLoadFailed" when IsSdkResolutionFailure(raw) => "SdkResolutionFailed",
             "WorkspaceDiagnostic" or "ProjectLoadFailed" or "SolutionLoadFailed" when IsReferenceAssemblyDiagnostic(raw, diagnosticId) => "MissingReferenceAssemblies",
+            "WorkspaceDiagnostic" or "ProjectLoadFailed" or "SolutionLoadFailed" when IsWebApplicationTargetsFailure(raw, diagnosticId) => "WebApplicationTargetsUnavailable",
+            "WorkspaceDiagnostic" or "ProjectLoadFailed" or "SolutionLoadFailed" when IsImportedTargetsFailure(raw, diagnosticId) => "ImportedTargetsUnavailable",
+            "WorkspaceDiagnostic" or "ProjectLoadFailed" or "SolutionLoadFailed" when IsLegacyProjectEvaluationFailure(raw, diagnosticId) => "LegacyProjectEvaluationFailed",
             "WorkspaceDiagnostic" or "ProjectLoadFailed" or "SolutionLoadFailed" => "UncategorizedWorkspaceFailure",
             _ => "UncategorizedWorkspaceFailure"
         };
@@ -85,6 +90,43 @@ public static class BuildEnvironmentDiagnosticExtractor
     public static string HashObservedValue(string propertyKey, string diagnosticCode, string rawValue)
     {
         return FactFactory.Hash($"build-environment|{propertyKey}|{diagnosticCode}|{rawValue}", 32);
+    }
+
+    private static List<BuildEnvironmentDiagnosticCandidate> CorroborateLegacyWorkspaceFailures(
+        IReadOnlyList<BuildEnvironmentDiagnosticCandidate> diagnostics)
+    {
+        var legacyProjects = diagnostics
+            .Where(item => item.DiagnosticCode is "LegacyTargetFramework" or "OldMsBuildToolsVersion"
+                or "ImportedLegacyTargets" or "WebApplicationProjectTargets" or "NonSdkStyleProject")
+            .Select(item => item.ProjectPath ?? item.FilePath)
+            .Where(item => !string.IsNullOrWhiteSpace(item))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return diagnostics
+            .Select(item => CorroborateLegacyWorkspaceDiagnosticCode(
+                item.DiagnosticCode,
+                item.ProjectPath ?? item.FilePath,
+                legacyProjects)
+                == "LegacyWorkspacePrerequisitesUnresolved"
+                    ? item with
+                    {
+                        DiagnosticCode = "LegacyWorkspacePrerequisitesUnresolved",
+                        GuidanceCode = GuidanceFor("LegacyWorkspacePrerequisitesUnresolved"),
+                        Limitation = LimitationFor("LegacyWorkspacePrerequisitesUnresolved", DiagnosticKindWorkspace)
+                    }
+                    : item)
+            .ToList();
+    }
+
+    internal static string CorroborateLegacyWorkspaceDiagnosticCode(
+        string diagnosticCode,
+        string? projectPath,
+        IReadOnlySet<string> legacyProjectPaths)
+    {
+        return diagnosticCode == "UncategorizedWorkspaceFailure"
+            && projectPath is not null
+            && legacyProjectPaths.Contains(projectPath)
+                ? "LegacyWorkspacePrerequisitesUnresolved"
+                : diagnosticCode;
     }
 
     private static IReadOnlyList<BuildEnvironmentDiagnosticCandidate> ReadProjectDiagnostics(string repoPath, FileInventoryItem project)
@@ -731,6 +773,42 @@ public static class BuildEnvironmentDiagnosticExtractor
             || raw.Contains("framework assembly", StringComparison.OrdinalIgnoreCase);
     }
 
+    private static bool IsWebApplicationTargetsFailure(string raw, string? diagnosticId)
+    {
+        return (string.Equals(diagnosticId, "MSB4019", StringComparison.OrdinalIgnoreCase)
+                || ContainsMissingImportSignal(raw))
+            && (raw.Contains("Microsoft.WebApplication.targets", StringComparison.OrdinalIgnoreCase)
+                || raw.Contains("WebApplications", StringComparison.OrdinalIgnoreCase)
+                || raw.Contains("VSToolsPath", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsImportedTargetsFailure(string raw, string? diagnosticId)
+    {
+        return string.Equals(diagnosticId, "MSB4019", StringComparison.OrdinalIgnoreCase)
+            || (ContainsMissingImportSignal(raw)
+                && (raw.Contains(".targets", StringComparison.OrdinalIgnoreCase)
+                    || raw.Contains(".props", StringComparison.OrdinalIgnoreCase)
+                    || raw.Contains("import", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static bool IsLegacyProjectEvaluationFailure(string raw, string? diagnosticId)
+    {
+        return (diagnosticId is not null
+            && (diagnosticId.Equals("MSB4025", StringComparison.OrdinalIgnoreCase)
+                || diagnosticId.Equals("MSB4067", StringComparison.OrdinalIgnoreCase)
+                || diagnosticId.Equals("MSB4232", StringComparison.OrdinalIgnoreCase)))
+            || raw.Contains("project file could not be loaded", StringComparison.OrdinalIgnoreCase)
+            || raw.Contains("project evaluation", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool ContainsMissingImportSignal(string raw)
+    {
+        return raw.Contains("was not found", StringComparison.OrdinalIgnoreCase)
+            || raw.Contains("could not be found", StringComparison.OrdinalIgnoreCase)
+            || raw.Contains("does not exist", StringComparison.OrdinalIgnoreCase)
+            || raw.Contains("MSB4019", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string RuleFor(string diagnosticKind)
     {
         return diagnosticKind switch
@@ -766,12 +844,15 @@ public static class BuildEnvironmentDiagnosticExtractor
             "LegacyTargetFramework" or "MissingReferenceAssemblies" => "UseCompatibleReferenceAssemblies",
             "OldMsBuildToolsVersion" or "VisualStudioVersionDeclared" => "UseCompatibleMSBuildToolset",
             "ImportedLegacyTargets" or "UnknownImportedTargets" => "ReviewImportedTargets",
-            "WebApplicationProjectTargets" => "UseCompatibleWebApplicationTargets",
+            "WebApplicationProjectTargets" or "WebApplicationTargetsUnavailable" => "UseCompatibleWebApplicationTargets",
+            "ImportedTargetsUnavailable" => "ReviewImportedTargets",
+            "LegacyProjectEvaluationFailed" or "LegacyWorkspacePrerequisitesUnresolved" => "UseCompatibleMSBuildToolset",
             "PackagesConfigPresent" or "PackageReferencePresent" or "PackagesLockPresent" or "NuGetConfigPresent" => "ReviewNuGetRestoreInputs",
             "NuGetRestoreFailed" or "PackageSourceUnavailable" or "CredentialRequired" or "PackageVersionUnavailable" or "UnsupportedPackageFormat" => "ReviewSanitizedRestoreFailure",
             "GeneratedFileMissing" or "GeneratedFileMalformed" or "GeneratedFileUnlinked" => "ReviewGeneratedFileCoverage",
             "SdkResolutionFailed" => "UseCompatibleDotNetSdk",
             "MSBuildRegistrationFailed" or "CompilationCreationFailed" => "UseCompatibleMSBuildToolset",
+            "CompilationInputUnavailable" => "ReviewMissingCompilationInputs",
             _ => "ReviewEnvironmentGap"
         };
     }
@@ -814,6 +895,7 @@ public static class BuildEnvironmentDiagnosticExtractor
             "ReviewNuGetRestoreInputs" => "NuGet restore inputs are present; package resolution is not assumed unless restore is explicitly requested.",
             "ReviewSanitizedRestoreFailure" => "Explicit restore failed with a sanitized category; review package resolution in a compatible environment.",
             "ReviewGeneratedFileCoverage" => "Generated or designer-file evidence may cap semantic coverage for related legacy patterns.",
+            "ReviewMissingCompilationInputs" => "One or more project-declared C# inputs were unavailable in the captured source inventory.",
             "UseCompatibleDotNetSdk" => "A compatible .NET SDK appears necessary for full project load.",
             _ => "Review the environment diagnostic category and supporting evidence."
         };

@@ -84,9 +84,25 @@ public static class LegacyBatchDataMovementExtractor
         AddConfigurationObservations(existingFacts, observations);
         AddSsisObservations(inventory, observations);
 
+        var existingFactsByFile = existingFacts
+            .GroupBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<CodeFact>)group.ToArray(),
+                StringComparer.Ordinal);
+        var configurationFacts = existingFacts
+            .Where(fact => fact.FactType == FactTypes.ConfigKeyDeclared)
+            .ToArray();
+
         foreach (var item in inventory.Where(item => CSharpKinds.Contains(item.Kind)).OrderBy(item => item.RelativePath, StringComparer.Ordinal))
         {
-            ExtractCSharpFile(repoPath, item, existingFacts, observations, gaps);
+            ExtractCSharpFile(
+                repoPath,
+                item,
+                existingFactsByFile.GetValueOrDefault(item.RelativePath) ?? [],
+                configurationFacts,
+                observations,
+                gaps);
         }
 
         var factById = existingFacts
@@ -322,7 +338,8 @@ public static class LegacyBatchDataMovementExtractor
     private static void ExtractCSharpFile(
         string repoPath,
         FileInventoryItem item,
-        IReadOnlyList<CodeFact> existingFacts,
+        IReadOnlyList<CodeFact> fileFacts,
+        IReadOnlyList<CodeFact> configurationFacts,
         List<BatchObservation> observations,
         List<PendingGap> gaps)
     {
@@ -369,7 +386,7 @@ public static class LegacyBatchDataMovementExtractor
             foreach (var baseType in type.BaseList?.Types ?? [])
             {
                 var baseName = NormalizeGlobalTypeName(baseType.Type.ToString());
-                var semanticRelationship = FindSemanticBaseRelationship(existingFacts, item.RelativePath, baseType, ownerType);
+                var semanticRelationship = FindSemanticBaseRelationship(fileFacts, item.RelativePath, baseType, ownerType);
                 var resolvedBaseName = NormalizeGlobalTypeName(semanticRelationship?.TargetSymbol ?? baseName);
                 if (resolvedBaseName == "System.ServiceProcess.ServiceBase")
                 {
@@ -387,7 +404,7 @@ public static class LegacyBatchDataMovementExtractor
         }
 
         var memberContexts = new Dictionary<string, List<MemberContext>>(StringComparer.Ordinal);
-        var ownerProjectPath = UniqueProjectPath(existingFacts, item.RelativePath);
+        var ownerProjectPath = UniqueProjectPath(fileFacts, item.RelativePath);
         foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
         {
             var member = method.Identifier.ValueText;
@@ -407,7 +424,7 @@ public static class LegacyBatchDataMovementExtractor
                 memberContexts[memberKey] = contexts;
             }
             contexts.Add(context);
-            if (IsExecutableEntryPoint(repoPath, item.RelativePath, method, existingFacts))
+            if (IsExecutableEntryPoint(repoPath, item.RelativePath, method, fileFacts))
             {
                 observations.Add(SyntaxObservation(item.RelativePath, method.Identifier, "console-job", "static-main-method", "entry", member, ownerType, signals));
             }
@@ -422,7 +439,7 @@ public static class LegacyBatchDataMovementExtractor
 
                 var properties = new SortedDictionary<string, string>(signals, StringComparer.Ordinal);
                 var localGaps = new List<GapDescriptor>();
-                ClassifyScheduleReference(attribute.ArgumentList?.Arguments.FirstOrDefault()?.Expression, ownerProjectPath, existingFacts, properties, localGaps);
+                ClassifyScheduleReference(attribute.ArgumentList?.Arguments.FirstOrDefault()?.Expression, ownerProjectPath, configurationFacts, properties, localGaps);
                 var supportingFactIds = properties.GetValueOrDefault("scheduleConfigFactId") is { Length: > 0 } configFactId ? new[] { configFactId } : [];
                 observations.Add(SyntaxObservation(item.RelativePath, attribute, "scheduled-task", "timer-trigger-attribute", "trigger", member, ownerType, properties, localGaps, supportingFactIds));
             }
@@ -431,7 +448,7 @@ public static class LegacyBatchDataMovementExtractor
             {
                 var invocationName = InvocationName(invocation);
                 var receiver = InvocationReceiver(invocation);
-                var semanticHangfire = FindSemanticInvocation(existingFacts, item.RelativePath, invocation, "Hangfire.RecurringJob", "AddOrUpdate");
+                var semanticHangfire = FindSemanticInvocation(fileFacts, item.RelativePath, invocation, "Hangfire.RecurringJob", "AddOrUpdate");
                 if (invocationName == "AddOrUpdate" && (NormalizeGlobalTypeName(receiver) == "Hangfire.RecurringJob" || semanticHangfire is not null))
                 {
                     var properties = new SortedDictionary<string, string>(signals, StringComparer.Ordinal)
@@ -444,7 +461,7 @@ public static class LegacyBatchDataMovementExtractor
                 }
 
                 if (IsExplicitSystemIoReceiver(receiver) && (FileReadMethods.Contains(invocationName) || FileWriteMethods.Contains(invocationName))
-                    && !HasSemanticFileObservation(existingFacts, item.RelativePath, invocation))
+                    && !HasSemanticFileObservation(fileFacts, item.RelativePath, invocation))
                 {
                     var properties = new SortedDictionary<string, string>(signals, StringComparer.Ordinal)
                     {
@@ -466,7 +483,7 @@ public static class LegacyBatchDataMovementExtractor
             {
                 var typeName = NormalizeGlobalTypeName(creation.Type.ToString());
                 if (typeName == "System.IO.FileSystemWatcher"
-                    && !HasSemanticFileWatcherObservation(existingFacts, item.RelativePath, creation))
+                    && !HasSemanticFileWatcherObservation(fileFacts, item.RelativePath, creation))
                 {
                     observations.Add(SyntaxObservation(item.RelativePath, creation, "file-data-movement", "qualified-file-system-watcher", "watch", member, ownerType, signals));
                 }
@@ -476,8 +493,8 @@ public static class LegacyBatchDataMovementExtractor
                 }
             }
 
-            AddStoredProcedureObservations(item.RelativePath, method, member, ownerType, signals, existingFacts, observations);
-            AddBulkCopySyntaxFallback(item.RelativePath, method, member, ownerType, signals, existingFacts, observations);
+            AddStoredProcedureObservations(item.RelativePath, method, member, ownerType, signals, fileFacts, observations);
+            AddBulkCopySyntaxFallback(item.RelativePath, method, member, ownerType, signals, fileFacts, observations);
         }
 
         EnrichExistingObservations(item.RelativePath, memberContexts, observations);

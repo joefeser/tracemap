@@ -51,6 +51,11 @@ public sealed class CSharpSyntaxExtractorTests
         Assert.Equal("FailedOrPartial", result.Manifest.BuildStatus);
         Assert.Contains(result.Manifest.KnownGaps, gap => gap.Contains("Workspace diagnostic category", StringComparison.OrdinalIgnoreCase));
         AssertFact(result, FactTypes.TypeDeclared, "CustomerProfile", "src/Broken/CustomerProfile.cs", 6, 18);
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.TypeDeclared
+            && fact.Evidence.FilePath == "src/Broken/CustomerProfile.cs"
+            && fact.Properties.GetValueOrDefault("namespace") == "BrokenSample"
+            && fact.Properties.GetValueOrDefault("qualifiedName") == "BrokenSample.CustomerProfile");
         AssertFact(result, FactTypes.PropertyDeclared, "CustomerProfile.PrimaryEmail", "src/Broken/CustomerProfile.cs", 9, 9);
         AssertFact(result, FactTypes.MethodDeclared, "LoadAsync", "src/Broken/CustomerProfile.cs", 11, 17);
         AssertFact(result, FactTypes.EnumDeclared, "CustomerStatus", "src/Broken/CustomerProfile.cs", 20, 24);
@@ -69,6 +74,25 @@ public sealed class CSharpSyntaxExtractorTests
         Assert.All(
             result.Facts.Where(fact => fact.RuleId.StartsWith("csharp.syntax.", StringComparison.Ordinal)),
             fact => Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, fact.EvidenceTier));
+    }
+
+    [Fact]
+    public void Scan_preserves_containing_types_in_syntax_qualified_identity()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Nested.cs"),
+            "namespace Sample.Controls; public class Outer { public class Calendar { } }");
+
+        var result = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.TypeDeclared
+            && fact.Properties.GetValueOrDefault("name") == "Calendar"
+            && fact.Properties.GetValueOrDefault("qualifiedName") == "Sample.Controls.Outer.Calendar");
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.TypeDeclared
+            && fact.Properties.GetValueOrDefault("name") == "Calendar"
+            && fact.Properties.GetValueOrDefault("qualifiedName") == "Sample.Controls.Calendar");
     }
 
     [Fact]

@@ -848,42 +848,87 @@ public static class ScanEngine
         progress?.FinishStage(ScanProgressReporter.ScanOperation, ScanProgressStages.SyntaxFallback, "completed");
         cancellationToken.ThrowIfCancellationRequested();
         progress?.StartStage(ScanProgressReporter.ScanOperation, ScanProgressStages.SpecializedExtraction);
-        facts.AddRange(CSharpIntegrationSyntaxExtractor.Extract(
-            repoPath,
-            manifest,
-            inventory,
-            semanticallyAnalyzedFiles,
-            protectedSourceSpans));
-        facts.AddRange(FilterProtectedEvidence(RazorBindingExtractor.Extract(repoPath, manifest, inventory), protectedLineRanges));
-        facts.AddRange(FilterProtectedEvidence(LegacyWcfExtractor.Extract(repoPath, manifest, inventory), protectedLineRanges));
-        facts.AddRange(FilterProtectedEvidence(LegacyAsmxExtractor.Extract(repoPath, manifest, inventory), protectedLineRanges));
-        facts.AddRange(FilterProtectedEvidence(
-            LegacyRemotingExtractor.Extract(repoPath, manifest, inventory, semanticResult.Facts, semanticResult.Attempted),
-            protectedLineRanges));
-        facts.AddRange(SqlFileExtractor.Extract(repoPath, manifest, inventory));
-        facts.AddRange(SqlExecutionContextExtractor.Extract(repoPath, manifest, inventory));
-        facts.AddRange(PostgresSchemaMigrationExtractor.Extract(repoPath, manifest, inventory));
-        facts.AddRange(SqlProjectRefactorExtractor.Extract(
-            repoPath,
-            manifest,
-            inventory,
-            includeUnreferencedLogGaps: options.ProjectPaths is null || options.ProjectPaths.Count == 0));
+        var extractorOrdinal = 0;
+        IReadOnlyList<CodeFact> Observe(string extractor, Func<IReadOnlyList<CodeFact>> extract)
+        {
+            extractorOrdinal++;
+            return progress?.ObserveExtractor(extractor, extractorOrdinal, inventory.Count, extract) ?? extract();
+        }
+
+        facts.AddRange(Observe(
+            ScanPerformanceExtractors.CSharpIntegrationSyntax,
+            () => CSharpIntegrationSyntaxExtractor.Extract(
+                repoPath,
+                manifest,
+                inventory,
+                semanticallyAnalyzedFiles,
+                protectedSourceSpans)));
+        facts.AddRange(Observe(
+            ScanPerformanceExtractors.RazorBinding,
+            () => FilterProtectedEvidence(RazorBindingExtractor.Extract(repoPath, manifest, inventory), protectedLineRanges).ToArray()));
+        facts.AddRange(Observe(
+            ScanPerformanceExtractors.LegacyWcf,
+            () => FilterProtectedEvidence(LegacyWcfExtractor.Extract(repoPath, manifest, inventory), protectedLineRanges).ToArray()));
+        facts.AddRange(Observe(
+            ScanPerformanceExtractors.LegacyAsmx,
+            () => FilterProtectedEvidence(LegacyAsmxExtractor.Extract(repoPath, manifest, inventory), protectedLineRanges).ToArray()));
+        facts.AddRange(Observe(
+            ScanPerformanceExtractors.LegacyRemoting,
+            () => FilterProtectedEvidence(
+                LegacyRemotingExtractor.Extract(repoPath, manifest, inventory, semanticResult.Facts, semanticResult.Attempted),
+                protectedLineRanges).ToArray()));
+        facts.AddRange(Observe(
+            ScanPerformanceExtractors.SqlFile,
+            () => SqlFileExtractor.Extract(repoPath, manifest, inventory)));
+        facts.AddRange(Observe(
+            ScanPerformanceExtractors.SqlExecutionContext,
+            () => SqlExecutionContextExtractor.Extract(repoPath, manifest, inventory)));
+        facts.AddRange(Observe(
+            ScanPerformanceExtractors.PostgresSchemaMigration,
+            () => PostgresSchemaMigrationExtractor.Extract(repoPath, manifest, inventory)));
+        facts.AddRange(Observe(
+            ScanPerformanceExtractors.SqlProjectRefactor,
+            () => SqlProjectRefactorExtractor.Extract(
+                repoPath,
+                manifest,
+                inventory,
+                includeUnreferencedLogGaps: options.ProjectPaths is null || options.ProjectPaths.Count == 0)));
         facts.AddRange(binlogFacts);
-        facts.AddRange(ConfigExtractor.Extract(repoPath, manifest, inventory));
+        facts.AddRange(Observe(
+            ScanPerformanceExtractors.Config,
+            () => ConfigExtractor.Extract(repoPath, manifest, inventory)));
         facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, semanticResult.GapFacts));
         facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, semanticResult.Facts));
-        facts.AddRange(FilterProtectedEvidence(LegacyDataMetadataExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges));
-        facts.AddRange(FilterProtectedEvidence(LegacyDataEdmxSymbolComposition.Extract(manifest, inventory, facts, semanticallyAnalyzedFiles), protectedLineRanges));
-        facts.AddRange(FilterProtectedEvidence(LegacyWebFormsExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges));
-        facts.AddRange(FilterProtectedEvidence(LegacyWinFormsExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges));
-        facts.AddRange(FilterProtectedEvidence(LegacyAspNetExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges));
-        facts.AddRange(FilterProtectedEvidence(LegacyBatchDataMovementExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges));
+        facts.AddRange(Observe(
+            ScanPerformanceExtractors.LegacyData,
+            () => FilterProtectedEvidence(LegacyDataMetadataExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges).ToArray()));
+        facts.AddRange(Observe(
+            ScanPerformanceExtractors.LegacyDataSymbolComposition,
+            () => FilterProtectedEvidence(
+                LegacyDataEdmxSymbolComposition.Extract(manifest, inventory, facts, semanticallyAnalyzedFiles),
+                protectedLineRanges).ToArray()));
+        facts.AddRange(Observe(
+            ScanPerformanceExtractors.LegacyWebForms,
+            () => FilterProtectedEvidence(LegacyWebFormsExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges).ToArray()));
+        facts.AddRange(Observe(
+            ScanPerformanceExtractors.LegacyWinForms,
+            () => FilterProtectedEvidence(LegacyWinFormsExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges).ToArray()));
+        facts.AddRange(Observe(
+            ScanPerformanceExtractors.LegacyAspNet,
+            () => FilterProtectedEvidence(LegacyAspNetExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges).ToArray()));
+        facts.AddRange(Observe(
+            ScanPerformanceExtractors.LegacyBatchDataMovement,
+            () => FilterProtectedEvidence(
+                LegacyBatchDataMovementExtractor.Extract(repoPath, manifest, inventory, facts),
+                protectedLineRanges).ToArray()));
         var diagnosticSemanticResult = semanticResult with
         {
             GapFacts = semanticResult.GapFacts.Where(gap => !IsProducerLocalSemanticGap(gap)).ToArray(),
             ReducedCoverage = HasToolchainSemanticReduction(semanticResult)
         };
-        facts.AddRange(AnalyzerCapabilityDiagnosticExtractor.Extract(manifest, inventory, diagnosticSemanticResult, facts, options));
+        facts.AddRange(Observe(
+            ScanPerformanceExtractors.AnalyzerCapability,
+            () => AnalyzerCapabilityDiagnosticExtractor.Extract(manifest, inventory, diagnosticSemanticResult, facts, options)));
         progress?.FinishStage(
             ScanProgressReporter.ScanOperation,
             ScanProgressStages.SpecializedExtraction,
