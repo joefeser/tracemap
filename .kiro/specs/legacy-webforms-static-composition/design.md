@@ -20,9 +20,9 @@ All identities are derived from existing normalized surface/control identities p
 ## Parsing boundaries
 
 - Lifecycle context supports logical negation of `IsPostBack` (`!IsPostBack` or `!this.IsPostBack`) inside `Page_Init`, `Page_Load`, or `Page_PreRender`. A local or parameter shadowing `IsPostBack`, and other conditions containing it, are explicit gaps. Branch context applies only to syntax inside the `if` true statement, never its `else` statement.
-- Client-script methods are a closed representative set: `RegisterStartupScript`, `RegisterClientScriptBlock`, `RegisterClientScriptInclude`, `RegisterOnSubmitStatement`, and `RegisterHiddenField`. The invocation must use a supported Page, ClientScript, or ScriptManager receiver. A literal payload at the documented overload position is hashed; same-named helpers and dynamic payloads are gaps.
+- Client-script methods are a closed representative set: `RegisterStartupScript`, `RegisterClientScriptBlock`, `RegisterClientScriptInclude`, `RegisterOnSubmitStatement`, and `RegisterHiddenField`. The invocation must use a supported Page, ClientScript, or ScriptManager receiver and a documented receiver/method arity. A literal payload at the documented overload position is hashed; same-named helpers, unsupported overload shapes, and dynamic payloads are gaps.
 - `__doPostBack` parsing accepts only a literal first argument. Exact same-surface control matching is optional supporting evidence, never a dispatch claim.
-- `DataSourceID` accepts a safe static control identifier and resolves only within the same markup surface.
+- `DataSourceID` accepts a safe static control identifier and resolves only within the same markup surface. A present dynamic or otherwise unsupported attribute value emits `DynamicWebFormsDataSourceId` rather than disappearing from coverage.
 - `Eval`/`Bind` accepts a standalone literal first argument. A bounded enclosing server control is chosen only when its parsed opening-tag span contains the expression; this avoids guessing through nested same-type closing tags. Otherwise the page remains the source.
 
 ## Failure behavior

@@ -301,7 +301,8 @@ public static partial class LegacyWebFormsExtractor
 
             foreach (Match match in ServerControlRegex().Matches(activeMarkup))
             {
-                var attrs = ParseAttributes(match.Groups["attrs"].Value);
+                var attributeText = match.Groups["attrs"].Value;
+                var attrs = ParseAttributes(attributeText);
                 if (!IsServerControl(attrs))
                 {
                     continue;
@@ -329,6 +330,17 @@ public static partial class LegacyWebFormsExtractor
                     .ToArray();
                 var assemblyResolution = assemblyResolutions.Length == 1 ? assemblyResolutions[0] : null;
                 var isRegistered = sourceRegistration is not null || assemblyResolution is not null;
+                var rawDataSourceId = attrs.GetValueOrDefault("DataSourceID");
+                var dataSourceId = SafeIdentifier(rawDataSourceId);
+                var declaresUnparsedDataSourceId = rawDataSourceId is null
+                    && Regex.IsMatch(attributeText, @"\bDataSourceID\s*=", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+                if ((!string.IsNullOrWhiteSpace(rawDataSourceId) && dataSourceId is null) || declaresUnparsedDataSourceId)
+                {
+                    gaps.Add(new WebFormsGap(
+                        "DynamicWebFormsDataSourceId",
+                        "A DataSourceID attribute is not a supported static control identifier; TraceMap did not infer or evaluate its source.",
+                        line));
+                }
                 controls.Add(new WebFormsControl(
                     controlPrefix,
                     controlType,
@@ -341,7 +353,7 @@ public static partial class LegacyWebFormsExtractor
                     assemblyResolution?.Registration.Line,
                     SafeIdentifier(attrs.GetValueOrDefault("CommandName")),
                     SafeIdentifier(attrs.GetValueOrDefault("ContentPlaceHolderID")),
-                    SafeIdentifier(attrs.GetValueOrDefault("DataSourceID")),
+                    dataSourceId,
                     line,
                     LineAt(source, match.Index + match.Length - 1),
                     FactFactory.Hash(match.Value, 32),
@@ -1213,7 +1225,7 @@ public static partial class LegacyWebFormsExtractor
             if (payloadExpression is not LiteralExpressionSyntax payloadLiteral
                 || !payloadLiteral.IsKind(SyntaxKind.StringLiteralExpression))
             {
-                facts.Add(CreateGap(manifest, method.FilePath, line, "DynamicWebFormsClientScriptRegistration", "A supported client-script registration has no literal string payload; TraceMap did not inspect or infer the dynamic script."));
+                facts.Add(CreateGap(manifest, method.FilePath, line, "DynamicWebFormsClientScriptRegistration", "A client-script-like call does not match a supported overload with a literal string payload; TraceMap did not inspect or infer the script."));
                 continue;
             }
 
@@ -1373,7 +1385,8 @@ public static partial class LegacyWebFormsExtractor
     private static ExpressionSyntax? ClientScriptPayloadExpression(InvocationExpressionSyntax invocation, string methodName)
     {
         var arguments = invocation.ArgumentList.Arguments;
-        if (arguments.Count == 0)
+        var payloadIndex = SupportedClientScriptPayloadIndex(invocation, methodName, arguments.Count);
+        if (payloadIndex is null)
         {
             return null;
         }
@@ -1397,15 +1410,53 @@ public static partial class LegacyWebFormsExtractor
             }
         }
 
-        if (methodName is "RegisterStartupScript" or "RegisterClientScriptBlock"
-            && arguments.Count >= 4)
+        var positionalPayload = arguments[payloadIndex.Value];
+        return positionalPayload.NameColon is null ? positionalPayload.Expression : null;
+    }
+
+    private static int? SupportedClientScriptPayloadIndex(
+        InvocationExpressionSyntax invocation,
+        string methodName,
+        int argumentCount)
+    {
+        if (invocation.Expression is not MemberAccessExpressionSyntax memberAccess)
         {
-            var positionalPayload = arguments[^2];
-            return positionalPayload.NameColon is null ? positionalPayload.Expression : null;
+            return null;
         }
 
-        var finalArgument = arguments[^1];
-        return finalArgument.NameColon is null ? finalArgument.Expression : null;
+        var receiver = memberAccess.Expression.ToString();
+        var isScriptManager = receiver.Equals("ScriptManager", StringComparison.Ordinal);
+        var isLegacyPage = receiver is "Page" or "this.Page";
+
+        if (isScriptManager)
+        {
+            return (methodName, argumentCount) switch
+            {
+                ("RegisterStartupScript" or "RegisterClientScriptBlock", 5) => 3,
+                ("RegisterClientScriptInclude" or "RegisterOnSubmitStatement", 4) => 3,
+                ("RegisterHiddenField", 3) => 2,
+                _ => null
+            };
+        }
+
+        if (isLegacyPage)
+        {
+            return (methodName, argumentCount) switch
+            {
+                ("RegisterStartupScript" or "RegisterClientScriptBlock" or "RegisterOnSubmitStatement" or "RegisterHiddenField", 2) => 1,
+                _ => null
+            };
+        }
+
+        return (methodName, argumentCount) switch
+        {
+            ("RegisterStartupScript" or "RegisterClientScriptBlock", 3 or 4) => 2,
+            ("RegisterClientScriptInclude", 2) => 1,
+            ("RegisterClientScriptInclude", 3) => 2,
+            ("RegisterOnSubmitStatement", 3) => 2,
+            ("RegisterHiddenField", 2) => 1,
+            _ => null
+        };
     }
 
     private static bool HasSupportedClientScriptReceiver(InvocationExpressionSyntax invocation, MethodDeclarationSyntax method)
@@ -1890,6 +1941,7 @@ public static partial class LegacyWebFormsExtractor
             "UnresolvedWebFormsPostBackTarget" or "AmbiguousWebFormsPostBackTarget"
                 or "DynamicWebFormsPostBackTarget" => RuleIds.LegacyWebFormsPostBackTarget,
             "UnresolvedWebFormsDataSourceId" or "AmbiguousWebFormsDataSourceId" or "AmbiguousWebFormsDataBindingSource"
+                or "DynamicWebFormsDataSourceId"
                 or "DynamicWebFormsDataBindingExpression" => RuleIds.LegacyWebFormsDataBinding,
             _ => RuleIds.LegacyWebFormsHandlerResolution
         };

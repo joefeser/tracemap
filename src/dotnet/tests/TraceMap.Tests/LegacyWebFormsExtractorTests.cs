@@ -1438,6 +1438,7 @@ public sealed class LegacyWebFormsExtractorTests
         File.WriteAllText(Path.Combine(repo, "Default.aspx"), """
             <%@ Page Language="C#" CodeBehind="Default.aspx.cs" Inherits="Sample.Default" %>
             <asp:Label runat="server" ID="Output" Text='<%# Eval("prefix" + suffix) %>' />
+            <asp:GridView runat="server" ID="DynamicGrid" DataSourceID='<%# ResolveSource() %>' />
             <asp:Button runat="server" ID="SaveButton" />
             <script>__doPostBack("SaveButton" + suffix, "");</script>
             """);
@@ -1451,6 +1452,7 @@ public sealed class LegacyWebFormsExtractorTests
                     {
                         Logger.RegisterStartupScript(GetType(), "key", "literal", true);
                     }
+                    ClientScript.RegisterStartupScript("payload");
                 }
             }
             """);
@@ -1463,6 +1465,10 @@ public sealed class LegacyWebFormsExtractorTests
         Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WebFormsPostBackTargetCandidate);
         Assert.Contains(result.Facts, fact => fact.Properties.GetValueOrDefault("gapKind") == "AmbiguousWebFormsIsPostBackReceiver");
         Assert.Contains(result.Facts, fact => fact.Properties.GetValueOrDefault("gapKind") == "AmbiguousWebFormsClientScriptRegistrationReceiver");
+        Assert.Contains(result.Facts, fact => fact.Properties.GetValueOrDefault("gapKind") == "DynamicWebFormsClientScriptRegistration");
+        Assert.Contains(result.Facts, fact =>
+            fact.RuleId == RuleIds.LegacyWebFormsDataBinding
+            && fact.Properties.GetValueOrDefault("gapKind") == "DynamicWebFormsDataSourceId");
         Assert.Contains(result.Facts, fact => fact.Properties.GetValueOrDefault("gapKind") == "DynamicWebFormsDataBindingExpression");
         Assert.Contains(result.Facts, fact => fact.Properties.GetValueOrDefault("gapKind") == "DynamicWebFormsPostBackTarget");
     }
