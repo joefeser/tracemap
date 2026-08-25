@@ -27,14 +27,14 @@ try {
     $facts = @(
         @{ factType = 'FileInventoried'; ruleId = 'file.inventory.v1'; evidenceTier = 'Tier2Structural'; evidence = @{ filePath = 'private-web/default.aspx' }; properties = @{} },
         @{ factType = 'WebFormsUserControlRegistered'; ruleId = 'legacy.webforms.inventory.v1'; evidenceTier = 'Tier2Structural'; evidence = @{ filePath = 'private-web/web.config' }; properties = @{ registrationShape = 'assembly-namespace' } },
-        @{ factType = 'CallEdge'; ruleId = 'csharp.semantic.call.v1'; evidenceTier = 'Tier1Semantic'; evidence = @{ filePath = 'private-backend/service.cs' }; properties = @{} },
-        @{ factType = 'AnalyzerCapabilityDiagnostic'; ruleId = 'analyzer.capability.semantic.v1'; evidenceTier = 'Tier4Unknown'; evidence = @{ filePath = 'private-backend/service.csproj' }; properties = @{ capabilityCode = 'CSharpSemanticCompilation'; capabilityState = 'Reduced'; coverageEffect = 'reduces-semantic-coverage' } },
-        @{ factType = 'BuildEnvironmentDiagnostic'; ruleId = 'build.environment.workspace-diagnostic.v1'; evidenceTier = 'Tier4Unknown'; evidence = @{ filePath = 'private-backend/service.csproj' }; properties = @{ diagnosticCode = 'MissingReferenceAssemblies'; diagnosticKind = 'workspace'; coverageEffect = 'reduces-semantic-coverage' } },
+        @{ factType = 'CallEdge'; ruleId = 'csharp.semantic.call.v1'; evidenceTier = 'Tier1Semantic'; evidence = @{ filePath = 'private-web/private-backend/service.cs' }; properties = @{} },
+        @{ factType = 'AnalyzerCapabilityDiagnostic'; ruleId = 'analyzer.capability.semantic.v1'; evidenceTier = 'Tier4Unknown'; evidence = @{ filePath = 'private-web/private-backend/service.csproj' }; properties = @{ capabilityCode = 'CSharpSemanticCompilation'; capabilityState = 'Reduced'; coverageEffect = 'reduces-semantic-coverage' } },
+        @{ factType = 'BuildEnvironmentDiagnostic'; ruleId = 'build.environment.workspace-diagnostic.v1'; evidenceTier = 'Tier4Unknown'; evidence = @{ filePath = 'private-web/private-backend/service.csproj' }; properties = @{ diagnosticCode = 'MissingReferenceAssemblies'; diagnosticKind = 'workspace'; coverageEffect = 'reduces-semantic-coverage' } },
         @{ factType = 'AnalysisGap'; ruleId = 'legacy.webforms.event-binding.v1'; evidenceTier = 'Tier4Unknown'; evidence = @{ filePath = 'private-controls/widget.ascx' }; properties = @{ gapKind = 'UnsupportedWebFormsEventAttribute' } }
     )
     [IO.File]::WriteAllLines((Join-Path $scan "facts.ndjson"), @($facts | ForEach-Object { $_ | ConvertTo-Json -Compress -Depth 10 }), [Text.UTF8Encoding]::new($false))
 
-    $result = @(& $script -ReviewOutputPath $review -WebFormsFolder 'private-web' -BackendFolder 'private-backend' -ControlsFolder 'private-controls' -OutputDirectory $output)
+    $result = @(& $script -ReviewOutputPath $review -WebFormsFolder 'private-web' -BackendFolder 'private-web/private-backend' -ControlsFolder 'private-controls' -OutputDirectory $output)
     Assert-True ($result[0] -eq 'focused-webforms-accuracy-summary-file=created') "summary creation was not reported"
     $file = @(Get-ChildItem $output -File -Filter 'focused-webforms-accuracy-*.txt')
     Assert-True ($file.Count -eq 1) "accuracy summary was not created"

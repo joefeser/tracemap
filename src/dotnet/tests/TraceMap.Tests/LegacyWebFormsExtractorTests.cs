@@ -103,6 +103,41 @@ public sealed class LegacyWebFormsExtractorTests
     }
 
     [Fact]
+    public void Scan_does_not_assign_sdk_excluded_source_to_assembly_registration()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "Web", "Controls"));
+        File.WriteAllText(Path.Combine(repo, "Web", "Widgets.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <AssemblyName>Sample.Widgets</AssemblyName>
+                <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Web", "Controls", "Calendar.cs"), "namespace Sample.Controls; public sealed class Calendar { }");
+        File.WriteAllText(Path.Combine(repo, "Web", "web.config"), """
+            <configuration><system.web><pages><controls>
+              <add tagPrefix="widgets" namespace="Sample.Controls" assembly="Sample.Widgets" />
+            </controls></pages></system.web></configuration>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Web", "Default.aspx"), """
+            <%@ Page Language="C#" Inherits="Sample.Default" %>
+            <widgets:Calendar runat="server" ID="Calendar" />
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "WebFormsAssemblyTypeUnavailable");
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsCompositionDeclared
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "UsesRegisteredAssemblyControl");
+    }
+
+    [Fact]
     public void Scan_distinguishes_out_of_scope_assembly_from_missing_local_type()
     {
         using var temp = new TempDirectory();
@@ -596,6 +631,9 @@ public sealed class LegacyWebFormsExtractorTests
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
             && fact.Properties.GetValueOrDefault("gapKind") == "UnsupportedWebFormsEventAttribute");
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsHandlerResolved
+            && fact.ContractElement == "Grid_RowDataBound");
     }
 
     [Fact]

@@ -76,10 +76,6 @@ foreach ($project in $ProjectRelativePath) {
 }
 
 Set-Location $TraceMapRoot
-git fetch origin codex/work-dump-edge-case-triage
-if ($LASTEXITCODE -ne 0) { throw "TRACEMAP_FETCH_FAILED" }
-git switch --detach origin/codex/work-dump-edge-case-triage
-if ($LASTEXITCODE -ne 0) { throw "TRACEMAP_CHECKOUT_FAILED" }
 dotnet build "$TraceMapRoot\src\dotnet\TraceMap.sln"
 if ($LASTEXITCODE -ne 0) { throw "TRACEMAP_BUILD_FAILED" }
 
