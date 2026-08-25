@@ -2203,7 +2203,7 @@ rules:
       - AnalysisGap
     limitations:
       - Registration-call syntax does not prove successful registration, rendered output, script execution, browser behavior, branch execution, or runtime reachability.
-      - Dynamic payloads, ambiguous or custom same-named receivers, wrapper methods, reflection, generated scripts, and unsupported registration APIs remain gaps; raw script bodies are not retained.
+      - Dynamic payloads, ambiguous, shadowed, or custom same-named receivers, unsupported positional or named argument shapes, wrapper methods, reflection, generated scripts, and unsupported registration APIs remain gaps; raw script bodies are not retained.
 
   - id: legacy.webforms.postback-target.v1
     name: Legacy WebForms postback target candidates
@@ -2225,7 +2225,7 @@ rules:
       - AnalysisGap
     limitations:
       - Static DataSourceID, Eval, and Bind evidence does not prove successful binding, returned rows, evaluated values, rendering, persistence, or runtime reachability.
-      - Composed or dynamic expressions, naming-container resolution, templates outside opening-tag attributes, programmatic binding, unsupported property shapes, and ambiguous control IDs remain gaps; field literals are retained only as hashes.
+      - Blank, composed, or dynamic values and expressions, naming-container resolution, templates outside opening-tag attributes, programmatic binding, unsupported property shapes, and ambiguous control IDs remain gaps; field literals are retained only as hashes.
 
   - id: legacy.webforms.modernization-packet.v1
     name: Web Forms modernization evidence packet composition

@@ -1474,6 +1474,48 @@ public sealed class LegacyWebFormsExtractorTests
     }
 
     [Fact]
+    public void Static_composition_gaps_blank_data_sources_invalid_named_overloads_and_member_shadowing()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), """
+            <%@ Page Language="C#" CodeBehind="Default.aspx.cs" Inherits="Sample.Default" %>
+            <asp:GridView runat="server" ID="BlankGrid" DataSourceID="" />
+            """);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx.cs"), """
+            namespace Sample;
+            public partial class Default
+            {
+                private object ClientScript;
+
+                protected void Page_Load(object sender, object e)
+                {
+                    ClientScript.RegisterStartupScript(GetType(), "member", "not-framework", true);
+                    Page.ClientScript.RegisterStartupScript(
+                        type: GetType(),
+                        key: "invalid",
+                        script: "not-an-overload",
+                        bogus: true);
+                }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WebFormsClientScriptRegistrationCandidate);
+        Assert.Contains(result.Facts, fact =>
+            fact.RuleId == RuleIds.LegacyWebFormsDataBinding
+            && fact.Properties.GetValueOrDefault("gapKind") == "DynamicWebFormsDataSourceId");
+        Assert.Contains(result.Facts, fact =>
+            fact.RuleId == RuleIds.LegacyWebFormsClientScript
+            && fact.Properties.GetValueOrDefault("gapKind") == "AmbiguousWebFormsClientScriptRegistrationReceiver");
+        Assert.Contains(result.Facts, fact =>
+            fact.RuleId == RuleIds.LegacyWebFormsClientScript
+            && fact.Properties.GetValueOrDefault("gapKind") == "DynamicWebFormsClientScriptRegistration");
+    }
+
+    [Fact]
     public void Static_composition_preserves_exact_binding_sites_and_true_branch_context_with_duplicate_controls()
     {
         using var temp = new TempDirectory();
