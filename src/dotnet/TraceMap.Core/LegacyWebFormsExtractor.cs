@@ -76,9 +76,15 @@ public static partial class LegacyWebFormsExtractor
             foreach (var binding in page.Bindings)
             {
                 var designerFact = designerFactsByPageAndField.GetValueOrDefault(SurfaceFieldKey(page.FilePath, binding.ControlId));
-                var bindingFact = CreateEventBindingFact(manifest, page, binding, designerFact, ResolveHandlerIdentity(page, binding, context, evidenceIndex));
+                var handlerIdentity = binding.BindingKind == WebFormsBindingKind.MarkupEventCandidate
+                    ? StructuralHandlerIdentity(page, binding.HandlerName)
+                    : ResolveHandlerIdentity(page, binding, context, evidenceIndex);
+                var bindingFact = CreateEventBindingFact(manifest, page, binding, designerFact, handlerIdentity);
                 facts.Add(bindingFact);
-                AddHandlerResolutionFacts(manifest, page, binding, bindingFact, context, evidenceIndex, facts);
+                if (binding.BindingKind != WebFormsBindingKind.MarkupEventCandidate)
+                {
+                    AddHandlerResolutionFacts(manifest, page, binding, bindingFact, context, evidenceIndex, facts);
+                }
             }
 
             AddExplicitControlSubscriptionFacts(manifest, page, context, evidenceIndex, facts);
@@ -2206,7 +2212,31 @@ public static partial class LegacyWebFormsExtractor
                     .Select(value => value!)
                     .ToHashSet(StringComparer.OrdinalIgnoreCase);
                 var sdkStyle = document.Root?.Attribute("Sdk") is not null;
-                return new WebFormsProjectScope(projectPath, projectDirectory, assemblyName, explicitSources, sdkStyle);
+                var enableDefaultCompileItems = document.Descendants()
+                    .Where(element => element.Name.LocalName == "EnableDefaultCompileItems")
+                    .Select(element => element.Value.Trim())
+                    .LastOrDefault();
+                var defaultCompileItemsEnabled = sdkStyle
+                    && (enableDefaultCompileItems is null
+                        || string.Equals(enableDefaultCompileItems, "true", StringComparison.OrdinalIgnoreCase));
+                var removeValues = document.Descendants()
+                    .Where(element => element.Name.LocalName == "Compile")
+                    .Select(element => ConfigAttribute(element, "Remove"))
+                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                    .ToArray();
+                var excludedSources = removeValues
+                    .Select(value => ResolveProjectSource(repoPath, projectDirectory, value!))
+                    .Where(value => value is not null)
+                    .Select(value => value!)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var hasUnsupportedRemovals = removeValues.Any(value => ResolveProjectSource(repoPath, projectDirectory, value!) is null);
+                return new WebFormsProjectScope(
+                    projectPath,
+                    projectDirectory,
+                    assemblyName,
+                    explicitSources,
+                    excludedSources,
+                    defaultCompileItemsEnabled && !hasUnsupportedRemovals);
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or XmlException)
             {
@@ -2216,7 +2246,12 @@ public static partial class LegacyWebFormsExtractor
 
         private static string? ResolveProjectSource(string repoPath, string projectDirectory, string include)
         {
-            if (include.Contains("$(", StringComparison.Ordinal) || include.Contains('*'))
+            if (include.Contains("$(", StringComparison.Ordinal)
+                || include.Contains("@(", StringComparison.Ordinal)
+                || include.Contains("%(", StringComparison.Ordinal)
+                || include.Contains('*')
+                || include.Contains('?')
+                || include.Contains(';'))
             {
                 return null;
             }
@@ -2246,10 +2281,12 @@ public static partial class LegacyWebFormsExtractor
         string ProjectDirectory,
         string AssemblyName,
         IReadOnlySet<string> ExplicitSources,
-        bool SdkStyle)
+        IReadOnlySet<string> ExcludedSources,
+        bool DefaultCompileItemsEnabled)
     {
-        public bool OwnsSource(string filePath) => ExplicitSources.Contains(filePath)
-            || (SdkStyle && IsSameOrAncestor(ProjectDirectory, RelativeDirectory(filePath)));
+        public bool OwnsSource(string filePath) => !ExcludedSources.Contains(filePath)
+            && (ExplicitSources.Contains(filePath)
+                || (DefaultCompileItemsEnabled && IsSameOrAncestor(ProjectDirectory, RelativeDirectory(filePath))));
     }
 
     private sealed record WebFormsBinding(

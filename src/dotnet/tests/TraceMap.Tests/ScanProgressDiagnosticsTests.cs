@@ -900,6 +900,20 @@ public sealed class ScanProgressDiagnosticsTests
     }
 
     [Fact]
+    public void Performance_receipt_preserves_partial_run_state_after_successful_publication()
+    {
+        using var temp = new TempDirectory();
+        var tracker = new ScanPerformanceTracker(Path.Combine(temp.Path, "performance.json"), new ManualTimeProvider());
+
+        tracker.RecordProgress(ScanProgressStages.SpecializedExtraction, "partial");
+        tracker.RecordProgress(ScanProgressStages.LocalReviewPublication, "completed");
+
+        var receipt = tracker.ReadReceipt();
+        Assert.Equal("partial", receipt.RunState);
+        Assert.Equal("complete", receipt.TimingCoverage);
+    }
+
+    [Fact]
     public void Performance_receipt_keeps_timeout_boundary_when_blocked_extractor_returns_late()
     {
         using var temp = new TempDirectory();

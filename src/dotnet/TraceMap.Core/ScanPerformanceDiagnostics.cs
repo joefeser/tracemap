@@ -194,13 +194,20 @@ internal sealed class ScanPerformanceTracker
                 timingCoverage = timings.Count == 0 ? "unavailable" : "partial";
                 terminalLatched = state is "cancelled" or "timed-out";
             }
-            else if (stage == ScanProgressStages.SpecializedExtraction && state is "completed" or "partial")
+            else
             {
-                timingCoverage = active is null && !timingsTruncated ? "complete" : "partial";
-            }
-            else if (stage == ScanProgressStages.LocalReviewPublication && state == "completed")
-            {
-                runState = "completed";
+                if (state == "partial" && runState == "running")
+                {
+                    runState = "partial";
+                }
+                if (stage == ScanProgressStages.SpecializedExtraction && state is "completed" or "partial")
+                {
+                    timingCoverage = active is null && !timingsTruncated ? "complete" : "partial";
+                }
+                else if (stage == ScanProgressStages.LocalReviewPublication && state == "completed" && runState == "running")
+                {
+                    runState = "completed";
+                }
             }
 
             WriteReceiptLocked();

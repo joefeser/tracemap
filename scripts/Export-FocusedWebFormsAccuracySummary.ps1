@@ -46,7 +46,7 @@ function Get-ScopeRole {
     param([AllowNull()][string]$FilePath)
     if ([string]::IsNullOrWhiteSpace($FilePath)) { return "unknown" }
     $normalized = Normalize-RelativePath $FilePath
-    foreach ($scope in $script:scopes) {
+    foreach ($scope in @($script:scopes | Sort-Object { $_.Prefix.Length } -Descending)) {
         if ($normalized.Equals($scope.Prefix, [StringComparison]::OrdinalIgnoreCase) -or
             $normalized.StartsWith($scope.Prefix + "/", [StringComparison]::OrdinalIgnoreCase)) {
             return $scope.Role
