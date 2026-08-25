@@ -1247,8 +1247,10 @@ public static partial class LegacyWebFormsExtractor
                 },
                 invocation.SyntaxTree.GetLineSpan(invocation.Span).EndLinePosition.Line + 1));
 
+            var literalPostBackStarts = new HashSet<int>();
             foreach (Match match in PostBackLiteralRegex().Matches(payload))
             {
+                literalPostBackStarts.Add(match.Index);
                 var value = MatchLiteralValue(match);
                 if (string.IsNullOrEmpty(value))
                 {
@@ -1270,6 +1272,17 @@ public static partial class LegacyWebFormsExtractor
                         FactFactory.Hash(invocation.ToString(), 32),
                         "client-script-literal"),
                     facts);
+            }
+
+            if (PostBackInvocationRegex().Matches(payload)
+                .Any(match => !literalPostBackStarts.Contains(match.Index)))
+            {
+                facts.Add(CreateGap(
+                    manifest,
+                    method.FilePath,
+                    line,
+                    "DynamicWebFormsPostBackTarget",
+                    "A literal registered script contains one or more __doPostBack calls without a supported literal first target; TraceMap did not infer those postback targets."));
             }
         }
     }
@@ -1378,16 +1391,21 @@ public static partial class LegacyWebFormsExtractor
             var namedPayloads = namedArguments
                 .Where(argument => argument.NameColon!.Name.Identifier.ValueText.Equals(payloadParameterName, StringComparison.Ordinal))
                 .ToArray();
-            return namedPayloads.Length == 1 ? namedPayloads[0].Expression : null;
+            if (namedPayloads.Length != 0)
+            {
+                return namedPayloads.Length == 1 ? namedPayloads[0].Expression : null;
+            }
         }
 
         if (methodName is "RegisterStartupScript" or "RegisterClientScriptBlock"
             && arguments.Count >= 4)
         {
-            return arguments[^2].Expression;
+            var positionalPayload = arguments[^2];
+            return positionalPayload.NameColon is null ? positionalPayload.Expression : null;
         }
 
-        return arguments[^1].Expression;
+        var finalArgument = arguments[^1];
+        return finalArgument.NameColon is null ? finalArgument.Expression : null;
     }
 
     private static bool HasSupportedClientScriptReceiver(InvocationExpressionSyntax invocation, MethodDeclarationSyntax method)
