@@ -1500,6 +1500,11 @@ public sealed class LegacyWebFormsExtractorTests
                         script: "__doPostBack('Duplicate','')",
                         key: "third",
                         type: GetType());
+                    ClientScript.RegisterStartupScript(
+                        GetType(),
+                        "mixed",
+                        "__doPostBack(resolveTarget(), '')",
+                        addScriptTags: true);
                 }
 
                 protected void Helper(object ClientScript)
@@ -1524,11 +1529,12 @@ public sealed class LegacyWebFormsExtractorTests
         Assert.NotEqual(bindings[0].Properties.GetValueOrDefault("supportingFactIds"), bindings[1].Properties.GetValueOrDefault("supportingFactIds"));
         var lifecycle = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WebFormsLifecycleBranchCandidate);
         Assert.True(lifecycle.Evidence.EndLine > lifecycle.Evidence.StartLine);
-        Assert.Equal(3, scripts.Length);
+        Assert.Equal(4, scripts.Length);
         Assert.Equal("inside-not-is-postback-syntax", scripts[0].Properties.GetValueOrDefault("branchContext"));
         Assert.Equal("not-observed", scripts[1].Properties.GetValueOrDefault("branchContext"));
         Assert.True(scripts[2].Evidence.EndLine > scripts[2].Evidence.StartLine);
         Assert.Contains(result.Facts, fact => fact.Properties.GetValueOrDefault("gapKind") == "AmbiguousWebFormsClientScriptRegistrationReceiver");
+        Assert.Contains(result.Facts, fact => fact.Properties.GetValueOrDefault("gapKind") == "DynamicWebFormsPostBackTarget");
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WebFormsPostBackTargetCandidate && fact.Properties.GetValueOrDefault("sourceKind") == "client-script-literal");
     }
 
