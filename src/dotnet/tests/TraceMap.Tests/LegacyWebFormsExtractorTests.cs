@@ -1516,6 +1516,53 @@ public sealed class LegacyWebFormsExtractorTests
     }
 
     [Fact]
+    public void Static_composition_rejects_script_manager_aliases_nested_types_and_prefixed_postback_names()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Alias.aspx"), """
+            <%@ Page Language="C#" CodeBehind="Alias.aspx.cs" Inherits="Sample.AliasPage" %>
+            <asp:Button runat="server" ID="SaveButton" />
+            <script>my__doPostBack('SaveButton', ''); object.__doPostBack('SaveButton', '');</script>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Alias.aspx.cs"), """
+            using ScriptManager = Custom.ClientScripts;
+            namespace Sample;
+            public partial class AliasPage
+            {
+                protected void Page_Load(object sender, object e)
+                {
+                    ScriptManager.RegisterStartupScript(this, GetType(), "alias", "not-framework", true);
+                }
+            }
+            """);
+        File.WriteAllText(Path.Combine(repo, "Nested.aspx"), """
+            <%@ Page Language="C#" CodeBehind="Nested.aspx.cs" Inherits="Sample.NestedPage" %>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Nested.aspx.cs"), """
+            namespace Sample;
+            public partial class NestedPage
+            {
+                private static class ScriptManager { }
+
+                protected void Page_Load(object sender, object e)
+                {
+                    ScriptManager.RegisterStartupScript(this, GetType(), "nested", "not-framework", true);
+                }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WebFormsClientScriptRegistrationCandidate);
+        Assert.DoesNotContain(result.Facts, fact => fact.RuleId == RuleIds.LegacyWebFormsPostBackTarget);
+        Assert.Equal(2, result.Facts.Count(fact =>
+            fact.RuleId == RuleIds.LegacyWebFormsClientScript
+            && fact.Properties.GetValueOrDefault("gapKind") == "AmbiguousWebFormsClientScriptRegistrationReceiver"));
+    }
+
+    [Fact]
     public void Static_composition_preserves_exact_binding_sites_and_true_branch_context_with_duplicate_controls()
     {
         using var temp = new TempDirectory();

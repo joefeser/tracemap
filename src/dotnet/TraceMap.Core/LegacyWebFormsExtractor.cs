@@ -1504,7 +1504,9 @@ public static partial class LegacyWebFormsExtractor
             _ => null
         };
         if (shadowableReceiver is not null
-            && (HasLocalNameShadow(method, shadowableReceiver) || HasContainingMemberShadow(method, shadowableReceiver)))
+            && (HasLocalNameShadow(method, shadowableReceiver)
+                || HasContainingMemberShadow(method, shadowableReceiver)
+                || HasFileScopedTypeShadow(method, shadowableReceiver)))
         {
             return false;
         }
@@ -1536,6 +1538,17 @@ public static partial class LegacyWebFormsExtractor
             EventDeclarationSyntax @event => @event.Identifier.ValueText == name,
             _ => false
         }) == true;
+    }
+
+    private static bool HasFileScopedTypeShadow(MethodDeclarationSyntax method, string name)
+    {
+        var root = method.SyntaxTree.GetCompilationUnitRoot();
+        return root.DescendantNodes().OfType<UsingDirectiveSyntax>().Any(usingDirective =>
+                usingDirective.Alias?.Name.Identifier.ValueText.Equals(name, StringComparison.Ordinal) == true)
+            || root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>()
+                .Any(declaration => declaration.Identifier.ValueText.Equals(name, StringComparison.Ordinal))
+            || root.DescendantNodes().OfType<DelegateDeclarationSyntax>()
+                .Any(declaration => declaration.Identifier.ValueText.Equals(name, StringComparison.Ordinal));
     }
 
     private static CodeFact? FindControlFact(
@@ -2749,10 +2762,10 @@ public static partial class LegacyWebFormsExtractor
     [GeneratedRegex(@"<%#\s*(?<kind>Eval|Bind)\s*\(", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex DataBindingInvocationRegex();
 
-    [GeneratedRegex("""__doPostBack\s*\(\s*(?:"(?<dq>[^"]+)"|'(?<sq>[^']+)')\s*(?=,)""", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    [GeneratedRegex("""(?<![A-Za-z0-9_$.])__doPostBack\s*\(\s*(?:"(?<dq>[^"]+)"|'(?<sq>[^']+)')\s*(?=,)""", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex PostBackLiteralRegex();
 
-    [GeneratedRegex(@"__doPostBack\s*\(", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    [GeneratedRegex(@"(?<![A-Za-z0-9_$.])__doPostBack\s*\(", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex PostBackInvocationRegex();
 
     private sealed class WebFormsEvidenceIndex(
