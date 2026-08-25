@@ -2239,6 +2239,7 @@ public static partial class LegacyWebFormsExtractor
                     return null;
                 }
                 var projectDirectory = RelativeDirectory(projectPath);
+                var sourcePathComparer = CSharpSemanticExtractor.CreateSourcePathComparer(repoPath);
                 var explicitSources = document.Descendants()
                     .Where(element => element.Name.LocalName == "Compile")
                     .Select(element => ConfigAttribute(element, "Include"))
@@ -2246,7 +2247,7 @@ public static partial class LegacyWebFormsExtractor
                     .Select(value => ResolveProjectSource(repoPath, projectDirectory, value!))
                     .Where(value => value is not null)
                     .Select(value => value!)
-                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    .ToHashSet(sourcePathComparer);
                 var sdkStyle = document.Root?.Attribute("Sdk") is not null;
                 var enableDefaultCompileItems = document.Descendants()
                     .Where(element => element.Name.LocalName == "EnableDefaultCompileItems")
@@ -2264,7 +2265,7 @@ public static partial class LegacyWebFormsExtractor
                     .Select(value => ResolveProjectSource(repoPath, projectDirectory, value!))
                     .Where(value => value is not null)
                     .Select(value => value!)
-                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    .ToHashSet(sourcePathComparer);
                 var hasUnsupportedRemovals = removeValues.Any(value => ResolveProjectSource(repoPath, projectDirectory, value!) is null);
                 return new WebFormsProjectScope(
                     projectPath,

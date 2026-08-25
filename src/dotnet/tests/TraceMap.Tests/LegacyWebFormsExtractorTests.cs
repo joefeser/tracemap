@@ -138,6 +138,38 @@ public sealed class LegacyWebFormsExtractorTests
     }
 
     [Fact]
+    public void Scan_applies_host_path_casing_to_explicit_compile_ownership()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "Web", "Controls"));
+        File.WriteAllText(Path.Combine(repo, "Web", "Widgets.csproj"), """
+            <Project ToolsVersion="12.0">
+              <PropertyGroup><AssemblyName>Sample.Widgets</AssemblyName></PropertyGroup>
+              <ItemGroup><Compile Include="controls\\Calendar.cs" /></ItemGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Web", "Controls", "Calendar.cs"), "namespace Sample.Controls; public sealed class Calendar { }");
+        File.WriteAllText(Path.Combine(repo, "Web", "web.config"), """
+            <configuration><system.web><pages><controls>
+              <add tagPrefix="widgets" namespace="Sample.Controls" assembly="Sample.Widgets" />
+            </controls></pages></system.web></configuration>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Web", "Default.aspx"), "<%@ Page Language=\"C#\" Inherits=\"Sample.Default\" %><widgets:Calendar runat=\"server\" ID=\"Calendar\" />");
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var compositionResolved = result.Facts.Any(fact =>
+            fact.FactType == FactTypes.WebFormsCompositionDeclared
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "UsesRegisteredAssemblyControl");
+        var hostIsCaseInsensitive = CSharpSemanticExtractor.CreateSourcePathComparer(repo) == StringComparer.OrdinalIgnoreCase;
+
+        Assert.Equal(hostIsCaseInsensitive, compositionResolved);
+        Assert.Equal(!hostIsCaseInsensitive, result.Facts.Any(fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "WebFormsAssemblyTypeUnavailable"));
+    }
+
+    [Fact]
     public void Scan_distinguishes_out_of_scope_assembly_from_missing_local_type()
     {
         using var temp = new TempDirectory();
