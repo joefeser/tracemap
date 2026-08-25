@@ -1410,7 +1410,8 @@ public static partial class LegacyWebFormsExtractor
                 or "UnsupportedWebFormsUserControlRegistration" or "MissingWebFormsUserControl"
                 or "UnresolvedWebFormsContentPlaceholder" or "UnresolvedWebFormsContentMaster"
                 or "UnresolvedWebFormsControlRegistration" or "AmbiguousWebFormsUserControlRegistration"
-                or "UnresolvedWebFormsAssemblyControlRegistration" or "AmbiguousWebFormsAssemblyControlRegistration" => RuleIds.LegacyWebFormsComposition,
+                or "UnresolvedWebFormsAssemblyControlRegistration" or "AmbiguousWebFormsAssemblyControlRegistration"
+                or "WebFormsAssemblyTypeUnavailable" or "WebFormsAssemblyProjectUnavailable" => RuleIds.LegacyWebFormsComposition,
             "UnsupportedWebFormsEventAttribute" or "DynamicWebFormsEventSubscription"
                 or "UnsupportedWebFormsEventSubscription" or "UnknownWebFormsEventSubscriptionReceiver"
                 or "AmbiguousWebFormsEventSubscriptionReceiver" => RuleIds.LegacyWebFormsEventBinding,
@@ -1675,7 +1676,8 @@ public static partial class LegacyWebFormsExtractor
                 var controls = document.Descendants()
                     .Where(element => element.Name.LocalName == "controls")
                     .Where(element => element.Ancestors().Any(ancestor => ancestor.Name.LocalName == "pages"))
-                    .Where(element => element.Ancestors().Any(ancestor => ancestor.Name.LocalName == "system.web"));
+                    .Where(element => element.Ancestors().Any(ancestor => ancestor.Name.LocalName == "system.web"))
+                    .Where(element => ConfigLocationsApply(element, config.RelativePath, markupFilePath));
                 foreach (var element in controls.SelectMany(control => control.Elements()))
                 {
                     if (element.Name.LocalName == "clear")
@@ -1721,6 +1723,31 @@ public static partial class LegacyWebFormsExtractor
         }
 
         return registrations;
+    }
+
+    private static bool ConfigLocationsApply(XElement element, string configPath, string markupPath)
+    {
+        return element.Ancestors()
+            .Where(ancestor => ancestor.Name.LocalName == "location")
+            .All(location => ConfigLocationApplies(location, configPath, markupPath));
+    }
+
+    private static bool ConfigLocationApplies(XElement location, string configPath, string markupPath)
+    {
+        var declaredPath = ConfigAttribute(location, "path");
+        var safePath = SafeMarkupPath(declaredPath);
+        if (safePath is null)
+        {
+            return false;
+        }
+
+        var configDirectory = RelativeDirectory(configPath);
+        var locationPath = safePath == "."
+            ? configDirectory
+            : FileInventory.NormalizeRelativePath(configDirectory == "." ? safePath : $"{configDirectory}/{safePath}");
+        return locationPath == "."
+            || markupPath.Equals(locationPath, StringComparison.OrdinalIgnoreCase)
+            || markupPath.StartsWith(locationPath + "/", StringComparison.OrdinalIgnoreCase);
     }
 
     private static void ApplyConfigControlRegistrationRemoval(
@@ -2240,8 +2267,11 @@ public static partial class LegacyWebFormsExtractor
                 }
                 var projectDirectory = RelativeDirectory(projectPath);
                 var sourcePathComparer = CSharpSemanticExtractor.CreateSourcePathComparer(repoPath);
-                var explicitSources = document.Descendants()
+                var compileItems = document.Descendants()
                     .Where(element => element.Name.LocalName == "Compile")
+                    .ToArray();
+                var explicitSources = compileItems
+                    .Where(element => !HasConditionalProjectContext(element))
                     .Select(element => ConfigAttribute(element, "Include"))
                     .Where(value => !string.IsNullOrWhiteSpace(value))
                     .Select(value => ResolveProjectSource(repoPath, projectDirectory, value!))
@@ -2249,15 +2279,19 @@ public static partial class LegacyWebFormsExtractor
                     .Select(value => value!)
                     .ToHashSet(sourcePathComparer);
                 var sdkStyle = document.Root?.Attribute("Sdk") is not null;
-                var enableDefaultCompileItems = document.Descendants()
+                var defaultCompileItemElements = document.Descendants()
                     .Where(element => element.Name.LocalName == "EnableDefaultCompileItems")
+                    .ToArray();
+                var enableDefaultCompileItems = defaultCompileItemElements
+                    .Where(element => !HasConditionalProjectContext(element))
                     .Select(element => element.Value.Trim())
                     .LastOrDefault();
                 var defaultCompileItemsEnabled = sdkStyle
+                    && !defaultCompileItemElements.Any(HasConditionalProjectContext)
                     && (enableDefaultCompileItems is null
                         || string.Equals(enableDefaultCompileItems, "true", StringComparison.OrdinalIgnoreCase));
-                var removeValues = document.Descendants()
-                    .Where(element => element.Name.LocalName == "Compile")
+                var removeValues = compileItems
+                    .Where(element => !HasConditionalProjectContext(element))
                     .Select(element => ConfigAttribute(element, "Remove"))
                     .Where(value => !string.IsNullOrWhiteSpace(value))
                     .ToArray();
@@ -2266,7 +2300,10 @@ public static partial class LegacyWebFormsExtractor
                     .Where(value => value is not null)
                     .Select(value => value!)
                     .ToHashSet(sourcePathComparer);
-                var hasUnsupportedRemovals = removeValues.Any(value => ResolveProjectSource(repoPath, projectDirectory, value!) is null);
+                var hasUnsupportedRemovals = compileItems.Any(element =>
+                        HasConditionalProjectContext(element)
+                        && !string.IsNullOrWhiteSpace(ConfigAttribute(element, "Remove")))
+                    || removeValues.Any(value => ResolveProjectSource(repoPath, projectDirectory, value!) is null);
                 return new WebFormsProjectScope(
                     projectPath,
                     projectDirectory,
@@ -2279,6 +2316,13 @@ public static partial class LegacyWebFormsExtractor
             {
                 return null;
             }
+        }
+
+        private static bool HasConditionalProjectContext(XElement element)
+        {
+            return element.AncestorsAndSelf()
+                .TakeWhile(ancestor => ancestor.Name.LocalName != "Project")
+                .Any(ancestor => !string.IsNullOrWhiteSpace(ConfigAttribute(ancestor, "Condition")));
         }
 
         private static string? ResolveProjectSource(string repoPath, string projectDirectory, string include)
