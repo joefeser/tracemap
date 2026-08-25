@@ -1486,7 +1486,8 @@ public sealed class LegacyWebFormsExtractorTests
             {
                 protected void Page_Load(object sender, object e)
                 {
-                    if (!IsPostBack)
+                    if (!(
+                        IsPostBack))
                     {
                         ClientScript.RegisterStartupScript(GetType(), "first", "literal-one", ShouldAddTags());
                     }
@@ -1494,6 +1495,16 @@ public sealed class LegacyWebFormsExtractorTests
                     {
                         ClientScript.RegisterStartupScript(GetType(), "second", "literal-two", ShouldAddTags());
                     }
+                    ClientScript.RegisterStartupScript(
+                        addScriptTags: true,
+                        script: "__doPostBack('Duplicate','')",
+                        key: "third",
+                        type: GetType());
+                }
+
+                protected void Helper(object ClientScript)
+                {
+                    ClientScript.RegisterStartupScript(GetType(), "shadowed", "not-framework", true);
                 }
             }
             """);
@@ -1511,9 +1522,14 @@ public sealed class LegacyWebFormsExtractorTests
         Assert.Equal(2, bindings.Length);
         Assert.All(bindings, binding => Assert.False(string.IsNullOrWhiteSpace(binding.Properties.GetValueOrDefault("supportingFactIds"))));
         Assert.NotEqual(bindings[0].Properties.GetValueOrDefault("supportingFactIds"), bindings[1].Properties.GetValueOrDefault("supportingFactIds"));
-        Assert.Equal(2, scripts.Length);
+        var lifecycle = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WebFormsLifecycleBranchCandidate);
+        Assert.True(lifecycle.Evidence.EndLine > lifecycle.Evidence.StartLine);
+        Assert.Equal(3, scripts.Length);
         Assert.Equal("inside-not-is-postback-syntax", scripts[0].Properties.GetValueOrDefault("branchContext"));
         Assert.Equal("not-observed", scripts[1].Properties.GetValueOrDefault("branchContext"));
+        Assert.True(scripts[2].Evidence.EndLine > scripts[2].Evidence.StartLine);
+        Assert.Contains(result.Facts, fact => fact.Properties.GetValueOrDefault("gapKind") == "AmbiguousWebFormsClientScriptRegistrationReceiver");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WebFormsPostBackTargetCandidate && fact.Properties.GetValueOrDefault("sourceKind") == "client-script-literal");
     }
 
     private static void WriteBasicPage(string repo, string handlerName, string handlerBody)
