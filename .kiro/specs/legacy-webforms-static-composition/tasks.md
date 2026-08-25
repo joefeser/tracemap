@@ -8,4 +8,4 @@
 - [x] 6. Implement `DataSourceID` and `Eval`/`Bind` correlation and gaps.
 - [x] 7. Add human-readable report projections without raw payloads.
 - [x] 8. Add focused unit and end-to-end non-compiling fixture coverage, including preservation assertions.
-- [ ] 9. Run focused and full validation, update implementation state, commit, push, open a ready PR to `dev`, and run ACK.
+- [x] 9. Run focused and full validation, update implementation state, commit, push, open a ready PR to `dev`, and run ACK.

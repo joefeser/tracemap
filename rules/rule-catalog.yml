@@ -2192,7 +2192,7 @@ rules:
       - AnalysisGap
     limitations:
       - An enclosing !IsPostBack condition is syntax evidence only and does not prove that a branch ran, lifecycle ordering, state initialization, runtime reachability, or correctness.
-      - Equivalent, negated, compound, helper-based, or dynamic postback conditions outside the documented shape remain explicit gaps.
+      - Local or parameter shadowing, equivalent, negated, compound, helper-based, or dynamic postback conditions outside the documented shape remain explicit gaps.
 
   - id: legacy.webforms.client-script.v1
     name: Legacy WebForms client-script registration candidates
@@ -2203,7 +2203,7 @@ rules:
       - AnalysisGap
     limitations:
       - Registration-call syntax does not prove successful registration, rendered output, script execution, browser behavior, branch execution, or runtime reachability.
-      - Dynamic payloads, wrapper methods, reflection, generated scripts, and unsupported registration APIs remain gaps; raw script bodies are not retained.
+      - Dynamic payloads, ambiguous or custom same-named receivers, wrapper methods, reflection, generated scripts, and unsupported registration APIs remain gaps; raw script bodies are not retained.
 
   - id: legacy.webforms.postback-target.v1
     name: Legacy WebForms postback target candidates
@@ -2225,7 +2225,7 @@ rules:
       - AnalysisGap
     limitations:
       - Static DataSourceID, Eval, and Bind evidence does not prove successful binding, returned rows, evaluated values, rendering, persistence, or runtime reachability.
-      - Dynamic expressions, naming-container resolution, templates, programmatic binding, unsupported property shapes, and ambiguous control IDs remain gaps; field literals are retained only as hashes.
+      - Composed or dynamic expressions, naming-container resolution, templates outside opening-tag attributes, programmatic binding, unsupported property shapes, and ambiguous control IDs remain gaps; field literals are retained only as hashes.
 
   - id: legacy.webforms.modernization-packet.v1
     name: Web Forms modernization evidence packet composition

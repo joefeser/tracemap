@@ -19,11 +19,11 @@ All identities are derived from existing normalized surface/control identities p
 
 ## Parsing boundaries
 
-- Lifecycle context supports logical negation of `IsPostBack` (`!IsPostBack` or `!this.IsPostBack`) inside `Page_Init`, `Page_Load`, or `Page_PreRender`. Other conditions containing `IsPostBack` are gaps.
-- Client-script methods are a closed representative set: `RegisterStartupScript`, `RegisterClientScriptBlock`, `RegisterClientScriptInclude`, `RegisterOnSubmitStatement`, and `RegisterHiddenField`. At least one literal string argument is required; the final literal string is hashed as the registered payload/target.
+- Lifecycle context supports logical negation of `IsPostBack` (`!IsPostBack` or `!this.IsPostBack`) inside `Page_Init`, `Page_Load`, or `Page_PreRender`. A local or parameter shadowing `IsPostBack`, and other conditions containing it, are explicit gaps. Branch context applies only to syntax inside the `if` true statement, never its `else` statement.
+- Client-script methods are a closed representative set: `RegisterStartupScript`, `RegisterClientScriptBlock`, `RegisterClientScriptInclude`, `RegisterOnSubmitStatement`, and `RegisterHiddenField`. The invocation must use a supported Page, ClientScript, or ScriptManager receiver. A literal payload at the documented overload position is hashed; same-named helpers and dynamic payloads are gaps.
 - `__doPostBack` parsing accepts only a literal first argument. Exact same-surface control matching is optional supporting evidence, never a dispatch claim.
 - `DataSourceID` accepts a safe static control identifier and resolves only within the same markup surface.
-- `Eval`/`Bind` accepts a literal first argument. A bounded enclosing server control is chosen only when one parsed opening/closing tag interval contains the expression; otherwise the page remains the source and a scope gap is emitted.
+- `Eval`/`Bind` accepts a standalone literal first argument. A bounded enclosing server control is chosen only when its parsed opening-tag span contains the expression; this avoids guessing through nested same-type closing tags. Otherwise the page remains the source.
 
 ## Failure behavior
 
@@ -36,4 +36,3 @@ The human-readable report includes the new facts. Existing modernization packet,
 ## Limitations
 
 Static syntax cannot prove page rendering, control-tree construction, lifecycle order, branch feasibility, postback dispatch, browser execution, successful data binding, returned data, or runtime reachability. Dynamic strings, generated markup, reflection, JavaScript construction, indirect helpers, data-source configuration, and runtime control creation remain gaps or outside coverage.
-

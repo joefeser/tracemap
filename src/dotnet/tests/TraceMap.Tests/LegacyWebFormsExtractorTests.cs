@@ -1429,6 +1429,93 @@ public sealed class LegacyWebFormsExtractorTests
         Assert.Contains(first.Facts, fact => fact.RuleId == RuleIds.LegacyWebFormsDataBinding && fact.FactType == FactTypes.AnalysisGap);
     }
 
+    [Fact]
+    public void Static_composition_rejects_composed_literals_shadowed_lifecycle_and_custom_script_methods()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), """
+            <%@ Page Language="C#" CodeBehind="Default.aspx.cs" Inherits="Sample.Default" %>
+            <asp:Label runat="server" ID="Output" Text='<%# Eval("prefix" + suffix) %>' />
+            <asp:Button runat="server" ID="SaveButton" />
+            <script>__doPostBack("SaveButton" + suffix, "");</script>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx.cs"), """
+            namespace Sample;
+            public partial class Default
+            {
+                protected void Page_Load(object sender, object e, bool IsPostBack)
+                {
+                    if (!IsPostBack)
+                    {
+                        Logger.RegisterStartupScript(GetType(), "key", "literal", true);
+                    }
+                }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WebFormsLifecycleBranchCandidate);
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WebFormsClientScriptRegistrationCandidate);
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WebFormsDataBindingCandidate && fact.ContractElement == "Eval");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WebFormsPostBackTargetCandidate);
+        Assert.Contains(result.Facts, fact => fact.Properties.GetValueOrDefault("gapKind") == "AmbiguousWebFormsIsPostBackReceiver");
+        Assert.Contains(result.Facts, fact => fact.Properties.GetValueOrDefault("gapKind") == "AmbiguousWebFormsClientScriptRegistrationReceiver");
+        Assert.Contains(result.Facts, fact => fact.Properties.GetValueOrDefault("gapKind") == "DynamicWebFormsDataBindingExpression");
+        Assert.Contains(result.Facts, fact => fact.Properties.GetValueOrDefault("gapKind") == "DynamicWebFormsPostBackTarget");
+    }
+
+    [Fact]
+    public void Static_composition_preserves_exact_binding_sites_and_true_branch_context_with_duplicate_controls()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), """
+            <%@ Page Language="C#" CodeBehind="Default.aspx.cs" Inherits="Sample.Default" %>
+            <asp:Panel runat="server" ID="Outer"><asp:Panel runat="server" ID="Inner">
+              <asp:Label runat="server" ID="Duplicate" Text='<%# Eval("InnerField") %>' />
+            </asp:Panel></asp:Panel>
+            <asp:Label runat="server" ID="Duplicate" Text='<%# Bind("OuterField") %>' />
+            """);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx.cs"), """
+            namespace Sample;
+            public partial class Default
+            {
+                protected void Page_Load(object sender, object e)
+                {
+                    if (!IsPostBack)
+                    {
+                        ClientScript.RegisterStartupScript(GetType(), "first", "literal-one", ShouldAddTags());
+                    }
+                    else
+                    {
+                        ClientScript.RegisterStartupScript(GetType(), "second", "literal-two", ShouldAddTags());
+                    }
+                }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var bindings = result.Facts
+            .Where(fact => fact.FactType == FactTypes.WebFormsDataBindingCandidate && fact.ContractElement is "Eval" or "Bind")
+            .OrderBy(fact => fact.Evidence.StartLine)
+            .ToArray();
+        var scripts = result.Facts
+            .Where(fact => fact.FactType == FactTypes.WebFormsClientScriptRegistrationCandidate)
+            .OrderBy(fact => fact.Evidence.StartLine)
+            .ToArray();
+
+        Assert.Equal(2, bindings.Length);
+        Assert.All(bindings, binding => Assert.False(string.IsNullOrWhiteSpace(binding.Properties.GetValueOrDefault("supportingFactIds"))));
+        Assert.NotEqual(bindings[0].Properties.GetValueOrDefault("supportingFactIds"), bindings[1].Properties.GetValueOrDefault("supportingFactIds"));
+        Assert.Equal(2, scripts.Length);
+        Assert.Equal("inside-not-is-postback-syntax", scripts[0].Properties.GetValueOrDefault("branchContext"));
+        Assert.Equal("not-observed", scripts[1].Properties.GetValueOrDefault("branchContext"));
+    }
+
     private static void WriteBasicPage(string repo, string handlerName, string handlerBody)
     {
         WritePage(repo, "Default.aspx", "Default.aspx.cs", "Sample.Default", handlerName);
