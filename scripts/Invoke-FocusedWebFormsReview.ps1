@@ -104,7 +104,21 @@ dotnet run --project "$TraceMapRoot\src\dotnet\TraceMap.Cli" -- local-review @re
 $reviewExitCode = $LASTEXITCODE
 "focused-review-process-exit=$reviewExitCode"
 
-if (Test-Path -LiteralPath $outRoot -PathType Container) {
+# Progress and performance receipts are the primary diagnostics for failed or
+# timed-out runs. Export them before attempting summaries that require a
+# complete scan artifact set.
+& "$TraceMapRoot\scripts\Export-FocusedWebFormsProgressSummary.ps1" -ProgressPath $progressPath
+& "$TraceMapRoot\scripts\Export-FocusedWebFormsPerformanceSummary.ps1" -ProgressPath $progressPath
+
+$factsPath = Join-Path $outRoot "scan/facts.ndjson"
+$manifestPath = Join-Path $outRoot "scan/scan-manifest.json"
+$resultPath = Join-Path $outRoot "local-review-result.json"
+$completeReviewArtifacts =
+    (Test-Path -LiteralPath $factsPath -PathType Leaf) -and
+    (Test-Path -LiteralPath $manifestPath -PathType Leaf) -and
+    (Test-Path -LiteralPath $resultPath -PathType Leaf)
+
+if ($completeReviewArtifacts) {
     & "$TraceMapRoot\scripts\Export-FocusedWebFormsEvidenceSummary.ps1" `
         -ReviewOutputPath $outRoot `
         -OutputDirectory $summaryParent
@@ -115,9 +129,9 @@ if (Test-Path -LiteralPath $outRoot -PathType Container) {
         -ControlsFolder $ControlsFolder `
         -OutputDirectory $summaryParent
 }
-
-& "$TraceMapRoot\scripts\Export-FocusedWebFormsProgressSummary.ps1" -ProgressPath $progressPath
-& "$TraceMapRoot\scripts\Export-FocusedWebFormsPerformanceSummary.ps1" -ProgressPath $progressPath
+else {
+    "focused-webforms-evidence-summary=skipped;reason=incomplete-review-artifacts"
+}
 
 "retained-output-directory=$([IO.Path]::GetFileName($outRoot))"
 "retained-progress-file=$([IO.Path]::GetFileName($progressPath))"
