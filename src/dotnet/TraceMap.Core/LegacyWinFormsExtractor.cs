@@ -273,6 +273,7 @@ public static class LegacyWinFormsExtractor
         var span = tree.GetLineSpan(type.Span);
         var bases = type.BaseList?.Types.Select(baseType => NormalizeTypeName(baseType.Type.ToString())).ToArray() ?? [];
         var namespaceImports = root.Usings
+            .Concat(type.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().SelectMany(namespaceDeclaration => namespaceDeclaration.Usings))
             .Where(usingDirective => usingDirective.Alias is null && !usingDirective.StaticKeyword.IsKind(SyntaxKind.StaticKeyword))
             .Select(usingDirective => NormalizeTypeName(usingDirective.Name?.ToString() ?? string.Empty))
             .Where(value => !string.IsNullOrWhiteSpace(value))
