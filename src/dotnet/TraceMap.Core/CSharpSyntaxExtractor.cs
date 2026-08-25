@@ -94,6 +94,15 @@ public static class CSharpSyntaxExtractor
                     break;
                 case TypeDeclarationSyntax typeDeclaration:
                     var typeName = typeDeclaration.Identifier.ValueText;
+                    var namespaceName = GetSyntacticNamespace(typeDeclaration);
+                    var containingTypeNames = typeDeclaration.Ancestors()
+                        .OfType<TypeDeclarationSyntax>()
+                        .Reverse()
+                        .Select(item => item.Identifier.ValueText);
+                    var qualifiedName = string.Join(".", new[] { namespaceName }
+                        .Concat(containingTypeNames)
+                        .Append(typeName)
+                        .Where(item => !string.IsNullOrWhiteSpace(item)));
                     facts.Add(CreateSyntaxFact(
                         manifest,
                         FactTypes.TypeDeclared,
@@ -104,6 +113,8 @@ public static class CSharpSyntaxExtractor
                         properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
                         {
                             ["name"] = typeName,
+                            ["namespace"] = namespaceName,
+                            ["qualifiedName"] = qualifiedName,
                             ["kind"] = typeDeclaration.Keyword.ValueText
                         }));
                     break;
@@ -147,6 +158,15 @@ public static class CSharpSyntaxExtractor
                     ["propertyName"] = propertyName
                 }));
         }
+    }
+
+    private static string GetSyntacticNamespace(SyntaxNode declaration)
+    {
+        return string.Join(".", declaration.Ancestors()
+            .OfType<BaseNamespaceDeclarationSyntax>()
+            .Reverse()
+            .Select(item => item.Name.ToString())
+            .Where(item => !string.IsNullOrWhiteSpace(item)));
     }
 
     private static void AddAttributeFacts(ScanManifest manifest, List<CodeFact> facts, string filePath, CompilationUnitSyntax root, IReadOnlyList<ProtectedSourceSpan> protectedSpans)

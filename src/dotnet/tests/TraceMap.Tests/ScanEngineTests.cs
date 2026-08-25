@@ -13,6 +13,58 @@ namespace TraceMap.Tests;
 public sealed class ScanEngineTests
 {
     [Fact]
+    public void Missing_project_compilation_input_is_a_reduced_coverage_gap_not_a_snapshot_change()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "MissingInput.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+              </PropertyGroup>
+              <ItemGroup>
+                <Compile Include="Default.aspx.cs" />
+                <Compile Include="Missing.cs" />
+                <Content Include="Default.aspx" />
+              </ItemGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), """
+            <%@ Page Language="C#" CodeBehind="Default.aspx.cs" Inherits="Legacy.Default" %>
+            <asp:Button runat="server" ID="SaveButton" OnClick="Save_Click" />
+            """);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx.cs"), """
+            using System;
+            namespace Legacy;
+            public partial class Default
+            {
+                protected void Save_Click(object sender, EventArgs e) { }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.Equal("FailedOrPartial", result.Manifest.BuildStatus);
+        Assert.Contains("Reduced", result.Manifest.AnalysisLevel, StringComparison.Ordinal);
+        Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WebFormsPageDeclared);
+        Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared);
+        Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WebFormsHandlerResolved);
+        var gap = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "CompilationInputUnavailable");
+        Assert.Equal(RuleIds.CSharpSemanticWorkspace, gap.RuleId);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
+        Assert.Equal("MissingInput.csproj", gap.Evidence.FilePath);
+        Assert.Equal("MissingInput.csproj", gap.ProjectPath);
+        Assert.Equal("CompilationInputUnavailable", gap.Properties.GetValueOrDefault("diagnosticCode"));
+        Assert.Equal("reduces-semantic-coverage", gap.Properties.GetValueOrDefault("coverageEffect"));
+        Assert.Equal("category-only", gap.Properties.GetValueOrDefault("sanitization"));
+        Assert.DoesNotContain("Missing.cs", gap.Properties.GetValueOrDefault("message"), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void File_inventory_retains_the_legacy_two_parameter_binary_contract()
     {
         var method = typeof(FileInventory).GetMethod(

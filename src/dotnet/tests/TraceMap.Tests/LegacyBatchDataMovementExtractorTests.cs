@@ -1,3 +1,5 @@
+using System.Collections;
+using System.Text;
 using System.Text.Json;
 using TraceMap.Core;
 
@@ -365,6 +367,49 @@ public sealed class LegacyBatchDataMovementExtractorTests
     }
 
     [Fact]
+    public void Extractor_indexes_existing_facts_before_walking_syntax_nodes()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), "<%@ Page Language=\"C#\" %>");
+
+        var source = new StringBuilder("public sealed class Batch { public void Run() {");
+        for (var index = 0; index < 200; index++)
+        {
+            source.AppendLine("_ = System.IO.File.ReadAllText(\"candidate\");");
+        }
+        source.AppendLine("} }");
+        File.WriteAllText(Path.Combine(repo, "Batch.cs"), source.ToString());
+
+        var manifest = Manifest();
+        var unrelatedFacts = Enumerable.Range(0, 2_000)
+            .Select(index => Fact(
+                manifest,
+                FactTypes.MethodDeclared,
+                RuleIds.CSharpSemanticDeclarations,
+                $"Other/File{index:D4}.cs",
+                1,
+                $"global::Other.Type{index}.Method()",
+                "Method",
+                new()))
+            .ToArray();
+        var countedFacts = new CountingReadOnlyList<CodeFact>(unrelatedFacts);
+
+        var facts = LegacyBatchDataMovementExtractor.Extract(
+            repo,
+            manifest,
+            FileInventory.Collect(repo),
+            countedFacts);
+
+        Assert.Equal(200, facts.Count(fact => fact.FactType == FactTypes.LegacyBatchDataMovementDeclared
+            && fact.Properties.GetValueOrDefault("mechanism") == "qualified-system-io-call"));
+        Assert.True(
+            countedFacts.EnumerationCount <= 20,
+            $"Expected a bounded number of existing-fact passes, observed {countedFacts.EnumerationCount}.");
+    }
+
+    [Fact]
     public void Rule_catalog_documents_batch_data_movement_non_claims()
     {
         var catalog = File.ReadAllText(Path.Combine(FindRepoRoot(), "rules", "rule-catalog.yml"));
@@ -425,5 +470,22 @@ public sealed class LegacyBatchDataMovementExtractorTests
             current = current.Parent;
         }
         throw new DirectoryNotFoundException("Repository root was not found.");
+    }
+
+    private sealed class CountingReadOnlyList<T>(IReadOnlyList<T> items) : IReadOnlyList<T>
+    {
+        public int EnumerationCount { get; private set; }
+
+        public int Count => items.Count;
+
+        public T this[int index] => items[index];
+
+        public IEnumerator<T> GetEnumerator()
+        {
+            EnumerationCount++;
+            return items.GetEnumerator();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 }

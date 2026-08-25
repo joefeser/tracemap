@@ -43,7 +43,9 @@ public static class SqliteIndexWriter
             InsertFact(connection, transaction, fact);
         }
 
+        CreateEvidenceIndexes(connection, transaction);
         InsertParameterForwardEdges(connection, transaction);
+        CreateParameterForwardIndexes(connection, transaction);
         transaction.Commit();
     }
 
@@ -263,6 +265,15 @@ public static class SqliteIndexWriter
               end_line integer not null
             );
 
+            """;
+        command.ExecuteNonQuery();
+    }
+
+    private static void CreateEvidenceIndexes(SqliteConnection connection, SqliteTransaction transaction)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
             create index ix_facts_type on facts(fact_type);
             create index ix_facts_rule on facts(rule_id);
             create index ix_facts_target_symbol on facts(target_symbol);
@@ -292,6 +303,15 @@ public static class SqliteIndexWriter
             create index ix_local_aliases_origin on local_aliases(origin_symbol);
             create index ix_field_aliases_field on field_aliases(containing_symbol, field_symbol, start_line);
             create index ix_field_aliases_origin on field_aliases(origin_symbol);
+            """;
+        command.ExecuteNonQuery();
+    }
+
+    private static void CreateParameterForwardIndexes(SqliteConnection connection, SqliteTransaction transaction)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
             create index ix_parameter_forward_edges_source on parameter_forward_edges(source_node_key);
             create index ix_parameter_forward_edges_target on parameter_forward_edges(target_node_key);
             create index ix_parameter_forward_edges_source_method on parameter_forward_edges(source_method_symbol);
