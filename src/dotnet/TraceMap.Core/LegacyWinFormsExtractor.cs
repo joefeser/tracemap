@@ -190,6 +190,10 @@ public static class LegacyWinFormsExtractor
             .ThenBy(type => type.TypeName, StringComparer.Ordinal)
             .ToArray();
         var surfaceNames = surfaces.Select(surface => surface.TypeName).ToHashSet(StringComparer.Ordinal);
+        var surfaceFiles = files
+            .Where(file => file.Classes.Any(type => surfaceNames.Any(surface => SameType(surface, type.TypeName))))
+            .Select(file => file.FilePath)
+            .ToHashSet(StringComparer.Ordinal);
         var methods = files.SelectMany(file => file.Methods).Where(method => surfaceNames.Any(surface => SameType(surface, method.TypeName))).ToArray();
         var controls = files.SelectMany(file => file.Controls).Where(control => surfaceNames.Any(surface => SameType(surface, control.TypeName))).ToArray();
         var bindings = files.SelectMany(file => file.Bindings).Where(binding => surfaceNames.Any(surface => SameType(surface, binding.TypeName))).ToArray();
@@ -218,7 +222,11 @@ public static class LegacyWinFormsExtractor
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
             .SelectMany(item => ParseResourceFile(repoPath, item, surfaces))
             .ToArray();
-        var gaps = files.SelectMany(file => file.Gaps).Concat(resources.SelectMany(resource => resource.Gaps)).ToArray();
+        var gaps = files
+            .Where(file => surfaceFiles.Contains(file.FilePath))
+            .SelectMany(file => file.Gaps)
+            .Concat(resources.SelectMany(resource => resource.Gaps))
+            .ToArray();
         return new WinFormsContext(surfaces, controls, bindings, methods, navigation, callbacks, resources, gaps);
     }
 
@@ -237,7 +245,7 @@ public static class LegacyWinFormsExtractor
             }
 
             var classes = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
-                .Select(type => ToTypeInfo(tree, item.RelativePath, type, isDesigner))
+                .Select(type => ToTypeInfo(tree, item.RelativePath, type, isDesigner, root))
                 .ToArray();
             var methods = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
                 .Select(method => ToMethod(tree, item.RelativePath, method))
@@ -255,15 +263,26 @@ public static class LegacyWinFormsExtractor
         }
     }
 
-    private static WinFormsType ToTypeInfo(SyntaxTree tree, string filePath, ClassDeclarationSyntax type, bool isDesigner)
+    private static WinFormsType ToTypeInfo(
+        SyntaxTree tree,
+        string filePath,
+        ClassDeclarationSyntax type,
+        bool isDesigner,
+        CompilationUnitSyntax root)
     {
         var span = tree.GetLineSpan(type.Span);
         var bases = type.BaseList?.Types.Select(baseType => NormalizeTypeName(baseType.Type.ToString())).ToArray() ?? [];
+        var namespaceImports = root.Usings
+            .Where(usingDirective => usingDirective.Alias is null && !usingDirective.StaticKeyword.IsKind(SyntaxKind.StaticKeyword))
+            .Select(usingDirective => NormalizeTypeName(usingDirective.Name?.ToString() ?? string.Empty))
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .ToHashSet(StringComparer.Ordinal);
         return new WinFormsType(
             filePath,
             QualifiedClassName(type),
             type.Identifier.ValueText,
             bases,
+            namespaceImports,
             type.Modifiers.Any(SyntaxKind.PartialKeyword),
             isDesigner,
             span.StartLinePosition.Line + 1,
@@ -812,7 +831,21 @@ public static class LegacyWinFormsExtractor
 
     private static bool IsWinFormsSurface(WinFormsType type)
     {
-        return type.BaseTypes.Any(baseType => SurfaceBaseNames.Contains(baseType) || SurfaceBaseNames.Contains(LastTypePart(baseType)));
+        return type.BaseTypes.Any(baseType =>
+        {
+            if (baseType.Contains('.', StringComparison.Ordinal))
+            {
+                return SurfaceBaseNames.Contains(baseType);
+            }
+
+            return baseType switch
+            {
+                "Form" or "UserControl" or "Control" or "ApplicationContext" =>
+                    type.NamespaceImports.Contains("System.Windows.Forms", StringComparer.Ordinal),
+                "Component" => type.NamespaceImports.Contains("System.ComponentModel", StringComparer.Ordinal),
+                _ => false
+            };
+        });
     }
 
     private static string SurfaceKind(WinFormsType type)
@@ -1186,7 +1219,16 @@ public static class LegacyWinFormsExtractor
         IReadOnlyList<WinFormsCallback> UiMarshalCallbacks,
         IReadOnlyList<WinFormsGap> Gaps);
 
-    private sealed record WinFormsType(string FilePath, string TypeName, string ShortName, IReadOnlyList<string> BaseTypes, bool IsPartial, bool IsDesigner, int Line, int EndLine);
+    private sealed record WinFormsType(
+        string FilePath,
+        string TypeName,
+        string ShortName,
+        IReadOnlyList<string> BaseTypes,
+        IReadOnlySet<string> NamespaceImports,
+        bool IsPartial,
+        bool IsDesigner,
+        int Line,
+        int EndLine);
     private sealed record WinFormsMethod(string FilePath, string TypeName, string MethodName, bool HasCommonEventSignature, int Line, int EndLine);
     private sealed record WinFormsControl(string FilePath, string TypeName, string ControlId, string ControlType, string ControlKind, string DeclarationKind, int Line, int EndLine, bool IsDesigner);
     private sealed record WinFormsBinding(string FilePath, string TypeName, string ControlId, string EventName, string? HandlerName, string BindingKind, bool NeedsReview, bool InInitializeComponent, int Line, int EndLine, bool IsDesigner);

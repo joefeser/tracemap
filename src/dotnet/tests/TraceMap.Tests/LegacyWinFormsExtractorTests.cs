@@ -193,6 +193,70 @@ public sealed class LegacyWinFormsExtractorTests
     }
 
     [Fact]
+    public void Scan_does_not_emit_winforms_evidence_for_webforms_user_control_or_ordinary_event_subscription()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "OrderEditor.ascx.cs"), """
+            using System;
+            using System.Web.UI;
+
+            namespace Sample;
+
+            public partial class OrderEditor : UserControl
+            {
+                private event EventHandler? Changed;
+
+                protected void OnInit()
+                {
+                    Changed += HandleChanged;
+                }
+
+                private void HandleChanged(object? sender, EventArgs args) { }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType.StartsWith("WinForms", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.RuleId.StartsWith("legacy.winforms", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Scan_does_not_emit_winforms_gap_for_non_surface_add_assignment()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Worker.cs"), """
+            using System;
+
+            namespace Sample;
+
+            public sealed class Worker
+            {
+                private event EventHandler? Changed;
+
+                public void Subscribe()
+                {
+                    Changed += HandleChanged;
+                }
+
+                private void HandleChanged(object? sender, EventArgs args) { }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.RuleId == RuleIds.LegacyWinFormsEventBinding
+            && fact.Properties.GetValueOrDefault("classification") == "UnsupportedWinFormsEventSubscription");
+    }
+
+    [Fact]
     public void Scan_rejects_unsafe_resx_without_rendering_raw_resource_values()
     {
         using var temp = new TempDirectory();

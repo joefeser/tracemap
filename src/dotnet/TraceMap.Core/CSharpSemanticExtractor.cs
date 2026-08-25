@@ -340,7 +340,8 @@ public static class CSharpSemanticExtractor
                 gaps.Add(CreateGap(
                     projectItem.RelativePath,
                     $"Unable to load project with MSBuildWorkspace: {ex.Message}",
-                    "ProjectLoadFailed"));
+                    "ProjectLoadFailed",
+                    projectItem.RelativePath));
                 progress?.FinishStage(
                     ScanProgressReporter.ScanOperation,
                     ScanProgressStages.ProjectLoad,

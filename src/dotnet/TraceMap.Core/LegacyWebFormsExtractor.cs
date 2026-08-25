@@ -1,4 +1,6 @@
 using System.Text.RegularExpressions;
+using System.Xml;
+using System.Xml.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -37,7 +39,8 @@ public static partial class LegacyWebFormsExtractor
         IReadOnlyList<FileInventoryItem> inventory,
         IReadOnlyList<CodeFact> existingFacts)
     {
-        var context = BuildContext(repoPath, inventory);
+        var context = BuildContext(repoPath, inventory, existingFacts);
+        var evidenceIndex = WebFormsEvidenceIndex.Create(existingFacts);
         var facts = new List<CodeFact>();
         var designerFactsByPageAndField = new Dictionary<string, CodeFact>(StringComparer.Ordinal);
 
@@ -53,7 +56,7 @@ public static partial class LegacyWebFormsExtractor
             var pageFact = CreatePageFact(manifest, page);
             facts.Add(pageFact);
             var registrationFacts = new List<CodeFact>();
-            foreach (var registration in page.Registrations.Where(item => item.SourceReference is not null))
+            foreach (var registration in page.Registrations)
             {
                 var registrationFact = CreateUserControlRegistrationFact(manifest, page, registration);
                 facts.Add(registrationFact);
@@ -73,19 +76,19 @@ public static partial class LegacyWebFormsExtractor
             foreach (var binding in page.Bindings)
             {
                 var designerFact = designerFactsByPageAndField.GetValueOrDefault(SurfaceFieldKey(page.FilePath, binding.ControlId));
-                var bindingFact = CreateEventBindingFact(manifest, page, binding, designerFact, ResolveHandlerIdentity(page, binding, context, existingFacts));
+                var bindingFact = CreateEventBindingFact(manifest, page, binding, designerFact, ResolveHandlerIdentity(page, binding, context, evidenceIndex));
                 facts.Add(bindingFact);
-                AddHandlerResolutionFacts(manifest, page, binding, bindingFact, context, existingFacts, facts);
+                AddHandlerResolutionFacts(manifest, page, binding, bindingFact, context, evidenceIndex, facts);
             }
 
-            AddExplicitControlSubscriptionFacts(manifest, page, context, existingFacts, facts);
+            AddExplicitControlSubscriptionFacts(manifest, page, context, evidenceIndex, facts);
 
             foreach (var gap in page.Gaps)
             {
-                facts.Add(CreateGap(manifest, page.FilePath, gap.Line, gap.GapKind, gap.Message));
+                facts.Add(CreateGap(manifest, gap.FilePath ?? page.FilePath, gap.Line, gap.GapKind, gap.Message));
             }
 
-            AddAutoWireupFacts(manifest, page, context, existingFacts, facts);
+            AddAutoWireupFacts(manifest, page, context, evidenceIndex, facts);
         }
 
         var allFacts = existingFacts.Concat(facts).ToArray();
@@ -95,10 +98,11 @@ public static partial class LegacyWebFormsExtractor
         var candidateDirectFacts = allFacts
             .Where(fact => fact.FactType is not (FactTypes.WebFormsHandlerResolved or FactTypes.WebFormsEventBindingDeclared))
             .ToArray();
+        var directEvidenceIndex = WebFormsDirectEvidenceIndex.Create(candidateDirectFacts);
         foreach (var resolution in facts.Where(fact => fact.FactType == FactTypes.WebFormsHandlerResolved).ToArray())
         {
-            facts.Add(CreateFlowFact(manifest, resolution, candidateDirectFacts, wcfMappings));
-            var logicSignal = CreateLogicSignalFact(manifest, resolution, context, candidateDirectFacts, wcfMappings);
+            facts.Add(CreateFlowFact(manifest, resolution, directEvidenceIndex, wcfMappings));
+            var logicSignal = CreateLogicSignalFact(manifest, resolution, context, directEvidenceIndex, wcfMappings);
             if (logicSignal is not null)
             {
                 facts.Add(logicSignal);
@@ -116,13 +120,17 @@ public static partial class LegacyWebFormsExtractor
             .ToArray();
     }
 
-    private static WebFormsContext BuildContext(string repoPath, IReadOnlyList<FileInventoryItem> inventory)
+    private static WebFormsContext BuildContext(
+        string repoPath,
+        IReadOnlyList<FileInventoryItem> inventory,
+        IReadOnlyList<CodeFact> existingFacts)
     {
         var inventoryPathIndex = CreateInventoryPathIndex(inventory);
+        var assemblyRegistrationResolver = WebFormsAssemblyRegistrationResolver.Create(repoPath, inventory, existingFacts);
         var pages = inventory
             .Where(item => item.Kind == "WebFormsMarkup")
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
-            .Select(item => ParseMarkupFile(repoPath, item, inventory, inventoryPathIndex))
+            .Select(item => ParseMarkupFile(repoPath, item, inventory, inventoryPathIndex, assemblyRegistrationResolver))
             .ToArray();
         var codeFiles = inventory
             .Where(item => item.Kind is "WebFormsCodeBehind" or "CSharp")
@@ -154,7 +162,8 @@ public static partial class LegacyWebFormsExtractor
         string repoPath,
         FileInventoryItem file,
         IReadOnlyList<FileInventoryItem> inventory,
-        InventoryPathIndex inventoryPathIndex)
+        InventoryPathIndex inventoryPathIndex,
+        WebFormsAssemblyRegistrationResolver assemblyRegistrationResolver)
     {
         var fullPath = Path.Combine(repoPath, file.RelativePath);
         try
@@ -186,7 +195,13 @@ public static partial class LegacyWebFormsExtractor
                     : null;
             var titleValue = directiveAttributes.GetValueOrDefault("Title");
             var titleHash = SafeDisplayMetadata(titleValue);
-            var registrations = ParseUserControlRegistrations(file.RelativePath, webApplicationRoot, activeMarkup, source, inventoryPathIndex);
+            var registrations = ParseUserControlRegistrations(file.RelativePath, webApplicationRoot, activeMarkup, source, inventoryPathIndex)
+                .Concat(ParseConfigControlRegistrations(repoPath, file.RelativePath, webApplicationRoot, inventory, inventoryPathIndex))
+                .OrderBy(item => item.DeclarationFilePath, StringComparer.Ordinal)
+                .ThenBy(item => item.Line)
+                .ThenBy(item => item.TagPrefix, StringComparer.Ordinal)
+                .ThenBy(item => item.TagName, StringComparer.Ordinal)
+                .ToArray();
             var initialGaps = new List<WebFormsGap>();
             if (!directive.Success)
             {
@@ -221,15 +236,15 @@ public static partial class LegacyWebFormsExtractor
                     LineAt(source, directive.Index)));
             }
 
-            foreach (var registration in registrations.Where(item => item.SourceReference is null))
+            foreach (var registration in registrations.Where(item => item.RegistrationShape == "unsupported"))
             {
-                initialGaps.Add(new WebFormsGap("UnsupportedWebFormsUserControlRegistration", "A user-control registration does not contain a supported repository-relative Src path.", registration.Line));
+                initialGaps.Add(new WebFormsGap("UnsupportedWebFormsUserControlRegistration", "A control registration does not contain a supported static Src or namespace/assembly shape.", registration.Line, registration.DeclarationFilePath));
             }
 
             foreach (var registration in registrations.Where(item => item.SourceReference is not null
                 && item.SourcePath is null))
             {
-                initialGaps.Add(new WebFormsGap("MissingWebFormsUserControl", "The registered user-control source is not present in the scan input.", registration.Line));
+                initialGaps.Add(new WebFormsGap("MissingWebFormsUserControl", "The registered user-control source is not present in the scan input.", registration.Line, registration.DeclarationFilePath));
             }
 
             var page = new WebFormsPage(
@@ -253,6 +268,7 @@ public static partial class LegacyWebFormsExtractor
             var bindings = new List<WebFormsBinding>();
             var gaps = page.Gaps.ToList();
             var duplicateRegistrationKeys = registrations
+                .Where(item => item.RegistrationShape == "src")
                 .GroupBy(item => RegistrationKey(item.TagPrefix, item.TagName), StringComparer.OrdinalIgnoreCase)
                 .Where(group => group
                     .Select(item => item.SourceReference ?? $"unsupported@{item.Line}")
@@ -262,7 +278,7 @@ public static partial class LegacyWebFormsExtractor
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
             foreach (var duplicate in registrations.Where(item => duplicateRegistrationKeys.Contains(RegistrationKey(item.TagPrefix, item.TagName))))
             {
-                gaps.Add(new WebFormsGap("AmbiguousWebFormsUserControlRegistration", "Multiple user-control registrations map the same tag to different static sources; TraceMap did not choose one.", duplicate.Line));
+                gaps.Add(new WebFormsGap("AmbiguousWebFormsUserControlRegistration", "Multiple user-control registrations map the same tag to different static sources; TraceMap did not choose one.", duplicate.Line, duplicate.DeclarationFilePath));
             }
 
             foreach (Match match in ServerControlRegex().Matches(activeMarkup))
@@ -278,18 +294,33 @@ public static partial class LegacyWebFormsExtractor
                 var controlType = SafeIdentifier(match.Groups["type"].Value) ?? "unknown";
                 var controlId = SafeIdentifier(attrs.GetValueOrDefault("ID")) ?? $"{controlType}@{line}";
                 var registrationKey = RegistrationKey(controlPrefix, controlType);
-                var registration = duplicateRegistrationKeys.Contains(registrationKey)
+                var sourceRegistration = duplicateRegistrationKeys.Contains(registrationKey)
                     ? null
                     : registrations.FirstOrDefault(item =>
+                    item.RegistrationShape == "src"
+                    &&
                     item.TagPrefix.Equals(controlPrefix, StringComparison.OrdinalIgnoreCase)
                     && item.TagName.Equals(controlType, StringComparison.OrdinalIgnoreCase)
                     && item.SourcePath is not null);
+                var assemblyResolutions = registrations
+                    .Where(item => item.RegistrationShape == "assembly-namespace"
+                        && item.TagPrefix.Equals(controlPrefix, StringComparison.OrdinalIgnoreCase))
+                    .SelectMany(item => assemblyRegistrationResolver.ResolveAll(item, controlType))
+                    .GroupBy(item => $"{item.TargetSymbol}|{item.TypeFactId}", StringComparer.Ordinal)
+                    .Select(group => group.First())
+                    .ToArray();
+                var assemblyResolution = assemblyResolutions.Length == 1 ? assemblyResolutions[0] : null;
+                var isRegistered = sourceRegistration is not null || assemblyResolution is not null;
                 controls.Add(new WebFormsControl(
                     controlPrefix,
                     controlType,
                     controlId,
-                    ClassifyControl(controlType, registration is not null),
-                    registration?.SourcePath,
+                    ClassifyControl(controlType, isRegistered),
+                    sourceRegistration?.SourcePath,
+                    assemblyResolution?.TargetSymbol,
+                    assemblyResolution?.TypeFactId,
+                    assemblyResolution?.Registration.DeclarationFilePath,
+                    assemblyResolution?.Registration.Line,
                     SafeIdentifier(attrs.GetValueOrDefault("CommandName")),
                     SafeIdentifier(attrs.GetValueOrDefault("ContentPlaceHolderID")),
                     line,
@@ -304,11 +335,30 @@ public static partial class LegacyWebFormsExtractor
                 {
                     gaps.Add(new WebFormsGap("UnresolvedWebFormsContentMaster", "A Content control declares a placeholder target, but no supported static master-page reference is available.", line));
                 }
-                if (registration is null
+                if (!isRegistered
                     && !controlPrefix.Equals("asp", StringComparison.OrdinalIgnoreCase)
                     && !controlPrefix.Equals("html", StringComparison.OrdinalIgnoreCase))
                 {
-                    gaps.Add(new WebFormsGap("UnresolvedWebFormsControlRegistration", "A prefixed server control has no supported static Register directive in this markup file.", line));
+                    var assemblyRegistrations = registrations
+                        .Where(item => item.RegistrationShape == "assembly-namespace"
+                            && item.TagPrefix.Equals(controlPrefix, StringComparison.OrdinalIgnoreCase))
+                        .ToArray();
+                    var assemblyRegistrationPresent = assemblyRegistrations.Length > 0;
+                    var assemblyGapKind = assemblyResolutions.Length > 1
+                        ? "AmbiguousWebFormsAssemblyControlRegistration"
+                        : assemblyRegistrations
+                            .Select(item => assemblyRegistrationResolver.ClassifyUnavailable(item, controlType))
+                            .OrderBy(item => item == "WebFormsAssemblyTypeUnavailable" ? 0 : 1)
+                            .ThenBy(item => item, StringComparer.Ordinal)
+                            .FirstOrDefault() ?? "UnresolvedWebFormsAssemblyControlRegistration";
+                    gaps.Add(new WebFormsGap(
+                        assemblyRegistrationPresent
+                            ? assemblyGapKind
+                            : "UnresolvedWebFormsControlRegistration",
+                        assemblyRegistrationPresent
+                            ? "A namespace/assembly registration could not be matched to one scoped syntax-visible type and project assembly; the categorical gap identifies the failed evidence boundary."
+                            : "A prefixed server control has no supported static Register directive in this markup file.",
+                        line));
                 }
                 foreach (var (name, value) in attrs.OrderBy(pair => pair.Key, StringComparer.Ordinal))
                 {
@@ -316,11 +366,13 @@ public static partial class LegacyWebFormsExtractor
                     {
                         bindings.Add(new WebFormsBinding(controlType, controlId, name, SafeIdentifier(value)!, file.RelativePath, line, line, FactFactory.Hash(match.Value, 32), WebFormsBindingKind.MarkupAttribute));
                     }
-                    else if (name.StartsWith("On", StringComparison.OrdinalIgnoreCase)
-                        && !SupportedEvents.Contains(name)
-                        && LooksLikeHandlerName(value))
+                    else if (IsBoundedStaticEventAttribute(name) && LooksLikeHandlerName(value))
                     {
-                        gaps.Add(new WebFormsGap("UnsupportedWebFormsEventAttribute", $"Unsupported WebForms event-like attribute `{name}` requires review.", line));
+                        bindings.Add(new WebFormsBinding(controlType, controlId, name, SafeIdentifier(value)!, file.RelativePath, line, line, FactFactory.Hash(match.Value, 32), WebFormsBindingKind.MarkupEventCandidate));
+                    }
+                    else if (name.StartsWith("On", StringComparison.OrdinalIgnoreCase))
+                    {
+                        gaps.Add(new WebFormsGap("UnsupportedWebFormsEventAttribute", "A WebForms event-like attribute is client-side, dynamic, malformed, or outside the bounded static event shape.", line));
                     }
                 }
             }
@@ -480,10 +532,10 @@ public static partial class LegacyWebFormsExtractor
         WebFormsBinding binding,
         CodeFact bindingFact,
         WebFormsContext context,
-        IReadOnlyList<CodeFact> existingFacts,
+        WebFormsEvidenceIndex evidenceIndex,
         List<CodeFact> facts)
     {
-        var candidates = CandidateMethods(page, binding.HandlerName, context, existingFacts).ToArray();
+        var candidates = CandidateMethods(page, binding.HandlerName, context, evidenceIndex).ToArray();
         if (candidates.Length == 0)
         {
             var unprovenCrossFile = context.CodeFiles
@@ -515,7 +567,7 @@ public static partial class LegacyWebFormsExtractor
             binding,
             bindingFact,
             method,
-            existingFacts,
+            evidenceIndex,
             isAutoWireup: false,
             hasExplicitSubscription: IsExplicitBinding(binding.BindingKind)));
     }
@@ -524,12 +576,12 @@ public static partial class LegacyWebFormsExtractor
         ScanManifest manifest,
         WebFormsPage page,
         WebFormsContext context,
-        IReadOnlyList<CodeFact> existingFacts,
+        WebFormsEvidenceIndex evidenceIndex,
         List<CodeFact> facts)
     {
         foreach (var (handlerName, eventName) in new[] { ("Page_Load", "OnLoad"), ("Page_Init", "OnInit") })
         {
-            var candidates = CandidateMethods(page, handlerName, context, existingFacts).ToArray();
+            var candidates = CandidateMethods(page, handlerName, context, evidenceIndex).ToArray();
             if (candidates.Length == 0)
             {
                 continue;
@@ -554,9 +606,9 @@ public static partial class LegacyWebFormsExtractor
             }
 
             var syntheticBinding = new WebFormsBinding(page.DirectiveKind, page.PageTypeName, eventName, handlerName, page.FilePath, page.DirectiveLine, null, null, WebFormsBindingKind.AutoEventWireup);
-            var bindingFact = CreateEventBindingFact(manifest, page, syntheticBinding, null, ResolveHandlerIdentity(page, syntheticBinding, context, existingFacts));
+            var bindingFact = CreateEventBindingFact(manifest, page, syntheticBinding, null, ResolveHandlerIdentity(page, syntheticBinding, context, evidenceIndex));
             facts.Add(bindingFact);
-            facts.Add(CreateHandlerFact(manifest, page, syntheticBinding, bindingFact, candidates[0], existingFacts, isAutoWireup: page.AutoEventWireup == true, hasExplicitSubscription));
+            facts.Add(CreateHandlerFact(manifest, page, syntheticBinding, bindingFact, candidates[0], evidenceIndex, isAutoWireup: page.AutoEventWireup == true, hasExplicitSubscription));
         }
     }
 
@@ -564,7 +616,7 @@ public static partial class LegacyWebFormsExtractor
         WebFormsPage page,
         string handlerName,
         WebFormsContext context,
-        IReadOnlyList<CodeFact> existingFacts)
+        WebFormsEvidenceIndex evidenceIndex)
     {
         var linkedCodePath = page.LinkedCodePath;
         if (linkedCodePath is null)
@@ -585,14 +637,14 @@ public static partial class LegacyWebFormsExtractor
             return linked;
         }
 
-        var linkedProjectPaths = FindLinkedProjectPaths(page, existingFacts);
+        var linkedProjectPaths = FindLinkedProjectPaths(page, evidenceIndex);
 
         return context.CodeFiles
             .Where(file => !file.FilePath.Equals(linkedCodePath, StringComparison.Ordinal))
             .SelectMany(file => file.Methods)
             .Where(method => method.MethodName.Equals(handlerName, StringComparison.Ordinal))
             .Where(method => PageTypeMatches(page.PageTypeName, method.PageTypeName))
-            .Where(method => FindSemanticHandlerEvidence(method, existingFacts, linkedProjectPaths) is { } semantic
+            .Where(method => FindSemanticHandlerEvidence(method, evidenceIndex.FactsForFile(method.FilePath), linkedProjectPaths) is { } semantic
                 && SemanticHandlerTypeMatches(page.PageTypeName, semantic.SourceSymbol, method.MethodName))
             .OrderBy(method => method.FilePath, StringComparer.Ordinal)
             .ThenBy(method => method.Line)
@@ -603,7 +655,7 @@ public static partial class LegacyWebFormsExtractor
         ScanManifest manifest,
         WebFormsPage page,
         WebFormsContext context,
-        IReadOnlyList<CodeFact> existingFacts,
+        WebFormsEvidenceIndex evidenceIndex,
         List<CodeFact> facts)
     {
         if (page.LinkedCodePath is null)
@@ -623,7 +675,7 @@ public static partial class LegacyWebFormsExtractor
             if (!SupportedEvents.Contains(eventAttributeName))
             {
                 var hasPlausibleEventHandler = subscription.HandlerName is not null
-                    && CandidateMethods(page, subscription.HandlerName, context, existingFacts)
+                    && CandidateMethods(page, subscription.HandlerName, context, evidenceIndex)
                         .Any(method => method.HasCommonEventSignature);
                 if (!lifecycleReceiver && hasPlausibleEventHandler)
                 {
@@ -657,9 +709,9 @@ public static partial class LegacyWebFormsExtractor
                     page,
                     lifecycleBinding,
                     null,
-                    ResolveHandlerIdentity(page, lifecycleBinding, context, existingFacts));
+                    ResolveHandlerIdentity(page, lifecycleBinding, context, evidenceIndex));
                 facts.Add(lifecycleBindingFact);
-                AddHandlerResolutionFacts(manifest, page, lifecycleBinding, lifecycleBindingFact, context, existingFacts, facts);
+                AddHandlerResolutionFacts(manifest, page, lifecycleBinding, lifecycleBindingFact, context, evidenceIndex, facts);
                 continue;
             }
 
@@ -691,9 +743,9 @@ public static partial class LegacyWebFormsExtractor
                 subscription.SnippetHash,
                 WebFormsBindingKind.ExplicitControlSubscription,
                 subscription.SyntaxSpanStart);
-            var bindingFact = CreateEventBindingFact(manifest, page, binding, null, ResolveHandlerIdentity(page, binding, context, existingFacts));
+            var bindingFact = CreateEventBindingFact(manifest, page, binding, null, ResolveHandlerIdentity(page, binding, context, evidenceIndex));
             facts.Add(bindingFact);
-            AddHandlerResolutionFacts(manifest, page, binding, bindingFact, context, existingFacts, facts);
+            AddHandlerResolutionFacts(manifest, page, binding, bindingFact, context, evidenceIndex, facts);
         }
     }
 
@@ -752,6 +804,13 @@ public static partial class LegacyWebFormsExtractor
         };
         AddOptional(properties, "designerFactId", designerFact?.FactId);
         AddOptional(properties, "registeredSourcePath", control.RegisteredSourcePath);
+        AddOptional(properties, "registeredTargetSymbol", control.RegisteredTargetSymbol);
+        AddOptional(properties, "registrationTypeFactId", control.RegistrationTypeFactId);
+        AddOptional(properties, "registrationDeclarationFilePath", control.RegistrationDeclarationFilePath);
+        if (control.RegistrationDeclarationLine is not null)
+        {
+            properties["registrationDeclarationLine"] = control.RegistrationDeclarationLine.Value.ToString();
+        }
         AddOptional(properties, "commandName", control.CommandName);
         AddOptional(properties, "contentPlaceHolderId", control.ContentPlaceHolderId);
         return FactFactory.Create(
@@ -769,17 +828,22 @@ public static partial class LegacyWebFormsExtractor
     private static CodeFact CreateUserControlRegistrationFact(ScanManifest manifest, WebFormsPage page, WebFormsUserControlRegistration registration)
     {
         var surfaceIdentity = SurfaceIdentity(page.FilePath);
-        var registrationIdentity = $"webforms-registration:{FactFactory.Hash($"{surfaceIdentity}|{registration.TagPrefix}|{registration.TagName}|{registration.Line}", 24)}";
+        var registrationIdentity = $"webforms-registration:{FactFactory.Hash($"{surfaceIdentity}|{registration.DeclarationFilePath}|{registration.TagPrefix}|{registration.TagName}|{registration.NamespaceName}|{registration.AssemblyName}|{registration.Line}", 24)}";
+        var supportedShape = registration.SourcePath is not null || registration.RegistrationShape == "assembly-namespace";
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
-            ["coverageLabel"] = registration.SourcePath is null ? "reduced-static-webforms-composition" : "bounded-static-webforms-composition",
+            ["coverageLabel"] = supportedShape ? "bounded-static-webforms-composition" : "reduced-static-webforms-composition",
+            ["declarationKind"] = registration.DeclarationKind,
+            ["registrationShape"] = registration.RegistrationShape,
             ["registrationIdentity"] = registrationIdentity,
             ["surfaceIdentity"] = surfaceIdentity,
             ["tagName"] = registration.TagName,
             ["tagPrefix"] = registration.TagPrefix,
-            ["ruleLimitations"] = "A static Register directive does not prove runtime loading, control construction, or use by a rendered page."
+            ["ruleLimitations"] = "A static markup or configuration registration does not prove runtime loading, inherited configuration effectiveness, control construction, or use by a rendered page."
         };
         AddOptional(properties, "sourcePath", registration.SourcePath);
+        AddOptional(properties, "namespaceName", registration.NamespaceName);
+        AddOptional(properties, "assemblyName", registration.AssemblyName);
         if (registration.SourcePath is null)
         {
             AddOptional(properties, "declaredSourcePath", registration.SourceReference);
@@ -788,8 +852,8 @@ public static partial class LegacyWebFormsExtractor
             manifest,
             FactTypes.WebFormsUserControlRegistered,
             RuleIds.LegacyWebFormsInventory,
-            registration.SourcePath is null ? EvidenceTiers.Tier4Unknown : EvidenceTiers.Tier2Structural,
-            new EvidenceSpan(page.FilePath, registration.Line, registration.Line, registration.SnippetHash, "LegacyWebFormsExtractor", ScannerVersions.LegacyWebFormsExtractor),
+            supportedShape ? EvidenceTiers.Tier2Structural : EvidenceTiers.Tier4Unknown,
+            new EvidenceSpan(registration.DeclarationFilePath, registration.Line, registration.Line, registration.SnippetHash, "LegacyWebFormsExtractor", ScannerVersions.LegacyWebFormsExtractor),
             sourceSymbol: surfaceIdentity,
             targetSymbol: registrationIdentity,
             contractElement: $"{registration.TagPrefix}:{registration.TagName}",
@@ -842,6 +906,27 @@ public static partial class LegacyWebFormsExtractor
                         .ToArray()));
             }
 
+            if (controlCategory == "RegisteredUserControl"
+                && controlFact.Properties.GetValueOrDefault("registeredTargetSymbol") is { } registeredTargetSymbol
+                && controlFact.Properties.GetValueOrDefault("registrationTypeFactId") is { } registrationTypeFactId)
+            {
+                var matchingRegistration = registrationFacts.FirstOrDefault(fact =>
+                    fact.Evidence.FilePath == controlFact.Properties.GetValueOrDefault("registrationDeclarationFilePath")
+                    && fact.Evidence.StartLine.ToString() == controlFact.Properties.GetValueOrDefault("registrationDeclarationLine"));
+                facts.Add(CreateCompositionFact(
+                    manifest,
+                    controlFact.Evidence.FilePath,
+                    controlFact.Evidence.StartLine,
+                    "UsesRegisteredAssemblyControl",
+                    controlFact.TargetSymbol ?? sourceSurfaceIdentity,
+                    registeredTargetSymbol,
+                    null,
+                    new[] { controlFact.FactId, registrationTypeFactId, matchingRegistration?.FactId }
+                        .Where(value => value is not null)
+                        .Select(value => value!)
+                        .ToArray()));
+            }
+
             if (controlCategory == "MasterContent"
                 && page.MasterPageFile is not null
                 && controlFact.Properties.GetValueOrDefault("contentPlaceHolderId") is { } contentPlaceHolderId)
@@ -869,9 +954,17 @@ public static partial class LegacyWebFormsExtractor
         string relationshipKind,
         string sourceIdentity,
         string targetIdentity,
-        string targetFilePath,
+        string? targetFilePath,
         IReadOnlyList<string> supportingFactIds)
     {
+        var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["coverageLabel"] = "bounded-static-webforms-composition",
+            ["relationshipKind"] = relationshipKind,
+            ["supportingFactIds"] = string.Join(",", supportingFactIds.OrderBy(value => value, StringComparer.Ordinal)),
+            ["ruleLimitations"] = "Static WebForms composition evidence does not prove runtime loading, rendering, control construction, or navigation."
+        };
+        AddOptional(properties, "targetFilePath", targetFilePath);
         return FactFactory.Create(
             manifest,
             FactTypes.WebFormsCompositionDeclared,
@@ -881,30 +974,23 @@ public static partial class LegacyWebFormsExtractor
             sourceSymbol: sourceIdentity,
             targetSymbol: targetIdentity,
             contractElement: relationshipKind,
-            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["coverageLabel"] = "bounded-static-webforms-composition",
-                ["relationshipKind"] = relationshipKind,
-                ["supportingFactIds"] = string.Join(",", supportingFactIds.OrderBy(value => value, StringComparer.Ordinal)),
-                ["targetFilePath"] = targetFilePath,
-                ["ruleLimitations"] = "Static WebForms composition evidence does not prove runtime loading, rendering, control construction, or navigation."
-            });
+            properties: properties);
     }
 
     private static string ResolveHandlerIdentity(
         WebFormsPage page,
         WebFormsBinding binding,
         WebFormsContext context,
-        IReadOnlyList<CodeFact> existingFacts)
+        WebFormsEvidenceIndex evidenceIndex)
     {
-        var candidates = CandidateMethods(page, binding.HandlerName, context, existingFacts).ToArray();
+        var candidates = CandidateMethods(page, binding.HandlerName, context, evidenceIndex).ToArray();
         if (candidates.Length != 1)
         {
             return StructuralHandlerIdentity(page, binding.HandlerName);
         }
 
         var method = candidates[0];
-        return FindSemanticHandlerEvidence(method, existingFacts, FindLinkedProjectPaths(page, existingFacts))?.Properties.GetValueOrDefault("sourceSymbolId")
+        return FindSemanticHandlerEvidence(method, evidenceIndex.FactsForFile(method.FilePath), FindLinkedProjectPaths(page, evidenceIndex))?.Properties.GetValueOrDefault("sourceSymbolId")
             ?? StructuralHandlerIdentity(page, method.MethodName, method.FilePath, method.Line);
     }
 
@@ -926,7 +1012,9 @@ public static partial class LegacyWebFormsExtractor
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
             ["bindingKind"] = binding.BindingKind.ToString(),
-            ["coverageLabel"] = "bounded-static-webforms-event",
+            ["coverageLabel"] = binding.BindingKind == WebFormsBindingKind.MarkupEventCandidate
+                ? "bounded-static-webforms-event-candidate"
+                : "bounded-static-webforms-event",
             ["controlId"] = binding.ControlId,
             ["controlType"] = binding.ControlType,
             ["eventSourceIdentity"] = sourceIdentity,
@@ -986,11 +1074,14 @@ public static partial class LegacyWebFormsExtractor
         WebFormsBinding binding,
         CodeFact bindingFact,
         WebFormsMethod method,
-        IReadOnlyList<CodeFact> existingFacts,
+        WebFormsEvidenceIndex evidenceIndex,
         bool isAutoWireup,
         bool hasExplicitSubscription = false)
     {
-        var semanticEvidence = FindSemanticHandlerEvidence(method, existingFacts, FindLinkedProjectPaths(page, existingFacts));
+        var semanticEvidence = FindSemanticHandlerEvidence(
+            method,
+            evidenceIndex.FactsForFile(method.FilePath),
+            FindLinkedProjectPaths(page, evidenceIndex));
         var tier = semanticEvidence is not null
             ? EvidenceTiers.Tier1Semantic
             : method.HasCommonEventSignature && PageTypeMatches(page.PageTypeName, method.PageTypeName)
@@ -1045,12 +1136,12 @@ public static partial class LegacyWebFormsExtractor
     private static CodeFact CreateFlowFact(
         ScanManifest manifest,
         CodeFact resolution,
-        IReadOnlyList<CodeFact> candidateDirectFacts,
+        WebFormsDirectEvidenceIndex directEvidenceIndex,
         IReadOnlyList<CodeFact> wcfMappings)
     {
         var handlerName = resolution.Properties.GetValueOrDefault("handlerName") ?? resolution.ContractElement ?? string.Empty;
         var handlerSymbol = resolution.Properties.GetValueOrDefault("handlerSymbol") ?? resolution.TargetSymbol ?? handlerName;
-        var directFacts = candidateDirectFacts
+        var directFacts = directEvidenceIndex.Candidates(resolution.Evidence.FilePath, handlerName, handlerSymbol)
             .Where(fact => IsDirectHandlerEvidence(fact, handlerName, handlerSymbol, resolution.Evidence.FilePath))
             .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
             .ToArray();
@@ -1112,7 +1203,7 @@ public static partial class LegacyWebFormsExtractor
         ScanManifest manifest,
         CodeFact resolution,
         WebFormsContext context,
-        IReadOnlyList<CodeFact> candidateDirectFacts,
+        WebFormsDirectEvidenceIndex directEvidenceIndex,
         IReadOnlyList<CodeFact> wcfMappings)
     {
         var handlerName = resolution.Properties.GetValueOrDefault("handlerName") ?? resolution.ContractElement ?? string.Empty;
@@ -1123,7 +1214,7 @@ public static partial class LegacyWebFormsExtractor
             return null;
         }
 
-        var directFacts = candidateDirectFacts
+        var directFacts = directEvidenceIndex.Candidates(resolution.Evidence.FilePath, handlerName, resolution.TargetSymbol ?? handlerName)
             .Where(fact => IsDirectHandlerEvidence(fact, handlerName, resolution.TargetSymbol ?? handlerName, resolution.Evidence.FilePath))
             .ToArray();
         var hasBackend = directFacts.Any(IsTerminalSurfaceFact) || WcfMappingsForCalls(wcfMappings, directFacts).Any();
@@ -1276,18 +1367,14 @@ public static partial class LegacyWebFormsExtractor
 
     private static IReadOnlySet<string> FindLinkedProjectPaths(
         WebFormsPage page,
-        IReadOnlyList<CodeFact> existingFacts)
+        WebFormsEvidenceIndex evidenceIndex)
     {
         if (page.LinkedCodePath is null)
         {
             return new HashSet<string>(StringComparer.Ordinal);
         }
 
-        return existingFacts
-            .Where(fact => fact.Evidence.FilePath.Equals(page.LinkedCodePath, StringComparison.Ordinal)
-                && !string.IsNullOrWhiteSpace(fact.ProjectPath))
-            .Select(fact => fact.ProjectPath!)
-            .ToHashSet(StringComparer.Ordinal);
+        return evidenceIndex.ProjectPathsForFile(page.LinkedCodePath);
     }
 
     private static CodeFact CreateGap(ScanManifest manifest, string filePath, int line, string gapKind, string message)
@@ -1316,7 +1403,8 @@ public static partial class LegacyWebFormsExtractor
             "UnsupportedWebFormsMasterPageReference" or "MissingWebFormsMasterPage" or "UnsupportedWebFormsMasterPageTarget"
                 or "UnsupportedWebFormsUserControlRegistration" or "MissingWebFormsUserControl"
                 or "UnresolvedWebFormsContentPlaceholder" or "UnresolvedWebFormsContentMaster"
-                or "UnresolvedWebFormsControlRegistration" or "AmbiguousWebFormsUserControlRegistration" => RuleIds.LegacyWebFormsComposition,
+                or "UnresolvedWebFormsControlRegistration" or "AmbiguousWebFormsUserControlRegistration"
+                or "UnresolvedWebFormsAssemblyControlRegistration" or "AmbiguousWebFormsAssemblyControlRegistration" => RuleIds.LegacyWebFormsComposition,
             "UnsupportedWebFormsEventAttribute" or "DynamicWebFormsEventSubscription"
                 or "UnsupportedWebFormsEventSubscription" or "UnknownWebFormsEventSubscriptionReceiver"
                 or "AmbiguousWebFormsEventSubscriptionReceiver" => RuleIds.LegacyWebFormsEventBinding,
@@ -1345,6 +1433,12 @@ public static partial class LegacyWebFormsExtractor
     private static bool LooksLikeHandlerName(string? value)
     {
         return SafeIdentifier(value) is not null;
+    }
+
+    private static bool IsBoundedStaticEventAttribute(string name)
+    {
+        return !name.StartsWith("OnClient", StringComparison.OrdinalIgnoreCase)
+            && BoundedStaticEventAttributeRegex().IsMatch(name);
     }
 
     private static string? SafeIdentifier(string? value)
@@ -1522,11 +1616,17 @@ public static partial class LegacyWebFormsExtractor
             {
                 var attributes = ParseAttributes(match.Groups["attrs"].Value);
                 var sourceReference = ResolveMarkupReferencePath(markupFilePath, webApplicationRoot, attributes.GetValueOrDefault("Src"));
+                var namespaceName = SafeIdentifier(attributes.GetValueOrDefault("Namespace"));
+                var assemblyName = SafeIdentifier(attributes.GetValueOrDefault("Assembly"));
                 return new WebFormsUserControlRegistration(
                     SafeIdentifier(attributes.GetValueOrDefault("TagPrefix")) ?? "unknown",
                     SafeIdentifier(attributes.GetValueOrDefault("TagName")) ?? "unknown",
                     sourceReference,
                     ResolveInventoryPath(sourceReference, inventoryPathIndex),
+                    namespaceName,
+                    assemblyName,
+                    markupFilePath,
+                    "markup-directive",
                     LineAt(source, match.Index),
                     FactFactory.Hash(match.Value, 32));
             })
@@ -1535,6 +1635,74 @@ public static partial class LegacyWebFormsExtractor
             .ThenBy(item => item.TagName, StringComparer.Ordinal)
             .ToArray();
     }
+
+    private static IReadOnlyList<WebFormsUserControlRegistration> ParseConfigControlRegistrations(
+        string repoPath,
+        string markupFilePath,
+        string webApplicationRoot,
+        IReadOnlyList<FileInventoryItem> inventory,
+        InventoryPathIndex inventoryPathIndex)
+    {
+        var markupDirectory = RelativeDirectory(markupFilePath);
+        var configs = inventory
+            .Where(item => Path.GetFileName(item.RelativePath).Equals("web.config", StringComparison.OrdinalIgnoreCase))
+            .Where(item =>
+            {
+                var directory = RelativeDirectory(item.RelativePath);
+                return IsSameOrAncestor(webApplicationRoot, directory) && IsSameOrAncestor(directory, markupDirectory);
+            })
+            .OrderBy(item => item.RelativePath.Count(character => character == '/'))
+            .ThenBy(item => item.RelativePath, StringComparer.Ordinal)
+            .ToArray();
+        var registrations = new List<WebFormsUserControlRegistration>();
+        foreach (var config in configs)
+        {
+            try
+            {
+                using var stream = File.OpenRead(Path.Combine(repoPath, config.RelativePath));
+                using var reader = XmlReader.Create(stream, new XmlReaderSettings
+                {
+                    DtdProcessing = DtdProcessing.Prohibit,
+                    XmlResolver = null
+                });
+                var document = XDocument.Load(reader, LoadOptions.SetLineInfo);
+                var controls = document.Descendants()
+                    .Where(element => element.Name.LocalName == "controls")
+                    .Where(element => element.Ancestors().Any(ancestor => ancestor.Name.LocalName == "pages"))
+                    .Where(element => element.Ancestors().Any(ancestor => ancestor.Name.LocalName == "system.web"))
+                    .SelectMany(element => element.Elements().Where(child => child.Name.LocalName == "add"));
+                foreach (var element in controls)
+                {
+                    var tagPrefix = SafeIdentifier(ConfigAttribute(element, "tagPrefix")) ?? "unknown";
+                    var tagName = SafeIdentifier(ConfigAttribute(element, "tagName")) ?? "unknown";
+                    var sourceReference = ResolveMarkupReferencePath(config.RelativePath, webApplicationRoot, ConfigAttribute(element, "src"));
+                    var namespaceName = SafeIdentifier(ConfigAttribute(element, "namespace"));
+                    var assemblyName = SafeIdentifier(ConfigAttribute(element, "assembly"));
+                    var line = element is IXmlLineInfo lineInfo && lineInfo.HasLineInfo() ? Math.Max(1, lineInfo.LineNumber) : 1;
+                    registrations.Add(new WebFormsUserControlRegistration(
+                        tagPrefix,
+                        tagName,
+                        sourceReference,
+                        ResolveInventoryPath(sourceReference, inventoryPathIndex),
+                        namespaceName,
+                        assemblyName,
+                        config.RelativePath,
+                        "configuration",
+                        line,
+                        FactFactory.Hash(element.ToString(SaveOptions.DisableFormatting), 32)));
+                }
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or XmlException)
+            {
+                // Malformed or unreadable configuration remains covered by the config extractor.
+            }
+        }
+
+        return registrations;
+    }
+
+    private static string? ConfigAttribute(XElement element, string name) =>
+        element.Attributes().FirstOrDefault(attribute => attribute.Name.LocalName.Equals(name, StringComparison.OrdinalIgnoreCase))?.Value;
 
     private static string MaskServerComments(string text)
     {
@@ -1583,10 +1751,10 @@ public static partial class LegacyWebFormsExtractor
 
     private static string FindWebApplicationRoot(string markupPath, IReadOnlyList<FileInventoryItem> inventory)
     {
-        var markupDirectory = FileInventory.NormalizeRelativePath(Path.GetDirectoryName(markupPath) ?? ".");
+        var markupDirectory = RelativeDirectory(markupPath);
         var projectCandidates = inventory
             .Where(item => item.Kind == "Project")
-            .Select(item => FileInventory.NormalizeRelativePath(Path.GetDirectoryName(item.RelativePath) ?? "."))
+            .Select(item => RelativeDirectory(item.RelativePath))
             .Where(directory => IsSameOrAncestor(directory, markupDirectory))
             .Distinct(StringComparer.Ordinal)
             .OrderByDescending(directory => directory.Length)
@@ -1599,7 +1767,7 @@ public static partial class LegacyWebFormsExtractor
 
         var webConfigCandidates = inventory
             .Where(item => Path.GetFileName(item.RelativePath).Equals("Web.config", StringComparison.OrdinalIgnoreCase))
-            .Select(item => FileInventory.NormalizeRelativePath(Path.GetDirectoryName(item.RelativePath) ?? "."))
+            .Select(item => RelativeDirectory(item.RelativePath))
             .Where(directory => IsSameOrAncestor(directory, markupDirectory))
             .Distinct(StringComparer.Ordinal)
             .OrderBy(directory => directory.Count(character => character == '/'))
@@ -1607,6 +1775,12 @@ public static partial class LegacyWebFormsExtractor
             .ThenBy(directory => directory, StringComparer.Ordinal)
             .ToArray();
         return webConfigCandidates.FirstOrDefault() ?? ".";
+    }
+
+    private static string RelativeDirectory(string relativePath)
+    {
+        var directory = FileInventory.NormalizeRelativePath(Path.GetDirectoryName(relativePath) ?? ".");
+        return string.IsNullOrWhiteSpace(directory) ? "." : directory;
     }
 
     private static bool IsSameOrAncestor(string candidate, string path)
@@ -1780,6 +1954,84 @@ public static partial class LegacyWebFormsExtractor
     [GeneratedRegex(@"^[A-Za-z_][A-Za-z0-9_.]*$")]
     private static partial Regex SafeIdentifierRegex();
 
+    [GeneratedRegex(@"^On[A-Za-z][A-Za-z0-9_]{0,63}$", RegexOptions.IgnoreCase)]
+    private static partial Regex BoundedStaticEventAttributeRegex();
+
+    private sealed class WebFormsEvidenceIndex(
+        IReadOnlyDictionary<string, IReadOnlyList<CodeFact>> factsByFile,
+        IReadOnlyDictionary<string, IReadOnlySet<string>> projectPathsByFile)
+    {
+        public static WebFormsEvidenceIndex Create(IReadOnlyList<CodeFact> facts)
+        {
+            var factsByFile = facts
+                .GroupBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+                .ToDictionary(
+                    group => group.Key,
+                    group => (IReadOnlyList<CodeFact>)group.ToArray(),
+                    StringComparer.Ordinal);
+            var projectPathsByFile = facts
+                .Where(fact => !string.IsNullOrWhiteSpace(fact.ProjectPath))
+                .GroupBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+                .ToDictionary(
+                    group => group.Key,
+                    group => (IReadOnlySet<string>)group.Select(fact => fact.ProjectPath!).ToHashSet(StringComparer.Ordinal),
+                    StringComparer.Ordinal);
+            return new WebFormsEvidenceIndex(factsByFile, projectPathsByFile);
+        }
+
+        public IReadOnlyList<CodeFact> FactsForFile(string filePath) =>
+            factsByFile.GetValueOrDefault(filePath) ?? [];
+
+        public IReadOnlySet<string> ProjectPathsForFile(string filePath) =>
+            projectPathsByFile.GetValueOrDefault(filePath) ?? new HashSet<string>(StringComparer.Ordinal);
+    }
+
+    private sealed class WebFormsDirectEvidenceIndex(
+        IReadOnlyDictionary<string, IReadOnlyList<CodeFact>> factsByFile,
+        IReadOnlyDictionary<string, IReadOnlyList<CodeFact>> factsBySourceSymbol,
+        IReadOnlyDictionary<string, IReadOnlyList<CodeFact>> factsBySourceMember,
+        IReadOnlyDictionary<string, IReadOnlyList<CodeFact>> factsByCallerSymbol)
+    {
+        public static WebFormsDirectEvidenceIndex Create(IReadOnlyList<CodeFact> facts) => new(
+            GroupFacts(facts, fact => fact.Evidence.FilePath),
+            GroupFacts(facts, fact => fact.SourceSymbol),
+            GroupFacts(facts, fact => SourceMemberName(fact.SourceSymbol)),
+            GroupFacts(facts, fact => fact.Properties.GetValueOrDefault("callerSymbol")));
+
+        public IEnumerable<CodeFact> Candidates(string filePath, string handlerName, string handlerSymbol) =>
+            (factsByFile.GetValueOrDefault(filePath) ?? [])
+                .Concat(factsBySourceSymbol.GetValueOrDefault(handlerSymbol) ?? [])
+                .Concat(factsBySourceMember.GetValueOrDefault(handlerName) ?? [])
+                .Concat(factsByCallerSymbol.GetValueOrDefault(handlerSymbol) ?? [])
+                .DistinctBy(fact => fact.FactId);
+
+        private static IReadOnlyDictionary<string, IReadOnlyList<CodeFact>> GroupFacts(
+            IReadOnlyList<CodeFact> facts,
+            Func<CodeFact, string?> keySelector) =>
+            facts.Select(fact => (Fact: fact, Key: keySelector(fact)))
+                .Where(item => !string.IsNullOrWhiteSpace(item.Key))
+                .GroupBy(item => item.Key!, StringComparer.Ordinal)
+                .ToDictionary(
+                    group => group.Key,
+                    group => (IReadOnlyList<CodeFact>)group.Select(item => item.Fact).ToArray(),
+                    StringComparer.Ordinal);
+
+        private static string? SourceMemberName(string? sourceSymbol)
+        {
+            if (string.IsNullOrWhiteSpace(sourceSymbol))
+            {
+                return null;
+            }
+
+            var signatureStart = sourceSymbol.IndexOf('(', StringComparison.Ordinal);
+            var memberEnd = signatureStart >= 0 ? signatureStart : sourceSymbol.Length;
+            var separator = sourceSymbol.LastIndexOf('.', memberEnd - 1, memberEnd);
+            return separator >= 0 && separator + 1 < memberEnd
+                ? sourceSymbol[(separator + 1)..memberEnd]
+                : sourceSymbol[..memberEnd];
+        }
+    }
+
     private sealed record WebFormsContext(
         IReadOnlyList<WebFormsPage> Pages,
         IReadOnlyList<WebFormsCodeFile> CodeFiles,
@@ -1808,6 +2060,10 @@ public static partial class LegacyWebFormsExtractor
         string ControlId,
         string ControlCategory,
         string? RegisteredSourcePath,
+        string? RegisteredTargetSymbol,
+        string? RegistrationTypeFactId,
+        string? RegistrationDeclarationFilePath,
+        int? RegistrationDeclarationLine,
         string? CommandName,
         string? ContentPlaceHolderId,
         int Line,
@@ -1818,12 +2074,183 @@ public static partial class LegacyWebFormsExtractor
         string TagName,
         string? SourceReference,
         string? SourcePath,
+        string? NamespaceName,
+        string? AssemblyName,
+        string DeclarationFilePath,
+        string DeclarationKind,
         int Line,
-        string? SnippetHash);
+        string? SnippetHash)
+    {
+        public string RegistrationShape => SourceReference is not null
+            ? "src"
+            : NamespaceName is not null && AssemblyName is not null
+                ? "assembly-namespace"
+                : "unsupported";
+    }
 
     private sealed record InventoryPathIndex(
         IReadOnlyDictionary<string, string> Exact,
         IReadOnlyDictionary<string, string?> CaseInsensitive);
+
+    private sealed record WebFormsAssemblyControlResolution(
+        WebFormsUserControlRegistration Registration,
+        string TargetSymbol,
+        string TypeFactId);
+
+    private sealed class WebFormsAssemblyRegistrationResolver(
+        IReadOnlyList<WebFormsAssemblyTypeCandidate> candidates,
+        IReadOnlySet<string> projectAssemblyNames)
+    {
+        public static WebFormsAssemblyRegistrationResolver Create(
+            string repoPath,
+            IReadOnlyList<FileInventoryItem> inventory,
+            IReadOnlyList<CodeFact> existingFacts)
+        {
+            var projects = inventory
+                .Where(item => item.Kind == "Project")
+                .Select(item => ReadProject(repoPath, item.RelativePath))
+                .Where(item => item is not null)
+                .Select(item => item!)
+                .ToArray();
+            var candidates = existingFacts
+                .Where(fact => fact.FactType == FactTypes.TypeDeclared)
+                .Select(fact =>
+                {
+                    var qualifiedName = fact.Properties.GetValueOrDefault("qualifiedName");
+                    if (string.IsNullOrWhiteSpace(qualifiedName))
+                    {
+                        var namespaceName = fact.Properties.GetValueOrDefault("namespace");
+                        var name = fact.Properties.GetValueOrDefault("name");
+                        qualifiedName = string.IsNullOrWhiteSpace(namespaceName) ? name : $"{namespaceName}.{name}";
+                    }
+                    var project = projects
+                        .Where(item => item.OwnsSource(fact.Evidence.FilePath))
+                        .OrderByDescending(item => item.ProjectDirectory.Length)
+                        .ThenBy(item => item.ProjectPath, StringComparer.Ordinal)
+                        .FirstOrDefault();
+                    return string.IsNullOrWhiteSpace(qualifiedName) || project is null
+                        ? null
+                        : new WebFormsAssemblyTypeCandidate(qualifiedName, project.AssemblyName, fact.FactId, fact.Evidence.FilePath);
+                })
+                .Where(item => item is not null)
+                .Select(item => item!)
+                .GroupBy(item => $"{item.QualifiedName}|{item.AssemblyName}|{item.FilePath}", StringComparer.Ordinal)
+                .Select(group => group.OrderBy(item => item.TypeFactId, StringComparer.Ordinal).First())
+                .OrderBy(item => item.QualifiedName, StringComparer.Ordinal)
+                .ThenBy(item => item.AssemblyName, StringComparer.Ordinal)
+                .ThenBy(item => item.FilePath, StringComparer.Ordinal)
+                .ToArray();
+            return new WebFormsAssemblyRegistrationResolver(
+                candidates,
+                projects.Select(item => item.AssemblyName).ToHashSet(StringComparer.OrdinalIgnoreCase));
+        }
+
+        public IReadOnlyList<WebFormsAssemblyControlResolution> ResolveAll(WebFormsUserControlRegistration registration, string controlType)
+        {
+            if (registration.NamespaceName is null || registration.AssemblyName is null)
+            {
+                return [];
+            }
+
+            var qualifiedName = $"{registration.NamespaceName}.{controlType}";
+            var matches = candidates
+                .Where(item => item.QualifiedName.Equals(qualifiedName, StringComparison.Ordinal)
+                    && item.AssemblyName.Equals(registration.AssemblyName, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            return matches
+                .Select(item => new WebFormsAssemblyControlResolution(registration, item.QualifiedName, item.TypeFactId))
+                .ToArray();
+        }
+
+        public string ClassifyUnavailable(WebFormsUserControlRegistration registration, string controlType)
+        {
+            if (registration.NamespaceName is null || registration.AssemblyName is null)
+            {
+                return "UnresolvedWebFormsAssemblyControlRegistration";
+            }
+
+            if (!projectAssemblyNames.Contains(registration.AssemblyName))
+            {
+                return "WebFormsAssemblyProjectUnavailable";
+            }
+
+            var qualifiedName = $"{registration.NamespaceName}.{controlType}";
+            return candidates.Any(item =>
+                item.AssemblyName.Equals(registration.AssemblyName, StringComparison.OrdinalIgnoreCase)
+                && item.QualifiedName.Equals(qualifiedName, StringComparison.Ordinal))
+                    ? "AmbiguousWebFormsAssemblyControlRegistration"
+                    : "WebFormsAssemblyTypeUnavailable";
+        }
+
+        private static WebFormsProjectScope? ReadProject(string repoPath, string projectPath)
+        {
+            try
+            {
+                using var stream = File.OpenRead(Path.Combine(repoPath, projectPath));
+                using var reader = XmlReader.Create(stream, new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null });
+                var document = XDocument.Load(reader);
+                var assemblyName = document.Descendants()
+                    .FirstOrDefault(element => element.Name.LocalName == "AssemblyName")?.Value.Trim();
+                assemblyName = SafeIdentifier(assemblyName) ?? SafeIdentifier(Path.GetFileNameWithoutExtension(projectPath));
+                if (assemblyName is null)
+                {
+                    return null;
+                }
+                var projectDirectory = RelativeDirectory(projectPath);
+                var explicitSources = document.Descendants()
+                    .Where(element => element.Name.LocalName == "Compile")
+                    .Select(element => ConfigAttribute(element, "Include"))
+                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                    .Select(value => ResolveProjectSource(repoPath, projectDirectory, value!))
+                    .Where(value => value is not null)
+                    .Select(value => value!)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var sdkStyle = document.Root?.Attribute("Sdk") is not null;
+                return new WebFormsProjectScope(projectPath, projectDirectory, assemblyName, explicitSources, sdkStyle);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or XmlException)
+            {
+                return null;
+            }
+        }
+
+        private static string? ResolveProjectSource(string repoPath, string projectDirectory, string include)
+        {
+            if (include.Contains("$(", StringComparison.Ordinal) || include.Contains('*'))
+            {
+                return null;
+            }
+            try
+            {
+                var fullPath = Path.GetFullPath(Path.Combine(repoPath, projectDirectory, include.Replace('\\', Path.DirectorySeparatorChar)));
+                var root = Path.GetFullPath(repoPath).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+                return fullPath.StartsWith(root, StringComparison.OrdinalIgnoreCase)
+                    ? FileInventory.NormalizeRelativePath(Path.GetRelativePath(repoPath, fullPath))
+                    : null;
+            }
+            catch (Exception exception) when (exception is ArgumentException or NotSupportedException)
+            {
+                return null;
+            }
+        }
+    }
+
+    private sealed record WebFormsAssemblyTypeCandidate(
+        string QualifiedName,
+        string AssemblyName,
+        string TypeFactId,
+        string FilePath);
+
+    private sealed record WebFormsProjectScope(
+        string ProjectPath,
+        string ProjectDirectory,
+        string AssemblyName,
+        IReadOnlySet<string> ExplicitSources,
+        bool SdkStyle)
+    {
+        public bool OwnsSource(string filePath) => ExplicitSources.Contains(filePath)
+            || (SdkStyle && IsSameOrAncestor(ProjectDirectory, RelativeDirectory(filePath)));
+    }
 
     private sealed record WebFormsBinding(
         string ControlType,
@@ -1840,12 +2267,13 @@ public static partial class LegacyWebFormsExtractor
     private enum WebFormsBindingKind
     {
         MarkupAttribute,
+        MarkupEventCandidate,
         AutoEventWireup,
         ExplicitLifecycleSubscription,
         ExplicitControlSubscription
     }
 
-    private sealed record WebFormsGap(string GapKind, string Message, int Line);
+    private sealed record WebFormsGap(string GapKind, string Message, int Line, string? FilePath = null);
 
     private sealed record WebFormsCodeFile(
         string FilePath,

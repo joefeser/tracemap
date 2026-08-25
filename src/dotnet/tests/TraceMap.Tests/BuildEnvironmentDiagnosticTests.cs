@@ -227,6 +227,108 @@ public sealed class BuildEnvironmentDiagnosticTests
         Assert.DoesNotContain("private-two", second.Message);
     }
 
+    [Theory]
+    [InlineData("MSB4019", "The imported project Microsoft.WebApplication.targets was not found under VSToolsPath/WebApplications.", "WebApplicationTargetsUnavailable", "UseCompatibleWebApplicationTargets")]
+    [InlineData("MSB4019", "The imported project Legacy.Custom.targets was not found.", "ImportedTargetsUnavailable", "ReviewImportedTargets")]
+    [InlineData("MSB4025", "The project file could not be loaded because project evaluation failed.", "LegacyProjectEvaluationFailed", "UseCompatibleMSBuildToolset")]
+    public void Sanitized_workspace_gaps_classify_common_legacy_project_load_failures(
+        string diagnosticId,
+        string rawMessage,
+        string expectedCode,
+        string expectedGuidance)
+    {
+        var diagnostic = BuildEnvironmentDiagnosticExtractor.SanitizeWorkspaceGap(
+            "ProjectLoadFailed",
+            rawMessage,
+            diagnosticId);
+
+        Assert.Equal(expectedCode, diagnostic.DiagnosticCode);
+        Assert.Equal(expectedGuidance, diagnostic.GuidanceCode);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, diagnostic.EvidenceTier);
+        Assert.Equal("reduces-semantic-coverage", diagnostic.CoverageEffect);
+        Assert.Equal("category-only", diagnostic.Sanitization);
+        Assert.DoesNotContain("Legacy.Custom", diagnostic.Message);
+        Assert.DoesNotContain("VSToolsPath", diagnostic.Message);
+    }
+
+    [Fact]
+    public void Uncategorized_workspace_failure_uses_bounded_legacy_prerequisite_fallback_only_for_same_project()
+    {
+        var legacyProjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "src/Legacy/Legacy.csproj" };
+
+        Assert.Equal(
+            "LegacyWorkspacePrerequisitesUnresolved",
+            BuildEnvironmentDiagnosticExtractor.CorroborateLegacyWorkspaceDiagnosticCode(
+                "UncategorizedWorkspaceFailure",
+                "src/Legacy/Legacy.csproj",
+                legacyProjects));
+        Assert.Equal(
+            "LegacyWorkspacePrerequisitesUnresolved",
+            BuildEnvironmentDiagnosticExtractor.CorroborateLegacyWorkspaceDiagnosticCode(
+                "UncategorizedWorkspaceFailure",
+                "SRC/LEGACY/LEGACY.CSPROJ",
+                legacyProjects));
+        Assert.Equal(
+            "UncategorizedWorkspaceFailure",
+            BuildEnvironmentDiagnosticExtractor.CorroborateLegacyWorkspaceDiagnosticCode(
+                "UncategorizedWorkspaceFailure",
+                "src/Modern/Modern.csproj",
+                legacyProjects));
+        Assert.Equal(
+            "SdkResolutionFailed",
+            BuildEnvironmentDiagnosticExtractor.CorroborateLegacyWorkspaceDiagnosticCode(
+                "SdkResolutionFailed",
+                "src/Legacy/Legacy.csproj",
+                legacyProjects));
+    }
+
+    [Fact]
+    public void Extract_correlates_uncategorized_workspace_failure_with_same_project_legacy_signals()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "src", "Legacy"));
+        var projectPath = "src/Legacy/Legacy.csproj";
+        File.WriteAllText(Path.Combine(repo, projectPath), """
+            <Project ToolsVersion="12.0">
+              <PropertyGroup><TargetFrameworkVersion>v4.5</TargetFrameworkVersion></PropertyGroup>
+            </Project>
+            """);
+        var inventory = FileInventory.Collect(repo, Path.Combine(temp.Path, "out"));
+        var manifest = new ScanManifest(
+            "scan-test", "repo", null, null, "abc123", ScannerVersions.TraceMap,
+            DateTimeOffset.UnixEpoch, "Level1SemanticAnalysisReduced", "FailedOrPartial",
+            [], [], [], []);
+        var gap = new SemanticFactCandidate(
+            FactTypes.AnalysisGap,
+            RuleIds.CSharpSemanticDeclarations,
+            EvidenceTiers.Tier4Unknown,
+            new EvidenceSpan(projectPath, 1, 1, null, "CSharpSemanticExtractor", ScannerVersions.CSharpSemanticExtractor),
+            ProjectPath: projectPath,
+            Properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["diagnosticCode"] = "UncategorizedWorkspaceFailure",
+                ["diagnosticKind"] = BuildEnvironmentDiagnosticExtractor.DiagnosticKindWorkspace,
+                ["sanitization"] = "category-only"
+            });
+
+        var facts = BuildEnvironmentDiagnosticExtractor.Extract(
+            repo,
+            manifest,
+            inventory,
+            new SemanticExtractionResult([], [gap], Attempted: true, ReducedCoverage: true));
+
+        Assert.Contains(facts, fact =>
+            fact.FactType == FactTypes.BuildEnvironmentDiagnostic
+            && fact.ProjectPath == projectPath
+            && fact.Properties.GetValueOrDefault("diagnosticCode") == "LegacyWorkspacePrerequisitesUnresolved"
+            && fact.Properties.GetValueOrDefault("guidanceCode") == "UseCompatibleMSBuildToolset"
+            && fact.EvidenceTier == EvidenceTiers.Tier4Unknown);
+        Assert.DoesNotContain(facts, fact =>
+            fact.ProjectPath == projectPath
+            && fact.Properties.GetValueOrDefault("diagnosticCode") == "UncategorizedWorkspaceFailure");
+    }
+
     [Fact]
     public void Observed_value_hashes_are_stable_distinct_and_secret_categories_are_not_hashed()
     {
