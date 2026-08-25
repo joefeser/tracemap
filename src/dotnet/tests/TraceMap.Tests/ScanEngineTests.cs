@@ -13,6 +13,39 @@ namespace TraceMap.Tests;
 public sealed class ScanEngineTests
 {
     [Fact]
+    public void Missing_project_compilation_input_is_a_reduced_coverage_gap_not_a_snapshot_change()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "MissingInput.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+              </PropertyGroup>
+              <ItemGroup>
+                <Compile Include="Missing.cs" />
+              </ItemGroup>
+            </Project>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        var gap = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "CompilationInputUnavailable");
+        Assert.Equal(RuleIds.CSharpSemanticWorkspace, gap.RuleId);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
+        Assert.Equal("MissingInput.csproj", gap.Evidence.FilePath);
+        Assert.Equal("MissingInput.csproj", gap.ProjectPath);
+        Assert.Equal("CompilationInputUnavailable", gap.Properties.GetValueOrDefault("diagnosticCode"));
+        Assert.Equal("reduces-semantic-coverage", gap.Properties.GetValueOrDefault("coverageEffect"));
+        Assert.Equal("category-only", gap.Properties.GetValueOrDefault("sanitization"));
+        Assert.DoesNotContain("Missing.cs", gap.Properties.GetValueOrDefault("message"), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void File_inventory_retains_the_legacy_two_parameter_binary_contract()
     {
         var method = typeof(FileInventory).GetMethod(

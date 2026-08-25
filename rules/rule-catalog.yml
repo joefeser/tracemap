@@ -3573,6 +3573,7 @@ rules:
       - Native workspace messages are sanitized to stable categories before shareable artifacts are written; raw local paths, remotes, package sources, config values, credentials, and source-like snippets are omitted.
       - Source documents outside the repository use deterministic synthetic evidence paths derived from bounded non-host descriptors. The original path is not retained, and same-named unrecognized external sources can share an identity.
       - Explicit scan-scope gaps report only a categorical omitted-document count at repository evidence path `.`; they do not identify excluded source files, prove build failure, or describe runtime behavior.
+      - Project-declared C# inputs missing from the captured inventory emit a project-scoped `CompilationInputUnavailable` gap; the missing path is not retained, and the gap does not prove why the input is absent.
       - Exclusion comparison follows detected host path case semantics and macOS Unicode-equivalence semantics without rewriting persisted evidence paths. Unicode-distinct names remain distinct on hosts whose filesystems treat them as distinct.
 
   - id: build.environment.target-framework.v1
