@@ -25,13 +25,32 @@ public sealed class ScanEngineTests
                 <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
               </PropertyGroup>
               <ItemGroup>
+                <Compile Include="Default.aspx.cs" />
                 <Compile Include="Missing.cs" />
+                <Content Include="Default.aspx" />
               </ItemGroup>
             </Project>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), """
+            <%@ Page Language="C#" CodeBehind="Default.aspx.cs" Inherits="Legacy.Default" %>
+            <asp:Button runat="server" ID="SaveButton" OnClick="Save_Click" />
+            """);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx.cs"), """
+            using System;
+            namespace Legacy;
+            public partial class Default
+            {
+                protected void Save_Click(object sender, EventArgs e) { }
+            }
             """);
 
         var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
 
+        Assert.Equal("FailedOrPartial", result.Manifest.BuildStatus);
+        Assert.Contains("Reduced", result.Manifest.AnalysisLevel, StringComparison.Ordinal);
+        Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WebFormsPageDeclared);
+        Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared);
+        Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WebFormsHandlerResolved);
         var gap = Assert.Single(result.Facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
             && fact.Properties.GetValueOrDefault("gapKind") == "CompilationInputUnavailable");
