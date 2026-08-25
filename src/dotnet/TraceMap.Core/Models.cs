@@ -297,6 +297,10 @@ public static class FactTypes
     public const string WebFormsHandlerResolved = nameof(WebFormsHandlerResolved);
     public const string WebFormsEventFlowProjected = nameof(WebFormsEventFlowProjected);
     public const string WebFormsLogicSignalDetected = nameof(WebFormsLogicSignalDetected);
+    public const string WebFormsLifecycleBranchCandidate = nameof(WebFormsLifecycleBranchCandidate);
+    public const string WebFormsClientScriptRegistrationCandidate = nameof(WebFormsClientScriptRegistrationCandidate);
+    public const string WebFormsPostBackTargetCandidate = nameof(WebFormsPostBackTargetCandidate);
+    public const string WebFormsDataBindingCandidate = nameof(WebFormsDataBindingCandidate);
     public const string WinFormsSurfaceDeclared = nameof(WinFormsSurfaceDeclared);
     public const string WinFormsControlDeclared = nameof(WinFormsControlDeclared);
     public const string WinFormsEventBindingDeclared = nameof(WinFormsEventBindingDeclared);
@@ -458,6 +462,10 @@ public static class RuleIds
     public const string LegacyWebFormsDesignerControl = "legacy.webforms.designer-control.v1";
     public const string LegacyWebFormsEventFlow = "legacy.webforms.event-flow.v1";
     public const string LegacyWebFormsLogicSignal = "legacy.webforms.logic-signal.v1";
+    public const string LegacyWebFormsLifecycleContext = "legacy.webforms.lifecycle-context.v1";
+    public const string LegacyWebFormsClientScript = "legacy.webforms.client-script.v1";
+    public const string LegacyWebFormsPostBackTarget = "legacy.webforms.postback-target.v1";
+    public const string LegacyWebFormsDataBinding = "legacy.webforms.data-binding.v1";
     public const string LegacyWebFormsModernizationPacket = "legacy.webforms.modernization-packet.v1";
     public const string LegacyWinFormsInventory = "legacy.winforms.inventory.v1";
     public const string LegacyWinFormsControl = "legacy.winforms.control.v1";
@@ -561,7 +569,7 @@ public static class ScannerVersions
     public const string LegacyWcfExtractor = "legacy-wcf/0.2.0";
     public const string LegacyAsmxExtractor = "legacy-asmx/0.1.0";
     public const string LegacyRemotingExtractor = "legacy-remoting/0.1.0";
-    public const string LegacyWebFormsExtractor = "legacy-webforms/0.5.0";
+    public const string LegacyWebFormsExtractor = "legacy-webforms/0.6.0";
     public const string LegacyWinFormsExtractor = "legacy-winforms/0.1.0";
     public const string LegacyAspNetExtractor = "legacy-aspnet/0.2.0";
     public const string LegacyBatchDataMovementExtractor = "legacy-batch-data-movement/0.1.0";

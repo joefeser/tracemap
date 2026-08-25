@@ -33,6 +33,15 @@ public static partial class LegacyWebFormsExtractor
         "DataSource"
     };
 
+    private static readonly HashSet<string> ClientScriptRegistrationMethods = new(StringComparer.Ordinal)
+    {
+        "RegisterStartupScript",
+        "RegisterClientScriptBlock",
+        "RegisterClientScriptInclude",
+        "RegisterOnSubmitStatement",
+        "RegisterHiddenField"
+    };
+
     public static IReadOnlyList<CodeFact> Extract(
         string repoPath,
         ScanManifest manifest,
@@ -72,6 +81,7 @@ public static partial class LegacyWebFormsExtractor
             }
 
             facts.AddRange(CreateCompositionFacts(manifest, page, pageFact, registrationFacts, controlFacts));
+            AddStaticCompositionFacts(manifest, page, pageFact, controlFacts, context, facts);
 
             foreach (var binding in page.Bindings)
             {
@@ -268,6 +278,8 @@ public static partial class LegacyWebFormsExtractor
                 registrations,
                 [],
                 [],
+                [],
+                [],
                 initialGaps);
 
             var controls = new List<WebFormsControl>();
@@ -289,7 +301,8 @@ public static partial class LegacyWebFormsExtractor
 
             foreach (Match match in ServerControlRegex().Matches(activeMarkup))
             {
-                var attrs = ParseAttributes(match.Groups["attrs"].Value);
+                var attributeText = match.Groups["attrs"].Value;
+                var attrs = ParseAttributes(attributeText);
                 if (!IsServerControl(attrs))
                 {
                     continue;
@@ -317,6 +330,17 @@ public static partial class LegacyWebFormsExtractor
                     .ToArray();
                 var assemblyResolution = assemblyResolutions.Length == 1 ? assemblyResolutions[0] : null;
                 var isRegistered = sourceRegistration is not null || assemblyResolution is not null;
+                var rawDataSourceId = attrs.GetValueOrDefault("DataSourceID");
+                var dataSourceId = SafeIdentifier(rawDataSourceId);
+                var declaresDataSourceId = attrs.ContainsKey("DataSourceID")
+                    || Regex.IsMatch(attributeText, @"\bDataSourceID\s*=", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+                if (declaresDataSourceId && dataSourceId is null)
+                {
+                    gaps.Add(new WebFormsGap(
+                        "DynamicWebFormsDataSourceId",
+                        "A DataSourceID attribute is not a supported static control identifier; TraceMap did not infer or evaluate its source.",
+                        line));
+                }
                 controls.Add(new WebFormsControl(
                     controlPrefix,
                     controlType,
@@ -329,8 +353,12 @@ public static partial class LegacyWebFormsExtractor
                     assemblyResolution?.Registration.Line,
                     SafeIdentifier(attrs.GetValueOrDefault("CommandName")),
                     SafeIdentifier(attrs.GetValueOrDefault("ContentPlaceHolderID")),
+                    dataSourceId,
                     line,
-                    FactFactory.Hash(match.Value, 32)));
+                    LineAt(source, match.Index + match.Length - 1),
+                    FactFactory.Hash(match.Value, 32),
+                    match.Index,
+                    match.Index + match.Length));
                 if (controlType.Equals("Content", StringComparison.OrdinalIgnoreCase)
                     && SafeIdentifier(attrs.GetValueOrDefault("ContentPlaceHolderID")) is null)
                 {
@@ -383,16 +411,21 @@ public static partial class LegacyWebFormsExtractor
                 }
             }
 
+            var dataBindings = ParseDataBindings(activeMarkup, source, controls, gaps);
+            var postBackTargets = ParseMarkupPostBackTargets(file.RelativePath, activeMarkup, source, gaps);
+
             return page with
             {
                 Controls = controls.OrderBy(control => control.Line).ThenBy(control => control.ControlId, StringComparer.Ordinal).ThenBy(control => control.ControlType, StringComparer.Ordinal).ToArray(),
                 Bindings = bindings.OrderBy(binding => binding.Line).ThenBy(binding => binding.ControlId, StringComparer.Ordinal).ThenBy(binding => binding.EventName, StringComparer.Ordinal).ThenBy(binding => binding.HandlerName, StringComparer.Ordinal).ToArray(),
+                DataBindings = dataBindings,
+                PostBackTargets = postBackTargets,
                 Gaps = gaps.OrderBy(gap => gap.Line).ThenBy(gap => gap.GapKind, StringComparer.Ordinal).ToArray()
             };
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return new WebFormsPage(file.RelativePath, MarkupKind(file.RelativePath), Path.GetFileNameWithoutExtension(file.RelativePath), null, null, null, ResolveLinkedCodePath(file.RelativePath, null), null, false, null, 1, [], [], [], [new WebFormsGap("UnreadableWebFormsMarkup", "Unable to read WebForms markup for extraction.", 1)]);
+            return new WebFormsPage(file.RelativePath, MarkupKind(file.RelativePath), Path.GetFileNameWithoutExtension(file.RelativePath), null, null, null, ResolveLinkedCodePath(file.RelativePath, null), null, false, null, 1, [], [], [], [], [], [new WebFormsGap("UnreadableWebFormsMarkup", "Unable to read WebForms markup for extraction.", 1)]);
         }
     }
 
@@ -983,6 +1016,554 @@ public static partial class LegacyWebFormsExtractor
             properties: properties);
     }
 
+    private static void AddStaticCompositionFacts(
+        ScanManifest manifest,
+        WebFormsPage page,
+        CodeFact pageFact,
+        IReadOnlyList<CodeFact> controlFacts,
+        WebFormsContext context,
+        List<CodeFact> facts)
+    {
+        var controlsById = page.Controls
+            .GroupBy(control => control.ControlId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+        var controlFactsByIdentity = controlFacts
+            .Where(fact => fact.TargetSymbol is not null)
+            .GroupBy(fact => fact.TargetSymbol!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
+
+        foreach (var control in page.Controls.Where(control => control.DataSourceId is not null))
+        {
+            var sourceIdentity = ControlIdentity(SurfaceIdentity(page.FilePath), control);
+            var sourceFact = FindControlFact(controlFactsByIdentity, sourceIdentity, control);
+            if ((controlsById.GetValueOrDefault(control.ControlId) ?? []).Length != 1)
+            {
+                facts.Add(CreateGap(
+                    manifest,
+                    page.FilePath,
+                    control.Line,
+                    "AmbiguousWebFormsDataBindingSource",
+                    "A DataSourceID source control uses a duplicate same-surface ID; TraceMap did not choose one source control."));
+                continue;
+            }
+            var matches = controlsById.GetValueOrDefault(control.DataSourceId!) ?? [];
+            if (matches.Length != 1)
+            {
+                facts.Add(CreateGap(
+                    manifest,
+                    page.FilePath,
+                    control.Line,
+                    matches.Length == 0 ? "UnresolvedWebFormsDataSourceId" : "AmbiguousWebFormsDataSourceId",
+                    matches.Length == 0
+                        ? "A static DataSourceID did not match one control on the same markup surface."
+                        : "A static DataSourceID matched multiple controls on the same markup surface; TraceMap did not choose one."));
+                continue;
+            }
+
+            var target = matches[0];
+            var targetIdentity = ControlIdentity(SurfaceIdentity(page.FilePath), target);
+            var targetFact = FindControlFact(controlFactsByIdentity, targetIdentity, target);
+            facts.Add(CreateStaticCompositionFact(
+                manifest,
+                FactTypes.WebFormsDataBindingCandidate,
+                RuleIds.LegacyWebFormsDataBinding,
+                EvidenceTiers.Tier2Structural,
+                page.FilePath,
+                control.Line,
+                control.SnippetHash,
+                sourceIdentity,
+                targetIdentity,
+                "DataSourceID",
+                "bounded-static-webforms-data-binding",
+                "A same-surface DataSourceID match is a declarative correlation candidate; it does not prove successful binding, returned rows, rendering, or runtime use.",
+                new[] { pageFact.FactId, sourceFact?.FactId, targetFact?.FactId },
+                endLine: control.EndLine));
+        }
+
+        foreach (var binding in page.DataBindings)
+        {
+            var enclosing = binding.EnclosingControlSyntaxStart is null
+                ? null
+                : page.Controls.SingleOrDefault(control => control.SyntaxStart == binding.EnclosingControlSyntaxStart);
+            var sourceIdentity = enclosing is null
+                ? SurfaceIdentity(page.FilePath)
+                : ControlIdentity(SurfaceIdentity(page.FilePath), enclosing);
+            var sourceFact = enclosing is null
+                ? pageFact
+                : FindControlFact(controlFactsByIdentity, sourceIdentity, enclosing) ?? pageFact;
+            var targetIdentity = $"webforms-binding-field:{binding.FieldHash}";
+            var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["bindingKind"] = binding.BindingKind,
+                ["coverageLabel"] = "bounded-static-webforms-data-binding",
+                ["fieldHash"] = binding.FieldHash,
+                ["fieldLength"] = binding.FieldLength.ToString(),
+                ["supportingFactIds"] = string.Join(",", new[] { pageFact.FactId, sourceFact.FactId }.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal)),
+                ["ruleLimitations"] = "Eval/Bind literal evidence is a static field-expression candidate and does not prove a data source, successful evaluation, returned value, rendering, or runtime reachability."
+            };
+            if (enclosing is not null)
+            {
+                properties["enclosingControlIdentity"] = sourceIdentity;
+                properties["enclosingControlLine"] = enclosing.Line.ToString();
+            }
+            facts.Add(FactFactory.Create(
+                manifest,
+                FactTypes.WebFormsDataBindingCandidate,
+                RuleIds.LegacyWebFormsDataBinding,
+                EvidenceTiers.Tier3SyntaxOrTextual,
+                new EvidenceSpan(page.FilePath, binding.Line, binding.EndLine, binding.SnippetHash, "LegacyWebFormsExtractor", ScannerVersions.LegacyWebFormsExtractor),
+                sourceSymbol: sourceIdentity,
+                targetSymbol: targetIdentity,
+                contractElement: binding.BindingKind,
+                properties: properties));
+        }
+
+        foreach (var target in page.PostBackTargets)
+        {
+            AddPostBackTargetFact(manifest, page, pageFact, controlFactsByIdentity, controlsById, target, facts);
+        }
+
+        if (page.LinkedCodePath is null)
+        {
+            return;
+        }
+
+        var methods = context.CodeFiles
+            .Where(file => file.FilePath.Equals(page.LinkedCodePath, StringComparison.Ordinal))
+            .SelectMany(file => file.Methods)
+            .Where(method => PageTypeMatches(page.PageTypeName, method.PageTypeName))
+            .OrderBy(method => method.Line)
+            .ThenBy(method => method.MethodName, StringComparer.Ordinal)
+            .ToArray();
+        foreach (var method in methods)
+        {
+            AddLifecycleContextFacts(manifest, page, method, pageFact, facts);
+            AddClientScriptFacts(manifest, page, method, pageFact, controlFactsByIdentity, controlsById, facts);
+        }
+    }
+
+    private static void AddLifecycleContextFacts(
+        ScanManifest manifest,
+        WebFormsPage page,
+        WebFormsMethod method,
+        CodeFact pageFact,
+        List<CodeFact> facts)
+    {
+        if (method.MethodName is not ("Page_Init" or "Page_Load" or "Page_PreRender"))
+        {
+            return;
+        }
+
+        foreach (var statement in method.Declaration.DescendantNodes().OfType<IfStatementSyntax>())
+        {
+            if (!ContainsIsPostBack(statement.Condition))
+            {
+                continue;
+            }
+
+            var line = statement.SyntaxTree.GetLineSpan(statement.Condition.Span).StartLinePosition.Line + 1;
+            if (HasLocalIsPostBackShadow(method.Declaration))
+            {
+                facts.Add(CreateGap(manifest, method.FilePath, line, "AmbiguousWebFormsIsPostBackReceiver", "A local or parameter shadows IsPostBack in this method; TraceMap did not treat the condition as Page lifecycle evidence."));
+                continue;
+            }
+            if (!IsNotPostBackCondition(statement.Condition))
+            {
+                facts.Add(CreateGap(manifest, method.FilePath, line, "UnsupportedWebFormsIsPostBackCondition", "An IsPostBack condition is visible, but it is outside the bounded static !IsPostBack shape."));
+                continue;
+            }
+
+            var sourceIdentity = StructuralHandlerIdentity(page, method.MethodName, method.FilePath, method.Line);
+            var targetIdentity = $"webforms-lifecycle-branch:{FactFactory.Hash($"{sourceIdentity}|not-is-postback|{line}", 24)}";
+            facts.Add(CreateStaticCompositionFact(
+                manifest,
+                FactTypes.WebFormsLifecycleBranchCandidate,
+                RuleIds.LegacyWebFormsLifecycleContext,
+                EvidenceTiers.Tier3SyntaxOrTextual,
+                method.FilePath,
+                line,
+                FactFactory.Hash(statement.Condition.ToString(), 32),
+                sourceIdentity,
+                targetIdentity,
+                "NotIsPostBackBranch",
+                "bounded-static-webforms-lifecycle-context",
+                "The syntax establishes an enclosing !IsPostBack branch candidate only; it does not prove which branch ran, lifecycle ordering, state availability, or runtime behavior.",
+                [pageFact.FactId],
+                new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["branchContext"] = "not-is-postback-syntax",
+                    ["lifecycleMethod"] = method.MethodName
+                },
+                statement.SyntaxTree.GetLineSpan(statement.Condition.Span).EndLinePosition.Line + 1));
+        }
+    }
+
+    private static void AddClientScriptFacts(
+        ScanManifest manifest,
+        WebFormsPage page,
+        WebFormsMethod method,
+        CodeFact pageFact,
+        IReadOnlyDictionary<string, CodeFact[]> controlFactsByIdentity,
+        IReadOnlyDictionary<string, WebFormsControl[]> controlsById,
+        List<CodeFact> facts)
+    {
+        foreach (var invocation in method.Declaration.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            var methodName = InvocationName(invocation);
+            if (!ClientScriptRegistrationMethods.Contains(methodName))
+            {
+                continue;
+            }
+
+            var line = invocation.SyntaxTree.GetLineSpan(invocation.Span).StartLinePosition.Line + 1;
+            if (!HasSupportedClientScriptReceiver(invocation, method.Declaration))
+            {
+                facts.Add(CreateGap(manifest, method.FilePath, line, "AmbiguousWebFormsClientScriptRegistrationReceiver", "A client-script-like method name has no supported Page, ClientScript, or ScriptManager receiver; TraceMap did not classify it as a registration."));
+                continue;
+            }
+            var payloadExpression = ClientScriptPayloadExpression(invocation, methodName);
+            if (payloadExpression is not LiteralExpressionSyntax payloadLiteral
+                || !payloadLiteral.IsKind(SyntaxKind.StringLiteralExpression))
+            {
+                facts.Add(CreateGap(manifest, method.FilePath, line, "DynamicWebFormsClientScriptRegistration", "A client-script-like call does not match a supported overload with a literal string payload; TraceMap did not inspect or infer the script."));
+                continue;
+            }
+
+            var payload = payloadLiteral.Token.ValueText;
+            var payloadHash = FactFactory.Hash(payload, 32);
+            var sourceIdentity = StructuralHandlerIdentity(page, method.MethodName, method.FilePath, method.Line);
+            var targetIdentity = $"webforms-client-script:{payloadHash}";
+            var branchContext = IsInsideNotPostBackTrueBranch(invocation, method)
+                ? "inside-not-is-postback-syntax"
+                : "not-observed";
+            facts.Add(CreateStaticCompositionFact(
+                manifest,
+                FactTypes.WebFormsClientScriptRegistrationCandidate,
+                RuleIds.LegacyWebFormsClientScript,
+                EvidenceTiers.Tier3SyntaxOrTextual,
+                method.FilePath,
+                line,
+                FactFactory.Hash(invocation.ToString(), 32),
+                sourceIdentity,
+                targetIdentity,
+                methodName,
+                "bounded-static-webforms-client-script",
+                "A literal registration call is syntax evidence only; TraceMap stores a hash, does not render or execute the script, and does not prove registration success, branch execution, or client behavior.",
+                [pageFact.FactId],
+                new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["branchContext"] = branchContext,
+                    ["payloadHash"] = payloadHash,
+                    ["payloadLength"] = payload.Length.ToString(),
+                    ["registrationMethod"] = methodName
+                },
+                invocation.SyntaxTree.GetLineSpan(invocation.Span).EndLinePosition.Line + 1));
+
+            var literalPostBackStarts = new HashSet<int>();
+            foreach (Match match in PostBackLiteralRegex().Matches(payload))
+            {
+                literalPostBackStarts.Add(match.Index);
+                var value = MatchLiteralValue(match);
+                if (string.IsNullOrEmpty(value))
+                {
+                    continue;
+                }
+                AddPostBackTargetFact(
+                    manifest,
+                    page,
+                    pageFact,
+                    controlFactsByIdentity,
+                    controlsById,
+                    new WebFormsPostBackTarget(
+                        method.FilePath,
+                        FactFactory.Hash(value, 32),
+                        value.Length,
+                        SafeIdentifier(value),
+                        line,
+                        invocation.SyntaxTree.GetLineSpan(invocation.Span).EndLinePosition.Line + 1,
+                        FactFactory.Hash(invocation.ToString(), 32),
+                        "client-script-literal"),
+                    facts);
+            }
+
+            if (PostBackInvocationRegex().Matches(payload)
+                .Any(match => !literalPostBackStarts.Contains(match.Index)))
+            {
+                facts.Add(CreateGap(
+                    manifest,
+                    method.FilePath,
+                    line,
+                    "DynamicWebFormsPostBackTarget",
+                    "A literal registered script contains one or more __doPostBack calls without a supported literal first target; TraceMap did not infer those postback targets."));
+            }
+        }
+    }
+
+    private static void AddPostBackTargetFact(
+        ScanManifest manifest,
+        WebFormsPage page,
+        CodeFact pageFact,
+        IReadOnlyDictionary<string, CodeFact[]> controlFactsByIdentity,
+        IReadOnlyDictionary<string, WebFormsControl[]> controlsById,
+        WebFormsPostBackTarget target,
+        List<CodeFact> facts)
+    {
+        var matches = target.StaticTargetId is null ? [] : controlsById.GetValueOrDefault(target.StaticTargetId) ?? [];
+        var matchedControl = matches.Length == 1 ? matches[0] : null;
+        var targetIdentity = matchedControl is null
+            ? $"webforms-postback-target:{target.TargetHash}"
+            : ControlIdentity(SurfaceIdentity(page.FilePath), matchedControl);
+        var targetFact = matchedControl is null ? null : FindControlFact(controlFactsByIdentity, targetIdentity, matchedControl);
+        facts.Add(CreateStaticCompositionFact(
+            manifest,
+            FactTypes.WebFormsPostBackTargetCandidate,
+            RuleIds.LegacyWebFormsPostBackTarget,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            target.FilePath,
+            target.Line,
+            target.SnippetHash,
+            SurfaceIdentity(page.FilePath),
+            targetIdentity,
+            "__doPostBack",
+            matchedControl is null ? "reduced-static-webforms-postback-target" : "bounded-static-webforms-postback-target",
+            "A literal __doPostBack target is a static candidate only; TraceMap does not execute client script, construct UniqueID values, submit a postback, or prove server-side dispatch.",
+            new[] { pageFact.FactId, targetFact?.FactId },
+            new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["sourceKind"] = target.SourceKind,
+                ["targetHash"] = target.TargetHash,
+                ["targetLength"] = target.TargetLength.ToString(),
+                ["targetResolution"] = matchedControl is null ? "unresolved" : "same-surface-control"
+            },
+            target.EndLine));
+        if (matches.Length != 1)
+        {
+            facts.Add(CreateGap(
+                manifest,
+                target.FilePath,
+                target.Line,
+                matches.Length > 1 ? "AmbiguousWebFormsPostBackTarget" : "UnresolvedWebFormsPostBackTarget",
+                matches.Length > 1
+                    ? "A literal __doPostBack target matched multiple controls on the same surface; TraceMap did not choose one."
+                    : "A literal __doPostBack target could not be resolved to one same-surface control."));
+        }
+    }
+
+    private static CodeFact CreateStaticCompositionFact(
+        ScanManifest manifest,
+        string factType,
+        string ruleId,
+        string evidenceTier,
+        string filePath,
+        int line,
+        string? snippetHash,
+        string sourceIdentity,
+        string targetIdentity,
+        string contractElement,
+        string coverageLabel,
+        string limitations,
+        IEnumerable<string?> supportingFactIds,
+        SortedDictionary<string, string>? additionalProperties = null,
+        int? endLine = null)
+    {
+        var properties = additionalProperties ?? new SortedDictionary<string, string>(StringComparer.Ordinal);
+        properties["coverageLabel"] = coverageLabel;
+        properties["supportingFactIds"] = string.Join(",", supportingFactIds.Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value!).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal));
+        properties["ruleLimitations"] = limitations;
+        return FactFactory.Create(
+            manifest,
+            factType,
+            ruleId,
+            evidenceTier,
+            new EvidenceSpan(filePath, line, endLine ?? line, snippetHash, "LegacyWebFormsExtractor", ScannerVersions.LegacyWebFormsExtractor),
+            sourceSymbol: sourceIdentity,
+            targetSymbol: targetIdentity,
+            contractElement: contractElement,
+            properties: properties);
+    }
+
+    private static ExpressionSyntax? ClientScriptPayloadExpression(InvocationExpressionSyntax invocation, string methodName)
+    {
+        var arguments = invocation.ArgumentList.Arguments;
+        var signatures = SupportedClientScriptSignatures(invocation, methodName, arguments.Count);
+        foreach (var signature in signatures)
+        {
+            var assignedParameters = new HashSet<string>(StringComparer.Ordinal);
+            var valid = true;
+            for (var index = 0; index < arguments.Count; index++)
+            {
+                var argument = arguments[index];
+                var parameterName = argument.NameColon?.Name.Identifier.ValueText ?? signature[index];
+                if (!signature.Contains(parameterName, StringComparer.Ordinal)
+                    || !assignedParameters.Add(parameterName))
+                {
+                    valid = false;
+                    break;
+                }
+            }
+
+            if (!valid)
+            {
+                continue;
+            }
+
+            var payloadParameterName = methodName switch
+            {
+                "RegisterStartupScript" or "RegisterClientScriptBlock" or "RegisterOnSubmitStatement" => "script",
+                "RegisterClientScriptInclude" => "url",
+                "RegisterHiddenField" => "initialValue",
+                _ => null
+            };
+            if (payloadParameterName is null)
+            {
+                return null;
+            }
+
+            var namedPayload = arguments.SingleOrDefault(argument =>
+                argument.NameColon?.Name.Identifier.ValueText.Equals(payloadParameterName, StringComparison.Ordinal) == true);
+            if (namedPayload is not null)
+            {
+                return namedPayload.Expression;
+            }
+
+            var payloadIndex = Array.IndexOf(signature, payloadParameterName);
+            if (payloadIndex >= 0 && arguments[payloadIndex].NameColon is null)
+            {
+                return arguments[payloadIndex].Expression;
+            }
+        }
+
+        return null;
+    }
+
+    private static IReadOnlyList<string[]> SupportedClientScriptSignatures(
+        InvocationExpressionSyntax invocation,
+        string methodName,
+        int argumentCount)
+    {
+        if (invocation.Expression is not MemberAccessExpressionSyntax memberAccess)
+        {
+            return [];
+        }
+
+        var receiver = memberAccess.Expression.ToString();
+        var isScriptManager = receiver.Equals("ScriptManager", StringComparison.Ordinal);
+        var isLegacyPage = receiver is "Page" or "this.Page";
+
+        if (isScriptManager)
+        {
+            return (methodName, argumentCount) switch
+            {
+                ("RegisterStartupScript" or "RegisterClientScriptBlock", 5) =>
+                    [["control", "type", "key", "script", "addScriptTags"], ["page", "type", "key", "script", "addScriptTags"]],
+                ("RegisterClientScriptInclude", 4) =>
+                    [["control", "type", "key", "url"], ["page", "type", "key", "url"]],
+                ("RegisterOnSubmitStatement", 4) =>
+                    [["control", "type", "key", "script"], ["page", "type", "key", "script"]],
+                ("RegisterHiddenField", 3) =>
+                    [["control", "hiddenFieldName", "initialValue"], ["page", "hiddenFieldName", "initialValue"]],
+                _ => []
+            };
+        }
+
+        if (isLegacyPage)
+        {
+            return (methodName, argumentCount) switch
+            {
+                ("RegisterStartupScript" or "RegisterClientScriptBlock" or "RegisterOnSubmitStatement", 2) => [["key", "script"]],
+                ("RegisterHiddenField", 2) => [["hiddenFieldName", "initialValue"]],
+                _ => []
+            };
+        }
+
+        return (methodName, argumentCount) switch
+        {
+            ("RegisterStartupScript" or "RegisterClientScriptBlock", 3) => [["type", "key", "script"]],
+            ("RegisterStartupScript" or "RegisterClientScriptBlock", 4) => [["type", "key", "script", "addScriptTags"]],
+            ("RegisterClientScriptInclude", 2) => [["key", "url"]],
+            ("RegisterClientScriptInclude", 3) => [["type", "key", "url"]],
+            ("RegisterOnSubmitStatement", 3) => [["type", "key", "script"]],
+            ("RegisterHiddenField", 2) => [["hiddenFieldName", "initialValue"]],
+            _ => []
+        };
+    }
+
+    private static bool HasSupportedClientScriptReceiver(InvocationExpressionSyntax invocation, MethodDeclarationSyntax method)
+    {
+        if (invocation.Expression is not MemberAccessExpressionSyntax memberAccess)
+        {
+            return false;
+        }
+
+        var receiver = memberAccess.Expression.ToString();
+        var shadowableReceiver = receiver switch
+        {
+            "ClientScript" or "this.ClientScript" => "ClientScript",
+            "ScriptManager" => "ScriptManager",
+            "Page" or "this.Page" or "Page.ClientScript" => "Page",
+            _ => null
+        };
+        if (shadowableReceiver is not null
+            && (HasLocalNameShadow(method, shadowableReceiver)
+                || HasContainingMemberShadow(method, shadowableReceiver)
+                || HasFileScopedTypeShadow(method, shadowableReceiver)))
+        {
+            return false;
+        }
+
+        return receiver.Equals("ClientScript", StringComparison.Ordinal)
+            || receiver.Equals("ScriptManager", StringComparison.Ordinal)
+            || receiver.Equals("Page", StringComparison.Ordinal)
+            || receiver.Equals("this.Page", StringComparison.Ordinal)
+            || receiver.Equals("this.ClientScript", StringComparison.Ordinal)
+            || receiver.Equals("base.ClientScript", StringComparison.Ordinal)
+            || receiver.Equals("Page.ClientScript", StringComparison.Ordinal);
+    }
+
+    private static bool HasLocalNameShadow(MethodDeclarationSyntax method, string name) =>
+        method.ParameterList.Parameters.Any(parameter => parameter.Identifier.ValueText == name)
+        || method.DescendantNodes().OfType<VariableDeclaratorSyntax>()
+            .Any(variable => variable.Identifier.ValueText == name)
+        || method.DescendantNodes().OfType<LocalFunctionStatementSyntax>()
+            .Any(local => local.Identifier.ValueText == name);
+
+    private static bool HasContainingMemberShadow(MethodDeclarationSyntax method, string name)
+    {
+        var containingType = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
+        return containingType?.Members.Any(member => member switch
+        {
+            FieldDeclarationSyntax field => field.Declaration.Variables.Any(variable => variable.Identifier.ValueText == name),
+            EventFieldDeclarationSyntax eventField => eventField.Declaration.Variables.Any(variable => variable.Identifier.ValueText == name),
+            PropertyDeclarationSyntax property => property.Identifier.ValueText == name,
+            EventDeclarationSyntax @event => @event.Identifier.ValueText == name,
+            _ => false
+        }) == true;
+    }
+
+    private static bool HasFileScopedTypeShadow(MethodDeclarationSyntax method, string name)
+    {
+        var root = method.SyntaxTree.GetCompilationUnitRoot();
+        return root.DescendantNodes().OfType<UsingDirectiveSyntax>().Any(usingDirective =>
+                usingDirective.Alias?.Name.Identifier.ValueText.Equals(name, StringComparison.Ordinal) == true)
+            || root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>()
+                .Any(declaration => declaration.Identifier.ValueText.Equals(name, StringComparison.Ordinal))
+            || root.DescendantNodes().OfType<DelegateDeclarationSyntax>()
+                .Any(declaration => declaration.Identifier.ValueText.Equals(name, StringComparison.Ordinal));
+    }
+
+    private static CodeFact? FindControlFact(
+        IReadOnlyDictionary<string, CodeFact[]> controlFactsByIdentity,
+        string identity,
+        WebFormsControl control)
+    {
+        var candidates = controlFactsByIdentity.GetValueOrDefault(identity) ?? [];
+        var exact = candidates
+            .Where(fact => fact.Evidence.StartLine == control.Line
+                && fact.Evidence.SnippetHash == control.SnippetHash)
+            .ToArray();
+        return exact.Length == 1 ? exact[0] : null;
+    }
+
     private static string ResolveHandlerIdentity(
         WebFormsPage page,
         WebFormsBinding binding,
@@ -1415,8 +1996,157 @@ public static partial class LegacyWebFormsExtractor
             "UnsupportedWebFormsEventAttribute" or "DynamicWebFormsEventSubscription"
                 or "UnsupportedWebFormsEventSubscription" or "UnknownWebFormsEventSubscriptionReceiver"
                 or "AmbiguousWebFormsEventSubscriptionReceiver" => RuleIds.LegacyWebFormsEventBinding,
+            "UnsupportedWebFormsIsPostBackCondition" or "AmbiguousWebFormsIsPostBackReceiver" => RuleIds.LegacyWebFormsLifecycleContext,
+            "DynamicWebFormsClientScriptRegistration" or "AmbiguousWebFormsClientScriptRegistrationReceiver" => RuleIds.LegacyWebFormsClientScript,
+            "UnresolvedWebFormsPostBackTarget" or "AmbiguousWebFormsPostBackTarget"
+                or "DynamicWebFormsPostBackTarget" => RuleIds.LegacyWebFormsPostBackTarget,
+            "UnresolvedWebFormsDataSourceId" or "AmbiguousWebFormsDataSourceId" or "AmbiguousWebFormsDataBindingSource"
+                or "DynamicWebFormsDataSourceId"
+                or "DynamicWebFormsDataBindingExpression" => RuleIds.LegacyWebFormsDataBinding,
             _ => RuleIds.LegacyWebFormsHandlerResolution
         };
+    }
+
+    private static IReadOnlyList<WebFormsDataBinding> ParseDataBindings(
+        string markup,
+        SourceText source,
+        IReadOnlyList<WebFormsControl> controls,
+        List<WebFormsGap> gaps)
+    {
+        var results = new List<WebFormsDataBinding>();
+        var literalStarts = new HashSet<int>();
+        foreach (Match match in DataBindingLiteralRegex().Matches(markup))
+        {
+            literalStarts.Add(match.Index);
+            var value = MatchLiteralValue(match);
+            if (string.IsNullOrEmpty(value))
+            {
+                continue;
+            }
+            var enclosing = controls
+                .Where(control => control.SyntaxStart <= match.Index && control.OpeningSyntaxEnd >= match.Index + match.Length)
+                .OrderByDescending(control => control.SyntaxStart)
+                .ThenBy(control => control.OpeningSyntaxEnd)
+                .FirstOrDefault();
+            results.Add(new WebFormsDataBinding(
+                match.Groups["kind"].Value,
+                FactFactory.Hash(value, 32),
+                value.Length,
+                enclosing?.ControlId,
+                enclosing?.SyntaxStart,
+                LineAt(source, match.Index),
+                LineAt(source, match.Index + match.Length - 1),
+                FactFactory.Hash(match.Value, 32)));
+        }
+
+        foreach (Match match in DataBindingInvocationRegex().Matches(markup))
+        {
+            if (!literalStarts.Contains(match.Index))
+            {
+                gaps.Add(new WebFormsGap("DynamicWebFormsDataBindingExpression", "An Eval/Bind expression does not use a supported literal first argument; TraceMap did not infer a field.", LineAt(source, match.Index)));
+            }
+        }
+
+        return results
+            .OrderBy(item => item.Line)
+            .ThenBy(item => item.BindingKind, StringComparer.Ordinal)
+            .ThenBy(item => item.FieldHash, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<WebFormsPostBackTarget> ParseMarkupPostBackTargets(
+        string filePath,
+        string markup,
+        SourceText source,
+        List<WebFormsGap> gaps)
+    {
+        var results = new List<WebFormsPostBackTarget>();
+        var literalStarts = new HashSet<int>();
+        foreach (Match match in PostBackLiteralRegex().Matches(markup))
+        {
+            literalStarts.Add(match.Index);
+            var value = MatchLiteralValue(match);
+            if (string.IsNullOrEmpty(value))
+            {
+                continue;
+            }
+            results.Add(new WebFormsPostBackTarget(
+                filePath,
+                FactFactory.Hash(value, 32),
+                value.Length,
+                SafeIdentifier(value),
+                LineAt(source, match.Index),
+                LineAt(source, match.Index + match.Length - 1),
+                FactFactory.Hash(match.Value, 32),
+                "markup-literal"));
+        }
+
+        foreach (Match match in PostBackInvocationRegex().Matches(markup))
+        {
+            if (!literalStarts.Contains(match.Index))
+            {
+                gaps.Add(new WebFormsGap("DynamicWebFormsPostBackTarget", "A __doPostBack call has no supported literal first target; TraceMap did not infer a postback target.", LineAt(source, match.Index)));
+            }
+        }
+
+        return results
+            .OrderBy(item => item.Line)
+            .ThenBy(item => item.TargetHash, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static string MatchLiteralValue(Match match) =>
+        match.Groups["dq"].Success ? match.Groups["dq"].Value : match.Groups["sq"].Value;
+
+    private static bool ContainsIsPostBack(ExpressionSyntax expression) =>
+        expression.DescendantNodesAndSelf()
+            .OfType<IdentifierNameSyntax>()
+            .Any(identifier => identifier.Identifier.ValueText == "IsPostBack");
+
+    private static bool HasLocalIsPostBackShadow(MethodDeclarationSyntax method) =>
+        method.ParameterList.Parameters.Any(parameter => parameter.Identifier.ValueText == "IsPostBack")
+        || method.DescendantNodes().OfType<VariableDeclaratorSyntax>()
+            .Any(variable => variable.Identifier.ValueText == "IsPostBack")
+        || method.DescendantNodes().OfType<LocalFunctionStatementSyntax>()
+            .Any(local => local.Identifier.ValueText == "IsPostBack");
+
+    private static bool IsInsideNotPostBackTrueBranch(SyntaxNode node, WebFormsMethod method)
+    {
+        if (HasLocalIsPostBackShadow(method.Declaration))
+        {
+            return false;
+        }
+
+        foreach (var statement in node.Ancestors().OfType<IfStatementSyntax>())
+        {
+            if (!IsNotPostBackCondition(statement.Condition))
+            {
+                continue;
+            }
+
+            return statement.Statement.Span.Contains(node.Span);
+        }
+
+        return false;
+    }
+
+    private static bool IsNotPostBackCondition(ExpressionSyntax expression)
+    {
+        expression = expression is ParenthesizedExpressionSyntax parenthesized ? parenthesized.Expression : expression;
+        if (expression is not PrefixUnaryExpressionSyntax prefix
+            || !prefix.IsKind(SyntaxKind.LogicalNotExpression))
+        {
+            return false;
+        }
+        var operand = prefix.Operand is ParenthesizedExpressionSyntax operandParenthesized
+            ? operandParenthesized.Expression
+            : prefix.Operand;
+        return operand is IdentifierNameSyntax identifier && identifier.Identifier.ValueText == "IsPostBack"
+            || operand is MemberAccessExpressionSyntax
+            {
+                Expression: ThisExpressionSyntax,
+                Name: IdentifierNameSyntax member
+            } && member.Identifier.ValueText == "IsPostBack";
     }
 
     private static SortedDictionary<string, string> ParseAttributes(string text)
@@ -2026,6 +2756,18 @@ public static partial class LegacyWebFormsExtractor
     [GeneratedRegex(@"^On[A-Za-z][A-Za-z0-9_]{0,63}$", RegexOptions.IgnoreCase)]
     private static partial Regex BoundedStaticEventAttributeRegex();
 
+    [GeneratedRegex("""<%#\s*(?<kind>Eval|Bind)\s*\(\s*(?:"(?<dq>[^"]+)"|'(?<sq>[^']+)')\s*(?=,|\))""", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    private static partial Regex DataBindingLiteralRegex();
+
+    [GeneratedRegex(@"<%#\s*(?<kind>Eval|Bind)\s*\(", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    private static partial Regex DataBindingInvocationRegex();
+
+    [GeneratedRegex("""(?<![A-Za-z0-9_$.])__doPostBack\s*\(\s*(?:"(?<dq>[^"]+)"|'(?<sq>[^']+)')\s*(?=,)""", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    private static partial Regex PostBackLiteralRegex();
+
+    [GeneratedRegex(@"(?<![A-Za-z0-9_$.])__doPostBack\s*\(", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    private static partial Regex PostBackInvocationRegex();
+
     private sealed class WebFormsEvidenceIndex(
         IReadOnlyDictionary<string, IReadOnlyList<CodeFact>> factsByFile,
         IReadOnlyDictionary<string, IReadOnlySet<string>> projectPathsByFile)
@@ -2121,6 +2863,8 @@ public static partial class LegacyWebFormsExtractor
         IReadOnlyList<WebFormsUserControlRegistration> Registrations,
         IReadOnlyList<WebFormsControl> Controls,
         IReadOnlyList<WebFormsBinding> Bindings,
+        IReadOnlyList<WebFormsDataBinding> DataBindings,
+        IReadOnlyList<WebFormsPostBackTarget> PostBackTargets,
         IReadOnlyList<WebFormsGap> Gaps);
 
     private sealed record WebFormsControl(
@@ -2135,8 +2879,32 @@ public static partial class LegacyWebFormsExtractor
         int? RegistrationDeclarationLine,
         string? CommandName,
         string? ContentPlaceHolderId,
+        string? DataSourceId,
         int Line,
-        string? SnippetHash);
+        int EndLine,
+        string? SnippetHash,
+        int SyntaxStart,
+        int OpeningSyntaxEnd);
+
+    private sealed record WebFormsDataBinding(
+        string BindingKind,
+        string FieldHash,
+        int FieldLength,
+        string? EnclosingControlId,
+        int? EnclosingControlSyntaxStart,
+        int Line,
+        int EndLine,
+        string SnippetHash);
+
+    private sealed record WebFormsPostBackTarget(
+        string FilePath,
+        string TargetHash,
+        int TargetLength,
+        string? StaticTargetId,
+        int Line,
+        int EndLine,
+        string SnippetHash,
+        string SourceKind);
 
     private sealed record WebFormsUserControlRegistration(
         string TagPrefix,
