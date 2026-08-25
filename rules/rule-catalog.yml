@@ -2202,6 +2202,7 @@ rules:
       - WebFormsClientScriptRegistrationCandidate
       - AnalysisGap
     limitations:
+      - Supported receiver names are rejected when aliased or redeclared by a file-local custom type; semantic framework identity is not inferred under reduced compilation.
       - Registration-call syntax does not prove successful registration, rendered output, script execution, browser behavior, branch execution, or runtime reachability.
       - Dynamic payloads, ambiguous, shadowed, or custom same-named receivers, unsupported positional or named argument shapes, wrapper methods, reflection, generated scripts, and unsupported registration APIs remain gaps; raw script bodies are not retained.
 
@@ -2213,6 +2214,7 @@ rules:
       - WebFormsPostBackTargetCandidate
       - AnalysisGap
     limitations:
+      - Only standalone `__doPostBack` identifiers are considered; prefixed identifiers and member-qualified custom functions are ignored.
       - Literal targets are hashed and do not prove generated UniqueID values, browser execution, form submission, server dispatch, event handling, or runtime reachability.
       - Dynamic targets, naming containers, templated controls, event validation, and cross-surface resolution remain gaps.
 
