@@ -262,7 +262,11 @@ public static class MarkdownReportWriter
                 or FactTypes.WebFormsCompositionDeclared
                 or FactTypes.WebFormsEventBindingDeclared
                 or FactTypes.WebFormsDesignerControlDeclared
-                or FactTypes.WebFormsHandlerResolved),
+                or FactTypes.WebFormsHandlerResolved
+                or FactTypes.WebFormsLifecycleBranchCandidate
+                or FactTypes.WebFormsClientScriptRegistrationCandidate
+                or FactTypes.WebFormsPostBackTargetCandidate
+                or FactTypes.WebFormsDataBindingCandidate),
             FormatWebFormsEventFact);
 
         AddFactSection(
@@ -864,6 +868,10 @@ public static class MarkdownReportWriter
             FactTypes.WebFormsControlDeclared => $"- control `{fact.Properties.GetValueOrDefault("controlId") ?? DisplayFactName(fact)}` type `{fact.Properties.GetValueOrDefault("controlType") ?? "unknown"}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`",
             FactTypes.WebFormsUserControlRegistered => $"- user-control registration `{fact.Properties.GetValueOrDefault("tagPrefix") ?? "unknown"}:{fact.Properties.GetValueOrDefault("tagName") ?? "unknown"}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`",
             FactTypes.WebFormsCompositionDeclared => $"- composition `{fact.Properties.GetValueOrDefault("relationshipKind") ?? "unknown"}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`",
+            FactTypes.WebFormsLifecycleBranchCandidate => $"- lifecycle context `{fact.Properties.GetValueOrDefault("branchContext") ?? "unknown"}` in `{fact.Properties.GetValueOrDefault("lifecycleMethod") ?? "unknown"}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`",
+            FactTypes.WebFormsClientScriptRegistrationCandidate => $"- client-script registration `{fact.Properties.GetValueOrDefault("registrationMethod") ?? "unknown"}` with hashed payload ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`",
+            FactTypes.WebFormsPostBackTargetCandidate => $"- postback target candidate `{fact.Properties.GetValueOrDefault("targetResolution") ?? "unresolved"}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`",
+            FactTypes.WebFormsDataBindingCandidate => $"- data-binding candidate `{fact.Properties.GetValueOrDefault("bindingKind") ?? fact.ContractElement ?? "unknown"}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`",
             _ => $"- `{fact.FactType}` `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`"
         };
     }
