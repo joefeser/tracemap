@@ -343,6 +343,7 @@ public static partial class LegacyWebFormsExtractor
                     SafeIdentifier(attrs.GetValueOrDefault("ContentPlaceHolderID")),
                     SafeIdentifier(attrs.GetValueOrDefault("DataSourceID")),
                     line,
+                    LineAt(source, match.Index + match.Length - 1),
                     FactFactory.Hash(match.Value, 32),
                     match.Index,
                     match.Index + match.Length));
@@ -1063,7 +1064,8 @@ public static partial class LegacyWebFormsExtractor
                 "DataSourceID",
                 "bounded-static-webforms-data-binding",
                 "A same-surface DataSourceID match is a declarative correlation candidate; it does not prove successful binding, returned rows, rendering, or runtime use.",
-                new[] { pageFact.FactId, sourceFact?.FactId, targetFact?.FactId }));
+                new[] { pageFact.FactId, sourceFact?.FactId, targetFact?.FactId },
+                endLine: control.EndLine));
         }
 
         foreach (var binding in page.DataBindings)
@@ -1097,7 +1099,7 @@ public static partial class LegacyWebFormsExtractor
                 FactTypes.WebFormsDataBindingCandidate,
                 RuleIds.LegacyWebFormsDataBinding,
                 EvidenceTiers.Tier3SyntaxOrTextual,
-                new EvidenceSpan(page.FilePath, binding.Line, binding.Line, binding.SnippetHash, "LegacyWebFormsExtractor", ScannerVersions.LegacyWebFormsExtractor),
+                new EvidenceSpan(page.FilePath, binding.Line, binding.EndLine, binding.SnippetHash, "LegacyWebFormsExtractor", ScannerVersions.LegacyWebFormsExtractor),
                 sourceSymbol: sourceIdentity,
                 targetSymbol: targetIdentity,
                 contractElement: binding.BindingKind,
@@ -1179,7 +1181,8 @@ public static partial class LegacyWebFormsExtractor
                 {
                     ["branchContext"] = "not-is-postback-syntax",
                     ["lifecycleMethod"] = method.MethodName
-                }));
+                },
+                statement.SyntaxTree.GetLineSpan(statement.Condition.Span).EndLinePosition.Line + 1));
         }
     }
 
@@ -1201,7 +1204,7 @@ public static partial class LegacyWebFormsExtractor
             }
 
             var line = invocation.SyntaxTree.GetLineSpan(invocation.Span).StartLinePosition.Line + 1;
-            if (!HasSupportedClientScriptReceiver(invocation))
+            if (!HasSupportedClientScriptReceiver(invocation, method.Declaration))
             {
                 facts.Add(CreateGap(manifest, method.FilePath, line, "AmbiguousWebFormsClientScriptRegistrationReceiver", "A client-script-like method name has no supported Page, ClientScript, or ScriptManager receiver; TraceMap did not classify it as a registration."));
                 continue;
@@ -1241,7 +1244,8 @@ public static partial class LegacyWebFormsExtractor
                     ["payloadHash"] = payloadHash,
                     ["payloadLength"] = payload.Length.ToString(),
                     ["registrationMethod"] = methodName
-                }));
+                },
+                invocation.SyntaxTree.GetLineSpan(invocation.Span).EndLinePosition.Line + 1));
 
             foreach (Match match in PostBackLiteralRegex().Matches(payload))
             {
@@ -1256,7 +1260,15 @@ public static partial class LegacyWebFormsExtractor
                     pageFact,
                     controlFactsByIdentity,
                     controlsById,
-                    new WebFormsPostBackTarget(method.FilePath, FactFactory.Hash(value, 32), value.Length, SafeIdentifier(value), line, FactFactory.Hash(invocation.ToString(), 32), "client-script-literal"),
+                    new WebFormsPostBackTarget(
+                        method.FilePath,
+                        FactFactory.Hash(value, 32),
+                        value.Length,
+                        SafeIdentifier(value),
+                        line,
+                        invocation.SyntaxTree.GetLineSpan(invocation.Span).EndLinePosition.Line + 1,
+                        FactFactory.Hash(invocation.ToString(), 32),
+                        "client-script-literal"),
                     facts);
             }
         }
@@ -1297,7 +1309,8 @@ public static partial class LegacyWebFormsExtractor
                 ["targetHash"] = target.TargetHash,
                 ["targetLength"] = target.TargetLength.ToString(),
                 ["targetResolution"] = matchedControl is null ? "unresolved" : "same-surface-control"
-            }));
+            },
+            target.EndLine));
         if (matches.Length != 1)
         {
             facts.Add(CreateGap(
@@ -1325,7 +1338,8 @@ public static partial class LegacyWebFormsExtractor
         string coverageLabel,
         string limitations,
         IEnumerable<string?> supportingFactIds,
-        SortedDictionary<string, string>? additionalProperties = null)
+        SortedDictionary<string, string>? additionalProperties = null,
+        int? endLine = null)
     {
         var properties = additionalProperties ?? new SortedDictionary<string, string>(StringComparer.Ordinal);
         properties["coverageLabel"] = coverageLabel;
@@ -1336,7 +1350,7 @@ public static partial class LegacyWebFormsExtractor
             factType,
             ruleId,
             evidenceTier,
-            new EvidenceSpan(filePath, line, line, snippetHash, "LegacyWebFormsExtractor", ScannerVersions.LegacyWebFormsExtractor),
+            new EvidenceSpan(filePath, line, endLine ?? line, snippetHash, "LegacyWebFormsExtractor", ScannerVersions.LegacyWebFormsExtractor),
             sourceSymbol: sourceIdentity,
             targetSymbol: targetIdentity,
             contractElement: contractElement,
@@ -1351,6 +1365,22 @@ public static partial class LegacyWebFormsExtractor
             return null;
         }
 
+        var payloadParameterName = methodName switch
+        {
+            "RegisterStartupScript" or "RegisterClientScriptBlock" or "RegisterOnSubmitStatement" => "script",
+            "RegisterClientScriptInclude" => "url",
+            "RegisterHiddenField" => "initialValue",
+            _ => null
+        };
+        var namedArguments = arguments.Where(argument => argument.NameColon is not null).ToArray();
+        if (namedArguments.Length > 0)
+        {
+            var namedPayloads = namedArguments
+                .Where(argument => argument.NameColon!.Name.Identifier.ValueText.Equals(payloadParameterName, StringComparison.Ordinal))
+                .ToArray();
+            return namedPayloads.Length == 1 ? namedPayloads[0].Expression : null;
+        }
+
         if (methodName is "RegisterStartupScript" or "RegisterClientScriptBlock"
             && arguments.Count >= 4)
         {
@@ -1360,7 +1390,7 @@ public static partial class LegacyWebFormsExtractor
         return arguments[^1].Expression;
     }
 
-    private static bool HasSupportedClientScriptReceiver(InvocationExpressionSyntax invocation)
+    private static bool HasSupportedClientScriptReceiver(InvocationExpressionSyntax invocation, MethodDeclarationSyntax method)
     {
         if (invocation.Expression is not MemberAccessExpressionSyntax memberAccess)
         {
@@ -1368,6 +1398,14 @@ public static partial class LegacyWebFormsExtractor
         }
 
         var receiver = memberAccess.Expression.ToString();
+        var shadowableReceiver = receiver is "ClientScript" or "ScriptManager" or "Page" or "Page.ClientScript"
+            ? receiver.Split('.')[0]
+            : null;
+        if (shadowableReceiver is not null && HasLocalNameShadow(method, shadowableReceiver))
+        {
+            return false;
+        }
+
         return receiver.Equals("ClientScript", StringComparison.Ordinal)
             || receiver.Equals("ScriptManager", StringComparison.Ordinal)
             || receiver.Equals("Page", StringComparison.Ordinal)
@@ -1376,6 +1414,13 @@ public static partial class LegacyWebFormsExtractor
             || receiver.Equals("base.ClientScript", StringComparison.Ordinal)
             || receiver.Equals("Page.ClientScript", StringComparison.Ordinal);
     }
+
+    private static bool HasLocalNameShadow(MethodDeclarationSyntax method, string name) =>
+        method.ParameterList.Parameters.Any(parameter => parameter.Identifier.ValueText == name)
+        || method.DescendantNodes().OfType<VariableDeclaratorSyntax>()
+            .Any(variable => variable.Identifier.ValueText == name)
+        || method.DescendantNodes().OfType<LocalFunctionStatementSyntax>()
+            .Any(local => local.Identifier.ValueText == name);
 
     private static CodeFact? FindControlFact(
         IReadOnlyDictionary<string, CodeFact[]> controlFactsByIdentity,
@@ -1860,6 +1905,7 @@ public static partial class LegacyWebFormsExtractor
                 enclosing?.ControlId,
                 enclosing?.SyntaxStart,
                 LineAt(source, match.Index),
+                LineAt(source, match.Index + match.Length - 1),
                 FactFactory.Hash(match.Value, 32)));
         }
 
@@ -1900,6 +1946,7 @@ public static partial class LegacyWebFormsExtractor
                 value.Length,
                 SafeIdentifier(value),
                 LineAt(source, match.Index),
+                LineAt(source, match.Index + match.Length - 1),
                 FactFactory.Hash(match.Value, 32),
                 "markup-literal"));
         }
@@ -2704,6 +2751,7 @@ public static partial class LegacyWebFormsExtractor
         string? ContentPlaceHolderId,
         string? DataSourceId,
         int Line,
+        int EndLine,
         string? SnippetHash,
         int SyntaxStart,
         int OpeningSyntaxEnd);
@@ -2715,6 +2763,7 @@ public static partial class LegacyWebFormsExtractor
         string? EnclosingControlId,
         int? EnclosingControlSyntaxStart,
         int Line,
+        int EndLine,
         string SnippetHash);
 
     private sealed record WebFormsPostBackTarget(
@@ -2723,6 +2772,7 @@ public static partial class LegacyWebFormsExtractor
         int TargetLength,
         string? StaticTargetId,
         int Line,
+        int EndLine,
         string SnippetHash,
         string SourceKind);
 
