@@ -1675,10 +1675,26 @@ public static partial class LegacyWebFormsExtractor
                 var controls = document.Descendants()
                     .Where(element => element.Name.LocalName == "controls")
                     .Where(element => element.Ancestors().Any(ancestor => ancestor.Name.LocalName == "pages"))
-                    .Where(element => element.Ancestors().Any(ancestor => ancestor.Name.LocalName == "system.web"))
-                    .SelectMany(element => element.Elements().Where(child => child.Name.LocalName == "add"));
-                foreach (var element in controls)
+                    .Where(element => element.Ancestors().Any(ancestor => ancestor.Name.LocalName == "system.web"));
+                foreach (var element in controls.SelectMany(control => control.Elements()))
                 {
+                    if (element.Name.LocalName == "clear")
+                    {
+                        registrations.Clear();
+                        continue;
+                    }
+
+                    if (element.Name.LocalName == "remove")
+                    {
+                        ApplyConfigControlRegistrationRemoval(registrations, element);
+                        continue;
+                    }
+
+                    if (element.Name.LocalName != "add")
+                    {
+                        continue;
+                    }
+
                     var tagPrefix = SafeIdentifier(ConfigAttribute(element, "tagPrefix")) ?? "unknown";
                     var tagName = SafeIdentifier(ConfigAttribute(element, "tagName")) ?? "unknown";
                     var sourceReference = ResolveMarkupReferencePath(config.RelativePath, webApplicationRoot, ConfigAttribute(element, "src"));
@@ -1705,6 +1721,26 @@ public static partial class LegacyWebFormsExtractor
         }
 
         return registrations;
+    }
+
+    private static void ApplyConfigControlRegistrationRemoval(
+        List<WebFormsUserControlRegistration> registrations,
+        XElement element)
+    {
+        var tagPrefix = SafeIdentifier(ConfigAttribute(element, "tagPrefix"));
+        var tagName = SafeIdentifier(ConfigAttribute(element, "tagName"));
+        var namespaceName = SafeIdentifier(ConfigAttribute(element, "namespace"));
+        var assemblyName = SafeIdentifier(ConfigAttribute(element, "assembly"));
+        if (tagPrefix is null && tagName is null && namespaceName is null && assemblyName is null)
+        {
+            return;
+        }
+
+        registrations.RemoveAll(registration =>
+            (tagPrefix is null || registration.TagPrefix.Equals(tagPrefix, StringComparison.OrdinalIgnoreCase))
+            && (tagName is null || registration.TagName.Equals(tagName, StringComparison.OrdinalIgnoreCase))
+            && (namespaceName is null || string.Equals(registration.NamespaceName, namespaceName, StringComparison.Ordinal))
+            && (assemblyName is null || string.Equals(registration.AssemblyName, assemblyName, StringComparison.OrdinalIgnoreCase)));
     }
 
     private static string? ConfigAttribute(XElement element, string name) =>

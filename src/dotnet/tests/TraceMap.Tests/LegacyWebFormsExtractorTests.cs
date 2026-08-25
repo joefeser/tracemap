@@ -660,6 +660,31 @@ public sealed class LegacyWebFormsExtractorTests
             && fact.Properties.GetValueOrDefault("relationshipKind") == "UsesRegisteredUserControl");
     }
 
+    [Theory]
+    [InlineData("<clear />")]
+    [InlineData("<remove tagPrefix=\"uc\" tagName=\"Widget\" />")]
+    public void Scan_honors_child_config_control_registration_removal(string childControlDirective)
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "Pages"));
+        Directory.CreateDirectory(Path.Combine(repo, "Controls"));
+        File.WriteAllText(Path.Combine(repo, "LegacyWeb.csproj"), "<Project ToolsVersion=\"14.0\" />");
+        File.WriteAllText(Path.Combine(repo, "web.config"), "<configuration><system.web><pages><controls><add tagPrefix=\"uc\" tagName=\"Widget\" src=\"~/Controls/Widget.ascx\" /></controls></pages></system.web></configuration>");
+        File.WriteAllText(Path.Combine(repo, "Pages", "web.config"), $"<configuration><system.web><pages><controls>{childControlDirective}</controls></pages></system.web></configuration>");
+        File.WriteAllText(Path.Combine(repo, "Controls", "Widget.ascx"), "<%@ Control Language=\"C#\" Inherits=\"Sample.Widget\" %>");
+        File.WriteAllText(Path.Combine(repo, "Pages", "Default.aspx"), "<%@ Page Language=\"C#\" Inherits=\"Sample.Default\" %><uc:Widget runat=\"server\" ID=\"Widget\" />");
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsCompositionDeclared
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "UsesRegisteredUserControl");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "UnresolvedWebFormsControlRegistration");
+    }
+
     [Fact]
     public void Scan_extracts_markup_binding_handler_designer_and_report_sections()
     {

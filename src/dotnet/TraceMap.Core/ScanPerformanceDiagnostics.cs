@@ -196,7 +196,7 @@ internal sealed class ScanPerformanceTracker
             }
             else
             {
-                if (state == "partial" && runState == "running")
+                if (state == "partial" && runState is "running" or "failed")
                 {
                     runState = "partial";
                 }

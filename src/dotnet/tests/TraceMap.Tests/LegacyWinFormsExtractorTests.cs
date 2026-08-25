@@ -7,6 +7,27 @@ namespace TraceMap.Tests;
 public sealed class LegacyWinFormsExtractorTests
 {
     [Fact]
+    public void Scan_recognizes_form_base_type_imported_inside_block_namespace()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "MainForm.cs"), """
+            namespace Sample
+            {
+                using System.Windows.Forms;
+                public class MainForm : Form { }
+            }
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.WinFormsSurfaceDeclared
+            && fact.TargetSymbol == "Sample.MainForm");
+    }
+
+    [Fact]
     public void Scan_extracts_designer_binding_handler_navigation_callback_resource_and_report_sections()
     {
         using var temp = new TempDirectory();
