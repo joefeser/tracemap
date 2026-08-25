@@ -1,0 +1,114 @@
+{
+  "schemaVersion": "tracemap-migration-extraction-summary/v1",
+  "sanitized": true,
+  "captureMethod": "owner-supplied-sanitized-metadata-and-photo-derived-aggregate-reconstruction",
+  "tracemapCommit": "1804de3432cc154e382396d2bd57ae5391e4c907",
+  "sourceSnapshotIdentity": {
+    "status": "unavailable-in-sanitized-handoff",
+    "limitation": "No private source labels, repository identities, run IDs, or source commit SHAs are retained."
+  },
+  "runOutcome": "failed-partial",
+  "sourceCoverage": {
+    "totalSources": 17,
+    "semanticFullSuccess": 1,
+    "semanticReduced": 16,
+    "failedOrPartial": 16
+  },
+  "lanes": {
+    "E1": {
+      "name": "endpoint-alignment",
+      "state": "not-proven",
+      "supportingRuleIds": [
+        "endpoint.alignment.v1",
+        "csharp.semantic.contractmapping.v1",
+        "csharp.syntax.aspnetroute.v1"
+      ],
+      "evidenceTiers": ["Tier1Semantic", "Tier3SyntaxOrTextual", "Tier4Unknown"],
+      "aggregateCounts": {
+        "configuredPairs": 66,
+        "pairsWithExactMatches": 0,
+        "pairsWithNoAlignedEvidence": 66,
+        "clientCallCandidates": 0,
+        "serverEndpointDeclarations": 414,
+        "normalizedCandidates": 312,
+        "ambiguousCandidates": 0,
+        "unmatchedClusters": 414,
+        "httpMethodUnavailable": 0,
+        "routeIdentityUnavailable": 102
+      },
+      "limitations": [
+        "Zero matches means not-proven alignment, not no interaction.",
+        "Coverage is reduced because most source scans were reduced or partial."
+      ],
+      "nextPrerequisite": "Restore client call evidence first; then run bounded, local-only candidate clustering over existing endpoint and reverse reports using opaque identities."
+    },
+    "E2": {
+      "name": "razor-binding-inventory",
+      "state": "reduced-coverage",
+      "supportingRuleIds": [
+        "csharp.razor.semantic-model-binding-gap.v1",
+        "csharp.semantic.workspace.v1"
+      ],
+      "evidenceTiers": ["Tier4Unknown"],
+      "aggregateCounts": {
+        "exactBindings": 0,
+        "candidateBindings": 0,
+        "reducedBindings": 69,
+        "unavailableBindings": 0,
+        "bindingTypeUnavailable": 67,
+        "bindingPropertyUnavailable": 2
+      },
+      "limitations": [
+        "Current artifacts provide gap diagnostics, not a complete Razor binding inventory."
+      ],
+      "nextPrerequisite": "Recover semantic prerequisites for the highest-gap source scopes before rerunning only Razor-binding extraction."
+    },
+    "E3": {
+      "name": "legacy-event-patterns",
+      "state": "unknown",
+      "supportingRuleIds": ["legacy.winforms.event-binding.v1"],
+      "evidenceTiers": ["Tier4Unknown"],
+      "aggregateCounts": {
+        "webformsMarkupCodeBehindBindings": 0,
+        "winFormsSubscriptions": 11,
+        "razorHandlers": 0,
+        "unknownLegacyEventDiagnostics": 0
+      },
+      "limitations": [
+        "The observed rule identifies WinForms gaps and cannot be relabeled as WebForms evidence.",
+        "No rule-backed artifact in this handoff isolates WebForms markup/code-behind bindings."
+      ],
+      "nextPrerequisite": "Add or run a bounded, rule-backed technology classifier before making WebForms event claims."
+    },
+    "E4": {
+      "name": "angular-typescript-readiness",
+      "state": "blocked-by-toolchain",
+      "supportingRuleIds": ["repo.manifest.v1", "typescript.config.v1"],
+      "evidenceTiers": ["Tier4Unknown"],
+      "aggregateCounts": {
+        "missingModule": 27,
+        "ordinaryTypeError": 105,
+        "typescriptConfigAnalysisGap": 30,
+        "sourceScopesBlockedByToolchain": 6
+      },
+      "limitations": [
+        "Toolchain failures can obscure route, service, and HTTP extraction.",
+        "Compilation/configuration noise is not proof of application defects."
+      ],
+      "nextPrerequisite": "Produce anonymous per-scope readiness categories before any Angular parity work."
+    }
+  },
+  "crossLaneUnknowns": [
+    "Canonical client-to-server endpoint mappings remain unproven.",
+    "Exact Razor binding inventory is unavailable under current coverage.",
+    "WebForms-specific event evidence is not isolated from WinForms diagnostics.",
+    "Angular migration parity cannot be claimed from current artifacts."
+  ],
+  "recommendedNextExtraction": {
+    "id": "E4-client-evidence-readiness-pass",
+    "scope": "existing TypeScript manifest, configuration, and compilation diagnostics only",
+    "expectedOutput": "anonymous per-scope readiness categories and prerequisites for restoring client call extraction",
+    "rescanRequired": false,
+    "followUp": "After prerequisites are corrected, rerun only affected client extraction and then E1 alignment."
+  }
+}

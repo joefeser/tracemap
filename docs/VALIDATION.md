@@ -148,6 +148,13 @@ The run must emit `tracemap-progress ...` lines to stderr immediately, keep
 `/tmp/tracemap-review-progress.json` valid per
 `docs/contracts/tracemap-scan-progress.v1.schema.json` throughout, and leave
 the checkpoint behind with `local-review-publication` completed on success.
+It must also leave
+`/tmp/tracemap-review-progress.json.performance.json` valid per
+`docs/contracts/tracemap-scan-performance.v1.schema.json`, with complete
+specialized-extractor timing coverage on success, a bounded heartbeat count,
+and no source identity. The slowest extractor is reported only from a
+retained start/terminal pair. Both receipts are operational observations, not
+evidence facts.
 An empty `/tmp/tracemap-review-smoke` during execution is expected: work is
 staged in a hidden sibling until the atomic publication rename.
 
@@ -903,7 +910,7 @@ python3 -m unittest scripts.tests.test_legacy_codebase_validation
 git diff --check
 ```
 
-Checked-in fixtures should cover explicit markup event bindings, bounded named control subscriptions, lambda/dynamic and unknown-receiver gaps, missing or stale designer files, exact semantic or linked structural code-behind resolution, proven and unproven cross-file partial handlers, overload/ambiguity gaps, explicit `AutoEventWireup="true"` for `Page_Load`/`Page_Init`, false or unknown auto-wireup gaps, master/content declarations, registered and nested user controls, validator/data-source/command metadata, same-named surfaces in separate folders, surface-qualified combined-path resolution, extractor-to-NDJSON-to-SQLite identity/direction persistence, missing composition targets, direct WCF/SQL reachability, reduced coverage, no-backend-evidence cases, static logic signals, UI-boilerplate signals, deterministic duplicate bindings, and privacy redaction.
+Checked-in fixtures should cover explicit markup event bindings, Tier3 bounded static `OnX` event-like candidates, client-side/dynamic attribute gaps, bounded named control subscriptions, lambda/dynamic and unknown-receiver gaps, missing or stale designer files, exact semantic or linked structural code-behind resolution, proven and unproven cross-file partial handlers, overload/ambiguity gaps, explicit `AutoEventWireup="true"` for `Page_Load`/`Page_Init`, false or unknown auto-wireup gaps, master/content declarations, markup and ancestor-`web.config` user-control registrations, conflicting inherited registration gaps, registered and nested user controls, validator/data-source/command metadata, same-named surfaces in separate folders, surface-qualified combined-path resolution, extractor-to-NDJSON-to-SQLite identity/direction persistence, missing composition targets, direct WCF/SQL reachability, reduced coverage, no-backend-evidence cases, sanitized legacy workspace failure categories, static logic signals, UI-boilerplate signals, deterministic duplicate bindings, and privacy redaction.
 
 Useful inspection queries:
 

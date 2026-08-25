@@ -196,7 +196,7 @@ The .NET adapter emits WebForms-specific evidence for static event entry points:
 | --- | --- | --- |
 | `WebFormsPageDeclared` | Inventories `.aspx`, `.ascx`, and `.master` directives and safe code-behind linkage. | `surfaceIdentity`, `pageTypeName`, `linkedCodePath`, `directiveKind`, `autoEventWireup` |
 | `WebFormsControlDeclared` | Records static server controls from markup. | `surfaceIdentity`, `controlIdentity`, `pageTypeName`, `controlId`, `controlType`, `designerFactId` |
-| `WebFormsUserControlRegistered` | Records static `Register` directives with safe tag identity and repository-relative source linkage. | `surfaceIdentity`, `tagPrefix`, `tagName`, `sourcePath` |
+| `WebFormsUserControlRegistered` | Records static `Register` directives with safe tag identity and either repository-relative source linkage or bounded namespace/assembly identity. | `surfaceIdentity`, `tagPrefix`, `tagName`, `registrationShape`, `sourcePath`, `namespaceName`, `assemblyName` |
 | `WebFormsCompositionDeclared` | Records declared master-page, content-placeholder, and registered user-control composition. | `relationshipKind`, `sourceSymbol`, `targetSymbol`, `supportingFactIds` |
 | `WebFormsEventBindingDeclared` | Records supported static event attributes and bounded named control subscriptions with explicit control/surface-to-handler direction. | `surfaceIdentity`, `controlIdentity`, `eventSourceIdentity`, `handlerSymbolId`, `bindingKind`, `eventName` |
 | `WebFormsDesignerControlDeclared` | Records designer partial-class control fields as supporting evidence. | `pageTypeName`, `fieldName`, `controlType` |
