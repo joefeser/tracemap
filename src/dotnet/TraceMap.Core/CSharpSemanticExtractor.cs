@@ -601,16 +601,27 @@ public static class CSharpSemanticExtractor
             "completed",
             ordinal: projectOrdinal);
 
+        var unavailableCompilationInputObserved = false;
         foreach (var document in project.Documents.OrderBy(document => ToRelativePath(repoPath, document.FilePath), StringComparer.Ordinal))
         {
             cancellationToken.ThrowIfCancellationRequested();
             var projection = ToRelativePathProjection(repoPath, document.FilePath);
             if (!projection.IsExternal && !IsCompilerGeneratedDocument(document, cancellationToken))
             {
-                compilationInputFiles.Add(
-                    compilationInputPaths.TryGetValue(projection.Path, out var canonicalCompilationInputPath)
-                        ? canonicalCompilationInputPath
-                        : projection.Path);
+                if (compilationInputPaths.TryGetValue(projection.Path, out var canonicalCompilationInputPath))
+                {
+                    compilationInputFiles.Add(canonicalCompilationInputPath);
+                }
+                else if (File.Exists(Path.Combine(repoPath, projection.Path.Replace('/', Path.DirectorySeparatorChar))))
+                {
+                    // A repository-local compilation input that appeared after initial
+                    // inventory remains protected so source mutation fails loudly.
+                    compilationInputFiles.Add(projection.Path);
+                }
+                else
+                {
+                    unavailableCompilationInputObserved = true;
+                }
             }
 
             string? canonicalEvidencePath = null;
@@ -631,6 +642,15 @@ public static class CSharpSemanticExtractor
                 protectedSourceSpans,
                 canonicalEvidencePath,
                 cancellationToken);
+        }
+
+        if (unavailableCompilationInputObserved)
+        {
+            gaps.Add(CreateGap(
+                projectPath,
+                "A project-declared C# compilation input was unavailable in the captured source inventory.",
+                "CompilationInputUnavailable",
+                projectPath));
         }
     }
 

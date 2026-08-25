@@ -63,6 +63,7 @@ public static class BuildEnvironmentDiagnosticExtractor
             "MSBuildRegistrationFailed" => "MSBuildRegistrationFailed",
             "RestoreFailed" => CategorizeRestoreFailure(raw),
             "CompilationCreateFailed" or "CompilationMissing" => "CompilationCreationFailed",
+            "CompilationInputUnavailable" => "CompilationInputUnavailable",
             "CompilationDiagnostic" when IsReferenceAssemblyDiagnostic(raw, diagnosticId) => "MissingReferenceAssemblies",
             "WorkspaceDiagnostic" or "ProjectLoadFailed" or "SolutionLoadFailed" when IsSdkResolutionFailure(raw) => "SdkResolutionFailed",
             "WorkspaceDiagnostic" or "ProjectLoadFailed" or "SolutionLoadFailed" when IsReferenceAssemblyDiagnostic(raw, diagnosticId) => "MissingReferenceAssemblies",
@@ -851,6 +852,7 @@ public static class BuildEnvironmentDiagnosticExtractor
             "GeneratedFileMissing" or "GeneratedFileMalformed" or "GeneratedFileUnlinked" => "ReviewGeneratedFileCoverage",
             "SdkResolutionFailed" => "UseCompatibleDotNetSdk",
             "MSBuildRegistrationFailed" or "CompilationCreationFailed" => "UseCompatibleMSBuildToolset",
+            "CompilationInputUnavailable" => "ReviewMissingCompilationInputs",
             _ => "ReviewEnvironmentGap"
         };
     }
@@ -893,6 +895,7 @@ public static class BuildEnvironmentDiagnosticExtractor
             "ReviewNuGetRestoreInputs" => "NuGet restore inputs are present; package resolution is not assumed unless restore is explicitly requested.",
             "ReviewSanitizedRestoreFailure" => "Explicit restore failed with a sanitized category; review package resolution in a compatible environment.",
             "ReviewGeneratedFileCoverage" => "Generated or designer-file evidence may cap semantic coverage for related legacy patterns.",
+            "ReviewMissingCompilationInputs" => "One or more project-declared C# inputs were unavailable in the captured source inventory.",
             "UseCompatibleDotNetSdk" => "A compatible .NET SDK appears necessary for full project load.",
             _ => "Review the environment diagnostic category and supporting evidence."
         };
