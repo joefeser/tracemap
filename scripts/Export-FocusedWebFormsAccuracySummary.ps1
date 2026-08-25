@@ -110,7 +110,7 @@ try {
     $factsPath = Join-Path $reviewRoot "scan/facts.ndjson"
     $manifestPath = Join-Path $reviewRoot "scan/scan-manifest.json"
     if (-not (Test-Path $factsPath -PathType Leaf) -or -not (Test-Path $manifestPath -PathType Leaf)) { throw "RetainedOutputIncomplete" }
-    try { $manifest = [IO.File]::ReadAllText($manifestPath) | ConvertFrom-Json -Depth 30 } catch { throw "ManifestMalformed" }
+    try { $manifest = [IO.File]::ReadAllText($manifestPath) | ConvertFrom-Json } catch { throw "ManifestMalformed" }
     $analysisLevel = [string](Get-OptionalProperty $manifest 'analysisLevel')
     $buildStatus = [string](Get-OptionalProperty $manifest 'buildStatus')
     if ($analysisLevel -notin @('Level1SemanticAnalysis', 'Level1SemanticAnalysisReduced', 'Level3SyntaxAnalysis', 'Level3SyntaxAnalysisReduced') -or
@@ -127,7 +127,7 @@ try {
     [long]$inventoryTotal = 0
 
     foreach ($line in [IO.File]::ReadLines($factsPath)) {
-        try { $fact = $line | ConvertFrom-Json -Depth 50 } catch { throw "FactsParseFailed" }
+        try { $fact = $line | ConvertFrom-Json } catch { throw "FactsParseFailed" }
         $factTotal++
         $factType = [string](Get-OptionalProperty $fact 'factType')
         $ruleId = [string](Get-OptionalProperty $fact 'ruleId')
