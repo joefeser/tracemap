@@ -1957,3 +1957,24 @@ reduced-analysis preservation, five-artifact publication, NDJSON/SQLite parity,
 malformed-schema rejection, and repository-relative evidence. The matrix uses
 only generated repositories and never proves semantic parity, runtime behavior,
 build success, or complete dependency coverage.
+
+### Legacy Web Forms static composition
+
+For changes to Web Forms lifecycle context, client-script registration,
+postback-target, or declarative data-binding evidence, run:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter LegacyWebFormsExtractorTests
+```
+
+The focused suite includes a synthetic, non-compiling .NET Framework 4.5 Web
+Application fixture. Confirm that `!IsPostBack` context, supported literal
+client-script registrations, literal `__doPostBack` targets, exact same-surface
+`DataSourceID` matches, and literal `Eval`/`Bind` expressions emit deterministic,
+rule-backed candidates. Confirm that dynamic or ambiguous shapes emit explicit
+gaps, literal script and binding payloads are retained only as hashes, and
+existing `.ashx`, handler, redirect/transfer, markup-event, lifecycle, and
+reduced-compilation evidence remains present. These candidates do not prove
+runtime reachability, execution, branch selection, rendering, postback dispatch,
+or successful data binding.
