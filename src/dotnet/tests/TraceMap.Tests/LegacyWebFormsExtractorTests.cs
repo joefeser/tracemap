@@ -1270,6 +1270,165 @@ public sealed class LegacyWebFormsExtractorTests
             $"Expected a bounded number of existing-evidence passes, observed {countedFacts.EnumerationCount}.");
     }
 
+    [Fact]
+    public void Scan_composes_lifecycle_script_postback_and_binding_candidates_when_legacy_project_does_not_compile()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Legacy.csproj"), """
+            <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+              <PropertyGroup>
+                <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+                <ProjectTypeGuids>{349c5851-65df-11da-9384-00065b846f21}</ProjectTypeGuids>
+              </PropertyGroup>
+              <ItemGroup>
+                <Compile Include="Default.aspx.cs" />
+                <Compile Include="Missing.Generated.cs" />
+              </ItemGroup>
+              <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+              <Import Project="$(VSToolsPath)\WebApplications\Microsoft.WebApplication.targets" />
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), """
+            <%@ Page Language="C#" AutoEventWireup="true" CodeBehind="Default.aspx.cs" Inherits="Sample.Default" %>
+            <asp:ObjectDataSource runat="server" ID="CustomerSource" />
+            <asp:GridView runat="server" ID="CustomerGrid" DataSourceID="CustomerSource">
+              <Columns>
+                <asp:BoundField runat="server" ID="NameColumn" HeaderText='<%# Eval("CustomerName") %>' />
+                <asp:TemplateField><ItemTemplate><asp:Label runat="server" ID="CodeLabel" Text='<%# Bind("CustomerCode") %>' /></ItemTemplate></asp:TemplateField>
+              </Columns>
+            </asp:GridView>
+            <asp:Button runat="server" ID="SaveButton" OnClick="SaveButton_Click" />
+            <script>__doPostBack('SaveButton', ''); __doPostBack(dynamicTarget, '');</script>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx.cs"), """
+            using System;
+            namespace Sample;
+            public partial class Default
+            {
+                protected void Page_Load(object sender, EventArgs e)
+                {
+                    if (!IsPostBack)
+                    {
+                        ClientScript.RegisterStartupScript(GetType(), "startup", "__doPostBack('SaveButton','')", true);
+                    }
+                    if (IsPostBack && DateTime.Now.Ticks > 0) { }
+                }
+
+                protected void SaveButton_Click(object sender, EventArgs e)
+                {
+                    Response.Redirect("Details.aspx");
+                    Server.Transfer("Review.aspx");
+                }
+            }
+            """);
+        File.WriteAllText(Path.Combine(repo, "Download.ashx"), "<%@ WebHandler Language=\"C#\" Class=\"Sample.DownloadHandler\" %>");
+        File.WriteAllText(Path.Combine(repo, "Download.ashx.cs"), "namespace Sample { public sealed class DownloadHandler { public void ProcessRequest(object context) { } } }");
+        File.WriteAllText(Path.Combine(repo, "web.config"), """
+            <configuration><system.webServer><handlers>
+              <add name="download" path="download.axd" verb="GET" type="Sample.DownloadHandler" />
+            </handlers></system.webServer></configuration>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.NotEqual("Succeeded", result.Manifest.BuildStatus);
+        var lifecycle = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WebFormsLifecycleBranchCandidate);
+        Assert.Equal(RuleIds.LegacyWebFormsLifecycleContext, lifecycle.RuleId);
+        Assert.Equal("not-is-postback-syntax", lifecycle.Properties.GetValueOrDefault("branchContext"));
+        var script = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WebFormsClientScriptRegistrationCandidate);
+        Assert.Equal(RuleIds.LegacyWebFormsClientScript, script.RuleId);
+        Assert.Equal("inside-not-is-postback-syntax", script.Properties.GetValueOrDefault("branchContext"));
+        Assert.NotNull(script.Properties.GetValueOrDefault("payloadHash"));
+        Assert.Equal(2, result.Facts.Count(fact => fact.FactType == FactTypes.WebFormsPostBackTargetCandidate));
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsPostBackTargetCandidate
+            && fact.Properties.GetValueOrDefault("targetResolution") == "same-surface-control");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsDataBindingCandidate
+            && fact.ContractElement == "DataSourceID"
+            && fact.EvidenceTier == EvidenceTiers.Tier2Structural);
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsDataBindingCandidate
+            && fact.ContractElement == "Eval"
+            && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+            && fact.Properties.ContainsKey("fieldHash"));
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsDataBindingCandidate
+            && fact.ContractElement == "Bind"
+            && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+            && fact.Properties.ContainsKey("fieldHash"));
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WebFormsHandlerResolved);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AspNetHandlerDeclared);
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AspNetNavigationReferenceDeclared
+            && fact.Properties.GetValueOrDefault("referenceKind") == "CodeRedirect");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AspNetNavigationReferenceDeclared
+            && fact.Properties.GetValueOrDefault("referenceKind") == "CodeTransfer");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyWebFormsLifecycleContext
+            && fact.Properties.GetValueOrDefault("gapKind") == "UnsupportedWebFormsIsPostBackCondition");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyWebFormsPostBackTarget
+            && fact.Properties.GetValueOrDefault("gapKind") == "DynamicWebFormsPostBackTarget");
+        var serialized = SerializeFacts(result.Facts.Where(fact => fact.RuleId.StartsWith("legacy.webforms", StringComparison.Ordinal)));
+        Assert.DoesNotContain("CustomerName", serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain("CustomerCode", serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain("__doPostBack('SaveButton','')", serialized, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Static_composition_facts_are_deterministic_and_gaps_are_rule_backed()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), """
+            <%@ Page Language="C#" CodeBehind="Default.aspx.cs" Inherits="Sample.Default" %>
+            <asp:Label runat="server" ID="Output" Text='<%# Bind(GetField()) %>' />
+            <script>__doPostBack(resolveTarget(), '');</script>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx.cs"), """
+            namespace Sample;
+            public partial class Default
+            {
+                protected void Page_PreRender(object sender, object e)
+                {
+                    ClientScript.RegisterClientScriptBlock(GetType(), "key", CreateScript(), true);
+                }
+            }
+            """);
+
+        var first = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out-1")));
+        var second = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out-2")));
+        var firstFacts = first.Facts
+            .Where(fact => fact.RuleId is RuleIds.LegacyWebFormsLifecycleContext
+                or RuleIds.LegacyWebFormsClientScript
+                or RuleIds.LegacyWebFormsPostBackTarget
+                or RuleIds.LegacyWebFormsDataBinding)
+            .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
+            .Select(fact => JsonSerializer.Serialize(fact))
+            .ToArray();
+        var secondFacts = second.Facts
+            .Where(fact => fact.RuleId is RuleIds.LegacyWebFormsLifecycleContext
+                or RuleIds.LegacyWebFormsClientScript
+                or RuleIds.LegacyWebFormsPostBackTarget
+                or RuleIds.LegacyWebFormsDataBinding)
+            .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
+            .Select(fact => JsonSerializer.Serialize(fact))
+            .ToArray();
+
+        Assert.Equal(firstFacts, secondFacts);
+        Assert.Contains(first.Facts, fact => fact.RuleId == RuleIds.LegacyWebFormsClientScript && fact.FactType == FactTypes.AnalysisGap);
+        Assert.Contains(first.Facts, fact => fact.RuleId == RuleIds.LegacyWebFormsPostBackTarget && fact.FactType == FactTypes.AnalysisGap);
+        Assert.Contains(first.Facts, fact => fact.RuleId == RuleIds.LegacyWebFormsDataBinding && fact.FactType == FactTypes.AnalysisGap);
+    }
+
     private static void WriteBasicPage(string repo, string handlerName, string handlerBody)
     {
         WritePage(repo, "Default.aspx", "Default.aspx.cs", "Sample.Default", handlerName);

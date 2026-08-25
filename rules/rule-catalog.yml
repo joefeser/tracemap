@@ -2183,6 +2183,50 @@ rules:
       - UI-boilerplate signals are lower-strength syntax evidence and do not prove that a handler is safe, irrelevant, or free of backend effects.
       - Generated code, partial methods, reflection, dynamic dispatch, branch feasibility, and indirect helper calls can hide or dilute signals.
 
+  - id: legacy.webforms.lifecycle-context.v1
+    name: Legacy WebForms lifecycle branch context candidates
+    description: Emits syntax-local lifecycle context candidates for bounded Page_Init, Page_Load, and Page_PreRender methods containing an explicit !IsPostBack branch.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - WebFormsLifecycleBranchCandidate
+      - AnalysisGap
+    limitations:
+      - An enclosing !IsPostBack condition is syntax evidence only and does not prove that a branch ran, lifecycle ordering, state initialization, runtime reachability, or correctness.
+      - Equivalent, negated, compound, helper-based, or dynamic postback conditions outside the documented shape remain explicit gaps.
+
+  - id: legacy.webforms.client-script.v1
+    name: Legacy WebForms client-script registration candidates
+    description: Emits bounded syntax candidates for supported RegisterStartupScript and related client-script registration calls with literal string payloads stored only as hashes.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - WebFormsClientScriptRegistrationCandidate
+      - AnalysisGap
+    limitations:
+      - Registration-call syntax does not prove successful registration, rendered output, script execution, browser behavior, branch execution, or runtime reachability.
+      - Dynamic payloads, wrapper methods, reflection, generated scripts, and unsupported registration APIs remain gaps; raw script bodies are not retained.
+
+  - id: legacy.webforms.postback-target.v1
+    name: Legacy WebForms postback target candidates
+    description: Emits bounded syntax candidates for literal __doPostBack targets in markup and literal registered client-script payloads, with same-surface control correlation where exact.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - WebFormsPostBackTargetCandidate
+      - AnalysisGap
+    limitations:
+      - Literal targets are hashed and do not prove generated UniqueID values, browser execution, form submission, server dispatch, event handling, or runtime reachability.
+      - Dynamic targets, naming containers, templated controls, event validation, and cross-surface resolution remain gaps.
+
+  - id: legacy.webforms.data-binding.v1
+    name: Legacy WebForms declarative data-binding candidates
+    description: Correlates explicit same-surface DataSourceID declarations and inventories literal Eval/Bind field-expression candidates without evaluating markup.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - WebFormsDataBindingCandidate
+      - AnalysisGap
+    limitations:
+      - Static DataSourceID, Eval, and Bind evidence does not prove successful binding, returned rows, evaluated values, rendering, persistence, or runtime reachability.
+      - Dynamic expressions, naming-container resolution, templates, programmatic binding, unsupported property shapes, and ambiguous control IDs remain gaps; field literals are retained only as hashes.
+
   - id: legacy.webforms.modernization-packet.v1
     name: Web Forms modernization evidence packet composition
     description: Composes one immutable TraceMap snapshot's existing Web Forms and legacy-flow evidence into deterministic local-only JSON and Markdown modernization inventory packets.
