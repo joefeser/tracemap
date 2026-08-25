@@ -138,6 +138,39 @@ public sealed class LegacyWebFormsExtractorTests
     }
 
     [Fact]
+    public void Scan_does_not_assign_conditioned_compile_source_to_assembly_registration()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "Web", "Controls"));
+        File.WriteAllText(Path.Combine(repo, "Web", "Widgets.csproj"), """
+            <Project ToolsVersion="12.0">
+              <PropertyGroup><AssemblyName>Sample.Widgets</AssemblyName></PropertyGroup>
+              <ItemGroup Condition="'$(Configuration)' == 'Release'">
+                <Compile Include="Controls\Calendar.cs" />
+              </ItemGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Web", "Controls", "Calendar.cs"), "namespace Sample.Controls; public sealed class Calendar { }");
+        File.WriteAllText(Path.Combine(repo, "Web", "web.config"), """
+            <configuration><system.web><pages><controls>
+              <add tagPrefix="widgets" namespace="Sample.Controls" assembly="Sample.Widgets" />
+            </controls></pages></system.web></configuration>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Web", "Default.aspx"), "<%@ Page Language=\"C#\" Inherits=\"Sample.Default\" %><widgets:Calendar runat=\"server\" ID=\"Calendar\" />");
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyWebFormsComposition
+            && fact.Properties.GetValueOrDefault("gapKind") == "WebFormsAssemblyTypeUnavailable");
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsCompositionDeclared
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "UsesRegisteredAssemblyControl");
+    }
+
+    [Fact]
     public void Scan_applies_host_path_casing_to_explicit_compile_ownership()
     {
         using var temp = new TempDirectory();
@@ -198,9 +231,11 @@ public sealed class LegacyWebFormsExtractorTests
 
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyWebFormsComposition
             && fact.Properties.GetValueOrDefault("gapKind") == "WebFormsAssemblyTypeUnavailable");
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyWebFormsComposition
             && fact.Properties.GetValueOrDefault("gapKind") == "WebFormsAssemblyProjectUnavailable");
         Assert.DoesNotContain(result.Facts, fact =>
             fact.FactType == FactTypes.WebFormsCompositionDeclared
@@ -628,6 +663,45 @@ public sealed class LegacyWebFormsExtractorTests
             && fact.Properties.GetValueOrDefault("relationshipKind") == "UsesRegisteredUserControl");
         Assert.DoesNotContain(result.Facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "UnresolvedWebFormsControlRegistration");
+    }
+
+    [Fact]
+    public void Scan_applies_location_scoped_config_registration_only_to_matching_markup()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "Admin"));
+        Directory.CreateDirectory(Path.Combine(repo, "Public"));
+        Directory.CreateDirectory(Path.Combine(repo, "Controls"));
+        File.WriteAllText(Path.Combine(repo, "LegacyWeb.csproj"), "<Project ToolsVersion=\"14.0\" />");
+        File.WriteAllText(Path.Combine(repo, "web.config"), """
+            <configuration>
+              <location path="Admin">
+                <system.web><pages><controls>
+                  <add tagPrefix="uc" tagName="Widget" src="~/Controls/Widget.ascx" />
+                </controls></pages></system.web>
+              </location>
+            </configuration>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Controls", "Widget.ascx"), "<%@ Control Language=\"C#\" Inherits=\"Sample.Widget\" %>");
+        var markup = "<%@ Page Language=\"C#\" Inherits=\"Sample.Default\" %><uc:Widget runat=\"server\" ID=\"Widget\" />";
+        File.WriteAllText(Path.Combine(repo, "Admin", "Default.aspx"), markup);
+        File.WriteAllText(Path.Combine(repo, "Public", "Default.aspx"), markup);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsCompositionDeclared
+            && fact.Evidence.FilePath == "Admin/Default.aspx"
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "UsesRegisteredUserControl");
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsCompositionDeclared
+            && fact.Evidence.FilePath == "Public/Default.aspx"
+            && fact.Properties.GetValueOrDefault("relationshipKind") == "UsesRegisteredUserControl");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.Evidence.FilePath == "Public/Default.aspx"
             && fact.Properties.GetValueOrDefault("gapKind") == "UnresolvedWebFormsControlRegistration");
     }
 
