@@ -28,7 +28,7 @@ if (-not (Test-Path -LiteralPath $ProgressPath -PathType Leaf)) {
     throw "FOCUSED_PROGRESS_RECEIPT_UNAVAILABLE"
 }
 
-$receipt = Get-Content -LiteralPath $ProgressPath -Raw | ConvertFrom-Json -Depth 20
+$receipt = Get-Content -LiteralPath $ProgressPath -Raw | ConvertFrom-Json
 if ((Get-OptionalProperty $receipt "schemaVersion") -ne "tracemap-scan-progress/v1") {
     throw "FOCUSED_PROGRESS_RECEIPT_UNSUPPORTED"
 }
