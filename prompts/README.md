@@ -16,6 +16,7 @@ published from the normal development environment first.
 - `collect-webforms-extraction-readiness.md`
 - `collect-focused-webforms-gap-extractor-summary.md`
 - `collect-webforms-scope-discovery.md`
+- `review-focused-webforms-coverage-gaps.md`
 - `run-webforms-monorepo-correction.md`
 - `run-focused-webforms-monorepo-scan.md`
 - `run-focused-webforms-one-repo-windows.md`
