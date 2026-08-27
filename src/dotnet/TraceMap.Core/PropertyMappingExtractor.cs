@@ -61,6 +61,15 @@ internal static class PropertyMappingExtractor
 
             if (!assignment.IsKind(SyntaxKind.SimpleAssignmentExpression))
             {
+                // Compound accumulation into a local, parameter, field, or literal is
+                // ordinary value arithmetic, not a member-mapping attempt; only
+                // compound assignments that touch at least one property on a
+                // transforming counterpart stay fail-closed gaps.
+                var compoundFailing = left.State == SideResolutionState.Property ? right : left;
+                if (compoundFailing.State is SideResolutionState.NonPropertySymbol or SideResolutionState.ValueLiteral)
+                {
+                    continue;
+                }
                 AddGapOrCount(
                     projectPath,
                     filePath,
@@ -105,6 +114,30 @@ internal static class PropertyMappingExtractor
                 {
                     continue;
                 }
+                var sourceIdentity = CSharpSymbolIdentityProvider.TryCreate(right.Property);
+                var targetIdentity = CSharpSymbolIdentityProvider.TryCreate(left.Property);
+                if (sourceIdentity is not null
+                    && targetIdentity is not null
+                    && string.Equals(sourceIdentity.SymbolId, targetIdentity.SymbolId, StringComparison.Ordinal))
+                {
+                    // Distinct resolved symbols whose canonical IDs collapse (for
+                    // example differently constructed generic instantiations) must
+                    // fail closed; emitting them would seed false exact-ID self
+                    // joins in the exact-identity composition slice.
+                    AddGapOrCount(
+                        projectPath,
+                        filePath,
+                        assignment,
+                        "PropertyMappingTargetAmbiguous",
+                        "canonical-identity-collision",
+                        containerMethod.Symbol,
+                        left,
+                        right,
+                        ref gapCount,
+                        ref suppressedGaps,
+                        gaps);
+                    continue;
+                }
                 if (!SymbolEqualityComparer.Default.Equals(left.Property!.Type, right.Property!.Type))
                 {
                     AddGapOrCount(
@@ -142,10 +175,11 @@ internal static class PropertyMappingExtractor
             }
 
             // A fully resolved non-property counterpart (local, parameter, field,
-            // or method group) is plain value copy-in/copy-out rather than a
-            // member-mapping attempt; emitting gaps there would be global noise.
+            // or method group) or a plain value literal is ordinary copy-in or
+            // initialization rather than a member-mapping attempt; emitting gaps
+            // there would be global noise.
             var failing = left.State == SideResolutionState.Property ? right : left;
-            if (failing.State == SideResolutionState.NonPropertySymbol)
+            if (failing.State is SideResolutionState.NonPropertySymbol or SideResolutionState.ValueLiteral)
             {
                 continue;
             }
@@ -211,6 +245,7 @@ internal static class PropertyMappingExtractor
     {
         Property,
         NonPropertySymbol,
+        ValueLiteral,
         AmbiguousCandidates,
         UnresolvedBinding,
         DynamicValue,
@@ -273,6 +308,10 @@ internal static class PropertyMappingExtractor
             case IdentifierNameSyntax identifier:
                 boundTarget = identifier;
                 break;
+            case LiteralExpressionSyntax:
+                return new Side(SideResolutionState.ValueLiteral, Detail: "value-literal");
+            case DefaultExpressionSyntax:
+                return new Side(SideResolutionState.ValueLiteral, Detail: "value-literal");
             case InvocationExpressionSyntax:
                 return new Side(SideResolutionState.TransformExpression, Detail: "invocation");
             case BinaryExpressionSyntax binary when !binary.IsKind(SyntaxKind.SimpleAssignmentExpression):
@@ -399,6 +438,7 @@ internal static class PropertyMappingExtractor
         var detail = failingSide.Detail ?? "unsupported";
         var (gapKind, stateValue) = failingSide.State switch
         {
+            SideResolutionState.ValueLiteral => ("PropertyMappingShapeUnsupported", detail),
             SideResolutionState.AmbiguousCandidates => ("PropertyMappingTargetAmbiguous", detail),
             SideResolutionState.DynamicValue => ("PropertyMappingShapeUnsupported", detail),
             SideResolutionState.TransformExpression => ("PropertyMappingShapeUnsupported", detail),

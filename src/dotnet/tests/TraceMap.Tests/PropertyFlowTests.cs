@@ -375,6 +375,9 @@ public sealed class PropertyFlowTests
         var root = Assert.Single(report.SelectedRoots);
         Assert.Equal(RuleIds.RazorModelBinding, root.RuleId);
         Assert.Equal(1, report.Summary.TotalCandidateCount);
+        // The assertion below is only meaningful when at least one path exists;
+        // the syntax target must still produce its first-hop lineage row.
+        Assert.NotEmpty(report.LineagePaths);
         Assert.DoesNotContain(report.LineagePaths.SelectMany(path => path.Nodes), node =>
             node.RuleId is RuleIds.CSharpSemanticPropertyMapping or RuleIds.CSharpSemanticPropertyMappingGap);
     }

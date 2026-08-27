@@ -449,6 +449,139 @@ public sealed class PropertyMappingTests
     }
 
     [Fact]
+    public void Extractor_stays_silent_for_literals_and_compound_accumulation_into_locals()
+    {
+        const string source = """
+            namespace Fixt;
+
+            public sealed class Row
+            {
+                public string Name { get; set; } = "";
+                public int Count { get; set; }
+            }
+
+            public sealed class Defaults
+            {
+                public Row Seeded { get; set; } = new Row();
+            }
+
+            public sealed class Writer
+            {
+                public void Seed(Row row)
+                {
+                    row.Name = "constant";
+                    row.Count = 0;
+                    row.Name = default(string);
+                    var seeded = new Row
+                    {
+                        Name = "unknown",
+                        Count = 1
+                    };
+                    _ = seeded;
+                }
+
+                public int Accumulate(System.Collections.Generic.List<Row> rows)
+                {
+                    var total = 0;
+                    var label = "";
+                    foreach (var row in rows)
+                    {
+                        total += row.Count;
+                        label += row.Name;
+                    }
+                    return total;
+                }
+
+                public void CompoundIntoPropertyStaysGap(Row target, Row source)
+                {
+                    target.Count += source.Count;
+                    target.Name ??= source.Name;
+                }
+            }
+            """;
+
+        var extraction = ExtractOne(source);
+        Assert.Empty(extraction.Facts);
+        var compoundGaps = extraction.Gaps.Where(gap =>
+            Prop(gap).GetValueOrDefault("shapeState") == "compound-assignment").ToArray();
+        // Both-side-property compound assignments remain fail-closed gaps.
+        Assert.Equal(2, compoundGaps.Length);
+        Assert.All(compoundGaps, gap =>
+            Assert.Contains("CompoundIntoPropertyStaysGap", Prop(gap).GetValueOrDefault("scopeSymbolId"), StringComparison.Ordinal));
+        Assert.DoesNotContain(extraction.Gaps, gap =>
+            (Prop(gap).GetValueOrDefault("scopeSymbolId") ?? string.Empty).Contains("Accumulate", StringComparison.Ordinal));
+        Assert.DoesNotContain(extraction.Gaps, gap =>
+            (Prop(gap).GetValueOrDefault("scopeSymbolId") ?? string.Empty).Contains("Seed", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Extractor_fails_closed_when_distinct_symbols_collapse_to_identical_canonical_ids()
+    {
+        const string source = """
+            namespace Fixt;
+
+            public sealed class Box<T>
+            {
+                public int Count { get; set; }
+            }
+
+            public sealed class Left
+            {
+                public int Count { get; set; }
+            }
+
+            public sealed class Right
+            {
+                public int Count { get; set; }
+            }
+
+            public sealed class Copier
+            {
+                public void Collapse(Box<string> text, Box<int> number)
+                {
+                    text.Count = number.Count;
+                }
+
+                public void SameConstructionStaysSilent(Box<string> first, Box<string> second)
+                {
+                    second.Count = first.Count;
+                }
+
+                public void DistinctSymbolsStillEmit(Left left, Right right)
+                {
+                    right.Count = left.Count;
+                }
+            }
+            """;
+
+        var extraction = ExtractOne(source);
+        var collision = Assert.Single(extraction.Gaps, gap =>
+            Prop(gap).GetValueOrDefault("shapeState") == "canonical-identity-collision");
+        Assert.Equal("PropertyMappingTargetAmbiguous", collision.Properties["gapKind"]);
+        Assert.Contains("Collapse", collision.Properties.GetValueOrDefault("scopeSymbolId"), StringComparison.Ordinal);
+
+        // Different generic instantiations of the same property collapse to one
+        // canonical ID pair; no fact may carry identical source and target IDs.
+        Assert.DoesNotContain(extraction.Facts, fact =>
+            Prop(fact).GetValueOrDefault("sourcePropertySymbolId") ==
+            Prop(fact).GetValueOrDefault("targetPropertySymbolId"));
+
+        // Same-construction cross-instance copies follow the documented
+        // same-symbol exclusion: silent, no fact and no gap.
+        Assert.DoesNotContain(extraction.Gaps, gap =>
+            (Prop(gap).GetValueOrDefault("scopeSymbolId") ?? string.Empty).Contains("SameConstructionStaysSilent", StringComparison.Ordinal));
+        Assert.DoesNotContain(extraction.Facts, fact =>
+            (Prop(fact).GetValueOrDefault("containerMethodSymbolId") ?? string.Empty).Contains("SameConstructionStaysSilent", StringComparison.Ordinal));
+
+        // Genuinely distinct symbols still emit with distinct canonical IDs.
+        var emitted = Assert.Single(extraction.Facts, fact =>
+            (Prop(fact).GetValueOrDefault("containerMethodSymbolId") ?? string.Empty).Contains("DistinctSymbolsStillEmit", StringComparison.Ordinal));
+        Assert.NotEqual(
+            Prop(emitted)["sourcePropertySymbolId"],
+            Prop(emitted)["targetPropertySymbolId"]);
+    }
+
+    [Fact]
     public void Extractor_flags_ambiguous_property_candidates_as_target_ambiguity()
     {
         const string source = """

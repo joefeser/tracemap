@@ -82,6 +82,41 @@ Validation on this branch:
   `FailedOrPartial`;
 - full-solution results recorded in the PR description.
 
+## Review log: independent architecture review response
+
+A read-only independent architecture review of the branch head found the
+producer/consumer isolation airtight (every consumption path verified,
+including the combined path-graph view) with zero blocking findings and
+five important findings. All five were accepted and fixed in one review
+response commit:
+
+1. literal-RHS assignments, including object-initializer constant
+   defaults, no longer emit per-assignment gaps and stay silent like
+   resolved non-property counterparts (design.md Slice B noise rule);
+2. compound accumulation into locals, parameters, fields, or literals
+   stays silent; compound assignments touching a property on a
+   transforming counterpart still fail closed;
+3. distinct symbols whose canonical IDs collapse (different generic
+   instantiations of one property) fail closed as
+   `PropertyMappingTargetAmbiguous`/`canonical-identity-collision`
+   instead of emitting identical source/target IDs that would seed false
+   exact-ID self-joins in PR 3;
+4. the requirement 6.6 reducer regression now proves a genuinely
+   matching baseline fact plus eleven mapping facts and one gap produce
+   byte-identical reduce output with unchanged `DefiniteImpact`
+   classification and no fan-out warning;
+5. the property-flow reader isolation test now asserts a lineage path
+   exists so its exclusion assertion cannot pass vacuously.
+
+Catalog limitations were extended for same-symbol cross-instance copies,
+anonymous-type compilation-order identity indices, resolved chained
+member access, and both-side non-property silence. Self-scan note:
+tracemap cannot currently self-scan out of the box because the scanner's
+semantic load executes the CLI project's source generator and rewrites
+its obj state file mid-scan (`SourceSnapshotChangedDuringScan`); the
+dogfood noise receipt therefore scans a disposable tree without the
+generator-bearing CLI project.
+
 Deferred to later slices in recorded order:
 
 - PR 3 removes the temporary reader exclusion and joins by canonical IDs;
