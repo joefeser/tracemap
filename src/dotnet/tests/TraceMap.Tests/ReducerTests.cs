@@ -300,6 +300,56 @@ public sealed class ReducerTests
     }
 
     [Fact]
+    public async Task Reduce_excludes_semantic_property_mapping_facts_and_gaps_from_generic_matching()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        var outputPath = Path.Combine(temp.Path, "out");
+        var deltaPath = WriteDelta(temp.Path, "CustomerProfile.primaryEmail");
+        var manifest = CreateManifest("Level1SemanticAnalysis", "Succeeded");
+        var mapping = FactFactory.Create(
+            manifest,
+            FactTypes.PropertyMappingDeclared,
+            RuleIds.CSharpSemanticPropertyMapping,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan("src/Mappers.cs", 10, 10, null, "CSharpPropertyMappingExtractor", ScannerVersions.CSharpPropertyMappingExtractor),
+            sourceSymbol: "global::Sample.CustomerProfile.PrimaryEmail",
+            targetSymbol: "global::Sample.ViewModels.ProfileView.PrimaryEmail",
+            contractElement: "assignment",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["coverageLabel"] = "bounded-static-property-mapping",
+                ["direction"] = "source-to-target",
+                ["limitations"] = "Static compiler evidence only.",
+                ["mappingShape"] = "assignment",
+                ["sourcePropertySymbolId"] = "CustomerProfile.primaryEmail",
+                ["targetPropertySymbolId"] = "ProfileView.primaryEmail"
+            });
+        var gap = FactFactory.Create(
+            manifest,
+            FactTypes.AnalysisGap,
+            RuleIds.CSharpSemanticPropertyMappingGap,
+            EvidenceTiers.Tier4Unknown,
+            new EvidenceSpan("src/Mappers.cs", 10, 10, null, "CSharpPropertyMappingExtractor", ScannerVersions.CSharpPropertyMappingExtractor),
+            contractElement: "PropertyMappingShapeUnsupported",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["coverageEffect"] = "reduces-direct-property-mapping-coverage",
+                ["gapKind"] = "PropertyMappingShapeUnsupported",
+                ["occurrenceCount"] = "1",
+                ["shapeState"] = "invocation",
+                ["targetPropertySymbolId"] = "CustomerProfile.primaryEmail"
+            });
+        SqliteIndexWriter.Write(indexPath, manifest, [mapping, gap]);
+
+        var report = await RunReduceAsync(indexPath, deltaPath, outputPath);
+
+        Assert.Contains("Classification: `NoEvidenceFullCoverage`", report);
+        Assert.DoesNotContain("PropertyMappingDeclared", report, StringComparison.Ordinal);
+        Assert.DoesNotContain("UnknownAnalysisGap", report, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Reduce_no_match_with_reduced_coverage_reports_no_evidence_reduced_coverage()
     {
         using var temp = new TempDirectory();
