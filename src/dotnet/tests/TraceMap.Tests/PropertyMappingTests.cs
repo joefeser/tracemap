@@ -400,6 +400,39 @@ public sealed class PropertyMappingTests
     }
 
     [Fact]
+    public void Extractor_rejects_equal_unresolved_property_types_as_semantically_unavailable()
+    {
+        const string source = """
+            namespace Fixt;
+
+            public sealed class SourceDto
+            {
+                public MissingContract Name { get; set; }
+            }
+
+            public sealed class TargetDto
+            {
+                public MissingContract Name { get; set; }
+            }
+
+            public static class Mapper
+            {
+                public static void Copy(SourceDto source, TargetDto target)
+                {
+                    target.Name = source.Name;
+                }
+            }
+            """;
+
+        var extraction = ExtractWithErrors(source);
+
+        Assert.Empty(extraction.Facts);
+        var gap = Assert.Single(extraction.Gaps);
+        Assert.Equal("PropertyMappingSemanticUnavailable", Prop(gap)["gapKind"]);
+        Assert.Equal("incomplete-binding", Prop(gap)["shapeState"]);
+    }
+
+    [Fact]
     public void Extractor_flags_ambiguous_property_candidates_as_target_ambiguity()
     {
         const string source = """

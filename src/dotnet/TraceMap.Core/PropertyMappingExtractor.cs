@@ -82,7 +82,8 @@ internal static class PropertyMappingExtractor
                     assignment,
                     model,
                     containerMethod.Symbol,
-                    left.Property!);
+                    left.Property!,
+                    right.Property!);
                 if (semanticGapState is not null)
                 {
                     AddGapOrCount(
@@ -336,7 +337,8 @@ internal static class PropertyMappingExtractor
         AssignmentExpressionSyntax assignment,
         SemanticModel model,
         IMethodSymbol containerMethod,
-        IPropertySymbol targetProperty)
+        IPropertySymbol targetProperty,
+        IPropertySymbol sourceProperty)
     {
         // Record `with` initializers and future initializer forms are not the
         // admitted `new Target { ... }` object-initializer shape.
@@ -344,6 +346,15 @@ internal static class PropertyMappingExtractor
             && !initializer.IsKind(SyntaxKind.ObjectInitializerExpression))
         {
             return "expression-transform";
+        }
+
+        // Roslyn can bind properties whose declared value type is unresolved.
+        // Equal IErrorTypeSymbol instances are not compiler-resolved evidence
+        // and therefore cannot support a Tier1 mapping.
+        if (targetProperty.Type.TypeKind == TypeKind.Error
+            || sourceProperty.Type.TypeKind == TypeKind.Error)
+        {
+            return "incomplete-binding";
         }
 
         var setter = targetProperty.SetMethod;
