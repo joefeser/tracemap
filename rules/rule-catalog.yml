@@ -1037,10 +1037,10 @@ rules:
       - Evidence proves only a recorded directed source-property to target-property static assignment relationship; it does not prove that any mapping executed, that an object was created, persisted, serialized, or reached a handler, nor any runtime values, business meaning, correctness, completeness, or impact.
       - v0 admits only simple assignment `target.Property = source.Property` and object-initializer member assignment `new Target { Property = source.Property }`; parentheses, null-forgiving syntax, and same-type (identity) casts may be unwrapped only when the resolved source property symbol is preserved.
       - Method calls, arithmetic, string interpolation, pattern expressions, conditional/null-coalescing access, compound assignments, element/indexer access, dynamic values, user-defined or built-in type conversions, generic or non-generic transforms, and ambiguity fail closed as rule-backed gaps; no expression text is retained anywhere.
-      - Both endpoints must resolve through Roslyn to ordinary non-indexer properties with canonical symbol identities; source/target containing types, assemblies, the containing method identity, closed mapping shape, direction, span, tier, coverage label, and fixed limitations are preserved on every fact.
+      - Both endpoints must resolve through Roslyn to ordinary non-indexer properties with canonical symbol identities, and the target write must be semantically valid and accessible in the containing method; getter-only, inaccessible, invalid, or incomplete writes fail closed as PropertyMappingSemanticUnavailable gaps. Source/target containing types, assemblies, the containing method identity, closed mapping shape, direction, span, tier, coverage label, and fixed limitations are preserved on every fact.
       - Same-name properties without an admitted mapping shape emit no fact; reverse direction is never inferred from a single fact. Assignments whose resolved endpoints are the identical property symbol are skipped as vacuous self-copies; compiler-generated anonymous-type members participate when Roslyn resolves them canonically. Emission is bounded deterministically per method and per document with one aggregated PropertyMappingTruncated gap.
       - Plain value copies between properties and fully resolved locals, parameters, fields, or method groups produce neither facts nor gaps; indexers, element access, compound assignments, conditionals, switch expressions, dynamic values, and incomplete bindings emit categorical gaps with closed shape states.
-      - Assignments in constructors, field/property initializers, tuple-deconstruction forms, dictionary-key assignments, generated/excluded scan-scope files, and top-level statements are outside v0 admission and produce neither facts nor global noise.
+      - Assignments in constructors, field/property initializers, record `with` initializers, tuple-deconstruction forms, dictionary-key assignments, generated/excluded scan-scope files, and top-level statements are outside v0 admission; recognized property-to-property attempts fail closed where applicable and unrelated forms produce no global noise.
       - These facts remain excluded from the legacy name-based property-flow reporter and generic contract reducer until exact-identity composition is implemented under the property-flow depth runway.
 
   - id: csharp.semantic.propertymapping-gap.v1
@@ -1051,7 +1051,7 @@ rules:
       - AnalysisGap
     limitations:
       - A gap reduces direct property-mapping coverage and does not prove that a mapping, source property, target property, or transformation is absent or present at runtime.
-      - Gap records contain categorical shape state, canonical symbol identities where available, bounded counts, and limitations; they do not store source snippets, expressions, constant values, host-local paths, or digests of protected content.
+      - Gap records contain categorical shape state, canonical symbol identities where available, bounded counts, and limitations; the aggregate PropertyMappingTruncated row uses shapeState `truncation` and counts inside the 100-gap document bound. Gap rows do not store source snippets, expressions, constant values, host-local paths, or digests of protected content.
 
   - id: csharp.razor.binding-gap.v1
     name: Razor binding analysis gap

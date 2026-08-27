@@ -758,7 +758,10 @@ limitations; transforming, dynamic, ambiguous, conversion-requiring, indexer,
 and compound-assignment counterparts fail closed as rule-backed
 `AnalysisGap` rows with closed PascalCase gap kinds and `shapeState` values,
 never storing expression text; per-method/per-document bounds fold suppressed
-emissions into one aggregated `PropertyMappingTruncated` gap; same-name
+emissions into one aggregated `PropertyMappingTruncated` gap whose
+`shapeState=truncation` row remains inside the 100-gap document bound; record
+`with` initializers and getter-only, inaccessible, or otherwise invalid target
+writes fail closed rather than producing Tier1 evidence; same-name
 cross-assembly properties keep distinct canonical identities through extern
 aliases; partial/non-compiling projects keep healthy-file evidence byte-stable
 while the manifest remains truthfully reduced. Mapping facts and gaps stay
