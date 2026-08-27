@@ -1027,6 +1027,32 @@ rules:
       - A gap reduces semantic model-binding coverage and does not prove that a runtime binding, handler, model property, route, or submitted value is absent.
       - Gap records contain categorical state, canonical symbol identities where available, bounded counts, and limitations; they do not store source snippets, host-local paths, or raw submitted values.
 
+  - id: csharp.semantic.propertymapping.v1
+    name: Direct property mapping evidence
+    description: Extracts compiler-resolved direct property-to-property mapping facts for the bounded v0 shapes of simple assignment and object-initializer member assignment, including the same initializer rule inside LINQ-style projections.
+    evidenceTier: Tier1Semantic
+    emits:
+      - PropertyMappingDeclared
+    limitations:
+      - Evidence proves only a recorded directed source-property to target-property static assignment relationship; it does not prove that any mapping executed, that an object was created, persisted, serialized, or reached a handler, nor any runtime values, business meaning, correctness, completeness, or impact.
+      - v0 admits only simple assignment `target.Property = source.Property` and object-initializer member assignment `new Target { Property = source.Property }`; parentheses, null-forgiving syntax, and same-type (identity) casts may be unwrapped only when the resolved source property symbol is preserved.
+      - Method calls, arithmetic, string interpolation, pattern expressions, conditional/null-coalescing access, compound assignments, element/indexer access, dynamic values, user-defined or built-in type conversions, generic or non-generic transforms, and ambiguity fail closed as rule-backed gaps; no expression text is retained anywhere.
+      - Both endpoints must resolve through Roslyn to ordinary non-indexer properties with canonical symbol identities; source/target containing types, assemblies, the containing method identity, closed mapping shape, direction, span, tier, coverage label, and fixed limitations are preserved on every fact.
+      - Same-name properties without an admitted mapping shape emit no fact; reverse direction is never inferred from a single fact. Assignments whose resolved endpoints are the identical property symbol are skipped as vacuous self-copies; compiler-generated anonymous-type members participate when Roslyn resolves them canonically. Emission is bounded deterministically per method and per document with one aggregated PropertyMappingTruncated gap.
+      - Plain value copies between properties and fully resolved locals, parameters, fields, or method groups produce neither facts nor gaps; indexers, element access, compound assignments, conditionals, switch expressions, dynamic values, and incomplete bindings emit categorical gaps with closed shape states.
+      - Assignments in constructors, field/property initializers, tuple-deconstruction forms, dictionary-key assignments, generated/excluded scan-scope files, and top-level statements are outside v0 admission and produce neither facts nor global noise.
+      - These facts remain excluded from the legacy name-based property-flow reporter and generic contract reducer until exact-identity composition is implemented under the property-flow depth runway.
+
+  - id: csharp.semantic.propertymapping-gap.v1
+    name: Direct property mapping analysis gap
+    description: Records categorical compiler-evidence boundaries that prevent precise direct property-mapping extraction, including deterministic per-method/per-document emission-bound truncation.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - A gap reduces direct property-mapping coverage and does not prove that a mapping, source property, target property, or transformation is absent or present at runtime.
+      - Gap records contain categorical shape state, canonical symbol identities where available, bounded counts, and limitations; they do not store source snippets, expressions, constant values, host-local paths, or digests of protected content.
+
   - id: csharp.razor.binding-gap.v1
     name: Razor binding analysis gap
     description: Records dynamic Razor model/view-data/partial/template constructs that prevent precise static field/property lineage.
