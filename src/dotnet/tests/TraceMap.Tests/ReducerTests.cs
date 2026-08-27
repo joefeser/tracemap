@@ -38,6 +38,82 @@ public sealed class ReducerTests
     }
 
     [Fact]
+    public async Task Reduce_mapping_facts_never_change_baseline_output_or_downgrade_classification()
+    {
+        using var temp = new TempDirectory();
+        var deltaPath = WriteDelta(temp.Path, "CustomerProfile.primaryEmail");
+        var manifest = CreateManifest("Level1SemanticAnalysis", "Succeeded");
+        CodeFact BaselineFact() => FactFactory.Create(
+            manifest,
+            FactTypes.PropertyAccessed,
+            RuleIds.CSharpSemanticPropertyAccess,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan("src/ProfileReader.cs", 8, 8, null, "CSharpSemanticExtractor", ScannerVersions.CSharpSemanticExtractor),
+            sourceSymbol: "profile",
+            targetSymbol: "global::Sample.CustomerProfile.PrimaryEmail",
+            contractElement: "PrimaryEmail",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["containingType"] = "global::Sample.CustomerProfile",
+                ["propertyName"] = "PrimaryEmail"
+            });
+        CodeFact MappingFact(int index) => FactFactory.Create(
+            manifest,
+            FactTypes.PropertyMappingDeclared,
+            RuleIds.CSharpSemanticPropertyMapping,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan($"src/Mappers{index}.cs", 10 + index, 10 + index, null, "CSharpPropertyMappingExtractor", ScannerVersions.CSharpPropertyMappingExtractor),
+            sourceSymbol: $"global::Sample.Source{index}.PrimaryEmail",
+            targetSymbol: $"global::Sample.Target{index}.PrimaryEmail",
+            contractElement: "assignment",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["coverageLabel"] = "bounded-static-property-mapping",
+                ["direction"] = "source-to-target",
+                ["limitations"] = "Static compiler evidence only.",
+                ["mappingShape"] = "assignment",
+                ["sourcePropertySymbolId"] = $"source-{index}",
+                ["targetPropertySymbolId"] = $"target-{index}"
+            });
+        var mappingGap = FactFactory.Create(
+            manifest,
+            FactTypes.AnalysisGap,
+            RuleIds.CSharpSemanticPropertyMappingGap,
+            EvidenceTiers.Tier4Unknown,
+            new EvidenceSpan("src/Mappers0.cs", 20, 20, null, "CSharpPropertyMappingExtractor", ScannerVersions.CSharpPropertyMappingExtractor),
+            contractElement: "PropertyMappingTruncated",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["coverageEffect"] = "reduces-direct-property-mapping-coverage",
+                ["gapKind"] = "PropertyMappingTruncated",
+                ["occurrenceCount"] = "2"
+            });
+
+        var baselineIndexPath = Path.Combine(temp.Path, "baseline.sqlite");
+        SqliteIndexWriter.Write(baselineIndexPath, manifest, [BaselineFact()]);
+        var baselineOutput = Path.Combine(temp.Path, "baseline-out");
+        var baselineReport = await RunReduceAsync(baselineIndexPath, deltaPath, baselineOutput);
+
+        var noisyIndexPath = Path.Combine(temp.Path, "noisy.sqlite");
+        var noisyFacts = new List<CodeFact> { BaselineFact(), mappingGap };
+        noisyFacts.AddRange(Enumerable.Range(0, 11).Select(MappingFact));
+        SqliteIndexWriter.Write(noisyIndexPath, manifest, noisyFacts);
+        var noisyOutput = Path.Combine(temp.Path, "noisy-out");
+        var noisyReport = await RunReduceAsync(noisyIndexPath, deltaPath, noisyOutput);
+
+        Assert.Contains("Classification: `DefiniteImpact`", baselineReport);
+        Assert.Contains("Classification: `DefiniteImpact`", noisyReport);
+        Assert.DoesNotContain("High fan-out match set", noisyReport, StringComparison.Ordinal);
+        Assert.DoesNotContain("PropertyMappingDeclared", noisyReport, StringComparison.Ordinal);
+        Assert.Equal(
+            await File.ReadAllTextAsync(Path.Combine(baselineOutput, "impact-report.md")),
+            await File.ReadAllTextAsync(Path.Combine(noisyOutput, "impact-report.md")));
+        Assert.Equal(
+            await File.ReadAllTextAsync(Path.Combine(baselineOutput, "impact-report.json")),
+            await File.ReadAllTextAsync(Path.Combine(noisyOutput, "impact-report.json")));
+    }
+
+    [Fact]
     public async Task Reduce_removed_property_with_syntax_only_match_reports_needs_review()
     {
         using var temp = new TempDirectory();
