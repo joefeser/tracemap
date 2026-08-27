@@ -30,6 +30,10 @@ Assert-True ($progressIndex -ge 0 -and $progressIndex -lt $evidenceIndex) "progr
 Assert-True ($performanceIndex -ge 0 -and $performanceIndex -lt $evidenceIndex) "performance diagnostics must precede evidence summaries"
 Assert-True ($workspaceIndex -gt $evidenceIndex) "workspace readback must run after complete scan artifacts are verified"
 Assert-True ($content.Contains('git -C $TraceMapRoot rev-parse HEAD', [StringComparison]::Ordinal)) "workspace readback must identify the TraceMap head"
+Assert-True ($content.Contains('Solution path, relative to the source root', [StringComparison]::Ordinal)) "solution selection prompt is missing"
+Assert-True ($content.Contains('$reviewArguments += @("--solution", $SolutionRelativePath)', [StringComparison]::Ordinal)) "selected solution is not passed to local review"
+Assert-True ($content.Contains('SOLUTION_SCOPE_UNAVAILABLE', [StringComparison]::Ordinal)) "solution path availability is not validated"
+Assert-True ($content.Contains('SOLUTION_SCOPE_INVALID', [StringComparison]::Ordinal)) "solution extension is not validated"
 
 foreach ($requiredArtifact in @('scan/facts.ndjson', 'scan/scan-manifest.json', 'local-review-result.json')) {
     Assert-True ($content.Contains($requiredArtifact, [StringComparison]::Ordinal)) "evidence summary guard is missing $requiredArtifact"
