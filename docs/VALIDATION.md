@@ -743,6 +743,28 @@ The resulting semantic facts remain available in NDJSON/SQLite but must not
 change generic reducer or legacy name-based property-flow output until the
 exact-identity composition slice lands.
 
+For direct property-mapping producer changes, also run the producer, collision,
+direction, bounds, and isolation regressions:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter "FullyQualifiedName~PropertyMappingTests|FullyQualifiedName~Reduce_excludes_semantic_property_mapping|FullyQualifiedName~Property_flow_ignores_direct_property_mapping"
+```
+
+Expected behavior: supported shapes emit `PropertyMappingDeclared` Tier1 facts
+with canonical source/target property identities, containing-type and method
+identities, closed mapping shape, direction, span, coverage label, and fixed
+limitations; transforming, dynamic, ambiguous, conversion-requiring, indexer,
+and compound-assignment counterparts fail closed as rule-backed
+`AnalysisGap` rows with closed PascalCase gap kinds and `shapeState` values,
+never storing expression text; per-method/per-document bounds fold suppressed
+emissions into one aggregated `PropertyMappingTruncated` gap; same-name
+cross-assembly properties keep distinct canonical identities through extern
+aliases; partial/non-compiling projects keep healthy-file evidence byte-stable
+while the manifest remains truthfully reduced. Mapping facts and gaps stay
+available in NDJSON/SQLite but must not change generic reducer or legacy
+name-based property-flow output until exact-ID composition lands in PR 3.
+
 Expected behavior: Angular template fixtures emit `UiTemplateBinding`,
 `UiFormControlBinding`, `UiEventBinding`, `UiTemplateVariable`, and
 `UiBindingGap` facts with rule IDs and safe metadata only; Razor fixtures emit

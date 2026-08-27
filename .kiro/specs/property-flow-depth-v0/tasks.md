@@ -60,18 +60,18 @@ Issue: #517
 
 ## PR 2: Direct Property Mapping Producer
 
-- [ ] Add a versioned mapping fact/rule and closed v0 property/gap schemas.
-- [ ] Emit exact RHS-property -> LHS-property facts for simple assignments.
-- [ ] Emit exact source-property -> initialized-target-property facts for
+- [x] Add a versioned mapping fact/rule and closed v0 property/gap schemas.
+- [x] Emit exact RHS-property -> LHS-property facts for simple assignments.
+- [x] Emit exact source-property -> initialized-target-property facts for
       object initializers and LINQ projection initializers.
-- [ ] Unwrap only bounded identity-preserving syntax/conversions.
-- [ ] Fail closed for transforming/dynamic/ambiguous/unsupported shapes without
+- [x] Unwrap only bounded identity-preserving syntax/conversions.
+- [x] Fail closed for transforming/dynamic/ambiguous/unsupported shapes without
       retaining expressions or protected digests.
-- [ ] Add direction, collision, shadowing, projection, partial-build,
+- [x] Add direction, collision, shadowing, projection, partial-build,
       generated/excluded-source, determinism, catalog, storage, and generic-
       reducer exclusion regressions.
-- [ ] Define per-method/per-file bounds and emit an aggregated truncation gap.
-- [ ] Extend the PR 1 reducer isolation to the mapping fact/gap rule IDs and
+- [x] Define per-method/per-file bounds and emit an aggregated truncation gap.
+- [x] Extend the PR 1 reducer isolation to the mapping fact/gap rule IDs and
       prove mapping rows cannot change existing output or cross the reducer's
       fan-out threshold.
 
