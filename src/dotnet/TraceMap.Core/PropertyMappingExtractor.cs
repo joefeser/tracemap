@@ -369,6 +369,12 @@ internal static class PropertyMappingExtractor
             return "incomplete-binding";
         }
 
+        var getter = sourceProperty.GetMethod;
+        if (getter is null || !model.Compilation.IsSymbolAccessibleWithin(getter, within))
+        {
+            return "incomplete-binding";
+        }
+
         // A property symbol can still resolve inside an invalid assignment
         // (for example a receiver/accessibility error in partial compilation).
         // Tier1 mapping evidence requires an error-free assignment span.

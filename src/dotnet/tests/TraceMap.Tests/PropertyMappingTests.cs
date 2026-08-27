@@ -374,14 +374,30 @@ public sealed class PropertyMappingTests
                 public string Name { get; private set; } = "";
             }
 
+            public sealed class PrivateSource
+            {
+                public string Name { private get; set; } = "";
+            }
+
+            public sealed class TargetDto
+            {
+                public string Name { get; set; } = "";
+            }
+
             public sealed record RecordTarget(string Name);
 
             public static class Mapper
             {
-                public static void Invalid(SourceDto source, ReadOnlyTarget readOnly, PrivateTarget privateTarget)
+                public static void Invalid(
+                    SourceDto source,
+                    PrivateSource privateSource,
+                    ReadOnlyTarget readOnly,
+                    PrivateTarget privateTarget,
+                    TargetDto target)
                 {
                     readOnly.Name = source.Name;
                     privateTarget.Name = source.Name;
+                    target.Name = privateSource.Name;
                     _ = new RecordTarget("") with { Name = source.Name };
                 }
             }
@@ -390,8 +406,8 @@ public sealed class PropertyMappingTests
         var extraction = ExtractWithErrors(source);
 
         Assert.Empty(extraction.Facts);
-        Assert.Equal(3, extraction.Gaps.Count);
-        Assert.Equal(2, extraction.Gaps.Count(gap =>
+        Assert.Equal(4, extraction.Gaps.Count);
+        Assert.Equal(3, extraction.Gaps.Count(gap =>
             Prop(gap).GetValueOrDefault("gapKind") == "PropertyMappingSemanticUnavailable"
             && Prop(gap).GetValueOrDefault("shapeState") == "incomplete-binding"));
         Assert.Single(extraction.Gaps, gap =>
