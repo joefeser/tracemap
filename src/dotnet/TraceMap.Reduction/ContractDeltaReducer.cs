@@ -1351,7 +1351,8 @@ public static class ContractDeltaReducer
     {
         if (fact.FactType is FactTypes.FrameworkMigrationDeclared or FactTypes.FrameworkMigrationOperationCandidate
             || fact.RuleId == RuleIds.DatabaseFrameworkMigrationGap
-            || fact.RuleId is RuleIds.CSharpRazorSemanticModelBinding or RuleIds.CSharpRazorSemanticModelBindingGap)
+            || fact.RuleId is RuleIds.CSharpRazorSemanticModelBinding or RuleIds.CSharpRazorSemanticModelBindingGap
+            || fact.RuleId is RuleIds.CSharpSemanticPropertyMapping or RuleIds.CSharpSemanticPropertyMappingGap)
         {
             return EvidenceMatch.None;
         }
