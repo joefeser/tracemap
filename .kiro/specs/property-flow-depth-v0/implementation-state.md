@@ -1,13 +1,83 @@
 # Property Flow Depth v0 Implementation State
 
-Status: pr1-semantic-razor-producer-implemented
+Status: pr2-direct-property-mapping-producer-implemented
 
-Branch: `codex/property-flow-semantic-razor-v0`
+Branch: `codex/property-flow-direct-mapping-v0`
 
 Base: fresh `origin/dev` at
-`ac887c857828c86da7a98cdf72b5b235d2c86391`
+`1d50aa5d70f58e851411b953b1dbccee38625fda` (PR 1 landed as merge a3b9f221 and
+is an ancestor of the base).
 
 Issue: [#517](https://github.com/joefeser/tracemap/issues/517)
+
+## PR 2: Direct Property Mapping Producer (this branch)
+
+Scope shipped (tasks 2.1-2.7 only; PR 3/PR 4 remain untouched):
+
+- New fact `PropertyMappingDeclared`, rules `csharp.semantic.propertymapping.v1`
+  (Tier1) and `csharp.semantic.propertymapping-gap.v1` (Tier4), producer
+  extractor identity `CSharpPropertyMappingExtractor`
+  (`csharp-property-mapping/0.1.0`), coverage label
+  `bounded-static-property-mapping`.
+- Supported v0 shapes: simple assignment `target.Property = source.Property`,
+  object-initializer member assignment, and the same initializer rule inside
+  lambdas/query clauses labeled `projection`. Unwrapping is limited to
+  parentheses, null-forgiving postfix `!`, and same-type casts that preserve
+  the resolved source property symbol.
+- Fail-closed categorical gaps (`PropertyMappingShapeUnsupported`,
+  `PropertyMappingTargetAmbiguous`, `PropertyMappingSemanticUnavailable`,
+  `PropertyMappingTruncated`) with closed `shapeState` values
+  (`invocation`, `interpolation`, `binary-expression`,
+  `conditional-expression`, `switch-expression`, `pattern-expression`,
+  `expression-transform`, `conversion`, `type-conversion-required`,
+  `indexer-element`, `compound-assignment`, `dynamic`,
+  `ambiguous-candidates`, `incomplete-binding`, `unresolved-binding`);
+  no expressions, snippets, constant values, or protected digests are stored.
+- Deterministic bounds declared before implementation: 25 facts per method-like
+  container, 250 per document, 100 gaps per document; exceedances fold into one
+  aggregated truncation gap with occurrence plus suppressed-fact/gap counts.
+- Isolation preserved: generic reducer matching excludes both new rule IDs;
+  property-flow reader admission excludes them (PR 3 removes this only with
+  exact-ID composition); producer-local gaps do not flip build status, analysis
+  level, or toolchain-capability classification.
+
+Decisions recorded for reviewers:
+
+- Both endpoints must resolve to ordinary non-indexer properties whose types
+  match under `SymbolEqualityComparer.Default`; mismatched property types emit
+  `type-conversion-required` rather than guessing through conversions. Only
+  nullable-annotation-insensitive equality is required, mirroring PR 3's
+  future exact-ID joins.
+- Assignments whose resolved endpoints are the identical property symbol are
+  skipped as vacuous self-copies and documented in the catalog limitations.
+- Plain value copies between a property and a fully resolved local, parameter,
+  field, or method group stay silent (value copy-in/out, not member mapping);
+  unresolved/ambiguous/transforming counterparts still fail closed. This keeps
+  ubiquitous extraction patterns from becoming global noise while preserving
+  truthful gap semantics.
+- Constructor bodies, field/property initializers, tuple-deconstruction, and
+  dictionary-key assignments are outside v0 containers/shapes and documented as
+  such; constructor forwarding remains deferred to its own bounded slice.
+- Per-method bound keys are the nearest method-like declaration (methods,
+  local functions, accessors, operators); anonymous functions are not separate
+  containers so lambda-bodied assignments attribute to their enclosing member.
+
+Validation on this branch:
+
+- focused: PropertyMappingTests 11/11, reducer isolation
+  (`Reduce_excludes_semantic_property_mapping...`) and reader isolation
+  (`Property_flow_ignores_direct_property_mapping...`) pass;
+- synthetic non-compiling fixture scan keeps healthy-file mappings byte-stable
+  across repeated scans while the manifest truthfully reports
+  `FailedOrPartial`;
+- full-solution results recorded in the PR description.
+
+Deferred to later slices in recorded order:
+
+- PR 3 removes the temporary reader exclusion and joins by canonical IDs;
+- PR 4 owns the consumer/public-safe audit;
+- constructor forwarding, AutoMapper/Mapster profiles, custom resolvers, legacy
+  ASP.NET MVC, runtime/reachability claims all remain deferred unchanged.
 
 ## Reconciliation
 
