@@ -4,6 +4,7 @@ param(
     [string]$WebFormsFolder,
     [string]$BackendFolder,
     [string]$ControlsFolder,
+    [string]$SolutionRelativePath,
     [string[]]$ProjectRelativePath = @(),
     [string]$TraceMapRoot = (Split-Path $PSScriptRoot -Parent),
     [int]$TimeoutSeconds = 7200
@@ -40,6 +41,9 @@ $SourceRoot = Read-RequiredValue $SourceRoot "Private source repository root"
 $WebFormsFolder = Read-RequiredValue $WebFormsFolder "Web Forms folder, relative to the source root"
 $BackendFolder = Read-RequiredValue $BackendFolder "Backend folder, relative to the source root"
 $ControlsFolder = Read-RequiredValue $ControlsFolder "Shared controls folder, relative to the source root"
+if ([string]::IsNullOrWhiteSpace($SolutionRelativePath)) {
+    $SolutionRelativePath = (Read-Host "Solution path, relative to the source root (blank if unavailable)").Trim()
+}
 if ($ProjectRelativePath.Count -eq 0) {
     $projectInput = Read-Host "Comma-separated in-scope project paths, relative to the source root (blank for a projectless scan)"
     if (-not [string]::IsNullOrWhiteSpace($projectInput)) {
@@ -61,6 +65,10 @@ $selectedFolders = @($WebFormsFolder, $BackendFolder, $ControlsFolder)
 if (($selectedFolders | Select-Object -Unique).Count -ne 3) { throw "THREE_FOLDER_SCOPE_INVALID" }
 foreach ($folder in $selectedFolders) {
     [void](Resolve-RelativeChild $SourceRoot $folder "THREE_FOLDER_SCOPE_UNAVAILABLE" $false)
+}
+if (-not [string]::IsNullOrWhiteSpace($SolutionRelativePath)) {
+    $solutionPath = Resolve-RelativeChild $SourceRoot $SolutionRelativePath "SOLUTION_SCOPE_UNAVAILABLE" $true
+    if ([IO.Path]::GetExtension($solutionPath) -notin @('.sln', '.slnx')) { throw "SOLUTION_SCOPE_INVALID" }
 }
 foreach ($project in $ProjectRelativePath) {
     $projectPath = Resolve-RelativeChild $SourceRoot $project "PROJECT_SCOPE_UNAVAILABLE" $true
@@ -89,6 +97,7 @@ New-Item -ItemType Directory -Path $outputParent, $progressParent, $summaryParen
 
 $reviewArguments = @("run", "--repo", $SourceRoot, "--out", $outRoot)
 foreach ($folder in $selectedFolders) { $reviewArguments += @("--include", ($folder.TrimEnd('/', '\') + "/**")) }
+if (-not [string]::IsNullOrWhiteSpace($SolutionRelativePath)) { $reviewArguments += @("--solution", $SolutionRelativePath) }
 foreach ($project in $ProjectRelativePath) { $reviewArguments += @("--project", $project) }
 foreach ($pattern in @(
     ".vs/**", "**/bin/**", "**/obj/**", "**/node_modules/**", "**/dist/**",
