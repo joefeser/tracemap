@@ -404,6 +404,51 @@ repositories, combines their indexes, and investigates UI-to-endpoint-to-
 dependency chains, see the [Angular and .NET interaction mapping
 runbook](docs/ANGULAR_DOTNET_INTERACTION_RUNBOOK.md).
 
+### Restricted Windows Web Forms workspace readback
+
+For a private legacy Web Forms repository that must remain on a restricted
+Windows endpoint, the focused runner scans three explicitly selected folders
+and writes sanitized summaries outside the source repository. It does not emit
+source text, object names, raw workspace messages, or machine-local paths in
+the summary files.
+
+Check out the diagnostic branch containing the workspace readback, then run:
+
+```powershell
+git fetch origin codex/focused-webforms-workspace-readback
+git switch --detach origin/codex/focused-webforms-workspace-readback
+
+pwsh -NoProfile -File .\scripts\Invoke-FocusedWebFormsReview.ps1 `
+  -SourceRoot 'C:\work\<private-client-app>' `
+  -WebFormsFolder 'source\<webforms-folder>' `
+  -BackendFolder 'source\<backend-folder>' `
+  -ControlsFolder 'source\<controls-folder>' `
+  -SolutionRelativePath '<solution-file>.sln'
+```
+
+When the solution owns all three in-scope projects, omit
+`-ProjectRelativePath`; solution selection is the preferred admission test.
+The root solution is passed explicitly because the three folder include globs
+do not otherwise include a solution stored at the repository root. If no
+solution is available, omit `-SolutionRelativePath` and leave the interactive
+solution prompt blank.
+
+After the run, inspect only the newest files in `C:\work\tracemap-summary`:
+
+- `focused-webforms-workspace-*.txt` identifies the exact TraceMap head,
+  semantic-compilation state, Tier1 fact count, typed workspace diagnostics by
+  scope, remaining uncategorized count, and one next action.
+- `focused-webforms-accuracy-*.txt` summarizes evidence tiers, capability
+  states, diagnostics, and the highest-count accuracy gaps.
+- `focused-webforms-performance-*.txt` identifies the slowest observed stage
+  and extractor without exposing source identities.
+
+Give those three summaries to the local reviewer. A legacy MSBuild build that
+succeeds does not by itself prove that Roslyn `MSBuildWorkspace` admitted the
+solution; `semanticCompilation=available` plus Tier1 evidence is the relevant
+readback. Reduced results remain useful, but must not be described as complete
+call-chain or runtime evidence.
+
 ## License
 
 This project is licensed under the Apache License 2.0. See [LICENSE](./LICENSE).
