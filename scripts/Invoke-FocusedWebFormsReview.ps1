@@ -119,6 +119,10 @@ $completeReviewArtifacts =
     (Test-Path -LiteralPath $resultPath -PathType Leaf)
 
 if ($completeReviewArtifacts) {
+    $traceMapHead = (git -C $TraceMapRoot rev-parse HEAD).Trim()
+    if ($LASTEXITCODE -ne 0 -or $traceMapHead -notmatch '^[0-9a-fA-F]{40}$') {
+        throw "TRACEMAP_HEAD_UNAVAILABLE"
+    }
     & "$TraceMapRoot\scripts\Export-FocusedWebFormsEvidenceSummary.ps1" `
         -ReviewOutputPath $outRoot `
         -OutputDirectory $summaryParent
@@ -127,6 +131,13 @@ if ($completeReviewArtifacts) {
         -WebFormsFolder $WebFormsFolder `
         -BackendFolder $BackendFolder `
         -ControlsFolder $ControlsFolder `
+        -OutputDirectory $summaryParent
+    & "$TraceMapRoot\scripts\Export-FocusedWebFormsWorkspaceSummary.ps1" `
+        -ReviewOutputPath $outRoot `
+        -WebFormsFolder $WebFormsFolder `
+        -BackendFolder $BackendFolder `
+        -ControlsFolder $ControlsFolder `
+        -TraceMapHead $traceMapHead `
         -OutputDirectory $summaryParent
 }
 else {
