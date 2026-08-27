@@ -306,7 +306,7 @@ public sealed class PropertyMappingTests
         var dynamicGap = Assert.Single(gaps, gap =>
             Prop(gap).GetValueOrDefault("gapKind") == "PropertyMappingShapeUnsupported"
             && Prop(gap).GetValueOrDefault("shapeState") == "dynamic");
-        Assert.Contains("DynamicAccess", dynamicGap.Properties.GetValueOrDefault("scopeSymbolId"), StringComparison.Ordinal);
+        Assert.Contains("DynamicAccess", Prop(dynamicGap).GetValueOrDefault("scopeSymbolId"), StringComparison.Ordinal);
         // Fully resolved non-property counterparts never become unavailable gaps.
         Assert.DoesNotContain(gaps, gap => Prop(gap).GetValueOrDefault("shapeState") == "non-property-symbol");
 
@@ -314,6 +314,89 @@ public sealed class PropertyMappingTests
         var serialized = System.Text.Json.JsonSerializer.Serialize(gaps.Select(gap => Prop(gap)));
         Assert.DoesNotContain("Decorate(source", serialized, StringComparison.Ordinal);
         Assert.DoesNotContain("$\"value-", serialized, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Extractor_normalizes_unadmitted_expression_states_to_the_closed_vocabulary()
+    {
+        const string source = """
+            namespace Fixt;
+
+            public sealed class SourceDto
+            {
+                public SourceDto? Child { get; set; }
+                public string Name { get; set; } = "";
+                public System.Threading.Tasks.Task<string> PendingName { get; set; } =
+                    System.Threading.Tasks.Task.FromResult("");
+            }
+
+            public sealed class TargetDto
+            {
+                public string? Name { get; set; }
+            }
+
+            public static class Mapper
+            {
+                public static async System.Threading.Tasks.Task Copy(SourceDto source, TargetDto target)
+                {
+                    target.Name = source.Child?.Name;
+                    target.Name = await source.PendingName;
+                }
+            }
+            """;
+
+        var extraction = ExtractOne(source);
+
+        Assert.Empty(extraction.Facts);
+        Assert.Equal(2, extraction.Gaps.Count);
+        Assert.All(extraction.Gaps, gap =>
+            Assert.Equal("expression-transform", Prop(gap)["shapeState"]));
+    }
+
+    [Fact]
+    public void Extractor_rejects_record_with_and_invalid_property_writes()
+    {
+        const string source = """
+            namespace Fixt;
+
+            public sealed class SourceDto
+            {
+                public string Name { get; set; } = "";
+            }
+
+            public sealed class ReadOnlyTarget
+            {
+                public string Name { get; } = "";
+            }
+
+            public sealed class PrivateTarget
+            {
+                public string Name { get; private set; } = "";
+            }
+
+            public sealed record RecordTarget(string Name);
+
+            public static class Mapper
+            {
+                public static void Invalid(SourceDto source, ReadOnlyTarget readOnly, PrivateTarget privateTarget)
+                {
+                    readOnly.Name = source.Name;
+                    privateTarget.Name = source.Name;
+                    _ = new RecordTarget("") with { Name = source.Name };
+                }
+            }
+            """;
+
+        var extraction = ExtractWithErrors(source);
+
+        Assert.Empty(extraction.Facts);
+        Assert.Equal(3, extraction.Gaps.Count);
+        Assert.Equal(2, extraction.Gaps.Count(gap =>
+            Prop(gap).GetValueOrDefault("gapKind") == "PropertyMappingSemanticUnavailable"
+            && Prop(gap).GetValueOrDefault("shapeState") == "incomplete-binding"));
+        Assert.Single(extraction.Gaps, gap =>
+            Prop(gap).GetValueOrDefault("gapKind") == "PropertyMappingSemanticUnavailable"
+            && Prop(gap).GetValueOrDefault("shapeState") == "expression-transform");
     }
 
     [Fact]
@@ -513,7 +596,38 @@ public sealed class PropertyMappingTests
         var documentExtraction = ExtractOne(documentBuilder.ToString());
         Assert.Equal(250, documentExtraction.Facts.Count);
         var documentTruncated = Assert.Single(documentExtraction.Gaps);
-        Assert.Equal("50", documentTruncated.Properties["suppressedFactCount"]);
+        Assert.Equal("50", Prop(documentTruncated)["suppressedFactCount"]);
+    }
+
+    [Fact]
+    public void Extractor_keeps_the_truncation_summary_inside_the_gap_bound()
+    {
+        var source = new System.Text.StringBuilder("""
+            namespace Fixt;
+            public sealed class SourceDto { public string Name { get; set; } = ""; }
+            public sealed class TargetDto { public string Name { get; set; } = ""; }
+            public static class Helper { public static string Copy(string value) => value; }
+            public static class Mapper
+            {
+                public static void Copy(SourceDto source, TargetDto target)
+                {
+            """);
+        for (var index = 0; index < 101; index++)
+        {
+            source.AppendLine("        target.Name = Helper.Copy(source.Name);");
+        }
+        source.AppendLine("    }");
+        source.AppendLine("}");
+
+        var extraction = ExtractOne(source.ToString());
+
+        Assert.Empty(extraction.Facts);
+        Assert.Equal(100, extraction.Gaps.Count);
+        var truncation = Assert.Single(extraction.Gaps, gap =>
+            Prop(gap).GetValueOrDefault("gapKind") == "PropertyMappingTruncated");
+        Assert.Equal("truncation", Prop(truncation)["shapeState"]);
+        Assert.Equal("2", Prop(truncation)["suppressedGapCount"]);
+        Assert.Equal("2", Prop(truncation)["occurrenceCount"]);
     }
 
     [Fact]

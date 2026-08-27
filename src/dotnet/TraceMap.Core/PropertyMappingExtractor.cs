@@ -78,6 +78,28 @@ internal static class PropertyMappingExtractor
 
             if (left.State == SideResolutionState.Property && right.State == SideResolutionState.Property)
             {
+                var semanticGapState = GetAssignmentSemanticGapState(
+                    assignment,
+                    model,
+                    containerMethod.Symbol,
+                    left.Property!);
+                if (semanticGapState is not null)
+                {
+                    AddGapOrCount(
+                        projectPath,
+                        filePath,
+                        assignment,
+                        "PropertyMappingSemanticUnavailable",
+                        semanticGapState,
+                        containerMethod.Symbol,
+                        left,
+                        right,
+                        ref gapCount,
+                        ref suppressedGaps,
+                    gaps);
+                    continue;
+                }
+
                 if (SymbolEqualityComparer.Default.Equals(left.Property, right.Property))
                 {
                     continue;
@@ -141,6 +163,13 @@ internal static class PropertyMappingExtractor
 
         if (suppressedFacts > 0 || suppressedGaps > 0)
         {
+            // The truncation summary counts against the documented gap bound.
+            // Reserve its slot deterministically if ordinary gaps filled it.
+            if (gapCount >= MaxGapsPerDocument)
+            {
+                gaps.RemoveAt(gaps.Count - 1);
+                suppressedGaps++;
+            }
             gaps.Add(CreateTruncationGap(projectPath, filePath, suppressedFacts, suppressedGaps));
         }
     }
@@ -212,7 +241,7 @@ internal static class PropertyMappingExtractor
                 case ElementAccessExpressionSyntax:
                     return new Side(SideResolutionState.TransformExpression, Detail: "indexer-element");
                 case ConditionalAccessExpressionSyntax:
-                    return new Side(SideResolutionState.TransformExpression, Detail: "conditional-access");
+                    return new Side(SideResolutionState.TransformExpression, Detail: "expression-transform");
                 default:
                     return ResolveTerminal(current, model);
             }
@@ -262,7 +291,7 @@ internal static class PropertyMappingExtractor
             case ImplicitElementAccessSyntax:
                 return new Side(SideResolutionState.TransformExpression, Detail: "indexer-element");
             case AwaitExpressionSyntax:
-                return new Side(SideResolutionState.TransformExpression, Detail: "await-expression");
+                return new Side(SideResolutionState.TransformExpression, Detail: "expression-transform");
             default:
                 return new Side(SideResolutionState.TransformExpression, Detail: "expression-transform");
         }
@@ -302,6 +331,41 @@ internal static class PropertyMappingExtractor
     private static int CountPropertySides(Side left, Side right) =>
         (left.State == SideResolutionState.Property ? 1 : 0)
         + (right.State == SideResolutionState.Property ? 1 : 0);
+
+    private static string? GetAssignmentSemanticGapState(
+        AssignmentExpressionSyntax assignment,
+        SemanticModel model,
+        IMethodSymbol containerMethod,
+        IPropertySymbol targetProperty)
+    {
+        // Record `with` initializers and future initializer forms are not the
+        // admitted `new Target { ... }` object-initializer shape.
+        if (assignment.Parent is InitializerExpressionSyntax initializer
+            && !initializer.IsKind(SyntaxKind.ObjectInitializerExpression))
+        {
+            return "expression-transform";
+        }
+
+        var setter = targetProperty.SetMethod;
+        if (setter is null)
+        {
+            return "incomplete-binding";
+        }
+
+        var within = (ISymbol?)containerMethod.ContainingType ?? containerMethod;
+        if (!model.Compilation.IsSymbolAccessibleWithin(setter, within))
+        {
+            return "incomplete-binding";
+        }
+
+        // A property symbol can still resolve inside an invalid assignment
+        // (for example a receiver/accessibility error in partial compilation).
+        // Tier1 mapping evidence requires an error-free assignment span.
+        return model.GetDiagnostics(assignment.Span)
+            .Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            ? "incomplete-binding"
+            : null;
+    }
 
     private static void ClassifyFailure(
         string? projectPath,
@@ -449,6 +513,7 @@ internal static class PropertyMappingExtractor
             ["limitations"] = Limitations,
             ["occurrenceCount"] = (suppressedFacts + suppressedGaps).ToString(System.Globalization.CultureInfo.InvariantCulture),
             ["sanitization"] = "categorical-count",
+            ["shapeState"] = "truncation",
             ["suppressedFactCount"] = suppressedFacts.ToString(System.Globalization.CultureInfo.InvariantCulture),
             ["suppressedGapCount"] = suppressedGaps.ToString(System.Globalization.CultureInfo.InvariantCulture)
         };

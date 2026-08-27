@@ -32,6 +32,7 @@ Scope shipped (tasks 2.1-2.7 only; PR 3/PR 4 remain untouched):
   `expression-transform`, `conversion`, `type-conversion-required`,
   `indexer-element`, `compound-assignment`, `dynamic`,
   `ambiguous-candidates`, `incomplete-binding`, `unresolved-binding`);
+  the aggregate truncation row additionally uses `truncation`;
   no expressions, snippets, constant values, or protected digests are stored.
 - Deterministic bounds declared before implementation: 25 facts per method-like
   container, 250 per document, 100 gaps per document; exceedances fold into one
@@ -61,10 +62,19 @@ Decisions recorded for reviewers:
 - Per-method bound keys are the nearest method-like declaration (methods,
   local functions, accessors, operators); anonymous functions are not separate
   containers so lambda-bodied assignments attribute to their enclosing member.
+- Exact-head review tightened Tier1 admission: record `with` initializers and
+  getter-only, inaccessible, or diagnostically invalid target writes now emit
+  categorical gaps; conditional-access and await transforms normalize to the
+  documented `expression-transform` state; and the aggregate truncation row
+  reserves a slot inside the declared 100-gap document bound.
 
 Validation on this branch:
 
-- focused: PropertyMappingTests 11/11, reducer isolation
+- focused after exact-head review: PropertyMappingTests plus reducer/reader
+  isolation 16/16;
+- full solution: 1714/1714 tests, clean build with zero warnings/errors,
+  changed-file format verification, private-path guard, and diff check;
+- original focused producer validation: PropertyMappingTests 11/11, reducer isolation
   (`Reduce_excludes_semantic_property_mapping...`) and reader isolation
   (`Property_flow_ignores_direct_property_mapping...`) pass;
 - synthetic non-compiling fixture scan keeps healthy-file mappings byte-stable
