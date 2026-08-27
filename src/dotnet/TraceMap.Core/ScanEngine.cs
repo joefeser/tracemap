@@ -235,7 +235,8 @@ public static class ScanEngine
         var migrationFallbackReducedCoverage = migrationFallbackGaps.Length > 0;
         var semanticBuildReducedCoverage = semanticResult.GapFacts.Any(gap =>
             gap.RuleId != RuleIds.DatabaseFrameworkMigrationGap
-            && gap.RuleId != RuleIds.CSharpRazorSemanticModelBindingGap);
+            && gap.RuleId != RuleIds.CSharpRazorSemanticModelBindingGap
+            && gap.RuleId != RuleIds.CSharpSemanticPropertyMappingGap);
         var semanticBuildStatus = semanticResult.Attempted
             ? semanticBuildReducedCoverage ? "FailedOrPartial" : "Succeeded"
             : "NotRun";
@@ -1010,6 +1011,11 @@ public static class ScanEngine
             var gapKind = gap.Properties?.GetValueOrDefault("gapKind") ?? gap.ContractElement ?? "UnknownRazorModelBindingGap";
             return $"Semantic Razor model-binding coverage reduced: {gapKind}.";
         }
+        if (gap.RuleId == RuleIds.CSharpSemanticPropertyMappingGap)
+        {
+            var gapKind = gap.Properties?.GetValueOrDefault("gapKind") ?? gap.ContractElement ?? "UnknownPropertyMappingGap";
+            return $"Direct property-mapping coverage reduced: {gapKind}.";
+        }
         return "Roslyn semantic analysis reported a gap.";
     }
 
@@ -1017,7 +1023,8 @@ public static class ScanEngine
         result.GapFacts.Any(gap => !IsProducerLocalSemanticGap(gap));
 
     private static bool IsProducerLocalSemanticGap(SemanticFactCandidate gap) =>
-        gap.RuleId == RuleIds.CSharpRazorSemanticModelBindingGap;
+        gap.RuleId == RuleIds.CSharpRazorSemanticModelBindingGap
+        || gap.RuleId == RuleIds.CSharpSemanticPropertyMappingGap;
 
     private static string GetBuildStatusReason(
         ScanManifest manifest,

@@ -1697,7 +1697,9 @@ public static class PropertyFlowReporter
 
     private static bool IsAdmittedPropertyFlowFact(PropertyFactRow fact) =>
         fact.RuleId != RuleIds.CSharpRazorSemanticModelBinding
-        && fact.RuleId != RuleIds.CSharpRazorSemanticModelBindingGap;
+        && fact.RuleId != RuleIds.CSharpRazorSemanticModelBindingGap
+        && fact.RuleId != RuleIds.CSharpSemanticPropertyMapping
+        && fact.RuleId != RuleIds.CSharpSemanticPropertyMappingGap;
 
     private static string? PropertyName(PropertyFactRow fact)
     {
