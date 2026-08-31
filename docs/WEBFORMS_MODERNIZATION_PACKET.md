@@ -205,6 +205,56 @@ report.
 | `--max-gaps` | 1000 | Maximum structured gaps, including a limit gap. |
 | `--max-depth` | 8 | Maximum legacy static-flow traversal depth. |
 | `--max-paths` | 1000 | Maximum legacy static-flow paths considered. |
+| `--max-input-facts` | 250000 | Maximum retained snapshot plus graph fact rows, after conservative syntax-witness compaction. |
+| `--max-input-edges` | 250000 | Ceiling for loaded dependency rows and, separately, derived graph edges. |
+| `--max-input-text-bytes` | 134217728 | Retained UTF-8 input text admission budget (128 MiB), shared by snapshot/facts/edges. |
+
+### Large indexes and OOM recovery
+
+The packet reader streams syntax rows and keeps only the first symbol witnesses
+for a closed set of graph-inert fact types. It retains full graph-relevant rows,
+declared surfaces, unknown types, and legacy rules, plus referenced supporting
+IDs and provenance even for otherwise omitted symbol witnesses.
+Repository-wide symbols remain visible to reconciliation and dispatch so this
+optimization cannot turn hidden competing symbols into a false unique match.
+The scan index is opened read-only and is not filtered or rewritten on disk.
+
+The input limits are separate from output/traversal limits. A row is checked
+before allocating its managed strings/JSON; a single retained row is limited to
+1 MiB of UTF-8 text. Derived graph nodes are capped at twice `--max-input-facts`.
+If admission or graph construction exceeds a limit, the packet emits
+`WebFormsModernizationInputLimitReached`, is reduced/truncated, and does **not**
+classify paths from an incomplete graph. Retained markup/configuration inventory
+remains available. Event chains use `UnknownAnalysisGap` instead of a fabricated
+`NoBackendEvidence`. One admission gap survives even with `--max-gaps 1`.
+Limits count serialized input text/rows, not a hard process RSS quota. Raising
+limits can increase memory pressure. The general `paths`/`relate` commands do
+not inherit this packet-specific reader.
+
+JSON is serialized directly to a staging stream, avoiding a whole-document
+managed string. Atomic directory publication and the packet v1 schema remain
+unchanged. Web Forms roots use the explicit `--max-event-chains` ceiling rather
+than the ordinary path command's 250-selector cap; path/frontier/output limits
+can still truncate coverage and must be inspected.
+
+To retry a completed scan after an OOM, **reuse its existing `scan/index.sqlite`**.
+Do not rerun scanning or overwrite a successful packet:
+
+```powershell
+$Index = Read-Host 'Full path to the completed scan/index.sqlite'
+$Out = Join-Path 'C:\work\tracemap-output' ('webforms-memory-retry-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+dotnet run --no-build --project .\src\dotnet\TraceMap.Cli -- webforms-modernization `
+  --index $Index --out $Out `
+  --max-surfaces 1000 --max-event-chains 2000 --max-boundaries 2000 --max-paths 2000
+```
+
+Build the checked-out TraceMap version first. Record that tool commit separately
+from the scanned application's commit. Inspect the packet's input-limit gaps,
+`summary.truncated`, retained surface/event counts, and provenance before using
+it. Successful command completion does not imply complete coverage. If an input
+limit is reached, share only the categorical gap, counts, tool SHA, and chosen
+limits with the tool author; private source/SQL/index files need not leave the
+work machine. Root-specific lazy loading is not implemented by this slice.
 
 Increase a bound only after inspecting why the packet truncated. A binding
 limit changes packet content and may materially increase run time and packet
