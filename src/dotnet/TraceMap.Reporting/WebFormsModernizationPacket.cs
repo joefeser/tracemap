@@ -18,7 +18,10 @@ public sealed record WebFormsModernizationOptions(
     int MaxPaths = 1_000,
     int MaxBoundaries = 1_000,
     int MaxIdentityState = 1_000,
-    int MaxBatchDataMovement = 1_000);
+    int MaxBatchDataMovement = 1_000,
+    int MaxInputFacts = 250_000,
+    int MaxInputEdges = 250_000,
+    int MaxInputTextBytes = 128 * 1024 * 1024);
 
 public sealed record WebFormsModernizationResult(
     WebFormsModernizationPacket Packet,
@@ -269,7 +272,11 @@ public static class WebFormsModernizationPacketReporter
             Directory.CreateDirectory(staging);
             var json = Path.Combine(staging, "webforms-modernization.json");
             var markdown = Path.Combine(staging, "webforms-modernization.md");
-            await File.WriteAllTextAsync(json, JsonSerializer.Serialize(packet, JsonOptions) + "\n", new UTF8Encoding(false), cancellationToken);
+            await using (var stream = new FileStream(json, FileMode.CreateNew, FileAccess.Write, FileShare.None, 64 * 1024, useAsync: true))
+            {
+                await JsonSerializer.SerializeAsync(stream, packet, JsonOptions, cancellationToken);
+                await stream.WriteAsync("\n"u8.ToArray(), cancellationToken);
+            }
             await File.WriteAllTextAsync(markdown, RenderMarkdown(packet), new UTF8Encoding(false), cancellationToken);
             Directory.Move(staging, output);
             return new(packet, Path.Combine(output, Path.GetFileName(json)), Path.Combine(output, Path.GetFileName(markdown)));
@@ -286,14 +293,20 @@ public static class WebFormsModernizationPacketReporter
         CancellationToken cancellationToken = default)
     {
         Validate(options);
-        var snapshot = await ReadSnapshotAsync(options.IndexPath, cancellationToken);
-        var legacyFlow = await CombinedDependencyPathReporter.BuildReportAsync(new(
+        var budget = new ReportInputBudget(options.MaxInputFacts, options.MaxInputEdges, options.MaxInputTextBytes);
+        var snapshot = await ReadSnapshotAsync(options.IndexPath, budget, cancellationToken);
+        var legacyFlow = await CombinedDependencyPathReporter.BuildBoundedSingleIndexReportAsync(new(
             options.IndexPath,
             Path.Combine(Path.GetTempPath(), "tracemap-webforms-modernization-unused"),
             View: LegacyFlowReportConstants.View,
             IncludeLegacyRoots: true,
             MaxDepth: options.MaxDepth,
-            MaxPaths: options.MaxPaths), cancellationToken);
+            MaxPaths: options.MaxPaths)
+        {
+            StartingNodeLimit = options.MaxEventChains,
+            StartingFactIds = snapshot.Facts.Where(fact => fact.FactType == FactTypes.WebFormsHandlerResolved)
+                .Select(fact => "single:" + fact.FactId).ToHashSet(StringComparer.Ordinal)
+        }, budget, cancellationToken);
         return Build(snapshot, legacyFlow, options);
     }
 
@@ -303,6 +316,8 @@ public static class WebFormsModernizationPacketReporter
         WebFormsModernizationOptions options)
     {
         var gaps = new List<WebFormsModernizationGap>();
+        var inputLimit = snapshot.InputLimit ?? legacyFlow.Gaps.FirstOrDefault(gap => gap.GapKind == "GraphInputLimitReached")?.Reason;
+        var inputLimited = inputLimit is not null;
         var sourceAnalysisReduced = IsReducedAnalysisLevel(snapshot.AnalysisLevel);
         if (sourceAnalysisReduced)
             AddGeneratedGap(gaps, options.MaxGaps, snapshot, "SourceAnalysisCoverageReduced", "scan", snapshot.ScanId, []);
@@ -312,7 +327,7 @@ public static class WebFormsModernizationPacketReporter
             AddGeneratedGap(gaps, options.MaxGaps, snapshot, "EvidenceProvenanceUnavailable", "fact", invalid.FactId, [invalid.FactId]);
         var facts = allFacts.Where(HasRequiredProvenance).ToArray();
         var factsById = facts.ToDictionary(fact => fact.FactId, StringComparer.Ordinal);
-        var truncated = legacyFlow.Summary.Truncated;
+        var truncated = legacyFlow.Summary.Truncated || inputLimited;
         var pageFacts = facts.Where(fact => fact.FactType == FactTypes.WebFormsPageDeclared).ToArray();
         var retainedPages = pageFacts.Take(options.MaxSurfaces).ToArray();
         if (retainedPages.Length < pageFacts.Length)
@@ -378,9 +393,9 @@ public static class WebFormsModernizationPacketReporter
             var handlers = handlersByBinding.GetValueOrDefault(binding.FactId) ?? [];
             var handler = handlers.Length == 1 ? handlers[0] : null;
             var flowFact = handler is null ? null : flowFacts.FirstOrDefault(fact => SplitIds(fact.Properties.GetValueOrDefault("supportingFactIds")).Contains(handler.FactId, StringComparer.Ordinal));
-            var legacyPaths = legacyFlow.Paths.Where(path => path.SupportingFactIds.Contains(binding.FactId, StringComparer.Ordinal)
+            var legacyPaths = legacyFlow.Paths.Where(path => !inputLimited && (path.SupportingFactIds.Contains(binding.FactId, StringComparer.Ordinal)
                 || (handler is not null && (path.SupportingFactIds.Contains(handler.FactId, StringComparer.Ordinal)
-                    || path.Nodes.FirstOrDefault()?.SymbolId == handler.TargetSymbol)))
+                    || path.Nodes.FirstOrDefault()?.SymbolId == handler.TargetSymbol))))
                 .OrderBy(path => path.PathId, StringComparer.Ordinal).ToArray();
             var concreteTerminals = legacyPaths
                 .Select(path => path.Nodes.LastOrDefault())
@@ -413,12 +428,12 @@ public static class WebFormsModernizationPacketReporter
                 var retainedPathEvidenceIds = pathEvidence.Select(evidence => evidence.EvidenceId).ToHashSet(StringComparer.Ordinal);
                 var pathProvenanceAvailable = legacyPath is null || requiredPathEvidenceIds.All(retainedPathEvidenceIds.Contains);
                 var supportedLegacyPath = pathProvenanceAvailable ? legacyPath : null;
-                var classification = handler is null
+                var classification = inputLimited ? "UnknownAnalysisGap" : handler is null
                     ? "handler-unavailable"
                     : supportedLegacyPath is not null ? supportedLegacyPath.Classification
                     : flowFact?.Properties.GetValueOrDefault("flowClassification") ?? "NoBackendEvidence";
-                var terminalKind = supportedLegacyPath?.Nodes.LastOrDefault()?.SurfaceKind ?? EmptyToNull(flowFact?.Properties.GetValueOrDefault("terminalSurfaceKind"));
-                if (handler is not null && terminalKind is null)
+                var terminalKind = inputLimited ? null : supportedLegacyPath?.Nodes.LastOrDefault()?.SurfaceKind ?? EmptyToNull(flowFact?.Properties.GetValueOrDefault("terminalSurfaceKind"));
+                if (!inputLimited && handler is not null && terminalKind is null)
                     AddGeneratedGap(gaps, options.MaxGaps, snapshot, "NoBackendEvidence", "event-chain", binding.FactId, support.Select(fact => fact.FactId));
                 var chain = new WebFormsModernizationEventChain(
                     HashId("chain", [binding.FactId, handler?.FactId ?? "handler-unavailable", supportedLegacyPath?.PathId ?? "no-path"]),
@@ -437,7 +452,9 @@ public static class WebFormsModernizationPacketReporter
                     support.Select(fact => fact.RuleId).Concat(supportedLegacyPath?.Edges.Select(edge => edge.RuleId) ?? []).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
                     support.Select(fact => fact.EvidenceTier).Concat(supportedLegacyPath?.Edges.Select(edge => edge.EvidenceTier) ?? []).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
                     support.Select(fact => fact.Properties.GetValueOrDefault("coverageLabel") ?? UnknownCoverage).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
-                    terminalKind is null && handler is not null
+                    inputLimited
+                        ? ["Input admission was truncated; no downstream path or absence conclusion was derived from the incomplete input."]
+                        : terminalKind is null && handler is not null
                         ? ["No backend or terminal evidence was composed for this handler in the bounded static snapshot; this is not proof of absence."]
                         : ["The chain is static evidence and does not prove runtime event firing or terminal execution."]);
                 chains.Add(chain);
@@ -600,6 +617,12 @@ public static class WebFormsModernizationPacketReporter
         foreach (var batchGap in facts.Where(fact => fact.FactType == FactTypes.AnalysisGap && fact.RuleId == RuleIds.LegacyWebFormsBatchDataMovement))
             AddFactGap(gaps, options.MaxGaps, snapshot, batchGap);
         if (gaps.Any(gap => gap.Classification == "WebFormsModernizationGapLimitReached")) truncated = true;
+        if (inputLimited)
+        {
+            // Reserve one explicit admission gap even when --max-gaps is one.
+            var limitGap = CreateGeneratedGap(snapshot, "WebFormsModernizationInputLimitReached", "input", inputLimit, []);
+            if (gaps.Count >= options.MaxGaps) gaps[^1] = limitGap; else gaps.Add(limitGap);
+        }
         var uniqueGaps = gaps.GroupBy(gap => gap.GapId, StringComparer.Ordinal).Select(group => group.First()).OrderBy(gap => gap.GapId, StringComparer.Ordinal).ToArray();
         var hasReducedInput = facts.Any(fact => fact.EvidenceTier == EvidenceTiers.Tier4Unknown
             || IsReducedCoverageLabel(fact.Properties.GetValueOrDefault("coverageLabel")));
@@ -887,7 +910,7 @@ public static class WebFormsModernizationPacketReporter
             ["The packet failed closed because required evidence was unavailable or bounded by a deterministic limit."]);
     }
 
-    private static async Task<Snapshot> ReadSnapshotAsync(string path, CancellationToken cancellationToken)
+    private static async Task<Snapshot> ReadSnapshotAsync(string path, ReportInputBudget budget, CancellationToken cancellationToken)
     {
         await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
         {
@@ -901,7 +924,7 @@ public static class WebFormsModernizationPacketReporter
             await connection.OpenAsync(cancellationToken);
             await using (var queryOnly = connection.CreateCommand())
             {
-                queryOnly.CommandText = "pragma query_only = on;";
+                queryOnly.CommandText = "pragma query_only = on; pragma temp_store=file; pragma cache_size=-8192;";
                 await queryOnly.ExecuteNonQueryAsync(cancellationToken);
             }
             if (!await TableExistsAsync(connection, "scan_manifest", cancellationToken)
@@ -945,18 +968,22 @@ public static class WebFormsModernizationPacketReporter
                     throw new InvalidDataException("WebFormsModernizationSourceIdentityMismatch");
             }
             var facts = new List<CodeFact>();
+            string? inputLimit = null;
             await using (var command = connection.CreateCommand())
             {
-                command.CommandText = """
+                command.CommandText = $$"""
                 select fact_id, scan_id, repo, commit_sha, project_path, fact_type, rule_id, evidence_tier,
                        source_symbol, target_symbol, contract_element, file_path, start_line, end_line,
-                       snippet_hash, extractor_id, extractor_version, properties_json
+                       snippet_hash, extractor_id, extractor_version, properties_json,
+                       {{CombinedDependencyPathReporter.TextByteCountSql("fact_id", "scan_id", "repo", "commit_sha", "project_path", "fact_type", "rule_id", "evidence_tier", "source_symbol", "target_symbol", "contract_element", "file_path", "snippet_hash", "extractor_id", "extractor_version", "properties_json")}}
                 from facts where rule_id like 'legacy.webforms.%' or rule_id = $identityRule order by fact_id;
                 """;
                 command.Parameters.AddWithValue("$identityRule", RuleIds.LegacyAspNetIdentityState);
                 await using var reader = await command.ExecuteReaderAsync(cancellationToken);
                 while (await reader.ReadAsync(cancellationToken))
                 {
+                    try { budget.Retain(reader.GetInt64(18)); }
+                    catch (ReportInputLimitException exception) { inputLimit = "snapshot-" + exception.Limit; break; }
                     var properties = JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(17)) ?? [];
                     facts.Add(new(
                     reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
@@ -968,7 +995,7 @@ public static class WebFormsModernizationPacketReporter
             }
             if (facts.Any(fact => fact.ScanId != scanId || fact.Repo != repository || fact.CommitSha != commit))
                 throw new InvalidDataException("WebFormsModernizationSourceIdentityMismatch");
-            return new(repository, scanId, commit, analysis, build, facts);
+            return new(repository, scanId, commit, analysis, build, facts, inputLimit);
         }
         catch (InvalidDataException)
         {
@@ -1043,7 +1070,7 @@ public static class WebFormsModernizationPacketReporter
         if (string.IsNullOrWhiteSpace(options.IndexPath)) throw new ArgumentException("webforms-modernization requires --index <index.sqlite>.");
         if (string.IsNullOrWhiteSpace(options.OutputDirectory)) throw new ArgumentException("webforms-modernization requires --out <directory>.");
         if (!File.Exists(options.IndexPath)) throw new FileNotFoundException("WebFormsModernizationIndexUnavailable");
-        if (options.MaxSurfaces <= 0 || options.MaxEventChains <= 0 || options.MaxCandidates <= 0 || options.MaxGaps <= 0 || options.MaxDepth <= 0 || options.MaxPaths <= 0 || options.MaxBoundaries <= 0 || options.MaxIdentityState <= 0 || options.MaxBatchDataMovement <= 0)
+        if (options.MaxSurfaces <= 0 || options.MaxEventChains <= 0 || options.MaxCandidates <= 0 || options.MaxGaps <= 0 || options.MaxDepth <= 0 || options.MaxPaths <= 0 || options.MaxBoundaries <= 0 || options.MaxIdentityState <= 0 || options.MaxBatchDataMovement <= 0 || options.MaxInputFacts <= 0 || options.MaxInputEdges <= 0 || options.MaxInputTextBytes <= 0)
             throw new ArgumentOutOfRangeException(nameof(options), "Web Forms modernization bounds must be positive.");
     }
 
@@ -1251,5 +1278,6 @@ public static class WebFormsModernizationPacketReporter
         string CommitSha,
         string AnalysisLevel,
         string BuildStatus,
-        IReadOnlyList<CodeFact> Facts);
+        IReadOnlyList<CodeFact> Facts,
+        string? InputLimit = null);
 }

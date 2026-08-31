@@ -24,7 +24,13 @@ public sealed record CombinedDependencyPathOptions(
     int MaxDepth = 8,
     int MaxPaths = 100,
     int MaxFrontier = 10000,
-    string? MessageDirection = null);
+    string? MessageDirection = null)
+{
+    // Packet callers select their own roots; ordinary paths consumers retain
+    // the historical selector ceiling and selection behavior.
+    internal int StartingNodeLimit { get; init; } = 250;
+    internal IReadOnlySet<string>? StartingFactIds { get; init; }
+}
 
 public sealed record CombinedDependencyPathResult(
     CombinedDependencyPathReport Report,
@@ -246,7 +252,7 @@ public static class CombinedValueOriginClassifications
     public const string NoValuePathEvidence = nameof(NoValuePathEvidence);
 }
 
-public static class CombinedDependencyPathReporter
+public static partial class CombinedDependencyPathReporter
 {
     private const string Version = "1.0";
     private const string Algorithm = "bounded-bfs";
@@ -259,7 +265,6 @@ public static class CombinedDependencyPathReporter
     private const string QueryGapRuleId = "combined.paths.query-gap.v1";
     private const string TruncationGapRuleId = "combined.paths.truncation-gap.v1";
     private const string SymbolReconciliationRuleId = "combined.paths.symbol-reconciliation.v1";
-    private const int SelectorCandidateLimit = 250;
 
     private static readonly HashSet<string> EdgeKindTerms = new(StringComparer.Ordinal)
     {
@@ -442,6 +447,7 @@ public static class CombinedDependencyPathReporter
         {
             throw new ArgumentException("--max-frontier must be a positive integer.");
         }
+        if (options.StartingNodeLimit <= 0) throw new ArgumentOutOfRangeException(nameof(options));
 
         if (!string.IsNullOrWhiteSpace(options.ToSurface))
         {
@@ -670,9 +676,10 @@ public static class CombinedDependencyPathReporter
         IReadOnlyList<CombinedEndpointFinding> endpointFindings,
         IReadOnlyList<CombinedDependencySurfaceRow> surfaces,
         (string Client, string Server)? sourcePair,
-        bool includeLegacyRoots)
+        bool includeLegacyRoots,
+        ReportInputBudget? budget = null)
     {
-        var graph = new EvidenceGraph(read.Sources);
+        var graph = new EvidenceGraph(read.Sources, budget);
         var factsById = read.Facts.ToDictionary(fact => fact.CombinedFactId, StringComparer.Ordinal);
         foreach (var fact in read.Facts.OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
         {
@@ -874,7 +881,7 @@ public static class CombinedDependencyPathReporter
             : "tracemap paths graph inventory requires a combined index produced by tracemap combine.");
     }
 
-    private static async Task<CombinedReadResult> ReadSingleIndexAsync(SqliteConnection connection, string indexPath, CancellationToken cancellationToken)
+    private static async Task<CombinedReadResult> ReadSingleIndexAsync(SqliteConnection connection, string indexPath, CancellationToken cancellationToken, ReportInputBudget? budget = null)
     {
         var (source, manifestJson) = await ReadSingleSourceAsync(connection, indexPath, cancellationToken);
         var warnings = new List<string>();
@@ -884,8 +891,10 @@ public static class CombinedDependencyPathReporter
             "facts",
             "extractor_version",
             cancellationToken);
-        var facts = await ReadSingleFactsAsync(connection, source, hasFactExtractorVersion, cancellationToken);
-        var edges = await ReadSingleEdgesAsync(connection, source, cancellationToken);
+        var facts = budget is null
+            ? await ReadSingleFactsAsync(connection, source, hasFactExtractorVersion, cancellationToken)
+            : await ReadCompactSingleFactsAsync(connection, source, hasFactExtractorVersion, budget, cancellationToken);
+        var edges = await ReadSingleEdgesAsync(connection, source, cancellationToken, budget);
         var counts = new SortedDictionary<string, long>(StringComparer.Ordinal);
         if (await TableExistsAsync(connection, "parameter_forward_edges", cancellationToken))
         {
@@ -992,7 +1001,7 @@ public static class CombinedDependencyPathReporter
         return rows;
     }
 
-    private static async Task<IReadOnlyList<CombinedDependencyEdgeRow>> ReadSingleEdgesAsync(SqliteConnection connection, CombinedReportSource source, CancellationToken cancellationToken)
+    private static async Task<IReadOnlyList<CombinedDependencyEdgeRow>> ReadSingleEdgesAsync(SqliteConnection connection, CombinedReportSource source, CancellationToken cancellationToken, ReportInputBudget? budget = null)
     {
         var edges = new List<CombinedDependencyEdgeRow>();
         if (await TableExistsAsync(connection, "call_edges", cancellationToken))
@@ -1001,7 +1010,7 @@ public static class CombinedDependencyPathReporter
                 select 'calls', fact_id, fact_id, caller_symbol, callee_symbol, callee_assembly_name, callee_assembly_version, rule_id, evidence_tier, file_path, start_line, end_line
                 from call_edges
                 order by file_path, start_line, fact_id;
-                """, cancellationToken);
+                """, cancellationToken, budget);
         }
 
         if (await TableExistsAsync(connection, "object_creations", cancellationToken))
@@ -1010,7 +1019,7 @@ public static class CombinedDependencyPathReporter
                 select 'creates', fact_id, fact_id, caller_symbol, created_type, created_type_assembly_name, created_type_assembly_version, rule_id, evidence_tier, file_path, start_line, end_line
                 from object_creations
                 order by file_path, start_line, fact_id;
-                """, cancellationToken);
+                """, cancellationToken, budget);
         }
 
         if (await TableExistsAsync(connection, "symbol_relationships", cancellationToken))
@@ -1032,7 +1041,7 @@ public static class CombinedDependencyPathReporter
                 left join symbols source_symbols on source_symbols.scan_id = relationships.scan_id and source_symbols.symbol_id = relationships.source_symbol_id
                 left join symbols target_symbols on target_symbols.scan_id = relationships.scan_id and target_symbols.symbol_id = relationships.target_symbol_id
                 order by relationships.file_path, relationships.start_line, relationships.relationship_id;
-                """, cancellationToken);
+                """, cancellationToken, budget);
         }
 
         if (await TableExistsAsync(connection, "parameter_forward_edges", cancellationToken))
@@ -1044,7 +1053,7 @@ public static class CombinedDependencyPathReporter
                        target_assembly_name, target_assembly_version, rule_id, evidence_tier, file_path, start_line, end_line
                 from parameter_forward_edges
                 order by file_path, start_line, fact_id;
-                """, cancellationToken);
+                """, cancellationToken, budget);
         }
 
         return edges
@@ -1062,13 +1071,22 @@ public static class CombinedDependencyPathReporter
         CombinedReportSource source,
         List<CombinedDependencyEdgeRow> edges,
         string sql,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        ReportInputBudget? budget = null)
     {
         await using var command = connection.CreateCommand();
-        command.CommandText = sql;
+        command.CommandText = budget is null ? sql : $$"""
+            with input(edge_kind, edge_id, original_fact_id, source_symbol, target_symbol,
+                       assembly_name, assembly_version, rule_id, evidence_tier, file_path, start_line, end_line) as (
+                {{sql.Trim().TrimEnd(';')}}
+            )
+            select *, {{TextByteCountSql("edge_kind", "edge_id", "original_fact_id", "source_symbol", "target_symbol", "assembly_name", "assembly_version", "rule_id", "evidence_tier", "file_path")}}
+            from input;
+            """;
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
+            budget?.Retain(reader.GetInt64(12), edge: true);
             var originalId = reader.GetString(1);
             edges.Add(new CombinedDependencyEdgeRow(
                 reader.GetString(0),
@@ -2875,6 +2893,8 @@ public static class CombinedDependencyPathReporter
             candidates = candidates.Where(node => string.Equals(node.SourceLabel, sourceFilter, StringComparison.OrdinalIgnoreCase));
         }
 
+        if (options.StartingFactIds is not null)
+            candidates = candidates.Where(node => node.CombinedFactId is not null && options.StartingFactIds.Contains(node.CombinedFactId));
         var ordered = candidates
             .OrderBy(node => node.SourceLabel, StringComparer.Ordinal)
             .ThenBy(node => node.DisplayName, StringComparer.Ordinal)
@@ -2882,7 +2902,7 @@ public static class CombinedDependencyPathReporter
             .ThenBy(node => node.StartLine ?? 0)
             .ThenBy(node => node.NodeId, StringComparer.Ordinal)
             .ToArray();
-        return new SelectorResolution(ordered.Take(SelectorCandidateLimit).ToArray(), ordered.Length);
+        return new SelectorResolution(ordered.Take(options.StartingNodeLimit).ToArray(), ordered.Length);
     }
 
     private static bool WebFormsRootMatches(GraphNode node, string selector)
@@ -4255,7 +4275,7 @@ public static class CombinedDependencyPathReporter
         return text[..Math.Min(length, text.Length)];
     }
 
-    private sealed class EvidenceGraph(IReadOnlyList<CombinedReportSource> sources)
+    private sealed class EvidenceGraph(IReadOnlyList<CombinedReportSource> sources, ReportInputBudget? budget = null)
     {
         public Dictionary<string, GraphNode> Nodes { get; } = new(StringComparer.Ordinal);
         public List<GraphEdge> Edges { get; } = [];
@@ -4271,6 +4291,8 @@ public static class CombinedDependencyPathReporter
 
         public void AddNode(GraphNode node)
         {
+            if (budget is not null && !Nodes.ContainsKey(node.NodeId) && Nodes.Count >= (long)budget.MaxFacts * 2)
+                throw new ReportInputLimitException("graph-nodes");
             Nodes.TryAdd(node.NodeId, node);
         }
 
@@ -4281,6 +4303,9 @@ public static class CombinedDependencyPathReporter
             {
                 return existing;
             }
+
+            if (budget is not null && Nodes.Count >= (long)budget.MaxFacts * 2)
+                throw new ReportInputLimitException("graph-nodes");
 
             sourcesById.TryGetValue(sourceIndexId, out var source);
             var node = new GraphNode(
@@ -4326,6 +4351,9 @@ public static class CombinedDependencyPathReporter
             {
                 return;
             }
+
+            if (budget is not null && Edges.Count >= budget.MaxEdges)
+                throw new ReportInputLimitException("graph-edges");
 
             Edges.Add(edge);
             EdgesById[edge.EdgeId] = edge;
