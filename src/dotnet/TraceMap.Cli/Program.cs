@@ -580,7 +580,8 @@ public static class TraceMapCommand
         string[] supportedOptions =
         [
             "--index", "--out", "--max-surfaces", "--max-event-chains", "--max-candidates",
-            "--max-gaps", "--max-depth", "--max-paths", "--max-boundaries", "--max-identity-state", "--max-batch-data-movement"
+            "--max-gaps", "--max-depth", "--max-paths", "--max-boundaries", "--max-identity-state", "--max-batch-data-movement",
+            "--max-input-facts", "--max-input-edges", "--max-input-text-bytes"
         ];
         var unknownOptions = values.Keys.Except(supportedOptions, StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
         if (unknownOptions.Length > 0)
@@ -611,7 +612,10 @@ public static class TraceMapCommand
             ParsePositiveInt(values, "--max-paths", 1_000),
             ParsePositiveInt(values, "--max-boundaries", 1_000),
             ParsePositiveInt(values, "--max-identity-state", 1_000),
-            ParsePositiveInt(values, "--max-batch-data-movement", 1_000)), cancellationToken);
+            ParsePositiveInt(values, "--max-batch-data-movement", 1_000),
+            ParsePositiveInt(values, "--max-input-facts", 250_000),
+            ParsePositiveInt(values, "--max-input-edges", 250_000),
+            ParsePositiveInt(values, "--max-input-text-bytes", 128 * 1024 * 1024)), cancellationToken);
         await output.WriteLineAsync($"TraceMap Web Forms modernization packet completed: {result.JsonPath}");
         await output.WriteLineAsync($"Repository: {result.Packet.Sources.Single().RepositoryId}");
         await output.WriteLineAsync($"Commit SHA: {result.Packet.Sources.Single().CommitSha}");
@@ -2748,6 +2752,9 @@ public static class TraceMapCommand
               --max-gaps <n>             Maximum gap rows (default 1000).
               --max-depth <n>            Legacy static-flow traversal depth (default 8).
               --max-paths <n>            Legacy static-flow path limit (default 1000).
+              --max-input-facts <n>      Retained snapshot/graph fact rows (default 250000).
+              --max-input-edges <n>      Loaded and derived graph edge ceiling (default 250000).
+              --max-input-text-bytes <n> Retained UTF-8 input text budget (default 134217728).
 
             Outputs:
               webforms-modernization.json and webforms-modernization.md
