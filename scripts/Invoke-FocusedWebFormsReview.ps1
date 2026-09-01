@@ -74,6 +74,29 @@ function Get-InScopeSolutionProjects {
     return $selected
 }
 
+function Assert-ProjectsBelongToSolution {
+    param(
+        [string[]]$ExplicitProjects,
+        [string[]]$SolutionProjects,
+        [string]$SourceRoot
+    )
+
+    $sourcePrefix = $SourceRoot.TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
+    $solutionProjectSet = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($project in $SolutionProjects) { [void]$solutionProjectSet.Add($project.Replace('\', '/')) }
+    foreach ($project in $ExplicitProjects) {
+        $platformRelativePath = $project.Replace('\', [IO.Path]::DirectorySeparatorChar).Replace('/', [IO.Path]::DirectorySeparatorChar)
+        $candidate = [IO.Path]::GetFullPath((Join-Path $SourceRoot $platformRelativePath))
+        if (-not $candidate.StartsWith($sourcePrefix, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "PROJECT_NOT_IN_SELECTED_SOLUTION"
+        }
+        $normalizedProject = $candidate.Substring($sourcePrefix.Length).Replace('\', '/')
+        if (-not $solutionProjectSet.Contains($normalizedProject)) {
+            throw "PROJECT_NOT_IN_SELECTED_SOLUTION"
+        }
+    }
+}
+
 $SourceRoot = Read-RequiredValue $SourceRoot "Private source repository root"
 $WebFormsFolder = Read-RequiredValue $WebFormsFolder "Web Forms folder, relative to the source root"
 $BackendFolder = Read-RequiredValue $BackendFolder "Backend folder, relative to the source root"
@@ -106,8 +129,15 @@ foreach ($folder in $selectedFolders) {
 if (-not [string]::IsNullOrWhiteSpace($SolutionRelativePath)) {
     $solutionPath = Resolve-RelativeChild $SourceRoot $SolutionRelativePath "SOLUTION_SCOPE_UNAVAILABLE" $true
     if ([IO.Path]::GetExtension($solutionPath) -notin @('.sln', '.slnx')) { throw "SOLUTION_SCOPE_INVALID" }
+    $solutionProjects = @(Get-InScopeSolutionProjects $solutionPath $SourceRoot $selectedFolders)
     if ($ProjectRelativePath.Count -eq 0) {
-        $ProjectRelativePath = @(Get-InScopeSolutionProjects $solutionPath $SourceRoot $selectedFolders)
+        $ProjectRelativePath = $solutionProjects
+    }
+    else {
+        Assert-ProjectsBelongToSolution `
+            -ExplicitProjects $ProjectRelativePath `
+            -SolutionProjects $solutionProjects `
+            -SourceRoot $SourceRoot
     }
 }
 foreach ($project in $ProjectRelativePath) {
@@ -167,16 +197,31 @@ $reviewExitCode = $LASTEXITCODE
 $factsPath = Join-Path $outRoot "scan/facts.ndjson"
 $manifestPath = Join-Path $outRoot "scan/scan-manifest.json"
 $resultPath = Join-Path $outRoot "local-review-result.json"
-$completeReviewArtifacts =
+$scanArtifactsAvailable =
     (Test-Path -LiteralPath $factsPath -PathType Leaf) -and
-    (Test-Path -LiteralPath $manifestPath -PathType Leaf) -and
+    (Test-Path -LiteralPath $manifestPath -PathType Leaf)
+$completeReviewArtifacts =
+    $scanArtifactsAvailable -and
     (Test-Path -LiteralPath $resultPath -PathType Leaf)
 
-if ($completeReviewArtifacts) {
+if ($scanArtifactsAvailable) {
     $traceMapHead = (git -C $TraceMapRoot rev-parse HEAD).Trim()
     if ($LASTEXITCODE -ne 0 -or $traceMapHead -notmatch '^[0-9a-fA-F]{40}$') {
         throw "TRACEMAP_HEAD_UNAVAILABLE"
     }
+    & "$TraceMapRoot\scripts\Export-FocusedWebFormsWorkspaceSummary.ps1" `
+        -ReviewOutputPath $outRoot `
+        -WebFormsFolder $WebFormsFolder `
+        -BackendFolder $BackendFolder `
+        -ControlsFolder $ControlsFolder `
+        -TraceMapHead $traceMapHead `
+        -OutputDirectory $summaryParent
+}
+else {
+    "focused-webforms-workspace-summary=skipped;reason=incomplete-scan-artifacts"
+}
+
+if ($completeReviewArtifacts) {
     & "$TraceMapRoot\scripts\Export-FocusedWebFormsEvidenceSummary.ps1" `
         -ReviewOutputPath $outRoot `
         -OutputDirectory $summaryParent
@@ -185,13 +230,6 @@ if ($completeReviewArtifacts) {
         -WebFormsFolder $WebFormsFolder `
         -BackendFolder $BackendFolder `
         -ControlsFolder $ControlsFolder `
-        -OutputDirectory $summaryParent
-    & "$TraceMapRoot\scripts\Export-FocusedWebFormsWorkspaceSummary.ps1" `
-        -ReviewOutputPath $outRoot `
-        -WebFormsFolder $WebFormsFolder `
-        -BackendFolder $BackendFolder `
-        -ControlsFolder $ControlsFolder `
-        -TraceMapHead $traceMapHead `
         -OutputDirectory $summaryParent
 }
 else {
