@@ -53,19 +53,19 @@ Operational boundaries:
 - Merge-commit readback is the default; squash merge requires separate owner
   approval.
 
-The one-pass Qodo lifecycle and bounded current-head Codex recovery require the
-immutable Agent Control Kit `v0.4.4` release at
-`855428f7a8e9bd084decc3a1569aa59f7d50583d`. Before a loop, verify the exact
+The one-pass Qodo lifecycle, bounded current-head Codex recovery, and trusted
+local-review fallback require the immutable Agent Control Kit `v0.5.0` release
+at `a09a10ecf62bfb673bbcc54c4157aeef9e90467a`. Before a loop, verify the exact
 checkout, stable identity, release receipt, and consumer lane:
 
 ```bash
-ACK_ROOT=../agent-control-kit-v0.4.4
-ACK_RELEASE_RECEIPT="$ACK_ROOT/.agent-control/tmp/releases/0.4.4-855428f7a8e9bd084decc3a1569aa59f7d50583d.json"
-ACK_SHA=855428f7a8e9bd084decc3a1569aa59f7d50583d
+ACK_ROOT=../agent-control-kit-v0.5.0
+ACK_RELEASE_RECEIPT="$ACK_ROOT/.agent-control/tmp/releases/0.5.0-a09a10ecf62bfb673bbcc54c4157aeef9e90467a.json"
+ACK_SHA=a09a10ecf62bfb673bbcc54c4157aeef9e90467a
 
 git -C "$ACK_ROOT" fetch origin --tags
 test "$(git -C "$ACK_ROOT" rev-parse HEAD)" = "$ACK_SHA"
-test "$(git -C "$ACK_ROOT" rev-parse 'v0.4.4^{commit}')" = "$ACK_SHA"
+test "$(git -C "$ACK_ROOT" rev-parse 'v0.5.0^{commit}')" = "$ACK_SHA"
 npm --prefix "$ACK_ROOT" run build
 node "$ACK_ROOT/dist/cli.js" version --json
 node "$ACK_ROOT/dist/cli.js" release verify \
