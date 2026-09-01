@@ -295,6 +295,7 @@ public static class WebFormsModernizationPacketReporter
         Validate(options);
         var budget = new ReportInputBudget(options.MaxInputFacts, options.MaxInputEdges, options.MaxInputTextBytes);
         var snapshot = await ReadSnapshotAsync(options.IndexPath, budget, cancellationToken);
+        var startingFactIds = SelectStartingHandlerFactIds(snapshot.Facts, options.MaxEventChains);
         var legacyFlow = await CombinedDependencyPathReporter.BuildBoundedSingleIndexReportAsync(new(
             options.IndexPath,
             Path.Combine(Path.GetTempPath(), "tracemap-webforms-modernization-unused"),
@@ -303,11 +304,34 @@ public static class WebFormsModernizationPacketReporter
             MaxDepth: options.MaxDepth,
             MaxPaths: options.MaxPaths)
         {
-            StartingNodeLimit = options.MaxEventChains,
-            StartingFactIds = snapshot.Facts.Where(fact => fact.FactType == FactTypes.WebFormsHandlerResolved)
-                .Select(fact => "single:" + fact.FactId).ToHashSet(StringComparer.Ordinal)
+            StartingNodeLimit = Math.Max(1, startingFactIds.Count),
+            StartingFactIds = startingFactIds
         }, budget, cancellationToken);
         return Build(snapshot, legacyFlow, options);
+    }
+
+    private static IReadOnlySet<string> SelectStartingHandlerFactIds(
+        IReadOnlyList<CodeFact> facts,
+        int maxEventChains)
+    {
+        var retainedBindingIds = facts
+            .Where(HasRequiredProvenance)
+            .Where(fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared)
+            .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ThenBy(fact => fact.Evidence.StartLine)
+            .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
+            .Take(maxEventChains)
+            .Select(fact => fact.FactId)
+            .ToHashSet(StringComparer.Ordinal);
+
+        return facts
+            .Where(HasRequiredProvenance)
+            .Where(fact => fact.FactType == FactTypes.WebFormsHandlerResolved)
+            .Where(fact => retainedBindingIds.Contains(fact.Properties.GetValueOrDefault("bindingFactId") ?? ""))
+            .GroupBy(fact => fact.Properties["bindingFactId"], StringComparer.Ordinal)
+            .Where(group => group.Count() == 1)
+            .Select(group => "single:" + group.Single().FactId)
+            .ToHashSet(StringComparer.Ordinal);
     }
 
     internal static WebFormsModernizationPacket Build(
