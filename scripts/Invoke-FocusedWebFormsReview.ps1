@@ -37,6 +37,43 @@ function Resolve-RelativeChild {
     return $candidate
 }
 
+function Get-InScopeSolutionProjects {
+    param(
+        [string]$SolutionPath,
+        [string]$SourceRoot,
+        [string[]]$SelectedFolders
+    )
+
+    $solutionDirectory = Split-Path -Parent $SolutionPath
+    $projectRows = @(dotnet sln $SolutionPath list)
+    if ($LASTEXITCODE -ne 0) { throw "SOLUTION_PROJECT_LIST_FAILED" }
+
+    $scopeRoots = @($SelectedFolders | ForEach-Object {
+        [IO.Path]::GetFullPath((Join-Path $SourceRoot $_)).TrimEnd('\', '/')
+    })
+    $sourcePrefix = $SourceRoot.TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
+    $projects = [Collections.Generic.List[string]]::new()
+    foreach ($row in $projectRows) {
+        $listedPath = ([string]$row).Trim()
+        if (-not $listedPath.EndsWith('.csproj', [StringComparison]::OrdinalIgnoreCase)) { continue }
+        $candidate = if ([IO.Path]::IsPathRooted($listedPath)) {
+            [IO.Path]::GetFullPath($listedPath)
+        } else {
+            [IO.Path]::GetFullPath((Join-Path $solutionDirectory $listedPath))
+        }
+        if (-not $candidate.StartsWith($sourcePrefix, [StringComparison]::OrdinalIgnoreCase)) { continue }
+        foreach ($scopeRoot in $scopeRoots) {
+            if ($candidate.StartsWith($scopeRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+                $projects.Add($candidate.Substring($sourcePrefix.Length).Replace('\', '/'))
+                break
+            }
+        }
+    }
+    $selected = @($projects | Sort-Object -Unique)
+    if ($selected.Count -eq 0) { throw "SOLUTION_SCOPE_HAS_NO_IN_SCOPE_PROJECTS" }
+    return $selected
+}
+
 $SourceRoot = Read-RequiredValue $SourceRoot "Private source repository root"
 $WebFormsFolder = Read-RequiredValue $WebFormsFolder "Web Forms folder, relative to the source root"
 $BackendFolder = Read-RequiredValue $BackendFolder "Backend folder, relative to the source root"
@@ -44,7 +81,7 @@ $ControlsFolder = Read-RequiredValue $ControlsFolder "Shared controls folder, re
 if ([string]::IsNullOrWhiteSpace($SolutionRelativePath)) {
     $SolutionRelativePath = (Read-Host "Solution path, relative to the source root (blank if unavailable)").Trim()
 }
-if ($ProjectRelativePath.Count -eq 0) {
+if ($ProjectRelativePath.Count -eq 0 -and [string]::IsNullOrWhiteSpace($SolutionRelativePath)) {
     $projectInput = Read-Host "Comma-separated in-scope project paths, relative to the source root (blank for a projectless scan)"
     if (-not [string]::IsNullOrWhiteSpace($projectInput)) {
         $ProjectRelativePath = @($projectInput.Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ })
@@ -69,6 +106,9 @@ foreach ($folder in $selectedFolders) {
 if (-not [string]::IsNullOrWhiteSpace($SolutionRelativePath)) {
     $solutionPath = Resolve-RelativeChild $SourceRoot $SolutionRelativePath "SOLUTION_SCOPE_UNAVAILABLE" $true
     if ([IO.Path]::GetExtension($solutionPath) -notin @('.sln', '.slnx')) { throw "SOLUTION_SCOPE_INVALID" }
+    if ($ProjectRelativePath.Count -eq 0) {
+        $ProjectRelativePath = @(Get-InScopeSolutionProjects $solutionPath $SourceRoot $selectedFolders)
+    }
 }
 foreach ($project in $ProjectRelativePath) {
     $projectPath = Resolve-RelativeChild $SourceRoot $project "PROJECT_SCOPE_UNAVAILABLE" $true

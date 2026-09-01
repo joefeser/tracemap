@@ -13,6 +13,7 @@ $ErrorActionPreference = "Stop"
 $culture = [Globalization.CultureInfo]::InvariantCulture
 $safeToken = '^[A-Za-z][A-Za-z0-9._-]{0,99}$'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
+$isWindowsPlatform = [IO.Path]::DirectorySeparatorChar -eq '\'
 
 function Get-OptionalProperty {
     param([AllowNull()][object]$Value, [string]$Name)
@@ -42,7 +43,7 @@ function Get-ScopeRole {
 
 function Test-WithinPath {
     param([string]$Candidate, [string]$Parent)
-    $comparison = if ($IsWindows) { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
+    $comparison = if ($script:isWindowsPlatform) { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
     $separator = [IO.Path]::DirectorySeparatorChar
     $parentPath = $Parent.TrimEnd($separator)
     return $Candidate.Equals($parentPath, $comparison) -or $Candidate.StartsWith($parentPath + $separator, $comparison)
@@ -69,7 +70,7 @@ try {
     $reviewRoot = [IO.Path]::GetFullPath($ReviewOutputPath)
     if (-not (Test-Path -LiteralPath $reviewRoot -PathType Container)) { throw 'RetainedOutputUnavailable' }
     if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
-        $OutputDirectory = if ($IsWindows) { 'C:\work\tracemap-summary' } else { Join-Path ([IO.Path]::GetTempPath()) 'tracemap-summary' }
+        $OutputDirectory = if ($isWindowsPlatform) { 'C:\work\tracemap-summary' } else { Join-Path ([IO.Path]::GetTempPath()) 'tracemap-summary' }
     }
     $summaryRoot = [IO.Path]::GetFullPath($OutputDirectory)
     if ((Test-WithinPath $summaryRoot $reviewRoot) -or (Test-WithinPath $summaryRoot $repoRoot)) { throw 'SummaryOutputUnsafe' }
@@ -137,9 +138,14 @@ try {
         'inspect-capability-gaps'
     }
 
+    $workspaceState = if ($analysisLevel -eq 'Level1SemanticAnalysis' -and $buildStatus -eq 'Succeeded') {
+        'completed'
+    } else {
+        'partial'
+    }
     $lines = [Collections.Generic.List[string]]::new()
     foreach ($line in @(
-        'focused-webforms-workspace=completed',
+        "focused-webforms-workspace=$workspaceState",
         'failureCode=none',
         "tracemapHead=$($TraceMapHead.ToLowerInvariant())",
         "analysisLevel=$analysisLevel",
