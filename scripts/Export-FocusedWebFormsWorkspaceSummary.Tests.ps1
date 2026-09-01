@@ -28,7 +28,7 @@ try {
     New-Item -ItemType Directory -Path $scan -Force | Out-Null
     [IO.File]::WriteAllText((Join-Path $scan 'scan-manifest.json'), '{"analysisLevel":"Level1SemanticAnalysisReduced","buildStatus":"FailedOrPartial"}', [Text.UTF8Encoding]::new($false))
     $facts = @(
-        @{ factType = 'AnalyzerCapabilityDiagnostic'; ruleId = 'analyzer.capability.semantic.v1'; evidenceTier = 'Tier4Unknown'; evidence = @{ filePath = 'private-web/private-backend/service.csproj' }; properties = @{ capabilityCode = 'CSharpSemanticCompilation'; capabilityState = 'Reduced' } },
+        @{ factType = 'AnalyzerCapabilityDiagnostic'; ruleId = 'analyzer.capability.semantic.v1'; evidenceTier = 'Tier4Unknown'; evidence = @{ filePath = 'private-web/private-backend/service.csproj' }; properties = @{ capabilityCode = 'CSharpSemanticCompilation'; capabilityState = 'reduced' } },
         @{ factType = 'BuildEnvironmentDiagnostic'; ruleId = 'build.environment.workspace-diagnostic.v1'; evidenceTier = 'Tier4Unknown'; evidence = @{ filePath = 'private-web/private-backend/service.csproj' }; properties = @{ diagnosticCode = 'LegacyWorkspacePrerequisitesUnresolved'; diagnosticKind = 'workspace'; guidanceCode = 'UseCompatibleMSBuildToolset' } },
         @{ factType = 'BuildEnvironmentDiagnostic'; ruleId = 'build.environment.workspace-diagnostic.v1'; evidenceTier = 'Tier4Unknown'; evidence = @{ filePath = 'private-web/default.aspx' }; properties = @{ diagnosticCode = 'UncategorizedWorkspaceFailure'; diagnosticKind = 'workspace'; guidanceCode = 'InspectWorkspaceDiagnostics' } },
         @{ factType = 'CallEdge'; ruleId = 'csharp.semantic.call.v1'; evidenceTier = 'Tier1Semantic'; evidence = @{ filePath = 'private-controls/widget.cs' }; properties = @{} }
@@ -55,7 +55,7 @@ try {
     Assert-True (-not $content.Contains($testRoot)) 'local path leaked'
 
     [IO.File]::WriteAllText((Join-Path $scan 'scan-manifest.json'), '{"analysisLevel":"Level1SemanticAnalysis","buildStatus":"Succeeded"}', [Text.UTF8Encoding]::new($false))
-    $facts[0].properties.capabilityState = 'Available'
+    $facts[0].properties.capabilityState = 'available'
     [IO.File]::WriteAllLines((Join-Path $scan 'facts.ndjson'), @($facts | ForEach-Object { $_ | ConvertTo-Json -Compress -Depth 10 }), [Text.UTF8Encoding]::new($false))
     $fullOutput = Join-Path $testRoot 'full-summary'
     $fullResult = @(& $script -ReviewOutputPath $review -WebFormsFolder 'private-web' -BackendFolder 'private-web/private-backend' -ControlsFolder 'private-controls' -TraceMapHead $head -OutputDirectory $fullOutput)

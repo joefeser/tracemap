@@ -99,7 +99,7 @@ try {
         if ($factType -eq 'AnalyzerCapabilityDiagnostic' -and
             [string](Get-OptionalProperty $properties 'capabilityCode') -eq 'CSharpSemanticCompilation') {
             $state = [string](Get-OptionalProperty $properties 'capabilityState')
-            if ($state -in @('Available', 'Reduced', 'Unavailable', 'NotRequested', 'Unknown', 'NotApplicable')) {
+            if ($state -in @('available', 'reduced', 'unavailable', 'not-requested', 'unknown', 'not-applicable')) {
                 [void]$capabilityStates.Add($state)
             }
         }
@@ -117,11 +117,11 @@ try {
         if ($code -eq 'LegacyWorkspacePrerequisitesUnresolved') { $legacyPrerequisiteCount++ }
     }
 
-    $semanticState = if ($capabilityStates.Contains('Available')) {
+    $semanticState = if ($capabilityStates.Contains('available')) {
         'available'
-    } elseif ($capabilityStates.Contains('Reduced')) {
+    } elseif ($capabilityStates.Contains('reduced')) {
         'reduced'
-    } elseif ($capabilityStates.Contains('Unavailable')) {
+    } elseif ($capabilityStates.Contains('unavailable')) {
         'unavailable'
     } else {
         'unknown'
