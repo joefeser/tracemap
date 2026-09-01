@@ -31,6 +31,7 @@ Assert-True ($performanceIndex -ge 0 -and $performanceIndex -lt $evidenceIndex) 
 Assert-True ($workspaceIndex -gt $evidenceIndex) "workspace readback must run after complete scan artifacts are verified"
 Assert-True ($content.Contains('git -C $TraceMapRoot rev-parse HEAD', [StringComparison]::Ordinal)) "workspace readback must identify the TraceMap head"
 Assert-True ($content.Contains('Solution path, relative to the source root', [StringComparison]::Ordinal)) "solution selection prompt is missing"
+Assert-True ($content.Contains('$reviewArguments += @("--include", $SolutionRelativePath)', [StringComparison]::Ordinal)) "selected solution must survive inventory include filtering"
 Assert-True ($content.Contains('$reviewArguments += @("--solution", $SolutionRelativePath)', [StringComparison]::Ordinal)) "selected solution is not passed to local review"
 Assert-True ($content.Contains('if ($ProjectRelativePath.Count -eq 0 -and [string]::IsNullOrWhiteSpace($SolutionRelativePath))', [StringComparison]::Ordinal)) "solution-only invocation must not prompt for project paths"
 Assert-True ($content.Contains('Get-InScopeSolutionProjects $solutionPath $SourceRoot $selectedFolders', [StringComparison]::Ordinal)) "solution-only invocation must derive the bounded project selection"

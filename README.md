@@ -429,10 +429,11 @@ When the solution owns projects under the three in-scope folders, omit
 `-ProjectRelativePath`; the runner derives and passes only those solution
 projects to the semantic extractor. This prevents unrelated solution projects
 from contributing compilation diagnostics to the focused readback. The root
-solution is passed explicitly because the three folder include globs do not
-otherwise include a solution stored at the repository root. If no solution is
-available, omit `-SolutionRelativePath`, leave the interactive solution prompt
-blank, and supply the in-scope project paths when prompted.
+solution is explicitly added to the inventory scope because the three folder
+include globs do not otherwise include a solution stored at the repository
+root. If no solution is available, omit `-SolutionRelativePath`, leave the
+interactive solution prompt blank, and supply the in-scope project paths when
+prompted.
 
 After the run, inspect only the newest files in `C:\work\tracemap-summary`:
 
