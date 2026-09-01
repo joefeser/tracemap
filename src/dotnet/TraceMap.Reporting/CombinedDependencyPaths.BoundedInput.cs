@@ -134,7 +134,9 @@ public static partial class CombinedDependencyPathReporter
         {
             await using var command = connection.CreateCommand();
             var names = batch.Select((_, index) => "$id" + index).ToArray();
-            command.CommandText = CompactFactQuery(hasExtractorVersion, $"fact_id in ({string.Join(',', names)})");
+            // The interpolated SQL contains generated parameter names only;
+            // every fact ID value is bound below.
+            command.CommandText = CompactFactQuery(hasExtractorVersion, $"fact_id in ({string.Join(',', names)})"); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
             for (var index = 0; index < batch.Length; index++) command.Parameters.AddWithValue(names[index], batch[index]);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))

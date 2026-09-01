@@ -1075,6 +1075,8 @@ public static partial class CombinedDependencyPathReporter
         ReportInputBudget? budget = null)
     {
         await using var command = connection.CreateCommand();
+        // This private helper receives only compile-time SQL literals from its
+        // call sites; no repository or user value supplies query syntax.
         command.CommandText = budget is null ? sql : $$"""
             with input(edge_kind, edge_id, original_fact_id, source_symbol, target_symbol,
                        assembly_name, assembly_version, rule_id, evidence_tier, file_path, start_line, end_line) as (
@@ -1082,7 +1084,7 @@ public static partial class CombinedDependencyPathReporter
             )
             select *, {{TextByteCountSql("edge_kind", "edge_id", "original_fact_id", "source_symbol", "target_symbol", "assembly_name", "assembly_version", "rule_id", "evidence_tier", "file_path")}}
             from input;
-            """;
+            """; // nosemgrep: csharp.lang.security.sqli.csharp-sqli
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {

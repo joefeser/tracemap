@@ -202,6 +202,22 @@ public sealed class WebFormsReportMemoryTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task Event_chain_limit_selects_paths_for_the_bindings_retained_by_the_packet()
+    {
+        using var temp = new TempDirectory();
+        var facts = Fixture("retained", "Z.Sample.Page.Load()", "Pages/A.aspx", "Pages/Z.aspx")
+            .Concat(Fixture("omitted", "A.Sample.Page.Load()", "Pages/B.aspx", "Pages/A.aspx"));
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(Write(temp.Path, facts), "unused",
+            MaxSurfaces: 10, MaxEventChains: 1, MaxPaths: 10, MaxBoundaries: 10));
+
+        var chain = Assert.Single(packet.EventChains);
+        Assert.NotNull(chain.LegacyPathId);
+        Assert.Single(packet.DownstreamBoundaries);
+        Assert.DoesNotContain(packet.Gaps, gap => gap.Classification == "NoBackendEvidence");
+        Assert.True(packet.Summary.Truncated);
+    }
+
+    [Fact]
     public async Task Streaming_publication_matches_existing_JSON_contract_and_honors_cancellation()
     {
         using var temp = new TempDirectory();
@@ -235,24 +251,33 @@ public sealed class WebFormsReportMemoryTests(ITestOutputHelper output)
         SqliteIndexWriter.Write(path, Manifest(), facts.ToArray());
         return path;
     }
-    private static List<CodeFact> Fixture(string suffix = "")
+    private static List<CodeFact> Fixture(
+        string suffix = "",
+        string? methodOverride = null,
+        string? filePath = null,
+        string? markupFileOverride = null)
     {
         var surface = "surface:page" + suffix;
-        var method = $"Sample.Page{suffix}.Load()";
+        var method = methodOverride ?? $"Sample.Page{suffix}.Load()";
         var save = $"Sample.Store{suffix}.Save()";
+        var markupFile = markupFileOverride ?? filePath ?? "Pages/Page.aspx";
         var page = Fact(FactTypes.WebFormsPageDeclared, RuleIds.LegacyWebFormsInventory, surface, "Sample.Page" + suffix, 1,
             ("surfaceIdentity", surface), ("directiveKind", "Page"));
         var binding = Fact(FactTypes.WebFormsEventBindingDeclared, RuleIds.LegacyWebFormsEventBinding,
             "control:load" + suffix, method, 2, ("surfaceIdentity", surface), ("eventName", "OnLoad"),
-            ("eventSourceIdentity", "control:load" + suffix), ("handlerName", "Load"), ("markupFile", "Pages/Page.aspx"));
+            ("eventSourceIdentity", "control:load" + suffix), ("handlerName", "Load"), ("markupFile", markupFile));
         var handler = Fact(FactTypes.WebFormsHandlerResolved, RuleIds.LegacyWebFormsHandlerResolution,
             "control:load" + suffix, method, 3, ("surfaceIdentity", surface), ("bindingFactId", binding.FactId),
             ("handlerSymbolId", method), ("handlerSymbol", method), ("supportingFactIds", binding.FactId),
-            ("eventName", "OnLoad"), ("handlerName", "Load"), ("markupFile", "Pages/Page.aspx"));
+            ("eventName", "OnLoad"), ("handlerName", "Load"), ("markupFile", markupFile));
         var call = Fact(FactTypes.CallEdge, "csharp.semantic.call.v1", method, save, 4);
         var terminal = Fact(FactTypes.QueryPatternDetected, RuleIds.CSharpSyntaxQueryPattern, save, "query:" + suffix, 5,
             ("operationName", "SELECT"), ("tableName", "synthetic_orders"), ("sqlSourceKind", "literal-string"));
-        return [page, binding, handler, call, terminal];
+        var facts = new List<CodeFact> { page, binding, handler, call, terminal };
+        if (filePath is not null)
+            for (var index = 0; index < facts.Count; index++)
+                facts[index] = facts[index] with { Evidence = facts[index].Evidence with { FilePath = filePath } };
+        return facts;
     }
     private static CodeFact Fact(string type, string rule, string? source, string? target, int line,
         params (string Key, string Value)[] properties) => FactFactory.Create(Manifest(), type, rule, EvidenceTiers.Tier2Structural,
