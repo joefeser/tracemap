@@ -15,6 +15,8 @@ $tokens = $null
 $parseErrors = $null
 [Management.Automation.Language.Parser]::ParseFile($script, [ref]$tokens, [ref]$parseErrors) | Out-Null
 Assert-True ($parseErrors.Count -eq 0) 'workspace summary script syntax is invalid'
+$scriptContent = [IO.File]::ReadAllText($script)
+Assert-True ($scriptContent.IndexOf('ConvertFrom-Json -Depth', [StringComparison]::OrdinalIgnoreCase) -lt 0) 'workspace summary must support JSON readers without the Depth parameter'
 
 $testRoot = Join-Path ([IO.Path]::GetTempPath()) ('tracemap-webforms-workspace-test-' + [Guid]::NewGuid().ToString('N'))
 $review = Join-Path $testRoot 'review'

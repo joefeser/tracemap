@@ -413,12 +413,10 @@ and writes sanitized summaries outside the source repository. It does not emit
 source text, object names, raw workspace messages, or machine-local paths in
 the summary files.
 
-Check out the diagnostic branch containing the workspace readback, then run:
+Use a clean checkout of the owner-approved TraceMap revision containing the
+workspace readback, then run:
 
 ```powershell
-git fetch origin codex/focused-webforms-workspace-readback
-git switch --detach origin/codex/focused-webforms-workspace-readback
-
 pwsh -NoProfile -File .\scripts\Invoke-FocusedWebFormsReview.ps1 `
   -SourceRoot 'C:\work\<private-client-app>' `
   -WebFormsFolder 'source\<webforms-folder>' `

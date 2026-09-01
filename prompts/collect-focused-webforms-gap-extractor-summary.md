@@ -18,10 +18,10 @@ if (git status --porcelain) {
     throw "TRACEMAP_WORKTREE_DIRTY"
 }
 
-git fetch origin codex/work-dump-edge-case-triage-rebased
+git fetch origin dev
 if ($LASTEXITCODE -ne 0) { throw "TRACEMAP_FETCH_FAILED" }
 
-git switch --detach origin/codex/work-dump-edge-case-triage-rebased
+git switch --detach origin/dev
 if ($LASTEXITCODE -ne 0) { throw "TRACEMAP_CHECKOUT_FAILED" }
 
 git rev-parse --short HEAD

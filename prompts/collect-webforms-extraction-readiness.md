@@ -7,8 +7,9 @@ do not redirect the review toward Angular, TypeScript, Razor, or WinForms.
 
 Repository instructions:
 
-1. Confirm this checkout is on branch
-   `codex/work-dump-edge-case-triage-rebased`.
+1. Confirm this checkout is at the exact owner-approved TraceMap revision.
+   Do not substitute an experimental branch or a newer revision without owner
+   approval.
 2. Read `prompts/README.md`, `docs/MIGRATION_EXTRACTION_TRIAGE.md`, and
    `docs/examples/tracemap-migration-extraction-summary.json` completely.
 3. Ask the local owner for the exact existing interaction output directory if

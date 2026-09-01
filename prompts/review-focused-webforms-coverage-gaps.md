@@ -14,8 +14,9 @@ application, launch a browser, or rescan unless separately authorized.
 
 Inputs:
 
-1. Confirm the TraceMap checkout is detached at the exact head requested by the
-   owner from branch `codex/work-dump-edge-case-triage-rebased`.
+1. Confirm the TraceMap checkout is detached at the exact owner-approved
+   TraceMap revision. Do not substitute an experimental branch or a newer
+   revision without owner approval.
 2. Ask the owner for the exact latest completed focused-review output directory
    if it is not already supplied. Do not search unrelated directories or drives.
 3. Ask the owner for the exact authorized source root and the three in-scope
