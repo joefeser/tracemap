@@ -28,7 +28,8 @@ $evidenceIndex = $content.IndexOf('Export-FocusedWebFormsEvidenceSummary.ps1', [
 $workspaceIndex = $content.IndexOf('Export-FocusedWebFormsWorkspaceSummary.ps1', [StringComparison]::Ordinal)
 Assert-True ($progressIndex -ge 0 -and $progressIndex -lt $evidenceIndex) "progress diagnostics must precede evidence summaries"
 Assert-True ($performanceIndex -ge 0 -and $performanceIndex -lt $evidenceIndex) "performance diagnostics must precede evidence summaries"
-Assert-True ($workspaceIndex -gt $evidenceIndex) "workspace readback must run after complete scan artifacts are verified"
+Assert-True ($workspaceIndex -ge 0 -and $workspaceIndex -lt $evidenceIndex) "workspace readback must precede result-gated evidence summaries"
+Assert-True ($content.Contains('$scanArtifactsAvailable', [StringComparison]::Ordinal)) "workspace readback must have a scan-artifact-only guard"
 Assert-True ($content.Contains('git -C $TraceMapRoot rev-parse HEAD', [StringComparison]::Ordinal)) "workspace readback must identify the TraceMap head"
 Assert-True ($content.Contains('Solution path, relative to the source root', [StringComparison]::Ordinal)) "solution selection prompt is missing"
 Assert-True ($content.Contains('if ([string]::IsNullOrWhiteSpace($SolutionRelativePath) -and $ProjectRelativePath.Count -eq 0)', [StringComparison]::Ordinal)) "project-only invocation must not prompt for a solution"
@@ -36,6 +37,8 @@ Assert-True ($content.Contains('$reviewArguments += @("--include", $SolutionRela
 Assert-True ($content.Contains('$reviewArguments += @("--solution", $SolutionRelativePath)', [StringComparison]::Ordinal)) "selected solution is not passed to local review"
 Assert-True ($content.Contains('if ($ProjectRelativePath.Count -eq 0 -and [string]::IsNullOrWhiteSpace($SolutionRelativePath))', [StringComparison]::Ordinal)) "solution-only invocation must not prompt for project paths"
 Assert-True ($content.Contains('Get-InScopeSolutionProjects $solutionPath $SourceRoot $selectedFolders', [StringComparison]::Ordinal)) "solution-only invocation must derive the bounded project selection"
+Assert-True ($content.Contains('Assert-ProjectsBelongToSolution', [StringComparison]::Ordinal)) "explicit project selection must be checked against the solution"
+Assert-True ($content.Contains('PROJECT_NOT_IN_SELECTED_SOLUTION', [StringComparison]::Ordinal)) "solution membership failure must be categorical"
 Assert-True ($content.Contains('SOLUTION_SCOPE_HAS_NO_IN_SCOPE_PROJECTS', [StringComparison]::Ordinal)) "solution scope must fail closed when it has no selected projects"
 Assert-True ($content.Contains('SOLUTION_SCOPE_UNAVAILABLE', [StringComparison]::Ordinal)) "solution path availability is not validated"
 Assert-True ($content.Contains('SOLUTION_SCOPE_INVALID', [StringComparison]::Ordinal)) "solution extension is not validated"
@@ -47,6 +50,14 @@ $selectionFunction = @($scriptAst.FindAll({
 }, $true))
 Assert-True ($selectionFunction.Count -eq 1) "solution project selector is missing"
 Invoke-Expression $selectionFunction[0].Extent.Text
+
+$membershipFunction = @($scriptAst.FindAll({
+    param($node)
+    $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+        $node.Name -eq 'Assert-ProjectsBelongToSolution'
+}, $true))
+Assert-True ($membershipFunction.Count -eq 1) "solution membership validator is missing"
+Invoke-Expression $membershipFunction[0].Extent.Text
 
 $selectionRoot = Join-Path ([IO.Path]::GetTempPath()) ('tracemap-webforms-solution-selection-' + [Guid]::NewGuid().ToString('N'))
 try {
@@ -75,6 +86,20 @@ try {
     Assert-True ($selection -contains 'source/backend/backend.csproj') "backend solution project was not selected"
     Assert-True ($selection -contains 'source/controls/controls.csproj') "controls solution project was not selected"
     Assert-True ($selection -notcontains 'unrelated/unrelated.csproj') "out-of-scope solution project was selected"
+
+    Assert-ProjectsBelongToSolution `
+        -ExplicitProjects @('source\backend\backend.csproj') `
+        -SolutionProjects $selection `
+        -SourceRoot $selectionRoot
+    $membershipFailure = $null
+    try {
+        Assert-ProjectsBelongToSolution `
+            -ExplicitProjects @('source/backend/not-in-solution.csproj') `
+            -SolutionProjects $selection `
+            -SourceRoot $selectionRoot
+    }
+    catch { $membershipFailure = $_.Exception.Message }
+    Assert-True ($membershipFailure -eq 'PROJECT_NOT_IN_SELECTED_SOLUTION') "explicit nonmember project did not fail closed"
 }
 finally {
     Remove-Item Function:\dotnet -ErrorAction SilentlyContinue
@@ -85,5 +110,6 @@ foreach ($requiredArtifact in @('scan/facts.ndjson', 'scan/scan-manifest.json', 
     Assert-True ($content.Contains($requiredArtifact, [StringComparison]::Ordinal)) "evidence summary guard is missing $requiredArtifact"
 }
 Assert-True ($content.Contains('focused-webforms-evidence-summary=skipped;reason=incomplete-review-artifacts', [StringComparison]::Ordinal)) "incomplete artifact outcome is not categorical"
+Assert-True ($content.Contains('focused-webforms-workspace-summary=skipped;reason=incomplete-scan-artifacts', [StringComparison]::Ordinal)) "incomplete scan artifact outcome is not categorical"
 
 Write-Output "focused-webforms-review-launcher-tests=passed"

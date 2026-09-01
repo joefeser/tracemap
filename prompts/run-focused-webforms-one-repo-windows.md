@@ -86,10 +86,12 @@ Do not add the repository's solution or projects outside the three selected
 folders. Remove either placeholder project row when it does not exist. Add an
 actual Web Forms project only when that project owns the Web Forms folder.
 
-## 1. Select the current TraceMap branch
+## 1. Verify the intended TraceMap revision
 
-The TraceMap checkout must be clean. This uses a detached remote head so the
-workstation does not create or rewrite a local branch.
+The TraceMap checkout must already be on the owner-approved revision selected
+before this workflow began, and it must be clean. This step reports the current
+revision for local confirmation; it does not fetch, switch, create, or rewrite
+a branch.
 
 ```powershell
 Set-Location $TraceMapRoot
@@ -98,13 +100,11 @@ if (git status --porcelain) {
     throw "TRACEMAP_WORKTREE_DIRTY"
 }
 
-git fetch origin dev
-if ($LASTEXITCODE -ne 0) { throw "TRACEMAP_FETCH_FAILED" }
-
-git switch --detach origin/dev
-if ($LASTEXITCODE -ne 0) { throw "TRACEMAP_CHECKOUT_FAILED" }
-
 git status --short --branch
+git rev-parse HEAD
+if ($LASTEXITCODE -ne 0) { throw "TRACEMAP_HEAD_UNAVAILABLE" }
+
+# Stop here unless the displayed branch and HEAD are the intended revision.
 dotnet build "$TraceMapRoot\src\dotnet\TraceMap.sln"
 if ($LASTEXITCODE -ne 0) { throw "TRACEMAP_BUILD_FAILED" }
 ```
