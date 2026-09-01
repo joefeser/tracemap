@@ -137,7 +137,12 @@ New-Item -ItemType Directory -Path $outputParent, $progressParent, $summaryParen
 
 $reviewArguments = @("run", "--repo", $SourceRoot, "--out", $outRoot)
 foreach ($folder in $selectedFolders) { $reviewArguments += @("--include", ($folder.TrimEnd('/', '\') + "/**")) }
-if (-not [string]::IsNullOrWhiteSpace($SolutionRelativePath)) { $reviewArguments += @("--solution", $SolutionRelativePath) }
+if (-not [string]::IsNullOrWhiteSpace($SolutionRelativePath)) {
+    # Explicit selection does not bypass inventory scope filtering. Preserve the
+    # solution itself while the derived project list bounds semantic loading.
+    $reviewArguments += @("--include", $SolutionRelativePath)
+    $reviewArguments += @("--solution", $SolutionRelativePath)
+}
 foreach ($project in $ProjectRelativePath) { $reviewArguments += @("--project", $project) }
 foreach ($pattern in @(
     ".vs/**", "**/bin/**", "**/obj/**", "**/node_modules/**", "**/dist/**",
