@@ -2,22 +2,23 @@
 
 ## PowerShell-only execution (recommended)
 
-No coding agent is required on the Windows validation machine. From a clean
-TraceMap checkout, run:
+No coding agent is required on the Windows validation machine. First fetch and
+check out the intended TraceMap revision yourself; the launcher does not select
+or update branches. From that clean TraceMap checkout, run:
 
 ```powershell
 pwsh -File .\scripts\Invoke-FocusedWebFormsReview.ps1
 ```
 
-The script asks for five bounded local values once, fetches the current work
-branch, builds TraceMap, performs exactly one focused scan, writes the retained
-output and diagnostic receipts, and creates sanitized gap/extractor and
-accuracy-readiness summaries. The accuracy summary separates compiler-resolved,
-structural, syntax-only, and unknown evidence across the three selected folder
-roles and legacy artifact kinds without returning their private names. It does
-not ask an agent for permission between commands and does not
-retry a failed or partial scan. Pass the same values as named parameters when
-fully unattended execution is preferred.
+The script asks for five bounded local values once, validates and builds the
+current checkout at its existing HEAD, performs exactly one focused scan,
+writes the retained output and diagnostic receipts, and creates sanitized
+gap/extractor and accuracy-readiness summaries. The accuracy summary separates
+compiler-resolved, structural, syntax-only, and unknown evidence across the
+three selected folder roles and legacy artifact kinds without returning their
+private names. It does not ask an agent for permission between commands and
+does not retry a failed or partial scan. Pass the same values as named
+parameters when fully unattended execution is preferred.
 
 To summarize an already retained run without rescanning, use the same three
 local folder values supplied to the review:
