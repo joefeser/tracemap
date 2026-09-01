@@ -42,6 +42,43 @@ python3 scripts/test_validate_adapter_artifacts.py
 ./scripts/check-private-paths.sh
 ```
 
+## Web Forms large-index report memory
+
+For changes to packet input loading or serialization, run the memory regressions
+alongside the full .NET suite:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter 'FullyQualifiedName~WebFormsReportMemoryTests'
+TRACEMAP_MEMORY_TEST_FULL_READER=1 dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --no-build --filter 'FullyQualifiedName~Large_repetitive_fact_payload' \
+  --logger 'console;verbosity=detailed'
+TRACEMAP_MEMORY_TEST_ROWS=1000000 dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --no-build --filter 'FullyQualifiedName~Large_repetitive_fact_payload' \
+  --logger 'console;verbosity=detailed'
+```
+
+The fixture inserts 1 KiB unused syntax properties directly into SQLite rather
+than building a million in-memory test facts. Normal CI uses 100,000 noise rows;
+the opt-in scale is clamped to 100,000–2,000,000. The full-reader comparison is
+opt-in because it deliberately exercises the old allocation-heavy reader. Run
+it in its own test process; do not enable it for the million-row check on a
+memory-constrained host.
+
+Assertions cover byte-equivalent path/provenance output, an unchanged index
+hash, global symbol collisions, unknown/declared surfaces, referenced supporting
+IDs, oversized rows, fact/edge/text/snapshot admission limits, explicit partial
+coverage without incomplete-graph absence conclusions, 518 independent roots,
+streamed JSON byte parity, and cancellation without partial publication.
+
+The test logs retained text/row counts and process-wide managed allocation deltas
+around each report call. These are not live heap or OS working-set quotas.
+Temporary row allocations may grow with visited rows even while retained graph
+input stays constant. Record process peak RSS separately with a platform profiler
+and describe whether it includes the test runner, fixture construction, and child
+processes. Synthetic results do not prove that an owner's full private index fits
+the default limits; the existing-index Windows rerun remains required.
+
 ## Public Demo Workflow
 
 Run the public demo when validating the open-source walkthrough or generated public artifacts:

@@ -2269,6 +2269,8 @@ rules:
       - Structural slice candidates do not infer business capabilities, parity, migration scope, effort, cloud readiness, target architecture, test completeness, security approval, release approval, or safety to change; owner naming and confirmation remain required.
       - Missing coverage labels, source identity mismatch, unsupported evidence, missing handlers or terminals, reduced scans, and deterministic traversal or output limits remain explicit gaps rather than clean-absence claims.
       - The local-only packet omits snippets, raw SQL, configuration values, URLs, connection strings, credentials, source values, repository remotes, and absolute local paths.
+      - Web Forms packet input admission bounds retained fact and edge rows, UTF-8 text bytes, per-row size, and graph nodes/edges; these are deterministic admission limits, not a hard OS working-set guarantee. On admission failure, WebFormsModernizationInputLimitReached preserves admitted inventory but no downstream paths or absence classifications are derived from the incomplete graph.
+      - A closed audited set of graph-inert syntax facts may be compacted to symbol witnesses; unknown types, declared dependency surfaces, legacy rules, supporting evidence IDs, and repository-wide symbol competitors are preserved. This is not root-specific lazy graph loading.
 
   - id: legacy.webforms.batch-data-movement.v1
     name: Legacy Web Forms batch and data-movement evidence
@@ -2975,13 +2977,15 @@ rules:
 
   - id: combined.paths.truncation-gap.v1
     name: Combined dependency path truncation gap
-    description: Emits path-search limit gaps when selector candidate, depth, cycle, path-count, or frontier bounds stop traversal.
+    description: Emits path-search limit gaps when selector candidate, depth, cycle, path-count, or frontier bounds stop traversal, or Web Forms packet graph-input admission is incomplete.
     evidenceTier: Tier4Unknown
     emits:
       - TruncatedByLimit path gap
+      - GraphInputLimitReached path gap
     limitations:
       - Truncation means the returned path set is intentionally partial and must not be treated as complete dependency coverage.
       - The triggering evidence span is best-effort and may point to the nearest traversed node rather than the omitted dependency.
+      - Web Forms graph-input admission gaps have no source span and discard the incomplete graph before classification; they do not imply missing runtime dependencies or a clean graph.
 
   - id: combined.route-flow.selector.v1
     name: Route-flow selector handling
