@@ -78,7 +78,7 @@ $SourceRoot = Read-RequiredValue $SourceRoot "Private source repository root"
 $WebFormsFolder = Read-RequiredValue $WebFormsFolder "Web Forms folder, relative to the source root"
 $BackendFolder = Read-RequiredValue $BackendFolder "Backend folder, relative to the source root"
 $ControlsFolder = Read-RequiredValue $ControlsFolder "Shared controls folder, relative to the source root"
-if ([string]::IsNullOrWhiteSpace($SolutionRelativePath)) {
+if ([string]::IsNullOrWhiteSpace($SolutionRelativePath) -and $ProjectRelativePath.Count -eq 0) {
     $SolutionRelativePath = (Read-Host "Solution path, relative to the source root (blank if unavailable)").Trim()
 }
 if ($ProjectRelativePath.Count -eq 0 -and [string]::IsNullOrWhiteSpace($SolutionRelativePath)) {
