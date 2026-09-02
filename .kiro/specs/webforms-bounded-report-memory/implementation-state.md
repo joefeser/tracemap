@@ -154,3 +154,18 @@ Validation on 2026-09-02:
 The repository-wide formatter still reports unrelated pre-existing formatting
 violations outside this change, so validation is scoped to all changed C# files.
 No non-.NET adapter changed; pinned language-adapter smokes are deferred.
+
+### Projection-boundary follow-up
+
+The restricted post-fix review verified the lineage patch and exposed a second,
+independent projection defect: 10,609 `PropertyMappingShapeUnsupported` and 24
+`PropertyMappingTruncated` occurrences were duplicated as unknown
+`BuildEnvironmentDiagnostic` workspace failures. Two genuine workspace-callback
+occurrences remained. The legacy-prerequisite count was zero.
+
+Commit `08ec7348` bounds environment projection to the closed admitted gap kinds,
+preserves the original property-mapping gaps, and bumps the build-environment
+extractor to `0.5.0`. Validation: focused build-environment tests **22/22** and
+full .NET solution **1,738/1,738** passed; changed-file format verification,
+private-path guard, and `git diff --check` passed. The full suite retains one
+pre-existing nullable warning in `PropertyMappingTests.cs:560`.

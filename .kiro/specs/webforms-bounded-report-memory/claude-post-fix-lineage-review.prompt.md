@@ -30,11 +30,20 @@ operator. Report only these fields when present:
 - `legacyWorkspacePrerequisitesUnresolvedCount`
 - `nextAction`
 
-The expected TraceMap head is:
+The selected run must contain the projection-boundary fix at or after:
 
 ```text
-90309df61ebf0a17a2b82e9a58cb74ce9fdadb7d
+08ec7348e01f66dcb461c476f67c3849f2d66238
 ```
+
+In the local TraceMap checkout, verify this without changing repository state:
+
+```text
+git merge-base --is-ancestor 08ec7348e01f66dcb461c476f67c3849f2d66238 <tracemapHead>
+```
+
+Exit code 0 means the selected run contains the fix. A later documentation-only
+head is acceptable when this ancestry check succeeds.
 
 Run this count-only query against the selected `scan/index.sqlite`:
 
@@ -52,12 +61,13 @@ ORDER BY extractor_id, extractor_version;
 The fixed index must contain the applicable expected versions:
 
 ```text
-BuildEnvironmentDiagnosticExtractor | build-environment/0.4.0
+BuildEnvironmentDiagnosticExtractor | build-environment/0.5.0
 CSharpSemanticExtractor             | csharp-semantic/0.19.0
 ```
 
-If the summary head or applicable extractor versions do not match, stop and
-report `result=wrong-tracemap-build`. Do not interpret the diagnostic counts.
+If the ancestry check fails or the applicable extractor versions do not match,
+stop and report `result=wrong-tracemap-build`. Do not interpret the diagnostic
+counts.
 
 ## 2. Analyze only closed lineage fields
 
@@ -78,6 +88,10 @@ GROUP BY origin_category, origin_gap_kind, diagnostic_id, diagnostic_code, guida
 ORDER BY occurrence_count DESC, origin_category, origin_gap_kind, diagnostic_id;
 ```
 
+No `PropertyMappingShapeUnsupported`, `PropertyMappingTruncated`, or other
+property-mapping gap kind may appear in this build-environment result. If one
+does, report `result=wrong-tracemap-build` and stop.
+
 Then run the compiler-origin query against the originating gaps so a projected
 reference-assembly diagnostic is not double-counted:
 
@@ -93,6 +107,23 @@ WHERE fact_type = 'AnalysisGap'
 GROUP BY diagnostic_id, diagnostic_code
 ORDER BY count DESC, diagnostic_id;
 ```
+
+Confirm separately that the original property-mapping gaps remain in their own
+rule-backed evidence family:
+
+```sql
+SELECT
+  json_extract(properties_json, '$.gapKind') AS gap_kind,
+  SUM(CAST(COALESCE(json_extract(properties_json, '$.occurrenceCount'), '1') AS INTEGER)) AS occurrence_count
+FROM facts
+WHERE fact_type = 'AnalysisGap'
+  AND rule_id = 'csharp.semantic.propertymapping-gap.v1'
+GROUP BY gap_kind
+ORDER BY occurrence_count DESC, gap_kind;
+```
+
+These rows are expected analysis limitations. Do not add them to workspace,
+load, compilation, registration, or unknown diagnostic-origin counts.
 
 Finally report these derived counts:
 
@@ -122,4 +153,3 @@ runtime reachability, successful binding, a complete call chain, or migration
 readiness. If a genuine workspace/load failure remains, state only its safe
 origin, category, safe diagnostic ID when present, and aggregate count. Exact
 native-message classification remains a separate local-debugger action.
-

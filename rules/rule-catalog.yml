@@ -3721,6 +3721,7 @@ rules:
       - LegacyWorkspacePrerequisitesUnresolved is emitted only when an otherwise uncategorized workspace failure shares project identity with static legacy framework, project-format, import, or toolset evidence; it does not identify the exact missing prerequisite.
       - Projected diagnostics preserve a closed origin category, original gap kind, safe diagnostic ID when present, and deterministic occurrence count; they never retain native diagnostic text.
       - Ordinary compiler diagnostics remain AnalysisGap evidence and are not projected or relabeled as workspace/toolset failures; recognized reference-assembly compiler diagnostics may be projected with compilation origin.
+      - Projection admits only the documented workspace, project/solution load, compilation setup/input, MSBuild registration, restore, and recognized reference-assembly gap kinds; unrelated semantic extractor limitations remain in their own rule families and are not duplicated as build-environment failures.
 
   - id: build.msbuild-binlog.observation.v1
     name: Bounded MSBuild binary-log observation
