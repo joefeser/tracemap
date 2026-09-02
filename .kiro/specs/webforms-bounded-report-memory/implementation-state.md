@@ -97,8 +97,12 @@ The sanitized restricted Windows rerun observation from 2026-09-02 is recorded
 in [`restricted-run-2026-09-02.md`](restricted-run-2026-09-02.md). It completed
 with a partial/reduced result, 1,653,627 facts, 13,460 gaps, and complete timing
 coverage. Artifact writing dominated the 1,104,151 ms run. No OOM or failed
-process was observed. The workspace and accuracy summaries still require
-bounded local review before any additional scanner change is justified.
+process was observed. A later bounded local review of the sanitized summaries
+reported 932,070 Tier1 facts and identified
+`LegacyWorkspacePrerequisitesUnresolved|UseCompatibleMSBuildToolset` as the
+dominant workspace blocker at 10,588 occurrences. The screenshots and
+transcribed review do not replace an exact-text artifact or synthetic
+reproducer for a subsequent scanner change.
 
 Implementation and runbook are committed locally; pushing/opening a PR and
 repairing ACK setup remain separate next steps. No merge readiness is claimed.
