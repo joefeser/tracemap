@@ -42,6 +42,8 @@ Assert-True ($content.Contains('PROJECT_NOT_IN_SELECTED_SOLUTION', [StringCompar
 Assert-True ($content.Contains('SOLUTION_SCOPE_HAS_NO_IN_SCOPE_PROJECTS', [StringComparison]::Ordinal)) "solution scope must fail closed when it has no selected projects"
 Assert-True ($content.Contains('SOLUTION_SCOPE_UNAVAILABLE', [StringComparison]::Ordinal)) "solution path availability is not validated"
 Assert-True ($content.Contains('SOLUTION_SCOPE_INVALID', [StringComparison]::Ordinal)) "solution extension is not validated"
+Assert-True ($content.Contains("[IO.Path]::GetExtension(`$solutionPath) -ne '.sln'", [StringComparison]::Ordinal)) "unsupported solution formats must fail closed"
+Assert-True (-not $content.Contains("'.slnx'", [StringComparison]::Ordinal)) "slnx must not be accepted before scanner inventory support exists"
 
 $selectionFunction = @($scriptAst.FindAll({
     param($node)
