@@ -15,7 +15,7 @@ pull this branch and give the on-device reviewer
 [`claude-diagnostic-review.prompt.md`](claude-diagnostic-review.prompt.md). The
 prompt is self-contained and uses only repository-relative instructions.
 
-After rerunning with diagnostic-lineage commit `90309df6`, use
+After rerunning with projection-boundary commit `08ec7348`, or a descendant, use
 [`claude-post-fix-lineage-review.prompt.md`](claude-post-fix-lineage-review.prompt.md)
 instead. It verifies the TraceMap head and extractor versions before reading the
 new closed origin fields. Do not use the older diagnostic-review prompt for a
@@ -238,3 +238,30 @@ The closed origin categories are `compilation`, `workspace`, `project-load`,
 `generated-file-inspection`, and `unknown`. These categories describe scanner
 provenance. They do not prove a build repair, runtime behavior, branch
 reachability, or a compatible toolset.
+
+## Restricted validation of the lineage correction
+
+The 2026-09-02 post-fix restricted run verified TraceMap head `90309df6`,
+`build-environment/0.4.0`, and `csharp-semantic/0.19.0`. It established:
+
+- `LegacyWorkspacePrerequisitesUnresolved` fell from 10,588 occurrences to 0;
+- two genuine `WorkspaceDiagnostic` callback occurrences remained;
+- no project-load, solution-load, compilation-creation, compilation-input, or
+  MSBuild-registration occurrence was retained; and
+- 10,609 `PropertyMappingShapeUnsupported` plus 24
+  `PropertyMappingTruncated` gaps were incorrectly projected as 10,633 unknown
+  build-environment workspace failures.
+
+The final item is a second TraceMap classifier defect, not a private-application
+failure. `ReadWorkspaceDiagnostics` admitted arbitrary semantic gaps that lacked
+a diagnostic kind. Projection-boundary commit `08ec7348` restricts admission to
+the closed workspace/load/compilation/registration/restore gap kinds and bumps
+the build-environment extractor to `0.5.0`. The original property-mapping gaps
+remain as rule-backed analysis limitations; only their bogus environment
+diagnostic duplicates are removed.
+
+After rerunning this version, the expected environment summary is approximately
+two genuine workspace callback occurrences, zero unknown-origin property-mapping
+projections, and zero legacy-prerequisite occurrences. Exact classification of
+the two native callbacks still requires the local-only debugger inspection
+described above.
