@@ -15,6 +15,12 @@ pull this branch and give the on-device reviewer
 [`claude-diagnostic-review.prompt.md`](claude-diagnostic-review.prompt.md). The
 prompt is self-contained and uses only repository-relative instructions.
 
+To let an on-device coding agent reproduce and repair the TraceMap lineage
+defect without repeated instructions, use
+[`claude-workspace-self-help.prompt.md`](claude-workspace-self-help.prompt.md).
+It authorizes a synthetic implementation and validation loop but not a push,
+pull request, merge, BRD, or private application change.
+
 ## Current conclusion
 
 `LegacyWorkspacePrerequisitesUnresolved|UseCompatibleMSBuildToolset` is not a
@@ -34,6 +40,15 @@ Consequently, the reported 10,588 occurrences may include ordinary compiler
 diagnostics. The count must not be described as 10,588 proven workspace or
 toolset failures. The successful retention of substantial Tier1 evidence is
 also consistent with at least some compilations being created despite errors.
+
+A subsequent on-device execution of the count-only queries found only two
+retained `csharp.semantic.workspace.v1` `AnalysisGap` rows: one
+`WorkspaceDiagnostic` and one `ScanScopeExcludedSources`. It found zero
+retained `CompilationDiagnostic` rows. The separate environment projection
+still contained 10,588 `LegacyWorkspacePrerequisitesUnresolved` rows and one
+`UncategorizedWorkspaceFailure` row. Therefore neither the compiler-error
+hypothesis nor 10,588 genuine load failures is proven. The decisive defect is
+that the 10,588 projected rows have no retained origin lineage in this index.
 
 Relevant implementation points:
 
@@ -98,10 +113,12 @@ GROUP BY diagnostic_code, guidance_code
 ORDER BY count DESC, diagnostic_code;
 ```
 
-If the first query shows approximately 10,588 `CompilationDiagnostic` rows,
-the field result primarily demonstrates classifier conflation. If it instead
-shows genuine workspace/load failures, those failures require the local-only
-inspection described below.
+For the retained field index, these queries were indeterminate: the first query
+could account for only one genuine workspace callback, while the second
+contained 10,588 additional projected rows. The next implementation must
+preserve origin lineage before another retained index can answer the question.
+The single workspace callback requires the local-only inspection described
+below if its exact native category is needed before that rerun.
 
 ## Exact prompt for the on-device reviewer
 
