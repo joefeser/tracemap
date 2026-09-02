@@ -465,6 +465,27 @@ public sealed class ScanEngineTests
     }
 
     [Fact]
+    public void Project_scope_honors_case_insensitive_filesystem_path_matching()
+    {
+        using var temp = new TempDirectory();
+        if (!CSharpSemanticExtractor.CreateSourcePathComparer(temp.Path).Equals("a", "A"))
+            return;
+
+        var projectDirectory = Path.Combine(temp.Path, "Source", "Backend");
+        Directory.CreateDirectory(projectDirectory);
+        File.WriteAllText(Path.Combine(projectDirectory, "Backend.csproj"), "<Project />");
+        File.WriteAllText(Path.Combine(projectDirectory, "Backend.cs"), "public sealed class Backend { }");
+
+        var result = ScanEngine.Scan(new ScanOptions(
+            temp.Path,
+            Path.Combine(temp.Path, "out"),
+            ProjectPaths: ["source/backend/backend.csproj"]));
+
+        Assert.Contains(result.Inventory, item => item.RelativePath == "Source/Backend/Backend.csproj");
+        Assert.Contains(result.Inventory, item => item.RelativePath == "Source/Backend/Backend.cs");
+    }
+
+    [Fact]
     public void Include_scope_does_not_enter_an_unrelated_symbolic_link_directory()
     {
         if (OperatingSystem.IsWindows())
