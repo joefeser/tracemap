@@ -104,7 +104,11 @@ inspection subsequently established that this projection can conflate ordinary
 `CompilationDiagnostic` rows with genuine workspace failures for legacy
 projects. It is not evidence of 10,588 proven toolset failures. The bounded
 count-only queries, local-inspection boundary, and synthetic reproducer are
-recorded in [`README.md`](README.md).
+recorded in [`README.md`](README.md). The on-device count-only follow-up found
+only one retained `WorkspaceDiagnostic`, one scan-scope gap, and no retained
+`CompilationDiagnostic` rows under `csharp.semantic.workspace.v1`; the 10,588
+projected rows therefore remain origin-indeterminate and demonstrate missing
+diagnostic lineage rather than a proven environmental root cause.
 
 Implementation and runbook are committed locally; pushing/opening a PR and
 repairing ACK setup remain separate next steps. No merge readiness is claimed.
