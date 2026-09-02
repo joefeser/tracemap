@@ -1109,9 +1109,10 @@ public static class ScanEngine
             .Where(item => solutionPaths.Count == 0 || item.Kind != "Solution" || solutionPaths.Contains(item.RelativePath))
             .Where(item => projectPaths.Count == 0 || item.Kind is not ("Project" or "SqlProject") || projectPaths.Contains(item.RelativePath))
             .Where(item => projectDirectories.Length == 0
+                || includeGlobs.Length > 0
                 || item.Kind is "Solution"
                 || projectPaths.Contains(item.RelativePath)
-                || projectDirectories.Any(directory => IsUnderScopedDirectory(item.RelativePath, directory)))
+                || projectDirectories.Any(directory => IsUnderScopedDirectory(item.RelativePath, directory, sourcePathComparer)))
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
             .ToArray();
     }
@@ -1139,7 +1140,7 @@ public static class ScanEngine
 
     private static HashSet<string> NormalizeOptionPaths(string repoPath, IReadOnlyList<string>? paths)
     {
-        var result = new HashSet<string>(StringComparer.Ordinal);
+        var result = new HashSet<string>(CSharpSemanticExtractor.CreateSourcePathComparer(repoPath));
         foreach (var path in paths ?? [])
         {
             if (string.IsNullOrWhiteSpace(path))
@@ -1156,7 +1157,7 @@ public static class ScanEngine
         return result;
     }
 
-    private static bool IsUnderScopedDirectory(string relativePath, string directory)
+    private static bool IsUnderScopedDirectory(string relativePath, string directory, StringComparer pathComparer)
     {
         if (directory is "." or "")
         {
@@ -1164,7 +1165,10 @@ public static class ScanEngine
         }
 
         var normalizedDirectory = directory.TrimEnd('/') + "/";
-        return relativePath.StartsWith(normalizedDirectory, StringComparison.Ordinal);
+        var comparison = pathComparer.Equals("a", "A")
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        return relativePath.StartsWith(normalizedDirectory, comparison);
     }
 
     internal static bool GlobMatches(string relativePath, string glob, StringComparer? pathComparer = null)

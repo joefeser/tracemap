@@ -101,6 +101,12 @@ diagnostics:
 - The checkpoint follows
   `docs/contracts/tracemap-scan-progress.v1.schema.json` and contains the
   latest event plus at most 32 recent non-heartbeat events.
+- The same option also maintains an adjacent
+  `<checkpoint>.performance.json` receipt following
+  `docs/contracts/tracemap-scan-performance.v1.schema.json`. It retains at
+  most 64 terminal specialized-extractor timings, a separately aggregated
+  heartbeat count, an active categorical extractor when one has started but
+  not terminated, truthful timing coverage, and a bounded next action.
 - While a stage is active, a heartbeat line is emitted every 15 seconds
   reporting only the categorical stage, elapsed milliseconds, the last
   completed stage, and the monotonic sequence. Heartbeats are produced by a
@@ -114,6 +120,8 @@ The checkpoint path must be a file path outside the scanned repository and
 outside the review output (including hidden staging siblings). Paths inside
 either tree, existing directories, and staging-directory names are rejected
 with `LOCAL_REVIEW_PROGRESS_PATH_UNSAFE` before any scanning starts.
+The derived performance receipt remains beside that authorized checkpoint;
+it is never written into the repository or review output.
 
 ### Privacy Boundary
 
@@ -137,6 +145,16 @@ to `other`, unknown count keys are dropped, and failure codes are checked
 against a closed catalog — anything else, including a path or exception text
 passed by mistake, collapses to `UNKNOWN` — so even a programming mistake
 cannot leak a value through this channel.
+
+The performance receipt applies the same boundary. Extractor categories and
+versions come from a closed scanner-owned catalog; an unknown value becomes
+`other` / `unavailable`. Its `inputCount` is the bounded scan-inventory count
+presented to that extractor, not a claim that every row was parsed; it also
+records aggregate emitted-fact and emitted-gap counts. It never contains
+per-file, per-symbol, per-fact, source,
+configuration, diagnostic, or exception data. Timings are local operational
+observations and do not change evidence tiers, rules, coverage, or scan
+conclusions.
 
 ### Stage Catalog
 

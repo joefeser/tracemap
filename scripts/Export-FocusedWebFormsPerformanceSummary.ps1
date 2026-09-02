@@ -29,7 +29,7 @@ if (-not (Test-Path -LiteralPath $performancePath -PathType Leaf)) {
     throw "FOCUSED_PERFORMANCE_RECEIPT_UNAVAILABLE"
 }
 
-$performance = Get-Content -LiteralPath $performancePath -Raw | ConvertFrom-Json -Depth 20
+$performance = Get-Content -LiteralPath $performancePath -Raw | ConvertFrom-Json
 if ((Get-OptionalProperty $performance "schemaVersion") -ne "tracemap-scan-performance/v1") {
     throw "FOCUSED_PERFORMANCE_RECEIPT_UNSUPPORTED"
 }
