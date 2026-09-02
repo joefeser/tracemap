@@ -381,6 +381,50 @@ public sealed class BuildEnvironmentDiagnosticTests
     }
 
     [Fact]
+    public void Unrelated_semantic_gaps_are_not_projected_as_workspace_failures()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        var inventory = FileInventory.Collect(repo, Path.Combine(temp.Path, "out"));
+        var manifest = new ScanManifest(
+            "scan-test", "repo", null, null, "abc123", ScannerVersions.TraceMap,
+            DateTimeOffset.UnixEpoch, "Level1SemanticAnalysisReduced", "FailedOrPartial",
+            [], [], [], []);
+        var unrelatedGaps = new[]
+        {
+            new SemanticFactCandidate(
+                FactTypes.AnalysisGap,
+                RuleIds.CSharpSemanticPropertyMappingGap,
+                EvidenceTiers.Tier4Unknown,
+                new EvidenceSpan("src/Legacy/Model.cs", 1, 1, null, "CSharpPropertyMappingExtractor", ScannerVersions.CSharpPropertyMappingExtractor),
+                Properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["gapKind"] = "PropertyMappingShapeUnsupported",
+                    ["occurrenceCount"] = "10609"
+                }),
+            new SemanticFactCandidate(
+                FactTypes.AnalysisGap,
+                RuleIds.CSharpSemanticWorkspace,
+                EvidenceTiers.Tier4Unknown,
+                new EvidenceSpan("src/Legacy/Model.cs", 1, 1, null, "CSharpSemanticExtractor", ScannerVersions.CSharpSemanticExtractor),
+                Properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["gapKind"] = "SyntaxTreeReadFailed",
+                    ["diagnosticKind"] = BuildEnvironmentDiagnosticExtractor.DiagnosticKindWorkspace
+                })
+        };
+
+        var facts = BuildEnvironmentDiagnosticExtractor.Extract(
+            repo,
+            manifest,
+            inventory,
+            new SemanticExtractionResult([], unrelatedGaps, Attempted: true, ReducedCoverage: true));
+
+        Assert.Empty(facts);
+    }
+
+    [Fact]
     public void Equivalent_workspace_diagnostics_are_aggregated_with_safe_origin_lineage()
     {
         using var temp = new TempDirectory();

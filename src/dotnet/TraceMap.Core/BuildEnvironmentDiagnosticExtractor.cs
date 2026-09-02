@@ -36,6 +36,19 @@ public static class BuildEnvironmentDiagnosticExtractor
         "{349c5851-65df-11da-9384-00065b846f21}"
     };
 
+    private static readonly HashSet<string> WorkspaceProjectionGapKinds = new(StringComparer.Ordinal)
+    {
+        "CompilationDiagnostic",
+        "CompilationCreateFailed",
+        "CompilationMissing",
+        "CompilationInputUnavailable",
+        "WorkspaceDiagnostic",
+        "ProjectLoadFailed",
+        "SolutionLoadFailed",
+        "MSBuildRegistrationFailed",
+        "RestoreFailed"
+    };
+
     private static readonly Dictionary<string, string> UnsupportedProjectGuids = new(StringComparer.OrdinalIgnoreCase)
     {
         ["{54435603-dbb4-11d2-8724-00a0c9a8b90c}"] = "setup-deployment",
@@ -561,6 +574,8 @@ public static class BuildEnvironmentDiagnosticExtractor
     private static IReadOnlyList<BuildEnvironmentDiagnosticCandidate> ReadWorkspaceDiagnostics(IReadOnlyList<SemanticFactCandidate> gaps)
     {
         return gaps
+            .Where(gap => gap.FactType == FactTypes.AnalysisGap)
+            .Where(gap => WorkspaceProjectionGapKinds.Contains(gap.Properties?.GetValueOrDefault("gapKind") ?? string.Empty))
             .Where(gap => gap.Properties?.GetValueOrDefault("diagnosticKind") != DiagnosticKindScanScope)
             .Where(gap => gap.Properties?.GetValueOrDefault("gapKind") != "CompilationDiagnostic"
                 || gap.Properties?.GetValueOrDefault("diagnosticCode") == "MissingReferenceAssemblies")
