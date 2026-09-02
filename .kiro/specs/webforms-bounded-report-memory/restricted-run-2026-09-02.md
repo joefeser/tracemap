@@ -152,6 +152,13 @@ failures. Use the count-only origin queries in [`README.md`](README.md) before
 interpreting it. The one uncategorized failure remains a separate bounded
 classification target.
 
+The subsequent on-device count-only query found just one retained
+`WorkspaceDiagnostic`, one `ScanScopeExcludedSources` gap, and zero retained
+`CompilationDiagnostic` rows under `csharp.semantic.workspace.v1`. The 10,588
+projected environment rows could not be traced back to their origin from the
+retained index. This makes the field conclusion indeterminate and identifies
+safe origin-lineage preservation as the next product requirement.
+
 ### Highest-count Web Forms gaps
 
 | Artifact | Rule | Reason | Count |
@@ -233,11 +240,14 @@ regression.
 
 ## Follow-up decision rule
 
-The next investigation is to separate original `CompilationDiagnostic` gaps
-from genuine workspace/load failures using the retained index and the bounded
-queries in [`README.md`](README.md). Code inspection already supplies a
-synthetic classifier hypothesis: an ordinary compiler error in a legacy
-project can be relabeled as a toolset-prerequisite failure.
+The retained index cannot separate the 10,588 projected rows: its bounded query
+found only one genuine workspace callback and no retained compiler-diagnostic
+origins. The next implementation is therefore to preserve safe diagnostic
+origin lineage and keep compiler diagnostics distinct from workspace/load
+failures. Code inspection still supplies a synthetic classifier hypothesis:
+an ordinary compiler error in a legacy project can be relabeled as a
+toolset-prerequisite failure, but the field run does not prove that path caused
+the 10,588 rows.
 
 Before implementing another scanner fix, reproduce that projection with a
 synthetic, non-compiling legacy solution. A focused implementation slice is
