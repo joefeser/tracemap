@@ -551,7 +551,7 @@ public static class ScannerVersions
     public const string FileInventoryExtractor = "file-inventory/0.1.0";
     public const string ProjectFileExtractor = "project-file/0.1.0";
     public const string NuGetLockfileExtractor = "nuget-lockfile/0.1.0";
-    public const string BuildEnvironmentExtractor = "build-environment/0.4.0";
+    public const string BuildEnvironmentExtractor = "build-environment/0.5.0";
     public const string AnalyzerCapabilityExtractor = "analyzer-capability/0.1.0";
     public const string CSharpSyntaxExtractor = "csharp-syntax/0.5.0";
     public const string CSharpAspNetSyntaxRouteExtractor = "csharp-aspnet-syntax-route/0.1.0";
