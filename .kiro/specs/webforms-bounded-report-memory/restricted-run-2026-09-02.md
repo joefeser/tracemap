@@ -145,7 +145,11 @@ Additional typed diagnostics included:
 
 The dominant workspace blocker was therefore reported as
 `LegacyWorkspacePrerequisitesUnresolved|UseCompatibleMSBuildToolset` with
-10,588 occurrences. The one uncategorized failure remains a separate bounded
+10,588 occurrences. Subsequent TraceMap code inspection showed that ordinary
+`CompilationDiagnostic` rows can be projected into that legacy-workspace
+category. The count is therefore not proof of 10,588 workspace/toolset
+failures. Use the count-only origin queries in [`README.md`](README.md) before
+interpreting it. The one uncategorized failure remains a separate bounded
 classification target.
 
 ### Highest-count Web Forms gaps
@@ -229,15 +233,17 @@ regression.
 
 ## Follow-up decision rule
 
-The strongest next investigation is the compatible legacy MSBuild workspace:
-10,588 typed diagnostics share that reason, and 655 aggregate
-`SyntaxFallbackOperationCandidate` gaps were also reported. This evidence does
-not yet prove that changing the toolset will eliminate those gaps.
+The next investigation is to separate original `CompilationDiagnostic` gaps
+from genuine workspace/load failures using the retained index and the bounded
+queries in [`README.md`](README.md). Code inspection already supplies a
+synthetic classifier hypothesis: an ordinary compiler error in a legacy
+project can be relabeled as a toolset-prerequisite failure.
 
-Before implementing another scanner fix, retain the exact sanitized summary
-text and construct a synthetic, non-compiling legacy solution that reproduces
-the toolset classification. A focused implementation slice is justified only
-when that reproducer demonstrates a deterministic admission or classification
-defect. Treat the single `ReviewEnvironmentGap`, generated designer inputs,
-dynamic navigation/events/SQL, unsupported property-mapping shapes, and
-workspace compatibility as distinct problem classes rather than one failure.
+Before implementing another scanner fix, reproduce that projection with a
+synthetic, non-compiling legacy solution. A focused implementation slice is
+justified when the reproducer demonstrates the deterministic classification
+defect. Inspect native diagnostic text locally only if genuine workspace/load
+failures remain after separation. Treat the single `ReviewEnvironmentGap`,
+generated designer inputs, dynamic navigation/events/SQL, unsupported
+property-mapping shapes, and workspace compatibility as distinct problem
+classes rather than one failure.
