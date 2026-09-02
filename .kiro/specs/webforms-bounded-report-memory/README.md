@@ -15,6 +15,12 @@ pull this branch and give the on-device reviewer
 [`claude-diagnostic-review.prompt.md`](claude-diagnostic-review.prompt.md). The
 prompt is self-contained and uses only repository-relative instructions.
 
+After rerunning with diagnostic-lineage commit `90309df6`, use
+[`claude-post-fix-lineage-review.prompt.md`](claude-post-fix-lineage-review.prompt.md)
+instead. It verifies the TraceMap head and extractor versions before reading the
+new closed origin fields. Do not use the older diagnostic-review prompt for a
+post-fix index.
+
 To let an on-device coding agent reproduce and repair the TraceMap lineage
 defect without repeated instructions, use
 [`claude-workspace-self-help.prompt.md`](claude-workspace-self-help.prompt.md).
