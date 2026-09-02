@@ -10,6 +10,11 @@ The field metrics and the operator-supplied post-run readback are recorded in
 defines the next diagnostic step. It does not claim a product root cause, full
 semantic compilation, complete event-to-database chains, or runtime behavior.
 
+For a computer that does not share this machine's filesystem or chat history,
+pull this branch and give the on-device reviewer
+[`claude-diagnostic-review.prompt.md`](claude-diagnostic-review.prompt.md). The
+prompt is self-contained and uses only repository-relative instructions.
+
 ## Current conclusion
 
 `LegacyWorkspacePrerequisitesUnresolved|UseCompatibleMSBuildToolset` is not a
