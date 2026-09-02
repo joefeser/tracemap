@@ -71,7 +71,7 @@ configured external summary directory:
 It also retained the focused output directory and progress receipt. Those raw
 artifacts remain local and must not be committed.
 
-## What remains unknown
+## Questions queued before local review
 
 The console receipt does not expose the fields needed to decide whether the
 solution unlocked compiler-resolved evidence. Before changing product code,
@@ -87,6 +87,116 @@ inspect the sanitized workspace and accuracy summaries for:
 Do not infer complete call chains, runtime reachability, successful binding,
 rendered behavior, branch execution, SQL execution, or production usage from
 the process exit code, fact count, or completed publication stage.
+
+## Operator-supplied local-review readback
+
+Later screenshots show that an on-device reviewer analyzed the three sanitized
+summary files after the TraceMap run completed. This does not change the earlier
+observation that no reviewer ran before or during the scan. The findings below
+are transcribed from that post-run review and have not been independently
+recomputed from the private artifacts.
+
+### Compilation and scope admission
+
+- `semanticCompilation=reduced`
+- `analysisLevel=Level1SemanticAnalysisReduced`
+- `buildStatus=FailedOrPartial`
+- all three intended scopes (`webforms`, `backend`, and `controls`) were present
+  with non-zero facts, but none reached full semantic compilation;
+- the reviewer concluded that the Roslyn workspace loaded but did not reach
+  full compilation across the selected scopes;
+- legacy MSBuild success remains insufficient to prove Roslyn workspace
+  admission.
+
+### Semantic evidence retained
+
+The reviewer reported **932,070 Tier1 semantic facts**:
+
+| Scope | Tier1 facts |
+| --- | ---: |
+| `webforms` | 556,487 |
+| `backend` | 357,255 |
+| `controls` | 18,328 |
+
+`CSharpSemanticExtractor` reportedly emitted 927,941 facts and 230 gaps. No
+comparable baseline was supplied, so the review correctly made no improvement
+or regression claim.
+
+### Workspace diagnostics
+
+The reviewer reported 10,589 workspace diagnostics and one uncategorized
+failure:
+
+| Scope | Diagnostic | Reason | Count |
+| --- | --- | --- | ---: |
+| `webforms` | `LegacyWorkspacePrerequisitesUnresolved` | `UseCompatibleMSBuildToolset` | 6,632 |
+| `backend` | `LegacyWorkspacePrerequisitesUnresolved` | `UseCompatibleMSBuildToolset` | 3,833 |
+| `controls` | `LegacyWorkspacePrerequisitesUnresolved` | `UseCompatibleMSBuildToolset` | 123 |
+| `other` | `UncategorizedWorkspaceFailure` | `ReviewEnvironmentGap` | 1 |
+
+Additional typed diagnostics included:
+
+- `GeneratedFileMissing`: 278 total (`backend` 235, `webforms` 41,
+  `controls` 2);
+- `WebApplicationProjectTargets`: 3 in `webforms`;
+- `NonSdkStyleProject`: one in each selected scope;
+- `UnknownImportedTargets`: 2 in `webforms`;
+- `UnknownLegacyProjectFormat`: 1 in `webforms`.
+
+The dominant workspace blocker was therefore reported as
+`LegacyWorkspacePrerequisitesUnresolved|UseCompatibleMSBuildToolset` with
+10,588 occurrences. The one uncategorized failure remains a separate bounded
+classification target.
+
+### Highest-count Web Forms gaps
+
+| Artifact | Rule | Reason | Count |
+| --- | --- | --- | ---: |
+| `aspx-codebehind` | `database.operation.call-pattern.v1` | `SyntaxFallbackOperationCandidate` | 405 |
+| `aspx` | `legacy.webforms.composition.v1` | `WebFormsAssemblyProjectUnavailable` | 323 |
+| `aspx-codebehind` | `legacy.aspnet.navigation.v1` | `DynamicCodeNavigationTarget` | 313 |
+| `aspx` | `legacy.webforms.event-binding.v1` | `UnsupportedWebFormsEventAttribute` | 166 |
+| `aspx-codebehind` | `legacy.webforms.lifecycle-context.v1` | `UnsupportedWebFormsIsPostBackCondition` | 129 |
+| `aspx-codebehind` | `legacy.webforms.event-binding.v1` | `DynamicWebFormsEventSubscription` | 98 |
+| `cs` in Web Forms scope | `legacy.aspnet.navigation.v1` | `DynamicCodeNavigationTarget` | 94 |
+| `aspx` | `legacy.webforms.composition.v1` | `WebFormsAssemblyTypeUnavailable` | 80 |
+| `ascx` | `legacy.webforms.composition.v1` | `WebFormsAssemblyProjectUnavailable` | 68 |
+| `ascx` | `legacy.webforms.composition.v1` | `UnresolvedWebFormsControlRegistration` | 47 |
+| `aspx-codebehind` | `legacy.webforms.client-script.v1` | `DynamicWebFormsClientScriptRegistration` | 39 |
+| `ascx-codebehind` | `database.operation.call-pattern.v1` | `SyntaxFallbackOperationCandidate` | 35 |
+| `aspx` | `legacy.webforms.handler-resolution.v1` | `AutoEventWireupUnavailable` | 31 |
+| `ascx` | `legacy.webforms.event-binding.v1` | `UnsupportedWebFormsEventAttribute` | 23 |
+| `aspx-codebehind` | `database.sql.text.v1` | `dynamic-sql-boundary` | 18 |
+| `aspx-codebehind` | `legacy.webforms.client-script.v1` | `AmbiguousWebFormsClientScriptRegistrationReceiver` | 18 |
+| `aspx-codebehind` | `database.operation.call-pattern.v1` | `DatabaseOperationTargetUnavailable` | 9 |
+
+For backend context, the reviewer also reported 303 `dynamic-sql-boundary`,
+217 `DatabaseOperationTargetUnavailable`, 208
+`SyntaxFallbackOperationCandidate`, and 156
+`AmbiguousAsmxMetadataOperationMapping` gaps.
+
+The largest gap across the entire run was
+`csharp.semantic.propertymapping-gap.v1` at 10,628, including 10,604
+`PropertyMappingShapeUnsupported` results. The corresponding extractor emitted
+13,836 facts. This is a separate extractor-shape limitation and should not be
+conflated with the workspace toolset blocker.
+
+### Static event-to-database posture
+
+The reviewer found useful static evidence toward handler-to-backend and
+database operations, while retaining the required non-claim about complete
+runtime chains:
+
+- 476 `aspx-codebehind` files with 384,933 Tier1 and 303,578 Tier3 facts;
+- 27 `ascx-codebehind` files with 22,777 Tier1 facts;
+- database-operation candidate extraction was active, with unresolved and
+  syntax-fallback gaps retained rather than promoted;
+- `LegacyAsmxExtractor` emitted 5,739 facts;
+- `CSharpIntegrationSyntaxExtractor` emitted 3,409 facts and 986 gaps.
+
+The review summarized static event-to-database evidence as present but
+unproven as complete chains. That is consistent with TraceMap's evidence
+posture.
 
 ## Bounded local-review prompt
 
@@ -119,7 +229,15 @@ regression.
 
 ## Follow-up decision rule
 
-No scanner fix is justified from the screenshots alone. First classify the
-sanitized summary evidence. Open a focused implementation slice only when a
-typed diagnostic, missing rule-backed correlation, deterministic truncation,
-or reproducible publication bottleneck identifies a bounded product defect.
+The strongest next investigation is the compatible legacy MSBuild workspace:
+10,588 typed diagnostics share that reason, and 655 aggregate
+`SyntaxFallbackOperationCandidate` gaps were also reported. This evidence does
+not yet prove that changing the toolset will eliminate those gaps.
+
+Before implementing another scanner fix, retain the exact sanitized summary
+text and construct a synthetic, non-compiling legacy solution that reproduces
+the toolset classification. A focused implementation slice is justified only
+when that reproducer demonstrates a deterministic admission or classification
+defect. Treat the single `ReviewEnvironmentGap`, generated designer inputs,
+dynamic navigation/events/SQL, unsupported property-mapping shapes, and
+workspace compatibility as distinct problem classes rather than one failure.
