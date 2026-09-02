@@ -128,7 +128,7 @@ foreach ($folder in $selectedFolders) {
 }
 if (-not [string]::IsNullOrWhiteSpace($SolutionRelativePath)) {
     $solutionPath = Resolve-RelativeChild $SourceRoot $SolutionRelativePath "SOLUTION_SCOPE_UNAVAILABLE" $true
-    if ([IO.Path]::GetExtension($solutionPath) -notin @('.sln', '.slnx')) { throw "SOLUTION_SCOPE_INVALID" }
+    if ([IO.Path]::GetExtension($solutionPath) -ne '.sln') { throw "SOLUTION_SCOPE_INVALID" }
     $solutionProjects = @(Get-InScopeSolutionProjects $solutionPath $SourceRoot $selectedFolders)
     if ($ProjectRelativePath.Count -eq 0) {
         $ProjectRelativePath = $solutionProjects

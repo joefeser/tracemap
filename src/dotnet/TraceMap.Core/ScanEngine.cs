@@ -1109,6 +1109,7 @@ public static class ScanEngine
             .Where(item => solutionPaths.Count == 0 || item.Kind != "Solution" || solutionPaths.Contains(item.RelativePath))
             .Where(item => projectPaths.Count == 0 || item.Kind is not ("Project" or "SqlProject") || projectPaths.Contains(item.RelativePath))
             .Where(item => projectDirectories.Length == 0
+                || includeGlobs.Length > 0
                 || item.Kind is "Solution"
                 || projectPaths.Contains(item.RelativePath)
                 || projectDirectories.Any(directory => IsUnderScopedDirectory(item.RelativePath, directory)))
