@@ -93,6 +93,13 @@ recorded failures are not a reason to weaken gates in the Web Forms patch.
 
 ## Handoff
 
+The sanitized restricted Windows rerun observation from 2026-09-02 is recorded
+in [`restricted-run-2026-09-02.md`](restricted-run-2026-09-02.md). It completed
+with a partial/reduced result, 1,653,627 facts, 13,460 gaps, and complete timing
+coverage. Artifact writing dominated the 1,104,151 ms run. No OOM or failed
+process was observed. The workspace and accuracy summaries still require
+bounded local review before any additional scanner change is justified.
+
 Implementation and runbook are committed locally; pushing/opening a PR and
 repairing ACK setup remain separate next steps. No merge readiness is claimed.
 Use the README's large-index/OOM link for the private Windows rerun after the
