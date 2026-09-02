@@ -3709,7 +3709,7 @@ rules:
 
   - id: build.environment.workspace-diagnostic.v1
     name: Build environment workspace diagnostics
-    description: Records sanitized MSBuildWorkspace, legacy Web Application/import/evaluation, SDK resolution, reference assembly, restore, and compilation setup categories that explain reduced semantic coverage.
+    description: Records sanitized MSBuildWorkspace, legacy Web Application/import/evaluation, SDK resolution, reference assembly, restore, and compilation setup categories with closed origin lineage that explains reduced semantic coverage.
     evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - BuildEnvironmentDiagnostic
@@ -3719,6 +3719,8 @@ rules:
       - Syntax, config, SQL, WCF, and WebForms fallback facts remain valid within their own evidence tiers.
       - Legacy workspace categories are bounded pattern classifications of sanitized native diagnostics; they identify likely prerequisite classes, not a proven repair or compatible build environment.
       - LegacyWorkspacePrerequisitesUnresolved is emitted only when an otherwise uncategorized workspace failure shares project identity with static legacy framework, project-format, import, or toolset evidence; it does not identify the exact missing prerequisite.
+      - Projected diagnostics preserve a closed origin category, original gap kind, safe diagnostic ID when present, and deterministic occurrence count; they never retain native diagnostic text.
+      - Ordinary compiler diagnostics remain AnalysisGap evidence and are not projected or relabeled as workspace/toolset failures; recognized reference-assembly compiler diagnostics may be projected with compilation origin.
 
   - id: build.msbuild-binlog.observation.v1
     name: Bounded MSBuild binary-log observation

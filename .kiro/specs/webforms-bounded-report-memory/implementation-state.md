@@ -1,6 +1,7 @@
 # Implementation state
 
-Branch: `codex/webforms-bounded-report-memory`
+Original implementation branch: `codex/webforms-bounded-report-memory`
+Current diagnostic-debug branch: `codex/restricted-webforms-run-evidence-20260902`
 Base: `ce6b449f0be49b04f524c23641c42ff56c155ec8` (fresh origin/dev).
 Implementation commit: `15c699ee` (reader, packet, CLI, rules, and 11 regression cases).
 
@@ -118,3 +119,38 @@ original scan index, select a new output directory, and compare counts/gaps and
 memory. A deterministic input-limit gap is a truthful partial result, not proof
 that every requested event chain was analyzed. Full private-index completion
 and any subsequent root-specific lazy-loading design remain unverified here.
+
+## Diagnostic-lineage debug patch
+
+At the operator's direction, the diagnostic projection correction is being
+debugged on `codex/restricted-webforms-run-evidence-20260902` alongside the
+sanitized field notes. After synthetic and restricted validation settle the
+behavior, the code/test/rule/script changes should be cherry-picked onto a fresh
+branch from `origin/dev`; the field documentation need not be included in that
+product PR.
+
+The patch separates ordinary compiler diagnostics from workspace admission,
+adds closed origin lineage and safe diagnostic IDs to projected environment
+facts, limits legacy-prerequisite corroboration to genuine workspace/load
+origins, deterministically aggregates exactly equivalent projections, and makes
+the PowerShell readback report unknown lineage explicitly for pre-fix indexes.
+No raw native diagnostic message or private identifier is added.
+
+Validation on 2026-09-02:
+
+- full .NET solution: **1,737/1,737 passed**;
+- focused diagnostic/snapshot suite: **32/32 passed** before the final safe-ID
+  extraction case, followed by a green full solution run containing that case;
+- `Export-FocusedWebFormsWorkspaceSummary.Tests.ps1`: passed, including legacy
+  unknown-lineage, compiler-origin, workspace/load-origin, static-origin, and
+  occurrence-count cases;
+- changed-file `dotnet format --verify-no-changes`: passed;
+- private-path guard and `git diff --check`: passed;
+- synthetic CLI classifier fixture: 37 facts, truthful
+  `Level1SemanticAnalysisReduced`; `CS0103` remained a compiler-origin
+  `AnalysisGap`, no legacy-toolset prerequisite projection was emitted, and
+  Web Forms page/control/event/handler evidence remained present.
+
+The repository-wide formatter still reports unrelated pre-existing formatting
+violations outside this change, so validation is scoped to all changed C# files.
+No non-.NET adapter changed; pinned language-adapter smokes are deferred.

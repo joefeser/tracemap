@@ -261,8 +261,12 @@ public sealed class CSharpFullSnapshotStabilityTests
             && fact.Evidence.ExtractorVersion == ScannerVersions.CSharpSemanticExtractor
             && fact.Properties.GetValueOrDefault("gapKind") == "CompilationDiagnostic"
             && fact.Properties.GetValueOrDefault("diagnosticId") == diagnosticId);
-        Assert.Equal("workspace", gap.Properties["diagnosticKind"]);
+        Assert.Equal("compilation", gap.Properties["diagnosticKind"]);
         Assert.Equal("reduces-semantic-coverage", gap.Properties["coverageEffect"]);
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.BuildEnvironmentDiagnostic
+            && fact.Properties.GetValueOrDefault("originCategory") == BuildEnvironmentDiagnosticExtractor.OriginCompilation
+            && fact.Properties.GetValueOrDefault("diagnosticId") == diagnosticId);
     }
 
     private static void AssertNoErrorTypeSemanticFacts(ScanResult result, string filePath, int line)

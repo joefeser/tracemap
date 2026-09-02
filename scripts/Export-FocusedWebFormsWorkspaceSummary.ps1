@@ -12,6 +12,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $culture = [Globalization.CultureInfo]::InvariantCulture
 $safeToken = '^[A-Za-z][A-Za-z0-9._-]{0,99}$'
+$safeDiagnosticId = '^(?:CS|MSB)[0-9]{4}$'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $isWindowsPlatform = [IO.Path]::DirectorySeparatorChar -eq '\'
 
@@ -49,11 +50,6 @@ function Test-WithinPath {
     return $Candidate.Equals($parentPath, $comparison) -or $Candidate.StartsWith($parentPath + $separator, $comparison)
 }
 
-function Add-Count {
-    param($Counts, [string]$Key)
-    if ($Counts.ContainsKey($Key)) { $Counts[$Key]++ } else { $Counts.Add($Key, 1L) }
-}
-
 try {
     if ($TraceMapHead -notmatch '^[0-9a-fA-F]{40}$') { throw 'TraceMapHeadInvalid' }
     $folders = @($WebFormsFolder, $BackendFolder, $ControlsFolder) | ForEach-Object { Normalize-RelativePath $_ }
@@ -86,6 +82,9 @@ try {
 
     [long]$tier1Count = 0
     [long]$workspaceDiagnosticCount = 0
+    [long]$compilerDiagnosticCount = 0
+    [long]$staticDiagnosticCount = 0
+    [long]$unknownDiagnosticOriginCount = 0
     [long]$uncategorizedCount = 0
     [long]$legacyPrerequisiteCount = 0
     $capabilityStates = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
@@ -103,18 +102,51 @@ try {
                 [void]$capabilityStates.Add($state)
             }
         }
-        if ($factType -ne 'BuildEnvironmentDiagnostic' -or
-            [string](Get-OptionalProperty $properties 'diagnosticKind') -ne 'workspace') { continue }
+        $ruleId = [string](Get-OptionalProperty $fact 'ruleId')
+        if ($factType -eq 'AnalysisGap' -and $ruleId -eq 'csharp.semantic.workspace.v1' -and
+            [string](Get-OptionalProperty $properties 'gapKind') -eq 'CompilationDiagnostic') {
+            $code = [string](Get-OptionalProperty $properties 'diagnosticCode')
+            $guidance = [string](Get-OptionalProperty $properties 'guidanceCode')
+            $diagnosticId = [string](Get-OptionalProperty $properties 'diagnosticId')
+            if ($code -notmatch $safeToken -or $guidance -notmatch $safeToken) { continue }
+            if ($diagnosticId -notmatch $safeDiagnosticId) { $diagnosticId = 'none' }
+            $evidence = Get-OptionalProperty $fact 'evidence'
+            $scope = Get-ScopeRole ([string](Get-OptionalProperty $evidence 'filePath'))
+            $key = "$scope|compilation|CompilationDiagnostic|$diagnosticId|$code|$guidance"
+            if ($diagnosticCounts.ContainsKey($key)) { $diagnosticCounts[$key]++ } else { $diagnosticCounts.Add($key, 1L) }
+            $compilerDiagnosticCount++
+            continue
+        }
+        if ($factType -ne 'BuildEnvironmentDiagnostic') { continue }
 
+        $kind = [string](Get-OptionalProperty $properties 'diagnosticKind')
         $code = [string](Get-OptionalProperty $properties 'diagnosticCode')
         $guidance = [string](Get-OptionalProperty $properties 'guidanceCode')
-        if ($code -notmatch $safeToken -or $guidance -notmatch $safeToken) { continue }
+        $origin = [string](Get-OptionalProperty $properties 'originCategory')
+        $originGapKind = [string](Get-OptionalProperty $properties 'originGapKind')
+        $diagnosticId = [string](Get-OptionalProperty $properties 'diagnosticId')
+        [long]$occurrenceCount = 1
+        $rawOccurrenceCount = [string](Get-OptionalProperty $properties 'occurrenceCount')
+        if (-not [string]::IsNullOrWhiteSpace($rawOccurrenceCount)) {
+            [long]$parsedOccurrenceCount = 0
+            if ([long]::TryParse($rawOccurrenceCount, [ref]$parsedOccurrenceCount) -and $parsedOccurrenceCount -gt 0) {
+                $occurrenceCount = $parsedOccurrenceCount
+            }
+        }
+        if ($kind -eq 'compilation') { continue } # Count the originating AnalysisGap once, not its environment projection.
+        if ($kind -notin @('workspace', 'target-framework', 'toolset', 'project-format', 'restore', 'generated-file') -or $code -notmatch $safeToken -or $guidance -notmatch $safeToken) { continue }
+        if ($origin -notmatch $safeToken) { $origin = 'unknown' }
+        if ($originGapKind -notmatch $safeToken) { $originGapKind = 'unknown' }
+        if ($diagnosticId -notmatch $safeDiagnosticId) { $diagnosticId = 'none' }
         $evidence = Get-OptionalProperty $fact 'evidence'
         $scope = Get-ScopeRole ([string](Get-OptionalProperty $evidence 'filePath'))
-        Add-Count $diagnosticCounts "$scope|$code|$guidance"
-        $workspaceDiagnosticCount++
-        if ($code -eq 'UncategorizedWorkspaceFailure') { $uncategorizedCount++ }
-        if ($code -eq 'LegacyWorkspacePrerequisitesUnresolved') { $legacyPrerequisiteCount++ }
+        $key = "$scope|$origin|$originGapKind|$diagnosticId|$code|$guidance"
+        if ($diagnosticCounts.ContainsKey($key)) { $diagnosticCounts[$key] += $occurrenceCount } else { $diagnosticCounts.Add($key, $occurrenceCount) }
+        if ($kind -eq 'workspace') { $workspaceDiagnosticCount += $occurrenceCount }
+        if ($origin -eq 'static-project-inspection') { $staticDiagnosticCount += $occurrenceCount }
+        if ($ruleId -eq 'build.environment.workspace-diagnostic.v1' -and $origin -eq 'unknown') { $unknownDiagnosticOriginCount += $occurrenceCount }
+        if ($code -eq 'UncategorizedWorkspaceFailure') { $uncategorizedCount += $occurrenceCount }
+        if ($code -eq 'LegacyWorkspacePrerequisitesUnresolved') { $legacyPrerequisiteCount += $occurrenceCount }
     }
 
     $semanticState = if ($capabilityStates.Contains('available')) {
@@ -126,7 +158,9 @@ try {
     } else {
         'unknown'
     }
-    $nextAction = if ($uncategorizedCount -gt 0) {
+    $nextAction = if ($unknownDiagnosticOriginCount -gt 0) {
+        'rerun-with-diagnostic-lineage'
+    } elseif ($uncategorizedCount -gt 0) {
         'classify-bounded-workspace-failure'
     } elseif ($legacyPrerequisiteCount -gt 0) {
         'inspect-compatible-legacy-workspace'
@@ -153,11 +187,14 @@ try {
         "semanticCompilation=$semanticState",
         "tier1FactCount=$($tier1Count.ToString($culture))",
         "workspaceDiagnosticCount=$($workspaceDiagnosticCount.ToString($culture))",
+        "compilerDiagnosticCount=$($compilerDiagnosticCount.ToString($culture))",
+        "staticDiagnosticCount=$($staticDiagnosticCount.ToString($culture))",
+        "unknownDiagnosticOriginCount=$($unknownDiagnosticOriginCount.ToString($culture))",
         "uncategorizedWorkspaceFailureCount=$($uncategorizedCount.ToString($culture))",
         "legacyWorkspacePrerequisitesUnresolvedCount=$($legacyPrerequisiteCount.ToString($culture))"
     )) { $lines.Add($line) }
     foreach ($row in @($diagnosticCounts.GetEnumerator() | Sort-Object Name)) {
-        $lines.Add("workspaceDiagnostic=$($row.Key)|count=$($row.Value.ToString($culture))")
+        $lines.Add("diagnostic=$($row.Key)|count=$($row.Value.ToString($culture))")
     }
     $lines.Add("nextAction=$nextAction")
     $lines.Add('nonClaim=legacy-msbuild-success-does-not-prove-roslyn-workspace-admission')

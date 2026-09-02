@@ -202,3 +202,33 @@ compilation is reduced.
 No raw message is required to prove this classifier defect. Native diagnostic
 inspection is necessary only to classify genuine workspace/load failures that
 remain after compiler diagnostics are separated.
+
+## Diagnostic-lineage correction on this branch
+
+The same evidence branch now contains the prospective product correction so it
+can be debugged against synthetic and restricted local reruns before the code is
+cherry-picked onto a fresh implementation branch. This is not a merge-ready
+branch and no private scan artifact is committed.
+
+The corrected projection:
+
+- classifies ordinary `CompilationDiagnostic` gaps as compiler diagnostics,
+  retains their safe IDs on the originating `AnalysisGap`, and does not emit a
+  duplicate `BuildEnvironmentDiagnostic` for them;
+- projects a recognized reference-assembly compiler diagnostic only with
+  `originCategory=compilation`;
+- preserves `originCategory`, `originGapKind`, a strictly safe diagnostic ID,
+  `occurrenceCount`, and `aggregationState` on projected environment facts;
+- permits `LegacyWorkspacePrerequisitesUnresolved` corroboration only for
+  `workspace`, `project-load`, or `solution-load` origins that share identity
+  with static legacy-project evidence;
+- aggregates exactly equivalent projected diagnostics deterministically; and
+- reports missing lineage from older indexes as `unknown` with next action
+  `rerun-with-diagnostic-lineage` rather than reconstructing a cause.
+
+The closed origin categories are `compilation`, `workspace`, `project-load`,
+`solution-load`, `compilation-creation`, `compilation-input`,
+`msbuild-registration`, `restore`, `static-project-inspection`,
+`generated-file-inspection`, and `unknown`. These categories describe scanner
+provenance. They do not prove a build repair, runtime behavior, branch
+reachability, or a compatible toolset.
