@@ -5180,9 +5180,9 @@ public static class CSharpSemanticExtractor
             ["messageHash"] = FactFactory.Hash(sanitized.Message, 32),
             ["sanitization"] = sanitized.Sanitization
         };
-        if (!string.IsNullOrWhiteSpace(diagnosticId))
+        if (!string.IsNullOrWhiteSpace(sanitized.DiagnosticId))
         {
-            properties["diagnosticId"] = diagnosticId;
+            properties["diagnosticId"] = sanitized.DiagnosticId;
         }
 
         var diagnosticTokens = ExtractSafeDiagnosticTokens(gapKind, message);

@@ -1,17 +1,35 @@
 using System.Xml;
 using System.Xml.Linq;
+using System.Text.RegularExpressions;
 
 namespace TraceMap.Core;
 
 public static class BuildEnvironmentDiagnosticExtractor
 {
+    private static readonly Regex SafeDiagnosticIdRegex = new(
+        @"\b(?:CS|MSB)[0-9]{4}\b",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
     public const string DiagnosticKindTargetFramework = "target-framework";
     public const string DiagnosticKindToolset = "toolset";
     public const string DiagnosticKindProjectFormat = "project-format";
     public const string DiagnosticKindRestore = "restore";
     public const string DiagnosticKindGeneratedFile = "generated-file";
     public const string DiagnosticKindWorkspace = "workspace";
+    public const string DiagnosticKindCompilation = "compilation";
     public const string DiagnosticKindScanScope = "scan-scope";
+
+    public const string OriginCompilation = "compilation";
+    public const string OriginCompilationCreation = "compilation-creation";
+    public const string OriginCompilationInput = "compilation-input";
+    public const string OriginWorkspace = "workspace";
+    public const string OriginProjectLoad = "project-load";
+    public const string OriginSolutionLoad = "solution-load";
+    public const string OriginMsBuildRegistration = "msbuild-registration";
+    public const string OriginRestore = "restore";
+    public const string OriginStaticProjectInspection = "static-project-inspection";
+    public const string OriginGeneratedFileInspection = "generated-file-inspection";
+    public const string OriginUnknown = "unknown";
 
     private static readonly HashSet<string> WebApplicationProjectGuids = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -40,6 +58,7 @@ public static class BuildEnvironmentDiagnosticExtractor
         diagnostics.AddRange(ReadGeneratedFileDiagnostics(repoPath, inventory));
         diagnostics.AddRange(ReadWorkspaceDiagnostics(semanticResult.GapFacts));
         diagnostics = CorroborateLegacyWorkspaceFailures(diagnostics);
+        diagnostics = AggregateEquivalentDiagnostics(diagnostics);
 
         return diagnostics
             .OrderBy(item => item.DiagnosticKind, StringComparer.Ordinal)
@@ -58,22 +77,30 @@ public static class BuildEnvironmentDiagnosticExtractor
     public static SanitizedDiagnostic SanitizeWorkspaceGap(string gapKind, string rawMessage, string? diagnosticId = null)
     {
         var raw = rawMessage ?? string.Empty;
+        var safeDiagnosticId = NormalizeSafeDiagnosticIdentifier(diagnosticId)
+            ?? ExtractSafeDiagnosticIdentifier(raw);
         var code = gapKind switch
         {
             "MSBuildRegistrationFailed" => "MSBuildRegistrationFailed",
             "RestoreFailed" => CategorizeRestoreFailure(raw),
             "CompilationCreateFailed" or "CompilationMissing" => "CompilationCreationFailed",
             "CompilationInputUnavailable" => "CompilationInputUnavailable",
-            "CompilationDiagnostic" when IsReferenceAssemblyDiagnostic(raw, diagnosticId) => "MissingReferenceAssemblies",
+            "CompilationDiagnostic" when IsReferenceAssemblyDiagnostic(raw, safeDiagnosticId) => "MissingReferenceAssemblies",
+            "CompilationDiagnostic" => "CompilerDiagnostic",
             "WorkspaceDiagnostic" or "ProjectLoadFailed" or "SolutionLoadFailed" when IsSdkResolutionFailure(raw) => "SdkResolutionFailed",
-            "WorkspaceDiagnostic" or "ProjectLoadFailed" or "SolutionLoadFailed" when IsReferenceAssemblyDiagnostic(raw, diagnosticId) => "MissingReferenceAssemblies",
-            "WorkspaceDiagnostic" or "ProjectLoadFailed" or "SolutionLoadFailed" when IsWebApplicationTargetsFailure(raw, diagnosticId) => "WebApplicationTargetsUnavailable",
-            "WorkspaceDiagnostic" or "ProjectLoadFailed" or "SolutionLoadFailed" when IsImportedTargetsFailure(raw, diagnosticId) => "ImportedTargetsUnavailable",
-            "WorkspaceDiagnostic" or "ProjectLoadFailed" or "SolutionLoadFailed" when IsLegacyProjectEvaluationFailure(raw, diagnosticId) => "LegacyProjectEvaluationFailed",
+            "WorkspaceDiagnostic" or "ProjectLoadFailed" or "SolutionLoadFailed" when IsReferenceAssemblyDiagnostic(raw, safeDiagnosticId) => "MissingReferenceAssemblies",
+            "WorkspaceDiagnostic" or "ProjectLoadFailed" or "SolutionLoadFailed" when IsWebApplicationTargetsFailure(raw, safeDiagnosticId) => "WebApplicationTargetsUnavailable",
+            "WorkspaceDiagnostic" or "ProjectLoadFailed" or "SolutionLoadFailed" when IsImportedTargetsFailure(raw, safeDiagnosticId) => "ImportedTargetsUnavailable",
+            "WorkspaceDiagnostic" or "ProjectLoadFailed" or "SolutionLoadFailed" when IsLegacyProjectEvaluationFailure(raw, safeDiagnosticId) => "LegacyProjectEvaluationFailed",
             "WorkspaceDiagnostic" or "ProjectLoadFailed" or "SolutionLoadFailed" => "UncategorizedWorkspaceFailure",
             _ => "UncategorizedWorkspaceFailure"
         };
-        var kind = gapKind == "RestoreFailed" ? DiagnosticKindRestore : DiagnosticKindWorkspace;
+        var kind = gapKind switch
+        {
+            "RestoreFailed" => DiagnosticKindRestore,
+            "CompilationDiagnostic" => DiagnosticKindCompilation,
+            _ => DiagnosticKindWorkspace
+        };
         var guidance = GuidanceFor(code);
         return new SanitizedDiagnostic(
             code,
@@ -84,7 +111,8 @@ public static class BuildEnvironmentDiagnosticExtractor
             CoverageEffectFor(code, kind),
             "category-only",
             MessageFor(code, kind),
-            LimitationFor(code, kind));
+            LimitationFor(code, kind),
+            safeDiagnosticId);
     }
 
     public static string HashObservedValue(string propertyKey, string diagnosticCode, string rawValue)
@@ -105,7 +133,8 @@ public static class BuildEnvironmentDiagnosticExtractor
             .Select(item => CorroborateLegacyWorkspaceDiagnosticCode(
                 item.DiagnosticCode,
                 item.ProjectPath ?? item.FilePath,
-                legacyProjects)
+                legacyProjects,
+                item.OriginCategory)
                 == "LegacyWorkspacePrerequisitesUnresolved"
                     ? item with
                     {
@@ -120,13 +149,28 @@ public static class BuildEnvironmentDiagnosticExtractor
     internal static string CorroborateLegacyWorkspaceDiagnosticCode(
         string diagnosticCode,
         string? projectPath,
-        IReadOnlySet<string> legacyProjectPaths)
+        IReadOnlySet<string> legacyProjectPaths,
+        string originCategory)
     {
         return diagnosticCode == "UncategorizedWorkspaceFailure"
+            && originCategory is OriginWorkspace or OriginProjectLoad or OriginSolutionLoad
             && projectPath is not null
             && legacyProjectPaths.Contains(projectPath)
                 ? "LegacyWorkspacePrerequisitesUnresolved"
                 : diagnosticCode;
+    }
+
+    private static List<BuildEnvironmentDiagnosticCandidate> AggregateEquivalentDiagnostics(
+        IReadOnlyList<BuildEnvironmentDiagnosticCandidate> diagnostics)
+    {
+        return diagnostics
+            .GroupBy(item => item)
+            .Select(group => group.First() with
+            {
+                OccurrenceCount = group.Sum(item => item.OccurrenceCount),
+                AggregationState = group.Count() > 1 ? "aggregated-equivalent" : "single"
+            })
+            .ToList();
     }
 
     private static IReadOnlyList<BuildEnvironmentDiagnosticCandidate> ReadProjectDiagnostics(string repoPath, FileInventoryItem project)
@@ -518,10 +562,14 @@ public static class BuildEnvironmentDiagnosticExtractor
     {
         return gaps
             .Where(gap => gap.Properties?.GetValueOrDefault("diagnosticKind") != DiagnosticKindScanScope)
+            .Where(gap => gap.Properties?.GetValueOrDefault("gapKind") != "CompilationDiagnostic"
+                || gap.Properties?.GetValueOrDefault("diagnosticCode") == "MissingReferenceAssemblies")
             .Select(gap =>
             {
                 var code = gap.Properties?.GetValueOrDefault("diagnosticCode") ?? "UncategorizedWorkspaceFailure";
                 var kind = gap.Properties?.GetValueOrDefault("diagnosticKind") ?? DiagnosticKindWorkspace;
+                var originGapKind = gap.Properties?.GetValueOrDefault("gapKind");
+                var diagnosticId = gap.Properties?.GetValueOrDefault("diagnosticId");
                 return Candidate(
                     code,
                     kind,
@@ -534,7 +582,10 @@ public static class BuildEnvironmentDiagnosticExtractor
                     toolFamily: kind == DiagnosticKindRestore ? "NuGet" : "MSBuild/Roslyn",
                     guidanceCode: GuidanceFor(code),
                     coverageEffect: CoverageEffectFor(code, kind),
-                    sanitization: gap.Properties?.GetValueOrDefault("sanitization") ?? "category-only");
+                    sanitization: gap.Properties?.GetValueOrDefault("sanitization") ?? "category-only",
+                    originCategory: OriginCategoryFor(originGapKind),
+                    originGapKind: originGapKind,
+                    diagnosticId: IsSafeDiagnosticIdentifier(diagnosticId) ? diagnosticId : null);
             })
             .ToArray();
     }
@@ -549,8 +600,13 @@ public static class BuildEnvironmentDiagnosticExtractor
             ["guidanceCode"] = item.GuidanceCode,
             ["guidance"] = GuidanceText(item.GuidanceCode),
             ["limitation"] = item.Limitation,
-            ["sanitization"] = item.Sanitization
+            ["sanitization"] = item.Sanitization,
+            ["originCategory"] = item.OriginCategory,
+            ["aggregationState"] = item.AggregationState,
+            ["occurrenceCount"] = item.OccurrenceCount.ToString(System.Globalization.CultureInfo.InvariantCulture)
         };
+        AddIfPresent(properties, "originGapKind", item.OriginGapKind);
+        AddIfPresent(properties, "diagnosticId", item.DiagnosticId);
         AddIfPresent(properties, "projectStyle", item.ProjectStyle);
         AddIfPresent(properties, "safeObservedValue", item.SafeObservedValue);
         AddIfPresent(properties, "observedValueHash", item.ObservedValueHash);
@@ -590,7 +646,10 @@ public static class BuildEnvironmentDiagnosticExtractor
         string? observedValueHash = null,
         string? guidanceCode = null,
         string coverageEffect = "informational",
-        string sanitization = "none")
+        string sanitization = "none",
+        string? originCategory = null,
+        string? originGapKind = null,
+        string? diagnosticId = null)
     {
         return new BuildEnvironmentDiagnosticCandidate(
             diagnosticCode,
@@ -609,7 +668,12 @@ public static class BuildEnvironmentDiagnosticExtractor
             guidanceCode ?? GuidanceFor(diagnosticCode),
             coverageEffect,
             sanitization,
-            LimitationFor(diagnosticCode, diagnosticKind));
+            LimitationFor(diagnosticCode, diagnosticKind),
+            originCategory ?? DefaultOriginCategory(diagnosticKind),
+            originGapKind,
+            diagnosticId,
+            1,
+            "single");
     }
 
     private static IEnumerable<XElement> Elements(XDocument document, params string[] names)
@@ -829,7 +893,7 @@ public static class BuildEnvironmentDiagnosticExtractor
             return EvidenceTiers.Tier3SyntaxOrTextual;
         }
 
-        if (diagnosticKind is DiagnosticKindWorkspace or DiagnosticKindGeneratedFile || diagnosticCode.StartsWith("Unknown", StringComparison.Ordinal))
+        if (diagnosticKind is DiagnosticKindWorkspace or DiagnosticKindCompilation or DiagnosticKindGeneratedFile || diagnosticCode.StartsWith("Unknown", StringComparison.Ordinal))
         {
             return EvidenceTiers.Tier4Unknown;
         }
@@ -853,13 +917,14 @@ public static class BuildEnvironmentDiagnosticExtractor
             "SdkResolutionFailed" => "UseCompatibleDotNetSdk",
             "MSBuildRegistrationFailed" or "CompilationCreationFailed" => "UseCompatibleMSBuildToolset",
             "CompilationInputUnavailable" => "ReviewMissingCompilationInputs",
+            "CompilerDiagnostic" => "ReviewCompilerDiagnostic",
             _ => "ReviewEnvironmentGap"
         };
     }
 
     private static string CoverageEffectFor(string diagnosticCode, string diagnosticKind)
     {
-        if (diagnosticKind == DiagnosticKindWorkspace)
+        if (diagnosticKind is DiagnosticKindWorkspace or DiagnosticKindCompilation)
         {
             return "reduces-semantic-coverage";
         }
@@ -879,9 +944,12 @@ public static class BuildEnvironmentDiagnosticExtractor
 
     private static string MessageFor(string diagnosticCode, string diagnosticKind)
     {
-        return diagnosticKind == DiagnosticKindRestore
-            ? $"Restore diagnostic category: {diagnosticCode}. Native output was redacted."
-            : $"Workspace diagnostic category: {diagnosticCode}. Native output was redacted.";
+        return diagnosticKind switch
+        {
+            DiagnosticKindRestore => $"Restore diagnostic category: {diagnosticCode}. Native output was redacted.",
+            DiagnosticKindCompilation => $"Compiler diagnostic category: {diagnosticCode}. Native output was redacted.",
+            _ => $"Workspace diagnostic category: {diagnosticCode}. Native output was redacted."
+        };
     }
 
     private static string GuidanceText(string guidanceCode)
@@ -896,6 +964,7 @@ public static class BuildEnvironmentDiagnosticExtractor
             "ReviewSanitizedRestoreFailure" => "Explicit restore failed with a sanitized category; review package resolution in a compatible environment.",
             "ReviewGeneratedFileCoverage" => "Generated or designer-file evidence may cap semantic coverage for related legacy patterns.",
             "ReviewMissingCompilationInputs" => "One or more project-declared C# inputs were unavailable in the captured source inventory.",
+            "ReviewCompilerDiagnostic" => "Review the safe compiler diagnostic ID on the originating analysis gap; it is not a workspace-admission diagnosis.",
             "UseCompatibleDotNetSdk" => "A compatible .NET SDK appears necessary for full project load.",
             _ => "Review the environment diagnostic category and supporting evidence."
         };
@@ -910,8 +979,61 @@ public static class BuildEnvironmentDiagnosticExtractor
             DiagnosticKindProjectFormat => "Project-format diagnostics are static evidence and do not prove runtime deployment behavior.",
             DiagnosticKindRestore => "Restore diagnostics do not prove package absence, vulnerability, runtime loading, or deployment behavior; unsafe values are omitted or hashed.",
             DiagnosticKindGeneratedFile => "Generated-file diagnostics are analysis gaps and do not prove generated code absence at runtime.",
+            DiagnosticKindCompilation => "Compiler diagnostics prove only that Roslyn reported a compilation error; they do not prove workspace admission or toolset failure.",
             _ => "Workspace diagnostics are sanitized categories; raw native output is not stored in shareable artifacts."
         };
+    }
+
+    private static string OriginCategoryFor(string? gapKind)
+    {
+        return gapKind switch
+        {
+            "CompilationDiagnostic" => OriginCompilation,
+            "CompilationCreateFailed" or "CompilationMissing" => OriginCompilationCreation,
+            "CompilationInputUnavailable" => OriginCompilationInput,
+            "WorkspaceDiagnostic" => OriginWorkspace,
+            "ProjectLoadFailed" => OriginProjectLoad,
+            "SolutionLoadFailed" => OriginSolutionLoad,
+            "MSBuildRegistrationFailed" => OriginMsBuildRegistration,
+            "RestoreFailed" => OriginRestore,
+            _ => OriginUnknown
+        };
+    }
+
+    private static string DefaultOriginCategory(string diagnosticKind)
+    {
+        return diagnosticKind switch
+        {
+            DiagnosticKindTargetFramework or DiagnosticKindToolset or DiagnosticKindProjectFormat => OriginStaticProjectInspection,
+            DiagnosticKindRestore => OriginRestore,
+            DiagnosticKindGeneratedFile => OriginGeneratedFileInspection,
+            DiagnosticKindCompilation => OriginCompilation,
+            _ => OriginUnknown
+        };
+    }
+
+    private static bool IsSafeDiagnosticIdentifier(string? value)
+    {
+        return NormalizeSafeDiagnosticIdentifier(value) is not null;
+    }
+
+    private static string? NormalizeSafeDiagnosticIdentifier(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || !SafeDiagnosticIdRegex.IsMatch(value))
+        {
+            return null;
+        }
+
+        var match = SafeDiagnosticIdRegex.Match(value);
+        return match.Index == 0 && match.Length == value.Length
+            ? match.Value.ToUpperInvariant()
+            : null;
+    }
+
+    private static string? ExtractSafeDiagnosticIdentifier(string raw)
+    {
+        var match = SafeDiagnosticIdRegex.Match(raw);
+        return match.Success ? match.Value.ToUpperInvariant() : null;
     }
 
     private static void AddIfPresent(IDictionary<string, string> properties, string key, string? value)
@@ -931,7 +1053,8 @@ public static class BuildEnvironmentDiagnosticExtractor
         string CoverageEffect,
         string Sanitization,
         string Message,
-        string Limitation);
+        string Limitation,
+        string? DiagnosticId);
 
     private sealed record BuildEnvironmentDiagnosticCandidate(
         string DiagnosticCode,
@@ -950,5 +1073,10 @@ public static class BuildEnvironmentDiagnosticExtractor
         string GuidanceCode,
         string CoverageEffect,
         string Sanitization,
-        string Limitation);
+        string Limitation,
+        string OriginCategory,
+        string? OriginGapKind,
+        string? DiagnosticId,
+        int OccurrenceCount,
+        string AggregationState);
 }
