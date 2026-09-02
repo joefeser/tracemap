@@ -438,6 +438,54 @@ public sealed class ScanEngineTests
     }
 
     [Fact]
+    public void Explicit_include_scope_preserves_projectless_files_outside_selected_project_directories()
+    {
+        using var temp = new TempDirectory();
+        var webFormsDirectory = Path.Combine(temp.Path, "source", "web");
+        var backendDirectory = Path.Combine(temp.Path, "source", "backend");
+        var unrelatedDirectory = Path.Combine(temp.Path, "unrelated");
+        Directory.CreateDirectory(webFormsDirectory);
+        Directory.CreateDirectory(backendDirectory);
+        Directory.CreateDirectory(unrelatedDirectory);
+        File.WriteAllText(Path.Combine(webFormsDirectory, "Default.aspx"), "<%@ Page Language=\"C#\" %>");
+        File.WriteAllText(Path.Combine(backendDirectory, "Backend.csproj"), "<Project />");
+        File.WriteAllText(Path.Combine(backendDirectory, "Backend.cs"), "public sealed class Backend { }");
+        File.WriteAllText(Path.Combine(unrelatedDirectory, "Excluded.cs"), "public sealed class Excluded { }");
+
+        var result = ScanEngine.Scan(new ScanOptions(
+            temp.Path,
+            Path.Combine(temp.Path, "out"),
+            ProjectPaths: ["source/backend/Backend.csproj"],
+            IncludeGlobs: ["source/web/**", "source/backend/**"]));
+
+        Assert.Contains(result.Inventory, item => item.RelativePath == "source/web/Default.aspx");
+        Assert.Contains(result.Inventory, item => item.RelativePath == "source/backend/Backend.csproj");
+        Assert.Contains(result.Inventory, item => item.RelativePath == "source/backend/Backend.cs");
+        Assert.DoesNotContain(result.Inventory, item => item.RelativePath == "unrelated/Excluded.cs");
+    }
+
+    [Fact]
+    public void Project_scope_honors_case_insensitive_filesystem_path_matching()
+    {
+        using var temp = new TempDirectory();
+        if (!CSharpSemanticExtractor.CreateSourcePathComparer(temp.Path).Equals("a", "A"))
+            return;
+
+        var projectDirectory = Path.Combine(temp.Path, "Source", "Backend");
+        Directory.CreateDirectory(projectDirectory);
+        File.WriteAllText(Path.Combine(projectDirectory, "Backend.csproj"), "<Project />");
+        File.WriteAllText(Path.Combine(projectDirectory, "Backend.cs"), "public sealed class Backend { }");
+
+        var result = ScanEngine.Scan(new ScanOptions(
+            temp.Path,
+            Path.Combine(temp.Path, "out"),
+            ProjectPaths: ["source/backend/backend.csproj"]));
+
+        Assert.Contains(result.Inventory, item => item.RelativePath == "Source/Backend/Backend.csproj");
+        Assert.Contains(result.Inventory, item => item.RelativePath == "Source/Backend/Backend.cs");
+    }
+
+    [Fact]
     public void Include_scope_does_not_enter_an_unrelated_symbolic_link_directory()
     {
         if (OperatingSystem.IsWindows())

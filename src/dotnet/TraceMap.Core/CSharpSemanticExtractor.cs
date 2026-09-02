@@ -177,7 +177,7 @@ public static class CSharpSemanticExtractor
         var explicitlyExcludedSourcePaths = new HashSet<string>(sourcePathComparer);
         var selectedProjectPaths = projects
             .Select(item => item.RelativePath)
-            .ToHashSet(StringComparer.Ordinal);
+            .ToHashSet(sourcePathComparer);
         var excludeGlobs = (options.ExcludeGlobs ?? [])
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .ToArray();
@@ -220,7 +220,7 @@ public static class CSharpSemanticExtractor
                 "WorkspaceDiagnostic"));
         });
 
-        var loadedProjectPaths = new HashSet<string>(StringComparer.Ordinal);
+        var loadedProjectPaths = new HashSet<string>(sourcePathComparer);
         var attempted = false;
 
         if (solutions.Length > 0)

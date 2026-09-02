@@ -93,7 +93,7 @@ try {
     }
 
     try {
-        $result = [IO.File]::ReadAllText($resultPath) | ConvertFrom-Json -Depth 50
+        $result = [IO.File]::ReadAllText($resultPath) | ConvertFrom-Json
     }
     catch {
         throw "RetainedResultMalformed"
@@ -136,7 +136,7 @@ try {
             throw "FactsParseFailed"
         }
         try {
-            $fact = $line | ConvertFrom-Json -Depth 50
+            $fact = $line | ConvertFrom-Json
         }
         catch {
             throw "FactsParseFailed"
