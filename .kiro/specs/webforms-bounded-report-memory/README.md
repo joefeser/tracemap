@@ -1,5 +1,16 @@
 # Restricted Web Forms run: diagnostic follow-up
 
+## Current handoff: one-page static trace
+
+After the `legacy-webforms/0.7.0` run, give Claude
+[`claude-single-page-trace.prompt.md`](claude-single-page-trace.prompt.md).
+It uses the existing index and matching local source to trace one explicit page
+event through its handler and bounded call edges toward a database boundary.
+It checks exact identity/support, preserves lower evidence tiers, and reports
+the first missing hop rather than inventing a chain. No scan, rebuild, debugger,
+database access or BRD is needed. This is the current task; the coverage prompts
+below describe earlier or separate investigations.
+
 ## Latest step: retained coverage triage (2026-09-03)
 
 ### Follow-up from bounded samples
