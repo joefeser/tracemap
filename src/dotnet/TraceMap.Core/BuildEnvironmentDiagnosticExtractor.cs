@@ -98,8 +98,11 @@ public static class BuildEnvironmentDiagnosticExtractor
             "RestoreFailed" => CategorizeRestoreFailure(raw),
             "CompilationCreateFailed" or "CompilationMissing" => "CompilationCreationFailed",
             "CompilationInputUnavailable" => "CompilationInputUnavailable",
+            "ComReferenceResolutionSkipped" => "ComReferenceResolutionSkipped",
+            "ComReferenceResolutionFallbackUnavailable" => "ComReferenceResolutionFallbackUnavailable",
             "CompilationDiagnostic" when IsReferenceAssemblyDiagnostic(raw, safeDiagnosticId) => "MissingReferenceAssemblies",
             "CompilationDiagnostic" => "CompilerDiagnostic",
+            "WorkspaceDiagnostic" or "ProjectLoadFailed" or "SolutionLoadFailed" when IsMsBuildTaskHostIncompatibility(raw) => "MSBuildTaskHostIncompatible",
             "WorkspaceDiagnostic" or "ProjectLoadFailed" or "SolutionLoadFailed" when IsSdkResolutionFailure(raw) => "SdkResolutionFailed",
             "WorkspaceDiagnostic" or "ProjectLoadFailed" or "SolutionLoadFailed" when IsReferenceAssemblyDiagnostic(raw, safeDiagnosticId) => "MissingReferenceAssemblies",
             "WorkspaceDiagnostic" or "ProjectLoadFailed" or "SolutionLoadFailed" when IsWebApplicationTargetsFailure(raw, safeDiagnosticId) => "WebApplicationTargetsUnavailable",
@@ -844,6 +847,16 @@ public static class BuildEnvironmentDiagnosticExtractor
             || raw.Contains("resolver", StringComparison.OrdinalIgnoreCase);
     }
 
+    internal static bool IsMsBuildTaskHostIncompatibility(string raw)
+    {
+        var identifiesComTask = raw.Contains("ResolveComReference", StringComparison.OrdinalIgnoreCase);
+        var identifiesHostFailure = raw.Contains("task could not be instantiated", StringComparison.OrdinalIgnoreCase)
+            || raw.Contains("not supported on the .NET Core version of MSBuild", StringComparison.OrdinalIgnoreCase)
+            || raw.Contains("Microsoft.Build.Tasks.Core", StringComparison.OrdinalIgnoreCase);
+        var identifiesBuildAssembly = raw.Contains("Microsoft.Build", StringComparison.OrdinalIgnoreCase);
+        return identifiesComTask && identifiesHostFailure && identifiesBuildAssembly;
+    }
+
     private static bool IsReferenceAssemblyDiagnostic(string raw, string? diagnosticId)
     {
         return string.Equals(diagnosticId, "CS0012", StringComparison.OrdinalIgnoreCase)
@@ -930,8 +943,11 @@ public static class BuildEnvironmentDiagnosticExtractor
             "NuGetRestoreFailed" or "PackageSourceUnavailable" or "CredentialRequired" or "PackageVersionUnavailable" or "UnsupportedPackageFormat" => "ReviewSanitizedRestoreFailure",
             "GeneratedFileMissing" or "GeneratedFileMalformed" or "GeneratedFileUnlinked" => "ReviewGeneratedFileCoverage",
             "SdkResolutionFailed" => "UseCompatibleDotNetSdk",
+            "MSBuildTaskHostIncompatible" => "UseCompatibleMSBuildTaskHost",
             "MSBuildRegistrationFailed" or "CompilationCreationFailed" => "UseCompatibleMSBuildToolset",
             "CompilationInputUnavailable" => "ReviewMissingCompilationInputs",
+            "ComReferenceResolutionSkipped" => "ReviewComReferenceCoverage",
+            "ComReferenceResolutionFallbackUnavailable" => "UseCompatibleMSBuildTaskHost",
             "CompilerDiagnostic" => "ReviewCompilerDiagnostic",
             _ => "ReviewEnvironmentGap"
         };
@@ -981,6 +997,8 @@ public static class BuildEnvironmentDiagnosticExtractor
             "ReviewMissingCompilationInputs" => "One or more project-declared C# inputs were unavailable in the captured source inventory.",
             "ReviewCompilerDiagnostic" => "Review the safe compiler diagnostic ID on the originating analysis gap; it is not a workspace-admission diagnosis.",
             "UseCompatibleDotNetSdk" => "A compatible .NET SDK appears necessary for full project load.",
+            "UseCompatibleMSBuildTaskHost" => "A compatible full-framework MSBuild task host appears necessary for COM-reference resolution.",
+            "ReviewComReferenceCoverage" => "COM-reference resolution was omitted for semantic admission; review unresolved COM-defined symbols separately.",
             _ => "Review the environment diagnostic category and supporting evidence."
         };
     }
