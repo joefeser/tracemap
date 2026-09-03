@@ -396,7 +396,11 @@ public static partial class LegacyWebFormsExtractor
                 }
                 foreach (var (name, value) in attrs.OrderBy(pair => pair.Key, StringComparer.Ordinal))
                 {
-                    if (SupportedEvents.Contains(name) && LooksLikeHandlerName(value))
+                    if (name.StartsWith("OnClient", StringComparison.OrdinalIgnoreCase))
+                    {
+                        gaps.Add(new WebFormsGap("ClientWebFormsEventAttribute", "An OnClient-prefixed attribute is outside server-event binding analysis; client execution and binding are unproven.", line));
+                    }
+                    else if (SupportedEvents.Contains(name) && LooksLikeHandlerName(value))
                     {
                         bindings.Add(new WebFormsBinding(controlType, controlId, name, SafeIdentifier(value)!, file.RelativePath, line, line, FactFactory.Hash(match.Value, 32), WebFormsBindingKind.MarkupAttribute));
                     }
@@ -406,7 +410,10 @@ public static partial class LegacyWebFormsExtractor
                     }
                     else if (name.StartsWith("On", StringComparison.OrdinalIgnoreCase))
                     {
-                        gaps.Add(new WebFormsGap("UnsupportedWebFormsEventAttribute", "A WebForms event-like attribute is client-side, dynamic, malformed, or outside the bounded static event shape.", line));
+                        var gapKind = IsBoundedStaticEventAttribute(name)
+                            ? "NonIdentifierWebFormsEventValue"
+                            : "UnsupportedWebFormsEventAttribute";
+                        gaps.Add(new WebFormsGap(gapKind, "An event-like attribute is malformed or has a value outside the bounded identifier-only server-handler shape; its execution language and binding are unproven.", line));
                     }
                 }
             }
@@ -1167,14 +1174,16 @@ public static partial class LegacyWebFormsExtractor
                 facts.Add(CreateGap(manifest, method.FilePath, line, "AmbiguousWebFormsIsPostBackReceiver", "A local or parameter shadows IsPostBack in this method; TraceMap did not treat the condition as Page lifecycle evidence."));
                 continue;
             }
-            if (!IsNotPostBackCondition(statement.Condition))
+            var isNotPostBack = IsNotPostBackCondition(statement.Condition);
+            if (!isNotPostBack && !IsPositivePostBackCondition(statement.Condition))
             {
-                facts.Add(CreateGap(manifest, method.FilePath, line, "UnsupportedWebFormsIsPostBackCondition", "An IsPostBack condition is visible, but it is outside the bounded static !IsPostBack shape."));
+                facts.Add(CreateGap(manifest, method.FilePath, line, "UnsupportedWebFormsIsPostBackCondition", "An IsPostBack condition is visible, but it is outside the bounded positive or negated IsPostBack shape."));
                 continue;
             }
 
             var sourceIdentity = StructuralHandlerIdentity(page, method.MethodName, method.FilePath, method.Line);
-            var targetIdentity = $"webforms-lifecycle-branch:{FactFactory.Hash($"{sourceIdentity}|not-is-postback|{line}", 24)}";
+            var branchKind = isNotPostBack ? "not-is-postback" : "is-postback";
+            var targetIdentity = $"webforms-lifecycle-branch:{FactFactory.Hash($"{sourceIdentity}|{branchKind}|{line}", 24)}";
             facts.Add(CreateStaticCompositionFact(
                 manifest,
                 FactTypes.WebFormsLifecycleBranchCandidate,
@@ -1185,13 +1194,15 @@ public static partial class LegacyWebFormsExtractor
                 FactFactory.Hash(statement.Condition.ToString(), 32),
                 sourceIdentity,
                 targetIdentity,
-                "NotIsPostBackBranch",
+                isNotPostBack ? "NotIsPostBackBranch" : "IsPostBackBranch",
                 "bounded-static-webforms-lifecycle-context",
-                "The syntax establishes an enclosing !IsPostBack branch candidate only; it does not prove which branch ran, lifecycle ordering, state availability, or runtime behavior.",
+                isNotPostBack
+                    ? "The syntax establishes an enclosing !IsPostBack branch candidate only; it does not prove which branch ran, lifecycle ordering, state availability, or runtime behavior."
+                    : "The syntax establishes a positive IsPostBack branch candidate only; it does not prove which branch ran, lifecycle ordering, state availability, or runtime behavior.",
                 [pageFact.FactId],
                 new SortedDictionary<string, string>(StringComparer.Ordinal)
                 {
-                    ["branchContext"] = "not-is-postback-syntax",
+                    ["branchContext"] = $"{branchKind}-syntax",
                     ["lifecycleMethod"] = method.MethodName
                 },
                 statement.SyntaxTree.GetLineSpan(statement.Condition.Span).EndLinePosition.Line + 1));
@@ -1993,7 +2004,7 @@ public static partial class LegacyWebFormsExtractor
                 or "UnresolvedWebFormsControlRegistration" or "AmbiguousWebFormsUserControlRegistration"
                 or "UnresolvedWebFormsAssemblyControlRegistration" or "AmbiguousWebFormsAssemblyControlRegistration"
                 or "WebFormsAssemblyTypeUnavailable" or "WebFormsAssemblyProjectUnavailable" => RuleIds.LegacyWebFormsComposition,
-            "UnsupportedWebFormsEventAttribute" or "DynamicWebFormsEventSubscription"
+            "UnsupportedWebFormsEventAttribute" or "ClientWebFormsEventAttribute" or "NonIdentifierWebFormsEventValue" or "DynamicWebFormsEventSubscription"
                 or "UnsupportedWebFormsEventSubscription" or "UnknownWebFormsEventSubscriptionReceiver"
                 or "AmbiguousWebFormsEventSubscriptionReceiver" => RuleIds.LegacyWebFormsEventBinding,
             "UnsupportedWebFormsIsPostBackCondition" or "AmbiguousWebFormsIsPostBackReceiver" => RuleIds.LegacyWebFormsLifecycleContext,
@@ -2143,6 +2154,17 @@ public static partial class LegacyWebFormsExtractor
             : prefix.Operand;
         return operand is IdentifierNameSyntax identifier && identifier.Identifier.ValueText == "IsPostBack"
             || operand is MemberAccessExpressionSyntax
+            {
+                Expression: ThisExpressionSyntax,
+                Name: IdentifierNameSyntax member
+            } && member.Identifier.ValueText == "IsPostBack";
+    }
+
+    private static bool IsPositivePostBackCondition(ExpressionSyntax expression)
+    {
+        expression = expression is ParenthesizedExpressionSyntax parenthesized ? parenthesized.Expression : expression;
+        return expression is IdentifierNameSyntax identifier && identifier.Identifier.ValueText == "IsPostBack"
+            || expression is MemberAccessExpressionSyntax
             {
                 Expression: ThisExpressionSyntax,
                 Name: IdentifierNameSyntax member
@@ -2989,9 +3011,8 @@ public static partial class LegacyWebFormsExtractor
                 return [];
             }
 
-            var qualifiedName = $"{registration.NamespaceName}.{controlType}";
             var matches = candidates
-                .Where(item => item.QualifiedName.Equals(qualifiedName, StringComparison.Ordinal)
+                .Where(item => MatchesMarkupType(item.QualifiedName, registration.NamespaceName, controlType)
                     && item.AssemblyName.Equals(registration.AssemblyName, StringComparison.OrdinalIgnoreCase))
                 .ToArray();
             return matches
@@ -3011,12 +3032,18 @@ public static partial class LegacyWebFormsExtractor
                 return "WebFormsAssemblyProjectUnavailable";
             }
 
-            var qualifiedName = $"{registration.NamespaceName}.{controlType}";
             return candidates.Any(item =>
                 item.AssemblyName.Equals(registration.AssemblyName, StringComparison.OrdinalIgnoreCase)
-                && item.QualifiedName.Equals(qualifiedName, StringComparison.Ordinal))
+                && MatchesMarkupType(item.QualifiedName, registration.NamespaceName, controlType))
                     ? "AmbiguousWebFormsAssemblyControlRegistration"
                     : "WebFormsAssemblyTypeUnavailable";
+        }
+
+        private static bool MatchesMarkupType(string qualifiedName, string namespaceName, string controlType)
+        {
+            var prefix = namespaceName + ".";
+            return qualifiedName.StartsWith(prefix, StringComparison.Ordinal)
+                && qualifiedName.AsSpan(prefix.Length).Equals(controlType.AsSpan(), StringComparison.OrdinalIgnoreCase);
         }
 
         private static WebFormsProjectScope? ReadProject(string repoPath, string projectPath)

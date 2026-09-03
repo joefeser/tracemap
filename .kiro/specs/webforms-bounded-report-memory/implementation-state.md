@@ -214,3 +214,22 @@ summary tests, workspace-summary tests and review-launcher tests all passed.
 Private-path guard and diff whitespace checks passed. The .NET suite was not
 rerun for this PowerShell/documentation-only change; the preceding scanner fix
 passed 1,742/1,742 .NET tests.
+
+### Bounded post-triage extraction follow-up
+
+Same diagnostic branch; no PR or merge. `legacy-webforms/0.7.0` changes only
+markup type-name casing (namespace and project ownership unchanged), positive
+postback branch candidates, and client/non-identifier event gap classification.
+Exact tag matches do not override case-collision ambiguity. Negative-branch
+identity/limitations and client-script negative-branch attribution are retained.
+DLL metadata support, compound conditions, boolean comparisons and arbitrary
+receiver inference remain out of scope. Synthetic non-compiling Framework 4.5
+fixtures cover these boundaries; the restricted sample observations are not
+treated as a population-wide guarantee of gap reduction.
+
+Validation: focused extractor/coverage tests 59/59; full .NET suite 1,758/1,758;
+legacy-codebase validation Python tests 13/13. A synthetic non-compiling Framework
+4.5 CLI scan emitted 65 facts with reduced coverage; its persisted SQLite facts
+include canonical control-type composition, both postback polarities and the
+client-attribute gap. Changed-file formatting, private-path guard and diff checks
+passed. The existing nullable warning in PropertyMappingTests remains unrelated.

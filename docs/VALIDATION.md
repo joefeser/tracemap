@@ -951,6 +951,14 @@ Checked-in fixtures should cover explicit markup event bindings, Tier3 bounded s
 
 Useful inspection queries:
 
+For `legacy-webforms/0.7.0`, `WebFormsBoundedCoverageTests` additionally covers
+case-insensitive markup type names with strict namespace/project identity and
+case-collision ambiguity, positive versus negative postback candidates, unchanged
+negative-only script attribution, shadowing/compound/comparison gaps, and separate
+OnClient/non-identifier event-value gaps. These fixtures intentionally target
+non-compiling Framework 4.5 projects; gap reductions do not establish runtime
+binding or branch execution.
+
 ```bash
 sqlite3 <out>/index.sqlite "select fact_type, count(*) from facts where fact_type like 'WebForms%' group by fact_type order by fact_type;"
 sqlite3 <out>/index.sqlite "select fact_type, rule_id, evidence_tier, file_path, start_line, properties_json from facts where fact_type like 'WebForms%' order by fact_type, file_path, start_line;"

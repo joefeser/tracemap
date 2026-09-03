@@ -2,6 +2,31 @@
 
 ## Latest step: retained coverage triage (2026-09-03)
 
+### Follow-up from bounded samples
+
+The local review confirmed the COM fallback was active (one COM-skip gap, no
+workspace callbacks or fallback-unavailable gaps). Five samples per gap family
+identified DLL-only references, case-mismatched markup type names, client/event
+value limitations, and positive/compound postback conditions. These samples do
+not establish the distribution of all retained gaps.
+
+`legacy-webforms/0.7.0` adds case-insensitive matching **only for the markup type
+name** within an exact namespace and scoped assembly. Case-only collisions stay
+ambiguous and DLL-only controls remain unresolved. Positive `IsPostBack` and
+`this.IsPostBack` conditions now have distinct Tier3 branch candidates; compound
+conditions and boolean comparisons remain gaps. OnClient attributes now produce
+`ClientWebFormsEventAttribute`; non-identifier event values produce
+`NonIdentifierWebFormsEventValue`, with no inferred execution language or server
+handler. No runtime-binding or branch-execution claim is added.
+
+After pulling this change, use the same existing focused scan command when
+ready to validate on the work machine. No debugger, dependency reinstall, or
+scope expansion is needed. Verify the retained extractor is
+`legacy-webforms/0.7.0`, then compare rule-specific gaps, not just total gaps:
+event gaps were split into clearer categories rather than removed. The existing
+triage prompt below can inspect the new retained index; no private source needs
+to leave that machine.
+
 The post-COM-fallback field run at `ad8fdd98` reported zero workspace diagnostics
 and 932,070 Tier1 facts. It still correctly reports reduced coverage; these
 counts do not establish full compilation or successful COM binding.
