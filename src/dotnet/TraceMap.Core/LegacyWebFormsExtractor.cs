@@ -1740,7 +1740,7 @@ public static partial class LegacyWebFormsExtractor
         var handlerName = resolution.Properties.GetValueOrDefault("handlerName") ?? resolution.ContractElement ?? string.Empty;
         var handlerSymbol = resolution.Properties.GetValueOrDefault("handlerSymbol") ?? resolution.TargetSymbol ?? handlerName;
         var directFacts = directEvidenceIndex.Candidates(resolution.Evidence.FilePath, handlerName, handlerSymbol)
-            .Where(fact => IsDirectHandlerEvidence(fact, handlerName, handlerSymbol, resolution.Evidence.FilePath))
+            .Where(fact => IsDirectHandlerEvidence(fact, resolution))
             .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
             .ToArray();
         var terminals = directFacts
@@ -1777,7 +1777,7 @@ public static partial class LegacyWebFormsExtractor
             ["markupFile"] = resolution.Properties.GetValueOrDefault("markupFile") ?? string.Empty,
             ["pageTypeName"] = resolution.Properties.GetValueOrDefault("pageTypeName") ?? resolution.SourceSymbol ?? string.Empty,
             ["ruleIds"] = string.Join(",", supportingFacts.Select(fact => fact.RuleId).Append(RuleIds.LegacyWebFormsEventFlow).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal)),
-            ["ruleLimitations"] = "Event-flow projection is static direct evidence and does not prove runtime execution, branch feasibility, dynamic dispatch, event bubbling, generated-code freshness, service reachability, or SQL execution.",
+            ["ruleLimitations"] = "Direct support is bounded to the handler file/span; semantic support requires canonical source identity. Syntax name/span support does not prove assembly identity or distinguish overlapping same-line declarations. Event-flow projection does not prove runtime execution, branch feasibility, dynamic dispatch, event bubbling, generated-code freshness, service reachability, or SQL execution.",
             ["sourceSymbolId"] = resolution.Properties.GetValueOrDefault("sourceSymbolId") ?? string.Empty,
             ["supportingEdgeIds"] = string.Join(",", directFacts.Where(fact => fact.FactType == FactTypes.CallEdge).Select(fact => fact.FactId).OrderBy(value => value, StringComparer.Ordinal)),
             ["supportingFactIds"] = string.Join(",", supportingFacts.Select(fact => fact.FactId).OrderBy(value => value, StringComparer.Ordinal)),
@@ -1806,14 +1806,15 @@ public static partial class LegacyWebFormsExtractor
     {
         var handlerName = resolution.Properties.GetValueOrDefault("handlerName") ?? resolution.ContractElement ?? string.Empty;
         var methodPath = resolution.Evidence.FilePath;
-        var method = context.CodeFiles.FirstOrDefault(file => file.FilePath.Equals(methodPath, StringComparison.Ordinal))?.Methods.FirstOrDefault(method => method.MethodName.Equals(handlerName, StringComparison.Ordinal));
+        var method = context.CodeFiles.FirstOrDefault(file => file.FilePath.Equals(methodPath, StringComparison.Ordinal))?.Methods.FirstOrDefault(method => method.MethodName.Equals(handlerName, StringComparison.Ordinal)
+            && method.Line == resolution.Evidence.StartLine && method.EndLine == resolution.Evidence.EndLine);
         if (method is null)
         {
             return null;
         }
 
         var directFacts = directEvidenceIndex.Candidates(resolution.Evidence.FilePath, handlerName, resolution.TargetSymbol ?? handlerName)
-            .Where(fact => IsDirectHandlerEvidence(fact, handlerName, resolution.TargetSymbol ?? handlerName, resolution.Evidence.FilePath))
+            .Where(fact => IsDirectHandlerEvidence(fact, resolution))
             .ToArray();
         var hasBackend = directFacts.Any(IsTerminalSurfaceFact) || WcfMappingsForCalls(wcfMappings, directFacts).Any();
         var hasLogic = hasBackend
@@ -1849,24 +1850,35 @@ public static partial class LegacyWebFormsExtractor
             });
     }
 
-    private static bool IsDirectHandlerEvidence(CodeFact fact, string handlerName, string handlerSymbol, string handlerFilePath)
+    private static bool IsDirectHandlerEvidence(CodeFact fact, CodeFact resolution)
     {
         if (fact.FactType is FactTypes.WebFormsHandlerResolved or FactTypes.WebFormsEventBindingDeclared)
         {
             return false;
         }
 
-        var sameFile = fact.Evidence.FilePath.Equals(handlerFilePath, StringComparison.Ordinal);
+        // A member name is only an index hint, never proof of handler ownership.
+        var handlerName = resolution.Properties.GetValueOrDefault("handlerName") ?? resolution.ContractElement ?? string.Empty;
+        var handlerSymbol = resolution.Properties.GetValueOrDefault("handlerSymbol") ?? string.Empty;
+        var sameFile = fact.Evidence.FilePath.Equals(resolution.Evidence.FilePath, StringComparison.Ordinal);
+        if (!sameFile || fact.Evidence.StartLine < resolution.Evidence.StartLine
+            || fact.Evidence.EndLine > resolution.Evidence.EndLine)
+        {
+            return false;
+        }
+
+        var sourceId = fact.Properties.GetValueOrDefault("sourceSymbolId");
+        if (fact.EvidenceTier == EvidenceTiers.Tier1Semantic)
+        {
+            return resolution.EvidenceTier == EvidenceTiers.Tier1Semantic
+                && !string.IsNullOrWhiteSpace(sourceId)
+                && sourceId.Equals(resolution.Properties.GetValueOrDefault("handlerSymbolId"), StringComparison.Ordinal);
+        }
+
         if (!string.IsNullOrWhiteSpace(fact.SourceSymbol))
         {
             if (fact.SourceSymbol.Equals(handlerSymbol, StringComparison.Ordinal)
-                || fact.SourceSymbol.EndsWith("." + handlerName, StringComparison.Ordinal)
-                || fact.SourceSymbol.Contains("." + handlerName + "(", StringComparison.Ordinal))
-            {
-                return true;
-            }
-
-            if (sameFile && fact.SourceSymbol.Equals(handlerName, StringComparison.Ordinal))
+                || fact.SourceSymbol.Equals(handlerName, StringComparison.Ordinal))
             {
                 return true;
             }

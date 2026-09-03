@@ -2194,6 +2194,7 @@ rules:
       - WebFormsEventFlowProjected
       - AnalysisGap
     limitations:
+      - Direct support must lie inside the resolved handler file and line span. Semantic support requires the same canonical source symbol ID; method-name matches across files, types, or assemblies are not ownership evidence. Syntax support remains a bounded name-and-span candidate and does not prove assembly identity or distinguish overlapping same-line declarations.
       - Event-flow projection is static evidence and does not prove runtime event firing, branch feasibility, dynamic dispatch, delegate invocation, reflection targets, event bubbling, generated-code freshness, service reachability, SQL execution, database state, or production usage.
       - MVP projection prefers direct handler-to-evidence facts and can miss multi-hop call chains, dependency injection, reflection, generated code, unsupported frameworks, or ORM metadata.
       - Reduced semantic coverage, missing call edges, ambiguous generated clients, or unavailable terminal evidence produce partial or unknown classifications rather than clean absence claims.
@@ -2206,6 +2207,7 @@ rules:
       - WebFormsLogicSignalDetected
       - AnalysisGap
     limitations:
+      - Backend support uses the same handler span and semantic identity admission as event-flow projection; syntax method selection must match the resolved handler span.
       - Logic signals are deterministic static heuristics, not proof of business logic, code quality, risk, runtime behavior, or production usage.
       - UI-boilerplate signals are lower-strength syntax evidence and do not prove that a handler is safe, irrelevant, or free of backend effects.
       - Generated code, partial methods, reflection, dynamic dispatch, branch feasibility, and indirect helper calls can hide or dilute signals.

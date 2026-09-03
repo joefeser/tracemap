@@ -8,6 +8,67 @@ namespace TraceMap.Tests;
 
 public sealed class LegacyWebFormsExtractorTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Flow_support_requires_handler_span_and_semantic_identity(bool semantic)
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Sample.csproj"), """
+            <Project ToolsVersion="12.0">
+              <PropertyGroup><TargetFrameworkVersion>v4.5</TargetFrameworkVersion></PropertyGroup>
+              <ItemGroup><Compile Include="Default.aspx.cs" /><Compile Include="Missing.cs" /></ItemGroup>
+              <Import Project="Missing.Legacy.targets" />
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), """
+            <%@ Page Language="C#" CodeBehind="Default.aspx.cs" Inherits="Sample.Default" %>
+            <asp:Button runat="server" ID="Save" OnClick="Save_Click" />
+            """);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx.cs"), """
+            namespace Sample;
+            public partial class Default {
+                void Save_Click(object sender, System.EventArgs e) {
+                    Save();
+                }
+            }
+            public class Other {
+                void Save_Click() { Save(); }
+            }
+            """);
+        var manifest = new ScanManifest("ownership", "synthetic", null, "main", "abc123", "test/1.0",
+            DateTimeOffset.UnixEpoch, "Level1SemanticAnalysisReduced", "FailedOrPartial", [], ["Sample.csproj"], [], []);
+        CodeFact Edge(string path, int line, string symbol, string id, string tier) => FactFactory.Create(
+            manifest, FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, tier,
+            new EvidenceSpan(path, line, line, null, "fixture", "fixture/1.0"),
+            projectPath: "Sample.csproj", sourceSymbol: symbol, targetSymbol: "Save",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["sourceSymbolId"] = id,
+                ["callerName"] = "Save_Click"
+            });
+        var tier = semantic ? EvidenceTiers.Tier1Semantic : EvidenceTiers.Tier3SyntaxOrTextual;
+        var own = Edge("Default.aspx.cs", 4, semantic ? "Sample.Default.Save_Click(object, System.EventArgs)" : "Save_Click", "assembly-a:handler", tier);
+        var foreignFile = Edge("Other.cs", 4, "Other.Type.Save_Click()", "assembly-b:handler", tier);
+        var foreignType = Edge("Default.aspx.cs", 8, "Sample.Other.Save_Click()", "assembly-a:other", tier);
+        var foreignAssembly = Edge("Default.aspx.cs", 4, "Sample.Default.Save_Click(object, System.EventArgs)", "assembly-b:handler", EvidenceTiers.Tier1Semantic);
+        // Resolve against the owning evidence first; add colliding evidence only for projection.
+        var inputs = new[] { own, foreignFile, foreignType };
+        var facts = LegacyWebFormsExtractor.Extract(repo, manifest, FileInventory.Collect(repo), inputs);
+        var flow = Assert.Single(facts, f => f.FactType == FactTypes.WebFormsEventFlowProjected);
+        Assert.Contains(own.FactId, flow.Properties["supportingEdgeIds"]);
+        Assert.DoesNotContain(foreignFile.FactId, flow.Properties["supportingFactIds"]);
+        Assert.DoesNotContain(foreignType.FactId, flow.Properties["supportingFactIds"]);
+        // Exercise the same ownership predicate with an assembly collision at the exact same span.
+        var resolution = Assert.Single(facts, f => f.FactType == FactTypes.WebFormsHandlerResolved);
+        var predicate = typeof(LegacyWebFormsExtractor).GetMethod("IsDirectHandlerEvidence",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        Assert.False((bool)predicate.Invoke(null, [foreignAssembly, resolution])!);
+        Assert.Equal(SerializeFacts(facts), SerializeFacts(LegacyWebFormsExtractor.Extract(repo, manifest, FileInventory.Collect(repo), inputs.Reverse().ToArray())));
+    }
+
     [Fact]
     public void Scan_resolves_config_namespace_assembly_registration_only_to_one_scoped_syntax_type()
     {

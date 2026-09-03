@@ -14,3 +14,4 @@
 - [x] Add positive IsPostBack syntax candidates without widening compound-condition or script-branch claims.
 - [x] Separate OnClient and non-identifier event-value gaps; preserve static server bindings.
 - [x] Add the read-only one-page event-to-database trace handoff with identity and traversal bounds.
+- [x] Isolate projected direct support by resolved handler span and semantic identity; regress same-name file/type/assembly collisions and retained syntax evidence.
