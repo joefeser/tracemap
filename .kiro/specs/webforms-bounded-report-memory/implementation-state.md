@@ -169,3 +169,10 @@ extractor to `0.5.0`. Validation: focused build-environment tests **22/22** and
 full .NET solution **1,738/1,738** passed; changed-file format verification,
 private-path guard, and `git diff --check` passed. The full suite retains one
 pre-existing nullable warning in `PropertyMappingTests.cs:560`.
+
+Restricted validation completed on TraceMap head `a3de925b`: provenance and
+extractor versions passed; unknown-origin and legacy-prerequisite counts were
+zero; independent property-mapping gaps remained in their own rule family; and
+exactly two sanitized `WorkspaceDiagnostic` callback occurrences remained. No
+safe diagnostic ID was present. The next investigation is local-only native
+callback classification, not another inference from shareable artifacts.

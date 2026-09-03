@@ -265,3 +265,32 @@ two genuine workspace callback occurrences, zero unknown-origin property-mapping
 projections, and zero legacy-prerequisite occurrences. Exact classification of
 the two native callbacks still requires the local-only debugger inspection
 described above.
+
+### Projection-boundary restricted rerun result
+
+The subsequent restricted review verified TraceMap head
+`a3de925b23a75ca78a779b93bfe6f215f7020116` as a descendant of projection fix
+`08ec7348`. The retained index contained `build-environment/0.5.0` and
+`csharp-semantic/0.19.0`. The safe aggregate result was:
+
+- `workspaceDiagnosticCount=2` and
+  `uncategorizedWorkspaceFailureCount=2`;
+- `unknownDiagnosticOriginCount=0`;
+- `legacyWorkspacePrerequisitesUnresolvedCount=0`;
+- no compiler, project-load, solution-load, compilation-creation,
+  compilation-input, or MSBuild-registration diagnostic occurrences; and
+- one aggregated build-environment row with `originCategory=workspace`,
+  `originGapKind=WorkspaceDiagnostic`, no safe diagnostic ID, guidance
+  `ReviewEnvironmentGap`, and `occurrenceCount=2`.
+
+No property-mapping gap was projected into build-environment diagnostics. The
+independent `csharp.semantic.propertymapping-gap.v1` evidence remained with
+10,604 `PropertyMappingShapeUnsupported` occurrences and 1,074
+`PropertyMappingTruncated` occurrences. Those are bounded property-mapping
+analysis limitations, not workspace failures.
+
+This validates both classifier corrections against the restricted run. The
+remaining outcome is
+`result=lineage-fix-verified-genuine-workspace-failure-remains`. The sanitized
+artifacts cannot classify the two native callbacks further; use the local-only
+inspection boundary above before proposing another product correction.
