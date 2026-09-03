@@ -39,8 +39,11 @@ git merge-base --is-ancestor cd8dc053 <tracemapHead>
 
 Use the scanner SHA from retained provenance, not the application commit shown
 in the scan console. Require exit 0; do not fetch/rebuild if it fails. Confirm
-the retained Web Forms extractor version is `legacy-webforms/0.7.0` (or verify
+the retained Web Forms extractor version is `legacy-webforms/0.7.1` (or verify
 a later version against local history) and workspace failure counts remain zero.
+Version 0.7.0 indexes predate the handler-ownership correction; do not use them
+to validate projected support. When reviewing the correction, retain the same
+previously selected event rather than selecting a different successful example.
 
 Open `scan/index.sqlite` read-only using an installed tool, such as
 `sqlite3 -readonly <local-index-path>`, then `PRAGMA query_only=ON`.
