@@ -194,3 +194,23 @@ hooks are never replaced; those projects receive
 `ComReferenceResolutionFallbackUnavailable` and retain normal workspace
 behavior. Extractor versions advance to `build-environment/0.6.0` and
 `csharp-semantic/0.20.0`.
+
+### Post-COM coverage handoff (2026-09-03)
+
+The field summary at `ad8fdd98` reports zero workspace/uncategorized diagnostics
+and 932,070 Tier1 facts, with reduced coverage retained. The accuracy report's
+workspace-repair priority was still triggered by static legacy markers. The
+summary now admits only non-informational workspace-rule diagnostics for that
+decision; generic unknown failures request classification and COM host failures
+receive task-host-specific guidance. No scanner or evidence rule changed.
+
+Added `claude-retained-coverage-triage.prompt.md` as the current handoff, linked
+at the top of README. It selects and verifies a retained run, inspects at most
+five samples in each of four gap kinds read-only, and returns only closed
+aggregate categories. It forbids scan/rebuild, source changes and BRD work.
+
+Validation: accuracy-summary tests (including fourteen priority cases), evidence-
+summary tests, workspace-summary tests and review-launcher tests all passed.
+Private-path guard and diff whitespace checks passed. The .NET suite was not
+rerun for this PowerShell/documentation-only change; the preceding scanner fix
+passed 1,742/1,742 .NET tests.

@@ -8,3 +8,5 @@
 - [x] Add large synthetic noise, graph parity, collision/support, limit, and cancellation regressions.
 - [x] Validate full .NET suite, CLI sample, memory experiment, formatting, privacy, and diff.
 - [x] Document existing-index reruns, limits, limitations, and ACK readback (preflight blocked; see implementation state).
+- [x] Restrict accuracy-summary workspace-repair priority to actual diagnostic evidence and regress static-only cases.
+- [x] Add a self-contained read-only retained-coverage prompt for the separate work computer.
