@@ -1,5 +1,24 @@
 # Implementation state
 
+## Handler ownership correction (2026-09-03)
+
+On the current diagnostic branch, `legacy-webforms/0.7.1` fixes direct event-flow
+support accepting same-name members from unrelated files/types. Admission now
+requires the resolved handler file and contained line span. Tier1 support also
+requires its canonical source symbol ID (including assembly identity). Logic
+signals share admission and select their syntax method by the resolved span.
+Syntax name/span evidence remains lower-tier; overlapping same-line declarations
+are an explicit limitation, not compiler-resolved ownership.
+
+Synthetic regressions cover same-name different-file/type edges, a same-span
+different-assembly semantic identity, retained own-handler support under reduced
+coverage, syntax fallback, and reversed-input determinism. No private source is
+used. Validation: full .NET suite 1760/1760; focused extractor suite 45/45;
+synthetic non-compiling CLI smoke 65 facts with reduced coverage; changed-file
+format verification, private-path guard, and diff checks. Existing unrelated
+PropertyMappingTests nullable warning remains. README and one-page prompt now
+require a fresh 0.7.1 index and the same selected event; no PR or merge requested.
+
 Original implementation branch: `codex/webforms-bounded-report-memory`
 Current diagnostic-debug branch: `codex/restricted-webforms-run-evidence-20260902`
 Base: `ce6b449f0be49b04f524c23641c42ff56c155ec8` (fresh origin/dev).

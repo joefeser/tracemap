@@ -1,6 +1,20 @@
 # Restricted Web Forms run: diagnostic follow-up
 
-## Current handoff: one-page static trace
+## Current handoff: handler ownership correction (0.7.1)
+
+The one-page review exposed unrelated same-name handler edges in projected
+support. Version `legacy-webforms/0.7.1` requires the resolved handler file/span
+and, for semantic facts, its canonical source symbol ID. Logic signals use the
+same admission. Linked syntax evidence remains lower-tier, not assembly proof.
+
+After pulling, rerun the existing focused PowerShell scan command once; old
+indexes cannot acquire this correction by rerunning summaries. Confirm the new
+index reports `legacy-webforms/0.7.1`, then give Claude
+`claude-single-page-trace.prompt.md` for the **same selected event**. Compare
+supporting edges and reject unrelated owners. An HTTP terminal is not proof of
+no database effects in untraversed branches. No debugger or BRD is needed.
+
+## Previous handoff: one-page static trace
 
 After the `legacy-webforms/0.7.0` run, give Claude
 [`claude-single-page-trace.prompt.md`](claude-single-page-trace.prompt.md).
