@@ -233,3 +233,13 @@ legacy-codebase validation Python tests 13/13. A synthetic non-compiling Framewo
 include canonical control-type composition, both postback polarities and the
 client-attribute gap. Changed-file formatting, private-path guard and diff checks
 passed. The existing nullable warning in PropertyMappingTests remains unrelated.
+
+### One-page trace handoff
+
+Added `claude-single-page-trace.prompt.md` and made it the first README handoff.
+This is documentation-only: actual execution needs the work computer's retained
+index and private source. Selection is fixed before traversal to avoid selecting
+only a successful example. Bounds are six hops, fifty symbols, one hundred
+edges and ten terminal candidates. Handler joins use binding IDs; downstream
+joins preserve canonical symbol/assembly identity and explicit support. Manual
+source observations cannot fill missing extracted edges. No new scan or BRD.
