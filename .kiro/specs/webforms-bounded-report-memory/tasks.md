@@ -13,3 +13,4 @@
 - [x] Add bounded case-insensitive markup type-name matching with strict namespace and collision gaps.
 - [x] Add positive IsPostBack syntax candidates without widening compound-condition or script-branch claims.
 - [x] Separate OnClient and non-identifier event-value gaps; preserve static server bindings.
+- [x] Add the read-only one-page event-to-database trace handoff with identity and traversal bounds.
