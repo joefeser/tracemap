@@ -49,6 +49,41 @@ try {
     Assert-True (-not $content.Contains('private-backend')) "private backend folder leaked"
     Assert-True (-not $content.Contains('private-controls')) "private controls folder leaked"
     Assert-True (-not $content.Contains($testRoot)) "local root leaked"
+
+    $cases = @(
+        @{ Codes = @('LegacyTargetFramework', 'NonSdkStyleProject', 'WebApplicationProjectTargets'); Rule = 'build.environment.project-format.v1'; Effect = 'caps-to-structural'; Expected = 'inspect-highest-count-accuracy-gap' },
+        @{ Codes = @('LegacyTargetFramework', 'NonSdkStyleProject', 'WebApplicationProjectTargets'); Rule = 'build.environment.workspace-diagnostic.v1'; Effect = 'caps-to-structural'; Expected = 'inspect-highest-count-accuracy-gap' },
+        @{ Codes = @('SdkResolutionFailed'); Rule = 'build.environment.workspace-diagnostic.v1'; Effect = 'informational'; Expected = 'inspect-highest-count-accuracy-gap' },
+        @{ Codes = @('MissingReferenceAssemblies'); Rule = 'unrelated.rule.v1'; Effect = 'reduces-semantic-coverage'; Expected = 'inspect-highest-count-accuracy-gap' },
+        @{ Codes = @('UncategorizedWorkspaceFailure'); Expected = 'classify-bounded-workspace-failure' },
+        @{ Codes = @('MSBuildTaskHostIncompatible'); Expected = 'use-compatible-msbuild-task-host' },
+        @{ Codes = @('MissingReferenceAssemblies', 'MSBuildTaskHostIncompatible'); Expected = 'restore-compatible-reference-assemblies' },
+        @{ Codes = @('SdkResolutionFailed'); Expected = 'recreate-compatible-legacy-msbuild-workspace' },
+        @{ Codes = @('MSBuildRegistrationFailed'); Expected = 'recreate-compatible-legacy-msbuild-workspace' },
+        @{ Codes = @('LegacyWorkspacePrerequisitesUnresolved'); Expected = 'recreate-compatible-legacy-msbuild-workspace' },
+        @{ Codes = @('WebApplicationTargetsUnavailable'); Expected = 'recreate-compatible-legacy-msbuild-workspace' },
+        @{ Codes = @('ImportedTargetsUnavailable'); Expected = 'recreate-compatible-legacy-msbuild-workspace' },
+        @{ Codes = @('LegacyProjectEvaluationFailed'); Expected = 'recreate-compatible-legacy-msbuild-workspace' },
+        @{ Codes = @(); Expected = 'inspect-highest-count-accuracy-gap' }
+    )
+    foreach ($case in $cases) {
+        $caseFacts = @($case.Codes | ForEach-Object {
+            @{ factType = 'BuildEnvironmentDiagnostic';
+                ruleId = $(if ($case.ContainsKey('Rule')) { $case.Rule } else { 'build.environment.workspace-diagnostic.v1' });
+                evidenceTier = 'Tier4Unknown'; evidence = @{ filePath = 'private-web/site.csproj' };
+                properties = @{ diagnosticCode = $_; diagnosticKind = 'workspace';
+                    coverageEffect = $(if ($case.ContainsKey('Effect')) { $case.Effect } else { 'reduces-semantic-coverage' }) } }
+        })
+        [IO.File]::WriteAllLines((Join-Path $scan 'facts.ndjson'), [string[]]@($caseFacts | ForEach-Object { $_ | ConvertTo-Json -Compress -Depth 10 }), [Text.UTF8Encoding]::new($false))
+        $caseOutput = Join-Path $testRoot ([Guid]::NewGuid().ToString('N'))
+        $caseResult = @(& $script -ReviewOutputPath $review -WebFormsFolder 'private-web' -BackendFolder 'private-web/private-backend' -ControlsFolder 'private-controls' -OutputDirectory $caseOutput)
+        Assert-True ($caseResult[0] -eq 'focused-webforms-accuracy-summary-file=created') 'priority fixture did not run'
+        $caseFile = @(Get-ChildItem $caseOutput -File -Filter 'focused-webforms-accuracy-*.txt')
+        Assert-True ($caseFile.Count -eq 1) 'priority fixture output missing'
+        $caseContent = [IO.File]::ReadAllText($caseFile[0].FullName)
+        Assert-True ($caseContent.Contains("priority01=$($case.Expected)")) "incorrect priority for $($case.Codes -join ',')"
+        Assert-True (-not $caseContent.Contains('private-web')) 'priority fixture leaked private path'
+    }
     'focused-webforms-accuracy-summary-tests=passed'
 }
 finally {

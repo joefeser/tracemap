@@ -1,5 +1,28 @@
 # Restricted Web Forms run: diagnostic follow-up
 
+## Latest step: retained coverage triage (2026-09-03)
+
+The post-COM-fallback field run at `ad8fdd98` reported zero workspace diagnostics
+and 932,070 Tier1 facts. It still correctly reports reduced coverage; these
+counts do not establish full compilation or successful COM binding.
+
+For this run, give Claude **only**
+[`claude-retained-coverage-triage.prompt.md`](claude-retained-coverage-triage.prompt.md).
+It executes bounded read-only queries and local source inspection using existing
+artifacts, returning sanitized categories for control registrations, event
+attributes and `IsPostBack` conditions. No debugger, scan, rebuild, or BRD is
+needed. This supersedes the older prompt selection instructions below for runs
+where the COM fallback fix is present and workspace failures are zero.
+
+`Export-FocusedWebFormsAccuracySummary.ps1` now bases workspace-repair priority
+on non-informational diagnostics under the workspace-diagnostic rule, not static
+legacy framework/project markers. Uncategorized workspace failures request
+classification; COM task-host failures receive specific task-host guidance.
+Existing summary files are immutable observations of the old report logic and
+are not rewritten by pulling this branch. The new prompt can inspect them as-is.
+
+## Earlier investigation history
+
 This directory records the bounded-report implementation and the sanitized
 2026-09-02 restricted Web Forms field observation. The private repository,
 source, raw scan artifacts, screenshots, local absolute paths, and native
