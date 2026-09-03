@@ -2143,7 +2143,7 @@ rules:
       - AnalysisGap
     limitations:
       - Composition facts describe static markup declarations and do not prove runtime loading, rendering, control construction, navigation, event firing, deployment, or production use.
-      - Registered user-control and master-page targets are repository-relative declarations; registered assembly controls require exact namespace, type, and project assembly evidence. Missing, dynamic, unsafe, malformed, conflicting, or out-of-scope targets remain explicit analysis gaps.
+      - Registered user-control and master-page targets are repository-relative declarations; registered assembly controls require source-project assembly evidence and an exact namespace. Only the markup type-name segment uses ordinal case-insensitive matching, while preserving the canonical source type name. Multiple candidates, including case-only collisions, remain ambiguous even if one matches the tag exactly. Missing, dynamic, unsafe, malformed, conflicting, or out-of-scope targets remain explicit analysis gaps; DLL-only controls are not resolved by this rule.
       - ContentPlaceHolderID is a declared target candidate and is not proof that the referenced master page contains a compatible runtime placeholder.
       - Raw markup, page titles, source snippets, local absolute paths, URLs, configuration values, and unsafe expressions are omitted or hashed.
 
@@ -2157,6 +2157,7 @@ rules:
     limitations:
       - Event bindings are static declarations and do not prove that a control exists at runtime, a user can reach the event, event bubbling occurs, or the handler executes.
       - Safe OnX attributes outside the representative event allowlist are Tier3 event-like candidates, not proof that the target control exposes that server event; client-side, malformed, dynamic, generated, and unsafe shapes remain gaps rather than guessed handlers.
+      - OnClient-prefixed attributes emit ClientWebFormsEventAttribute gaps and never server bindings. Bounded event names with non-identifier values emit NonIdentifierWebFormsEventValue gaps without assuming JavaScript or C# execution; other malformed names retain UnsupportedWebFormsEventAttribute. Raw attribute values are not retained.
       - Duplicate controls or duplicate bindings are preserved as separate evidence rows with deterministic IDs; TraceMap does not collapse them into a single runtime control.
       - Explicit control subscriptions are limited to statically named receivers, representative events, and named handlers on the linked markup surface; lambdas, delegate expressions, unknown receivers, ambiguous controls, and dynamic wiring remain explicit gaps.
 
@@ -2211,14 +2212,14 @@ rules:
 
   - id: legacy.webforms.lifecycle-context.v1
     name: Legacy WebForms lifecycle branch context candidates
-    description: Emits syntax-local lifecycle context candidates for bounded Page_Init, Page_Load, and Page_PreRender methods containing an explicit !IsPostBack branch.
+    description: Emits syntax-local lifecycle context candidates for bounded Page_Init, Page_Load, and Page_PreRender methods containing an explicit positive or negated IsPostBack branch.
     evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - WebFormsLifecycleBranchCandidate
       - AnalysisGap
     limitations:
-      - An enclosing !IsPostBack condition is syntax evidence only and does not prove that a branch ran, lifecycle ordering, state initialization, runtime reachability, or correctness.
-      - Local or parameter shadowing, equivalent, negated, compound, helper-based, or dynamic postback conditions outside the documented shape remain explicit gaps.
+      - Bare IsPostBack and this.IsPostBack conditions emit IsPostBackBranch with is-postback-syntax context; their logical negations retain NotIsPostBackBranch with not-is-postback-syntax context. One layer of parentheses is accepted at each existing expression boundary. These are syntax candidates, not proof of Page symbol identity, a branch running, lifecycle ordering, state initialization, runtime reachability, or correctness.
+      - Local or parameter shadowing, boolean comparisons, compound conditions, arbitrary receivers, helper-based conditions, and other expressions outside the documented shape remain explicit gaps. Positive branch support does not widen client-script inside-not-is-postback-syntax attribution or claim anything about else-branch execution.
 
   - id: legacy.webforms.client-script.v1
     name: Legacy WebForms client-script registration candidates

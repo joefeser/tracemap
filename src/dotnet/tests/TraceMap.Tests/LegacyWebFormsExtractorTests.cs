@@ -736,7 +736,7 @@ public sealed class LegacyWebFormsExtractorTests
             && fact.Properties.GetValueOrDefault("eventName") == "OnClientClick");
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
-            && fact.Properties.GetValueOrDefault("gapKind") == "UnsupportedWebFormsEventAttribute");
+            && fact.Properties.GetValueOrDefault("gapKind") == "ClientWebFormsEventAttribute");
         Assert.DoesNotContain(result.Facts, fact =>
             fact.FactType == FactTypes.WebFormsHandlerResolved
             && fact.ContractElement == "Grid_RowDataBound");
@@ -1209,7 +1209,7 @@ public sealed class LegacyWebFormsExtractorTests
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.LegacyWebFormsEventBinding
-            && fact.Properties.GetValueOrDefault("gapKind") == "UnsupportedWebFormsEventAttribute");
+            && fact.Properties.GetValueOrDefault("gapKind") == "ClientWebFormsEventAttribute");
     }
 
     [Fact]
