@@ -299,3 +299,29 @@ For that local-only step, give the on-device reviewer
 [`claude-local-workspace-callback-classification.prompt.md`](claude-local-workspace-callback-classification.prompt.md).
 It limits the debug run to observing the two callbacks, forbids retaining their
 native messages, and permits only a closed categorical result.
+
+### Local callback result and COM-reference admission fallback
+
+The on-device debugger inspection completed without retaining native callback
+text. Both callbacks had kind `Failure`, no safe `CS####` or `MSB####`
+identifier, the same `sdk-resolution` category, and aggregate occurrence count
+2. A normal Visual Studio solution build succeeded independently. That
+combination bounds the defect to TraceMap's workspace task-host path rather than
+proving that the application solution cannot compile.
+
+The observed category was narrowed further to COM-reference task-host
+incompatibility. TraceMap now classifies that bounded native shape as
+`MSBuildTaskHostIncompatible|UseCompatibleMSBuildTaskHost`. Before opening a
+selected project that statically declares `COMReference` or `COMFileReference`,
+TraceMap installs a temporary MSBuild targets override that omits only
+`ResolveComReferences` and `ResolveComReferencesDesignTime`. This prevents a COM
+tooling limitation from rejecting the rest of the project while preserving a
+project-scoped `ComReferenceResolutionSkipped|ReviewComReferenceCoverage` gap.
+COM-defined symbols can remain unresolved and must not be reported as semantic
+facts without independent evidence.
+
+The override contains no repository data and is deleted after workspace use. It
+is not installed when any selected project defines
+`CustomAfterMicrosoftCommonTargets`; TraceMap preserves that project extension
+point and emits `ComReferenceResolutionFallbackUnavailable` instead. The
+application repository and its normal Visual Studio build are never modified.

@@ -231,8 +231,9 @@ public sealed class BuildEnvironmentDiagnosticTests
     [InlineData("MSB4019", "The imported project Microsoft.WebApplication.targets was not found under VSToolsPath/WebApplications.", "WebApplicationTargetsUnavailable", "UseCompatibleWebApplicationTargets")]
     [InlineData("MSB4019", "The imported project Legacy.Custom.targets was not found.", "ImportedTargetsUnavailable", "ReviewImportedTargets")]
     [InlineData("MSB4025", "The project file could not be loaded because project evaluation failed.", "LegacyProjectEvaluationFailed", "UseCompatibleMSBuildToolset")]
+    [InlineData(null, "The ResolveComReference task could not be instantiated from Microsoft.Build.Tasks.Core because Microsoft.Build could not be loaded.", "MSBuildTaskHostIncompatible", "UseCompatibleMSBuildTaskHost")]
     public void Sanitized_workspace_gaps_classify_common_legacy_project_load_failures(
-        string diagnosticId,
+        string? diagnosticId,
         string rawMessage,
         string expectedCode,
         string expectedGuidance)

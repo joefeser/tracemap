@@ -203,13 +203,38 @@ public static class CSharpSemanticExtractor
 
         RunRestoreIfRequested(repoPath, projects, solutions, options, gaps, cancellationToken);
 
-        var workspaceProperties = string.IsNullOrWhiteSpace(options.TargetFramework)
-            ? null
-            : new Dictionary<string, string>(StringComparer.Ordinal)
+        using var comReferenceFallback = ComReferenceWorkspaceFallback.Prepare(repoPath, projects);
+        var workspaceProperties = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (!string.IsNullOrWhiteSpace(options.TargetFramework))
+        {
+            workspaceProperties["TargetFramework"] = options.TargetFramework;
+        }
+
+        if (comReferenceFallback.IsActive)
+        {
+            workspaceProperties[ComReferenceWorkspaceFallback.CustomAfterTargetsProperty] = comReferenceFallback.TargetsPath!;
+            foreach (var projectPath in comReferenceFallback.ProjectPaths)
             {
-                ["TargetFramework"] = options.TargetFramework
-            };
-        using var workspace = workspaceProperties is null
+                gaps.Add(CreateGap(
+                    projectPath,
+                    "TraceMap omitted COM-reference resolution during design-time project loading; COM-defined symbols may remain unresolved.",
+                    "ComReferenceResolutionSkipped",
+                    projectPath));
+            }
+        }
+        else if (comReferenceFallback.ProjectPaths.Count > 0)
+        {
+            foreach (var projectPath in comReferenceFallback.ProjectPaths)
+            {
+                gaps.Add(CreateGap(
+                    projectPath,
+                    "TraceMap could not install the bounded COM-reference design-time fallback; semantic project loading may remain reduced.",
+                    "ComReferenceResolutionFallbackUnavailable",
+                    projectPath));
+            }
+        }
+
+        using var workspace = workspaceProperties.Count == 0
             ? MSBuildWorkspace.Create()
             : MSBuildWorkspace.Create(workspaceProperties);
         workspace.RegisterWorkspaceFailedHandler(args =>

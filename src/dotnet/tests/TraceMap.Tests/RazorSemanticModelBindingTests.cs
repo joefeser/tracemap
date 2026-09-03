@@ -586,7 +586,7 @@ public sealed class RazorSemanticModelBindingTests
     {
         Assert.Equal("csharp.razor.semantic-model-binding.v1", RuleIds.CSharpRazorSemanticModelBinding);
         Assert.Equal("csharp.razor.semantic-model-binding-gap.v1", RuleIds.CSharpRazorSemanticModelBindingGap);
-        Assert.Equal("csharp-semantic/0.19.0", ScannerVersions.CSharpSemanticExtractor);
+        Assert.Equal("csharp-semantic/0.20.0", ScannerVersions.CSharpSemanticExtractor);
         var catalog = File.ReadAllText(Path.Combine(FindRepoRoot(), "rules", "rule-catalog.yml"));
         Assert.Contains($"id: {RuleIds.CSharpRazorSemanticModelBinding}", catalog, StringComparison.Ordinal);
         Assert.Contains($"id: {RuleIds.CSharpRazorSemanticModelBindingGap}", catalog, StringComparison.Ordinal);
