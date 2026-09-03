@@ -294,3 +294,8 @@ remaining outcome is
 `result=lineage-fix-verified-genuine-workspace-failure-remains`. The sanitized
 artifacts cannot classify the two native callbacks further; use the local-only
 inspection boundary above before proposing another product correction.
+
+For that local-only step, give the on-device reviewer
+[`claude-local-workspace-callback-classification.prompt.md`](claude-local-workspace-callback-classification.prompt.md).
+It limits the debug run to observing the two callbacks, forbids retaining their
+native messages, and permits only a closed categorical result.
