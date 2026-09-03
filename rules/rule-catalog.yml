@@ -3650,6 +3650,8 @@ rules:
       - Source documents outside the repository use deterministic synthetic evidence paths derived from bounded non-host descriptors. The original path is not retained, and same-named unrecognized external sources can share an identity.
       - Explicit scan-scope gaps report only a categorical omitted-document count at repository evidence path `.`; they do not identify excluded source files, prove build failure, or describe runtime behavior.
       - Project-declared C# inputs missing from the captured inventory emit a project-scoped `CompilationInputUnavailable` gap; the missing path is not retained, and the gap does not prove why the input is absent.
+      - Projects declaring COMReference or COMFileReference items are loaded with COM-reference design-time targets omitted when TraceMap can install its bounded temporary target override. A project-scoped `ComReferenceResolutionSkipped` gap records that COM-defined symbols may remain unresolved; this does not prove the COM component is absent or broken at build or runtime.
+      - TraceMap does not replace a project-defined CustomAfterMicrosoftCommonTargets hook. In that case it emits `ComReferenceResolutionFallbackUnavailable` and leaves ordinary MSBuildWorkspace behavior intact.
       - Exclusion comparison follows detected host path case semantics and macOS Unicode-equivalence semantics without rewriting persisted evidence paths. Unicode-distinct names remain distinct on hosts whose filesystems treat them as distinct.
 
   - id: build.environment.target-framework.v1
@@ -3709,7 +3711,7 @@ rules:
 
   - id: build.environment.workspace-diagnostic.v1
     name: Build environment workspace diagnostics
-    description: Records sanitized MSBuildWorkspace, legacy Web Application/import/evaluation, SDK resolution, reference assembly, restore, and compilation setup categories with closed origin lineage that explains reduced semantic coverage.
+    description: Records sanitized MSBuildWorkspace, legacy Web Application/import/evaluation, SDK resolution, MSBuild task-host, reference assembly, restore, and compilation setup categories with closed origin lineage that explains reduced semantic coverage.
     evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - BuildEnvironmentDiagnostic
@@ -3720,6 +3722,7 @@ rules:
       - Legacy workspace categories are bounded pattern classifications of sanitized native diagnostics; they identify likely prerequisite classes, not a proven repair or compatible build environment.
       - LegacyWorkspacePrerequisitesUnresolved is emitted only when an otherwise uncategorized workspace failure shares project identity with static legacy framework, project-format, import, or toolset evidence; it does not identify the exact missing prerequisite.
       - Projected diagnostics preserve a closed origin category, original gap kind, safe diagnostic ID when present, and deterministic occurrence count; they never retain native diagnostic text.
+      - MSBuildTaskHostIncompatible is a bounded classification for COM-reference task instantiation or host-support failures. It does not prove that the solution itself cannot compile under Visual Studio or full-framework MSBuild.
       - Ordinary compiler diagnostics remain AnalysisGap evidence and are not projected or relabeled as workspace/toolset failures; recognized reference-assembly compiler diagnostics may be projected with compilation origin.
       - Projection admits only the documented workspace, project/solution load, compilation setup/input, MSBuild registration, restore, and recognized reference-assembly gap kinds; unrelated semantic extractor limitations remain in their own rule families and are not duplicated as build-environment failures.
 

@@ -176,3 +176,21 @@ zero; independent property-mapping gaps remained in their own rule family; and
 exactly two sanitized `WorkspaceDiagnostic` callback occurrences remained. No
 safe diagnostic ID was present. The next investigation is local-only native
 callback classification, not another inference from shareable artifacts.
+
+### COM-reference task-host follow-up
+
+Local-only inspection classified both remaining callbacks as the same bounded
+COM-reference task-host failure: kind `Failure`, no safe diagnostic ID, aggregate
+occurrence count 2. A separate Visual Studio build of the selected solution
+succeeded, so the evidence does not support a broken-solution claim.
+
+The follow-up adds `MSBuildTaskHostIncompatible` classification and a bounded
+workspace admission fallback for projects declaring `COMReference` or
+`COMFileReference`. The fallback temporarily overrides only the two COM
+reference resolution targets, keeps independent semantic extraction available,
+and emits `ComReferenceResolutionSkipped` so COM-defined symbols remain an
+explicit Tier 4 limitation. Project-defined `CustomAfterMicrosoftCommonTargets`
+hooks are never replaced; those projects receive
+`ComReferenceResolutionFallbackUnavailable` and retain normal workspace
+behavior. Extractor versions advance to `build-environment/0.6.0` and
+`csharp-semantic/0.20.0`.

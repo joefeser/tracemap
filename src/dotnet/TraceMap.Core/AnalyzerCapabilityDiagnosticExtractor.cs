@@ -741,6 +741,9 @@ public static class AnalyzerCapabilityDiagnosticExtractor
                 or "ImportedTargetsUnavailable"
                 or "MissingReferenceAssemblies"
                 or "SdkResolutionFailed"
+                or "MSBuildTaskHostIncompatible"
+                or "ComReferenceResolutionSkipped"
+                or "ComReferenceResolutionFallbackUnavailable"
                 or "MSBuildRegistrationFailed"
                 or "CompilationCreationFailed"
                 or "UncategorizedWorkspaceFailure";
