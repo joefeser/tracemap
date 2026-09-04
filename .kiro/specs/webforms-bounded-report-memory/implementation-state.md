@@ -1,5 +1,17 @@
 # Implementation state
 
+## Retained projection verification handoff (2026-09-03)
+
+Field screenshots report scanner 963392f4, extractor 0.7.1, zero workspace
+diagnostics and the retained three-hop semantic path to an HTTP boundary.
+The report says no projection was found for the binding; that is not sufficient
+to verify ownership isolation because projection lookup uses handler identity
+and exact supporting fact IDs, not direct bindingFactId. Added a bounded,
+read-only prompt for that lookup and support validation. README makes clear no
+new scan is needed. Field ownership verification remains pending; omitted
+branches remain unverified. Documentation-only change; privacy and diff checks
+are the relevant validation, with no new code-test claim.
+
 ## Handler ownership correction (2026-09-03)
 
 On the current diagnostic branch, `legacy-webforms/0.7.1` fixes direct event-flow

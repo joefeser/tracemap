@@ -1,6 +1,16 @@
 # Restricted Web Forms run: diagnostic follow-up
 
-## Current handoff: handler ownership correction (0.7.1)
+## Current handoff: verify projection ownership in the retained index
+
+The work-machine run already used `963392f4` / `legacy-webforms/0.7.1` and
+reported zero workspace diagnostics. **Do not rerun PowerShell for this step.**
+Give Claude
+[`claude-projection-ownership-verification.prompt.md`](claude-projection-ownership-verification.prompt.md).
+It checks the same selected event in the existing index, joining the projection
+through the handler identity and exact supporting fact IDs. The last report's
+missing-projection claim does not yet verify removal of the unrelated edges.
+
+## Previous handoff: handler ownership correction (0.7.1)
 
 The one-page review exposed unrelated same-name handler edges in projected
 support. Version `legacy-webforms/0.7.1` requires the resolved handler file/span
