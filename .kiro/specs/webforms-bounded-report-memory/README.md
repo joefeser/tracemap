@@ -1,6 +1,23 @@
 # Restricted Web Forms run: diagnostic follow-up
 
-## Current handoff: verify projection ownership in the retained index
+## Current handoff: one database-backed event in the existing index
+
+Give Claude
+[`claude-database-backed-event-trace.prompt.md`](claude-database-backed-event-trace.prompt.md).
+**No PowerShell rerun is needed.** It uses the existing 0.7.1 index and asks
+which page/event to use if no known database-backed target is already identified.
+The expectation of database access is not itself evidence.
+
+The field ownership check for the previous event passed: one projection,
+six resolved support facts, two resolved edges, no mismatches or missing IDs.
+Both unrelated edges remain indexed but are excluded from that projection;
+the legitimate direct edge remains. This verifies that tested event, not every
+projection or runtime behavior.
+
+Work-machine handoffs belong in committed prompt files linked here, not in
+chat-only copy/paste instructions; the two computers are separate.
+
+## Previous handoff: verify projection ownership in the retained index
 
 The work-machine run already used `963392f4` / `legacy-webforms/0.7.1` and
 reported zero workspace diagnostics. **Do not rerun PowerShell for this step.**
