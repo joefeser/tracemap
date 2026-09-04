@@ -1,5 +1,20 @@
 # Implementation state
 
+## Field ownership result and next handoff (2026-09-03)
+
+Operator screenshots report ownership-verified for the same event on 0.7.1:
+one projection, six supporting facts and two edges resolved, zero mismatches
+or missing IDs. Both prior unrelated edges remain indexed but are absent from
+this projection; the legitimate direct edge remains. Syntax support stays Tier3.
+This closes the field check for the selected event only. No runtime or broad
+coverage claim follows.
+
+Added claude-database-backed-event-trace.prompt.md for an operator-selected
+different event using the existing index, with the original bounds and privacy
+constraints. No new scan required. Future work-machine handoffs must be pushed
+as repo prompt files and linked in README because the computers are separate.
+Documentation-only change; validate privacy and diff checks, not a new code-test run.
+
 ## Retained projection verification handoff (2026-09-03)
 
 Field screenshots report scanner 963392f4, extractor 0.7.1, zero workspace

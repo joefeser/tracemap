@@ -16,3 +16,4 @@
 - [x] Add the read-only one-page event-to-database trace handoff with identity and traversal bounds.
 - [x] Isolate projected direct support by resolved handler span and semantic identity; regress same-name file/type/assembly collisions and retained syntax evidence.
 - [x] Add a read-only retained projection-ownership verification prompt using handler identity and exact support IDs.
+- [x] Record field ownership verification and add the separate database-backed event prompt for the existing index.
