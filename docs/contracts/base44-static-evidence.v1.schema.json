@@ -76,7 +76,11 @@
               "extractorVersion": { "type": "string" }
             }
           },
-          "properties": { "type": "object", "additionalProperties": { "type": "string" } }
+          "properties": {
+            "description": "String-valued deterministic fact properties. Base44 entity payload/query facts encode sorted field, spread, binding, and typed-gap arrays as JSON strings; consumers must parse them only for the matching versioned rule ID.",
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          }
         }
       }
     },

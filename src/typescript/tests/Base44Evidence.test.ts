@@ -50,6 +50,32 @@ describe("Base44 source-bound static evidence", () => {
       targetSymbol: "Order",
       properties: expect.objectContaining({ operationName: "filter" })
     }));
+    const createPayload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload && fact.targetSymbol === "Order");
+    expect(createPayload).toEqual(expect.objectContaining({
+      ruleId: "base44.entity.payload.v1",
+      properties: expect.objectContaining({
+        argumentIndex: "0",
+        completeness: "complete",
+        constructionKind: "object-literal",
+        operationName: "create",
+        shapeVersion: "1"
+      })
+    }));
+    expect(JSON.parse(createPayload?.properties.fieldsJson ?? "[]")).toEqual([
+      { expressionType: "string-literal", name: "status", origin: "literal", presence: "unconditional" }
+    ]);
+    const filterShape = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityQuery
+      && fact.targetSymbol === "Order"
+      && fact.properties.operationName === "filter");
+    expect(JSON.parse(filterShape?.properties.fieldsJson ?? "[]")).toEqual([
+      { expressionType: "string-literal", name: "status", origin: "filter:literal", presence: "unconditional" }
+    ]);
+    const operations = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation);
+    const shapes = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityPayload || fact.factType === FactTypes.Base44EntityQuery);
+    expect(shapes).toHaveLength(operations.length);
+    expect(shapes.map((fact) => fact.properties.operationEvidenceId).sort()).toEqual(
+      operations.map((fact) => fact.properties.operationEvidenceId).sort()
+    );
     expect(packet.facts).toContainEqual(expect.objectContaining({
       factType: FactTypes.Base44FunctionInvocation,
       targetSymbol: "serviceFunction"
@@ -85,6 +111,84 @@ describe("Base44 source-bound static evidence", () => {
     expect(serialized).not.toContain("provider.example/private/path");
     expect(packet.facts.find((fact) => fact.factType === FactTypes.Base44HttpTarget)?.properties.originSha256).toMatch(/^[0-9a-f]{64}$/);
     for (const name of ["base44-evidence.json", "base44-evidence.md", "base44-evidence.html"]) await expect(fs.stat(path.join(out, name))).resolves.toBeTruthy();
+  });
+
+  it("emits deterministic payload presence, type, binding, spread and ambiguity evidence without values", async () => {
+    const repo = await payloadFixtureRepo();
+    const firstOut = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-payload-first-"));
+    const secondOut = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-payload-second-"));
+    const first = await buildBase44Evidence(options(repo, firstOut));
+    const second = await buildBase44Evidence(options(repo, secondOut));
+    const payloadFacts = first.packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityPayload);
+
+    expect(payloadFacts).toHaveLength(3);
+    expect(payloadFacts.map((fact) => fact.factId)).toEqual(
+      second.packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityPayload).map((fact) => fact.factId)
+    );
+
+    const tooling = payloadFacts.find((fact) => fact.targetSymbol === "ToolingItem");
+    expect(tooling?.properties.completeness).toBe("partial");
+    expect(tooling?.properties.constructionKind).toBe("identifier:object-literal");
+    expect(JSON.parse(tooling?.properties.fieldsJson ?? "[]")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "name", presence: "unconditional", expressionType: "identifier-reference" }),
+      expect.objectContaining({ name: "quantity", presence: "spread-derived", expressionType: "integer-number-literal" }),
+      expect.objectContaining({ name: "job_cost", presence: "conditional", expressionType: "numeric-binary-expression" }),
+      expect.objectContaining({ name: "decimal_cost", presence: "unconditional", expressionType: "decimal-number-literal" }),
+      expect.objectContaining({ name: "<dynamic>", presence: "dynamic-computed" }),
+      expect.objectContaining({ name: "assigned_after_init", presence: "unconditional", expressionType: "integer-number-literal" }),
+      expect.objectContaining({ name: "conditional_assignment", presence: "conditional" })
+    ]));
+    expect(JSON.parse(tooling?.properties.analysisGapsJson ?? "[]")).toContain("dynamic-computed-property");
+    expect(JSON.parse(tooling?.properties.candidateBindingsJson ?? "[]")).toEqual(expect.arrayContaining(["binding:defaults", "binding:payload"]));
+    expect(tooling?.properties.fieldsJson).not.toContain("shadow_only");
+
+    const bulk = payloadFacts.find((fact) => fact.targetSymbol === "PurchasedPart");
+    expect(JSON.parse(bulk?.properties.fieldsJson ?? "[]")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "sku", presence: "unconditional" }),
+      expect.objectContaining({ name: "price", presence: "conditional", expressionType: "integer-number-literal" })
+    ]));
+
+    const query = first.packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityQuery && fact.targetSymbol === "ToolingItem");
+    expect(query?.properties.completeness).toBe("partial");
+    expect(JSON.parse(query?.properties.fieldsJson ?? "[]")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "status", origin: "filter:literal" }),
+      expect.objectContaining({ name: "created_date", origin: "sort-argument" }),
+      expect.objectContaining({ name: "id", origin: "select-argument" })
+    ]));
+    expect(JSON.parse(query?.properties.analysisGapsJson ?? "[]")).toEqual(expect.arrayContaining(["spread:binding-initializer-unresolved"]));
+
+    const serialized = JSON.stringify(first.packet);
+    for (const prohibited of ["secret-tool-name", "secret-status", "private-dynamic-field", "SKU-PRIVATE"]) {
+      expect(serialized).not.toContain(prohibited);
+    }
+  });
+
+  it("ignores schema prose but produces an exact payload-shape diff when executable payload code changes", async () => {
+    const repo = await payloadFixtureRepo();
+    const baselineOut = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-payload-baseline-"));
+    await buildBase44Evidence(options(repo, baselineOut));
+
+    await fs.writeFile(path.join(repo, "database-schema.md"), "# False authority\nToolingItem requires invented_field.\n");
+    execFileSync("git", ["add", "database-schema.md"], { cwd: repo });
+    execFileSync("git", ["commit", "-qm", "change schema prose"], { cwd: repo });
+    const proseOut = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-payload-prose-"));
+    await buildBase44Evidence(options(repo, proseOut));
+    const proseDiff = await diffBase44Evidence(path.join(baselineOut, "base44-evidence.json"), path.join(proseOut, "base44-evidence.json"), path.join(proseOut, "diff.json"));
+    expect(proseDiff.added).toHaveLength(0);
+    expect(proseDiff.removed).toHaveLength(0);
+
+    const appPath = path.join(repo, "src/app.ts");
+    const source = await fs.readFile(appPath, "utf8");
+    await fs.writeFile(appPath, source.replace("assigned_after_init = 3", "new_payload_field = 3"));
+    execFileSync("git", ["add", "src/app.ts"], { cwd: repo });
+    execFileSync("git", ["commit", "-qm", "change executable payload"], { cwd: repo });
+    const editedOut = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-payload-edited-"));
+    await buildBase44Evidence(options(repo, editedOut));
+    const payloadDiff = await diffBase44Evidence(path.join(proseOut, "base44-evidence.json"), path.join(editedOut, "base44-evidence.json"), path.join(editedOut, "diff.json"));
+    const addedPayload = payloadDiff.added.find((fact) => fact.factType === FactTypes.Base44EntityPayload && fact.targetSymbol === "ToolingItem");
+    const removedPayload = payloadDiff.removed.find((fact) => fact.factType === FactTypes.Base44EntityPayload && fact.targetSymbol === "ToolingItem");
+    expect(JSON.parse(addedPayload?.properties.fieldsJson ?? "[]")).toEqual(expect.arrayContaining([expect.objectContaining({ name: "new_payload_field" })]));
+    expect(JSON.parse(removedPayload?.properties.fieldsJson ?? "[]")).toEqual(expect.arrayContaining([expect.objectContaining({ name: "assigned_after_init" })]));
   });
 
   it("fails closed on invalid source identities and marks reduced-coverage diffs", async () => {
@@ -199,6 +303,41 @@ async function nonBase44MigrationRepo(): Promise<string> {
   await fs.mkdir(path.join(repo, "db/migrations"), { recursive: true });
   await fs.writeFile(path.join(repo, "src/app.ts"), 'const token = Deno.env.get("GENERIC_TOKEN");\nexport const load = () => fetch("https://ordinary.example.invalid/path");\n');
   await fs.writeFile(path.join(repo, "db/migrations/001.sql"), "create table orders (id text primary key);\n");
+  execFileSync("git", ["init", "-q"], { cwd: repo });
+  execFileSync("git", ["config", "user.email", "tracemap@example.invalid"], { cwd: repo });
+  execFileSync("git", ["config", "user.name", "TraceMap Test"], { cwd: repo });
+  execFileSync("git", ["add", "."], { cwd: repo });
+  execFileSync("git", ["commit", "-qm", "fixture"], { cwd: repo });
+  return repo;
+}
+
+async function payloadFixtureRepo(): Promise<string> {
+  const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-payload-fixture-"));
+  await fs.mkdir(path.join(repo, "src"), { recursive: true });
+  await fs.writeFile(path.join(repo, "package.json"), JSON.stringify({ dependencies: { "@base44/sdk": "0.8.5" } }));
+  await fs.writeFile(path.join(repo, "src/app.ts"), `import { base44 } from "@base44/sdk";
+export async function run(name, includeCost, hours, rate, dynamicKey, criteria, nextStatus) {
+  const defaults = { quantity: 1 };
+  const payload = {
+    ...defaults,
+    name,
+    decimal_cost: 500.00,
+    ...(includeCost ? { job_cost: hours * rate } : {}),
+    [dynamicKey]: "private-dynamic-field"
+  };
+  payload.assigned_after_init = 3;
+  if (includeCost) payload.conditional_assignment = nextStatus;
+  function unrelatedScope() {
+    const payload = { shadow_only: "secret-tool-name" };
+    payload.shadow_only = "secret-tool-name";
+    return payload;
+  }
+  await base44.entities.ToolingItem.create(payload);
+  await base44.entities.Organization.update("private-id", { status: nextStatus });
+  await base44.entities.PurchasedPart.bulkCreate([{ sku: "SKU-PRIVATE" }, { sku: "SKU-SECOND", price: 2 }]);
+  return base44.entities.ToolingItem.filter({ status: "secret-status", ...criteria }, "-created_date", 100, 0, "id,status");
+}
+`);
   execFileSync("git", ["init", "-q"], { cwd: repo });
   execFileSync("git", ["config", "user.email", "tracemap@example.invalid"], { cwd: repo });
   execFileSync("git", ["config", "user.name", "TraceMap Test"], { cwd: repo });
