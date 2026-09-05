@@ -139,7 +139,7 @@ describe("Base44 source-bound static evidence", () => {
     const second = await buildBase44Evidence(options(repo, secondOut));
     const payloadFacts = first.packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityPayload);
 
-    expect(payloadFacts).toHaveLength(4);
+    expect(payloadFacts).toHaveLength(6);
     expect(payloadFacts.map((fact) => fact.factId)).toEqual(
       second.packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityPayload).map((fact) => fact.factId)
     );
@@ -167,6 +167,7 @@ describe("Base44 source-bound static evidence", () => {
       expect.objectContaining({ name: "lookup", origin: "property:records.<literal-key>" })
     ]));
     expect(JSON.parse(tooling?.properties.analysisGapsJson ?? "[]")).toContain("compound-property-assignment:??=");
+    expect(tooling?.properties.fieldsJson).not.toContain("deleted_before_call");
 
     const bulk = payloadFacts.find((fact) => fact.targetSymbol === "PurchasedPart");
     expect(JSON.parse(bulk?.properties.fieldsJson ?? "[]")).toEqual(expect.arrayContaining([
@@ -186,11 +187,24 @@ describe("Base44 source-bound static evidence", () => {
     expect(JSON.parse(organization?.properties.analysisGapsJson ?? "[]")).toContain("binding-initializer-unresolved");
 
     const captured = payloadFacts.find((fact) => fact.targetSymbol === "CapturedItem");
-    expect(captured?.properties.completeness).toBe("complete");
+    expect(captured?.properties.completeness).toBe("partial");
     expect(JSON.parse(captured?.properties.fieldsJson ?? "[]")).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: "captured_before_reassignment", presence: "unconditional" })
     ]));
     expect(captured?.properties.fieldsJson).not.toContain("after_capture");
+    expect(JSON.parse(captured?.properties.analysisGapsJson ?? "[]")).toContain("post-capture-alias-mutation-unresolved");
+
+    const conditionalRows = payloadFacts.find((fact) => fact.targetSymbol === "ConditionalRows");
+    expect(JSON.parse(conditionalRows?.properties.fieldsJson ?? "[]")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "conditional_a", presence: "conditional" }),
+      expect.objectContaining({ name: "conditional_b", presence: "conditional" })
+    ]));
+
+    const duplicateRows = payloadFacts.find((fact) => fact.targetSymbol === "DuplicateRows");
+    expect(JSON.parse(duplicateRows?.properties.fieldsJson ?? "[]")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "duplicate_a", presence: "conditional" }),
+      expect.objectContaining({ name: "second_only", presence: "conditional" })
+    ]));
 
     const query = first.packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityQuery && fact.targetSymbol === "ToolingItem");
     expect(query?.properties.completeness).toBe("partial");
@@ -370,8 +384,10 @@ export async function run(name, includeCost, hours, rate, dynamicKey, criteria, 
     decimal_cost: 500.00,
     ...(includeCost ? { job_cost: hours * rate } : {}),
     [dynamicKey]: "private-dynamic-field",
-    lookup: records["private-customer-id"]
+    lookup: records["private-customer-id"],
+    deleted_before_call: 1,
   };
+  delete payload.deleted_before_call;
   payload.assigned_after_init = 3;
   payload.compound_assignment ??= nextStatus;
   includeCost && (payload.short_circuit_assignment = nextStatus);
@@ -392,8 +408,14 @@ export async function run(name, includeCost, hours, rate, dynamicKey, criteria, 
   await base44.entities.PurchasedPart.bulkCreate(partRows);
   let original = { captured_before_reassignment: 1 };
   const capturedPayload = original;
+  original.captured_after_alias = 3;
   original = { after_capture: 2 };
   await base44.entities.CapturedItem.create(capturedPayload);
+  await base44.entities.ConditionalRows.bulkCreate(includeCost ? [{ conditional_a: 1 }] : [{ conditional_b: 2 }]);
+  const firstRow = { duplicate_a: 1 };
+  firstRow.duplicate_a = 2;
+  const secondRow = { second_only: 1 };
+  await base44.entities.DuplicateRows.bulkCreate([firstRow, secondRow]);
   return base44.entities.ToolingItem.filter({ status: "secret-status", ...criteria }, "-created_date", 100, 0, "id,status");
 }
 `);

@@ -155,7 +155,7 @@ function addSelectEvidence(expression: ts.Expression | undefined, fields: ShapeF
 function analyzeExpression(expression: ts.Expression, context: ShapeContext, visitedBindings: Set<string>, presence: Presence): ShapeAnalysis {
   const unwrapped = unwrapExpression(expression);
   if (ts.isObjectLiteralExpression(unwrapped)) return analyzeObjectLiteral(unwrapped, context, visitedBindings, presence);
-  if (ts.isArrayLiteralExpression(unwrapped)) return analyzeArrayLiteral(unwrapped, context, visitedBindings);
+  if (ts.isArrayLiteralExpression(unwrapped)) return analyzeArrayLiteral(unwrapped, context, visitedBindings, presence);
   if (ts.isIdentifier(unwrapped)) return analyzeIdentifier(unwrapped, context, visitedBindings, presence);
   if (ts.isConditionalExpression(unwrapped)) {
     const result = emptyAnalysis("conditional-expression");
@@ -236,6 +236,9 @@ function analyzeIdentifier(identifier: ts.Identifier, context: ShapeContext, vis
   const result = analyzeExpression(declaration.initializer, bindingContext, nextVisited, presence);
   result.constructionKind = `identifier:${result.constructionKind}`;
   addBindingMutations(bindingName, declaration, bindingContext, result);
+  if (context.callPosition > referencePosition && hasPostCaptureAliasMutation(bindingName, declaration, referencePosition, context)) {
+    result.gaps.push("post-capture-alias-mutation-unresolved");
+  }
   result.candidateBindings.push(candidate);
   return result;
 }
@@ -285,6 +288,18 @@ function addBindingMutations(bindingName: string, declaration: ts.VariableDeclar
       && resolveDeclarationAt(bindingName, node, context) === declaration) {
       result.gaps.push("unary-property-mutation");
     }
+    if (ts.isDeleteExpression(node)) {
+      const field = assignedField(node.expression, bindingName);
+      if (field && resolveDeclarationAt(bindingName, node, context) === declaration) {
+        if (field === "<dynamic>") {
+          result.gaps.push("dynamic-computed-deletion");
+        } else if (isConditionallyExecuted(node, scope)) {
+          result.fields = result.fields.map((candidate) => candidate.name === field ? { ...candidate, presence: "conditional" } : candidate);
+        } else {
+          result.fields = result.fields.filter((candidate) => candidate.name !== field);
+        }
+      }
+    }
     ts.forEachChild(node, visit);
   };
   visit(scope);
@@ -314,6 +329,35 @@ function executionScope(node: ts.Node): ts.Node {
     if (ts.isFunctionLike(current) || ts.isSourceFile(current)) return current;
   }
   return node.getSourceFile();
+}
+
+function hasPostCaptureAliasMutation(bindingName: string, declaration: ts.VariableDeclaration, start: number, context: ShapeContext): boolean {
+  const scope = executionScope(context.callNode);
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (found || (node !== scope && ts.isFunctionLike(node))) return;
+    const position = node.getStart(context.source);
+    if (position <= start || position >= context.callPosition) return ts.forEachChild(node, visit);
+    if (ts.isBinaryExpression(node) && assignedField(node.left, bindingName)
+      && resolveDeclarationAt(bindingName, node, context) === declaration) {
+      found = true;
+      return;
+    }
+    if (ts.isCallExpression(node) && expressionChain(node.expression)?.join(".") === "Object.assign"
+      && ts.isIdentifier(node.arguments[0]) && node.arguments[0].text === bindingName
+      && resolveDeclarationAt(bindingName, node, context) === declaration) {
+      found = true;
+      return;
+    }
+    if (ts.isDeleteExpression(node) && assignedField(node.expression, bindingName)
+      && resolveDeclarationAt(bindingName, node, context) === declaration) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(scope);
+  return found;
 }
 
 function resolveDeclarationAt(bindingName: string, useNode: ts.Node, context: ShapeContext): ts.VariableDeclaration | null {
@@ -352,7 +396,7 @@ function scopeDepth(node: ts.Node): number {
   return depth;
 }
 
-function analyzeArrayLiteral(node: ts.ArrayLiteralExpression, context: ShapeContext, visitedBindings: Set<string>): ShapeAnalysis {
+function analyzeArrayLiteral(node: ts.ArrayLiteralExpression, context: ShapeContext, visitedBindings: Set<string>, inheritedPresence: Presence): ShapeAnalysis {
   const result = emptyAnalysis("array-literal");
   if (node.elements.length === 0) return result;
   const perElement: ShapeAnalysis[] = [];
@@ -365,12 +409,12 @@ function analyzeArrayLiteral(node: ts.ArrayLiteralExpression, context: ShapeCont
       result.gaps.push("array-spread-unresolved");
       continue;
     }
-    perElement.push(analyzeExpression(element as ts.Expression, context, new Set(visitedBindings), "unconditional"));
+    perElement.push(analyzeExpression(element as ts.Expression, context, new Set(visitedBindings), inheritedPresence));
   }
   const elementCount = perElement.length;
   const occurrences = new Map<string, number>();
   for (const analysis of perElement) {
-    for (const field of normalizeFields(analysis.fields)) occurrences.set(field.name, (occurrences.get(field.name) ?? 0) + 1);
+    for (const name of new Set(normalizeFields(analysis.fields).map((field) => field.name))) occurrences.set(name, (occurrences.get(name) ?? 0) + 1);
     mergeAnalysis(result, analysis);
   }
   result.fields = result.fields.map((field) => ({
