@@ -139,7 +139,7 @@ describe("Base44 source-bound static evidence", () => {
     const second = await buildBase44Evidence(options(repo, secondOut));
     const payloadFacts = first.packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityPayload);
 
-    expect(payloadFacts).toHaveLength(3);
+    expect(payloadFacts).toHaveLength(4);
     expect(payloadFacts.map((fact) => fact.factId)).toEqual(
       second.packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityPayload).map((fact) => fact.factId)
     );
@@ -162,6 +162,8 @@ describe("Base44 source-bound static evidence", () => {
     expect(tooling?.properties.fieldsJson).not.toContain("phantom_nested_mutation");
     expect(JSON.parse(tooling?.properties.fieldsJson ?? "[]")).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: "compound_assignment", presence: "conditional" }),
+      expect.objectContaining({ name: "short_circuit_assignment", presence: "conditional" }),
+      expect.objectContaining({ name: "conditional_object_assign", presence: "conditional" }),
       expect.objectContaining({ name: "lookup", origin: "property:records.<literal-key>" })
     ]));
     expect(JSON.parse(tooling?.properties.analysisGapsJson ?? "[]")).toContain("compound-property-assignment:??=");
@@ -182,6 +184,13 @@ describe("Base44 source-bound static evidence", () => {
       expect.objectContaining({ name: "status", presence: "conditional", origin: expect.stringContaining("logical-right") })
     ]));
     expect(JSON.parse(organization?.properties.analysisGapsJson ?? "[]")).toContain("binding-initializer-unresolved");
+
+    const captured = payloadFacts.find((fact) => fact.targetSymbol === "CapturedItem");
+    expect(captured?.properties.completeness).toBe("complete");
+    expect(JSON.parse(captured?.properties.fieldsJson ?? "[]")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "captured_before_reassignment", presence: "unconditional" })
+    ]));
+    expect(captured?.properties.fieldsJson).not.toContain("after_capture");
 
     const query = first.packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityQuery && fact.targetSymbol === "ToolingItem");
     expect(query?.properties.completeness).toBe("partial");
@@ -365,7 +374,9 @@ export async function run(name, includeCost, hours, rate, dynamicKey, criteria, 
   };
   payload.assigned_after_init = 3;
   payload.compound_assignment ??= nextStatus;
+  includeCost && (payload.short_circuit_assignment = nextStatus);
   if (includeCost) payload.conditional_assignment = nextStatus;
+  if (includeCost) Object.assign(payload, { conditional_object_assign: 1 });
   function neverCalled() {
     payload.phantom_nested_mutation = "phantom-private-value";
   }
@@ -379,6 +390,10 @@ export async function run(name, includeCost, hours, rate, dynamicKey, criteria, 
   let partRows = [{ old_sku: "OLD-PRIVATE" }];
   partRows = [...rows, { sku: "SKU-PRIVATE" }, { sku: "SKU-SECOND", price: 2 }];
   await base44.entities.PurchasedPart.bulkCreate(partRows);
+  let original = { captured_before_reassignment: 1 };
+  const capturedPayload = original;
+  original = { after_capture: 2 };
+  await base44.entities.CapturedItem.create(capturedPayload);
   return base44.entities.ToolingItem.filter({ status: "secret-status", ...criteria }, "-created_date", 100, 0, "id,status");
 }
 `);
