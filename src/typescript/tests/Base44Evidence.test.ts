@@ -62,13 +62,21 @@ describe("Base44 source-bound static evidence", () => {
       })
     }));
     expect(JSON.parse(createPayload?.properties.fieldsJson ?? "[]")).toEqual([
-      { expressionType: "string-literal", name: "status", origin: "literal", presence: "unconditional" }
+      expect.objectContaining({
+        expressionType: "string-literal",
+        name: "status",
+        origin: "literal",
+        presence: "unconditional",
+        evidenceStartLine: expect.any(Number),
+        evidenceEndLine: expect.any(Number),
+        evidenceSnippetHash: expect.stringMatching(/^[0-9a-f]{64}$/)
+      })
     ]);
     const filterShape = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityQuery
       && fact.targetSymbol === "Order"
       && fact.properties.operationName === "filter");
     expect(JSON.parse(filterShape?.properties.fieldsJson ?? "[]")).toEqual([
-      { expressionType: "string-literal", name: "status", origin: "filter:literal", presence: "unconditional" }
+      expect.objectContaining({ expressionType: "string-literal", name: "status", origin: "filter:literal", presence: "unconditional" })
     ]);
     const operations = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation);
     const shapes = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityPayload || fact.factType === FactTypes.Base44EntityQuery);
@@ -78,7 +86,7 @@ describe("Base44 source-bound static evidence", () => {
     );
     const deleteManyShape = shapes.find((fact) => fact.properties.operationName === "deleteMany");
     expect(JSON.parse(deleteManyShape?.properties.fieldsJson ?? "[]")).toEqual([
-      { expressionType: "string-literal", name: "status", origin: "filter:literal", presence: "unconditional" }
+      expect.objectContaining({ expressionType: "string-literal", name: "status", origin: "filter:literal", presence: "unconditional" })
     ]);
     const importShape = shapes.find((fact) => fact.properties.operationName === "importEntities");
     expect(importShape?.properties).toEqual(expect.objectContaining({
@@ -151,12 +159,29 @@ describe("Base44 source-bound static evidence", () => {
     expect(JSON.parse(tooling?.properties.analysisGapsJson ?? "[]")).toContain("dynamic-computed-property");
     expect(JSON.parse(tooling?.properties.candidateBindingsJson ?? "[]")).toEqual(expect.arrayContaining(["binding:defaults", "binding:payload"]));
     expect(tooling?.properties.fieldsJson).not.toContain("shadow_only");
+    expect(tooling?.properties.fieldsJson).not.toContain("phantom_nested_mutation");
+    expect(JSON.parse(tooling?.properties.fieldsJson ?? "[]")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "compound_assignment", presence: "conditional" }),
+      expect.objectContaining({ name: "lookup", origin: "property:records.<literal-key>" })
+    ]));
+    expect(JSON.parse(tooling?.properties.analysisGapsJson ?? "[]")).toContain("compound-property-assignment:??=");
 
     const bulk = payloadFacts.find((fact) => fact.targetSymbol === "PurchasedPart");
     expect(JSON.parse(bulk?.properties.fieldsJson ?? "[]")).toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: "sku", presence: "unconditional" }),
+      expect.objectContaining({ name: "sku", presence: "conditional" }),
       expect.objectContaining({ name: "price", presence: "conditional", expressionType: "integer-number-literal" })
     ]));
+    expect(JSON.parse(bulk?.properties.fieldsJson ?? "[]")).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "old_sku" })
+    ]));
+    expect(JSON.parse(bulk?.properties.analysisGapsJson ?? "[]")).toContain("array-spread-unresolved");
+
+    const organization = payloadFacts.find((fact) => fact.targetSymbol === "Organization");
+    expect(organization?.properties.completeness).toBe("partial");
+    expect(JSON.parse(organization?.properties.fieldsJson ?? "[]")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "status", presence: "conditional", origin: expect.stringContaining("logical-right") })
+    ]));
+    expect(JSON.parse(organization?.properties.analysisGapsJson ?? "[]")).toContain("binding-initializer-unresolved");
 
     const query = first.packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityQuery && fact.targetSymbol === "ToolingItem");
     expect(query?.properties.completeness).toBe("partial");
@@ -168,7 +193,7 @@ describe("Base44 source-bound static evidence", () => {
     expect(JSON.parse(query?.properties.analysisGapsJson ?? "[]")).toEqual(expect.arrayContaining(["spread:binding-initializer-unresolved"]));
 
     const serialized = JSON.stringify(first.packet);
-    for (const prohibited of ["secret-tool-name", "secret-status", "private-dynamic-field", "SKU-PRIVATE"]) {
+    for (const prohibited of ["secret-tool-name", "secret-status", "private-dynamic-field", "SKU-PRIVATE", "private-customer-id", "phantom-private-value"]) {
       expect(serialized).not.toContain(prohibited);
     }
   });
@@ -328,25 +353,32 @@ async function payloadFixtureRepo(): Promise<string> {
   await fs.mkdir(path.join(repo, "src"), { recursive: true });
   await fs.writeFile(path.join(repo, "package.json"), JSON.stringify({ dependencies: { "@base44/sdk": "0.8.5" } }));
   await fs.writeFile(path.join(repo, "src/app.ts"), `import { base44 } from "@base44/sdk";
-export async function run(name, includeCost, hours, rate, dynamicKey, criteria, nextStatus) {
+export async function run(name, includeCost, hours, rate, dynamicKey, criteria, nextStatus, records, rows, maybeUpdate) {
   const defaults = { quantity: 1 };
   const payload = {
     ...defaults,
     name,
     decimal_cost: 500.00,
     ...(includeCost ? { job_cost: hours * rate } : {}),
-    [dynamicKey]: "private-dynamic-field"
+    [dynamicKey]: "private-dynamic-field",
+    lookup: records["private-customer-id"]
   };
   payload.assigned_after_init = 3;
+  payload.compound_assignment ??= nextStatus;
   if (includeCost) payload.conditional_assignment = nextStatus;
+  function neverCalled() {
+    payload.phantom_nested_mutation = "phantom-private-value";
+  }
   function unrelatedScope() {
     const payload = { shadow_only: "secret-tool-name" };
     payload.shadow_only = "secret-tool-name";
     return payload;
   }
   await base44.entities.ToolingItem.create(payload);
-  await base44.entities.Organization.update("private-id", { status: nextStatus });
-  await base44.entities.PurchasedPart.bulkCreate([{ sku: "SKU-PRIVATE" }, { sku: "SKU-SECOND", price: 2 }]);
+  await base44.entities.Organization.update("private-id", maybeUpdate ?? { status: nextStatus });
+  let partRows = [{ old_sku: "OLD-PRIVATE" }];
+  partRows = [...rows, { sku: "SKU-PRIVATE" }, { sku: "SKU-SECOND", price: 2 }];
+  await base44.entities.PurchasedPart.bulkCreate(partRows);
   return base44.entities.ToolingItem.filter({ status: "secret-status", ...criteria }, "-created_date", 100, 0, "id,status");
 }
 `);
