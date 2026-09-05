@@ -7,7 +7,7 @@ import { RuleIds, ScannerVersions } from "../facts/RuleIds";
 import { hash } from "../util/Hash";
 import { extractEntityShapeFacts } from "./Base44EntityShapeExtractor";
 
-const entityOperations = new Set(["list", "filter", "get", "create", "update", "delete", "bulkCreate", "subscribe", "upsert", "createMany", "updateMany"]);
+const entityOperations = new Set(["list", "filter", "get", "create", "update", "delete", "deleteMany", "bulkCreate", "importEntities", "subscribe", "upsert"]);
 const primitiveRoots = new Set([
   "auth", "entities", "functions", "integrations",
   "analytics", "appLogs", "users", "asServiceRole",

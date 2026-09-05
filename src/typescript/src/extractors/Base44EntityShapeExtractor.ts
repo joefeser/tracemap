@@ -49,10 +49,7 @@ export interface EntityShapeInput {
 const mutationPayloadIndex = new Map<string, number>([
   ["create", 0],
   ["update", 1],
-  ["upsert", 0],
-  ["bulkCreate", 0],
-  ["createMany", 0],
-  ["updateMany", 1]
+  ["bulkCreate", 0]
 ]);
 
 export function extractEntityShapeFacts(input: EntityShapeInput): CodeFact[] {
@@ -67,7 +64,24 @@ export function extractEntityShapeFacts(input: EntityShapeInput): CodeFact[] {
     return [shapeFact(input, FactTypes.Base44EntityPayload, RuleIds.Base44EntityPayload, payloadIndex, "payload", analysis)];
   }
 
-  if (!["filter", "list", "get", "delete", "subscribe"].includes(input.operationName)) return [];
+  if (input.operationName === "upsert") {
+    const payloadIndex = input.node.arguments.findIndex((argument) => ts.isObjectLiteralExpression(unwrapExpression(argument)));
+    const analysis = payloadIndex >= 0
+      ? analyzeExpression(input.node.arguments[payloadIndex], context, new Set(), "unconditional")
+      : unresolvedAnalysis("upsert-unpinned", "upsert-argument-contract-unpinned");
+    analysis.gaps.push("upsert-argument-contract-unpinned");
+    return [shapeFact(input, FactTypes.Base44EntityPayload, RuleIds.Base44EntityPayload, payloadIndex, "payload", analysis)];
+  }
+
+  if (input.operationName === "importEntities") {
+    const expression = input.node.arguments[0];
+    const analysis = expression
+      ? unresolvedAnalysis(expressionType(expression), "import-file-payload-not-entity-shape", expressionOrigin(expression))
+      : unresolvedAnalysis("missing", "import-file-argument-missing");
+    return [shapeFact(input, FactTypes.Base44EntityPayload, RuleIds.Base44EntityPayload, 0, "import-file", analysis)];
+  }
+
+  if (!["filter", "list", "get", "delete", "deleteMany", "subscribe"].includes(input.operationName)) return [];
   return [queryFact(input, context)];
 }
 
@@ -75,12 +89,14 @@ function queryFact(input: EntityShapeInput, context: ShapeContext): CodeFact {
   const accumulated = emptyAnalysis(`${input.operationName}-arguments`);
   const { fields, spreads, candidateBindings, gaps } = accumulated;
 
-  if (input.operationName === "filter") {
+  if (input.operationName === "filter" || input.operationName === "deleteMany") {
     const filter = input.node.arguments[0];
     if (filter) mergeAnalysis(accumulated, analyzeExpression(filter, context, new Set(), "unconditional"), "filter");
     else gaps.push("filter-argument-missing");
-    addSortEvidence(input.node.arguments[1], fields, candidateBindings, gaps);
-    addSelectEvidence(input.node.arguments[4], fields, candidateBindings, gaps);
+    if (input.operationName === "filter") {
+      addSortEvidence(input.node.arguments[1], fields, candidateBindings, gaps);
+      addSelectEvidence(input.node.arguments[4], fields, candidateBindings, gaps);
+    }
   } else if (input.operationName === "list") {
     addSortEvidence(input.node.arguments[0], fields, candidateBindings, gaps);
     addSelectEvidence(input.node.arguments[3], fields, candidateBindings, gaps);
