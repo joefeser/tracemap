@@ -56,6 +56,25 @@ rules:
     limitations:
       - Entity calls do not prove schema, migration, RLS, service-role, tenant isolation, persistence, or runtime success.
 
+  - id: base44.entity.payload.v1
+    name: Base44 entity mutation payload shape
+    description: Records source-bound create, update, upsert, and bulk payload field presence, expression classes, bounded binding derivation, spreads, and typed ambiguity without literal values.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits: [Base44EntityPayload]
+    limitations:
+      - Static payload shape does not prove branch execution, runtime values, validation, persistence, authorization, tenant isolation, or schema compatibility.
+      - Unresolved bindings, computed fields, spreads, call results, and unsupported constructions remain Tier4Unknown and never prove that an unobserved field is absent.
+      - Binding and expression classes are bounded intrafile evidence; this rule does not execute helpers or infer fields from documentation, schema prose, fixtures, or naming conventions.
+
+  - id: base44.entity.query.v1
+    name: Base44 entity query shape
+    description: Records source-bound filter, sort, and select field evidence plus typed ambiguity without literal filter values.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits: [Base44EntityQuery]
+    limitations:
+      - Static query shape does not prove runtime reachability, returned rows, ordering, projection, authorization, tenant isolation, or backend compatibility.
+      - Dynamic filter, sort, and select constructions remain Tier4Unknown and missing fields are not clean absence outside complete per-callsite coverage.
+
   - id: base44.environment.access.v1
     name: Base44 function environment access
     description: Records environment variable names or explicit dynamic access gaps without values.
