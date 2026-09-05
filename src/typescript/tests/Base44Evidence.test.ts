@@ -139,7 +139,7 @@ describe("Base44 source-bound static evidence", () => {
     const second = await buildBase44Evidence(options(repo, secondOut));
     const payloadFacts = first.packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityPayload);
 
-    expect(payloadFacts).toHaveLength(6);
+    expect(payloadFacts).toHaveLength(9);
     expect(payloadFacts.map((fact) => fact.factId)).toEqual(
       second.packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityPayload).map((fact) => fact.factId)
     );
@@ -205,6 +205,19 @@ describe("Base44 source-bound static evidence", () => {
       expect.objectContaining({ name: "duplicate_a", presence: "conditional" }),
       expect.objectContaining({ name: "second_only", presence: "conditional" })
     ]));
+
+    const conditionalPayload = payloadFacts.find((fact) => fact.targetSymbol === "ConditionalPayload");
+    expect(JSON.parse(conditionalPayload?.properties.fieldsJson ?? "[]")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "late_conditional", presence: "conditional" })
+    ]));
+
+    const moduleScoped = payloadFacts.find((fact) => fact.targetSymbol === "ModuleScopedItem");
+    expect(moduleScoped?.properties.completeness).toBe("partial");
+    expect(JSON.parse(moduleScoped?.properties.analysisGapsJson ?? "[]")).toContain("binding-cross-execution-scope");
+
+    const unaryAlias = payloadFacts.find((fact) => fact.targetSymbol === "UnaryAliasItem");
+    expect(unaryAlias?.properties.completeness).toBe("partial");
+    expect(JSON.parse(unaryAlias?.properties.analysisGapsJson ?? "[]")).toContain("post-capture-alias-mutation-unresolved");
 
     const query = first.packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityQuery && fact.targetSymbol === "ToolingItem");
     expect(query?.properties.completeness).toBe("partial");
@@ -376,6 +389,8 @@ async function payloadFixtureRepo(): Promise<string> {
   await fs.mkdir(path.join(repo, "src"), { recursive: true });
   await fs.writeFile(path.join(repo, "package.json"), JSON.stringify({ dependencies: { "@base44/sdk": "0.8.5" } }));
   await fs.writeFile(path.join(repo, "src/app.ts"), `import { base44 } from "@base44/sdk";
+const modulePayload = { module_initial: 1 };
+modulePayload.module_assigned = 2;
 export async function run(name, includeCost, hours, rate, dynamicKey, criteria, nextStatus, records, rows, maybeUpdate) {
   const defaults = { quantity: 1 };
   const payload = {
@@ -416,6 +431,14 @@ export async function run(name, includeCost, hours, rate, dynamicKey, criteria, 
   firstRow.duplicate_a = 2;
   const secondRow = { second_only: 1 };
   await base44.entities.DuplicateRows.bulkCreate([firstRow, secondRow]);
+  const conditionalPayload = { conditional_base: 1 };
+  conditionalPayload.late_conditional = 2;
+  await base44.entities.ConditionalPayload.create(includeCost ? conditionalPayload : { conditional_other: 3 });
+  await base44.entities.ModuleScopedItem.create(modulePayload);
+  const unarySource = { unary_initial: 1 };
+  const unaryPayload = unarySource;
+  unarySource.unary_after_capture++;
+  await base44.entities.UnaryAliasItem.create(unaryPayload);
   return base44.entities.ToolingItem.filter({ status: "secret-status", ...criteria }, "-created_date", 100, 0, "id,status");
 }
 `);
