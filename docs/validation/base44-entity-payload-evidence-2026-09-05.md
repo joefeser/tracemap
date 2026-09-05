@@ -15,10 +15,10 @@ compatible.
 - Accepted source/tree SHA-256:
   `a5a313b180ef0cdfd2e837779f251cc754978fcd474b6a32646c133b058b6e24`
 - TraceMap implementation commit:
-  `07d3ee21b06f3b1128fc4c4fcdd7bb82b9825c70`
+  `220c07148000e59439505d4fdfe0a82f450558de`
 - Extractor identity: `base44-evidence@base44-evidence/0.2.0`
 - Evidence packet SHA-256:
-  `0d123f9103a7ca87323316132e3a7991474d60fdecd6ecd1eabc553eb2881329`
+  `a739f1dde567511eaafc9796efdeb497847048510b7154d90b90383336ac161c`
 
 The packet was generated into a disposable local output directory and was not
 committed because standard scan artifacts are local-only.
@@ -71,6 +71,9 @@ The focused TypeScript suite proves:
   assignments, array spreads, and nested unexecuted function bodies;
 - reference-time snapshots for aliased object bindings, short-circuit mutation
   branches, and conditional `Object.assign` calls;
+- explicit gaps for post-capture alias mutations, inherited conditional
+  presence for bulk arrays, property-deletion handling, and per-element field
+  occurrence counting;
 - redaction of string-literal element-access segments from property origins;
 - deterministic fact identities for an unchanged executable source snapshot;
 - zero Base44 fact delta after adding a false `database-schema.md` document;
