@@ -76,6 +76,16 @@ describe("Base44 source-bound static evidence", () => {
     expect(shapes.map((fact) => fact.properties.operationEvidenceId).sort()).toEqual(
       operations.map((fact) => fact.properties.operationEvidenceId).sort()
     );
+    const deleteManyShape = shapes.find((fact) => fact.properties.operationName === "deleteMany");
+    expect(JSON.parse(deleteManyShape?.properties.fieldsJson ?? "[]")).toEqual([
+      { expressionType: "string-literal", name: "status", origin: "filter:literal", presence: "unconditional" }
+    ]);
+    const importShape = shapes.find((fact) => fact.properties.operationName === "importEntities");
+    expect(importShape?.properties).toEqual(expect.objectContaining({
+      argumentRole: "import-file",
+      completeness: "unresolved",
+      analysisGapsJson: '["import-file-payload-not-entity-shape"]'
+    }));
     expect(packet.facts).toContainEqual(expect.objectContaining({
       factType: FactTypes.Base44FunctionInvocation,
       targetSymbol: "serviceFunction"
@@ -271,6 +281,8 @@ export async function currentSdkSurfaces() {
   base44.users.inviteUser("owned@example.invalid");
   base44.asServiceRole.integrations.Core.SendEmail({ to: "owned@example.invalid" });
   base44.asServiceRole.entities.Order.filter({ status: "open" });
+  base44.asServiceRole.entities.Order.deleteMany({ status: "retired" });
+  base44.asServiceRole.entities.Order.importEntities(file);
   base44.asServiceRole.functions.invoke("serviceFunction");
   await base44.asServiceRole.functions.invoke("chainedServiceFunction").then(() => undefined);
   base44.integrations.functions.invoke("helperFunction");
