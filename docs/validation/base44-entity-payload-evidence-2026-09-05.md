@@ -15,10 +15,10 @@ compatible.
 - Accepted source/tree SHA-256:
   `a5a313b180ef0cdfd2e837779f251cc754978fcd474b6a32646c133b058b6e24`
 - TraceMap implementation commit:
-  `5be416d36e3bb951ed1d9c595e880df898af21b3`
+  `07149774b7af8c08b57dea49036bcb3f762d074f`
 - Extractor identity: `base44-evidence@base44-evidence/0.2.0`
 - Evidence packet SHA-256:
-  `8364ffa3fda63f9ef8a91fe92f73978a77007862a3a0a369ac38226b0a5d1667`
+  `cabdaf7f2e01501436867833574fc490a3a1d1da98a9a3955899a2a907c2c053`
 
 The packet was generated into a disposable local output directory and was not
 committed because standard scan artifacts are local-only.
