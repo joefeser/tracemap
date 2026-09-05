@@ -37,7 +37,7 @@ The additive JavaScript/JSX/TypeScript/TSX `base44.*.v1` rules cover:
 - SQL migration surface hashes and statement kinds; and
 - customer-authored function/entity boundaries.
 
-Facts contain repository and commit identity, rule, evidence tier, extractor identity/version, relative path, a first-class line span, source-file digest, and snippet digest. They never store source snippets, environment values, URL paths/query strings, tokens, or cookies.
+Facts contain repository and commit identity, rule, evidence tier, extractor identity/version, relative path, a first-class line span, source-file digest, and snippet digest. Each statically derived field also carries the contributing syntax's line span and snippet digest so identifier, spread, and mutation evidence remains independently inspectable even when it is defined away from the SDK callsite. They never store source snippets, environment values, URL paths/query strings, tokens, or cookies.
 
 `base44.entity.payload.v1` and `base44.entity.query.v1` are additive facts in
 the v1 packet. Structured field, spread, binding, and gap collections are
@@ -51,7 +51,8 @@ The extractor intentionally records only expression classes such as
 `decimal-number-literal`, `binary-expression`, `call-expression`, and
 `property-access`. Literal customer values are not retained. Binding and
 property origins contain code identifiers needed to trace source flow, never
-the values held by those identifiers.
+the values held by those identifiers. String-literal element-access segments
+in origins are replaced by a non-value-bearing marker.
 
 ## Consumer contract
 
