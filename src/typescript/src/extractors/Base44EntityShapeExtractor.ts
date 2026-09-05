@@ -33,7 +33,7 @@ interface ShapeAnalysis {
 
 interface ShapeContext {
   source: ts.SourceFile;
-  callNode: ts.CallExpression;
+  callNode: ts.Node;
   callPosition: number;
   declarations: Map<string, ts.VariableDeclaration[]>;
 }
@@ -224,16 +224,18 @@ function analyzeIdentifier(identifier: ts.Identifier, context: ShapeContext, vis
   const bindingName = identifier.text;
   const candidate = `binding:${bindingName}`;
   if (visitedBindings.has(bindingName)) return unresolvedAnalysis("identifier-reference", "binding-cycle", candidate);
+  const referencePosition = identifier.getStart(context.source);
   const declaration = [...(context.declarations.get(bindingName) ?? [])]
-    .filter((item) => item.getStart(context.source) < context.callPosition)
-    .filter((item) => isDeclarationVisibleAt(item, context.callNode))
+    .filter((item) => item.getStart(context.source) < referencePosition)
+    .filter((item) => isDeclarationVisibleAt(item, identifier))
     .sort((left, right) => scopeDepth(declarationScope(right)) - scopeDepth(declarationScope(left))
       || right.getStart(context.source) - left.getStart(context.source))[0];
   if (!declaration?.initializer) return unresolvedAnalysis("identifier-reference", "binding-initializer-unresolved", candidate);
+  const bindingContext: ShapeContext = { ...context, callNode: identifier, callPosition: referencePosition };
   const nextVisited = new Set(visitedBindings).add(bindingName);
-  const result = analyzeExpression(declaration.initializer, context, nextVisited, presence);
+  const result = analyzeExpression(declaration.initializer, bindingContext, nextVisited, presence);
   result.constructionKind = `identifier:${result.constructionKind}`;
-  addBindingMutations(bindingName, declaration, context, result);
+  addBindingMutations(bindingName, declaration, bindingContext, result);
   result.candidateBindings.push(candidate);
   return result;
 }
@@ -269,8 +271,10 @@ function addBindingMutations(bindingName: string, declaration: ts.VariableDeclar
     }
     if (ts.isCallExpression(node) && expressionChain(node.expression)?.join(".") === "Object.assign" && ts.isIdentifier(node.arguments[0]) && node.arguments[0].text === bindingName
       && resolveDeclarationAt(bindingName, node, context) === declaration) {
+      const conditional = isConditionallyExecuted(node, scope);
       for (const source of node.arguments.slice(1)) {
-        const spread = analyzeExpression(source, context, new Set([bindingName]), "spread-derived");
+        const spread = analyzeExpression(source, context, new Set([bindingName]), conditional ? "conditional" : "spread-derived");
+        if (conditional) spread.fields = spread.fields.map((field) => ({ ...field, presence: "conditional" }));
         mergeAnalysis(result, spread);
         result.gaps.push(...spread.gaps.map((gap) => `object-assign:${gap}`));
       }
@@ -438,6 +442,9 @@ function isConditionallyExecuted(node: ts.Node, source: ts.Node): boolean {
     if (ts.isIfStatement(parent) || ts.isConditionalExpression(parent) || ts.isSwitchStatement(parent)
       || ts.isForStatement(parent) || ts.isForInStatement(parent) || ts.isForOfStatement(parent)
       || ts.isWhileStatement(parent) || ts.isDoStatement(parent) || ts.isTryStatement(parent)) return true;
+    if (ts.isBinaryExpression(parent)
+      && [ts.SyntaxKind.AmpersandAmpersandToken, ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken].includes(parent.operatorToken.kind)
+      && isAncestor(parent.right, node)) return true;
   }
   return false;
 }
