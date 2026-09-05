@@ -235,7 +235,10 @@ function analyzeIdentifier(identifier: ts.Identifier, context: ShapeContext, vis
   const nextVisited = new Set(visitedBindings).add(bindingName);
   const result = analyzeExpression(declaration.initializer, bindingContext, nextVisited, presence);
   result.constructionKind = `identifier:${result.constructionKind}`;
-  addBindingMutations(bindingName, declaration, bindingContext, result);
+  addBindingMutations(bindingName, declaration, bindingContext, result, presence);
+  if (executionScope(declaration) !== executionScope(identifier)) {
+    result.gaps.push("binding-cross-execution-scope");
+  }
   if (context.callPosition > referencePosition && hasPostCaptureAliasMutation(bindingName, declaration, referencePosition, context)) {
     result.gaps.push("post-capture-alias-mutation-unresolved");
   }
@@ -243,7 +246,7 @@ function analyzeIdentifier(identifier: ts.Identifier, context: ShapeContext, vis
   return result;
 }
 
-function addBindingMutations(bindingName: string, declaration: ts.VariableDeclaration, context: ShapeContext, result: ShapeAnalysis): void {
+function addBindingMutations(bindingName: string, declaration: ts.VariableDeclaration, context: ShapeContext, result: ShapeAnalysis, inheritedPresence: Presence): void {
   const declarationEnd = declaration.getEnd();
   const scope = executionScope(context.callNode);
   const visit = (node: ts.Node): void => {
@@ -253,7 +256,8 @@ function addBindingMutations(bindingName: string, declaration: ts.VariableDeclar
     if (ts.isBinaryExpression(node) && isAssignmentOperator(node.operatorToken.kind)) {
       if (ts.isIdentifier(node.left) && node.left.text === bindingName && resolveDeclarationAt(bindingName, node, context) === declaration) {
         if (node.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
-          applyBindingReassignment(bindingName, node, context, result, isConditionallyExecuted(node, scope));
+          applyBindingReassignment(bindingName, node, context, result,
+            inheritedPresence === "conditional" || isConditionallyExecuted(node, scope) ? "conditional" : inheritedPresence);
         } else {
           result.gaps.push(`binding-compound-reassignment:${ts.tokenToString(node.operatorToken.kind) ?? "unknown"}`);
         }
@@ -268,13 +272,13 @@ function addBindingMutations(bindingName: string, declaration: ts.VariableDeclar
         result.gaps.push("dynamic-computed-assignment");
       } else if (field) {
         const simpleAssignment = node.operatorToken.kind === ts.SyntaxKind.EqualsToken;
-        result.fields.push(fieldEvidence(field, simpleAssignment && !isConditionallyExecuted(node, scope) ? "unconditional" : "conditional", expressionType(node.right), expressionOrigin(node.right), node, context));
+        result.fields.push(fieldEvidence(field, simpleAssignment && inheritedPresence !== "conditional" && !isConditionallyExecuted(node, scope) ? inheritedPresence : "conditional", expressionType(node.right), expressionOrigin(node.right), node, context));
         if (!simpleAssignment) result.gaps.push(`compound-property-assignment:${ts.tokenToString(node.operatorToken.kind) ?? "unknown"}`);
       }
     }
     if (ts.isCallExpression(node) && expressionChain(node.expression)?.join(".") === "Object.assign" && ts.isIdentifier(node.arguments[0]) && node.arguments[0].text === bindingName
       && resolveDeclarationAt(bindingName, node, context) === declaration) {
-      const conditional = isConditionallyExecuted(node, scope);
+      const conditional = inheritedPresence === "conditional" || isConditionallyExecuted(node, scope);
       for (const source of node.arguments.slice(1)) {
         const spread = analyzeExpression(source, context, new Set([bindingName]), conditional ? "conditional" : "spread-derived");
         if (conditional) spread.fields = spread.fields.map((field) => ({ ...field, presence: "conditional" }));
@@ -305,9 +309,9 @@ function addBindingMutations(bindingName: string, declaration: ts.VariableDeclar
   visit(scope);
 }
 
-function applyBindingReassignment(bindingName: string, node: ts.BinaryExpression, context: ShapeContext, result: ShapeAnalysis, conditional: boolean): void {
-  const replacement = analyzeExpression(node.right, context, new Set([bindingName]), conditional ? "conditional" : "unconditional");
-  if (conditional) {
+function applyBindingReassignment(bindingName: string, node: ts.BinaryExpression, context: ShapeContext, result: ShapeAnalysis, presence: Presence): void {
+  const replacement = analyzeExpression(node.right, context, new Set([bindingName]), presence);
+  if (presence === "conditional") {
     result.fields = result.fields.map((field) => ({ ...field, presence: "conditional" }));
     mergeAnalysis(result, replacement, "conditional-reassignment");
     result.gaps.push("conditional-binding-reassignment");
@@ -350,6 +354,13 @@ function hasPostCaptureAliasMutation(bindingName: string, declaration: ts.Variab
       return;
     }
     if (ts.isDeleteExpression(node) && assignedField(node.expression, bindingName)
+      && resolveDeclarationAt(bindingName, node, context) === declaration) {
+      found = true;
+      return;
+    }
+    if (((ts.isPrefixUnaryExpression(node) && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(node.operator))
+      || ts.isPostfixUnaryExpression(node))
+      && assignedField(node.operand, bindingName)
       && resolveDeclarationAt(bindingName, node, context) === declaration) {
       found = true;
       return;
