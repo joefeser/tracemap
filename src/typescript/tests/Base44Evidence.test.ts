@@ -4,16 +4,32 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 import { buildBase44Evidence, diffBase44Evidence } from "../src/base44/Base44EvidencePacket";
+import { createFactId } from "../src/facts/FactFactory";
 import { FactTypes } from "../src/facts/Models";
 
 const shaA = "a".repeat(64);
 const shaB = "b".repeat(64);
 
 describe("Base44 source-bound static evidence", () => {
+  it("preserves complete query shapes for transparent wrapped controls", async () => {
+    const repo = await fixtureRepo();
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-query-wrappers-"));
+    await fs.writeFile(path.join(repo, "src/wrapped-query.ts"),
+      'import { base44 } from "@base44/sdk"; base44.entities.Order.filter(({state: `open`} satisfies Filter), (`-id` satisfies string), 25, 0, ([`id`] satisfies string[]));');
+    const {packet} = await buildBase44Evidence(options(repo,out));
+    const fact = packet.facts.find(f => f.factType === FactTypes.Base44EntityQuery && f.evidence.filePath === "src/wrapped-query.ts");
+    expect(fact?.properties.completeness).toBe("complete");
+    expect(JSON.parse(fact?.properties.querySemanticsJson ?? "null").completeness).toBe("complete");
+    expect(JSON.parse(fact?.properties.fieldsJson ?? "[]")).toEqual(expect.arrayContaining([
+      expect.objectContaining({name:"id",origin:"sort-argument"}),
+      expect.objectContaining({name:"id",origin:"select-argument"})
+    ]));
+  });
+
   it("extracts SDK, function, entity, env, provider and migration surfaces without raw secrets or URLs", async () => {
     const repo = await fixtureRepo();
     const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-out-"));
-    const { packet } = await buildBase44Evidence(options(repo, out));
+    const { packet, result } = await buildBase44Evidence(options(repo, out));
 
     expect(packet.schemaVersion).toBe("tracemap.base44.static-evidence.v1");
     expect(packet.source.acceptedSourceSha256).toBe(shaA);
@@ -75,6 +91,18 @@ describe("Base44 source-bound static evidence", () => {
     const filterShape = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityQuery
       && fact.targetSymbol === "Order"
       && fact.properties.operationName === "filter");
+    expect(JSON.parse(filterShape?.properties.querySemanticsJson ?? "null")).toMatchObject({
+      schemaVersion: "88mph.entity-query.v1", method: "filter", completeness: "complete"
+    });
+    for (const fact of result.facts.filter(f => f.properties.querySemanticsJson)) {
+      const id = (properties: Record<string,string>) => createFactId(fact.scanId, fact.factType, fact.ruleId,
+        fact.evidence.filePath, fact.evidence.startLine, fact.evidence.endLine,
+        fact.projectPath, fact.sourceSymbol, fact.targetSymbol, fact.contractElement, properties);
+      expect(fact.factId).toBe(id(fact.properties));
+      const withoutQuery = {...fact.properties};
+      delete withoutQuery.querySemanticsJson;
+      expect(fact.factId).not.toBe(id(withoutQuery));
+    }
     expect(JSON.parse(filterShape?.properties.fieldsJson ?? "[]")).toEqual([
       expect.objectContaining({ expressionType: "string-literal", name: "status", origin: "filter:literal", presence: "unconditional" })
     ]);
