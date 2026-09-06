@@ -86,3 +86,7 @@ Consumers must:
    unresolved callsite.
 
 The JSON Schema at `docs/contracts/base44-static-evidence.v1.schema.json` defines the wire shape. Additive packet fields are allowed, while the named identity and provenance fields are required.
+
+The additive normalized query descriptor introduced in `base44-evidence/0.3.0`
+is documented in [Base44 query semantics v1](BASE44_QUERY_SEMANTICS_V1.md).
+It retains literal pagination controls but never filter operand values.
