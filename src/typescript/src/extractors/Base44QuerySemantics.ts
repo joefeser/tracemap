@@ -91,9 +91,11 @@ export function extractQuerySemantics(call: ts.CallExpression, source: ts.Source
         }
         entries.push({ field, form: "operators", operators });
       } else {
-        const evidence = operand(value);
-        if (evidence.kind === "reference") gaps.add("query:implicit_predicate_type_unresolved");
-        entries.push({ field, form: "implicit", operand: evidence });
+        // A direct identifier/member reference is complete source evidence
+        // for a runtime-deferred value expression. Its eventual structure and
+        // interpretation belong to exact-SDK/runtime conformance, not static
+        // type inference.
+        entries.push({ field, form: "implicit", operand: operand(value) });
       }
     }
     return { kind: "filter", entries };
@@ -133,5 +135,5 @@ export function extractQuerySemantics(call: ts.CallExpression, source: ts.Source
     return { index, role, presence: "supplied", span: span(node), value };
   });
   if (call.arguments.length > roles.length) gaps.add("query:extra_arguments");
-  return { schemaVersion: "88mph.entity-query.v1", method, completeness: gaps.size ? "unresolved" : "complete", arguments: args, gaps: [...gaps].sort() };
+  return { schemaVersion: "88mph.entity-query.v2", method, completeness: gaps.size ? "unresolved" : "complete", arguments: args, gaps: [...gaps].sort() };
 }
