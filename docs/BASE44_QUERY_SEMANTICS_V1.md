@@ -34,6 +34,38 @@ reverse-engineer's independent Babel output, but only after the reviewed
 producer identity is admitted. The extractor never publishes compatibility,
 SQL, migrations, or release decisions.
 
-Validation: `npm run check --prefix src/typescript` and a fresh source-bound
-ShopGenie scan. The .NET implementation is unchanged; its suite is explicitly
-deferred for this TypeScript-only extractor change.
+## Validation record
+
+Followed `docs/VALIDATION.md` for the applicable TypeScript adapter checks:
+
+- `npm run check --prefix src/typescript`: build and 94 tests pass, including
+  sample/fixture semantic and syntax-fallback behavior, query evidence,
+  relationships and the fact-ID recomputation regression.
+- `TRACEMAP_SKIP_BUILD=1 TRACEMAP_OSS_SMOKE_REPOS=scip-typescript,axios-npm-lock scripts/smoke-open-source-repos.sh /tmp/query-oss-cache /tmp/query-oss-out`:
+  both pinned TypeScript smoke scans complete with required artifacts and
+  populated relationship tables. `scip-typescript` at
+  `891eb4293709a6a587bf4468dfa1b45a85182fd9` emits 14,060 facts, 2,461 call
+  edges, 281 object creations and 1,475 argument flows, with 33 analysis gaps.
+  `axios-npm-lock` at `84a9f3b9a4f3244b8c8e818f557d64c7b964fb25` emits 11,186
+  facts, 2,127 call edges, 146 object creations and 1,363 argument flows, with
+  56 gaps. Both honestly report `Level1SemanticAnalysisReduced` and
+  `FailedOrPartial`; smoke completion is not full semantic coverage.
+- `python3 scripts/test_validate_adapter_artifacts.py`: seven tests pass.
+- `scripts/check-private-paths.sh`: passes.
+- A fresh source-bound ShopGenie Base44 scan is required for candidate evidence;
+  this uses executable source without installing or running the app.
+
+Local .NET build/tests, JVM tests, Python adapter install/tests and endpoint
+smoke, Swift tests, and non-TypeScript OSS samples are explicitly deferred:
+those implementations are unchanged by this Base44 TypeScript extractor slice.
+The full cross-adapter combine/report/paths/reverse/export matrix is delegated
+to Adapter Validation CI, whose initial candidate run passed all five adapters
+and the combine job after one retry of an unchanged .NET restore-diagnostic
+assertion. That earlier CI run is not evidence for a later head; current-head
+CI remains a merge gate. No full-reader .NET memory or downstream reducer change
+is claimed here because this change does not touch those paths.
+
+Review hardening includes signed numeric operands, static no-substitution
+backtick strings, transparent `satisfies` wrappers, a bounded iterative wrapper
+walk, and including `querySemanticsJson` before fact identity is calculated.
+Filter values remain excluded, and unresolved descriptors remain blocking.
