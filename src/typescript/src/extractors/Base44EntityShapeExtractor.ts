@@ -177,7 +177,7 @@ function analyzeObjectLiteral(node: ts.ObjectLiteralExpression, context: ShapeCo
   const result = emptyAnalysis("object-literal");
   for (const property of node.properties) {
     if (ts.isSpreadAssignment(property)) {
-      const spread = analyzeExpression(property.expression, context, new Set(visitedBindings), "spread-derived");
+      const spread = analyzeExpression(property.expression, context, new Set(visitedBindings), inheritedPresence === "conditional" ? "conditional" : "spread-derived");
       const spreadOrigin = expressionOrigin(property.expression);
       result.spreads.push({
         expressionType: expressionType(property.expression),
@@ -188,7 +188,7 @@ function analyzeObjectLiteral(node: ts.ObjectLiteralExpression, context: ShapeCo
       result.candidateBindings.push(spreadOrigin, ...spread.candidateBindings);
       result.gaps.push(...spread.gaps.map((gap) => `spread:${gap}`));
       for (const field of spread.fields) {
-        result.fields.push({ ...field, presence: field.presence === "conditional" ? "conditional" : "spread-derived" });
+        result.fields.push({ ...field, presence: inheritedPresence === "conditional" || field.presence === "conditional" ? "conditional" : "spread-derived" });
       }
       result.spreads.push(...spread.spreads);
       continue;
@@ -225,12 +225,9 @@ function analyzeIdentifier(identifier: ts.Identifier, context: ShapeContext, vis
   const candidate = `binding:${bindingName}`;
   if (visitedBindings.has(bindingName)) return unresolvedAnalysis("identifier-reference", "binding-cycle", candidate);
   const referencePosition = identifier.getStart(context.source);
-  const declaration = [...(context.declarations.get(bindingName) ?? [])]
-    .filter((item) => item.getStart(context.source) < referencePosition)
-    .filter((item) => isDeclarationVisibleAt(item, identifier))
-    .sort((left, right) => scopeDepth(declarationScope(right)) - scopeDepth(declarationScope(left))
-      || right.getStart(context.source) - left.getStart(context.source))[0];
+  const declaration = resolveDeclarationAt(bindingName, identifier, context);
   if (!declaration?.initializer) return unresolvedAnalysis("identifier-reference", "binding-initializer-unresolved", candidate);
+  if (!ts.isIdentifier(declaration.name)) return unresolvedAnalysis("identifier-reference", "destructured-binding-unresolved", candidate);
   const bindingContext: ShapeContext = { ...context, callNode: identifier, callPosition: referencePosition };
   const nextVisited = new Set(visitedBindings).add(bindingName);
   const result = analyzeExpression(declaration.initializer, bindingContext, nextVisited, presence);
@@ -253,6 +250,8 @@ function addBindingMutations(bindingName: string, declaration: ts.VariableDeclar
     if (node !== scope && ts.isFunctionLike(node)) return;
     const position = node.getStart(context.source);
     if (position <= declarationEnd || position >= context.callPosition) return ts.forEachChild(node, visit);
+    const referenceGap = unmodeledReferenceUse(node, bindingName, declaration, context);
+    if (referenceGap) result.gaps.push(referenceGap);
     if (ts.isBinaryExpression(node) && isAssignmentOperator(node.operatorToken.kind)) {
       if (ts.isIdentifier(node.left) && node.left.text === bindingName && resolveDeclarationAt(bindingName, node, context) === declaration) {
         if (node.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
@@ -342,6 +341,10 @@ function hasPostCaptureAliasMutation(bindingName: string, declaration: ts.Variab
     if (found || (node !== scope && ts.isFunctionLike(node))) return;
     const position = node.getStart(context.source);
     if (position <= start || position >= context.callPosition) return ts.forEachChild(node, visit);
+    if (unmodeledReferenceUse(node, bindingName, declaration, context)) {
+      found = true;
+      return;
+    }
     if (ts.isBinaryExpression(node) && assignedField(node.left, bindingName)
       && resolveDeclarationAt(bindingName, node, context) === declaration) {
       found = true;
@@ -371,12 +374,46 @@ function hasPostCaptureAliasMutation(bindingName: string, declaration: ts.Variab
   return found;
 }
 
+// Reference escapes can mutate an object without a direct assignment to its binding.
+// Keep the observed fields but do not infer the behavior of aliases or helpers.
+function unmodeledReferenceUse(node: ts.Node, bindingName: string, declaration: ts.VariableDeclaration, context: ShapeContext): string | null {
+  // The containing call/capture has not executed yet at this reference.
+  if (isAncestor(node, context.callNode)) return null;
+  const referencesBinding = (expression: ts.Expression | undefined): boolean => {
+    if (!expression) return false;
+    const unwrapped = unwrapExpression(expression);
+    return ts.isIdentifier(unwrapped) && unwrapped.text === bindingName
+      && resolveDeclarationAt(bindingName, unwrapped, context) === declaration;
+  };
+  if ((ts.isVariableDeclaration(node) && referencesBinding(node.initializer))
+    || (ts.isBinaryExpression(node) && isAssignmentOperator(node.operatorToken.kind) && referencesBinding(node.right))
+    || (ts.isPropertyAssignment(node) && referencesBinding(node.initializer))) {
+    return "binding-alias-escape-unresolved";
+  }
+  if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
+    // Object.assign is already modeled as a shallow copy, with no source escape.
+    if (ts.isCallExpression(node) && expressionChain(node.expression)?.join(".") === "Object.assign") return null;
+    const callee = unwrapExpression(node.expression);
+    if ((ts.isPropertyAccessExpression(callee) || ts.isElementAccessExpression(callee))
+      && referencesBinding(callee.expression)) return "binding-method-call-unresolved";
+    if (node.arguments?.some(referencesBinding)) return "binding-call-escape-unresolved";
+  }
+  return null;
+}
+
 function resolveDeclarationAt(bindingName: string, useNode: ts.Node, context: ShapeContext): ts.VariableDeclaration | null {
-  return [...(context.declarations.get(bindingName) ?? [])]
-    .filter((item) => item.getStart(context.source) < useNode.getStart(context.source))
+  // Select the lexical binding before checking source order: a later declaration
+  // still shadows an outer one (including a temporal dead zone).
+  const declaration = [...(context.declarations.get(bindingName) ?? [])]
     .filter((item) => isDeclarationVisibleAt(item, useNode))
     .sort((left, right) => scopeDepth(declarationScope(right)) - scopeDepth(declarationScope(left))
-      || right.getStart(context.source) - left.getStart(context.source))[0] ?? null;
+      || right.getStart(context.source) - left.getStart(context.source))[0];
+  const scope = declaration && declarationScope(declaration);
+  for (let current: ts.Node | undefined = useNode; current; current = current.parent) {
+    if (ts.isFunctionLike(current) && current.parameters.some((parameter) => bindingNames(parameter.name).includes(bindingName))) return null;
+    if (current === scope) break;
+  }
+  return declaration && declaration.getStart(context.source) < useNode.getStart(context.source) ? declaration : null;
 }
 
 function isDeclarationVisibleAt(declaration: ts.VariableDeclaration, useNode: ts.Node): boolean {
@@ -385,6 +422,7 @@ function isDeclarationVisibleAt(declaration: ts.VariableDeclaration, useNode: ts
 }
 
 function declarationScope(declaration: ts.VariableDeclaration): ts.Node {
+  if (ts.isCatchClause(declaration.parent)) return declaration.parent;
   const declarationList = declaration.parent;
   const functionScoped = ts.isVariableDeclarationList(declarationList)
     && (declarationList.flags & (ts.NodeFlags.Let | ts.NodeFlags.Const)) === 0;
@@ -473,15 +511,22 @@ function shapeFact(input: EntityShapeInput, factType: string, ruleId: string, ar
 function collectVariableDeclarations(source: ts.SourceFile): Map<string, ts.VariableDeclaration[]> {
   const declarations = new Map<string, ts.VariableDeclaration[]>();
   const visit = (node: ts.Node): void => {
-    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
-      const current = declarations.get(node.name.text) ?? [];
-      current.push(node);
-      declarations.set(node.name.text, current);
+    if (ts.isVariableDeclaration(node)) {
+      for (const name of bindingNames(node.name)) {
+        const current = declarations.get(name) ?? [];
+        current.push(node);
+        declarations.set(name, current);
+      }
     }
     ts.forEachChild(node, visit);
   };
   visit(source);
   return declarations;
+}
+
+function bindingNames(name: ts.BindingName): string[] {
+  if (ts.isIdentifier(name)) return [name.text];
+  return name.elements.flatMap((element) => ts.isBindingElement(element) ? bindingNames(element.name) : []);
 }
 
 function assignedField(left: ts.Expression, bindingName: string): string | null {

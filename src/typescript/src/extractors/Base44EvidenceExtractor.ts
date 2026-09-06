@@ -132,6 +132,8 @@ function addSdkCall(chain: string[], node: ts.CallExpression, source: ts.SourceF
       filePath,
       String(operationStartLine),
       String(operationEndLine),
+      String(node.getStart(source)),
+      String(node.getEnd()),
       entityName,
       operationName,
       hash(node.getText(source), 64)

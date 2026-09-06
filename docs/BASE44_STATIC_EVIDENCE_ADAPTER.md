@@ -47,6 +47,24 @@ only when the modeled shape is complete. Any unresolved binding, dynamic
 computed property, unresolved spread, or unsupported construction marks that
 fact `Tier4Unknown`; a consumer must not interpret omitted fields as absent.
 
+Conditional presence propagates through every nested object spread. Payload
+bindings that escape through another local alias, an object property, helper
+arguments, or a method call retain observed fields but receive typed gaps:
+`binding-alias-escape-unresolved`, `binding-call-escape-unresolved`, or
+`binding-method-call-unresolved`. The extractor does not prove these uses are
+pure, simulate their mutations, or reconstruct a general alias graph. The same
+uses after an alias capture produce `post-capture-alias-mutation-unresolved`.
+Parameters, catch bindings, destructured bindings, and later local declarations
+shadow outer bindings; unsupported initializers remain unresolved rather than
+borrowing unrelated outer fields. Destructuring emits
+`destructured-binding-unresolved`.
+
+Operation linkage includes source character offsets as well as line spans and
+syntax hashes, so identical calls on one line remain distinct. Extractor
+`base44-evidence/0.2.1` changes these derived IDs; regenerate both comparison
+snapshots with the same extractor version rather than treating an ID migration
+as a source change.
+
 The extractor intentionally records only expression classes such as
 `decimal-number-literal`, `binary-expression`, `call-expression`, and
 `property-access`. Literal customer values are not retained. Binding and
