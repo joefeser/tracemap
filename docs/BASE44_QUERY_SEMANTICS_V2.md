@@ -10,10 +10,18 @@ a runtime-deferred value expression. The operand remains a redacted `reference`
 plus its exact source span, with its eventual structure and interpretation
 deferred to exact-SDK and runtime conformance.
 
+Reference admission is recursive and intentionally non-executable. Identifier
+roots, `this`, property chains, and element chains whose indexes are literals or
+admitted references are accepted. A call, construction, assignment, or other
+unsupported expression at any receiver or index depth makes the whole operand
+unresolved with `query:operand_expression_unsupported`; an outer member-access
+node cannot hide executable syntax such as `helper().id` or
+`values[makeKey()]`.
+
 This does not infer the reference's type or value, turn a reference into an
 implicit equality claim, or authorize a narrower database/runtime contract.
 The replacement runtime must accept the SDK's open query-object behavior.
-Root filter bindings, spreads, computed or duplicate keys, logical composition,
+Root filter bindings, spreads, computed or duplicate filter keys, logical composition,
 unsupported expressions, dynamic controls, unknown operators, empty operator
 objects, and traversal overflow remain unresolved.
 
