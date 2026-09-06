@@ -1,4 +1,5 @@
 import ts from "typescript";
+import { extractQuerySemantics } from "./Base44QuerySemantics";
 import { CodeFact, EvidenceTiers, FactTypes, ScanManifest } from "../facts/Models";
 import { createEvidence, createFact } from "../facts/FactFactory";
 import { RuleIds, ScannerVersions } from "../facts/RuleIds";
@@ -91,6 +92,8 @@ export function extractEntityShapeFacts(input: EntityShapeInput): CodeFact[] {
 function queryFact(input: EntityShapeInput, context: ShapeContext): CodeFact {
   const accumulated = emptyAnalysis(`${input.operationName}-arguments`);
   const { fields, spreads, candidateBindings, gaps } = accumulated;
+  const querySemantics = extractQuerySemantics(input.node, input.source, input.operationName);
+  if (querySemantics?.completeness === "unresolved") gaps.push(...querySemantics.gaps);
 
   if (input.operationName === "filter" || input.operationName === "deleteMany") {
     const filter = input.node.arguments[0];
@@ -116,11 +119,13 @@ function queryFact(input: EntityShapeInput, context: ShapeContext): CodeFact {
     candidateBindings: unique(candidateBindings),
     gaps: unique(gaps)
   };
-  return shapeFact(input, FactTypes.Base44EntityQuery, RuleIds.Base44EntityQuery, -1, "query", analysis);
+  const fact = shapeFact(input, FactTypes.Base44EntityQuery, RuleIds.Base44EntityQuery, -1, "query", analysis);
+  if (querySemantics) fact.properties.querySemanticsJson = JSON.stringify(querySemantics);
+  return fact;
 }
 
 function addSortEvidence(expression: ts.Expression | undefined, fields: ShapeField[], bindings: string[], gaps: string[], context?: ShapeContext): void {
-  if (!expression || expression.kind === ts.SyntaxKind.UndefinedKeyword) return;
+  if (!expression || expression.kind === ts.SyntaxKind.UndefinedKeyword || unwrapExpression(expression).kind === ts.SyntaxKind.NullKeyword) return;
   if (ts.isStringLiteralLike(expression)) {
     const names = expression.text.split(",").map((item) => item.trim().replace(/^[-+]/, "")).filter(isSafeFieldName);
     if (names.length === 0) gaps.push("sort-field-literal-unresolved");
@@ -137,7 +142,7 @@ function addSortEvidence(expression: ts.Expression | undefined, fields: ShapeFie
 }
 
 function addSelectEvidence(expression: ts.Expression | undefined, fields: ShapeField[], bindings: string[], gaps: string[], context?: ShapeContext): void {
-  if (!expression || expression.kind === ts.SyntaxKind.UndefinedKeyword) return;
+  if (!expression || expression.kind === ts.SyntaxKind.UndefinedKeyword || unwrapExpression(expression).kind === ts.SyntaxKind.NullKeyword) return;
   if (ts.isStringLiteralLike(expression)) {
     const names = expression.text.split(",").map((item) => item.trim()).filter(isSafeFieldName);
     if (names.length === 0) gaps.push("select-field-literal-unresolved");

@@ -75,6 +75,9 @@ describe("Base44 source-bound static evidence", () => {
     const filterShape = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityQuery
       && fact.targetSymbol === "Order"
       && fact.properties.operationName === "filter");
+    expect(JSON.parse(filterShape?.properties.querySemanticsJson ?? "null")).toMatchObject({
+      schemaVersion: "88mph.entity-query.v1", method: "filter", completeness: "complete"
+    });
     expect(JSON.parse(filterShape?.properties.fieldsJson ?? "[]")).toEqual([
       expect.objectContaining({ expressionType: "string-literal", name: "status", origin: "filter:literal", presence: "unconditional" })
     ]);
