@@ -4,6 +4,10 @@ This receipt validates the bounded TypeScript extractor correction in TraceMap
 issue #713. It is static producer evidence only. It does not create schema
 authority, prove runtime behavior, admit an SDK, or declare ShopGenie compatible.
 
+The results below describe the original `0.4.0` implementation. The direct PR
+review corrections and `0.4.1` replay are recorded in
+[the PR #719 review receipt](base44-pr719-review-2026-09-06.md).
+
 ## Bound source
 
 - Repository: `BigRiverMachine/ShopGenie`
