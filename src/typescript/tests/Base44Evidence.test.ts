@@ -92,7 +92,7 @@ describe("Base44 source-bound static evidence", () => {
       && fact.targetSymbol === "Order"
       && fact.properties.operationName === "filter");
     expect(JSON.parse(filterShape?.properties.querySemanticsJson ?? "null")).toMatchObject({
-      schemaVersion: "88mph.entity-query.v1", method: "filter", completeness: "complete"
+      schemaVersion: "88mph.entity-query.v2", method: "filter", completeness: "complete"
     });
     for (const fact of result.facts.filter(f => f.properties.querySemanticsJson)) {
       const id = (properties: Record<string,string>) => createFactId(fact.scanId, fact.factType, fact.ruleId,
