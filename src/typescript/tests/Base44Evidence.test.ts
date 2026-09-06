@@ -50,6 +50,50 @@ describe("Base44 source-bound static evidence", () => {
       targetSymbol: "Order",
       properties: expect.objectContaining({ operationName: "filter" })
     }));
+    const createPayload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload && fact.targetSymbol === "Order");
+    expect(createPayload).toEqual(expect.objectContaining({
+      ruleId: "base44.entity.payload.v1",
+      properties: expect.objectContaining({
+        argumentIndex: "0",
+        completeness: "complete",
+        constructionKind: "object-literal",
+        operationName: "create",
+        shapeVersion: "1"
+      })
+    }));
+    expect(JSON.parse(createPayload?.properties.fieldsJson ?? "[]")).toEqual([
+      expect.objectContaining({
+        expressionType: "string-literal",
+        name: "status",
+        origin: "literal",
+        presence: "unconditional",
+        evidenceStartLine: expect.any(Number),
+        evidenceEndLine: expect.any(Number),
+        evidenceSnippetHash: expect.stringMatching(/^[0-9a-f]{64}$/)
+      })
+    ]);
+    const filterShape = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityQuery
+      && fact.targetSymbol === "Order"
+      && fact.properties.operationName === "filter");
+    expect(JSON.parse(filterShape?.properties.fieldsJson ?? "[]")).toEqual([
+      expect.objectContaining({ expressionType: "string-literal", name: "status", origin: "filter:literal", presence: "unconditional" })
+    ]);
+    const operations = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation);
+    const shapes = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityPayload || fact.factType === FactTypes.Base44EntityQuery);
+    expect(shapes).toHaveLength(operations.length);
+    expect(shapes.map((fact) => fact.properties.operationEvidenceId).sort()).toEqual(
+      operations.map((fact) => fact.properties.operationEvidenceId).sort()
+    );
+    const deleteManyShape = shapes.find((fact) => fact.properties.operationName === "deleteMany");
+    expect(JSON.parse(deleteManyShape?.properties.fieldsJson ?? "[]")).toEqual([
+      expect.objectContaining({ expressionType: "string-literal", name: "status", origin: "filter:literal", presence: "unconditional" })
+    ]);
+    const importShape = shapes.find((fact) => fact.properties.operationName === "importEntities");
+    expect(importShape?.properties).toEqual(expect.objectContaining({
+      argumentRole: "import-file",
+      completeness: "unresolved",
+      analysisGapsJson: '["import-file-payload-not-entity-shape"]'
+    }));
     expect(packet.facts).toContainEqual(expect.objectContaining({
       factType: FactTypes.Base44FunctionInvocation,
       targetSymbol: "serviceFunction"
@@ -85,6 +129,200 @@ describe("Base44 source-bound static evidence", () => {
     expect(serialized).not.toContain("provider.example/private/path");
     expect(packet.facts.find((fact) => fact.factType === FactTypes.Base44HttpTarget)?.properties.originSha256).toMatch(/^[0-9a-f]{64}$/);
     for (const name of ["base44-evidence.json", "base44-evidence.md", "base44-evidence.html"]) await expect(fs.stat(path.join(out, name))).resolves.toBeTruthy();
+  });
+
+  it("emits deterministic payload presence, type, binding, spread and ambiguity evidence without values", async () => {
+    const repo = await payloadFixtureRepo();
+    const firstOut = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-payload-first-"));
+    const secondOut = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-payload-second-"));
+    const first = await buildBase44Evidence(options(repo, firstOut));
+    const second = await buildBase44Evidence(options(repo, secondOut));
+    const payloadFacts = first.packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityPayload);
+
+    expect(payloadFacts).toHaveLength(9);
+    expect(payloadFacts.map((fact) => fact.factId)).toEqual(
+      second.packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityPayload).map((fact) => fact.factId)
+    );
+
+    const tooling = payloadFacts.find((fact) => fact.targetSymbol === "ToolingItem");
+    expect(tooling?.properties.completeness).toBe("partial");
+    expect(tooling?.properties.constructionKind).toBe("identifier:object-literal");
+    expect(JSON.parse(tooling?.properties.fieldsJson ?? "[]")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "name", presence: "unconditional", expressionType: "identifier-reference" }),
+      expect.objectContaining({ name: "quantity", presence: "spread-derived", expressionType: "integer-number-literal" }),
+      expect.objectContaining({ name: "job_cost", presence: "conditional", expressionType: "numeric-binary-expression" }),
+      expect.objectContaining({ name: "decimal_cost", presence: "unconditional", expressionType: "decimal-number-literal" }),
+      expect.objectContaining({ name: "<dynamic>", presence: "dynamic-computed" }),
+      expect.objectContaining({ name: "assigned_after_init", presence: "unconditional", expressionType: "integer-number-literal" }),
+      expect.objectContaining({ name: "conditional_assignment", presence: "conditional" })
+    ]));
+    expect(JSON.parse(tooling?.properties.analysisGapsJson ?? "[]")).toContain("dynamic-computed-property");
+    expect(JSON.parse(tooling?.properties.candidateBindingsJson ?? "[]")).toEqual(expect.arrayContaining(["binding:defaults", "binding:payload"]));
+    expect(tooling?.properties.fieldsJson).not.toContain("shadow_only");
+    expect(tooling?.properties.fieldsJson).not.toContain("phantom_nested_mutation");
+    expect(JSON.parse(tooling?.properties.fieldsJson ?? "[]")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "compound_assignment", presence: "conditional" }),
+      expect.objectContaining({ name: "short_circuit_assignment", presence: "conditional" }),
+      expect.objectContaining({ name: "conditional_object_assign", presence: "conditional" }),
+      expect.objectContaining({ name: "lookup", origin: "property:records.<literal-key>" })
+    ]));
+    expect(JSON.parse(tooling?.properties.analysisGapsJson ?? "[]")).toContain("compound-property-assignment:??=");
+    expect(tooling?.properties.fieldsJson).not.toContain("deleted_before_call");
+
+    const bulk = payloadFacts.find((fact) => fact.targetSymbol === "PurchasedPart");
+    expect(JSON.parse(bulk?.properties.fieldsJson ?? "[]")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "sku", presence: "conditional" }),
+      expect.objectContaining({ name: "price", presence: "conditional", expressionType: "integer-number-literal" })
+    ]));
+    expect(JSON.parse(bulk?.properties.fieldsJson ?? "[]")).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "old_sku" })
+    ]));
+    expect(JSON.parse(bulk?.properties.analysisGapsJson ?? "[]")).toContain("array-spread-unresolved");
+
+    const organization = payloadFacts.find((fact) => fact.targetSymbol === "Organization");
+    expect(organization?.properties.completeness).toBe("partial");
+    expect(JSON.parse(organization?.properties.fieldsJson ?? "[]")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "status", presence: "conditional", origin: expect.stringContaining("logical-right") })
+    ]));
+    expect(JSON.parse(organization?.properties.analysisGapsJson ?? "[]")).toContain("binding-initializer-unresolved");
+
+    const captured = payloadFacts.find((fact) => fact.targetSymbol === "CapturedItem");
+    expect(captured?.properties.completeness).toBe("partial");
+    expect(JSON.parse(captured?.properties.fieldsJson ?? "[]")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "captured_before_reassignment", presence: "unconditional" })
+    ]));
+    expect(captured?.properties.fieldsJson).not.toContain("after_capture");
+    expect(JSON.parse(captured?.properties.analysisGapsJson ?? "[]")).toContain("post-capture-alias-mutation-unresolved");
+
+    const conditionalRows = payloadFacts.find((fact) => fact.targetSymbol === "ConditionalRows");
+    expect(JSON.parse(conditionalRows?.properties.fieldsJson ?? "[]")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "conditional_a", presence: "conditional" }),
+      expect.objectContaining({ name: "conditional_b", presence: "conditional" })
+    ]));
+
+    const duplicateRows = payloadFacts.find((fact) => fact.targetSymbol === "DuplicateRows");
+    expect(JSON.parse(duplicateRows?.properties.fieldsJson ?? "[]")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "duplicate_a", presence: "conditional" }),
+      expect.objectContaining({ name: "second_only", presence: "conditional" })
+    ]));
+
+    const conditionalPayload = payloadFacts.find((fact) => fact.targetSymbol === "ConditionalPayload");
+    expect(JSON.parse(conditionalPayload?.properties.fieldsJson ?? "[]")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "late_conditional", presence: "conditional" })
+    ]));
+
+    const moduleScoped = payloadFacts.find((fact) => fact.targetSymbol === "ModuleScopedItem");
+    expect(moduleScoped?.properties.completeness).toBe("partial");
+    expect(JSON.parse(moduleScoped?.properties.analysisGapsJson ?? "[]")).toContain("binding-cross-execution-scope");
+
+    const unaryAlias = payloadFacts.find((fact) => fact.targetSymbol === "UnaryAliasItem");
+    expect(unaryAlias?.properties.completeness).toBe("partial");
+    expect(JSON.parse(unaryAlias?.properties.analysisGapsJson ?? "[]")).toContain("post-capture-alias-mutation-unresolved");
+
+    const query = first.packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityQuery && fact.targetSymbol === "ToolingItem");
+    expect(query?.properties.completeness).toBe("partial");
+    expect(JSON.parse(query?.properties.fieldsJson ?? "[]")).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "status", origin: "filter:literal" }),
+      expect.objectContaining({ name: "created_date", origin: "sort-argument" }),
+      expect.objectContaining({ name: "id", origin: "select-argument" })
+    ]));
+    expect(JSON.parse(query?.properties.analysisGapsJson ?? "[]")).toEqual(expect.arrayContaining(["spread:binding-initializer-unresolved"]));
+
+    const serialized = JSON.stringify(first.packet);
+    for (const prohibited of ["secret-tool-name", "secret-status", "private-dynamic-field", "SKU-PRIVATE", "private-customer-id", "phantom-private-value"]) {
+      expect(serialized).not.toContain(prohibited);
+    }
+  });
+
+  it.each([
+    "const defaults = { branch_only: 1 }; base44.entities.ReviewItem.create(flag ? { ...defaults } : {});",
+    "const defaults = { branch_only: 1 }; base44.entities.ReviewItem.create({ ...(flag ? { ...defaults } : {}) });",
+    "const defaults = { branch_only: 1 }; base44.entities.ReviewItem.create(flag && { ...defaults });"
+  ])("preserves branch-conditional presence through nested spreads: %s", async (body) => {
+    const { packet } = await reviewFixture(body);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload)!;
+    const fields = JSON.parse(payload.properties.fieldsJson);
+    expect(fields).toEqual(expect.arrayContaining([expect.objectContaining({ name: "branch_only", presence: "conditional" })]));
+    expect(fields.filter((field: { name: string; presence: string }) => field.name === "branch_only").every((field: { presence: string }) => field.presence === "conditional")).toBe(true);
+  });
+
+  it.each([
+    ["const payload = { initial: 1 }; const alias = payload; alias.added = 2; base44.entities.ReviewItem.create(payload);", "binding-alias-escape-unresolved"],
+    ["const payload = { initial: 1 }; mutate(payload); base44.entities.ReviewItem.create(payload);", "binding-call-escape-unresolved"],
+    ["const payload = [{ initial: 1 }]; payload.push({ added: 2 }); base44.entities.ReviewItem.bulkCreate(payload);", "binding-method-call-unresolved"],
+    ["const original = [{ initial: 1 }]; const payload = original; original.push({ added: 2 }); base44.entities.ReviewItem.bulkCreate(payload);", "post-capture-alias-mutation-unresolved"]
+  ])("does not claim a complete shape after unmodeled reference use: %s", async (body, gap) => {
+    const { packet } = await reviewFixture(body);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload)!;
+    expect(payload.properties.completeness).toBe("partial");
+    expect(payload.evidenceTier).toBe("Tier4Unknown");
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toContain(gap);
+  });
+
+  it.each([
+    "const payload = { unrelated_outer: 1 }; function save(payload) { base44.entities.ReviewItem.create(payload); }",
+    "const payload = { unrelated_outer: 1 }; function save({ payload }) { base44.entities.ReviewItem.create(payload); }",
+    "const payload = { unrelated_outer: 1 }; { const { payload } = input; base44.entities.ReviewItem.create(payload); }",
+    "const payload = { unrelated_outer: 1 }; { base44.entities.ReviewItem.create(payload); const payload = {}; }",
+    "try {} catch (payload) {} const payload = { own_field: 1 }; { const { payload } = input; base44.entities.ReviewItem.create(payload); }"
+  ])("does not derive fields from a shadowed outer binding: %s", async (body) => {
+    const { packet } = await reviewFixture(body);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload)!;
+    expect(payload.properties.completeness).toBe("unresolved");
+    expect(JSON.parse(payload.properties.fieldsJson)).toEqual([]);
+  });
+
+  it.each([
+    "const payload = { own_field: 1 }; { const payload = {}; mutate(payload); } base44.entities.ReviewItem.create(payload);",
+    "const payload = { own_field: 1 }; function neverCalled() { mutate(payload); } base44.entities.ReviewItem.create(payload);",
+    "const payload = { own_field: 1 }; base44.entities.ReviewItem.create(payload); mutate(payload);",
+    "const payload = { own_field: 1 }; Object.assign({}, payload); base44.entities.ReviewItem.create(payload);",
+    "const payload = { own_field: 1 }; try {} catch (payload) { mutate(payload); } base44.entities.ReviewItem.create(payload);"
+  ])("preserves complete evidence outside the relevant binding and call interval: %s", async (body) => {
+    const { packet } = await reviewFixture(body);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload)!;
+    expect(payload.properties.completeness).toBe("complete");
+    expect(JSON.parse(payload.properties.fieldsJson)).toEqual([expect.objectContaining({ name: "own_field" })]);
+  });
+
+  it("keeps identical calls on one line distinct and linked through artifact serialization", async () => {
+    const { packet, result } = await reviewFixture("base44.entities.ReviewItem.create({ field: 1 }); base44.entities.ReviewItem.create({ field: 1 });");
+    const operations = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation);
+    const shapes = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityPayload);
+    expect(operations).toHaveLength(2);
+    expect(shapes).toHaveLength(2);
+    expect(new Set(operations.map((fact) => fact.properties.operationEvidenceId)).size).toBe(2);
+    expect(new Set(shapes.map((fact) => fact.factId)).size).toBe(2);
+    expect(shapes.map((fact) => fact.properties.operationEvidenceId).sort()).toEqual(operations.map((fact) => fact.properties.operationEvidenceId).sort());
+    expect(result.facts.filter((fact) => fact.factType === FactTypes.Base44EntityPayload)).toHaveLength(2);
+  });
+
+  it("ignores schema prose but produces an exact payload-shape diff when executable payload code changes", async () => {
+    const repo = await payloadFixtureRepo();
+    const baselineOut = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-payload-baseline-"));
+    await buildBase44Evidence(options(repo, baselineOut));
+
+    await fs.writeFile(path.join(repo, "database-schema.md"), "# False authority\nToolingItem requires invented_field.\n");
+    execFileSync("git", ["add", "database-schema.md"], { cwd: repo });
+    execFileSync("git", ["commit", "-qm", "change schema prose"], { cwd: repo });
+    const proseOut = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-payload-prose-"));
+    await buildBase44Evidence(options(repo, proseOut));
+    const proseDiff = await diffBase44Evidence(path.join(baselineOut, "base44-evidence.json"), path.join(proseOut, "base44-evidence.json"), path.join(proseOut, "diff.json"));
+    expect(proseDiff.added).toHaveLength(0);
+    expect(proseDiff.removed).toHaveLength(0);
+
+    const appPath = path.join(repo, "src/app.ts");
+    const source = await fs.readFile(appPath, "utf8");
+    await fs.writeFile(appPath, source.replace("assigned_after_init = 3", "new_payload_field = 3"));
+    execFileSync("git", ["add", "src/app.ts"], { cwd: repo });
+    execFileSync("git", ["commit", "-qm", "change executable payload"], { cwd: repo });
+    const editedOut = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-payload-edited-"));
+    await buildBase44Evidence(options(repo, editedOut));
+    const payloadDiff = await diffBase44Evidence(path.join(proseOut, "base44-evidence.json"), path.join(editedOut, "base44-evidence.json"), path.join(editedOut, "diff.json"));
+    const addedPayload = payloadDiff.added.find((fact) => fact.factType === FactTypes.Base44EntityPayload && fact.targetSymbol === "ToolingItem");
+    const removedPayload = payloadDiff.removed.find((fact) => fact.factType === FactTypes.Base44EntityPayload && fact.targetSymbol === "ToolingItem");
+    expect(JSON.parse(addedPayload?.properties.fieldsJson ?? "[]")).toEqual(expect.arrayContaining([expect.objectContaining({ name: "new_payload_field" })]));
+    expect(JSON.parse(removedPayload?.properties.fieldsJson ?? "[]")).toEqual(expect.arrayContaining([expect.objectContaining({ name: "assigned_after_init" })]));
   });
 
   it("fails closed on invalid source identities and marks reduced-coverage diffs", async () => {
@@ -167,6 +405,8 @@ export async function currentSdkSurfaces() {
   base44.users.inviteUser("owned@example.invalid");
   base44.asServiceRole.integrations.Core.SendEmail({ to: "owned@example.invalid" });
   base44.asServiceRole.entities.Order.filter({ status: "open" });
+  base44.asServiceRole.entities.Order.deleteMany({ status: "retired" });
+  base44.asServiceRole.entities.Order.importEntities(file);
   base44.asServiceRole.functions.invoke("serviceFunction");
   await base44.asServiceRole.functions.invoke("chainedServiceFunction").then(() => undefined);
   base44.integrations.functions.invoke("helperFunction");
@@ -205,4 +445,87 @@ async function nonBase44MigrationRepo(): Promise<string> {
   execFileSync("git", ["add", "."], { cwd: repo });
   execFileSync("git", ["commit", "-qm", "fixture"], { cwd: repo });
   return repo;
+}
+
+async function payloadFixtureRepo(): Promise<string> {
+  const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-payload-fixture-"));
+  await fs.mkdir(path.join(repo, "src"), { recursive: true });
+  await fs.writeFile(path.join(repo, "package.json"), JSON.stringify({ dependencies: { "@base44/sdk": "0.8.5" } }));
+  await fs.writeFile(path.join(repo, "src/app.ts"), `import { base44 } from "@base44/sdk";
+const modulePayload = { module_initial: 1 };
+modulePayload.module_assigned = 2;
+export async function run(name, includeCost, hours, rate, dynamicKey, criteria, nextStatus, records, rows, maybeUpdate) {
+  const defaults = { quantity: 1 };
+  const payload = {
+    ...defaults,
+    name,
+    decimal_cost: 500.00,
+    ...(includeCost ? { job_cost: hours * rate } : {}),
+    [dynamicKey]: "private-dynamic-field",
+    lookup: records["private-customer-id"],
+    deleted_before_call: 1,
+  };
+  delete payload.deleted_before_call;
+  payload.assigned_after_init = 3;
+  payload.compound_assignment ??= nextStatus;
+  includeCost && (payload.short_circuit_assignment = nextStatus);
+  if (includeCost) payload.conditional_assignment = nextStatus;
+  if (includeCost) Object.assign(payload, { conditional_object_assign: 1 });
+  function neverCalled() {
+    payload.phantom_nested_mutation = "phantom-private-value";
+  }
+  function unrelatedScope() {
+    const payload = { shadow_only: "secret-tool-name" };
+    payload.shadow_only = "secret-tool-name";
+    return payload;
+  }
+  await base44.entities.ToolingItem.create(payload);
+  await base44.entities.Organization.update("private-id", maybeUpdate ?? { status: nextStatus });
+  let partRows = [{ old_sku: "OLD-PRIVATE" }];
+  partRows = [...rows, { sku: "SKU-PRIVATE" }, { sku: "SKU-SECOND", price: 2 }];
+  await base44.entities.PurchasedPart.bulkCreate(partRows);
+  let original = { captured_before_reassignment: 1 };
+  const capturedPayload = original;
+  original.captured_after_alias = 3;
+  original = { after_capture: 2 };
+  await base44.entities.CapturedItem.create(capturedPayload);
+  await base44.entities.ConditionalRows.bulkCreate(includeCost ? [{ conditional_a: 1 }] : [{ conditional_b: 2 }]);
+  const firstRow = { duplicate_a: 1 };
+  firstRow.duplicate_a = 2;
+  const secondRow = { second_only: 1 };
+  await base44.entities.DuplicateRows.bulkCreate([firstRow, secondRow]);
+  const conditionalPayload = { conditional_base: 1 };
+  conditionalPayload.late_conditional = 2;
+  await base44.entities.ConditionalPayload.create(includeCost ? conditionalPayload : { conditional_other: 3 });
+  await base44.entities.ModuleScopedItem.create(modulePayload);
+  const unarySource = { unary_initial: 1 };
+  const unaryPayload = unarySource;
+  unarySource.unary_after_capture++;
+  await base44.entities.UnaryAliasItem.create(unaryPayload);
+  return base44.entities.ToolingItem.filter({ status: "secret-status", ...criteria }, "-created_date", 100, 0, "id,status");
+}
+`);
+  execFileSync("git", ["init", "-q"], { cwd: repo });
+  execFileSync("git", ["config", "user.email", "tracemap@example.invalid"], { cwd: repo });
+  execFileSync("git", ["config", "user.name", "TraceMap Test"], { cwd: repo });
+  execFileSync("git", ["add", "."], { cwd: repo });
+  execFileSync("git", ["commit", "-qm", "fixture"], { cwd: repo });
+  return repo;
+}
+
+async function reviewFixture(body: string) {
+  const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-review-fixture-"));
+  const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-review-out-"));
+  try {
+    await fs.writeFile(path.join(repo, "app.ts"), `import { base44 } from "@base44/sdk";
+export function run(flag) { ${body} }
+`);
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    execFileSync("git", ["add", "."], { cwd: repo });
+    execFileSync("git", ["-c", "user.name=TraceMap Test", "-c", "user.email=tracemap@example.invalid", "commit", "-qm", "fixture"], { cwd: repo });
+    return await buildBase44Evidence(options(repo, out));
+  } finally {
+    await fs.rm(repo, { recursive: true, force: true });
+    await fs.rm(out, { recursive: true, force: true });
+  }
 }

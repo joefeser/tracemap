@@ -5,8 +5,9 @@ import { CodeFact, EvidenceTiers, FactTypes, FileInventoryItem, ScanManifest } f
 import { createEvidence, createFact } from "../facts/FactFactory";
 import { RuleIds, ScannerVersions } from "../facts/RuleIds";
 import { hash } from "../util/Hash";
+import { extractEntityShapeFacts } from "./Base44EntityShapeExtractor";
 
-const entityOperations = new Set(["list", "filter", "get", "create", "update", "delete", "bulkCreate", "subscribe"]);
+const entityOperations = new Set(["list", "filter", "get", "create", "update", "delete", "deleteMany", "bulkCreate", "importEntities", "subscribe", "upsert"]);
 const primitiveRoots = new Set([
   "auth", "entities", "functions", "integrations",
   "analytics", "appLogs", "users", "asServiceRole",
@@ -123,11 +124,28 @@ function addSdkCall(chain: string[], node: ts.CallExpression, source: ts.SourceF
   if (entitiesIndex >= 0
     && entityOperations.has(relative[entitiesIndex + 2])
     && entitiesIndex + 3 === relative.length) {
-    facts.push(fact(manifest, FactTypes.Base44EntityOperation, RuleIds.Base44EntityOperation, node, source, filePath, relative[entitiesIndex + 1], {
-      entityName: relative[entitiesIndex + 1],
-      operationName: relative[entitiesIndex + 2],
+    const entityName = relative[entitiesIndex + 1];
+    const operationName = relative[entitiesIndex + 2];
+    const operationStartLine = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+    const operationEndLine = source.getLineAndCharacterOfPosition(node.getEnd()).line + 1;
+    const operationEvidenceId = `operation-${hash([
+      filePath,
+      String(operationStartLine),
+      String(operationEndLine),
+      String(node.getStart(source)),
+      String(node.getEnd()),
+      entityName,
+      operationName,
+      hash(node.getText(source), 64)
+    ].join("|"), 20)}`;
+    const operationFact = fact(manifest, FactTypes.Base44EntityOperation, RuleIds.Base44EntityOperation, node, source, filePath, entityName, {
+      entityName,
+      operationEvidenceId,
+      operationName,
       sourceFileSha256: hash(text, 64)
-    }));
+    });
+    facts.push(operationFact);
+    facts.push(...extractEntityShapeFacts({ manifest, node, source, filePath, sourceText: text, entityName, operationName, operationEvidenceId }));
   }
 }
 
