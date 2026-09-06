@@ -90,3 +90,10 @@ The JSON Schema at `docs/contracts/base44-static-evidence.v1.schema.json` define
 The additive normalized query descriptor introduced in `base44-evidence/0.3.0`
 is documented in [Base44 query semantics v1](BASE44_QUERY_SEMANTICS_V1.md).
 It retains literal pagination controls but never filter operand values.
+
+Extractor `base44-evidence/0.4.1` also follows an SDK client through a local
+helper parameter when executable callsites prove the binding. The proof is
+conservative: every directly resolved callsite for that parameter must supply
+the same SDK-derived alias. Parameter names, JSDoc, type annotations, and prose
+never create client authority. See
+[Base44 injected-client dataflow](BASE44_INJECTED_CLIENT_DATAFLOW.md).
