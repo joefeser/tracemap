@@ -30,6 +30,27 @@ export function extractQuerySemantics(call: ts.CallExpression, source: ts.Source
     if (ts.isOmittedExpression(node)) { gaps.add("query:missing_expression"); return false; }
     return true;
   }
+  function admittedReference(input: ts.Expression, depth: number): boolean {
+    const node = unwrap(input);
+    if (!admit(node, depth)) return false;
+    if (ts.isIdentifier(node) || node.kind === ts.SyntaxKind.ThisKeyword) return true;
+    if (ts.isPropertyAccessExpression(node)) {
+      return admittedReference(node.expression, depth + 1);
+    }
+    if (ts.isElementAccessExpression(node)) {
+      if (!admittedReference(node.expression, depth + 1)) return false;
+      const index = node.argumentExpression;
+      if (!index) {
+        gaps.add("query:missing_expression");
+        return false;
+      }
+      const value = unwrap(index);
+      if (!admit(value, depth + 1)) return false;
+      if (ts.isStringLiteralLike(value) || ts.isNumericLiteral(value)) return true;
+      return admittedReference(value, depth + 1);
+    }
+    return false;
+  }
   function operand(input: ts.Expression, depth = 0): Record<string, unknown> {
     const node = unwrap(input);
     if (!admit(node, depth)) return { kind: "unknown" };
@@ -41,7 +62,9 @@ export function extractQuerySemantics(call: ts.CallExpression, source: ts.Source
       && ts.isNumericLiteral(unwrap(node.operand))) {
       return { kind: "literal", type: "number", span: span(node) };
     }
-    if (ts.isIdentifier(node) || ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) {
+    if ((ts.isIdentifier(node) || node.kind === ts.SyntaxKind.ThisKeyword
+      || ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node))
+      && admittedReference(node, depth + 1)) {
       return { kind: "reference", span: span(node) };
     }
     if (ts.isArrayLiteralExpression(node)) {
@@ -91,9 +114,11 @@ export function extractQuerySemantics(call: ts.CallExpression, source: ts.Source
         }
         entries.push({ field, form: "operators", operators });
       } else {
-        const evidence = operand(value);
-        if (evidence.kind === "reference") gaps.add("query:implicit_predicate_type_unresolved");
-        entries.push({ field, form: "implicit", operand: evidence });
+        // A direct identifier/member reference is complete source evidence
+        // for a runtime-deferred value expression. Its eventual structure and
+        // interpretation belong to exact-SDK/runtime conformance, not static
+        // type inference.
+        entries.push({ field, form: "implicit", operand: operand(value) });
       }
     }
     return { kind: "filter", entries };
@@ -133,5 +158,5 @@ export function extractQuerySemantics(call: ts.CallExpression, source: ts.Source
     return { index, role, presence: "supplied", span: span(node), value };
   });
   if (call.arguments.length > roles.length) gaps.add("query:extra_arguments");
-  return { schemaVersion: "88mph.entity-query.v1", method, completeness: gaps.size ? "unresolved" : "complete", arguments: args, gaps: [...gaps].sort() };
+  return { schemaVersion: "88mph.entity-query.v2", method, completeness: gaps.size ? "unresolved" : "complete", arguments: args, gaps: [...gaps].sort() };
 }
