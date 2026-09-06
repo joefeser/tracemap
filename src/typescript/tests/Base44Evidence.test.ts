@@ -159,6 +159,29 @@ describe("Base44 source-bound static evidence", () => {
     for (const name of ["base44-evidence.json", "base44-evidence.md", "base44-evidence.html"]) await expect(fs.stat(path.join(out, name))).resolves.toBeTruthy();
   });
 
+  it("follows only callsite-proven SDK clients through imported helper parameters", async () => {
+    const repo = await injectedClientFixtureRepo();
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-injected-client-out-"));
+    const { packet } = await buildBase44Evidence(options(repo, out));
+    const helperOperations = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation
+      && fact.evidence.filePath === "src/helper.ts");
+
+    expect(helperOperations.map((fact) => `${fact.targetSymbol}.${fact.properties.operationName}`).sort()).toEqual([
+      "ForwardedItem.list",
+      "MaterialTypeVendor.create",
+      "MaterialTypeVendor.filter",
+      "Vendor.list"
+    ]);
+    expect(helperOperations.every((fact) => fact.properties.clientBindingKind === "callsite-proven-parameter")).toBe(true);
+    expect(packet.facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.Base44EntityOperation,
+      targetSymbol: "ForwardedItem",
+      properties: expect.objectContaining({ clientBindingKind: "callsite-proven-parameter" })
+    }));
+    expect(packet.facts.some((fact) => fact.factType === FactTypes.Base44EntityOperation
+      && ["UnprovenItem", "ConflictedItem", "ShadowedItem", "LexicalShadowItem"].includes(fact.targetSymbol ?? ""))).toBe(false);
+  });
+
   it("emits deterministic payload presence, type, binding, spread and ambiguity evidence without values", async () => {
     const repo = await payloadFixtureRepo();
     const firstOut = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-payload-first-"));
@@ -467,6 +490,42 @@ async function nonBase44MigrationRepo(): Promise<string> {
   await fs.mkdir(path.join(repo, "db/migrations"), { recursive: true });
   await fs.writeFile(path.join(repo, "src/app.ts"), 'const token = Deno.env.get("GENERIC_TOKEN");\nexport const load = () => fetch("https://ordinary.example.invalid/path");\n');
   await fs.writeFile(path.join(repo, "db/migrations/001.sql"), "create table orders (id text primary key);\n");
+  execFileSync("git", ["init", "-q"], { cwd: repo });
+  execFileSync("git", ["config", "user.email", "tracemap@example.invalid"], { cwd: repo });
+  execFileSync("git", ["config", "user.name", "TraceMap Test"], { cwd: repo });
+  execFileSync("git", ["add", "."], { cwd: repo });
+  execFileSync("git", ["commit", "-qm", "fixture"], { cwd: repo });
+  return repo;
+}
+
+async function injectedClientFixtureRepo(): Promise<string> {
+  const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-injected-client-fixture-"));
+  await fs.mkdir(path.join(repo, "src"), { recursive: true });
+  await fs.writeFile(path.join(repo, "package.json"), JSON.stringify({ dependencies: { "@base44/sdk": "0.8.5" } }));
+  await fs.writeFile(path.join(repo, "src/helper.ts"), `
+export async function useClient(materialId, client, organizationId) {
+  const vendors = await client.entities.Vendor.list("name", 1000);
+  const existing = await client.entities.MaterialTypeVendor.filter({ material_id: materialId, vendor_id: vendors[0].id });
+  if (!existing.length) await client.entities.MaterialTypeVendor.create({ material_id: materialId, vendor_id: vendors[0].id, organization_id: organizationId });
+  function shadow(client) { return client.entities.ShadowedItem.list(); }
+}
+export function forward(client) { return forwardedAgain(client); }
+function forwardedAgain(client) { return client.entities.ForwardedItem.list(); }
+export function unproven(base44) { return base44.entities.UnprovenItem.list(); }
+export function conflicted(client) { return client.entities.ConflictedItem.list(); }
+export function lexicalShadow(client) { return client.entities.LexicalShadowItem.list(); }
+`);
+  await fs.writeFile(path.join(repo, "src/app.ts"), `
+import { base44 } from "@base44/sdk";
+import { useClient as link, forward, conflicted, lexicalShadow } from "./helper";
+export async function run(id, org) {
+  await link(id, base44, org);
+  await forward(base44);
+  await conflicted(base44);
+  await conflicted({ entities: {} });
+  { const base44 = { entities: {} }; await lexicalShadow(base44); }
+}
+`);
   execFileSync("git", ["init", "-q"], { cwd: repo });
   execFileSync("git", ["config", "user.email", "tracemap@example.invalid"], { cwd: repo });
   execFileSync("git", ["config", "user.name", "TraceMap Test"], { cwd: repo });
