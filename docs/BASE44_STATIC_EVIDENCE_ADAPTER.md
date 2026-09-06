@@ -91,6 +91,11 @@ The additive normalized query descriptor introduced in `base44-evidence/0.3.0`
 is documented in [Base44 query semantics v1](BASE44_QUERY_SEMANTICS_V1.md).
 It retains literal pagination controls but never filter operand values.
 
+Extractor `base44-evidence/0.5.0` emits the versioned
+`88mph.entity-query.v2` correction for direct runtime-reference operands. See
+[Base44 query semantics v2](BASE44_QUERY_SEMANTICS_V2.md). Consumers must admit
+the new extractor and descriptor identities explicitly.
+
 Extractor `base44-evidence/0.4.1` also follows an SDK client through a local
 helper parameter when executable callsites prove the binding. The proof is
 conservative: every directly resolved callsite for that parameter must supply
