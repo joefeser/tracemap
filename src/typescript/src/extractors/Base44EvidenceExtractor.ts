@@ -20,7 +20,7 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
   const facts: CodeFact[] = [];
   const sourceItems = inventory.filter((file) => !file.skipped && /\.[jt]sx?$/.test(file.relativePath) && !file.relativePath.endsWith(".d.ts"));
   const migrationItems = inventory.filter((file) => !file.skipped && file.relativePath.endsWith(".sql") && isMigrationPath(file.relativePath));
-  const aliasMaps = await buildAliasMaps(sourceItems);
+  const aliasDiscovery = await buildAliasMaps(sourceItems);
   for (const item of inventory.filter((file) => !file.skipped)) {
     if (item.relativePath.endsWith(".sql")) {
       continue;
@@ -30,7 +30,8 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
     }
     const text = await fs.readFile(item.absolutePath, "utf8");
     const source = ts.createSourceFile(item.absolutePath, text, ts.ScriptTarget.Latest, true, scriptKind(item.relativePath));
-    const aliases = aliasMaps.get(item.relativePath) ?? new Map<string, string[]>();
+    const aliases = aliasDiscovery.aliasesByFile.get(item.relativePath) ?? new Map<string, string[]>();
+    const injectedParameters = aliasDiscovery.injectedParametersByFile.get(item.relativePath) ?? new Map<number, string[]>();
     const base44Context = aliases.size > 0
       || source.statements.some((statement) => ts.isImportDeclaration(statement)
         && ts.isStringLiteral(statement.moduleSpecifier)
@@ -48,7 +49,7 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
         sourceFileSha256: hash(text, 64)
       }));
     }
-    visit(source, source, item.relativePath, text, aliases, base44Context, manifest, facts);
+    visit(source, source, item.relativePath, text, aliases, injectedParameters, new Map(), base44Context, manifest, facts);
     if (isFunctionEntry(item.relativePath)) {
       const name = functionName(item.relativePath);
       facts.push(fact(manifest, FactTypes.Base44FunctionSurface, RuleIds.Base44FunctionSurface, source, source, item.relativePath, name, {
@@ -74,11 +75,18 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
   return facts;
 }
 
-function visit(node: ts.Node, source: ts.SourceFile, filePath: string, text: string, aliases: Map<string, string[]>, base44Context: boolean, manifest: ScanManifest, facts: CodeFact[]): void {
+type ScopedAlias = string[] | null;
+
+function visit(node: ts.Node, source: ts.SourceFile, filePath: string, text: string, aliases: Map<string, string[]>, injectedParameters: Map<number, string[]>, inheritedAliases: Map<string, ScopedAlias>, base44Context: boolean, manifest: ScanManifest, facts: CodeFact[]): void {
+  const scopedAliases = ts.isFunctionLike(node)
+    ? enterFunctionScope(node, source, injectedParameters, inheritedAliases)
+    : inheritedAliases;
   if (ts.isCallExpression(node)) {
     const chain = expressionChain(node.expression);
-    const prefix = chain ? aliases.get(chain[0]) : undefined;
-    if (chain && prefix) addSdkCall([...prefix, ...chain.slice(1)], node, source, filePath, text, manifest, facts);
+    const scoped = chain && scopedAliases.has(chain[0]) ? scopedAliases.get(chain[0]) : undefined;
+    const prefix = chain && !scopedAliases.has(chain[0]) ? aliases.get(chain[0]) : scoped ?? undefined;
+    if (chain && prefix) addSdkCall([...prefix, ...chain.slice(1)], node, source, filePath, text, manifest, facts,
+      scopedAliases.has(chain[0]) ? "callsite-proven-parameter" : "source-import-or-derived");
     if (base44Context && chain?.join(".") === "Deno.env.get") {
       const name = stringArgument(node.arguments[0]);
       facts.push(fact(manifest, FactTypes.Base44EnvironmentAccess, RuleIds.Base44EnvironmentAccess, node, source, filePath, name ?? "dynamic", {
@@ -98,16 +106,30 @@ function visit(node: ts.Node, source: ts.SourceFile, filePath: string, text: str
       }, origin ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier4Unknown));
     }
   }
-  ts.forEachChild(node, (child) => visit(child, source, filePath, text, aliases, base44Context, manifest, facts));
+  ts.forEachChild(node, (child) => visit(child, source, filePath, text, aliases, injectedParameters, scopedAliases, base44Context, manifest, facts));
 }
 
-function addSdkCall(chain: string[], node: ts.CallExpression, source: ts.SourceFile, filePath: string, text: string, manifest: ScanManifest, facts: CodeFact[]): void {
+function enterFunctionScope(node: ts.SignatureDeclaration, source: ts.SourceFile, injectedParameters: Map<number, string[]>, inherited: Map<string, ScopedAlias>): Map<string, ScopedAlias> {
+  const scoped = new Map(inherited);
+  for (const parameter of node.parameters) {
+    for (const name of bindingNames(parameter.name)) scoped.set(name, null);
+    if (ts.isIdentifier(parameter.name)) {
+      const injected = injectedParameters.get(parameter.getStart(source));
+      if (injected) scoped.set(parameter.name.text, injected);
+    }
+  }
+  return scoped;
+}
+
+function addSdkCall(chain: string[], node: ts.CallExpression, source: ts.SourceFile, filePath: string, text: string, manifest: ScanManifest, facts: CodeFact[], clientBindingKind: string): void {
   const rootIndex = chain.findIndex((part) => primitiveRoots.has(part));
   if (rootIndex < 0) return;
   const relative = chain.slice(rootIndex);
   const capability = relative.join(".");
+  const clientBindingEvidence: Record<string, string> = clientBindingKind === "callsite-proven-parameter" ? { clientBindingKind } : {};
   facts.push(fact(manifest, FactTypes.Base44SdkPrimitive, RuleIds.Base44SdkPrimitive, node, source, filePath, capability, {
     capability,
+    ...clientBindingEvidence,
     primitiveRoot: relative[0],
     sourceFileSha256: hash(text, 64)
   }));
@@ -140,6 +162,7 @@ function addSdkCall(chain: string[], node: ts.CallExpression, source: ts.SourceF
     ].join("|"), 20)}`;
     const operationFact = fact(manifest, FactTypes.Base44EntityOperation, RuleIds.Base44EntityOperation, node, source, filePath, entityName, {
       entityName,
+      ...clientBindingEvidence,
       operationEvidenceId,
       operationName,
       sourceFileSha256: hash(text, 64)
@@ -245,7 +268,24 @@ interface SourceContext {
   factoryAliases: Set<string>;
 }
 
-async function buildAliasMaps(items: readonly FileInventoryItem[]): Promise<Map<string, Map<string, string[]>>> {
+interface AliasDiscovery {
+  aliasesByFile: Map<string, Map<string, string[]>>;
+  injectedParametersByFile: Map<string, Map<number, string[]>>;
+}
+
+interface ParameterSource {
+  kind: "known" | "parameter" | "unknown";
+  prefix?: string[];
+  parameterKey?: string;
+  suffix?: string[];
+}
+
+interface ParameterTarget {
+  context: SourceContext;
+  parameter: ts.ParameterDeclaration;
+}
+
+async function buildAliasMaps(items: readonly FileInventoryItem[]): Promise<AliasDiscovery> {
   const contexts = new Map<string, SourceContext>();
   for (const item of items) {
     const text = await fs.readFile(item.absolutePath, "utf8");
@@ -265,7 +305,224 @@ async function buildAliasMaps(items: readonly FileInventoryItem[]): Promise<Map<
     }
     if (!changed) break;
   }
-  return new Map([...contexts].map(([filePath, context]) => [filePath, context.aliases]));
+  return {
+    aliasesByFile: new Map([...contexts].map(([filePath, context]) => [filePath, context.aliases])),
+    injectedParametersByFile: discoverInjectedParameterAliases(contexts)
+  };
+}
+
+/**
+ * Propagate an SDK alias into a local helper parameter only when every statically
+ * discovered direct callsite supplies the same proven SDK-derived expression.
+ * Names, JSDoc, and parameter annotations never create authority.
+ */
+function discoverInjectedParameterAliases(contexts: Map<string, SourceContext>): Map<string, Map<number, string[]>> {
+  const inputs = new Map<string, { target: ParameterTarget; sources: ParameterSource[] }>();
+  for (const caller of contexts.values()) {
+    const visitCall = (node: ts.Node): void => {
+      if (ts.isCallExpression(node)) {
+        const target = resolveCallableTarget(node.expression, caller, contexts);
+        if (target) {
+          for (let index = 0; index < target.parameters.length; index++) {
+            const parameter = target.parameters[index];
+            if (!ts.isIdentifier(parameter.name)) continue;
+            const key = parameterKey(target.getSourceFile(), parameter);
+            const record = inputs.get(key) ?? { target: { context: contextForSource(target.getSourceFile(), contexts), parameter }, sources: [] };
+            record.sources.push(argumentAliasSource(node.arguments[index], node, caller));
+            inputs.set(key, record);
+          }
+        }
+      }
+      ts.forEachChild(node, visitCall);
+    };
+    visitCall(caller.source);
+  }
+
+  const resolved = new Map<string, string[]>();
+  for (let pass = 0; pass < inputs.size + 1; pass++) {
+    let changed = false;
+    for (const [key, record] of inputs) {
+      const candidates = record.sources.map((source) => resolveParameterSource(source, resolved));
+      if (!candidates.length || candidates.some((candidate) => !candidate)) continue;
+      const first = candidates[0]!;
+      if (!candidates.every((candidate) => candidate!.join(".") === first.join("."))) continue;
+      if (!resolved.has(key)) { resolved.set(key, first); changed = true; }
+    }
+    if (!changed) break;
+  }
+
+  const byFile = new Map<string, Map<number, string[]>>();
+  for (const [key, prefix] of resolved) {
+    const target = inputs.get(key)!.target;
+    const file = target.context.item.relativePath;
+    const parameters = byFile.get(file) ?? new Map<number, string[]>();
+    parameters.set(target.parameter.getStart(target.context.source), prefix);
+    byFile.set(file, parameters);
+  }
+  return byFile;
+}
+
+function contextForSource(source: ts.SourceFile, contexts: Map<string, SourceContext>): SourceContext {
+  const context = [...contexts.values()].find((candidate) => candidate.source === source);
+  if (!context) throw new Error(`Base44 alias analysis lost source context for ${source.fileName}`);
+  return context;
+}
+
+function parameterKey(source: ts.SourceFile, parameter: ts.ParameterDeclaration): string {
+  return `${source.fileName}:${parameter.getStart(source)}`;
+}
+
+function resolveParameterSource(source: ParameterSource, resolved: Map<string, string[]>): string[] | null {
+  if (source.kind === "unknown") return null;
+  if (source.kind === "known") return source.prefix ?? [];
+  const prefix = source.parameterKey ? resolved.get(source.parameterKey) : undefined;
+  return prefix ? [...prefix, ...(source.suffix ?? [])] : null;
+}
+
+function argumentAliasSource(argument: ts.Expression | undefined, call: ts.CallExpression, caller: SourceContext): ParameterSource {
+  if (!argument) return { kind: "unknown" };
+  const chain = expressionChain(unwrapAliasExpression(argument));
+  if (!chain) return { kind: "unknown" };
+  const parameter = enclosingParameter(chain[0], call);
+  if (parameter) return {
+    kind: "parameter",
+    parameterKey: parameterKey(caller.source, parameter),
+    suffix: chain.slice(1)
+  };
+  if (isLocallyShadowed(chain[0], call)) return { kind: "unknown" };
+  const prefix = caller.aliases.get(chain[0]);
+  return prefix ? { kind: "known", prefix: [...prefix, ...chain.slice(1)] } : { kind: "unknown" };
+}
+
+function unwrapAliasExpression(input: ts.Expression): ts.Expression {
+  let node = input;
+  while (ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isTypeAssertionExpression(node)
+    || ts.isNonNullExpression(node) || ts.isSatisfiesExpression(node)) node = node.expression;
+  return node;
+}
+
+function enclosingParameter(name: string, use: ts.Node): ts.ParameterDeclaration | null {
+  for (let current: ts.Node | undefined = use.parent; current; current = current.parent) {
+    if (!ts.isFunctionLike(current)) continue;
+    const parameter = current.parameters.find((candidate) => bindingNames(candidate.name).includes(name));
+    if (parameter) return parameter;
+  }
+  return null;
+}
+
+function resolveCallableTarget(expression: ts.Expression, caller: SourceContext, contexts: Map<string, SourceContext>): ts.FunctionLikeDeclaration | null {
+  expression = unwrapAliasExpression(expression);
+  if (!ts.isIdentifier(expression) || enclosingParameter(expression.text, expression) || isLocallyShadowed(expression.text, expression)) return null;
+  const local = findLocalCallable(caller.source, expression.text);
+  if (local) return local;
+  for (const statement of caller.source.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier) || statement.importClause?.isTypeOnly) continue;
+    const targetPath = resolveLocalModule(caller.item.relativePath, statement.moduleSpecifier.text, contexts);
+    const target = targetPath ? contexts.get(targetPath) : undefined;
+    if (!target) continue;
+    const clause = statement.importClause;
+    if (clause?.name?.text === expression.text) return findExportedCallable(target.source, "default");
+    if (clause?.namedBindings && ts.isNamedImports(clause.namedBindings)) {
+      const binding = clause.namedBindings.elements.find((item) => !item.isTypeOnly && item.name.text === expression.text);
+      if (binding) return findExportedCallable(target.source, binding.propertyName?.text ?? binding.name.text);
+    }
+  }
+  return null;
+}
+
+function isLocallyShadowed(name: string, use: ts.Node): boolean {
+  const owningFunction = enclosingFunction(use);
+  if (owningFunction?.body && containsFunctionScopedVar(owningFunction.body, name)) return true;
+  for (let current: ts.Node | undefined = use.parent; current && !ts.isSourceFile(current); current = current.parent) {
+    if (ts.isCatchClause(current) && current.variableDeclaration
+      && bindingNames(current.variableDeclaration.name).includes(name)) return true;
+    if (ts.isBlock(current) && directScopeBindings(current).has(name)) return true;
+    if ((ts.isForStatement(current) || ts.isForInStatement(current) || ts.isForOfStatement(current))
+      && current.initializer && ts.isVariableDeclarationList(current.initializer)
+      && current.initializer.declarations.some((declaration) => bindingNames(declaration.name).includes(name))) return true;
+  }
+  return false;
+}
+
+function enclosingFunction(node: ts.Node): ts.FunctionLikeDeclaration | null {
+  for (let current: ts.Node | undefined = node.parent; current; current = current.parent) {
+    if (ts.isFunctionLike(current) && "body" in current) return current as ts.FunctionLikeDeclaration;
+  }
+  return null;
+}
+
+function containsFunctionScopedVar(root: ts.Node, name: string): boolean {
+  let found = false;
+  const visitNode = (node: ts.Node): void => {
+    if (found || (node !== root && ts.isFunctionLike(node))) return;
+    if (ts.isVariableDeclarationList(node) && (node.flags & ts.NodeFlags.BlockScoped) === 0
+      && node.declarations.some((declaration) => bindingNames(declaration.name).includes(name))) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visitNode);
+  };
+  visitNode(root);
+  return found;
+}
+
+function directScopeBindings(scope: ts.Block): Set<string> {
+  const names = new Set<string>();
+  for (const statement of scope.statements) {
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        for (const name of bindingNames(declaration.name)) names.add(name);
+      }
+    } else if ((ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) && statement.name) {
+      names.add(statement.name.text);
+    }
+  }
+  return names;
+}
+
+function findLocalCallable(source: ts.SourceFile, name: string): ts.FunctionLikeDeclaration | null {
+  for (const statement of source.statements) {
+    if (ts.isFunctionDeclaration(statement) && statement.name?.text === name) return statement;
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name) && declaration.name.text === name && declaration.initializer
+          && (ts.isArrowFunction(declaration.initializer) || ts.isFunctionExpression(declaration.initializer))) return declaration.initializer;
+      }
+    }
+  }
+  return null;
+}
+
+function findExportedCallable(source: ts.SourceFile, exportedName: string): ts.FunctionLikeDeclaration | null {
+  for (const statement of source.statements) {
+    const exported = hasModifier(statement, ts.SyntaxKind.ExportKeyword);
+    const isDefault = hasModifier(statement, ts.SyntaxKind.DefaultKeyword);
+    if (ts.isFunctionDeclaration(statement) && exported
+      && (exportedName === "default" ? isDefault : !isDefault && statement.name?.text === exportedName)) return statement;
+    if (exported && ts.isVariableStatement(statement) && exportedName !== "default") {
+      for (const declaration of statement.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name) && declaration.name.text === exportedName && declaration.initializer
+          && (ts.isArrowFunction(declaration.initializer) || ts.isFunctionExpression(declaration.initializer))) return declaration.initializer;
+      }
+    }
+    if (ts.isExportAssignment(statement) && exportedName === "default" && ts.isIdentifier(statement.expression)) {
+      return findLocalCallable(source, statement.expression.text);
+    }
+    if (ts.isExportDeclaration(statement) && !statement.moduleSpecifier && statement.exportClause && ts.isNamedExports(statement.exportClause)) {
+      const binding = statement.exportClause.elements.find((item) => item.name.text === exportedName);
+      if (binding) return findLocalCallable(source, binding.propertyName?.text ?? binding.name.text);
+    }
+  }
+  return null;
+}
+
+function hasModifier(node: ts.Node, kind: ts.SyntaxKind): boolean {
+  return ts.canHaveModifiers(node) && Boolean(ts.getModifiers(node)?.some((modifier) => modifier.kind === kind));
+}
+
+function bindingNames(name: ts.BindingName): string[] {
+  if (ts.isIdentifier(name)) return [name.text];
+  return name.elements.flatMap((element) => ts.isOmittedExpression(element) ? [] : bindingNames(element.name));
 }
 
 function seedDirectSdkImports(context: SourceContext): void {
