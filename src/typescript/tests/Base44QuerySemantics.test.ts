@@ -25,8 +25,21 @@ describe("normalized Base44 query syntax", () => {
     expect(extract("list","undefined").completeness).toBe("unresolved");
     expect(extract("deleteMany","").gaps).toContain("query:filter_missing");
   });
+  it("records direct runtime references as complete deferred wire values", () => {
+    const result = extract("filter", "{tenant_id: tenantId, owner_id: user.id, selected_id: ids[index]}");
+    expect(result).toMatchObject({
+      schemaVersion: "88mph.entity-query.v2",
+      completeness: "complete",
+      gaps: [],
+    });
+    expect((result.arguments[0].value as any).entries.map((entry: any) => entry.operand.kind))
+      .toEqual(["reference", "reference", "reference"]);
+    expect(JSON.stringify(result)).not.toContain("tenantId");
+    expect(JSON.stringify(result)).not.toContain("user.id");
+    expect(JSON.stringify(result)).not.toContain("ids[index]");
+  });
   it.each([
-    ["filter", "query"], ["filter", "{a: criteria}"], ["filter", "{...query}"], ["filter", "{[field]: 1}"],
+    ["filter", "query"], ["filter", "{...query}"], ["filter", "{[field]: 1}"],
     ["filter", "{$or: [{a:1},{a:2}]}"], ["filter", "{a: {$unknown: 1}}"],
     ["filter", "{a: {}}"], ["filter", "{a:1,a:2}"], ["filter", "{get a(){return 1}}"],
     ["filter", "{a: helper()}"], ["filter", "{a: {$in: [,1]}}"],
