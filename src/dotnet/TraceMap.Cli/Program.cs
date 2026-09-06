@@ -579,7 +579,7 @@ public static class TraceMapCommand
         var values = ParseOptions(args);
         string[] supportedOptions =
         [
-            "--index", "--out", "--max-surfaces", "--max-event-chains", "--max-candidates",
+            "--index", "--out", "--surface-list", "--max-surfaces", "--max-event-chains", "--max-candidates",
             "--max-gaps", "--max-depth", "--max-paths", "--max-boundaries", "--max-identity-state", "--max-batch-data-movement",
             "--max-input-facts", "--max-input-edges", "--max-input-text-bytes"
         ];
@@ -615,7 +615,8 @@ public static class TraceMapCommand
             ParsePositiveInt(values, "--max-batch-data-movement", 1_000),
             ParsePositiveInt(values, "--max-input-facts", 250_000),
             ParsePositiveInt(values, "--max-input-edges", 250_000),
-            ParsePositiveInt(values, "--max-input-text-bytes", 128 * 1024 * 1024)), cancellationToken);
+            ParsePositiveInt(values, "--max-input-text-bytes", 128 * 1024 * 1024),
+            values.GetValueOrDefault("--surface-list")), cancellationToken);
         await output.WriteLineAsync($"TraceMap Web Forms modernization packet completed: {result.JsonPath}");
         await output.WriteLineAsync($"Repository: {result.Packet.Sources.Single().RepositoryId}");
         await output.WriteLineAsync($"Commit SHA: {result.Packet.Sources.Single().CommitSha}");
@@ -625,6 +626,8 @@ public static class TraceMapCommand
         await output.WriteLineAsync($"Downstream boundaries: {result.Packet.Summary.DownstreamBoundaryCount}");
         await output.WriteLineAsync($"Identity/state declarations: {result.Packet.Summary.IdentityStateCount}");
         await output.WriteLineAsync($"Batch/data-movement declarations: {result.Packet.Summary.BatchDataMovementCount}");
+        if (result.Packet.SurfaceSelection is not null)
+            await output.WriteLineAsync($"Requested pages: {result.Packet.SurfaceSelection.RequestedCount}; matched: {result.Packet.SurfaceSelection.MatchedCount}; unmatched: {result.Packet.SurfaceSelection.UnmatchedCount}; ambiguous: {result.Packet.SurfaceSelection.AmbiguousCount}");
         await output.WriteLineAsync($"Gaps: {result.Packet.Summary.GapCount}");
         return 0;
     }
@@ -2742,6 +2745,8 @@ public static class TraceMapCommand
               --out <directory>          New output directory.
 
             Optional:
+              --surface-list <path>      UTF-8 text/CSV page list; first column is a repo-relative
+                                         .aspx path or a unique filename. Restricts page/event output.
               --max-surfaces <n>         Maximum surface rows (default 1000).
               --max-event-chains <n>     Maximum event chains (default 1000).
               --max-boundaries <n>       Maximum downstream boundary rows (default 1000).
@@ -2762,6 +2767,8 @@ public static class TraceMapCommand
             Boundaries:
               Local-only, single-snapshot static evidence composition. No runtime,
               business-capability, parity, migration-estimate, architecture, or release claim.
+              Surface-list values are represented by ordered aliases and hashes; raw values
+              are not copied into the packet. Unmatched or ambiguous entries remain gaps.
             """;
     }
 

@@ -10,6 +10,7 @@
 - [x] Document existing-index reruns, limits, limitations, and ACK readback (preflight blocked; see implementation state).
 - [x] Restrict accuracy-summary workspace-repair priority to actual diagnostic evidence and regress static-only cases.
 - [x] Add a self-contained read-only retained-coverage prompt for the separate work computer.
+- [x] Add a deterministic retained-index page-list report command with explicit match gaps and alias-only coverage output.
 - [x] Add bounded case-insensitive markup type-name matching with strict namespace and collision gaps.
 - [x] Add positive IsPostBack syntax candidates without widening compound-condition or script-branch claims.
 - [x] Separate OnClient and non-identifier event-value gaps; preserve static server bindings.

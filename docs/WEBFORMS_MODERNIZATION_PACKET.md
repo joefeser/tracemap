@@ -382,6 +382,7 @@ generated file.
 | --- | --- |
 | `coverage` | `bounded-static-webforms-modernization` means no known packet gap or bound weakened the retained evidence. It is not a completeness claim. `reduced-static-webforms-modernization` means at least one upstream, provenance, build, analysis, path, or bound limitation applies. |
 | `surfaces` | Declared Web Forms surfaces and their composition/control evidence. These are static declarations, not proof that a user can reach or render them. |
+| `surfaceSelection` | Optional ordered, alias-only result of `--surface-list`. Raw list values are not retained. Unique matches restrict page/event output; unmatched or ambiguous entries emit explicit packet gaps. |
 | `eventChains` | Bounded static chains from a surface/control event to a handler and, when evidence permits, an existing static terminal path. |
 | `eventChains[].classification` | May be a legacy static-path classification, `NoBackendEvidence`, or `handler-unavailable`. It is evidence-relative, not a runtime result. |
 | `downstreamBoundaries` | Bounded terminal projections from retained event chains. Each row keeps an opaque target identity, terminal evidence ID, path evidence, rules, tiers, coverage, and supporting IDs. It is not proof that the interaction ran or succeeded. |
