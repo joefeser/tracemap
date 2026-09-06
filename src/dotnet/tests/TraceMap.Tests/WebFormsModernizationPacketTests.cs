@@ -651,6 +651,64 @@ public sealed class WebFormsModernizationPacketTests
     }
 
     [Fact]
+    public async Task Surface_list_filters_pages_and_events_and_reports_unmatched_and_ambiguous_entries()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("Succeeded") with { AnalysisLevel = "Level1SemanticAnalysis" };
+        var first = Page("surface:a", "AreaA/Orders.aspx", manifest);
+        var second = Page("surface:b", "AreaB/Orders.aspx", manifest);
+        var third = Page("surface:c", "AreaC/Status.aspx", manifest);
+        var firstBinding = Fact(manifest, FactTypes.WebFormsEventBindingDeclared, RuleIds.LegacyWebFormsEventBinding, "AreaA/Orders.aspx", 4,
+            source: "control:a", target: "method:a", contract: "Save_Click",
+            ("surfaceIdentity", "surface:a"), ("eventSourceIdentity", "control:a"), ("eventName", "OnClick"),
+            ("handlerName", "Save_Click"), ("coverageLabel", "bounded-static-webforms-event"));
+        var thirdBinding = Fact(manifest, FactTypes.WebFormsEventBindingDeclared, RuleIds.LegacyWebFormsEventBinding, "AreaC/Status.aspx", 4,
+            source: "control:c", target: "method:c", contract: "Refresh_Click",
+            ("surfaceIdentity", "surface:c"), ("eventSourceIdentity", "control:c"), ("eventName", "OnClick"),
+            ("handlerName", "Refresh_Click"), ("coverageLabel", "bounded-static-webforms-event"));
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, manifest, [first, second, third, firstBinding, thirdBinding]);
+        var list = Path.Combine(temp.Path, "pages.csv");
+        await File.WriteAllTextAsync(list, "path\nAreaC\\Status.aspx\nOrders.aspx\nMissing.aspx\n");
+
+        var output = Path.Combine(temp.Path, "packet");
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
+        var exit = await TraceMapCommand.RunAsync([
+            "webforms-modernization", "--index", index, "--surface-list", list, "--out", output
+        ], stdout, stderr);
+        Assert.Equal(0, exit);
+        Assert.Equal(string.Empty, stderr.ToString());
+        Assert.Contains("Requested pages: 3; matched: 1; unmatched: 1; ambiguous: 1", stdout.ToString(), StringComparison.Ordinal);
+        var packet = JsonSerializer.Deserialize<WebFormsModernizationPacket>(
+            await File.ReadAllTextAsync(Path.Combine(output, "webforms-modernization.json")),
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        Assert.NotNull(packet);
+
+        Assert.NotNull(packet.SurfaceSelection);
+        Assert.Equal(3, packet.SurfaceSelection.RequestedCount);
+        Assert.Equal(1, packet.SurfaceSelection.MatchedCount);
+        Assert.Equal(1, packet.SurfaceSelection.AmbiguousCount);
+        Assert.Equal(1, packet.SurfaceSelection.UnmatchedCount);
+        Assert.Single(packet.Surfaces);
+        Assert.Equal("surface:c", packet.Surfaces.Single().SurfaceId);
+        Assert.Single(packet.EventChains);
+        Assert.Equal("surface:c", packet.EventChains.Single().SurfaceId);
+        Assert.Contains(packet.Gaps, gap => gap.Classification == "WebFormsSurfaceListEntryAmbiguous");
+        Assert.Contains(packet.Gaps, gap => gap.Classification == "WebFormsSurfaceListEntryUnmatched");
+        var json = await File.ReadAllTextAsync(Path.Combine(output, "webforms-modernization.json"));
+        var markdown = await File.ReadAllTextAsync(Path.Combine(output, "webforms-modernization.md"));
+        Assert.DoesNotContain("Missing.aspx", json, StringComparison.Ordinal);
+        Assert.Contains("## Requested page coverage", markdown, StringComparison.Ordinal);
+        Assert.Contains("`page-001`", markdown, StringComparison.Ordinal);
+    }
+
+    private static CodeFact Page(string surface, string path, ScanManifest manifest) =>
+        Fact(manifest, FactTypes.WebFormsPageDeclared, RuleIds.LegacyWebFormsInventory, path, 1,
+            source: surface, target: surface, contract: Path.GetFileName(path),
+            ("surfaceIdentity", surface), ("directiveKind", "Page"), ("coverageLabel", "bounded-static-webforms-inventory"));
+
+    [Fact]
     public async Task Combined_and_multi_manifest_indexes_fail_closed_with_stable_errors()
     {
         using var temp = new TempDirectory();

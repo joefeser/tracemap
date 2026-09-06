@@ -21,7 +21,8 @@ public sealed record WebFormsModernizationOptions(
     int MaxBatchDataMovement = 1_000,
     int MaxInputFacts = 250_000,
     int MaxInputEdges = 250_000,
-    int MaxInputTextBytes = 128 * 1024 * 1024);
+    int MaxInputTextBytes = 128 * 1024 * 1024,
+    string? SurfaceListPath = null);
 
 public sealed record WebFormsModernizationResult(
     WebFormsModernizationPacket Packet,
@@ -45,7 +46,23 @@ public sealed record WebFormsModernizationPacket(
     IReadOnlyList<WebFormsModernizationSliceCandidate> StructuralSliceCandidates,
     IReadOnlyList<WebFormsModernizationGap> Gaps,
     IReadOnlyList<string> OwnerQuestions,
+    IReadOnlyList<string> Limitations,
+    WebFormsModernizationSurfaceSelection? SurfaceSelection = null);
+
+public sealed record WebFormsModernizationSurfaceSelection(
+    string RuleId,
+    int RequestedCount,
+    int MatchedCount,
+    int UnmatchedCount,
+    int AmbiguousCount,
+    IReadOnlyList<WebFormsModernizationSurfaceSelectionItem> Items,
     IReadOnlyList<string> Limitations);
+
+public sealed record WebFormsModernizationSurfaceSelectionItem(
+    string Alias,
+    string RequestId,
+    string Status,
+    IReadOnlyList<string> SurfaceIds);
 
 public sealed record WebFormsModernizationSource(
     string SourceId,
@@ -295,7 +312,14 @@ public static class WebFormsModernizationPacketReporter
         Validate(options);
         var budget = new ReportInputBudget(options.MaxInputFacts, options.MaxInputEdges, options.MaxInputTextBytes);
         var snapshot = await ReadSnapshotAsync(options.IndexPath, budget, cancellationToken);
-        var startingFactIds = SelectStartingHandlerFactIds(snapshot.Facts, options.MaxEventChains);
+        var surfaceSelection = options.SurfaceListPath is null
+            ? null
+            : await ResolveSurfaceSelectionAsync(snapshot.Facts, options.SurfaceListPath, cancellationToken);
+        var selectedSurfaceIds = surfaceSelection?.Items
+            .Where(item => item.Status == "matched")
+            .SelectMany(item => item.SurfaceIds)
+            .ToHashSet(StringComparer.Ordinal);
+        var startingFactIds = SelectStartingHandlerFactIds(snapshot.Facts, options.MaxEventChains, selectedSurfaceIds);
         var legacyFlow = await CombinedDependencyPathReporter.BuildBoundedSingleIndexReportAsync(new(
             options.IndexPath,
             Path.Combine(Path.GetTempPath(), "tracemap-webforms-modernization-unused"),
@@ -307,16 +331,19 @@ public static class WebFormsModernizationPacketReporter
             StartingNodeLimit = Math.Max(1, startingFactIds.Count),
             StartingFactIds = startingFactIds
         }, budget, cancellationToken);
-        return Build(snapshot, legacyFlow, options);
+        return Build(snapshot, legacyFlow, options, surfaceSelection);
     }
 
     private static IReadOnlySet<string> SelectStartingHandlerFactIds(
         IReadOnlyList<CodeFact> facts,
-        int maxEventChains)
+        int maxEventChains,
+        IReadOnlySet<string>? selectedSurfaceIds = null)
     {
         var retainedBindingIds = facts
             .Where(HasRequiredProvenance)
             .Where(fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared)
+            .Where(fact => selectedSurfaceIds is null
+                || selectedSurfaceIds.Contains(fact.Properties.GetValueOrDefault("surfaceIdentity") ?? ""))
             .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
             .ThenBy(fact => fact.Evidence.StartLine)
             .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
@@ -337,7 +364,8 @@ public static class WebFormsModernizationPacketReporter
     internal static WebFormsModernizationPacket Build(
         Snapshot snapshot,
         CombinedDependencyPathReport legacyFlow,
-        WebFormsModernizationOptions options)
+        WebFormsModernizationOptions options,
+        WebFormsModernizationSurfaceSelection? surfaceSelection = null)
     {
         var gaps = new List<WebFormsModernizationGap>();
         var inputLimit = snapshot.InputLimit ?? legacyFlow.Gaps.FirstOrDefault(gap => gap.GapKind == "GraphInputLimitReached")?.Reason;
@@ -352,7 +380,20 @@ public static class WebFormsModernizationPacketReporter
         var facts = allFacts.Where(HasRequiredProvenance).ToArray();
         var factsById = facts.ToDictionary(fact => fact.FactId, StringComparer.Ordinal);
         var truncated = legacyFlow.Summary.Truncated || inputLimited;
-        var pageFacts = facts.Where(fact => fact.FactType == FactTypes.WebFormsPageDeclared).ToArray();
+        var selectedSurfaceIds = surfaceSelection?.Items
+            .Where(item => item.Status == "matched")
+            .SelectMany(item => item.SurfaceIds)
+            .ToHashSet(StringComparer.Ordinal);
+        if (surfaceSelection is not null)
+        {
+            foreach (var item in surfaceSelection.Items.Where(item => item.Status != "matched"))
+                AddGeneratedGap(gaps, options.MaxGaps, snapshot,
+                    item.Status == "ambiguous" ? "WebFormsSurfaceListEntryAmbiguous" : "WebFormsSurfaceListEntryUnmatched",
+                    "surface-list-entry", item.RequestId, []);
+        }
+        var pageFacts = facts.Where(fact => fact.FactType == FactTypes.WebFormsPageDeclared)
+            .Where(fact => selectedSurfaceIds is null || selectedSurfaceIds.Contains(SurfaceIdentity(fact)))
+            .ToArray();
         var retainedPages = pageFacts.Take(options.MaxSurfaces).ToArray();
         if (retainedPages.Length < pageFacts.Length)
         {
@@ -399,6 +440,8 @@ public static class WebFormsModernizationPacketReporter
             .ToDictionary(group => group.Key, group => group.OrderBy(fact => fact.FactId, StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
         var flowFacts = facts.Where(fact => fact.FactType == FactTypes.WebFormsEventFlowProjected).ToArray();
         var bindings = facts.Where(fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared)
+            .Where(fact => selectedSurfaceIds is null
+                || selectedSurfaceIds.Contains(fact.Properties.GetValueOrDefault("surfaceIdentity") ?? ""))
             .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
             .ThenBy(fact => fact.Evidence.StartLine)
             .ThenBy(fact => fact.FactId, StringComparer.Ordinal).ToArray();
@@ -678,7 +721,8 @@ public static class WebFormsModernizationPacketReporter
             candidates,
             uniqueGaps,
             Questions,
-            PacketLimitations);
+            PacketLimitations,
+            surfaceSelection);
     }
 
     private static IReadOnlyList<WebFormsModernizationSliceCandidate> BuildCandidates(
@@ -1051,6 +1095,25 @@ public static class WebFormsModernizationPacketReporter
         b.AppendLine($"- Repository: `{packet.Sources.Single().RepositoryId}`");
         b.AppendLine($"- Commit: `{packet.Sources.Single().CommitSha}`");
         b.AppendLine($"- Surfaces: `{packet.Summary.SurfaceCount}`; event chains: `{packet.Summary.EventChainCount}`; downstream boundaries: `{packet.Summary.DownstreamBoundaryCount}`; identity/state declarations: `{packet.Summary.IdentityStateCount}`; batch/data-movement declarations: `{packet.Summary.BatchDataMovementCount}`; structural candidates: `{packet.Summary.StructuralSliceCandidateCount}`; gaps: `{packet.Summary.GapCount}`; truncated: `{packet.Summary.Truncated}`.").AppendLine();
+        if (packet.SurfaceSelection is not null)
+        {
+            b.AppendLine("## Requested page coverage").AppendLine();
+            b.AppendLine($"Requested: `{packet.SurfaceSelection.RequestedCount}`; matched: `{packet.SurfaceSelection.MatchedCount}`; unmatched: `{packet.SurfaceSelection.UnmatchedCount}`; ambiguous: `{packet.SurfaceSelection.AmbiguousCount}`.").AppendLine();
+            b.AppendLine("| Page alias | Match status | Static event chains | Downstream boundaries | First unresolved state |");
+            b.AppendLine("| --- | --- | ---: | ---: | --- |");
+            foreach (var item in packet.SurfaceSelection.Items)
+            {
+                var chains = packet.EventChains.Where(chain => item.SurfaceIds.Contains(chain.SurfaceId, StringComparer.Ordinal)).ToArray();
+                var boundaries = packet.DownstreamBoundaries.Count(boundary => item.SurfaceIds.Contains(boundary.SurfaceId, StringComparer.Ordinal));
+                var unresolved = item.Status != "matched" ? item.Status
+                    : chains.Length == 0 ? "no-static-event-binding"
+                    : chains.All(chain => chain.HandlerFactId is null) ? "handler-unavailable"
+                    : chains.All(chain => chain.TerminalKind is null) ? "terminal-unavailable"
+                    : "none-within-bounds";
+                b.AppendLine($"| `{item.Alias}` | `{item.Status}` | {chains.Length} | {boundaries} | `{unresolved}` |");
+            }
+            b.AppendLine().AppendLine("Page aliases preserve input order; the source list and its raw paths are not copied into this packet.").AppendLine();
+        }
         b.AppendLine("## Surfaces").AppendLine();
         if (packet.Surfaces.Count == 0) b.AppendLine("- No supported Web Forms surfaces were available; see gaps.");
         foreach (var surface in packet.Surfaces)
@@ -1089,11 +1152,88 @@ public static class WebFormsModernizationPacketReporter
         return b.ToString().Replace("\r\n", "\n", StringComparison.Ordinal);
     }
 
+    private static async Task<WebFormsModernizationSurfaceSelection> ResolveSurfaceSelectionAsync(
+        IReadOnlyList<CodeFact> facts,
+        string surfaceListPath,
+        CancellationToken cancellationToken)
+    {
+        if (!File.Exists(surfaceListPath)) throw new FileNotFoundException("WebFormsSurfaceListUnavailable");
+        var lines = await File.ReadAllLinesAsync(surfaceListPath, cancellationToken);
+        var requests = lines.Select(ExtractSurfaceListValue)
+            .Where(value => value is not null)
+            .Cast<string>()
+            .Where(value => !IsSurfaceListHeader(value))
+            .ToArray();
+        if (requests.Length == 0) throw new InvalidDataException("WebFormsSurfaceListEmpty");
+
+        var pages = facts.Where(HasRequiredProvenance)
+            .Where(fact => fact.FactType == FactTypes.WebFormsPageDeclared)
+            .Select(fact => (Fact: fact, Path: NormalizeSurfaceListPath(fact.Evidence.FilePath)))
+            .ToArray();
+        var items = requests.Select((request, index) =>
+        {
+            var normalized = NormalizeSurfaceListPath(request);
+            var pathQualified = normalized.Contains('/', StringComparison.Ordinal);
+            var matches = pages.Where(page => pathQualified
+                    ? page.Path.Equals(normalized, StringComparison.OrdinalIgnoreCase)
+                    : Path.GetFileName(page.Path).Equals(normalized, StringComparison.OrdinalIgnoreCase))
+                .Select(page => SurfaceIdentity(page.Fact))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray();
+            var status = matches.Length == 1 ? "matched" : matches.Length == 0 ? "unmatched" : "ambiguous";
+            return new WebFormsModernizationSurfaceSelectionItem(
+                $"page-{index + 1:000}",
+                HashId("surface-request", [normalized.ToUpperInvariant()]),
+                status,
+                matches);
+        }).ToArray();
+        return new(
+            PacketRuleId,
+            items.Length,
+            items.Count(item => item.Status == "matched"),
+            items.Count(item => item.Status == "unmatched"),
+            items.Count(item => item.Status == "ambiguous"),
+            items,
+            [
+                "Selection matches static Web Forms page declarations only and does not prove runtime routing, rendering, event firing, handler reachability, binding success, or downstream execution.",
+                "Filename-only entries are accepted only when they identify one surface; ambiguous and unmatched entries remain explicit gaps.",
+                "Raw page-list values are not retained in the packet; deterministic aliases preserve input order."
+            ]);
+    }
+
+    private static string? ExtractSurfaceListValue(string line)
+    {
+        var value = line.Trim();
+        if (value.Length == 0 || value.StartsWith('#')) return null;
+        if (value[0] == '"')
+        {
+            var closingQuote = value.IndexOf('"', 1);
+            return closingQuote < 0 ? value[1..].Trim() : value[1..closingQuote].Replace("\"\"", "\"", StringComparison.Ordinal).Trim();
+        }
+        var comma = value.IndexOf(',');
+        return (comma < 0 ? value : value[..comma]).Trim();
+    }
+
+    private static bool IsSurfaceListHeader(string value) =>
+        value.Equals("path", StringComparison.OrdinalIgnoreCase)
+        || value.Equals("page", StringComparison.OrdinalIgnoreCase)
+        || value.Equals("file", StringComparison.OrdinalIgnoreCase)
+        || value.Equals("surface", StringComparison.OrdinalIgnoreCase);
+
+    private static string NormalizeSurfaceListPath(string value)
+    {
+        var normalized = value.Trim().Replace('\\', '/');
+        while (normalized.StartsWith("./", StringComparison.Ordinal)) normalized = normalized[2..];
+        return normalized.TrimStart('/');
+    }
+
     private static void Validate(WebFormsModernizationOptions options)
     {
         if (string.IsNullOrWhiteSpace(options.IndexPath)) throw new ArgumentException("webforms-modernization requires --index <index.sqlite>.");
         if (string.IsNullOrWhiteSpace(options.OutputDirectory)) throw new ArgumentException("webforms-modernization requires --out <directory>.");
         if (!File.Exists(options.IndexPath)) throw new FileNotFoundException("WebFormsModernizationIndexUnavailable");
+        if (options.SurfaceListPath is not null && !File.Exists(options.SurfaceListPath)) throw new FileNotFoundException("WebFormsSurfaceListUnavailable");
         if (options.MaxSurfaces <= 0 || options.MaxEventChains <= 0 || options.MaxCandidates <= 0 || options.MaxGaps <= 0 || options.MaxDepth <= 0 || options.MaxPaths <= 0 || options.MaxBoundaries <= 0 || options.MaxIdentityState <= 0 || options.MaxBatchDataMovement <= 0 || options.MaxInputFacts <= 0 || options.MaxInputEdges <= 0 || options.MaxInputTextBytes <= 0)
             throw new ArgumentOutOfRangeException(nameof(options), "Web Forms modernization bounds must be positive.");
     }

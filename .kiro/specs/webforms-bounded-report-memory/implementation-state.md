@@ -1,5 +1,19 @@
 # Implementation state
 
+## Retained-index page-list report (2026-09-06)
+
+Rebased this diagnostic branch cleanly onto `origin/dev` at `af72e8b9`, which
+contains the merged Base44 work through PR #719. Added optional
+`webforms-modernization --surface-list <file>` filtering and the committed
+`Invoke-FocusedWebFormsPageListReport.ps1` wrapper for the work-machine run.
+The input is a line list or first-column CSV; repo-relative paths match exactly
+and filename-only values must be unique. Output retains deterministic page
+aliases and hashes rather than copying raw list values. Matched entries restrict
+page/event traversal; unmatched and ambiguous entries emit packet-rule gaps.
+The Markdown coverage table reports only static event-chain and downstream
+boundary evidence plus the first unresolved state. It makes no runtime,
+rendering, branch, binding, SQL-execution, or whole-application claim.
+
 ## Field ownership result and next handoff (2026-09-03)
 
 Operator screenshots report ownership-verified for the same event on 0.7.1:

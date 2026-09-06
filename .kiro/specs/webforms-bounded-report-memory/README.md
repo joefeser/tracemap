@@ -1,5 +1,29 @@
 # Restricted Web Forms run: diagnostic follow-up
 
+## Tuesday handoff: report every page in a saved list
+
+Pull this branch, then run the committed wrapper below from the TraceMap repo.
+It reads the existing `index.sqlite`; it does not scan or modify the application
+repository. The page-list file may be UTF-8 text with one page per line or CSV
+whose first column is `path`, `page`, `file`, or `surface`. Prefer repo-relative
+paths such as `Area/Orders.aspx`. A filename alone is accepted only when unique.
+
+```powershell
+.\scripts\Invoke-FocusedWebFormsPageListReport.ps1 `
+  -IndexPath 'C:\work\tracemap-output\focused-webforms-YYYYMMDD-HHMMSS\scan\index.sqlite' `
+  -PageListPath 'C:\Users\YOUR-ID\Downloads\webforms-pages.txt' `
+  -OutputDirectory 'C:\work\tracemap-output\webforms-page-list-YYYYMMDD-HHMMSS'
+```
+
+Open `webforms-modernization.md` in the new output directory. Its **Requested
+page coverage** table retains input order as `page-001`, `page-002`, and so on,
+and reports match status, static event-chain count, downstream-boundary count,
+and the first unresolved state. Raw page-list values are not copied into the
+packet. Unmatched and duplicate filename-only entries become explicit gaps.
+The output is static evidence only: it does not prove runtime page rendering,
+event firing, handler reachability, successful binding, SQL execution, or
+whole-application coverage.
+
 ## Current handoff: one database-backed event in the existing index
 
 Give Claude
