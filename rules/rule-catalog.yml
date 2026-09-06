@@ -31,6 +31,8 @@ rules:
     emits: [Base44SdkPrimitive]
     limitations:
       - Static call syntax does not prove runtime reachability, execution, authorization, response compatibility, or provider delivery.
+      - Injected client authority is bounded to immutable lexical bindings and consistently proven direct callsites; unknown inputs invalidate downstream helpers. Rest, destructured, and spread-shifted bindings are unsupported.
+      - Dynamic dispatch, escaped callbacks, and unresolved re-exports are not followed; missing operations do not prove source absence. See docs/BASE44_INJECTED_CLIENT_DATAFLOW.md.
 
   - id: base44.function.invocation.v1
     name: Base44 frontend function invocation
@@ -39,6 +41,8 @@ rules:
     emits: [Base44FunctionInvocation]
     limitations:
       - A named invocation does not prove route binding or execution; dynamic targets remain Tier4Unknown.
+      - Injected client authority is bounded to immutable lexical bindings and consistently proven direct callsites; unknown inputs invalidate downstream helpers. Rest, destructured, and spread-shifted bindings are unsupported.
+      - Dynamic dispatch, escaped callbacks, and unresolved re-exports are not followed; missing operations do not prove source absence. See docs/BASE44_INJECTED_CLIENT_DATAFLOW.md.
 
   - id: base44.function.surface.v1
     name: Base44 function source surface
@@ -55,6 +59,8 @@ rules:
     emits: [Base44EntityOperation]
     limitations:
       - Entity calls do not prove schema, migration, RLS, service-role, tenant isolation, persistence, or runtime success.
+      - Injected client authority is bounded to immutable lexical bindings and consistently proven direct callsites; unknown inputs invalidate downstream helpers. Rest, destructured, and spread-shifted bindings are unsupported.
+      - Dynamic dispatch, escaped callbacks, and unresolved re-exports are not followed; missing operations do not prove source absence. See docs/BASE44_INJECTED_CLIENT_DATAFLOW.md.
 
   - id: base44.entity.payload.v1
     name: Base44 entity mutation payload shape

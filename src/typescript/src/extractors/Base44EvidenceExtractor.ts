@@ -121,6 +121,7 @@ function addSdkCall(chain: string[], node: ts.CallExpression, source: ts.SourceF
     const functionName = stringArgument(node.arguments[0]);
     facts.push(fact(manifest, FactTypes.Base44FunctionInvocation, RuleIds.Base44FunctionInvocation, node, source, filePath, functionName ?? "dynamic", {
       functionName: functionName ?? "dynamic",
+      ...clientBindingEvidence,
       bindingKind: functionName ? "static" : "dynamic",
       sourceFileSha256: hash(text, 64)
     }, functionName ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier4Unknown));
@@ -284,7 +285,6 @@ async function buildAliasMaps(items: readonly FileInventoryItem[]): Promise<Alia
     let changed = false;
     for (const context of contexts.values()) {
       changed = propagateLocalImports(context, contexts, exportsByFile) || changed;
-      changed = discoverDerivedAliases(context) || changed;
       changed = updateExportedAliases(context, exportsByFile) || changed;
     }
     if (!changed) break;
@@ -313,7 +313,9 @@ function discoverInjectedParameterAliases(contexts: Map<string, SourceContext>):
             if (!ts.isIdentifier(parameter.name)) continue;
             const key = parameterKey(target.getSourceFile(), parameter);
             const record = inputs.get(key) ?? { target: { context: contextForSource(target.getSourceFile(), contexts), parameter }, sources: [] };
-            record.sources.push(argumentAliasSource(node.arguments[index], node, caller));
+            record.sources.push(parameter.dotDotDotToken || node.arguments.slice(0, index + 1).some(ts.isSpreadElement)
+              ? { kind: "unknown" }
+              : argumentAliasSource(node.arguments[index], node, caller));
             inputs.set(key, record);
           }
         }
@@ -327,7 +329,7 @@ function discoverInjectedParameterAliases(contexts: Map<string, SourceContext>):
   for (const [key, record] of inputs) {
     const values = new Map<string, string[]>();
     for (const source of record.sources) {
-      if (source.kind === "known" && source.prefix) values.set(source.prefix.join("."), source.prefix);
+      if (source.kind === "known" && source.prefix) values.set(JSON.stringify(source.prefix), source.prefix);
     }
     candidates.set(key, values);
   }
@@ -339,7 +341,7 @@ function discoverInjectedParameterAliases(contexts: Map<string, SourceContext>):
         if (source.kind !== "parameter" || !source.parameterKey) continue;
         for (const value of [...(candidates.get(source.parameterKey)?.values() ?? [])]) {
           const candidate = [...value, ...(source.suffix ?? [])];
-          const identity = candidate.join(".");
+          const identity = JSON.stringify(candidate);
           if (!values.has(identity) && values.size < 2) { values.set(identity, candidate); changed = true; }
         }
       }
@@ -353,6 +355,20 @@ function discoverInjectedParameterAliases(contexts: Map<string, SourceContext>):
     const dependenciesResolved = record.sources.every((source) => source.kind === "known"
       || source.kind === "parameter" && Boolean(source.parameterKey && candidates.get(source.parameterKey)?.size));
     if (record.sources.length && dependenciesResolved && values.size === 1) resolved.set(key, [...values.values()][0]);
+  }
+
+  // A candidate path is not proof: unknown or ambiguous inputs must invalidate
+  // every downstream dependent, including otherwise consistently seeded cycles.
+  for (let pass = 0; pass < inputs.size; pass++) {
+    let changed = false;
+    for (const key of resolved.keys()) {
+      if (inputs.get(key)!.sources.some((source) => source.kind === "parameter"
+        && (!source.parameterKey || !resolved.has(source.parameterKey)))) {
+        resolved.delete(key);
+        changed = true;
+      }
+    }
+    if (!changed) break;
   }
 
   const byFile = new Map<string, Map<number, string[]>>();
@@ -474,8 +490,8 @@ function resolveRuntimeAlias(name: string, use: ts.Node, source: ts.SourceFile, 
       ? { prefix, kind: "callsite-proven-parameter" } : null;
   }
   if (binding.kind === "variable") {
-    if (!isImmutableVariable(binding.node, use) || !binding.node.initializer) return null;
-    const factory = factoryAlias(binding.node.initializer, aliases, factoryAliases);
+    if (!ts.isIdentifier(binding.node.name) || !isImmutableVariable(binding.node, use) || !binding.node.initializer) return null;
+    const factory = factoryAlias(binding.node.initializer, source, aliases, factoryAliases);
     if (factory) return { prefix: factory, kind: "source-import-or-derived" };
     const chain = expressionChain(unwrapAliasExpression(binding.node.initializer));
     if (!chain) return null;
@@ -491,7 +507,7 @@ function resolveRuntimeAlias(name: string, use: ts.Node, source: ts.SourceFile, 
 
 function parameterSourceFromExpression(input: ts.Expression, use: ts.Node, context: SourceContext, visited: Set<ts.Node>): ParameterSource {
   const expression = unwrapAliasExpression(input);
-  const factory = factoryAlias(expression, context.aliases, context.factoryAliases);
+  const factory = factoryAlias(expression, context.source, context.aliases, context.factoryAliases);
   if (factory) return { kind: "known", prefix: factory };
   const chain = expressionChain(expression);
   if (!chain) return { kind: "unknown" };
@@ -506,7 +522,7 @@ function parameterSourceFromExpression(input: ts.Expression, use: ts.Node, conte
     };
   }
   if (binding.kind === "variable") {
-    if (!isImmutableVariable(binding.node, use) || !binding.node.initializer) return { kind: "unknown" };
+    if (!ts.isIdentifier(binding.node.name) || !isImmutableVariable(binding.node, use) || !binding.node.initializer) return { kind: "unknown" };
     return appendParameterSource(parameterSourceFromExpression(binding.node.initializer, binding.node, context, next), chain.slice(1));
   }
   if (binding.kind === "import") {
@@ -522,13 +538,24 @@ function appendParameterSource(source: ParameterSource, suffix: string[]): Param
   return source;
 }
 
-function factoryAlias(input: ts.Expression, aliases: Map<string, string[]>, factoryAliases: Set<string>): string[] | null {
+function factoryAlias(input: ts.Expression, source: ts.SourceFile, aliases: Map<string, string[]>, factoryAliases: Set<string>, visited = new Set<ts.Node>()): string[] | null {
   const expression = unwrapAliasExpression(input);
   if (!ts.isCallExpression(expression)) return null;
-  const callee = expressionChain(expression.expression);
-  if (callee?.length === 1 && factoryAliases.has(callee[0])) return [];
-  if (callee && callee.length > 1 && aliases.has(callee[0]) && base44FactoryNames.has(callee.at(-1) ?? "")) return [];
-  return null;
+  const callee = expressionChain(unwrapAliasExpression(expression.expression));
+  if (!callee) return null;
+  const resolveRoot = (name: string, use: ts.Node): { factory: boolean; namespace: boolean } | null => {
+    const binding = resolveLexicalBinding(name, use, source);
+    if (!binding || visited.has(binding.node)) return null;
+    visited.add(binding.node);
+    if (binding.kind === "import") return { factory: factoryAliases.has(name), namespace: aliases.has(name) };
+    if (binding.kind !== "variable" || !ts.isIdentifier(binding.node.name)
+      || !isImmutableVariable(binding.node, use) || !binding.node.initializer) return null;
+    const alias = unwrapAliasExpression(binding.node.initializer);
+    return ts.isIdentifier(alias) ? resolveRoot(alias.text, alias) : null;
+  };
+  const root = resolveRoot(callee[0], expression);
+  return root && ((callee.length === 1 && root.factory)
+    || (callee.length === 2 && root.namespace && base44FactoryNames.has(callee[1]))) ? [] : null;
 }
 
 function resolveLexicalBinding(name: string, use: ts.Node, source: ts.SourceFile): LexicalBinding | null {
@@ -547,6 +574,9 @@ function resolveLexicalBinding(name: string, use: ts.Node, source: ts.SourceFile
       && current.initializer && ts.isVariableDeclarationList(current.initializer)) {
       const declaration = current.initializer.declarations.find((item) => bindingNames(item.name).includes(name));
       if (declaration) return { kind: "variable", node: declaration };
+    }
+    if ((ts.isFunctionExpression(current) || ts.isClassExpression(current)) && current.name?.text === name) {
+      return { kind: "other", node: current };
     }
     if (ts.isFunctionLike(current)) {
       const parameter = current.parameters.find((candidate) => bindingNames(candidate.name).includes(name));
@@ -604,7 +634,7 @@ function functionScopedVar(root: ts.Node, name: string): ts.VariableDeclaration 
 function isImmutableVariable(declaration: ts.VariableDeclaration, use: ts.Node): boolean {
   return ts.isVariableDeclarationList(declaration.parent)
     && Boolean(declaration.parent.flags & ts.NodeFlags.Const)
-    && declaration.getEnd() <= use.getStart(use.getSourceFile());
+    && declaration.getEnd() <= (ts.isSourceFile(use) ? use.getEnd() : use.getStart(use.getSourceFile()));
 }
 
 function bindingWrittenBefore(name: ts.BindingName, use: ts.Node): boolean {
@@ -617,6 +647,10 @@ function bindingWrittenBefore(name: ts.BindingName, use: ts.Node): boolean {
     if (written || node.getStart(node.getSourceFile()) >= limit || (node !== root && ts.isFunctionLike(node))) return;
     if (ts.isBinaryExpression(node) && isAssignmentOperator(node.operatorToken.kind)) {
       written = assignmentTargetIdentifiers(node.left).some((identifier) => identifier.text === name.text
+        && resolveLexicalBinding(identifier.text, identifier, identifier.getSourceFile())?.node === declaration);
+    }
+    if ((ts.isForInStatement(node) || ts.isForOfStatement(node)) && !ts.isVariableDeclarationList(node.initializer)) {
+      written = assignmentTargetIdentifiers(node.initializer).some((identifier) => identifier.text === name.text
         && resolveLexicalBinding(identifier.text, identifier, identifier.getSourceFile())?.node === declaration);
     }
     if (((ts.isPrefixUnaryExpression(node) && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(node.operator))
@@ -712,40 +746,21 @@ function propagateLocalImports(context: SourceContext, contexts: Map<string, Sou
   return changed;
 }
 
-function discoverDerivedAliases(context: SourceContext): boolean {
-  let changed = false;
-  const visitNode = (node: ts.Node): void => {
-    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
-      if (ts.isCallExpression(node.initializer)) {
-        const callee = expressionChain(node.initializer.expression);
-        const directFactory = callee?.length === 1 && context.factoryAliases.has(callee[0]);
-        const namespaceFactory = Boolean(callee && callee.length > 1 && context.aliases.has(callee[0]) && base44FactoryNames.has(callee.at(-1) ?? ""));
-        if (directFactory || namespaceFactory) changed = setAlias(context.aliases, node.name.text, []) || changed;
-      } else {
-        const chain = expressionChain(node.initializer);
-        const prefix = chain ? context.aliases.get(chain[0]) : undefined;
-        if (chain && prefix) changed = setAlias(context.aliases, node.name.text, [...prefix, ...chain.slice(1)]) || changed;
-      }
-    }
-    ts.forEachChild(node, visitNode);
-  };
-  visitNode(context.source);
-  return changed;
-}
-
 function updateExportedAliases(context: SourceContext, exportsByFile: Map<string, Map<string, string[]>>): boolean {
   const exported = exportsByFile.get(context.item.relativePath) ?? new Map<string, string[]>();
   let changed = false;
+  const exportedPrefix = (name: string): string[] | undefined => resolveRuntimeAlias(name, context.source, context.source,
+    context.aliases, context.factoryAliases, new Map(), new Set())?.prefix;
   for (const statement of context.source.statements) {
     if (ts.isVariableStatement(statement) && statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)) {
       for (const declaration of statement.declarationList.declarations) {
-        if (ts.isIdentifier(declaration.name)) changed = setAlias(exported, declaration.name.text, context.aliases.get(declaration.name.text)) || changed;
+        if (ts.isIdentifier(declaration.name)) changed = setAlias(exported, declaration.name.text, exportedPrefix(declaration.name.text)) || changed;
       }
     }
     if (ts.isExportDeclaration(statement) && statement.exportClause && ts.isNamedExports(statement.exportClause) && !statement.moduleSpecifier) {
       for (const element of statement.exportClause.elements) {
         const localName = element.propertyName?.text ?? element.name.text;
-        changed = setAlias(exported, element.name.text, context.aliases.get(localName)) || changed;
+        changed = setAlias(exported, element.name.text, exportedPrefix(localName)) || changed;
       }
     }
   }
@@ -767,7 +782,7 @@ function resolveLocalModule(fromFile: string, specifier: string, contexts: Map<s
 function setAlias(target: Map<string, string[]>, name: string, value: string[] | undefined): boolean {
   if (!value) return false;
   const existing = target.get(name);
-  if (existing && existing.join(".") === value.join(".")) return false;
+  if (existing && JSON.stringify(existing) === JSON.stringify(value)) return false;
   target.set(name, value);
   return true;
 }
