@@ -234,6 +234,69 @@ describe("Base44 source-bound static evidence", () => {
     }
   });
 
+  it.each([
+    "const defaults = { branch_only: 1 }; base44.entities.ReviewItem.create(flag ? { ...defaults } : {});",
+    "const defaults = { branch_only: 1 }; base44.entities.ReviewItem.create({ ...(flag ? { ...defaults } : {}) });",
+    "const defaults = { branch_only: 1 }; base44.entities.ReviewItem.create(flag && { ...defaults });"
+  ])("preserves branch-conditional presence through nested spreads: %s", async (body) => {
+    const { packet } = await reviewFixture(body);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload)!;
+    const fields = JSON.parse(payload.properties.fieldsJson);
+    expect(fields).toEqual(expect.arrayContaining([expect.objectContaining({ name: "branch_only", presence: "conditional" })]));
+    expect(fields.filter((field: { name: string; presence: string }) => field.name === "branch_only").every((field: { presence: string }) => field.presence === "conditional")).toBe(true);
+  });
+
+  it.each([
+    ["const payload = { initial: 1 }; const alias = payload; alias.added = 2; base44.entities.ReviewItem.create(payload);", "binding-alias-escape-unresolved"],
+    ["const payload = { initial: 1 }; mutate(payload); base44.entities.ReviewItem.create(payload);", "binding-call-escape-unresolved"],
+    ["const payload = [{ initial: 1 }]; payload.push({ added: 2 }); base44.entities.ReviewItem.bulkCreate(payload);", "binding-method-call-unresolved"],
+    ["const original = [{ initial: 1 }]; const payload = original; original.push({ added: 2 }); base44.entities.ReviewItem.bulkCreate(payload);", "post-capture-alias-mutation-unresolved"]
+  ])("does not claim a complete shape after unmodeled reference use: %s", async (body, gap) => {
+    const { packet } = await reviewFixture(body);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload)!;
+    expect(payload.properties.completeness).toBe("partial");
+    expect(payload.evidenceTier).toBe("Tier4Unknown");
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toContain(gap);
+  });
+
+  it.each([
+    "const payload = { unrelated_outer: 1 }; function save(payload) { base44.entities.ReviewItem.create(payload); }",
+    "const payload = { unrelated_outer: 1 }; function save({ payload }) { base44.entities.ReviewItem.create(payload); }",
+    "const payload = { unrelated_outer: 1 }; { const { payload } = input; base44.entities.ReviewItem.create(payload); }",
+    "const payload = { unrelated_outer: 1 }; { base44.entities.ReviewItem.create(payload); const payload = {}; }",
+    "try {} catch (payload) {} const payload = { own_field: 1 }; { const { payload } = input; base44.entities.ReviewItem.create(payload); }"
+  ])("does not derive fields from a shadowed outer binding: %s", async (body) => {
+    const { packet } = await reviewFixture(body);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload)!;
+    expect(payload.properties.completeness).toBe("unresolved");
+    expect(JSON.parse(payload.properties.fieldsJson)).toEqual([]);
+  });
+
+  it.each([
+    "const payload = { own_field: 1 }; { const payload = {}; mutate(payload); } base44.entities.ReviewItem.create(payload);",
+    "const payload = { own_field: 1 }; function neverCalled() { mutate(payload); } base44.entities.ReviewItem.create(payload);",
+    "const payload = { own_field: 1 }; base44.entities.ReviewItem.create(payload); mutate(payload);",
+    "const payload = { own_field: 1 }; Object.assign({}, payload); base44.entities.ReviewItem.create(payload);",
+    "const payload = { own_field: 1 }; try {} catch (payload) { mutate(payload); } base44.entities.ReviewItem.create(payload);"
+  ])("preserves complete evidence outside the relevant binding and call interval: %s", async (body) => {
+    const { packet } = await reviewFixture(body);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload)!;
+    expect(payload.properties.completeness).toBe("complete");
+    expect(JSON.parse(payload.properties.fieldsJson)).toEqual([expect.objectContaining({ name: "own_field" })]);
+  });
+
+  it("keeps identical calls on one line distinct and linked through artifact serialization", async () => {
+    const { packet, result } = await reviewFixture("base44.entities.ReviewItem.create({ field: 1 }); base44.entities.ReviewItem.create({ field: 1 });");
+    const operations = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation);
+    const shapes = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityPayload);
+    expect(operations).toHaveLength(2);
+    expect(shapes).toHaveLength(2);
+    expect(new Set(operations.map((fact) => fact.properties.operationEvidenceId)).size).toBe(2);
+    expect(new Set(shapes.map((fact) => fact.factId)).size).toBe(2);
+    expect(shapes.map((fact) => fact.properties.operationEvidenceId).sort()).toEqual(operations.map((fact) => fact.properties.operationEvidenceId).sort());
+    expect(result.facts.filter((fact) => fact.factType === FactTypes.Base44EntityPayload)).toHaveLength(2);
+  });
+
   it("ignores schema prose but produces an exact payload-shape diff when executable payload code changes", async () => {
     const repo = await payloadFixtureRepo();
     const baselineOut = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-payload-baseline-"));
@@ -448,4 +511,21 @@ export async function run(name, includeCost, hours, rate, dynamicKey, criteria, 
   execFileSync("git", ["add", "."], { cwd: repo });
   execFileSync("git", ["commit", "-qm", "fixture"], { cwd: repo });
   return repo;
+}
+
+async function reviewFixture(body: string) {
+  const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-review-fixture-"));
+  const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-review-out-"));
+  try {
+    await fs.writeFile(path.join(repo, "app.ts"), `import { base44 } from "@base44/sdk";
+export function run(flag) { ${body} }
+`);
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    execFileSync("git", ["add", "."], { cwd: repo });
+    execFileSync("git", ["-c", "user.name=TraceMap Test", "-c", "user.email=tracemap@example.invalid", "commit", "-qm", "fixture"], { cwd: repo });
+    return await buildBase44Evidence(options(repo, out));
+  } finally {
+    await fs.rm(repo, { recursive: true, force: true });
+    await fs.rm(out, { recursive: true, force: true });
+  }
 }

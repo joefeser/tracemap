@@ -65,6 +65,8 @@ rules:
       - Static payload shape does not prove branch execution, runtime values, validation, persistence, authorization, tenant isolation, or schema compatibility.
       - Unresolved bindings, computed fields, spreads, call results, and unsupported constructions remain Tier4Unknown and never prove that an unobserved field is absent.
       - Binding and expression classes are bounded intrafile evidence; this rule does not execute helpers or infer fields from documentation, schema prose, fixtures, or naming conventions.
+      - Aliases, helper arguments, and method calls can mutate payloads; unmodeled reference uses emit typed gaps rather than proving a complete shape or absence. Nested spreads preserve inherited conditional presence.
+      - Parameters, catch bindings, destructuring, and later local declarations shadow outer variables. Unsupported binding initializers remain unresolved.
 
   - id: base44.entity.query.v1
     name: Base44 entity query shape
@@ -74,6 +76,7 @@ rules:
     limitations:
       - Static query shape does not prove runtime reachability, returned rows, ordering, projection, authorization, tenant isolation, or backend compatibility.
       - Dynamic filter, sort, and select constructions remain Tier4Unknown and missing fields are not clean absence outside complete per-callsite coverage.
+      - Filter bindings share the payload rule limitations for lexical shadowing, aliases, helper calls, method calls, and inherited conditional spread presence.
 
   - id: base44.environment.access.v1
     name: Base44 function environment access

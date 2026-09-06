@@ -7,6 +7,12 @@ source. It is independent static evidence only. It does not create database
 schema authority, prove runtime behavior, admit an SDK, or declare ShopGenie
 compatible.
 
+The counts and packet digest below are historical evidence from extractor
+`base44-evidence/0.2.0`. The PR #717 review corrections in
+[the review validation receipt](base44-pr717-review-2026-09-05.md) use
+`base44-evidence/0.2.1`; this historical ShopGenie packet has not been regenerated
+with those corrections and must not serve as current-head validation.
+
 ## Bound identities
 
 - Source repository: `BigRiverMachine/ShopGenie`
