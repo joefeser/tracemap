@@ -1,5 +1,9 @@
 # Base44 normalized query evidence — issue #713
 
+> Historical contract. `88mph.entity-query.v2` supersedes this descriptor for
+> reviewed producers that model direct reference operands as runtime-deferred
+> wire values. See [Base44 query semantics v2](BASE44_QUERY_SEMANTICS_V2.md).
+
 Extractor `base44-evidence/0.3.0` adds `properties.querySemanticsJson` to
 filter/list/deleteMany query facts. The encoded descriptor is
 `88mph.entity-query.v1`, independently derived with the TypeScript compiler
