@@ -168,8 +168,12 @@ describe("Base44 source-bound static evidence", () => {
 
     expect(helperOperations.map((fact) => `${fact.targetSymbol}.${fact.properties.operationName}`).sort()).toEqual([
       "ForwardedItem.list",
+      "LocalAliasItem.list",
       "MaterialTypeVendor.create",
       "MaterialTypeVendor.filter",
+      "NestedItem.list",
+      "OverloadedItem.list",
+      "RecursiveItem.list",
       "Vendor.list"
     ]);
     expect(helperOperations.every((fact) => fact.properties.clientBindingKind === "callsite-proven-parameter")).toBe(true);
@@ -179,7 +183,19 @@ describe("Base44 source-bound static evidence", () => {
       properties: expect.objectContaining({ clientBindingKind: "callsite-proven-parameter" })
     }));
     expect(packet.facts.some((fact) => fact.factType === FactTypes.Base44EntityOperation
-      && ["UnprovenItem", "ConflictedItem", "ShadowedItem", "LexicalShadowItem"].includes(fact.targetSymbol ?? ""))).toBe(false);
+      && ["UnprovenItem", "ConflictedItem", "ShadowedItem", "LexicalShadowItem", "ArgumentShadowItem",
+        "ReassignedAliasItem", "ReassignedParameterItem", "StaleHelperItem", "CatchShadowItem",
+        "StaleDeclaredHelperItem", "LoopShadowItem", "ClassShadowItem", "FunctionShadowItem",
+        "ConflictingRecursiveItem"].includes(fact.targetSymbol ?? ""))).toBe(false);
+    expect(packet.facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.Base44HttpTarget,
+      evidence: expect.objectContaining({ filePath: "src/helper.ts" })
+    }));
+    expect(packet.facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.Base44EnvironmentAccess,
+      targetSymbol: "HELPER_TOKEN",
+      evidence: expect.objectContaining({ filePath: "src/helper.ts" })
+    }));
   });
 
   it("emits deterministic payload presence, type, binding, spread and ambiguity evidence without values", async () => {
@@ -514,16 +530,62 @@ function forwardedAgain(client) { return client.entities.ForwardedItem.list(); }
 export function unproven(base44) { return base44.entities.UnprovenItem.list(); }
 export function conflicted(client) { return client.entities.ConflictedItem.list(); }
 export function lexicalShadow(client) { return client.entities.LexicalShadowItem.list(); }
+export function outerShadow(client) { { const client = { entities: {} }; return argumentSink(client); } }
+function argumentSink(client) { return client.entities.ArgumentShadowItem.list(); }
+export function reassignedAliasSink(client) { return client.entities.ReassignedAliasItem.list(); }
+export function reassignedParameter(client) { client = { entities: {} }; return client.entities.ReassignedParameterItem.list(); }
+export function recursive(client, count) { return count > 0 ? recursive(client, count - 1) : client.entities.RecursiveItem.list(); }
+export function conflictingRecursive(client, count) {
+  return count > 0 ? conflictingRecursive(client.entities, count - 1) : client.entities.ConflictingRecursiveItem.list();
+}
+export function nestedForward(client) {
+  const nested = (nestedClient) => nestedClient.entities.NestedItem.list();
+  return nested(client);
+}
+export function localAliasSink(client) { return client.entities.LocalAliasItem.list(); }
+export function overloaded(client: unknown): unknown;
+export function overloaded(client) { return client.entities.OverloadedItem.list(); }
+export function helperContext(client) {
+  Deno.env.get("HELPER_TOKEN");
+  fetch("https://helper.example.invalid/path");
+  return client;
+}
+export function blockShadows(client) {
+  try { throw new Error(); } catch (client) { client.entities.CatchShadowItem.list(); }
+  for (const client of []) client.entities.LoopShadowItem.list();
+  { class client {} client.entities.ClassShadowItem.list(); }
+  { function client() {} client.entities.FunctionShadowItem.list(); }
+}
 `);
   await fs.writeFile(path.join(repo, "src/app.ts"), `
 import { base44 } from "@base44/sdk";
-import { useClient as link, forward, conflicted, lexicalShadow } from "./helper";
+import { useClient as link, forward, conflicted, lexicalShadow, outerShadow, reassignedAliasSink,
+  reassignedParameter, recursive, conflictingRecursive, nestedForward, localAliasSink, overloaded, helperContext, blockShadows } from "./helper";
 export async function run(id, org) {
   await link(id, base44, org);
   await forward(base44);
   await conflicted(base44);
   await conflicted({ entities: {} });
   { const base44 = { entities: {} }; await lexicalShadow(base44); }
+  await outerShadow(base44);
+  let mutableClient = base44;
+  mutableClient = { entities: {} };
+  await reassignedAliasSink(mutableClient);
+  await reassignedParameter(base44);
+  await recursive(base44, 2);
+  await conflictingRecursive(base44, 2);
+  await nestedForward(base44);
+  const localClient = base44;
+  await localAliasSink(localClient);
+  await overloaded(base44);
+  await helperContext(base44);
+  await blockShadows(base44);
+  let staleHelper = (client) => client.entities.StaleHelperItem.list();
+  staleHelper = () => undefined;
+  staleHelper(base44);
+  function staleDeclared(client) { return client.entities.StaleDeclaredHelperItem.list(); }
+  staleDeclared = () => undefined;
+  staleDeclared(base44);
 }
 `);
   execFileSync("git", ["init", "-q"], { cwd: repo });
