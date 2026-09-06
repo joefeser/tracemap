@@ -43,4 +43,32 @@ describe("normalized Base44 query syntax", () => {
     expect(extract("filter",`{${Array.from({length:600},(_,i)=>`f${i}: 1`).join(",")}}`).gaps).toContain("query:complexity_limit");
     expect(extract("filter","{b: 1, a: user.id}").arguments[0].span).toEqual({start:30,end:48});
   });
+  it('accepts static backtick strings and transparent satisfies wrappers', () => {
+    const result = extract('filter', '({state: `SECRET_STATIC`} satisfies Filter), (`-id` satisfies string), (25 satisfies number), 0, [`id`]');
+    expect(result.completeness).toBe('complete');
+    expect(result.arguments[1].value).toEqual({kind:'sort',encoding:'string',fields:[{name:'id',direction:'desc'}]});
+    expect(result.arguments[4].value).toEqual({kind:'selection',encoding:'array',fields:['id']});
+    expect(JSON.stringify(result)).not.toContain('SECRET_STATIC');
+    expect(extract('filter','{state: `prefix-${dynamic}` }').completeness).toBe('unresolved');
+  });
+  it('bounds transparent wrapper traversal before it can recurse without limit', () => {
+    const result = extract('filter', '({state: "open"})' + '!'.repeat(60));
+    expect(result.completeness).toBe('unresolved');
+    expect(result.gaps).toContain('query:complexity_limit');
+  });
+
+  it('retains full signed numeric predicate spans without storing the number', () => {
+    const args = '{balance: -98765.5, cost: {$gte: +12345, $in: [-2, +3]}}';
+    const result = extract('filter', args);
+    expect(result.completeness).toBe('complete');
+    const operand = (result.arguments[0].value as any).entries[0].operand;
+    const code = `base44.entities.Widget.filter(${args});`;
+    expect(operand).toMatchObject({kind:'literal',type:'number'});
+    expect(code.slice(operand.span.start, operand.span.end)).toBe('-98765.5');
+    expect(JSON.stringify(result)).not.toContain('98765.5');
+    expect(JSON.stringify(result)).not.toContain('12345');
+    expect(extract('filter','{a: -runtimeValue}').completeness).toBe('unresolved');
+    expect(extract('list',"'-id', -1").completeness).toBe('unresolved');
+  });
+
 });

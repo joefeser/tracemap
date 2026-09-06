@@ -12,8 +12,14 @@ export function extractQuerySemantics(call: ts.CallExpression, source: ts.Source
   let budget = 512;
   const span = (node: ts.Node) => ({ start: node.getStart(source), end: node.getEnd() });
   function unwrap(node: ts.Expression): ts.Expression {
-    return ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isTypeAssertionExpression(node)
-      || ts.isNonNullExpression(node) ? unwrap(node.expression) : node;
+    let current = node;
+    let depth = 0;
+    while (ts.isParenthesizedExpression(current) || ts.isAsExpression(current) || ts.isTypeAssertionExpression(current)
+      || ts.isNonNullExpression(current) || ts.isSatisfiesExpression(current)) {
+      if (++depth > 16 || --budget < 0) { gaps.add("query:complexity_limit"); break; }
+      current = current.expression;
+    }
+    return current;
   }
   function gap(reason: string, node?: ts.Node): Record<string, unknown> {
     gaps.add(reason);
@@ -27,10 +33,14 @@ export function extractQuerySemantics(call: ts.CallExpression, source: ts.Source
   function operand(input: ts.Expression, depth = 0): Record<string, unknown> {
     const node = unwrap(input);
     if (!admit(node, depth)) return { kind: "unknown" };
-    const type = ts.isStringLiteral(node) ? "string" : ts.isNumericLiteral(node) ? "number"
+    const type = ts.isStringLiteralLike(node) ? "string" : ts.isNumericLiteral(node) ? "number"
       : node.kind === ts.SyntaxKind.TrueKeyword || node.kind === ts.SyntaxKind.FalseKeyword ? "boolean"
       : node.kind === ts.SyntaxKind.NullKeyword ? "null" : null;
     if (type) return { kind: "literal", type, span: span(node) };
+    if (ts.isPrefixUnaryExpression(node) && [ts.SyntaxKind.PlusToken, ts.SyntaxKind.MinusToken].includes(node.operator)
+      && ts.isNumericLiteral(unwrap(node.operand))) {
+      return { kind: "literal", type: "number", span: span(node) };
+    }
     if (ts.isIdentifier(node) || ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) {
       return { kind: "reference", span: span(node) };
     }
@@ -81,7 +91,7 @@ export function extractQuerySemantics(call: ts.CallExpression, source: ts.Source
         }
         entries.push({ field, form: "operators", operators });
       } else {
-        const evidence = operand(propertyValue(property));
+        const evidence = operand(value);
         if (evidence.kind === "reference") gaps.add("query:implicit_predicate_type_unresolved");
         entries.push({ field, form: "implicit", operand: evidence });
       }
@@ -96,7 +106,7 @@ export function extractQuerySemantics(call: ts.CallExpression, source: ts.Source
     for (const element of values) {
       const value = unwrap(element);
       if (!admit(value, 0)) break;
-      if (!ts.isStringLiteral(value)) return gap(`query:${role}_unresolved`, value);
+      if (!ts.isStringLiteralLike(value)) return gap(`query:${role}_unresolved`, value);
       for (const part of value.text.split(",")) {
         const text = part.trim();
         const name = role === "sort" ? text.replace(/^[-+]/u, "") : text;
