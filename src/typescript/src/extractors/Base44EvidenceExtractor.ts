@@ -250,6 +250,7 @@ function addEntityOperation(
     entitySelectorGap: selectorGap,
     entitySelectorJson: selectorJson,
     computedQueryFields,
+    arrayIntrinsicsPristine: arrayIntrinsicsArePristine(contexts),
     runtimeDeferredOuterKind,
     sdkIdentityGap: sdkIdentity.gap ?? "",
     sdkIdentityJson: sdkIdentity.identity ? JSON.stringify(sdkIdentity.identity) : ""
@@ -615,7 +616,7 @@ function emitComputedEntityCall(
         sdkIdentityGap: sdkIdentity.gap ?? "",
         sdkIdentityJson: sdkIdentity.identity ? JSON.stringify(sdkIdentity.identity) : "",
         sourceFileSha256: hash(text, 64)
-      }, sdkIdentity.identity && !selector.gap ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier4Unknown));
+      }, sdkIdentity.identity ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier4Unknown));
     return;
   }
   if (candidates.length === 0) {
@@ -835,6 +836,7 @@ function dormantMutationHookCallable(node: ts.CallExpression, source: ts.SourceF
   const declaration = hookCall.parent;
   if (!ts.isVariableDeclaration(declaration) || !ts.isIdentifier(declaration.name)) return null;
   const bindingName = declaration.name.text;
+  if (mutationHandleIsExported(declaration, bindingName, source)) return null;
   let unsafe = false;
   const scope = executionRoot(declaration.name);
   const visit = (candidate: ts.Node): void => {
@@ -855,6 +857,35 @@ function dormantMutationHookCallable(node: ts.CallExpression, source: ts.SourceF
   };
   visit(scope);
   return unsafe ? null : `${bindingName}.mutationFn`;
+}
+
+function mutationHandleIsExported(
+  declaration: ts.VariableDeclaration,
+  bindingName: string,
+  source: ts.SourceFile
+): boolean {
+  const statement = declaration.parent.parent;
+  if (ts.isVariableStatement(statement)
+    && statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)) return true;
+  for (const candidate of source.statements) {
+    if (ts.isExportAssignment(candidate)) {
+      const expression = unwrapAliasExpression(candidate.expression);
+      if (ts.isIdentifier(expression) && expression.text === bindingName
+        && resolveLexicalBinding(bindingName, expression, source)?.node === declaration) return true;
+    }
+    if (ts.isExportDeclaration(candidate) && !candidate.moduleSpecifier
+      && candidate.exportClause && ts.isNamedExports(candidate.exportClause)
+      && candidate.exportClause.elements.some((element) => (element.propertyName?.text ?? element.name.text) === bindingName)) return true;
+    if (ts.isExpressionStatement(candidate) && ts.isBinaryExpression(candidate.expression)
+      && candidate.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+      const right = unwrapAliasExpression(candidate.expression.right);
+      if (!ts.isIdentifier(right) || right.text !== bindingName
+        || resolveLexicalBinding(bindingName, right, source)?.node !== declaration) continue;
+      const left = candidate.expression.left.getText(source);
+      if (left === "module.exports" || left.startsWith("module.exports.") || left.startsWith("exports.")) return true;
+    }
+  }
+  return false;
 }
 
 function isReactQueryUseMutationCall(call: ts.CallExpression, source: ts.SourceFile): boolean {
@@ -932,6 +963,7 @@ function sourceReachabilityGraph(contexts: Map<string, SourceContext>): {
         if (specifier && ts.isStringLiteralLike(specifier)) {
           const target = resolveLocalModule(context.item.relativePath, specifier.text, contexts);
           if (target) targets.add(target);
+          else if (isLocalModuleSpecifier(specifier.text)) closed = false;
         }
       }
       if (ts.isCallExpression(node)) {
@@ -948,6 +980,7 @@ function sourceReachabilityGraph(contexts: Map<string, SourceContext>): {
           } else {
             const target = resolveLocalModule(context.item.relativePath, argument.text, contexts);
             if (target) targets.add(target);
+            else if (isLocalModuleSpecifier(argument.text)) closed = false;
           }
         }
       }
@@ -967,6 +1000,10 @@ function sourceReachabilityGraph(contexts: Map<string, SourceContext>): {
   const result = { closed, roots, reachable };
   sourceReachabilityCache.set(contexts, result);
   return result;
+}
+
+function isLocalModuleSpecifier(specifier: string): boolean {
+  return specifier.startsWith(".") || specifier.startsWith("@/");
 }
 
 function returnedExpression(owner: ts.FunctionLikeDeclaration): ts.Expression | null {
@@ -1321,6 +1358,21 @@ function statementTerminates(statement: ts.Statement): boolean {
   }
   if (ts.isIfStatement(statement)) return Boolean(statement.elseStatement
     && statementTerminates(statement.thenStatement) && statementTerminates(statement.elseStatement));
+  return false;
+}
+
+function isStaticallyUnreachable(node: ts.Node, boundary: ts.Node): boolean {
+  let child: ts.Node = node;
+  for (let current = node.parent; current; child = current, current = current.parent) {
+    if (ts.isBlock(current) || ts.isSourceFile(current)) {
+      const statement = current.statements.find((candidate) => candidate === child || isAncestorNode(candidate, child));
+      if (statement) {
+        const index = current.statements.indexOf(statement);
+        if (current.statements.slice(0, index).some(statementTerminates)) return true;
+      }
+    }
+    if (current === boundary) break;
+  }
   return false;
 }
 
@@ -1725,6 +1777,10 @@ function isTransparentClosedReactRefUse(
     || resolveCallableExpression(member, context, contexts, new Set(), true) !== owner) return false;
   const use = member.parent;
   if (ts.isCallExpression(use) && unwrapAliasExpression(use.expression) === member) return true;
+  if (ts.isPropertyAccessExpression(use) && use.expression === member
+    && (use.name.text === "flush" || use.name.text === "cancel")
+    && ts.isCallExpression(use.parent) && use.parent.expression === use && use.parent.arguments.length === 0
+    && isExactLodashDebounceRef(reference, context.source)) return true;
   if (ts.isBinaryExpression(use) && use.left === member
     && use.operatorToken.kind === ts.SyntaxKind.EqualsToken
     && resolveCallableTarget(use.right, context, contexts) === owner) return true;
@@ -1733,6 +1789,16 @@ function isTransparentClosedReactRefUse(
     return ts.isVariableDeclarationList(list) && (list.flags & ts.NodeFlags.Const) !== 0;
   }
   return false;
+}
+
+function isExactLodashDebounceRef(reference: ts.Identifier, source: ts.SourceFile): boolean {
+  const binding = resolveLexicalBinding(reference.text, reference, source);
+  if (binding?.kind !== "variable" || !binding.node.initializer) return false;
+  const initializer = unwrapAliasExpression(binding.node.initializer);
+  if (!ts.isCallExpression(initializer) || !isExactImportedCall(initializer, source, "react", new Set(["useRef"]))) return false;
+  const argument = initializer.arguments[0] && unwrapAliasExpression(initializer.arguments[0]);
+  return Boolean(argument && ts.isCallExpression(argument)
+    && isExactImportedCall(argument, source, "lodash", new Set(["debounce"])));
 }
 
 function isTransparentCallableAliasReference(reference: ts.Identifier, source: ts.SourceFile): boolean {
@@ -1826,15 +1892,18 @@ function evaluateAppendOnlyArrayBinding(
   context: SelectorEvaluationContext,
   visited: Set<string>
 ): StaticSelectorValue[] | null {
+  if (!arrayIntrinsicsArePristine(context.contexts)) return null;
   if (!ts.isIdentifier(declaration.name) || !declaration.initializer) return null;
   const initial = evaluateSelectorValues(declaration.initializer, context, new Set(visited));
   if (!initial || initial.length !== 1 || initial[0].kind !== "array") return null;
   const elements = [...(initial[0].elements ?? [])];
   let unsafe = false;
   const scope = executionRoot(declaration.name);
+  if (isStaticallyUnreachable(use, scope)) return null;
   const usePosition = use.getStart(context.source);
   const visit = (node: ts.Node): void => {
     if (unsafe || (node !== scope && ts.isFunctionLike(node) && !isAncestorNode(node, use))) return;
+    if (node !== scope && isStaticallyUnreachable(node, scope)) return;
     if (node.getStart(context.source) > usePosition) return;
     if (ts.isIdentifier(node) && node !== declaration.name && node !== use && node.text === bindingName
       && resolveLexicalBinding(bindingName, node, context.source)?.node === declaration) {
@@ -2132,6 +2201,7 @@ function evaluateSelectorCall(call: ts.CallExpression, context: SelectorEvaluati
     return [{ kind: "array", elements, evidence: normalizeSelectorEvidence(elements.flatMap((item) => item.evidence)) }];
   }
   if (ts.isPropertyAccessExpression(callee) && ["filter", "map"].includes(callee.name.text)) {
+    if (!arrayIntrinsicsArePristine(context.contexts)) return null;
     const owner = evaluateSelectorValues(callee.expression, context, new Set(visited));
     if (!owner || owner.some((item) => item.kind !== "array")) return null;
     if (callee.name.text === "filter") return owner;
@@ -2139,6 +2209,58 @@ function evaluateSelectorCall(call: ts.CallExpression, context: SelectorEvaluati
   const target = resolveCallableTarget(call.expression, contextForSource(context.source, context.contexts), context.contexts);
   if (target) return evaluateCallableReturns(call, target, context, visited);
   return null;
+}
+
+const arrayIntrinsicRealmCache = new WeakMap<Map<string, SourceContext>, boolean>();
+
+function arrayIntrinsicsArePristine(contexts: Map<string, SourceContext>): boolean {
+  const cached = arrayIntrinsicRealmCache.get(contexts);
+  if (cached !== undefined) return cached;
+  let pristine = true;
+  const mutationMembers = new Set(["map", "filter", "push"]);
+  for (const context of contexts.values()) {
+    const visit = (node: ts.Node): void => {
+      if (!pristine) return;
+      if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression)
+        && node.expression.text === "Array" && node.name.text === "prototype"
+        && !resolveLexicalBinding("Array", node.expression, context.source)) {
+        pristine = false;
+        return;
+      }
+      const mutatedMember = (expression: ts.Expression): string | null => {
+        const target = unwrapAliasExpression(expression);
+        if (ts.isPropertyAccessExpression(target)) return target.name.text;
+        if (ts.isElementAccessExpression(target) && target.argumentExpression
+          && ts.isStringLiteralLike(target.argumentExpression)) return target.argumentExpression.text;
+        return null;
+      };
+      if (ts.isBinaryExpression(node) && isAssignmentOperator(node.operatorToken.kind)
+        && mutationMembers.has(mutatedMember(node.left) ?? "")) {
+        pristine = false;
+        return;
+      }
+      if (ts.isDeleteExpression(node) && mutationMembers.has(mutatedMember(node.expression) ?? "")) {
+        pristine = false;
+        return;
+      }
+      if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
+        && ts.isIdentifier(node.expression.expression)
+        && ["Object", "Reflect"].includes(node.expression.expression.text)
+        && ["defineProperty", "setPrototypeOf"].includes(node.expression.name.text)) {
+        const member = node.arguments[1];
+        if (node.expression.name.text === "setPrototypeOf"
+          || (member && ts.isStringLiteralLike(member) && mutationMembers.has(member.text))) {
+          pristine = false;
+          return;
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(context.source);
+    if (!pristine) break;
+  }
+  arrayIntrinsicRealmCache.set(contexts, pristine);
+  return pristine;
 }
 
 function evaluateCallableReturns(

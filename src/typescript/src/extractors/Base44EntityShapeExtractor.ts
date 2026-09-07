@@ -67,6 +67,7 @@ interface ShapeContext {
   callPosition: number;
   declarations: Map<string, ts.VariableDeclaration[]>;
   computedQueryFields: Record<string, string[]>;
+  arrayIntrinsicsPristine: boolean;
 }
 
 interface ParameterBinding {
@@ -94,6 +95,7 @@ export interface EntityShapeInput {
   entitySelectorGap: string;
   entitySelectorJson: string;
   computedQueryFields?: Record<string, string[]>;
+  arrayIntrinsicsPristine: boolean;
   runtimeDeferredOuterKind?: "object";
   sdkIdentityGap: string;
   sdkIdentityJson: string;
@@ -113,7 +115,8 @@ export function extractEntityShapeFacts(input: EntityShapeInput): CodeFact[] {
     callNode: input.node,
     callPosition: input.node.getStart(input.source),
     declarations,
-    computedQueryFields: input.computedQueryFields ?? {}
+    computedQueryFields: input.computedQueryFields ?? {},
+    arrayIntrinsicsPristine: input.arrayIntrinsicsPristine
   };
   const payloadIndex = mutationPayloadIndex.get(input.operationName);
   if (payloadIndex !== undefined) {
@@ -675,6 +678,7 @@ function analyzeArrayIteratorParameter(
   visitedBindings: Set<string>,
   presence: Presence
 ): ShapeAnalysis | null {
+  if (!context.arrayIntrinsicsPristine) return null;
   if (binding.propertyPath.length !== 0 || binding.gap || !ts.isIdentifier(binding.parameter.name)
     || binding.parameter.initializer || binding.parameter.dotDotDotToken) return null;
   const callback = binding.parameter.parent;
@@ -1074,6 +1078,7 @@ function addBindingMutations(bindingName: string, declaration: ts.VariableDeclar
   const visit = (node: ts.Node): void => {
     if (node !== scope && ts.isFunctionLike(node)) return;
     if (areMutuallyExclusive(node, context.callNode)) return;
+    if (node !== scope && isStaticallyUnreachable(node, scope)) return;
     const position = node.getStart(context.source);
     if (position <= declarationEnd || position >= context.callPosition) return ts.forEachChild(node, visit);
     const safeArrayPush = isSafeArrayPush(node, bindingName, declaration, context, result);
@@ -1165,7 +1170,8 @@ function isSafeArrayPush(
   context: ShapeContext,
   result: ShapeAnalysis
 ): boolean {
-  if (!ts.isCallExpression(node) || provenPayloadOuterKind(result.outerKinds) !== "array") return false;
+  if (!context.arrayIntrinsicsPristine || !ts.isCallExpression(node)
+    || provenPayloadOuterKind(result.outerKinds) !== "array") return false;
   const callee = unwrapExpression(node.expression);
   return ts.isPropertyAccessExpression(callee) && callee.name.text === "push"
     && ts.isIdentifier(callee.expression) && callee.expression.text === bindingName
@@ -1488,6 +1494,32 @@ function isConditionallyExecuted(node: ts.Node, source: ts.Node): boolean {
       && isAncestor(parent.right, node)) return true;
   }
   return false;
+}
+
+function isStaticallyUnreachable(node: ts.Node, boundary: ts.Node): boolean {
+  let child: ts.Node = node;
+  for (let current = node.parent; current; child = current, current = current.parent) {
+    if (ts.isBlock(current) || ts.isSourceFile(current)) {
+      const statement = current.statements.find((candidate) => candidate === child || isAncestor(candidate, child));
+      if (statement) {
+        const index = current.statements.indexOf(statement);
+        if (current.statements.slice(0, index).some(statementTerminatesExecution)) return true;
+      }
+    }
+    if (current === boundary) break;
+  }
+  return false;
+}
+
+function statementTerminatesExecution(statement: ts.Statement): boolean {
+  if (ts.isReturnStatement(statement) || ts.isThrowStatement(statement)) return true;
+  if (ts.isBlock(statement)) {
+    const last = statement.statements.at(-1);
+    return Boolean(last && statementTerminatesExecution(last));
+  }
+  return ts.isIfStatement(statement) && Boolean(statement.elseStatement
+    && statementTerminatesExecution(statement.thenStatement)
+    && statementTerminatesExecution(statement.elseStatement));
 }
 
 function areMutuallyExclusive(left: ts.Node, right: ts.Node): boolean {
@@ -1877,10 +1909,25 @@ function normalizeFields(fields: ShapeField[]): ShapeField[] {
       field.evidenceStartOffset,
       field.evidenceEndOffset,
       field.name,
-      field.origin,
-      field.presence,
     ]);
-    byValue.set(occurrence, field);
+    const existing = byValue.get(occurrence);
+    if (!existing) {
+      byValue.set(occurrence, field);
+      continue;
+    }
+    const presence: Presence = existing.presence === field.presence ? field.presence
+      : existing.presence === "dynamic-computed" || field.presence === "dynamic-computed" ? "dynamic-computed"
+        : existing.presence === "unresolved" || field.presence === "unresolved" ? "unresolved" : "conditional";
+    const semanticAgrees = existing.valueType === field.valueType && existing.explicitNull === field.explicitNull;
+    byValue.set(occurrence, {
+      ...existing,
+      presence,
+      expressionType: existing.expressionType === field.expressionType ? existing.expressionType : "multiple-source-expressions",
+      origin: existing.origin === field.origin ? existing.origin : "multiple-source-paths",
+      semanticPresence: semanticPresence(presence),
+      valueType: semanticAgrees ? existing.valueType : "unknown",
+      explicitNull: existing.explicitNull || field.explicitNull
+    });
   }
   return [...byValue.values()].sort((left, right) => left.name.localeCompare(right.name)
     || left.evidenceFilePath.localeCompare(right.evidenceFilePath)
