@@ -753,7 +753,8 @@ export function Screen(enabled) {
     ["aliased Function", `const Build = Function; new Build("Array.prototype.push = () => 0")();`],
     ["function constructor", `(() => {}).constructor("Array.prototype.push = () => 0")();`],
     ["aliased function constructor", `const Build = (() => {}).constructor; new Build("Array.prototype.push = () => 0")();`],
-    ["escaped global alias", `const realm = globalThis; inspect(realm);`]
+    ["escaped global alias", `const realm = globalThis; inspect(realm);`],
+    ["exported global alias", `export const realm = globalThis;`]
   ])("blocks Array inference around indirect dynamic evaluation: %s", async (_caseName, evaluator) => {
     const { packet } = await mutationHookFixture(`
 ${evaluator}
@@ -808,6 +809,8 @@ const cleaned = "Array.prototype.push = () => 0";`],
 const cleaned = "Array.prototype.push = () => 0";`],
     ["escaped RegExp authority", `const RuntimeRegExp = RegExp;
 inspect(RuntimeRegExp);
+const cleaned = "Array.prototype.push = () => 0";`],
+    ["exported RegExp authority", `export const RuntimeRegExp = RegExp;
 const cleaned = "Array.prototype.push = () => 0";`]
   ])("rejects an unsound bounded arithmetic guard: %s", async (_caseName, setup) => {
     const { packet } = await mutationHookFixture(`
