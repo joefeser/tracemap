@@ -39,6 +39,26 @@ The additive JavaScript/JSX/TypeScript/TSX `base44.*.v1` rules cover:
 
 Facts contain repository and commit identity, rule, evidence tier, extractor identity/version, relative path, a first-class line span, source-file digest, and snippet digest. Each statically derived field also carries the contributing syntax's line span and snippet digest so identifier, spread, and mutation evidence remains independently inspectable even when it is defined away from the SDK callsite. They never store source snippets, environment values, URL paths/query strings, tokens, or cookies.
 
+Extractor `base44-evidence/0.7.0` adds the producer-owned
+`coverage.gaps[]` contract. Every `Tier4Unknown` Base44 fact appears exactly
+once with its non-null `factId`, rule, tier, a closed category (`entity`,
+`function`, `auth`, `http-integration`, `storage`, `provider`, or `unknown`),
+and a deterministic declared-surface label. Its `gapId` binds the gap schema,
+packet repository and commit, both accepted source identities, fact ID,
+category, and surface. The packet always emits `coverage.gaps`, including an
+empty array, and identifies the entry schema as
+`tracemap.base44.coverage-gap.v1`. Missing, duplicate, malformed, orphaned, or
+misclassified entries fail packet validation. Manifest-only `knownGaps` remain
+separate aggregate coverage limitations because they have no source fact ID;
+consumers must retain them as unknown blockers rather than invent source
+evidence. Host-generated cross-producer comparison gaps are also separate and
+must be classified and composed by the host.
+
+The packet schema remains `tracemap.base44.static-evidence.v1`; these fields
+are additive so historical v1 artifacts remain structurally recognizable.
+Consumers admitting extractor `0.7.0` or later must require both fields and
+validate the exact one-to-one relationship with Tier-4 packet facts.
+
 `base44.entity.payload.v1` and `base44.entity.query.v1` are additive facts in
 the v1 packet. Structured field, spread, binding, and gap collections are
 deterministically encoded in string-valued JSON properties so the existing

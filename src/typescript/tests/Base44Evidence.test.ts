@@ -803,6 +803,70 @@ export function Screen() {
     expect(await fs.readFile(`${extensionlessOutput}.md`, "utf8")).toContain("# TraceMap Base44 Static Diff");
   });
 
+  it("publishes mixed producer-owned coverage gaps once with stable source-bound identities", async () => {
+    const repo = await coverageGapFixtureRepo();
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-coverage-gaps-"));
+    const replayOut = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-coverage-gaps-replay-"));
+    const first = await buildBase44Evidence(options(repo, out));
+    const replay = await buildBase44Evidence(options(repo, replayOut));
+
+    expect(first.packet.coverage.gapSchemaVersion).toBe("tracemap.base44.coverage-gap.v1");
+    expect(first.packet.coverage.gaps).toEqual(replay.packet.coverage.gaps);
+    const tier4Facts = first.packet.facts.filter((fact) => fact.evidenceTier === "Tier4Unknown");
+    expect(tier4Facts).toHaveLength(4);
+    expect(first.packet.coverage.gaps).toHaveLength(tier4Facts.length);
+    expect(new Set(first.packet.coverage.gaps.map((gap) => gap.gapId)).size).toBe(tier4Facts.length);
+    expect(new Set(first.packet.coverage.gaps.map((gap) => gap.factId)).size).toBe(tier4Facts.length);
+    expect(first.packet.coverage.gaps.map((gap) => gap.factId).sort()).toEqual(
+      tier4Facts.map((fact) => fact.factId).sort()
+    );
+    expect(first.packet.coverage.gaps.map((gap) => gap.category).sort()).toEqual([
+      "entity",
+      "function",
+      "http-integration",
+      "unknown"
+    ]);
+    expect(first.packet.coverage.gaps).toEqual(expect.arrayContaining([
+      expect.objectContaining({ category: "entity", surface: "entities.ImportRecord.importEntities" }),
+      expect.objectContaining({ category: "function", surface: "functions.dynamic" }),
+      expect.objectContaining({ category: "http-integration", surface: "http-integration.Base44HttpTarget.dynamic" }),
+      expect.objectContaining({ category: "unknown", surface: "unknown.Base44EnvironmentAccess.dynamic" })
+    ]));
+    expect(first.packet.coverage.gaps.every((gap) => gap.factId !== null && gap.evidenceTier === "Tier4Unknown")).toBe(true);
+
+    const duplicate = structuredClone(first.packet);
+    duplicate.coverage.gaps.push(structuredClone(duplicate.coverage.gaps[0]));
+    const duplicatePath = path.join(out, "duplicate-gap.json");
+    await fs.writeFile(duplicatePath, `${JSON.stringify(duplicate, null, 2)}\n`);
+    await expect(diffBase44Evidence(
+      path.join(out, "base44-evidence.json"),
+      duplicatePath,
+      path.join(out, "duplicate-diff.json")
+    )).rejects.toThrow("duplicate gapId");
+
+    const malformed = structuredClone(first.packet);
+    malformed.coverage.gaps[0].gapId = "gap-not-a-sha";
+    const malformedPath = path.join(out, "malformed-gap.json");
+    await fs.writeFile(malformedPath, `${JSON.stringify(malformed, null, 2)}\n`);
+    await expect(diffBase44Evidence(
+      path.join(out, "base44-evidence.json"),
+      malformedPath,
+      path.join(out, "malformed-diff.json")
+    )).rejects.toThrow("invalid gapId");
+
+    const reclassifiedUnknown = structuredClone(first.packet);
+    const unknownGap = reclassifiedUnknown.coverage.gaps.find((gap) => gap.category === "unknown");
+    if (!unknownGap) throw new Error("fixture did not emit the expected unknown coverage gap");
+    unknownGap.category = "http-integration";
+    const reclassifiedPath = path.join(out, "reclassified-gap.json");
+    await fs.writeFile(reclassifiedPath, `${JSON.stringify(reclassifiedUnknown, null, 2)}\n`);
+    await expect(diffBase44Evidence(
+      path.join(out, "base44-evidence.json"),
+      reclassifiedPath,
+      path.join(out, "reclassified-diff.json")
+    )).rejects.toThrow("do not match the source-bound Tier4 fact set exactly once");
+  });
+
   it("does not classify conventional migrations as Base44 without a Base44 signal", async () => {
     const repo = await nonBase44MigrationRepo();
     const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-non-base44-out-"));
@@ -811,6 +875,8 @@ export function Screen() {
     expect(packet.facts.some((fact) => fact.factType === FactTypes.Base44MigrationSurface)).toBe(false);
     expect(packet.facts.some((fact) => fact.factType === FactTypes.Base44HttpTarget)).toBe(false);
     expect(packet.facts.some((fact) => fact.factType === FactTypes.Base44EnvironmentAccess)).toBe(false);
+    expect(packet.coverage.gapSchemaVersion).toBe("tracemap.base44.coverage-gap.v1");
+    expect(packet.coverage.gaps).toEqual([]);
   });
 });
 
@@ -887,6 +953,25 @@ async function nonBase44MigrationRepo(): Promise<string> {
   await fs.mkdir(path.join(repo, "db/migrations"), { recursive: true });
   await fs.writeFile(path.join(repo, "src/app.ts"), 'const token = Deno.env.get("GENERIC_TOKEN");\nexport const load = () => fetch("https://ordinary.example.invalid/path");\n');
   await fs.writeFile(path.join(repo, "db/migrations/001.sql"), "create table orders (id text primary key);\n");
+  execFileSync("git", ["init", "-q"], { cwd: repo });
+  execFileSync("git", ["config", "user.email", "tracemap@example.invalid"], { cwd: repo });
+  execFileSync("git", ["config", "user.name", "TraceMap Test"], { cwd: repo });
+  execFileSync("git", ["add", "."], { cwd: repo });
+  execFileSync("git", ["commit", "-qm", "fixture"], { cwd: repo });
+  return repo;
+}
+
+async function coverageGapFixtureRepo(): Promise<string> {
+  const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-coverage-gap-fixture-"));
+  await fs.mkdir(path.join(repo, "src"), { recursive: true });
+  await fs.writeFile(path.join(repo, "src/app.ts"), `import { base44 } from "@base44/sdk";
+export async function run(functionName, file, environmentName, url) {
+  await base44.functions.invoke(functionName, {});
+  await base44.entities.ImportRecord.importEntities(file);
+  Deno.env.get(environmentName);
+  return fetch(url);
+}
+`);
   execFileSync("git", ["init", "-q"], { cwd: repo });
   execFileSync("git", ["config", "user.email", "tracemap@example.invalid"], { cwd: repo });
   execFileSync("git", ["config", "user.name", "TraceMap Test"], { cwd: repo });
