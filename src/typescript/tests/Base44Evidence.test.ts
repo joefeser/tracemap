@@ -289,6 +289,9 @@ export async function unused(data) { return base44.entities.AliasGraph.create(da
     await fs.writeFile(path.join(repo, "src/used.ts"), `import { base44 } from "@base44/sdk";
 export const used = (data) => base44.entities.ExtendedAlias.create(data);
 `);
+    await fs.writeFile(path.join(repo, "src/dormant.ts"), `import { base44 } from "@base44/sdk";
+export async function dormant(data) { return base44.entities.ExtendedAliasDormant.create(data); }
+`);
     execFileSync("git", ["init", "-q"], { cwd: repo });
     execFileSync("git", ["add", "."], { cwd: repo });
     execFileSync("git", ["-c", "user.name=TraceMap Test", "-c", "user.email=tracemap@example.invalid", "commit", "-qm", "fixture"], { cwd: repo });
@@ -296,6 +299,40 @@ export const used = (data) => base44.entities.ExtendedAlias.create(data);
     const packet = (await buildBase44Evidence(options(repo, out))).packet;
     expect(packet.facts.some((fact) => fact.factType === FactTypes.Base44EntityOperation
       && fact.targetSymbol === "ExtendedAlias")).toBe(true);
+    expect(packet.facts.some((fact) => fact.factType === FactTypes.Base44EntityCallsiteDisposition
+      && fact.evidence.filePath === "src/dormant.ts")).toBe(true);
+  });
+
+  it("resolves source-rooted baseUrl and package imports aliases without opening the graph", async () => {
+    for (const kind of ["baseUrl", "package-imports"] as const) {
+      const repo = await fs.mkdtemp(path.join(os.tmpdir(), `tracemap-${kind}-reachability-`));
+      await fs.mkdir(path.join(repo, "src"), { recursive: true });
+      await writeFrontendSdkAuthority(repo);
+      const specifier = kind === "baseUrl" ? "used" : "#used";
+      if (kind === "baseUrl") {
+        await fs.writeFile(path.join(repo, "jsconfig.json"), `${JSON.stringify({ compilerOptions: { baseUrl: "src" } }, null, 2)}\n`);
+      } else {
+        const packageJson = JSON.parse(await fs.readFile(path.join(repo, "package.json"), "utf8"));
+        packageJson.imports = { "#*": "./src/*" };
+        await fs.writeFile(path.join(repo, "package.json"), `${JSON.stringify(packageJson, null, 2)}\n`);
+      }
+      await fs.writeFile(path.join(repo, "src/main.ts"), `import { used } from "${specifier}"; used({ name: "active" });\n`);
+      await fs.writeFile(path.join(repo, "src/used.ts"), `import { base44 } from "@base44/sdk";
+export const used = (data) => base44.entities.RootedAlias.create(data);
+`);
+      await fs.writeFile(path.join(repo, "src/dormant.ts"), `import { base44 } from "@base44/sdk";
+export async function dormant(data) { return base44.entities.RootedAliasDormant.create(data); }
+`);
+      execFileSync("git", ["init", "-q"], { cwd: repo });
+      execFileSync("git", ["add", "."], { cwd: repo });
+      execFileSync("git", ["-c", "user.name=TraceMap Test", "-c", "user.email=tracemap@example.invalid", "commit", "-qm", "fixture"], { cwd: repo });
+      const out = await fs.mkdtemp(path.join(os.tmpdir(), `tracemap-${kind}-reachability-out-`));
+      const packet = (await buildBase44Evidence(options(repo, out))).packet;
+      expect(packet.facts.some((fact) => fact.factType === FactTypes.Base44EntityOperation
+        && fact.targetSymbol === "RootedAlias")).toBe(true);
+      expect(packet.facts.some((fact) => fact.factType === FactTypes.Base44EntityCallsiteDisposition
+        && fact.evidence.filePath === "src/dormant.ts")).toBe(true);
+    }
   });
 
   it.each([
@@ -640,7 +677,9 @@ base44.entities.ArrayRealm.bulkCreate(rows);
 
   it("does not trust Array inference through an indirectly obtained intrinsic prototype", async () => {
     const repo = await fixtureRepo();
-    await fs.writeFile(path.join(repo, "src/array-reflect-patch.ts"), `Reflect.set(Object.getPrototypeOf([]), "push", function(value) { return 1; });\n`);
+    await fs.writeFile(path.join(repo, "src/array-reflect-patch.ts"), `const getPrototype = Object.getPrototypeOf;
+Reflect.set(getPrototype(new Array()), "push", function(value) { return 1; });
+`);
     await fs.writeFile(path.join(repo, "src/array-reflect-realm.ts"), `import "./array-reflect-patch";
 import { base44 } from "@base44/sdk";
 const rows = [];
