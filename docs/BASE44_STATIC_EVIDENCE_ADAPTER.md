@@ -140,6 +140,25 @@ Extractor `base44-evidence/0.5.0` emits the versioned
 [Base44 query semantics v2](BASE44_QUERY_SEMANTICS_V2.md). Consumers must admit
 the new extractor and descriptor identities explicitly.
 
+Extractor `base44-evidence/0.8.0` adds the narrow
+`88mph.entity-query.v3` descriptor for source-bound local filter objects with
+conditionally added fields. V3 preserves v2 and adds explicit per-entry
+`always`/`conditional` presence plus source derivation; direct object literals
+continue to emit v2. See
+[Base44 query semantics v3](BASE44_QUERY_SEMANTICS_V3.md). Consumers that do
+not explicitly validate and admit v3 must block it.
+
+The same extractor emits the closed payload shape-v2 contract documented in
+[Base44 entity payload shape v2](BASE44_ENTITY_PAYLOAD_SHAPE_V2.md). It
+distinguishes a source-bounded outer object with runtime-deferred fields from
+an unresolved outer kind and carries the Docker write/readback/cleanup
+obligation without relabeling static evidence complete. It also models a
+statically named object-rest payload only
+when the source object is independently resolved, every excluded key is
+static, and the rest binding is not mutated or escaped before the SDK call.
+All source gaps are retained; array destructuring, selected-property bindings,
+computed/default exclusions, and runtime-open inputs remain unresolved.
+
 Extractor `base44-evidence/0.4.1` also follows an SDK client through a local
 helper parameter when executable callsites prove the binding. The proof is
 conservative: every directly resolved callsite for that parameter must supply

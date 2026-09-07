@@ -9,6 +9,18 @@ function extract(method: string, args: string) {
   return extractQuerySemantics(call, source, method)!;
 }
 
+function extractProgram(code: string, entity = "Widget") {
+  const source = ts.createSourceFile("fixture.ts", code, ts.ScriptTarget.Latest, true);
+  let selected: ts.CallExpression | undefined;
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node) && node.expression.getText(source) === `base44.entities.${entity}.filter`) selected = node;
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  if (!selected) throw new Error("fixture has no selected Base44 filter call");
+  return extractQuerySemantics(selected, source, "filter")!;
+}
+
 describe("normalized Base44 query syntax", () => {
   it("captures the full literal query and excludes runtime operands", () => {
     const result = extract("filter", `{tenant_id: {$eq: user.id}, state: 'SECRET_OPERAND', cost: {$gte: 12.5, $in: [1, 2]}}, '-created_date,name', 25, 0, ['id','name']`);
@@ -92,6 +104,70 @@ describe("normalized Base44 query syntax", () => {
     expect(JSON.stringify(result)).not.toContain('12345');
     expect(extract('filter','{a: -runtimeValue}').completeness).toBe('unresolved');
     expect(extract('list',"'-id', -1").completeness).toBe('unresolved');
+  });
+
+  it("emits query v3 with source-derived always and conditional binding fields", () => {
+    const result = extractProgram(`
+function load(toolingItem, organizationId, preselectedPrintId) {
+  const filters = { tooling_item_id: toolingItem.id, organization_id: organizationId };
+  if (preselectedPrintId) filters.print_id = preselectedPrintId;
+  return base44.entities.Widget.filter(filters);
+}`);
+    expect(result).toMatchObject({
+      schemaVersion: "88mph.entity-query.v3",
+      method: "filter",
+      completeness: "complete",
+      gaps: []
+    });
+    const entries = (result.arguments[0].value as any).entries;
+    expect(entries.map((entry: any) => ({ field: entry.field, presence: entry.presence }))).toEqual([
+      { field: "tooling_item_id", presence: "always" },
+      { field: "organization_id", presence: "always" },
+      { field: "print_id", presence: "conditional" }
+    ]);
+    expect(entries[2].derivation).toEqual([expect.objectContaining({ kind: "conditional-property-assignment" })]);
+    expect(JSON.stringify(result)).not.toContain("preselectedPrintId");
+  });
+
+  it("binds conditional presence and branch loss into different descriptors", () => {
+    const conditional = extractProgram(`
+function load(value, flag) {
+  const filters = { tenant_id: value };
+  if (flag) filters.state = value;
+  return base44.entities.Widget.filter(filters);
+}`);
+    const always = extractProgram(`
+function load(value) {
+  const filters = { tenant_id: value };
+  filters.state = value;
+  return base44.entities.Widget.filter(filters);
+}`);
+    expect(conditional.schemaVersion).toBe("88mph.entity-query.v3");
+    expect(always.schemaVersion).toBe("88mph.entity-query.v3");
+    expect((conditional.arguments[0].value as any).entries[1].presence).toBe("conditional");
+    expect((always.arguments[0].value as any).entries[1].presence).toBe("always");
+    expect(JSON.stringify(conditional)).not.toBe(JSON.stringify(always));
+  });
+
+  it.each([
+    "inspect(filters);",
+    "const alias = filters;",
+    "filters.state ||= value;",
+    "delete filters.state;",
+    "filters.configure();",
+    "queueMicrotask(() => { filters.state = value; });"
+  ])("keeps mutated or escaped query bindings fail closed: %s", (mutation) => {
+    const result = extractProgram(`
+function load(value) {
+  const filters = { tenant_id: value };
+  ${mutation}
+  return base44.entities.Widget.filter(filters);
+}`);
+    expect(result.schemaVersion).toBe("88mph.entity-query.v3");
+    expect(result.completeness).toBe("unresolved");
+    expect(result.gaps).toEqual(expect.arrayContaining([
+      expect.stringMatching(/^query:(binding-mutation|binding-state-or-escape|binding-nested-capture)-unresolved$/)
+    ]));
   });
 
 });

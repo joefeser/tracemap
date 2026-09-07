@@ -73,8 +73,11 @@ describe("Base44 source-bound static evidence", () => {
         argumentIndex: "0",
         completeness: "complete",
         constructionKind: "object-literal",
+        outerKind: "object",
         operationName: "create",
-        shapeVersion: "1"
+        referenceAccounting: "source-bounded",
+        runtimeObligationsJson: "[]",
+        shapeVersion: "2"
       })
     }));
     expect(JSON.parse(createPayload?.properties.fieldsJson ?? "[]")).toEqual([
@@ -338,6 +341,123 @@ export function Screen(raw) {
       packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityPayload).map((fact) => fact.factId)
     );
     expect(JSON.stringify(packet)).not.toContain("redacted");
+  });
+
+  it("projects a source-proven object-rest payload without the removed fields", async () => {
+    const { packet } = await mutationHookFixture(`
+export function Screen() {
+  const save = useWrite({ mutationFn: (variables) => {
+    const { metadata, ...payload } = variables;
+    return base44.entities.RestProjectedItem.create(payload);
+  } });
+  save.mutate({ metadata: "redacted", name: "redacted", quantity: 2 });
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "RestProjectedItem")!;
+    expect(payload.properties.completeness).toBe("complete");
+    expect(payload.properties.constructionKind).toBe("destructured:object-rest:react-query-mutation-callsites");
+    expect(JSON.parse(payload.properties.fieldsJson)).toEqual([
+      expect.objectContaining({ name: "name" }),
+      expect.objectContaining({ name: "quantity" })
+    ]);
+    expect(payload.properties.fieldsJson).not.toContain("metadata");
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toEqual([]);
+  });
+
+  it("classifies a finite open-object spread as runtime-deferred without claiming its fields", async () => {
+    const { packet } = await mutationHookFixture(`
+export function Screen(runtimeInput) {
+  const save = useWrite({ mutationFn: (variables) =>
+    base44.entities.DeferredItem.create({ ...variables, organization_id: "redacted" })
+  });
+  save.mutate(runtimeInput);
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "DeferredItem")!;
+    expect(payload).toMatchObject({
+      evidenceTier: "Tier4Unknown",
+      properties: {
+        ...payload.properties,
+        completeness: "partial",
+        outerKind: "object",
+        referenceAccounting: "source-bounded",
+        runtimeObligationsJson: '["entity-open-object-fields:docker-write-readback-cleanup"]',
+        shapeVersion: "2"
+      }
+    });
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toEqual(["runtime-deferred-object-fields"]);
+    expect(JSON.parse(payload.properties.fieldsJson)).toEqual([
+      expect.objectContaining({ name: "organization_id", presence: "unconditional" })
+    ]);
+
+    const tampered = structuredClone(packet);
+    const tamperedPayload = tampered.facts.find((fact) => fact.factId === payload.factId)!;
+    tamperedPayload.properties.outerKind = "unknown";
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-deferred-tamper-"));
+    const baselinePath = path.join(out, "baseline.json");
+    const tamperedPath = path.join(out, "tampered.json");
+    await fs.writeFile(baselinePath, `${JSON.stringify(packet)}\n`);
+    await fs.writeFile(tamperedPath, `${JSON.stringify(tampered)}\n`);
+    await expect(diffBase44Evidence(baselinePath, tamperedPath, path.join(out, "diff.json")))
+      .rejects.toThrow("invalid deferred-object contract");
+
+    const missingObligation = structuredClone(packet);
+    const missingObligationPayload = missingObligation.facts.find((fact) => fact.factId === payload.factId)!;
+    missingObligationPayload.properties.runtimeObligationsJson = "[]";
+    const missingObligationPath = path.join(out, "missing-obligation.json");
+    await fs.writeFile(missingObligationPath, `${JSON.stringify(missingObligation)}\n`);
+    await expect(diffBase44Evidence(baselinePath, missingObligationPath, path.join(out, "missing-obligation-diff.json")))
+      .rejects.toThrow("invalid deferred-object contract");
+
+    const orphanedObligation = structuredClone(packet);
+    const orphanedObligationPayload = orphanedObligation.facts.find((fact) => fact.factId === payload.factId)!;
+    orphanedObligationPayload.properties.analysisGapsJson = "[]";
+    const orphanedObligationPath = path.join(out, "orphaned-obligation.json");
+    await fs.writeFile(orphanedObligationPath, `${JSON.stringify(orphanedObligation)}\n`);
+    await expect(diffBase44Evidence(baselinePath, orphanedObligationPath, path.join(out, "orphaned-obligation-diff.json")))
+      .rejects.toThrow("orphaned runtime obligation");
+  });
+
+  it.each([
+    "const escaped = save.mutate;",
+    "save.mutate(runtimeInput); inspect(save);"
+  ])("does not mark an escaped hook graph source-bounded: %s", async (escape) => {
+    const { packet } = await mutationHookFixture(`
+export function Screen(runtimeInput) {
+  const save = useWrite({ mutationFn: (variables) =>
+    base44.entities.DeferredRejectedItem.create({ ...variables, organization_id: "redacted" })
+  });
+  ${escape}
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "DeferredRejectedItem")!;
+    expect(payload.properties.referenceAccounting).toBe("unresolved");
+    expect(JSON.parse(payload.properties.analysisGapsJson)).not.toContain("runtime-deferred-object-fields");
+    expect(JSON.parse(payload.properties.runtimeObligationsJson)).toEqual([]);
+  });
+
+  it.each([
+    "const { [key]: removed, ...payload } = variables;",
+    "const { metadata: removed = fallback, ...payload } = variables;",
+    "const { metadata, payload } = variables;"
+  ])("keeps unsupported object-rest exclusions fail closed: %s", async (binding) => {
+    const { packet } = await mutationHookFixture(`
+export function Screen(key, fallback) {
+  const save = useWrite({ mutationFn: (variables) => {
+    ${binding}
+    return base44.entities.RestRejectedItem.create(payload);
+  } });
+  save.mutate({ metadata: { nested: "redacted" }, name: "must-not-be-claimed" });
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "RestRejectedItem")!;
+    expect(payload.properties.completeness).toBe("unresolved");
+    expect(JSON.parse(payload.properties.fieldsJson)).toEqual([]);
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("destructured-binding-unresolved");
   });
 
   it("keeps mutation-hook escapes and dynamic arguments as typed payload gaps", async () => {
