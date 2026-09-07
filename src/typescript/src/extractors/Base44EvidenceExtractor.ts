@@ -963,7 +963,7 @@ function sourceReachabilityGraph(contexts: Map<string, SourceContext>): {
         if (specifier && ts.isStringLiteralLike(specifier)) {
           const target = resolveLocalModule(context.item.relativePath, specifier.text, contexts);
           if (target) targets.add(target);
-          else if (localSpecifierRequiresExecutableContext(specifier.text)) closed = false;
+          else if (localSpecifierRequiresExecutableContext(specifier.text, contexts)) closed = false;
         }
       }
       if (ts.isCallExpression(node)) {
@@ -980,7 +980,7 @@ function sourceReachabilityGraph(contexts: Map<string, SourceContext>): {
           } else {
             const target = resolveLocalModule(context.item.relativePath, argument.text, contexts);
             if (target) targets.add(target);
-            else if (localSpecifierRequiresExecutableContext(argument.text)) closed = false;
+            else if (localSpecifierRequiresExecutableContext(argument.text, contexts)) closed = false;
           }
         }
       }
@@ -1002,8 +1002,13 @@ function sourceReachabilityGraph(contexts: Map<string, SourceContext>): {
   return result;
 }
 
-function localSpecifierRequiresExecutableContext(specifier: string): boolean {
-  if (!specifier.startsWith(".") && !specifier.startsWith("@/")) return false;
+function localSpecifierRequiresExecutableContext(
+  specifier: string,
+  contexts: Map<string, SourceContext>
+): boolean {
+  const local = specifier.startsWith(".") || specifier.startsWith("@/")
+    || localModuleAliases(contexts).some((alias) => moduleAliasMatch(alias.pattern, specifier) !== null);
+  if (!local) return false;
   // Static style imports cannot contain executable Base44 callsites and are
   // deliberately absent from the TypeScript/JavaScript SourceContext graph.
   // Missing/broken asset bytes remain a build/package concern. Every local
@@ -1363,6 +1368,11 @@ function statementTerminates(statement: ts.Statement): boolean {
   }
   if (ts.isIfStatement(statement)) return Boolean(statement.elseStatement
     && statementTerminates(statement.thenStatement) && statementTerminates(statement.elseStatement));
+  if (ts.isTryStatement(statement)) {
+    if (statement.finallyBlock && statementTerminates(statement.finallyBlock)) return true;
+    return statementTerminates(statement.tryBlock)
+      && (!statement.catchClause || statementTerminates(statement.catchClause.block));
+  }
   return false;
 }
 
@@ -2226,9 +2236,7 @@ function arrayIntrinsicsArePristine(contexts: Map<string, SourceContext>): boole
   for (const context of contexts.values()) {
     const visit = (node: ts.Node): void => {
       if (!pristine) return;
-      if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression)
-        && node.expression.text === "Array" && node.name.text === "prototype"
-        && !resolveLexicalBinding("Array", node.expression, context.source)) {
+      if (isArrayPrototypeExpression(node, context.source)) {
         pristine = false;
         return;
       }
@@ -2240,21 +2248,32 @@ function arrayIntrinsicsArePristine(contexts: Map<string, SourceContext>): boole
         return null;
       };
       if (ts.isBinaryExpression(node) && isAssignmentOperator(node.operatorToken.kind)
-        && mutationMembers.has(mutatedMember(node.left) ?? "")) {
+        && mutationMembers.has(mutatedMember(node.left) ?? "")
+        && ((ts.isPropertyAccessExpression(unwrapAliasExpression(node.left))
+          && isArrayPrototypeExpression((unwrapAliasExpression(node.left) as ts.PropertyAccessExpression).expression, context.source))
+          || (ts.isElementAccessExpression(unwrapAliasExpression(node.left))
+            && isArrayPrototypeExpression((unwrapAliasExpression(node.left) as ts.ElementAccessExpression).expression, context.source)))) {
         pristine = false;
         return;
       }
-      if (ts.isDeleteExpression(node) && mutationMembers.has(mutatedMember(node.expression) ?? "")) {
+      if (ts.isDeleteExpression(node) && mutationMembers.has(mutatedMember(node.expression) ?? "")
+        && ((ts.isPropertyAccessExpression(unwrapAliasExpression(node.expression))
+          && isArrayPrototypeExpression((unwrapAliasExpression(node.expression) as ts.PropertyAccessExpression).expression, context.source))
+          || (ts.isElementAccessExpression(unwrapAliasExpression(node.expression))
+            && isArrayPrototypeExpression((unwrapAliasExpression(node.expression) as ts.ElementAccessExpression).expression, context.source)))) {
         pristine = false;
         return;
       }
       if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
         && ts.isIdentifier(node.expression.expression)
         && ["Object", "Reflect"].includes(node.expression.expression.text)
-        && ["defineProperty", "setPrototypeOf"].includes(node.expression.name.text)) {
+        && ["defineProperty", "set", "setPrototypeOf"].includes(node.expression.name.text)
+        && !resolveLexicalBinding(node.expression.expression.text, node.expression.expression, context.source)) {
+        const target = node.arguments[0] && unwrapAliasExpression(node.arguments[0]);
         const member = node.arguments[1];
-        if (node.expression.name.text === "setPrototypeOf"
-          || (member && ts.isStringLiteralLike(member) && mutationMembers.has(member.text))) {
+        if (target && isArrayPrototypeExpression(target, context.source)
+          && (node.expression.name.text === "setPrototypeOf"
+            || (member && ts.isStringLiteralLike(member) && mutationMembers.has(member.text)))) {
           pristine = false;
           return;
         }
@@ -2266,6 +2285,21 @@ function arrayIntrinsicsArePristine(contexts: Map<string, SourceContext>): boole
   }
   arrayIntrinsicRealmCache.set(contexts, pristine);
   return pristine;
+}
+
+function isArrayPrototypeExpression(node: ts.Node, source: ts.SourceFile): boolean {
+  const expression = ts.isExpression(node) ? unwrapAliasExpression(node) : node;
+  if (ts.isPropertyAccessExpression(expression) && ts.isIdentifier(expression.expression)
+    && expression.expression.text === "Array" && expression.name.text === "prototype"
+    && !resolveLexicalBinding("Array", expression.expression, source)) return true;
+  if (ts.isPropertyAccessExpression(expression) && expression.name.text === "__proto__"
+    && ts.isArrayLiteralExpression(unwrapAliasExpression(expression.expression))) return true;
+  if (!ts.isCallExpression(expression) || expression.arguments.length !== 1
+    || !ts.isArrayLiteralExpression(unwrapAliasExpression(expression.arguments[0]))) return false;
+  const callee = unwrapAliasExpression(expression.expression);
+  return ts.isPropertyAccessExpression(callee) && callee.name.text === "getPrototypeOf"
+    && ts.isIdentifier(callee.expression) && ["Object", "Reflect"].includes(callee.expression.text)
+    && !resolveLexicalBinding(callee.expression.text, callee.expression, source);
 }
 
 function evaluateCallableReturns(
@@ -2572,6 +2606,51 @@ interface SourceContext {
   factoryAliases: Set<string>;
 }
 
+interface LocalModuleAlias {
+  pattern: string;
+  targets: string[];
+}
+
+const localModuleAliasCache = new WeakMap<Map<string, SourceContext>, LocalModuleAlias[]>();
+
+function localModuleAliases(contexts: Map<string, SourceContext>): LocalModuleAlias[] {
+  return localModuleAliasCache.get(contexts) ?? [];
+}
+
+async function loadLocalModuleAliases(items: readonly FileInventoryItem[]): Promise<LocalModuleAlias[]> {
+  const first = items[0];
+  if (!first) return [];
+  let repositoryRoot = path.dirname(first.absolutePath);
+  for (let index = 1; index < first.relativePath.split("/").length; index++) {
+    repositoryRoot = path.dirname(repositoryRoot);
+  }
+  for (const configName of ["tsconfig.json", "jsconfig.json"]) {
+    const configPath = path.join(repositoryRoot, configName);
+    let text: string;
+    try {
+      text = await fs.readFile(configPath, "utf8");
+    } catch (error: any) {
+      if (error?.code === "ENOENT") continue;
+      return [];
+    }
+    const parsed = ts.parseConfigFileTextToJson(configPath, text);
+    if (parsed.error || !parsed.config || typeof parsed.config !== "object") return [];
+    const options = parsed.config.compilerOptions;
+    const paths = options && typeof options === "object" ? options.paths : null;
+    if (!paths || typeof paths !== "object" || Array.isArray(paths)) return [];
+    const baseUrl = typeof options.baseUrl === "string" ? options.baseUrl : ".";
+    return Object.entries(paths).flatMap(([pattern, rawTargets]) => {
+      if (!pattern || !Array.isArray(rawTargets)
+        || rawTargets.some((target) => typeof target !== "string" || !target)) return [];
+      return [{
+        pattern,
+        targets: rawTargets.map((target) => path.posix.normalize(path.posix.join(baseUrl, target)).replace(/^\.\//u, ""))
+      }];
+    }).sort((left, right) => left.pattern.localeCompare(right.pattern));
+  }
+  return [];
+}
+
 interface AliasDiscovery {
   contexts: Map<string, SourceContext>;
   aliasesByFile: Map<string, Map<string, string[]>>;
@@ -2633,6 +2712,7 @@ async function buildAliasMaps(items: readonly FileInventoryItem[]): Promise<Alia
     seedDirectSdkImports(context);
     contexts.set(item.relativePath, context);
   }
+  localModuleAliasCache.set(contexts, await loadLocalModuleAliases(items));
 
   const exportsByFile = new Map<string, Map<string, string[]>>();
   for (let pass = 0; pass < contexts.size + 2; pass++) {
@@ -3484,14 +3564,34 @@ function updateExportedAliases(context: SourceContext, exportsByFile: Map<string
 }
 
 function resolveLocalModule(fromFile: string, specifier: string, contexts: Map<string, SourceContext>): string | null {
-  let base: string;
-  if (specifier.startsWith("@/")) base = `src/${specifier.slice(2)}`;
-  else if (specifier.startsWith(".")) base = path.posix.normalize(path.posix.join(path.posix.dirname(fromFile), specifier));
-  else return null;
-  for (const candidate of [base, ...[".ts", ".tsx", ".js", ".jsx"].map((extension) => `${base}${extension}`), ...[".ts", ".tsx", ".js", ".jsx"].map((extension) => `${base}/index${extension}`)]) {
-    if (contexts.has(candidate)) return candidate;
+  const bases: string[] = [];
+  if (specifier.startsWith("@/")) bases.push(`src/${specifier.slice(2)}`);
+  if (specifier.startsWith(".")) {
+    bases.push(path.posix.normalize(path.posix.join(path.posix.dirname(fromFile), specifier)));
+  }
+  for (const alias of localModuleAliases(contexts)) {
+    const capture = moduleAliasMatch(alias.pattern, specifier);
+    if (capture === null) continue;
+    bases.push(...alias.targets.map((target) => target.replace("*", capture)));
+  }
+  for (const base of [...new Set(bases)]) {
+    if (base.startsWith("../") || path.posix.isAbsolute(base)) continue;
+    for (const candidate of [base, ...[".ts", ".tsx", ".js", ".jsx"].map((extension) => `${base}${extension}`), ...[".ts", ".tsx", ".js", ".jsx"].map((extension) => `${base}/index${extension}`)]) {
+      if (contexts.has(candidate)) return candidate;
+    }
   }
   return null;
+}
+
+function moduleAliasMatch(pattern: string, specifier: string): string | null {
+  const firstWildcard = pattern.indexOf("*");
+  if (firstWildcard < 0) return pattern === specifier ? "" : null;
+  if (pattern.indexOf("*", firstWildcard + 1) >= 0) return null;
+  const prefix = pattern.slice(0, firstWildcard);
+  const suffix = pattern.slice(firstWildcard + 1);
+  return specifier.startsWith(prefix) && specifier.endsWith(suffix)
+    ? specifier.slice(prefix.length, specifier.length - suffix.length)
+    : null;
 }
 
 function setAlias(target: Map<string, string[]>, name: string, value: string[] | undefined): boolean {

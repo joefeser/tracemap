@@ -53,8 +53,8 @@ boolean, object, and array constructions; numeric operators and unshadowed
 primitive coercions; conditional/logical alternatives; and explicit null.
 Array `map`/`filter`/`push` projection is admitted only when the complete scanned
 project realm contains no mutation or escape of those intrinsic methods;
-statically unreachable mutations after a terminating statement contribute no
-field evidence.
+statically unreachable mutations after a terminating statement, including a
+terminating `try`/`catch`/`finally`, contribute no field evidence.
 Identifiers, arbitrary calls, properties, or conflicting alternatives remain
 `unknown`. It does not infer UUID or date from names, documentation, schema
 prose, example values, or formatting. A consumer may promote a typed column

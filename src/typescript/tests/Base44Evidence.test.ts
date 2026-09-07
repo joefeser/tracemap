@@ -255,6 +255,28 @@ export async function unused(data) { return base44.entities.StyleGraph.create(da
       && fact.evidence.filePath === "src/unused.ts")).toBe(true);
   });
 
+  it("fails dormant reachability closed on an unresolved configured local alias", async () => {
+    const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-local-alias-reachability-"));
+    await fs.mkdir(path.join(repo, "src"), { recursive: true });
+    await writeFrontendSdkAuthority(repo);
+    await fs.writeFile(path.join(repo, "jsconfig.json"), `${JSON.stringify({
+      compilerOptions: { baseUrl: ".", paths: { "~/*": ["src/*"] } }
+    }, null, 2)}\n`);
+    await fs.writeFile(path.join(repo, "src/main.ts"), `import "~/missing-local-module";\n`);
+    await fs.writeFile(path.join(repo, "src/unused.ts"), `import { base44 } from "@base44/sdk";
+export async function unused(data) { return base44.entities.AliasGraph.create(data); }
+`);
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    execFileSync("git", ["add", "."], { cwd: repo });
+    execFileSync("git", ["-c", "user.name=TraceMap Test", "-c", "user.email=tracemap@example.invalid", "commit", "-qm", "fixture"], { cwd: repo });
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-local-alias-reachability-out-"));
+    const packet = (await buildBase44Evidence(options(repo, out))).packet;
+    expect(packet.facts.some((fact) => fact.factType === FactTypes.Base44EntityOperation
+      && fact.targetSymbol === "AliasGraph")).toBe(true);
+    expect(packet.facts.some((fact) => fact.factType === FactTypes.Base44EntityCallsiteDisposition
+      && fact.evidence.filePath === "src/unused.ts")).toBe(false);
+  });
+
   it("marks an uninvoked real mutation callback dormant but blocks spoofed, invoked, or escaped handles", async () => {
     const { packet } = await mutationHookFixture(`
 export function Screen(runtimeEntity) {
@@ -555,6 +577,23 @@ base44.entities.ArrayRealm.bulkCreate(rows);
     expect(payload.evidenceTier).toBe("Tier4Unknown");
   });
 
+  it("does not trust Array inference through an indirectly obtained intrinsic prototype", async () => {
+    const repo = await fixtureRepo();
+    await fs.writeFile(path.join(repo, "src/array-reflect-patch.ts"), `Reflect.set(Object.getPrototypeOf([]), "push", function(value) { return 1; });\n`);
+    await fs.writeFile(path.join(repo, "src/array-reflect-realm.ts"), `import "./array-reflect-patch";
+import { base44 } from "@base44/sdk";
+const rows = [];
+rows.push({ forged: 1 });
+base44.entities.ArrayReflectRealm.bulkCreate(rows);
+`);
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-array-reflect-realm-"));
+    const packet = (await buildBase44Evidence(options(repo, out))).packet;
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "ArrayReflectRealm")!;
+    expect(payload.properties.completeness).not.toBe("complete");
+    expect(JSON.parse(payload.properties.fieldsJson)).toEqual([]);
+  });
+
   it("excludes array mutations after a statically terminating statement", async () => {
     const repo = await fixtureRepo();
     await fs.writeFile(path.join(repo, "src/unreachable-array-mutation.ts"), `import { base44 } from "@base44/sdk";
@@ -566,6 +605,22 @@ base44.entities.UnreachableMutation.bulkCreate(rows);
     const packet = (await buildBase44Evidence(options(repo, out))).packet;
     const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
       && fact.targetSymbol === "UnreachableMutation")!;
+    const names = JSON.parse(payload.properties.fieldsJson).map((field: {name: string}) => field.name);
+    expect(names).toContain("retained");
+    expect(names).not.toContain("forged");
+  });
+
+  it("excludes array mutations after a statically terminating try/finally", async () => {
+    const repo = await fixtureRepo();
+    await fs.writeFile(path.join(repo, "src/unreachable-try-array-mutation.ts"), `import { base44 } from "@base44/sdk";
+const rows = [{ retained: 1 }];
+if (globalThis.stop) { try { throw new Error("stop"); } finally {} rows.push({ forged: 1 }); }
+base44.entities.UnreachableTryMutation.bulkCreate(rows);
+`);
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-unreachable-try-array-mutation-"));
+    const packet = (await buildBase44Evidence(options(repo, out))).packet;
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "UnreachableTryMutation")!;
     const names = JSON.parse(payload.properties.fieldsJson).map((field: {name: string}) => field.name);
     expect(names).toContain("retained");
     expect(names).not.toContain("forged");

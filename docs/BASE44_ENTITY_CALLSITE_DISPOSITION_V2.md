@@ -68,6 +68,9 @@ disposition, whose only claim is that the exact callsite is dormant. Missing
 literal local import/require/re-export edges make the module graph open and
 prevent dormancy. Explicit static stylesheet imports are outside the executable
 source graph; their existence and bytes remain a separate build/package gate.
+Configured TypeScript/JavaScript path aliases participate in the same graph;
+an unresolved aliased edge blocks dormancy instead of being mistaken for an
+external package.
 
 Validation rejects open objects, nonzero reference counters, source/callsite
 mismatch, unsupported extractor versions, incorrect tiers, selector/SDK
