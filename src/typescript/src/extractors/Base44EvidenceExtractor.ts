@@ -2251,6 +2251,18 @@ function arrayIntrinsicsArePristine(contexts: Map<string, SourceContext>): boole
         pristine = false;
         return;
       }
+      if (dangerousPrototypeCapabilityReference(node, context.source)) {
+        pristine = false;
+        return;
+      }
+      if ((ts.isCallExpression(node) || ts.isNewExpression(node))) {
+        const callee = unwrapAliasExpression(node.expression);
+        if (ts.isIdentifier(callee) && (callee.text === "eval" || callee.text === "Function")
+          && !resolveLexicalBinding(callee.text, callee, context.source)) {
+          pristine = false;
+          return;
+        }
+      }
       const mutatedMember = (expression: ts.Expression): string | null => {
         const target = unwrapAliasExpression(expression);
         if (ts.isPropertyAccessExpression(target)) return target.name.text;
@@ -2298,11 +2310,35 @@ function arrayIntrinsicsArePristine(contexts: Map<string, SourceContext>): boole
   return pristine;
 }
 
+const dangerousPrototypeCapabilities = new Set([
+  "defineProperties", "defineProperty", "getPrototypeOf", "set", "setPrototypeOf"
+]);
+
+function dangerousPrototypeCapabilityReference(node: ts.Node, source: ts.SourceFile): boolean {
+  if (ts.isPropertyAccessExpression(node)) {
+    if (node.name.text === "__proto__") return true;
+    if (node.name.text === "prototype" && ts.isPropertyAccessExpression(unwrapAliasExpression(node.expression))
+      && (unwrapAliasExpression(node.expression) as ts.PropertyAccessExpression).name.text === "constructor") return true;
+    return ts.isIdentifier(node.expression) && ["Object", "Reflect"].includes(node.expression.text)
+      && dangerousPrototypeCapabilities.has(node.name.text) && !resolveLexicalBinding(node.expression.text, node.expression, source);
+  }
+  if (!ts.isElementAccessExpression(node) || !node.argumentExpression
+    || !ts.isStringLiteralLike(node.argumentExpression)) return false;
+  const owner = unwrapAliasExpression(node.expression);
+  return ts.isIdentifier(owner) && ["Object", "Reflect"].includes(owner.text)
+    && dangerousPrototypeCapabilities.has(node.argumentExpression.text) && !resolveLexicalBinding(owner.text, owner, source);
+}
+
 function isArrayPrototypeExpression(node: ts.Node, source: ts.SourceFile): boolean {
   const expression = ts.isExpression(node) ? unwrapAliasExpression(node) : node;
   if (ts.isPropertyAccessExpression(expression) && ts.isIdentifier(expression.expression)
     && expression.expression.text === "Array" && expression.name.text === "prototype"
     && !resolveLexicalBinding("Array", expression.expression, source)) return true;
+  if (ts.isPropertyAccessExpression(expression) && expression.name.text === "prototype") {
+    const constructor = unwrapAliasExpression(expression.expression);
+    if (ts.isPropertyAccessExpression(constructor) && constructor.name.text === "constructor"
+      && isArrayConstruction(constructor.expression, source)) return true;
+  }
   if (ts.isPropertyAccessExpression(expression) && expression.name.text === "__proto__"
     && ts.isArrayLiteralExpression(unwrapAliasExpression(expression.expression))) return true;
   if (!ts.isCallExpression(expression) || expression.arguments.length !== 1

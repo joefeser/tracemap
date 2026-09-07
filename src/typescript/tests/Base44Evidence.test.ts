@@ -675,11 +675,13 @@ base44.entities.ArrayRealm.bulkCreate(rows);
     expect(payload.evidenceTier).toBe("Tier4Unknown");
   });
 
-  it("does not trust Array inference through an indirectly obtained intrinsic prototype", async () => {
+  it.each([
+    ["aliased getPrototypeOf/new Array", `const getPrototype = Object.getPrototypeOf;
+Reflect.set(getPrototype(new Array()), "push", function(value) { return 1; });`],
+    ["constructor prototype", `Reflect.set([].constructor.prototype, "map", function(callback) { return []; });`]
+  ])("does not trust Array inference through an indirectly obtained intrinsic prototype: %s", async (_caseName, patch) => {
     const repo = await fixtureRepo();
-    await fs.writeFile(path.join(repo, "src/array-reflect-patch.ts"), `const getPrototype = Object.getPrototypeOf;
-Reflect.set(getPrototype(new Array()), "push", function(value) { return 1; });
-`);
+    await fs.writeFile(path.join(repo, "src/array-reflect-patch.ts"), `${patch}\n`);
     await fs.writeFile(path.join(repo, "src/array-reflect-realm.ts"), `import "./array-reflect-patch";
 import { base44 } from "@base44/sdk";
 const rows = [];
