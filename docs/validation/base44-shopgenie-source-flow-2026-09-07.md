@@ -6,8 +6,8 @@
 - Exact source commit: `6753cfa6264b04c0d7dbfcde942689ee32d2c06b`
 - Accepted source/tree SHA-256: `a5a313b180ef0cdfd2e837779f251cc754978fcd474b6a32646c133b058b6e24`
 - Extractor: `base44-evidence/0.14.0`
-- TraceMap implementation commit: `85e8e69353627a6aafa50edf94c4d977e6969c7c`
-- TraceMap implementation tree: `1a02f4d4ab6fbba240b8c00add551ca0d66cafce`
+- TraceMap implementation commit: `39cf17175d05ae5725af808f4815776273f6bfe0`
+- TraceMap implementation tree: `41be893b0830c0400c7a9f427e8637242dbc7362`
 
 The executable source is authority. No prose schema, fixture, reverse-engineer
 artifact, host reconciliation, or customer-specific filename supplies an
@@ -119,7 +119,7 @@ The portable packet binds only deterministic `facts.ndjson`, `report.md`, and
 required outputs validated independently; their timestamp-bearing bytes cannot
 perturb the portable packet digest.
 
-The hardened implementation passed 233/233 TypeScript tests, the accumulated
+The hardened implementation passed 235/235 TypeScript tests, the accumulated
 21-case adversarial corpus, and 7/7 adapter-validator tests. Both immutable-git-
 archive canonical replays passed artifact validation and reproduced the exact
 packet/facts hashes above, 1,797 unique executable operation identities, 46
