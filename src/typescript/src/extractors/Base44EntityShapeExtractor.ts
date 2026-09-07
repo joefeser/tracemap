@@ -1519,7 +1519,11 @@ function statementTerminatesExecution(statement: ts.Statement): boolean {
   }
   return ts.isIfStatement(statement) && Boolean(statement.elseStatement
     && statementTerminatesExecution(statement.thenStatement)
-    && statementTerminatesExecution(statement.elseStatement));
+    && statementTerminatesExecution(statement.elseStatement))
+    || ts.isTryStatement(statement) && Boolean(
+      statement.finallyBlock && statementTerminatesExecution(statement.finallyBlock)
+      || statementTerminatesExecution(statement.tryBlock)
+        && (!statement.catchClause || statementTerminatesExecution(statement.catchClause.block)));
 }
 
 function areMutuallyExclusive(left: ts.Node, right: ts.Node): boolean {
