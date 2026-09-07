@@ -415,6 +415,16 @@ export function Screen(extra) {
       `const save = useWrite({ mutationFn: (payload) => { try { throw new Error(); } catch (payload) { return base44.entities.CatchShadowItem.create(payload); } } });
        save.mutate({ must_not_be_projected: 1 });`,
       "CatchShadowItem"
+    ],
+    [
+      `const save = useWrite({ mutationFn: (payload) => { { function payload() {}; return base44.entities.FunctionShadowItem.create(payload); } } });
+       save.mutate({ must_not_be_projected: 1 });`,
+      "FunctionShadowItem"
+    ],
+    [
+      `const save = useWrite({ mutationFn: (payload) => { { class payload {}; return base44.entities.ClassShadowItem.create(payload); } } });
+       save.mutate({ must_not_be_projected: 1 });`,
+      "ClassShadowItem"
     ]
   ])("rejects a locally shadowed mutation callback parameter: %s", async (body, entity) => {
     const { packet } = await mutationHookFixture(`export function Screen() { ${body} }`);
@@ -422,6 +432,43 @@ export function Screen(extra) {
     expect(payload.properties.completeness).toBe("unresolved");
     expect(JSON.parse(payload.properties.fieldsJson)).toEqual([]);
     expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("mutation-hook-parameter-shadowed");
+  });
+
+  it.each([
+    "payload = { current: 1 };",
+    "payload.current = 1;",
+    "delete payload.stale;",
+    "inspect(payload);",
+    "const alias = payload;"
+  ])("does not project a mutation callsite through changed or escaped callback state: %s", async (mutation) => {
+    const { packet } = await mutationHookFixture(`
+export function Screen() {
+  const save = useWrite({ mutationFn: (payload) => {
+    ${mutation}
+    return base44.entities.MutatedParameterItem.create(payload);
+  } });
+  save.mutate({ stale: 1 });
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "MutatedParameterItem")!;
+    expect(payload.properties.completeness).toBe("unresolved");
+    expect(JSON.parse(payload.properties.fieldsJson)).toEqual([]);
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("mutation-hook-parameter-state-unresolved");
+  });
+
+  it("keeps a typed gap when the hook result is invoked through a computed member", async () => {
+    const { packet } = await mutationHookFixture(`
+export function Screen(key) {
+  const save = useWrite({ mutationFn: (payload) => base44.entities.ComputedHookItem.create(payload) });
+  save[key]({ other: 1 });
+  save.mutate({ known: 1 });
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "ComputedHookItem")!;
+    expect(payload.properties.completeness).toBe("partial");
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("mutation-hook-computed-member-unresolved");
   });
 
   it("does not confuse an outer same-named binding with a callback-local parameter", async () => {

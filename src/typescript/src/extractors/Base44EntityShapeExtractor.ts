@@ -254,6 +254,9 @@ function analyzeIdentifier(identifier: ts.Identifier, context: ShapeContext, vis
     if (visibleDeclaration && (!parameter || isAncestor(parameter.parameter.parent, declarationScope(visibleDeclaration)))) {
       return unresolvedAnalysis("identifier-reference", "mutation-hook-parameter-shadowed", candidate);
     }
+    if (parameter && hasVisibleFunctionOrClassShadow(bindingName, identifier, parameter.parameter.parent)) {
+      return unresolvedAnalysis("identifier-reference", "mutation-hook-parameter-shadowed", candidate);
+    }
     const callsiteAnalysis = parameter && analyzeMutationHookParameter(parameter, context, visitedBindings, presence);
     return callsiteAnalysis ?? unresolvedAnalysis("identifier-reference", "binding-initializer-unresolved", candidate);
   }
@@ -316,6 +319,11 @@ function analyzeMutationHookParameter(binding: ParameterBinding, context: ShapeC
     result.gaps.push(binding.gap ?? hook.gap!);
     return result;
   }
+  const parameterStateGap = mutationHookParameterStateGap(binding, hook, context);
+  if (parameterStateGap) {
+    result.gaps.push(parameterStateGap);
+    return result;
+  }
   const hookVisitKey = `mutation-hook-parameter:${binding.parameter.getStart(context.source)}`;
   if (visitedBindings.has(hookVisitKey)) {
     result.gaps.push("mutation-hook-recursion-unresolved");
@@ -333,6 +341,10 @@ function analyzeMutationHookParameter(binding: ParameterBinding, context: ShapeC
         const member = ts.isPropertyAccessExpression(access)
           ? access.name.text
           : access.argumentExpression && ts.isStringLiteralLike(access.argumentExpression) ? access.argumentExpression.text : null;
+        if (ts.isElementAccessExpression(access) && member === null) {
+          gaps.push("mutation-hook-computed-member-unresolved");
+          return;
+        }
         if (member === "mutate" || member === "mutateAsync") {
           if (ts.isCallExpression(access.parent) && access.parent.expression === access) calls.push(access.parent);
           else gaps.push("mutation-hook-method-escape-unresolved");
@@ -380,6 +392,71 @@ function analyzeMutationHookParameter(binding: ParameterBinding, context: ShapeC
       : "conditional"
   }));
   return result;
+}
+
+function mutationHookParameterStateGap(binding: ParameterBinding, hook: MutationHookContext, context: ShapeContext): string | null {
+  if (!ts.isIdentifier(binding.parameter.name)) return null;
+  const callback = binding.parameter.parent;
+  const bindingName = binding.parameter.name.text;
+  let unsafe = false;
+  const visit = (node: ts.Node): void => {
+    if (unsafe || (node !== callback && ts.isFunctionLike(node))) return;
+    if (node.getStart(context.source) >= context.callPosition) return;
+    if (ts.isIdentifier(node) && node !== binding.parameter.name && node.text === bindingName
+      && resolveParameterBindingAt(bindingName, node)?.parameter === binding.parameter) {
+      for (let current: ts.Node | undefined = node.parent; current && current !== callback; current = current.parent) {
+        if (ts.isBinaryExpression(current) && isAssignmentOperator(current.operatorToken.kind)
+          && (isAncestor(current.left, node) || isAncestor(current.right, node))) {
+          unsafe = true;
+          return;
+        }
+        if (((ts.isPrefixUnaryExpression(current)
+          && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(current.operator))
+          || ts.isPostfixUnaryExpression(current))
+          && isAncestor(current.operand, node)) {
+          unsafe = true;
+          return;
+        }
+        if (ts.isDeleteExpression(current) && isAncestor(current.expression, node)) {
+          unsafe = true;
+          return;
+        }
+        if (ts.isCallExpression(current) && isSameMutationHookInvocation(current, hook, context)) {
+          continue;
+        }
+        if ((ts.isCallExpression(current) || ts.isNewExpression(current))
+          && (isAncestor(current.expression, node)
+            || current.arguments?.some((argument) => isAncestor(argument, node)))) {
+          unsafe = true;
+          return;
+        }
+        if ((ts.isVariableDeclaration(current) && current.initializer && isAncestor(current.initializer, node))
+          || (ts.isReturnStatement(current) && current.expression && isAncestor(current.expression, node))
+          || (ts.isThrowStatement(current) && current.expression && isAncestor(current.expression, node))) {
+          unsafe = true;
+          return;
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(callback);
+  return unsafe ? "mutation-hook-parameter-state-unresolved" : null;
+}
+
+function isSameMutationHookInvocation(call: ts.CallExpression, hook: MutationHookContext, context: ShapeContext): boolean {
+  const access = unwrapExpression(call.expression);
+  if (!ts.isPropertyAccessExpression(access) && !ts.isElementAccessExpression(access)) return false;
+  const member = ts.isPropertyAccessExpression(access)
+    ? access.name.text
+    : access.argumentExpression && ts.isStringLiteralLike(access.argumentExpression)
+      ? access.argumentExpression.text
+      : null;
+  const owner = unwrapExpression(access.expression);
+  return (member === "mutate" || member === "mutateAsync")
+    && ts.isIdentifier(owner)
+    && owner.text === hook.bindingName
+    && resolveDeclarationAt(hook.bindingName, owner, context) === hook.declaration;
 }
 
 function mutationHookContext(parameter: ts.ParameterDeclaration, source: ts.SourceFile): MutationHookContext | null {
@@ -680,6 +757,18 @@ function resolveVisibleVariableDeclaration(bindingName: string, useNode: ts.Node
     .filter((item) => isDeclarationVisibleAt(item, useNode))
     .sort((left, right) => scopeDepth(declarationScope(right)) - scopeDepth(declarationScope(left))
       || right.getStart(context.source) - left.getStart(context.source))[0] ?? null;
+}
+
+function hasVisibleFunctionOrClassShadow(bindingName: string, useNode: ts.Node, boundary: ts.Node): boolean {
+  for (let current: ts.Node | undefined = useNode.parent; current; current = current.parent) {
+    if (ts.isBlock(current) || ts.isSourceFile(current)) {
+      if (current.statements.some((statement) =>
+        (ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement))
+        && statement.name?.text === bindingName)) return true;
+    }
+    if (current === boundary) break;
+  }
+  return false;
 }
 
 function isDeclarationVisibleAt(declaration: ts.VariableDeclaration, useNode: ts.Node): boolean {
