@@ -6,6 +6,8 @@ import { RuleIds, ScannerVersions } from "../facts/RuleIds";
 import { hash } from "../util/Hash";
 
 type Presence = "unconditional" | "conditional" | "spread-derived" | "dynamic-computed" | "unresolved";
+type SemanticPresence = "always" | "conditional" | "unknown";
+type PayloadValueType = "string" | "number" | "integer" | "decimal" | "boolean" | "date" | "object" | "array" | "uuid" | "unknown";
 
 interface ShapeField {
   name: string;
@@ -15,6 +17,17 @@ interface ShapeField {
   evidenceStartLine: number;
   evidenceEndLine: number;
   evidenceSnippetHash: string;
+  semanticPresence: SemanticPresence;
+  valueType: PayloadValueType;
+  explicitNull: boolean;
+}
+
+interface SemanticShapeField {
+  name: string;
+  semanticPresence: SemanticPresence;
+  valueType: PayloadValueType;
+  explicitNull: boolean;
+  provenance: Array<Omit<ShapeField, "semanticPresence" | "valueType" | "explicitNull">>;
 }
 
 interface ShapeSpread {
@@ -45,6 +58,7 @@ interface ShapeContext {
   callNode: ts.Node;
   callPosition: number;
   declarations: Map<string, ts.VariableDeclaration[]>;
+  computedQueryFields: Record<string, string[]>;
 }
 
 interface ParameterBinding {
@@ -71,6 +85,8 @@ export interface EntityShapeInput {
   operationEvidenceId: string;
   entitySelectorGap: string;
   entitySelectorJson: string;
+  computedQueryFields?: Record<string, string[]>;
+  runtimeDeferredOuterKind?: "object";
   sdkIdentityGap: string;
   sdkIdentityJson: string;
 }
@@ -83,13 +99,27 @@ const mutationPayloadIndex = new Map<string, number>([
 
 export function extractEntityShapeFacts(input: EntityShapeInput): CodeFact[] {
   const declarations = collectVariableDeclarations(input.source);
-  const context: ShapeContext = { source: input.source, callNode: input.node, callPosition: input.node.getStart(input.source), declarations };
+  const context: ShapeContext = {
+    source: input.source,
+    callNode: input.node,
+    callPosition: input.node.getStart(input.source),
+    declarations,
+    computedQueryFields: input.computedQueryFields ?? {}
+  };
   const payloadIndex = mutationPayloadIndex.get(input.operationName);
   if (payloadIndex !== undefined) {
     const expression = input.node.arguments[payloadIndex];
     const analysis = expression
       ? analyzeExpression(expression, context, new Set(), "unconditional")
       : unresolvedAnalysis("missing", "payload-argument-missing");
+    if (input.runtimeDeferredOuterKind && analysis.gaps.length > 0
+      && ["object", "unknown"].includes(provenPayloadOuterKind(analysis.outerKinds))
+      && analysis.gaps.every((gap) => /^(?:spread:)*(?:binding-initializer-unresolved|destructured-binding-unresolved)$/u.test(gap))) {
+      analysis.constructionKind = `runtime-deferred-${input.runtimeDeferredOuterKind}`;
+      analysis.outerKinds = [input.runtimeDeferredOuterKind];
+      analysis.gaps = ["runtime-deferred-object-fields"];
+      analysis.candidateBindings.push("source-bounded-caller-graph");
+    }
     return [shapeFact(input, FactTypes.Base44EntityPayload, RuleIds.Base44EntityPayload, payloadIndex, "payload", analysis)];
   }
 
@@ -117,7 +147,13 @@ export function extractEntityShapeFacts(input: EntityShapeInput): CodeFact[] {
 function queryFact(input: EntityShapeInput, context: ShapeContext): CodeFact {
   const accumulated = emptyAnalysis(`${input.operationName}-arguments`);
   const { fields, spreads, candidateBindings, gaps } = accumulated;
-  const querySemantics = extractQuerySemantics(input.node, input.source, input.operationName);
+  const querySemantics = extractQuerySemantics(
+    input.node,
+    input.source,
+    input.operationName,
+    context.computedQueryFields,
+    input.entityName
+  );
   if (querySemantics?.completeness === "unresolved") gaps.push(...querySemantics.gaps);
 
   if (input.operationName === "filter" || input.operationName === "deleteMany") {
@@ -137,6 +173,12 @@ function queryFact(input: EntityShapeInput, context: ShapeContext): CodeFact {
     gaps.push("subscription-callback-missing");
   }
 
+  // The closed query descriptor is the source-of-truth for query argument
+  // completeness. Legacy shape projection may not repeat a finite caller-bound
+  // parameter proof; do not turn an independently complete descriptor back
+  // into a contradictory Tier4 gap.
+  if (querySemantics?.completeness === "complete") gaps.length = 0;
+
   const analysis: ShapeAnalysis = {
     constructionKind: `${input.operationName}-arguments`,
     outerKinds: [],
@@ -154,6 +196,8 @@ function addSortEvidence(expression: ts.Expression | undefined, fields: ShapeFie
   if (!expression) return;
   expression = unwrapExpression(expression);
   if (expression.kind === ts.SyntaxKind.UndefinedKeyword || expression.kind === ts.SyntaxKind.NullKeyword) return;
+  if (context && ts.isIdentifier(expression) && expression.text === "undefined"
+    && !resolveDeclarationAt(expression.text, expression, context)) return;
   if (ts.isStringLiteralLike(expression)) {
     const names = expression.text.split(",").map((item) => item.trim().replace(/^[-+]/, "")).filter(isSafeFieldName);
     if (names.length === 0) gaps.push("sort-field-literal-unresolved");
@@ -173,6 +217,8 @@ function addSelectEvidence(expression: ts.Expression | undefined, fields: ShapeF
   if (!expression) return;
   expression = unwrapExpression(expression);
   if (expression.kind === ts.SyntaxKind.UndefinedKeyword || expression.kind === ts.SyntaxKind.NullKeyword) return;
+  if (context && ts.isIdentifier(expression) && expression.text === "undefined"
+    && !resolveDeclarationAt(expression.text, expression, context)) return;
   if (ts.isStringLiteralLike(expression)) {
     const names = expression.text.split(",").map((item) => item.trim()).filter(isSafeFieldName);
     if (names.length === 0) gaps.push("select-field-literal-unresolved");
@@ -237,20 +283,20 @@ function analyzeObjectLiteral(node: ts.ObjectLiteralExpression, context: ShapeCo
           const computedOrigin = ts.isComputedPropertyName(property.name) ? expressionOrigin(property.name.expression) : "computed";
           for (const finiteName of finiteNames) {
             result.fields.push(fieldEvidence(finiteName, computedPresence, expressionType(property.initializer),
-              `computed:${computedOrigin}`, property, context));
+              `computed:${computedOrigin}`, property, context, property.initializer));
           }
           result.candidateBindings.push(`computed:${computedOrigin}`);
         } else {
-          result.fields.push(fieldEvidence("<dynamic>", "dynamic-computed", expressionType(property.initializer), expressionOrigin(property.initializer), property, context));
+          result.fields.push(fieldEvidence("<dynamic>", "dynamic-computed", expressionType(property.initializer), expressionOrigin(property.initializer), property, context, property.initializer));
           result.gaps.push("dynamic-computed-property");
         }
       } else {
-        result.fields.push(fieldEvidence(name, inheritedPresence, expressionType(property.initializer), expressionOrigin(property.initializer), property, context));
+        result.fields.push(fieldEvidence(name, inheritedPresence, expressionType(property.initializer), expressionOrigin(property.initializer), property, context, property.initializer));
       }
       continue;
     }
     if (ts.isShorthandPropertyAssignment(property)) {
-      result.fields.push(fieldEvidence(property.name.text, inheritedPresence, "identifier-reference", `binding:${property.name.text}`, property, context));
+      result.fields.push(fieldEvidence(property.name.text, inheritedPresence, "identifier-reference", `binding:${property.name.text}`, property, context, property.name));
       result.candidateBindings.push(`binding:${property.name.text}`);
       continue;
     }
@@ -285,7 +331,8 @@ function analyzeIdentifier(identifier: ts.Identifier, context: ShapeContext, vis
       return unresolvedAnalysis("identifier-reference", "mutation-hook-parameter-shadowed", candidate);
     }
     const callsiteAnalysis = parameter && (analyzeMutationHookParameter(parameter, context, visitedBindings, presence)
-      ?? analyzeArrayIteratorParameter(parameter, context, visitedBindings, presence));
+      ?? analyzeArrayIteratorParameter(parameter, context, visitedBindings, presence)
+      ?? analyzeClosedFunctionParameter(parameter, context, visitedBindings, presence));
     return callsiteAnalysis ?? unresolvedAnalysis("identifier-reference", "binding-initializer-unresolved", candidate);
   }
   const bindingContext: ShapeContext = { ...context, callNode: identifier, callPosition: referencePosition };
@@ -653,6 +700,77 @@ function analyzeArrayIteratorParameter(
   };
 }
 
+function analyzeClosedFunctionParameter(
+  binding: ParameterBinding,
+  context: ShapeContext,
+  visitedBindings: Set<string>,
+  presence: Presence
+): ShapeAnalysis | null {
+  if (binding.propertyPath.length !== 0 || binding.gap || !ts.isIdentifier(binding.parameter.name)
+    || binding.parameter.initializer || binding.parameter.dotDotDotToken) return null;
+  const callback = binding.parameter.parent;
+  if (!ts.isArrowFunction(callback) && !ts.isFunctionExpression(callback)) return null;
+  const owner = transparentCallbackOwner(callback, context.source);
+  if (!owner || !ts.isIdentifier(owner.name)) return null;
+
+  let unsafeParameterUse = false;
+  const inspectParameter = (node: ts.Node): void => {
+    if (unsafeParameterUse || (node !== callback && ts.isFunctionLike(node))) return;
+    if (ts.isIdentifier(node) && resolvesToParameterBinding(node, binding, context)
+      && !isAncestor(context.callNode, node)) {
+      unsafeParameterUse = true;
+      return;
+    }
+    ts.forEachChild(node, inspectParameter);
+  };
+  inspectParameter(callback);
+  if (unsafeParameterUse) return null;
+
+  const ownerName = owner.name.text;
+  const analyses: ShapeAnalysis[] = [];
+  let unsafeOwnerUse = false;
+  const inspectOwner = (node: ts.Node): void => {
+    if (unsafeOwnerUse || node === owner.name) return;
+    if (ts.isIdentifier(node) && isValueIdentifierReference(node) && node.text === ownerName
+      && resolveDeclarationAt(ownerName, node, context) === owner) {
+      const call = node.parent;
+      if (!ts.isCallExpression(call) || unwrapExpression(call.expression) !== node) {
+        if (isProvenReactDependencyReference(node, context.source)) return;
+        unsafeOwnerUse = true;
+        return;
+      }
+      const argument = call.arguments[callback.parameters.indexOf(binding.parameter)];
+      if (!argument || ts.isSpreadElement(argument)) {
+        unsafeOwnerUse = true;
+        return;
+      }
+      const callsiteContext: ShapeContext = { ...context, callNode: call, callPosition: call.getStart(context.source) };
+      analyses.push(analyzeExpression(argument, callsiteContext, new Set(visitedBindings), presence));
+      return;
+    }
+    ts.forEachChild(node, inspectOwner);
+  };
+  inspectOwner(context.source);
+  if (unsafeOwnerUse || analyses.length === 0 || analyses.some((analysis) => analysis.gaps.length > 0)) return null;
+
+  const result = emptyAnalysis("function-parameter-callsites");
+  for (const analysis of analyses) mergeAnalysis(result, analysis, `function:${ownerName}`);
+  const occurrences = new Map<string, number>();
+  for (const analysis of analyses) {
+    for (const name of new Set(analysis.fields.filter((field) => field.presence === "unconditional").map((field) => field.name))) {
+      occurrences.set(name, (occurrences.get(name) ?? 0) + 1);
+    }
+  }
+  result.fields = result.fields.map((field) => ({
+    ...field,
+    presence: occurrences.get(field.name) === analyses.length && field.presence === "unconditional"
+      ? "unconditional"
+      : "conditional"
+  }));
+  result.candidateBindings.push(`function-parameter:${ownerName}`);
+  return result;
+}
+
 function hasUnsafeForwardedParameterReference(binding: ParameterBinding, context: ShapeContext): boolean {
   const callback = binding.parameter.parent;
   let unsafe = false;
@@ -987,11 +1105,11 @@ function addBindingMutations(bindingName: string, declaration: ts.VariableDeclar
         return;
       }
       if (field === "<dynamic>") {
-        result.fields.push(fieldEvidence(field, "dynamic-computed", expressionType(node.right), expressionOrigin(node.right), node, context));
+        result.fields.push(fieldEvidence(field, "dynamic-computed", expressionType(node.right), expressionOrigin(node.right), node, context, node.right));
         result.gaps.push("dynamic-computed-assignment");
       } else if (field) {
         const simpleAssignment = node.operatorToken.kind === ts.SyntaxKind.EqualsToken;
-        result.fields.push(fieldEvidence(field, simpleAssignment && inheritedPresence !== "conditional" && !isConditionallyExecuted(node, scope) ? inheritedPresence : "conditional", expressionType(node.right), expressionOrigin(node.right), node, context));
+        result.fields.push(fieldEvidence(field, simpleAssignment && inheritedPresence !== "conditional" && !isConditionallyExecuted(node, scope) ? inheritedPresence : "conditional", expressionType(node.right), expressionOrigin(node.right), node, context, node.right));
         if (!simpleAssignment) result.gaps.push(`compound-property-assignment:${ts.tokenToString(node.operatorToken.kind) ?? "unknown"}`);
       }
     }
@@ -1233,7 +1351,11 @@ function analyzeArrayLiteral(node: ts.ArrayLiteralExpression, context: ShapeCont
 }
 
 function shapeFact(input: EntityShapeInput, factType: string, ruleId: string, argumentIndex: number, argumentRole: string, analysis: ShapeAnalysis, querySemantics?: ReturnType<typeof extractQuerySemantics>): CodeFact {
-  const fields = normalizeFields(analysis.fields);
+  const normalizedFields = normalizeFields(analysis.fields);
+  const fields = normalizedFields.map(syntacticField);
+  const semanticFields = factType === FactTypes.Base44EntityPayload
+    ? semanticPayloadFields(normalizedFields)
+    : null;
   const spreads = normalizeSpreads(analysis.spreads);
   const payloadContract = factType === FactTypes.Base44EntityPayload ? payloadShapeContract(analysis) : null;
   const gaps = unique([...(payloadContract?.gaps ?? analysis.gaps), ...(input.entitySelectorGap ? [input.entitySelectorGap] : [])]);
@@ -1268,9 +1390,10 @@ function shapeFact(input: EntityShapeInput, factType: string, ruleId: string, ar
         outerKind: payloadContract?.outerKind,
         referenceAccounting: payloadContract?.referenceAccounting,
         runtimeObligationsJson: payloadContract ? stableArray(payloadContract.runtimeObligations) : undefined,
+        semanticFieldsJson: semanticFields ? stableArray(semanticFields) : undefined,
         sdkIdentityGap: input.sdkIdentityGap,
         sdkIdentityJson: input.sdkIdentityJson,
-        shapeVersion: payloadContract ? "2" : "1",
+        shapeVersion: payloadContract ? "3" : "1",
         sourceFileSha256: hash(input.sourceText, 64),
         spreadsJson: stableArray(spreads)
       }
@@ -1286,9 +1409,11 @@ function payloadShapeContract(analysis: ShapeAnalysis): {
 } {
   const outerKind = provenPayloadOuterKind(analysis.outerKinds);
   const hasFiniteHookGraph = analysis.candidateBindings.some((binding) => binding.startsWith("mutation-hook:"));
+  const hasFiniteCallerGraph = analysis.candidateBindings.includes("source-bounded-caller-graph");
   const deferredFieldSource = /^(?:spread:)+(?:binding-initializer-unresolved|destructured-binding-unresolved)$/u;
   const onlyDeferredFieldSources = analysis.gaps.length > 0 && analysis.gaps.every((gap) => deferredFieldSource.test(gap));
-  if (outerKind === "object" && hasFiniteHookGraph && onlyDeferredFieldSources) {
+  if (outerKind === "object" && ((hasFiniteHookGraph && onlyDeferredFieldSources)
+    || (hasFiniteCallerGraph && analysis.gaps.length === 1 && analysis.gaps[0] === "runtime-deferred-object-fields"))) {
     return {
       outerKind,
       referenceAccounting: "source-bounded",
@@ -1381,6 +1506,8 @@ function staticPropertyName(name: ts.PropertyName): string | null {
 
 function finiteComputedPropertyNames(name: ts.PropertyName, context: ShapeContext): string[] {
   if (!ts.isComputedPropertyName(name)) return [];
+  const correlated = context.computedQueryFields[String(name.getStart(context.source))];
+  if (correlated) return [...correlated];
   return resolveFiniteStringExpression(name.expression, context, new Set());
 }
 
@@ -1588,10 +1715,21 @@ function unresolvedAnalysis(constructionKind: string, gap: string, binding?: str
   return { constructionKind, outerKinds: ["unknown"], arrayElementOuterKinds: [], arrayElementCount: 0, fields: [], spreads: [], candidateBindings: binding ? [binding] : [], gaps: [gap] };
 }
 
-function fieldEvidence(name: string, presence: Presence, expressionTypeName: string, origin: string, node: ts.Node, context?: ShapeContext): ShapeField {
+function fieldEvidence(
+  name: string,
+  presence: Presence,
+  expressionTypeName: string,
+  origin: string,
+  node: ts.Node,
+  context?: ShapeContext,
+  semanticExpression?: ts.Expression
+): ShapeField {
   const source = context?.source ?? node.getSourceFile();
   const start = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
   const end = source.getLineAndCharacterOfPosition(node.getEnd()).line + 1;
+  const semantic = semanticExpression
+    ? semanticValue(semanticExpression, context, new Set())
+    : semanticValueFromExpressionType(expressionTypeName);
   return {
     name,
     presence,
@@ -1599,8 +1737,105 @@ function fieldEvidence(name: string, presence: Presence, expressionTypeName: str
     origin,
     evidenceStartLine: start,
     evidenceEndLine: end,
-    evidenceSnippetHash: hash(node.getText(source), 64)
+    evidenceSnippetHash: hash(node.getText(source), 64),
+    semanticPresence: semanticPresence(presence),
+    valueType: semantic.valueType,
+    explicitNull: semantic.explicitNull
   };
+}
+
+interface SemanticValue {
+  valueType: PayloadValueType;
+  explicitNull: boolean;
+}
+
+function semanticPresence(presence: Presence): SemanticPresence {
+  if (presence === "unconditional") return "always";
+  if (presence === "conditional" || presence === "spread-derived") return "conditional";
+  return "unknown";
+}
+
+function semanticValueFromExpressionType(type: string): SemanticValue {
+  if (type === "string-literal" || type === "template-expression") return { valueType: "string", explicitNull: false };
+  if (type === "integer-number-literal") return { valueType: "integer", explicitNull: false };
+  if (type === "decimal-number-literal") return { valueType: "decimal", explicitNull: false };
+  if (type === "boolean-literal") return { valueType: "boolean", explicitNull: false };
+  if (type === "null-literal") return { valueType: "unknown", explicitNull: true };
+  if (type === "object-literal") return { valueType: "object", explicitNull: false };
+  if (type === "array-literal") return { valueType: "array", explicitNull: false };
+  if (type === "number-coercion-call" || type === "numeric-binary-expression") return { valueType: "number", explicitNull: false };
+  return { valueType: "unknown", explicitNull: false };
+}
+
+function semanticValue(expression: ts.Expression, context: ShapeContext | undefined, visited: Set<ts.Node>): SemanticValue {
+  const node = unwrapExpression(expression);
+  if (visited.has(node)) return { valueType: "unknown", explicitNull: false };
+  const next = new Set(visited).add(node);
+  if (ts.isStringLiteralLike(node) || ts.isNoSubstitutionTemplateLiteral(node) || ts.isTemplateExpression(node)) {
+    return { valueType: "string", explicitNull: false };
+  }
+  if (ts.isNumericLiteral(node)) {
+    return { valueType: /[.eE]/u.test(node.getText()) ? "decimal" : "integer", explicitNull: false };
+  }
+  if (node.kind === ts.SyntaxKind.TrueKeyword || node.kind === ts.SyntaxKind.FalseKeyword) {
+    return { valueType: "boolean", explicitNull: false };
+  }
+  if (node.kind === ts.SyntaxKind.NullKeyword) return { valueType: "unknown", explicitNull: true };
+  if (ts.isObjectLiteralExpression(node)) return { valueType: "object", explicitNull: false };
+  if (ts.isArrayLiteralExpression(node)) return { valueType: "array", explicitNull: false };
+  if (ts.isConditionalExpression(node)) {
+    return mergeSemanticValues([
+      semanticValue(node.whenTrue, context, next),
+      semanticValue(node.whenFalse, context, next)
+    ]);
+  }
+  if (ts.isBinaryExpression(node)) {
+    if ([ts.SyntaxKind.MinusToken, ts.SyntaxKind.AsteriskToken, ts.SyntaxKind.SlashToken,
+      ts.SyntaxKind.PercentToken, ts.SyntaxKind.AsteriskAsteriskToken].includes(node.operatorToken.kind)) {
+      return { valueType: "number", explicitNull: false };
+    }
+    if ([ts.SyntaxKind.EqualsEqualsToken, ts.SyntaxKind.EqualsEqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsToken,
+      ts.SyntaxKind.ExclamationEqualsEqualsToken, ts.SyntaxKind.LessThanToken, ts.SyntaxKind.LessThanEqualsToken,
+      ts.SyntaxKind.GreaterThanToken, ts.SyntaxKind.GreaterThanEqualsToken, ts.SyntaxKind.InKeyword,
+      ts.SyntaxKind.InstanceOfKeyword].includes(node.operatorToken.kind)) {
+      return { valueType: "boolean", explicitNull: false };
+    }
+    if ([ts.SyntaxKind.AmpersandAmpersandToken, ts.SyntaxKind.BarBarToken,
+      ts.SyntaxKind.QuestionQuestionToken].includes(node.operatorToken.kind)) {
+      return mergeSemanticValues([semanticValue(node.left, context, next), semanticValue(node.right, context, next)]);
+    }
+    return { valueType: "unknown", explicitNull: false };
+  }
+  if (ts.isPrefixUnaryExpression(node)) {
+    if (node.operator === ts.SyntaxKind.ExclamationToken) return { valueType: "boolean", explicitNull: false };
+    if (node.operator === ts.SyntaxKind.PlusToken || node.operator === ts.SyntaxKind.MinusToken
+      || node.operator === ts.SyntaxKind.TildeToken) return { valueType: "number", explicitNull: false };
+  }
+  if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)
+    && (!context || !resolveDeclarationAt(node.expression.text, node.expression, context))) {
+    if (node.expression.text === "String") return { valueType: "string", explicitNull: false };
+    if (node.expression.text === "Boolean") return { valueType: "boolean", explicitNull: false };
+    if (node.expression.text === "Number") return { valueType: "number", explicitNull: false };
+    if (node.expression.text === "parseInt") return { valueType: "integer", explicitNull: false };
+    if (node.expression.text === "parseFloat") return { valueType: "decimal", explicitNull: false };
+    if (node.expression.text === "Array") return { valueType: "array", explicitNull: false };
+    if (node.expression.text === "Object") return { valueType: "object", explicitNull: false };
+  }
+  return semanticValueFromExpressionType(expressionType(node));
+}
+
+function mergeSemanticValues(values: SemanticValue[]): SemanticValue {
+  const explicitNull = values.some((value) => value.explicitNull);
+  const types = new Set(values.map((value) => value.valueType).filter((type) => type !== "unknown"));
+  if (values.some((value) => value.valueType === "unknown" && !value.explicitNull)) {
+    return { valueType: "unknown", explicitNull };
+  }
+  if (types.size === 0) return { valueType: "unknown", explicitNull };
+  if (types.size === 1) return { valueType: [...types][0], explicitNull };
+  if ([...types].every((type) => type === "number" || type === "integer" || type === "decimal")) {
+    return { valueType: "number", explicitNull };
+  }
+  return { valueType: "unknown", explicitNull };
 }
 
 function normalizeFields(fields: ShapeField[]): ShapeField[] {
@@ -1610,6 +1845,35 @@ function normalizeFields(fields: ShapeField[]): ShapeField[] {
     || left.presence.localeCompare(right.presence)
     || left.expressionType.localeCompare(right.expressionType)
     || left.origin.localeCompare(right.origin));
+}
+
+function syntacticField(field: ShapeField): Omit<ShapeField, "semanticPresence" | "valueType" | "explicitNull"> {
+  const { semanticPresence: _semanticPresence, valueType: _valueType, explicitNull: _explicitNull, ...syntactic } = field;
+  return syntactic;
+}
+
+function semanticPayloadFields(fields: ShapeField[]): SemanticShapeField[] {
+  const normalized = normalizeFields(fields).map((field) => ({
+    ...field,
+    semanticPresence: semanticPresence(field.presence)
+  }));
+  const byName = new Map<string, ShapeField[]>();
+  for (const field of normalized) byName.set(field.name, [...(byName.get(field.name) ?? []), field]);
+  return [...byName.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([name, alternatives]) => {
+    const types = new Set(alternatives.map((field) => field.valueType));
+    const semanticPresences = new Set(alternatives.map((field) => field.semanticPresence));
+    const nullStates = new Set(alternatives.map((field) => field.explicitNull));
+    const semanticPresenceValue: SemanticPresence = semanticPresences.has("unknown") ? "unknown"
+      : alternatives.every((field) => field.semanticPresence === "always") ? "always" : "conditional";
+    const valueAgrees = types.size === 1 && nullStates.size === 1;
+    return {
+      name,
+      semanticPresence: semanticPresenceValue,
+      valueType: valueAgrees ? alternatives[0].valueType : "unknown",
+      explicitNull: alternatives.some((field) => field.explicitNull),
+      provenance: alternatives.map(syntacticField)
+    };
+  });
 }
 
 function normalizeSpreads(spreads: ShapeSpread[]): ShapeSpread[] {

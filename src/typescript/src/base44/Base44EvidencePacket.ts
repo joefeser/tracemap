@@ -102,7 +102,11 @@ export async function buildBase44Evidence(options: Base44EvidenceOptions): Promi
   const result = await scan(options);
   const base44Facts = result.facts.filter((fact) => fact.factType.startsWith("Base44"));
   const artifacts: Base44EvidencePacket["artifacts"] = {};
-  for (const name of ["scan-manifest.json", "facts.ndjson", "index.sqlite", "report.md", "logs/analyzer.log"]) {
+  // Bind only deterministic source-evidence artifacts into the portable
+  // packet. scan-manifest.json carries scannedAt and index.sqlite serializes
+  // that operational timestamp, so both remain required scan outputs and are
+  // validated separately but cannot perturb the source-bound packet bytes.
+  for (const name of ["facts.ndjson", "report.md", "logs/analyzer.log"]) {
     artifacts[name] = { sha256: await sha256File(path.join(options.outputPath, name)) };
   }
   const packet: Base44EvidencePacket = {
@@ -319,6 +323,7 @@ function coverageGapSurface(
 function validateCoverageGaps(packet: Base44EvidencePacket): void {
   validatePayloadShapeContracts(packet);
   validateEntitySelectorContracts(packet);
+  validateEntityCallsiteDispositions(packet);
   validateSdkIdentityContracts(packet);
   if (packet.coverage?.gapSchemaVersion !== base44CoverageGapSchemaVersion) {
     throw new Error(`Unsupported Base44 coverage gap schema: ${packet.coverage?.gapSchemaVersion ?? "missing"}`);
@@ -350,11 +355,14 @@ function validateCoverageGaps(packet: Base44EvidencePacket): void {
 
 function validatePayloadShapeContracts(packet: Base44EvidencePacket): void {
   for (const fact of packet.facts.filter((candidate) => candidate.factType === FactTypes.Base44EntityPayload)) {
-    if (["base44-evidence/0.8.0", "base44-evidence/0.9.0", "base44-evidence/0.10.0", "base44-evidence/0.11.0", "base44-evidence/0.12.0"].includes(fact.evidence.extractorVersion)
+    if (["base44-evidence/0.8.0", "base44-evidence/0.9.0", "base44-evidence/0.10.0", "base44-evidence/0.11.0", "base44-evidence/0.12.0", "base44-evidence/0.13.0"].includes(fact.evidence.extractorVersion)
       && fact.properties.shapeVersion !== "2") {
       throw new Error(`Base44 payload ${fact.factId} must use shapeVersion 2 for extractor ${fact.evidence.extractorVersion}`);
     }
-    if (fact.properties.shapeVersion !== "2") continue;
+    if (fact.evidence.extractorVersion === "base44-evidence/0.14.0" && fact.properties.shapeVersion !== "3") {
+      throw new Error(`Base44 payload ${fact.factId} must use shapeVersion 3 for extractor ${fact.evidence.extractorVersion}`);
+    }
+    if (!new Set(["2", "3"]).has(fact.properties.shapeVersion)) continue;
     const outerKind = fact.properties.outerKind;
     const referenceAccounting = fact.properties.referenceAccounting;
     if (!new Set(["object", "array", "unknown"]).has(outerKind)) {
@@ -390,6 +398,84 @@ function validatePayloadShapeContracts(packet: Base44EvidencePacket): void {
     if (!deferred && obligations.length > 0) {
       throw new Error(`Base44 payload ${fact.factId} has an orphaned runtime obligation`);
     }
+    if (fact.properties.shapeVersion === "3") validateSemanticPayloadFields(fact);
+  }
+}
+
+const payloadValueTypes = new Set(["string", "number", "integer", "decimal", "boolean", "date", "object", "array", "uuid", "unknown"]);
+
+function validateSemanticPayloadFields(fact: Base44PacketFact): void {
+  let fields: unknown;
+  let semanticFields: unknown;
+  try {
+    fields = JSON.parse(fact.properties.fieldsJson);
+    semanticFields = JSON.parse(fact.properties.semanticFieldsJson);
+  } catch {
+    throw new Error(`Base44 payload ${fact.factId} has malformed semantic fields JSON`);
+  }
+  if (!Array.isArray(fields) || !Array.isArray(semanticFields)) {
+    throw new Error(`Base44 payload ${fact.factId} semantic fields must be arrays`);
+  }
+  const syntacticKeys = ["name", "presence", "expressionType", "origin", "evidenceStartLine", "evidenceEndLine", "evidenceSnippetHash"];
+  for (const [index, value] of fields.entries()) validatePayloadFieldProvenance(value, syntacticKeys, fact.factId, index);
+  const names = new Set<string>();
+  const flattenedProvenance: Record<string, unknown>[] = [];
+  for (const [index, value] of semanticFields.entries()) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error(`Base44 payload ${fact.factId} semantic field ${index} must be an object`);
+    }
+    const field = value as Record<string, unknown>;
+    requireClosedKeys(field, ["name", "semanticPresence", "valueType", "explicitNull", "provenance"],
+      `semantic payload field ${fact.factId}:${index}`);
+    if (typeof field.name !== "string" || !field.name || names.has(field.name)
+      || !new Set(["always", "conditional", "unknown"]).has(String(field.semanticPresence))
+      || !payloadValueTypes.has(String(field.valueType)) || typeof field.explicitNull !== "boolean"
+      || !Array.isArray(field.provenance) || field.provenance.length === 0) {
+      throw new Error(`Base44 payload ${fact.factId} has invalid semantic field ${index}`);
+    }
+    const provenance = field.provenance as unknown[];
+    for (const [provenanceIndex, item] of provenance.entries()) {
+      validatePayloadFieldProvenance(item, syntacticKeys, fact.factId, provenanceIndex);
+      const observation = item as Record<string, unknown>;
+      if (observation.name !== field.name) throw new Error(`Base44 payload ${fact.factId} has cross-field semantic provenance`);
+      flattenedProvenance.push(observation);
+    }
+    const presenceValues = provenance.map((item) => String((item as Record<string, unknown>).presence));
+    const expectedPresence = presenceValues.some((presence) => presence === "dynamic-computed" || presence === "unresolved") ? "unknown"
+      : presenceValues.every((presence) => presence === "unconditional") ? "always" : "conditional";
+    if (field.semanticPresence !== expectedPresence) {
+      throw new Error(`Base44 payload ${fact.factId} has a non-conservative semantic presence aggregate`);
+    }
+    names.add(field.name);
+  }
+  const sorted = [...semanticFields].sort((left: any, right: any) => left.name.localeCompare(right.name));
+  if (JSON.stringify(semanticFields) !== JSON.stringify(sorted)) {
+    throw new Error(`Base44 payload ${fact.factId} semantic fields are not deterministic`);
+  }
+  if (JSON.stringify(flattenedProvenance) !== JSON.stringify(fields)) {
+    throw new Error(`Base44 payload ${fact.factId} semantic fields do not preserve syntactic alternatives exactly once`);
+  }
+}
+
+function validatePayloadFieldProvenance(
+  value: unknown,
+  keys: string[],
+  factId: string,
+  index: number
+): void {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`Base44 payload ${factId} field provenance ${index} must be an object`);
+  }
+  const field = value as Record<string, unknown>;
+  requireClosedKeys(field, keys, `payload field provenance ${factId}:${index}`);
+  if (typeof field.name !== "string" || !field.name
+    || !new Set(["unconditional", "conditional", "spread-derived", "dynamic-computed", "unresolved"]).has(String(field.presence))
+    || typeof field.expressionType !== "string" || !field.expressionType
+    || typeof field.origin !== "string" || !field.origin
+    || !Number.isSafeInteger(field.evidenceStartLine) || !Number.isSafeInteger(field.evidenceEndLine)
+    || Number(field.evidenceStartLine) < 1 || Number(field.evidenceEndLine) < Number(field.evidenceStartLine)
+    || typeof field.evidenceSnippetHash !== "string" || !/^[0-9a-f]{64}$/u.test(field.evidenceSnippetHash)) {
+    throw new Error(`Base44 payload ${factId} has invalid field provenance ${index}`);
   }
 }
 
@@ -399,7 +485,7 @@ function validateEntitySelectorContracts(packet: Base44EvidencePacket): void {
     FactTypes.Base44EntityPayload,
     FactTypes.Base44EntityQuery
   ]);
-  const facts = packet.facts.filter((fact) => fact.evidence.extractorVersion === "base44-evidence/0.12.0"
+  const facts = packet.facts.filter((fact) => ["base44-evidence/0.12.0", "base44-evidence/0.13.0", "base44-evidence/0.14.0"].includes(fact.evidence.extractorVersion)
     && selectorFactTypes.has(fact.factType));
   const operations = new Map(facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation)
     .map((fact) => [fact.properties.operationEvidenceId, fact]));
@@ -474,6 +560,31 @@ function validateEntitySelectorContracts(packet: Base44EvidencePacket): void {
   }
 }
 
+function validateEntityCallsiteDispositions(packet: Base44EvidencePacket): void {
+  for (const fact of packet.facts.filter((candidate) => candidate.factType === FactTypes.Base44EntityCallsiteDisposition)) {
+    let disposition: Record<string, any>;
+    try {
+      disposition = JSON.parse(fact.properties.callsiteDispositionJson);
+    } catch {
+      throw new Error(`Base44 fact ${fact.factId} has malformed entity callsite disposition JSON`);
+    }
+    requireClosedKeys(disposition, ["schemaVersion", "disposition", "callableName", "authorityPath", "authoritySha256",
+      "sourceSnapshotDigest", "externalModuleReferences", "ambiguousDynamicModuleReferences"], `entity callsite disposition ${fact.factId}`);
+    if (!["base44-evidence/0.13.0", "base44-evidence/0.14.0"].includes(fact.evidence.extractorVersion)
+      || disposition.schemaVersion !== "88mph.base44-entity-callsite-disposition.v1"
+      || disposition.disposition !== "dormant-unreachable"
+      || typeof disposition.callableName !== "string" || !disposition.callableName
+      || disposition.authorityPath !== fact.evidence.filePath
+      || disposition.authoritySha256 !== fact.properties.sourceFileSha256
+      || !/^[0-9a-f]{64}$/u.test(disposition.authoritySha256)
+      || !/^[0-9a-f]{64}$/u.test(disposition.sourceSnapshotDigest)
+      || disposition.externalModuleReferences !== 0 || disposition.ambiguousDynamicModuleReferences !== 0
+      || fact.evidenceTier !== EvidenceTiers.Tier3SyntaxOrTextual) {
+      throw new Error(`Base44 fact ${fact.factId} has an invalid entity callsite disposition`);
+    }
+  }
+}
+
 const sdkIdentityGapTokens = new Set([
   "sdk-identity-source-root-missing",
   "sdk-identity-source-root-ambiguous",
@@ -489,7 +600,7 @@ function validateSdkIdentityContracts(packet: Base44EvidencePacket): void {
     FactTypes.Base44EntityPayload,
     FactTypes.Base44EntityQuery
   ]);
-  const facts = packet.facts.filter((fact) => ["base44-evidence/0.10.0", "base44-evidence/0.11.0", "base44-evidence/0.12.0"].includes(fact.evidence.extractorVersion)
+  const facts = packet.facts.filter((fact) => ["base44-evidence/0.10.0", "base44-evidence/0.11.0", "base44-evidence/0.12.0", "base44-evidence/0.13.0", "base44-evidence/0.14.0"].includes(fact.evidence.extractorVersion)
     && identityFactTypes.has(fact.factType));
   const operations = new Map(facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation)
     .map((fact) => [fact.properties.operationEvidenceId, fact]));

@@ -62,6 +62,16 @@ rules:
       - Injected client authority is bounded to immutable lexical bindings and consistently proven direct callsites; unknown inputs invalidate downstream helpers. Rest, destructured, and spread-shifted bindings are unsupported.
       - Dynamic dispatch, escaped callbacks, and unresolved re-exports are not followed; missing operations do not prove source absence. See docs/BASE44_INJECTED_CLIENT_DATAFLOW.md.
 
+  - id: base44.entity.callsite-disposition.v1
+    name: Base44 entity callsite disposition
+    description: Records source-bound dormant or unreachable entity callsites excluded from the executable operation denominator by a closed rooted-module and callback-invocation proof.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits: [Base44EntityCallsiteDisposition]
+    limitations:
+      - A dormant disposition proves only that the bounded source graph has no rooted executable path to the callsite; it does not prove that deleted, generated, dynamically imported, or runtime-injected code cannot introduce one.
+      - Dynamic imports, unresolved re-exports, escaped callbacks, ambiguous module references, or any unknown invocation path prevent a dormant disposition and remain typed blockers.
+      - Dispositions do not prove runtime behavior, deployment reachability, authorization, persistence, or compatibility.
+
   - id: base44.entity.payload.v1
     name: Base44 entity mutation payload shape
     description: Records source-bound create, update, upsert, and bulk payload field presence, expression classes, bounded binding derivation, spreads, and typed ambiguity without literal values.

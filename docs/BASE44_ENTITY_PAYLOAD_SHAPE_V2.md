@@ -50,3 +50,9 @@ property including `outerKind`, `referenceAccounting`,
 `runtimeObligationsJson`, `analysisGapsJson`, normalized fields/spreads, and
 source-file SHA-256. Evidence additionally binds the SDK-call snippet SHA-256
 and extractor identity/version. Runtime values are never included.
+
+Extractor `base44-evidence/0.14.0` supersedes this producer format with
+`shapeVersion=3` while retaining every v2 outer-kind and obligation property.
+Version 3 adds a separately versioned semantic field projection; v2 remains
+readable but is not semantic type-promotion authority. See
+[Base44 entity payload shape v3](BASE44_ENTITY_PAYLOAD_SHAPE_V3.md).

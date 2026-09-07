@@ -87,7 +87,8 @@ function visit(node: ts.Node, source: ts.SourceFile, filePath: string, text: str
   if (ts.isCallExpression(node)) {
     const chain = expressionChain(node.expression);
     const binding = chain ? resolveRuntimeAlias(chain[0], node, source, aliases, factoryAliases, injectedParameters, new Set()) : null;
-    if (chain && binding) addSdkCall([...binding.prefix, ...chain.slice(1)], node, source, filePath, text, manifest, facts, binding.kind, sdkIdentity);
+    if (chain && binding) addSdkCall([...binding.prefix, ...chain.slice(1)], node, source, filePath, text, manifest, facts,
+      binding.kind, sdkIdentity, contexts);
     if (chain && !binding) addComputedEntityAliasSdkCall(node, source, filePath, text, manifest, facts, aliases,
       factoryAliases, injectedParameters, sdkIdentity, contexts);
     if (!chain) addComputedEntitySdkCall(node, source, filePath, text, manifest, facts, aliases, factoryAliases,
@@ -114,12 +115,27 @@ function visit(node: ts.Node, source: ts.SourceFile, filePath: string, text: str
   ts.forEachChild(node, (child) => visit(child, source, filePath, text, aliases, factoryAliases, injectedParameters, base44Context, manifest, facts, sdkIdentity, contexts));
 }
 
-function addSdkCall(chain: string[], node: ts.CallExpression, source: ts.SourceFile, filePath: string, text: string, manifest: ScanManifest, facts: CodeFact[], clientBindingKind: string, sdkIdentity: SdkIdentityResolution): void {
+function addSdkCall(chain: string[], node: ts.CallExpression, source: ts.SourceFile, filePath: string, text: string, manifest: ScanManifest, facts: CodeFact[], clientBindingKind: string, sdkIdentity: SdkIdentityResolution, contexts: Map<string, SourceContext>): void {
   const rootIndex = chain.findIndex((part) => primitiveRoots.has(part));
   if (rootIndex < 0) return;
   const relative = chain.slice(rootIndex);
   const capability = relative.join(".");
   const clientBindingEvidence: Record<string, string> = clientBindingKind === "callsite-proven-parameter" ? { clientBindingKind } : {};
+  const entitiesIndex = sdkRootIndex(relative, "entities");
+  if (entitiesIndex >= 0
+    && entityOperations.has(relative[entitiesIndex + 2])
+    && entitiesIndex + 3 === relative.length) {
+    const disposition = dormantEntityCallsiteDisposition(node, source, filePath, contexts);
+    if (disposition) {
+      facts.push(fact(manifest, FactTypes.Base44EntityCallsiteDisposition, RuleIds.Base44EntityCallsiteDisposition,
+        node, source, filePath, `${filePath}:${disposition.callableName}:${relative[entitiesIndex + 2]}`, {
+          callsiteDispositionJson: JSON.stringify(disposition),
+          operationName: relative[entitiesIndex + 2],
+          sourceFileSha256: hash(text, 64)
+        }));
+      return;
+    }
+  }
   facts.push(fact(manifest, FactTypes.Base44SdkPrimitive, RuleIds.Base44SdkPrimitive, node, source, filePath, capability, {
     capability,
     ...clientBindingEvidence,
@@ -136,14 +152,14 @@ function addSdkCall(chain: string[], node: ts.CallExpression, source: ts.SourceF
       sourceFileSha256: hash(text, 64)
     }, functionName ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier4Unknown));
   }
-  const entitiesIndex = sdkRootIndex(relative, "entities");
   if (entitiesIndex >= 0
     && entityOperations.has(relative[entitiesIndex + 2])
     && entitiesIndex + 3 === relative.length) {
     const entityName = relative[entitiesIndex + 1];
     const operationName = relative[entitiesIndex + 2];
+    const computedFields = sourceBoundComputedFields(node, { filePath, source, contexts });
     addEntityOperation(node, source, filePath, text, manifest, facts, clientBindingKind, sdkIdentity,
-      entityName, operationName, staticEntitySelector(entityName, node, source, filePath));
+      entityName, operationName, staticEntitySelector(entityName, node, source, filePath), contexts, computedFields);
   }
 }
 
@@ -188,7 +204,9 @@ function addEntityOperation(
   sdkIdentity: SdkIdentityResolution,
   entityName: string,
   operationName: string,
-  selector: EntitySelectorContract
+  selector: EntitySelectorContract,
+  contexts: Map<string, SourceContext>,
+  computedQueryFields: Record<string, string[]> = {}
 ): void {
   const clientBindingEvidence: Record<string, string> = clientBindingKind === "callsite-proven-parameter" ? { clientBindingKind } : {};
   const operationStartLine = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
@@ -217,19 +235,39 @@ function addEntityOperation(
     sourceFileSha256: hash(text, 64)
   }, sdkIdentity.identity && !selectorGap ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier4Unknown);
   facts.push(operationFact);
+  const runtimeDeferredOuterKind = sourceBoundPayloadOuterKind(node, operationName, { filePath, source, contexts });
   facts.push(...extractEntityShapeFacts({
     manifest, node, source, filePath, sourceText: text, entityName, operationName, operationEvidenceId,
     entitySelectorGap: selectorGap,
     entitySelectorJson: selectorJson,
+    computedQueryFields,
+    runtimeDeferredOuterKind,
     sdkIdentityGap: sdkIdentity.gap ?? "",
     sdkIdentityJson: sdkIdentity.identity ? JSON.stringify(sdkIdentity.identity) : ""
   }));
 }
 
+function sourceBoundPayloadOuterKind(
+  call: ts.CallExpression,
+  operationName: string,
+  context: SelectorEvaluationContext
+): "object" | undefined {
+  const argumentIndex = operationName === "update" ? 1
+    : operationName === "create" || operationName === "bulkCreate" ? 0 : -1;
+  if (argumentIndex < 0) return undefined;
+  const argument = call.arguments[argumentIndex];
+  if (!argument || ts.isSpreadElement(argument)) return undefined;
+  const values = evaluateSelectorValues(argument, context, new Set());
+  if (!values?.length) return undefined;
+  if (values.every((value) => value.kind === "object")) return "object";
+  return undefined;
+}
+
 interface StaticSelectorValue {
-  kind: "string" | "object" | "array" | "opaque";
-  value?: string;
+  kind: "string" | "boolean" | "undefined" | "object" | "array" | "opaque";
+  value?: string | boolean;
   properties?: Map<string, StaticSelectorValue[]>;
+  openProperties?: boolean;
   elements?: StaticSelectorValue[];
   evidence: EntitySelectorEvidence[];
 }
@@ -238,6 +276,8 @@ interface SelectorEvaluationContext {
   filePath: string;
   source: ts.SourceFile;
   contexts: Map<string, SourceContext>;
+  parameterValues?: Map<ts.ParameterDeclaration, StaticSelectorValue[]>;
+  bindingValues?: Map<ts.VariableDeclaration, StaticSelectorValue[]>;
 }
 
 function addComputedEntitySdkCall(
@@ -292,10 +332,10 @@ function addComputedEntityAliasSdkCall(
   const alias = computedEntityAlias(declaration.node.initializer, declaration.node, source, aliases, factoryAliases,
     injectedParameters, contexts);
   if (!alias) return;
-  const safeSelector = isImmutableVariable(declaration.node, owner) && selectorBindingIsUnmutated(declaration.node, source)
-    ? alias.selector : undefined;
-  emitComputedEntityCall(node, safeSelector, alias.relative, alias.binding, source, filePath, text,
-    manifest, facts, sdkIdentity, contexts);
+  const resolvedSelectors = entityAliasBindingSelectorValues(declaration.node, owner, alias, source, filePath,
+    aliases, factoryAliases, injectedParameters, contexts);
+  emitComputedEntityCall(node, resolvedSelectors ? undefined : alias.selector, alias.relative, alias.binding,
+    source, filePath, text, manifest, facts, sdkIdentity, contexts, resolvedSelectors ?? undefined);
 }
 
 function computedEntityAlias(
@@ -347,6 +387,136 @@ function computedEntityAlias(
     : null;
 }
 
+function entityAliasBindingSelectorValues(
+  declaration: ts.VariableDeclaration,
+  use: ts.Identifier,
+  initialAlias: { selector: ts.Expression; relative: string[]; binding: RuntimeAlias },
+  source: ts.SourceFile,
+  filePath: string,
+  aliases: Map<string, string[]>,
+  factoryAliases: Set<string>,
+  injectedParameters: Map<number, string[]>,
+  contexts: Map<string, SourceContext>
+): StaticSelectorValue[] | null {
+  if (!ts.isIdentifier(declaration.name)) return null;
+  if (isImmutableVariable(declaration, use) && selectorBindingIsUnmutated(declaration, source, use)) {
+    return evaluateSelectorValues(initialAlias.selector, { filePath, source, contexts }, new Set());
+  }
+  const values: StaticSelectorValue[] = [];
+  const initial = evaluateSelectorValues(initialAlias.selector, { filePath, source, contexts }, new Set());
+  if (!initial) return null;
+  values.push(...initial);
+  const bindingName = declaration.name.text;
+  let unsafe = false;
+  const scope = executionRoot(declaration.name);
+  const usePosition = use.getStart(source);
+  const visit = (node: ts.Node): void => {
+    if (unsafe || node.getStart(source) > usePosition) return;
+    if (ts.isIdentifier(node) && node !== declaration.name && node !== use && node.text === bindingName
+      && resolveLexicalBinding(bindingName, node, source)?.node === declaration) {
+      const assignment = node.parent;
+      if (ts.isBinaryExpression(assignment) && assignment.left === node
+        && assignment.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+        const resolved = entityAliasAssignmentSelectorValues(assignment.right, source, filePath, aliases,
+          factoryAliases, injectedParameters, contexts, initialAlias.relative);
+        if (!resolved) { unsafe = true; return; }
+        values.push(...resolved);
+        return;
+      }
+      if ((ts.isPropertyAccessExpression(assignment) || ts.isElementAccessExpression(assignment))
+        && assignment.expression === node) return;
+      unsafe = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(scope);
+  return unsafe ? null : normalizeStaticValues(values);
+}
+
+function entityAliasAssignmentSelectorValues(
+  input: ts.Expression,
+  source: ts.SourceFile,
+  filePath: string,
+  aliases: Map<string, string[]>,
+  factoryAliases: Set<string>,
+  injectedParameters: Map<number, string[]>,
+  contexts: Map<string, SourceContext>,
+  expectedRelative: string[]
+): StaticSelectorValue[] | null {
+  const expression = unwrapSelectorExpression(input);
+  const direct = computedEntityAlias(expression, expression, source, aliases, factoryAliases, injectedParameters, contexts);
+  if (direct && JSON.stringify(direct.relative) === JSON.stringify(expectedRelative)) {
+    return evaluateSelectorValues(direct.selector, { filePath, source, contexts }, new Set());
+  }
+  if (!ts.isCallExpression(expression)) return null;
+  const caller = contextForSource(source, contexts);
+  const wrapper = resolveCallableTarget(expression.expression, caller, contexts);
+  if (!wrapper || !wrapper.body) return null;
+  const callbackIndex = wrapper.parameters.findIndex((parameter) => ts.isIdentifier(parameter.name)
+    && transparentCallbackReturnBinding(wrapper, parameter.name.text));
+  const callback = callbackIndex >= 0 ? expression.arguments[callbackIndex] : undefined;
+  if (!callback || ts.isSpreadElement(callback)
+    || (!ts.isArrowFunction(callback) && !ts.isFunctionExpression(callback))) return null;
+  const returns = callableReturnExpressions(callback);
+  if (returns.length === 0) return null;
+  const values: StaticSelectorValue[] = [];
+  for (const returned of returns) {
+    const aliasesInReturn = nullableEntityAliases(returned, callback.getSourceFile(), filePath, aliases,
+      factoryAliases, injectedParameters, contexts, expectedRelative);
+    if (!aliasesInReturn) return null;
+    values.push(...aliasesInReturn);
+  }
+  return values.length ? normalizeStaticValues(values) : null;
+}
+
+function transparentCallbackReturnBinding(owner: ts.FunctionLikeDeclaration, parameterName: string): boolean {
+  if (!owner.body || !ts.isBlock(owner.body)) return false;
+  const returnedNames = new Set<string>();
+  let unsafe = false;
+  const visit = (node: ts.Node): void => {
+    if (unsafe || (node !== owner.body && ts.isFunctionLike(node))) return;
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer
+      && ts.isCallExpression(unwrapSelectorExpression(node.initializer))) {
+      const call = unwrapSelectorExpression(node.initializer) as ts.CallExpression;
+      const callee = unwrapAliasExpression(call.expression);
+      if (ts.isIdentifier(callee) && callee.text === parameterName && call.arguments.length === 0) returnedNames.add(node.name.text);
+    }
+    if (ts.isReturnStatement(node) && node.expression) {
+      const returned = unwrapAliasExpression(node.expression);
+      if (returned.kind === ts.SyntaxKind.NullKeyword) return;
+      if (!ts.isIdentifier(returned) || !returnedNames.has(returned.text)) unsafe = true;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(owner.body);
+  return !unsafe && returnedNames.size === 1;
+}
+
+function nullableEntityAliases(
+  input: ts.Expression,
+  source: ts.SourceFile,
+  filePath: string,
+  aliases: Map<string, string[]>,
+  factoryAliases: Set<string>,
+  injectedParameters: Map<number, string[]>,
+  contexts: Map<string, SourceContext>,
+  expectedRelative: string[]
+): StaticSelectorValue[] | null {
+  const expression = unwrapSelectorExpression(input);
+  if (expression.kind === ts.SyntaxKind.NullKeyword || expression.kind === ts.SyntaxKind.UndefinedKeyword) return [];
+  if (ts.isConditionalExpression(expression)) {
+    const left = nullableEntityAliases(expression.whenTrue, source, filePath, aliases, factoryAliases,
+      injectedParameters, contexts, expectedRelative);
+    const right = nullableEntityAliases(expression.whenFalse, source, filePath, aliases, factoryAliases,
+      injectedParameters, contexts, expectedRelative);
+    return left && right ? normalizeStaticValues([...left, ...right]) : null;
+  }
+  const direct = computedEntityAlias(expression, expression, source, aliases, factoryAliases, injectedParameters, contexts);
+  if (!direct || JSON.stringify(direct.relative) !== JSON.stringify(expectedRelative)) return null;
+  return evaluateSelectorValues(direct.selector, { filePath, source, contexts }, new Set());
+}
+
 function emitComputedEntityCall(
   node: ts.CallExpression,
   selectorExpression: ts.Expression | undefined,
@@ -358,16 +528,27 @@ function emitComputedEntityCall(
   manifest: ScanManifest,
   facts: CodeFact[],
   sdkIdentity: SdkIdentityResolution,
-  contexts: Map<string, SourceContext>
+  contexts: Map<string, SourceContext>,
+  resolvedOverride?: StaticSelectorValue[]
 ): void {
   const methodAccess = unwrapAliasExpression(node.expression);
   if (!ts.isPropertyAccessExpression(methodAccess)) return;
 
   const operationName = methodAccess.name.text;
-  const resolved = selectorExpression
-    ? evaluateSelectorValues(selectorExpression, { filePath, source, contexts }, new Set()) : null;
+  const resolved = resolvedOverride ?? (selectorExpression
+    ? evaluateSelectorValues(selectorExpression, { filePath, source, contexts }, new Set()) : null);
   const candidates = resolved ? selectorStrings(resolved) : [];
   const evidence = resolved ? normalizeSelectorEvidence(resolved.flatMap((value) => value.evidence)) : [];
+  const disposition = dormantEntityCallsiteDisposition(node, source, filePath, contexts);
+  if (disposition) {
+    facts.push(fact(manifest, FactTypes.Base44EntityCallsiteDisposition, RuleIds.Base44EntityCallsiteDisposition,
+      node, source, filePath, `${filePath}:${disposition.callableName}:${operationName}`, {
+        callsiteDispositionJson: JSON.stringify(disposition),
+        operationName,
+        sourceFileSha256: hash(text, 64)
+      }));
+    return;
+  }
   const selector: EntitySelectorContract = candidates.length > 0 ? {
     schemaVersion: "88mph.base44-entity-selector.v1",
     kind: "finite-source-domain",
@@ -391,9 +572,12 @@ function emitComputedEntityCall(
       sourceFileSha256: hash(text, 64)
     }, EvidenceTiers.Tier4Unknown));
     addEntityOperation(node, source, filePath, text, manifest, facts, binding.kind, sdkIdentity,
-      "dynamic", operationName, selector);
+      "dynamic", operationName, selector, contexts);
     return;
   }
+  const correlatedFields = selectorExpression
+    ? correlatedComputedQueryFields(node, selectorExpression, candidates, { filePath, source, contexts }) : {};
+  const sourceBoundFields = sourceBoundComputedFields(node, { filePath, source, contexts });
   for (const entityName of candidates) {
     const capability = `${primitivePrefix}.${entityName}.${operationName}`;
     facts.push(fact(manifest, FactTypes.Base44SdkPrimitive, RuleIds.Base44SdkPrimitive, node, source, filePath, capability, {
@@ -402,9 +586,282 @@ function emitComputedEntityCall(
       primitiveRoot: relative[0],
       sourceFileSha256: hash(text, 64)
     }));
+    const computedQueryFields = { ...sourceBoundFields, ...(correlatedFields[entityName] ?? {}) };
     addEntityOperation(node, source, filePath, text, manifest, facts, binding.kind, sdkIdentity,
-      entityName, operationName, selector);
+      entityName, operationName, selector, contexts, computedQueryFields);
   }
+}
+
+function sourceBoundComputedFields(
+  _call: ts.CallExpression,
+  context: SelectorEvaluationContext
+): Record<string, string[]> {
+  const byFile = sourceBoundComputedFieldsCache.get(context.contexts) ?? new Map<string, Record<string, string[]>>();
+  sourceBoundComputedFieldsCache.set(context.contexts, byFile);
+  const cached = byFile.get(context.filePath);
+  if (cached) return cached;
+  const result: Record<string, string[]> = {};
+  const visit = (node: ts.Node): void => {
+    if (ts.isComputedPropertyName(node)) {
+      const values = evaluateSelectorValues(node.expression, context, new Set());
+      const strings = values ? flattenStaticValues(values)
+        .filter((value) => value.kind === "string" && typeof value.value === "string"
+          && /^[A-Za-z_][A-Za-z0-9_.]*$/u.test(value.value))
+        .map((value) => value.value as string) : [];
+      if (values && strings.length === flattenStaticValues(values).length && strings.length > 0) {
+        result[String(node.getStart(context.source))] = uniqueStrings(strings);
+      }
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(context.source);
+  byFile.set(context.filePath, result);
+  return result;
+}
+
+const sourceBoundComputedFieldsCache = new WeakMap<Map<string, SourceContext>, Map<string, Record<string, string[]>>>();
+
+function correlatedComputedQueryFields(
+  call: ts.CallExpression,
+  selectorExpression: ts.Expression,
+  entityNames: string[],
+  context: SelectorEvaluationContext
+): Record<string, Record<string, string[]>> {
+  const selectorMember = selectorObjectMember(selectorExpression, context.source);
+  const filter = call.arguments[0] && unwrapAliasExpression(call.arguments[0]);
+  if (!selectorMember || !filter || !ts.isObjectLiteralExpression(filter)) return {};
+  const ownerValues = evaluateSelectorValues(selectorMember.owner, context, new Set());
+  if (!ownerValues) return {};
+  const result: Record<string, Record<string, string[]>> = {};
+  for (const property of filter.properties) {
+    if (!ts.isPropertyAssignment(property) || !ts.isComputedPropertyName(property.name)) continue;
+    const fieldMember = selectorObjectMember(property.name.expression, context.source);
+    if (!fieldMember || fieldMember.declaration !== selectorMember.declaration) continue;
+    for (const entityName of entityNames) {
+      const names: string[] = [];
+      let complete = true;
+      for (const value of ownerValues) {
+        if (value.kind !== "object") { complete = false; break; }
+        const entities = selectStaticProperty([value], selectorMember.property);
+        const candidates = entities ? selectorStrings(entities) : [];
+        if (!candidates.includes(entityName)) continue;
+        const fields = selectStaticProperty([value], fieldMember.property);
+        const strings = fields ? flattenStaticValues(fields).filter((item) => item.kind === "string"
+          && typeof item.value === "string").map((item) => item.value as string) : [];
+        if (strings.length === 0) { complete = false; break; }
+        names.push(...strings);
+      }
+      if (complete && names.length > 0) {
+        const byPosition = result[entityName] ?? {};
+        byPosition[String(property.name.getStart(context.source))] = uniqueStrings(names);
+        result[entityName] = byPosition;
+      }
+    }
+  }
+  return result;
+}
+
+function selectorObjectMember(
+  input: ts.Expression,
+  source: ts.SourceFile
+): { owner: ts.Identifier; property: string; declaration: ts.Node } | null {
+  const expression = unwrapAliasExpression(input);
+  if (!ts.isPropertyAccessExpression(expression)) return null;
+  const owner = unwrapAliasExpression(expression.expression);
+  if (!ts.isIdentifier(owner)) return null;
+  const declaration = resolveLexicalBinding(owner.text, owner, source)?.node;
+  return declaration ? { owner, property: expression.name.text, declaration } : null;
+}
+
+interface DormantEntityCallsiteDisposition {
+  schemaVersion: "88mph.base44-entity-callsite-disposition.v1";
+  disposition: "dormant-unreachable";
+  callableName: string;
+  authorityPath: string;
+  authoritySha256: string;
+  sourceSnapshotDigest: string;
+  externalModuleReferences: 0;
+  ambiguousDynamicModuleReferences: 0;
+}
+
+function dormantEntityCallsiteDisposition(
+  node: ts.CallExpression,
+  source: ts.SourceFile,
+  filePath: string,
+  contexts: Map<string, SourceContext>
+): DormantEntityCallsiteDisposition | null {
+  const dormantMutation = dormantMutationHookCallable(node, source);
+  if (dormantMutation) return {
+    schemaVersion: "88mph.base44-entity-callsite-disposition.v1",
+    disposition: "dormant-unreachable",
+    callableName: dormantMutation,
+    authorityPath: filePath,
+    authoritySha256: hash(source.getFullText(), 64),
+    sourceSnapshotDigest: sourceGraphDigest(contexts),
+    externalModuleReferences: 0,
+    ambiguousDynamicModuleReferences: 0
+  };
+  const callable = findAncestor(node, (candidate): candidate is ts.FunctionDeclaration => ts.isFunctionDeclaration(candidate));
+  if (!callable?.name || !hasModifier(callable, ts.SyntaxKind.ExportKeyword)) return null;
+  if (!sourceModuleHasClosedExports(source) || sourceModuleMayBeReferenced(filePath, contexts)) return null;
+  return {
+    schemaVersion: "88mph.base44-entity-callsite-disposition.v1",
+    disposition: "dormant-unreachable",
+    callableName: callable.name.text,
+    authorityPath: filePath,
+    authoritySha256: hash(source.getFullText(), 64),
+    sourceSnapshotDigest: sourceGraphDigest(contexts),
+    externalModuleReferences: 0,
+    ambiguousDynamicModuleReferences: 0
+  };
+}
+
+function dormantMutationHookCallable(node: ts.CallExpression, source: ts.SourceFile): string | null {
+  const owner = findAncestor(node, (candidate): candidate is ts.ArrowFunction | ts.FunctionExpression =>
+    ts.isArrowFunction(candidate) || ts.isFunctionExpression(candidate));
+  if (!owner) return null;
+  const property = owner.parent;
+  if (!ts.isPropertyAssignment(property) || property.initializer !== owner
+    || selectorPropertyName(property.name) !== "mutationFn" || !ts.isObjectLiteralExpression(property.parent)) return null;
+  const hookCall = property.parent.parent;
+  if (!ts.isCallExpression(hookCall) || !hookCall.arguments.includes(property.parent)
+    || !isReactQueryUseMutationCall(hookCall, source)) return null;
+  const declaration = hookCall.parent;
+  if (!ts.isVariableDeclaration(declaration) || !ts.isIdentifier(declaration.name)) return null;
+  const bindingName = declaration.name.text;
+  let unsafe = false;
+  const scope = executionRoot(declaration.name);
+  const visit = (candidate: ts.Node): void => {
+    if (unsafe) return;
+    if (ts.isIdentifier(candidate) && candidate !== declaration.name && candidate.text === bindingName) {
+      if (resolveLexicalBinding(bindingName, candidate, source)?.node !== declaration) {
+        unsafe = true;
+        return;
+      }
+      const member = candidate.parent;
+      if (!ts.isPropertyAccessExpression(member) || member.expression !== candidate
+        || member.name.text === "mutate" || member.name.text === "mutateAsync") {
+        unsafe = true;
+      }
+      return;
+    }
+    ts.forEachChild(candidate, visit);
+  };
+  visit(scope);
+  return unsafe ? null : `${bindingName}.mutationFn`;
+}
+
+function isReactQueryUseMutationCall(call: ts.CallExpression, source: ts.SourceFile): boolean {
+  const callee = unwrapAliasExpression(call.expression);
+  if (ts.isIdentifier(callee)) {
+    const binding = resolveLexicalBinding(callee.text, callee, source);
+    if (binding?.kind !== "import" || binding.exportedName !== "useMutation") return false;
+    const declaration = findAncestor(binding.node, ts.isImportDeclaration);
+    return Boolean(declaration && ts.isStringLiteralLike(declaration.moduleSpecifier)
+      && declaration.moduleSpecifier.text === "@tanstack/react-query");
+  }
+  if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== "useMutation"
+    || !ts.isIdentifier(callee.expression)) return false;
+  const binding = resolveLexicalBinding(callee.expression.text, callee.expression, source);
+  const declaration = binding?.kind === "import" ? findAncestor(binding.node, ts.isImportDeclaration) : null;
+  return Boolean(binding?.kind === "import" && binding.exportedName === "*" && declaration
+    && ts.isStringLiteralLike(declaration.moduleSpecifier)
+    && declaration.moduleSpecifier.text === "@tanstack/react-query");
+}
+
+function sourceGraphDigest(contexts: Map<string, SourceContext>): string {
+  const cached = sourceGraphDigestCache.get(contexts);
+  if (cached) return cached;
+  const digest = hash(JSON.stringify([...contexts.values()]
+    .map((context) => [context.item.relativePath, hash(context.source.getFullText(), 64)])
+    .sort(([left], [right]) => left.localeCompare(right))), 64);
+  sourceGraphDigestCache.set(contexts, digest);
+  return digest;
+}
+
+const sourceGraphDigestCache = new WeakMap<Map<string, SourceContext>, string>();
+
+function sourceModuleHasClosedExports(source: ts.SourceFile): boolean {
+  for (const statement of source.statements) {
+    if (ts.isExportDeclaration(statement) || ts.isExportAssignment(statement)) return false;
+    if (ts.isVariableStatement(statement) && hasModifier(statement, ts.SyntaxKind.ExportKeyword)) {
+      if ((statement.declarationList.flags & ts.NodeFlags.Const) === 0) return false;
+      if (statement.declarationList.declarations.some((declaration) => !ts.isIdentifier(declaration.name))) return false;
+    }
+  }
+  return true;
+}
+
+function sourceModuleMayBeReferenced(filePath: string, contexts: Map<string, SourceContext>): boolean {
+  const graph = sourceReachabilityGraph(contexts);
+  const frontendRoots = [...graph.roots].filter((candidate) => /(^|\/)src\/(?:pages\.config|main|index|App)\.[jt]sx?$/u.test(candidate));
+  if ((filePath.startsWith("src/") || filePath.includes("/src/")) && frontendRoots.length === 0) return true;
+  return !graph.closed || graph.roots.size === 0 || graph.reachable.has(filePath);
+}
+
+const sourceReachabilityCache = new WeakMap<Map<string, SourceContext>, {
+  closed: boolean;
+  roots: Set<string>;
+  reachable: Set<string>;
+}>();
+
+function sourceReachabilityGraph(contexts: Map<string, SourceContext>): {
+  closed: boolean;
+  roots: Set<string>;
+  reachable: Set<string>;
+} {
+  const cached = sourceReachabilityCache.get(contexts);
+  if (cached) return cached;
+  let closed = true;
+  const edges = new Map<string, Set<string>>();
+  const roots = new Set([...contexts.keys()].filter((filePath) =>
+    /(^|\/)(?:pages\.config|main|index|App)\.[jt]sx?$/u.test(filePath)
+    || /(^|\/)functions\/[^/]+\.[jt]sx?$/u.test(filePath)
+    || /(^|\/)base44\/functions\/[^/]+\/(?:entry|index)\.[jt]sx?$/u.test(filePath)));
+  for (const context of contexts.values()) {
+    const targets = edges.get(context.item.relativePath) ?? new Set<string>();
+    const visit = (node: ts.Node): void => {
+      if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+        const specifier = node.moduleSpecifier;
+        if (specifier && ts.isStringLiteralLike(specifier)) {
+          const target = resolveLocalModule(context.item.relativePath, specifier.text, contexts);
+          if (target) targets.add(target);
+        }
+      }
+      if (ts.isCallExpression(node)) {
+        const isImport = node.expression.kind === ts.SyntaxKind.ImportKeyword;
+        const isRequire = ts.isIdentifier(node.expression) && node.expression.text === "require";
+        const isImportGlob = ts.isPropertyAccessExpression(node.expression)
+          && ts.isMetaProperty(node.expression.expression) && node.expression.name.text === "glob";
+        if (isImport || isRequire || isImportGlob) {
+          const argument = node.arguments[0];
+          if (!argument || !ts.isStringLiteralLike(argument)) {
+            closed = false;
+          } else if (isImportGlob) {
+            closed = false;
+          } else {
+            const target = resolveLocalModule(context.item.relativePath, argument.text, contexts);
+            if (target) targets.add(target);
+          }
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(context.source);
+    edges.set(context.item.relativePath, targets);
+  }
+  const reachable = new Set<string>();
+  const queue = [...roots];
+  while (queue.length) {
+    const current = queue.shift()!;
+    if (reachable.has(current)) continue;
+    reachable.add(current);
+    queue.push(...(edges.get(current) ?? []));
+  }
+  const result = { closed, roots, reachable };
+  sourceReachabilityCache.set(contexts, result);
+  return result;
 }
 
 function returnedExpression(owner: ts.FunctionLikeDeclaration): ts.Expression | null {
@@ -425,7 +882,7 @@ function filePathForSource(source: ts.SourceFile, contexts: Map<string, SourceCo
 }
 
 function evaluateSelectorValues(expression: ts.Expression, context: SelectorEvaluationContext, visited: Set<string>): StaticSelectorValue[] | null {
-  const value = unwrapAliasExpression(expression);
+  const value = unwrapSelectorExpression(expression);
   if (ts.isStringLiteralLike(value)) {
     return [{
       kind: "string",
@@ -433,8 +890,13 @@ function evaluateSelectorValues(expression: ts.Expression, context: SelectorEval
       evidence: [selectorEvidence(value, context.source, context.filePath, "literal")]
     }];
   }
-  if (ts.isNumericLiteral(value) || value.kind === ts.SyntaxKind.TrueKeyword
-    || value.kind === ts.SyntaxKind.FalseKeyword || value.kind === ts.SyntaxKind.NullKeyword) {
+  if (value.kind === ts.SyntaxKind.TrueKeyword || value.kind === ts.SyntaxKind.FalseKeyword) {
+    return [{ kind: "boolean", value: value.kind === ts.SyntaxKind.TrueKeyword, evidence: [] }];
+  }
+  if (ts.isIdentifier(value) && value.text === "undefined" && !resolveLexicalBinding(value.text, value, context.source)) {
+    return [{ kind: "undefined", evidence: [] }];
+  }
+  if (ts.isNumericLiteral(value) || value.kind === ts.SyntaxKind.NullKeyword) {
     return [{ kind: "opaque", evidence: [] }];
   }
   if (ts.isConditionalExpression(value)) {
@@ -467,29 +929,60 @@ function evaluateSelectorValues(expression: ts.Expression, context: SelectorEval
     return [{ kind: "array", elements, evidence: normalizeSelectorEvidence(elements.flatMap((item) => item.evidence)) }];
   }
   if (ts.isObjectLiteralExpression(value)) {
+    const correlatedBinding = correlatedObjectForOfBinding(value, context.source);
+    if (correlatedBinding && !context.bindingValues?.has(correlatedBinding)) {
+      const statement = correlatedBinding.parent.parent;
+      if (!ts.isForOfStatement(statement)) return null;
+      const iterable = evaluateSelectorValues(statement.expression, context, new Set(visited));
+      if (!iterable || iterable.some((item) => item.kind !== "array")) return null;
+      const elements = iterable.flatMap((item) => item.elements ?? []);
+      const objects: StaticSelectorValue[] = [];
+      for (const element of elements) {
+        const bindingValues = new Map(context.bindingValues ?? []);
+        bindingValues.set(correlatedBinding, [element]);
+        const resolved = evaluateSelectorValues(value, { ...context, bindingValues }, new Set(visited));
+        if (!resolved) return null;
+        objects.push(...resolved);
+      }
+      return normalizeStaticValues(objects);
+    }
     const properties = new Map<string, StaticSelectorValue[]>();
+    let openProperties = false;
     const evidence: EntitySelectorEvidence[] = [];
     for (const property of value.properties) {
       if (ts.isSpreadAssignment(property)) {
         const spread = evaluateSelectorValues(property.expression, context, new Set(visited));
-        if (!spread || spread.some((item) => item.kind !== "object")) return null;
+        if (!spread || spread.some((item) => item.kind !== "object")) {
+          // The object-literal construction itself still proves the outer
+          // runtime kind even when a spread's fields are opaque. Keep the
+          // property set open so callers cannot use this as static field or
+          // selector completeness.
+          openProperties = true;
+          evidence.push(selectorEvidence(property, context.source, context.filePath, "object-property"));
+          continue;
+        }
         for (const item of spread) for (const [name, values] of item.properties ?? []) {
           properties.set(name, [...(properties.get(name) ?? []), ...values]);
         }
+        if (spread.some((item) => item.openProperties)) openProperties = true;
         evidence.push(...spread.flatMap((item) => item.evidence));
         continue;
       }
       if (!ts.isPropertyAssignment(property) && !ts.isShorthandPropertyAssignment(property)) return null;
       const name = selectorPropertyName(property.name);
-      if (!name) return null;
+      if (!name) {
+        openProperties = true;
+        evidence.push(selectorEvidence(property.name, context.source, context.filePath, "object-property"));
+        continue;
+      }
       const initializer = ts.isPropertyAssignment(property) ? property.initializer : property.name;
-      const resolved = evaluateSelectorValues(initializer, context, new Set(visited));
-      if (!resolved) return null;
+      const resolved = evaluateSelectorValues(initializer, context, new Set(visited))
+        ?? [{ kind: "opaque" as const, evidence: [] }];
       properties.set(name, [...(properties.get(name) ?? []), ...resolved]);
       evidence.push(selectorEvidence(property.name, context.source, context.filePath, "object-property"),
         ...resolved.flatMap((item) => item.evidence));
     }
-    return [{ kind: "object", properties, evidence: normalizeSelectorEvidence(evidence) }];
+    return [{ kind: "object", properties, ...(openProperties ? { openProperties: true } : {}), evidence: normalizeSelectorEvidence(evidence) }];
   }
   if (ts.isNewExpression(value) && ts.isIdentifier(value.expression) && value.expression.text === "Set"
     && value.arguments?.length === 1) {
@@ -526,18 +1019,148 @@ function evaluateSelectorIdentifier(identifier: ts.Identifier, context: Selector
   if (visited.has(key)) return null;
   const next = new Set(visited).add(key);
   if (binding.kind === "variable") {
+    const supplied = context.bindingValues?.get(binding.node);
+    if (supplied) return projectBindingValues(binding.node.name, identifier.text, supplied);
     if (ts.isVariableDeclaration(binding.node) && ts.isForOfStatement(binding.node.parent.parent)) {
       const iterable = evaluateSelectorValues(binding.node.parent.parent.expression, context, next);
       if (!iterable || iterable.some((item) => item.kind !== "array")) return null;
-      return projectBindingValues(binding.node.name, identifier.text, iterable.flatMap((item) => item.elements ?? []));
+      const elements = narrowSelectorObjectsForUse(identifier, binding.node,
+        iterable.flatMap((item) => item.elements ?? []), context);
+      if (!elements) return null;
+      return projectBindingValues(binding.node.name, identifier.text, elements);
     }
+    const reactState = evaluateSelectorReactStateBinding(identifier.text, binding.node, identifier, context, next);
+    if (reactState) return reactState;
+    const accumulated = evaluateAppendOnlyArrayBinding(identifier.text, binding.node, identifier, context, next);
+    if (accumulated) return accumulated;
     if (!isImmutableVariable(binding.node, identifier) || !binding.node.initializer
-      || !selectorBindingIsUnmutated(binding.node, context.source)) return null;
+      || !selectorBindingIsUnmutated(binding.node, context.source, identifier)) return null;
     const resolved = evaluateSelectorValues(binding.node.initializer, context, next);
     return resolved ? projectBindingValues(binding.node.name, identifier.text, resolved) : null;
   }
-  if (binding.kind === "parameter") return evaluateSelectorParameter(binding.node, context, next);
+  if (binding.kind === "parameter") {
+    const supplied = context.parameterValues?.get(binding.node);
+    if (supplied) return projectBindingValues(binding.node.name, identifier.text, supplied);
+    return evaluateSelectorParameter(binding.node, identifier.text, context, next);
+  }
   return null;
+}
+
+function correlatedObjectForOfBinding(
+  object: ts.ObjectLiteralExpression,
+  source: ts.SourceFile
+): ts.VariableDeclaration | null {
+  const candidates = new Set<ts.VariableDeclaration>();
+  for (const property of object.properties) {
+    if (!ts.isPropertyAssignment(property) && !ts.isShorthandPropertyAssignment(property)) continue;
+    const initializer = ts.isPropertyAssignment(property) ? property.initializer : property.name;
+    const visit = (node: ts.Node): void => {
+      if (ts.isIdentifier(node)) {
+        const binding = resolveLexicalBinding(node.text, node, source);
+        if (binding?.kind === "variable" && ts.isForOfStatement(binding.node.parent.parent)) candidates.add(binding.node);
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(initializer);
+  }
+  return candidates.size === 1 ? [...candidates][0] : null;
+}
+
+interface SelectorObjectConstraint {
+  property: string;
+  value: string | boolean;
+  equal: boolean;
+  test: "truthy" | "equality";
+}
+
+function narrowSelectorObjectsForUse(
+  use: ts.Identifier,
+  declaration: ts.VariableDeclaration,
+  values: StaticSelectorValue[],
+  context: SelectorEvaluationContext
+): StaticSelectorValue[] | null {
+  let narrowed = values;
+  for (let current: ts.Node | undefined = use; current?.parent; current = current.parent) {
+    const parent = current.parent;
+    if (!ts.isIfStatement(parent)) continue;
+    const branch = isAncestorNode(parent.thenStatement, use) ? "then"
+      : parent.elseStatement && isAncestorNode(parent.elseStatement, use) ? "else" : null;
+    if (!branch) continue;
+    const constraint = selectorObjectConstraint(parent.expression, declaration, context.source);
+    if (!constraint) continue;
+    const expected = branch === "then" ? constraint.equal : !constraint.equal;
+    const matches = narrowed.map((value) => selectorObjectMatches(value, constraint));
+    if (matches.some((match) => match === null)) return null;
+    narrowed = narrowed.filter((_value, index) => matches[index] === expected);
+  }
+  return narrowed;
+}
+
+function selectorObjectConstraint(
+  input: ts.Expression,
+  declaration: ts.VariableDeclaration,
+  source: ts.SourceFile
+): SelectorObjectConstraint | null {
+  const expression = unwrapAliasExpression(input);
+  if (ts.isPrefixUnaryExpression(expression) && expression.operator === ts.SyntaxKind.ExclamationToken) {
+    const member = selectorBindingProperty(expression.operand, declaration, source);
+    return member ? { property: member, value: true, equal: false, test: "truthy" } : null;
+  }
+  const truthy = selectorBindingProperty(expression, declaration, source);
+  if (truthy) return { property: truthy, value: true, equal: true, test: "truthy" };
+  if (!ts.isBinaryExpression(expression)
+    || ![ts.SyntaxKind.EqualsEqualsEqualsToken, ts.SyntaxKind.EqualsEqualsToken,
+      ts.SyntaxKind.ExclamationEqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsToken].includes(expression.operatorToken.kind)) return null;
+  const leftProperty = selectorBindingProperty(expression.left, declaration, source);
+  const rightProperty = selectorBindingProperty(expression.right, declaration, source);
+  const literal = leftProperty ? selectorConstraintLiteral(expression.right)
+    : rightProperty ? selectorConstraintLiteral(expression.left) : null;
+  const property = leftProperty ?? rightProperty;
+  if (!property || literal === null) return null;
+  return { property, value: literal,
+    equal: [ts.SyntaxKind.EqualsEqualsEqualsToken, ts.SyntaxKind.EqualsEqualsToken].includes(expression.operatorToken.kind),
+    test: "equality" };
+}
+
+function selectorBindingProperty(input: ts.Expression, declaration: ts.VariableDeclaration, source: ts.SourceFile): string | null {
+  const expression = unwrapAliasExpression(input);
+  if (!ts.isPropertyAccessExpression(expression)) return null;
+  const owner = unwrapAliasExpression(expression.expression);
+  return ts.isIdentifier(owner) && resolveLexicalBinding(owner.text, owner, source)?.node === declaration
+    ? expression.name.text : null;
+}
+
+function selectorConstraintLiteral(input: ts.Expression): string | boolean | null {
+  const expression = unwrapAliasExpression(input);
+  if (ts.isStringLiteralLike(expression)) return expression.text;
+  if (expression.kind === ts.SyntaxKind.TrueKeyword) return true;
+  if (expression.kind === ts.SyntaxKind.FalseKeyword) return false;
+  return null;
+}
+
+function selectorObjectMatches(value: StaticSelectorValue, constraint: SelectorObjectConstraint): boolean | null {
+  if (value.kind !== "object") return false;
+  const selected = value.properties?.get(constraint.property);
+  if (!selected) return false;
+  const matches: boolean[] = [];
+  for (const item of selected) {
+  if (constraint.test === "truthy") {
+      if (item.kind === "opaque") return null;
+      if (item.kind === "boolean") matches.push(item.value === true);
+      else if (item.kind === "string") matches.push(item.value !== "");
+      else if (item.kind === "undefined") matches.push(false);
+      else matches.push(true);
+    } else if (typeof constraint.value === "boolean" && item.kind === "boolean") {
+      matches.push(item.value === constraint.value);
+    } else if (typeof constraint.value === "string" && item.kind === "string") {
+      matches.push(item.value === constraint.value);
+    } else if (item.kind === "opaque") {
+      return null;
+    } else {
+      matches.push(false);
+    }
+  }
+  return matches.length > 0 && matches.every((match) => match === matches[0]) ? matches[0] : null;
 }
 
 function evaluateDominatingSetConstraint(identifier: ts.Identifier, context: SelectorEvaluationContext, visited: Set<string>): StaticSelectorValue[] | null {
@@ -587,17 +1210,27 @@ function evaluateSetMembershipOwner(owner: ts.Expression, context: SelectorEvalu
 
 function statementTerminates(statement: ts.Statement): boolean {
   if (ts.isReturnStatement(statement) || ts.isThrowStatement(statement)) return true;
-  if (ts.isBlock(statement)) return statement.statements.length > 0
-    && statement.statements.every((candidate) => ts.isReturnStatement(candidate) || ts.isThrowStatement(candidate));
+  if (ts.isBlock(statement)) {
+    const last = statement.statements.at(-1);
+    return Boolean(last && statementTerminates(last));
+  }
+  if (ts.isIfStatement(statement)) return Boolean(statement.elseStatement
+    && statementTerminates(statement.thenStatement) && statementTerminates(statement.elseStatement));
   return false;
 }
 
-function evaluateSelectorParameter(parameter: ts.ParameterDeclaration, context: SelectorEvaluationContext, visited: Set<string>): StaticSelectorValue[] | null {
-  if (parameter.dotDotDotToken || parameter.initializer || !ts.isIdentifier(parameter.name)) return null;
+const selectorParameterCache = new WeakMap<Map<string, SourceContext>, Map<string, StaticSelectorValue[] | null>>();
+
+function evaluateSelectorParameter(parameter: ts.ParameterDeclaration, bindingName: string, context: SelectorEvaluationContext, visited: Set<string>): StaticSelectorValue[] | null {
+  const cache = selectorParameterCache.get(context.contexts) ?? new Map<string, StaticSelectorValue[] | null>();
+  selectorParameterCache.set(context.contexts, cache);
+  const cacheKey = `${parameter.getSourceFile().fileName}:${parameter.getStart(parameter.getSourceFile())}:${bindingName}`;
+  if (!context.parameterValues && cache.has(cacheKey)) return cache.get(cacheKey) ?? null;
+  if (parameter.dotDotDotToken || parameter.initializer) return null;
   const owner = parameter.parent;
   if (!ts.isFunctionLike(owner) || !("body" in owner) || !owner.body) return null;
   const executableOwner = owner as ts.FunctionLikeDeclaration;
-  if (!selectorCallableReferencesAreClosed(executableOwner, context.contexts)) return null;
+  const directReferencesClosed = selectorCallableReferencesAreClosed(executableOwner, context.contexts);
   const index = executableOwner.parameters.indexOf(parameter);
   const values: StaticSelectorValue[] = [];
   let calls = 0;
@@ -605,14 +1238,19 @@ function evaluateSelectorParameter(parameter: ts.ParameterDeclaration, context: 
   for (const caller of context.contexts.values()) {
     const visitCalls = (node: ts.Node): void => {
       if (ts.isCallExpression(node) && resolveCallableTarget(node.expression, caller, context.contexts) === executableOwner) {
+        if (isTransparentForwarderInvocation(node, executableOwner, caller, context.contexts)) {
+          ts.forEachChild(node, visitCalls);
+          return;
+        }
         calls += 1;
         const argument = node.arguments[index];
         if (!argument || ts.isSpreadElement(argument)) return;
-        const resolved = evaluateSelectorValues(argument, {
+        const argumentValues = evaluateSelectorValues(argument, {
           filePath: caller.item.relativePath,
           source: caller.source,
           contexts: context.contexts
         }, new Set(visited));
+        const resolved = argumentValues ? projectBindingValues(parameter.name, bindingName, argumentValues) : null;
         if (resolved) {
           resolvedCalls += 1;
           values.push(...resolved.map((item) => ({
@@ -628,7 +1266,317 @@ function evaluateSelectorParameter(parameter: ts.ParameterDeclaration, context: 
     };
     visitCalls(caller.source);
   }
-  return calls > 0 && resolvedCalls === calls ? normalizeStaticValues(values) : null;
+  if (calls === 0) {
+    const hookArguments = selectorMutationHookArguments(executableOwner, context);
+    for (const { argument, caller } of hookArguments ?? []) {
+      calls += 1;
+      const argumentValues = evaluateSelectorValues(argument, caller, new Set(visited));
+      const resolved = argumentValues ? projectBindingValues(parameter.name, bindingName, argumentValues) : null;
+      if (!resolved) continue;
+      resolvedCalls += 1;
+      values.push(...resolved.map((item) => ({
+        ...item,
+        evidence: normalizeSelectorEvidence([
+          selectorEvidence(argument, caller.source, caller.filePath, "caller-argument"),
+          ...item.evidence
+        ])
+      })));
+    }
+  }
+  if (calls === 0) {
+    const inlineArguments = selectorInlineComponentCallbackArguments(executableOwner, index, context);
+    for (const { argument, caller } of inlineArguments ?? []) {
+      calls += 1;
+      const argumentValues = evaluateSelectorValues(argument, caller, new Set(visited));
+      const resolved = argumentValues ? projectBindingValues(parameter.name, bindingName, argumentValues) : null;
+      if (!resolved) continue;
+      resolvedCalls += 1;
+      values.push(...resolved.map((item) => ({
+        ...item,
+        evidence: normalizeSelectorEvidence([
+          selectorEvidence(argument, caller.source, caller.filePath, "caller-argument"),
+          ...item.evidence
+        ])
+      })));
+    }
+  }
+  if (!directReferencesClosed) {
+    const componentArguments = selectorComponentCallbackArguments(executableOwner, index, context.contexts);
+    if (!componentArguments) return null;
+    for (const { argument, caller } of componentArguments) {
+      calls += 1;
+      const argumentValues = evaluateSelectorValues(argument, caller, new Set(visited));
+      const resolved = argumentValues ? projectBindingValues(parameter.name, bindingName, argumentValues) : null;
+      if (!resolved) continue;
+      resolvedCalls += 1;
+      values.push(...resolved.map((item) => ({
+        ...item,
+        evidence: normalizeSelectorEvidence([
+          selectorEvidence(argument, caller.source, caller.filePath, "caller-argument"),
+          ...item.evidence
+        ])
+      })));
+    }
+  }
+  const result = calls > 0 && resolvedCalls === calls ? normalizeStaticValues(values) : null;
+  if (!context.parameterValues) cache.set(cacheKey, result);
+  return result;
+}
+
+function selectorInlineComponentCallbackArguments(
+  owner: ts.FunctionLikeDeclaration,
+  argumentIndex: number,
+  context: SelectorEvaluationContext
+): Array<{ argument: ts.Expression; caller: SelectorEvaluationContext }> | null {
+  if (!ts.isArrowFunction(owner) && !ts.isFunctionExpression(owner)) return null;
+  let expression: ts.Node = owner;
+  while (expression.parent && (ts.isParenthesizedExpression(expression.parent)
+    || ts.isAsExpression(expression.parent) || ts.isTypeAssertionExpression(expression.parent)
+    || ts.isNonNullExpression(expression.parent) || ts.isSatisfiesExpression(expression.parent))) {
+    expression = expression.parent;
+  }
+  const jsxExpression = expression.parent;
+  if (!ts.isJsxExpression(jsxExpression) || jsxExpression.expression !== expression
+    || !ts.isJsxAttribute(jsxExpression.parent)) return null;
+  const attribute = jsxExpression.parent;
+  if (!ts.isIdentifier(attribute.name)) return null;
+  const opening = attribute.parent.parent;
+  if ((!ts.isJsxOpeningElement(opening) && !ts.isJsxSelfClosingElement(opening))
+    || !ts.isIdentifier(opening.tagName) || opening.attributes.properties.some(ts.isJsxSpreadAttribute)) return null;
+  const caller = contextForSource(owner.getSourceFile(), context.contexts);
+  const component = resolveJsxCallable(opening.tagName, caller, context.contexts);
+  if (!component) return null;
+  const propName = attribute.name.text;
+  const parameter = component.parameters.find((candidate) => ts.isObjectBindingPattern(candidate.name)
+    && candidate.name.elements.some((element) => !element.dotDotDotToken
+      && (element.propertyName ? selectorPropertyName(element.propertyName)
+        : ts.isIdentifier(element.name) ? element.name.text : null) === propName));
+  if (!parameter || !ts.isObjectBindingPattern(parameter.name)) return null;
+  const element = parameter.name.elements.find((candidate) => !candidate.dotDotDotToken
+    && (candidate.propertyName ? selectorPropertyName(candidate.propertyName)
+      : ts.isIdentifier(candidate.name) ? candidate.name.text : null) === propName);
+  if (!element || !ts.isIdentifier(element.name)) return null;
+  const propBinding = element.name;
+  const componentContext = contextForSource(component.getSourceFile(), context.contexts);
+  const result: Array<{ argument: ts.Expression; caller: SelectorEvaluationContext }> = [];
+  let unsafe = false;
+  const visit = (candidate: ts.Node): void => {
+    if (unsafe) return;
+    if (ts.isIdentifier(candidate) && ts.isJsxAttribute(candidate.parent)
+      && candidate.parent.name === candidate) return;
+    if (ts.isIdentifier(candidate) && candidate !== propBinding && candidate.text === propBinding.text
+      && resolveLexicalBinding(candidate.text, candidate, componentContext.source)?.node === parameter) {
+      const invocation = candidate.parent;
+      if (!ts.isCallExpression(invocation) || unwrapAliasExpression(invocation.expression) !== candidate) {
+        unsafe = true;
+        return;
+      }
+      const argument = invocation.arguments[argumentIndex];
+      if (!argument || ts.isSpreadElement(argument)) {
+        unsafe = true;
+        return;
+      }
+      result.push({ argument, caller: {
+        filePath: componentContext.item.relativePath,
+        source: componentContext.source,
+        contexts: context.contexts
+      } });
+    }
+    ts.forEachChild(candidate, visit);
+  };
+  visit(component);
+  return !unsafe && result.length > 0 ? result : null;
+}
+
+function selectorComponentCallbackArguments(
+  owner: ts.FunctionLikeDeclaration,
+  argumentIndex: number,
+  contexts: Map<string, SourceContext>
+): Array<{ argument: ts.Expression; caller: SelectorEvaluationContext }> | null {
+  const result: Array<{ argument: ts.Expression; caller: SelectorEvaluationContext }> = [];
+  let foundOwnerReference = false;
+  let unsafe = false;
+  for (const caller of contexts.values()) {
+    const visitOwner = (node: ts.Node): void => {
+      if (unsafe || !ts.isIdentifier(node) || resolveCallableTarget(node, caller, contexts) !== owner) {
+        if (!unsafe) ts.forEachChild(node, visitOwner);
+        return;
+      }
+      const declarationName = (ts.isFunctionDeclaration(owner) || ts.isFunctionExpression(owner)) ? owner.name : undefined;
+      const variable = (ts.isArrowFunction(owner) || ts.isFunctionExpression(owner)) && ts.isVariableDeclaration(owner.parent)
+        ? owner.parent : undefined;
+      if (node === declarationName || node === variable?.name || (ts.isImportSpecifier(node.parent) && node.parent.name === node)) return;
+      if (ts.isCallExpression(node.parent) && unwrapAliasExpression(node.parent.expression) === node) return;
+      const expression = node.parent;
+      const attribute = ts.isJsxExpression(expression) && expression.expression === node && ts.isJsxAttribute(expression.parent)
+        ? expression.parent : null;
+      const opening = attribute?.parent.parent;
+      if (!attribute || !opening || (!ts.isJsxOpeningElement(opening) && !ts.isJsxSelfClosingElement(opening))
+        || !ts.isIdentifier(attribute.name) || !ts.isIdentifier(opening.tagName)
+        || opening.attributes.properties.some(ts.isJsxSpreadAttribute)) {
+        unsafe = true;
+        return;
+      }
+      const component = resolveJsxCallable(opening.tagName, caller, contexts);
+      if (!component) {
+        unsafe = true;
+        return;
+      }
+      const propName = attribute.name.text;
+      const parameter = component.parameters.find((candidate) => ts.isObjectBindingPattern(candidate.name)
+        && candidate.name.elements.some((element) => !element.dotDotDotToken
+          && (element.propertyName ? selectorPropertyName(element.propertyName)
+            : ts.isIdentifier(element.name) ? element.name.text : null) === propName));
+      if (!parameter || !ts.isObjectBindingPattern(parameter.name)) {
+        unsafe = true;
+        return;
+      }
+      const element = parameter.name.elements.find((candidate) => !candidate.dotDotDotToken
+        && (candidate.propertyName ? selectorPropertyName(candidate.propertyName)
+          : ts.isIdentifier(candidate.name) ? candidate.name.text : null) === propName);
+      if (!element || !ts.isIdentifier(element.name)) {
+        unsafe = true;
+        return;
+      }
+      foundOwnerReference = true;
+      const propBinding = element.name;
+      const componentContext = contextForSource(component.getSourceFile(), contexts);
+      const visitProp = (candidate: ts.Node): void => {
+        if (unsafe) return;
+        if (ts.isIdentifier(candidate) && ts.isJsxAttribute(candidate.parent)
+          && candidate.parent.name === candidate) return;
+        if (ts.isIdentifier(candidate) && candidate !== propBinding && candidate.text === propBinding.text
+          && resolveLexicalBinding(candidate.text, candidate, componentContext.source)?.node === parameter) {
+          const call = candidate.parent;
+          if (!ts.isCallExpression(call) || unwrapAliasExpression(call.expression) !== candidate) {
+            unsafe = true;
+            return;
+          }
+          const argument = call.arguments[argumentIndex];
+          if (!argument || ts.isSpreadElement(argument)) {
+            unsafe = true;
+            return;
+          }
+          result.push({ argument, caller: {
+            filePath: componentContext.item.relativePath,
+            source: componentContext.source,
+            contexts
+          } });
+        }
+        ts.forEachChild(candidate, visitProp);
+      };
+      visitProp(component);
+    };
+    visitOwner(caller.source);
+    if (unsafe) return null;
+  }
+  return foundOwnerReference && result.length > 0 ? result : null;
+}
+
+function selectorMutationHookArguments(
+  owner: ts.FunctionLikeDeclaration,
+  context: SelectorEvaluationContext
+): Array<{ argument: ts.Expression; caller: SelectorEvaluationContext }> | null {
+  const property = owner.parent;
+  if (!ts.isPropertyAssignment(property) || property.initializer !== owner
+    || selectorPropertyName(property.name) !== "mutationFn" || !ts.isObjectLiteralExpression(property.parent)) return null;
+  const hookCall = property.parent.parent;
+  if (!ts.isCallExpression(hookCall) || !hookCall.arguments.includes(property.parent)
+    || !isReactQueryUseMutationCall(hookCall, context.source)) return null;
+  const declaration = hookCall.parent;
+  if (!ts.isVariableDeclaration(declaration) || !ts.isIdentifier(declaration.name)) return null;
+  const bindingName = declaration.name.text;
+  const caller: SelectorEvaluationContext = {
+    filePath: context.filePath,
+    source: context.source,
+    contexts: context.contexts
+  };
+  const result: Array<{ argument: ts.Expression; caller: SelectorEvaluationContext }> = [];
+  let unsafe = false;
+  const scope = executionRoot(declaration.name);
+  const visit = (node: ts.Node): void => {
+    if (unsafe) return;
+    if (ts.isIdentifier(node) && node !== declaration.name && node.text === bindingName
+      && resolveLexicalBinding(bindingName, node, context.source)?.node === declaration) {
+      const member = node.parent;
+      if ((ts.isPropertyAccessExpression(member) || ts.isElementAccessExpression(member)) && member.expression === node) {
+        const name = ts.isPropertyAccessExpression(member) ? member.name.text
+          : member.argumentExpression && ts.isStringLiteralLike(member.argumentExpression) ? member.argumentExpression.text : null;
+        if ((name === "mutate" || name === "mutateAsync") && ts.isCallExpression(member.parent)
+          && member.parent.expression === member) {
+          if (sourceProvenDormantInlineJsxCallback(member.parent, caller)) return;
+          const argument = member.parent.arguments[0];
+          if (!argument || ts.isSpreadElement(argument)) { unsafe = true; return; }
+          result.push({ argument, caller });
+        } else if (!name) {
+          unsafe = true;
+        }
+        return;
+      }
+      if (ts.isArrayLiteralExpression(node.parent) && node.parent.elements.includes(node)) {
+        const dependencyArray = node.parent;
+        const hookCall = dependencyArray.parent;
+        if (ts.isCallExpression(hookCall) && hookCall.arguments[1] === dependencyArray
+          && isExactImportedCall(hookCall, context.source, "react",
+            new Set(["useCallback", "useEffect", "useLayoutEffect", "useMemo"]))) return;
+      }
+      unsafe = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(scope);
+  return !unsafe && result.length > 0 ? result : null;
+}
+
+function sourceProvenDormantInlineJsxCallback(
+  node: ts.Node,
+  context: SelectorEvaluationContext
+): boolean {
+  const callback = findAncestor(node, (candidate): candidate is ts.ArrowFunction | ts.FunctionExpression =>
+    ts.isArrowFunction(candidate) || ts.isFunctionExpression(candidate));
+  if (!callback) return false;
+  let expression: ts.Node = callback;
+  while (expression.parent && (ts.isParenthesizedExpression(expression.parent)
+    || ts.isAsExpression(expression.parent) || ts.isTypeAssertionExpression(expression.parent)
+    || ts.isNonNullExpression(expression.parent) || ts.isSatisfiesExpression(expression.parent))) {
+    expression = expression.parent;
+  }
+  const jsxExpression = expression.parent;
+  if (!ts.isJsxExpression(jsxExpression) || jsxExpression.expression !== expression
+    || !ts.isJsxAttribute(jsxExpression.parent)) return false;
+  const attribute = jsxExpression.parent;
+  if (!ts.isIdentifier(attribute.name)) return false;
+  const opening = attribute.parent.parent;
+  if ((!ts.isJsxOpeningElement(opening) && !ts.isJsxSelfClosingElement(opening))
+    || !ts.isIdentifier(opening.tagName) || opening.attributes.properties.some(ts.isJsxSpreadAttribute)) return false;
+  const caller = contextForSource(callback.getSourceFile(), context.contexts);
+  const component = resolveJsxCallable(opening.tagName, caller, context.contexts);
+  if (!component) return false;
+  const propName = attribute.name.text;
+  const parameter = component.parameters.find((candidate) => ts.isObjectBindingPattern(candidate.name)
+    && candidate.name.elements.some((element) => !element.dotDotDotToken
+      && (element.propertyName ? selectorPropertyName(element.propertyName)
+        : ts.isIdentifier(element.name) ? element.name.text : null) === propName));
+  if (!parameter || !ts.isObjectBindingPattern(parameter.name)) return false;
+  const element = parameter.name.elements.find((candidate) => !candidate.dotDotDotToken
+    && (candidate.propertyName ? selectorPropertyName(candidate.propertyName)
+      : ts.isIdentifier(candidate.name) ? candidate.name.text : null) === propName);
+  if (!element || !ts.isIdentifier(element.name)) return false;
+  const propBinding = element.name;
+  let referenced = false;
+  const visit = (candidate: ts.Node): void => {
+    if (referenced) return;
+    if (ts.isIdentifier(candidate) && candidate !== propBinding && candidate.text === propBinding.text
+      && !(ts.isJsxAttribute(candidate.parent) && candidate.parent.name === candidate)
+      && resolveLexicalBinding(candidate.text, candidate, component.getSourceFile())?.node === parameter) {
+      referenced = true;
+      return;
+    }
+    ts.forEachChild(candidate, visit);
+  };
+  visit(component);
+  return !referenced;
 }
 
 function selectorCallableReferencesAreClosed(owner: ts.FunctionLikeDeclaration, contexts: Map<string, SourceContext>): boolean {
@@ -646,7 +1594,8 @@ function selectorCallableReferencesAreClosed(owner: ts.FunctionLikeDeclaration, 
           return;
         }
         if (resolveCallableTarget(node, context, contexts) === owner
-          && (!ts.isCallExpression(node.parent) || unwrapAliasExpression(node.parent.expression) !== node)) {
+          && (!ts.isCallExpression(node.parent) || unwrapAliasExpression(node.parent.expression) !== node)
+          && !isTransparentCallableAliasReference(node, context.source)) {
           closed = false;
           return;
         }
@@ -657,6 +1606,335 @@ function selectorCallableReferencesAreClosed(owner: ts.FunctionLikeDeclaration, 
     if (!closed) break;
   }
   return closed;
+}
+
+function isTransparentCallableAliasReference(reference: ts.Identifier, source: ts.SourceFile): boolean {
+  const parent = reference.parent;
+  if (ts.isPropertyAccessExpression(parent) && parent.expression === reference && parent.name.text === "current") return true;
+  if (ts.isCallExpression(parent) && parent.arguments.includes(reference)
+    && (isExactImportedCall(parent, source, "react", new Set(["useRef", "useCallback"]))
+      || isExactImportedCall(parent, source, "lodash", new Set(["debounce"])))) return true;
+  if (ts.isBinaryExpression(parent) && parent.right === reference
+    && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+    const left = unwrapAliasExpression(parent.left);
+    return ts.isPropertyAccessExpression(left) && left.name.text === "current";
+  }
+  if (ts.isArrayLiteralExpression(parent) && parent.elements.includes(reference)) {
+    const call = parent.parent;
+    return ts.isCallExpression(call) && call.arguments[1] === parent
+      && isExactImportedCall(call, source, "react", new Set(["useCallback", "useEffect", "useLayoutEffect", "useMemo"]));
+  }
+  return false;
+}
+
+function isTransparentForwarderInvocation(
+  call: ts.CallExpression,
+  owner: ts.FunctionLikeDeclaration,
+  caller: SourceContext,
+  contexts: Map<string, SourceContext>
+): boolean {
+  const callback = findAncestor(call, (node): node is ts.ArrowFunction | ts.FunctionExpression =>
+    ts.isArrowFunction(node) || ts.isFunctionExpression(node));
+  if (!callback || callback.parameters.length !== 1 || !callback.parameters[0].dotDotDotToken) return false;
+  const wrapper = callback.parent;
+  return ts.isCallExpression(wrapper) && wrapper.arguments[0] === callback
+    && isExactImportedCall(wrapper, caller.source, "lodash", new Set(["debounce"]))
+    && resolveForwardedCallable(callback, caller, contexts, new Set()) === owner;
+}
+
+function evaluateAppendOnlyArrayBinding(
+  bindingName: string,
+  declaration: ts.VariableDeclaration,
+  use: ts.Identifier,
+  context: SelectorEvaluationContext,
+  visited: Set<string>
+): StaticSelectorValue[] | null {
+  if (!ts.isIdentifier(declaration.name) || !declaration.initializer) return null;
+  const initial = evaluateSelectorValues(declaration.initializer, context, new Set(visited));
+  if (!initial || initial.length !== 1 || initial[0].kind !== "array") return null;
+  const elements = [...(initial[0].elements ?? [])];
+  let unsafe = false;
+  const scope = executionRoot(declaration.name);
+  const usePosition = use.getStart(context.source);
+  const visit = (node: ts.Node): void => {
+    if (unsafe || (node !== scope && ts.isFunctionLike(node) && !isAncestorNode(node, use))) return;
+    if (node.getStart(context.source) > usePosition) return;
+    if (ts.isIdentifier(node) && node !== declaration.name && node !== use && node.text === bindingName
+      && resolveLexicalBinding(bindingName, node, context.source)?.node === declaration) {
+      const member = node.parent;
+      const call = member.parent;
+      if (ts.isPropertyAccessExpression(member) && member.expression === node && member.name.text === "push"
+        && ts.isCallExpression(call) && call.expression === member) {
+        for (const argument of call.arguments) {
+          if (ts.isSpreadElement(argument)) { unsafe = true; return; }
+          const resolved = evaluateSelectorValues(argument, context, new Set(visited));
+          if (!resolved) { unsafe = true; return; }
+          elements.push(...resolved);
+        }
+        return;
+      }
+      if (selectorAccumulatedArrayReferenceIsSafe(node, use)) return;
+      unsafe = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(scope);
+  return unsafe ? null : [{
+    kind: "array",
+    elements: normalizeStaticValues(elements),
+    evidence: normalizeSelectorEvidence([...initial[0].evidence, ...elements.flatMap((item) => item.evidence)])
+  }];
+}
+
+function selectorAccumulatedArrayReferenceIsSafe(node: ts.Identifier, evaluatedUse: ts.Identifier): boolean {
+  if (node === evaluatedUse) return true;
+  const parent = node.parent;
+  if (ts.isPropertyAssignment(parent) && parent.name === node) return true;
+  if (ts.isPropertyAccessExpression(parent) && parent.expression === node && parent.name.text === "length") return true;
+  if (ts.isForOfStatement(parent) && parent.expression === node) return true;
+  if (ts.isPropertyAssignment(parent) && parent.initializer === node) return true;
+  if (ts.isShorthandPropertyAssignment(parent) && parent.name === node) return true;
+  if (ts.isReturnStatement(parent) && parent.expression === node) return true;
+  return false;
+}
+
+function evaluateSelectorReactStateBinding(
+  bindingName: string,
+  declaration: ts.VariableDeclaration,
+  use: ts.Identifier,
+  context: SelectorEvaluationContext,
+  visited: Set<string>
+): StaticSelectorValue[] | null {
+  if (!ts.isArrayBindingPattern(declaration.name) || !declaration.initializer) return null;
+  const initializer = unwrapSelectorExpression(declaration.initializer);
+  if (!ts.isCallExpression(initializer) || !isReactUseStateCall(initializer, context.source)) return null;
+  const valueElement = declaration.name.elements[0];
+  const setterElement = declaration.name.elements[1];
+  if (!valueElement || !ts.isBindingElement(valueElement) || !ts.isIdentifier(valueElement.name)
+    || valueElement.name.text !== bindingName || valueElement.dotDotDotToken || valueElement.initializer
+    || !setterElement || !ts.isBindingElement(setterElement) || !ts.isIdentifier(setterElement.name)
+    || setterElement.dotDotDotToken || setterElement.initializer || declaration.name.elements.length !== 2) return null;
+  const setterName = setterElement.name.text;
+  const values: StaticSelectorValue[] = [];
+  const initialExpression = initializer.arguments[0];
+  const initial = initialExpression && !ts.isSpreadElement(initialExpression)
+    ? evaluateSelectorValues(initialExpression, context, new Set(visited))
+      ?? evaluateComponentParameterValues(initialExpression, context, new Set(visited))
+    : null;
+  if (!initial) return null;
+  values.push(...initial);
+  let setterCalls = 0;
+  let unsafe = false;
+  const scope = executionRoot(declaration.name);
+  const visit = (node: ts.Node): void => {
+    if (unsafe) return;
+    if (node === setterElement.name) return;
+    if (ts.isIdentifier(node) && node.text === setterName
+      && resolveLexicalBinding(setterName, node, context.source)?.node === declaration) {
+      const call = node.parent;
+      if (!ts.isCallExpression(call) || unwrapAliasExpression(call.expression) !== node
+        || call.arguments.length !== 1 || ts.isSpreadElement(call.arguments[0])) {
+        unsafe = true;
+        return;
+      }
+      setterCalls += 1;
+      const resolved = evaluateSelectorValues(call.arguments[0], context, new Set(visited))
+        ?? evaluateReactStateOuterObjectUpdate(call.arguments[0], context)
+        ?? selectorControlledOptionValues(call, bindingName, declaration, context);
+      if (!resolved) { unsafe = true; return; }
+      values.push(...resolved);
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(scope);
+  if (unsafe) return null;
+  const usable = values.filter((value) => value.kind !== "opaque");
+  if (usable.length === 0 || (values.some((value) => value.kind === "opaque")
+    && !selectorStateUseExcludesOpaque(bindingName, declaration, use, context))) return null;
+  return normalizeStaticValues(usable);
+}
+
+function evaluateReactStateOuterObjectUpdate(
+  input: ts.Expression,
+  context: SelectorEvaluationContext
+): StaticSelectorValue[] | null {
+  const callback = unwrapAliasExpression(input);
+  if ((!ts.isArrowFunction(callback) && !ts.isFunctionExpression(callback)) || callback.modifiers?.some((item) => item.kind === ts.SyntaxKind.AsyncKeyword)
+    || callback.parameters.length !== 1 || callback.parameters[0].dotDotDotToken || callback.parameters[0].initializer) return null;
+  const returned = ts.isBlock(callback.body)
+    ? callback.body.statements.length === 1 && ts.isReturnStatement(callback.body.statements[0])
+      ? callback.body.statements[0].expression : undefined
+    : callback.body;
+  const object = returned && unwrapAliasExpression(returned);
+  if (!object || !ts.isObjectLiteralExpression(object)) return null;
+  return [{
+    kind: "object",
+    properties: new Map(),
+    evidence: [selectorEvidence(object, context.source, context.filePath, "caller-argument")]
+  }];
+}
+
+function isReactUseStateCall(call: ts.CallExpression, source: ts.SourceFile): boolean {
+  const callee = unwrapAliasExpression(call.expression);
+  if (!ts.isIdentifier(callee) || callee.text !== "useState") return false;
+  const binding = resolveLexicalBinding(callee.text, callee, source);
+  if (binding?.kind !== "import") return false;
+  const declaration = findAncestor(binding.node, ts.isImportDeclaration);
+  return Boolean(declaration && ts.isStringLiteralLike(declaration.moduleSpecifier)
+    && declaration.moduleSpecifier.text === "react" && binding.exportedName === "useState");
+}
+
+function evaluateComponentParameterValues(
+  input: ts.Expression,
+  context: SelectorEvaluationContext,
+  visited: Set<string>
+): StaticSelectorValue[] | null {
+  const expression = unwrapAliasExpression(input);
+  if (!ts.isIdentifier(expression)) return null;
+  const binding = resolveLexicalBinding(expression.text, expression, context.source);
+  if (binding?.kind !== "parameter" || !ts.isObjectBindingPattern(binding.node.name)) return null;
+  const element = binding.node.name.elements.find((candidate) => bindingNames(candidate.name).includes(expression.text));
+  if (!element || element.dotDotDotToken || !element.initializer) return null;
+  const propertyNode = element.propertyName ?? (ts.isIdentifier(element.name) ? element.name : null);
+  const propertyName = propertyNode ? selectorPropertyName(propertyNode) : null;
+  if (!propertyName) return null;
+  const owner = binding.node.parent;
+  if (!ts.isFunctionLike(owner) || !("body" in owner) || !owner.body) return null;
+  const executableOwner = owner as ts.FunctionLikeDeclaration;
+  const values: StaticSelectorValue[] = [];
+  let callsites = 0;
+  let resolvedCallsites = 0;
+  for (const caller of context.contexts.values()) {
+    const visit = (node: ts.Node): void => {
+      if (!ts.isJsxOpeningElement(node) && !ts.isJsxSelfClosingElement(node)) {
+        ts.forEachChild(node, visit);
+        return;
+      }
+      if (!ts.isIdentifier(node.tagName) || resolveJsxCallable(node.tagName, caller, context.contexts) !== executableOwner) return;
+      callsites += 1;
+      if (node.attributes.properties.some(ts.isJsxSpreadAttribute)) return;
+      const attribute = node.attributes.properties.find((item): item is ts.JsxAttribute =>
+        ts.isJsxAttribute(item) && ts.isIdentifier(item.name) && item.name.text === propertyName);
+      const resolved = !attribute
+        ? evaluateSelectorValues(element.initializer!, context, new Set(visited))
+        : attribute.initializer && ts.isStringLiteral(attribute.initializer)
+          ? [{ kind: "string" as const, value: attribute.initializer.text,
+            evidence: [selectorEvidence(attribute.initializer, caller.source, caller.item.relativePath, "caller-argument")] }]
+          : attribute.initializer && ts.isJsxExpression(attribute.initializer) && attribute.initializer.expression
+            ? evaluateSelectorValues(attribute.initializer.expression, {
+              filePath: caller.item.relativePath, source: caller.source, contexts: context.contexts
+            }, new Set(visited)) : null;
+      if (resolved) {
+        resolvedCallsites += 1;
+        values.push(...resolved);
+      }
+    };
+    visit(caller.source);
+  }
+  return callsites > 0 && resolvedCallsites === callsites ? normalizeStaticValues(values) : null;
+}
+
+function resolveJsxCallable(
+  tag: ts.Identifier,
+  caller: SourceContext,
+  contexts: Map<string, SourceContext>
+): ts.FunctionLikeDeclaration | null {
+  const binding = resolveLexicalBinding(tag.text, tag, caller.source);
+  if (binding?.kind === "function") return binding.node.body ? binding.node : null;
+  if (binding?.kind !== "import") return null;
+  const declaration = findAncestor(binding.node, ts.isImportDeclaration);
+  if (!declaration || !ts.isStringLiteralLike(declaration.moduleSpecifier)) return null;
+  const targetPath = resolveLocalModule(caller.item.relativePath, declaration.moduleSpecifier.text, contexts);
+  const target = targetPath ? contexts.get(targetPath) : undefined;
+  return target ? findExportedCallable(target.source, binding.exportedName) : null;
+}
+
+function selectorControlledOptionValues(
+  setterCall: ts.CallExpression,
+  stateName: string,
+  declaration: ts.VariableDeclaration,
+  context: SelectorEvaluationContext
+): StaticSelectorValue[] | null {
+  const arrow = findAncestor(setterCall, (node): node is ts.ArrowFunction | ts.FunctionExpression =>
+    ts.isArrowFunction(node) || ts.isFunctionExpression(node));
+  const attribute = arrow && findAncestor(arrow, ts.isJsxAttribute);
+  const opening = attribute && findAncestor(attribute, (node): node is ts.JsxOpeningElement => ts.isJsxOpeningElement(node));
+  if (!arrow || !attribute || !ts.isIdentifier(attribute.name) || attribute.name.text !== "onChange" || !opening
+    || !ts.isIdentifier(opening.tagName) || opening.tagName.text !== "select") return null;
+  const valueAttribute = opening.attributes.properties.find((item): item is ts.JsxAttribute =>
+    ts.isJsxAttribute(item) && ts.isIdentifier(item.name) && item.name.text === "value");
+  if (!valueAttribute?.initializer || !ts.isJsxExpression(valueAttribute.initializer)
+    || !valueAttribute.initializer.expression || !ts.isIdentifier(valueAttribute.initializer.expression)
+    || valueAttribute.initializer.expression.text !== stateName
+    || resolveLexicalBinding(stateName, valueAttribute.initializer.expression, context.source)?.node !== declaration) return null;
+  const expression = setterCall.arguments[0] && unwrapAliasExpression(setterCall.arguments[0]);
+  if (!expression || !ts.isPropertyAccessExpression(expression) || expression.name.text !== "value") return null;
+  const target = unwrapAliasExpression(expression.expression);
+  if (!ts.isPropertyAccessExpression(target) || target.name.text !== "target") return null;
+  const event = unwrapAliasExpression(target.expression);
+  if (!ts.isIdentifier(event) || !arrow.parameters.some((parameter) => ts.isIdentifier(parameter.name)
+    && parameter.name.text === event.text)) return null;
+  const element = opening.parent;
+  if (!ts.isJsxElement(element)) return null;
+  const values: StaticSelectorValue[] = [];
+  for (const child of element.children) {
+    if (ts.isJsxText(child) && child.text.trim() === "") continue;
+    if (!ts.isJsxElement(child)) return null;
+    const childOpening = child.openingElement;
+    if (!ts.isIdentifier(childOpening.tagName) || childOpening.tagName.text !== "option") return null;
+    const optionValue = childOpening.attributes.properties.find((item): item is ts.JsxAttribute =>
+      ts.isJsxAttribute(item) && ts.isIdentifier(item.name) && item.name.text === "value");
+    if (!optionValue?.initializer || !ts.isStringLiteral(optionValue.initializer)) return null;
+    values.push({ kind: "string", value: optionValue.initializer.text,
+      evidence: [selectorEvidence(optionValue.initializer, context.source, context.filePath, "literal")] });
+  }
+  return values.length ? normalizeStaticValues(values) : null;
+}
+
+function selectorStateUseExcludesOpaque(
+  bindingName: string,
+  declaration: ts.VariableDeclaration,
+  use: ts.Identifier,
+  context: SelectorEvaluationContext
+): boolean {
+  for (let current: ts.Node | undefined = use; current?.parent; current = current.parent) {
+    const parent = current.parent;
+    if (ts.isBinaryExpression(parent) && isAncestorNode(parent.left, use)
+      && [ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken].includes(parent.operatorToken.kind)) {
+      const fallback = evaluateSelectorValues(parent.right, context, new Set());
+      if (fallback) return true;
+    }
+    if (ts.isIfStatement(parent) && isAncestorNode(parent.thenStatement, use)
+      && ts.isIdentifier(unwrapAliasExpression(parent.expression))
+      && (unwrapAliasExpression(parent.expression) as ts.Identifier).text === bindingName) return true;
+    if (!ts.isBlock(parent)) continue;
+    const statement = parent.statements.find((candidate) => isAncestorNode(candidate, use));
+    if (!statement) continue;
+    for (const prior of parent.statements.slice(0, parent.statements.indexOf(statement))) {
+      if (!ts.isIfStatement(prior) || !statementTerminates(prior.thenStatement)) continue;
+      if (selectorConditionRejectsFalsyBinding(prior.expression, bindingName, declaration, context.source)) return true;
+    }
+  }
+  return false;
+}
+
+function selectorConditionRejectsFalsyBinding(
+  input: ts.Expression,
+  bindingName: string,
+  declaration: ts.VariableDeclaration,
+  source: ts.SourceFile
+): boolean {
+  const condition = unwrapAliasExpression(input);
+  if (ts.isPrefixUnaryExpression(condition) && condition.operator === ts.SyntaxKind.ExclamationToken) {
+    const checked = unwrapAliasExpression(condition.operand);
+    return ts.isIdentifier(checked) && checked.text === bindingName
+      && resolveLexicalBinding(bindingName, checked, source)?.node === declaration;
+  }
+  return ts.isBinaryExpression(condition) && condition.operatorToken.kind === ts.SyntaxKind.BarBarToken
+    && (selectorConditionRejectsFalsyBinding(condition.left, bindingName, declaration, source)
+      || selectorConditionRejectsFalsyBinding(condition.right, bindingName, declaration, source));
 }
 
 function evaluateSelectorCall(call: ts.CallExpression, context: SelectorEvaluationContext, visited: Set<string>): StaticSelectorValue[] | null {
@@ -681,16 +1959,82 @@ function evaluateSelectorCall(call: ts.CallExpression, context: SelectorEvaluati
     if (!owner || owner.some((item) => item.kind !== "array")) return null;
     if (callee.name.text === "filter") return owner;
   }
+  const target = resolveCallableTarget(call.expression, contextForSource(context.source, context.contexts), context.contexts);
+  if (target) return evaluateCallableReturns(call, target, context, visited);
   return null;
+}
+
+function evaluateCallableReturns(
+  call: ts.CallExpression,
+  target: ts.FunctionLikeDeclaration,
+  caller: SelectorEvaluationContext,
+  visited: Set<string>
+): StaticSelectorValue[] | null {
+  const targetContext = contextForSource(target.getSourceFile(), caller.contexts);
+  const targetKey = `callable:${targetContext.item.relativePath}:${target.getStart(targetContext.source)}`;
+  if (visited.has(targetKey) || !target.body) return null;
+  const parameterValues = new Map<ts.ParameterDeclaration, StaticSelectorValue[]>();
+  for (const [index, parameter] of target.parameters.entries()) {
+    if (parameter.dotDotDotToken) return null;
+    const argument = call.arguments[index];
+    const resolved = argument && !ts.isSpreadElement(argument)
+      ? evaluateSelectorValues(argument, caller, new Set(visited))
+      : parameter.initializer
+        ? evaluateSelectorValues(parameter.initializer, {
+          filePath: targetContext.item.relativePath,
+          source: targetContext.source,
+          contexts: caller.contexts,
+          parameterValues
+        }, new Set(visited))
+        : null;
+    parameterValues.set(parameter, resolved ?? [{ kind: "opaque", evidence: [] }]);
+  }
+  const returns = callableReturnExpressions(target);
+  if (returns.length === 0) return null;
+  const values: StaticSelectorValue[] = [];
+  const nextContext: SelectorEvaluationContext = {
+    filePath: targetContext.item.relativePath,
+    source: targetContext.source,
+    contexts: caller.contexts,
+    parameterValues
+  };
+  for (const expression of returns) {
+    const resolved = evaluateSelectorValues(expression, nextContext, new Set(visited).add(targetKey));
+    if (!resolved) return null;
+    values.push(...resolved.map((value) => ({
+      ...value,
+      evidence: normalizeSelectorEvidence([
+        selectorEvidence(call, caller.source, caller.filePath, "caller-argument"),
+        ...value.evidence
+      ])
+    })));
+  }
+  return normalizeStaticValues(values);
+}
+
+function callableReturnExpressions(owner: ts.FunctionLikeDeclaration): ts.Expression[] {
+  if (!owner.body) return [];
+  if (!ts.isBlock(owner.body)) return [owner.body];
+  const returns: ts.Expression[] = [];
+  const visit = (node: ts.Node): void => {
+    if (node !== owner.body && ts.isFunctionLike(node)) return;
+    if (ts.isReturnStatement(node) && node.expression) {
+      returns.push(node.expression);
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(owner.body);
+  return returns;
 }
 
 function selectStaticProperty(values: StaticSelectorValue[], name: string): StaticSelectorValue[] | null {
   const selected: StaticSelectorValue[] = [];
   for (const value of values) {
     if (value.kind === "object") {
+      if (value.openProperties) return null;
       const property = value.properties?.get(name);
-      if (!property) return null;
-      selected.push(...property);
+      selected.push(...(property ?? [{ kind: "undefined" as const, evidence: value.evidence }]));
     } else if (value.kind === "array" && /^\d+$/u.test(name)) {
       const item = value.elements?.[Number(name)];
       if (!item) return null;
@@ -713,7 +2057,11 @@ function projectBindingValues(name: ts.BindingName, bindingName: string, values:
   return null;
 }
 
-function selectorBindingIsUnmutated(declaration: ts.VariableDeclaration, source: ts.SourceFile): boolean {
+function selectorBindingIsUnmutated(
+  declaration: ts.VariableDeclaration,
+  source: ts.SourceFile,
+  evaluatedUse?: ts.Identifier
+): boolean {
   if (!ts.isIdentifier(declaration.name)) return false;
   const bindingName = declaration.name.text;
   let unsafe = false;
@@ -722,6 +2070,7 @@ function selectorBindingIsUnmutated(declaration: ts.VariableDeclaration, source:
     if (unsafe || (node !== root && ts.isFunctionLike(node))) return;
     if (ts.isIdentifier(node) && node !== declaration.name && node.text === bindingName
       && resolveLexicalBinding(bindingName, node, source)?.node === declaration) {
+      if (node === evaluatedUse) return;
       const parent = node.parent;
       if ((ts.isBinaryExpression(parent) && isAssignmentOperator(parent.operatorToken.kind) && isAncestorNode(parent.left, node))
         || ((ts.isPrefixUnaryExpression(parent) && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(parent.operator)
@@ -761,8 +2110,8 @@ function selectorBindingReferenceIsSafe(node: ts.Identifier): boolean {
 function selectorStrings(values: StaticSelectorValue[]): string[] {
   const flattened = flattenStaticValues(values);
   if (flattened.length === 0 || flattened.some((value) => value.kind !== "string"
-    || !value.value || !isEntityCandidate(value.value))) return [];
-  return uniqueStrings(flattened.map((value) => value.value!));
+    || typeof value.value !== "string" || !value.value || !isEntityCandidate(value.value))) return [];
+  return uniqueStrings(flattened.map((value) => value.value as string));
 }
 
 function flattenStaticValues(values: StaticSelectorValue[]): StaticSelectorValue[] {
@@ -788,9 +2137,11 @@ function normalizeStaticValues(values: StaticSelectorValue[]): StaticSelectorVal
 
 function staticValueKey(value: StaticSelectorValue): string {
   if (value.kind === "string") return `string:${value.value}`;
+  if (value.kind === "boolean") return `boolean:${value.value}`;
+  if (value.kind === "undefined") return "undefined";
   if (value.kind === "opaque") return "opaque";
   if (value.kind === "array") return `array:${JSON.stringify((value.elements ?? []).map(staticValueKey))}`;
-  return `object:${JSON.stringify([...(value.properties ?? new Map())].map(([name, values]) => [name, values.map(staticValueKey)]).sort())}`;
+  return `object:${value.openProperties ? "open:" : "closed:"}${JSON.stringify([...(value.properties ?? new Map())].map(([name, values]) => [name, values.map(staticValueKey)]).sort())}`;
 }
 
 function selectorEvidence(node: ts.Node, source: ts.SourceFile, filePath: string, derivation: EntitySelectorEvidence["derivation"]): EntitySelectorEvidence {
@@ -1271,7 +2622,88 @@ function unwrapAliasExpression(input: ts.Expression): ts.Expression {
 }
 
 function resolveCallableTarget(expression: ts.Expression, caller: SourceContext, contexts: Map<string, SourceContext>): ts.FunctionLikeDeclaration | null {
+  const cache = callableTargetCache.get(contexts) ?? new WeakMap<ts.Expression, ts.FunctionLikeDeclaration | null>();
+  callableTargetCache.set(contexts, cache);
+  const cached = cache.get(expression);
+  if (cached !== undefined) return cached;
+  const resolved = resolveCallableExpression(expression, caller, contexts, new Set());
+  cache.set(expression, resolved);
+  return resolved;
+}
+
+const callableTargetCache = new WeakMap<
+  Map<string, SourceContext>,
+  WeakMap<ts.Expression, ts.FunctionLikeDeclaration | null>
+>();
+
+function resolveCallableExpression(
+  expression: ts.Expression,
+  caller: SourceContext,
+  contexts: Map<string, SourceContext>,
+  visited: Set<ts.Node>,
+  allowDeferredCapture = false
+): ts.FunctionLikeDeclaration | null {
   expression = unwrapAliasExpression(expression);
+  if (visited.has(expression)) return null;
+  const next = new Set(visited).add(expression);
+  if (ts.isCallExpression(expression)) {
+    if (isExactImportedCall(expression, caller.source, "react", new Set(["useRef", "useCallback"]))) {
+      const argument = expression.arguments[0];
+      if (!argument || ts.isSpreadElement(argument)) return null;
+      return ts.isArrowFunction(argument) || ts.isFunctionExpression(argument)
+        ? argument : resolveCallableExpression(argument, caller, contexts, next, allowDeferredCapture);
+    }
+    if (isExactImportedCall(expression, caller.source, "lodash", new Set(["debounce"]))) {
+      const argument = expression.arguments[0];
+      if (!argument || ts.isSpreadElement(argument)) return null;
+      const direct = resolveCallableExpression(argument, caller, contexts, next, allowDeferredCapture);
+      if (direct && !ts.isArrowFunction(argument) && !ts.isFunctionExpression(argument)) return direct;
+      return ts.isArrowFunction(argument) || ts.isFunctionExpression(argument)
+        ? resolveForwardedCallable(argument, caller, contexts, next) : null;
+    }
+  }
+  if (ts.isPropertyAccessExpression(expression) && expression.name.text === "current") {
+    const owner = unwrapAliasExpression(expression.expression);
+    if (!ts.isIdentifier(owner)) return null;
+    const lexical = resolveLexicalBinding(owner.text, owner, caller.source);
+    const binding = lexical?.kind === "variable" ? lexical
+      : allowDeferredCapture ? resolveDeferredCapturedVariable(owner.text, owner, caller.source) : null;
+    if (binding?.kind !== "variable" || !binding.node.initializer) {
+      return null;
+    }
+    const initializer = unwrapAliasExpression(binding.node.initializer);
+    if (!ts.isCallExpression(initializer)
+      || !isExactImportedCall(initializer, caller.source, "react", new Set(["useRef"]))) {
+      return null;
+    }
+    const initialArgument = initializer.arguments[0];
+    if (!initialArgument || ts.isSpreadElement(initialArgument)) return null;
+    const targets: ts.FunctionLikeDeclaration[] = [];
+    const initial = resolveCallableExpression(initialArgument, caller, contexts, next, allowDeferredCapture);
+    if (!initial) return null;
+    targets.push(initial);
+    let unsafeWrite = false;
+    const inspectWrites = (node: ts.Node): void => {
+      if (unsafeWrite || !ts.isBinaryExpression(node)) return ts.forEachChild(node, inspectWrites);
+      const left = unwrapAliasExpression(node.left);
+      if (!ts.isPropertyAccessExpression(left) || left.name.text !== "current") return ts.forEachChild(node, inspectWrites);
+      const root = unwrapAliasExpression(left.expression);
+      if (!ts.isIdentifier(root) || root.text !== owner.text
+        || resolveLexicalBinding(root.text, root, caller.source)?.node !== binding.node) return ts.forEachChild(node, inspectWrites);
+      if (node.operatorToken.kind !== ts.SyntaxKind.EqualsToken) {
+        unsafeWrite = true;
+        return;
+      }
+      const target = resolveCallableExpression(node.right, caller, contexts, next, allowDeferredCapture);
+      if (!target) {
+        unsafeWrite = true;
+        return;
+      }
+      targets.push(target);
+    };
+    inspectWrites(caller.source);
+    return !unsafeWrite && targets.every((target) => target === initial) ? initial : null;
+  }
   if (!ts.isIdentifier(expression)) return null;
   const binding = resolveLexicalBinding(expression.text, expression, caller.source);
   if (!binding) return null;
@@ -1279,10 +2711,12 @@ function resolveCallableTarget(expression: ts.Expression, caller: SourceContext,
     return binding.node.body && !bindingWrittenBefore(binding.node.name!, expression) ? binding.node : null;
   }
   if (binding.kind === "variable") {
-    return isImmutableVariable(binding.node, expression)
-      && binding.node.initializer
-      && (ts.isArrowFunction(binding.node.initializer) || ts.isFunctionExpression(binding.node.initializer))
-      ? binding.node.initializer : null;
+    if (!isImmutableVariable(binding.node, expression) || !binding.node.initializer) {
+      return null;
+    }
+    const initializer = unwrapAliasExpression(binding.node.initializer);
+    if (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer)) return initializer;
+    return resolveCallableExpression(initializer, caller, contexts, next, allowDeferredCapture);
   }
   if (binding.kind !== "import") return null;
   const statement = binding.node.parent;
@@ -1293,6 +2727,64 @@ function resolveCallableTarget(expression: ts.Expression, caller: SourceContext,
   const target = targetPath ? contexts.get(targetPath) : undefined;
   if (!target) return null;
   return findExportedCallable(target.source, binding.exportedName);
+}
+
+function resolveForwardedCallable(
+  callback: ts.ArrowFunction | ts.FunctionExpression,
+  caller: SourceContext,
+  contexts: Map<string, SourceContext>,
+  visited: Set<ts.Node>
+): ts.FunctionLikeDeclaration | null {
+  if (callback.parameters.length !== 1 || !callback.parameters[0].dotDotDotToken
+    || !ts.isIdentifier(callback.parameters[0].name)) return null;
+  const body = callback.body;
+  const expression = ts.isBlock(body)
+    ? body.statements.length === 1 && ts.isReturnStatement(body.statements[0]) ? body.statements[0].expression : undefined
+    : body;
+  const call = expression && unwrapAliasExpression(expression);
+  if (!call || !ts.isCallExpression(call) || call.arguments.length !== 1 || !ts.isSpreadElement(call.arguments[0])
+    || !ts.isIdentifier(call.arguments[0].expression)
+    || call.arguments[0].expression.text !== callback.parameters[0].name.text) return null;
+  return resolveCallableExpression(call.expression, caller, contexts, visited, true);
+}
+
+function resolveDeferredCapturedVariable(
+  name: string,
+  use: ts.Identifier,
+  source: ts.SourceFile
+): Extract<LexicalBinding, { kind: "variable" }> | null {
+  const capture = findAncestor(use, (node): node is ts.ArrowFunction | ts.FunctionExpression =>
+    ts.isArrowFunction(node) || ts.isFunctionExpression(node));
+  if (!capture) return null;
+  const boundary = capture.parent ? executionRoot(capture.parent) : source;
+  if (boundary === capture) return null;
+  const declarations: ts.VariableDeclaration[] = [];
+  const visit = (node: ts.Node): void => {
+    if (node !== boundary && ts.isFunctionLike(node) && node !== capture) return;
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === name) declarations.push(node);
+    ts.forEachChild(node, visit);
+  };
+  visit(boundary);
+  if (declarations.length !== 1 || !declarations[0].initializer) return null;
+  const declaration = declarations[0];
+  const list = declaration.parent;
+  if (!ts.isVariableDeclarationList(list) || (list.flags & ts.NodeFlags.Const) === 0) return null;
+  return { kind: "variable", node: declaration };
+}
+
+function isExactImportedCall(
+  call: ts.CallExpression,
+  source: ts.SourceFile,
+  moduleName: string,
+  exportedNames: Set<string>
+): boolean {
+  const callee = unwrapAliasExpression(call.expression);
+  if (!ts.isIdentifier(callee)) return false;
+  const binding = resolveLexicalBinding(callee.text, callee, source);
+  if (binding?.kind !== "import" || !exportedNames.has(binding.exportedName)) return false;
+  const declaration = findAncestor(binding.node, ts.isImportDeclaration);
+  return Boolean(declaration && ts.isStringLiteralLike(declaration.moduleSpecifier)
+    && declaration.moduleSpecifier.text === moduleName);
 }
 
 function findExportedCallable(source: ts.SourceFile, exportedName: string): ts.FunctionLikeDeclaration | null {

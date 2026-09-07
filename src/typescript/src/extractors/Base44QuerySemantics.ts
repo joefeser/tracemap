@@ -1,7 +1,13 @@
 import ts from "typescript";
 
 /** Independently projected from TypeScript syntax; never includes operand text. */
-export function extractQuerySemantics(call: ts.CallExpression, source: ts.SourceFile, method: string) {
+export function extractQuerySemantics(
+  call: ts.CallExpression,
+  source: ts.SourceFile,
+  method: string,
+  computedQueryFields: Readonly<Record<string, readonly string[]>> = {},
+  entityName = ""
+) {
   const roles = new Map([
     ["filter", ["filter", "sort", "limit", "skip", "fields"]],
     ["list", ["sort", "limit", "skip", "fields"]],
@@ -79,7 +85,19 @@ export function extractQuerySemantics(call: ts.CallExpression, source: ts.Source
   }
   function propertyName(node: ts.ObjectLiteralElementLike): string | null {
     if (!ts.isPropertyAssignment(node) && !ts.isShorthandPropertyAssignment(node)) return null;
+    if (ts.isComputedPropertyName(node.name)) {
+      const candidates = computedQueryFields[String(node.name.getStart(source))] ?? [];
+      return candidates.length === 1 ? candidates[0] : null;
+    }
     return ts.isIdentifier(node.name) || ts.isStringLiteral(node.name) ? node.name.text : null;
+  }
+  function propertyNames(node: ts.ObjectLiteralElementLike): string[] {
+    if (!ts.isPropertyAssignment(node) && !ts.isShorthandPropertyAssignment(node)) return [];
+    if (ts.isComputedPropertyName(node.name)) {
+      return [...new Set(computedQueryFields[String(node.name.getStart(source))] ?? [])].sort();
+    }
+    const name = propertyName(node);
+    return name ? [name] : [];
   }
   function propertyValue(node: ts.ObjectLiteralElementLike): ts.Expression {
     return ts.isPropertyAssignment(node) ? node.initializer : (node as ts.ShorthandPropertyAssignment).name;
@@ -115,12 +133,21 @@ export function extractQuerySemantics(call: ts.CallExpression, source: ts.Source
     const fields = new Set<string>();
     for (const property of node.properties) {
       if (!admit(property, 0)) break;
-      const field = propertyName(property);
-      if (!field || !fieldNamePattern.test(field) || field === "__proto__" || fields.has(field)) {
+      const names = propertyNames(property);
+      if (names.length === 0 || names.some((field) => !fieldNamePattern.test(field)
+        || field === "__proto__" || fields.has(field))) {
         gaps.add("query:field_or_composition_unresolved"); continue;
       }
-      fields.add(field);
-      entries.push(queryEntry(field, propertyValue(property)));
+      for (const field of names) {
+        fields.add(field);
+        const entry = queryEntry(field, propertyValue(property));
+        entries.push(names.length > 1 ? {
+          ...entry,
+          presence: "conditional",
+          derivation: [{ kind: "computed-field-source-domain", span: span("name" in property && property.name ? property.name : property) }]
+        } : entry);
+      }
+      if (names.length > 1) descriptorVersion = "88mph.entity-query.v3";
     }
     return { kind: "filter", entries };
   }
@@ -205,6 +232,9 @@ export function extractQuerySemantics(call: ts.CallExpression, source: ts.Source
   }
   function namedFields(input: ts.Expression, role: string): Record<string, unknown> {
     const node = unwrap(input);
+    if (ts.isIdentifier(node) && node.text === "undefined" && !resolveBindingDeclaration(node.text, node, source)) {
+      return { kind: "undefined" };
+    }
     const array = ts.isArrayLiteralExpression(node);
     const values = array ? node.elements : [node];
     const fields: unknown[] = [];
@@ -236,7 +266,13 @@ export function extractQuerySemantics(call: ts.CallExpression, source: ts.Source
       if (bound) {
         descriptorVersion = "88mph.entity-query.v3";
         value = bound;
-      } else value = query(node);
+      } else {
+        const parameterBound = parameterCallsiteQuery(node);
+        if (parameterBound) {
+          descriptorVersion = "88mph.entity-query.v3";
+          value = parameterBound;
+        } else value = query(node);
+      }
     }
     else if (node.kind === ts.SyntaxKind.NullKeyword) value = { kind: "null" };
     else if (role === "sort" || role === "fields") value = namedFields(node, role);
@@ -246,6 +282,254 @@ export function extractQuerySemantics(call: ts.CallExpression, source: ts.Source
   });
   if (call.arguments.length > roles.length) gaps.add("query:extra_arguments");
   return { schemaVersion: descriptorVersion, method, completeness: gaps.size ? "unresolved" : "complete", arguments: args, gaps: [...gaps].sort() };
+
+  function parameterCallsiteQuery(node: ts.Expression): Record<string, unknown> | null {
+    if (!ts.isIdentifier(unwrap(node))) return null;
+    const selector = queryEntitySelector(call);
+    const argumentsFound = selector
+      ? correlatedParameterCallsiteArguments(selector, node, new Set())
+      : closedParameterCallsiteArguments(node, new Set());
+    if (!argumentsFound?.length) return null;
+
+    const byField = new Map<string, { entry: Record<string, unknown>; occurrences: number; derivations: unknown[]; shape: string }>();
+    for (const argument of argumentsFound) {
+      const parsed = query(argument);
+      if (parsed.kind !== "filter" || !Array.isArray(parsed.entries)) return null;
+      for (const rawEntry of parsed.entries as Array<Record<string, unknown>>) {
+        const field = typeof rawEntry.field === "string" ? rawEntry.field : null;
+        if (!field) return null;
+        const shape = JSON.stringify(structuralEntryShape(rawEntry));
+        const existing = byField.get(field);
+        if (existing && existing.shape !== shape) {
+          gaps.add("query:parameter-callsite-value-conflict");
+          return null;
+        }
+        if (existing) {
+          existing.occurrences += 1;
+          existing.derivations.push({ kind: "parameter-callsite", span: span(argument) });
+        } else {
+          byField.set(field, {
+            entry: rawEntry,
+            occurrences: 1,
+            derivations: [{ kind: "parameter-callsite", span: span(argument) }],
+            shape
+          });
+        }
+      }
+    }
+    return {
+      kind: "filter",
+      construction: { kind: "parameter-callsites", span: span(node) },
+      entries: [...byField.values()].map(({ entry, occurrences, derivations }) => ({
+        ...entry,
+        presence: occurrences === argumentsFound.length ? "always" : "conditional",
+        derivation: derivations
+      }))
+    };
+  }
+
+  function queryEntitySelector(queryCall: ts.CallExpression): ts.Expression | null {
+    const methodAccess = unwrap(queryCall.expression);
+    if (!ts.isPropertyAccessExpression(methodAccess) && !ts.isElementAccessExpression(methodAccess)) return null;
+    const client = unwrap(methodAccess.expression);
+    return ts.isElementAccessExpression(client) && client.argumentExpression
+      ? unwrap(client.argumentExpression) : null;
+  }
+
+  function correlatedParameterCallsiteArguments(
+    selectorNode: ts.Expression,
+    filterNode: ts.Expression,
+    visited: Set<number>
+  ): ts.Expression[] | null {
+    selectorNode = unwrap(selectorNode);
+    filterNode = unwrap(filterNode);
+    if (!ts.isIdentifier(selectorNode) || !ts.isIdentifier(filterNode)) return null;
+    const selectorBinding = enclosingParameter(selectorNode);
+    const filterBinding = enclosingParameter(filterNode);
+    if (!selectorBinding || !filterBinding || selectorBinding.callback !== filterBinding.callback) return null;
+    const { callback } = selectorBinding;
+    const selectorParameter = selectorBinding.parameter;
+    const filterParameter = filterBinding.parameter;
+    if (selectorParameter.initializer || selectorParameter.dotDotDotToken
+      || filterParameter.initializer || filterParameter.dotDotDotToken) return null;
+    const identity = filterParameter.getStart(source);
+    if (visited.has(identity)) return null;
+    const next = new Set(visited).add(identity);
+    const owner = callbackVariableOwner(callback);
+    if (!owner || !ts.isIdentifier(owner.name)) return null;
+    if (!parameterReferencesAreExact(callback, selectorParameter, selectorNode, true)
+      || !parameterReferencesAreExact(callback, filterParameter, filterNode)) return null;
+
+    const calls = directVariableCalls(owner);
+    if (!calls) return null;
+    const selectorIndex = callback.parameters.indexOf(selectorParameter);
+    const filterIndex = callback.parameters.indexOf(filterParameter);
+    const matched: ts.Expression[] = [];
+    for (const invocation of calls) {
+      const selectorArgument = invocation.arguments[selectorIndex];
+      const filterArgument = invocation.arguments[filterIndex];
+      if (!selectorArgument || !filterArgument || ts.isSpreadElement(selectorArgument) || ts.isSpreadElement(filterArgument)) return null;
+      const candidate = unwrap(selectorArgument);
+      if (ts.isStringLiteralLike(candidate)) {
+        if (candidate.text === entityName) matched.push(filterArgument);
+        continue;
+      }
+      const nested = correlatedParameterCallsiteArguments(candidate, filterArgument, next);
+      if (!nested) return null;
+      matched.push(...nested);
+    }
+    return matched.length ? matched : null;
+  }
+
+  function enclosingParameter(node: ts.Identifier): {
+    parameter: ts.ParameterDeclaration;
+    callback: ts.ArrowFunction | ts.FunctionExpression;
+  } | null {
+    for (let current: ts.Node | undefined = node.parent; current; current = current.parent) {
+      if (!ts.isArrowFunction(current) && !ts.isFunctionExpression(current)) continue;
+      const parameter = current.parameters.find((item) => ts.isIdentifier(item.name) && item.name.text === node.text);
+      return parameter ? { parameter, callback: current } : null;
+    }
+    return null;
+  }
+
+  function callbackVariableOwner(callback: ts.ArrowFunction | ts.FunctionExpression): ts.VariableDeclaration | null {
+    let ownerExpression: ts.Expression = callback;
+    while (ts.isParenthesizedExpression(ownerExpression.parent) || ts.isAsExpression(ownerExpression.parent)
+      || ts.isTypeAssertionExpression(ownerExpression.parent) || ts.isNonNullExpression(ownerExpression.parent)
+      || ts.isSatisfiesExpression(ownerExpression.parent)) ownerExpression = ownerExpression.parent;
+    return ts.isVariableDeclaration(ownerExpression.parent) && ownerExpression.parent.initializer === ownerExpression
+      ? ownerExpression.parent : null;
+  }
+
+  function parameterReferencesAreExact(
+    callback: ts.ArrowFunction | ts.FunctionExpression,
+    parameter: ts.ParameterDeclaration,
+    allowed: ts.Identifier,
+    allowElementAccessReads = false
+  ): boolean {
+    let safe = true;
+    const visit = (candidate: ts.Node): void => {
+      if (!safe || (candidate !== callback && ts.isFunctionLike(candidate))) return;
+      if (ts.isIdentifier(candidate) && candidate !== parameter.name && candidate !== allowed
+        && isParameterReference(candidate, parameter)) {
+        if (allowElementAccessReads && ts.isElementAccessExpression(candidate.parent)
+          && candidate.parent.argumentExpression === candidate) return;
+        safe = false;
+      }
+      else ts.forEachChild(candidate, visit);
+    };
+    visit(callback);
+    return safe;
+  }
+
+  function directVariableCalls(owner: ts.VariableDeclaration): ts.CallExpression[] | null {
+    if (!ts.isIdentifier(owner.name)) return null;
+    const ownerName = owner.name.text;
+    const result: ts.CallExpression[] = [];
+    let safe = true;
+    const visit = (candidate: ts.Node): void => {
+      if (!safe || candidate === owner.name) return;
+      if (ts.isIdentifier(candidate) && candidate.text === ownerName
+        && resolveBindingDeclaration(candidate.text, candidate, source) === owner) {
+        const invocation = candidate.parent;
+        if (!ts.isCallExpression(invocation) || unwrap(invocation.expression) !== candidate) safe = false;
+        else result.push(invocation);
+        return;
+      }
+      ts.forEachChild(candidate, visit);
+    };
+    visit(source);
+    return safe && result.length ? result : null;
+  }
+
+  function closedParameterCallsiteArguments(node: ts.Expression, visited: Set<number>): ts.Expression[] | null {
+    node = unwrap(node);
+    if (!ts.isIdentifier(node)) return [node];
+    let parameter: ts.ParameterDeclaration | null = null;
+    let callback: ts.ArrowFunction | ts.FunctionExpression | null = null;
+    for (let current: ts.Node | undefined = node.parent; current; current = current.parent) {
+      if (!ts.isArrowFunction(current) && !ts.isFunctionExpression(current)) continue;
+      const candidate = current.parameters.find((item) => ts.isIdentifier(item.name) && item.name.text === node.text);
+      if (candidate) { parameter = candidate; callback = current; }
+      break;
+    }
+    if (!parameter || !callback || parameter.initializer || parameter.dotDotDotToken) return [node];
+    const identity = parameter.getStart(source);
+    if (visited.has(identity)) return null;
+    const next = new Set(visited).add(identity);
+
+    let ownerExpression: ts.Expression = callback;
+    while (ts.isParenthesizedExpression(ownerExpression.parent) || ts.isAsExpression(ownerExpression.parent)
+      || ts.isTypeAssertionExpression(ownerExpression.parent) || ts.isNonNullExpression(ownerExpression.parent)
+      || ts.isSatisfiesExpression(ownerExpression.parent)) ownerExpression = ownerExpression.parent;
+    const owner = ownerExpression.parent;
+    if (!ts.isVariableDeclaration(owner) || owner.initializer !== ownerExpression || !ts.isIdentifier(owner.name)) return null;
+    const ownerName = owner.name.text;
+
+    let unsafeParameter = false;
+    const inspectParameter = (candidate: ts.Node): void => {
+      if (unsafeParameter || (candidate !== callback && ts.isFunctionLike(candidate))) return;
+      if (ts.isIdentifier(candidate) && candidate.text === node.text && candidate !== parameter!.name && candidate !== node
+        && isParameterReference(candidate, parameter!)) unsafeParameter = true;
+      else ts.forEachChild(candidate, inspectParameter);
+    };
+    inspectParameter(callback);
+    if (unsafeParameter) return null;
+
+    const argumentIndex = callback.parameters.indexOf(parameter);
+    const direct: ts.Expression[] = [];
+    let unsafeOwner = false;
+    const inspectOwner = (candidate: ts.Node): void => {
+      if (unsafeOwner || candidate === owner.name) return;
+      if (ts.isIdentifier(candidate) && candidate.text === ownerName
+        && resolveBindingDeclaration(candidate.text, candidate, source) === owner) {
+        const invocation = candidate.parent;
+        if (!ts.isCallExpression(invocation) || unwrap(invocation.expression) !== candidate) {
+          unsafeOwner = true;
+          return;
+        }
+        const argument = invocation.arguments[argumentIndex];
+        if (!argument || ts.isSpreadElement(argument)) unsafeOwner = true;
+        else direct.push(argument);
+        return;
+      }
+      ts.forEachChild(candidate, inspectOwner);
+    };
+    inspectOwner(source);
+    if (unsafeOwner || direct.length === 0) return null;
+    const expanded: ts.Expression[] = [];
+    for (const argument of direct) {
+      const resolved = closedParameterCallsiteArguments(argument, next);
+      if (!resolved) return null;
+      expanded.push(...resolved);
+    }
+    return expanded;
+  }
+
+  function structuralEntryShape(entry: Record<string, unknown>): unknown {
+    if (entry.form === "operators") {
+      const operators = Array.isArray(entry.operators)
+        ? entry.operators.map((item) => item && typeof item === "object"
+          ? (item as Record<string, unknown>).operator : null)
+        : [];
+      return { field: entry.field, form: entry.form, operators };
+    }
+    return { field: entry.field, form: entry.form };
+  }
+
+  function isParameterReference(candidate: ts.Identifier, parameter: ts.ParameterDeclaration): boolean {
+    const parent = candidate.parent;
+    if ((ts.isPropertyAccessExpression(parent) && parent.name === candidate)
+      || (ts.isPropertyAssignment(parent) && parent.name === candidate && parent.initializer !== candidate)
+      || (ts.isMethodDeclaration(parent) && parent.name === candidate)) return false;
+    for (let current: ts.Node | undefined = candidate.parent; current; current = current.parent) {
+      if (!ts.isFunctionLike(current)) continue;
+      const bound = current.parameters.find((item) => bindingNames(item.name).includes(candidate.text));
+      return bound === parameter;
+    }
+    return false;
+  }
 }
 
 function resolveBindingDeclaration(name: string, use: ts.Node, source: ts.SourceFile): ts.VariableDeclaration | null {
