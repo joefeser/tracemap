@@ -2255,14 +2255,6 @@ function arrayIntrinsicsArePristine(contexts: Map<string, SourceContext>): boole
         pristine = false;
         return;
       }
-      if ((ts.isCallExpression(node) || ts.isNewExpression(node))) {
-        const callee = unwrapAliasExpression(node.expression);
-        if (ts.isIdentifier(callee) && (callee.text === "eval" || callee.text === "Function")
-          && !resolveLexicalBinding(callee.text, callee, context.source)) {
-          pristine = false;
-          return;
-        }
-      }
       const mutatedMember = (expression: ts.Expression): string | null => {
         const target = unwrapAliasExpression(expression);
         if (ts.isPropertyAccessExpression(target)) return target.name.text;
