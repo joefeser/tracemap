@@ -235,6 +235,26 @@ export async function otherwiseDormant(data) { return base44.entities.MissingEdg
       && fact.evidence.filePath === "src/hook.ts")).toBe(false);
   });
 
+  it("keeps explicit static-style imports outside the executable reachability graph", async () => {
+    const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-style-import-reachability-"));
+    await fs.mkdir(path.join(repo, "src"), { recursive: true });
+    await writeFrontendSdkAuthority(repo);
+    await fs.writeFile(path.join(repo, "src/main.ts"), `import "./app.css";\n`);
+    await fs.writeFile(path.join(repo, "src/app.css"), `.app { display: block; }\n`);
+    await fs.writeFile(path.join(repo, "src/unused.ts"), `import { base44 } from "@base44/sdk";
+export async function unused(data) { return base44.entities.StyleGraph.create(data); }
+`);
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    execFileSync("git", ["add", "."], { cwd: repo });
+    execFileSync("git", ["-c", "user.name=TraceMap Test", "-c", "user.email=tracemap@example.invalid", "commit", "-qm", "fixture"], { cwd: repo });
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-style-import-reachability-out-"));
+    const packet = (await buildBase44Evidence(options(repo, out))).packet;
+    expect(packet.facts.some((fact) => fact.factType === FactTypes.Base44EntityOperation
+      && fact.targetSymbol === "StyleGraph")).toBe(false);
+    expect(packet.facts.some((fact) => fact.factType === FactTypes.Base44EntityCallsiteDisposition
+      && fact.evidence.filePath === "src/unused.ts")).toBe(true);
+  });
+
   it("marks an uninvoked real mutation callback dormant but blocks spoofed, invoked, or escaped handles", async () => {
     const { packet } = await mutationHookFixture(`
 export function Screen(runtimeEntity) {

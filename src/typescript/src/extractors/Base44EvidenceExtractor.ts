@@ -963,7 +963,7 @@ function sourceReachabilityGraph(contexts: Map<string, SourceContext>): {
         if (specifier && ts.isStringLiteralLike(specifier)) {
           const target = resolveLocalModule(context.item.relativePath, specifier.text, contexts);
           if (target) targets.add(target);
-          else if (isLocalModuleSpecifier(specifier.text)) closed = false;
+          else if (localSpecifierRequiresExecutableContext(specifier.text)) closed = false;
         }
       }
       if (ts.isCallExpression(node)) {
@@ -980,7 +980,7 @@ function sourceReachabilityGraph(contexts: Map<string, SourceContext>): {
           } else {
             const target = resolveLocalModule(context.item.relativePath, argument.text, contexts);
             if (target) targets.add(target);
-            else if (isLocalModuleSpecifier(argument.text)) closed = false;
+            else if (localSpecifierRequiresExecutableContext(argument.text)) closed = false;
           }
         }
       }
@@ -1002,8 +1002,13 @@ function sourceReachabilityGraph(contexts: Map<string, SourceContext>): {
   return result;
 }
 
-function isLocalModuleSpecifier(specifier: string): boolean {
-  return specifier.startsWith(".") || specifier.startsWith("@/");
+function localSpecifierRequiresExecutableContext(specifier: string): boolean {
+  if (!specifier.startsWith(".") && !specifier.startsWith("@/")) return false;
+  // Static style imports cannot contain executable Base44 callsites and are
+  // deliberately absent from the TypeScript/JavaScript SourceContext graph.
+  // Missing/broken asset bytes remain a build/package concern. Every local
+  // executable or extensionless module edge still has to resolve here.
+  return !/\.(?:css|less|sass|scss)(?:[?#].*)?$/iu.test(specifier);
 }
 
 function returnedExpression(owner: ts.FunctionLikeDeclaration): ts.Expression | null {
