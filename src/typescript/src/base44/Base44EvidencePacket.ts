@@ -159,7 +159,8 @@ export async function diffBase44Evidence(beforePath: string, afterPath: string, 
   const removed = [...beforeByKey.entries()].filter(([key]) => !afterByKey.has(key)).map(([, fact]) => fact);
   const addedKnownGaps = after.coverage.knownGaps.filter((gap) => !before.coverage.knownGaps.includes(gap)).sort();
   const removedKnownGaps = before.coverage.knownGaps.filter((gap) => !after.coverage.knownGaps.includes(gap)).sort();
-  const coverageReduced = addedKnownGaps.length > 0 || tierRank(after.coverage.analysisLevel) > tierRank(before.coverage.analysisLevel);
+  const coverageReduced = removed.length > 0 || addedKnownGaps.length > 0
+    || tierRank(after.coverage.analysisLevel) > tierRank(before.coverage.analysisLevel);
   const coverageEvidence = {
     beforeAnalysisLevel: before.coverage.analysisLevel,
     afterAnalysisLevel: after.coverage.analysisLevel,
@@ -354,6 +355,8 @@ function validateCoverageGaps(packet: Base44EvidencePacket): void {
 }
 
 function validatePayloadShapeContracts(packet: Base44EvidencePacket): void {
+  const sourceAuthority = new Set(packet.facts.map((fact) =>
+    `${fact.evidence.filePath}\0${fact.properties.sourceFileSha256 ?? ""}`));
   for (const fact of packet.facts.filter((candidate) => candidate.factType === FactTypes.Base44EntityPayload)) {
     if (["base44-evidence/0.8.0", "base44-evidence/0.9.0", "base44-evidence/0.10.0", "base44-evidence/0.11.0", "base44-evidence/0.12.0", "base44-evidence/0.13.0"].includes(fact.evidence.extractorVersion)
       && fact.properties.shapeVersion !== "2") {
@@ -398,13 +401,13 @@ function validatePayloadShapeContracts(packet: Base44EvidencePacket): void {
     if (!deferred && obligations.length > 0) {
       throw new Error(`Base44 payload ${fact.factId} has an orphaned runtime obligation`);
     }
-    if (fact.properties.shapeVersion === "3") validateSemanticPayloadFields(fact);
+    if (fact.properties.shapeVersion === "3") validateSemanticPayloadFields(sourceAuthority, fact);
   }
 }
 
 const payloadValueTypes = new Set(["string", "number", "integer", "decimal", "boolean", "date", "object", "array", "uuid", "unknown"]);
 
-function validateSemanticPayloadFields(fact: Base44PacketFact): void {
+function validateSemanticPayloadFields(sourceAuthority: Set<string>, fact: Base44PacketFact): void {
   let fields: unknown;
   let semanticFields: unknown;
   try {
@@ -416,8 +419,25 @@ function validateSemanticPayloadFields(fact: Base44PacketFact): void {
   if (!Array.isArray(fields) || !Array.isArray(semanticFields)) {
     throw new Error(`Base44 payload ${fact.factId} semantic fields must be arrays`);
   }
-  const syntacticKeys = ["name", "presence", "expressionType", "origin", "evidenceStartLine", "evidenceEndLine", "evidenceSnippetHash"];
-  for (const [index, value] of fields.entries()) validatePayloadFieldProvenance(value, syntacticKeys, fact.factId, index);
+  const syntacticKeys = ["name", "presence", "expressionType", "origin", "evidenceStartLine", "evidenceEndLine",
+    "evidenceStartOffset", "evidenceEndOffset", "evidenceFilePath", "evidenceSourceFileSha256", "evidenceSnippetHash"];
+  const semanticProvenanceKeys = [...syntacticKeys, "semanticValueType", "semanticExplicitNull"];
+  for (const [index, value] of fields.entries()) validatePayloadFieldProvenance(sourceAuthority, value, syntacticKeys, fact.factId, index);
+  const sortedFields = [...fields].sort((left: any, right: any) => left.name.localeCompare(right.name)
+    || left.evidenceFilePath.localeCompare(right.evidenceFilePath)
+    || left.evidenceStartOffset - right.evidenceStartOffset
+    || left.evidenceEndOffset - right.evidenceEndOffset
+    || left.presence.localeCompare(right.presence)
+    || left.expressionType.localeCompare(right.expressionType)
+    || left.origin.localeCompare(right.origin));
+  const occurrenceKeys = fields.map((field: any) => JSON.stringify([
+    field.evidenceFilePath, field.evidenceSourceFileSha256, field.evidenceStartOffset,
+    field.evidenceEndOffset, field.name, field.origin, field.presence,
+  ]));
+  if (JSON.stringify(fields) !== JSON.stringify(sortedFields)
+    || new Set(occurrenceKeys).size !== occurrenceKeys.length) {
+    throw new Error(`Base44 payload ${fact.factId} has non-deterministic or duplicate field occurrences`);
+  }
   const names = new Set<string>();
   const flattenedProvenance: Record<string, unknown>[] = [];
   for (const [index, value] of semanticFields.entries()) {
@@ -435,16 +455,28 @@ function validateSemanticPayloadFields(fact: Base44PacketFact): void {
     }
     const provenance = field.provenance as unknown[];
     for (const [provenanceIndex, item] of provenance.entries()) {
-      validatePayloadFieldProvenance(item, syntacticKeys, fact.factId, provenanceIndex);
+      validatePayloadFieldProvenance(sourceAuthority, item, semanticProvenanceKeys, fact.factId, provenanceIndex);
       const observation = item as Record<string, unknown>;
       if (observation.name !== field.name) throw new Error(`Base44 payload ${fact.factId} has cross-field semantic provenance`);
-      flattenedProvenance.push(observation);
+      if (!payloadValueTypes.has(String(observation.semanticValueType))
+        || typeof observation.semanticExplicitNull !== "boolean") {
+        throw new Error(`Base44 payload ${fact.factId} has invalid semantic provenance value ${provenanceIndex}`);
+      }
+      const { semanticValueType: _semanticValueType, semanticExplicitNull: _semanticExplicitNull, ...syntactic } = observation;
+      flattenedProvenance.push(syntactic);
     }
     const presenceValues = provenance.map((item) => String((item as Record<string, unknown>).presence));
     const expectedPresence = presenceValues.some((presence) => presence === "dynamic-computed" || presence === "unresolved") ? "unknown"
       : presenceValues.every((presence) => presence === "unconditional") ? "always" : "conditional";
     if (field.semanticPresence !== expectedPresence) {
       throw new Error(`Base44 payload ${fact.factId} has a non-conservative semantic presence aggregate`);
+    }
+    const semanticTypes = new Set(provenance.map((item) => String((item as Record<string, unknown>).semanticValueType)));
+    const nullStates = new Set(provenance.map((item) => Boolean((item as Record<string, unknown>).semanticExplicitNull)));
+    const expectedValueType = semanticTypes.size === 1 && nullStates.size === 1 ? [...semanticTypes][0] : "unknown";
+    const expectedExplicitNull = provenance.some((item) => Boolean((item as Record<string, unknown>).semanticExplicitNull));
+    if (field.valueType !== expectedValueType || field.explicitNull !== expectedExplicitNull) {
+      throw new Error(`Base44 payload ${fact.factId} has a contradictory semantic value aggregate`);
     }
     names.add(field.name);
   }
@@ -458,6 +490,7 @@ function validateSemanticPayloadFields(fact: Base44PacketFact): void {
 }
 
 function validatePayloadFieldProvenance(
+  sourceAuthority: Set<string>,
   value: unknown,
   keys: string[],
   factId: string,
@@ -474,8 +507,16 @@ function validatePayloadFieldProvenance(
     || typeof field.origin !== "string" || !field.origin
     || !Number.isSafeInteger(field.evidenceStartLine) || !Number.isSafeInteger(field.evidenceEndLine)
     || Number(field.evidenceStartLine) < 1 || Number(field.evidenceEndLine) < Number(field.evidenceStartLine)
+    || !Number.isSafeInteger(field.evidenceStartOffset) || !Number.isSafeInteger(field.evidenceEndOffset)
+    || Number(field.evidenceStartOffset) < 0 || Number(field.evidenceEndOffset) <= Number(field.evidenceStartOffset)
+    || typeof field.evidenceFilePath !== "string" || !field.evidenceFilePath
+    || field.evidenceFilePath.startsWith("/") || field.evidenceFilePath.split("/").includes("..")
+    || typeof field.evidenceSourceFileSha256 !== "string" || !/^[0-9a-f]{64}$/u.test(field.evidenceSourceFileSha256)
     || typeof field.evidenceSnippetHash !== "string" || !/^[0-9a-f]{64}$/u.test(field.evidenceSnippetHash)) {
     throw new Error(`Base44 payload ${factId} has invalid field provenance ${index}`);
+  }
+  if (!sourceAuthority.has(`${field.evidenceFilePath}\0${field.evidenceSourceFileSha256}`)) {
+    throw new Error(`Base44 payload ${factId} has field provenance outside packet source authority`);
   }
 }
 
@@ -561,6 +602,13 @@ function validateEntitySelectorContracts(packet: Base44EvidencePacket): void {
 }
 
 function validateEntityCallsiteDispositions(packet: Base44EvidencePacket): void {
+  const runtimeSdkImports = packet.facts.filter((fact) => fact.factType === FactTypes.Base44SdkImport
+    && fact.properties.importKind === "runtime");
+  const operations = new Map(packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation)
+    .map((fact) => [fact.properties.operationEvidenceId, fact]));
+  const operationIds = new Set(operations.keys());
+  const suppressedOperationIds = new Set<string>();
+  const dispositionsByOperationId = new Map<string, { fact: Base44PacketFact; disposition: Record<string, any> }>();
   for (const fact of packet.facts.filter((candidate) => candidate.factType === FactTypes.Base44EntityCallsiteDisposition)) {
     let disposition: Record<string, any>;
     try {
@@ -569,9 +617,11 @@ function validateEntityCallsiteDispositions(packet: Base44EvidencePacket): void 
       throw new Error(`Base44 fact ${fact.factId} has malformed entity callsite disposition JSON`);
     }
     requireClosedKeys(disposition, ["schemaVersion", "disposition", "callableName", "authorityPath", "authoritySha256",
-      "sourceSnapshotDigest", "externalModuleReferences", "ambiguousDynamicModuleReferences"], `entity callsite disposition ${fact.factId}`);
-    if (!["base44-evidence/0.13.0", "base44-evidence/0.14.0"].includes(fact.evidence.extractorVersion)
-      || disposition.schemaVersion !== "88mph.base44-entity-callsite-disposition.v1"
+      "sourceSnapshotDigest", "externalModuleReferences", "ambiguousDynamicModuleReferences", "operationName",
+      "operationEvidenceIds", "primitiveCapabilities", "entitySelector", "sdkIdentity", "sdkIdentityGap", "callsite"],
+    `entity callsite disposition ${fact.factId}`);
+    if (fact.evidence.extractorVersion !== "base44-evidence/0.14.0"
+      || disposition.schemaVersion !== "88mph.base44-entity-callsite-disposition.v2"
       || disposition.disposition !== "dormant-unreachable"
       || typeof disposition.callableName !== "string" || !disposition.callableName
       || disposition.authorityPath !== fact.evidence.filePath
@@ -579,10 +629,218 @@ function validateEntityCallsiteDispositions(packet: Base44EvidencePacket): void 
       || !/^[0-9a-f]{64}$/u.test(disposition.authoritySha256)
       || !/^[0-9a-f]{64}$/u.test(disposition.sourceSnapshotDigest)
       || disposition.externalModuleReferences !== 0 || disposition.ambiguousDynamicModuleReferences !== 0
-      || fact.evidenceTier !== EvidenceTiers.Tier3SyntaxOrTextual) {
+      || disposition.operationName !== fact.properties.operationName) {
       throw new Error(`Base44 fact ${fact.factId} has an invalid entity callsite disposition`);
     }
+    const selector = disposition.entitySelector as Record<string, any>;
+    requireClosedKeys(selector, ["schemaVersion", "kind", "candidates", "evidence", "gap"], `disposition entity selector ${fact.factId}`);
+    if (selector.schemaVersion !== "88mph.base44-entity-selector.v1"
+      || !["static-member", "finite-source-domain", "unresolved"].includes(selector.kind)
+      || !Array.isArray(selector.candidates) || !Array.isArray(selector.evidence)
+      || !["", "entity-selector-dynamic-unresolved"].includes(selector.gap)
+      || (selector.kind === "unresolved") !== Boolean(selector.gap)
+      || selector.candidates.some((candidate: unknown) => typeof candidate !== "string"
+        || !/^[A-Z][A-Za-z0-9_]*$/u.test(candidate as string))
+      || JSON.stringify(selector.candidates) !== JSON.stringify([...new Set(selector.candidates)].sort())
+      || (selector.kind === "static-member" && (selector.candidates.length !== 1 || selector.evidence.length !== 1))
+      || (selector.kind === "finite-source-domain" && (selector.candidates.length === 0 || selector.evidence.length === 0))
+      || (selector.kind === "unresolved" && (selector.candidates.length !== 0 || selector.evidence.length !== 0))
+      || fact.properties.entitySelectorJson !== JSON.stringify(selector)) {
+      throw new Error(`Base44 fact ${fact.factId} has an invalid disposition entity selector`);
+    }
+    for (const item of selector.evidence as Array<Record<string, any>>) {
+      requireClosedKeys(item, ["filePath", "sourceFileSha256", "startLine", "endLine", "snippetSha256", "derivation"],
+        `disposition selector evidence ${fact.factId}`);
+      if (typeof item.filePath !== "string" || !item.filePath || item.filePath.startsWith("/")
+        || item.filePath.split("/").includes("..") || !/^[0-9a-f]{64}$/u.test(item.sourceFileSha256 ?? "")
+        || !Number.isInteger(item.startLine) || item.startLine < 1
+        || !Number.isInteger(item.endLine) || item.endLine < item.startLine
+        || !/^[0-9a-f]{64}$/u.test(item.snippetSha256 ?? "")
+        || !["literal", "array-element", "object-property", "caller-argument", "set-membership"].includes(item.derivation)
+        || !packet.facts.some((authority) => authority.evidence.filePath === item.filePath
+          && authority.properties.sourceFileSha256 === item.sourceFileSha256)) {
+        throw new Error(`Base44 fact ${fact.factId} has invalid disposition selector evidence`);
+      }
+    }
+    const callsite = disposition.callsite as Record<string, any>;
+    requireClosedKeys(callsite, ["filePath", "sourceFileSha256", "startLine", "endLine", "startOffset", "endOffset", "snippetSha256"],
+      `disposition callsite ${fact.factId}`);
+    if (callsite.filePath !== fact.evidence.filePath || callsite.sourceFileSha256 !== fact.properties.sourceFileSha256
+      || callsite.startLine !== fact.evidence.startLine || callsite.endLine !== fact.evidence.endLine
+      || callsite.snippetSha256 !== fact.evidence.snippetHash
+      || !Number.isSafeInteger(callsite.startOffset) || !Number.isSafeInteger(callsite.endOffset)
+      || callsite.startOffset < 0 || callsite.endOffset <= callsite.startOffset) {
+      throw new Error(`Base44 fact ${fact.factId} has invalid exact callsite evidence`);
+    }
+    const entityNames = selector.candidates.length > 0 ? selector.candidates : ["dynamic"];
+    const expectedOperationIds = entityNames.map((entityName: string) => `operation-${createHash("sha256").update([
+      callsite.filePath,
+      String(callsite.startLine),
+      String(callsite.endLine),
+      String(callsite.startOffset),
+      String(callsite.endOffset),
+      entityName,
+      disposition.operationName,
+      callsite.snippetSha256,
+    ].join("|"), "utf8").digest("hex").slice(0, 20)}`).sort();
+    if (!Array.isArray(disposition.operationEvidenceIds)
+      || disposition.operationEvidenceIds.length !== entityNames.length
+      || JSON.stringify(disposition.operationEvidenceIds) !== fact.properties.operationEvidenceIdsJson
+      || JSON.stringify(disposition.operationEvidenceIds) !== JSON.stringify(expectedOperationIds)
+      || JSON.stringify(disposition.operationEvidenceIds) !== JSON.stringify([...new Set(disposition.operationEvidenceIds)].sort())
+      || disposition.operationEvidenceIds.some((id: unknown) => typeof id !== "string" || !/^operation-[0-9a-f]{20}$/u.test(id as string)
+        || operationIds.has(id as string))) {
+      throw new Error(`Base44 fact ${fact.factId} has invalid suppressed operation accounting`);
+    }
+    for (const id of disposition.operationEvidenceIds as string[]) {
+      if (suppressedOperationIds.has(id)) throw new Error(`Base44 fact ${fact.factId} duplicates a suppressed operation identity`);
+      suppressedOperationIds.add(id);
+      dispositionsByOperationId.set(id, { fact, disposition });
+    }
+    if (!Array.isArray(disposition.primitiveCapabilities)
+      || disposition.primitiveCapabilities.length !== entityNames.length
+      || JSON.stringify(disposition.primitiveCapabilities) !== JSON.stringify([...new Set(disposition.primitiveCapabilities)].sort())
+      || disposition.primitiveCapabilities.some((capability: unknown) => typeof capability !== "string"
+        || !entityNames.some((entity: string) => capability === `entities.${entity}.${disposition.operationName}`
+          || capability === `asServiceRole.entities.${entity}.${disposition.operationName}`))) {
+      throw new Error(`Base44 fact ${fact.factId} has invalid primitive capability accounting`);
+    }
+    for (const capability of disposition.primitiveCapabilities as string[]) {
+      if (!packet.facts.some((primitive) => primitive.factType === FactTypes.Base44SdkPrimitive
+        && primitive.evidence.filePath === fact.evidence.filePath
+        && primitive.evidence.startLine === fact.evidence.startLine
+        && primitive.evidence.endLine === fact.evidence.endLine
+        && primitive.properties.capability === capability)) {
+        throw new Error(`Base44 fact ${fact.factId} lacks its retained SDK primitive`);
+      }
+    }
+    if (disposition.sdkIdentityGap) {
+      if (!sdkIdentityGapTokens.has(disposition.sdkIdentityGap) || disposition.sdkIdentity !== null
+        || fact.properties.sdkIdentityGap !== disposition.sdkIdentityGap || fact.properties.sdkIdentityJson) {
+        throw new Error(`Base44 fact ${fact.factId} has invalid disposition SDK identity gap`);
+      }
+    } else {
+      if (!disposition.sdkIdentity || fact.properties.sdkIdentityGap
+        || fact.properties.sdkIdentityJson !== JSON.stringify(disposition.sdkIdentity)) {
+        throw new Error(`Base44 fact ${fact.factId} has contradictory disposition SDK identity`);
+      }
+      validateSdkIdentityJson(fact, fact.properties.sdkIdentityJson, runtimeSdkImports);
+    }
+    const expectedTier = disposition.sdkIdentity && !selector.gap
+      ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier4Unknown;
+    if (fact.evidenceTier !== expectedTier) {
+      throw new Error(`Base44 fact ${fact.factId} has an invalid disposition evidence tier`);
+    }
   }
+
+  validateEntityPrimitiveDenominator(packet, operations, dispositionsByOperationId);
+}
+
+function validateEntityPrimitiveDenominator(
+  packet: Base44EvidencePacket,
+  operations: Map<string, Base44PacketFact>,
+  dispositionsByOperationId: Map<string, { fact: Base44PacketFact; disposition: Record<string, any> }>
+): void {
+  const primitivesByOperationId = new Map<string, Base44PacketFact[]>();
+  const entityPrimitivePattern = /^(?:asServiceRole\.)?entities\.([A-Z][A-Za-z0-9_]*|dynamic)\.([A-Za-z][A-Za-z0-9_]*)$/u;
+  const primitives = packet.facts.filter((fact) => fact.factType === FactTypes.Base44SdkPrimitive
+    && fact.evidence.extractorVersion === "base44-evidence/0.14.0"
+    && entityPrimitivePattern.test(fact.properties.capability ?? ""));
+  for (const primitive of primitives) {
+    const match = entityPrimitivePattern.exec(primitive.properties.capability)!;
+    const callsite = exactEntityFactCallsite(primitive);
+    const expectedOperationId = entityOperationIdFromCallsite(callsite, match[1], match[2]);
+    const active = operations.get(expectedOperationId);
+    const suppressed = dispositionsByOperationId.get(expectedOperationId);
+    if (Number(Boolean(active)) + Number(Boolean(suppressed)) !== 1) {
+      throw new Error(`Base44 SDK primitive ${primitive.factId} is not accounted by exactly one active operation or dormant disposition`);
+    }
+    if (active) {
+      const operationCallsite = exactEntityFactCallsite(active);
+      const selector = JSON.parse(active.properties.entitySelectorJson) as Record<string, any>;
+      const selectorAccountsForEntity = selector.kind === "unresolved"
+        ? match[1] === "dynamic" : selector.candidates.includes(match[1]);
+      if (operationCallsite.key !== callsite.key || active.properties.entityName !== match[1]
+        || active.properties.operationName !== match[2] || !selectorAccountsForEntity) {
+        throw new Error(`Base44 SDK primitive ${primitive.factId} contradicts its active operation`);
+      }
+    }
+    if (suppressed) {
+      const dispositionCallsite = suppressed.disposition.callsite as Record<string, any>;
+      if (exactCallsiteKey(dispositionCallsite) !== callsite.key
+        || !suppressed.disposition.primitiveCapabilities.includes(primitive.properties.capability)) {
+        throw new Error(`Base44 SDK primitive ${primitive.factId} contradicts its dormant disposition`);
+      }
+    }
+    const rows = primitivesByOperationId.get(expectedOperationId) ?? [];
+    rows.push(primitive);
+    primitivesByOperationId.set(expectedOperationId, rows);
+  }
+
+  for (const operation of packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation
+    && fact.evidence.extractorVersion === "base44-evidence/0.14.0")) {
+    const callsite = exactEntityFactCallsite(operation);
+    const expectedOperationId = entityOperationIdFromCallsite(callsite,
+      operation.properties.entityName, operation.properties.operationName);
+    if (operation.properties.operationEvidenceId !== expectedOperationId) {
+      throw new Error(`Base44 operation ${operation.factId} has invalid exact operation identity`);
+    }
+    const rows = primitivesByOperationId.get(expectedOperationId) ?? [];
+    if (rows.length !== 1) {
+      throw new Error(`Base44 operation ${operation.factId} does not have exactly one retained SDK primitive`);
+    }
+  }
+  for (const [operationId, disposition] of dispositionsByOperationId) {
+    const rows = primitivesByOperationId.get(operationId) ?? [];
+    if (rows.length !== 1) {
+      throw new Error(`Base44 disposition ${disposition.fact.factId} does not have exactly one retained SDK primitive per suppressed operation`);
+    }
+  }
+}
+
+function exactEntityFactCallsite(fact: Base44PacketFact): {
+  filePath: string; sourceFileSha256: string; startLine: number; endLine: number;
+  startOffset: number; endOffset: number; snippetSha256: string; key: string;
+} {
+  const startOffset = Number(fact.properties.callsiteStartOffset);
+  const endOffset = Number(fact.properties.callsiteEndOffset);
+  const value = {
+    filePath: fact.evidence.filePath,
+    sourceFileSha256: fact.properties.sourceFileSha256,
+    startLine: fact.evidence.startLine,
+    endLine: fact.evidence.endLine,
+    startOffset,
+    endOffset,
+    snippetSha256: fact.properties.callsiteSnippetSha256
+  };
+  if (!Number.isSafeInteger(startOffset) || !Number.isSafeInteger(endOffset)
+    || startOffset < 0 || endOffset <= startOffset
+    || !/^[0-9a-f]{64}$/u.test(value.sourceFileSha256 ?? "")
+    || !/^[0-9a-f]{64}$/u.test(value.snippetSha256 ?? "")
+    || value.snippetSha256 !== fact.evidence.snippetHash) {
+    throw new Error(`Base44 fact ${fact.factId} has invalid exact entity callsite properties`);
+  }
+  return { ...value, key: exactCallsiteKey(value) };
+}
+
+function exactCallsiteKey(callsite: Record<string, any>): string {
+  return [callsite.filePath, callsite.sourceFileSha256, callsite.startLine, callsite.endLine,
+    callsite.startOffset, callsite.endOffset, callsite.snippetSha256].join("|");
+}
+
+function entityOperationIdFromCallsite(
+  callsite: Record<string, any>, entityName: string, operationName: string
+): string {
+  return `operation-${createHash("sha256").update([
+    callsite.filePath,
+    String(callsite.startLine),
+    String(callsite.endLine),
+    String(callsite.startOffset),
+    String(callsite.endOffset),
+    entityName,
+    operationName,
+    callsite.snippetSha256,
+  ].join("|"), "utf8").digest("hex").slice(0, 20)}`;
 }
 
 const sdkIdentityGapTokens = new Set([

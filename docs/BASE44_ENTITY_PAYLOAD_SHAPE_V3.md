@@ -22,15 +22,23 @@ Each semantic field is unique by name and has this closed form:
       "origin": "literal",
       "evidenceStartLine": 1,
       "evidenceEndLine": 1,
-      "evidenceSnippetHash": "<sha256>"
+      "evidenceStartOffset": 0,
+      "evidenceEndOffset": 12,
+      "evidenceFilePath": "src/file.ts",
+      "evidenceSourceFileSha256": "<sha256>",
+      "evidenceSnippetHash": "<sha256>",
+      "semanticValueType": "string",
+      "semanticExplicitNull": false
     }
   ]
 }
 ```
 
-Provenance is the exact, deterministic `fieldsJson` observation set grouped by
-field name. Flattening every semantic field's provenance must reproduce
-`fieldsJson` exactly once. No alternative source observation is discarded.
+Provenance is the exact, deterministic `fieldsJson` occurrence set grouped by
+field name. Source path/hash plus offsets distinguish identical syntax on the
+same line. Flattening every semantic field's provenance after removing its two
+semantic-observation members must reproduce `fieldsJson` exactly once. No
+alternative source occurrence is discarded.
 
 Presence aggregation is fail closed: any unknown observation produces
 `unknown`; otherwise all `always` observations produce `always`; every other
@@ -49,7 +57,11 @@ prose, example values, or formatting. A consumer may promote a typed column
 only after independent producers agree across the required executable
 callsites with no unknown or conflict.
 
-Packet validation rejects missing/open semantic objects, unsupported enums,
-duplicate names, empty/cross-field provenance, reordered projections, or any
-projection that loses or duplicates a syntactic observation. Shape v2 remains
-readable but cannot authorize semantic type promotion.
+Packet validation recomputes presence, value type, and explicit-null aggregates
+from the closed per-occurrence semantic observations. It rejects missing/open
+semantic objects, unsupported enums, duplicate names, unauthenticated source
+provenance, contradictory aggregates, reordered projections, or any projection
+that loses or duplicates a syntactic occurrence. Shape v2 remains readable but
+cannot authorize semantic type promotion. `Object(...)` coercion and numeric
+operators with unproven JSON-number operands remain `unknown`; BigInt must never
+be promoted as a JSON number.

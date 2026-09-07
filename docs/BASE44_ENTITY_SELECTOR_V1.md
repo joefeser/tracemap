@@ -56,7 +56,7 @@ SDK entity client is not itself an entity operation. Only the downstream SDK
 method call at its real source location enters the operation denominator.
 
 Source-proven dormant SDK calls are represented separately by
-[Base44 entity callsite disposition v1](BASE44_ENTITY_CALLSITE_DISPOSITION_V1.md).
+[Base44 entity callsite disposition v2](BASE44_ENTITY_CALLSITE_DISPOSITION_V2.md).
 They are not converted into successful operations and are excluded only when
 the closed reachability proof is present.
 
