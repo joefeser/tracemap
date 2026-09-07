@@ -174,6 +174,14 @@ unsupported, or ambiguous authority is a typed Tier-4 operation blocker; no
 directory or repository-wide default supplies identity. See
 [Base44 SDK callsite identity v1](BASE44_SDK_CALLSITE_IDENTITY_V1.md).
 
+Extractor `base44-evidence/0.11.0` preserves callsite SDK identity and adds
+narrow payload source-closure proofs for source-proven React dependency arrays,
+finite local computed-key caller domains, closed React object state, and
+mutually exclusive `if/else` or conditional-expression arms. Runtime-open
+fields remain deferred and cross-component/ref-indirect or unused mutation
+paths remain typed blockers. See
+[Base44 payload source closure v1](BASE44_PAYLOAD_SOURCE_CLOSURE_V1.md).
+
 Extractor `base44-evidence/0.4.1` also follows an SDK client through a local
 helper parameter when executable callsites prove the binding. The proof is
 conservative: every directly resolved callsite for that parameter must supply

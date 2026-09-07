@@ -349,7 +349,7 @@ function validateCoverageGaps(packet: Base44EvidencePacket): void {
 
 function validatePayloadShapeContracts(packet: Base44EvidencePacket): void {
   for (const fact of packet.facts.filter((candidate) => candidate.factType === FactTypes.Base44EntityPayload)) {
-    if (["base44-evidence/0.8.0", "base44-evidence/0.9.0", "base44-evidence/0.10.0"].includes(fact.evidence.extractorVersion)
+    if (["base44-evidence/0.8.0", "base44-evidence/0.9.0", "base44-evidence/0.10.0", "base44-evidence/0.11.0"].includes(fact.evidence.extractorVersion)
       && fact.properties.shapeVersion !== "2") {
       throw new Error(`Base44 payload ${fact.factId} must use shapeVersion 2 for extractor ${fact.evidence.extractorVersion}`);
     }
@@ -407,7 +407,7 @@ function validateSdkIdentityContracts(packet: Base44EvidencePacket): void {
     FactTypes.Base44EntityPayload,
     FactTypes.Base44EntityQuery
   ]);
-  const facts = packet.facts.filter((fact) => fact.evidence.extractorVersion === "base44-evidence/0.10.0"
+  const facts = packet.facts.filter((fact) => ["base44-evidence/0.10.0", "base44-evidence/0.11.0"].includes(fact.evidence.extractorVersion)
     && identityFactTypes.has(fact.factType));
   const operations = new Map(facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation)
     .map((fact) => [fact.properties.operationEvidenceId, fact]));

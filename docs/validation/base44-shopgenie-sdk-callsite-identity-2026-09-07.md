@@ -9,7 +9,7 @@ obligation, or claim runtime compatibility.
 
 ## Bound inputs
 
-- ShopGenie repository: `/Users/josephfeser/src/BigRiverMachine/ShopGenie`
+- ShopGenie repository: `<exact-ShopGenie-origin-main-checkout>`
 - ShopGenie commit: `6753cfa6264b04c0d7dbfcde942689ee32d2c06b`
 - Accepted source/tree SHA-256:
   `a5a313b180ef0cdfd2e837779f251cc754978fcd474b6a32646c133b058b6e24`
@@ -79,7 +79,7 @@ TRACEMAP_SKIP_BUILD=1 \
 git diff --check
 
 node src/typescript/dist/src/cli.js base44-evidence \
-  --repo /Users/josephfeser/src/BigRiverMachine/ShopGenie \
+  --repo <exact-ShopGenie-origin-main-checkout> \
   --out <disposable-output> \
   --accepted-source-sha256 a5a313b180ef0cdfd2e837779f251cc754978fcd474b6a32646c133b058b6e24 \
   --accepted-tree-sha256 a5a313b180ef0cdfd2e837779f251cc754978fcd474b6a32646c133b058b6e24 \

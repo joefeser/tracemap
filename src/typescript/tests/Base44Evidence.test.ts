@@ -713,6 +713,120 @@ export function LaterShadowedImport() {
     expect(JSON.parse(laterShadowed.properties.analysisGapsJson)).toContain("binding-initializer-unresolved");
   });
 
+  it("treats only source-proven React dependency-array references as terminating hook uses", async () => {
+    const {packet} = await mutationHookFixture(`
+import { useCallback as useStable } from "react";
+export function Screen() {
+  const accepted = useWrite({ mutationFn: (payload) => base44.entities.AcceptedDependencyItem.create(payload) });
+  accepted.mutate({ exact_field: 1 });
+  useStable(() => accepted.mutate({ exact_field: 2 }), [accepted]);
+
+  const rejected = useWrite({ mutationFn: (payload) => base44.entities.RejectedDependencyItem.create(payload) });
+  rejected.mutate({ exact_field: 1 });
+  const useCallback = (_callback, dependencies) => dependencies;
+  useCallback(() => undefined, [rejected]);
+}
+`);
+    const accepted = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "AcceptedDependencyItem")!;
+    expect(accepted.properties.completeness).toBe("complete");
+    expect(JSON.parse(accepted.properties.analysisGapsJson)).toEqual([]);
+    const rejected = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "RejectedDependencyItem")!;
+    expect(rejected.properties.completeness).toBe("partial");
+    expect(JSON.parse(rejected.properties.analysisGapsJson)).toContain("mutation-hook-binding-escape-unresolved");
+  });
+
+  it("resolves computed payload keys only through finite source-proven local caller domains", async () => {
+    const {packet} = await mutationHookFixture(`
+import { useCallback } from "react";
+import { debounce } from "lodash";
+export function Screen(runtimeField) {
+  const accepted = useWrite({ mutationFn: (payload) => base44.entities.FiniteComputedItem.update("id", payload) });
+  const update = useCallback(debounce((field, value) => accepted.mutate({ [field]: value }), 10), [accepted]);
+  update("name", 1);
+  update(true ? "phone" : "email", 2);
+
+  const unknown = useWrite({ mutationFn: (payload) => base44.entities.UnknownComputedItem.update("id", payload) });
+  const updateUnknown = useCallback(debounce((field, value) => unknown.mutate({ [field]: value }), 10), [unknown]);
+  updateUnknown(runtimeField, 1);
+
+  const escaped = useWrite({ mutationFn: (payload) => base44.entities.EscapedComputedItem.update("id", payload) });
+  const updateEscaped = useCallback(debounce((field, value) => escaped.mutate({ [field]: value }), 10), [escaped]);
+  consume(updateEscaped);
+  updateEscaped("known_but_not_closed", 1);
+}
+`);
+    const accepted = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "FiniteComputedItem")!;
+    expect(JSON.parse(accepted.properties.analysisGapsJson)).toEqual([]);
+    expect(accepted.properties.completeness).toBe("complete");
+    expect(JSON.parse(accepted.properties.fieldsJson).map((field: {name: string}) => field.name).sort()).toEqual([
+      "email", "name", "phone"
+    ]);
+    expect(JSON.parse(accepted.properties.fieldsJson).every((field: {presence: string}) => field.presence === "conditional")).toBe(true);
+    for (const entity of ["UnknownComputedItem", "EscapedComputedItem"]) {
+      const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload && fact.targetSymbol === entity)!;
+      expect(payload.properties.completeness).toBe("partial");
+      expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("dynamic-computed-property");
+      expect(JSON.parse(payload.properties.fieldsJson)).toContainEqual(expect.objectContaining({name: "<dynamic>"}));
+    }
+  });
+
+  it("models closed React object state and mutually exclusive mutation branches without erasing unsafe state flow", async () => {
+    const {packet} = await mutationHookFixture(`
+import { useState } from "react";
+export function Screen(flag, value) {
+  const [form, setForm] = useState({ name: "", email: "" });
+  setForm({ ...form, name: value });
+  setForm(previous => ({ ...previous, email: value }));
+  const create = useWrite({ mutationFn: (payload) => base44.entities.StateCreateItem.create(payload) });
+  const update = useWrite({ mutationFn: ({id, data}) => base44.entities.StateUpdateItem.update(id, data) });
+  if (flag) update.mutate({id: "id", data: form});
+  else create.mutate({...form, organization_id: "org"});
+}
+
+export function Sequential(value) {
+  const [form, setForm] = useState({ name: "" });
+  setForm(previous => ({ ...previous, name: value }));
+  const first = useWrite({ mutationFn: ({id, data}) => base44.entities.SequentialFirstItem.update(id, data) });
+  const second = useWrite({ mutationFn: (payload) => base44.entities.SequentialSecondItem.create(payload) });
+  first.mutate({id: "id", data: form});
+  second.mutate({...form, organization_id: "org"});
+}
+
+export function EscapedState(value) {
+  const [form, setForm] = useState({ name: "" });
+  consume(setForm);
+  const save = useWrite({ mutationFn: (payload) => base44.entities.EscapedStateItem.create(payload) });
+  save.mutate(form);
+}
+
+export function SpoofedState(useState) {
+  const [form] = useState({ invented: "" });
+  const save = useWrite({ mutationFn: (payload) => base44.entities.SpoofedStateItem.create(payload) });
+  save.mutate(form);
+}
+`);
+    for (const entity of ["StateCreateItem", "StateUpdateItem"]) {
+      const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload && fact.targetSymbol === entity)!;
+      expect(JSON.parse(payload.properties.analysisGapsJson)).toEqual([]);
+      expect(payload.properties.completeness).toBe("complete");
+      expect(payload.properties.outerKind).toBe("object");
+    }
+    const sequential = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "SequentialSecondItem")!;
+    expect(sequential.properties.completeness).toBe("partial");
+    expect(JSON.parse(sequential.properties.analysisGapsJson)).toContain("spread:binding-alias-escape-unresolved");
+    const escaped = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "EscapedStateItem")!;
+    expect(JSON.parse(escaped.properties.analysisGapsJson)).toContain("react-state-setter-flow-unresolved");
+    const spoofed = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "SpoofedStateItem")!;
+    expect(spoofed.properties.completeness).toBe("unresolved");
+    expect(JSON.parse(spoofed.properties.analysisGapsJson)).toContain("destructured-binding-unresolved");
+  });
+
   it("does not select a destructured mutation payload through a later unknown spread", async () => {
     const { packet } = await mutationHookFixture(`
 export function Screen(extra) {
