@@ -2306,11 +2306,35 @@ function isArrayPrototypeExpression(node: ts.Node, source: ts.SourceFile): boole
   if (ts.isPropertyAccessExpression(expression) && expression.name.text === "__proto__"
     && ts.isArrayLiteralExpression(unwrapAliasExpression(expression.expression))) return true;
   if (!ts.isCallExpression(expression) || expression.arguments.length !== 1
-    || !ts.isArrayLiteralExpression(unwrapAliasExpression(expression.arguments[0]))) return false;
+    || !isArrayConstruction(expression.arguments[0], source)) return false;
+  return isGlobalGetPrototypeOf(expression.expression, source, new Set());
+}
+
+function isArrayConstruction(node: ts.Expression, source: ts.SourceFile): boolean {
+  const expression = unwrapAliasExpression(node);
+  if (ts.isArrayLiteralExpression(expression)) return true;
+  if (!ts.isNewExpression(expression) && !ts.isCallExpression(expression)) return false;
   const callee = unwrapAliasExpression(expression.expression);
-  return ts.isPropertyAccessExpression(callee) && callee.name.text === "getPrototypeOf"
-    && ts.isIdentifier(callee.expression) && ["Object", "Reflect"].includes(callee.expression.text)
-    && !resolveLexicalBinding(callee.expression.text, callee.expression, source);
+  return ts.isIdentifier(callee) && callee.text === "Array"
+    && !resolveLexicalBinding("Array", callee, source);
+}
+
+function isGlobalGetPrototypeOf(
+  node: ts.Expression,
+  source: ts.SourceFile,
+  visited: Set<ts.Node>
+): boolean {
+  const expression = unwrapAliasExpression(node);
+  if (visited.has(expression)) return false;
+  const next = new Set(visited).add(expression);
+  if (ts.isPropertyAccessExpression(expression) && expression.name.text === "getPrototypeOf"
+    && ts.isIdentifier(expression.expression) && ["Object", "Reflect"].includes(expression.expression.text)
+    && !resolveLexicalBinding(expression.expression.text, expression.expression, source)) return true;
+  if (!ts.isIdentifier(expression)) return false;
+  const binding = resolveLexicalBinding(expression.text, expression, source);
+  return Boolean(binding?.kind === "variable" && binding.node.initializer
+    && isImmutableVariable(binding.node, expression)
+    && isGlobalGetPrototypeOf(binding.node.initializer, source, next));
 }
 
 function evaluateCallableReturns(
@@ -2624,6 +2648,7 @@ interface LocalModuleAlias {
 
 interface LocalModuleResolutionAuthority {
   aliases: LocalModuleAlias[];
+  baseUrls: string[];
   closed: boolean;
   declaredPackages: Set<string>;
 }
@@ -2636,12 +2661,13 @@ function localModuleAliases(contexts: Map<string, SourceContext>): LocalModuleAl
 
 async function loadLocalModuleAliases(items: readonly FileInventoryItem[]): Promise<LocalModuleResolutionAuthority> {
   const first = items[0];
-  if (!first) return { aliases: [], closed: true, declaredPackages: new Set() };
+  if (!first) return { aliases: [], baseUrls: [], closed: true, declaredPackages: new Set() };
   let repositoryRoot = path.dirname(first.absolutePath);
   for (let index = 1; index < first.relativePath.split("/").length; index++) {
     repositoryRoot = path.dirname(repositoryRoot);
   }
   let declaredPackages = new Set<string>();
+  let packageAliases: LocalModuleAlias[] = [];
   let packageAuthorityClosed = true;
   try {
     const packageJson = JSON.parse(await fs.readFile(path.join(repositoryRoot, "package.json"), "utf8"));
@@ -2654,6 +2680,21 @@ async function loadLocalModuleAliases(items: readonly FileInventoryItem[]): Prom
       }
       for (const name of Object.keys(dependencies)) declaredPackages.add(name);
     }
+    if (packageJson.imports !== undefined) {
+      if (!packageJson.imports || typeof packageJson.imports !== "object" || Array.isArray(packageJson.imports)) {
+        packageAuthorityClosed = false;
+      } else {
+        for (const [pattern, target] of Object.entries(packageJson.imports)) {
+          if (!pattern.startsWith("#") || (pattern.match(/\*/gu)?.length ?? 0) > 1
+            || typeof target !== "string" || !target.startsWith("./")
+            || (target.match(/\*/gu)?.length ?? 0) > 1) {
+            packageAuthorityClosed = false;
+            continue;
+          }
+          packageAliases.push({ pattern, targets: [path.posix.normalize(target).replace(/^\.\//u, "")] });
+        }
+      }
+    }
   } catch (error: any) {
     if (error?.code !== "ENOENT") packageAuthorityClosed = false;
   }
@@ -2663,42 +2704,45 @@ async function loadLocalModuleAliases(items: readonly FileInventoryItem[]): Prom
       await fs.access(configPath);
     } catch (error: any) {
       if (error?.code === "ENOENT") continue;
-      return { aliases: [], closed: false, declaredPackages };
+      return { aliases: packageAliases, baseUrls: [], closed: false, declaredPackages };
     }
     const loaded = await loadLocalModuleConfig(configPath, repositoryRoot, new Set());
     return {
-      aliases: loaded.aliases,
+      aliases: [...packageAliases, ...loaded.aliases].sort((left, right) => left.pattern.localeCompare(right.pattern)),
+      baseUrls: loaded.baseUrls,
       closed: loaded.closed && packageAuthorityClosed,
       declaredPackages
     };
   }
-  return { aliases: [], closed: packageAuthorityClosed, declaredPackages };
+  return { aliases: packageAliases, baseUrls: [], closed: packageAuthorityClosed, declaredPackages };
 }
 
 async function loadLocalModuleConfig(
   configPath: string,
   repositoryRoot: string,
   visited: Set<string>
-): Promise<{aliases: LocalModuleAlias[]; closed: boolean}> {
+): Promise<{aliases: LocalModuleAlias[]; baseUrls: string[]; closed: boolean}> {
   const canonicalPath = path.resolve(configPath);
   if (visited.has(canonicalPath) || !canonicalPath.startsWith(`${path.resolve(repositoryRoot)}${path.sep}`)) {
-    return { aliases: [], closed: false };
+    return { aliases: [], baseUrls: [], closed: false };
   }
   const nextVisited = new Set(visited).add(canonicalPath);
   let text: string;
   try {
     text = await fs.readFile(canonicalPath, "utf8");
   } catch {
-    return { aliases: [], closed: false };
+    return { aliases: [], baseUrls: [], closed: false };
   }
   const parsed = ts.parseConfigFileTextToJson(canonicalPath, text);
   if (parsed.error || !parsed.config || typeof parsed.config !== "object" || Array.isArray(parsed.config)) {
-    return { aliases: [], closed: false };
+    return { aliases: [], baseUrls: [], closed: false };
   }
-  let inherited: {aliases: LocalModuleAlias[]; closed: boolean} = { aliases: [], closed: true };
+  let inherited: {aliases: LocalModuleAlias[]; baseUrls: string[]; closed: boolean} = {
+    aliases: [], baseUrls: [], closed: true
+  };
   if (parsed.config.extends !== undefined) {
     if (typeof parsed.config.extends !== "string" || !parsed.config.extends.startsWith(".")) {
-      inherited = { aliases: [], closed: false };
+      inherited = { aliases: [], baseUrls: [], closed: false };
     } else {
       let extendedPath = path.resolve(path.dirname(canonicalPath), parsed.config.extends);
       if (!path.extname(extendedPath)) extendedPath += ".json";
@@ -2707,15 +2751,24 @@ async function loadLocalModuleConfig(
   }
   const options = parsed.config.compilerOptions;
   if (options !== undefined && (!options || typeof options !== "object" || Array.isArray(options))) {
-    return { aliases: inherited.aliases, closed: false };
+    return { aliases: inherited.aliases, baseUrls: inherited.baseUrls, closed: false };
   }
-  if (!options || options.paths === undefined) return inherited;
+  let baseUrls = inherited.baseUrls;
+  let baseDirectory = path.dirname(canonicalPath);
+  if (options && typeof options.baseUrl === "string") {
+    baseDirectory = path.resolve(path.dirname(canonicalPath), options.baseUrl);
+    const relativeBase = path.relative(repositoryRoot, baseDirectory).split(path.sep).join("/") || ".";
+    if (relativeBase.startsWith("../") || path.posix.isAbsolute(relativeBase)) {
+      return { aliases: inherited.aliases, baseUrls: inherited.baseUrls, closed: false };
+    }
+    baseUrls = [relativeBase];
+  }
+  if (!options || options.paths === undefined) return { ...inherited, baseUrls };
   if (!options.paths || typeof options.paths !== "object" || Array.isArray(options.paths)
     || (options.baseUrl !== undefined && typeof options.baseUrl !== "string")) {
-    return { aliases: inherited.aliases, closed: false };
+    return { aliases: inherited.aliases, baseUrls, closed: false };
   }
-  const baseDirectory = path.relative(repositoryRoot,
-    path.resolve(path.dirname(canonicalPath), typeof options.baseUrl === "string" ? options.baseUrl : "."))
+  const relativeBaseDirectory = path.relative(repositoryRoot, baseDirectory)
     .split(path.sep).join("/") || ".";
   const aliases: LocalModuleAlias[] = [];
   let closed = inherited.closed;
@@ -2729,10 +2782,10 @@ async function loadLocalModuleConfig(
     }
     aliases.push({
       pattern,
-      targets: [path.posix.normalize(path.posix.join(baseDirectory, rawTargets[0])).replace(/^\.\//u, "")]
+      targets: [path.posix.normalize(path.posix.join(relativeBaseDirectory, rawTargets[0])).replace(/^\.\//u, "")]
     });
   }
-  return { aliases: aliases.sort((left, right) => left.pattern.localeCompare(right.pattern)), closed };
+  return { aliases: aliases.sort((left, right) => left.pattern.localeCompare(right.pattern)), baseUrls, closed };
 }
 
 interface AliasDiscovery {
@@ -3658,6 +3711,10 @@ function resolveLocalModule(fromFile: string, specifier: string, contexts: Map<s
     if (capture === null) continue;
     bases.push(...alias.targets.map((target) => target.replace("*", capture)));
   }
+  if (!specifier.startsWith(".") && !specifier.startsWith("@/") && !/^[a-z]+:/iu.test(specifier)) {
+    bases.push(...(localModuleAliasCache.get(contexts)?.baseUrls ?? [])
+      .map((baseUrl) => path.posix.normalize(path.posix.join(baseUrl, specifier))));
+  }
   if (!specifier.startsWith(".") && !specifier.startsWith("@/")
     && !isDeclaredExternalModule(specifier, contexts)) {
     bases.push(specifier, `src/${specifier}`);
@@ -3678,7 +3735,7 @@ function moduleAliasMatch(pattern: string, specifier: string): string | null {
   const prefix = pattern.slice(0, firstWildcard);
   const suffix = pattern.slice(firstWildcard + 1);
   return specifier.startsWith(prefix) && specifier.endsWith(suffix)
-    ? specifier.slice(prefix.length, specifier.length - suffix.length)
+    ? specifier.slice(prefix.length, suffix.length ? specifier.length - suffix.length : undefined)
     : null;
 }
 
