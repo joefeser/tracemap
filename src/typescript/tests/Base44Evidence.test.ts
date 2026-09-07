@@ -190,6 +190,13 @@ export async function unused(entityName) { return base44.entities[entityName].cr
     await expect(diffBase44Evidence(path.join(out, "base44-evidence.json"), missingActivePrimitivePath,
       path.join(out, "missing-active-primitive-diff.json"))).rejects.toThrow("does not have exactly one retained SDK primitive");
 
+    const duplicateOperation = structuredClone(packet);
+    duplicateOperation.facts.push({ ...structuredClone(activeOperation), factId: `fact-${"d".repeat(20)}` });
+    const duplicateOperationPath = path.join(out, "duplicate-operation-identity.json");
+    await fs.writeFile(duplicateOperationPath, `${JSON.stringify(duplicateOperation, null, 2)}\n`);
+    await expect(diffBase44Evidence(path.join(out, "base44-evidence.json"), duplicateOperationPath,
+      path.join(out, "duplicate-operation-identity-diff.json"))).rejects.toThrow("duplicate operation identities");
+
     await fs.writeFile(path.join(repo, "src/main.ts"), `import { base44 } from "@base44/sdk";
 import { run } from "./active";
 base44.auth.me();
@@ -205,6 +212,27 @@ export const load = (runtimePath) => import(runtimePath);
       targetSymbol: "dynamic",
       evidence: expect.objectContaining({ filePath: "src/dormant.ts" })
     }));
+  });
+
+  it("never suppresses an exported React Query mutation handle or a module graph with a missing local edge", async () => {
+    const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-exported-mutation-handle-"));
+    await fs.mkdir(path.join(repo, "src"), { recursive: true });
+    await writeFrontendSdkAuthority(repo);
+    await fs.writeFile(path.join(repo, "src/main.ts"), `import { save } from "./hook"; save.mutate({ name: "active" }); import "./missing-local";\n`);
+    await fs.writeFile(path.join(repo, "src/hook.ts"), `import { base44 } from "@base44/sdk";
+import { useMutation } from "@tanstack/react-query";
+export const save = useMutation({ mutationFn: (data) => base44.entities.ExportedHandle.create(data) });
+export async function otherwiseDormant(data) { return base44.entities.MissingEdge.create(data); }
+`);
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    execFileSync("git", ["add", "."], { cwd: repo });
+    execFileSync("git", ["-c", "user.name=TraceMap Test", "-c", "user.email=tracemap@example.invalid", "commit", "-qm", "fixture"], { cwd: repo });
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-exported-mutation-handle-out-"));
+    const packet = (await buildBase44Evidence(options(repo, out))).packet;
+    expect(packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation)
+      .map((fact) => fact.targetSymbol)).toEqual(expect.arrayContaining(["ExportedHandle", "MissingEdge"]));
+    expect(packet.facts.some((fact) => fact.factType === FactTypes.Base44EntityCallsiteDisposition
+      && fact.evidence.filePath === "src/hook.ts")).toBe(false);
   });
 
   it("marks an uninvoked real mutation callback dormant but blocks spoofed, invoked, or escaped handles", async () => {
@@ -490,6 +518,39 @@ const save = (payload) => base44.entities.Occurrences.create(payload); save({ va
     expect(semantic[0].provenance).toHaveLength(2);
   });
 
+  it("does not trust Array map or push inference when the project realm mutates array intrinsics", async () => {
+    const repo = await fixtureRepo();
+    await fs.writeFile(path.join(repo, "src/array-patch.ts"), `Array.prototype.map = function(callback) { return [{ forged: true }]; };\n`);
+    await fs.writeFile(path.join(repo, "src/array-realm.ts"), `import "./array-patch";
+import { base44 } from "@base44/sdk";
+const names = ["safe"];
+const rows = names.map((name) => ({ [name]: 1 }));
+base44.entities.ArrayRealm.bulkCreate(rows);
+`);
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-array-realm-"));
+    const packet = (await buildBase44Evidence(options(repo, out))).packet;
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "ArrayRealm")!;
+    expect(payload.properties.completeness).not.toBe("complete");
+    expect(payload.evidenceTier).toBe("Tier4Unknown");
+  });
+
+  it("excludes array mutations after a statically terminating statement", async () => {
+    const repo = await fixtureRepo();
+    await fs.writeFile(path.join(repo, "src/unreachable-array-mutation.ts"), `import { base44 } from "@base44/sdk";
+const rows = [{ retained: 1 }];
+if (globalThis.stop) { throw new Error("stop"); rows.push({ forged: 1 }); }
+base44.entities.UnreachableMutation.bulkCreate(rows);
+`);
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-unreachable-array-mutation-"));
+    const packet = (await buildBase44Evidence(options(repo, out))).packet;
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "UnreachableMutation")!;
+    const names = JSON.parse(payload.properties.fieldsJson).map((field: {name: string}) => field.name);
+    expect(names).toContain("retained");
+    expect(names).not.toContain("forged");
+  });
+
   it("follows a closed React ref and debounce caller chain without trusting arbitrary current assignments", async () => {
     const repo = await fixtureRepo();
     await fs.writeFile(path.join(repo, "src/closed-react-ref.tsx"), `import { base44 } from "@base44/sdk";
@@ -501,6 +562,7 @@ const save = useCallback((field, value) => mutation.mutateAsync({ [field]: value
 const debouncedRef = useRef(debounce((...args) => saveRef.current?.(...args), 500));
 const saveRef = useRef(save);
 useEffect(() => { saveRef.current = save; }, [save]);
+useEffect(() => () => { debouncedRef.current.flush(); }, []);
 const debounced = debouncedRef.current;
 const handle = (field, value) => debounced(field, value);
 handle("price", 1);
@@ -1218,6 +1280,16 @@ export function Screen(runtimeInput) {
     await fs.writeFile(malformedSemanticPath, `${JSON.stringify(malformedSemantic)}\n`);
     await expect(diffBase44Evidence(baselinePath, malformedSemanticPath, path.join(out, "malformed-semantic-diff.json")))
       .rejects.toThrow("invalid semantic field");
+
+    const duplicateOccurrence = structuredClone(packet);
+    const duplicateOccurrencePayload = duplicateOccurrence.facts.find((fact) => fact.factId === payload.factId)!;
+    const duplicatedFields = JSON.parse(duplicateOccurrencePayload.properties.fieldsJson);
+    duplicatedFields.push({ ...duplicatedFields[0], origin: `${duplicatedFields[0].origin}:tampered` });
+    duplicateOccurrencePayload.properties.fieldsJson = JSON.stringify(duplicatedFields);
+    const duplicateOccurrencePath = path.join(out, "duplicate-semantic-occurrence.json");
+    await fs.writeFile(duplicateOccurrencePath, `${JSON.stringify(duplicateOccurrence)}\n`);
+    await expect(diffBase44Evidence(baselinePath, duplicateOccurrencePath, path.join(out, "duplicate-semantic-occurrence-diff.json")))
+      .rejects.toThrow("duplicate field occurrences");
 
     const contradictorySemantic = structuredClone(packet);
     const contradictoryPayload = contradictorySemantic.facts.find((fact) => fact.factId === payload.factId)!;

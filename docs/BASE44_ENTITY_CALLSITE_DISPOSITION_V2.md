@@ -45,7 +45,8 @@ The extractor admits only two bounded proofs:
 - A callback supplied as `mutationFn` to the exact
   `@tanstack/react-query` `useMutation` import when the returned handle has no
   `mutate`/`mutateAsync` reference and does not escape through an unknown or
-  computed use. A same-named local function is not React Query authority.
+  computed use. Exported/re-exported/CommonJS-exposed handles cannot be
+  dormant. A same-named local function is not React Query authority.
 
 A disposition is not a passing runtime test and does not erase source. The SDK
 primitive remains in the raw denominator, while the disposition records the
@@ -60,6 +61,12 @@ entity primitive has exactly one active operation or one suppressed disposition
 row, and each active or suppressed operation has exactly one retained primitive.
 An orphan, duplicate, or cross-callsite primitive invalidates the first packet;
 it is not deferred to a later diff.
+
+An unresolved entity selector remains a Tier-4 gap on the retained raw SDK
+primitive. It does not duplicate that gap on a source-proven Tier-3 reachability
+disposition, whose only claim is that the exact callsite is dormant. Missing
+literal local import/require/re-export edges make the module graph open and
+prevent dormancy.
 
 Validation rejects open objects, nonzero reference counters, source/callsite
 mismatch, unsupported extractor versions, incorrect tiers, selector/SDK

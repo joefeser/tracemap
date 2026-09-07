@@ -432,7 +432,7 @@ function validateSemanticPayloadFields(sourceAuthority: Set<string>, fact: Base4
     || left.origin.localeCompare(right.origin));
   const occurrenceKeys = fields.map((field: any) => JSON.stringify([
     field.evidenceFilePath, field.evidenceSourceFileSha256, field.evidenceStartOffset,
-    field.evidenceEndOffset, field.name, field.origin, field.presence,
+    field.evidenceEndOffset, field.name,
   ]));
   if (JSON.stringify(fields) !== JSON.stringify(sortedFields)
     || new Set(occurrenceKeys).size !== occurrenceKeys.length) {
@@ -604,8 +604,13 @@ function validateEntitySelectorContracts(packet: Base44EvidencePacket): void {
 function validateEntityCallsiteDispositions(packet: Base44EvidencePacket): void {
   const runtimeSdkImports = packet.facts.filter((fact) => fact.factType === FactTypes.Base44SdkImport
     && fact.properties.importKind === "runtime");
-  const operations = new Map(packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation)
-    .map((fact) => [fact.properties.operationEvidenceId, fact]));
+  const operationFacts = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation);
+  const operationIdsInPacket = operationFacts.map((fact) => fact.properties.operationEvidenceId);
+  if (operationIdsInPacket.some((id) => !/^operation-[0-9a-f]{20}$/u.test(id ?? ""))
+    || new Set(operationIdsInPacket).size !== operationIdsInPacket.length) {
+    throw new Error("Base44 entity operations contain invalid or duplicate operation identities");
+  }
+  const operations = new Map(operationFacts.map((fact) => [fact.properties.operationEvidenceId, fact]));
   const operationIds = new Set(operations.keys());
   const suppressedOperationIds = new Set<string>();
   const dispositionsByOperationId = new Map<string, { fact: Base44PacketFact; disposition: Record<string, any> }>();
@@ -726,8 +731,11 @@ function validateEntityCallsiteDispositions(packet: Base44EvidencePacket): void 
       }
       validateSdkIdentityJson(fact, fact.properties.sdkIdentityJson, runtimeSdkImports);
     }
-    const expectedTier = disposition.sdkIdentity && !selector.gap
-      ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier4Unknown;
+    // The disposition's claim is exact source reachability, not entity-name
+    // resolution. An unresolved selector remains a Tier-4 primitive gap in the
+    // raw denominator, but it does not downgrade independently proven dormant
+    // reachability or duplicate that gap on the disposition row.
+    const expectedTier = disposition.sdkIdentity ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier4Unknown;
     if (fact.evidenceTier !== expectedTier) {
       throw new Error(`Base44 fact ${fact.factId} has an invalid disposition evidence tier`);
     }
