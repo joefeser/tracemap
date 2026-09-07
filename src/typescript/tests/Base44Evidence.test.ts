@@ -594,6 +594,27 @@ base44.entities.ArrayReflectRealm.bulkCreate(rows);
     expect(JSON.parse(payload.properties.fieldsJson)).toEqual([]);
   });
 
+  it("does not confuse unrelated map properties with Array intrinsic mutation", async () => {
+    const { packet } = await mutationHookFixture(`
+const adapter = {};
+adapter.map = () => "not-an-array-intrinsic";
+export function Screen(enabled) {
+  const save = useWrite({
+    mutationFn: async (rows) => Promise.all(rows.map((row) => base44.entities.UnrelatedMapProperty.create(row)))
+  });
+  const rows = [];
+  if (enabled) rows.push({ name: "safe" });
+  save.mutate(rows);
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "UnrelatedMapProperty")!;
+    expect(payload.properties.completeness).toBe("complete");
+    expect(JSON.parse(payload.properties.fieldsJson)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "name" })
+    ]));
+  });
+
   it("excludes array mutations after a statically terminating statement", async () => {
     const repo = await fixtureRepo();
     await fs.writeFile(path.join(repo, "src/unreachable-array-mutation.ts"), `import { base44 } from "@base44/sdk";
