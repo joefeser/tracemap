@@ -81,7 +81,13 @@ The focused tests prove:
 - rejection of callbacks replaceable by later duplicate, spread, or dynamic
   mutation options while preserving explicit-after-spread proof;
 - typed gaps for mutated or escaped destructured callsite wrappers and recursive
-  self-hook calls; and
+  self-hook calls;
+- typed gaps when a callback parameter is reassigned, mutated, deleted, or
+  escapes before the SDK call;
+- typed gaps for computed access on the mutation-hook result, even when another
+  ordinary `.mutate` call is also present;
+- block-scoped function and class declarations shadowing the callback
+  parameter; and
 - continued redaction of raw literal values.
 
 The existing issue #713 suite also continues proving that schema prose cannot
@@ -98,7 +104,7 @@ guard, and pinned public OSS smoke scans described below.
 npm run check --prefix src/typescript
 ```
 
-Result: 10 test files and 141 tests passed.
+Result after exact-head review hardening: 10 test files and 149 tests passed.
 
 ```bash
 node src/typescript/dist/src/cli.js base44-evidence \
@@ -115,6 +121,13 @@ Result: 4,261 source-bound Base44 facts emitted and all adapter artifacts
 validated. The operation denominator remains 1,371/1,371 relative to the
 independent reverse-engineer census. This receipt reports payload evidence
 coverage only, not host reconciliation or application compatibility.
+
+The exact-head review replay reproduced the same 4,261 facts and the same
+`facts.ndjson` SHA-256
+`8333b563e0cedc4715703f36591d2f03be620f5acdb0f53f6a4eff7ca53019e9`
+when run from the same detached source path. The new adversarial protections do
+not change canonical ShopGenie evidence; they prevent unsupported future source
+patterns from being admitted.
 
 The remaining repository validation matrix also passed:
 
