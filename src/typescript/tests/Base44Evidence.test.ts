@@ -744,6 +744,88 @@ export function Screen(enabled) {
     expect(payload.properties.completeness === "complete").toBe(expectedComplete);
   });
 
+  it.each([
+    ["aliased eval", `const execute = eval; execute("Array.prototype.push = () => 0");`],
+    ["global member eval", `globalThis.eval("Array.prototype.push = () => 0");`],
+    ["global alias member eval", `const realm = globalThis; realm.eval("Array.prototype.push = () => 0");`],
+    ["conditional global alias member eval", `const realm = Math.random() ? {} : globalThis; realm.eval("Array.prototype.push = () => 0");`],
+    ["comma eval", `(0, eval)("Array.prototype.push = () => 0");`],
+    ["aliased Function", `const Build = Function; new Build("Array.prototype.push = () => 0")();`],
+    ["function constructor", `(() => {}).constructor("Array.prototype.push = () => 0")();`]
+  ])("blocks Array inference around indirect dynamic evaluation: %s", async (_caseName, evaluator) => {
+    const { packet } = await mutationHookFixture(`
+${evaluator}
+export function Screen(enabled) {
+  const save = useWrite({
+    mutationFn: async (rows) => Promise.all(rows.map((row) => base44.entities.IndirectDynamicEvaluation.create(row)))
+  });
+  const rows = [];
+  if (enabled) rows.push({ name: "safe" });
+  save.mutate(rows);
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "IndirectDynamicEvaluation")!;
+    expect(payload.properties.completeness).not.toBe("complete");
+  });
+
+  it("does not confuse an ordinary object eval member with dynamic evaluation", async () => {
+    const { packet } = await mutationHookFixture(`
+interface AdapterContract { eval(): string; Function: string; }
+const adapter = { eval: () => "ordinary-member" };
+adapter.eval();
+const { eval: ordinaryEval } = adapter;
+ordinaryEval();
+const windowObj = typeof window === "undefined" ? { localStorage: new Map() } : window;
+windowObj.localStorage;
+export function Screen(enabled) {
+  const save = useWrite({
+    mutationFn: async (rows) => Promise.all(rows.map((row) => base44.entities.OrdinaryEvalMember.create(row)))
+  });
+  const rows = [];
+  if (enabled) rows.push({ name: "safe" });
+  save.mutate(rows);
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "OrdinaryEvalMember")!;
+    expect(payload.properties.completeness).toBe("complete");
+  });
+
+  it.each([
+    ["stateful coercion", `const cleaned = {
+  count: 0,
+  toString() { return this.count++ ? "Array.prototype.push = () => 0" : "1"; }
+};`],
+    ["mutable RegExp guard", `RegExp.prototype.test = () => true;
+const cleaned = "Array.prototype.push = () => 0";`],
+    ["aliased RegExp guard", `const RuntimeRegExp = RegExp;
+RuntimeRegExp.prototype.test = () => true;
+const cleaned = "Array.prototype.push = () => 0";`],
+    ["global-member RegExp guard", `globalThis.RegExp.prototype.test = () => true;
+const cleaned = "Array.prototype.push = () => 0";`]
+  ])("rejects an unsound bounded arithmetic guard: %s", async (_caseName, setup) => {
+    const { packet } = await mutationHookFixture(`
+function evaluate() {
+  ${setup}
+  if (!/^[\\d+\\-*/(). ]+$/.test(cleaned)) return null;
+  return new Function(\`return \${cleaned}\`)();
+}
+export function Screen(enabled) {
+  evaluate();
+  const save = useWrite({
+    mutationFn: async (rows) => Promise.all(rows.map((row) => base44.entities.UnsoundArithmeticGuard.create(row)))
+  });
+  const rows = [];
+  if (enabled) rows.push({ name: "safe" });
+  save.mutate(rows);
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "UnsoundArithmeticGuard")!;
+    expect(payload.properties.completeness).not.toBe("complete");
+  });
+
   it("excludes array mutations after a statically terminating statement", async () => {
     const repo = await fixtureRepo();
     await fs.writeFile(path.join(repo, "src/unreachable-array-mutation.ts"), `import { base44 } from "@base44/sdk";
