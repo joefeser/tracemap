@@ -457,6 +457,45 @@ export function Screen() {
     expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("mutation-hook-parameter-state-unresolved");
   });
 
+  it.each([
+    "data = { current: 1 };",
+    "data.current = 1;",
+    "inspect(data);"
+  ])("does not project a mutation callsite through changed or escaped destructured callback state: %s", async (mutation) => {
+    const { packet } = await mutationHookFixture(`
+export function Screen() {
+  const save = useWrite({ mutationFn: ({ data }) => {
+    ${mutation}
+    return base44.entities.DestructuredParameterItem.create(data);
+  } });
+  save.mutate({ data: { stale: 1 } });
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "DestructuredParameterItem")!;
+    expect(payload.properties.completeness).toBe("unresolved");
+    expect(JSON.parse(payload.properties.fieldsJson)).toEqual([]);
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("mutation-hook-parameter-state-unresolved");
+  });
+
+  it("retains a typed gap when a nested function captures callback state before the SDK call", async () => {
+    const { packet } = await mutationHookFixture(`
+export function Screen() {
+  const save = useWrite({ mutationFn: (payload) => {
+    const rewrite = () => { payload.current = 1; };
+    rewrite();
+    return base44.entities.NestedCaptureItem.create(payload);
+  } });
+  save.mutate({ stale: 1 });
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "NestedCaptureItem")!;
+    expect(payload.properties.completeness).toBe("unresolved");
+    expect(JSON.parse(payload.properties.fieldsJson)).toEqual([]);
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("mutation-hook-parameter-state-unresolved");
+  });
+
   it("keeps a typed gap when the hook result is invoked through a computed member", async () => {
     const { packet } = await mutationHookFixture(`
 export function Screen(key) {
@@ -469,6 +508,23 @@ export function Screen(key) {
       && fact.targetSymbol === "ComputedHookItem")!;
     expect(payload.properties.completeness).toBe("partial");
     expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("mutation-hook-computed-member-unresolved");
+  });
+
+  it.each([
+    "{ function save() {}; save.mutate({ unrelated: 1 }); }",
+    "{ class save { static mutate(_value) {} }; save.mutate({ unrelated: 1 }); }"
+  ])("does not treat a function or class shadow as a hook-result callsite: %s", async (shadow) => {
+    const { packet } = await mutationHookFixture(`
+export function Screen() {
+  const save = useWrite({ mutationFn: (payload) => base44.entities.HookShadowItem.create(payload) });
+  ${shadow}
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "HookShadowItem")!;
+    expect(payload.properties.completeness).toBe("unresolved");
+    expect(JSON.parse(payload.properties.fieldsJson)).toEqual([]);
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("mutation-hook-callsite-missing");
   });
 
   it("does not confuse an outer same-named binding with a callback-local parameter", async () => {
