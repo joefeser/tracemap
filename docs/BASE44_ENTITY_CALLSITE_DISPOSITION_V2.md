@@ -70,7 +70,12 @@ prevent dormancy. Explicit static stylesheet imports are outside the executable
 source graph; their existence and bytes remain a separate build/package gate.
 Configured TypeScript/JavaScript path aliases participate in the same graph;
 an unresolved aliased edge blocks dormancy instead of being mistaken for an
-external package.
+external package. Local `extends` chains must remain inside the accepted source.
+Malformed, unreadable, cyclic, externally extended, or ambiguous multi-target
+configuration opens the graph. A bare import is external only when it is a
+platform builtin, an explicit protocol import, or its root package is declared
+by package authority; otherwise it may be a bundler alias and blocks dormancy
+unless it resolves to exact source.
 
 Validation rejects open objects, nonzero reference counters, source/callsite
 mismatch, unsupported extractor versions, incorrect tiers, selector/SDK
