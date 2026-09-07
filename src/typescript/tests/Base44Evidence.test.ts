@@ -406,6 +406,142 @@ export function Screen(extra) {
   });
 
   it.each([
+    [
+      `const save = useWrite({ mutationFn: (payload) => { { let payload; return base44.entities.BlockShadowItem.create(payload); } } });
+       save.mutate({ must_not_be_projected: 1 });`,
+      "BlockShadowItem"
+    ],
+    [
+      `const save = useWrite({ mutationFn: (payload) => { try { throw new Error(); } catch (payload) { return base44.entities.CatchShadowItem.create(payload); } } });
+       save.mutate({ must_not_be_projected: 1 });`,
+      "CatchShadowItem"
+    ]
+  ])("rejects a locally shadowed mutation callback parameter: %s", async (body, entity) => {
+    const { packet } = await mutationHookFixture(`export function Screen() { ${body} }`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload && fact.targetSymbol === entity)!;
+    expect(payload.properties.completeness).toBe("unresolved");
+    expect(JSON.parse(payload.properties.fieldsJson)).toEqual([]);
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("mutation-hook-parameter-shadowed");
+  });
+
+  it("does not confuse an outer same-named binding with a callback-local parameter", async () => {
+    const { packet } = await mutationHookFixture(`
+const payload = { unrelated_outer: 1 };
+export function Screen() {
+  const save = useWrite({ mutationFn: (payload) => base44.entities.CallbackParameterItem.create(payload) });
+  save.mutate({ actual_field: 1 });
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload && fact.targetSymbol === "CallbackParameterItem")!;
+    expect(payload.properties.completeness).toBe("complete");
+    expect(JSON.parse(payload.properties.fieldsJson)).toEqual([expect.objectContaining({ name: "actual_field" })]);
+  });
+
+  it("rejects callbacks that a later mutation option can replace while accepting the surviving callback", async () => {
+    const { packet } = await mutationHookFixture(`
+export function Screen(extra, key) {
+  const spreadOverride = useWrite({
+    mutationFn: (payload) => base44.entities.SpreadOverrideItem.create(payload),
+    ...extra
+  });
+  spreadOverride.mutate({ must_not_be_projected: 1 });
+
+  const duplicateOverride = useWrite({
+    mutationFn: (payload) => base44.entities.DuplicateOldItem.create(payload),
+    mutationFn: (payload) => base44.entities.DuplicateCurrentItem.create(payload)
+  });
+  duplicateOverride.mutate({ current_field: 1 });
+
+  const dynamicOverride = useWrite({
+    mutationFn: (payload) => base44.entities.DynamicOverrideItem.create(payload),
+    [key]: extra
+  });
+  dynamicOverride.mutate({ must_not_be_projected: 1 });
+
+  const explicitAfterSpread = useWrite({
+    ...extra,
+    mutationFn: (payload) => base44.entities.ExplicitCurrentItem.create(payload)
+  });
+  explicitAfterSpread.mutate({ accepted_field: 1 });
+}
+`);
+    for (const [entity, gap] of [
+      ["SpreadOverrideItem", "mutation-hook-callback-override-unresolved"],
+      ["DuplicateOldItem", "mutation-hook-callback-overridden"],
+      ["DynamicOverrideItem", "mutation-hook-callback-override-unresolved"]
+    ]) {
+      const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload && fact.targetSymbol === entity)!;
+      expect(payload.properties.completeness).toBe("unresolved");
+      expect(JSON.parse(payload.properties.fieldsJson)).toEqual([]);
+      expect(JSON.parse(payload.properties.analysisGapsJson)).toContain(gap);
+    }
+    for (const entity of ["DuplicateCurrentItem", "ExplicitCurrentItem"]) {
+      const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload && fact.targetSymbol === entity)!;
+      expect(payload.properties.completeness).toBe("complete");
+      expect(JSON.parse(payload.properties.fieldsJson)).toEqual([expect.objectContaining({
+        name: entity === "DuplicateCurrentItem" ? "current_field" : "accepted_field"
+      })]);
+    }
+  });
+
+  it.each([
+    "vars.data = { current: 1 };",
+    "delete vars.data;",
+    "const alias = vars; alias.data = { current: 1 };",
+    "inspect(vars);"
+  ])("does not project stale fields through a mutated or escaped destructured wrapper: %s", async (mutation) => {
+    const { packet } = await mutationHookFixture(`
+export function Screen() {
+  const save = useWrite({ mutationFn: ({ data }) => base44.entities.WrappedItem.create(data) });
+  const vars = { data: { stale: 1 } };
+  ${mutation}
+  save.mutate(vars);
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload && fact.targetSymbol === "WrappedItem")!;
+    expect(payload.properties.completeness).toBe("unresolved");
+    expect(JSON.parse(payload.properties.fieldsJson)).toEqual([]);
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toEqual(expect.arrayContaining([
+      "mutation-hook-destructured-argument-binding-state-unresolved", "mutation-hook-callsite-incomplete"
+    ]));
+  });
+
+  it.each([
+    ["(...args) => base44.entities.RestItem.create(args)", "mutation-hook-rest-parameter-unsupported"],
+    ["(variables, context) => base44.entities.SecondItem.create(context)", "mutation-hook-parameter-position-unsupported"],
+    ["([payload]) => base44.entities.ArrayBindingItem.create(payload)", "mutation-hook-parameter-binding-pattern-unsupported"]
+  ])("rejects unsupported mutation callback parameter semantics: %s", async (callback, gap) => {
+    const { packet } = await mutationHookFixture(`
+export function Screen() {
+  const save = useWrite({ mutationFn: ${callback} });
+  save.mutate({ must_not_be_projected: 1 });
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload)!;
+    expect(payload.properties.completeness).toBe("unresolved");
+    expect(JSON.parse(payload.properties.fieldsJson)).toEqual([]);
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toContain(gap);
+  });
+
+  it("breaks recursive self-hook analysis with a typed gap", async () => {
+    const { packet } = await mutationHookFixture(`
+export function Screen() {
+  const save = useWrite({ mutationFn: (payload) => {
+    save.mutate(payload);
+    return base44.entities.RecursiveItem.create(payload);
+  } });
+  save.mutate({ externally_observed: 1 });
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload && fact.targetSymbol === "RecursiveItem")!;
+    expect(payload.properties.completeness).toBe("partial");
+    expect(JSON.parse(payload.properties.fieldsJson)).toEqual([
+      expect.objectContaining({ name: "externally_observed", presence: "conditional" })
+    ]);
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("mutation-hook-recursion-unresolved");
+  });
+
+  it.each([
     "const defaults = { branch_only: 1 }; base44.entities.ReviewItem.create(flag ? { ...defaults } : {});",
     "const defaults = { branch_only: 1 }; base44.entities.ReviewItem.create({ ...(flag ? { ...defaults } : {}) });",
     "const defaults = { branch_only: 1 }; base44.entities.ReviewItem.create(flag && { ...defaults });"

@@ -67,9 +67,15 @@ the extractor projects payload shapes from direct `.mutate(...)` and
 callback parameter and statically named object-binding paths such as
 `mutationFn: ({ data }) => ...update(id, data)`. A field is unconditional only
 when every fully resolved callsite supplies it unconditionally. Dynamic
-arguments, later object spreads, missing callsites, method escapes, hook-result
-escapes, and unsupported destructuring remain explicit typed gaps. A local
-function merely named `useMutation` does not establish this proof.
+arguments, missing callsites, method escapes, hook-result escapes, and
+unsupported destructuring remain explicit typed gaps. Projection is also
+refused when a callback parameter is locally shadowed, is a rest/non-first or
+unsupported binding-pattern parameter, or recursively calls its own hook. For
+object-destructured parameters, any intervening reference to the callsite
+wrapper leaves its state unresolved. A later duplicate `mutationFn`, unknown
+spread, or dynamic option key invalidates an earlier callback proof; an explicit
+`mutationFn` after a spread may re-establish it. A local function merely named
+`useMutation` does not establish this proof.
 
 This is syntax-bound callsite evidence, not a claim that React rendered the
 component, a mutation executed, the server accepted the payload, or every
