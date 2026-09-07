@@ -56,7 +56,9 @@ project realm contains no mutation or escape of those intrinsic methods. Any
 unshadowed prototype mutation/reflection capability or
 `__proto__`/`constructor.prototype` access conservatively disables array-derived
 completeness; an unrelated ordinary-object property such as `adapter.map` does
-not.
+not. Dynamic `eval`/`Function` also disables it unless the evaluated expression
+is dominated by an exact terminating allowlist guard whose grammar contains
+only digits, arithmetic operators, parentheses, decimal points, and spaces.
 Statically unreachable mutations after a terminating statement, including a
 terminating `try`/`catch`/`finally`, contribute no field evidence.
 Identifiers, arbitrary calls, properties, or conflicting alternatives remain
