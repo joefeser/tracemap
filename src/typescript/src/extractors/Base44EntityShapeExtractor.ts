@@ -32,6 +32,11 @@ interface ShapeAnalysis {
   gaps: string[];
 }
 
+type PayloadOuterKind = "object" | "array" | "unknown";
+type PayloadReferenceAccounting = "source-bounded" | "unresolved";
+
+const deferredOpenObjectObligation = "entity-open-object-fields:docker-write-readback-cleanup";
+
 interface ShapeContext {
   source: ts.SourceFile;
   callNode: ts.Node;
@@ -261,11 +266,12 @@ function analyzeIdentifier(identifier: ts.Identifier, context: ShapeContext, vis
     const callsiteAnalysis = parameter && analyzeMutationHookParameter(parameter, context, visitedBindings, presence);
     return callsiteAnalysis ?? unresolvedAnalysis("identifier-reference", "binding-initializer-unresolved", candidate);
   }
-  if (!ts.isIdentifier(declaration.name)) return unresolvedAnalysis("identifier-reference", "destructured-binding-unresolved", candidate);
   const bindingContext: ShapeContext = { ...context, callNode: identifier, callPosition: referencePosition };
   const nextVisited = new Set(visitedBindings).add(bindingName);
-  const result = analyzeExpression(declaration.initializer, bindingContext, nextVisited, presence);
-  result.constructionKind = `identifier:${result.constructionKind}`;
+  const result = ts.isIdentifier(declaration.name)
+    ? analyzeExpression(declaration.initializer, bindingContext, nextVisited, presence)
+    : analyzeDestructuredBinding(bindingName, declaration, bindingContext, nextVisited, presence);
+  result.constructionKind = `${ts.isIdentifier(declaration.name) ? "identifier" : "destructured"}:${result.constructionKind}`;
   addBindingMutations(bindingName, declaration, bindingContext, result, presence);
   if (executionScope(declaration) !== executionScope(identifier)) {
     result.gaps.push("binding-cross-execution-scope");
@@ -275,6 +281,42 @@ function analyzeIdentifier(identifier: ts.Identifier, context: ShapeContext, vis
   }
   result.candidateBindings.push(candidate);
   return result;
+}
+
+function analyzeDestructuredBinding(
+  bindingName: string,
+  declaration: ts.VariableDeclaration,
+  context: ShapeContext,
+  visitedBindings: Set<string>,
+  presence: Presence
+): ShapeAnalysis {
+  if (!ts.isObjectBindingPattern(declaration.name) || !declaration.initializer) {
+    return unresolvedAnalysis("identifier-reference", "destructured-binding-unresolved", `binding:${bindingName}`);
+  }
+  const element = declaration.name.elements.find((candidate) => bindingNames(candidate.name).includes(bindingName));
+  if (!element || !element.dotDotDotToken || !ts.isIdentifier(element.name) || element.name.text !== bindingName
+    || element.initializer || declaration.name.elements.at(-1) !== element) {
+    return unresolvedAnalysis("identifier-reference", "destructured-binding-unresolved", `binding:${bindingName}`);
+  }
+  const omitted = new Set<string>();
+  for (const sibling of declaration.name.elements.slice(0, -1)) {
+    if (sibling.dotDotDotToken || sibling.initializer) {
+      return unresolvedAnalysis("identifier-reference", "destructured-binding-unresolved", `binding:${bindingName}`);
+    }
+    const name = sibling.propertyName
+      ? staticPropertyName(sibling.propertyName)
+      : ts.isIdentifier(sibling.name) ? sibling.name.text : null;
+    if (!name) return unresolvedAnalysis("identifier-reference", "destructured-binding-unresolved", `binding:${bindingName}`);
+    omitted.add(name);
+  }
+  const source = analyzeExpression(declaration.initializer, context, visitedBindings, presence);
+  // Object rest copies every own enumerable source field except the statically
+  // named bindings to its left. Unknown/computed source fields and all source
+  // gaps remain intact; this is a projection, never a completeness override.
+  source.fields = source.fields.filter((field) => !omitted.has(field.name));
+  source.constructionKind = `object-rest:${source.constructionKind}`;
+  source.candidateBindings.push(`object-rest:${bindingName}`);
+  return source;
 }
 
 function resolveParameterBindingAt(bindingName: string, useNode: ts.Node): ParameterBinding | null {
@@ -442,7 +484,8 @@ function mutationHookParameterStateGap(binding: ParameterBinding, hook: Mutation
           unsafe = true;
           return;
         }
-        if ((ts.isVariableDeclaration(current) && current.initializer && isAncestor(current.initializer, node))
+        if ((ts.isVariableDeclaration(current) && current.initializer && isAncestor(current.initializer, node)
+          && !isSafeObjectRestProjection(current, node, binding))
           || (ts.isReturnStatement(current) && current.expression && isAncestor(current.expression, node))
           || (ts.isThrowStatement(current) && current.expression && isAncestor(current.expression, node))) {
           unsafe = true;
@@ -454,6 +497,25 @@ function mutationHookParameterStateGap(binding: ParameterBinding, hook: Mutation
   };
   visit(callback);
   return unsafe ? "mutation-hook-parameter-state-unresolved" : null;
+}
+
+function isSafeObjectRestProjection(
+  declaration: ts.VariableDeclaration,
+  reference: ts.Identifier,
+  binding: ParameterBinding
+): boolean {
+  if (!ts.isObjectBindingPattern(declaration.name) || !declaration.initializer
+    || unwrapExpression(declaration.initializer) !== reference) return false;
+  if (binding.propertyPath.length !== 0) return false;
+  const rest = declaration.name.elements.at(-1);
+  if (!rest?.dotDotDotToken || !ts.isIdentifier(rest.name) || rest.initializer) return false;
+  return declaration.name.elements.slice(0, -1).every((element) => {
+    if (element.dotDotDotToken || element.initializer) return false;
+    const propertyName = element.propertyName
+      ? staticPropertyName(element.propertyName)
+      : ts.isIdentifier(element.name) ? element.name.text : null;
+    return propertyName !== null;
+  });
 }
 
 function enclosingIteration(node: ts.Node, boundary: ts.Node): ts.IterationStatement | null {
@@ -865,8 +927,11 @@ function analyzeArrayLiteral(node: ts.ArrayLiteralExpression, context: ShapeCont
 function shapeFact(input: EntityShapeInput, factType: string, ruleId: string, argumentIndex: number, argumentRole: string, analysis: ShapeAnalysis, querySemantics?: ReturnType<typeof extractQuerySemantics>): CodeFact {
   const fields = normalizeFields(analysis.fields);
   const spreads = normalizeSpreads(analysis.spreads);
-  const gaps = unique(analysis.gaps);
-  const completeness = gaps.length === 0 ? "complete" : fields.length > 0 ? "partial" : "unresolved";
+  const payloadContract = factType === FactTypes.Base44EntityPayload ? payloadShapeContract(analysis) : null;
+  const gaps = unique(payloadContract?.gaps ?? analysis.gaps);
+  const completeness = gaps.length === 0 ? "complete"
+    : fields.length > 0 || gaps.includes("runtime-deferred-object-fields") ? "partial"
+    : "unresolved";
   const start = input.source.getLineAndCharacterOfPosition(input.node.getStart(input.source)).line + 1;
   const end = input.source.getLineAndCharacterOfPosition(input.node.getEnd()).line + 1;
   return createFact(
@@ -890,12 +955,48 @@ function shapeFact(input: EntityShapeInput, factType: string, ruleId: string, ar
         fieldsJson: stableArray(fields),
         operationEvidenceId: input.operationEvidenceId,
         operationName: input.operationName,
-        shapeVersion: "1",
+        outerKind: payloadContract?.outerKind,
+        referenceAccounting: payloadContract?.referenceAccounting,
+        runtimeObligationsJson: payloadContract ? stableArray(payloadContract.runtimeObligations) : undefined,
+        shapeVersion: payloadContract ? "2" : "1",
         sourceFileSha256: hash(input.sourceText, 64),
         spreadsJson: stableArray(spreads)
       }
     }
   );
+}
+
+function payloadShapeContract(analysis: ShapeAnalysis): {
+  outerKind: PayloadOuterKind;
+  referenceAccounting: PayloadReferenceAccounting;
+  runtimeObligations: string[];
+  gaps: string[];
+} {
+  const outerKind = provenPayloadOuterKind(analysis.constructionKind);
+  const hasFiniteHookGraph = analysis.candidateBindings.some((binding) => binding.startsWith("mutation-hook:"));
+  const deferredFieldSource = /^(?:spread:)+(?:binding-initializer-unresolved|destructured-binding-unresolved)$/u;
+  const onlyDeferredFieldSources = analysis.gaps.length > 0 && analysis.gaps.every((gap) => deferredFieldSource.test(gap));
+  if (outerKind === "object" && hasFiniteHookGraph && onlyDeferredFieldSources) {
+    return {
+      outerKind,
+      referenceAccounting: "source-bounded",
+      runtimeObligations: [deferredOpenObjectObligation],
+      gaps: ["runtime-deferred-object-fields"]
+    };
+  }
+  return {
+    outerKind,
+    referenceAccounting: analysis.gaps.length === 0 ? "source-bounded" : "unresolved",
+    runtimeObligations: [],
+    gaps: analysis.gaps
+  };
+}
+
+function provenPayloadOuterKind(constructionKind: string): PayloadOuterKind {
+  if (constructionKind === "object-literal" || constructionKind.endsWith(":object-literal")
+    || constructionKind.includes(":object-rest:")) return "object";
+  if (constructionKind === "array-literal" || constructionKind.endsWith(":array-literal")) return "array";
+  return "unknown";
 }
 
 function collectVariableDeclarations(source: ts.SourceFile): Map<string, ts.VariableDeclaration[]> {

@@ -317,6 +317,7 @@ function coverageGapSurface(
 }
 
 function validateCoverageGaps(packet: Base44EvidencePacket): void {
+  validatePayloadShapeContracts(packet);
   if (packet.coverage?.gapSchemaVersion !== base44CoverageGapSchemaVersion) {
     throw new Error(`Unsupported Base44 coverage gap schema: ${packet.coverage?.gapSchemaVersion ?? "missing"}`);
   }
@@ -342,6 +343,47 @@ function validateCoverageGaps(packet: Base44EvidencePacket): void {
   }
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
     throw new Error("Base44 coverage gaps do not match the source-bound Tier4 fact set exactly once");
+  }
+}
+
+function validatePayloadShapeContracts(packet: Base44EvidencePacket): void {
+  for (const fact of packet.facts.filter((candidate) => candidate.factType === FactTypes.Base44EntityPayload)) {
+    if (fact.evidence.extractorVersion === "base44-evidence/0.8.0" && fact.properties.shapeVersion !== "2") {
+      throw new Error(`Base44 payload ${fact.factId} must use shapeVersion 2 for extractor 0.8.0`);
+    }
+    if (fact.properties.shapeVersion !== "2") continue;
+    const outerKind = fact.properties.outerKind;
+    const referenceAccounting = fact.properties.referenceAccounting;
+    if (!new Set(["object", "array", "unknown"]).has(outerKind)) {
+      throw new Error(`Base44 payload ${fact.factId} has an invalid outerKind`);
+    }
+    if (!new Set(["source-bounded", "unresolved"]).has(referenceAccounting)) {
+      throw new Error(`Base44 payload ${fact.factId} has invalid referenceAccounting`);
+    }
+    let obligations: unknown;
+    let gaps: unknown;
+    try {
+      obligations = JSON.parse(fact.properties.runtimeObligationsJson);
+      gaps = JSON.parse(fact.properties.analysisGapsJson);
+    } catch {
+      throw new Error(`Base44 payload ${fact.factId} has malformed payload-shape v2 arrays`);
+    }
+    if (!Array.isArray(obligations) || obligations.some((item) => item !== "entity-open-object-fields:docker-write-readback-cleanup")
+      || new Set(obligations).size !== obligations.length) {
+      throw new Error(`Base44 payload ${fact.factId} has invalid runtime obligations`);
+    }
+    if (!Array.isArray(gaps) || gaps.some((item) => typeof item !== "string")) {
+      throw new Error(`Base44 payload ${fact.factId} has invalid analysis gaps`);
+    }
+    const deferred = gaps.includes("runtime-deferred-object-fields");
+    if (deferred && (outerKind !== "object" || referenceAccounting !== "source-bounded"
+      || fact.properties.completeness !== "partial" || fact.evidenceTier !== EvidenceTiers.Tier4Unknown
+      || obligations.length !== 1)) {
+      throw new Error(`Base44 payload ${fact.factId} has an invalid deferred-object contract`);
+    }
+    if (!deferred && obligations.length > 0) {
+      throw new Error(`Base44 payload ${fact.factId} has an orphaned runtime obligation`);
+    }
   }
 }
 
