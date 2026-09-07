@@ -59,6 +59,30 @@ shadow outer bindings; unsupported initializers remain unresolved rather than
 borrowing unrelated outer fields. Destructuring emits
 `destructured-binding-unresolved`.
 
+Extractor `base44-evidence/0.6.0` adds a narrow parameter proof for mutation
+callbacks passed directly to a source-proven `useMutation` import from
+`@tanstack/react-query`. When the hook result is held in one local variable,
+the extractor projects payload shapes from direct `.mutate(...)` and
+`.mutateAsync(...)` callsites in the same source file. It supports a direct
+callback parameter and statically named object-binding paths such as
+`mutationFn: ({ data }) => ...update(id, data)`. A field is unconditional only
+when every fully resolved callsite supplies it unconditionally. Dynamic
+arguments, missing callsites, method escapes, hook-result escapes, and
+unsupported destructuring remain explicit typed gaps. Projection is also
+refused when a callback parameter is locally shadowed, is a rest/non-first or
+unsupported binding-pattern parameter, or recursively calls its own hook. For
+object-destructured parameters, any intervening reference to the callsite
+wrapper leaves its state unresolved. A later duplicate `mutationFn`, unknown
+spread, or dynamic option key invalidates an earlier callback proof; an explicit
+`mutationFn` after a spread may re-establish it. A local function merely named
+`useMutation` does not establish this proof.
+
+This is syntax-bound callsite evidence, not a claim that React rendered the
+component, a mutation executed, the server accepted the payload, or every
+runtime value has a known type. The extractor does not follow hook results
+across modules, evaluate arbitrary callbacks, or treat hook/framework names as
+authority without the exact runtime import.
+
 Operation linkage includes source character offsets as well as line spans and
 syntax hashes, so identical calls on one line remain distinct. Extractor
 `base44-evidence/0.2.1` changes these derived IDs; regenerate both comparison
