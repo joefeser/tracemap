@@ -69,6 +69,8 @@ export interface EntityShapeInput {
   entityName: string;
   operationName: string;
   operationEvidenceId: string;
+  sdkIdentityGap: string;
+  sdkIdentityJson: string;
 }
 
 const mutationPayloadIndex = new Map<string, number>([
@@ -1073,6 +1075,8 @@ function shapeFact(input: EntityShapeInput, factType: string, ruleId: string, ar
         outerKind: payloadContract?.outerKind,
         referenceAccounting: payloadContract?.referenceAccounting,
         runtimeObligationsJson: payloadContract ? stableArray(payloadContract.runtimeObligations) : undefined,
+        sdkIdentityGap: input.sdkIdentityGap,
+        sdkIdentityJson: input.sdkIdentityJson,
         shapeVersion: payloadContract ? "2" : "1",
         sourceFileSha256: hash(input.sourceText, 64),
         spreadsJson: stableArray(spreads)

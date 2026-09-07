@@ -125,6 +125,32 @@ describe("Base44 source-bound static evidence", () => {
       completeness: "unresolved",
       analysisGapsJson: '["import-file-payload-not-entity-shape"]'
     }));
+    const frontendOperation = operations.find((fact) => fact.targetSymbol === "Order" && fact.properties.operationName === "create")!;
+    expect(JSON.parse(frontendOperation.properties.sdkIdentityJson)).toEqual({
+      schemaVersion: "88mph.base44-sdk-callsite-identity.v1",
+      packageName: "@base44/sdk",
+      version: "0.8.5",
+      scope: "frontend-package",
+      rawSpecifier: "@base44/sdk",
+      evidence: [
+        expect.objectContaining({ authorityPath: "package-lock.json", kind: "package-lock-resolution" }),
+        expect.objectContaining({ authorityPath: "package.json", kind: "package-manifest" }),
+        expect.objectContaining({ authorityPath: "src/app.ts", kind: "source-import" })
+      ]
+    });
+    const functionOperation = operations.find((fact) => fact.evidence.filePath === "base44/functions/sendReceipt/server.ts")!;
+    expect(JSON.parse(functionOperation.properties.sdkIdentityJson)).toEqual({
+      schemaVersion: "88mph.base44-sdk-callsite-identity.v1",
+      packageName: "@base44/sdk",
+      version: "0.8.4",
+      scope: "function-runtime",
+      rawSpecifier: "npm:@base44/sdk@0.8.4",
+      evidence: [expect.objectContaining({
+        authorityPath: "base44/functions/sendReceipt/server.ts",
+        authoritySha256: functionOperation.properties.sourceFileSha256,
+        kind: "source-import"
+      })]
+    });
     expect(packet.facts).toContainEqual(expect.objectContaining({
       factType: FactTypes.Base44FunctionInvocation,
       targetSymbol: "serviceFunction"
@@ -199,6 +225,76 @@ describe("Base44 source-bound static evidence", () => {
       targetSymbol: "HELPER_TOKEN",
       evidence: expect.objectContaining({ filePath: "src/helper.ts" })
     }));
+    const indirectIdentity = JSON.parse(helperOperations.find((fact) => fact.targetSymbol === "Vendor")!.properties.sdkIdentityJson);
+    expect(indirectIdentity.evidence.map((item: {authorityPath: string}) => item.authorityPath)).toEqual([
+      "package-lock.json",
+      "package.json",
+      "src/app.ts"
+    ]);
+    expect(indirectIdentity.evidence.some((item: {authorityPath: string}) => item.authorityPath === "src/helper.ts")).toBe(false);
+  });
+
+  it("binds SDK identity to source roots and fails closed for ambiguous or tampered authority", async () => {
+    const repo = await mixedSdkIdentityFixtureRepo();
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-sdk-identity-"));
+    try {
+      const {packet} = await buildBase44Evidence(options(repo, out));
+      const operations = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation);
+      const frontend = operations.find((fact) => fact.targetSymbol === "FrontendItem")!;
+      const functionRuntime = operations.find((fact) => fact.targetSymbol === "FunctionItem")!;
+      const ambiguous = operations.find((fact) => fact.targetSymbol === "AmbiguousItem")!;
+      expect(JSON.parse(frontend.properties.sdkIdentityJson)).toMatchObject({version: "0.8.5", scope: "frontend-package"});
+      expect(JSON.parse(functionRuntime.properties.sdkIdentityJson)).toMatchObject({version: "0.8.4", scope: "function-runtime"});
+      expect(ambiguous.properties).toMatchObject({
+        sdkIdentityGap: "sdk-identity-source-root-ambiguous",
+        sdkIdentityJson: ""
+      });
+      expect(ambiguous.evidenceTier).toBe("Tier4Unknown");
+
+      const tampered = structuredClone(packet);
+      const tamperedOperation = tampered.facts.find((fact) => fact.factId === frontend.factId)!;
+      const tamperedIdentity = JSON.parse(tamperedOperation.properties.sdkIdentityJson);
+      tamperedIdentity.evidence.find((item: {kind: string}) => item.kind === "source-import").authoritySha256 = "f".repeat(64);
+      tamperedOperation.properties.sdkIdentityJson = JSON.stringify(tamperedIdentity);
+      const tamperedPath = path.join(out, "tampered-sdk-identity.json");
+      await fs.writeFile(tamperedPath, `${JSON.stringify(tampered, null, 2)}\n`);
+      await expect(diffBase44Evidence(
+        path.join(out, "base44-evidence.json"),
+        tamperedPath,
+        path.join(out, "tampered-sdk-identity-diff.json")
+      )).rejects.toThrow("not bound to an extracted runtime import");
+
+      const branchLoss = structuredClone(packet);
+      const ambiguousOperation = branchLoss.facts.find((fact) => fact.factId === ambiguous.factId)!;
+      ambiguousOperation.properties.sdkIdentityGap = "";
+      ambiguousOperation.properties.sdkIdentityJson = frontend.properties.sdkIdentityJson;
+      const branchLossPath = path.join(out, "sdk-identity-branch-loss.json");
+      await fs.writeFile(branchLossPath, `${JSON.stringify(branchLoss, null, 2)}\n`);
+      await expect(diffBase44Evidence(
+        path.join(out, "base44-evidence.json"),
+        branchLossPath,
+        path.join(out, "sdk-identity-branch-loss-diff.json")
+      )).rejects.toThrow("with an exact SDK identity must retain Tier3SyntaxOrTextual");
+
+      await fs.rm(path.join(repo, "package-lock.json"));
+      const missingOut = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-sdk-identity-missing-"));
+      try {
+        const missing = await buildBase44Evidence(options(repo, missingOut));
+        expect(missing.packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityOperation
+          && fact.targetSymbol === "FrontendItem")).toEqual(expect.objectContaining({
+          evidenceTier: "Tier4Unknown",
+          properties: expect.objectContaining({
+            sdkIdentityGap: "sdk-identity-package-authority-missing",
+            sdkIdentityJson: ""
+          })
+        }));
+      } finally {
+        await fs.rm(missingOut, {recursive: true, force: true});
+      }
+    } finally {
+      await fs.rm(repo, {recursive: true, force: true});
+      await fs.rm(out, {recursive: true, force: true});
+    }
   });
 
   it("emits deterministic payload presence, type, binding, spread and ambiguity evidence without values", async () => {
@@ -1139,7 +1235,7 @@ async function fixtureRepo(): Promise<string> {
   await fs.mkdir(path.join(repo, "base44/functions/sendReceipt"), { recursive: true });
   await fs.mkdir(path.join(repo, "base44/migrations"), { recursive: true });
   await fs.mkdir(path.join(repo, "reports"), { recursive: true });
-  await fs.writeFile(path.join(repo, "package.json"), JSON.stringify({ dependencies: { "@base44/sdk": "0.8.3" } }));
+  await writeFrontendSdkAuthority(repo);
   await fs.writeFile(path.join(repo, "src/app.ts"), `import { base44 } from "@base44/sdk";
 export async function run() {
   await base44.auth.me();
@@ -1174,7 +1270,7 @@ export async function currentSdkSurfaces() {
   return new Response(token ? "configured" : "missing");
 });
 `);
-  await fs.writeFile(path.join(repo, "base44/functions/sendReceipt/server.ts"), `import axios from "axios";\nimport { createClientFromRequest } from "npm:@base44/sdk@0.8.39";\nconst serviceClient = createClientFromRequest(new Request("https://example.invalid"));\nexport const load = async () => { await axios.post("https://mail.example.invalid/send", {}); return serviceClient.entities.Order.list(); };\n`);
+  await fs.writeFile(path.join(repo, "base44/functions/sendReceipt/server.ts"), `import axios from "axios";\nimport { createClientFromRequest } from "npm:@base44/sdk@0.8.4";\nconst serviceClient = createClientFromRequest(new Request("https://example.invalid"));\nexport const load = async () => { await axios.post("https://mail.example.invalid/send", {}); return serviceClient.entities.Order.list(); };\n`);
   await fs.writeFile(path.join(repo, "base44/migrations/001.sql"), "-- drop table retained;\n/* alter table ignored; */\ncreate table orders (id text primary key);\ncreate policy orders_rls on orders;\n");
   await fs.writeFile(path.join(repo, "reports/query.sql"), "select * from orders;\n");
   execFileSync("git", ["init", "-q"], { cwd: repo });
@@ -1199,9 +1295,41 @@ async function nonBase44MigrationRepo(): Promise<string> {
   return repo;
 }
 
+async function mixedSdkIdentityFixtureRepo(): Promise<string> {
+  const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-mixed-sdk-identity-fixture-"));
+  await fs.mkdir(path.join(repo, "src"), {recursive: true});
+  await fs.mkdir(path.join(repo, "functions/task"), {recursive: true});
+  await writeFrontendSdkAuthority(repo);
+  await fs.writeFile(path.join(repo, "src/helper.ts"), `
+export function writeAmbiguous(client, payload) {
+  return client.entities.AmbiguousItem.create(payload);
+}
+`);
+  await fs.writeFile(path.join(repo, "src/app.ts"), `import {base44} from "@base44/sdk";
+import {writeAmbiguous} from "./helper";
+export function run(payload) {
+  base44.entities.FrontendItem.create(payload);
+  return writeAmbiguous(base44, payload);
+}
+`);
+  await fs.writeFile(path.join(repo, "functions/task/index.ts"), `import {createClientFromRequest} from "npm:@base44/sdk@0.8.4";
+import {writeAmbiguous} from "../../src/helper";
+const base44 = createClientFromRequest(new Request("https://example.invalid"));
+export function run(payload) {
+  base44.entities.FunctionItem.create(payload);
+  return writeAmbiguous(base44, payload);
+}
+`);
+  execFileSync("git", ["init", "-q"], {cwd: repo});
+  execFileSync("git", ["add", "."], {cwd: repo});
+  execFileSync("git", ["-c", "user.name=TraceMap Test", "-c", "user.email=tracemap@example.invalid", "commit", "-qm", "fixture"], {cwd: repo});
+  return repo;
+}
+
 async function coverageGapFixtureRepo(): Promise<string> {
   const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-coverage-gap-fixture-"));
   await fs.mkdir(path.join(repo, "src"), { recursive: true });
+  await writeFrontendSdkAuthority(repo);
   await fs.writeFile(path.join(repo, "src/app.ts"), `import { base44 } from "@base44/sdk";
 export async function run(functionName, file, environmentName, url) {
   await base44.functions.invoke(functionName, {});
@@ -1221,7 +1349,7 @@ export async function run(functionName, file, environmentName, url) {
 async function injectedClientFixtureRepo(): Promise<string> {
   const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-injected-client-fixture-"));
   await fs.mkdir(path.join(repo, "src"), { recursive: true });
-  await fs.writeFile(path.join(repo, "package.json"), JSON.stringify({ dependencies: { "@base44/sdk": "0.8.5" } }));
+  await writeFrontendSdkAuthority(repo);
   await fs.writeFile(path.join(repo, "src/helper.ts"), `
 export async function useClient(materialId, client, organizationId) {
   const vendors = await client.entities.Vendor.list("name", 1000);
@@ -1303,7 +1431,7 @@ export async function run(id, org) {
 async function payloadFixtureRepo(): Promise<string> {
   const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-payload-fixture-"));
   await fs.mkdir(path.join(repo, "src"), { recursive: true });
-  await fs.writeFile(path.join(repo, "package.json"), JSON.stringify({ dependencies: { "@base44/sdk": "0.8.5" } }));
+  await writeFrontendSdkAuthority(repo);
   await fs.writeFile(path.join(repo, "src/app.ts"), `import { base44 } from "@base44/sdk";
 const modulePayload = { module_initial: 1 };
 modulePayload.module_assigned = 2;
@@ -1370,6 +1498,7 @@ async function reviewFixture(body: string) {
   const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-review-fixture-"));
   const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-review-out-"));
   try {
+    await writeFrontendSdkAuthority(repo);
     await fs.writeFile(path.join(repo, "app.ts"), `import { base44 } from "@base44/sdk";
 export function run(flag) { ${body} }
 `);
@@ -1388,6 +1517,7 @@ async function mutationHookFixture(body: string, replay = false) {
   const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-mutation-hook-out-"));
   const replayOut = replay ? await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-mutation-hook-replay-")) : null;
   try {
+    await writeFrontendSdkAuthority(repo);
     await fs.writeFile(path.join(repo, "app.ts"), `import { base44 } from "@base44/sdk";
 import { useMutation as useWrite } from "@tanstack/react-query";
 import * as ReactQuery from "@tanstack/react-query";
@@ -1404,4 +1534,18 @@ ${body}
     await fs.rm(out, { recursive: true, force: true });
     if (replayOut) await fs.rm(replayOut, { recursive: true, force: true });
   }
+}
+
+async function writeFrontendSdkAuthority(repo: string): Promise<void> {
+  const requested = "^0.8.3";
+  await fs.writeFile(path.join(repo, "package.json"), `${JSON.stringify({ dependencies: { "@base44/sdk": requested } }, null, 2)}\n`);
+  await fs.writeFile(path.join(repo, "package-lock.json"), `${JSON.stringify({
+    name: "base44-fixture",
+    lockfileVersion: 3,
+    requires: true,
+    packages: {
+      "": { dependencies: { "@base44/sdk": requested } },
+      "node_modules/@base44/sdk": { version: "0.8.5" }
+    }
+  }, null, 2)}\n`);
 }

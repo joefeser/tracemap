@@ -21,6 +21,7 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
   const sourceItems = inventory.filter((file) => !file.skipped && /\.[jt]sx?$/.test(file.relativePath) && !file.relativePath.endsWith(".d.ts"));
   const migrationItems = inventory.filter((file) => !file.skipped && file.relativePath.endsWith(".sql") && isMigrationPath(file.relativePath));
   const aliasDiscovery = await buildAliasMaps(sourceItems);
+  const frontendPackageAuthority = await loadFrontendPackageAuthority(inventory);
   for (const item of inventory.filter((file) => !file.skipped)) {
     if (item.relativePath.endsWith(".sql")) {
       continue;
@@ -33,6 +34,10 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
     const aliases = aliasDiscovery.aliasesByFile.get(item.relativePath) ?? new Map<string, string[]>();
     const factoryAliases = aliasDiscovery.factoryAliasesByFile.get(item.relativePath) ?? new Set<string>();
     const injectedParameters = aliasDiscovery.injectedParametersByFile.get(item.relativePath) ?? new Map<number, string[]>();
+    const sdkIdentity = resolveSdkIdentity(
+      aliasDiscovery.sdkAuthorityRootsByFile.get(item.relativePath) ?? [],
+      frontendPackageAuthority
+    );
     const base44Context = aliases.size > 0
       || injectedParameters.size > 0
       || source.statements.some((statement) => ts.isImportDeclaration(statement)
@@ -51,7 +56,7 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
         sourceFileSha256: hash(text, 64)
       }));
     }
-    visit(source, source, item.relativePath, text, aliases, factoryAliases, injectedParameters, base44Context, manifest, facts);
+    visit(source, source, item.relativePath, text, aliases, factoryAliases, injectedParameters, base44Context, manifest, facts, sdkIdentity);
     if (isFunctionEntry(item.relativePath)) {
       const name = functionName(item.relativePath);
       facts.push(fact(manifest, FactTypes.Base44FunctionSurface, RuleIds.Base44FunctionSurface, source, source, item.relativePath, name, {
@@ -77,11 +82,11 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
   return facts;
 }
 
-function visit(node: ts.Node, source: ts.SourceFile, filePath: string, text: string, aliases: Map<string, string[]>, factoryAliases: Set<string>, injectedParameters: Map<number, string[]>, base44Context: boolean, manifest: ScanManifest, facts: CodeFact[]): void {
+function visit(node: ts.Node, source: ts.SourceFile, filePath: string, text: string, aliases: Map<string, string[]>, factoryAliases: Set<string>, injectedParameters: Map<number, string[]>, base44Context: boolean, manifest: ScanManifest, facts: CodeFact[], sdkIdentity: SdkIdentityResolution): void {
   if (ts.isCallExpression(node)) {
     const chain = expressionChain(node.expression);
     const binding = chain ? resolveRuntimeAlias(chain[0], node, source, aliases, factoryAliases, injectedParameters, new Set()) : null;
-    if (chain && binding) addSdkCall([...binding.prefix, ...chain.slice(1)], node, source, filePath, text, manifest, facts, binding.kind);
+    if (chain && binding) addSdkCall([...binding.prefix, ...chain.slice(1)], node, source, filePath, text, manifest, facts, binding.kind, sdkIdentity);
     if (base44Context && chain?.join(".") === "Deno.env.get") {
       const name = stringArgument(node.arguments[0]);
       facts.push(fact(manifest, FactTypes.Base44EnvironmentAccess, RuleIds.Base44EnvironmentAccess, node, source, filePath, name ?? "dynamic", {
@@ -101,10 +106,10 @@ function visit(node: ts.Node, source: ts.SourceFile, filePath: string, text: str
       }, origin ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier4Unknown));
     }
   }
-  ts.forEachChild(node, (child) => visit(child, source, filePath, text, aliases, factoryAliases, injectedParameters, base44Context, manifest, facts));
+  ts.forEachChild(node, (child) => visit(child, source, filePath, text, aliases, factoryAliases, injectedParameters, base44Context, manifest, facts, sdkIdentity));
 }
 
-function addSdkCall(chain: string[], node: ts.CallExpression, source: ts.SourceFile, filePath: string, text: string, manifest: ScanManifest, facts: CodeFact[], clientBindingKind: string): void {
+function addSdkCall(chain: string[], node: ts.CallExpression, source: ts.SourceFile, filePath: string, text: string, manifest: ScanManifest, facts: CodeFact[], clientBindingKind: string, sdkIdentity: SdkIdentityResolution): void {
   const rootIndex = chain.findIndex((part) => primitiveRoots.has(part));
   if (rootIndex < 0) return;
   const relative = chain.slice(rootIndex);
@@ -149,10 +154,16 @@ function addSdkCall(chain: string[], node: ts.CallExpression, source: ts.SourceF
       ...clientBindingEvidence,
       operationEvidenceId,
       operationName,
+      sdkIdentityGap: sdkIdentity.gap ?? "",
+      sdkIdentityJson: sdkIdentity.identity ? JSON.stringify(sdkIdentity.identity) : "",
       sourceFileSha256: hash(text, 64)
-    });
+    }, sdkIdentity.identity ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier4Unknown);
     facts.push(operationFact);
-    facts.push(...extractEntityShapeFacts({ manifest, node, source, filePath, sourceText: text, entityName, operationName, operationEvidenceId }));
+    facts.push(...extractEntityShapeFacts({
+      manifest, node, source, filePath, sourceText: text, entityName, operationName, operationEvidenceId,
+      sdkIdentityGap: sdkIdentity.gap ?? "",
+      sdkIdentityJson: sdkIdentity.identity ? JSON.stringify(sdkIdentity.identity) : ""
+    }));
   }
 }
 
@@ -256,6 +267,39 @@ interface AliasDiscovery {
   aliasesByFile: Map<string, Map<string, string[]>>;
   factoryAliasesByFile: Map<string, Set<string>>;
   injectedParametersByFile: Map<string, Map<number, string[]>>;
+  sdkAuthorityRootsByFile: Map<string, SdkAuthorityRoot[]>;
+}
+
+interface SdkAuthorityRoot {
+  authorityPath: string;
+  authoritySha256: string;
+  rawSpecifier: string;
+}
+
+interface SdkIdentityEvidence {
+  authorityPath: string;
+  authoritySha256: string;
+  kind: "source-import" | "package-manifest" | "package-lock-resolution";
+}
+
+interface SdkIdentity {
+  schemaVersion: "88mph.base44-sdk-callsite-identity.v1";
+  packageName: "@base44/sdk";
+  version: "0.8.4" | "0.8.5";
+  scope: "function-runtime" | "frontend-package";
+  rawSpecifier: string;
+  evidence: SdkIdentityEvidence[];
+}
+
+interface SdkIdentityResolution {
+  identity?: SdkIdentity;
+  gap?: string;
+}
+
+interface FrontendPackageAuthority {
+  identityEvidence?: SdkIdentityEvidence[];
+  version?: string;
+  gap?: string;
 }
 
 interface ParameterSource {
@@ -292,7 +336,162 @@ async function buildAliasMaps(items: readonly FileInventoryItem[]): Promise<Alia
   return {
     aliasesByFile: new Map([...contexts].map(([filePath, context]) => [filePath, context.aliases])),
     factoryAliasesByFile: new Map([...contexts].map(([filePath, context]) => [filePath, context.factoryAliases])),
-    injectedParametersByFile: discoverInjectedParameterAliases(contexts)
+    injectedParametersByFile: discoverInjectedParameterAliases(contexts),
+    sdkAuthorityRootsByFile: discoverSdkAuthorityRoots(contexts)
+  };
+}
+
+function discoverSdkAuthorityRoots(contexts: Map<string, SourceContext>): Map<string, SdkAuthorityRoot[]> {
+  const direct = new Map<string, SdkAuthorityRoot[]>();
+  const imports = new Map<string, string[]>();
+  const importers = new Map<string, string[]>();
+  for (const [filePath, context] of contexts) {
+    const roots: SdkAuthorityRoot[] = [];
+    const targets: string[] = [];
+    for (const statement of context.source.statements) {
+      if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)
+        || statement.importClause?.isTypeOnly) continue;
+      const rawSpecifier = statement.moduleSpecifier.text;
+      if (isBase44SdkClientImport(rawSpecifier)) {
+        roots.push({
+          authorityPath: filePath,
+          authoritySha256: hash(context.source.getFullText(), 64),
+          rawSpecifier
+        });
+      }
+      const target = resolveLocalModule(filePath, rawSpecifier, contexts);
+      if (target) {
+        targets.push(target);
+        importers.set(target, [...(importers.get(target) ?? []), filePath]);
+      }
+    }
+    direct.set(filePath, normalizeSdkRoots(roots));
+    imports.set(filePath, uniqueStrings(targets));
+  }
+
+  const forward = new Map([...direct].map(([filePath, roots]) => [filePath, [...roots]]));
+  for (let pass = 0; pass < contexts.size + 1; pass++) {
+    let changed = false;
+    for (const filePath of contexts.keys()) {
+      const roots = normalizeSdkRoots([
+        ...(forward.get(filePath) ?? []),
+        ...(imports.get(filePath) ?? []).flatMap((target) => forward.get(target) ?? [])
+      ]);
+      if (JSON.stringify(roots) !== JSON.stringify(forward.get(filePath) ?? [])) {
+        forward.set(filePath, roots);
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+
+  const result = new Map<string, SdkAuthorityRoot[]>();
+  for (const filePath of contexts.keys()) {
+    const rooted = forward.get(filePath) ?? [];
+    if (rooted.length > 0) {
+      result.set(filePath, rooted);
+      continue;
+    }
+    // A callsite-proven injected client may flow into an otherwise SDK-free
+    // helper. Conservatively collect every importing source root; ambiguity is
+    // retained for the per-operation resolver rather than selecting by path.
+    const visited = new Set<string>([filePath]);
+    const queue = [...(importers.get(filePath) ?? [])];
+    const roots: SdkAuthorityRoot[] = [];
+    while (queue.length) {
+      const importer = queue.shift()!;
+      if (visited.has(importer)) continue;
+      visited.add(importer);
+      roots.push(...(forward.get(importer) ?? []));
+      queue.push(...(importers.get(importer) ?? []));
+    }
+    result.set(filePath, normalizeSdkRoots(roots));
+  }
+  return result;
+}
+
+function normalizeSdkRoots(roots: SdkAuthorityRoot[]): SdkAuthorityRoot[] {
+  const byKey = new Map(roots.map((root) => [JSON.stringify(root), root]));
+  return [...byKey.values()].sort((left, right) => left.authorityPath.localeCompare(right.authorityPath)
+    || left.rawSpecifier.localeCompare(right.rawSpecifier)
+    || left.authoritySha256.localeCompare(right.authoritySha256));
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
+}
+
+async function loadFrontendPackageAuthority(inventory: readonly FileInventoryItem[]): Promise<FrontendPackageAuthority> {
+  const manifest = inventory.find((item) => !item.skipped && item.relativePath === "package.json");
+  const lock = inventory.find((item) => !item.skipped && item.relativePath === "package-lock.json");
+  if (!manifest || !lock) return { gap: "sdk-identity-package-authority-missing" };
+  try {
+    const [manifestText, lockText] = await Promise.all([
+      fs.readFile(manifest.absolutePath, "utf8"),
+      fs.readFile(lock.absolutePath, "utf8")
+    ]);
+    const manifestJson = JSON.parse(manifestText) as Record<string, any>;
+    const lockJson = JSON.parse(lockText) as Record<string, any>;
+    const requested = manifestJson.dependencies?.["@base44/sdk"] ?? manifestJson.devDependencies?.["@base44/sdk"];
+    const lockedRequested = lockJson.packages?.[""]?.dependencies?.["@base44/sdk"]
+      ?? lockJson.packages?.[""]?.devDependencies?.["@base44/sdk"];
+    const version = lockJson.packages?.["node_modules/@base44/sdk"]?.version;
+    if (typeof requested !== "string" || requested !== lockedRequested || typeof version !== "string") {
+      return { gap: "sdk-identity-package-authority-invalid" };
+    }
+    return {
+      version,
+      identityEvidence: [
+        { authorityPath: manifest.relativePath, authoritySha256: hash(manifestText, 64), kind: "package-manifest" },
+        { authorityPath: lock.relativePath, authoritySha256: hash(lockText, 64), kind: "package-lock-resolution" }
+      ]
+    };
+  } catch {
+    return { gap: "sdk-identity-package-authority-invalid" };
+  }
+}
+
+function resolveSdkIdentity(roots: SdkAuthorityRoot[], frontend: FrontendPackageAuthority): SdkIdentityResolution {
+  if (roots.length === 0) return { gap: "sdk-identity-source-root-missing" };
+  const identities = roots.map((root): SdkIdentityResolution => {
+    const sourceEvidence: SdkIdentityEvidence = {
+      authorityPath: root.authorityPath,
+      authoritySha256: root.authoritySha256,
+      kind: "source-import"
+    };
+    if (root.rawSpecifier === "npm:@base44/sdk@0.8.4") {
+      return { identity: sdkIdentity("0.8.4", "function-runtime", root.rawSpecifier, [sourceEvidence]) };
+    }
+    if (root.rawSpecifier === "@base44/sdk") {
+      if (frontend.gap || !frontend.identityEvidence || !frontend.version) return { gap: frontend.gap ?? "sdk-identity-package-authority-invalid" };
+      if (frontend.version !== "0.8.5") return { gap: "sdk-identity-version-unsupported" };
+      return { identity: sdkIdentity("0.8.5", "frontend-package", root.rawSpecifier, [sourceEvidence, ...frontend.identityEvidence]) };
+    }
+    return { gap: "sdk-identity-specifier-unsupported" };
+  });
+  const gaps = uniqueStrings(identities.flatMap((candidate) => candidate.gap ? [candidate.gap] : []));
+  const values = new Map(identities.flatMap((candidate) => candidate.identity
+    ? [[JSON.stringify(candidate.identity), candidate.identity] as const] : []));
+  if (gaps.length > 0) return { gap: gaps.length === 1 ? gaps[0] : "sdk-identity-source-root-ambiguous" };
+  if (values.size !== 1) return { gap: "sdk-identity-source-root-ambiguous" };
+  return { identity: [...values.values()][0] };
+}
+
+function sdkIdentity(
+  version: "0.8.4" | "0.8.5",
+  scope: "function-runtime" | "frontend-package",
+  rawSpecifier: string,
+  evidence: SdkIdentityEvidence[]
+): SdkIdentity {
+  return {
+    schemaVersion: "88mph.base44-sdk-callsite-identity.v1",
+    packageName: "@base44/sdk",
+    version,
+    scope,
+    rawSpecifier,
+    evidence: [...evidence].sort((left, right) => left.kind.localeCompare(right.kind)
+      || left.authorityPath.localeCompare(right.authorityPath)
+      || left.authoritySha256.localeCompare(right.authoritySha256))
   };
 }
 

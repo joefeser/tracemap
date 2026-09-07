@@ -318,6 +318,7 @@ function coverageGapSurface(
 
 function validateCoverageGaps(packet: Base44EvidencePacket): void {
   validatePayloadShapeContracts(packet);
+  validateSdkIdentityContracts(packet);
   if (packet.coverage?.gapSchemaVersion !== base44CoverageGapSchemaVersion) {
     throw new Error(`Unsupported Base44 coverage gap schema: ${packet.coverage?.gapSchemaVersion ?? "missing"}`);
   }
@@ -348,7 +349,7 @@ function validateCoverageGaps(packet: Base44EvidencePacket): void {
 
 function validatePayloadShapeContracts(packet: Base44EvidencePacket): void {
   for (const fact of packet.facts.filter((candidate) => candidate.factType === FactTypes.Base44EntityPayload)) {
-    if (["base44-evidence/0.8.0", "base44-evidence/0.9.0"].includes(fact.evidence.extractorVersion)
+    if (["base44-evidence/0.8.0", "base44-evidence/0.9.0", "base44-evidence/0.10.0"].includes(fact.evidence.extractorVersion)
       && fact.properties.shapeVersion !== "2") {
       throw new Error(`Base44 payload ${fact.factId} must use shapeVersion 2 for extractor ${fact.evidence.extractorVersion}`);
     }
@@ -388,6 +389,114 @@ function validatePayloadShapeContracts(packet: Base44EvidencePacket): void {
     if (!deferred && obligations.length > 0) {
       throw new Error(`Base44 payload ${fact.factId} has an orphaned runtime obligation`);
     }
+  }
+}
+
+const sdkIdentityGapTokens = new Set([
+  "sdk-identity-source-root-missing",
+  "sdk-identity-source-root-ambiguous",
+  "sdk-identity-specifier-unsupported",
+  "sdk-identity-package-authority-missing",
+  "sdk-identity-package-authority-invalid",
+  "sdk-identity-version-unsupported"
+]);
+
+function validateSdkIdentityContracts(packet: Base44EvidencePacket): void {
+  const identityFactTypes = new Set<string>([
+    FactTypes.Base44EntityOperation,
+    FactTypes.Base44EntityPayload,
+    FactTypes.Base44EntityQuery
+  ]);
+  const facts = packet.facts.filter((fact) => fact.evidence.extractorVersion === "base44-evidence/0.10.0"
+    && identityFactTypes.has(fact.factType));
+  const operations = new Map(facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation)
+    .map((fact) => [fact.properties.operationEvidenceId, fact]));
+  const runtimeSdkImports = packet.facts.filter((fact) => fact.factType === FactTypes.Base44SdkImport
+    && fact.properties.importKind === "runtime");
+  for (const fact of facts) {
+    const identityJson = fact.properties.sdkIdentityJson;
+    const gap = fact.properties.sdkIdentityGap;
+    if (gap) {
+      if (!sdkIdentityGapTokens.has(gap) || identityJson) throw new Error(`Base44 fact ${fact.factId} has an invalid SDK identity gap`);
+      if (fact.factType === FactTypes.Base44EntityOperation && fact.evidenceTier !== EvidenceTiers.Tier4Unknown) {
+        throw new Error(`Base44 operation ${fact.factId} must retain Tier4Unknown for an SDK identity gap`);
+      }
+    } else {
+      if (!identityJson) throw new Error(`Base44 fact ${fact.factId} is missing its SDK identity`);
+      validateSdkIdentityJson(fact, identityJson, runtimeSdkImports);
+      if (fact.factType === FactTypes.Base44EntityOperation && fact.evidenceTier !== EvidenceTiers.Tier3SyntaxOrTextual) {
+        throw new Error(`Base44 operation ${fact.factId} with an exact SDK identity must retain Tier3SyntaxOrTextual`);
+      }
+    }
+    if (fact.factType !== FactTypes.Base44EntityOperation) {
+      const operation = operations.get(fact.properties.operationEvidenceId);
+      if (!operation || operation.properties.sdkIdentityJson !== identityJson || operation.properties.sdkIdentityGap !== gap) {
+        throw new Error(`Base44 shape ${fact.factId} does not retain its operation SDK identity exactly`);
+      }
+    }
+  }
+}
+
+function validateSdkIdentityJson(fact: Base44PacketFact, identityJson: string, runtimeSdkImports: Base44PacketFact[]): void {
+  let identity: Record<string, any>;
+  try {
+    identity = JSON.parse(identityJson);
+  } catch {
+    throw new Error(`Base44 fact ${fact.factId} has malformed SDK identity JSON`);
+  }
+  requireClosedKeys(identity, ["schemaVersion", "packageName", "version", "scope", "rawSpecifier", "evidence"], `SDK identity ${fact.factId}`);
+  if (identity.schemaVersion !== "88mph.base44-sdk-callsite-identity.v1" || identity.packageName !== "@base44/sdk"
+    || !["0.8.4", "0.8.5"].includes(identity.version)
+    || !["function-runtime", "frontend-package"].includes(identity.scope)
+    || typeof identity.rawSpecifier !== "string" || !Array.isArray(identity.evidence)) {
+    throw new Error(`Base44 fact ${fact.factId} has an invalid SDK identity`);
+  }
+  const evidence = identity.evidence as Array<Record<string, any>>;
+  for (const item of evidence) {
+    requireClosedKeys(item, ["authorityPath", "authoritySha256", "kind"], `SDK identity evidence ${fact.factId}`);
+    if (typeof item.authorityPath !== "string" || !item.authorityPath || item.authorityPath.startsWith("/")
+      || item.authorityPath.split("/").includes("..") || !/^[0-9a-f]{64}$/u.test(item.authoritySha256)
+      || !["source-import", "package-manifest", "package-lock-resolution"].includes(item.kind)) {
+      throw new Error(`Base44 fact ${fact.factId} has invalid SDK identity evidence`);
+    }
+  }
+  const sorted = [...evidence].sort((left, right) => left.kind.localeCompare(right.kind)
+    || left.authorityPath.localeCompare(right.authorityPath)
+    || left.authoritySha256.localeCompare(right.authoritySha256));
+  if (JSON.stringify(evidence) !== JSON.stringify(sorted)
+    || new Set(evidence.map((item) => JSON.stringify(item))).size !== evidence.length) {
+    throw new Error(`Base44 fact ${fact.factId} has non-deterministic SDK identity evidence`);
+  }
+  const sourceEvidence = evidence.filter((item) => item.kind === "source-import");
+  if (sourceEvidence.length !== 1 || !runtimeSdkImports.some((sdkImport) => (
+    sdkImport.evidence.filePath === sourceEvidence[0].authorityPath
+    && sdkImport.properties.sourceFileSha256 === sourceEvidence[0].authoritySha256
+    && sdkImport.properties.requestedPackage === identity.rawSpecifier
+  ))) {
+    throw new Error(`Base44 fact ${fact.factId} has SDK identity evidence not bound to an extracted runtime import`);
+  }
+  if (identity.scope === "function-runtime") {
+    if (identity.version !== "0.8.4" || identity.rawSpecifier !== "npm:@base44/sdk@0.8.4"
+      || evidence.length !== 1 || evidence[0].kind !== "source-import"
+      || evidence[0].authorityPath !== fact.evidence.filePath
+      || evidence[0].authoritySha256 !== fact.properties.sourceFileSha256) {
+      throw new Error(`Base44 fact ${fact.factId} has an invalid function-runtime SDK identity`);
+    }
+  } else {
+    const kinds = evidence.map((item) => item.kind);
+    if (identity.version !== "0.8.5" || identity.rawSpecifier !== "@base44/sdk"
+      || JSON.stringify(kinds) !== JSON.stringify(["package-lock-resolution", "package-manifest", "source-import"])
+      || evidence.find((item) => item.kind === "package-lock-resolution")?.authorityPath !== "package-lock.json"
+      || evidence.find((item) => item.kind === "package-manifest")?.authorityPath !== "package.json") {
+      throw new Error(`Base44 fact ${fact.factId} has an invalid frontend-package SDK identity`);
+    }
+  }
+}
+
+function requireClosedKeys(value: Record<string, any>, keys: string[], label: string): void {
+  if (!value || typeof value !== "object" || Array.isArray(value)
+    || JSON.stringify(Object.keys(value).sort()) !== JSON.stringify([...keys].sort())) {
+    throw new Error(`${label} has unexpected or missing properties`);
   }
 }
 

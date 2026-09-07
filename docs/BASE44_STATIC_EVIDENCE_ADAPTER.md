@@ -166,6 +166,14 @@ element paths. A parameter occupying an SDK payload position does not by
 itself prove object kind; absent caller/construction evidence remains a typed
 blocker.
 
+Extractor `base44-evidence/0.10.0` adds a source-derived SDK identity to every
+entity operation and its payload/query shape. It distinguishes exact
+`npm:@base44/sdk@0.8.4` function-runtime imports from frontend `@base44/sdk`
+imports resolved to `0.8.5` by the root manifest and lock. Missing, conflicting,
+unsupported, or ambiguous authority is a typed Tier-4 operation blocker; no
+directory or repository-wide default supplies identity. See
+[Base44 SDK callsite identity v1](BASE44_SDK_CALLSITE_IDENTITY_V1.md).
+
 Extractor `base44-evidence/0.4.1` also follows an SDK client through a local
 helper parameter when executable callsites prove the binding. The proof is
 conservative: every directly resolved callsite for that parameter must supply
