@@ -301,6 +301,110 @@ describe("Base44 source-bound static evidence", () => {
     }
   });
 
+  it("derives payload fields from source-proven React Query mutation callsites", async () => {
+    const { packet, replayPacket } = await mutationHookFixture(`
+export function Screen(raw) {
+  const createItem = useWrite({
+    mutationFn: (payload) => base44.entities.DirectItem.create(payload)
+  });
+  createItem.mutate({ always_present: 1, sometimes_present: raw });
+  createItem.mutate({ always_present: 2 });
+
+  const updateItem = ReactQuery.useMutation({
+    mutationFn: ({ id, data }) => base44.entities.NestedItem.update(id, data)
+  });
+  updateItem.mutate({ ...raw, id: "redacted", data: { status: "redacted", total: Number(raw) } });
+}
+`, true);
+
+    const direct = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload && fact.targetSymbol === "DirectItem")!;
+    expect(direct.properties.completeness).toBe("complete");
+    expect(direct.properties.constructionKind).toBe("react-query-mutation-callsites");
+    expect(JSON.parse(direct.properties.fieldsJson)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "always_present", presence: "unconditional", expressionType: "integer-number-literal" }),
+      expect.objectContaining({ name: "sometimes_present", presence: "conditional", expressionType: "identifier-reference" })
+    ]));
+    expect(JSON.parse(direct.properties.candidateBindingsJson)).toEqual(expect.arrayContaining([
+      "binding:payload", "mutation-hook:createItem"
+    ]));
+
+    const nested = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload && fact.targetSymbol === "NestedItem")!;
+    expect(nested.properties.completeness).toBe("complete");
+    expect(JSON.parse(nested.properties.fieldsJson)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "status", presence: "unconditional", expressionType: "string-literal" }),
+      expect.objectContaining({ name: "total", presence: "unconditional", expressionType: "number-coercion-call" })
+    ]));
+    expect(replayPacket?.facts.filter((fact) => fact.factType === FactTypes.Base44EntityPayload).map((fact) => fact.factId)).toEqual(
+      packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityPayload).map((fact) => fact.factId)
+    );
+    expect(JSON.stringify(packet)).not.toContain("redacted");
+  });
+
+  it("keeps mutation-hook escapes and dynamic arguments as typed payload gaps", async () => {
+    const { packet } = await mutationHookFixture(`
+export function Screen(input) {
+  const save = useWrite({ mutationFn: (payload) => base44.entities.ReviewItem.create(payload) });
+  save.mutate({ observed_only: 1 });
+  save.mutate(input);
+  const escaped = save.mutate;
+
+  const spoofed = useMutation({ mutationFn: (payload) => base44.entities.SpoofedItem.create(payload) });
+  spoofed.mutate({ invented: 1 });
+  return escaped;
+}
+
+export function ShadowedImport(useWrite) {
+  const shadowed = useWrite({ mutationFn: (payload) => base44.entities.ShadowedHookItem.create(payload) });
+  shadowed.mutate({ invented_shadow: 1 });
+}
+
+export function LaterShadowedImport() {
+  const shadowed = useWrite({ mutationFn: (payload) => base44.entities.LaterShadowedHookItem.create(payload) });
+  shadowed.mutate({ invented_later_shadow: 1 });
+  const useWrite = () => undefined;
+}
+`);
+    const reviewed = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload && fact.targetSymbol === "ReviewItem")!;
+    expect(reviewed.properties.completeness).toBe("partial");
+    expect(reviewed.evidenceTier).toBe("Tier4Unknown");
+    expect(JSON.parse(reviewed.properties.fieldsJson)).toEqual([
+      expect.objectContaining({ name: "observed_only", presence: "conditional" })
+    ]);
+    expect(JSON.parse(reviewed.properties.analysisGapsJson)).toEqual(expect.arrayContaining([
+      "binding-initializer-unresolved", "mutation-hook-method-escape-unresolved"
+    ]));
+
+    const spoofed = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload && fact.targetSymbol === "SpoofedItem")!;
+    expect(spoofed.properties.completeness).toBe("unresolved");
+    expect(JSON.parse(spoofed.properties.fieldsJson)).toEqual([]);
+    expect(JSON.parse(spoofed.properties.analysisGapsJson)).toContain("binding-initializer-unresolved");
+
+    const shadowed = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload && fact.targetSymbol === "ShadowedHookItem")!;
+    expect(shadowed.properties.completeness).toBe("unresolved");
+    expect(JSON.parse(shadowed.properties.fieldsJson)).toEqual([]);
+    expect(JSON.parse(shadowed.properties.analysisGapsJson)).toContain("binding-initializer-unresolved");
+
+    const laterShadowed = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload && fact.targetSymbol === "LaterShadowedHookItem")!;
+    expect(laterShadowed.properties.completeness).toBe("unresolved");
+    expect(JSON.parse(laterShadowed.properties.fieldsJson)).toEqual([]);
+    expect(JSON.parse(laterShadowed.properties.analysisGapsJson)).toContain("binding-initializer-unresolved");
+  });
+
+  it("does not select a destructured mutation payload through a later unknown spread", async () => {
+    const { packet } = await mutationHookFixture(`
+export function Screen(extra) {
+  const save = useWrite({ mutationFn: ({ data }) => base44.entities.ReviewItem.create(data) });
+  save.mutate({ data: { must_not_be_claimed: 1 }, ...extra });
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload && fact.targetSymbol === "ReviewItem")!;
+    expect(payload.properties.completeness).toBe("unresolved");
+    expect(JSON.parse(payload.properties.fieldsJson)).toEqual([]);
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toEqual(expect.arrayContaining([
+      "mutation-hook-destructured-spread-unresolved", "mutation-hook-callsite-incomplete"
+    ]));
+  });
+
   it.each([
     "const defaults = { branch_only: 1 }; base44.entities.ReviewItem.create(flag ? { ...defaults } : {});",
     "const defaults = { branch_only: 1 }; base44.entities.ReviewItem.create({ ...(flag ? { ...defaults } : {}) });",
@@ -676,5 +780,28 @@ export function run(flag) { ${body} }
   } finally {
     await fs.rm(repo, { recursive: true, force: true });
     await fs.rm(out, { recursive: true, force: true });
+  }
+}
+
+async function mutationHookFixture(body: string, replay = false) {
+  const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-mutation-hook-fixture-"));
+  const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-mutation-hook-out-"));
+  const replayOut = replay ? await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-mutation-hook-replay-")) : null;
+  try {
+    await fs.writeFile(path.join(repo, "app.ts"), `import { base44 } from "@base44/sdk";
+import { useMutation as useWrite } from "@tanstack/react-query";
+import * as ReactQuery from "@tanstack/react-query";
+${body}
+`);
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    execFileSync("git", ["add", "."], { cwd: repo });
+    execFileSync("git", ["-c", "user.name=TraceMap Test", "-c", "user.email=tracemap@example.invalid", "commit", "-qm", "fixture"], { cwd: repo });
+    const first = await buildBase44Evidence(options(repo, out));
+    const replayPacket = replayOut ? (await buildBase44Evidence(options(repo, replayOut))).packet : undefined;
+    return { ...first, replayPacket };
+  } finally {
+    await fs.rm(repo, { recursive: true, force: true });
+    await fs.rm(out, { recursive: true, force: true });
+    if (replayOut) await fs.rm(replayOut, { recursive: true, force: true });
   }
 }
