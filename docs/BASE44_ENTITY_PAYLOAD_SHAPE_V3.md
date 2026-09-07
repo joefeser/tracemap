@@ -52,8 +52,12 @@ The extractor proves only direct executable syntax: string/template, numeric,
 boolean, object, and array constructions; numeric operators and unshadowed
 primitive coercions; conditional/logical alternatives; and explicit null.
 Array `map`/`filter`/`push` projection is admitted only when the complete scanned
-project realm contains no mutation or escape of those intrinsic methods;
-statically unreachable mutations after a terminating statement, including a
+project realm contains no mutation or escape of those intrinsic methods. Any
+unshadowed prototype mutation/reflection capability, dynamic evaluation, or
+`__proto__`/`constructor.prototype` access conservatively disables array-derived
+completeness; an unrelated ordinary-object property such as `adapter.map` does
+not.
+Statically unreachable mutations after a terminating statement, including a
 terminating `try`/`catch`/`finally`, contribute no field evidence.
 Identifiers, arbitrary calls, properties, or conflicting alternatives remain
 `unknown`. It does not infer UUID or date from names, documentation, schema
