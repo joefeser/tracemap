@@ -57,8 +57,11 @@ unshadowed prototype mutation/reflection capability or
 `__proto__`/`constructor.prototype` access conservatively disables array-derived
 completeness; an unrelated ordinary-object property such as `adapter.map` does
 not. Dynamic `eval`/`Function` also disables it unless the evaluated expression
-is dominated by an exact terminating allowlist guard whose grammar contains
-only digits, arithmetic operators, parentheses, decimal points, and spaces.
+uses a direct, unshadowed evaluator, a source-normalized immutable string
+binding, and a pristine literal regular-expression guard dominated by an exact
+terminating allowlist whose grammar contains only digits, arithmetic operators,
+parentheses, decimal points, and spaces. Aliased, escaped, member-accessed, or
+otherwise indirect evaluators remain unsafe.
 Statically unreachable mutations after a terminating statement, including a
 terminating `try`/`catch`/`finally`, contribute no field evidence.
 Identifiers, arbitrary calls, properties, or conflicting alternatives remain

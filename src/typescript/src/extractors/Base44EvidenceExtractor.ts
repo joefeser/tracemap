@@ -2255,14 +2255,9 @@ function arrayIntrinsicsArePristine(contexts: Map<string, SourceContext>): boole
         pristine = false;
         return;
       }
-      if ((ts.isCallExpression(node) || ts.isNewExpression(node))) {
-        const callee = unwrapAliasExpression(node.expression);
-        if (ts.isIdentifier(callee) && (callee.text === "eval" || callee.text === "Function")
-          && !resolveLexicalBinding(callee.text, callee, context.source)
-          && !isBoundedArithmeticDynamicEvaluation(node, context.source)) {
-          pristine = false;
-          return;
-        }
+      if (unboundedDynamicEvaluationCapabilityReference(node, context.source)) {
+        pristine = false;
+        return;
       }
       const mutatedMember = (expression: ts.Expression): string | null => {
         const target = unwrapAliasExpression(expression);
@@ -2333,7 +2328,8 @@ function isBoundedArithmeticDynamicEvaluation(
   }
   if (!value) return false;
   const binding = resolveLexicalBinding(value.text, value, source);
-  if (binding?.kind !== "variable" || !isImmutableVariable(binding.node, value)) return false;
+  if (binding?.kind !== "variable" || !isImmutableVariable(binding.node, value)
+    || !isProvenArithmeticStringBinding(binding.node, source)) return false;
   const statement = findAncestor(node, ts.isStatement);
   const block = statement?.parent;
   if (!statement || !block || !ts.isBlock(block)) return false;
@@ -2356,9 +2352,113 @@ function isBoundedArithmeticDynamicEvaluation(
   });
 }
 
+function unboundedDynamicEvaluationCapabilityReference(node: ts.Node, source: ts.SourceFile): boolean {
+  if (ts.isIdentifier(node) && ["global", "globalThis", "self", "window"].includes(node.text)
+    && isRuntimeIdentifierReference(node) && !resolveLexicalBinding(node.text, node, source)) {
+    const parent = node.parent;
+    if ((ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent))
+      && parent.expression === node) return false;
+    if (ts.isTypeOfExpression(parent)) return false;
+    if (isImmutableGlobalAliasInitializer(node, source)) return false;
+    return true;
+  }
+  if (ts.isIdentifier(node) && (node.text === "eval" || node.text === "Function")
+    && isRuntimeIdentifierReference(node)
+    && !resolveLexicalBinding(node.text, node, source)) {
+    const invocation = node.parent;
+    return !((ts.isCallExpression(invocation) || ts.isNewExpression(invocation))
+      && unwrapAliasExpression(invocation.expression) === node
+      && isBoundedArithmeticDynamicEvaluation(invocation, source));
+  }
+  if ((ts.isCallExpression(node) || ts.isNewExpression(node))) {
+    const callee = unwrapAliasExpression(node.expression);
+    if (ts.isPropertyAccessExpression(callee) && callee.name.text === "constructor"
+      && (ts.isArrowFunction(unwrapAliasExpression(callee.expression))
+        || ts.isFunctionExpression(unwrapAliasExpression(callee.expression)))) return true;
+  }
+  if (!ts.isPropertyAccessExpression(node) && !ts.isElementAccessExpression(node)) return false;
+  const owner = unwrapAliasExpression(node.expression);
+  if (!isGlobalObjectExpression(owner, source, new Set())) return false;
+  const member = ts.isPropertyAccessExpression(node) ? node.name.text
+    : node.argumentExpression && ts.isStringLiteralLike(node.argumentExpression) ? node.argumentExpression.text : "";
+  return !member || member === "eval" || member === "Function";
+}
+
+function isGlobalObjectExpression(node: ts.Expression, source: ts.SourceFile, visited: Set<string>): boolean {
+  const expression = unwrapAliasExpression(node);
+  if (ts.isConditionalExpression(expression)) {
+    return isGlobalObjectExpression(expression.whenTrue, source, new Set(visited))
+      || isGlobalObjectExpression(expression.whenFalse, source, new Set(visited));
+  }
+  if (!ts.isIdentifier(expression)) return false;
+  if (["global", "globalThis", "self", "window"].includes(expression.text)
+    && !resolveLexicalBinding(expression.text, expression, source)) return true;
+  const binding = resolveLexicalBinding(expression.text, expression, source);
+  if (binding?.kind !== "variable" || !binding.node.initializer || !isImmutableVariable(binding.node, expression)) return false;
+  const key = `${binding.node.getStart(source)}:${expression.text}`;
+  if (visited.has(key)) return false;
+  return isGlobalObjectExpression(binding.node.initializer, source, new Set(visited).add(key));
+}
+
+function isImmutableGlobalAliasInitializer(node: ts.Identifier, source: ts.SourceFile): boolean {
+  let current: ts.Node = node;
+  while (current.parent && (ts.isParenthesizedExpression(current.parent)
+    || ts.isAsExpression(current.parent) || ts.isTypeAssertionExpression(current.parent)
+    || ts.isNonNullExpression(current.parent) || ts.isConditionalExpression(current.parent))) {
+    current = current.parent;
+  }
+  return ts.isVariableDeclaration(current.parent) && current.parent.initializer === current
+    && ts.isVariableDeclarationList(current.parent.parent)
+    && Boolean(current.parent.parent.flags & ts.NodeFlags.Const);
+}
+
+function isRuntimeIdentifierReference(node: ts.Identifier): boolean {
+  const parent = node.parent;
+  // Declaration names are not runtime reads. Keep shorthand properties out of
+  // this exemption because `{ eval }` reads the ambient binding.
+  if ((ts.isVariableDeclaration(parent) || ts.isParameter(parent)
+    || ts.isFunctionDeclaration(parent) || ts.isFunctionExpression(parent)
+    || ts.isClassDeclaration(parent) || ts.isClassExpression(parent)
+    || ts.isInterfaceDeclaration(parent) || ts.isTypeAliasDeclaration(parent)
+    || ts.isTypeParameterDeclaration(parent) || ts.isEnumDeclaration(parent)
+    || ts.isEnumMember(parent) || ts.isPropertyDeclaration(parent)
+    || ts.isPropertySignature(parent) || ts.isMethodSignature(parent)
+    || ts.isMethodDeclaration(parent) || ts.isGetAccessorDeclaration(parent)
+    || ts.isSetAccessorDeclaration(parent) || ts.isModuleDeclaration(parent))
+    && parent.name === node) return false;
+  if (ts.isPropertyAccessExpression(parent) && parent.name === node) return false;
+  if ((ts.isPropertyAssignment(parent) || ts.isMethodDeclaration(parent)
+    || ts.isGetAccessorDeclaration(parent) || ts.isSetAccessorDeclaration(parent))
+    && parent.name === node) return false;
+  if (ts.isBindingElement(parent) && (parent.name === node || parent.propertyName === node)) return false;
+  if ((ts.isImportSpecifier(parent) || ts.isExportSpecifier(parent))
+    && (parent.name === node || parent.propertyName === node)) return false;
+  return true;
+}
+
+function isProvenArithmeticStringBinding(declaration: ts.VariableDeclaration, source: ts.SourceFile): boolean {
+  if (!declaration.initializer) return false;
+  const initializer = unwrapAliasExpression(declaration.initializer);
+  if (ts.isStringLiteralLike(initializer)) return true;
+  if (!ts.isCallExpression(initializer) || initializer.arguments.length !== 0) return false;
+  const trim = unwrapAliasExpression(initializer.expression);
+  if (!ts.isPropertyAccessExpression(trim) || trim.name.text !== "trim") return false;
+  const stringSource = unwrapAliasExpression(trim.expression);
+  if (ts.isCallExpression(stringSource) && stringSource.arguments.length === 1) {
+    const callee = unwrapAliasExpression(stringSource.expression);
+    return ts.isIdentifier(callee) && callee.text === "String"
+      && !resolveLexicalBinding("String", callee, source);
+  }
+  if (!ts.isCallExpression(stringSource) || stringSource.arguments.length !== 0) return false;
+  const toString = unwrapAliasExpression(stringSource.expression);
+  return ts.isPropertyAccessExpression(toString) && toString.name.text === "toString";
+}
+
 function dangerousPrototypeCapabilityReference(node: ts.Node, source: ts.SourceFile): boolean {
   if (ts.isPropertyAccessExpression(node)) {
     if (node.name.text === "__proto__") return true;
+    if (node.name.text === "prototype"
+      && isGlobalIntrinsicConstructorExpression(node.expression, source, new Set())) return true;
     if (node.name.text === "prototype" && ts.isPropertyAccessExpression(unwrapAliasExpression(node.expression))
       && (unwrapAliasExpression(node.expression) as ts.PropertyAccessExpression).name.text === "constructor") return true;
     return ts.isIdentifier(node.expression) && ["Object", "Reflect"].includes(node.expression.text)
@@ -2367,8 +2467,35 @@ function dangerousPrototypeCapabilityReference(node: ts.Node, source: ts.SourceF
   if (!ts.isElementAccessExpression(node) || !node.argumentExpression
     || !ts.isStringLiteralLike(node.argumentExpression)) return false;
   const owner = unwrapAliasExpression(node.expression);
+  if (node.argumentExpression.text === "prototype"
+    && isGlobalIntrinsicConstructorExpression(owner, source, new Set())) return true;
   return ts.isIdentifier(owner) && ["Object", "Reflect"].includes(owner.text)
     && dangerousPrototypeCapabilities.has(node.argumentExpression.text) && !resolveLexicalBinding(owner.text, owner, source);
+}
+
+function isGlobalIntrinsicConstructorExpression(
+  node: ts.Expression,
+  source: ts.SourceFile,
+  visited: Set<string>
+): boolean {
+  const expression = unwrapAliasExpression(node);
+  if (ts.isIdentifier(expression)) {
+    if (["Function", "RegExp", "String"].includes(expression.text)
+      && !resolveLexicalBinding(expression.text, expression, source)) return true;
+    const binding = resolveLexicalBinding(expression.text, expression, source);
+    if (binding?.kind !== "variable" || !binding.node.initializer
+      || !isImmutableVariable(binding.node, expression)) return false;
+    const key = `${binding.node.getStart(source)}:${expression.text}`;
+    if (visited.has(key)) return false;
+    return isGlobalIntrinsicConstructorExpression(binding.node.initializer, source, new Set(visited).add(key));
+  }
+  if (!ts.isPropertyAccessExpression(expression) && !ts.isElementAccessExpression(expression)) return false;
+  const owner = unwrapAliasExpression(expression.expression);
+  if (!isGlobalObjectExpression(owner, source, new Set())) return false;
+  const member = ts.isPropertyAccessExpression(expression) ? expression.name.text
+    : expression.argumentExpression && ts.isStringLiteralLike(expression.argumentExpression)
+      ? expression.argumentExpression.text : "";
+  return ["Function", "RegExp", "String"].includes(member);
 }
 
 function isArrayPrototypeExpression(node: ts.Node, source: ts.SourceFile): boolean {
