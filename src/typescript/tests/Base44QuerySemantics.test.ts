@@ -31,10 +31,13 @@ describe("normalized Base44 query syntax", () => {
     expect(JSON.stringify(result)).not.toContain("SECRET_OPERAND");
     expect(JSON.stringify(result)).not.toContain("12.5");
   });
-  it("preserves omission and explicit null without treating a shadowable identifier as absent", () => {
+  it("preserves omission, explicit null, and only source-unshadowed undefined", () => {
     expect(extract("list","").arguments.every(arg => arg.presence === "absent")).toBe(true);
     expect(extract("list","null, 0").arguments[0]).toMatchObject({presence:"supplied",value:{kind:"null"}});
-    expect(extract("list","undefined").completeness).toBe("unresolved");
+    expect(extract("list","undefined").arguments[0]).toMatchObject({presence:"supplied",value:{kind:"undefined"}});
+    const shadowed = extractProgram("const undefined = runtimeSort; base44.entities.Widget.filter({}, undefined);");
+    expect(shadowed.completeness).toBe("unresolved");
+    expect(shadowed.gaps).toContain("query:sort_unresolved");
     expect(extract("deleteMany","").gaps).toContain("query:filter_missing");
   });
   it("records direct runtime references as complete deferred wire values", () => {

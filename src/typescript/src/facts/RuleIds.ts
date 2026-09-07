@@ -40,6 +40,7 @@ export const RuleIds = {
   Base44FunctionInvocation: "base44.function.invocation.v1",
   Base44FunctionSurface: "base44.function.surface.v1",
   Base44EntityOperation: "base44.entity.operation.v1",
+  Base44EntityCallsiteDisposition: "base44.entity.callsite-disposition.v1",
   Base44EntityPayload: "base44.entity.payload.v1",
   Base44EntityQuery: "base44.entity.query.v1",
   Base44EnvironmentAccess: "base44.environment.access.v1",
@@ -61,5 +62,5 @@ export const ScannerVersions = {
   TypeScriptIntegrationExtractor: "typescript-integration/0.1.0",
   TypeScriptAngularHttpClientExtractor: "typescript-angular-httpclient/0.1.0",
   TypeScriptAngularTemplateExtractor: "typescript-angular-template/0.1.0",
-  Base44EvidenceExtractor: "base44-evidence/0.12.0"
+  Base44EvidenceExtractor: "base44-evidence/0.14.0"
 } as const;

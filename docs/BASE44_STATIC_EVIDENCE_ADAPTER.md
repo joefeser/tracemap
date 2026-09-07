@@ -18,7 +18,7 @@ tracemap-ts base44-diff \
   --out <diff.json>
 ```
 
-The evidence command also writes the normal `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and analyzer log. It adds stable JSON and Markdown packets plus a credential-free static HTML explorer. Artifact SHA-256 values bind the normal scan outputs. The accepted source and normalized tree digests are supplied by the authority that inspected the packet; TraceMap validates their shape and binds them without claiming to have established packet trust.
+The evidence command also writes the normal `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and analyzer log. It adds stable JSON and Markdown packets plus a credential-free static HTML explorer. The portable packet binds the deterministic `facts.ndjson`, `report.md`, and analyzer log by SHA-256. `scan-manifest.json` carries the operational `scannedAt` timestamp and `index.sqlite` serializes that manifest, so both remain required scan outputs that the artifact validator checks separately but are deliberately excluded from the portable packet's source-evidence digest map. Two scans of identical accepted source therefore produce byte-identical `base44-evidence.json` packets without hiding or rewriting the operational scan timestamp. The accepted source and normalized tree digests are supplied by the authority that inspected the packet; TraceMap validates their shape and binds them without claiming to have established packet trust.
 
 ## Facts
 
@@ -187,6 +187,21 @@ for static and computed SDK entity access. It expands only finite immutable
 domains and emits a typed Tier-4 row when the selector graph is runtime-open,
 mutated, escaped, or only partially known. See
 [Base44 entity selector v1](BASE44_ENTITY_SELECTOR_V1.md).
+
+Extractor `base44-evidence/0.13.0` extends that contract through closed
+state/caller/relationship flows while preserving per-object entity/query-field
+correlation. It also publishes an explicit source-bound disposition instead of
+an entity row for a narrowly proven unreachable exported helper or uninvoked
+real React Query mutation callback. Ambiguous module graphs, mutation handles,
+branch predicates, callers, or assignments remain Tier-4 blockers. See
+[Base44 entity callsite disposition v1](BASE44_ENTITY_CALLSITE_DISPOSITION_V1.md).
+
+Extractor `base44-evidence/0.14.0` emits payload shape v3. It preserves the
+complete syntactic `fieldsJson` alternative set and adds a unique-by-name
+`semanticFieldsJson` projection with closed presence, value-type, explicit-null,
+and exact provenance semantics. Unknown or conflicting types remain unknown;
+the static projection does not by itself authorize a database column type. See
+[Base44 entity payload shape v3](BASE44_ENTITY_PAYLOAD_SHAPE_V3.md).
 
 Extractor `base44-evidence/0.4.1` also follows an SDK client through a local
 helper parameter when executable callsites prove the binding. The proof is

@@ -1,6 +1,6 @@
 # Base44 entity selector v1
 
-Extractor `base44-evidence/0.12.0` publishes a closed, source-bound selector
+Extractors `base44-evidence/0.12.0` through `base44-evidence/0.14.0` publish a closed, source-bound selector
 contract on every entity operation and its paired payload/query fact:
 
 ```json
@@ -36,11 +36,29 @@ Finite domains may come only from executable, immutable source constructs:
   through a terminating rejection branch; and
 - a source-bound local entity-client alias, including a local dynamic import.
 
+Version `0.13.0` additionally follows finite executable source through closed
+React state setters, controlled literal `<select>` options, append-only result
+arrays, destructured mutation inputs from the exact React Query import,
+terminating multi-statement guards, and mutable client aliases whose every
+assignment has the same finite SDK-derived outer kind. Object values derived
+from one `for...of` element remain correlated, so entity and computed query
+field candidates are not cross-producted.
+
 Every branch must resolve. A runtime argument mixed with a literal branch does
 not yield a partial candidate set. Mutation, assignment, rest/spread caller
 ambiguity, unsupported construction, or an escaped source container remains an
 `unresolved` Tier-4 operation. Its paired shape retains the same gap. An
 unresolved computed SDK primitive is separately visible as Tier 4.
+
+An opaque branch predicate invalidates the whole branch-specific selector; it
+must not be treated as false. A source assignment that acquires or restores an
+SDK entity client is not itself an entity operation. Only the downstream SDK
+method call at its real source location enters the operation denominator.
+
+Source-proven dormant SDK calls are represented separately by
+[Base44 entity callsite disposition v1](BASE44_ENTITY_CALLSITE_DISPOSITION_V1.md).
+They are not converted into successful operations and are excluded only when
+the closed reachability proof is present.
 
 The evidence array is deterministic and bound to a repo-relative source path
 and full-file hash already present in the packet's source authority. Consumers

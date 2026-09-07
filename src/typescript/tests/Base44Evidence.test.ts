@@ -105,6 +105,367 @@ export async function run(runtimeEntity) {
     expect(entityGaps.every((gap) => gap.category === "entity" && gap.surface.includes("entities.dynamic."))).toBe(true);
   });
 
+  it("classifies only closed exported helpers outside the rooted module graph as dormant", async () => {
+    const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-selector-dormant-"));
+    await fs.mkdir(path.join(repo, "src"), { recursive: true });
+    await writeFrontendSdkAuthority(repo);
+    await fs.writeFile(path.join(repo, "src/main.ts"), `import { base44 } from "@base44/sdk";
+import { run } from "./active";
+base44.auth.me();
+run("Order");
+`);
+    await fs.writeFile(path.join(repo, "src/active.ts"), `import { base44 } from "@base44/sdk";
+export async function run(entityName) { return base44.entities[entityName].filter({ id: "1" }); }
+`);
+    await fs.writeFile(path.join(repo, "src/dormant.ts"), `import { base44 } from "@base44/sdk";
+export async function unused(entityName) { return base44.entities[entityName].create({ name: "x" }); }
+`);
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    execFileSync("git", ["add", "."], { cwd: repo });
+    execFileSync("git", ["-c", "user.name=TraceMap Test", "-c", "user.email=tracemap@example.invalid", "commit", "-qm", "fixture"], { cwd: repo });
+
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-selector-dormant-out-"));
+    const { packet } = await buildBase44Evidence(options(repo, out));
+    expect(packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation
+      && fact.evidence.filePath === "src/active.ts").map((fact) => fact.targetSymbol)).toEqual(["Order"]);
+    expect(packet.facts.some((fact) => fact.factType === FactTypes.Base44EntityOperation
+      && fact.evidence.filePath === "src/dormant.ts")).toBe(false);
+    const disposition = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityCallsiteDisposition
+      && fact.evidence.filePath === "src/dormant.ts")!;
+    expect(JSON.parse(disposition.properties.callsiteDispositionJson)).toEqual(expect.objectContaining({
+      schemaVersion: "88mph.base44-entity-callsite-disposition.v1",
+      disposition: "dormant-unreachable",
+      callableName: "unused",
+      externalModuleReferences: 0,
+      ambiguousDynamicModuleReferences: 0
+    }));
+
+    const tampered = structuredClone(packet);
+    const tamperedDisposition = tampered.facts.find((fact) => fact.factId === disposition.factId)!;
+    const invalid = JSON.parse(tamperedDisposition.properties.callsiteDispositionJson);
+    invalid.externalModuleReferences = 1;
+    tamperedDisposition.properties.callsiteDispositionJson = JSON.stringify(invalid);
+    const tamperedPath = path.join(out, "tampered-dormant.json");
+    await fs.writeFile(tamperedPath, `${JSON.stringify(tampered, null, 2)}\n`);
+    await expect(diffBase44Evidence(path.join(out, "base44-evidence.json"), tamperedPath,
+      path.join(out, "tampered-dormant-diff.json"))).rejects.toThrow("invalid entity callsite disposition");
+
+    await fs.writeFile(path.join(repo, "src/main.ts"), `import { base44 } from "@base44/sdk";
+import { run } from "./active";
+base44.auth.me();
+run("Order");
+export const load = (runtimePath) => import(runtimePath);
+`);
+    const ambiguousOut = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-selector-dormant-ambiguous-"));
+    const ambiguous = (await buildBase44Evidence(options(repo, ambiguousOut))).packet;
+    expect(ambiguous.facts.some((fact) => fact.factType === FactTypes.Base44EntityCallsiteDisposition)).toBe(false);
+    expect(ambiguous.facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.Base44EntityOperation,
+      evidenceTier: "Tier4Unknown",
+      targetSymbol: "dynamic",
+      evidence: expect.objectContaining({ filePath: "src/dormant.ts" })
+    }));
+  });
+
+  it("marks an uninvoked real mutation callback dormant but blocks spoofed, invoked, or escaped handles", async () => {
+    const { packet } = await mutationHookFixture(`
+export function Screen(runtimeEntity) {
+  const dormant = useWrite({ mutationFn: () => base44.entities[runtimeEntity].filter({ id: "1" }) });
+  void dormant.isPending;
+  const staticDormant = useWrite({ mutationFn: () => base44.entities.Order.create({ status: "draft" }) });
+  void staticDormant.isIdle;
+  const invoked = useWrite({ mutationFn: () => base44.entities[runtimeEntity].delete("1") });
+  invoked.mutate();
+  const escaped = useWrite({ mutationFn: () => base44.entities[runtimeEntity].get("1") });
+  consume(escaped.mutate);
+}
+export function Spoofed(runtimeEntity, useWrite) {
+  const spoofed = useWrite({ mutationFn: () => base44.entities[runtimeEntity].list() });
+  void spoofed.isPending;
+}
+`);
+    expect(packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityCallsiteDisposition)
+      .map((fact) => fact.properties.operationName).sort()).toEqual(["create", "filter"]);
+    expect(packet.facts.some((fact) => fact.factType === FactTypes.Base44EntityOperation
+      && fact.targetSymbol === "Order" && fact.properties.operationName === "create")).toBe(false);
+    expect(packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation
+      && fact.targetSymbol === "dynamic").map((fact) => fact.properties.operationName).sort()).toEqual([
+      "delete", "get", "list"
+    ]);
+  });
+
+  it("follows controlled selector state and mutable SDK-client aliases only through closed source flow", async () => {
+    const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-selector-state-alias-"));
+    await fs.mkdir(path.join(repo, "src"), { recursive: true });
+    await writeFrontendSdkAuthority(repo);
+    await fs.writeFile(path.join(repo, "src/main.tsx"), `import VerifyIds from "./verify";
+export const App = () => <VerifyIds />;
+`);
+    await fs.writeFile(path.join(repo, "src/verify.tsx"), `import { useState } from "react";
+import { base44 } from "@base44/sdk";
+export default function VerifyIds({ defaultEntity = "Order" }) {
+  const [entity, setEntity] = useState(defaultEntity);
+  const getEnt = (name) => base44.entities[name];
+  let ent = getEnt(entity);
+  if (!ent) return null;
+  const run = () => ent.filter({ id: "1" });
+  return <><select value={entity} onChange={event => setEntity(event.target.value)}>
+    <option value="Order">Order</option><option value="Quote">Quote</option><option value="Customer">Customer</option>
+  </select><button onClick={run}>Run</button></>;
+}
+`);
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    execFileSync("git", ["add", "."], { cwd: repo });
+    execFileSync("git", ["-c", "user.name=TraceMap Test", "-c", "user.email=tracemap@example.invalid", "commit", "-qm", "fixture"], { cwd: repo });
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-selector-state-alias-out-"));
+    const packet = (await buildBase44Evidence(options(repo, out))).packet;
+    expect(packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation
+      && fact.evidence.filePath === "src/verify.tsx").map((fact) => fact.targetSymbol).sort()).toEqual([
+      "Customer", "Order", "Quote"
+    ]);
+
+    await fs.writeFile(path.join(repo, "src/verify.tsx"), `import { useState } from "react";
+import { base44 } from "@base44/sdk";
+export default function VerifyIds({ ...runtimeProps }) {
+  const [entity, setEntity] = useState(runtimeProps.defaultEntity);
+  let ent = base44.entities[entity];
+  ent = runtimeProps.replacement;
+  return <button onClick={() => ent.filter({ id: "1" })}>Run</button>;
+}
+`);
+    const unsafeOut = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-selector-state-alias-unsafe-"));
+    const unsafe = (await buildBase44Evidence(options(repo, unsafeOut))).packet;
+    expect(unsafe.facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.Base44EntityOperation,
+      evidenceTier: "Tier4Unknown",
+      targetSymbol: "dynamic"
+    }));
+  });
+
+  it("preserves correlated relationship selectors through append-only state and terminating guards", async () => {
+    const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-selector-correlated-"));
+    await fs.mkdir(path.join(repo, "src"), { recursive: true });
+    await writeFrontendSdkAuthority(repo);
+    await fs.writeFile(path.join(repo, "src/main.ts"), `import { run } from "./screen"; run();\n`);
+    await fs.writeFile(path.join(repo, "src/screen.ts"), `import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { base44 } from "@base44/sdk";
+  const RELATIONSHIPS = { Parent: [
+  { entity: "StringChild", field: "parent_name", isStringMatch: true },
+  { entity: "IdChild", field: "parent_id" },
+  { entity: "IdChild", field: "alternate_parent_id" }
+] };
+async function check(parent) {
+  const blockers = [];
+  for (const rel of RELATIONSHIPS[parent]) blockers.push({ entity: rel.entity, field: rel.field, isStringMatch: rel.isStringMatch });
+  return { blockers };
+}
+export function run() {
+  const [validation, setValidation] = useState(null);
+  const load = async () => { const result = await check("Parent"); setValidation(result); };
+  const remove = useMutation({ mutationFn: async ({ blockers }) => {
+    for (const blocker of blockers) {
+      if (blocker.isStringMatch) await base44.entities[blocker.entity].list();
+      else await base44.entities[blocker.entity].filter({ [blocker.field]: "id" });
+      await base44.entities[blocker.entity].delete("id");
+    }
+  }});
+  if (!validation) return load;
+  remove.mutate({ blockers: validation.blockers });
+  return load;
+}
+`);
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    execFileSync("git", ["add", "."], { cwd: repo });
+    execFileSync("git", ["-c", "user.name=TraceMap Test", "-c", "user.email=tracemap@example.invalid", "commit", "-qm", "fixture"], { cwd: repo });
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-selector-correlated-out-"));
+    const packet = (await buildBase44Evidence(options(repo, out))).packet;
+    const operations = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation
+      && fact.evidence.filePath === "src/screen.ts");
+    expect(operations.map((fact) => `${fact.targetSymbol}.${fact.properties.operationName}`).sort()).toEqual([
+      "IdChild.delete", "IdChild.filter", "StringChild.delete", "StringChild.list"
+    ]);
+    const idQuery = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityQuery
+      && fact.targetSymbol === "IdChild" && fact.properties.operationName === "filter")!;
+    expect(JSON.parse(idQuery.properties.fieldsJson)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "alternate_parent_id", presence: "conditional" }),
+      expect.objectContaining({ name: "parent_id", presence: "conditional" })
+    ]));
+    expect(JSON.parse(idQuery.properties.fieldsJson)).not.toContainEqual(expect.objectContaining({ name: "parent_name" }));
+    expect(idQuery.properties.completeness).toBe("complete");
+    const querySemantics = JSON.parse(idQuery.properties.querySemanticsJson);
+    expect(querySemantics).toMatchObject({
+      schemaVersion: "88mph.entity-query.v3",
+      completeness: "complete"
+    });
+    expect(querySemantics.arguments[0]).toMatchObject({
+      role: "filter",
+      value: expect.objectContaining({
+        entries: expect.arrayContaining([
+          expect.objectContaining({ field: "alternate_parent_id", presence: "conditional" }),
+          expect.objectContaining({ field: "parent_id", presence: "conditional" })
+        ])
+      })
+    });
+  });
+
+  it("does not narrow a selector branch through an opaque predicate", async () => {
+    const repo = await fixtureRepo();
+    await fs.writeFile(path.join(repo, "src/opaque-predicate.ts"), `import { base44 } from "@base44/sdk";
+export async function run(runtimeFlag) {
+  const relationships = [
+    { entity: "KnownChild", isStringMatch: true },
+    { entity: "RuntimeChild", isStringMatch: runtimeFlag }
+  ];
+  for (const relationship of relationships) {
+    if (relationship.isStringMatch) await base44.entities[relationship.entity].list();
+    else await base44.entities[relationship.entity].filter({ id: "1" });
+  }
+}
+`);
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-selector-opaque-predicate-"));
+    const packet = (await buildBase44Evidence(options(repo, out))).packet;
+    const operations = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation
+      && fact.evidence.filePath === "src/opaque-predicate.ts");
+    expect(operations.map((fact) => [fact.targetSymbol, fact.properties.operationName])).toEqual([
+      ["dynamic", "list"], ["dynamic", "filter"]
+    ]);
+    expect(operations.every((fact) => fact.evidenceTier === "Tier4Unknown"
+      && fact.properties.entitySelectorGap === "entity-selector-dynamic-unresolved")).toBe(true);
+  });
+
+  it("derives computed payload fields through a closed cross-component callback path", async () => {
+    const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-computed-field-component-"));
+    await fs.mkdir(path.join(repo, "src"), { recursive: true });
+    await writeFrontendSdkAuthority(repo);
+    await fs.writeFile(path.join(repo, "src/main.tsx"), `import Screen from "./screen";
+export const App = () => <Screen />;
+`);
+    await fs.writeFile(path.join(repo, "src/screen.tsx"), `import { useEffect, useRef } from "react";
+import { debounce } from "lodash";
+import Child from "./child";
+import { base44 } from "@base44/sdk";
+export default function Screen() {
+  const save = (field) => base44.entities.Order.create({ [field]: 1 });
+  const debouncedRef = useRef(debounce((...args) => saveRef.current?.(...args), 5));
+  const saveRef = useRef(save);
+  useEffect(() => { saveRef.current = save; }, [save]);
+  const debounced = debouncedRef.current;
+  const handle = (field) => debounced(field);
+  return <Child onSave={handle} />;
+}
+`);
+    await fs.writeFile(path.join(repo, "src/child.tsx"), `export default function Child({ onSave }) {
+  return <><button onClick={() => onSave("actual_cost")}>Cost</button>
+    <button onClick={() => onSave("actual_quantity")}>Qty</button></>;
+}
+`);
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    execFileSync("git", ["add", "."], { cwd: repo });
+    execFileSync("git", ["-c", "user.name=TraceMap Test", "-c", "user.email=tracemap@example.invalid", "commit", "-qm", "fixture"], { cwd: repo });
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-computed-field-component-out-"));
+    const packet = (await buildBase44Evidence(options(repo, out))).packet;
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "Order")!;
+    expect(payload.properties.completeness).toBe("complete");
+    expect(JSON.parse(payload.properties.fieldsJson)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "actual_cost", presence: "conditional" }),
+      expect.objectContaining({ name: "actual_quantity", presence: "conditional" })
+    ]));
+  });
+
+  it("derives a finite local query-parameter domain but blocks an escaped parameter", async () => {
+    const repo = await fixtureRepo();
+    await fs.writeFile(path.join(repo, "src/query-parameter.ts"), `import { base44 } from "@base44/sdk";
+const findOne = async (entityName, filter) => base44.entities[entityName].filter(filter, undefined, 50);
+findOne("Order", { status: "open" });
+findOne("Order", { status: runtimeStatus });
+findOne("Order", { customer_id: "1" });
+findOne("Other", { other_only: "x" });
+findOne("Other", { other_only: { $eq: "x" } });
+const unsafe = (filter) => { consume(filter); return base44.entities.Quote.filter(filter); };
+unsafe({ status: "draft" });
+`);
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-query-parameter-"));
+    const packet = (await buildBase44Evidence(options(repo, out))).packet;
+    const order = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityQuery
+      && fact.targetSymbol === "Order" && fact.evidence.filePath === "src/query-parameter.ts")!;
+    expect(order.properties.completeness).toBe("complete");
+    const descriptor = JSON.parse(order.properties.querySemanticsJson);
+    expect(descriptor).toMatchObject({ schemaVersion: "88mph.entity-query.v3", completeness: "complete" });
+    expect(descriptor.arguments[0].value.entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ field: "status", presence: "conditional" }),
+      expect.objectContaining({ field: "customer_id", presence: "conditional" })
+    ]));
+    expect(descriptor.arguments[0].value.entries.some((entry: { field: string }) => entry.field === "other_only")).toBe(false);
+    const other = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityQuery
+      && fact.targetSymbol === "Other" && fact.evidence.filePath === "src/query-parameter.ts")!;
+    expect(JSON.parse(other.properties.querySemanticsJson).gaps).toContain("query:parameter-callsite-value-conflict");
+    const quote = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityQuery
+      && fact.targetSymbol === "Quote" && fact.evidence.filePath === "src/query-parameter.ts")!;
+    expect(quote.properties.completeness).toBe("unresolved");
+    expect(JSON.parse(quote.properties.analysisGapsJson)).toContain("binding-initializer-unresolved");
+  });
+
+  it("admits only a source-bounded outer object as runtime-deferred and blocks an escaped caller graph", async () => {
+    const repo = await fixtureRepo();
+    await fs.writeFile(path.join(repo, "src/main.tsx"), `import { Screen } from "./runtime-deferred";
+export const App = () => <Screen />;
+`);
+    await fs.writeFile(path.join(repo, "src/runtime-deferred.tsx"), `import { base44 } from "@base44/sdk";
+import { useMutation as useWrite } from "@tanstack/react-query";
+import { useCallback } from "react";
+import Child from "./runtime-deferred-child";
+export function Screen(runtimeInput) {
+  const save = (data) => base44.entities.SafeOrder.update("1", data);
+  const saveSpread = (data) => base44.entities.SafeSpread.create({ ...data, fixed: true });
+  saveSpread(runtimeInput);
+  const unsafe = (data) => base44.entities.UnsafeOrder.update("1", data);
+  consume(unsafe);
+  unsafe(runtimeInput);
+  const hook = useWrite({ mutationFn: ({ data }) => base44.entities.HookOrder.update("1", data) });
+  const invoke = useCallback(() => hook.mutate({ data: { status: "ready" } }), [hook]);
+  invoke();
+  return <Child onSubmit={save} onUnsafe={(data) => base44.entities.UnsafeInline.create(data)}
+    onUnused={(data) => hook.mutate({ data })} />;
+}
+`);
+    await fs.writeFile(path.join(repo, "src/runtime-deferred-child.tsx"), `export default function Child({ onSubmit, onUnsafe, onUnused }) {
+  const handleSubmit = (event) => { event.preventDefault(); onSubmit({ [field]: value }); };
+  consume(onUnsafe);
+  return <form onSubmit={handleSubmit}><button type="submit">Save</button></form>;
+}
+`);
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-runtime-deferred-outer-"));
+    const packet = (await buildBase44Evidence(options(repo, out))).packet;
+    const safe = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "SafeOrder")!;
+    expect(safe.properties).toMatchObject({
+      completeness: "partial",
+      outerKind: "object",
+      referenceAccounting: "source-bounded",
+      runtimeObligationsJson: '["entity-open-object-fields:docker-write-readback-cleanup"]'
+    });
+    const safeSpread = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "SafeSpread")!;
+    expect(safeSpread.properties).toMatchObject({
+      completeness: "partial",
+      outerKind: "object",
+      referenceAccounting: "source-bounded",
+      runtimeObligationsJson: '["entity-open-object-fields:docker-write-readback-cleanup"]'
+    });
+    const unsafe = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "UnsafeOrder")!;
+    expect(unsafe.properties).toMatchObject({ completeness: "unresolved", outerKind: "unknown", referenceAccounting: "unresolved" });
+    const unsafeInline = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "UnsafeInline")!;
+    expect(unsafeInline.properties).toMatchObject({ completeness: "unresolved", outerKind: "unknown", referenceAccounting: "unresolved" });
+    const hook = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "HookOrder")!;
+    expect(hook.properties.outerKind).toBe("object");
+    expect(JSON.parse(hook.properties.analysisGapsJson)).not.toContain("binding-initializer-unresolved");
+  });
+
   it("accepts only terminating immutable Set guards as finite selector authority", async () => {
     const repo = await fixtureRepo();
     await fs.writeFile(path.join(repo, "src/guarded-entities.ts"), `import { base44 } from "@base44/sdk";
@@ -198,7 +559,7 @@ export async function run(acceptedEntity, mutatedEntity, nonTerminatingEntity) {
         operationName: "create",
         referenceAccounting: "source-bounded",
         runtimeObligationsJson: "[]",
-        shapeVersion: "2"
+        shapeVersion: "3"
       })
     }));
     expect(JSON.parse(createPayload?.properties.fieldsJson ?? "[]")).toEqual([
@@ -210,6 +571,12 @@ export async function run(acceptedEntity, mutatedEntity, nonTerminatingEntity) {
         evidenceStartLine: expect.any(Number),
         evidenceEndLine: expect.any(Number),
         evidenceSnippetHash: expect.stringMatching(/^[0-9a-f]{64}$/)
+      })
+    ]);
+    expect(JSON.parse(createPayload?.properties.semanticFieldsJson ?? "[]")).toEqual([
+      expect.objectContaining({
+        name: "status", semanticPresence: "always", valueType: "string", explicitNull: false,
+        provenance: [expect.objectContaining({ origin: "literal", expressionType: "string-literal" })]
       })
     ]);
     const filterShape = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityQuery
@@ -424,6 +791,15 @@ export async function run(acceptedEntity, mutatedEntity, nonTerminatingEntity) {
     const secondOut = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-payload-second-"));
     const first = await buildBase44Evidence(options(repo, firstOut));
     const second = await buildBase44Evidence(options(repo, secondOut));
+    expect(await fs.readFile(path.join(firstOut, "base44-evidence.json"), "utf8")).toBe(
+      await fs.readFile(path.join(secondOut, "base44-evidence.json"), "utf8")
+    );
+    expect(Object.keys(first.packet.artifacts).sort()).toEqual([
+      "facts.ndjson", "logs/analyzer.log", "report.md"
+    ]);
+    expect(first.packet.artifacts).toEqual(second.packet.artifacts);
+    await expect(fs.stat(path.join(firstOut, "scan-manifest.json"))).resolves.toBeTruthy();
+    await expect(fs.stat(path.join(firstOut, "index.sqlite"))).resolves.toBeTruthy();
     const payloadFacts = first.packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityPayload);
 
     expect(payloadFacts).toHaveLength(9);
@@ -534,6 +910,12 @@ export function Screen(raw) {
     mutationFn: ({ id, data }) => base44.entities.NestedItem.update(id, data)
   });
   updateItem.mutate({ ...raw, id: "redacted", data: { status: "redacted", total: Number(raw) } });
+  const stableSemantic = useWrite({ mutationFn: (payload) => base44.entities.StableSemantic.create(payload) });
+  stableSemantic.mutate({ state: "one" });
+  stableSemantic.mutate({ state: "two" });
+  const conflictingSemantic = useWrite({ mutationFn: (payload) => base44.entities.ConflictingSemantic.create(payload) });
+  conflictingSemantic.mutate({ state: "one" });
+  conflictingSemantic.mutate({ state: 2 });
 }
 `, true);
 
@@ -545,6 +927,10 @@ export function Screen(raw) {
       expect.objectContaining({ name: "always_present", presence: "unconditional", expressionType: "integer-number-literal" }),
       expect.objectContaining({ name: "sometimes_present", presence: "conditional", expressionType: "identifier-reference" })
     ]));
+    expect(JSON.parse(direct.properties.semanticFieldsJson)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "always_present", semanticPresence: "always", valueType: "integer", explicitNull: false }),
+      expect.objectContaining({ name: "sometimes_present", semanticPresence: "conditional", valueType: "unknown", explicitNull: false })
+    ]));
     expect(JSON.parse(direct.properties.candidateBindingsJson)).toEqual(expect.arrayContaining([
       "binding:payload", "mutation-hook:createItem"
     ]));
@@ -552,10 +938,20 @@ export function Screen(raw) {
     const nested = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload && fact.targetSymbol === "NestedItem")!;
     expect(nested.properties.completeness).toBe("complete");
     expect(nested.properties.outerKind).toBe("object");
-    expect(JSON.parse(nested.properties.fieldsJson)).toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: "status", presence: "unconditional", expressionType: "string-literal" }),
-      expect.objectContaining({ name: "total", presence: "unconditional", expressionType: "number-coercion-call" })
+    expect(JSON.parse(nested.properties.semanticFieldsJson)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "status", semanticPresence: "always", valueType: "string", explicitNull: false }),
+      expect.objectContaining({ name: "total", semanticPresence: "always", valueType: "number", explicitNull: false })
     ]));
+    const stableSemantic = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "StableSemantic")!;
+    expect(JSON.parse(stableSemantic.properties.semanticFieldsJson)).toEqual([
+      expect.objectContaining({ name: "state", semanticPresence: "always", valueType: "string", explicitNull: false })
+    ]);
+    const conflictingSemantic = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "ConflictingSemantic")!;
+    expect(JSON.parse(conflictingSemantic.properties.semanticFieldsJson)).toEqual([
+      expect.objectContaining({ name: "state", semanticPresence: "always", valueType: "unknown", explicitNull: false })
+    ]);
     expect(replayPacket?.facts.filter((fact) => fact.factType === FactTypes.Base44EntityPayload).map((fact) => fact.factId)).toEqual(
       packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityPayload).map((fact) => fact.factId)
     );
@@ -634,12 +1030,15 @@ export function Screen(runtimeInput) {
         outerKind: "object",
         referenceAccounting: "source-bounded",
         runtimeObligationsJson: '["entity-open-object-fields:docker-write-readback-cleanup"]',
-        shapeVersion: "2"
+        shapeVersion: "3"
       }
     });
     expect(JSON.parse(payload.properties.analysisGapsJson)).toEqual(["runtime-deferred-object-fields"]);
     expect(JSON.parse(payload.properties.fieldsJson)).toEqual([
       expect.objectContaining({ name: "organization_id", presence: "unconditional" })
+    ]);
+    expect(JSON.parse(payload.properties.semanticFieldsJson)).toEqual([
+      expect.objectContaining({ name: "organization_id", semanticPresence: "always", valueType: "string", explicitNull: false })
     ]);
 
     const tampered = structuredClone(packet);
@@ -668,6 +1067,26 @@ export function Screen(runtimeInput) {
     await fs.writeFile(orphanedObligationPath, `${JSON.stringify(orphanedObligation)}\n`);
     await expect(diffBase44Evidence(baselinePath, orphanedObligationPath, path.join(out, "orphaned-obligation-diff.json")))
       .rejects.toThrow("orphaned runtime obligation");
+
+    const malformedSemantic = structuredClone(packet);
+    const malformedPayload = malformedSemantic.facts.find((fact) => fact.factId === payload.factId)!;
+    const malformedFields = JSON.parse(malformedPayload.properties.semanticFieldsJson);
+    malformedFields[0].valueType = "guessed";
+    malformedPayload.properties.semanticFieldsJson = JSON.stringify(malformedFields);
+    const malformedSemanticPath = path.join(out, "malformed-semantic.json");
+    await fs.writeFile(malformedSemanticPath, `${JSON.stringify(malformedSemantic)}\n`);
+    await expect(diffBase44Evidence(baselinePath, malformedSemanticPath, path.join(out, "malformed-semantic-diff.json")))
+      .rejects.toThrow("invalid semantic field");
+
+    const duplicateSemantic = structuredClone(packet);
+    const duplicatePayload = duplicateSemantic.facts.find((fact) => fact.factId === payload.factId)!;
+    const duplicateFields = JSON.parse(duplicatePayload.properties.semanticFieldsJson);
+    duplicateFields.push(duplicateFields[0]);
+    duplicatePayload.properties.semanticFieldsJson = JSON.stringify(duplicateFields);
+    const duplicateSemanticPath = path.join(out, "duplicate-semantic.json");
+    await fs.writeFile(duplicateSemanticPath, `${JSON.stringify(duplicateSemantic)}\n`);
+    await expect(diffBase44Evidence(baselinePath, duplicateSemanticPath, path.join(out, "duplicate-semantic-diff.json")))
+      .rejects.toThrow("invalid semantic field");
   });
 
   it("follows a finite mutation-array push and map-element path", async () => {
