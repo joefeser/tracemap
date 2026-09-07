@@ -2255,6 +2255,15 @@ function arrayIntrinsicsArePristine(contexts: Map<string, SourceContext>): boole
         pristine = false;
         return;
       }
+      if ((ts.isCallExpression(node) || ts.isNewExpression(node))) {
+        const callee = unwrapAliasExpression(node.expression);
+        if (ts.isIdentifier(callee) && (callee.text === "eval" || callee.text === "Function")
+          && !resolveLexicalBinding(callee.text, callee, context.source)
+          && !isBoundedArithmeticDynamicEvaluation(node, context.source)) {
+          pristine = false;
+          return;
+        }
+      }
       const mutatedMember = (expression: ts.Expression): string | null => {
         const target = unwrapAliasExpression(expression);
         if (ts.isPropertyAccessExpression(target)) return target.name.text;
@@ -2305,6 +2314,47 @@ function arrayIntrinsicsArePristine(contexts: Map<string, SourceContext>): boole
 const dangerousPrototypeCapabilities = new Set([
   "defineProperties", "defineProperty", "getPrototypeOf", "set", "setPrototypeOf"
 ]);
+
+function isBoundedArithmeticDynamicEvaluation(
+  node: ts.CallExpression | ts.NewExpression,
+  source: ts.SourceFile
+): boolean {
+  if (!node.arguments || node.arguments.length !== 1) return false;
+  const argument = unwrapAliasExpression(node.arguments[0]);
+  let value: ts.Identifier | null = null;
+  const callee = unwrapAliasExpression(node.expression);
+  if (ts.isIdentifier(callee) && callee.text === "Function") {
+    if (!ts.isTemplateExpression(argument) || argument.head.text !== "return "
+      || argument.templateSpans.length !== 1 || argument.templateSpans[0].literal.text !== ""
+      || !ts.isIdentifier(argument.templateSpans[0].expression)) return false;
+    value = argument.templateSpans[0].expression;
+  } else if (ts.isIdentifier(callee) && callee.text === "eval" && ts.isIdentifier(argument)) {
+    value = argument;
+  }
+  if (!value) return false;
+  const binding = resolveLexicalBinding(value.text, value, source);
+  if (binding?.kind !== "variable" || !isImmutableVariable(binding.node, value)) return false;
+  const statement = findAncestor(node, ts.isStatement);
+  const block = statement?.parent;
+  if (!statement || !block || !ts.isBlock(block)) return false;
+  const statementIndex = block.statements.indexOf(statement);
+  return block.statements.slice(0, statementIndex).some((candidate) => {
+    if (!ts.isIfStatement(candidate) || candidate.elseStatement
+      || !statementTerminates(candidate.thenStatement)) return false;
+    const condition = unwrapAliasExpression(candidate.expression);
+    if (!ts.isPrefixUnaryExpression(condition) || condition.operator !== ts.SyntaxKind.ExclamationToken) return false;
+    const test = unwrapAliasExpression(condition.operand);
+    if (!ts.isCallExpression(test) || test.arguments.length !== 1
+      || !ts.isIdentifier(unwrapAliasExpression(test.arguments[0]))) return false;
+    const tested = unwrapAliasExpression(test.arguments[0]) as ts.Identifier;
+    if (resolveLexicalBinding(tested.text, tested, source)?.node !== binding.node) return false;
+    const testCallee = unwrapAliasExpression(test.expression);
+    if (!ts.isPropertyAccessExpression(testCallee) || testCallee.name.text !== "test") return false;
+    const regex = unwrapAliasExpression(testCallee.expression);
+    return ts.isRegularExpressionLiteral(regex)
+      && regex.getText(source) === String.raw`/^[\d+\-*/(). ]+$/`;
+  });
+}
 
 function dangerousPrototypeCapabilityReference(node: ts.Node, source: ts.SourceFile): boolean {
   if (ts.isPropertyAccessExpression(node)) {

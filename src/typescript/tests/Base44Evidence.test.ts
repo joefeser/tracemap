@@ -717,6 +717,33 @@ export function Screen(enabled) {
     ]));
   });
 
+  it.each([
+    ["bounded arithmetic", `function evaluate(expression) {
+  const cleaned = expression.toString().trim();
+  if (!/^[\\d+\\-*/(). ]+$/.test(cleaned)) return expression;
+  return new Function(\`return \${cleaned}\`)();
+}` , true],
+    ["unbounded source", `function evaluate(expression) {
+  return new Function(expression)();
+}` , false]
+  ])("admits Array inference only around %s dynamic evaluation", async (_caseName, evaluator, expectedComplete) => {
+    const { packet } = await mutationHookFixture(`
+${evaluator}
+export function Screen(enabled) {
+  evaluate("1 + 1");
+  const save = useWrite({
+    mutationFn: async (rows) => Promise.all(rows.map((row) => base44.entities.DynamicEvaluationArray.create(row)))
+  });
+  const rows = [];
+  if (enabled) rows.push({ name: "safe" });
+  save.mutate(rows);
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "DynamicEvaluationArray")!;
+    expect(payload.properties.completeness === "complete").toBe(expectedComplete);
+  });
+
   it("excludes array mutations after a statically terminating statement", async () => {
     const repo = await fixtureRepo();
     await fs.writeFile(path.join(repo, "src/unreachable-array-mutation.ts"), `import { base44 } from "@base44/sdk";
