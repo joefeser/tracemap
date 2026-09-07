@@ -6,8 +6,8 @@
 - Exact source commit: `6753cfa6264b04c0d7dbfcde942689ee32d2c06b`
 - Accepted source/tree SHA-256: `a5a313b180ef0cdfd2e837779f251cc754978fcd474b6a32646c133b058b6e24`
 - Extractor: `base44-evidence/0.14.0`
-- TraceMap commit: `785cd1196dba40fca99295277f86a50d4ad3f619`
-- TraceMap tree: `ae89c7d7e600bfb22d580b28a4335a3abb357e33`
+- TraceMap implementation commit: `5b176267d7943f0f9a3c2e919d3d52a5449317e7`
+- TraceMap implementation tree: `5ed329a7307b225874f1da6e05477ea22c6ef569`
 
 The executable source is authority. No prose schema, fixture, reverse-engineer
 artifact, host reconciliation, or customer-specific filename supplies an
