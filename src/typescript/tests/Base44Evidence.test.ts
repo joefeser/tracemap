@@ -277,6 +277,67 @@ export async function unused(data) { return base44.entities.AliasGraph.create(da
       && fact.evidence.filePath === "src/unused.ts")).toBe(false);
   });
 
+  it("resolves a local alias inherited from a source-bound config", async () => {
+    const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-extended-alias-reachability-"));
+    await fs.mkdir(path.join(repo, "src"), { recursive: true });
+    await writeFrontendSdkAuthority(repo);
+    await fs.writeFile(path.join(repo, "config.base.json"), `${JSON.stringify({
+      compilerOptions: { baseUrl: ".", paths: { "~/*": ["src/*"] } }
+    }, null, 2)}\n`);
+    await fs.writeFile(path.join(repo, "jsconfig.json"), `${JSON.stringify({ extends: "./config.base.json" }, null, 2)}\n`);
+    await fs.writeFile(path.join(repo, "src/main.ts"), `import { used } from "~/used"; used({ name: "active" });\n`);
+    await fs.writeFile(path.join(repo, "src/used.ts"), `import { base44 } from "@base44/sdk";
+export const used = (data) => base44.entities.ExtendedAlias.create(data);
+`);
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    execFileSync("git", ["add", "."], { cwd: repo });
+    execFileSync("git", ["-c", "user.name=TraceMap Test", "-c", "user.email=tracemap@example.invalid", "commit", "-qm", "fixture"], { cwd: repo });
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-extended-alias-reachability-out-"));
+    const packet = (await buildBase44Evidence(options(repo, out))).packet;
+    expect(packet.facts.some((fact) => fact.factType === FactTypes.Base44EntityOperation
+      && fact.targetSymbol === "ExtendedAlias")).toBe(true);
+  });
+
+  it.each([
+    ["malformed", `{ "compilerOptions": {`],
+    ["missing-extends", `${JSON.stringify({ extends: "./missing-config.json" })}\n`],
+    ["multi-target", `${JSON.stringify({ compilerOptions: { paths: { "~/*": ["src/*", "fallback/*"] } } })}\n`],
+    ["invalid-wildcards", `${JSON.stringify({ compilerOptions: { paths: { "~/*/*": ["src/*/*"] } } })}\n`]
+  ])("fails dormant reachability closed on %s module config authority", async (_caseName, config) => {
+    const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-invalid-module-config-"));
+    await fs.mkdir(path.join(repo, "src"), { recursive: true });
+    await writeFrontendSdkAuthority(repo);
+    await fs.writeFile(path.join(repo, "jsconfig.json"), config);
+    await fs.writeFile(path.join(repo, "src/main.ts"), `export const ready = true;\n`);
+    await fs.writeFile(path.join(repo, "src/unused.ts"), `import { base44 } from "@base44/sdk";
+export async function unused(data) { return base44.entities.InvalidConfig.create(data); }
+`);
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    execFileSync("git", ["add", "."], { cwd: repo });
+    execFileSync("git", ["-c", "user.name=TraceMap Test", "-c", "user.email=tracemap@example.invalid", "commit", "-qm", "fixture"], { cwd: repo });
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-invalid-module-config-out-"));
+    const packet = (await buildBase44Evidence(options(repo, out))).packet;
+    expect(packet.facts.some((fact) => fact.factType === FactTypes.Base44EntityOperation
+      && fact.targetSymbol === "InvalidConfig")).toBe(true);
+  });
+
+  it("fails dormant reachability closed on an undeclared bare module that may be a local bundler alias", async () => {
+    const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-undeclared-bare-alias-"));
+    await fs.mkdir(path.join(repo, "src"), { recursive: true });
+    await writeFrontendSdkAuthority(repo);
+    await fs.writeFile(path.join(repo, "src/main.ts"), `import "application/missing";\n`);
+    await fs.writeFile(path.join(repo, "src/unused.ts"), `import { base44 } from "@base44/sdk";
+export async function unused(data) { return base44.entities.UndeclaredAlias.create(data); }
+`);
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    execFileSync("git", ["add", "."], { cwd: repo });
+    execFileSync("git", ["-c", "user.name=TraceMap Test", "-c", "user.email=tracemap@example.invalid", "commit", "-qm", "fixture"], { cwd: repo });
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-undeclared-bare-alias-out-"));
+    const packet = (await buildBase44Evidence(options(repo, out))).packet;
+    expect(packet.facts.some((fact) => fact.factType === FactTypes.Base44EntityOperation
+      && fact.targetSymbol === "UndeclaredAlias")).toBe(true);
+  });
+
   it("marks an uninvoked real mutation callback dormant but blocks spoofed, invoked, or escaped handles", async () => {
     const { packet } = await mutationHookFixture(`
 export function Screen(runtimeEntity) {

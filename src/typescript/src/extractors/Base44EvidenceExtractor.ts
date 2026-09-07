@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { builtinModules } from "node:module";
 import path from "node:path";
 import ts from "typescript";
 import { CodeFact, EvidenceTiers, FactTypes, FileInventoryItem, ScanManifest } from "../facts/Models";
@@ -949,7 +950,7 @@ function sourceReachabilityGraph(contexts: Map<string, SourceContext>): {
 } {
   const cached = sourceReachabilityCache.get(contexts);
   if (cached) return cached;
-  let closed = true;
+  let closed = localModuleAliasCache.get(contexts)?.closed ?? false;
   const edges = new Map<string, Set<string>>();
   const roots = new Set([...contexts.keys()].filter((filePath) =>
     /(^|\/)(?:pages\.config|main|index|App)\.[jt]sx?$/u.test(filePath)
@@ -1008,12 +1009,22 @@ function localSpecifierRequiresExecutableContext(
 ): boolean {
   const local = specifier.startsWith(".") || specifier.startsWith("@/")
     || localModuleAliases(contexts).some((alias) => moduleAliasMatch(alias.pattern, specifier) !== null);
-  if (!local) return false;
+  if (!local && isDeclaredExternalModule(specifier, contexts)) return false;
   // Static style imports cannot contain executable Base44 callsites and are
   // deliberately absent from the TypeScript/JavaScript SourceContext graph.
   // Missing/broken asset bytes remain a build/package concern. Every local
   // executable or extensionless module edge still has to resolve here.
   return !/\.(?:css|less|sass|scss)(?:[?#].*)?$/iu.test(specifier);
+}
+
+const builtinModuleNames = new Set(builtinModules.flatMap((name) => [name, `node:${name}`]));
+
+function isDeclaredExternalModule(specifier: string, contexts: Map<string, SourceContext>): boolean {
+  if (/^(?:https?:|npm:|jsr:|data:|virtual:)/u.test(specifier) || builtinModuleNames.has(specifier)) return true;
+  const packageName = specifier.startsWith("@")
+    ? specifier.split("/").slice(0, 2).join("/")
+    : specifier.split("/", 1)[0];
+  return Boolean(packageName && localModuleAliasCache.get(contexts)?.declaredPackages.has(packageName));
 }
 
 function returnedExpression(owner: ts.FunctionLikeDeclaration): ts.Expression | null {
@@ -2611,44 +2622,117 @@ interface LocalModuleAlias {
   targets: string[];
 }
 
-const localModuleAliasCache = new WeakMap<Map<string, SourceContext>, LocalModuleAlias[]>();
-
-function localModuleAliases(contexts: Map<string, SourceContext>): LocalModuleAlias[] {
-  return localModuleAliasCache.get(contexts) ?? [];
+interface LocalModuleResolutionAuthority {
+  aliases: LocalModuleAlias[];
+  closed: boolean;
+  declaredPackages: Set<string>;
 }
 
-async function loadLocalModuleAliases(items: readonly FileInventoryItem[]): Promise<LocalModuleAlias[]> {
+const localModuleAliasCache = new WeakMap<Map<string, SourceContext>, LocalModuleResolutionAuthority>();
+
+function localModuleAliases(contexts: Map<string, SourceContext>): LocalModuleAlias[] {
+  return localModuleAliasCache.get(contexts)?.aliases ?? [];
+}
+
+async function loadLocalModuleAliases(items: readonly FileInventoryItem[]): Promise<LocalModuleResolutionAuthority> {
   const first = items[0];
-  if (!first) return [];
+  if (!first) return { aliases: [], closed: true, declaredPackages: new Set() };
   let repositoryRoot = path.dirname(first.absolutePath);
   for (let index = 1; index < first.relativePath.split("/").length; index++) {
     repositoryRoot = path.dirname(repositoryRoot);
   }
+  let declaredPackages = new Set<string>();
+  let packageAuthorityClosed = true;
+  try {
+    const packageJson = JSON.parse(await fs.readFile(path.join(repositoryRoot, "package.json"), "utf8"));
+    for (const key of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
+      const dependencies = packageJson?.[key];
+      if (dependencies === undefined) continue;
+      if (!dependencies || typeof dependencies !== "object" || Array.isArray(dependencies)) {
+        packageAuthorityClosed = false;
+        continue;
+      }
+      for (const name of Object.keys(dependencies)) declaredPackages.add(name);
+    }
+  } catch (error: any) {
+    if (error?.code !== "ENOENT") packageAuthorityClosed = false;
+  }
   for (const configName of ["tsconfig.json", "jsconfig.json"]) {
     const configPath = path.join(repositoryRoot, configName);
-    let text: string;
     try {
-      text = await fs.readFile(configPath, "utf8");
+      await fs.access(configPath);
     } catch (error: any) {
       if (error?.code === "ENOENT") continue;
-      return [];
+      return { aliases: [], closed: false, declaredPackages };
     }
-    const parsed = ts.parseConfigFileTextToJson(configPath, text);
-    if (parsed.error || !parsed.config || typeof parsed.config !== "object") return [];
-    const options = parsed.config.compilerOptions;
-    const paths = options && typeof options === "object" ? options.paths : null;
-    if (!paths || typeof paths !== "object" || Array.isArray(paths)) return [];
-    const baseUrl = typeof options.baseUrl === "string" ? options.baseUrl : ".";
-    return Object.entries(paths).flatMap(([pattern, rawTargets]) => {
-      if (!pattern || !Array.isArray(rawTargets)
-        || rawTargets.some((target) => typeof target !== "string" || !target)) return [];
-      return [{
-        pattern,
-        targets: rawTargets.map((target) => path.posix.normalize(path.posix.join(baseUrl, target)).replace(/^\.\//u, ""))
-      }];
-    }).sort((left, right) => left.pattern.localeCompare(right.pattern));
+    const loaded = await loadLocalModuleConfig(configPath, repositoryRoot, new Set());
+    return {
+      aliases: loaded.aliases,
+      closed: loaded.closed && packageAuthorityClosed,
+      declaredPackages
+    };
   }
-  return [];
+  return { aliases: [], closed: packageAuthorityClosed, declaredPackages };
+}
+
+async function loadLocalModuleConfig(
+  configPath: string,
+  repositoryRoot: string,
+  visited: Set<string>
+): Promise<{aliases: LocalModuleAlias[]; closed: boolean}> {
+  const canonicalPath = path.resolve(configPath);
+  if (visited.has(canonicalPath) || !canonicalPath.startsWith(`${path.resolve(repositoryRoot)}${path.sep}`)) {
+    return { aliases: [], closed: false };
+  }
+  const nextVisited = new Set(visited).add(canonicalPath);
+  let text: string;
+  try {
+    text = await fs.readFile(canonicalPath, "utf8");
+  } catch {
+    return { aliases: [], closed: false };
+  }
+  const parsed = ts.parseConfigFileTextToJson(canonicalPath, text);
+  if (parsed.error || !parsed.config || typeof parsed.config !== "object" || Array.isArray(parsed.config)) {
+    return { aliases: [], closed: false };
+  }
+  let inherited: {aliases: LocalModuleAlias[]; closed: boolean} = { aliases: [], closed: true };
+  if (parsed.config.extends !== undefined) {
+    if (typeof parsed.config.extends !== "string" || !parsed.config.extends.startsWith(".")) {
+      inherited = { aliases: [], closed: false };
+    } else {
+      let extendedPath = path.resolve(path.dirname(canonicalPath), parsed.config.extends);
+      if (!path.extname(extendedPath)) extendedPath += ".json";
+      inherited = await loadLocalModuleConfig(extendedPath, repositoryRoot, nextVisited);
+    }
+  }
+  const options = parsed.config.compilerOptions;
+  if (options !== undefined && (!options || typeof options !== "object" || Array.isArray(options))) {
+    return { aliases: inherited.aliases, closed: false };
+  }
+  if (!options || options.paths === undefined) return inherited;
+  if (!options.paths || typeof options.paths !== "object" || Array.isArray(options.paths)
+    || (options.baseUrl !== undefined && typeof options.baseUrl !== "string")) {
+    return { aliases: inherited.aliases, closed: false };
+  }
+  const baseDirectory = path.relative(repositoryRoot,
+    path.resolve(path.dirname(canonicalPath), typeof options.baseUrl === "string" ? options.baseUrl : "."))
+    .split(path.sep).join("/") || ".";
+  const aliases: LocalModuleAlias[] = [];
+  let closed = inherited.closed;
+  for (const [pattern, rawTargets] of Object.entries(options.paths)) {
+    if (!pattern || (pattern.match(/\*/gu)?.length ?? 0) > 1
+      || !Array.isArray(rawTargets) || rawTargets.length !== 1
+      || typeof rawTargets[0] !== "string" || !rawTargets[0]
+      || (rawTargets[0].match(/\*/gu)?.length ?? 0) > 1) {
+      closed = false;
+      continue;
+    }
+    aliases.push({
+      pattern,
+      targets: [path.posix.normalize(path.posix.join(baseDirectory, rawTargets[0])).replace(/^\.\//u, "")]
+    });
+  }
+  return { aliases: aliases.sort((left, right) => left.pattern.localeCompare(right.pattern)), closed };
 }
 
 interface AliasDiscovery {
@@ -3573,6 +3657,10 @@ function resolveLocalModule(fromFile: string, specifier: string, contexts: Map<s
     const capture = moduleAliasMatch(alias.pattern, specifier);
     if (capture === null) continue;
     bases.push(...alias.targets.map((target) => target.replace("*", capture)));
+  }
+  if (!specifier.startsWith(".") && !specifier.startsWith("@/")
+    && !isDeclaredExternalModule(specifier, contexts)) {
+    bases.push(specifier, `src/${specifier}`);
   }
   for (const base of [...new Set(bases)]) {
     if (base.startsWith("../") || path.posix.isAbsolute(base)) continue;
