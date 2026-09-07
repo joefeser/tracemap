@@ -24,16 +24,19 @@ interface ShapeSpread {
   fieldNames: string[];
 }
 
+type PayloadOuterKind = "object" | "array" | "unknown";
+type PayloadReferenceAccounting = "source-bounded" | "unresolved";
+
 interface ShapeAnalysis {
   constructionKind: string;
+  outerKinds: PayloadOuterKind[];
+  arrayElementOuterKinds: PayloadOuterKind[];
+  arrayElementCount: number;
   fields: ShapeField[];
   spreads: ShapeSpread[];
   candidateBindings: string[];
   gaps: string[];
 }
-
-type PayloadOuterKind = "object" | "array" | "unknown";
-type PayloadReferenceAccounting = "source-bounded" | "unresolved";
 
 const deferredOpenObjectObligation = "entity-open-object-fields:docker-write-readback-cleanup";
 
@@ -132,6 +135,9 @@ function queryFact(input: EntityShapeInput, context: ShapeContext): CodeFact {
 
   const analysis: ShapeAnalysis = {
     constructionKind: `${input.operationName}-arguments`,
+    outerKinds: [],
+    arrayElementOuterKinds: [],
+    arrayElementCount: 0,
     fields: normalizeFields(fields),
     spreads: normalizeSpreads(spreads),
     candidateBindings: unique(candidateBindings),
@@ -199,7 +205,7 @@ function analyzeExpression(expression: ts.Expression, context: ShapeContext, vis
 }
 
 function analyzeObjectLiteral(node: ts.ObjectLiteralExpression, context: ShapeContext, visitedBindings: Set<string>, inheritedPresence: Presence): ShapeAnalysis {
-  const result = emptyAnalysis("object-literal");
+  const result = emptyAnalysis("object-literal", ["object"]);
   for (const property of node.properties) {
     if (ts.isSpreadAssignment(property)) {
       const spread = analyzeExpression(property.expression, context, new Set(visitedBindings), inheritedPresence === "conditional" ? "conditional" : "spread-derived");
@@ -263,7 +269,8 @@ function analyzeIdentifier(identifier: ts.Identifier, context: ShapeContext, vis
     if (parameter && hasVisibleFunctionOrClassShadow(bindingName, identifier, parameter.parameter.parent)) {
       return unresolvedAnalysis("identifier-reference", "mutation-hook-parameter-shadowed", candidate);
     }
-    const callsiteAnalysis = parameter && analyzeMutationHookParameter(parameter, context, visitedBindings, presence);
+    const callsiteAnalysis = parameter && (analyzeMutationHookParameter(parameter, context, visitedBindings, presence)
+      ?? analyzeArrayIteratorParameter(parameter, context, visitedBindings, presence));
     return callsiteAnalysis ?? unresolvedAnalysis("identifier-reference", "binding-initializer-unresolved", candidate);
   }
   const bindingContext: ShapeContext = { ...context, callNode: identifier, callPosition: referencePosition };
@@ -438,6 +445,62 @@ function analyzeMutationHookParameter(binding: ParameterBinding, context: ShapeC
   return result;
 }
 
+function analyzeArrayIteratorParameter(
+  binding: ParameterBinding,
+  context: ShapeContext,
+  visitedBindings: Set<string>,
+  presence: Presence
+): ShapeAnalysis | null {
+  if (binding.propertyPath.length !== 0 || binding.gap || !ts.isIdentifier(binding.parameter.name)
+    || binding.parameter.initializer || binding.parameter.dotDotDotToken) return null;
+  const callback = binding.parameter.parent;
+  if ((!ts.isArrowFunction(callback) && !ts.isFunctionExpression(callback)) || callback.parameters[0] !== binding.parameter) return null;
+  const mapCall = callback.parent;
+  if (!ts.isCallExpression(mapCall) || mapCall.arguments[0] !== callback) return null;
+  const callee = unwrapExpression(mapCall.expression);
+  if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== "map") return null;
+  if (hasUnsafeForwardedParameterReference(binding, context)) {
+    return unresolvedAnalysis("array-map-element", "array-iterator-parameter-state-unresolved", `binding:${binding.bindingName}`);
+  }
+  const iterableContext: ShapeContext = {
+    ...context,
+    callNode: mapCall,
+    callPosition: mapCall.getStart(context.source)
+  };
+  const iterable = analyzeExpression(callee.expression, iterableContext, new Set(visitedBindings), presence);
+  const iterableKind = provenPayloadOuterKind(iterable.outerKinds);
+  const elementKind = provenPayloadOuterKind(iterable.arrayElementOuterKinds);
+  if (iterableKind !== "array" || elementKind !== "object" || iterable.gaps.length > 0) {
+    return unresolvedAnalysis("array-map-element", "array-iterator-source-unresolved", `binding:${binding.bindingName}`);
+  }
+  return {
+    constructionKind: `array-map-element:${iterable.constructionKind}`,
+    outerKinds: ["object"],
+    arrayElementOuterKinds: [],
+    arrayElementCount: 0,
+    fields: iterable.fields,
+    spreads: iterable.spreads,
+    candidateBindings: [...iterable.candidateBindings, `array-iterator:${binding.bindingName}`],
+    gaps: []
+  };
+}
+
+function hasUnsafeForwardedParameterReference(binding: ParameterBinding, context: ShapeContext): boolean {
+  const callback = binding.parameter.parent;
+  let unsafe = false;
+  const visit = (node: ts.Node): void => {
+    if (unsafe || (node !== callback && ts.isFunctionLike(node))) return;
+    if (ts.isIdentifier(node) && resolvesToParameterBinding(node, binding, context)
+      && !isAncestor(context.callNode, node)) {
+      unsafe = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(callback);
+  return unsafe;
+}
+
 function mutationHookParameterStateGap(binding: ParameterBinding, hook: MutationHookContext, context: ShapeContext): string | null {
   const callback = binding.parameter.parent;
   const bindingName = binding.bindingName;
@@ -458,6 +521,7 @@ function mutationHookParameterStateGap(binding: ParameterBinding, hook: Mutation
       return;
     }
     if (ts.isIdentifier(node) && resolvesToParameterBinding(node, binding, context)) {
+      if (isReadOnlyArrayIteratorReference(node, context)) return;
       for (let current: ts.Node | undefined = node.parent; current && current !== callback; current = current.parent) {
         if (ts.isBinaryExpression(current) && isAssignmentOperator(current.operatorToken.kind)
           && (isAncestor(current.left, node) || isAncestor(current.right, node))) {
@@ -497,6 +561,13 @@ function mutationHookParameterStateGap(binding: ParameterBinding, hook: Mutation
   };
   visit(callback);
   return unsafe ? "mutation-hook-parameter-state-unresolved" : null;
+}
+
+function isReadOnlyArrayIteratorReference(node: ts.Identifier, context: ShapeContext): boolean {
+  const access = node.parent;
+  return ts.isPropertyAccessExpression(access) && access.expression === node && access.name.text === "map"
+    && ts.isCallExpression(access.parent) && access.parent.expression === access
+    && isAncestor(access.parent, context.callNode);
 }
 
 function isSafeObjectRestProjection(
@@ -682,8 +753,32 @@ function addBindingMutations(bindingName: string, declaration: ts.VariableDeclar
     if (node !== scope && ts.isFunctionLike(node)) return;
     const position = node.getStart(context.source);
     if (position <= declarationEnd || position >= context.callPosition) return ts.forEachChild(node, visit);
-    const referenceGap = unmodeledReferenceUse(node, bindingName, declaration, context);
+    const safeArrayPush = isSafeArrayPush(node, bindingName, declaration, context, result);
+    const referenceGap = safeArrayPush ? null : unmodeledReferenceUse(node, bindingName, declaration, context);
     if (referenceGap) result.gaps.push(referenceGap);
+    if (safeArrayPush && ts.isCallExpression(node)) {
+      const conditional = inheritedPresence === "conditional" || isConditionallyExecuted(node, scope);
+      for (const argument of node.arguments) {
+        if (ts.isSpreadElement(argument)) {
+          result.gaps.push("array-push-spread-unresolved");
+          result.arrayElementOuterKinds.push("unknown");
+          result.arrayElementCount += 1;
+          continue;
+        }
+        const element = analyzeExpression(argument, context, new Set([bindingName]), conditional ? "conditional" : inheritedPresence);
+        if (result.arrayElementCount > 0) {
+          result.fields = result.fields.map((field) => ({ ...field, presence: "conditional" }));
+          element.fields = element.fields.map((field) => ({ ...field, presence: "conditional" }));
+        }
+        result.arrayElementOuterKinds.push(...element.outerKinds);
+        result.fields.push(...element.fields.map((field): ShapeField => conditional ? { ...field, presence: "conditional" } : field));
+        result.spreads.push(...element.spreads);
+        result.candidateBindings.push(...element.candidateBindings);
+        result.gaps.push(...element.gaps.map((gap) => `array-push:${gap}`));
+        result.arrayElementCount += 1;
+      }
+      return;
+    }
     if (ts.isBinaryExpression(node) && isAssignmentOperator(node.operatorToken.kind)) {
       if (ts.isIdentifier(node.left) && node.left.text === bindingName && resolveDeclarationAt(bindingName, node, context) === declaration) {
         if (node.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
@@ -740,6 +835,20 @@ function addBindingMutations(bindingName: string, declaration: ts.VariableDeclar
   visit(scope);
 }
 
+function isSafeArrayPush(
+  node: ts.Node,
+  bindingName: string,
+  declaration: ts.VariableDeclaration,
+  context: ShapeContext,
+  result: ShapeAnalysis
+): boolean {
+  if (!ts.isCallExpression(node) || provenPayloadOuterKind(result.outerKinds) !== "array") return false;
+  const callee = unwrapExpression(node.expression);
+  return ts.isPropertyAccessExpression(callee) && callee.name.text === "push"
+    && ts.isIdentifier(callee.expression) && callee.expression.text === bindingName
+    && resolveDeclarationAt(bindingName, callee.expression, context) === declaration;
+}
+
 function applyBindingReassignment(bindingName: string, node: ts.BinaryExpression, context: ShapeContext, result: ShapeAnalysis, presence: Presence): void {
   const replacement = analyzeExpression(node.right, context, new Set([bindingName]), presence);
   if (presence === "conditional") {
@@ -752,6 +861,9 @@ function applyBindingReassignment(bindingName: string, node: ts.BinaryExpression
   result.spreads = replacement.spreads;
   result.candidateBindings = replacement.candidateBindings;
   result.gaps = replacement.gaps;
+  result.outerKinds = replacement.outerKinds;
+  result.arrayElementOuterKinds = replacement.arrayElementOuterKinds;
+  result.arrayElementCount = replacement.arrayElementCount;
   result.constructionKind = `reassigned:${replacement.constructionKind}`;
 }
 
@@ -897,7 +1009,7 @@ function scopeDepth(node: ts.Node): number {
 }
 
 function analyzeArrayLiteral(node: ts.ArrayLiteralExpression, context: ShapeContext, visitedBindings: Set<string>, inheritedPresence: Presence): ShapeAnalysis {
-  const result = emptyAnalysis("array-literal");
+  const result = emptyAnalysis("array-literal", ["array"]);
   if (node.elements.length === 0) return result;
   const perElement: ShapeAnalysis[] = [];
   let hasUnresolvedSpread = false;
@@ -912,11 +1024,14 @@ function analyzeArrayLiteral(node: ts.ArrayLiteralExpression, context: ShapeCont
     perElement.push(analyzeExpression(element as ts.Expression, context, new Set(visitedBindings), inheritedPresence));
   }
   const elementCount = perElement.length;
+  result.arrayElementCount = elementCount;
   const occurrences = new Map<string, number>();
   for (const analysis of perElement) {
+    result.arrayElementOuterKinds.push(...analysis.outerKinds);
     for (const name of new Set(normalizeFields(analysis.fields).map((field) => field.name))) occurrences.set(name, (occurrences.get(name) ?? 0) + 1);
     mergeAnalysis(result, analysis);
   }
+  result.outerKinds = ["array"];
   result.fields = result.fields.map((field) => ({
     ...field,
     presence: !hasUnresolvedSpread && occurrences.get(field.name) === elementCount && field.presence === "unconditional" ? "unconditional" : "conditional"
@@ -972,7 +1087,7 @@ function payloadShapeContract(analysis: ShapeAnalysis): {
   runtimeObligations: string[];
   gaps: string[];
 } {
-  const outerKind = provenPayloadOuterKind(analysis.constructionKind);
+  const outerKind = provenPayloadOuterKind(analysis.outerKinds);
   const hasFiniteHookGraph = analysis.candidateBindings.some((binding) => binding.startsWith("mutation-hook:"));
   const deferredFieldSource = /^(?:spread:)+(?:binding-initializer-unresolved|destructured-binding-unresolved)$/u;
   const onlyDeferredFieldSources = analysis.gaps.length > 0 && analysis.gaps.every((gap) => deferredFieldSource.test(gap));
@@ -984,19 +1099,20 @@ function payloadShapeContract(analysis: ShapeAnalysis): {
       gaps: ["runtime-deferred-object-fields"]
     };
   }
+  const gaps = outerKind === "unknown" && analysis.gaps.length === 0
+    ? ["payload-outer-kind-unresolved"]
+    : analysis.gaps;
   return {
     outerKind,
-    referenceAccounting: analysis.gaps.length === 0 ? "source-bounded" : "unresolved",
+    referenceAccounting: gaps.length === 0 ? "source-bounded" : "unresolved",
     runtimeObligations: [],
-    gaps: analysis.gaps
+    gaps
   };
 }
 
-function provenPayloadOuterKind(constructionKind: string): PayloadOuterKind {
-  if (constructionKind === "object-literal" || constructionKind.endsWith(":object-literal")
-    || constructionKind.includes(":object-rest:")) return "object";
-  if (constructionKind === "array-literal" || constructionKind.endsWith(":array-literal")) return "array";
-  return "unknown";
+function provenPayloadOuterKind(outerKinds: PayloadOuterKind[]): PayloadOuterKind {
+  const candidates = new Set(outerKinds);
+  return candidates.size === 1 ? [...candidates][0] : "unknown";
 }
 
 function collectVariableDeclarations(source: ts.SourceFile): Map<string, ts.VariableDeclaration[]> {
@@ -1107,18 +1223,21 @@ function unwrapExpression(expression: ts.Expression): ts.Expression {
 }
 
 function mergeAnalysis(target: ShapeAnalysis, source: ShapeAnalysis, originPrefix?: string): void {
+  target.outerKinds.push(...source.outerKinds);
+  target.arrayElementOuterKinds.push(...source.arrayElementOuterKinds);
+  target.arrayElementCount += source.arrayElementCount;
   target.fields.push(...source.fields.map((field) => originPrefix ? { ...field, origin: `${originPrefix}:${field.origin}` } : field));
   target.spreads.push(...source.spreads);
   target.candidateBindings.push(...source.candidateBindings);
   target.gaps.push(...source.gaps);
 }
 
-function emptyAnalysis(constructionKind: string): ShapeAnalysis {
-  return { constructionKind, fields: [], spreads: [], candidateBindings: [], gaps: [] };
+function emptyAnalysis(constructionKind: string, outerKinds: PayloadOuterKind[] = []): ShapeAnalysis {
+  return { constructionKind, outerKinds, arrayElementOuterKinds: [], arrayElementCount: 0, fields: [], spreads: [], candidateBindings: [], gaps: [] };
 }
 
 function unresolvedAnalysis(constructionKind: string, gap: string, binding?: string): ShapeAnalysis {
-  return { constructionKind, fields: [], spreads: [], candidateBindings: binding ? [binding] : [], gaps: [gap] };
+  return { constructionKind, outerKinds: ["unknown"], arrayElementOuterKinds: [], arrayElementCount: 0, fields: [], spreads: [], candidateBindings: binding ? [binding] : [], gaps: [gap] };
 }
 
 function fieldEvidence(name: string, presence: Presence, expressionTypeName: string, origin: string, node: ts.Node, context?: ShapeContext): ShapeField {

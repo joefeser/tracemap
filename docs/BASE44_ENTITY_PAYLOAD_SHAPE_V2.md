@@ -24,6 +24,15 @@ verified cleanup in local Docker. Direct opaque parameters with no proven
 outer object stay `outerKind=unknown`, `referenceAccounting=unresolved`, and
 retain their original typed analysis gaps.
 
+Extractor `base44-evidence/0.9.0` additionally carries outer-kind evidence
+through conditional expressions, React Query callsites, array literals, and
+finite `push`/`map` element paths. `completeness=complete` is forbidden when
+`outerKind=unknown`; conflicting or missing outer-kind evidence emits the typed
+`payload-outer-kind-unresolved` gap. Only direct `.push(...)` syntax on a
+source-proven local array is modeled. Spread pushes, open elements, aliases,
+escapes, conflicting element kinds, and other iterator methods remain
+unresolved.
+
 Object-rest projection is independently supported only for a final identifier
 rest element with statically named excluded keys and a resolved source object.
 The projection removes only those named fields. Source gaps, binding mutation,
@@ -31,7 +40,7 @@ and escape evidence are retained. Array destructuring, selected-property
 bindings, and computed or default exclusions remain unresolved.
 
 Packet validation rejects unknown enum values, malformed/duplicate obligation
-tokens, orphaned obligations, extractor-0.8 payloads without shape v2, or a
+tokens, orphaned obligations, extractor-0.8/0.9 payloads without shape v2, or a
 deferred-object row that is not exactly object/source-bounded/partial/Tier4
 with its required obligation.
 

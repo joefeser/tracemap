@@ -323,6 +323,7 @@ export function Screen(raw) {
     const direct = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload && fact.targetSymbol === "DirectItem")!;
     expect(direct.properties.completeness).toBe("complete");
     expect(direct.properties.constructionKind).toBe("react-query-mutation-callsites");
+    expect(direct.properties.outerKind).toBe("object");
     expect(JSON.parse(direct.properties.fieldsJson)).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: "always_present", presence: "unconditional", expressionType: "integer-number-literal" }),
       expect.objectContaining({ name: "sometimes_present", presence: "conditional", expressionType: "identifier-reference" })
@@ -333,6 +334,7 @@ export function Screen(raw) {
 
     const nested = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload && fact.targetSymbol === "NestedItem")!;
     expect(nested.properties.completeness).toBe("complete");
+    expect(nested.properties.outerKind).toBe("object");
     expect(JSON.parse(nested.properties.fieldsJson)).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: "status", presence: "unconditional", expressionType: "string-literal" }),
       expect.objectContaining({ name: "total", presence: "unconditional", expressionType: "number-coercion-call" })
@@ -341,6 +343,37 @@ export function Screen(raw) {
       packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityPayload).map((fact) => fact.factId)
     );
     expect(JSON.stringify(packet)).not.toContain("redacted");
+
+    const tampered = structuredClone(packet);
+    tampered.facts.find((fact) => fact.factId === direct.factId)!.properties.outerKind = "unknown";
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-complete-outer-kind-tamper-"));
+    const baselinePath = path.join(out, "baseline.json");
+    const tamperedPath = path.join(out, "tampered.json");
+    await fs.writeFile(baselinePath, `${JSON.stringify(packet)}\n`);
+    await fs.writeFile(tamperedPath, `${JSON.stringify(tampered)}\n`);
+    await expect(diffBase44Evidence(baselinePath, tamperedPath, path.join(out, "diff.json")))
+      .rejects.toThrow("cannot be complete with an unknown outer kind");
+  });
+
+  it("downgrades conflicting mutation callsite outer kinds instead of claiming completeness", async () => {
+    const { packet } = await mutationHookFixture(`
+export function Screen() {
+  const save = useWrite({ mutationFn: (payload) => base44.entities.ConflictingOuterItem.create(payload) });
+  save.mutate({ known: 1 });
+  save.mutate([]);
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "ConflictingOuterItem")!;
+    expect(payload).toMatchObject({
+      evidenceTier: "Tier4Unknown",
+      properties: expect.objectContaining({
+        completeness: "partial",
+        outerKind: "unknown",
+        referenceAccounting: "unresolved"
+      })
+    });
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toEqual(["payload-outer-kind-unresolved"]);
   });
 
   it("projects a source-proven object-rest payload without the removed fields", async () => {
@@ -418,6 +451,80 @@ export function Screen(runtimeInput) {
     await fs.writeFile(orphanedObligationPath, `${JSON.stringify(orphanedObligation)}\n`);
     await expect(diffBase44Evidence(baselinePath, orphanedObligationPath, path.join(out, "orphaned-obligation-diff.json")))
       .rejects.toThrow("orphaned runtime obligation");
+  });
+
+  it("follows a finite mutation-array push and map-element path", async () => {
+    const { packet } = await mutationHookFixture(`
+export function Screen(enabled) {
+  const save = useWrite({
+    mutationFn: async (rows) => Promise.all(rows.map((row) => base44.entities.ArrayMappedItem.create(row)))
+  });
+  const rows = [];
+  if (enabled) rows.push({ organization_id: "redacted", quantity: 2 });
+  save.mutate(rows);
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "ArrayMappedItem")!;
+    expect(payload).toMatchObject({
+      evidenceTier: "Tier3SyntaxOrTextual",
+      properties: expect.objectContaining({
+        completeness: "complete",
+        outerKind: "object",
+        referenceAccounting: "source-bounded"
+      })
+    });
+    expect(JSON.parse(payload.properties.fieldsJson)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "organization_id", presence: "conditional" }),
+      expect.objectContaining({ name: "quantity", presence: "conditional" })
+    ]));
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toEqual([]);
+  });
+
+  it.each([
+    "rows.push(runtimeInput);",
+    "rows.push(...runtimeInput);",
+    "inspect(rows);",
+    "rows.map((row) => { row.extra = 2; });",
+    "rows.push({ known: 1 }); rows.push([]);"
+  ])("keeps an open or conflicting mutation-array source fail closed: %s", async (mutation) => {
+    const { packet } = await mutationHookFixture(`
+export function Screen(runtimeInput) {
+  const save = useWrite({
+    mutationFn: async (rows) => Promise.all(rows.map((row) => base44.entities.ArrayMappedRejectedItem.create(row)))
+  });
+  const rows = [];
+  ${mutation}
+  save.mutate(rows);
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "ArrayMappedRejectedItem")!;
+    expect(payload.evidenceTier).toBe("Tier4Unknown");
+    expect(payload.properties.outerKind).toBe("unknown");
+    expect(payload.properties.referenceAccounting).toBe("unresolved");
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toEqual(expect.arrayContaining([
+      expect.stringMatching(/^(?:array-iterator-source-unresolved|payload-outer-kind-unresolved)$/)
+    ]));
+  });
+
+  it("rejects a map element parameter that escapes beside the SDK call", async () => {
+    const { packet } = await mutationHookFixture(`
+export function Screen() {
+  const save = useWrite({
+    mutationFn: async (rows) => Promise.all(rows.map((row) => {
+      inspect(row);
+      return base44.entities.ArrayMappedEscapedItem.create(row);
+    }))
+  });
+  const rows = [{ known: 1 }];
+  save.mutate(rows);
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "ArrayMappedEscapedItem")!;
+    expect(payload.evidenceTier).toBe("Tier4Unknown");
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("array-iterator-parameter-state-unresolved");
   });
 
   it.each([
@@ -817,7 +924,6 @@ export function Screen() {
   it.each([
     ["const payload = { initial: 1 }; const alias = payload; alias.added = 2; base44.entities.ReviewItem.create(payload);", "binding-alias-escape-unresolved"],
     ["const payload = { initial: 1 }; mutate(payload); base44.entities.ReviewItem.create(payload);", "binding-call-escape-unresolved"],
-    ["const payload = [{ initial: 1 }]; payload.push({ added: 2 }); base44.entities.ReviewItem.bulkCreate(payload);", "binding-method-call-unresolved"],
     ["const original = [{ initial: 1 }]; const payload = original; original.push({ added: 2 }); base44.entities.ReviewItem.bulkCreate(payload);", "post-capture-alias-mutation-unresolved"]
   ])("does not claim a complete shape after unmodeled reference use: %s", async (body, gap) => {
     const { packet } = await reviewFixture(body);
@@ -825,6 +931,18 @@ export function Screen() {
     expect(payload.properties.completeness).toBe("partial");
     expect(payload.evidenceTier).toBe("Tier4Unknown");
     expect(JSON.parse(payload.properties.analysisGapsJson)).toContain(gap);
+  });
+
+  it("models a finite array push without erasing the array payload kind", async () => {
+    const { packet } = await reviewFixture("const payload = [{ initial: 1 }]; payload.push({ added: 2 }); base44.entities.ReviewItem.bulkCreate(payload);");
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload)!;
+    expect(payload.properties.completeness).toBe("complete");
+    expect(payload.properties.outerKind).toBe("array");
+    expect(JSON.parse(payload.properties.fieldsJson)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "initial", presence: "conditional" }),
+      expect.objectContaining({ name: "added", presence: "conditional" })
+    ]));
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toEqual([]);
   });
 
   it.each([
