@@ -21,8 +21,10 @@ compatible.
 - Corrected extractor: `base44-evidence/0.6.0`.
 - Baseline packet SHA-256:
   `b2cea57f3f426ae61c8ad20c2a97fbcbd7c9f8763a3536c0f8b50eff728d0f23`.
-- Corrected pre-commit packet SHA-256:
+- Corrected pre-review packet SHA-256:
   `127b10a70947d577486f6a563c7c6370a5798615e7c9742ce887041bfeee8b7b`.
+- Post-review replay `facts.ndjson` SHA-256:
+  `8333b563e0cedc4715703f36591d2f03be620f5acdb0f53f6a4eff7ca53019e9`.
 
 The accepted SHA-256 values above are caller-supplied authority identities.
 TraceMap validates and binds them but does not independently establish packet
@@ -54,6 +56,13 @@ The corrected packet also preserves typed gaps for dynamic computed fields,
 unknown spreads, dependency-array/other hook-result escapes, and unresolved
 callsite arguments. No gap is converted to clean absence.
 
+After the review hardening, two fresh scans produced byte-identical
+`facts.ndjson` artifacts at the hash above. The evidence counts and the
+before/after diff remained exactly unchanged: 127 added and 127 removed
+`Base44EntityPayload` facts with 4,134 facts unchanged. The enclosing packet
+hash is not used as the replay-equality claim because it binds the normal scan
+manifest, whose `scannedAt` value is intentionally run-specific.
+
 ## Controlled checks
 
 The focused tests prove:
@@ -67,6 +76,12 @@ The focused tests prove:
   that shadows an otherwise valid `useMutation` import;
 - typed gaps for dynamic callsite arguments and escaped `.mutate` methods;
 - refusal to select a destructured payload through a later unknown spread; and
+- rejection of shadowed, rest/non-first, and unsupported-pattern callback
+  parameters;
+- rejection of callbacks replaceable by later duplicate, spread, or dynamic
+  mutation options while preserving explicit-after-spread proof;
+- typed gaps for mutated or escaped destructured callsite wrappers and recursive
+  self-hook calls; and
 - continued redaction of raw literal values.
 
 The existing issue #713 suite also continues proving that schema prose cannot
@@ -75,11 +90,15 @@ source-bound payload fact.
 
 ## Commands and results
 
+The language-adapter validation procedure in `docs/VALIDATION.md` was followed,
+including the required local matrix, artifact conformance checks, private-path
+guard, and pinned public OSS smoke scans described below.
+
 ```bash
 npm run check --prefix src/typescript
 ```
 
-Result: 10 test files and 129 tests passed.
+Result: 10 test files and 141 tests passed.
 
 ```bash
 node src/typescript/dist/src/cli.js base44-evidence \

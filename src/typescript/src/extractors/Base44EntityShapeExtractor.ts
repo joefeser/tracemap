@@ -42,11 +42,13 @@ interface ShapeContext {
 interface ParameterBinding {
   parameter: ts.ParameterDeclaration;
   propertyPath: string[];
+  gap?: string;
 }
 
 interface MutationHookContext {
   declaration: ts.VariableDeclaration;
   bindingName: string;
+  gap?: string;
 }
 
 export interface EntityShapeInput {
@@ -245,6 +247,13 @@ function analyzeIdentifier(identifier: ts.Identifier, context: ShapeContext, vis
   const declaration = resolveDeclarationAt(bindingName, identifier, context);
   if (!declaration?.initializer) {
     const parameter = resolveParameterBindingAt(bindingName, identifier);
+    // A nearer lexical declaration, including one in its temporal dead zone or
+    // without an initializer, prevents this identifier from denoting an outer
+    // mutation callback parameter. Never fall through that shadow boundary.
+    const visibleDeclaration = resolveVisibleVariableDeclaration(bindingName, identifier, context);
+    if (visibleDeclaration && (!parameter || isAncestor(parameter.parameter.parent, declarationScope(visibleDeclaration)))) {
+      return unresolvedAnalysis("identifier-reference", "mutation-hook-parameter-shadowed", candidate);
+    }
     const callsiteAnalysis = parameter && analyzeMutationHookParameter(parameter, context, visitedBindings, presence);
     return callsiteAnalysis ?? unresolvedAnalysis("identifier-reference", "binding-initializer-unresolved", candidate);
   }
@@ -267,9 +276,16 @@ function analyzeIdentifier(identifier: ts.Identifier, context: ShapeContext, vis
 function resolveParameterBindingAt(bindingName: string, useNode: ts.Node): ParameterBinding | null {
   for (let current: ts.Node | undefined = useNode.parent; current; current = current.parent) {
     if (!ts.isFunctionLike(current)) continue;
-    for (const parameter of current.parameters) {
+    for (const [index, parameter] of current.parameters.entries()) {
       const propertyPath = bindingPropertyPath(parameter.name, bindingName);
-      if (propertyPath) return { parameter, propertyPath };
+      if (propertyPath) {
+        if (parameter.dotDotDotToken) return { parameter, propertyPath, gap: "mutation-hook-rest-parameter-unsupported" };
+        if (index !== 0) return { parameter, propertyPath, gap: "mutation-hook-parameter-position-unsupported" };
+        return { parameter, propertyPath };
+      }
+      if (bindingNames(parameter.name).includes(bindingName)) {
+        return { parameter, propertyPath: [], gap: "mutation-hook-parameter-binding-pattern-unsupported" };
+      }
     }
   }
   return null;
@@ -291,6 +307,21 @@ function bindingPropertyPath(name: ts.BindingName, bindingName: string): string[
 function analyzeMutationHookParameter(binding: ParameterBinding, context: ShapeContext, visitedBindings: Set<string>, presence: Presence): ShapeAnalysis | null {
   const hook = mutationHookContext(binding.parameter, context.source);
   if (!hook) return null;
+  const result = emptyAnalysis("react-query-mutation-callsites");
+  const parameterIdentity = binding.propertyPath.length > 0
+    ? binding.propertyPath.join(".")
+    : ts.isIdentifier(binding.parameter.name) ? binding.parameter.name.text : "parameter";
+  result.candidateBindings.push(`binding:${parameterIdentity}`, `mutation-hook:${hook.bindingName}`);
+  if (binding.gap || hook.gap) {
+    result.gaps.push(binding.gap ?? hook.gap!);
+    return result;
+  }
+  const hookVisitKey = `mutation-hook-parameter:${binding.parameter.getStart(context.source)}`;
+  if (visitedBindings.has(hookVisitKey)) {
+    result.gaps.push("mutation-hook-recursion-unresolved");
+    return result;
+  }
+  const callsiteVisited = new Set(visitedBindings).add(hookVisitKey);
   const calls: ts.CallExpression[] = [];
   const gaps: string[] = [];
   const visit = (node: ts.Node): void => {
@@ -314,11 +345,6 @@ function analyzeMutationHookParameter(binding: ParameterBinding, context: ShapeC
   };
   visit(context.source);
 
-  const result = emptyAnalysis("react-query-mutation-callsites");
-  const parameterIdentity = binding.propertyPath.length > 0
-    ? binding.propertyPath.join(".")
-    : ts.isIdentifier(binding.parameter.name) ? binding.parameter.name.text : "parameter";
-  result.candidateBindings.push(`binding:${parameterIdentity}`, `mutation-hook:${hook.bindingName}`);
   const analyses: ShapeAnalysis[] = [];
   for (const call of calls) {
     const argument = call.arguments[0];
@@ -326,13 +352,13 @@ function analyzeMutationHookParameter(binding: ParameterBinding, context: ShapeC
       gaps.push("mutation-hook-argument-unresolved");
       continue;
     }
-    const resolved = resolvePropertyPath(argument, binding.propertyPath, context);
+    const callsiteContext: ShapeContext = { ...context, callNode: call, callPosition: call.getStart(context.source) };
+    const resolved = resolvePropertyPath(argument, binding.propertyPath, callsiteContext);
     if (!resolved.expression) {
       gaps.push(resolved.gap ?? "mutation-hook-argument-unresolved");
       continue;
     }
-    const callsiteContext: ShapeContext = { ...context, callNode: call, callPosition: call.getStart(context.source) };
-    const analysis = analyzeExpression(resolved.expression, callsiteContext, new Set(visitedBindings), presence);
+    const analysis = analyzeExpression(resolved.expression, callsiteContext, new Set(callsiteVisited), presence);
     analyses.push(analysis);
     mergeAnalysis(result, analysis, `mutation-hook:${hook.bindingName}`);
   }
@@ -369,7 +395,24 @@ function mutationHookContext(parameter: ts.ParameterDeclaration, source: ts.Sour
   while (owner.parent && (ts.isParenthesizedExpression(owner.parent) || ts.isAsExpression(owner.parent)
     || ts.isTypeAssertionExpression(owner.parent) || ts.isNonNullExpression(owner.parent) || ts.isSatisfiesExpression(owner.parent))) owner = owner.parent;
   if (!ts.isVariableDeclaration(owner.parent) || !ts.isIdentifier(owner.parent.name)) return null;
-  return { declaration: owner.parent, bindingName: owner.parent.name.text };
+  let gap: string | undefined;
+  const propertyIndex = options.properties.indexOf(property);
+  for (const later of options.properties.slice(propertyIndex + 1)) {
+    if (ts.isSpreadAssignment(later)) {
+      gap = "mutation-hook-callback-override-unresolved";
+      break;
+    }
+    const laterName = "name" in later ? staticPropertyName(later.name) : null;
+    if (laterName === "mutationFn") {
+      gap = "mutation-hook-callback-overridden";
+      break;
+    }
+    if ("name" in later && laterName === null) {
+      gap = "mutation-hook-callback-override-unresolved";
+      break;
+    }
+  }
+  return { declaration: owner.parent, bindingName: owner.parent.name.text, gap };
 }
 
 function isProvenUseMutationCall(call: ts.CallExpression, source: ts.SourceFile): boolean {
@@ -412,6 +455,10 @@ function resolvePropertyPath(expression: ts.Expression, propertyPath: string[], 
   if (ts.isIdentifier(unwrapped)) {
     const declaration = resolveDeclarationAt(unwrapped.text, unwrapped, context);
     if (!declaration?.initializer || !ts.isIdentifier(declaration.name)) return { gap: "mutation-hook-argument-binding-unresolved" };
+    if (executionScope(declaration) !== executionScope(context.callNode)
+      || hasPriorBindingReference(unwrapped.text, declaration, context)) {
+      return { gap: "mutation-hook-destructured-argument-binding-state-unresolved" };
+    }
     return resolvePropertyPath(declaration.initializer, propertyPath, context);
   }
   if (!ts.isObjectLiteralExpression(unwrapped)) return { gap: "mutation-hook-destructured-argument-unresolved" };
@@ -434,6 +481,28 @@ function resolvePropertyPath(expression: ts.Expression, propertyPath: string[], 
   return selected
     ? resolvePropertyPath(selected, tail, context)
     : { gap: unresolvedSpread ? "mutation-hook-destructured-spread-unresolved" : "mutation-hook-destructured-property-missing" };
+}
+
+function hasPriorBindingReference(bindingName: string, declaration: ts.VariableDeclaration, context: ShapeContext): boolean {
+  const scope = executionScope(context.callNode);
+  const declarationEnd = declaration.getEnd();
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (found || (node !== scope && ts.isFunctionLike(node))) return;
+    const position = node.getStart(context.source);
+    if (position <= declarationEnd) return ts.forEachChild(node, visit);
+    // The mutate/mutateAsync invocation itself is the endpoint whose argument
+    // state we are resolving, not an earlier escape of that state.
+    if (position >= context.callPosition) return;
+    if (ts.isIdentifier(node) && node.text === bindingName
+      && resolveDeclarationAt(bindingName, node, context) === declaration) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(scope);
+  return found;
 }
 
 function addBindingMutations(bindingName: string, declaration: ts.VariableDeclaration, context: ShapeContext, result: ShapeAnalysis, inheritedPresence: Presence): void {
@@ -597,16 +666,20 @@ function unmodeledReferenceUse(node: ts.Node, bindingName: string, declaration: 
 function resolveDeclarationAt(bindingName: string, useNode: ts.Node, context: ShapeContext): ts.VariableDeclaration | null {
   // Select the lexical binding before checking source order: a later declaration
   // still shadows an outer one (including a temporal dead zone).
-  const declaration = [...(context.declarations.get(bindingName) ?? [])]
-    .filter((item) => isDeclarationVisibleAt(item, useNode))
-    .sort((left, right) => scopeDepth(declarationScope(right)) - scopeDepth(declarationScope(left))
-      || right.getStart(context.source) - left.getStart(context.source))[0];
+  const declaration = resolveVisibleVariableDeclaration(bindingName, useNode, context);
   const scope = declaration && declarationScope(declaration);
   for (let current: ts.Node | undefined = useNode; current; current = current.parent) {
     if (ts.isFunctionLike(current) && current.parameters.some((parameter) => bindingNames(parameter.name).includes(bindingName))) return null;
     if (current === scope) break;
   }
   return declaration && declaration.getStart(context.source) < useNode.getStart(context.source) ? declaration : null;
+}
+
+function resolveVisibleVariableDeclaration(bindingName: string, useNode: ts.Node, context: ShapeContext): ts.VariableDeclaration | null {
+  return [...(context.declarations.get(bindingName) ?? [])]
+    .filter((item) => isDeclarationVisibleAt(item, useNode))
+    .sort((left, right) => scopeDepth(declarationScope(right)) - scopeDepth(declarationScope(left))
+      || right.getStart(context.source) - left.getStart(context.source))[0] ?? null;
 }
 
 function isDeclarationVisibleAt(declaration: ts.VariableDeclaration, useNode: ts.Node): boolean {
