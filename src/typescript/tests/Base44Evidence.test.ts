@@ -751,7 +751,9 @@ export function Screen(enabled) {
     ["conditional global alias member eval", `const realm = Math.random() ? {} : globalThis; realm.eval("Array.prototype.push = () => 0");`],
     ["comma eval", `(0, eval)("Array.prototype.push = () => 0");`],
     ["aliased Function", `const Build = Function; new Build("Array.prototype.push = () => 0")();`],
-    ["function constructor", `(() => {}).constructor("Array.prototype.push = () => 0")();`]
+    ["function constructor", `(() => {}).constructor("Array.prototype.push = () => 0")();`],
+    ["aliased function constructor", `const Build = (() => {}).constructor; new Build("Array.prototype.push = () => 0")();`],
+    ["escaped global alias", `const realm = globalThis; inspect(realm);`]
   ])("blocks Array inference around indirect dynamic evaluation: %s", async (_caseName, evaluator) => {
     const { packet } = await mutationHookFixture(`
 ${evaluator}
@@ -803,6 +805,9 @@ const cleaned = "Array.prototype.push = () => 0";`],
 RuntimeRegExp.prototype.test = () => true;
 const cleaned = "Array.prototype.push = () => 0";`],
     ["global-member RegExp guard", `globalThis.RegExp.prototype.test = () => true;
+const cleaned = "Array.prototype.push = () => 0";`],
+    ["escaped RegExp authority", `const RuntimeRegExp = RegExp;
+inspect(RuntimeRegExp);
 const cleaned = "Array.prototype.push = () => 0";`]
   ])("rejects an unsound bounded arithmetic guard: %s", async (_caseName, setup) => {
     const { packet } = await mutationHookFixture(`
