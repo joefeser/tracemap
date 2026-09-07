@@ -1700,7 +1700,8 @@ function selectorCallableReferencesAreClosed(owner: ts.FunctionLikeDeclaration, 
         }
         if (resolveCallableTarget(node, context, contexts) === owner
           && (!ts.isCallExpression(node.parent) || unwrapAliasExpression(node.parent.expression) !== node)
-          && !isTransparentCallableAliasReference(node, context.source)) {
+          && !isTransparentCallableAliasReference(node, context.source)
+          && !isTransparentClosedReactRefUse(node, owner, context, contexts)) {
           closed = false;
           return;
         }
@@ -1711,6 +1712,27 @@ function selectorCallableReferencesAreClosed(owner: ts.FunctionLikeDeclaration, 
     if (!closed) break;
   }
   return closed;
+}
+
+function isTransparentClosedReactRefUse(
+  reference: ts.Identifier,
+  owner: ts.FunctionLikeDeclaration,
+  context: SourceContext,
+  contexts: Map<string, SourceContext>
+): boolean {
+  const member = reference.parent;
+  if (!ts.isPropertyAccessExpression(member) || member.expression !== reference || member.name.text !== "current"
+    || resolveCallableExpression(member, context, contexts, new Set(), true) !== owner) return false;
+  const use = member.parent;
+  if (ts.isCallExpression(use) && unwrapAliasExpression(use.expression) === member) return true;
+  if (ts.isBinaryExpression(use) && use.left === member
+    && use.operatorToken.kind === ts.SyntaxKind.EqualsToken
+    && resolveCallableTarget(use.right, context, contexts) === owner) return true;
+  if (ts.isVariableDeclaration(use) && use.initializer === member && ts.isIdentifier(use.name)) {
+    const list = use.parent;
+    return ts.isVariableDeclarationList(list) && (list.flags & ts.NodeFlags.Const) !== 0;
+  }
+  return false;
 }
 
 function isTransparentCallableAliasReference(reference: ts.Identifier, source: ts.SourceFile): boolean {
