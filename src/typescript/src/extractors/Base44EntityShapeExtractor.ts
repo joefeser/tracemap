@@ -399,10 +399,13 @@ function analyzeMutationHookParameter(binding: ParameterBinding, context: ShapeC
 function mutationHookParameterStateGap(binding: ParameterBinding, hook: MutationHookContext, context: ShapeContext): string | null {
   const callback = binding.parameter.parent;
   const bindingName = binding.bindingName;
+  const backedgeLoop = enclosingIteration(context.callNode, callback);
   let unsafe = false;
   const visit = (node: ts.Node): void => {
     if (unsafe) return;
-    if (node.getStart(context.source) >= context.callPosition) return;
+    if (isAncestor(context.callNode, node)) return;
+    if (node.getStart(context.source) >= context.callPosition
+      && (!backedgeLoop || !isAncestor(backedgeLoop, node))) return;
     if (node !== callback && ts.isFunctionLike(node)) {
       const findCapture = (child: ts.Node): void => {
         if (unsafe) return;
@@ -451,6 +454,14 @@ function mutationHookParameterStateGap(binding: ParameterBinding, hook: Mutation
   };
   visit(callback);
   return unsafe ? "mutation-hook-parameter-state-unresolved" : null;
+}
+
+function enclosingIteration(node: ts.Node, boundary: ts.Node): ts.IterationStatement | null {
+  for (let current: ts.Node | undefined = node.parent; current && current !== boundary; current = current.parent) {
+    if (ts.isForStatement(current) || ts.isForInStatement(current) || ts.isForOfStatement(current)
+      || ts.isWhileStatement(current) || ts.isDoStatement(current)) return current;
+  }
+  return null;
 }
 
 function resolvesToParameterBinding(node: ts.Identifier, binding: ParameterBinding, context: ShapeContext): boolean {
@@ -781,8 +792,11 @@ function resolveVisibleVariableDeclaration(bindingName: string, useNode: ts.Node
 
 function hasVisibleFunctionOrClassShadow(bindingName: string, useNode: ts.Node, boundary: ts.Node): boolean {
   for (let current: ts.Node | undefined = useNode.parent; current; current = current.parent) {
-    if (ts.isBlock(current) || ts.isSourceFile(current)) {
-      if (current.statements.some((statement) =>
+    if (ts.isBlock(current) || ts.isSourceFile(current) || ts.isCaseBlock(current)) {
+      const statements = ts.isCaseBlock(current)
+        ? current.clauses.flatMap((clause) => [...clause.statements])
+        : current.statements;
+      if (statements.some((statement) =>
         (ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement))
         && statement.name?.text === bindingName)) return true;
     }

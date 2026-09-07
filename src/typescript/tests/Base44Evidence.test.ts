@@ -434,6 +434,25 @@ export function Screen(extra) {
     expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("mutation-hook-parameter-shadowed");
   });
 
+  it("recognizes a callback-parameter class shadow across switch cases", async () => {
+    const { packet } = await mutationHookFixture(`
+export function Screen(kind) {
+  const save = useWrite({ mutationFn: (payload) => {
+    switch (kind) {
+      case "shadow": class payload {}; break;
+      default: return base44.entities.CaseShadowItem.create(payload);
+    }
+  } });
+  save.mutate({ must_not_be_projected: 1 });
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "CaseShadowItem")!;
+    expect(payload.properties.completeness).toBe("unresolved");
+    expect(JSON.parse(payload.properties.fieldsJson)).toEqual([]);
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("mutation-hook-parameter-shadowed");
+  });
+
   it.each([
     "payload = { current: 1 };",
     "payload.current = 1;",
@@ -491,6 +510,25 @@ export function Screen() {
 `);
     const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
       && fact.targetSymbol === "NestedCaptureItem")!;
+    expect(payload.properties.completeness).toBe("unresolved");
+    expect(JSON.parse(payload.properties.fieldsJson)).toEqual([]);
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("mutation-hook-parameter-state-unresolved");
+  });
+
+  it("retains a typed gap for callback state changed across a loop backedge", async () => {
+    const { packet } = await mutationHookFixture(`
+export function Screen(items) {
+  const save = useWrite({ mutationFn: (payload) => {
+    for (const item of items) {
+      base44.entities.LoopBackedgeItem.create(payload);
+      payload.current = item;
+    }
+  } });
+  save.mutate({ stale: 1 });
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "LoopBackedgeItem")!;
     expect(payload.properties.completeness).toBe("unresolved");
     expect(JSON.parse(payload.properties.fieldsJson)).toEqual([]);
     expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("mutation-hook-parameter-state-unresolved");
