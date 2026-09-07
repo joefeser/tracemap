@@ -1568,7 +1568,7 @@ export function Screen(runtimeInput) {
     await fs.writeFile(baselinePath, `${JSON.stringify(packet)}\n`);
     await fs.writeFile(tamperedPath, `${JSON.stringify(tampered)}\n`);
     await expect(diffBase44Evidence(baselinePath, tamperedPath, path.join(out, "diff.json")))
-      .rejects.toThrow("invalid deferred-object contract");
+      .rejects.toThrow("invalid runtime-deferred payload contract");
 
     const missingObligation = structuredClone(packet);
     const missingObligationPayload = missingObligation.facts.find((fact) => fact.factId === payload.factId)!;
@@ -1576,7 +1576,7 @@ export function Screen(runtimeInput) {
     const missingObligationPath = path.join(out, "missing-obligation.json");
     await fs.writeFile(missingObligationPath, `${JSON.stringify(missingObligation)}\n`);
     await expect(diffBase44Evidence(baselinePath, missingObligationPath, path.join(out, "missing-obligation-diff.json")))
-      .rejects.toThrow("invalid deferred-object contract");
+      .rejects.toThrow("invalid runtime-deferred payload contract");
 
     const orphanedObligation = structuredClone(packet);
     const orphanedObligationPayload = orphanedObligation.facts.find((fact) => fact.factId === payload.factId)!;
@@ -1625,6 +1625,48 @@ export function Screen(runtimeInput) {
     await fs.writeFile(duplicateSemanticPath, `${JSON.stringify(duplicateSemantic)}\n`);
     await expect(diffBase44Evidence(baselinePath, duplicateSemanticPath, path.join(out, "duplicate-semantic-diff.json")))
       .rejects.toThrow("invalid semantic field");
+  });
+
+  it("classifies finite source-visible mutation-hook execution gaps as runtime-deferred proof obligations", async () => {
+    const { packet } = await mutationHookFixture(`
+export function Screen() {
+  const save = useWrite({ mutationFn: (variables) =>
+    base44.entities.ExecutionDeferredItem.create(variables)
+  });
+  save.mutate({ candidate_only: 1 });
+  save.mutate();
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "ExecutionDeferredItem")!;
+    expect(payload).toMatchObject({
+      evidenceTier: "Tier4Unknown",
+      properties: {
+        ...payload.properties,
+        completeness: "partial",
+        outerKind: "object",
+        referenceAccounting: "source-bounded",
+        runtimeObligationsJson: '["entity-execution:docker-workflow-readback-cleanup"]',
+        shapeVersion: "3"
+      }
+    });
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toEqual([
+      "runtime-deferred-callsite-execution"
+    ]);
+    expect(JSON.parse(payload.properties.fieldsJson)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "candidate_only", presence: "conditional" })
+    ]));
+
+    const tampered = structuredClone(packet);
+    const tamperedPayload = tampered.facts.find((fact) => fact.factId === payload.factId)!;
+    tamperedPayload.properties.analysisGapsJson = "[]";
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-execution-deferred-tamper-"));
+    const baselinePath = path.join(out, "baseline.json");
+    const tamperedPath = path.join(out, "tampered.json");
+    await fs.writeFile(baselinePath, `${JSON.stringify(packet)}\n`);
+    await fs.writeFile(tamperedPath, `${JSON.stringify(tampered)}\n`);
+    await expect(diffBase44Evidence(baselinePath, tamperedPath, path.join(out, "diff.json")))
+      .rejects.toThrow("orphaned runtime obligation");
   });
 
   it("follows a finite mutation-array push and map-element path", async () => {
