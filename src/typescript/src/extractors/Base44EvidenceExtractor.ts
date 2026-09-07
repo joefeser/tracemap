@@ -2415,9 +2415,11 @@ function isImmutableGlobalAliasInitializer(node: ts.Identifier, source: ts.Sourc
     || ts.isNonNullExpression(current.parent) || ts.isConditionalExpression(current.parent))) {
     current = current.parent;
   }
-  return ts.isVariableDeclaration(current.parent) && current.parent.initializer === current
-    && ts.isVariableDeclarationList(current.parent.parent)
-    && Boolean(current.parent.parent.flags & ts.NodeFlags.Const);
+  if (!ts.isVariableDeclaration(current.parent) || current.parent.initializer !== current
+    || !ts.isVariableDeclarationList(current.parent.parent)
+    || !(current.parent.parent.flags & ts.NodeFlags.Const)
+    || !ts.isIdentifier(current.parent.name)) return false;
+  return !mutationHandleIsExported(current.parent, current.parent.name.text, source);
 }
 
 function isRuntimeIdentifierReference(node: ts.Identifier): boolean {
