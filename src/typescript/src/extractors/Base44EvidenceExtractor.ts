@@ -2362,6 +2362,14 @@ function unboundedDynamicEvaluationCapabilityReference(node: ts.Node, source: ts
     if (isImmutableGlobalAliasInitializer(node, source)) return false;
     return true;
   }
+  if (ts.isIdentifier(node) && isRuntimeIdentifierReference(node)
+    && isGlobalObjectExpression(node, source, new Set())) {
+    const parent = node.parent;
+    if ((ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent))
+      && parent.expression === node) return false;
+    if (ts.isTypeOfExpression(parent) || isImmutableGlobalAliasInitializer(node, source)) return false;
+    return true;
+  }
   if (ts.isIdentifier(node) && (node.text === "eval" || node.text === "Function")
     && isRuntimeIdentifierReference(node)
     && !resolveLexicalBinding(node.text, node, source)) {
@@ -2455,10 +2463,24 @@ function isProvenArithmeticStringBinding(declaration: ts.VariableDeclaration, so
 }
 
 function dangerousPrototypeCapabilityReference(node: ts.Node, source: ts.SourceFile): boolean {
+  const intrinsic = ts.isIdentifier(node) && isRuntimeIdentifierReference(node)
+    ? globalIntrinsicConstructorName(node, source, new Set()) : null;
+  if (ts.isIdentifier(node) && intrinsic) {
+    const parent = node.parent;
+    if ((ts.isCallExpression(parent) || ts.isNewExpression(parent))
+      && unwrapAliasExpression(parent.expression) === node) {
+      return intrinsic === "Function"
+        && !(node.text === "Function" && !resolveLexicalBinding("Function", node, source));
+    }
+    if ((ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent))
+      && parent.expression === node) return false;
+    if (isImmutableGlobalAliasInitializer(node, source)) return false;
+    return true;
+  }
   if (ts.isPropertyAccessExpression(node)) {
-    if (node.name.text === "__proto__") return true;
+    if (["__proto__", "constructor"].includes(node.name.text)) return true;
     if (node.name.text === "prototype"
-      && isGlobalIntrinsicConstructorExpression(node.expression, source, new Set())) return true;
+      && globalIntrinsicConstructorName(node.expression, source, new Set())) return true;
     if (node.name.text === "prototype" && ts.isPropertyAccessExpression(unwrapAliasExpression(node.expression))
       && (unwrapAliasExpression(node.expression) as ts.PropertyAccessExpression).name.text === "constructor") return true;
     return ts.isIdentifier(node.expression) && ["Object", "Reflect"].includes(node.expression.text)
@@ -2467,35 +2489,39 @@ function dangerousPrototypeCapabilityReference(node: ts.Node, source: ts.SourceF
   if (!ts.isElementAccessExpression(node) || !node.argumentExpression
     || !ts.isStringLiteralLike(node.argumentExpression)) return false;
   const owner = unwrapAliasExpression(node.expression);
+  if (["__proto__", "constructor"].includes(node.argumentExpression.text)) return true;
   if (node.argumentExpression.text === "prototype"
-    && isGlobalIntrinsicConstructorExpression(owner, source, new Set())) return true;
+    && globalIntrinsicConstructorName(owner, source, new Set())) return true;
   return ts.isIdentifier(owner) && ["Object", "Reflect"].includes(owner.text)
     && dangerousPrototypeCapabilities.has(node.argumentExpression.text) && !resolveLexicalBinding(owner.text, owner, source);
 }
 
-function isGlobalIntrinsicConstructorExpression(
+function globalIntrinsicConstructorName(
   node: ts.Expression,
   source: ts.SourceFile,
   visited: Set<string>
-): boolean {
+): "Function" | "RegExp" | "String" | null {
   const expression = unwrapAliasExpression(node);
   if (ts.isIdentifier(expression)) {
     if (["Function", "RegExp", "String"].includes(expression.text)
-      && !resolveLexicalBinding(expression.text, expression, source)) return true;
+      && !resolveLexicalBinding(expression.text, expression, source)) {
+      return expression.text as "Function" | "RegExp" | "String";
+    }
     const binding = resolveLexicalBinding(expression.text, expression, source);
     if (binding?.kind !== "variable" || !binding.node.initializer
-      || !isImmutableVariable(binding.node, expression)) return false;
+      || !isImmutableVariable(binding.node, expression)) return null;
     const key = `${binding.node.getStart(source)}:${expression.text}`;
-    if (visited.has(key)) return false;
-    return isGlobalIntrinsicConstructorExpression(binding.node.initializer, source, new Set(visited).add(key));
+    if (visited.has(key)) return null;
+    return globalIntrinsicConstructorName(binding.node.initializer, source, new Set(visited).add(key));
   }
-  if (!ts.isPropertyAccessExpression(expression) && !ts.isElementAccessExpression(expression)) return false;
+  if (!ts.isPropertyAccessExpression(expression) && !ts.isElementAccessExpression(expression)) return null;
   const owner = unwrapAliasExpression(expression.expression);
-  if (!isGlobalObjectExpression(owner, source, new Set())) return false;
+  if (!isGlobalObjectExpression(owner, source, new Set())) return null;
   const member = ts.isPropertyAccessExpression(expression) ? expression.name.text
     : expression.argumentExpression && ts.isStringLiteralLike(expression.argumentExpression)
       ? expression.argumentExpression.text : "";
-  return ["Function", "RegExp", "String"].includes(member);
+  return ["Function", "RegExp", "String"].includes(member)
+    ? member as "Function" | "RegExp" | "String" : null;
 }
 
 function isArrayPrototypeExpression(node: ts.Node, source: ts.SourceFile): boolean {
