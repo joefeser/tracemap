@@ -2,10 +2,35 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { CodeFact, ScanOptions, ScanResult } from "../facts/Models";
+import { CodeFact, EvidenceTiers, FactTypes, ScanOptions, ScanResult } from "../facts/Models";
 import { scan } from "../scan/ScanEngine";
 
 export const base44PacketSchemaVersion = "tracemap.base44.static-evidence.v1";
+export const base44CoverageGapSchemaVersion = "tracemap.base44.coverage-gap.v1";
+
+export const base44CoverageGapCategories = [
+  "entity",
+  "function",
+  "auth",
+  "http-integration",
+  "storage",
+  "provider",
+  "unknown"
+] as const;
+
+export type Base44CoverageGapCategory = typeof base44CoverageGapCategories[number];
+
+export interface Base44CoverageGap {
+  gapId: string;
+  surface: string;
+  category: Base44CoverageGapCategory;
+  factId: string;
+  ruleId: string;
+  evidenceTier: typeof EvidenceTiers.Tier4Unknown;
+}
+
+type CoverageGapFact = Pick<CodeFact,
+  "factId" | "factType" | "ruleId" | "evidenceTier" | "targetSymbol" | "contractElement" | "properties">;
 
 export interface Base44EvidenceOptions extends ScanOptions {
   acceptedSourceSha256: string;
@@ -28,6 +53,8 @@ export interface Base44EvidencePacket {
     analysisLevel: string;
     buildStatus: string;
     knownGaps: string[];
+    gapSchemaVersion: typeof base44CoverageGapSchemaVersion;
+    gaps: Base44CoverageGap[];
     ruleIds: string[];
     extractorIdentities: string[];
     evidenceTiers: string[];
@@ -93,6 +120,13 @@ export async function buildBase44Evidence(options: Base44EvidenceOptions): Promi
       analysisLevel: result.manifest.analysisLevel,
       buildStatus: result.manifest.buildStatus,
       knownGaps: [...result.manifest.knownGaps].sort(),
+      gapSchemaVersion: base44CoverageGapSchemaVersion,
+      gaps: buildCoverageGaps(base44Facts, {
+        repo: result.manifest.repoName,
+        commitSha: result.manifest.commitSha,
+        acceptedSourceSha256: options.acceptedSourceSha256.toLowerCase(),
+        acceptedTreeSha256: options.acceptedTreeSha256.toLowerCase()
+      }),
       ruleIds: unique(base44Facts.map((fact) => fact.ruleId)),
       extractorIdentities: unique(base44Facts.map((fact) => `${fact.evidence.extractorId}@${fact.evidence.extractorVersion}`)),
       evidenceTiers: unique(base44Facts.map((fact) => fact.evidenceTier))
@@ -105,6 +139,7 @@ export async function buildBase44Evidence(options: Base44EvidenceOptions): Promi
       "Dynamic imports, computed names, dynamic URLs, generated files outside inventory, and runtime-created bindings may require runtime evidence."
     ]
   };
+  validateCoverageGaps(packet);
   await fs.writeFile(path.join(options.outputPath, "base44-evidence.json"), stableJson(packet), "utf8");
   await fs.writeFile(path.join(options.outputPath, "base44-evidence.md"), packetMarkdown(packet), "utf8");
   await fs.writeFile(path.join(options.outputPath, "base44-evidence.html"), packetHtml(packet), "utf8");
@@ -167,7 +202,151 @@ function packetFact(fact: CodeFact): Base44PacketFact {
 async function readPacket(filePath: string): Promise<Base44EvidencePacket> {
   const value = JSON.parse(await fs.readFile(filePath, "utf8")) as Base44EvidencePacket;
   if (value.schemaVersion !== base44PacketSchemaVersion || !Array.isArray(value.facts)) throw new Error(`Unsupported Base44 evidence packet: ${filePath}`);
+  validateCoverageGaps(value);
   return value;
+}
+
+function buildCoverageGaps(
+  facts: readonly CoverageGapFact[],
+  source: Pick<Base44EvidencePacket["source"], "repo" | "commitSha" | "acceptedSourceSha256" | "acceptedTreeSha256">
+): Base44CoverageGap[] {
+  const gaps = facts
+    .filter((fact) => fact.evidenceTier === EvidenceTiers.Tier4Unknown)
+    .map((fact) => coverageGapForFact(fact, source))
+    .sort(compareCoverageGaps);
+  if (new Set(gaps.map((gap) => gap.gapId)).size !== gaps.length) {
+    throw new Error("Base44 coverage gaps contain a duplicate gapId");
+  }
+  if (new Set(gaps.map((gap) => gap.factId)).size !== gaps.length) {
+    throw new Error("Base44 coverage gaps contain a duplicate factId");
+  }
+  return gaps;
+}
+
+function coverageGapForFact(
+  fact: CoverageGapFact,
+  source: Pick<Base44EvidencePacket["source"], "repo" | "commitSha" | "acceptedSourceSha256" | "acceptedTreeSha256">
+): Base44CoverageGap {
+  const category = coverageGapCategory(fact);
+  const surface = coverageGapSurface(fact, category);
+  const identity = JSON.stringify([
+    base44CoverageGapSchemaVersion,
+    source.repo,
+    source.commitSha,
+    source.acceptedSourceSha256,
+    source.acceptedTreeSha256,
+    fact.factId,
+    category,
+    surface
+  ]);
+  return {
+    gapId: `gap-${createHash("sha256").update(identity, "utf8").digest("hex")}`,
+    surface,
+    category,
+    factId: fact.factId,
+    ruleId: fact.ruleId,
+    evidenceTier: EvidenceTiers.Tier4Unknown
+  };
+}
+
+function coverageGapCategory(fact: Pick<CodeFact, "factType" | "properties">): Base44CoverageGapCategory {
+  switch (fact.factType) {
+    case FactTypes.Base44EntityOperation:
+    case FactTypes.Base44EntityPayload:
+    case FactTypes.Base44EntityQuery:
+      return "entity";
+    case FactTypes.Base44FunctionInvocation:
+    case FactTypes.Base44FunctionSurface:
+      return "function";
+    case FactTypes.Base44HttpTarget:
+      return "http-integration";
+    case FactTypes.Base44MigrationSurface:
+      return "storage";
+    case FactTypes.Base44CustomerBoundary:
+      if (fact.properties.surfaceKind === "entity") return "entity";
+      if (fact.properties.surfaceKind === "function") return "function";
+      return "unknown";
+    case FactTypes.Base44SdkPrimitive:
+      return capabilityGapCategory(fact.properties.capability ?? "");
+    default:
+      return "unknown";
+  }
+}
+
+function capabilityGapCategory(capability: string): Base44CoverageGapCategory {
+  const normalized = capability.replace(/^asServiceRole\./, "");
+  const parts = normalized.split(".");
+  const root = parts[0]?.toLowerCase() ?? "";
+  if (root === "entities") return "entity";
+  if (root === "functions") return "function";
+  if (["auth", "users", "sso"].includes(root)) return "auth";
+  if (root === "storage") return "storage";
+  if (root === "integrations" && parts[1]?.toLowerCase() === "core") {
+    const operation = parts[2]?.toLowerCase() ?? "";
+    if (["uploadfile", "uploadprivatefile", "createfilesignedurl", "extractdatafromuploadedfile"].includes(operation)) {
+      return "storage";
+    }
+    if (["invokellm", "generateimage", "generatespeech", "generatevideo", "sendemail", "texttospeech", "transcribe"].includes(operation)) {
+      return "provider";
+    }
+  }
+  if (["integrations", "connectors", "analytics", "applogs"].includes(root)) return "http-integration";
+  return "unknown";
+}
+
+function coverageGapSurface(
+  fact: Pick<CodeFact, "factType" | "targetSymbol" | "contractElement" | "properties">,
+  category: Base44CoverageGapCategory
+): string {
+  const capability = fact.properties.capability?.trim();
+  if (capability) return capability;
+  if (category === "entity") {
+    const entity = fact.properties.entityName?.trim() || fact.targetSymbol?.trim() || "unknown";
+    const operation = fact.properties.operationName?.trim() || "unknown";
+    return `entities.${entity}.${operation}`;
+  }
+  if (category === "function") {
+    const name = fact.properties.functionName?.trim() || fact.targetSymbol?.trim() || "unknown";
+    return `functions.${name}`;
+  }
+  if (category === "storage" && fact.factType === FactTypes.Base44MigrationSurface) {
+    return `storage.migration.${fact.targetSymbol?.trim() || "unknown"}`;
+  }
+  const target = fact.targetSymbol?.trim() || fact.contractElement?.trim() || "unknown";
+  return `${category}.${fact.factType}.${target}`;
+}
+
+function validateCoverageGaps(packet: Base44EvidencePacket): void {
+  if (packet.coverage?.gapSchemaVersion !== base44CoverageGapSchemaVersion) {
+    throw new Error(`Unsupported Base44 coverage gap schema: ${packet.coverage?.gapSchemaVersion ?? "missing"}`);
+  }
+  if (!Array.isArray(packet.coverage.gaps)) {
+    throw new Error("Base44 evidence packet coverage.gaps must be an array");
+  }
+  const tier4Facts = packet.facts.filter((fact) => fact.evidenceTier === EvidenceTiers.Tier4Unknown);
+  const expected = buildCoverageGaps(tier4Facts, packet.source);
+  const actual = [...packet.coverage.gaps].sort(compareCoverageGaps);
+  if (new Set(actual.map((gap) => gap.gapId)).size !== actual.length) {
+    throw new Error("Base44 coverage gaps contain a duplicate gapId");
+  }
+  if (new Set(actual.map((gap) => gap.factId)).size !== actual.length) {
+    throw new Error("Base44 coverage gaps contain a duplicate factId");
+  }
+  for (const [index, gap] of actual.entries()) {
+    if (!/^gap-[0-9a-f]{64}$/.test(gap.gapId)) throw new Error(`Base44 coverage gap ${index} has an invalid gapId`);
+    if (!base44CoverageGapCategories.includes(gap.category)) throw new Error(`Base44 coverage gap ${index} has an invalid category`);
+    if (typeof gap.surface !== "string" || gap.surface.length === 0) throw new Error(`Base44 coverage gap ${index} has an invalid surface`);
+    if (!/^fact-[0-9a-f]{20}$/.test(gap.factId)) throw new Error(`Base44 coverage gap ${index} has an invalid factId`);
+    if (!gap.ruleId.startsWith("base44.")) throw new Error(`Base44 coverage gap ${index} has an invalid ruleId`);
+    if (gap.evidenceTier !== EvidenceTiers.Tier4Unknown) throw new Error(`Base44 coverage gap ${index} must retain Tier4Unknown`);
+  }
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new Error("Base44 coverage gaps do not match the source-bound Tier4 fact set exactly once");
+  }
+}
+
+function compareCoverageGaps(left: Base44CoverageGap, right: Base44CoverageGap): number {
+  return left.gapId.localeCompare(right.gapId);
 }
 
 function factKey(fact: Base44PacketFact): string {
