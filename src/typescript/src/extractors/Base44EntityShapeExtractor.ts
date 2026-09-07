@@ -59,6 +59,9 @@ interface ShapeAnalysis {
 }
 
 const deferredOpenObjectObligation = "entity-open-object-fields:docker-write-readback-cleanup";
+const deferredSourceExecutionObligation = "entity-execution:docker-workflow-readback-cleanup";
+const runtimeDeferredObjectGap = "runtime-deferred-object-fields";
+const runtimeDeferredExecutionGap = "runtime-deferred-callsite-execution";
 
 interface ShapeContext {
   source: ts.SourceFile;
@@ -129,7 +132,7 @@ export function extractEntityShapeFacts(input: EntityShapeInput): CodeFact[] {
       && analysis.gaps.every((gap) => /^(?:spread:)*(?:binding-initializer-unresolved|destructured-binding-unresolved)$/u.test(gap))) {
       analysis.constructionKind = `runtime-deferred-${input.runtimeDeferredOuterKind}`;
       analysis.outerKinds = [input.runtimeDeferredOuterKind];
-      analysis.gaps = ["runtime-deferred-object-fields"];
+      analysis.gaps = [runtimeDeferredObjectGap];
       analysis.candidateBindings.push("source-bounded-caller-graph");
     }
     return [shapeFact(input, FactTypes.Base44EntityPayload, RuleIds.Base44EntityPayload, payloadIndex, "payload", analysis)];
@@ -1378,7 +1381,7 @@ function shapeFact(input: EntityShapeInput, factType: string, ruleId: string, ar
   const payloadContract = factType === FactTypes.Base44EntityPayload ? payloadShapeContract(analysis) : null;
   const gaps = unique([...(payloadContract?.gaps ?? analysis.gaps), ...(input.entitySelectorGap ? [input.entitySelectorGap] : [])]);
   const completeness = gaps.length === 0 ? "complete"
-    : fields.length > 0 || gaps.includes("runtime-deferred-object-fields") ? "partial"
+    : fields.length > 0 || gaps.includes(runtimeDeferredObjectGap) || gaps.includes(runtimeDeferredExecutionGap) ? "partial"
     : "unresolved";
   const start = input.source.getLineAndCharacterOfPosition(input.node.getStart(input.source)).line + 1;
   const end = input.source.getLineAndCharacterOfPosition(input.node.getEnd()).line + 1;
@@ -1429,14 +1432,29 @@ function payloadShapeContract(analysis: ShapeAnalysis): {
   const hasFiniteHookGraph = analysis.candidateBindings.some((binding) => binding.startsWith("mutation-hook:"));
   const hasFiniteCallerGraph = analysis.candidateBindings.includes("source-bounded-caller-graph");
   const deferredFieldSource = /^(?:spread:)+(?:binding-initializer-unresolved|destructured-binding-unresolved)$/u;
-  const onlyDeferredFieldSources = analysis.gaps.length > 0 && analysis.gaps.every((gap) => deferredFieldSource.test(gap));
-  if (outerKind === "object" && ((hasFiniteHookGraph && onlyDeferredFieldSources)
-    || (hasFiniteCallerGraph && analysis.gaps.length === 1 && analysis.gaps[0] === "runtime-deferred-object-fields"))) {
+  const isDeferredFieldGap = (gap: string): boolean =>
+    deferredFieldSource.test(gap) || gap === runtimeDeferredObjectGap;
+  const executionGapSources = new Set(["mutation-hook-argument-unresolved", "mutation-hook-callsite-incomplete"]);
+  const fieldGaps = analysis.gaps.filter(isDeferredFieldGap);
+  const executionGaps = analysis.gaps.filter((gap) => executionGapSources.has(gap));
+  const onlyRuntimeDeferredGaps = analysis.gaps.length > 0
+    && fieldGaps.length + executionGaps.length === analysis.gaps.length;
+  if (outerKind === "object" && onlyRuntimeDeferredGaps
+    && (hasFiniteHookGraph || hasFiniteCallerGraph)
+    && (fieldGaps.length > 0 || (executionGaps.length > 0 && analysis.fields.length > 0))) {
+    const runtimeObligations = unique([
+      ...(executionGaps.length > 0 ? [deferredSourceExecutionObligation] : []),
+      ...(fieldGaps.length > 0 ? [deferredOpenObjectObligation] : [])
+    ]).sort();
+    const gaps = unique([
+      ...(executionGaps.length > 0 ? [runtimeDeferredExecutionGap] : []),
+      ...(fieldGaps.length > 0 ? [runtimeDeferredObjectGap] : [])
+    ]).sort();
     return {
       outerKind,
       referenceAccounting: "source-bounded",
-      runtimeObligations: [deferredOpenObjectObligation],
-      gaps: ["runtime-deferred-object-fields"]
+      runtimeObligations,
+      gaps
     };
   }
   const gaps = outerKind === "unknown" && analysis.gaps.length === 0

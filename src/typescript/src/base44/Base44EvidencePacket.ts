@@ -355,6 +355,9 @@ function validateCoverageGaps(packet: Base44EvidencePacket): void {
 }
 
 function validatePayloadShapeContracts(packet: Base44EvidencePacket): void {
+  const openObjectObligation = "entity-open-object-fields:docker-write-readback-cleanup";
+  const sourceExecutionObligation = "entity-execution:docker-workflow-readback-cleanup";
+  const runtimeObligations = new Set([openObjectObligation, sourceExecutionObligation]);
   const sourceAuthority = new Set(packet.facts.map((fact) =>
     `${fact.evidence.filePath}\0${fact.properties.sourceFileSha256 ?? ""}`));
   for (const fact of packet.facts.filter((candidate) => candidate.factType === FactTypes.Base44EntityPayload)) {
@@ -382,23 +385,28 @@ function validatePayloadShapeContracts(packet: Base44EvidencePacket): void {
     } catch {
       throw new Error(`Base44 payload ${fact.factId} has malformed payload-shape v2 arrays`);
     }
-    if (!Array.isArray(obligations) || obligations.some((item) => item !== "entity-open-object-fields:docker-write-readback-cleanup")
+    if (!Array.isArray(obligations) || obligations.some((item) => !runtimeObligations.has(item))
       || new Set(obligations).size !== obligations.length) {
       throw new Error(`Base44 payload ${fact.factId} has invalid runtime obligations`);
     }
     if (!Array.isArray(gaps) || gaps.some((item) => typeof item !== "string")) {
       throw new Error(`Base44 payload ${fact.factId} has invalid analysis gaps`);
     }
-    const deferred = gaps.includes("runtime-deferred-object-fields");
+    const deferredObject = gaps.includes("runtime-deferred-object-fields");
+    const deferredExecution = gaps.includes("runtime-deferred-callsite-execution");
+    const expectedObligations = [
+      ...(deferredExecution ? [sourceExecutionObligation] : []),
+      ...(deferredObject ? [openObjectObligation] : [])
+    ];
     if (fact.properties.completeness === "complete" && outerKind === "unknown") {
       throw new Error(`Base44 payload ${fact.factId} cannot be complete with an unknown outer kind`);
     }
-    if (deferred && (outerKind !== "object" || referenceAccounting !== "source-bounded"
+    if ((deferredObject || deferredExecution) && (outerKind !== "object" || referenceAccounting !== "source-bounded"
       || fact.properties.completeness !== "partial" || fact.evidenceTier !== EvidenceTiers.Tier4Unknown
-      || obligations.length !== 1)) {
-      throw new Error(`Base44 payload ${fact.factId} has an invalid deferred-object contract`);
+      || JSON.stringify(obligations) !== JSON.stringify(expectedObligations))) {
+      throw new Error(`Base44 payload ${fact.factId} has an invalid runtime-deferred payload contract`);
     }
-    if (!deferred && obligations.length > 0) {
+    if (!deferredObject && !deferredExecution && obligations.length > 0) {
       throw new Error(`Base44 payload ${fact.factId} has an orphaned runtime obligation`);
     }
     if (fact.properties.shapeVersion === "3") validateSemanticPayloadFields(sourceAuthority, fact);
