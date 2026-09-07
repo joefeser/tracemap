@@ -6,8 +6,8 @@
 - Exact source commit: `6753cfa6264b04c0d7dbfcde942689ee32d2c06b`
 - Accepted source/tree SHA-256: `a5a313b180ef0cdfd2e837779f251cc754978fcd474b6a32646c133b058b6e24`
 - Extractor: `base44-evidence/0.14.0`
-- TraceMap implementation commit: `5b176267d7943f0f9a3c2e919d3d52a5449317e7`
-- TraceMap implementation tree: `5ed329a7307b225874f1da6e05477ea22c6ef569`
+- TraceMap implementation commit: `a433cc35f62b7bdc1226eeac7342453c93c3a9be`
+- TraceMap implementation tree: `739ebc7a29edf6f51078e666499b1aed017c9f4d`
 
 The executable source is authority. No prose schema, fixture, reverse-engineer
 artifact, host reconciliation, or customer-specific filename supplies an
@@ -71,6 +71,13 @@ and package gates. All ten finite computed JobCost payloads at
 `src/pages/JobCostAnalysis.jsx:397-433` are complete without an app-specific
 rule.
 
+The array-intrinsic proof also fails closed for indirect, aliased, global-member,
+or function-constructor access to `eval`/`Function`, stateful non-string guard
+values, and direct or aliased mutation of the `RegExp`, `String`, or `Function`
+prototype authorities used by the bounded evaluator proof. The exact guarded
+ShopGenie arithmetic path remains admitted; ordinary object members named
+`eval` and ordinary conditional `window` aliases do not poison the proof.
+
 The extractor excludes a call only through the closed callsite-disposition
 contract. Path names such as `test`, `smoke`, or `diagnostic` never establish
 dormancy. The raw 1,797-row denominator therefore deliberately includes rooted
@@ -110,3 +117,9 @@ The portable packet binds only deterministic `facts.ndjson`, `report.md`, and
 `logs/analyzer.log`. Operational `scan-manifest.json` and `index.sqlite` remain
 required outputs validated independently; their timestamp-bearing bytes cannot
 perturb the portable packet digest.
+
+The hardened implementation passed 230/230 TypeScript tests, the accumulated
+21-case adversarial corpus, and 7/7 adapter-validator tests. Both immutable-git-
+archive canonical replays passed artifact validation and reproduced the exact
+packet/facts hashes above, 1,797 unique executable operation identities, 46
+unique dormant identities, and an empty active/dormant intersection.
