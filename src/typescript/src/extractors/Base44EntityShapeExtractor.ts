@@ -41,6 +41,7 @@ interface ShapeContext {
 
 interface ParameterBinding {
   parameter: ts.ParameterDeclaration;
+  bindingName: string;
   propertyPath: string[];
   gap?: string;
 }
@@ -282,12 +283,12 @@ function resolveParameterBindingAt(bindingName: string, useNode: ts.Node): Param
     for (const [index, parameter] of current.parameters.entries()) {
       const propertyPath = bindingPropertyPath(parameter.name, bindingName);
       if (propertyPath) {
-        if (parameter.dotDotDotToken) return { parameter, propertyPath, gap: "mutation-hook-rest-parameter-unsupported" };
-        if (index !== 0) return { parameter, propertyPath, gap: "mutation-hook-parameter-position-unsupported" };
-        return { parameter, propertyPath };
+        if (parameter.dotDotDotToken) return { parameter, bindingName, propertyPath, gap: "mutation-hook-rest-parameter-unsupported" };
+        if (index !== 0) return { parameter, bindingName, propertyPath, gap: "mutation-hook-parameter-position-unsupported" };
+        return { parameter, bindingName, propertyPath };
       }
       if (bindingNames(parameter.name).includes(bindingName)) {
-        return { parameter, propertyPath: [], gap: "mutation-hook-parameter-binding-pattern-unsupported" };
+        return { parameter, bindingName, propertyPath: [], gap: "mutation-hook-parameter-binding-pattern-unsupported" };
       }
     }
   }
@@ -334,6 +335,7 @@ function analyzeMutationHookParameter(binding: ParameterBinding, context: ShapeC
   const gaps: string[] = [];
   const visit = (node: ts.Node): void => {
     if (ts.isIdentifier(node) && node.text === hook.bindingName
+      && !hasVisibleFunctionOrClassShadow(hook.bindingName, node, context.source)
       && resolveDeclarationAt(hook.bindingName, node, context) === hook.declaration) {
       if (node === hook.declaration.name) return;
       const access = node.parent;
@@ -395,15 +397,22 @@ function analyzeMutationHookParameter(binding: ParameterBinding, context: ShapeC
 }
 
 function mutationHookParameterStateGap(binding: ParameterBinding, hook: MutationHookContext, context: ShapeContext): string | null {
-  if (!ts.isIdentifier(binding.parameter.name)) return null;
   const callback = binding.parameter.parent;
-  const bindingName = binding.parameter.name.text;
+  const bindingName = binding.bindingName;
   let unsafe = false;
   const visit = (node: ts.Node): void => {
-    if (unsafe || (node !== callback && ts.isFunctionLike(node))) return;
+    if (unsafe) return;
     if (node.getStart(context.source) >= context.callPosition) return;
-    if (ts.isIdentifier(node) && node !== binding.parameter.name && node.text === bindingName
-      && resolveParameterBindingAt(bindingName, node)?.parameter === binding.parameter) {
+    if (node !== callback && ts.isFunctionLike(node)) {
+      const findCapture = (child: ts.Node): void => {
+        if (unsafe) return;
+        if (ts.isIdentifier(child) && resolvesToParameterBinding(child, binding, context)) unsafe = true;
+        else ts.forEachChild(child, findCapture);
+      };
+      ts.forEachChild(node, findCapture);
+      return;
+    }
+    if (ts.isIdentifier(node) && resolvesToParameterBinding(node, binding, context)) {
       for (let current: ts.Node | undefined = node.parent; current && current !== callback; current = current.parent) {
         if (ts.isBinaryExpression(current) && isAssignmentOperator(current.operatorToken.kind)
           && (isAncestor(current.left, node) || isAncestor(current.right, node))) {
@@ -442,6 +451,17 @@ function mutationHookParameterStateGap(binding: ParameterBinding, hook: Mutation
   };
   visit(callback);
   return unsafe ? "mutation-hook-parameter-state-unresolved" : null;
+}
+
+function resolvesToParameterBinding(node: ts.Identifier, binding: ParameterBinding, context: ShapeContext): boolean {
+  if (node === binding.parameter.name || node.text !== binding.bindingName) return false;
+  const resolved = resolveParameterBindingAt(binding.bindingName, node);
+  if (!resolved || resolved.parameter !== binding.parameter
+    || resolved.propertyPath.length !== binding.propertyPath.length
+    || resolved.propertyPath.some((part, index) => part !== binding.propertyPath[index])) return false;
+  const visibleDeclaration = resolveVisibleVariableDeclaration(binding.bindingName, node, context);
+  if (visibleDeclaration && isAncestor(binding.parameter.parent, declarationScope(visibleDeclaration))) return false;
+  return !hasVisibleFunctionOrClassShadow(binding.bindingName, node, binding.parameter.parent);
 }
 
 function isSameMutationHookInvocation(call: ts.CallExpression, hook: MutationHookContext, context: ShapeContext): boolean {
