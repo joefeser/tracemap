@@ -16,6 +16,10 @@ interface ShapeField {
   origin: string;
   evidenceStartLine: number;
   evidenceEndLine: number;
+  evidenceStartOffset: number;
+  evidenceEndOffset: number;
+  evidenceFilePath: string;
+  evidenceSourceFileSha256: string;
   evidenceSnippetHash: string;
   semanticPresence: SemanticPresence;
   valueType: PayloadValueType;
@@ -27,7 +31,10 @@ interface SemanticShapeField {
   semanticPresence: SemanticPresence;
   valueType: PayloadValueType;
   explicitNull: boolean;
-  provenance: Array<Omit<ShapeField, "semanticPresence" | "valueType" | "explicitNull">>;
+  provenance: Array<Omit<ShapeField, "semanticPresence" | "valueType" | "explicitNull"> & {
+    semanticValueType: PayloadValueType;
+    semanticExplicitNull: boolean;
+  }>;
 }
 
 interface ShapeSpread {
@@ -55,6 +62,7 @@ const deferredOpenObjectObligation = "entity-open-object-fields:docker-write-rea
 
 interface ShapeContext {
   source: ts.SourceFile;
+  filePath: string;
   callNode: ts.Node;
   callPosition: number;
   declarations: Map<string, ts.VariableDeclaration[]>;
@@ -101,6 +109,7 @@ export function extractEntityShapeFacts(input: EntityShapeInput): CodeFact[] {
   const declarations = collectVariableDeclarations(input.source);
   const context: ShapeContext = {
     source: input.source,
+    filePath: input.filePath,
     callNode: input.node,
     callPosition: input.node.getStart(input.source),
     declarations,
@@ -712,6 +721,9 @@ function analyzeClosedFunctionParameter(
   if (!ts.isArrowFunction(callback) && !ts.isFunctionExpression(callback)) return null;
   const owner = transparentCallbackOwner(callback, context.source);
   if (!owner || !ts.isIdentifier(owner.name)) return null;
+  const ownerStatement = owner.parent.parent;
+  if (ts.isVariableStatement(ownerStatement)
+    && ownerStatement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)) return null;
 
   let unsafeParameterUse = false;
   const inspectParameter = (node: ts.Node): void => {
@@ -1724,7 +1736,9 @@ function fieldEvidence(
   context?: ShapeContext,
   semanticExpression?: ts.Expression
 ): ShapeField {
-  const source = context?.source ?? node.getSourceFile();
+  const source = node.getSourceFile();
+  const startOffset = node.getStart(source);
+  const endOffset = node.getEnd();
   const start = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
   const end = source.getLineAndCharacterOfPosition(node.getEnd()).line + 1;
   const semantic = semanticExpression
@@ -1737,6 +1751,10 @@ function fieldEvidence(
     origin,
     evidenceStartLine: start,
     evidenceEndLine: end,
+    evidenceStartOffset: startOffset,
+    evidenceEndOffset: endOffset,
+    evidenceFilePath: context ? (source === context.source ? context.filePath : "") : source.fileName,
+    evidenceSourceFileSha256: hash(source.getFullText(), 64),
     evidenceSnippetHash: hash(node.getText(source), 64),
     semanticPresence: semanticPresence(presence),
     valueType: semantic.valueType,
@@ -1792,7 +1810,13 @@ function semanticValue(expression: ts.Expression, context: ShapeContext | undefi
   if (ts.isBinaryExpression(node)) {
     if ([ts.SyntaxKind.MinusToken, ts.SyntaxKind.AsteriskToken, ts.SyntaxKind.SlashToken,
       ts.SyntaxKind.PercentToken, ts.SyntaxKind.AsteriskAsteriskToken].includes(node.operatorToken.kind)) {
-      return { valueType: "number", explicitNull: false };
+      const left = semanticValue(node.left, context, next);
+      const right = semanticValue(node.right, context, next);
+      const numeric = new Set<PayloadValueType>(["number", "integer", "decimal"]);
+      return numeric.has(left.valueType) && numeric.has(right.valueType)
+        && !left.explicitNull && !right.explicitNull
+        ? { valueType: "number", explicitNull: false }
+        : { valueType: "unknown", explicitNull: left.explicitNull || right.explicitNull };
     }
     if ([ts.SyntaxKind.EqualsEqualsToken, ts.SyntaxKind.EqualsEqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsToken,
       ts.SyntaxKind.ExclamationEqualsEqualsToken, ts.SyntaxKind.LessThanToken, ts.SyntaxKind.LessThanEqualsToken,
@@ -1809,7 +1833,13 @@ function semanticValue(expression: ts.Expression, context: ShapeContext | undefi
   if (ts.isPrefixUnaryExpression(node)) {
     if (node.operator === ts.SyntaxKind.ExclamationToken) return { valueType: "boolean", explicitNull: false };
     if (node.operator === ts.SyntaxKind.PlusToken || node.operator === ts.SyntaxKind.MinusToken
-      || node.operator === ts.SyntaxKind.TildeToken) return { valueType: "number", explicitNull: false };
+      || node.operator === ts.SyntaxKind.TildeToken) {
+      const operand = semanticValue(node.operand, context, next);
+      return new Set<PayloadValueType>(["number", "integer", "decimal"]).has(operand.valueType)
+        && !operand.explicitNull
+        ? { valueType: "number", explicitNull: false }
+        : { valueType: "unknown", explicitNull: operand.explicitNull };
+    }
   }
   if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)
     && (!context || !resolveDeclarationAt(node.expression.text, node.expression, context))) {
@@ -1819,7 +1849,7 @@ function semanticValue(expression: ts.Expression, context: ShapeContext | undefi
     if (node.expression.text === "parseInt") return { valueType: "integer", explicitNull: false };
     if (node.expression.text === "parseFloat") return { valueType: "decimal", explicitNull: false };
     if (node.expression.text === "Array") return { valueType: "array", explicitNull: false };
-    if (node.expression.text === "Object") return { valueType: "object", explicitNull: false };
+    if (node.expression.text === "Object") return { valueType: "unknown", explicitNull: false };
   }
   return semanticValueFromExpressionType(expressionType(node));
 }
@@ -1840,8 +1870,22 @@ function mergeSemanticValues(values: SemanticValue[]): SemanticValue {
 
 function normalizeFields(fields: ShapeField[]): ShapeField[] {
   const byValue = new Map<string, ShapeField>();
-  for (const field of fields) byValue.set(JSON.stringify(field), field);
+  for (const field of fields) {
+    const occurrence = JSON.stringify([
+      field.evidenceFilePath,
+      field.evidenceSourceFileSha256,
+      field.evidenceStartOffset,
+      field.evidenceEndOffset,
+      field.name,
+      field.origin,
+      field.presence,
+    ]);
+    byValue.set(occurrence, field);
+  }
   return [...byValue.values()].sort((left, right) => left.name.localeCompare(right.name)
+    || left.evidenceFilePath.localeCompare(right.evidenceFilePath)
+    || left.evidenceStartOffset - right.evidenceStartOffset
+    || left.evidenceEndOffset - right.evidenceEndOffset
     || left.presence.localeCompare(right.presence)
     || left.expressionType.localeCompare(right.expressionType)
     || left.origin.localeCompare(right.origin));
@@ -1871,7 +1915,11 @@ function semanticPayloadFields(fields: ShapeField[]): SemanticShapeField[] {
       semanticPresence: semanticPresenceValue,
       valueType: valueAgrees ? alternatives[0].valueType : "unknown",
       explicitNull: alternatives.some((field) => field.explicitNull),
-      provenance: alternatives.map(syntacticField)
+      provenance: alternatives.map((field) => ({
+        ...syntacticField(field),
+        semanticValueType: field.valueType,
+        semanticExplicitNull: field.explicitNull,
+      }))
     };
   });
 }

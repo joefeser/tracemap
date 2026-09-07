@@ -133,11 +133,15 @@ export async function unused(entityName) { return base44.entities[entityName].cr
     const disposition = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityCallsiteDisposition
       && fact.evidence.filePath === "src/dormant.ts")!;
     expect(JSON.parse(disposition.properties.callsiteDispositionJson)).toEqual(expect.objectContaining({
-      schemaVersion: "88mph.base44-entity-callsite-disposition.v1",
+      schemaVersion: "88mph.base44-entity-callsite-disposition.v2",
       disposition: "dormant-unreachable",
       callableName: "unused",
       externalModuleReferences: 0,
-      ambiguousDynamicModuleReferences: 0
+      ambiguousDynamicModuleReferences: 0,
+      operationEvidenceIds: [expect.stringMatching(/^operation-[0-9a-f]{20}$/)],
+      primitiveCapabilities: ["entities.dynamic.create"],
+      sdkIdentity: expect.objectContaining({ version: "0.8.5" }),
+      entitySelector: expect.objectContaining({ kind: "unresolved" })
     }));
 
     const tampered = structuredClone(packet);
@@ -149,6 +153,42 @@ export async function unused(entityName) { return base44.entities[entityName].cr
     await fs.writeFile(tamperedPath, `${JSON.stringify(tampered, null, 2)}\n`);
     await expect(diffBase44Evidence(path.join(out, "base44-evidence.json"), tamperedPath,
       path.join(out, "tampered-dormant-diff.json"))).rejects.toThrow("invalid entity callsite disposition");
+
+    const orphanedPrimitive = structuredClone(packet);
+    orphanedPrimitive.facts = orphanedPrimitive.facts.filter((fact) => fact.factId !== disposition.factId);
+    orphanedPrimitive.coverage.gaps = orphanedPrimitive.coverage.gaps.filter((gap) => gap.factId !== disposition.factId);
+    const orphanedPath = path.join(out, "orphaned-dormant-primitive.json");
+    await fs.writeFile(orphanedPath, `${JSON.stringify(orphanedPrimitive, null, 2)}\n`);
+    await expect(diffBase44Evidence(path.join(out, "base44-evidence.json"), orphanedPath,
+      path.join(out, "orphaned-dormant-primitive-diff.json"))).rejects.toThrow("not accounted by exactly one active operation or dormant disposition");
+
+    const retainedPrimitive = packet.facts.find((fact) => fact.factType === FactTypes.Base44SdkPrimitive
+      && fact.evidence.filePath === disposition.evidence.filePath
+      && fact.evidence.startLine === disposition.evidence.startLine
+      && fact.properties.capability === "entities.dynamic.create")!;
+    const removedDisposition = structuredClone(packet);
+    removedDisposition.facts = removedDisposition.facts.filter((fact) => fact.factId !== disposition.factId
+      && fact.factId !== retainedPrimitive.factId);
+    removedDisposition.coverage.gaps = removedDisposition.coverage.gaps.filter((gap) => gap.factId !== disposition.factId
+      && gap.factId !== retainedPrimitive.factId);
+    const removedPath = path.join(out, "removed-dormant.json");
+    await fs.writeFile(removedPath, `${JSON.stringify(removedDisposition, null, 2)}\n`);
+    const removedDiff = await diffBase44Evidence(path.join(out, "base44-evidence.json"), removedPath,
+      path.join(out, "removed-dormant-diff.json"));
+    expect(removedDiff.coverageReduced).toBe(true);
+    expect(removedDiff.removed).toContainEqual(expect.objectContaining({ factId: disposition.factId }));
+
+    const activeOperation = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityOperation
+      && fact.evidence.filePath === "src/active.ts")!;
+    const activePrimitive = packet.facts.find((fact) => fact.factType === FactTypes.Base44SdkPrimitive
+      && fact.evidence.filePath === activeOperation.evidence.filePath
+      && fact.properties.capability === "entities.Order.filter")!;
+    const missingActivePrimitive = structuredClone(packet);
+    missingActivePrimitive.facts = missingActivePrimitive.facts.filter((fact) => fact.factId !== activePrimitive.factId);
+    const missingActivePrimitivePath = path.join(out, "missing-active-primitive.json");
+    await fs.writeFile(missingActivePrimitivePath, `${JSON.stringify(missingActivePrimitive, null, 2)}\n`);
+    await expect(diffBase44Evidence(path.join(out, "base44-evidence.json"), missingActivePrimitivePath,
+      path.join(out, "missing-active-primitive-diff.json"))).rejects.toThrow("does not have exactly one retained SDK primitive");
 
     await fs.writeFile(path.join(repo, "src/main.ts"), `import { base44 } from "@base44/sdk";
 import { run } from "./active";
@@ -334,7 +374,7 @@ export async function run(runtimeFlag) {
       && fact.properties.entitySelectorGap === "entity-selector-dynamic-unresolved")).toBe(true);
   });
 
-  it("derives computed payload fields through a closed cross-component callback path", async () => {
+  it("keeps cross-component callback payload fields runtime-deferred until repo-wide semantics exist", async () => {
     const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-computed-field-component-"));
     await fs.mkdir(path.join(repo, "src"), { recursive: true });
     await writeFrontendSdkAuthority(repo);
@@ -367,11 +407,94 @@ export default function Screen() {
     const packet = (await buildBase44Evidence(options(repo, out))).packet;
     const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
       && fact.targetSymbol === "Order")!;
-    expect(payload.properties.completeness).toBe("complete");
-    expect(JSON.parse(payload.properties.fieldsJson)).toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: "actual_cost", presence: "conditional" }),
-      expect.objectContaining({ name: "actual_quantity", presence: "conditional" })
+    expect(payload.properties).toMatchObject({
+      completeness: "partial",
+      outerKind: "object",
+      referenceAccounting: "unresolved",
+      runtimeObligationsJson: '[]'
+    });
+    expect(JSON.parse(payload.properties.fieldsJson)).toEqual([
+      expect.objectContaining({ name: "<dynamic>", presence: "dynamic-computed" })
+    ]);
+    expect(JSON.parse(payload.properties.semanticFieldsJson)).toEqual([
+      expect.objectContaining({ name: "<dynamic>", semanticPresence: "unknown", valueType: "integer" })
+    ]);
+  });
+
+  it("does not promote local payload semantics when an exported callable has cross-file callers", async () => {
+    const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-cross-file-payload-semantics-"));
+    await fs.mkdir(path.join(repo, "src"), { recursive: true });
+    await writeFrontendSdkAuthority(repo);
+    await fs.writeFile(path.join(repo, "src/save.ts"), `import { base44 } from "@base44/sdk";
+export const direct = (payload) => base44.entities.Direct.create(payload);
+direct({ value: "local" });
+const named = (payload) => base44.entities.Named.create(payload);
+named({ value: "local" });
+export { named };
+const defaultSave = (payload) => base44.entities.Defaulted.create(payload);
+defaultSave({ value: "local" });
+export default defaultSave;
+const commonSave = (payload) => base44.entities.CommonJs.create(payload);
+commonSave({ value: "local" });
+module.exports.commonSave = commonSave;
+`);
+    await fs.writeFile(path.join(repo, "src/main.ts"), `import defaultSave, { direct, named } from "./save";
+direct({ value: 1 }); named({ value: 2 }); defaultSave({ value: 3 });
+`);
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    execFileSync("git", ["add", "."], { cwd: repo });
+    execFileSync("git", ["-c", "user.name=TraceMap Test", "-c", "user.email=tracemap@example.invalid", "commit", "-qm", "fixture"], { cwd: repo });
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-cross-file-payload-semantics-out-"));
+    const packet = (await buildBase44Evidence(options(repo, out))).packet;
+    for (const entity of ["Direct", "Named", "Defaulted", "CommonJs"]) {
+      const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+        && fact.targetSymbol === entity)!;
+      expect(payload.properties.completeness).not.toBe("complete");
+      expect(["partial", "unresolved"]).toContain(payload.properties.completeness);
+      expect(JSON.parse(payload.properties.fieldsJson)).toEqual([]);
+      expect(JSON.parse(payload.properties.semanticFieldsJson)).toEqual([]);
+      expect(JSON.parse(payload.properties.analysisGapsJson).length).toBeGreaterThan(0);
+    }
+  });
+
+  it("treats an arbitrary current assignment as a callable escape", async () => {
+    const repo = await fixtureRepo();
+    await fs.writeFile(path.join(repo, "src/arbitrary-ref-escape.ts"), `import { base44 } from "@base44/sdk";
+const external = globalThis.runtimeRef;
+const save = (payload) => base44.entities.EscapedRef.create(payload);
+save({ value: "local" });
+external.current = save;
+`);
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-arbitrary-ref-escape-"));
+    const packet = (await buildBase44Evidence(options(repo, out))).packet;
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "EscapedRef")!;
+    expect(payload.properties).toMatchObject({ completeness: "unresolved", outerKind: "unknown", referenceAccounting: "unresolved" });
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("binding-initializer-unresolved");
+  });
+
+  it("keeps non-JSON-safe coercions unknown and preserves identical source occurrences", async () => {
+    const repo = await fixtureRepo();
+    await fs.writeFile(path.join(repo, "src/json-semantics.ts"), `import { base44 } from "@base44/sdk";
+base44.entities.JsonSafe.create({ boxed: Object(1), bigint: 1n * 2n, numeric: 1 * 2 });
+const save = (payload) => base44.entities.Occurrences.create(payload); save({ value: "same" }); save({ value: "same" });
+`);
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-json-semantics-"));
+    const packet = (await buildBase44Evidence(options(repo, out))).packet;
+    const jsonSafe = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "JsonSafe")!;
+    expect(JSON.parse(jsonSafe.properties.semanticFieldsJson)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "boxed", valueType: "unknown" }),
+      expect.objectContaining({ name: "bigint", valueType: "unknown" }),
+      expect.objectContaining({ name: "numeric", valueType: "number" })
     ]));
+    const occurrences = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "Occurrences")!;
+    const fields = JSON.parse(occurrences.properties.fieldsJson);
+    const semantic = JSON.parse(occurrences.properties.semanticFieldsJson);
+    expect(fields).toHaveLength(2);
+    expect(new Set(fields.map((field: {evidenceStartOffset: number}) => field.evidenceStartOffset)).size).toBe(2);
+    expect(semantic[0].provenance).toHaveLength(2);
   });
 
   it("derives a finite local query-parameter domain but blocks an escaped parameter", async () => {
@@ -1077,6 +1200,16 @@ export function Screen(runtimeInput) {
     await fs.writeFile(malformedSemanticPath, `${JSON.stringify(malformedSemantic)}\n`);
     await expect(diffBase44Evidence(baselinePath, malformedSemanticPath, path.join(out, "malformed-semantic-diff.json")))
       .rejects.toThrow("invalid semantic field");
+
+    const contradictorySemantic = structuredClone(packet);
+    const contradictoryPayload = contradictorySemantic.facts.find((fact) => fact.factId === payload.factId)!;
+    const contradictoryFields = JSON.parse(contradictoryPayload.properties.semanticFieldsJson);
+    contradictoryFields[0].valueType = contradictoryFields[0].valueType === "string" ? "integer" : "string";
+    contradictoryPayload.properties.semanticFieldsJson = JSON.stringify(contradictoryFields);
+    const contradictorySemanticPath = path.join(out, "contradictory-semantic.json");
+    await fs.writeFile(contradictorySemanticPath, `${JSON.stringify(contradictorySemantic)}\n`);
+    await expect(diffBase44Evidence(baselinePath, contradictorySemanticPath, path.join(out, "contradictory-semantic-diff.json")))
+      .rejects.toThrow("contradictory semantic value aggregate");
 
     const duplicateSemantic = structuredClone(packet);
     const duplicatePayload = duplicateSemantic.facts.find((fact) => fact.factId === payload.factId)!;

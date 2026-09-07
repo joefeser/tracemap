@@ -194,7 +194,7 @@ correlation. It also publishes an explicit source-bound disposition instead of
 an entity row for a narrowly proven unreachable exported helper or uninvoked
 real React Query mutation callback. Ambiguous module graphs, mutation handles,
 branch predicates, callers, or assignments remain Tier-4 blockers. See
-[Base44 entity callsite disposition v1](BASE44_ENTITY_CALLSITE_DISPOSITION_V1.md).
+[Base44 entity callsite disposition v2](BASE44_ENTITY_CALLSITE_DISPOSITION_V2.md).
 
 Extractor `base44-evidence/0.14.0` emits payload shape v3. It preserves the
 complete syntactic `fieldsJson` alternative set and adds a unique-by-name

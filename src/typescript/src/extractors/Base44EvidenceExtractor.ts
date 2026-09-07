@@ -122,15 +122,35 @@ function addSdkCall(chain: string[], node: ts.CallExpression, source: ts.SourceF
   const capability = relative.join(".");
   const clientBindingEvidence: Record<string, string> = clientBindingKind === "callsite-proven-parameter" ? { clientBindingKind } : {};
   const entitiesIndex = sdkRootIndex(relative, "entities");
+  const isEntityOperation = entitiesIndex >= 0
+    && entityOperations.has(relative[entitiesIndex + 2])
+    && entitiesIndex + 3 === relative.length;
   if (entitiesIndex >= 0
     && entityOperations.has(relative[entitiesIndex + 2])
     && entitiesIndex + 3 === relative.length) {
-    const disposition = dormantEntityCallsiteDisposition(node, source, filePath, contexts);
-    if (disposition) {
+    const reachability = dormantEntityCallsiteDisposition(node, source, filePath, contexts);
+    if (reachability) {
+      const entityName = relative[entitiesIndex + 1];
+      const operationName = relative[entitiesIndex + 2];
+      const selector = staticEntitySelector(entityName, node, source, filePath);
+      const primitiveCapability = relative.join(".");
+      facts.push(fact(manifest, FactTypes.Base44SdkPrimitive, RuleIds.Base44SdkPrimitive, node, source, filePath, primitiveCapability, {
+        capability: primitiveCapability,
+        ...clientBindingEvidence,
+        ...exactEntityCallsiteProperties(node, source),
+        primitiveRoot: relative[0],
+        sourceFileSha256: hash(text, 64)
+      }));
+      const disposition = buildEntityCallsiteDisposition(reachability, node, source, filePath,
+        [entityName], operationName, selector, sdkIdentity, [primitiveCapability]);
       facts.push(fact(manifest, FactTypes.Base44EntityCallsiteDisposition, RuleIds.Base44EntityCallsiteDisposition,
-        node, source, filePath, `${filePath}:${disposition.callableName}:${relative[entitiesIndex + 2]}`, {
+        node, source, filePath, `${filePath}:${disposition.callableName}:${operationName}`, {
           callsiteDispositionJson: JSON.stringify(disposition),
-          operationName: relative[entitiesIndex + 2],
+          entitySelectorJson: JSON.stringify(selector),
+          operationEvidenceIdsJson: JSON.stringify(disposition.operationEvidenceIds),
+          operationName,
+          sdkIdentityGap: sdkIdentity.gap ?? "",
+          sdkIdentityJson: sdkIdentity.identity ? JSON.stringify(sdkIdentity.identity) : "",
           sourceFileSha256: hash(text, 64)
         }));
       return;
@@ -139,6 +159,7 @@ function addSdkCall(chain: string[], node: ts.CallExpression, source: ts.SourceF
   facts.push(fact(manifest, FactTypes.Base44SdkPrimitive, RuleIds.Base44SdkPrimitive, node, source, filePath, capability, {
     capability,
     ...clientBindingEvidence,
+    ...(isEntityOperation ? exactEntityCallsiteProperties(node, source) : {}),
     primitiveRoot: relative[0],
     sourceFileSha256: hash(text, 64)
   }));
@@ -152,9 +173,7 @@ function addSdkCall(chain: string[], node: ts.CallExpression, source: ts.SourceF
       sourceFileSha256: hash(text, 64)
     }, functionName ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier4Unknown));
   }
-  if (entitiesIndex >= 0
-    && entityOperations.has(relative[entitiesIndex + 2])
-    && entitiesIndex + 3 === relative.length) {
+  if (isEntityOperation) {
     const entityName = relative[entitiesIndex + 1];
     const operationName = relative[entitiesIndex + 2];
     const computedFields = sourceBoundComputedFields(node, { filePath, source, contexts });
@@ -209,18 +228,7 @@ function addEntityOperation(
   computedQueryFields: Record<string, string[]> = {}
 ): void {
   const clientBindingEvidence: Record<string, string> = clientBindingKind === "callsite-proven-parameter" ? { clientBindingKind } : {};
-  const operationStartLine = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
-  const operationEndLine = source.getLineAndCharacterOfPosition(node.getEnd()).line + 1;
-  const operationEvidenceId = `operation-${hash([
-    filePath,
-    String(operationStartLine),
-    String(operationEndLine),
-    String(node.getStart(source)),
-    String(node.getEnd()),
-    entityName,
-    operationName,
-    hash(node.getText(source), 64)
-  ].join("|"), 20)}`;
+  const operationEvidenceId = entityOperationEvidenceId(node, source, filePath, entityName, operationName);
   const selectorJson = JSON.stringify(selector);
   const selectorGap = selector.gap;
   const operationFact = fact(manifest, FactTypes.Base44EntityOperation, RuleIds.Base44EntityOperation, node, source, filePath, entityName, {
@@ -230,6 +238,7 @@ function addEntityOperation(
     ...clientBindingEvidence,
     operationEvidenceId,
     operationName,
+    ...exactEntityCallsiteProperties(node, source),
     sdkIdentityGap: sdkIdentity.gap ?? "",
     sdkIdentityJson: sdkIdentity.identity ? JSON.stringify(sdkIdentity.identity) : "",
     sourceFileSha256: hash(text, 64)
@@ -245,6 +254,35 @@ function addEntityOperation(
     sdkIdentityGap: sdkIdentity.gap ?? "",
     sdkIdentityJson: sdkIdentity.identity ? JSON.stringify(sdkIdentity.identity) : ""
   }));
+}
+
+function entityOperationEvidenceId(
+  node: ts.CallExpression,
+  source: ts.SourceFile,
+  filePath: string,
+  entityName: string,
+  operationName: string
+): string {
+  const operationStartLine = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+  const operationEndLine = source.getLineAndCharacterOfPosition(node.getEnd()).line + 1;
+  return `operation-${hash([
+    filePath,
+    String(operationStartLine),
+    String(operationEndLine),
+    String(node.getStart(source)),
+    String(node.getEnd()),
+    entityName,
+    operationName,
+    hash(node.getText(source), 64)
+  ].join("|"), 20)}`;
+}
+
+function exactEntityCallsiteProperties(node: ts.CallExpression, source: ts.SourceFile): Record<string, string> {
+  return {
+    callsiteStartOffset: String(node.getStart(source)),
+    callsiteEndOffset: String(node.getEnd()),
+    callsiteSnippetSha256: hash(node.getText(source), 64)
+  };
 }
 
 function sourceBoundPayloadOuterKind(
@@ -539,16 +577,6 @@ function emitComputedEntityCall(
     ? evaluateSelectorValues(selectorExpression, { filePath, source, contexts }, new Set()) : null);
   const candidates = resolved ? selectorStrings(resolved) : [];
   const evidence = resolved ? normalizeSelectorEvidence(resolved.flatMap((value) => value.evidence)) : [];
-  const disposition = dormantEntityCallsiteDisposition(node, source, filePath, contexts);
-  if (disposition) {
-    facts.push(fact(manifest, FactTypes.Base44EntityCallsiteDisposition, RuleIds.Base44EntityCallsiteDisposition,
-      node, source, filePath, `${filePath}:${disposition.callableName}:${operationName}`, {
-        callsiteDispositionJson: JSON.stringify(disposition),
-        operationName,
-        sourceFileSha256: hash(text, 64)
-      }));
-    return;
-  }
   const selector: EntitySelectorContract = candidates.length > 0 ? {
     schemaVersion: "88mph.base44-entity-selector.v1",
     kind: "finite-source-domain",
@@ -563,11 +591,39 @@ function emitComputedEntityCall(
     gap: "entity-selector-dynamic-unresolved"
   };
   const primitivePrefix = relative[0] === "asServiceRole" ? "asServiceRole.entities" : "entities";
+  const reachability = dormantEntityCallsiteDisposition(node, source, filePath, contexts);
+  if (reachability) {
+    const entityNames = candidates.length > 0 ? candidates : ["dynamic"];
+    const primitiveCapabilities = entityNames.map((entityName) => `${primitivePrefix}.${entityName}.${operationName}`);
+    for (const capability of primitiveCapabilities) {
+      facts.push(fact(manifest, FactTypes.Base44SdkPrimitive, RuleIds.Base44SdkPrimitive, node, source, filePath, capability, {
+        capability,
+        ...(binding.kind === "callsite-proven-parameter" ? { clientBindingKind: binding.kind } : {}),
+        ...exactEntityCallsiteProperties(node, source),
+        primitiveRoot: relative[0],
+        sourceFileSha256: hash(text, 64)
+      }, candidates.length > 0 ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier4Unknown));
+    }
+    const disposition = buildEntityCallsiteDisposition(reachability, node, source, filePath,
+      entityNames, operationName, selector, sdkIdentity, primitiveCapabilities);
+    facts.push(fact(manifest, FactTypes.Base44EntityCallsiteDisposition, RuleIds.Base44EntityCallsiteDisposition,
+      node, source, filePath, `${filePath}:${disposition.callableName}:${operationName}`, {
+        callsiteDispositionJson: JSON.stringify(disposition),
+        entitySelectorJson: JSON.stringify(selector),
+        operationEvidenceIdsJson: JSON.stringify(disposition.operationEvidenceIds),
+        operationName,
+        sdkIdentityGap: sdkIdentity.gap ?? "",
+        sdkIdentityJson: sdkIdentity.identity ? JSON.stringify(sdkIdentity.identity) : "",
+        sourceFileSha256: hash(text, 64)
+      }, sdkIdentity.identity && !selector.gap ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier4Unknown));
+    return;
+  }
   if (candidates.length === 0) {
     const capability = `${primitivePrefix}.dynamic.${operationName}`;
     facts.push(fact(manifest, FactTypes.Base44SdkPrimitive, RuleIds.Base44SdkPrimitive, node, source, filePath, capability, {
       capability,
       ...(binding.kind === "callsite-proven-parameter" ? { clientBindingKind: binding.kind } : {}),
+      ...exactEntityCallsiteProperties(node, source),
       primitiveRoot: relative[0],
       sourceFileSha256: hash(text, 64)
     }, EvidenceTiers.Tier4Unknown));
@@ -583,6 +639,7 @@ function emitComputedEntityCall(
     facts.push(fact(manifest, FactTypes.Base44SdkPrimitive, RuleIds.Base44SdkPrimitive, node, source, filePath, capability, {
       capability,
       ...(binding.kind === "callsite-proven-parameter" ? { clientBindingKind: binding.kind } : {}),
+      ...exactEntityCallsiteProperties(node, source),
       primitiveRoot: relative[0],
       sourceFileSha256: hash(text, 64)
     }));
@@ -674,9 +731,7 @@ function selectorObjectMember(
   return declaration ? { owner, property: expression.name.text, declaration } : null;
 }
 
-interface DormantEntityCallsiteDisposition {
-  schemaVersion: "88mph.base44-entity-callsite-disposition.v1";
-  disposition: "dormant-unreachable";
+interface DormantEntityReachability {
   callableName: string;
   authorityPath: string;
   authoritySha256: string;
@@ -685,16 +740,34 @@ interface DormantEntityCallsiteDisposition {
   ambiguousDynamicModuleReferences: 0;
 }
 
+interface DormantEntityCallsiteDisposition extends DormantEntityReachability {
+  schemaVersion: "88mph.base44-entity-callsite-disposition.v2";
+  disposition: "dormant-unreachable";
+  operationName: string;
+  operationEvidenceIds: string[];
+  primitiveCapabilities: string[];
+  entitySelector: EntitySelectorContract;
+  sdkIdentity: SdkIdentity | null;
+  sdkIdentityGap: string;
+  callsite: {
+    filePath: string;
+    sourceFileSha256: string;
+    startLine: number;
+    endLine: number;
+    startOffset: number;
+    endOffset: number;
+    snippetSha256: string;
+  };
+}
+
 function dormantEntityCallsiteDisposition(
   node: ts.CallExpression,
   source: ts.SourceFile,
   filePath: string,
   contexts: Map<string, SourceContext>
-): DormantEntityCallsiteDisposition | null {
+): DormantEntityReachability | null {
   const dormantMutation = dormantMutationHookCallable(node, source);
   if (dormantMutation) return {
-    schemaVersion: "88mph.base44-entity-callsite-disposition.v1",
-    disposition: "dormant-unreachable",
     callableName: dormantMutation,
     authorityPath: filePath,
     authoritySha256: hash(source.getFullText(), 64),
@@ -706,14 +779,46 @@ function dormantEntityCallsiteDisposition(
   if (!callable?.name || !hasModifier(callable, ts.SyntaxKind.ExportKeyword)) return null;
   if (!sourceModuleHasClosedExports(source) || sourceModuleMayBeReferenced(filePath, contexts)) return null;
   return {
-    schemaVersion: "88mph.base44-entity-callsite-disposition.v1",
-    disposition: "dormant-unreachable",
     callableName: callable.name.text,
     authorityPath: filePath,
     authoritySha256: hash(source.getFullText(), 64),
     sourceSnapshotDigest: sourceGraphDigest(contexts),
     externalModuleReferences: 0,
     ambiguousDynamicModuleReferences: 0
+  };
+}
+
+function buildEntityCallsiteDisposition(
+  reachability: DormantEntityReachability,
+  node: ts.CallExpression,
+  source: ts.SourceFile,
+  filePath: string,
+  entityNames: string[],
+  operationName: string,
+  entitySelector: EntitySelectorContract,
+  sdkIdentity: SdkIdentityResolution,
+  primitiveCapabilities: string[]
+): DormantEntityCallsiteDisposition {
+  return {
+    schemaVersion: "88mph.base44-entity-callsite-disposition.v2",
+    disposition: "dormant-unreachable",
+    ...reachability,
+    operationName,
+    operationEvidenceIds: entityNames.map((entityName) =>
+      entityOperationEvidenceId(node, source, filePath, entityName, operationName)).sort(),
+    primitiveCapabilities: [...primitiveCapabilities].sort(),
+    entitySelector,
+    sdkIdentity: sdkIdentity.identity ?? null,
+    sdkIdentityGap: sdkIdentity.gap ?? "",
+    callsite: {
+      filePath,
+      sourceFileSha256: hash(source.getFullText(), 64),
+      startLine: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
+      endLine: source.getLineAndCharacterOfPosition(node.getEnd()).line + 1,
+      startOffset: node.getStart(source),
+      endOffset: node.getEnd(),
+      snippetSha256: hash(node.getText(source), 64),
+    },
   };
 }
 
@@ -1610,14 +1715,12 @@ function selectorCallableReferencesAreClosed(owner: ts.FunctionLikeDeclaration, 
 
 function isTransparentCallableAliasReference(reference: ts.Identifier, source: ts.SourceFile): boolean {
   const parent = reference.parent;
-  if (ts.isPropertyAccessExpression(parent) && parent.expression === reference && parent.name.text === "current") return true;
   if (ts.isCallExpression(parent) && parent.arguments.includes(reference)
     && (isExactImportedCall(parent, source, "react", new Set(["useRef", "useCallback"]))
       || isExactImportedCall(parent, source, "lodash", new Set(["debounce"])))) return true;
   if (ts.isBinaryExpression(parent) && parent.right === reference
     && parent.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
-    const left = unwrapAliasExpression(parent.left);
-    return ts.isPropertyAccessExpression(left) && left.name.text === "current";
+    return isClosedReactRefCallableAssignment(reference, parent.left, source);
   }
   if (ts.isArrayLiteralExpression(parent) && parent.elements.includes(reference)) {
     const call = parent.parent;
@@ -1625,6 +1728,58 @@ function isTransparentCallableAliasReference(reference: ts.Identifier, source: t
       && isExactImportedCall(call, source, "react", new Set(["useCallback", "useEffect", "useLayoutEffect", "useMemo"]));
   }
   return false;
+}
+
+function isClosedReactRefCallableAssignment(
+  callableReference: ts.Identifier,
+  assignmentTarget: ts.Expression,
+  source: ts.SourceFile
+): boolean {
+  const left = unwrapAliasExpression(assignmentTarget);
+  if (!ts.isPropertyAccessExpression(left) || left.name.text !== "current") return false;
+  const refIdentifier = unwrapAliasExpression(left.expression);
+  if (!ts.isIdentifier(refIdentifier)) return false;
+  const refBinding = resolveLexicalBinding(refIdentifier.text, refIdentifier, source);
+  if (refBinding?.kind !== "variable" || !ts.isVariableDeclaration(refBinding.node)
+    || !ts.isIdentifier(refBinding.node.name) || !refBinding.node.initializer) return false;
+  const declarationList = refBinding.node.parent;
+  const statement = declarationList.parent;
+  if (!ts.isVariableDeclarationList(declarationList)
+    || (declarationList.flags & ts.NodeFlags.Const) === 0
+    || (ts.isVariableStatement(statement)
+      && statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword))) return false;
+  const initializer = unwrapSelectorExpression(refBinding.node.initializer);
+  if (!ts.isCallExpression(initializer) || !isExactImportedCall(initializer, source, "react", new Set(["useRef"]))) return false;
+  const initialCallable = initializer.arguments[0] && unwrapAliasExpression(initializer.arguments[0]);
+  const callableBinding = resolveLexicalBinding(callableReference.text, callableReference, source)?.node;
+  if (!initialCallable || !ts.isIdentifier(initialCallable)
+    || resolveLexicalBinding(initialCallable.text, initialCallable, source)?.node !== callableBinding) return false;
+  const refName = refBinding.node.name.text;
+
+  let closed = true;
+  const visit = (node: ts.Node): void => {
+    if (!closed) return;
+    if (ts.isIdentifier(node) && node !== refBinding.node.name && node.text === refName
+      && resolveLexicalBinding(node.text, node, source)?.node === refBinding.node) {
+      const member = node.parent;
+      if (!ts.isPropertyAccessExpression(member) || member.expression !== node || member.name.text !== "current") {
+        closed = false;
+        return;
+      }
+      const use = member.parent;
+      if (ts.isCallExpression(use) && unwrapAliasExpression(use.expression) === member) return;
+      if (ts.isBinaryExpression(use) && use.left === member && use.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+        const assigned = unwrapAliasExpression(use.right);
+        if (ts.isIdentifier(assigned)
+          && resolveLexicalBinding(assigned.text, assigned, source)?.node === callableBinding) return;
+      }
+      closed = false;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return closed;
 }
 
 function isTransparentForwarderInvocation(

@@ -40,7 +40,7 @@ export const RuleIds = {
   Base44FunctionInvocation: "base44.function.invocation.v1",
   Base44FunctionSurface: "base44.function.surface.v1",
   Base44EntityOperation: "base44.entity.operation.v1",
-  Base44EntityCallsiteDisposition: "base44.entity.callsite-disposition.v1",
+  Base44EntityCallsiteDisposition: "base44.entity.callsite-disposition.v2",
   Base44EntityPayload: "base44.entity.payload.v1",
   Base44EntityQuery: "base44.entity.query.v1",
   Base44EnvironmentAccess: "base44.environment.access.v1",
