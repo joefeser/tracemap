@@ -374,7 +374,7 @@ export async function run(runtimeFlag) {
       && fact.properties.entitySelectorGap === "entity-selector-dynamic-unresolved")).toBe(true);
   });
 
-  it("keeps cross-component callback payload fields runtime-deferred until repo-wide semantics exist", async () => {
+  it("derives cross-component callback payload fields only through a closed repo-wide caller graph", async () => {
     const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-computed-field-component-"));
     await fs.mkdir(path.join(repo, "src"), { recursive: true });
     await writeFrontendSdkAuthority(repo);
@@ -407,18 +407,11 @@ export default function Screen() {
     const packet = (await buildBase44Evidence(options(repo, out))).packet;
     const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
       && fact.targetSymbol === "Order")!;
-    expect(payload.properties).toMatchObject({
-      completeness: "partial",
-      outerKind: "object",
-      referenceAccounting: "unresolved",
-      runtimeObligationsJson: '[]'
-    });
-    expect(JSON.parse(payload.properties.fieldsJson)).toEqual([
-      expect.objectContaining({ name: "<dynamic>", presence: "dynamic-computed" })
-    ]);
-    expect(JSON.parse(payload.properties.semanticFieldsJson)).toEqual([
-      expect.objectContaining({ name: "<dynamic>", semanticPresence: "unknown", valueType: "integer" })
-    ]);
+    expect(payload.properties).toMatchObject({ completeness: "complete", outerKind: "object", referenceAccounting: "source-bounded" });
+    expect(JSON.parse(payload.properties.fieldsJson)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "actual_cost", presence: "conditional" }),
+      expect.objectContaining({ name: "actual_quantity", presence: "conditional" })
+    ]));
   });
 
   it("does not promote local payload semantics when an exported callable has cross-file callers", async () => {
@@ -495,6 +488,31 @@ const save = (payload) => base44.entities.Occurrences.create(payload); save({ va
     expect(fields).toHaveLength(2);
     expect(new Set(fields.map((field: {evidenceStartOffset: number}) => field.evidenceStartOffset)).size).toBe(2);
     expect(semantic[0].provenance).toHaveLength(2);
+  });
+
+  it("follows a closed React ref and debounce caller chain without trusting arbitrary current assignments", async () => {
+    const repo = await fixtureRepo();
+    await fs.writeFile(path.join(repo, "src/closed-react-ref.tsx"), `import { base44 } from "@base44/sdk";
+import { useCallback, useEffect, useRef } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { debounce } from "lodash";
+const mutation = useMutation({ mutationFn: (data) => base44.entities.ClosedRef.create(data) });
+const save = useCallback((field, value) => mutation.mutateAsync({ [field]: value }), [mutation]);
+const debouncedRef = useRef(debounce((...args) => saveRef.current?.(...args), 500));
+const saveRef = useRef(save);
+useEffect(() => { saveRef.current = save; }, [save]);
+const debounced = debouncedRef.current;
+const handle = (field, value) => debounced(field, value);
+handle("price", 1);
+`);
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-closed-react-ref-"));
+    const packet = (await buildBase44Evidence(options(repo, out))).packet;
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "ClosedRef")!;
+    expect(payload.properties.completeness).toBe("complete");
+    expect(JSON.parse(payload.properties.semanticFieldsJson)).toEqual([
+      expect.objectContaining({ name: "price", valueType: "unknown" })
+    ]);
   });
 
   it("derives a finite local query-parameter domain but blocks an escaped parameter", async () => {
