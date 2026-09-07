@@ -159,6 +159,13 @@ static, and the rest binding is not mutated or escaped before the SDK call.
 All source gaps are retained; array destructuring, selected-property bindings,
 computed/default exclusions, and runtime-open inputs remain unresolved.
 
+Extractor `base44-evidence/0.9.0` preserves query-v3 and payload shape-v2,
+adds explicit outer-kind propagation, forbids complete/unknown payloads, and
+models only finite source-derived local-array `.push(...)` to `.map(...)`
+element paths. A parameter occupying an SDK payload position does not by
+itself prove object kind; absent caller/construction evidence remains a typed
+blocker.
+
 Extractor `base44-evidence/0.4.1` also follows an SDK client through a local
 helper parameter when executable callsites prove the binding. The proof is
 conservative: every directly resolved callsite for that parameter must supply

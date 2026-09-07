@@ -348,8 +348,9 @@ function validateCoverageGaps(packet: Base44EvidencePacket): void {
 
 function validatePayloadShapeContracts(packet: Base44EvidencePacket): void {
   for (const fact of packet.facts.filter((candidate) => candidate.factType === FactTypes.Base44EntityPayload)) {
-    if (fact.evidence.extractorVersion === "base44-evidence/0.8.0" && fact.properties.shapeVersion !== "2") {
-      throw new Error(`Base44 payload ${fact.factId} must use shapeVersion 2 for extractor 0.8.0`);
+    if (["base44-evidence/0.8.0", "base44-evidence/0.9.0"].includes(fact.evidence.extractorVersion)
+      && fact.properties.shapeVersion !== "2") {
+      throw new Error(`Base44 payload ${fact.factId} must use shapeVersion 2 for extractor ${fact.evidence.extractorVersion}`);
     }
     if (fact.properties.shapeVersion !== "2") continue;
     const outerKind = fact.properties.outerKind;
@@ -376,6 +377,9 @@ function validatePayloadShapeContracts(packet: Base44EvidencePacket): void {
       throw new Error(`Base44 payload ${fact.factId} has invalid analysis gaps`);
     }
     const deferred = gaps.includes("runtime-deferred-object-fields");
+    if (fact.properties.completeness === "complete" && outerKind === "unknown") {
+      throw new Error(`Base44 payload ${fact.factId} cannot be complete with an unknown outer kind`);
+    }
     if (deferred && (outerKind !== "object" || referenceAccounting !== "source-bounded"
       || fact.properties.completeness !== "partial" || fact.evidenceTier !== EvidenceTiers.Tier4Unknown
       || obligations.length !== 1)) {
