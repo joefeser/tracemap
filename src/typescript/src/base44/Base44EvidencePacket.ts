@@ -318,6 +318,7 @@ function coverageGapSurface(
 
 function validateCoverageGaps(packet: Base44EvidencePacket): void {
   validatePayloadShapeContracts(packet);
+  validateEntitySelectorContracts(packet);
   validateSdkIdentityContracts(packet);
   if (packet.coverage?.gapSchemaVersion !== base44CoverageGapSchemaVersion) {
     throw new Error(`Unsupported Base44 coverage gap schema: ${packet.coverage?.gapSchemaVersion ?? "missing"}`);
@@ -349,7 +350,7 @@ function validateCoverageGaps(packet: Base44EvidencePacket): void {
 
 function validatePayloadShapeContracts(packet: Base44EvidencePacket): void {
   for (const fact of packet.facts.filter((candidate) => candidate.factType === FactTypes.Base44EntityPayload)) {
-    if (["base44-evidence/0.8.0", "base44-evidence/0.9.0", "base44-evidence/0.10.0", "base44-evidence/0.11.0"].includes(fact.evidence.extractorVersion)
+    if (["base44-evidence/0.8.0", "base44-evidence/0.9.0", "base44-evidence/0.10.0", "base44-evidence/0.11.0", "base44-evidence/0.12.0"].includes(fact.evidence.extractorVersion)
       && fact.properties.shapeVersion !== "2") {
       throw new Error(`Base44 payload ${fact.factId} must use shapeVersion 2 for extractor ${fact.evidence.extractorVersion}`);
     }
@@ -392,6 +393,87 @@ function validatePayloadShapeContracts(packet: Base44EvidencePacket): void {
   }
 }
 
+function validateEntitySelectorContracts(packet: Base44EvidencePacket): void {
+  const selectorFactTypes = new Set<string>([
+    FactTypes.Base44EntityOperation,
+    FactTypes.Base44EntityPayload,
+    FactTypes.Base44EntityQuery
+  ]);
+  const facts = packet.facts.filter((fact) => fact.evidence.extractorVersion === "base44-evidence/0.12.0"
+    && selectorFactTypes.has(fact.factType));
+  const operations = new Map(facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation)
+    .map((fact) => [fact.properties.operationEvidenceId, fact]));
+  for (const fact of facts) {
+    const gap = fact.properties.entitySelectorGap;
+    let selector: Record<string, any>;
+    try {
+      selector = JSON.parse(fact.properties.entitySelectorJson);
+    } catch {
+      throw new Error(`Base44 fact ${fact.factId} has malformed entity selector JSON`);
+    }
+    requireClosedKeys(selector, ["schemaVersion", "kind", "candidates", "evidence", "gap"], `entity selector ${fact.factId}`);
+    if (selector.schemaVersion !== "88mph.base44-entity-selector.v1"
+      || !["static-member", "finite-source-domain", "unresolved"].includes(selector.kind)
+      || !Array.isArray(selector.candidates) || !Array.isArray(selector.evidence)
+      || !["", "entity-selector-dynamic-unresolved"].includes(selector.gap)
+      || selector.gap !== gap) {
+      throw new Error(`Base44 fact ${fact.factId} has an invalid entity selector`);
+    }
+    const candidates = selector.candidates as unknown[];
+    if (candidates.some((candidate) => typeof candidate !== "string" || !/^[A-Z][A-Za-z0-9_]*$/u.test(candidate))
+      || JSON.stringify(candidates) !== JSON.stringify([...new Set(candidates as string[])].sort((left, right) => left.localeCompare(right)))) {
+      throw new Error(`Base44 fact ${fact.factId} has invalid entity selector candidates`);
+    }
+    if ((selector.kind === "unresolved") !== Boolean(gap)
+      || (selector.kind === "unresolved" && candidates.length !== 0)
+      || (selector.kind !== "unresolved" && candidates.length === 0)
+      || (selector.kind === "static-member" && (candidates.length !== 1 || candidates[0] !== fact.properties.entityName))
+      || (selector.kind === "finite-source-domain" && !candidates.includes(fact.properties.entityName))
+      || (selector.kind === "unresolved" && fact.properties.entityName !== "dynamic")) {
+      throw new Error(`Base44 fact ${fact.factId} has a contradictory entity selector`);
+    }
+    const evidence = selector.evidence as Array<Record<string, any>>;
+    for (const item of evidence) {
+      requireClosedKeys(item, ["filePath", "sourceFileSha256", "startLine", "endLine", "snippetSha256", "derivation"], `entity selector evidence ${fact.factId}`);
+      if (typeof item.filePath !== "string" || !item.filePath || item.filePath.startsWith("/") || item.filePath.split("/").includes("..")
+        || !Number.isInteger(item.startLine) || item.startLine < 1 || !Number.isInteger(item.endLine) || item.endLine < item.startLine
+        || !/^[0-9a-f]{64}$/u.test(item.sourceFileSha256) || !/^[0-9a-f]{64}$/u.test(item.snippetSha256)
+        || !["literal", "array-element", "object-property", "caller-argument", "set-membership"].includes(item.derivation)) {
+        throw new Error(`Base44 fact ${fact.factId} has invalid entity selector evidence`);
+      }
+      if (!packet.facts.some((authority) => authority.evidence.filePath === item.filePath
+        && authority.properties.sourceFileSha256 === item.sourceFileSha256)) {
+        throw new Error(`Base44 fact ${fact.factId} has entity selector evidence outside packet source authority`);
+      }
+    }
+    const sortedEvidence = [...evidence].sort((left, right) => left.filePath.localeCompare(right.filePath)
+      || left.sourceFileSha256.localeCompare(right.sourceFileSha256)
+      || left.startLine - right.startLine || left.endLine - right.endLine
+      || left.derivation.localeCompare(right.derivation) || left.snippetSha256.localeCompare(right.snippetSha256));
+    if (JSON.stringify(evidence) !== JSON.stringify(sortedEvidence)
+      || new Set(evidence.map((item) => JSON.stringify(item))).size !== evidence.length) {
+      throw new Error(`Base44 fact ${fact.factId} has non-deterministic entity selector evidence`);
+    }
+    if (selector.kind === "static-member" && (evidence.length !== 1
+      || evidence[0].filePath !== fact.evidence.filePath
+      || evidence[0].sourceFileSha256 !== fact.properties.sourceFileSha256
+      || evidence[0].derivation !== "literal")) {
+      throw new Error(`Base44 fact ${fact.factId} has invalid static entity selector authority`);
+    }
+    if (fact.factType === FactTypes.Base44EntityOperation) {
+      if (gap && fact.evidenceTier !== EvidenceTiers.Tier4Unknown) {
+        throw new Error(`Base44 operation ${fact.factId} has an invalid entity selector tier`);
+      }
+    } else {
+      const operation = operations.get(fact.properties.operationEvidenceId);
+      if (!operation || operation.properties.entitySelectorJson !== fact.properties.entitySelectorJson
+        || operation.properties.entitySelectorGap !== gap) {
+        throw new Error(`Base44 shape ${fact.factId} does not retain its operation entity selector exactly`);
+      }
+    }
+  }
+}
+
 const sdkIdentityGapTokens = new Set([
   "sdk-identity-source-root-missing",
   "sdk-identity-source-root-ambiguous",
@@ -407,7 +489,7 @@ function validateSdkIdentityContracts(packet: Base44EvidencePacket): void {
     FactTypes.Base44EntityPayload,
     FactTypes.Base44EntityQuery
   ]);
-  const facts = packet.facts.filter((fact) => ["base44-evidence/0.10.0", "base44-evidence/0.11.0"].includes(fact.evidence.extractorVersion)
+  const facts = packet.facts.filter((fact) => ["base44-evidence/0.10.0", "base44-evidence/0.11.0", "base44-evidence/0.12.0"].includes(fact.evidence.extractorVersion)
     && identityFactTypes.has(fact.factType));
   const operations = new Map(facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation)
     .map((fact) => [fact.properties.operationEvidenceId, fact]));
@@ -424,7 +506,8 @@ function validateSdkIdentityContracts(packet: Base44EvidencePacket): void {
     } else {
       if (!identityJson) throw new Error(`Base44 fact ${fact.factId} is missing its SDK identity`);
       validateSdkIdentityJson(fact, identityJson, runtimeSdkImports);
-      if (fact.factType === FactTypes.Base44EntityOperation && fact.evidenceTier !== EvidenceTiers.Tier3SyntaxOrTextual) {
+      if (fact.factType === FactTypes.Base44EntityOperation && fact.evidenceTier !== (fact.properties.entitySelectorGap
+        ? EvidenceTiers.Tier4Unknown : EvidenceTiers.Tier3SyntaxOrTextual)) {
         throw new Error(`Base44 operation ${fact.factId} with an exact SDK identity must retain Tier3SyntaxOrTextual`);
       }
     }

@@ -30,7 +30,8 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
       continue;
     }
     const text = await fs.readFile(item.absolutePath, "utf8");
-    const source = ts.createSourceFile(item.absolutePath, text, ts.ScriptTarget.Latest, true, scriptKind(item.relativePath));
+    const source = aliasDiscovery.contexts.get(item.relativePath)?.source
+      ?? ts.createSourceFile(item.absolutePath, text, ts.ScriptTarget.Latest, true, scriptKind(item.relativePath));
     const aliases = aliasDiscovery.aliasesByFile.get(item.relativePath) ?? new Map<string, string[]>();
     const factoryAliases = aliasDiscovery.factoryAliasesByFile.get(item.relativePath) ?? new Set<string>();
     const injectedParameters = aliasDiscovery.injectedParametersByFile.get(item.relativePath) ?? new Map<number, string[]>();
@@ -56,7 +57,7 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
         sourceFileSha256: hash(text, 64)
       }));
     }
-    visit(source, source, item.relativePath, text, aliases, factoryAliases, injectedParameters, base44Context, manifest, facts, sdkIdentity);
+    visit(source, source, item.relativePath, text, aliases, factoryAliases, injectedParameters, base44Context, manifest, facts, sdkIdentity, aliasDiscovery.contexts);
     if (isFunctionEntry(item.relativePath)) {
       const name = functionName(item.relativePath);
       facts.push(fact(manifest, FactTypes.Base44FunctionSurface, RuleIds.Base44FunctionSurface, source, source, item.relativePath, name, {
@@ -82,11 +83,15 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
   return facts;
 }
 
-function visit(node: ts.Node, source: ts.SourceFile, filePath: string, text: string, aliases: Map<string, string[]>, factoryAliases: Set<string>, injectedParameters: Map<number, string[]>, base44Context: boolean, manifest: ScanManifest, facts: CodeFact[], sdkIdentity: SdkIdentityResolution): void {
+function visit(node: ts.Node, source: ts.SourceFile, filePath: string, text: string, aliases: Map<string, string[]>, factoryAliases: Set<string>, injectedParameters: Map<number, string[]>, base44Context: boolean, manifest: ScanManifest, facts: CodeFact[], sdkIdentity: SdkIdentityResolution, contexts: Map<string, SourceContext>): void {
   if (ts.isCallExpression(node)) {
     const chain = expressionChain(node.expression);
     const binding = chain ? resolveRuntimeAlias(chain[0], node, source, aliases, factoryAliases, injectedParameters, new Set()) : null;
     if (chain && binding) addSdkCall([...binding.prefix, ...chain.slice(1)], node, source, filePath, text, manifest, facts, binding.kind, sdkIdentity);
+    if (chain && !binding) addComputedEntityAliasSdkCall(node, source, filePath, text, manifest, facts, aliases,
+      factoryAliases, injectedParameters, sdkIdentity, contexts);
+    if (!chain) addComputedEntitySdkCall(node, source, filePath, text, manifest, facts, aliases, factoryAliases,
+      injectedParameters, sdkIdentity, contexts);
     if (base44Context && chain?.join(".") === "Deno.env.get") {
       const name = stringArgument(node.arguments[0]);
       facts.push(fact(manifest, FactTypes.Base44EnvironmentAccess, RuleIds.Base44EnvironmentAccess, node, source, filePath, name ?? "dynamic", {
@@ -106,7 +111,7 @@ function visit(node: ts.Node, source: ts.SourceFile, filePath: string, text: str
       }, origin ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier4Unknown));
     }
   }
-  ts.forEachChild(node, (child) => visit(child, source, filePath, text, aliases, factoryAliases, injectedParameters, base44Context, manifest, facts, sdkIdentity));
+  ts.forEachChild(node, (child) => visit(child, source, filePath, text, aliases, factoryAliases, injectedParameters, base44Context, manifest, facts, sdkIdentity, contexts));
 }
 
 function addSdkCall(chain: string[], node: ts.CallExpression, source: ts.SourceFile, filePath: string, text: string, manifest: ScanManifest, facts: CodeFact[], clientBindingKind: string, sdkIdentity: SdkIdentityResolution): void {
@@ -137,34 +142,683 @@ function addSdkCall(chain: string[], node: ts.CallExpression, source: ts.SourceF
     && entitiesIndex + 3 === relative.length) {
     const entityName = relative[entitiesIndex + 1];
     const operationName = relative[entitiesIndex + 2];
-    const operationStartLine = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
-    const operationEndLine = source.getLineAndCharacterOfPosition(node.getEnd()).line + 1;
-    const operationEvidenceId = `operation-${hash([
-      filePath,
-      String(operationStartLine),
-      String(operationEndLine),
-      String(node.getStart(source)),
-      String(node.getEnd()),
-      entityName,
-      operationName,
-      hash(node.getText(source), 64)
-    ].join("|"), 20)}`;
-    const operationFact = fact(manifest, FactTypes.Base44EntityOperation, RuleIds.Base44EntityOperation, node, source, filePath, entityName, {
-      entityName,
-      ...clientBindingEvidence,
-      operationEvidenceId,
-      operationName,
-      sdkIdentityGap: sdkIdentity.gap ?? "",
-      sdkIdentityJson: sdkIdentity.identity ? JSON.stringify(sdkIdentity.identity) : "",
-      sourceFileSha256: hash(text, 64)
-    }, sdkIdentity.identity ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier4Unknown);
-    facts.push(operationFact);
-    facts.push(...extractEntityShapeFacts({
-      manifest, node, source, filePath, sourceText: text, entityName, operationName, operationEvidenceId,
-      sdkIdentityGap: sdkIdentity.gap ?? "",
-      sdkIdentityJson: sdkIdentity.identity ? JSON.stringify(sdkIdentity.identity) : ""
-    }));
+    addEntityOperation(node, source, filePath, text, manifest, facts, clientBindingKind, sdkIdentity,
+      entityName, operationName, staticEntitySelector(entityName, node, source, filePath));
   }
+}
+
+interface EntitySelectorEvidence {
+  filePath: string;
+  sourceFileSha256: string;
+  startLine: number;
+  endLine: number;
+  snippetSha256: string;
+  derivation: "literal" | "array-element" | "object-property" | "caller-argument" | "set-membership";
+}
+
+interface EntitySelectorContract {
+  schemaVersion: "88mph.base44-entity-selector.v1";
+  kind: "static-member" | "finite-source-domain" | "unresolved";
+  candidates: string[];
+  evidence: EntitySelectorEvidence[];
+  gap: "" | "entity-selector-dynamic-unresolved";
+}
+
+function staticEntitySelector(entityName: string, node: ts.CallExpression, source: ts.SourceFile, filePath: string): EntitySelectorContract {
+  const method = unwrapAliasExpression(node.expression);
+  const entityAccess = ts.isPropertyAccessExpression(method) ? unwrapAliasExpression(method.expression) : method;
+  const entity = ts.isPropertyAccessExpression(entityAccess) ? entityAccess.name : method;
+  return {
+    schemaVersion: "88mph.base44-entity-selector.v1",
+    kind: "static-member",
+    candidates: [entityName],
+    evidence: [selectorEvidence(entity, source, filePath, "literal")],
+    gap: ""
+  };
+}
+
+function addEntityOperation(
+  node: ts.CallExpression,
+  source: ts.SourceFile,
+  filePath: string,
+  text: string,
+  manifest: ScanManifest,
+  facts: CodeFact[],
+  clientBindingKind: string,
+  sdkIdentity: SdkIdentityResolution,
+  entityName: string,
+  operationName: string,
+  selector: EntitySelectorContract
+): void {
+  const clientBindingEvidence: Record<string, string> = clientBindingKind === "callsite-proven-parameter" ? { clientBindingKind } : {};
+  const operationStartLine = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+  const operationEndLine = source.getLineAndCharacterOfPosition(node.getEnd()).line + 1;
+  const operationEvidenceId = `operation-${hash([
+    filePath,
+    String(operationStartLine),
+    String(operationEndLine),
+    String(node.getStart(source)),
+    String(node.getEnd()),
+    entityName,
+    operationName,
+    hash(node.getText(source), 64)
+  ].join("|"), 20)}`;
+  const selectorJson = JSON.stringify(selector);
+  const selectorGap = selector.gap;
+  const operationFact = fact(manifest, FactTypes.Base44EntityOperation, RuleIds.Base44EntityOperation, node, source, filePath, entityName, {
+    entityName,
+    entitySelectorGap: selectorGap,
+    entitySelectorJson: selectorJson,
+    ...clientBindingEvidence,
+    operationEvidenceId,
+    operationName,
+    sdkIdentityGap: sdkIdentity.gap ?? "",
+    sdkIdentityJson: sdkIdentity.identity ? JSON.stringify(sdkIdentity.identity) : "",
+    sourceFileSha256: hash(text, 64)
+  }, sdkIdentity.identity && !selectorGap ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier4Unknown);
+  facts.push(operationFact);
+  facts.push(...extractEntityShapeFacts({
+    manifest, node, source, filePath, sourceText: text, entityName, operationName, operationEvidenceId,
+    entitySelectorGap: selectorGap,
+    entitySelectorJson: selectorJson,
+    sdkIdentityGap: sdkIdentity.gap ?? "",
+    sdkIdentityJson: sdkIdentity.identity ? JSON.stringify(sdkIdentity.identity) : ""
+  }));
+}
+
+interface StaticSelectorValue {
+  kind: "string" | "object" | "array" | "opaque";
+  value?: string;
+  properties?: Map<string, StaticSelectorValue[]>;
+  elements?: StaticSelectorValue[];
+  evidence: EntitySelectorEvidence[];
+}
+
+interface SelectorEvaluationContext {
+  filePath: string;
+  source: ts.SourceFile;
+  contexts: Map<string, SourceContext>;
+}
+
+function addComputedEntitySdkCall(
+  node: ts.CallExpression,
+  source: ts.SourceFile,
+  filePath: string,
+  text: string,
+  manifest: ScanManifest,
+  facts: CodeFact[],
+  aliases: Map<string, string[]>,
+  factoryAliases: Set<string>,
+  injectedParameters: Map<number, string[]>,
+  sdkIdentity: SdkIdentityResolution,
+  contexts: Map<string, SourceContext>
+): void {
+  const methodAccess = unwrapAliasExpression(node.expression);
+  if (!ts.isPropertyAccessExpression(methodAccess) || !entityOperations.has(methodAccess.name.text)) return;
+  const entityAccess = unwrapAliasExpression(methodAccess.expression);
+  if (!ts.isElementAccessExpression(entityAccess) || !entityAccess.argumentExpression
+    || ts.isStringLiteralLike(entityAccess.argumentExpression)) return;
+  const entitiesChain = expressionChain(unwrapAliasExpression(entityAccess.expression));
+  if (!entitiesChain) return;
+  const binding = resolveRuntimeAlias(entitiesChain[0], node, source, aliases, factoryAliases, injectedParameters, new Set());
+  if (!binding) return;
+  const relative = [...binding.prefix, ...entitiesChain.slice(1)];
+  const entitiesIndex = sdkRootIndex(relative, "entities");
+  if (entitiesIndex < 0 || entitiesIndex + 1 !== relative.length) return;
+
+  emitComputedEntityCall(node, entityAccess.argumentExpression, relative, binding, source, filePath, text,
+    manifest, facts, sdkIdentity, contexts);
+}
+
+function addComputedEntityAliasSdkCall(
+  node: ts.CallExpression,
+  source: ts.SourceFile,
+  filePath: string,
+  text: string,
+  manifest: ScanManifest,
+  facts: CodeFact[],
+  aliases: Map<string, string[]>,
+  factoryAliases: Set<string>,
+  injectedParameters: Map<number, string[]>,
+  sdkIdentity: SdkIdentityResolution,
+  contexts: Map<string, SourceContext>
+): void {
+  const methodAccess = unwrapAliasExpression(node.expression);
+  if (!ts.isPropertyAccessExpression(methodAccess) || !entityOperations.has(methodAccess.name.text)) return;
+  const owner = unwrapAliasExpression(methodAccess.expression);
+  if (!ts.isIdentifier(owner)) return;
+  const declaration = resolveLexicalBinding(owner.text, owner, source);
+  if (declaration?.kind !== "variable" || !declaration.node.initializer) return;
+  const alias = computedEntityAlias(declaration.node.initializer, declaration.node, source, aliases, factoryAliases,
+    injectedParameters, contexts);
+  if (!alias) return;
+  const safeSelector = isImmutableVariable(declaration.node, owner) && selectorBindingIsUnmutated(declaration.node, source)
+    ? alias.selector : undefined;
+  emitComputedEntityCall(node, safeSelector, alias.relative, alias.binding, source, filePath, text,
+    manifest, facts, sdkIdentity, contexts);
+}
+
+function computedEntityAlias(
+  input: ts.Expression,
+  use: ts.Node,
+  source: ts.SourceFile,
+  aliases: Map<string, string[]>,
+  factoryAliases: Set<string>,
+  injectedParameters: Map<number, string[]>,
+  contexts: Map<string, SourceContext>
+): { selector: ts.Expression; relative: string[]; binding: RuntimeAlias } | null {
+  const expression = unwrapSelectorExpression(input);
+  if (ts.isElementAccessExpression(expression) && expression.argumentExpression) {
+    const entitiesChain = expressionChain(unwrapAliasExpression(expression.expression));
+    if (!entitiesChain) return null;
+    const binding = resolveRuntimeAlias(entitiesChain[0], use, source, aliases, factoryAliases, injectedParameters, new Set());
+    if (!binding) return null;
+    const relative = [...binding.prefix, ...entitiesChain.slice(1)];
+    const entitiesIndex = sdkRootIndex(relative, "entities");
+    return entitiesIndex >= 0 && entitiesIndex + 1 === relative.length
+      ? { selector: expression.argumentExpression, relative, binding }
+      : null;
+  }
+  if (!ts.isCallExpression(expression)) return null;
+  const current = contexts.get(filePathForSource(source, contexts));
+  if (!current) return null;
+  const target = resolveCallableTarget(expression.expression, current, contexts);
+  if (!target) return null;
+  const returned = returnedExpression(target);
+  if (!returned) return null;
+  const entityAccess = unwrapSelectorExpression(returned);
+  if (!ts.isElementAccessExpression(entityAccess) || !entityAccess.argumentExpression) return null;
+  const chain = expressionChain(unwrapAliasExpression(entityAccess.expression));
+  if (!chain) return null;
+  const targetContext = contexts.get(filePathForSource(target.getSourceFile(), contexts));
+  if (!targetContext) return null;
+  const binding = resolveRuntimeAlias(chain[0], entityAccess, targetContext.source, targetContext.aliases,
+    targetContext.factoryAliases, new Map(), new Set());
+  if (!binding) return null;
+  const selector = unwrapAliasExpression(entityAccess.argumentExpression);
+  if (!ts.isIdentifier(selector)) return null;
+  const parameterIndex = target.parameters.findIndex((parameter) => ts.isIdentifier(parameter.name) && parameter.name.text === selector.text);
+  const argument = parameterIndex >= 0 ? expression.arguments[parameterIndex] : undefined;
+  if (!argument || ts.isSpreadElement(argument)) return null;
+  const relative = [...binding.prefix, ...chain.slice(1)];
+  const entitiesIndex = sdkRootIndex(relative, "entities");
+  return entitiesIndex >= 0 && entitiesIndex + 1 === relative.length
+    ? { selector: argument, relative, binding }
+    : null;
+}
+
+function emitComputedEntityCall(
+  node: ts.CallExpression,
+  selectorExpression: ts.Expression | undefined,
+  relative: string[],
+  binding: RuntimeAlias,
+  source: ts.SourceFile,
+  filePath: string,
+  text: string,
+  manifest: ScanManifest,
+  facts: CodeFact[],
+  sdkIdentity: SdkIdentityResolution,
+  contexts: Map<string, SourceContext>
+): void {
+  const methodAccess = unwrapAliasExpression(node.expression);
+  if (!ts.isPropertyAccessExpression(methodAccess)) return;
+
+  const operationName = methodAccess.name.text;
+  const resolved = selectorExpression
+    ? evaluateSelectorValues(selectorExpression, { filePath, source, contexts }, new Set()) : null;
+  const candidates = resolved ? selectorStrings(resolved) : [];
+  const evidence = resolved ? normalizeSelectorEvidence(resolved.flatMap((value) => value.evidence)) : [];
+  const selector: EntitySelectorContract = candidates.length > 0 ? {
+    schemaVersion: "88mph.base44-entity-selector.v1",
+    kind: "finite-source-domain",
+    candidates,
+    evidence,
+    gap: ""
+  } : {
+    schemaVersion: "88mph.base44-entity-selector.v1",
+    kind: "unresolved",
+    candidates: [],
+    evidence,
+    gap: "entity-selector-dynamic-unresolved"
+  };
+  const primitivePrefix = relative[0] === "asServiceRole" ? "asServiceRole.entities" : "entities";
+  if (candidates.length === 0) {
+    const capability = `${primitivePrefix}.dynamic.${operationName}`;
+    facts.push(fact(manifest, FactTypes.Base44SdkPrimitive, RuleIds.Base44SdkPrimitive, node, source, filePath, capability, {
+      capability,
+      ...(binding.kind === "callsite-proven-parameter" ? { clientBindingKind: binding.kind } : {}),
+      primitiveRoot: relative[0],
+      sourceFileSha256: hash(text, 64)
+    }, EvidenceTiers.Tier4Unknown));
+    addEntityOperation(node, source, filePath, text, manifest, facts, binding.kind, sdkIdentity,
+      "dynamic", operationName, selector);
+    return;
+  }
+  for (const entityName of candidates) {
+    const capability = `${primitivePrefix}.${entityName}.${operationName}`;
+    facts.push(fact(manifest, FactTypes.Base44SdkPrimitive, RuleIds.Base44SdkPrimitive, node, source, filePath, capability, {
+      capability,
+      ...(binding.kind === "callsite-proven-parameter" ? { clientBindingKind: binding.kind } : {}),
+      primitiveRoot: relative[0],
+      sourceFileSha256: hash(text, 64)
+    }));
+    addEntityOperation(node, source, filePath, text, manifest, facts, binding.kind, sdkIdentity,
+      entityName, operationName, selector);
+  }
+}
+
+function returnedExpression(owner: ts.FunctionLikeDeclaration): ts.Expression | null {
+  if (!owner.body) return null;
+  if (!ts.isBlock(owner.body)) return owner.body;
+  if (owner.body.statements.length !== 1 || !ts.isReturnStatement(owner.body.statements[0])) return null;
+  return owner.body.statements[0].expression ?? null;
+}
+
+function unwrapSelectorExpression(input: ts.Expression): ts.Expression {
+  let expression = unwrapAliasExpression(input);
+  while (ts.isAwaitExpression(expression)) expression = unwrapAliasExpression(expression.expression);
+  return expression;
+}
+
+function filePathForSource(source: ts.SourceFile, contexts: Map<string, SourceContext>): string {
+  return [...contexts].find(([, context]) => context.source === source)?.[0] ?? "";
+}
+
+function evaluateSelectorValues(expression: ts.Expression, context: SelectorEvaluationContext, visited: Set<string>): StaticSelectorValue[] | null {
+  const value = unwrapAliasExpression(expression);
+  if (ts.isStringLiteralLike(value)) {
+    return [{
+      kind: "string",
+      value: value.text,
+      evidence: [selectorEvidence(value, context.source, context.filePath, "literal")]
+    }];
+  }
+  if (ts.isNumericLiteral(value) || value.kind === ts.SyntaxKind.TrueKeyword
+    || value.kind === ts.SyntaxKind.FalseKeyword || value.kind === ts.SyntaxKind.NullKeyword) {
+    return [{ kind: "opaque", evidence: [] }];
+  }
+  if (ts.isConditionalExpression(value)) {
+    return mergeStaticValues(
+      evaluateSelectorValues(value.whenTrue, context, new Set(visited)),
+      evaluateSelectorValues(value.whenFalse, context, new Set(visited))
+    );
+  }
+  if (ts.isBinaryExpression(value)
+    && [ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken].includes(value.operatorToken.kind)) {
+    return mergeStaticValues(
+      evaluateSelectorValues(value.left, context, new Set(visited)),
+      evaluateSelectorValues(value.right, context, new Set(visited))
+    );
+  }
+  if (ts.isArrayLiteralExpression(value)) {
+    const elements: StaticSelectorValue[] = [];
+    for (const element of value.elements) {
+      if (ts.isOmittedExpression(element)) continue;
+      if (ts.isSpreadElement(element)) {
+        const spread = evaluateSelectorValues(element.expression, context, new Set(visited));
+        if (!spread || spread.some((item) => item.kind !== "array")) return null;
+        elements.push(...spread.flatMap((item) => item.elements ?? []));
+      } else {
+        const resolved = evaluateSelectorValues(element, context, new Set(visited));
+        if (!resolved) return null;
+        elements.push(...resolved);
+      }
+    }
+    return [{ kind: "array", elements, evidence: normalizeSelectorEvidence(elements.flatMap((item) => item.evidence)) }];
+  }
+  if (ts.isObjectLiteralExpression(value)) {
+    const properties = new Map<string, StaticSelectorValue[]>();
+    const evidence: EntitySelectorEvidence[] = [];
+    for (const property of value.properties) {
+      if (ts.isSpreadAssignment(property)) {
+        const spread = evaluateSelectorValues(property.expression, context, new Set(visited));
+        if (!spread || spread.some((item) => item.kind !== "object")) return null;
+        for (const item of spread) for (const [name, values] of item.properties ?? []) {
+          properties.set(name, [...(properties.get(name) ?? []), ...values]);
+        }
+        evidence.push(...spread.flatMap((item) => item.evidence));
+        continue;
+      }
+      if (!ts.isPropertyAssignment(property) && !ts.isShorthandPropertyAssignment(property)) return null;
+      const name = selectorPropertyName(property.name);
+      if (!name) return null;
+      const initializer = ts.isPropertyAssignment(property) ? property.initializer : property.name;
+      const resolved = evaluateSelectorValues(initializer, context, new Set(visited));
+      if (!resolved) return null;
+      properties.set(name, [...(properties.get(name) ?? []), ...resolved]);
+      evidence.push(selectorEvidence(property.name, context.source, context.filePath, "object-property"),
+        ...resolved.flatMap((item) => item.evidence));
+    }
+    return [{ kind: "object", properties, evidence: normalizeSelectorEvidence(evidence) }];
+  }
+  if (ts.isNewExpression(value) && ts.isIdentifier(value.expression) && value.expression.text === "Set"
+    && value.arguments?.length === 1) {
+    const resolved = evaluateSelectorValues(value.arguments[0], context, new Set(visited));
+    if (!resolved || resolved.length !== 1 || resolved[0].kind !== "array") return null;
+    return [{ ...resolved[0], evidence: normalizeSelectorEvidence([
+      selectorEvidence(value, context.source, context.filePath, "set-membership"), ...resolved[0].evidence
+    ]) }];
+  }
+  if (ts.isIdentifier(value)) return evaluateSelectorIdentifier(value, context, visited);
+  if (ts.isPropertyAccessExpression(value)) {
+    const owner = evaluateSelectorValues(value.expression, context, new Set(visited));
+    return owner ? selectStaticProperty(owner, value.name.text) : null;
+  }
+  if (ts.isElementAccessExpression(value) && value.argumentExpression) {
+    const owner = evaluateSelectorValues(value.expression, context, new Set(visited));
+    const keys = evaluateSelectorValues(value.argumentExpression, context, new Set(visited));
+    if (!owner || !keys) return null;
+    const names = selectorStrings(keys);
+    if (names.length === 0) return null;
+    const selected = names.flatMap((name) => selectStaticProperty(owner, name) ?? []);
+    return selected.length > 0 ? selected : null;
+  }
+  if (ts.isCallExpression(value)) return evaluateSelectorCall(value, context, visited);
+  return null;
+}
+
+function evaluateSelectorIdentifier(identifier: ts.Identifier, context: SelectorEvaluationContext, visited: Set<string>): StaticSelectorValue[] | null {
+  const constrained = evaluateDominatingSetConstraint(identifier, context, visited);
+  if (constrained) return constrained;
+  const binding = resolveLexicalBinding(identifier.text, identifier, context.source);
+  if (!binding) return null;
+  const key = `${context.filePath}:${binding.node.getStart(context.source)}`;
+  if (visited.has(key)) return null;
+  const next = new Set(visited).add(key);
+  if (binding.kind === "variable") {
+    if (ts.isVariableDeclaration(binding.node) && ts.isForOfStatement(binding.node.parent.parent)) {
+      const iterable = evaluateSelectorValues(binding.node.parent.parent.expression, context, next);
+      if (!iterable || iterable.some((item) => item.kind !== "array")) return null;
+      return projectBindingValues(binding.node.name, identifier.text, iterable.flatMap((item) => item.elements ?? []));
+    }
+    if (!isImmutableVariable(binding.node, identifier) || !binding.node.initializer
+      || !selectorBindingIsUnmutated(binding.node, context.source)) return null;
+    const resolved = evaluateSelectorValues(binding.node.initializer, context, next);
+    return resolved ? projectBindingValues(binding.node.name, identifier.text, resolved) : null;
+  }
+  if (binding.kind === "parameter") return evaluateSelectorParameter(binding.node, context, next);
+  return null;
+}
+
+function evaluateDominatingSetConstraint(identifier: ts.Identifier, context: SelectorEvaluationContext, visited: Set<string>): StaticSelectorValue[] | null {
+  const binding = resolveLexicalBinding(identifier.text, identifier, context.source)?.node;
+  if (!binding) return null;
+  for (let current: ts.Node | undefined = identifier; current; current = current.parent) {
+    if (!current.parent) continue;
+    if (ts.isIfStatement(current.parent)) {
+      const positive = setMembershipCondition(current.parent.expression, identifier.text, binding, context.source);
+      if (positive && isAncestorNode(current.parent.thenStatement, identifier)) {
+        return evaluateSetMembershipOwner(positive, context, visited);
+      }
+    }
+    if (!ts.isBlock(current.parent)) continue;
+    const statement = current.parent.statements.find((candidate) => isAncestorNode(candidate, identifier));
+    if (!statement) continue;
+    const index = current.parent.statements.indexOf(statement);
+    for (const prior of current.parent.statements.slice(0, index)) {
+      if (!ts.isIfStatement(prior) || !statementTerminates(prior.thenStatement)) continue;
+      const condition = unwrapAliasExpression(prior.expression);
+      if (!ts.isPrefixUnaryExpression(condition) || condition.operator !== ts.SyntaxKind.ExclamationToken) continue;
+      const owner = setMembershipCondition(condition.operand, identifier.text, binding, context.source);
+      if (owner) return evaluateSetMembershipOwner(owner, context, visited);
+    }
+  }
+  return null;
+}
+
+function setMembershipCondition(expression: ts.Expression, name: string, binding: ts.Node, source: ts.SourceFile): ts.Expression | null {
+  const call = unwrapAliasExpression(expression);
+  if (!ts.isCallExpression(call) || call.arguments.length !== 1) return null;
+  const callee = unwrapAliasExpression(call.expression);
+  if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== "has") return null;
+  const argument = unwrapAliasExpression(call.arguments[0]);
+  return ts.isIdentifier(argument) && argument.text === name
+    && resolveLexicalBinding(name, argument, source)?.node === binding ? callee.expression : null;
+}
+
+function evaluateSetMembershipOwner(owner: ts.Expression, context: SelectorEvaluationContext, visited: Set<string>): StaticSelectorValue[] | null {
+  const resolved = evaluateSelectorValues(owner, context, new Set(visited));
+  if (!resolved || resolved.some((item) => item.kind !== "array")) return null;
+  return normalizeStaticValues(resolved.flatMap((item) => item.elements ?? []).map((item) => ({
+    ...item,
+    evidence: normalizeSelectorEvidence(item.evidence.map((evidence) => ({ ...evidence, derivation: "set-membership" as const })))
+  })));
+}
+
+function statementTerminates(statement: ts.Statement): boolean {
+  if (ts.isReturnStatement(statement) || ts.isThrowStatement(statement)) return true;
+  if (ts.isBlock(statement)) return statement.statements.length > 0
+    && statement.statements.every((candidate) => ts.isReturnStatement(candidate) || ts.isThrowStatement(candidate));
+  return false;
+}
+
+function evaluateSelectorParameter(parameter: ts.ParameterDeclaration, context: SelectorEvaluationContext, visited: Set<string>): StaticSelectorValue[] | null {
+  if (parameter.dotDotDotToken || parameter.initializer || !ts.isIdentifier(parameter.name)) return null;
+  const owner = parameter.parent;
+  if (!ts.isFunctionLike(owner) || !("body" in owner) || !owner.body) return null;
+  const executableOwner = owner as ts.FunctionLikeDeclaration;
+  if (!selectorCallableReferencesAreClosed(executableOwner, context.contexts)) return null;
+  const index = executableOwner.parameters.indexOf(parameter);
+  const values: StaticSelectorValue[] = [];
+  let calls = 0;
+  let resolvedCalls = 0;
+  for (const caller of context.contexts.values()) {
+    const visitCalls = (node: ts.Node): void => {
+      if (ts.isCallExpression(node) && resolveCallableTarget(node.expression, caller, context.contexts) === executableOwner) {
+        calls += 1;
+        const argument = node.arguments[index];
+        if (!argument || ts.isSpreadElement(argument)) return;
+        const resolved = evaluateSelectorValues(argument, {
+          filePath: caller.item.relativePath,
+          source: caller.source,
+          contexts: context.contexts
+        }, new Set(visited));
+        if (resolved) {
+          resolvedCalls += 1;
+          values.push(...resolved.map((item) => ({
+            ...item,
+            evidence: normalizeSelectorEvidence([
+              selectorEvidence(argument, caller.source, caller.item.relativePath, "caller-argument"),
+              ...item.evidence
+            ])
+          })));
+        }
+      }
+      ts.forEachChild(node, visitCalls);
+    };
+    visitCalls(caller.source);
+  }
+  return calls > 0 && resolvedCalls === calls ? normalizeStaticValues(values) : null;
+}
+
+function selectorCallableReferencesAreClosed(owner: ts.FunctionLikeDeclaration, contexts: Map<string, SourceContext>): boolean {
+  let closed = true;
+  for (const context of contexts.values()) {
+    const visitNode = (node: ts.Node): void => {
+      if (!closed) return;
+      if (ts.isIdentifier(node)) {
+        const declarationName = (ts.isFunctionDeclaration(owner) || ts.isFunctionExpression(owner)) ? owner.name : undefined;
+        const variable = (ts.isArrowFunction(owner) || ts.isFunctionExpression(owner)) && ts.isVariableDeclaration(owner.parent)
+          ? owner.parent : undefined;
+        if (node === declarationName || node === variable?.name
+          || (ts.isImportSpecifier(node.parent) && node.parent.name === node)) {
+          ts.forEachChild(node, visitNode);
+          return;
+        }
+        if (resolveCallableTarget(node, context, contexts) === owner
+          && (!ts.isCallExpression(node.parent) || unwrapAliasExpression(node.parent.expression) !== node)) {
+          closed = false;
+          return;
+        }
+      }
+      ts.forEachChild(node, visitNode);
+    };
+    visitNode(context.source);
+    if (!closed) break;
+  }
+  return closed;
+}
+
+function evaluateSelectorCall(call: ts.CallExpression, context: SelectorEvaluationContext, visited: Set<string>): StaticSelectorValue[] | null {
+  const callee = unwrapAliasExpression(call.expression);
+  if (ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression) && callee.expression.text === "Object"
+    && ["values", "entries"].includes(callee.name.text) && call.arguments.length === 1) {
+    const resolved = evaluateSelectorValues(call.arguments[0], context, new Set(visited));
+    if (!resolved || resolved.some((item) => item.kind !== "object")) return null;
+    const elements: StaticSelectorValue[] = [];
+    for (const item of resolved) for (const [name, values] of item.properties ?? []) {
+      if (callee.name.text === "values") elements.push(...values);
+      else elements.push({
+        kind: "array",
+        elements: [{ kind: "string", value: name, evidence: item.evidence }, ...values],
+        evidence: normalizeSelectorEvidence(item.evidence)
+      });
+    }
+    return [{ kind: "array", elements, evidence: normalizeSelectorEvidence(elements.flatMap((item) => item.evidence)) }];
+  }
+  if (ts.isPropertyAccessExpression(callee) && ["filter", "map"].includes(callee.name.text)) {
+    const owner = evaluateSelectorValues(callee.expression, context, new Set(visited));
+    if (!owner || owner.some((item) => item.kind !== "array")) return null;
+    if (callee.name.text === "filter") return owner;
+  }
+  return null;
+}
+
+function selectStaticProperty(values: StaticSelectorValue[], name: string): StaticSelectorValue[] | null {
+  const selected: StaticSelectorValue[] = [];
+  for (const value of values) {
+    if (value.kind === "object") {
+      const property = value.properties?.get(name);
+      if (!property) return null;
+      selected.push(...property);
+    } else if (value.kind === "array" && /^\d+$/u.test(name)) {
+      const item = value.elements?.[Number(name)];
+      if (!item) return null;
+      selected.push(item);
+    } else return null;
+  }
+  return normalizeStaticValues(selected);
+}
+
+function projectBindingValues(name: ts.BindingName, bindingName: string, values: StaticSelectorValue[]): StaticSelectorValue[] | null {
+  if (ts.isIdentifier(name)) return name.text === bindingName ? normalizeStaticValues(values) : null;
+  for (const [index, element] of name.elements.entries()) {
+    if (ts.isOmittedExpression(element)) continue;
+    if (element.dotDotDotToken || element.initializer) return null;
+    if (ts.isIdentifier(element.name) && element.name.text === bindingName) {
+      return ts.isArrayBindingPattern(name) ? selectStaticProperty(values, String(index))
+        : selectStaticProperty(values, selectorPropertyName(element.propertyName ?? element.name) ?? "");
+    }
+  }
+  return null;
+}
+
+function selectorBindingIsUnmutated(declaration: ts.VariableDeclaration, source: ts.SourceFile): boolean {
+  if (!ts.isIdentifier(declaration.name)) return false;
+  const bindingName = declaration.name.text;
+  let unsafe = false;
+  const root = executionRoot(declaration.name);
+  const visitNode = (node: ts.Node): void => {
+    if (unsafe || (node !== root && ts.isFunctionLike(node))) return;
+    if (ts.isIdentifier(node) && node !== declaration.name && node.text === bindingName
+      && resolveLexicalBinding(bindingName, node, source)?.node === declaration) {
+      const parent = node.parent;
+      if ((ts.isBinaryExpression(parent) && isAssignmentOperator(parent.operatorToken.kind) && isAncestorNode(parent.left, node))
+        || ((ts.isPrefixUnaryExpression(parent) && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(parent.operator)
+          || ts.isPostfixUnaryExpression(parent)) && parent.operand === node)
+        || (ts.isCallExpression(parent.parent) && ts.isPropertyAccessExpression(parent)
+          && parent.expression === node && new Set(["push", "pop", "shift", "unshift", "splice", "sort", "reverse", "copyWithin", "fill", "add", "set", "delete", "clear"]).has(parent.name.text))) {
+        unsafe = true;
+        return;
+      }
+      if (!selectorBindingReferenceIsSafe(node)) {
+        unsafe = true;
+        return;
+      }
+    }
+    ts.forEachChild(node, visitNode);
+  };
+  visitNode(root);
+  return !unsafe;
+}
+
+function selectorBindingReferenceIsSafe(node: ts.Identifier): boolean {
+  const parent = node.parent;
+  if ((ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent)) && parent.expression === node) return true;
+  if (ts.isForOfStatement(parent) && parent.expression === node) return true;
+  if (ts.isSpreadElement(parent) || ts.isSpreadAssignment(parent)) return true;
+  if (ts.isElementAccessExpression(parent) && parent.argumentExpression === node) return true;
+  if (ts.isCallExpression(parent)) return false;
+  if (ts.isCallExpression(parent.parent) && parent.parent.arguments.includes(parent as ts.Expression)) {
+    const callee = unwrapAliasExpression(parent.parent.expression);
+    return ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression)
+      && callee.expression.text === "Object" && ["entries", "keys", "values"].includes(callee.name.text);
+  }
+  if (ts.isVariableDeclaration(parent) && parent.initializer === node) return false;
+  return true;
+}
+
+function selectorStrings(values: StaticSelectorValue[]): string[] {
+  const flattened = flattenStaticValues(values);
+  if (flattened.length === 0 || flattened.some((value) => value.kind !== "string"
+    || !value.value || !isEntityCandidate(value.value))) return [];
+  return uniqueStrings(flattened.map((value) => value.value!));
+}
+
+function flattenStaticValues(values: StaticSelectorValue[]): StaticSelectorValue[] {
+  return values.flatMap((value) => value.kind === "array" ? flattenStaticValues(value.elements ?? []) : [value]);
+}
+
+function mergeStaticValues(left: StaticSelectorValue[] | null, right: StaticSelectorValue[] | null): StaticSelectorValue[] | null {
+  return left && right ? normalizeStaticValues([...left, ...right]) : null;
+}
+
+function normalizeStaticValues(values: StaticSelectorValue[]): StaticSelectorValue[] {
+  const byKey = new Map<string, StaticSelectorValue>();
+  for (const value of values) {
+    const key = staticValueKey(value);
+    const existing = byKey.get(key);
+    byKey.set(key, existing ? {
+      ...existing,
+      evidence: normalizeSelectorEvidence([...existing.evidence, ...value.evidence])
+    } : value);
+  }
+  return [...byKey.values()].sort((left, right) => staticValueKey(left).localeCompare(staticValueKey(right)));
+}
+
+function staticValueKey(value: StaticSelectorValue): string {
+  if (value.kind === "string") return `string:${value.value}`;
+  if (value.kind === "opaque") return "opaque";
+  if (value.kind === "array") return `array:${JSON.stringify((value.elements ?? []).map(staticValueKey))}`;
+  return `object:${JSON.stringify([...(value.properties ?? new Map())].map(([name, values]) => [name, values.map(staticValueKey)]).sort())}`;
+}
+
+function selectorEvidence(node: ts.Node, source: ts.SourceFile, filePath: string, derivation: EntitySelectorEvidence["derivation"]): EntitySelectorEvidence {
+  const startLine = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+  const endLine = source.getLineAndCharacterOfPosition(node.getEnd()).line + 1;
+  return { filePath, sourceFileSha256: hash(source.getFullText(), 64), startLine, endLine,
+    snippetSha256: hash(node.getText(source), 64), derivation };
+}
+
+function normalizeSelectorEvidence(evidence: EntitySelectorEvidence[]): EntitySelectorEvidence[] {
+  const byKey = new Map(evidence.map((item) => [JSON.stringify(item), item]));
+  return [...byKey.values()].sort((left, right) => left.filePath.localeCompare(right.filePath)
+    || left.sourceFileSha256.localeCompare(right.sourceFileSha256)
+    || left.startLine - right.startLine || left.endLine - right.endLine
+    || left.derivation.localeCompare(right.derivation) || left.snippetSha256.localeCompare(right.snippetSha256));
+}
+
+function selectorPropertyName(name: ts.PropertyName): string | null {
+  return ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name) ? name.text : null;
+}
+
+function isEntityCandidate(value: string): boolean {
+  return /^[A-Z][A-Za-z0-9_]*$/u.test(value);
+}
+
+function isAncestorNode(ancestor: ts.Node, node: ts.Node): boolean {
+  for (let current: ts.Node | undefined = node; current; current = current.parent) if (current === ancestor) return true;
+  return false;
 }
 
 function sdkRootIndex(chain: string[], root: string): number {
@@ -264,6 +918,7 @@ interface SourceContext {
 }
 
 interface AliasDiscovery {
+  contexts: Map<string, SourceContext>;
   aliasesByFile: Map<string, Map<string, string[]>>;
   factoryAliasesByFile: Map<string, Set<string>>;
   injectedParametersByFile: Map<string, Map<number, string[]>>;
@@ -334,6 +989,7 @@ async function buildAliasMaps(items: readonly FileInventoryItem[]): Promise<Alia
     if (!changed) break;
   }
   return {
+    contexts,
     aliasesByFile: new Map([...contexts].map(([filePath, context]) => [filePath, context.aliases])),
     factoryAliasesByFile: new Map([...contexts].map(([filePath, context]) => [filePath, context.factoryAliases])),
     injectedParametersByFile: discoverInjectedParameterAliases(contexts),
@@ -364,6 +1020,10 @@ function discoverSdkAuthorityRoots(contexts: Map<string, SourceContext>): Map<st
         targets.push(target);
         importers.set(target, [...(importers.get(target) ?? []), filePath]);
       }
+    }
+    for (const target of dynamicLocalImportTargets(context, contexts)) {
+      targets.push(target);
+      importers.set(target, [...(importers.get(target) ?? []), filePath]);
     }
     direct.set(filePath, normalizeSdkRoots(roots));
     imports.set(filePath, uniqueStrings(targets));
@@ -689,7 +1349,12 @@ function resolveRuntimeAlias(name: string, use: ts.Node, source: ts.SourceFile, 
       ? { prefix, kind: "callsite-proven-parameter" } : null;
   }
   if (binding.kind === "variable") {
-    if (!ts.isIdentifier(binding.node.name) || !isImmutableVariable(binding.node, use) || !binding.node.initializer) return null;
+    if (!isImmutableVariable(binding.node, use) || !binding.node.initializer) return null;
+    if (!ts.isIdentifier(binding.node.name)) {
+      const prefix = aliases.get(name);
+      return prefix && !namedBindingWrittenBefore(name, binding.node, use)
+        ? { prefix, kind: "source-import-or-derived" } : null;
+    }
     const factory = factoryAlias(binding.node.initializer, source, aliases, factoryAliases);
     if (factory) return { prefix: factory, kind: "source-import-or-derived" };
     const chain = expressionChain(unwrapAliasExpression(binding.node.initializer));
@@ -861,6 +1526,22 @@ function bindingWrittenBefore(name: ts.BindingName, use: ts.Node): boolean {
   return written;
 }
 
+function namedBindingWrittenBefore(name: string, declaration: ts.VariableDeclaration, use: ts.Node): boolean {
+  const limit = use.getStart(use.getSourceFile());
+  const root = executionRoot(declaration.name);
+  let written = false;
+  const visitNode = (node: ts.Node): void => {
+    if (written || node.getStart(node.getSourceFile()) >= limit || (node !== root && ts.isFunctionLike(node))) return;
+    if (ts.isBinaryExpression(node) && isAssignmentOperator(node.operatorToken.kind)) {
+      written = assignmentTargetIdentifiers(node.left).some((identifier) => identifier.text === name
+        && resolveLexicalBinding(name, identifier, identifier.getSourceFile())?.node === declaration);
+    }
+    if (!written) ts.forEachChild(node, visitNode);
+  };
+  visitNode(root);
+  return written;
+}
+
 function assignmentTargetIdentifiers(input: ts.Expression): ts.Identifier[] {
   const expression = unwrapAliasExpression(input);
   if (ts.isIdentifier(expression)) return [expression];
@@ -942,7 +1623,46 @@ function propagateLocalImports(context: SourceContext, contexts: Map<string, Sou
       }
     }
   }
+  const visitDynamicImports = (node: ts.Node): void => {
+    if (ts.isVariableDeclaration(node) && ts.isObjectBindingPattern(node.name) && node.initializer) {
+      const requested = dynamicImportSpecifier(node.initializer);
+      const target = requested ? resolveLocalModule(context.item.relativePath, requested, contexts) : null;
+      const exported = target ? exportsByFile.get(target) : undefined;
+      if (exported) {
+        for (const element of node.name.elements) {
+          if (element.dotDotDotToken || element.initializer || !ts.isIdentifier(element.name)) continue;
+          const importedName = element.propertyName && ts.isIdentifier(element.propertyName)
+            ? element.propertyName.text : element.name.text;
+          changed = setAlias(context.aliases, element.name.text, exported.get(importedName)) || changed;
+        }
+      }
+    }
+    ts.forEachChild(node, visitDynamicImports);
+  };
+  visitDynamicImports(context.source);
   return changed;
+}
+
+function dynamicLocalImportTargets(context: SourceContext, contexts: Map<string, SourceContext>): string[] {
+  const targets: string[] = [];
+  const visitNode = (node: ts.Node): void => {
+    if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword
+      && node.arguments.length === 1 && ts.isStringLiteralLike(node.arguments[0])) {
+      const target = resolveLocalModule(context.item.relativePath, node.arguments[0].text, contexts);
+      if (target) targets.push(target);
+    }
+    ts.forEachChild(node, visitNode);
+  };
+  visitNode(context.source);
+  return uniqueStrings(targets);
+}
+
+function dynamicImportSpecifier(input: ts.Expression): string | null {
+  let expression = unwrapAliasExpression(input);
+  if (ts.isAwaitExpression(expression)) expression = unwrapAliasExpression(expression.expression);
+  return ts.isCallExpression(expression) && expression.expression.kind === ts.SyntaxKind.ImportKeyword
+    && expression.arguments.length === 1 && ts.isStringLiteralLike(expression.arguments[0])
+    ? expression.arguments[0].text : null;
 }
 
 function updateExportedAliases(context: SourceContext, exportsByFile: Map<string, Map<string, string[]>>): boolean {

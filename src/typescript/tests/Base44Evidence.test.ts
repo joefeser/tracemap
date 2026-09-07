@@ -11,6 +11,127 @@ const shaA = "a".repeat(64);
 const shaB = "b".repeat(64);
 
 describe("Base44 source-bound static evidence", () => {
+  it("expands finite source-derived entity selectors without erasing the source call identity", async () => {
+    const repo = await fixtureRepo();
+    await fs.writeFile(path.join(repo, "src/dynamic-entities.ts"), `import { base44 } from "@base44/sdk";
+const ENTITY_LIST = ["Customer", "Order"];
+const RELATIONSHIPS = {
+  Customer: [{ entity: "Buyer", text: "buyer", flag: true }, { entity: "ShippingAddress" }],
+  Order: [{ entity: "OrderItem" }]
+};
+export async function run() {
+  for (const entity of ENTITY_LIST) await base44.entities[entity].list();
+  for (const relationship of RELATIONSHIPS.Customer) await base44.entities[relationship.entity].filter({ id: "1" });
+  const remove = async (entityName) => base44.entities[entityName].delete("1");
+  await remove("Quote");
+  await remove(true ? "Print" : "Shipment");
+  const scan = async (kind) => {
+    const relationships = RELATIONSHIPS[kind];
+    for (const relationship of relationships) await base44.entities[relationship.entity].get("1");
+  };
+  await scan("Customer");
+  await scan("Order");
+}
+`);
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-selector-domain-"));
+    const { packet } = await buildBase44Evidence(options(repo, out));
+    const dynamicOperations = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation
+      && fact.evidence.filePath === "src/dynamic-entities.ts");
+    expect(dynamicOperations.map((fact) => `${fact.targetSymbol}.${fact.properties.operationName}`).sort()).toEqual([
+      "Buyer.filter", "Buyer.get", "Customer.list", "Order.list", "OrderItem.get", "Print.delete", "Quote.delete",
+      "Shipment.delete", "ShippingAddress.filter", "ShippingAddress.get"
+    ]);
+    expect(new Set(dynamicOperations.map((fact) => fact.properties.operationEvidenceId)).size).toBe(10);
+    expect(dynamicOperations.every((fact) => fact.evidenceTier === "Tier3SyntaxOrTextual"
+      && fact.properties.entitySelectorGap === "")).toBe(true);
+    expect(dynamicOperations.every((fact) => {
+      const selector = JSON.parse(fact.properties.entitySelectorJson);
+      return selector.schemaVersion === "88mph.base44-entity-selector.v1"
+        && selector.kind === "finite-source-domain" && selector.candidates.length > 0;
+    })).toBe(true);
+
+    const duplicateCandidate = structuredClone(packet);
+    const finite = duplicateCandidate.facts.find((fact) => fact.factType === FactTypes.Base44EntityOperation
+      && fact.evidence.filePath === "src/dynamic-entities.ts")!;
+    const duplicateSelector = JSON.parse(finite.properties.entitySelectorJson);
+    duplicateSelector.candidates.push(duplicateSelector.candidates[0]);
+    finite.properties.entitySelectorJson = JSON.stringify(duplicateSelector);
+    const duplicatePath = path.join(out, "duplicate-selector-candidate.json");
+    await fs.writeFile(duplicatePath, `${JSON.stringify(duplicateCandidate, null, 2)}\n`);
+    await expect(diffBase44Evidence(path.join(out, "base44-evidence.json"), duplicatePath,
+      path.join(out, "duplicate-selector-diff.json"))).rejects.toThrow("invalid entity selector candidates");
+
+    const forgedAuthority = structuredClone(packet);
+    const forged = forgedAuthority.facts.find((fact) => fact.factType === FactTypes.Base44EntityOperation
+      && fact.evidence.filePath === "src/dynamic-entities.ts")!;
+    const forgedSelector = JSON.parse(forged.properties.entitySelectorJson);
+    forgedSelector.evidence[0].sourceFileSha256 = "f".repeat(64);
+    forged.properties.entitySelectorJson = JSON.stringify(forgedSelector);
+    const forgedPath = path.join(out, "forged-selector-authority.json");
+    await fs.writeFile(forgedPath, `${JSON.stringify(forgedAuthority, null, 2)}\n`);
+    await expect(diffBase44Evidence(path.join(out, "base44-evidence.json"), forgedPath,
+      path.join(out, "forged-selector-diff.json"))).rejects.toThrow("outside packet source authority");
+  });
+
+  it("retains a typed entity gap for mutated, escaped, or runtime-open selectors", async () => {
+    const repo = await fixtureRepo();
+    await fs.writeFile(path.join(repo, "src/dynamic-entity-gaps.ts"), `import { base44 } from "@base44/sdk";
+export async function run(runtimeEntity) {
+  const mutated = ["Order"];
+  mutated.push(runtimeEntity);
+  for (const entity of mutated) await base44.entities[entity].list();
+  const escaped = ["Customer"];
+  consume(escaped);
+  for (const entity of escaped) await base44.entities[entity].get("1");
+  await base44.entities[runtimeEntity].filter({ id: "1" });
+  const helper = async (entityName) => base44.entities[entityName].subscribe(() => undefined);
+  await helper("Order");
+  await helper(runtimeEntity);
+  const escapedHelper = async (entityName) => base44.entities[entityName].deleteMany({ id: "1" });
+  consume(escapedHelper);
+  await escapedHelper("Customer");
+}
+`);
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-selector-gaps-"));
+    const { packet } = await buildBase44Evidence(options(repo, out));
+    const operations = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation
+      && fact.evidence.filePath === "src/dynamic-entity-gaps.ts");
+    expect(operations).toHaveLength(5);
+    expect(operations.every((fact) => fact.targetSymbol === "dynamic"
+      && fact.evidenceTier === "Tier4Unknown"
+      && fact.properties.entitySelectorGap === "entity-selector-dynamic-unresolved")).toBe(true);
+    const entityGaps = packet.coverage.gaps.filter((gap) => operations.some((operation) => operation.factId === gap.factId));
+    expect(entityGaps).toHaveLength(5);
+    expect(entityGaps.every((gap) => gap.category === "entity" && gap.surface.includes("entities.dynamic."))).toBe(true);
+  });
+
+  it("accepts only terminating immutable Set guards as finite selector authority", async () => {
+    const repo = await fixtureRepo();
+    await fs.writeFile(path.join(repo, "src/guarded-entities.ts"), `import { base44 } from "@base44/sdk";
+export async function run(acceptedEntity, mutatedEntity, nonTerminatingEntity) {
+  const accepted = new Set(["Order", "Quote"]);
+  if (!accepted.has(acceptedEntity)) return;
+  await base44.entities[acceptedEntity].filter({ id: "1" });
+
+  const mutated = new Set(["Customer"]);
+  mutated.add(mutatedEntity);
+  if (!mutated.has(mutatedEntity)) return;
+  await base44.entities[mutatedEntity].filter({ id: "1" });
+
+  const nonTerminating = new Set(["Print"]);
+  if (!nonTerminating.has(nonTerminatingEntity)) consume(nonTerminatingEntity);
+  await base44.entities[nonTerminatingEntity].filter({ id: "1" });
+}
+`);
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-selector-set-guard-"));
+    const { packet } = await buildBase44Evidence(options(repo, out));
+    const operations = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation
+      && fact.evidence.filePath === "src/guarded-entities.ts");
+    expect(operations.filter((fact) => fact.properties.operationName === "filter" && fact.targetSymbol !== "dynamic")
+      .map((fact) => fact.targetSymbol).sort()).toEqual(["Order", "Quote"]);
+    expect(operations.filter((fact) => fact.targetSymbol === "dynamic")).toHaveLength(2);
+  });
+
   it("preserves complete query shapes for transparent wrapped controls", async () => {
     const repo = await fixtureRepo();
     const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-query-wrappers-"));

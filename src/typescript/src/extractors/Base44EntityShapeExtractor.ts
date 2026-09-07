@@ -69,6 +69,8 @@ export interface EntityShapeInput {
   entityName: string;
   operationName: string;
   operationEvidenceId: string;
+  entitySelectorGap: string;
+  entitySelectorJson: string;
   sdkIdentityGap: string;
   sdkIdentityJson: string;
 }
@@ -1234,7 +1236,7 @@ function shapeFact(input: EntityShapeInput, factType: string, ruleId: string, ar
   const fields = normalizeFields(analysis.fields);
   const spreads = normalizeSpreads(analysis.spreads);
   const payloadContract = factType === FactTypes.Base44EntityPayload ? payloadShapeContract(analysis) : null;
-  const gaps = unique(payloadContract?.gaps ?? analysis.gaps);
+  const gaps = unique([...(payloadContract?.gaps ?? analysis.gaps), ...(input.entitySelectorGap ? [input.entitySelectorGap] : [])]);
   const completeness = gaps.length === 0 ? "complete"
     : fields.length > 0 || gaps.includes("runtime-deferred-object-fields") ? "partial"
     : "unresolved";
@@ -1258,6 +1260,8 @@ function shapeFact(input: EntityShapeInput, factType: string, ruleId: string, ar
         completeness,
         constructionKind: analysis.constructionKind,
         entityName: input.entityName,
+        entitySelectorGap: input.entitySelectorGap,
+        entitySelectorJson: input.entitySelectorJson,
         fieldsJson: stableArray(fields),
         operationEvidenceId: input.operationEvidenceId,
         operationName: input.operationName,

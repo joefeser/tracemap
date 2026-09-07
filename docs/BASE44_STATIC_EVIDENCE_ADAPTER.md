@@ -182,6 +182,12 @@ fields remain deferred and cross-component/ref-indirect or unused mutation
 paths remain typed blockers. See
 [Base44 payload source closure v1](BASE44_PAYLOAD_SOURCE_CLOSURE_V1.md).
 
+Extractor `base44-evidence/0.12.0` adds a source-bound entity-selector contract
+for static and computed SDK entity access. It expands only finite immutable
+domains and emits a typed Tier-4 row when the selector graph is runtime-open,
+mutated, escaped, or only partially known. See
+[Base44 entity selector v1](BASE44_ENTITY_SELECTOR_V1.md).
+
 Extractor `base44-evidence/0.4.1` also follows an SDK client through a local
 helper parameter when executable callsites prove the binding. The proof is
 conservative: every directly resolved callsite for that parameter must supply
