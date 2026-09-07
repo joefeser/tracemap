@@ -53,7 +53,7 @@ boolean, object, and array constructions; numeric operators and unshadowed
 primitive coercions; conditional/logical alternatives; and explicit null.
 Array `map`/`filter`/`push` projection is admitted only when the complete scanned
 project realm contains no mutation or escape of those intrinsic methods. Any
-unshadowed prototype mutation/reflection capability, dynamic evaluation, or
+unshadowed prototype mutation/reflection capability or
 `__proto__`/`constructor.prototype` access conservatively disables array-derived
 completeness; an unrelated ordinary-object property such as `adapter.map` does
 not.
