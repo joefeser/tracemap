@@ -235,6 +235,49 @@ export const load = (runtimePath) => import(runtimePath);
     }));
   });
 
+  it("keeps dormant static-entity dispositions Tier4 when SDK identity is unresolved", async () => {
+    const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-selector-dormant-no-sdk-authority-"));
+    await fs.mkdir(path.join(repo, "src/api"), { recursive: true });
+    await fs.mkdir(path.join(repo, "src/components/auth"), { recursive: true });
+    await fs.writeFile(path.join(repo, "jsconfig.json"), `${JSON.stringify({
+      compilerOptions: {
+        baseUrl: ".",
+        paths: { "@/*": ["./src/*"] }
+      },
+      include: ["src/**/*.js", "src/**/*.jsx"]
+    }, null, 2)}\n`);
+    await fs.writeFile(path.join(repo, "package.json"), `${JSON.stringify({
+      dependencies: { "@base44/sdk": "^0.8.3" }
+    }, null, 2)}\n`);
+    await fs.writeFile(path.join(repo, "src/main.ts"), `export const main = true;\n`);
+    await fs.writeFile(path.join(repo, "src/api/base44Client.js"), `import { createClient } from "@base44/sdk";
+export const base44 = createClient({ appId: "app", requiresAuth: false });
+`);
+    await fs.writeFile(path.join(repo, "src/components/auth/OrganizationContext.jsx"), `import { base44 } from "@/api/base44Client";
+export function OrganizationProvider() {
+  const queryFn = async () => base44.entities.Organization.filter({ id: "org_1" });
+  return queryFn;
+}
+`);
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    execFileSync("git", ["add", "."], { cwd: repo });
+    execFileSync("git", ["-c", "user.name=TraceMap Test", "-c", "user.email=tracemap@example.invalid", "commit", "-qm", "fixture"], { cwd: repo });
+
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-selector-dormant-no-sdk-authority-out-"));
+    const { packet } = await buildBase44Evidence(options(repo, out));
+    const disposition = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityCallsiteDisposition
+      && fact.evidence.filePath === "src/components/auth/OrganizationContext.jsx")!;
+
+    expect(disposition.evidenceTier).toBe("Tier4Unknown");
+    expect(disposition.properties.sdkIdentityGap).toBe("sdk-identity-package-authority-missing");
+    expect(disposition.properties.sdkIdentityJson).toBe("");
+    expect(JSON.parse(disposition.properties.callsiteDispositionJson)).toEqual(expect.objectContaining({
+      sdkIdentity: null,
+      sdkIdentityGap: "sdk-identity-package-authority-missing",
+      primitiveCapabilities: ["entities.Organization.filter"]
+    }));
+  });
+
   it("does not suppress helpers reachable only from an index.html module entrypoint", async () => {
     const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-html-entrypoint-reachability-"));
     await fs.mkdir(path.join(repo, "src"), { recursive: true });
