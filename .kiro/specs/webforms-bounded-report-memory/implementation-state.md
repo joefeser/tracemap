@@ -14,6 +14,12 @@ The Markdown coverage table reports only static event-chain and downstream
 boundary evidence plus the first unresolved state. It makes no runtime,
 rendering, branch, binding, SQL-execution, or whole-application claim.
 
+On 2026-09-08, added `Run-FocusedWebFormsPageList.ps1` as the human-operated
+entry point. Its top edit block contains the retained-index path, output root,
+and a here-string accepting one unquoted `.aspx` path per line. It creates the
+temporary list and timestamped output internally, then delegates to the tested
+parameterized wrapper. This avoids chat copy/paste and repeated command editing.
+
 ## Field ownership result and next handoff (2026-09-03)
 
 Operator screenshots report ownership-verified for the same event on 0.7.1:

@@ -2,18 +2,21 @@
 
 ## Tuesday handoff: report every page in a saved list
 
-Pull this branch, then run the committed wrapper below from the TraceMap repo.
-It reads the existing `index.sqlite`; it does not scan or modify the application
-repository. The page-list file may be UTF-8 text with one page per line or CSV
-whose first column is `path`, `page`, `file`, or `surface`. Prefer repo-relative
-paths such as `Area/Orders.aspx`. A filename alone is accepted only when unique.
+Pull this branch, then open
+[`scripts/Run-FocusedWebFormsPageList.ps1`](../../../scripts/Run-FocusedWebFormsPageList.ps1).
+At the top of that file, confirm `$IndexPath` and put one repository-relative
+`.aspx` path per line inside the `$Forms` block. No quotes or commas are needed.
+Then save the file and run this one command from the TraceMap repo:
 
 ```powershell
-.\scripts\Invoke-FocusedWebFormsPageListReport.ps1 `
-  -IndexPath 'C:\work\tracemap-output\focused-webforms-YYYYMMDD-HHMMSS\scan\index.sqlite' `
-  -PageListPath 'C:\Users\YOUR-ID\Downloads\webforms-pages.txt' `
-  -OutputDirectory 'C:\work\tracemap-output\webforms-page-list-YYYYMMDD-HHMMSS'
+.\scripts\Run-FocusedWebFormsPageList.ps1
 ```
+
+The script reads the existing `index.sqlite`; it does not scan or modify the
+application repository. It creates a timestamped output directory under
+`C:\work\tracemap-output`. Prefer paths such as `Area/Orders.aspx`. A filename
+alone is accepted only when unique. The parameterized
+`Invoke-FocusedWebFormsPageListReport.ps1` remains available for automation.
 
 Open `webforms-modernization.md` in the new output directory. Its **Requested
 page coverage** table retains input order as `page-001`, `page-002`, and so on,
