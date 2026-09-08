@@ -62,19 +62,26 @@ $resolvedWithoutTerminal = @($chains | Where-Object {
 })
 
 $rows = foreach ($chain in $resolvedWithoutTerminal) {
-    $edgeCount = @($chain.supportingEdgeIds).Count
-    $stopState = if ([string]::IsNullOrWhiteSpace($chain.legacyPathId)) {
-        'no-retained-legacy-path'
+    $observation = $chain.traversalObservation
+    $stopState = if ($null -ne $observation -and -not [string]::IsNullOrWhiteSpace($observation.stopState)) {
+        $observation.stopState
     }
-    elseif ($edgeCount -eq 0) {
-        'handler-root-no-supported-outgoing-edge'
+    elseif ([string]::IsNullOrWhiteSpace($chain.legacyPathId)) {
+        'traversal-observation-unavailable'
+    }
+    elseif (@($chain.supportingEdgeIds).Count -eq 0) {
+        'no-observed-downstream-edge'
     }
     else {
-        'bounded-static-path-without-terminal'
+        'observed-downstream-without-supported-terminal'
     }
     [pscustomobject]@{
         Alias = Get-PageAlias $chain
         StopState = $stopState
+        ReachedNodeCount = if ($null -eq $observation) { 0 } else { [int]$observation.reachedNodeCount }
+        TraversedEdgeCount = if ($null -eq $observation) { 0 } else { [int]$observation.traversedEdgeCount }
+        DownstreamEdgeCount = if ($null -eq $observation) { 0 } else { [int]$observation.downstreamEdgeCount }
+        TraversalTruncated = if ($null -eq $observation) { $false } else { [bool]$observation.truncated }
         Classification = $chain.classification
         EvidenceTiers = @($chain.evidenceTiers)
         RuleIds = @($chain.ruleIds)
@@ -93,6 +100,7 @@ foreach ($group in @($rows | Group-Object -Property StopState | Sort-Object -Pro
     $aliases = @($group.Group.Alias | Sort-Object -Unique)
     Write-Host "stopState=$($group.Name)|chains=$($group.Count)|pages=$($aliases.Count)"
     Write-Host "stopStateAliases-$($group.Name)=$($aliases -join ',')"
+    Write-Host "stopStateTraversal-$($group.Name)=reachedNodes:$([long](@($group.Group | Measure-Object -Property ReachedNodeCount -Sum).Sum))|traversedEdges:$([long](@($group.Group | Measure-Object -Property TraversedEdgeCount -Sum).Sum))|downstreamEdges:$([long](@($group.Group | Measure-Object -Property DownstreamEdgeCount -Sum).Sum))|truncatedChains:$(@($group.Group | Where-Object TraversalTruncated).Count)"
 }
 foreach ($group in @($rows | Group-Object -Property Classification | Sort-Object -Property Name)) {
     Write-Host "resolvedNoTerminalClassification=$($group.Name)|count=$($group.Count)"
@@ -139,5 +147,5 @@ else {
     }
 }
 
-Write-Host 'stopStateMeaning=no-supported-outgoing-edge-is-not-proof-of-runtime-absence'
+Write-Host 'stopStateMeaning=bounded-static-traversal-counts-are-not-proof-of-runtime-presence-or-absence'
 Write-Host 'nonClaim=static-evidence-does-not-prove-runtime-execution-reachability-or-successful-binding'

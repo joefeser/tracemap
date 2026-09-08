@@ -116,6 +116,17 @@ public sealed record WebFormsModernizationEventChain(
     IReadOnlyList<string> RuleIds,
     IReadOnlyList<string> EvidenceTiers,
     IReadOnlyList<string> CoverageLabels,
+    IReadOnlyList<string> Limitations,
+    WebFormsModernizationTraversalObservation? TraversalObservation = null);
+
+public sealed record WebFormsModernizationTraversalObservation(
+    string RuleId,
+    string StopState,
+    int ReachedNodeCount,
+    int TraversedEdgeCount,
+    int DownstreamEdgeCount,
+    int TerminalPathCount,
+    bool Truncated,
     IReadOnlyList<string> Limitations);
 
 public sealed record WebFormsModernizationPathEvidence(
@@ -320,7 +331,7 @@ public static class WebFormsModernizationPacketReporter
             .SelectMany(item => item.SurfaceIds)
             .ToHashSet(StringComparer.Ordinal);
         var startingFactIds = SelectStartingHandlerFactIds(snapshot.Facts, options.MaxEventChains, selectedSurfaceIds);
-        var legacyFlow = await CombinedDependencyPathReporter.BuildBoundedSingleIndexReportAsync(new(
+        var legacyFlowBuild = await CombinedDependencyPathReporter.BuildBoundedSingleIndexReportWithTraversalAsync(new(
             options.IndexPath,
             Path.Combine(Path.GetTempPath(), "tracemap-webforms-modernization-unused"),
             View: LegacyFlowReportConstants.View,
@@ -331,7 +342,7 @@ public static class WebFormsModernizationPacketReporter
             StartingNodeLimit = Math.Max(1, startingFactIds.Count),
             StartingFactIds = startingFactIds
         }, budget, cancellationToken);
-        return Build(snapshot, legacyFlow, options, surfaceSelection);
+        return Build(snapshot, legacyFlowBuild.Report, options, surfaceSelection, legacyFlowBuild.TraversalByStartingFactId);
     }
 
     private static IReadOnlySet<string> SelectStartingHandlerFactIds(
@@ -361,11 +372,46 @@ public static class WebFormsModernizationPacketReporter
             .ToHashSet(StringComparer.Ordinal);
     }
 
+    private static WebFormsModernizationTraversalObservation ToTraversalObservation(
+        CombinedDependencyPathReporter.CombinedDependencyTraversalObservation? observation)
+    {
+        if (observation is null)
+        {
+            return new WebFormsModernizationTraversalObservation(
+                RuleIds.LegacyFlowStaticTraversal,
+                "traversal-observation-unavailable",
+                0,
+                0,
+                0,
+                0,
+                false,
+                ["No bounded traversal observation was retained for this handler; no outgoing-edge or terminal absence conclusion is available."]);
+        }
+
+        var stopState = observation.Truncated
+            ? "bounded-traversal-truncated"
+            : observation.TerminalPathCount > 0
+                ? "supported-terminal-reached"
+                : observation.DownstreamEdgeCount == 0
+                    ? "no-observed-downstream-edge"
+                    : "observed-downstream-without-supported-terminal";
+        return new WebFormsModernizationTraversalObservation(
+            RuleIds.LegacyFlowStaticTraversal,
+            stopState,
+            observation.ReachedNodeCount,
+            observation.TraversedEdgeCount,
+            observation.DownstreamEdgeCount,
+            observation.TerminalPathCount,
+            observation.Truncated,
+            ["Counts describe bounded static graph observations after handler-root selection; they do not prove runtime reachability, execution, branch feasibility, successful binding, or absence."]);
+    }
+
     internal static WebFormsModernizationPacket Build(
         Snapshot snapshot,
         CombinedDependencyPathReport legacyFlow,
         WebFormsModernizationOptions options,
-        WebFormsModernizationSurfaceSelection? surfaceSelection = null)
+        WebFormsModernizationSurfaceSelection? surfaceSelection = null,
+        IReadOnlyDictionary<string, CombinedDependencyPathReporter.CombinedDependencyTraversalObservation>? traversalByStartingFactId = null)
     {
         var gaps = new List<WebFormsModernizationGap>();
         var inputLimit = snapshot.InputLimit ?? legacyFlow.Gaps.FirstOrDefault(gap => gap.GapKind == "GraphInputLimitReached")?.Reason;
@@ -500,6 +546,9 @@ public static class WebFormsModernizationPacketReporter
                     : supportedLegacyPath is not null ? supportedLegacyPath.Classification
                     : flowFact?.Properties.GetValueOrDefault("flowClassification") ?? "NoBackendEvidence";
                 var terminalKind = inputLimited ? null : supportedLegacyPath?.Nodes.LastOrDefault()?.SurfaceKind ?? EmptyToNull(flowFact?.Properties.GetValueOrDefault("terminalSurfaceKind"));
+                var traversalObservation = handler is null || inputLimited
+                    ? null
+                    : ToTraversalObservation(traversalByStartingFactId?.GetValueOrDefault("single:" + handler.FactId));
                 if (!inputLimited && handler is not null && terminalKind is null)
                     AddGeneratedGap(gaps, options.MaxGaps, snapshot, "NoBackendEvidence", "event-chain", binding.FactId, support.Select(fact => fact.FactId));
                 var chain = new WebFormsModernizationEventChain(
@@ -523,7 +572,8 @@ public static class WebFormsModernizationPacketReporter
                         ? ["Input admission was truncated; no downstream path or absence conclusion was derived from the incomplete input."]
                         : terminalKind is null && handler is not null
                         ? ["No backend or terminal evidence was composed for this handler in the bounded static snapshot; this is not proof of absence."]
-                        : ["The chain is static evidence and does not prove runtime event firing or terminal execution."]);
+                        : ["The chain is static evidence and does not prove runtime event firing or terminal execution."],
+                    traversalObservation);
                 chains.Add(chain);
                 if (terminalKind is not null)
                 {
@@ -1121,7 +1171,12 @@ public static class WebFormsModernizationPacketReporter
         b.AppendLine().AppendLine("## Event chains").AppendLine();
         if (packet.EventChains.Count == 0) b.AppendLine("- No supported static event chains were composed; this is not proof of absence.");
         foreach (var chain in packet.EventChains)
-            b.AppendLine($"- `{chain.ChainId}` — `{chain.EventSourceId}` -> `{chain.HandlerId ?? "handler-unavailable"}` -> `{chain.TerminalKind ?? "terminal-unavailable"}`; classification `{chain.Classification}`; supporting facts {string.Join(", ", chain.SupportingFactIds.Select(id => $"`{id}`"))}.");
+        {
+            var traversal = chain.TraversalObservation is null
+                ? "traversal observation unavailable"
+                : $"traversal `{chain.TraversalObservation.StopState}` (reached nodes {chain.TraversalObservation.ReachedNodeCount}, traversed edges {chain.TraversalObservation.TraversedEdgeCount}, downstream edges {chain.TraversalObservation.DownstreamEdgeCount})";
+            b.AppendLine($"- `{chain.ChainId}` — `{chain.EventSourceId}` -> `{chain.HandlerId ?? "handler-unavailable"}` -> `{chain.TerminalKind ?? "terminal-unavailable"}`; classification `{chain.Classification}`; {traversal}; supporting facts {string.Join(", ", chain.SupportingFactIds.Select(id => $"`{id}`"))}.");
+        }
         b.AppendLine().AppendLine("## Downstream boundaries").AppendLine();
         if (packet.DownstreamBoundaries.Count == 0) b.AppendLine("- No supported downstream boundary was composed; this is not proof of absence.");
         foreach (var boundary in packet.DownstreamBoundaries)

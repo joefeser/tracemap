@@ -357,3 +357,29 @@ only a successful example. Bounds are six hops, fifty symbols, one hundred
 edges and ten terminal candidates. Handler joins use binding IDs; downstream
 joins preserve canonical symbol/assembly identity and explicit support. Manual
 source observations cannot fill missing extracted edges. No new scan or BRD.
+
+### Per-handler traversal observation follow-up
+
+The branch was rebased without conflicts onto `origin/dev` at `b025a6d3`; the
+focused Web Forms packet baseline passed after that rebase. The non-truncated
+43-page field report then showed 191 event chains: 41 handler-unavailable, 143
+handler-resolved without a terminal, and 7 SQL-terminal chains. All 143 resolved
+nonterminal chains lacked a retained legacy path, so the prior packet could not
+distinguish a handler with no observed downstream edge from a traversed path that
+stopped before a supported terminal.
+
+The bounded path search now retains per-start observations during the existing
+single traversal: reached-node count, traversed-edge count, downstream-edge count,
+terminal-path count, and traversal truncation. The synthetic
+`legacy-root-selection` edge is excluded from downstream counts. Web Forms event
+chains expose only those counts, the public `legacy.flow.static-traversal.v1`
+rule, a closed stop state, and explicit non-runtime limitations; no private
+symbols, paths, SQL, or source content are added. The zero-argument triage script
+uses the new field and safely falls back to `traversal-observation-unavailable`
+for older packets. Synthetic tests cover a non-compiling Web Forms scan plus
+separate no-edge, nonterminal-traversal, and SQL-terminal paths.
+
+Validation after the rebase: focused packet and bounded-memory tests 28/28;
+duplicate-start route-flow compatibility regression passed; full .NET solution
+1,763/1,763; PowerShell parser clean. Changed-file formatting, private-path guard,
+and diff checks are recorded after their final rerun.

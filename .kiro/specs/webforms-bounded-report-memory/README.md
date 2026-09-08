@@ -49,13 +49,23 @@ content. Set `$ReportPath` at the top only when an older report must be selected
 
 For the next unresolved-chain breakdown, run
 `scripts/Triage-FocusedWebFormsUnresolvedChains.ps1`. It uses the same newest
-completed JSON without rerunning TraceMap. For resolved handlers without a
-terminal, it reports the first defensible packet-level stop state: no retained
-legacy path, a handler root with no supported outgoing edge, or a bounded static
-path without a terminal. It also groups public classifications, evidence tiers,
-rule IDs, linked gap classifications, and safe page aliases. Handler-unavailable
-chains receive their own alias and linked-gap summary. These are evidence states,
-not runtime absence or broken-code claims.
+completed JSON without rescanning the application. Packet generation now retains
+bounded per-handler traversal observations, excluding the synthetic handler-root
+selection edge from the downstream count. For resolved handlers it distinguishes
+`no-observed-downstream-edge`,
+`observed-downstream-without-supported-terminal`,
+`supported-terminal-reached`, and `bounded-traversal-truncated`. The script groups
+those closed states with reached-node, traversed-edge, downstream-edge and
+truncated-chain totals, public rule/evidence metadata, and safe page aliases.
+Handler-unavailable chains receive their own alias and linked-gap summary.
+These are bounded static observations, not runtime presence, absence, execution,
+branch feasibility, successful binding, or broken-code claims.
+
+Reports created before this change do not contain `traversalObservation`. After
+pulling the branch, first rerun `scripts/Run-FocusedWebFormsPageList.ps1` against
+the existing retained index, then rerun
+`scripts/Triage-FocusedWebFormsUnresolvedChains.ps1`. Neither command rescans,
+compiles, or changes the private application.
 
 ## Tuesday handoff: report every page in a saved list
 
