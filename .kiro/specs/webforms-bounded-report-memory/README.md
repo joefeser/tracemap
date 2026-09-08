@@ -1,5 +1,34 @@
 # Restricted Web Forms run: diagnostic follow-up
 
+## Current fix: selected-page graph admission
+
+The 43-page field report matched every requested page, but its 191 event chains
+were globally downgraded after the repository-wide graph reader reached the
+deterministic input ceiling. The roughly 200 `terminal-unavailable` results and
+zero downstream boundaries therefore describe incomplete report input, not
+evidence that the application lacks downstream calls. The 41
+`handler-unavailable` and one `no-static-event-binding` result remain review
+candidates, but should not drive application changes until the selected graph
+loads completely.
+
+This branch now resolves the selected handler facts first and reads only their
+deterministic, depth-bounded outgoing symbol neighborhood from the retained
+index. Unrelated repository facts and edges no longer consume the selected-page
+graph budget. The same fact, edge, text, depth, and frontier ceilings remain;
+if the selected neighborhood itself crosses one, the packet still emits the
+rule-backed input-limit gap and makes no path or boundary classification from
+partial graph input.
+
+After pulling this branch on the work machine, rerun
+`scripts/Run-FocusedWebFormsPageList.ps1` with the same 43-line form list and
+the same retained `index.sqlite`. This is report-only: it does not rescan,
+compile, or modify the private application. A useful comparison requires
+`truncated: false` and no `WebFormsModernizationInputLimitReached` gap. Only
+then compare resolved paths, downstream boundaries, and the remaining explicit
+handler/binding gaps. Static paths still do not prove runtime event firing,
+branch feasibility, successful binding, SQL execution, or whole-application
+coverage.
+
 ## Tuesday handoff: report every page in a saved list
 
 Pull this branch, then open

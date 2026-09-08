@@ -881,7 +881,14 @@ public static partial class CombinedDependencyPathReporter
             : "tracemap paths graph inventory requires a combined index produced by tracemap combine.");
     }
 
-    private static async Task<CombinedReadResult> ReadSingleIndexAsync(SqliteConnection connection, string indexPath, CancellationToken cancellationToken, ReportInputBudget? budget = null)
+    private static async Task<CombinedReadResult> ReadSingleIndexAsync(
+        SqliteConnection connection,
+        string indexPath,
+        CancellationToken cancellationToken,
+        ReportInputBudget? budget = null,
+        IReadOnlySet<string>? selectedFactIds = null,
+        int maxDepth = 8,
+        int maxFrontier = 10000)
     {
         var (source, manifestJson) = await ReadSingleSourceAsync(connection, indexPath, cancellationToken);
         var warnings = new List<string>();
@@ -891,10 +898,17 @@ public static partial class CombinedDependencyPathReporter
             "facts",
             "extractor_version",
             cancellationToken);
+        var selectedSymbols = budget is not null && selectedFactIds is not null
+            ? await ReadSelectedSymbolClosureAsync(connection, selectedFactIds, maxDepth, maxFrontier, cancellationToken)
+            : null;
+        var originalSelectedFactIds = selectedFactIds?.Select(id => id.StartsWith("single:", StringComparison.Ordinal)
+            ? id["single:".Length..]
+            : id).ToHashSet(StringComparer.Ordinal);
         var facts = budget is null
             ? await ReadSingleFactsAsync(connection, source, hasFactExtractorVersion, cancellationToken)
-            : await ReadCompactSingleFactsAsync(connection, source, hasFactExtractorVersion, budget, cancellationToken);
-        var edges = await ReadSingleEdgesAsync(connection, source, cancellationToken, budget);
+            : await ReadCompactSingleFactsAsync(connection, source, hasFactExtractorVersion, budget, cancellationToken,
+                originalSelectedFactIds, selectedSymbols);
+        var edges = await ReadSingleEdgesAsync(connection, source, cancellationToken, budget, selectedSymbols);
         var counts = new SortedDictionary<string, long>(StringComparer.Ordinal);
         if (await TableExistsAsync(connection, "parameter_forward_edges", cancellationToken))
         {
@@ -1001,7 +1015,12 @@ public static partial class CombinedDependencyPathReporter
         return rows;
     }
 
-    private static async Task<IReadOnlyList<CombinedDependencyEdgeRow>> ReadSingleEdgesAsync(SqliteConnection connection, CombinedReportSource source, CancellationToken cancellationToken, ReportInputBudget? budget = null)
+    private static async Task<IReadOnlyList<CombinedDependencyEdgeRow>> ReadSingleEdgesAsync(
+        SqliteConnection connection,
+        CombinedReportSource source,
+        CancellationToken cancellationToken,
+        ReportInputBudget? budget = null,
+        IReadOnlySet<string>? selectedSymbols = null)
     {
         var edges = new List<CombinedDependencyEdgeRow>();
         if (await TableExistsAsync(connection, "call_edges", cancellationToken))
@@ -1009,8 +1028,9 @@ public static partial class CombinedDependencyPathReporter
             await ReadSingleEdgeQueryAsync(connection, source, edges, """
                 select 'calls', fact_id, fact_id, caller_symbol, callee_symbol, callee_assembly_name, callee_assembly_version, rule_id, evidence_tier, file_path, start_line, end_line
                 from call_edges
+                where $symbols is null or caller_symbol in (select value from json_each($symbols))
                 order by file_path, start_line, fact_id;
-                """, cancellationToken, budget);
+                """, cancellationToken, budget, selectedSymbols);
         }
 
         if (await TableExistsAsync(connection, "object_creations", cancellationToken))
@@ -1018,8 +1038,9 @@ public static partial class CombinedDependencyPathReporter
             await ReadSingleEdgeQueryAsync(connection, source, edges, """
                 select 'creates', fact_id, fact_id, caller_symbol, created_type, created_type_assembly_name, created_type_assembly_version, rule_id, evidence_tier, file_path, start_line, end_line
                 from object_creations
+                where $symbols is null or caller_symbol in (select value from json_each($symbols))
                 order by file_path, start_line, fact_id;
-                """, cancellationToken, budget);
+                """, cancellationToken, budget, selectedSymbols);
         }
 
         if (await TableExistsAsync(connection, "symbol_relationships", cancellationToken))
@@ -1040,8 +1061,11 @@ public static partial class CombinedDependencyPathReporter
                 from symbol_relationships relationships
                 left join symbols source_symbols on source_symbols.scan_id = relationships.scan_id and source_symbols.symbol_id = relationships.source_symbol_id
                 left join symbols target_symbols on target_symbols.scan_id = relationships.scan_id and target_symbols.symbol_id = relationships.target_symbol_id
+                where $symbols is null
+                   or coalesce(source_symbols.display_name, relationships.source_symbol_id) in (select value from json_each($symbols))
+                   or coalesce(target_symbols.display_name, relationships.target_symbol_id) in (select value from json_each($symbols))
                 order by relationships.file_path, relationships.start_line, relationships.relationship_id;
-                """, cancellationToken, budget);
+                """, cancellationToken, budget, selectedSymbols);
         }
 
         if (await TableExistsAsync(connection, "parameter_forward_edges", cancellationToken))
@@ -1052,8 +1076,9 @@ public static partial class CombinedDependencyPathReporter
                        target_method_symbol || ':' || target_parameter_symbol,
                        target_assembly_name, target_assembly_version, rule_id, evidence_tier, file_path, start_line, end_line
                 from parameter_forward_edges
+                where $symbols is null or source_method_symbol in (select value from json_each($symbols))
                 order by file_path, start_line, fact_id;
-                """, cancellationToken, budget);
+                """, cancellationToken, budget, selectedSymbols);
         }
 
         return edges
@@ -1072,7 +1097,8 @@ public static partial class CombinedDependencyPathReporter
         List<CombinedDependencyEdgeRow> edges,
         string sql,
         CancellationToken cancellationToken,
-        ReportInputBudget? budget = null)
+        ReportInputBudget? budget = null,
+        IReadOnlySet<string>? selectedSymbols = null)
     {
         await using var command = connection.CreateCommand();
         // This private helper receives only compile-time SQL literals from its
@@ -1085,6 +1111,9 @@ public static partial class CombinedDependencyPathReporter
             select *, {{TextByteCountSql("edge_kind", "edge_id", "original_fact_id", "source_symbol", "target_symbol", "assembly_name", "assembly_version", "rule_id", "evidence_tier", "file_path")}}
             from input;
             """; // nosemgrep: csharp.lang.security.sqli.csharp-sqli
+        command.Parameters.AddWithValue("$symbols", selectedSymbols is null
+            ? DBNull.Value
+            : JsonSerializer.Serialize(selectedSymbols.Order(StringComparer.Ordinal)));
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
