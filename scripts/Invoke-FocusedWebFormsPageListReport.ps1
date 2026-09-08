@@ -63,6 +63,14 @@ if (Test-Path -LiteralPath $jsonPath -PathType Leaf) {
     else {
         foreach ($group in $limitGroups) {
             Write-Host "truncationGap=$($group.Name)|count=$($group.Count)"
+            if ($group.Name -eq 'TruncatedByLimit') {
+                foreach ($reasonGroup in @($group.Group | ForEach-Object {
+                    if ($_.truncationReason -cin @('depth', 'frontier', 'path', 'cycle')) { $_.truncationReason }
+                    else { 'unavailable' }
+                } | Group-Object | Sort-Object Name)) {
+                    Write-Host "truncationReason=$($reasonGroup.Name)|count=$($reasonGroup.Count)"
+                }
+            }
         }
     }
 }

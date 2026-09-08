@@ -230,6 +230,11 @@ public sealed class WebFormsModernizationPacketTests
         Assert.True(chain.TraversalObservation?.DownstreamEdgeCount >= 2);
         Assert.Contains(chain.PathEvidence, evidence => evidence.FilePath == "Pages/Projected.aspx.cs" && evidence.RuleId == RuleIds.CSharpSemanticCallGraph);
         Assert.DoesNotContain(chain.PathEvidence, evidence => evidence.FilePath?.StartsWith("Other/", StringComparison.Ordinal) == true);
+        var bounded = await WebFormsModernizationPacketReporter.WriteAsync(new(index, Path.Combine(temp.Path, "bounded"), MaxDepth: 3));
+        Assert.True(bounded.Packet.Summary.Truncated);
+        Assert.Contains(bounded.Packet.Gaps, gap => gap.Classification == "TruncatedByLimit" && gap.TruncationReason == "depth");
+        Assert.All(bounded.Packet.Gaps, gap => Assert.True(gap.TruncationReason is null or "depth" or "frontier" or "path" or "cycle"));
+        Assert.Contains("\"truncationReason\": \"depth\"", await File.ReadAllTextAsync(bounded.JsonPath));
     }
 
     [Fact]
