@@ -19,3 +19,4 @@
 - [x] Add a read-only retained projection-ownership verification prompt using handler identity and exact support IDs.
 - [x] Record field ownership verification and add the separate database-backed event prompt for the existing index.
 - [x] Scope bounded graph admission to exact selected handlers and regress unrelated large-index noise without weakening fail-closed limits.
+- [x] Raise the page-list gap publication cap after field confirmation and print remaining truncation classifications.

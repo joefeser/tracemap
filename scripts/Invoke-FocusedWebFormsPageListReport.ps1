@@ -13,7 +13,10 @@ param(
     [int]$MaxEventChains = 2000,
 
     [ValidateRange(1, 10000)]
-    [int]$MaxPaths = 2000
+    [int]$MaxPaths = 2000,
+
+    [ValidateRange(1, 10000)]
+    [int]$MaxGaps = 5000
 )
 
 $ErrorActionPreference = 'Stop'
@@ -35,7 +38,8 @@ $arguments = @(
     '--max-surfaces', '500',
     '--max-event-chains', $MaxEventChains.ToString(),
     '--max-paths', $MaxPaths.ToString(),
-    '--max-boundaries', $MaxPaths.ToString()
+    '--max-boundaries', $MaxPaths.ToString(),
+    '--max-gaps', $MaxGaps.ToString()
 )
 
 & dotnet @arguments
@@ -45,4 +49,21 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host "page-list-report=$OutputDirectory"
 Write-Host "markdown=$(Join-Path $OutputDirectory 'webforms-modernization.md')"
+$jsonPath = Join-Path $OutputDirectory 'webforms-modernization.json'
+if (Test-Path -LiteralPath $jsonPath -PathType Leaf) {
+    $packet = Get-Content -LiteralPath $jsonPath -Raw | ConvertFrom-Json
+    Write-Host "truncated=$($packet.summary.truncated.ToString().ToLowerInvariant())"
+    $limitGroups = @($packet.gaps |
+        Where-Object { $_.classification -match '(LimitReached|TruncatedByLimit)' } |
+        Group-Object -Property classification |
+        Sort-Object -Property Name)
+    if ($limitGroups.Count -eq 0) {
+        Write-Host 'truncationGap=none'
+    }
+    else {
+        foreach ($group in $limitGroups) {
+            Write-Host "truncationGap=$($group.Name)|count=$($group.Count)"
+        }
+    }
+}
 Write-Host 'nonClaim=static-evidence-does-not-prove-runtime-execution-or-successful-binding'
