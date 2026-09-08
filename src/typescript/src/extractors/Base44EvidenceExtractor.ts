@@ -76,6 +76,7 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
       }, EvidenceTiers.Tier2Structural));
     }
   }
+  ensureSelectorEvidenceAuthorityFacts(manifest, facts, aliasDiscovery.contexts);
   const hasBase44Signal = facts.some((candidate) => candidate.factType === FactTypes.Base44SdkImport
     || candidate.factType === FactTypes.Base44FunctionSurface
     || candidate.factType === FactTypes.Base44CustomerBoundary);
@@ -2795,6 +2796,44 @@ function isEntityCandidate(value: string): boolean {
 function isAncestorNode(ancestor: ts.Node, node: ts.Node): boolean {
   for (let current: ts.Node | undefined = node; current; current = current.parent) if (current === ancestor) return true;
   return false;
+}
+
+function ensureSelectorEvidenceAuthorityFacts(
+  manifest: ScanManifest,
+  facts: CodeFact[],
+  contexts: Map<string, SourceContext>
+): void {
+  const authorized = new Set(facts
+    .filter((candidate) => typeof candidate.properties.sourceFileSha256 === "string")
+    .map((candidate) => `${candidate.evidence.filePath}\0${candidate.properties.sourceFileSha256}`));
+  const required = new Map<string, { filePath: string; sourceFileSha256: string }>();
+  for (const candidate of facts) {
+    const selectorJson = candidate.properties.entitySelectorJson;
+    if (!selectorJson) continue;
+    try {
+      const selector = JSON.parse(selectorJson) as { evidence?: Array<{ filePath?: unknown; sourceFileSha256?: unknown }> };
+      for (const item of selector.evidence ?? []) {
+        if (typeof item.filePath !== "string" || typeof item.sourceFileSha256 !== "string") continue;
+        const key = `${item.filePath}\0${item.sourceFileSha256}`;
+        if (!authorized.has(key)) required.set(key, { filePath: item.filePath, sourceFileSha256: item.sourceFileSha256 });
+      }
+    } catch {
+      continue;
+    }
+  }
+  for (const authority of [...required.values()].sort((left, right) =>
+    left.filePath.localeCompare(right.filePath) || left.sourceFileSha256.localeCompare(right.sourceFileSha256))) {
+    const context = contexts.get(authority.filePath);
+    if (!context) continue;
+    const text = context.source.getFullText();
+    if (hash(text, 64) !== authority.sourceFileSha256) continue;
+    facts.push(fact(manifest, FactTypes.Base44SourceAuthority, RuleIds.Base44SourceAuthority,
+      context.source, context.source, authority.filePath, authority.filePath, {
+        authorityKind: "selector-evidence-source",
+        sourceFileSha256: authority.sourceFileSha256
+      }, EvidenceTiers.Tier2Structural));
+    authorized.add(`${authority.filePath}\0${authority.sourceFileSha256}`);
+  }
 }
 
 function sdkRootIndex(chain: string[], root: string): number {

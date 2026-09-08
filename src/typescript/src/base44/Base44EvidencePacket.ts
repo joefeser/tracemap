@@ -274,11 +274,21 @@ function normalizeLegacyCoverageGaps(packet: Base44EvidencePacket): void {
 }
 
 function legacyCoverageGapShapeAllowed(packet: Base44EvidencePacket): boolean {
-  const versions = unique(packet.facts.map((fact) => fact.evidence?.extractorVersion ?? "").filter(Boolean));
+  const versions = legacyCoverageGapProducerVersions(packet);
   return versions.length > 0 && versions.every((version) => {
     const match = /^base44-evidence\/0\.(\d+)\.\d+$/u.exec(version);
     return match !== null && Number(match[1]) <= 6;
   });
+}
+
+function legacyCoverageGapProducerVersions(packet: Base44EvidencePacket): string[] {
+  return unique([
+    ...(packet.coverage?.extractorIdentities ?? []).map((identity) => {
+      const match = /(?:^|@)(base44-evidence\/\d+\.\d+\.\d+)$/u.exec(identity);
+      return match?.[1] ?? identity;
+    }),
+    ...packet.facts.map((fact) => fact.evidence?.extractorVersion ?? "")
+  ].filter(Boolean));
 }
 
 function coverageGapCategory(fact: Pick<CodeFact, "factType" | "properties">): Base44CoverageGapCategory {

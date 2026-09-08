@@ -235,6 +235,38 @@ export const load = (runtimePath) => import(runtimePath);
     }));
   });
 
+  it("keeps helpers imported only by HTML-declared frontend entries active", async () => {
+    const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-selector-html-entrypoint-"));
+    await fs.mkdir(path.join(repo, "src"), { recursive: true });
+    await writeFrontendSdkAuthority(repo);
+    await fs.writeFile(path.join(repo, "index.html"), `<script type="module" src="/src/main.ts"></script>
+<script type="module" src="./src/admin.ts"></script>
+`);
+    await fs.writeFile(path.join(repo, "src/main.ts"), `import { base44 } from "@base44/sdk";
+base44.auth.me();
+`);
+    await fs.writeFile(path.join(repo, "src/admin.ts"), `import { saveAdmin } from "./admin-save";
+saveAdmin("Order");
+`);
+    await fs.writeFile(path.join(repo, "src/admin-save.ts"), `import { base44 } from "@base44/sdk";
+export async function saveAdmin(entityName) { return base44.entities[entityName].create({ name: "x" }); }
+`);
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    execFileSync("git", ["add", "."], { cwd: repo });
+    execFileSync("git", ["-c", "user.name=TraceMap Test", "-c", "user.email=tracemap@example.invalid", "commit", "-qm", "fixture"], { cwd: repo });
+
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-selector-html-entrypoint-out-"));
+    const { packet } = await buildBase44Evidence(options(repo, out));
+    expect(packet.facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.Base44EntityOperation,
+      evidenceTier: "Tier3SyntaxOrTextual",
+      targetSymbol: "Order",
+      evidence: expect.objectContaining({ filePath: "src/admin-save.ts" })
+    }));
+    expect(packet.facts.some((fact) => fact.factType === FactTypes.Base44EntityCallsiteDisposition
+      && fact.evidence.filePath === "src/admin-save.ts")).toBe(false);
+  });
+
   it("keeps dormant static-entity dispositions Tier4 when SDK identity is unresolved", async () => {
     const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-selector-dormant-no-sdk-authority-"));
     await fs.mkdir(path.join(repo, "src/api"), { recursive: true });
@@ -1405,6 +1437,8 @@ export async function run(acceptedEntity, mutatedEntity, nonTerminatingEntity) {
     expect(Object.keys(first.packet.artifacts).sort()).toEqual([
       "facts.ndjson", "logs/analyzer.log", "report.md"
     ]);
+    const packetSchema = JSON.parse(await fs.readFile(path.resolve(process.cwd(), "../../docs/contracts/base44-static-evidence.v1.schema.json"), "utf8"));
+    expect(packetSchema.properties.artifacts.required.sort()).toEqual(Object.keys(first.packet.artifacts).sort());
     expect(first.packet.artifacts).toEqual(second.packet.artifacts);
     await expect(fs.stat(path.join(firstOut, "scan-manifest.json"))).resolves.toBeTruthy();
     await expect(fs.stat(path.join(firstOut, "index.sqlite"))).resolves.toBeTruthy();
@@ -2538,12 +2572,25 @@ export function Screen() {
 
     const legacy = structuredClone(first.packet);
     for (const fact of legacy.facts) fact.evidence.extractorVersion = "base44-evidence/0.6.0";
+    legacy.coverage.extractorIdentities = ["base44-evidence@base44-evidence/0.6.0"];
     delete (legacy.coverage as any).gapSchemaVersion;
     delete (legacy.coverage as any).gaps;
     const legacyPath = path.join(out, "legacy-v1-without-gaps.json");
     await fs.writeFile(legacyPath, `${JSON.stringify(legacy, null, 2)}\n`);
     const legacyDiff = await diffBase44Evidence(legacyPath, legacyPath, path.join(out, "legacy-diff.json"));
     expect(legacyDiff.unchangedCount).toBe(legacy.facts.length);
+
+    const mismatchedLegacy = structuredClone(first.packet);
+    for (const fact of mismatchedLegacy.facts) fact.evidence.extractorVersion = "base44-evidence/0.6.0";
+    delete (mismatchedLegacy.coverage as any).gapSchemaVersion;
+    delete (mismatchedLegacy.coverage as any).gaps;
+    const mismatchedLegacyPath = path.join(out, "mismatched-legacy-v1-without-gaps.json");
+    await fs.writeFile(mismatchedLegacyPath, `${JSON.stringify(mismatchedLegacy, null, 2)}\n`);
+    await expect(diffBase44Evidence(
+      mismatchedLegacyPath,
+      mismatchedLegacyPath,
+      path.join(out, "mismatched-legacy-diff.json")
+    )).rejects.toThrow("Unsupported Base44 coverage gap schema");
 
     const currentMissingGaps = structuredClone(first.packet);
     delete (currentMissingGaps.coverage as any).gapSchemaVersion;
