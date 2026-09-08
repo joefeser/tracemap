@@ -6,8 +6,8 @@
 - Exact source commit: `6753cfa6264b04c0d7dbfcde942689ee32d2c06b`
 - Accepted source/tree SHA-256: `a5a313b180ef0cdfd2e837779f251cc754978fcd474b6a32646c133b058b6e24`
 - Extractor: `base44-evidence/0.14.0`
-- TraceMap implementation commit: `39cf17175d05ae5725af808f4815776273f6bfe0`
-- TraceMap implementation tree: `41be893b0830c0400c7a9f427e8637242dbc7362`
+- TraceMap implementation commit: `a2093ad9bac820125639c12436aa15885dd51733`
+- TraceMap implementation tree: `ee202ee02e415505102bb5eaedf3b3c30b7b5464`
 
 The executable source is authority. No prose schema, fixture, reverse-engineer
 artifact, host reconciliation, or customer-specific filename supplies an
@@ -21,9 +21,9 @@ dispositions. The operation key set is stable across deterministic replays.
 These are raw source facts, not a packaged-runtime or compatibility claim.
 
 Both final replays produced a byte-identical `base44-evidence.json` with SHA-256
-`be339501a5ad8106ff07b8ec186f2f33ec707fa6cafb887c9e927552aa0ee212`
+`ceb2c16cf5d5e1c593427989fd3c703785a5223def8e9545029060a988295c1f`
 and byte-identical `facts.ndjson` with SHA-256
-`ea07f6d5076283b7bd1081882effbee4a97d2d79ae9ee195597c486e9d84fef7`.
+`8933aa14cfa1a853140490f4d6767b2f5b189de31926b26d16aeb99005cf1e12`.
 
 Forty-six mutation payload rows remain intentionally partial under the exact
 runtime obligation
@@ -119,7 +119,7 @@ The portable packet binds only deterministic `facts.ndjson`, `report.md`, and
 required outputs validated independently; their timestamp-bearing bytes cannot
 perturb the portable packet digest.
 
-The hardened implementation passed 235/235 TypeScript tests, the accumulated
+The hardened implementation passed 238/238 TypeScript tests, the accumulated
 21-case adversarial corpus, and 7/7 adapter-validator tests. Both immutable-git-
 archive canonical replays passed artifact validation and reproduced the exact
 packet/facts hashes above, 1,797 unique executable operation identities, 46
