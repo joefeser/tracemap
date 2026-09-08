@@ -24,6 +24,15 @@ budget. Oversized payload evidence inside the selected neighborhood still
 fails before JSON allocation. Existing full-reader compaction behavior remains
 unchanged when no explicit handler selection is supplied.
 
+The first restricted rerun after this change had no input-admission, traversal,
+event-chain, or boundary limit classification. It retained exactly one
+`WebFormsModernizationGapLimitReached`, so its remaining `truncated: true` was
+the 1,000-row output gap cap. The committed page-list wrapper now passes
+`--max-gaps 5000` and reports any remaining `LimitReached` or
+`TruncatedByLimit` classifications directly after publication. This changes
+report retention only; it does not widen graph traversal, scan the repository,
+or alter application evidence.
+
 ## Retained-index page-list report (2026-09-06)
 
 Rebased this diagnostic branch cleanly onto `origin/dev` at `af72e8b9`, which

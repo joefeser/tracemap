@@ -29,6 +29,15 @@ handler/binding gaps. Static paths still do not prove runtime event firing,
 branch feasibility, successful binding, SQL execution, or whole-application
 coverage.
 
+The first selected-neighborhood rerun confirmed that
+`WebFormsModernizationInputLimitReached`, `TruncatedByLimit`, event-chain limits,
+and boundary limits were absent. Its sole truncation classification was
+`WebFormsModernizationGapLimitReached`, proving that the remaining `true` value
+came from the wrapper's default 1,000-row gap publication cap rather than graph
+admission. The wrapper now passes a bounded 5,000-row gap cap and prints the
+remaining limit classifications after each run. Pull and run the same
+zero-argument script again; no scan or source change is required.
+
 ## Tuesday handoff: report every page in a saved list
 
 Pull this branch, then open
