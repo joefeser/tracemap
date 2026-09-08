@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { builtinModules } from "node:module";
 import path from "node:path";
 import ts from "typescript";
@@ -956,6 +957,7 @@ function sourceReachabilityGraph(contexts: Map<string, SourceContext>): {
     /(^|\/)(?:pages\.config|main|index|App)\.[jt]sx?$/u.test(filePath)
     || /(^|\/)functions\/[^/]+\.[jt]sx?$/u.test(filePath)
     || /(^|\/)base44\/functions\/[^/]+\/(?:entry|index)\.[jt]sx?$/u.test(filePath)));
+  for (const htmlRoot of htmlEntrypointRoots(contexts)) roots.add(htmlRoot);
   for (const context of contexts.values()) {
     const targets = edges.get(context.item.relativePath) ?? new Set<string>();
     const visit = (node: ts.Node): void => {
@@ -1001,6 +1003,22 @@ function sourceReachabilityGraph(contexts: Map<string, SourceContext>): {
   const result = { closed, roots, reachable };
   sourceReachabilityCache.set(contexts, result);
   return result;
+}
+
+function htmlEntrypointRoots(contexts: Map<string, SourceContext>): string[] {
+  const first = contexts.values().next().value as SourceContext | undefined;
+  if (!first) return [];
+  let repositoryRoot = path.dirname(first.item.absolutePath);
+  for (let index = 1; index < first.item.relativePath.split("/").length; index++) repositoryRoot = path.dirname(repositoryRoot);
+  try {
+    const html = readFileSync(path.join(repositoryRoot, "index.html"), "utf8");
+    return [...html.matchAll(/\bsrc\s*=\s*["']([^"']+\.[cm]?[jt]sx?)["']/giu)]
+      .map((match) => match[1].replace(/^[./]+/u, ""))
+      .filter((candidate) => contexts.has(candidate))
+      .sort();
+  } catch {
+    return [];
+  }
 }
 
 function localSpecifierRequiresExecutableContext(
@@ -2215,6 +2233,7 @@ function evaluateSelectorCall(call: ts.CallExpression, context: SelectorEvaluati
     && ["values", "entries"].includes(callee.name.text) && call.arguments.length === 1) {
     const resolved = evaluateSelectorValues(call.arguments[0], context, new Set(visited));
     if (!resolved || resolved.some((item) => item.kind !== "object")) return null;
+    if (resolved.some((item) => item.openProperties)) return null;
     const elements: StaticSelectorValue[] = [];
     for (const item of resolved) for (const [name, values] of item.properties ?? []) {
       if (callee.name.text === "values") elements.push(...values);

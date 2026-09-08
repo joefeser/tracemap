@@ -105,6 +105,27 @@ export async function run(runtimeEntity) {
     expect(entityGaps.every((gap) => gap.category === "entity" && gap.surface.includes("entities.dynamic."))).toBe(true);
   });
 
+  it("keeps Object.values selectors open when object spreads make the value set unbounded", async () => {
+    const repo = await fixtureRepo();
+    await fs.writeFile(path.join(repo, "src/open-object-values.ts"), `import { base44 } from "@base44/sdk";
+export async function run(runtimeMap) {
+  for (const entity of Object.values({ Known: "Order", ...runtimeMap })) {
+    await base44.entities[entity].list();
+  }
+}
+`);
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-selector-open-object-values-"));
+    const { packet } = await buildBase44Evidence(options(repo, out));
+    const operations = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation
+      && fact.evidence.filePath === "src/open-object-values.ts");
+    expect(operations).toHaveLength(1);
+    expect(operations[0]).toEqual(expect.objectContaining({
+      evidenceTier: "Tier4Unknown",
+      targetSymbol: "dynamic"
+    }));
+    expect(operations[0].properties.entitySelectorGap).toBe("entity-selector-dynamic-unresolved");
+  });
+
   it("classifies only closed exported helpers outside the rooted module graph as dormant", async () => {
     const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-selector-dormant-"));
     await fs.mkdir(path.join(repo, "src"), { recursive: true });
@@ -212,6 +233,28 @@ export const load = (runtimePath) => import(runtimePath);
       targetSymbol: "dynamic",
       evidence: expect.objectContaining({ filePath: "src/dormant.ts" })
     }));
+  });
+
+  it("does not suppress helpers reachable only from an index.html module entrypoint", async () => {
+    const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-html-entrypoint-reachability-"));
+    await fs.mkdir(path.join(repo, "src"), { recursive: true });
+    await writeFrontendSdkAuthority(repo);
+    await fs.writeFile(path.join(repo, "index.html"), `<script type="module" src="/src/main.ts"></script><script type="module" src="/src/admin.ts"></script>`);
+    await fs.writeFile(path.join(repo, "src/main.ts"), `export const main = true;\n`);
+    await fs.writeFile(path.join(repo, "src/admin.ts"), `import { adminOnly } from "./dormant"; adminOnly({ name: "active" });\n`);
+    await fs.writeFile(path.join(repo, "src/dormant.ts"), `import { base44 } from "@base44/sdk";
+export async function adminOnly(data) { return base44.entities.AdminOnly.create(data); }
+`);
+    execFileSync("git", ["init", "-q"], { cwd: repo });
+    execFileSync("git", ["add", "."], { cwd: repo });
+    execFileSync("git", ["-c", "user.name=TraceMap Test", "-c", "user.email=tracemap@example.invalid", "commit", "-qm", "fixture"], { cwd: repo });
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-html-entrypoint-reachability-out-"));
+    const packet = (await buildBase44Evidence(options(repo, out))).packet;
+    expect(packet.facts.some((fact) => fact.factType === FactTypes.Base44EntityOperation
+      && fact.targetSymbol === "AdminOnly"
+      && fact.evidence.filePath === "src/dormant.ts")).toBe(true);
+    expect(packet.facts.some((fact) => fact.factType === FactTypes.Base44EntityCallsiteDisposition
+      && fact.evidence.filePath === "src/dormant.ts")).toBe(false);
   });
 
   it("never suppresses an exported React Query mutation handle or a module graph with a missing local edge", async () => {
@@ -2400,7 +2443,19 @@ export function Screen() {
       expect.objectContaining({ category: "http-integration", surface: "http-integration.Base44HttpTarget.dynamic" }),
       expect.objectContaining({ category: "unknown", surface: "unknown.Base44EnvironmentAccess.dynamic" })
     ]));
-    expect(first.packet.coverage.gaps.every((gap) => gap.factId !== null && gap.evidenceTier === "Tier4Unknown")).toBe(true);
+    expect(first.packet.coverage.gaps.every((gap) => gap.factId !== null
+      && gap.evidenceTier === "Tier4Unknown"
+      && gap.commitSha === first.packet.source.commitSha
+      && gap.filePath.length > 0
+      && gap.lineSpan.startLine >= 1
+      && gap.lineSpan.endLine >= gap.lineSpan.startLine
+      && gap.extractorVersion.length > 0)).toBe(true);
+    const markdown = await fs.readFile(path.join(out, "base44-evidence.md"), "utf8");
+    const html = await fs.readFile(path.join(out, "base44-evidence.html"), "utf8");
+    expect(markdown).toContain("Coverage status: `partial:4:producer-owned-coverage-gaps`");
+    expect(markdown).toContain("## Producer-owned coverage gaps");
+    expect(html).toContain("Coverage status:");
+    expect(html).toContain("Producer-owned coverage gaps");
 
     const duplicate = structuredClone(first.packet);
     duplicate.coverage.gaps.push(structuredClone(duplicate.coverage.gaps[0]));
@@ -2433,6 +2488,26 @@ export function Screen() {
       reclassifiedPath,
       path.join(out, "reclassified-diff.json")
     )).rejects.toThrow("do not match the source-bound Tier4 fact set exactly once");
+
+    const legacy = structuredClone(first.packet);
+    for (const fact of legacy.facts) fact.evidence.extractorVersion = "base44-evidence/0.6.0";
+    delete (legacy.coverage as any).gapSchemaVersion;
+    delete (legacy.coverage as any).gaps;
+    const legacyPath = path.join(out, "legacy-v1-without-gaps.json");
+    await fs.writeFile(legacyPath, `${JSON.stringify(legacy, null, 2)}\n`);
+    const legacyDiff = await diffBase44Evidence(legacyPath, legacyPath, path.join(out, "legacy-diff.json"));
+    expect(legacyDiff.unchangedCount).toBe(legacy.facts.length);
+
+    const currentMissingGaps = structuredClone(first.packet);
+    delete (currentMissingGaps.coverage as any).gapSchemaVersion;
+    delete (currentMissingGaps.coverage as any).gaps;
+    const currentMissingPath = path.join(out, "current-missing-gaps.json");
+    await fs.writeFile(currentMissingPath, `${JSON.stringify(currentMissingGaps, null, 2)}\n`);
+    await expect(diffBase44Evidence(
+      path.join(out, "base44-evidence.json"),
+      currentMissingPath,
+      path.join(out, "current-missing-gaps-diff.json")
+    )).rejects.toThrow("Unsupported Base44 coverage gap schema");
   });
 
   it("does not classify conventional migrations as Base44 without a Base44 signal", async () => {

@@ -27,10 +27,14 @@ export interface Base44CoverageGap {
   factId: string;
   ruleId: string;
   evidenceTier: typeof EvidenceTiers.Tier4Unknown;
+  filePath: string;
+  lineSpan: { startLine: number; endLine: number };
+  commitSha: string;
+  extractorVersion: string;
 }
 
 type CoverageGapFact = Pick<CodeFact,
-  "factId" | "factType" | "ruleId" | "evidenceTier" | "targetSymbol" | "contractElement" | "properties">;
+  "factId" | "factType" | "ruleId" | "evidenceTier" | "targetSymbol" | "contractElement" | "properties" | "evidence">;
 
 export interface Base44EvidenceOptions extends ScanOptions {
   acceptedSourceSha256: string;
@@ -207,6 +211,7 @@ function packetFact(fact: CodeFact): Base44PacketFact {
 async function readPacket(filePath: string): Promise<Base44EvidencePacket> {
   const value = JSON.parse(await fs.readFile(filePath, "utf8")) as Base44EvidencePacket;
   if (value.schemaVersion !== base44PacketSchemaVersion || !Array.isArray(value.facts)) throw new Error(`Unsupported Base44 evidence packet: ${filePath}`);
+  normalizeLegacyCoverageGaps(value);
   validateCoverageGaps(value);
   return value;
 }
@@ -250,8 +255,30 @@ function coverageGapForFact(
     category,
     factId: fact.factId,
     ruleId: fact.ruleId,
-    evidenceTier: EvidenceTiers.Tier4Unknown
+    evidenceTier: EvidenceTiers.Tier4Unknown,
+    filePath: fact.evidence.filePath,
+    lineSpan: { startLine: fact.evidence.startLine, endLine: fact.evidence.endLine },
+    commitSha: source.commitSha,
+    extractorVersion: fact.evidence.extractorVersion
   };
+}
+
+function normalizeLegacyCoverageGaps(packet: Base44EvidencePacket): void {
+  if (packet.coverage?.gapSchemaVersion === base44CoverageGapSchemaVersion && Array.isArray(packet.coverage.gaps)) return;
+  if (!legacyCoverageGapShapeAllowed(packet)) return;
+  packet.coverage.gapSchemaVersion = base44CoverageGapSchemaVersion;
+  packet.coverage.gaps = buildCoverageGaps(
+    packet.facts.filter((fact) => fact.evidenceTier === EvidenceTiers.Tier4Unknown),
+    packet.source
+  );
+}
+
+function legacyCoverageGapShapeAllowed(packet: Base44EvidencePacket): boolean {
+  const versions = unique(packet.facts.map((fact) => fact.evidence?.extractorVersion ?? "").filter(Boolean));
+  return versions.length > 0 && versions.every((version) => {
+    const match = /^base44-evidence\/0\.(\d+)\.\d+$/u.exec(version);
+    return match !== null && Number(match[1]) <= 6;
+  });
 }
 
 function coverageGapCategory(fact: Pick<CodeFact, "factType" | "properties">): Base44CoverageGapCategory {
@@ -348,6 +375,13 @@ function validateCoverageGaps(packet: Base44EvidencePacket): void {
     if (!/^fact-[0-9a-f]{20}$/.test(gap.factId)) throw new Error(`Base44 coverage gap ${index} has an invalid factId`);
     if (!gap.ruleId.startsWith("base44.")) throw new Error(`Base44 coverage gap ${index} has an invalid ruleId`);
     if (gap.evidenceTier !== EvidenceTiers.Tier4Unknown) throw new Error(`Base44 coverage gap ${index} must retain Tier4Unknown`);
+    if (typeof gap.filePath !== "string" || gap.filePath.length === 0) throw new Error(`Base44 coverage gap ${index} has an invalid filePath`);
+    if (gap.commitSha !== packet.source.commitSha) throw new Error(`Base44 coverage gap ${index} has an invalid commitSha`);
+    if (!gap.lineSpan || !Number.isInteger(gap.lineSpan.startLine) || !Number.isInteger(gap.lineSpan.endLine)
+      || gap.lineSpan.startLine < 1 || gap.lineSpan.endLine < gap.lineSpan.startLine) {
+      throw new Error(`Base44 coverage gap ${index} has an invalid lineSpan`);
+    }
+    if (typeof gap.extractorVersion !== "string" || gap.extractorVersion.length === 0) throw new Error(`Base44 coverage gap ${index} has an invalid extractorVersion`);
   }
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
     throw new Error("Base44 coverage gaps do not match the source-bound Tier4 fact set exactly once");
@@ -979,6 +1013,7 @@ function factKey(fact: Base44PacketFact): string {
 
 function packetMarkdown(packet: Base44EvidencePacket): string {
   const counts = countFacts(packet.facts);
+  const gapLines = coverageGapMarkdown(packet);
   return `${[
     "# TraceMap Base44 Static Evidence",
     "",
@@ -988,6 +1023,7 @@ function packetMarkdown(packet: Base44EvidencePacket): string {
     `- Accepted tree SHA-256: \`${packet.source.acceptedTreeSha256}\``,
     `- Coverage: \`${packet.coverage.label}\``,
     `- Analysis: \`${packet.coverage.analysisLevel}\``,
+    `- Coverage status: \`${coverageStatus(packet)}\``,
     "",
     "## Static fact counts",
     "",
@@ -999,6 +1035,10 @@ function packetMarkdown(packet: Base44EvidencePacket): string {
     "",
     ...(packet.coverage.knownGaps.length ? packet.coverage.knownGaps.map((gap) => `- ${gap}`) : ["- None recorded by this scan."]),
     "",
+    "## Producer-owned coverage gaps",
+    "",
+    ...gapLines,
+    "",
     "## Limitations",
     "",
     ...packet.limitations.map((item) => `- ${item}`),
@@ -1008,7 +1048,20 @@ function packetMarkdown(packet: Base44EvidencePacket): string {
 
 function packetHtml(packet: Base44EvidencePacket): string {
   const rows = Object.entries(countFacts(packet.facts)).map(([name, count]) => `<tr><td>${escapeHtml(name)}</td><td>${count}</td></tr>`).join("");
-  return `<!doctype html><html lang="en"><meta charset="utf-8"><title>TraceMap Base44 Static Evidence</title><style>body{font:16px system-ui;max-width:72rem;margin:2rem auto;padding:0 1rem;color:#18202a}code{word-break:break-all}table{border-collapse:collapse}th,td{border:1px solid #ccd3da;padding:.5rem;text-align:left}.warning{background:#fff4ce;padding:1rem}</style><main><h1>TraceMap Base44 Static Evidence</h1><p><strong>Repo:</strong> ${escapeHtml(packet.source.repo)}</p><p><strong>Commit:</strong> <code>${escapeHtml(packet.source.commitSha)}</code></p><p><strong>Accepted source:</strong> <code>${escapeHtml(packet.source.acceptedSourceSha256)}</code></p><p><strong>Accepted tree:</strong> <code>${escapeHtml(packet.source.acceptedTreeSha256)}</code></p><p><strong>Coverage:</strong> ${escapeHtml(packet.coverage.label)}</p><p class="warning">Static evidence is not runtime proof. Absence is coverage-qualified.</p><table><thead><tr><th>Fact type</th><th>Count</th></tr></thead><tbody>${rows}</tbody></table><h2>Known gaps</h2><ul>${packet.coverage.knownGaps.map((gap) => `<li>${escapeHtml(gap)}</li>`).join("") || "<li>None recorded by this scan.</li>"}</ul></main></html>\n`;
+  const gapRows = packet.coverage.gaps.map((gap) => `<tr><td>${escapeHtml(gap.category)}</td><td>${escapeHtml(gap.surface)}</td><td>${escapeHtml(gap.filePath)}:${gap.lineSpan.startLine}-${gap.lineSpan.endLine}</td><td>${escapeHtml(gap.ruleId)}</td></tr>`).join("");
+  return `<!doctype html><html lang="en"><meta charset="utf-8"><title>TraceMap Base44 Static Evidence</title><style>body{font:16px system-ui;max-width:72rem;margin:2rem auto;padding:0 1rem;color:#18202a}code{word-break:break-all}table{border-collapse:collapse}th,td{border:1px solid #ccd3da;padding:.5rem;text-align:left}.warning{background:#fff4ce;padding:1rem}</style><main><h1>TraceMap Base44 Static Evidence</h1><p><strong>Repo:</strong> ${escapeHtml(packet.source.repo)}</p><p><strong>Commit:</strong> <code>${escapeHtml(packet.source.commitSha)}</code></p><p><strong>Accepted source:</strong> <code>${escapeHtml(packet.source.acceptedSourceSha256)}</code></p><p><strong>Accepted tree:</strong> <code>${escapeHtml(packet.source.acceptedTreeSha256)}</code></p><p><strong>Coverage:</strong> ${escapeHtml(packet.coverage.label)}</p><p><strong>Coverage status:</strong> ${escapeHtml(coverageStatus(packet))}</p><p class="warning">Static evidence is not runtime proof. Absence is coverage-qualified.</p><table><thead><tr><th>Fact type</th><th>Count</th></tr></thead><tbody>${rows}</tbody></table><h2>Known gaps</h2><ul>${packet.coverage.knownGaps.map((gap) => `<li>${escapeHtml(gap)}</li>`).join("") || "<li>None recorded by this scan.</li>"}</ul><h2>Producer-owned coverage gaps</h2>${gapRows ? `<table><thead><tr><th>Category</th><th>Surface</th><th>Source</th><th>Rule</th></tr></thead><tbody>${gapRows}</tbody></table>` : "<p>None recorded by this scan.</p>"}</main></html>\n`;
+}
+
+function coverageStatus(packet: Base44EvidencePacket): string {
+  return packet.coverage.gaps.length > 0
+    ? `partial:${packet.coverage.gaps.length}:producer-owned-coverage-gaps`
+    : "complete-within-declared-coverage";
+}
+
+function coverageGapMarkdown(packet: Base44EvidencePacket): string[] {
+  if (!packet.coverage.gaps.length) return ["- None recorded by this scan."];
+  return packet.coverage.gaps.map((gap) =>
+    `- \`${gap.category}\` ${gap.surface} at \`${gap.filePath}:${gap.lineSpan.startLine}-${gap.lineSpan.endLine}\` (${gap.ruleId})`);
 }
 
 function diffMarkdown(diff: Base44Diff): string {
