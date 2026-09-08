@@ -192,7 +192,10 @@ function queryFact(input: EntityShapeInput, context: ShapeContext): CodeFact {
   // completeness. Legacy shape projection may not repeat a finite caller-bound
   // parameter proof; do not turn an independently complete descriptor back
   // into a contradictory Tier4 gap.
-  if (querySemantics?.completeness === "complete") gaps.length = 0;
+  if (querySemantics?.completeness === "complete") {
+    gaps.length = 0;
+    addQueryDescriptorFields(accumulated, querySemantics, input);
+  }
 
   const analysis: ShapeAnalysis = {
     constructionKind: `${input.operationName}-arguments`,
@@ -205,6 +208,144 @@ function queryFact(input: EntityShapeInput, context: ShapeContext): CodeFact {
     gaps: unique(gaps)
   };
   return shapeFact(input, FactTypes.Base44EntityQuery, RuleIds.Base44EntityQuery, -1, "query", analysis, querySemantics);
+}
+
+function addQueryDescriptorFields(
+  analysis: ShapeAnalysis,
+  querySemantics: NonNullable<ReturnType<typeof extractQuerySemantics>>,
+  input: EntityShapeInput
+): void {
+  const existing = new Set(analysis.fields.map((field) => `${field.origin}:${field.name}`));
+  const existingFilterFields = new Set(analysis.fields
+    .filter((field) => field.origin.startsWith("filter:"))
+    .map((field) => field.name));
+  const add = (
+    name: string,
+    presence: Presence,
+    origin: string,
+    span: QueryDescriptorSpan | undefined
+  ): void => {
+    if (!isSafeFieldName(name) || !descriptorSpanInSource(span, input.sourceText)) return;
+    if (origin.startsWith("filter:") && existingFilterFields.has(name)) return;
+    const key = `${origin}:${name}`;
+    if (existing.has(key)) return;
+    existing.add(key);
+    if (origin.startsWith("filter:")) existingFilterFields.add(name);
+    analysis.fields.push(descriptorFieldEvidence(name, presence, origin, span, input));
+  };
+
+  for (const argument of querySemantics.arguments ?? []) {
+    if (!isQueryDescriptorArgument(argument) || argument.presence !== "supplied") continue;
+    if (argument.role === "filter" && isQueryFilterDescriptor(argument.value)) {
+      for (const entry of argument.value.entries) {
+        if (!isQueryFieldDescriptor(entry)) continue;
+        const presence: Presence = entry.presence === "conditional" ? "conditional" : "unconditional";
+        if (entry.form === "implicit") {
+          add(entry.field, presence, `filter:${descriptorImplicitOrigin(entry.operand)}`, entry.operand?.span ?? argument.span);
+        } else if (entry.form === "operators" && Array.isArray(entry.operators) && entry.operators.length > 0) {
+          const operator = entry.operators[0];
+          add(entry.field, presence, "filter:expression:object-literal", operator?.operand?.span ?? argument.span);
+        }
+      }
+      continue;
+    }
+    if (argument.role === "sort" && isNamedFieldsDescriptor(argument.value)) {
+      for (const field of argument.value.fields) add(field.name, "unconditional", "sort-argument", argument.span);
+      continue;
+    }
+    if (argument.role === "fields" && isSelectionDescriptor(argument.value)) {
+      for (const field of argument.value.fields) add(field, "unconditional", "select-argument", argument.span);
+    }
+  }
+}
+
+interface QueryDescriptorSpan {
+  start: number;
+  end: number;
+}
+
+interface QueryDescriptorArgument {
+  role: string;
+  presence: string;
+  span?: QueryDescriptorSpan;
+  value?: unknown;
+}
+
+interface QueryFieldDescriptor {
+  field: string;
+  form: string;
+  presence?: string;
+  operand?: { kind?: string; type?: string; span?: QueryDescriptorSpan };
+  operators: Array<{ operand?: { span?: QueryDescriptorSpan } }>;
+}
+
+function isQueryDescriptorArgument(value: unknown): value is QueryDescriptorArgument {
+  return !!value && typeof value === "object" && typeof (value as QueryDescriptorArgument).role === "string"
+    && typeof (value as QueryDescriptorArgument).presence === "string";
+}
+
+function isQueryFilterDescriptor(value: unknown): value is { kind: "filter"; entries: unknown[] } {
+  return !!value && typeof value === "object" && (value as { kind?: unknown }).kind === "filter"
+    && Array.isArray((value as { entries?: unknown }).entries);
+}
+
+function isQueryFieldDescriptor(value: unknown): value is QueryFieldDescriptor {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as { field?: unknown; form?: unknown; operators?: unknown };
+  return typeof candidate.field === "string" && typeof candidate.form === "string"
+    && (candidate.operators === undefined || Array.isArray(candidate.operators));
+}
+
+function isNamedFieldsDescriptor(value: unknown): value is { kind: "fields"; fields: Array<{ name: string }> } {
+  return !!value && typeof value === "object" && (value as { kind?: unknown }).kind === "fields"
+    && Array.isArray((value as { fields?: unknown }).fields)
+    && (value as { fields: unknown[] }).fields.every((field) => !!field && typeof field === "object"
+      && typeof (field as { name?: unknown }).name === "string");
+}
+
+function isSelectionDescriptor(value: unknown): value is { kind: "selection"; fields: string[] } {
+  return !!value && typeof value === "object" && (value as { kind?: unknown }).kind === "selection"
+    && Array.isArray((value as { fields?: unknown }).fields)
+    && (value as { fields: unknown[] }).fields.every((field) => typeof field === "string");
+}
+
+function descriptorImplicitOrigin(operand: { kind?: string; type?: string } | undefined): string {
+  if (operand?.kind === "literal") return operand.type === "number" ? "expression:unary-expression" : "literal";
+  if (operand?.kind === "array") return "expression:array-literal";
+  if (operand?.kind === "reference") return "binding:querySemantics";
+  return "expression:unresolved";
+}
+
+function descriptorSpanInSource(span: QueryDescriptorSpan | undefined, sourceText: string): span is QueryDescriptorSpan {
+  return !!span && Number.isSafeInteger(span.start) && Number.isSafeInteger(span.end)
+    && span.start >= 0 && span.end > span.start && span.end <= sourceText.length;
+}
+
+function descriptorFieldEvidence(
+  name: string,
+  presence: Presence,
+  origin: string,
+  span: QueryDescriptorSpan,
+  input: EntityShapeInput
+): ShapeField {
+  const start = input.source.getLineAndCharacterOfPosition(span.start).line + 1;
+  const end = input.source.getLineAndCharacterOfPosition(span.end).line + 1;
+  return {
+    name,
+    presence,
+    expressionType: "query-descriptor",
+    origin,
+    evidenceStartLine: start,
+    evidenceEndLine: end,
+    evidenceStartOffset: span.start,
+    evidenceEndOffset: span.end,
+    evidenceFilePath: input.filePath,
+    evidenceSourceFileSha256: hash(input.sourceText, 64),
+    evidenceSnippetHash: hash(input.sourceText.slice(span.start, span.end), 64),
+    semanticPresence: semanticPresence(presence),
+    valueType: "unknown",
+    explicitNull: false
+  };
 }
 
 function addSortEvidence(expression: ts.Expression | undefined, fields: ShapeField[], bindings: string[], gaps: string[], context?: ShapeContext): void {
