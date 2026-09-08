@@ -397,3 +397,25 @@ and aggregate handler-owned call-edge counts.
 Validation: focused packet tests 15/15; full .NET solution 1,763/1,763;
 changed-file format verification and PowerShell parser clean. Private-path and
 diff checks pass.
+
+### Exact handler-call support bridge
+
+The field split found 137/143 resolved nonterminal chains with 3,032 exact
+handler-owned call-edge references. The bounded reader now seeds canonical
+handler display identities directly from the selected handler facts and admits
+the projection's exact supported call facts. Only
+compiler-resolved call targets seed further target-symbol closure. Graph
+construction re-anchors a call only when one exact Web Forms handler is in the
+projection support set, the projection source equals its canonical handler
+identity, and the call fact ID occurs in both support lists. The bridge is a
+`webforms-handler-call-support-projection` under
+`legacy.flow.static-traversal.v1`, remains review-tier projection evidence, and
+does not join unrelated same-named calls. Packet path matching now recognizes
+both canonical handler display identity and symbol ID. Syntax-only call targets
+remain isolated candidates and cannot create global simple-name joins.
+
+Validation: focused Web Forms packet and bounded-memory tests 29/29; full .NET
+solution 1,764/1,764; changed-file format verification clean. The synthetic
+reduced-analysis index proves an exact supported canonical call can continue to
+an SQL terminal while excluding an unsupported same-named call; a separate
+fixture proves syntax-only support stops at one isolated projected candidate.

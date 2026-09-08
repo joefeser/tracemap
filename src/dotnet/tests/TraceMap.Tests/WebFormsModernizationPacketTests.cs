@@ -124,6 +124,9 @@ public sealed class WebFormsModernizationPacketTests
         var unjoinedSyntaxCall = Fact(manifest, FactTypes.CallEdge, RuleIds.CSharpSyntaxCallGraph, "Pages/Traversal.aspx.cs", 25,
             source: "Unjoined_Click", target: "Save", contract: "Save",
             ("callerName", "Unjoined_Click"), ("calleeName", "Save"), ("coverageLabel", "syntax-only"));
+        var unrelatedSameNameCall = Fact(manifest, FactTypes.CallEdge, RuleIds.CSharpSyntaxCallGraph, "Other/Traversal.aspx.cs", 25,
+            source: "Unjoined_Click", target: "Unrelated", contract: "Unrelated",
+            ("callerName", "Unjoined_Click"), ("calleeName", "Unrelated"), ("coverageLabel", "syntax-only"));
         var unjoinedFlow = Fact(manifest, FactTypes.WebFormsEventFlowProjected, RuleIds.LegacyWebFormsEventFlow, "Pages/Traversal.aspx.cs", 21,
             source: "method:unjoined", target: "flow-terminal-unavailable", contract: "Unjoined_Click",
             ("supportingFactIds", $"{handlers[1].FactId},{unjoinedSyntaxCall.FactId}"),
@@ -138,7 +141,7 @@ public sealed class WebFormsModernizationPacketTests
             ("operationName", "SELECT"), ("tableName", "items"), ("columnNames", "id"),
             ("sqlSourceKind", "literal-string"), ("queryShapeHash", "shape-hash"), ("coverageLabel", "bounded-static-query"));
         var index = Path.Combine(temp.Path, "index.sqlite");
-        SqliteIndexWriter.Write(index, manifest, [page, .. bindings, .. handlers, unjoinedSyntaxCall, unjoinedFlow, downstreamCall, terminalCall, query]);
+        SqliteIndexWriter.Write(index, manifest, [page, .. bindings, .. handlers, unjoinedSyntaxCall, unrelatedSameNameCall, unjoinedFlow, downstreamCall, terminalCall, query]);
 
         var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(index, Path.Combine(temp.Path, "output")));
 
@@ -148,9 +151,10 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Equal("no-handler-owned-call-evidence-retained", noEdge.TraversalObservation?.CallEvidenceState);
         Assert.Equal(0, noEdge.TraversalObservation?.HandlerOwnedCallEvidenceCount);
         var unjoined = packet.EventChains.Single(chain => chain.HandlerFactId == handlers[1].FactId);
-        Assert.Equal("no-observed-downstream-edge", unjoined.TraversalObservation?.StopState);
-        Assert.Equal("handler-owned-call-evidence-unjoined", unjoined.TraversalObservation?.CallEvidenceState);
+        Assert.Equal("observed-downstream-without-supported-terminal", unjoined.TraversalObservation?.StopState);
+        Assert.Equal("joined-downstream-edge-observed", unjoined.TraversalObservation?.CallEvidenceState);
         Assert.Equal(1, unjoined.TraversalObservation?.HandlerOwnedCallEvidenceCount);
+        Assert.Equal(1, unjoined.TraversalObservation?.DownstreamEdgeCount);
         var downstream = packet.EventChains.Single(chain => chain.HandlerFactId == handlers[2].FactId);
         Assert.Equal("observed-downstream-without-supported-terminal", downstream.TraversalObservation?.StopState);
         Assert.True(downstream.TraversalObservation?.DownstreamEdgeCount > 0);
@@ -164,6 +168,68 @@ public sealed class WebFormsModernizationPacketTests
             Assert.Equal(RuleIds.LegacyFlowStaticTraversal, chain.TraversalObservation?.RuleId);
             Assert.Contains("do not prove runtime", string.Join(' ', chain.TraversalObservation?.Limitations ?? []), StringComparison.OrdinalIgnoreCase);
         });
+    }
+
+    [Fact]
+    public async Task Handler_owned_canonical_call_support_seeds_exact_closure_and_continues_to_a_terminal()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("FailedOrPartial") with { AnalysisLevel = "Level1SemanticAnalysisReduced" };
+        const string surface = "webforms-surface:projected";
+        const string handlerSymbolId = "symbol-id:projected-handler";
+        const string handlerSymbol = "Sample.Projected.Save_Click(object, System.EventArgs)";
+        var page = Fact(manifest, FactTypes.WebFormsPageDeclared, RuleIds.LegacyWebFormsInventory, "Pages/Projected.aspx", 1,
+            source: surface, target: "Sample.Projected", contract: "Projected.aspx",
+            ("surfaceIdentity", surface), ("directiveKind", "Page"), ("coverageLabel", "bounded-static-webforms-inventory"));
+        var binding = Fact(manifest, FactTypes.WebFormsEventBindingDeclared, RuleIds.LegacyWebFormsEventBinding, "Pages/Projected.aspx", 8,
+            source: "control:save", target: handlerSymbolId, contract: "Save_Click",
+            ("surfaceIdentity", surface), ("eventSourceIdentity", "control:save"), ("eventName", "OnClick"),
+            ("controlId", "save"), ("handlerName", "Save_Click"), ("markupFile", "Pages/Projected.aspx"),
+            ("coverageLabel", "bounded-static-webforms-event"));
+        var handler = Fact(manifest, FactTypes.WebFormsHandlerResolved, RuleIds.LegacyWebFormsHandlerResolution, "Pages/Projected.aspx.cs", 20,
+            source: "control:save", target: handlerSymbolId, contract: "Save_Click",
+            ("surfaceIdentity", surface), ("bindingFactId", binding.FactId), ("handlerSymbolId", handlerSymbolId),
+            ("handlerSymbol", handlerSymbol), ("handlerName", "Save_Click"), ("controlId", "save"),
+            ("eventName", "OnClick"), ("markupFile", "Pages/Projected.aspx"),
+            ("coverageLabel", "reduced-static-webforms-handler"));
+        var supportedCall = Fact(manifest, FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, "Pages/Projected.aspx.cs", 24,
+            source: handlerSymbol, target: "Sample.ProjectedService.Save()", contract: "Save",
+            ("callerName", "Save_Click"), ("calleeName", "Save"), ("coverageLabel", "bounded-static-call"));
+        var downstreamCall = Fact(manifest, FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, "Services/ProjectedService.cs", 12,
+            source: "Sample.ProjectedService.Save()", target: "method:projected-query", contract: "Execute",
+            ("coverageLabel", "bounded-static-call"));
+        var terminal = Fact(manifest, FactTypes.QueryPatternDetected, RuleIds.CSharpSyntaxQueryPattern, "Services/ProjectedRepository.cs", 30,
+            source: "method:projected-query", target: "projected-query-shape", contract: "query",
+            ("operationName", "SELECT"), ("tableName", "items"), ("columnNames", "id"),
+            ("sqlSourceKind", "literal-string"), ("queryShapeHash", "projected-shape-hash"),
+            ("coverageLabel", "bounded-static-query"));
+        var unrelatedSameNameCall = Fact(manifest, FactTypes.CallEdge, RuleIds.CSharpSyntaxCallGraph, "Other/Projected.aspx.cs", 24,
+            source: "Save_Click", target: "method:unrelated-query", contract: "Unrelated",
+            ("callerName", "Save_Click"), ("calleeName", "Unrelated"), ("coverageLabel", "syntax-only"));
+        var unrelatedTerminal = Fact(manifest, FactTypes.QueryPatternDetected, RuleIds.CSharpSyntaxQueryPattern, "Other/Repository.cs", 30,
+            source: "method:unrelated-query", target: "unrelated-query-shape", contract: "query",
+            ("operationName", "DELETE"), ("tableName", "other"), ("columnNames", "id"),
+            ("sqlSourceKind", "literal-string"), ("queryShapeHash", "unrelated-shape-hash"),
+            ("coverageLabel", "bounded-static-query"));
+        var flow = Fact(manifest, FactTypes.WebFormsEventFlowProjected, RuleIds.LegacyWebFormsEventFlow, "Pages/Projected.aspx.cs", 20,
+            source: handlerSymbol, target: "flow-terminal-unavailable", contract: "Save_Click",
+            ("supportingFactIds", $"{handler.FactId},{supportedCall.FactId}"),
+            ("supportingEdgeIds", supportedCall.FactId), ("flowClassification", "UnknownAnalysisGap"),
+            ("coverageLabel", "reduced-static-webforms-flow"));
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, manifest,
+            [page, binding, handler, supportedCall, downstreamCall, terminal, unrelatedSameNameCall, unrelatedTerminal, flow]);
+
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(index, Path.Combine(temp.Path, "output")));
+
+        var chain = Assert.Single(packet.EventChains);
+        Assert.Equal("sql-query", chain.TerminalKind);
+        Assert.Equal(CombinedDependencyPathClassifications.ProbableStaticPath, chain.Classification);
+        Assert.Equal("joined-downstream-edge-observed", chain.TraversalObservation?.CallEvidenceState);
+        Assert.Equal(1, chain.TraversalObservation?.HandlerOwnedCallEvidenceCount);
+        Assert.True(chain.TraversalObservation?.DownstreamEdgeCount >= 2);
+        Assert.Contains(chain.PathEvidence, evidence => evidence.FilePath == "Pages/Projected.aspx.cs" && evidence.RuleId == RuleIds.CSharpSemanticCallGraph);
+        Assert.DoesNotContain(chain.PathEvidence, evidence => evidence.FilePath?.StartsWith("Other/", StringComparison.Ordinal) == true);
     }
 
     [Fact]

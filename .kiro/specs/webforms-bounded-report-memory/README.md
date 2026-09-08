@@ -64,6 +64,14 @@ IDs already attributed to that exact handler by the Web Forms flow projection;
 the latter is a bounded retained-evidence result, not proof that the source has
 no calls. This separates an identity/composition follow-up from an extraction
 coverage follow-up without exposing handler names or private paths.
+The bounded graph now seeds both canonical identities from the exact handler
+fact and re-anchors syntax support using only the exact handler and call fact
+IDs already carried by the projection. Compiler-resolved targets can
+continue through the ordinary bounded symbol closure; syntax-only targets stop
+at an isolated candidate instead of joining globally by a simple method name.
+Same-named calls outside the projection support set remain excluded, and every
+bridge remains a static projection candidate under
+`legacy.flow.static-traversal.v1`.
 Handler-unavailable chains receive their own alias and linked-gap summary.
 These are bounded static observations, not runtime presence, absence, execution,
 branch feasibility, successful binding, or broken-code claims.

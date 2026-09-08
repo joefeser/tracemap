@@ -190,6 +190,20 @@ the primitive path and projection disagree on terminal identity or
 classification, the result is capped at `NeedsReviewStaticPath` and includes an
 ambiguity note rather than choosing the stronger conclusion.
 
+For bounded Web Forms reads, the exact resolved handler fact seeds both its
+canonical display identity and symbol ID. A handler-flow projection may also
+re-anchor an already retained call edge from that handler. Admission
+requires one supported handler fact, the projection source to equal that
+handler's canonical display identity, and the call fact ID to appear in both
+`supportingFactIds` and `supportingEdgeIds`. The bounded reader admits only those
+exact call facts. Compiler-resolved call targets may seed ordinary target-symbol
+closure; syntax-only targets remain isolated call-target candidates so a simple
+method name cannot join unrelated callers. Same-named calls elsewhere are not
+candidates. Canonical compiler-resolved edges retain their own evidence; the
+bridge remains projection evidence under
+`legacy.flow.static-traversal.v1`; it cannot upgrade confidence or prove runtime
+dispatch, execution, binding, or reachability.
+
 ## Proposed Rule IDs
 
 Add rule catalog entries before implementation emits new results:

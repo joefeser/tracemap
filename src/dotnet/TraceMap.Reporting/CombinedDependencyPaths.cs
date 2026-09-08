@@ -1312,6 +1312,7 @@ public static partial class CombinedDependencyPathReporter
 
         foreach (var projection in facts.Where(fact => fact.FactType is FactTypes.WebFormsEventFlowProjected or FactTypes.WinFormsHandlerFlowProjected).OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
         {
+            AddHandlerOwnedCallProjectionEdges(graph, projection, factsBySourceOriginalId);
             AddProjectionEdge(graph, projection, factsBySourceOriginalId, surfacesByKind);
         }
 
@@ -1627,6 +1628,129 @@ public static partial class CombinedDependencyPathReporter
             SafePath(projection.FilePath),
             projection.StartLine,
             projection.EndLine));
+    }
+
+    private static void AddHandlerOwnedCallProjectionEdges(
+        EvidenceGraph graph,
+        CombinedFactRow projection,
+        IReadOnlyDictionary<string, CombinedFactRow> factsBySourceOriginalId)
+    {
+        if (projection.FactType != FactTypes.WebFormsEventFlowProjected)
+        {
+            return;
+        }
+
+        var supportingIds = SplitList(CombinedDependencyReporter.FirstValue(projection.Properties, "supportingFactIds"))
+            .ToHashSet(StringComparer.Ordinal);
+        var handlers = supportingIds
+            .Select(id => factsBySourceOriginalId.GetValueOrDefault(SourceFactKey(projection.SourceIndexId, id)))
+            .Where(fact => fact?.FactType == FactTypes.WebFormsHandlerResolved)
+            .Cast<CombinedFactRow>()
+            .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal)
+            .ToArray();
+        if (handlers.Length != 1)
+        {
+            return;
+        }
+
+        var handler = handlers[0];
+        var handlerSymbol = HandlerSymbol(handler);
+        if (string.IsNullOrWhiteSpace(handlerSymbol)
+            || !string.Equals(projection.SourceSymbol, handlerSymbol, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var source = graph.GetOrAddSymbolNode(
+            handler.SourceIndexId,
+            handler.SourceLabel,
+            handlerSymbol,
+            handler.FilePath,
+            handler.StartLine,
+            handler.EndLine,
+            handler.RuleId,
+            handler.EvidenceTier);
+        foreach (var edgeId in SplitList(CombinedDependencyReporter.FirstValue(projection.Properties, "supportingEdgeIds")))
+        {
+            if (!supportingIds.Contains(edgeId)
+                || !factsBySourceOriginalId.TryGetValue(SourceFactKey(projection.SourceIndexId, edgeId), out var call)
+                || call.FactType != FactTypes.CallEdge
+                || string.IsNullOrWhiteSpace(call.SourceSymbol)
+                || string.IsNullOrWhiteSpace(call.TargetSymbol)
+                || string.Equals(call.SourceSymbol, handlerSymbol, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var target = call.EvidenceTier == EvidenceTiers.Tier1Semantic
+                ? graph.GetOrAddSymbolNode(
+                    call.SourceIndexId,
+                    call.SourceLabel,
+                    call.TargetSymbol,
+                    call.FilePath,
+                    call.StartLine,
+                    call.EndLine,
+                    call.RuleId,
+                    call.EvidenceTier)
+                : ToHandlerCallProjectionNode(call);
+            graph.AddNode(target);
+            if (source.NodeId == target.NodeId || HasExistingNonProjectionPath(graph, source.NodeId, target.NodeId, maxDepth: 1))
+            {
+                continue;
+            }
+
+            graph.AddEdge(new GraphEdge(
+                $"legacy-handler-call:{projection.CombinedFactId}:{call.CombinedFactId}",
+                "webforms-handler-call-support-projection",
+                source.NodeId,
+                target.NodeId,
+                "EvidenceEdge",
+                RuleIds.LegacyFlowStaticTraversal,
+                MaxEvidenceTier(projection.EvidenceTier, call.EvidenceTier),
+                SupportingFacts(projection, factsBySourceOriginalId)
+                    .Append(handler.CombinedFactId)
+                    .Append(call.CombinedFactId)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(value => value, StringComparer.Ordinal)
+                    .ToArray(),
+                [call.CombinedFactId],
+                SafePath(call.FilePath),
+                call.StartLine,
+                call.EndLine));
+        }
+    }
+
+    private static GraphNode ToHandlerCallProjectionNode(CombinedFactRow call)
+    {
+        var targetHash = Hash(call.TargetSymbol ?? call.CombinedFactId, 16);
+        return new GraphNode(
+            $"handler-call-target:{call.CombinedFactId}:{targetHash}",
+            "SymbolCandidate",
+            $"call-target-candidate:{targetHash}",
+            call.SourceIndexId,
+            SafeSourceLabel(call.SourceLabel),
+            call.ScanId,
+            call.CommitSha,
+            null,
+            call.CombinedFactId,
+            call.RuleId,
+            call.EvidenceTier,
+            SafePath(call.FilePath),
+            call.StartLine,
+            call.EndLine,
+            SurfaceKind: null,
+            SurfaceName: null,
+            HttpMethod: null,
+            NormalizedPathKey: null,
+            OperationName: null,
+            TableName: null,
+            ColumnNames: null,
+            SourceKind: "projection",
+            ShapeHash: targetHash,
+            TextHash: null,
+            TextLength: null,
+            PackageName: null,
+            ConfigKey: null);
     }
 
     private static GraphNode ToWebFormsRootNode(CombinedFactRow fact)
@@ -2771,7 +2895,9 @@ public static partial class CombinedDependencyPathReporter
 
     private static bool IsLegacyFlowProjectionEdge(string? edgeKind)
     {
-        return edgeKind is "webforms-event-flow-projection" or "winforms-handler-flow-projection";
+        return edgeKind is "webforms-event-flow-projection"
+            or "winforms-handler-flow-projection"
+            or "webforms-handler-call-support-projection";
     }
 
     private static IReadOnlyList<string> LegacyFlowRuleIdsFor(CombinedPath path)
