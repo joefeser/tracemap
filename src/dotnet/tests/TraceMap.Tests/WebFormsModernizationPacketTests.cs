@@ -106,8 +106,9 @@ public sealed class WebFormsModernizationPacketTests
         var definitions = new[]
         {
             (Control: "none", Handler: "method:none", Name: "None_Click", Line: 10),
-            (Control: "downstream", Handler: "method:downstream", Name: "Downstream_Click", Line: 11),
-            (Control: "terminal", Handler: "method:terminal", Name: "Terminal_Click", Line: 12)
+            (Control: "unjoined", Handler: "method:unjoined", Name: "Unjoined_Click", Line: 11),
+            (Control: "downstream", Handler: "method:downstream", Name: "Downstream_Click", Line: 12),
+            (Control: "terminal", Handler: "method:terminal", Name: "Terminal_Click", Line: 13)
         };
         var bindings = definitions.Select(item => Fact(manifest, FactTypes.WebFormsEventBindingDeclared, RuleIds.LegacyWebFormsEventBinding, "Pages/Traversal.aspx", item.Line,
             source: $"control:{item.Control}", target: item.Handler, contract: item.Name,
@@ -120,6 +121,14 @@ public sealed class WebFormsModernizationPacketTests
             ("handlerSymbol", binding.TargetSymbol!), ("handlerName", binding.ContractElement!),
             ("controlId", definitions[index].Control), ("eventName", "OnClick"), ("markupFile", "Pages/Traversal.aspx"),
             ("coverageLabel", "bounded-static-webforms-handler"))).ToArray();
+        var unjoinedSyntaxCall = Fact(manifest, FactTypes.CallEdge, RuleIds.CSharpSyntaxCallGraph, "Pages/Traversal.aspx.cs", 25,
+            source: "Unjoined_Click", target: "Save", contract: "Save",
+            ("callerName", "Unjoined_Click"), ("calleeName", "Save"), ("coverageLabel", "syntax-only"));
+        var unjoinedFlow = Fact(manifest, FactTypes.WebFormsEventFlowProjected, RuleIds.LegacyWebFormsEventFlow, "Pages/Traversal.aspx.cs", 21,
+            source: "method:unjoined", target: "flow-terminal-unavailable", contract: "Unjoined_Click",
+            ("supportingFactIds", $"{handlers[1].FactId},{unjoinedSyntaxCall.FactId}"),
+            ("supportingEdgeIds", unjoinedSyntaxCall.FactId), ("flowClassification", "UnknownAnalysisGap"),
+            ("coverageLabel", "reduced-static-webforms-flow"));
         var downstreamCall = Fact(manifest, FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, "Pages/Traversal.aspx.cs", 30,
             source: "method:downstream", target: "method:leaf", contract: "Leaf", ("coverageLabel", "bounded-static-call"));
         var terminalCall = Fact(manifest, FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, "Pages/Traversal.aspx.cs", 31,
@@ -129,19 +138,27 @@ public sealed class WebFormsModernizationPacketTests
             ("operationName", "SELECT"), ("tableName", "items"), ("columnNames", "id"),
             ("sqlSourceKind", "literal-string"), ("queryShapeHash", "shape-hash"), ("coverageLabel", "bounded-static-query"));
         var index = Path.Combine(temp.Path, "index.sqlite");
-        SqliteIndexWriter.Write(index, manifest, [page, .. bindings, .. handlers, downstreamCall, terminalCall, query]);
+        SqliteIndexWriter.Write(index, manifest, [page, .. bindings, .. handlers, unjoinedSyntaxCall, unjoinedFlow, downstreamCall, terminalCall, query]);
 
         var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(index, Path.Combine(temp.Path, "output")));
 
         var noEdge = packet.EventChains.Single(chain => chain.HandlerFactId == handlers[0].FactId);
         Assert.Equal("no-observed-downstream-edge", noEdge.TraversalObservation?.StopState);
         Assert.Equal(0, noEdge.TraversalObservation?.DownstreamEdgeCount);
-        var downstream = packet.EventChains.Single(chain => chain.HandlerFactId == handlers[1].FactId);
+        Assert.Equal("no-handler-owned-call-evidence-retained", noEdge.TraversalObservation?.CallEvidenceState);
+        Assert.Equal(0, noEdge.TraversalObservation?.HandlerOwnedCallEvidenceCount);
+        var unjoined = packet.EventChains.Single(chain => chain.HandlerFactId == handlers[1].FactId);
+        Assert.Equal("no-observed-downstream-edge", unjoined.TraversalObservation?.StopState);
+        Assert.Equal("handler-owned-call-evidence-unjoined", unjoined.TraversalObservation?.CallEvidenceState);
+        Assert.Equal(1, unjoined.TraversalObservation?.HandlerOwnedCallEvidenceCount);
+        var downstream = packet.EventChains.Single(chain => chain.HandlerFactId == handlers[2].FactId);
         Assert.Equal("observed-downstream-without-supported-terminal", downstream.TraversalObservation?.StopState);
         Assert.True(downstream.TraversalObservation?.DownstreamEdgeCount > 0);
-        var terminal = packet.EventChains.Single(chain => chain.HandlerFactId == handlers[2].FactId);
+        Assert.Equal("joined-downstream-edge-observed", downstream.TraversalObservation?.CallEvidenceState);
+        var terminal = packet.EventChains.Single(chain => chain.HandlerFactId == handlers[3].FactId);
         Assert.Equal("supported-terminal-reached", terminal.TraversalObservation?.StopState);
         Assert.True(terminal.TraversalObservation?.TerminalPathCount > 0);
+        Assert.Equal("joined-downstream-edge-observed", terminal.TraversalObservation?.CallEvidenceState);
         Assert.All(packet.EventChains, chain =>
         {
             Assert.Equal(RuleIds.LegacyFlowStaticTraversal, chain.TraversalObservation?.RuleId);

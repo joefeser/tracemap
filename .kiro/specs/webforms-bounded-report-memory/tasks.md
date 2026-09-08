@@ -23,3 +23,4 @@
 - [x] Add a zero-argument alias-only summarizer for mutually exclusive selected-page chain outcomes.
 - [x] Add a zero-argument unresolved-chain triage grouped by stop state and public evidence metadata.
 - [x] Retain bounded per-handler traversal observations and distinguish no observed downstream edge from nonterminal traversal.
+- [x] Distinguish exact handler-owned call evidence that failed to join from no retained handler-owned call evidence.

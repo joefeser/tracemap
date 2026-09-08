@@ -383,3 +383,17 @@ Validation after the rebase: focused packet and bounded-memory tests 28/28;
 duplicate-start route-flow compatibility regression passed; full .NET solution
 1,763/1,763; PowerShell parser clean. Changed-file formatting, private-path guard,
 and diff checks are recorded after their final rerun.
+
+### Handler-owned call-evidence diagnostic follow-up
+
+Field evidence established 143 resolved nonterminal chains with zero observed
+downstream edges. The packet now reports whether each exact handler flow
+projection retained one or more supporting call-edge fact IDs. Closed states
+separate retained-but-unjoined handler call evidence from no retained
+handler-owned call evidence. The diagnostic does not synthesize edges or widen
+identity matching. The alias-only triage script reports state, chain/page counts,
+and aggregate handler-owned call-edge counts.
+
+Validation: focused packet tests 15/15; full .NET solution 1,763/1,763;
+changed-file format verification and PowerShell parser clean. Private-path and
+diff checks pass.

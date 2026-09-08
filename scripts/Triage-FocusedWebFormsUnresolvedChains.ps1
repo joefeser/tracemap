@@ -81,6 +81,8 @@ $rows = foreach ($chain in $resolvedWithoutTerminal) {
         ReachedNodeCount = if ($null -eq $observation) { 0 } else { [int]$observation.reachedNodeCount }
         TraversedEdgeCount = if ($null -eq $observation) { 0 } else { [int]$observation.traversedEdgeCount }
         DownstreamEdgeCount = if ($null -eq $observation) { 0 } else { [int]$observation.downstreamEdgeCount }
+        CallEvidenceState = if ($null -eq $observation -or [string]::IsNullOrWhiteSpace($observation.callEvidenceState)) { 'unavailable' } else { $observation.callEvidenceState }
+        HandlerOwnedCallEvidenceCount = if ($null -eq $observation) { 0 } else { [int]$observation.handlerOwnedCallEvidenceCount }
         TraversalTruncated = if ($null -eq $observation) { $false } else { [bool]$observation.truncated }
         Classification = $chain.classification
         EvidenceTiers = @($chain.evidenceTiers)
@@ -101,6 +103,12 @@ foreach ($group in @($rows | Group-Object -Property StopState | Sort-Object -Pro
     Write-Host "stopState=$($group.Name)|chains=$($group.Count)|pages=$($aliases.Count)"
     Write-Host "stopStateAliases-$($group.Name)=$($aliases -join ',')"
     Write-Host "stopStateTraversal-$($group.Name)=reachedNodes:$([long](@($group.Group | Measure-Object -Property ReachedNodeCount -Sum).Sum))|traversedEdges:$([long](@($group.Group | Measure-Object -Property TraversedEdgeCount -Sum).Sum))|downstreamEdges:$([long](@($group.Group | Measure-Object -Property DownstreamEdgeCount -Sum).Sum))|truncatedChains:$(@($group.Group | Where-Object TraversalTruncated).Count)"
+}
+foreach ($group in @($rows | Group-Object -Property CallEvidenceState | Sort-Object -Property Name)) {
+    $aliases = @($group.Group.Alias | Sort-Object -Unique)
+    $ownedCallEdges = [long](@($group.Group | Measure-Object -Property HandlerOwnedCallEvidenceCount -Sum).Sum)
+    Write-Host "callEvidenceState=$($group.Name)|chains=$($group.Count)|handlerOwnedCallEdges=$ownedCallEdges|pages=$($aliases.Count)"
+    Write-Host "callEvidenceStateAliases-$($group.Name)=$($aliases -join ',')"
 }
 foreach ($group in @($rows | Group-Object -Property Classification | Sort-Object -Property Name)) {
     Write-Host "resolvedNoTerminalClassification=$($group.Name)|count=$($group.Count)"
@@ -148,4 +156,5 @@ else {
 }
 
 Write-Host 'stopStateMeaning=bounded-static-traversal-counts-are-not-proof-of-runtime-presence-or-absence'
+Write-Host 'callEvidenceMeaning=handler-owned-call-evidence-unjoined-distinguishes-retained-call-facts-from-no-handler-owned-call-evidence-retained'
 Write-Host 'nonClaim=static-evidence-does-not-prove-runtime-execution-reachability-or-successful-binding'

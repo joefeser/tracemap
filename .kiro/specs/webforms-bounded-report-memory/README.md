@@ -57,6 +57,13 @@ selection edge from the downstream count. For resolved handlers it distinguishes
 `supported-terminal-reached`, and `bounded-traversal-truncated`. The script groups
 those closed states with reached-node, traversed-edge, downstream-edge and
 truncated-chain totals, public rule/evidence metadata, and safe page aliases.
+For a resolved handler with no joined downstream edge, it also distinguishes
+`handler-owned-call-evidence-unjoined` from
+`no-handler-owned-call-evidence-retained`. The former counts only call-edge fact
+IDs already attributed to that exact handler by the Web Forms flow projection;
+the latter is a bounded retained-evidence result, not proof that the source has
+no calls. This separates an identity/composition follow-up from an extraction
+coverage follow-up without exposing handler names or private paths.
 Handler-unavailable chains receive their own alias and linked-gap summary.
 These are bounded static observations, not runtime presence, absence, execution,
 branch feasibility, successful binding, or broken-code claims.
