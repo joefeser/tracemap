@@ -127,6 +127,24 @@ export async function run(runtimeEntity) {
     });
   });
 
+  it("keeps captured selectors open across later outer-scope mutations", async () => {
+    const repo = await fixtureRepo();
+    await fs.writeFile(path.join(repo, "src/deferred-selector.ts"), `import { base44 } from "@base44/sdk";
+const entities = ["Order"];
+export async function run() {
+  for (const entity of entities) await base44.entities[entity].list();
+}
+entities.push("Customer");
+run();
+`);
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-deferred-selector-"));
+    const { packet } = await buildBase44Evidence(options(repo, out));
+    const operations = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation
+      && fact.evidence.filePath === "src/deferred-selector.ts");
+    expect(operations).toHaveLength(1);
+    expect(operations[0]).toMatchObject({ evidenceTier: "Tier4Unknown", targetSymbol: "dynamic" });
+  });
+
   it("keeps append-only selector arrays open when the array escapes through an object alias", async () => {
     const repo = await fixtureRepo();
     await fs.writeFile(path.join(repo, "src/escaped-array-object-alias.ts"), `import { base44 } from "@base44/sdk";

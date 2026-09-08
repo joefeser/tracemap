@@ -68,3 +68,15 @@ This contract proves possible entity identities at a source call. It does not
 prove route reachability, runtime execution, database compatibility, query
 field correlations, or Docker behavior. A finite selector does not turn an
 otherwise incomplete query/payload shape into a passing fact.
+
+### Deferred captured arrays
+
+Source ordering is used only within one execution frame. An array captured by
+another function cannot be treated as append-only up to the function body's
+text position: later outer statements may run before invocation. These captures
+require an unmutated binding across the enclosing scope or retain an unresolved
+selector gap. The producer never silently omits later candidates.
+
+Direct PR review validation (2026-09-08): TypeScript `npm run check` passes
+249 tests; `dotnet test src/dotnet/TraceMap.sln --nologo` passes 1,732 tests.
+The captured-array regression failed before this correction.
