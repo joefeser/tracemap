@@ -47,6 +47,16 @@ category counts and safe `page-NNN` aliases, plus terminal-kind counts. It does
 not print repository paths, source symbols, SQL, procedure names, or source
 content. Set `$ReportPath` at the top only when an older report must be selected.
 
+For the next unresolved-chain breakdown, run
+`scripts/Triage-FocusedWebFormsUnresolvedChains.ps1`. It uses the same newest
+completed JSON without rerunning TraceMap. For resolved handlers without a
+terminal, it reports the first defensible packet-level stop state: no retained
+legacy path, a handler root with no supported outgoing edge, or a bounded static
+path without a terminal. It also groups public classifications, evidence tiers,
+rule IDs, linked gap classifications, and safe page aliases. Handler-unavailable
+chains receive their own alias and linked-gap summary. These are evidence states,
+not runtime absence or broken-code claims.
+
 ## Tuesday handoff: report every page in a saved list
 
 Pull this branch, then open
