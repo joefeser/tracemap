@@ -27,9 +27,7 @@ if (-not (Test-Path -LiteralPath $ReportPath -PathType Leaf)) {
 }
 
 $packet = Get-Content -LiteralPath $ReportPath -Raw | ConvertFrom-Json
-if ($packet.summary.truncated) {
-    throw 'The selected report is truncated. Complete the page-list report before triaging unresolved chains.'
-}
+$isPartial = [bool]$packet.summary.truncated
 
 $chains = @($packet.eventChains)
 $gaps = @($packet.gaps)
@@ -91,9 +89,19 @@ $rows = foreach ($chain in $resolvedWithoutTerminal) {
     }
 }
 
-Write-Host 'focused-webforms-unresolved-triage=completed'
+Write-Host "focused-webforms-unresolved-triage=$(if ($isPartial) { 'partial' } else { 'completed' })"
 Write-Host "reportFile=$([System.IO.Path]::GetFileName($ReportPath))"
-Write-Host 'truncated=false'
+Write-Host "truncated=$($isPartial.ToString().ToLowerInvariant())"
+Write-Host 'countScope=retained-report-only'
+if ($isPartial) {
+    Write-Host 'coverageWarning=counts-may-omit-chains-edges-and-terminals;unavailable-does-not-prove-absence'
+}
+foreach ($group in @($gaps | Where-Object { $_.classification -match '(LimitReached|TruncatedByLimit)' } | Group-Object classification | Sort-Object Name)) {
+    Write-Host "truncationGap=$($group.Name)|count=$($group.Count)"
+    if ($group.Name -eq 'TruncatedByLimit') {
+        Write-Host 'truncationReason=not-retained-in-packet;do-not-infer-depth-frontier-path-or-cycle'
+    }
+}
 Write-Host "totalEventChains=$($chains.Count)"
 Write-Host "handlerUnavailableChains=$($handlerUnavailable.Count)"
 Write-Host "handlerResolvedTerminalUnavailableChains=$($resolvedWithoutTerminal.Count)"

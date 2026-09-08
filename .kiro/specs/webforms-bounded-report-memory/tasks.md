@@ -25,3 +25,4 @@
 - [x] Retain bounded per-handler traversal observations and distinguish no observed downstream edge from nonterminal traversal.
 - [x] Distinguish exact handler-owned call evidence that failed to join from no retained handler-owned call evidence.
 - [x] Re-anchor exact handler-owned call support and continue its bounded target-symbol traversal without name guessing.
+- [x] Permit clearly labeled partial diagnostic triage of retained truncated packets without inferring missing truncation reasons.

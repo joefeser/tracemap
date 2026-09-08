@@ -534,3 +534,11 @@ is not installed when any selected project defines
 `CustomAfterMicrosoftCommonTargets`; TraceMap preserves that project extension
 point and emits `ComReferenceResolutionFallbackUnavailable` instead. The
 application repository and its normal Visual Studio build are never modified.
+# Partial retained-report triage
+
+Run `./scripts/Triage-FocusedWebFormsUnresolvedChains.ps1` again after pulling.
+It reads the existing latest page-list JSON; it does not rebuild or rescan.
+Truncated packets now produce partial diagnostic output instead of throwing.
+All counts describe retained evidence only and cannot establish absence or completeness.
+The current packet does not retain the depth/frontier/path/cycle reason behind
+`TruncatedByLimit`; the script explicitly reports that reason as unavailable.

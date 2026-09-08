@@ -419,3 +419,13 @@ solution 1,764/1,764; changed-file format verification clean. The synthetic
 reduced-analysis index proves an exact supported canonical call can continue to
 an SQL terminal while excluding an unsupported same-named call; a separate
 fixture proves syntax-only support stops at one isolated projected candidate.
+## Partial triage handoff
+
+The work-machine report after de298671 matched 43 pages and retained 191 event
+chains, 7 boundaries, and 82 TruncatedByLimit gaps. The packet drops the underlying
+path-gap reason, so no specific limit or cycle cause is established. Triage now
+accepts this retained JSON with partial status, retained-only count scope, and an
+explicit no-absence warning. No traversal limits or scanner behavior changed.
+PowerShell synthetic empty-chain packets tested with truncated true and false;
+both produced the expected status and unavailable-reason output. Full .NET tests
+not rerun for this script/documentation-only change.
