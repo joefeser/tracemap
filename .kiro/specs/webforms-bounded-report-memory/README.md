@@ -536,6 +536,16 @@ point and emits `ComReferenceResolutionFallbackUnavailable` instead. The
 application repository and its normal Visual Studio build are never modified.
 # Partial retained-report triage
 
+Legacy path exploration now uses deterministic depth-first branch scheduling to
+reduce breadth-wide pending paths. Alternate routes are not globally deduplicated.
+This is not shortest-path ordering or exhaustive runtime analysis. Existing depth,
+path, and frontier limits remain enforced; cycle revisit gaps remain explicit and
+keep coverage partial. After pulling, regenerate with
+`./scripts/Run-FocusedWebFormsPageList.ps1`, then run the triage script. Reuse the
+existing index; no source rescan is needed. A remaining cycle count is not evidence
+of a runtime infinite loop, and a remaining frontier count still means incomplete
+exploration.
+
 Run `./scripts/Triage-FocusedWebFormsUnresolvedChains.ps1` again after pulling.
 It reads the existing latest page-list JSON; it does not rebuild or rescan.
 Truncated packets now produce partial diagnostic output instead of throwing.

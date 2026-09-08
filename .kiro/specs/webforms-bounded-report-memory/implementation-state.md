@@ -446,3 +446,23 @@ checks cover all four reasons plus absent/unknown values without leaking the
 unexpected value. Formatting and private-path guard passed.
 Validation: focused packet tests 16/16 and full .NET solution tests 1764/1764
 passed, including the synthetic scan/index/packet integration test.
+## Legacy frontier scheduling
+
+Field report after 236a942d identifies 81 cycle gaps and one frontier gap. The
+frontier is a global pending-path queue, not a depth limit. Legacy reports now
+schedule branches depth-first in existing deterministic edge order to reduce
+breadth-wide pending expansion. Non-legacy searches retain breadth-first order.
+No global node deduplication, limits increase, or suppression of cycle gaps was
+introduced. Cycles remain partial; path-limited legacy result subsets can change
+because traversal is not shortest-first. Private graph performance is not proven
+locally and requires regenerating the report from the retained index at work.
+
+Synthetic regression preserves 64 reconvergent routes under frontier 24, checks
+repeat determinism, checks true depth/frontier/path truncation, and preserves all
+64 terminal routes when a cycle is present. Existing scan-to-packet integration
+tests remain part of validation.
+Validation: full solution 1765/1765 passed; focused packet/traversal 17/17
+passed. The final added breadth-first comparison assertion also passed: ordinary
+breadth-first hits frontier 24 on the same fixture. Formatting, private-path
+guard, and diff check passed. Existing nullable warning in PropertyMappingTests
+is unchanged.

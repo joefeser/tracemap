@@ -589,3 +589,14 @@ Run relevant pinned smoke checks from `docs/VALIDATION.md` when implementation
 touches language adapters or public validation scripts. For spec-only delivery,
 Kiro review plus private-path and diff checks are sufficient unless repo
 validation scripts require more.
+## Bounded legacy traversal scheduling
+
+Legacy-flow searches use deterministic depth-first scheduling over the existing
+sorted roots and edges. Ordinary non-legacy path searches retain breadth-first
+scheduling. The legacy traversal rule does not promise shortest-path ordering.
+No global node-visited filter is used: reconvergent routes retain their independent
+edge evidence and path-local cycle constraints. Depth, frontier, and path bounds
+remain unchanged. Cycle revisits still emit explicit truncation gaps and preserve
+partial status; they do not prove runtime recursion or infinite loops. A path cap
+can therefore select a different deterministic subset than earlier breadth-first
+reports, and omitted routes remain unknown.
