@@ -21,6 +21,12 @@ public static partial class CombinedDependencyPathReporter
         CombinedDependencyPathOptions options,
         ReportInputBudget budget,
         CancellationToken cancellationToken = default)
+        => (await BuildBoundedSingleIndexReportWithTraversalAsync(options, budget, cancellationToken)).Report;
+
+    internal static async Task<CombinedDependencyPathBuildResult> BuildBoundedSingleIndexReportWithTraversalAsync(
+        CombinedDependencyPathOptions options,
+        ReportInputBudget budget,
+        CancellationToken cancellationToken = default)
     {
         ValidateOptions(options);
         await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
@@ -52,7 +58,7 @@ public static partial class CombinedDependencyPathReporter
             var endpoints = CombinedDependencyReporter.MatchEndpoints(read.Sources, read.Facts);
             var surfaces = CombinedDependencyReporter.BuildSurfaces(read.Facts, read.Sources);
             var graph = BuildGraph(read, endpoints, surfaces, null, includeLegacyRoots: true, budget);
-            return BuildReport(options, read, graph, null);
+            return BuildReportWithTraversalObservations(options, read, graph, null);
         }
         catch (ReportInputLimitException exception)
         {
@@ -69,11 +75,13 @@ public static partial class CombinedDependencyPathReporter
                 source.SourceIndexId, source.Label, null, null, TruncationGapRuleId, EvidenceTiers.Tier4Unknown,
                 null, null, exception.Limit));
             var report = BuildReport(options, read, graph, null);
-            return report with
-            {
-                ReportCoverage = "ReducedCoverage",
-                Summary = report.Summary with { Truncated = true }
-            };
+            return new CombinedDependencyPathBuildResult(
+                report with
+                {
+                    ReportCoverage = "ReducedCoverage",
+                    Summary = report.Summary with { Truncated = true }
+                },
+                new Dictionary<string, CombinedDependencyTraversalObservation>(StringComparer.Ordinal));
         }
     }
 

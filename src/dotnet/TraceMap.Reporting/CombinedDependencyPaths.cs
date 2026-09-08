@@ -477,6 +477,13 @@ public static partial class CombinedDependencyPathReporter
         CombinedReadResult read,
         EvidenceGraph graph,
         (string Client, string Server)? sourcePair)
+        => BuildReportWithTraversalObservations(options, read, graph, sourcePair).Report;
+
+    private static CombinedDependencyPathBuildResult BuildReportWithTraversalObservations(
+        CombinedDependencyPathOptions options,
+        CombinedReadResult read,
+        EvidenceGraph graph,
+        (string Client, string Server)? sourcePair)
     {
         var legacyMode = options.IncludeLegacyRoots || IsLegacyView(options.View);
         var sourceFilter = string.IsNullOrWhiteSpace(options.FromSource) ? null : options.FromSource.Trim();
@@ -487,6 +494,7 @@ public static partial class CombinedDependencyPathReporter
         var selectorCandidateCount = resolvedStarts.TotalMatchCount;
         var paths = new List<CombinedPath>();
         var truncated = false;
+        SearchResult? search = null;
 
         if (resolvedStarts.TotalMatchCount > startNodes.Count)
         {
@@ -513,6 +521,10 @@ public static partial class CombinedDependencyPathReporter
         }
         else if (terminalNodes.Count == 0)
         {
+            // Preserve bounded outgoing-graph observations even when the index
+            // contains no supported terminal surface. The public path result
+            // remains SelectorNoMatch and makes no terminal claim.
+            search = Search(graph, startNodes, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier);
             gaps.Add(new CombinedPathGap(
                 "gap:selector:no-terminal-surface",
                 "SelectorNoMatch",
@@ -530,7 +542,7 @@ public static partial class CombinedDependencyPathReporter
         }
         else
         {
-            var search = Search(graph, startNodes, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier);
+            search = Search(graph, startNodes, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier);
             paths.AddRange(search.Paths);
             gaps.AddRange(search.Gaps);
             truncated = truncated || search.Truncated;
@@ -627,7 +639,7 @@ public static partial class CombinedDependencyPathReporter
             .ThenBy(edge => edge.EdgeId, StringComparer.Ordinal)
             .ToArray();
 
-        return new CombinedDependencyPathReport(
+        var report = new CombinedDependencyPathReport(
             Version,
             legacyMode ? LegacyFlowReportConstants.SchemaVersion : null,
             legacyMode ? LegacyFlowReportConstants.View : null,
@@ -669,6 +681,28 @@ public static partial class CombinedDependencyPathReporter
                 participatingNodes,
                 participatingEdges),
             ReportLimitations(legacyMode, participatingNodes, sortedGaps));
+        var observations = startNodes
+            .Where(node => node.CombinedFactId is not null)
+            .GroupBy(node => node.CombinedFactId!, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => MergeTraversalObservations(group.Select(node =>
+                    search?.TraversalByRootNodeId.GetValueOrDefault(node.NodeId)
+                        ?? new CombinedDependencyTraversalObservation(0, 0, 0, 0, false))),
+                StringComparer.Ordinal);
+        return new CombinedDependencyPathBuildResult(report, observations);
+    }
+
+    private static CombinedDependencyTraversalObservation MergeTraversalObservations(
+        IEnumerable<CombinedDependencyTraversalObservation> observations)
+    {
+        var rows = observations.ToArray();
+        return new CombinedDependencyTraversalObservation(
+            rows.Sum(row => row.ReachedNodeCount),
+            rows.Sum(row => row.TraversedEdgeCount),
+            rows.Sum(row => row.DownstreamEdgeCount),
+            rows.Sum(row => row.TerminalPathCount),
+            rows.Any(row => row.Truncated));
     }
 
     private static EvidenceGraph BuildGraph(
@@ -2491,9 +2525,13 @@ public static partial class CombinedDependencyPathReporter
     private static SearchResult Search(EvidenceGraph graph, IReadOnlyList<GraphNode> starts, IReadOnlySet<string> terminalNodeIds, int maxDepth, int maxPaths, int maxFrontier)
     {
         var queue = new Queue<PathState>();
+        var traversal = starts.ToDictionary(
+            node => node.NodeId,
+            _ => new TraversalAccumulator(),
+            StringComparer.Ordinal);
         foreach (var start in starts.OrderBy(node => node.SourceLabel, StringComparer.Ordinal).ThenBy(node => node.DisplayName, StringComparer.Ordinal).ThenBy(node => node.NodeId, StringComparer.Ordinal))
         {
-            queue.Enqueue(new PathState([start.NodeId], []));
+            queue.Enqueue(new PathState(start.NodeId, [start.NodeId], []));
         }
 
         var paths = new List<CombinedPath>();
@@ -2506,6 +2544,8 @@ public static partial class CombinedDependencyPathReporter
             if (queue.Count > maxFrontier)
             {
                 truncated = true;
+                foreach (var rootNodeId in queue.Select(item => item.RootNodeId).Distinct(StringComparer.Ordinal))
+                    traversal[rootNodeId].Truncated = true;
                 gaps.Add(TruncatedGap("frontier", queue.Peek().NodeIds[0], graph));
                 break;
             }
@@ -2514,6 +2554,7 @@ public static partial class CombinedDependencyPathReporter
             var currentNodeId = state.NodeIds[^1];
             if (terminalNodeIds.Contains(currentNodeId) && state.EdgeIds.Count > 0)
             {
+                traversal[state.RootNodeId].TerminalPathCount++;
                 sequence++;
                 paths.Add(ToPath($"path:{sequence:0000}", graph, state));
                 continue;
@@ -2522,6 +2563,7 @@ public static partial class CombinedDependencyPathReporter
             if (state.EdgeIds.Count >= maxDepth)
             {
                 truncated = true;
+                traversal[state.RootNodeId].Truncated = true;
                 gaps.Add(TruncatedGap("depth", currentNodeId, graph));
                 continue;
             }
@@ -2541,11 +2583,16 @@ public static partial class CombinedDependencyPathReporter
                 if (state.NodeIds.Contains(edge.ToNodeId, StringComparer.Ordinal))
                 {
                     truncated = true;
+                    traversal[state.RootNodeId].Truncated = true;
                     gaps.Add(TruncatedGap("cycle", edge.ToNodeId, graph));
                     continue;
                 }
 
-                queue.Enqueue(new PathState([.. state.NodeIds, edge.ToNodeId], [.. state.EdgeIds, edge.EdgeId]));
+                var observation = traversal[state.RootNodeId];
+                observation.ReachedNodeIds.Add(edge.ToNodeId);
+                observation.TraversedEdgeIds.Add(edge.EdgeId);
+                if (edge.EdgeKind != "legacy-root-selection") observation.DownstreamEdgeIds.Add(edge.EdgeId);
+                queue.Enqueue(new PathState(state.RootNodeId, [.. state.NodeIds, edge.ToNodeId], [.. state.EdgeIds, edge.EdgeId]));
                 reachedNodeIds.Add(edge.ToNodeId);
             }
         }
@@ -2553,10 +2600,25 @@ public static partial class CombinedDependencyPathReporter
         if (paths.Count >= maxPaths && queue.Count > 0)
         {
             truncated = true;
+            foreach (var rootNodeId in queue.Select(item => item.RootNodeId).Distinct(StringComparer.Ordinal))
+                traversal[rootNodeId].Truncated = true;
             gaps.Add(TruncatedGap("path", queue.Peek().NodeIds[0], graph));
         }
 
-        return new SearchResult(paths, gaps, truncated, reachedNodeIds);
+        return new SearchResult(
+            paths,
+            gaps,
+            truncated,
+            reachedNodeIds,
+            traversal.ToDictionary(
+                item => item.Key,
+                item => new CombinedDependencyTraversalObservation(
+                    item.Value.ReachedNodeIds.Count,
+                    item.Value.TraversedEdgeIds.Count,
+                    item.Value.DownstreamEdgeIds.Count,
+                    item.Value.TerminalPathCount,
+                    item.Value.Truncated),
+                StringComparer.Ordinal));
     }
 
     private static bool IsDispatchCandidateCrossHop(EvidenceGraph graph, PathState state, GraphEdge edge)
@@ -4433,13 +4495,34 @@ public static partial class CombinedDependencyPathReporter
         }
     }
 
+    internal sealed record CombinedDependencyPathBuildResult(
+        CombinedDependencyPathReport Report,
+        IReadOnlyDictionary<string, CombinedDependencyTraversalObservation> TraversalByStartingFactId);
+
+    internal sealed record CombinedDependencyTraversalObservation(
+        int ReachedNodeCount,
+        int TraversedEdgeCount,
+        int DownstreamEdgeCount,
+        int TerminalPathCount,
+        bool Truncated);
+
     private sealed record SearchResult(
         IReadOnlyList<CombinedPath> Paths,
         IReadOnlyList<CombinedPathGap> Gaps,
         bool Truncated,
-        IReadOnlySet<string> ReachedNodeIds);
+        IReadOnlySet<string> ReachedNodeIds,
+        IReadOnlyDictionary<string, CombinedDependencyTraversalObservation> TraversalByRootNodeId);
 
-    private sealed record PathState(IReadOnlyList<string> NodeIds, IReadOnlyList<string> EdgeIds);
+    private sealed record PathState(string RootNodeId, IReadOnlyList<string> NodeIds, IReadOnlyList<string> EdgeIds);
+
+    private sealed class TraversalAccumulator
+    {
+        public HashSet<string> ReachedNodeIds { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> TraversedEdgeIds { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> DownstreamEdgeIds { get; } = new(StringComparer.Ordinal);
+        public int TerminalPathCount { get; set; }
+        public bool Truncated { get; set; }
+    }
 
     private sealed record SelectorResolution(IReadOnlyList<GraphNode> Nodes, int TotalMatchCount);
 
