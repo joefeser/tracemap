@@ -20,3 +20,4 @@
 - [x] Record field ownership verification and add the separate database-backed event prompt for the existing index.
 - [x] Scope bounded graph admission to exact selected handlers and regress unrelated large-index noise without weakening fail-closed limits.
 - [x] Raise the page-list gap publication cap after field confirmation and print remaining truncation classifications.
+- [x] Add a zero-argument alias-only summarizer for mutually exclusive selected-page chain outcomes.
