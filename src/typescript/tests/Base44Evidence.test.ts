@@ -959,6 +959,10 @@ unsafe({ status: "draft" });
       expect.objectContaining({ field: "customer_id", presence: "conditional" })
     ]));
     expect(descriptor.arguments[0].value.entries.some((entry: { field: string }) => entry.field === "other_only")).toBe(false);
+    expect(JSON.parse(order.properties.fieldsJson)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "status", presence: "conditional", expressionType: "query-descriptor" }),
+      expect.objectContaining({ name: "customer_id", presence: "conditional", expressionType: "query-descriptor" })
+    ]));
     const other = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityQuery
       && fact.targetSymbol === "Other" && fact.evidence.filePath === "src/query-parameter.ts")!;
     expect(JSON.parse(other.properties.querySemanticsJson).gaps).toContain("query:parameter-callsite-value-conflict");
