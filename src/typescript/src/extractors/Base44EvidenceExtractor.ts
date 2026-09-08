@@ -154,7 +154,7 @@ function addSdkCall(chain: string[], node: ts.CallExpression, source: ts.SourceF
           sdkIdentityGap: sdkIdentity.gap ?? "",
           sdkIdentityJson: sdkIdentity.identity ? JSON.stringify(sdkIdentity.identity) : "",
           sourceFileSha256: hash(text, 64)
-        }));
+        }, sdkIdentity.identity ? EvidenceTiers.Tier3SyntaxOrTextual : EvidenceTiers.Tier4Unknown));
       return;
     }
   }
