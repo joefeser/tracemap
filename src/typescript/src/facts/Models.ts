@@ -137,5 +137,6 @@ export const FactTypes = {
   Base44EnvironmentAccess: "Base44EnvironmentAccess",
   Base44HttpTarget: "Base44HttpTarget",
   Base44MigrationSurface: "Base44MigrationSurface",
+  Base44SourceAuthority: "Base44SourceAuthority",
   Base44CustomerBoundary: "Base44CustomerBoundary"
 } as const;

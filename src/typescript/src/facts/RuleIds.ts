@@ -46,6 +46,7 @@ export const RuleIds = {
   Base44EnvironmentAccess: "base44.environment.access.v1",
   Base44HttpTarget: "base44.http.target.v1",
   Base44MigrationSurface: "base44.migration.surface.v1",
+  Base44SourceAuthority: "base44.source.authority.v1",
   Base44CustomerBoundary: "base44.customer.boundary.v1",
   ContractDeltaReduction: "contract.delta.reduce.v1"
 } as const;
