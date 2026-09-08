@@ -119,6 +119,15 @@ rules:
     limitations:
       - Migration source does not prove SQL validity, execution, completion, schema state, RLS correctness, rollback, or runtime compatibility.
 
+  - id: base44.source.authority.v1
+    name: Base44 accepted source authority
+    description: Records the accepted customer source tree identity and source-bound authority metadata used to validate Base44 evidence facts.
+    evidenceTier: Tier2Structural
+    emits: [Base44SourceAuthority]
+    limitations:
+      - Source authority proves only the bounded analyzed source identity; it does not prove runtime execution, dependency integrity, build success, deployment, semantic compatibility, customer intent, or complete behavior.
+      - Consumers must treat this as an identity boundary for emitted evidence, not as permission to infer behavior from documentation, generated prose, fixtures, or filenames.
+
   - id: base44.customer.boundary.v1
     name: Base44 customer-authored source boundary
     description: Identifies customer-authored Base44 function and entity source boundaries without reclassifying their behavior as platform-owned.

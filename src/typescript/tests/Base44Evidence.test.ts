@@ -126,6 +126,27 @@ export async function run(runtimeMap) {
     expect(operations[0].properties.entitySelectorGap).toBe("entity-selector-dynamic-unresolved");
   });
 
+  it("keeps Object.values selectors open when Object authority is shadowed or mutated", async () => {
+    const repo = await fixtureRepo();
+    await fs.writeFile(path.join(repo, "src/shadowed-object-values.ts"), `import { base44 } from "@base44/sdk";
+export async function shadowed(runtimeEntity) {
+  const Object = { values: () => [runtimeEntity] };
+  for (const entity of Object.values({ Known: "Order" })) await base44.entities[entity].list();
+}
+Object.values = () => ["RuntimeEntity"];
+export async function mutated() {
+  for (const entity of Object.values({ Known: "Customer" })) await base44.entities[entity].list();
+}
+`);
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-selector-object-authority-"));
+    const { packet } = await buildBase44Evidence(options(repo, out));
+    const operations = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation
+      && fact.evidence.filePath === "src/shadowed-object-values.ts");
+    expect(operations).toHaveLength(2);
+    expect(operations.every((fact) => fact.targetSymbol === "dynamic"
+      && fact.properties.entitySelectorGap === "entity-selector-dynamic-unresolved")).toBe(true);
+  });
+
   it("classifies only closed exported helpers outside the rooted module graph as dormant", async () => {
     const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-selector-dormant-"));
     await fs.mkdir(path.join(repo, "src"), { recursive: true });
@@ -1131,6 +1152,47 @@ export async function run(acceptedEntity, mutatedEntity, nonTerminatingEntity) {
     expect(operations.filter((fact) => fact.properties.operationName === "filter" && fact.targetSymbol !== "dynamic")
       .map((fact) => fact.targetSymbol).sort()).toEqual(["Order", "Quote"]);
     expect(operations.filter((fact) => fact.targetSymbol === "dynamic")).toHaveLength(2);
+  });
+
+  it("keeps Set-guarded selectors open when Set authority is shadowed or mutated", async () => {
+    const repo = await fixtureRepo();
+    await fs.writeFile(path.join(repo, "src/shadowed-set-guard.ts"), `import { base44 } from "@base44/sdk";
+export async function shadowed(entity) {
+  class Set { constructor(values) {} has(value) { return true; } }
+  const accepted = new Set(["Order"]);
+  if (!accepted.has(entity)) return;
+  await base44.entities[entity].filter({ id: "1" });
+}
+Set.prototype.has = function(value) { return true; };
+export async function mutated(entity) {
+  const accepted = new Set(["Customer"]);
+  if (!accepted.has(entity)) return;
+  await base44.entities[entity].filter({ id: "1" });
+}
+`);
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-selector-set-authority-"));
+    const { packet } = await buildBase44Evidence(options(repo, out));
+    const operations = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation
+      && fact.evidence.filePath === "src/shadowed-set-guard.ts");
+    expect(operations).toHaveLength(2);
+    expect(operations.every((fact) => fact.targetSymbol === "dynamic"
+      && fact.properties.entitySelectorGap === "entity-selector-dynamic-unresolved")).toBe(true);
+  });
+
+  it("keeps open objects unresolved during branch narrowing", async () => {
+    const repo = await fixtureRepo();
+    await fs.writeFile(path.join(repo, "src/open-branch-narrowing.ts"), `import { base44 } from "@base44/sdk";
+export async function run(runtimeFlags) {
+  const rows = [{ entity: "Order", enabled: true }, { entity: "Customer", ...runtimeFlags }];
+  for (const row of rows.filter((item) => item.enabled)) await base44.entities[row.entity].list();
+}
+`);
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-selector-open-branch-"));
+    const { packet } = await buildBase44Evidence(options(repo, out));
+    const operations = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation
+      && fact.evidence.filePath === "src/open-branch-narrowing.ts");
+    expect(operations.some((fact) => fact.targetSymbol === "dynamic"
+      && fact.properties.entitySelectorGap === "entity-selector-dynamic-unresolved")).toBe(true);
   });
 
   it("preserves complete query shapes for transparent wrapped controls", async () => {

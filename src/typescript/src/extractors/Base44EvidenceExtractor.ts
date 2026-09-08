@@ -1167,7 +1167,9 @@ function evaluateSelectorValues(expression: ts.Expression, context: SelectorEval
     return [{ kind: "object", properties, ...(openProperties ? { openProperties: true } : {}), evidence: normalizeSelectorEvidence(evidence) }];
   }
   if (ts.isNewExpression(value) && ts.isIdentifier(value.expression) && value.expression.text === "Set"
-    && value.arguments?.length === 1) {
+    && value.arguments?.length === 1
+    && !resolveLexicalBinding("Set", value.expression, context.source)
+    && setIntrinsicsArePristine(context.contexts)) {
     const resolved = evaluateSelectorValues(value.arguments[0], context, new Set(visited));
     if (!resolved || resolved.length !== 1 || resolved[0].kind !== "array") return null;
     return [{ ...resolved[0], evidence: normalizeSelectorEvidence([
@@ -1323,7 +1325,7 @@ function selectorConstraintLiteral(input: ts.Expression): string | boolean | nul
 function selectorObjectMatches(value: StaticSelectorValue, constraint: SelectorObjectConstraint): boolean | null {
   if (value.kind !== "object") return false;
   const selected = value.properties?.get(constraint.property);
-  if (!selected) return false;
+  if (!selected) return value.openProperties ? null : false;
   const matches: boolean[] = [];
   for (const item of selected) {
   if (constraint.test === "truthy") {
@@ -1342,7 +1344,8 @@ function selectorObjectMatches(value: StaticSelectorValue, constraint: SelectorO
       matches.push(false);
     }
   }
-  return matches.length > 0 && matches.every((match) => match === matches[0]) ? matches[0] : null;
+  const result = matches.length > 0 && matches.every((match) => match === matches[0]) ? matches[0] : null;
+  return value.openProperties && result === false ? null : result;
 }
 
 function evaluateDominatingSetConstraint(identifier: ts.Identifier, context: SelectorEvaluationContext, visited: Set<string>): StaticSelectorValue[] | null {
@@ -2231,7 +2234,9 @@ function selectorConditionRejectsFalsyBinding(
 function evaluateSelectorCall(call: ts.CallExpression, context: SelectorEvaluationContext, visited: Set<string>): StaticSelectorValue[] | null {
   const callee = unwrapAliasExpression(call.expression);
   if (ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression) && callee.expression.text === "Object"
-    && ["values", "entries"].includes(callee.name.text) && call.arguments.length === 1) {
+    && ["values", "entries"].includes(callee.name.text) && call.arguments.length === 1
+    && !resolveLexicalBinding("Object", callee.expression, context.source)
+    && objectValueEnumerationIntrinsicsArePristine(context.contexts)) {
     const resolved = evaluateSelectorValues(call.arguments[0], context, new Set(visited));
     if (!resolved || resolved.some((item) => item.kind !== "object")) return null;
     if (resolved.some((item) => item.openProperties)) return null;
@@ -2258,6 +2263,8 @@ function evaluateSelectorCall(call: ts.CallExpression, context: SelectorEvaluati
 }
 
 const arrayIntrinsicRealmCache = new WeakMap<Map<string, SourceContext>, boolean>();
+const setIntrinsicRealmCache = new WeakMap<Map<string, SourceContext>, boolean>();
+const objectValueEnumerationIntrinsicRealmCache = new WeakMap<Map<string, SourceContext>, boolean>();
 
 function arrayIntrinsicsArePristine(contexts: Map<string, SourceContext>): boolean {
   const cached = arrayIntrinsicRealmCache.get(contexts);
@@ -2324,6 +2331,108 @@ function arrayIntrinsicsArePristine(contexts: Map<string, SourceContext>): boole
   }
   arrayIntrinsicRealmCache.set(contexts, pristine);
   return pristine;
+}
+
+function setIntrinsicsArePristine(contexts: Map<string, SourceContext>): boolean {
+  const cached = setIntrinsicRealmCache.get(contexts);
+  if (cached !== undefined) return cached;
+  let pristine = true;
+  for (const context of contexts.values()) {
+    const visit = (node: ts.Node): void => {
+      if (!pristine) return;
+      if (ts.isBinaryExpression(node) && isAssignmentOperator(node.operatorToken.kind)
+        && setPrototypeMemberIs(node.left, context.source, new Set(["has", "add"]))) {
+        pristine = false;
+        return;
+      }
+      if (ts.isDeleteExpression(node) && setPrototypeMemberIs(node.expression, context.source, new Set(["has", "add"]))) {
+        pristine = false;
+        return;
+      }
+      if (ts.isCallExpression(node) && intrinsicMutationCallTargetsMembers(node, context.source, isSetPrototypeExpression, new Set(["has", "add"]))) {
+        pristine = false;
+        return;
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(context.source);
+    if (!pristine) break;
+  }
+  setIntrinsicRealmCache.set(contexts, pristine);
+  return pristine;
+}
+
+function objectValueEnumerationIntrinsicsArePristine(contexts: Map<string, SourceContext>): boolean {
+  const cached = objectValueEnumerationIntrinsicRealmCache.get(contexts);
+  if (cached !== undefined) return cached;
+  let pristine = true;
+  for (const context of contexts.values()) {
+    const visit = (node: ts.Node): void => {
+      if (!pristine) return;
+      if (ts.isBinaryExpression(node) && isAssignmentOperator(node.operatorToken.kind)
+        && objectIntrinsicMemberIs(node.left, context.source, new Set(["values", "entries"]))) {
+        pristine = false;
+        return;
+      }
+      if (ts.isDeleteExpression(node) && objectIntrinsicMemberIs(node.expression, context.source, new Set(["values", "entries"]))) {
+        pristine = false;
+        return;
+      }
+      if (ts.isCallExpression(node) && intrinsicMutationCallTargetsMembers(node, context.source, isObjectIntrinsicExpression, new Set(["values", "entries"]))) {
+        pristine = false;
+        return;
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(context.source);
+    if (!pristine) break;
+  }
+  objectValueEnumerationIntrinsicRealmCache.set(contexts, pristine);
+  return pristine;
+}
+
+function intrinsicMutationCallTargetsMembers(
+  node: ts.CallExpression,
+  source: ts.SourceFile,
+  targetPredicate: (node: ts.Node, source: ts.SourceFile) => boolean,
+  members: Set<string>,
+): boolean {
+  if (!ts.isPropertyAccessExpression(node.expression)
+    || !ts.isIdentifier(node.expression.expression)
+    || !["Object", "Reflect"].includes(node.expression.expression.text)
+    || !["defineProperty", "set"].includes(node.expression.name.text)
+    || resolveLexicalBinding(node.expression.expression.text, node.expression.expression, source)) return false;
+  const target = node.arguments[0] && unwrapAliasExpression(node.arguments[0]);
+  const member = node.arguments[1];
+  return !!target
+    && targetPredicate(target, source)
+    && !!member
+    && ts.isStringLiteralLike(member)
+    && members.has(member.text);
+}
+
+function setPrototypeMemberIs(node: ts.Node, source: ts.SourceFile, members: Set<string>): boolean {
+  const expression = ts.isExpression(node) ? unwrapAliasExpression(node) : node;
+  if (ts.isPropertyAccessExpression(expression)) {
+    return members.has(expression.name.text) && isSetPrototypeExpression(expression.expression, source);
+  }
+  return ts.isElementAccessExpression(expression)
+    && !!expression.argumentExpression
+    && ts.isStringLiteralLike(expression.argumentExpression)
+    && members.has(expression.argumentExpression.text)
+    && isSetPrototypeExpression(expression.expression, source);
+}
+
+function objectIntrinsicMemberIs(node: ts.Node, source: ts.SourceFile, members: Set<string>): boolean {
+  const expression = ts.isExpression(node) ? unwrapAliasExpression(node) : node;
+  if (ts.isPropertyAccessExpression(expression)) {
+    return members.has(expression.name.text) && isObjectIntrinsicExpression(expression.expression, source);
+  }
+  return ts.isElementAccessExpression(expression)
+    && !!expression.argumentExpression
+    && ts.isStringLiteralLike(expression.argumentExpression)
+    && members.has(expression.argumentExpression.text)
+    && isObjectIntrinsicExpression(expression.expression, source);
 }
 
 const dangerousPrototypeCapabilities = new Set([
@@ -2522,12 +2631,12 @@ function globalIntrinsicConstructorName(
   node: ts.Expression,
   source: ts.SourceFile,
   visited: Set<string>
-): "Function" | "RegExp" | "String" | null {
+): "Function" | "RegExp" | "String" | "Set" | null {
   const expression = unwrapAliasExpression(node);
   if (ts.isIdentifier(expression)) {
-    if (["Function", "RegExp", "String"].includes(expression.text)
+    if (["Function", "RegExp", "String", "Set"].includes(expression.text)
       && !resolveLexicalBinding(expression.text, expression, source)) {
-      return expression.text as "Function" | "RegExp" | "String";
+      return expression.text as "Function" | "RegExp" | "String" | "Set";
     }
     const binding = resolveLexicalBinding(expression.text, expression, source);
     if (binding?.kind !== "variable" || !binding.node.initializer
@@ -2542,8 +2651,24 @@ function globalIntrinsicConstructorName(
   const member = ts.isPropertyAccessExpression(expression) ? expression.name.text
     : expression.argumentExpression && ts.isStringLiteralLike(expression.argumentExpression)
       ? expression.argumentExpression.text : "";
-  return ["Function", "RegExp", "String"].includes(member)
-    ? member as "Function" | "RegExp" | "String" : null;
+  return ["Function", "RegExp", "String", "Set"].includes(member)
+    ? member as "Function" | "RegExp" | "String" | "Set" : null;
+}
+
+function isSetPrototypeExpression(node: ts.Node, source: ts.SourceFile): boolean {
+  const expression = ts.isExpression(node) ? unwrapAliasExpression(node) : node;
+  return ts.isPropertyAccessExpression(expression)
+    && ts.isIdentifier(expression.expression)
+    && expression.expression.text === "Set"
+    && expression.name.text === "prototype"
+    && !resolveLexicalBinding("Set", expression.expression, source);
+}
+
+function isObjectIntrinsicExpression(node: ts.Node, source: ts.SourceFile): boolean {
+  const expression = ts.isExpression(node) ? unwrapAliasExpression(node) : node;
+  return ts.isIdentifier(expression)
+    && expression.text === "Object"
+    && !resolveLexicalBinding("Object", expression, source);
 }
 
 function isArrayPrototypeExpression(node: ts.Node, source: ts.SourceFile): boolean {
