@@ -540,5 +540,9 @@ Run `./scripts/Triage-FocusedWebFormsUnresolvedChains.ps1` again after pulling.
 It reads the existing latest page-list JSON; it does not rebuild or rescan.
 Truncated packets now produce partial diagnostic output instead of throwing.
 All counts describe retained evidence only and cannot establish absence or completeness.
-The current packet does not retain the depth/frontier/path/cycle reason behind
-`TruncatedByLimit`; the script explicitly reports that reason as unavailable.
+Newly generated packets retain an optional `truncationReason` for
+`TruncatedByLimit`: depth, frontier, path, or cycle. Scripts print reason counts.
+Older packets report unavailable; no reason is inferred from IDs or private text.
+After pulling this change, run `./scripts/Run-FocusedWebFormsPageList.ps1` once
+to regenerate the report from the existing index, then run the triage script.
+No source rescan is required. Cycle means revisit protection, not a proven runtime loop.

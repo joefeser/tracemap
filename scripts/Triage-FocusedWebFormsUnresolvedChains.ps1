@@ -99,7 +99,12 @@ if ($isPartial) {
 foreach ($group in @($gaps | Where-Object { $_.classification -match '(LimitReached|TruncatedByLimit)' } | Group-Object classification | Sort-Object Name)) {
     Write-Host "truncationGap=$($group.Name)|count=$($group.Count)"
     if ($group.Name -eq 'TruncatedByLimit') {
-        Write-Host 'truncationReason=not-retained-in-packet;do-not-infer-depth-frontier-path-or-cycle'
+        foreach ($reasonGroup in @($group.Group | ForEach-Object {
+            if ($_.truncationReason -cin @('depth', 'frontier', 'path', 'cycle')) { $_.truncationReason }
+            else { 'unavailable' }
+        } | Group-Object | Sort-Object Name)) {
+            Write-Host "truncationReason=$($reasonGroup.Name)|count=$($reasonGroup.Count)"
+        }
     }
 }
 Write-Host "totalEventChains=$($chains.Count)"

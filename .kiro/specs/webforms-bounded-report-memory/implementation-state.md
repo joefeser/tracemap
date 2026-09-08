@@ -429,3 +429,20 @@ explicit no-absence warning. No traversal limits or scanner behavior changed.
 PowerShell synthetic empty-chain packets tested with truncated true and false;
 both produced the expected status and unavailable-reason output. Full .NET tests
 not rerun for this script/documentation-only change.
+## Closed truncation-reason reporting
+
+Added optional gap.truncationReason for TruncatedByLimit, accepting only depth,
+frontier, path, and cycle from the existing path gap. Null is omitted for other
+gaps or unknown reasons. Both page-list reporting and retained triage print
+reason counts; old packets and unexpected values become unavailable. No traversal
+limits, cycle handling, or evidence classification changed. The field result shows
+137 previously unjoined chains now observe downstream edges; among 143 unresolved
+terminal chains, 130 are truncated, 7 have nonterminal traversal, and 6 have no
+retained handler-owned call evidence. These are retained-report observations only.
+
+The synthetic handler-to-terminal fixture verifies depth truncation survives JSON
+publication (depth 3; depth 1 does not admit the same fixture graph). PowerShell
+checks cover all four reasons plus absent/unknown values without leaking the
+unexpected value. Formatting and private-path guard passed.
+Validation: focused packet tests 16/16 and full .NET solution tests 1764/1764
+passed, including the synthetic scan/index/packet integration test.

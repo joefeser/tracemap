@@ -232,7 +232,9 @@ public sealed record WebFormsModernizationGap(
     string? ExtractorId,
     string? ExtractorVersion,
     IReadOnlyList<string> SupportingFactIds,
-    IReadOnlyList<string> Limitations);
+    IReadOnlyList<string> Limitations,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? TruncationReason = null);
 
 public static class WebFormsModernizationPacketReporter
 {
@@ -1012,7 +1014,9 @@ public static class WebFormsModernizationPacketReporter
             "CombinedDependencyPathReporter",
             "legacy-flow.v1",
             gap.EffectiveSupportingFactIds.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
-            ["The legacy-flow gap preserves incomplete static path coverage and does not prove absence."]));
+            ["The legacy-flow gap preserves incomplete static path coverage and does not prove absence."],
+            gap.GapKind == "TruncatedByLimit" && gap.Reason is "depth" or "frontier" or "path" or "cycle"
+                ? gap.Reason : null));
     }
 
     private static void AddGeneratedGap(List<WebFormsModernizationGap> gaps, int maxGaps, Snapshot snapshot, string classification, string scopeKind, string? scopeId, IEnumerable<string> support)
