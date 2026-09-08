@@ -127,7 +127,9 @@ public sealed record WebFormsModernizationTraversalObservation(
     int DownstreamEdgeCount,
     int TerminalPathCount,
     bool Truncated,
-    IReadOnlyList<string> Limitations);
+    IReadOnlyList<string> Limitations,
+    string CallEvidenceState = "unavailable",
+    int HandlerOwnedCallEvidenceCount = 0);
 
 public sealed record WebFormsModernizationPathEvidence(
     string EvidenceId,
@@ -373,7 +375,8 @@ public static class WebFormsModernizationPacketReporter
     }
 
     private static WebFormsModernizationTraversalObservation ToTraversalObservation(
-        CombinedDependencyPathReporter.CombinedDependencyTraversalObservation? observation)
+        CombinedDependencyPathReporter.CombinedDependencyTraversalObservation? observation,
+        int handlerOwnedCallEvidenceCount)
     {
         if (observation is null)
         {
@@ -385,7 +388,9 @@ public static class WebFormsModernizationPacketReporter
                 0,
                 0,
                 false,
-                ["No bounded traversal observation was retained for this handler; no outgoing-edge or terminal absence conclusion is available."]);
+                ["No bounded traversal observation was retained for this handler; no outgoing-edge or terminal absence conclusion is available."],
+                "unavailable",
+                handlerOwnedCallEvidenceCount);
         }
 
         var stopState = observation.Truncated
@@ -395,6 +400,13 @@ public static class WebFormsModernizationPacketReporter
                 : observation.DownstreamEdgeCount == 0
                     ? "no-observed-downstream-edge"
                     : "observed-downstream-without-supported-terminal";
+        var callEvidenceState = observation.DownstreamEdgeCount > 0
+            ? "joined-downstream-edge-observed"
+            : handlerOwnedCallEvidenceCount > 0
+                ? "handler-owned-call-evidence-unjoined"
+                : observation.Truncated
+                    ? "call-evidence-observation-incomplete"
+                    : "no-handler-owned-call-evidence-retained";
         return new WebFormsModernizationTraversalObservation(
             RuleIds.LegacyFlowStaticTraversal,
             stopState,
@@ -403,7 +415,9 @@ public static class WebFormsModernizationPacketReporter
             observation.DownstreamEdgeCount,
             observation.TerminalPathCount,
             observation.Truncated,
-            ["Counts describe bounded static graph observations after handler-root selection; they do not prove runtime reachability, execution, branch feasibility, successful binding, or absence."]);
+            ["Counts describe bounded static graph observations after handler-root selection; handler-owned call evidence is limited to call-edge facts explicitly retained by the handler flow projection. These observations do not prove runtime reachability, execution, branch feasibility, successful binding, or absence."],
+            callEvidenceState,
+            handlerOwnedCallEvidenceCount);
     }
 
     internal static WebFormsModernizationPacket Build(
@@ -546,9 +560,14 @@ public static class WebFormsModernizationPacketReporter
                     : supportedLegacyPath is not null ? supportedLegacyPath.Classification
                     : flowFact?.Properties.GetValueOrDefault("flowClassification") ?? "NoBackendEvidence";
                 var terminalKind = inputLimited ? null : supportedLegacyPath?.Nodes.LastOrDefault()?.SurfaceKind ?? EmptyToNull(flowFact?.Properties.GetValueOrDefault("terminalSurfaceKind"));
+                var handlerOwnedCallEvidenceCount = flowFact is null
+                    ? 0
+                    : SplitIds(flowFact.Properties.GetValueOrDefault("supportingEdgeIds")).Count;
                 var traversalObservation = handler is null || inputLimited
                     ? null
-                    : ToTraversalObservation(traversalByStartingFactId?.GetValueOrDefault("single:" + handler.FactId));
+                    : ToTraversalObservation(
+                        traversalByStartingFactId?.GetValueOrDefault("single:" + handler.FactId),
+                        handlerOwnedCallEvidenceCount);
                 if (!inputLimited && handler is not null && terminalKind is null)
                     AddGeneratedGap(gaps, options.MaxGaps, snapshot, "NoBackendEvidence", "event-chain", binding.FactId, support.Select(fact => fact.FactId));
                 var chain = new WebFormsModernizationEventChain(
@@ -1174,7 +1193,7 @@ public static class WebFormsModernizationPacketReporter
         {
             var traversal = chain.TraversalObservation is null
                 ? "traversal observation unavailable"
-                : $"traversal `{chain.TraversalObservation.StopState}` (reached nodes {chain.TraversalObservation.ReachedNodeCount}, traversed edges {chain.TraversalObservation.TraversedEdgeCount}, downstream edges {chain.TraversalObservation.DownstreamEdgeCount})";
+                : $"traversal `{chain.TraversalObservation.StopState}` (reached nodes {chain.TraversalObservation.ReachedNodeCount}, traversed edges {chain.TraversalObservation.TraversedEdgeCount}, downstream edges {chain.TraversalObservation.DownstreamEdgeCount}); call evidence `{chain.TraversalObservation.CallEvidenceState}` (handler-owned call edges {chain.TraversalObservation.HandlerOwnedCallEvidenceCount})";
             b.AppendLine($"- `{chain.ChainId}` — `{chain.EventSourceId}` -> `{chain.HandlerId ?? "handler-unavailable"}` -> `{chain.TerminalKind ?? "terminal-unavailable"}`; classification `{chain.Classification}`; {traversal}; supporting facts {string.Join(", ", chain.SupportingFactIds.Select(id => $"`{id}`"))}.");
         }
         b.AppendLine().AppendLine("## Downstream boundaries").AppendLine();
