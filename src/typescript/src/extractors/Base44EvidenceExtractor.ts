@@ -1950,9 +1950,13 @@ function evaluateAppendOnlyArrayBinding(
   if (isStaticallyUnreachable(use, scope)) return null;
   const usePosition = use.getStart(context.source);
   const visit = (node: ts.Node): void => {
-    if (unsafe || (node !== scope && ts.isFunctionLike(node) && !isAncestorNode(node, use))) return;
+    if (unsafe) return;
     if (node !== scope && isStaticallyUnreachable(node, scope)) return;
     if (node.getStart(context.source) > usePosition) return;
+    if (node !== scope && ts.isFunctionLike(node) && !isAncestorNode(node, use)) {
+      if (functionBodyMutatesBinding(node, bindingName, declaration, context.source)) unsafe = true;
+      return;
+    }
     if (ts.isIdentifier(node) && node !== declaration.name && node !== use && node.text === bindingName
       && resolveLexicalBinding(bindingName, node, context.source)?.node === declaration) {
       const member = node.parent;
@@ -1967,7 +1971,7 @@ function evaluateAppendOnlyArrayBinding(
         }
         return;
       }
-      if (selectorAccumulatedArrayReferenceIsSafe(node, use)) return;
+      if (!selectorBindingReferenceMutatesValue(node) && selectorAccumulatedArrayReferenceIsSafe(node, use)) return;
       unsafe = true;
       return;
     }
@@ -2024,6 +2028,12 @@ function evaluateSelectorReactStateBinding(
   const visit = (node: ts.Node): void => {
     if (unsafe) return;
     if (node === setterElement.name) return;
+    if (ts.isIdentifier(node) && node !== valueElement.name && node.text === bindingName
+      && resolveLexicalBinding(bindingName, node, context.source)?.node === declaration
+      && selectorBindingReferenceMutatesValue(node)) {
+      unsafe = true;
+      return;
+    }
     if (ts.isIdentifier(node) && node.text === setterName
       && resolveLexicalBinding(setterName, node, context.source)?.node === declaration) {
       const call = node.parent;
@@ -2253,6 +2263,7 @@ function evaluateSelectorCall(call: ts.CallExpression, context: SelectorEvaluati
   }
   if (ts.isPropertyAccessExpression(callee) && ["filter", "map"].includes(callee.name.text)) {
     if (!arrayIntrinsicsArePristine(context.contexts)) return null;
+    if (selectorReceiverMethodCanBeOverridden(callee.expression, callee.name.text, context)) return null;
     const owner = evaluateSelectorValues(callee.expression, context, new Set(visited));
     if (!owner || owner.some((item) => item.kind !== "array")) return null;
     if (callee.name.text === "filter") return owner;
@@ -2817,17 +2828,22 @@ function selectorBindingIsUnmutated(
   const bindingName = declaration.name.text;
   let unsafe = false;
   const root = executionRoot(declaration.name);
+  const usePosition = evaluatedUse?.getStart(source) ?? Number.POSITIVE_INFINITY;
   const visitNode = (node: ts.Node): void => {
-    if (unsafe || (node !== root && ts.isFunctionLike(node))) return;
+    if (unsafe) return;
+    if (node.getStart(source) > usePosition) return;
+    if (node !== root && ts.isFunctionLike(node)) {
+      if (functionBodyMutatesBinding(node, bindingName, declaration, source)) unsafe = true;
+      return;
+    }
     if (ts.isIdentifier(node) && node !== declaration.name && node.text === bindingName
       && resolveLexicalBinding(bindingName, node, source)?.node === declaration) {
       if (node === evaluatedUse) return;
       const parent = node.parent;
-      if ((ts.isBinaryExpression(parent) && isAssignmentOperator(parent.operatorToken.kind) && isAncestorNode(parent.left, node))
+      if (selectorBindingReferenceMutatesValue(node)
+        || (ts.isBinaryExpression(parent) && isAssignmentOperator(parent.operatorToken.kind) && isAncestorNode(parent.left, node))
         || ((ts.isPrefixUnaryExpression(parent) && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(parent.operator)
-          || ts.isPostfixUnaryExpression(parent)) && parent.operand === node)
-        || (ts.isCallExpression(parent.parent) && ts.isPropertyAccessExpression(parent)
-          && parent.expression === node && new Set(["push", "pop", "shift", "unshift", "splice", "sort", "reverse", "copyWithin", "fill", "add", "set", "delete", "clear"]).has(parent.name.text))) {
+          || ts.isPostfixUnaryExpression(parent)) && parent.operand === node)) {
         unsafe = true;
         return;
       }
@@ -2840,6 +2856,98 @@ function selectorBindingIsUnmutated(
   };
   visitNode(root);
   return !unsafe;
+}
+
+function functionBodyMutatesBinding(
+  owner: ts.SignatureDeclaration,
+  bindingName: string,
+  declaration: ts.VariableDeclaration,
+  source: ts.SourceFile
+): boolean {
+  let mutated = false;
+  const visit = (node: ts.Node): void => {
+    if (mutated) return;
+    if (node !== owner && ts.isFunctionLike(node)) return;
+    if (ts.isIdentifier(node) && node.text === bindingName
+      && resolveLexicalBinding(bindingName, node, source)?.node === declaration
+      && selectorBindingReferenceMutatesValue(node)) {
+      mutated = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(owner);
+  return mutated;
+}
+
+function selectorBindingReferenceMutatesValue(node: ts.Identifier): boolean {
+  const parent = node.parent;
+  if ((ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent)) && parent.expression === node) {
+    const use = parent.parent;
+    if (ts.isBinaryExpression(use) && isAssignmentOperator(use.operatorToken.kind) && isAncestorNode(use.left, parent)) return true;
+    if (ts.isDeleteExpression(use) && use.expression === parent) return true;
+    if (((ts.isPrefixUnaryExpression(use) && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(use.operator))
+      || ts.isPostfixUnaryExpression(use)) && use.operand === parent) return true;
+    if (ts.isCallExpression(use) && unwrapAliasExpression(use.expression) === parent) {
+      const member = ts.isPropertyAccessExpression(parent) ? parent.name.text
+        : parent.argumentExpression && ts.isStringLiteralLike(parent.argumentExpression) ? parent.argumentExpression.text : "";
+      return new Set(["push", "pop", "shift", "unshift", "splice", "sort", "reverse", "copyWithin", "fill", "add", "set", "delete", "clear"]).has(member);
+    }
+  }
+  if (ts.isCallExpression(parent)) {
+    const callee = unwrapAliasExpression(parent.expression);
+    return ts.isPropertyAccessExpression(callee)
+      && ts.isIdentifier(callee.expression)
+      && callee.expression.text === "Object"
+      && ["assign", "defineProperty", "defineProperties", "setPrototypeOf"].includes(callee.name.text)
+      && !resolveLexicalBinding("Object", callee.expression, node.getSourceFile())
+      && parent.arguments[0] === node;
+  }
+  return false;
+}
+
+function selectorReceiverMethodCanBeOverridden(
+  receiver: ts.Expression,
+  methodName: string,
+  context: SelectorEvaluationContext
+): boolean {
+  const owner = unwrapAliasExpression(receiver);
+  if (!ts.isIdentifier(owner)) return false;
+  const binding = resolveLexicalBinding(owner.text, owner, context.source);
+  return binding?.kind === "variable" && ts.isVariableDeclaration(binding.node)
+    && !selectorBindingMemberIsUnmutated(binding.node, methodName, context.source);
+}
+
+function selectorBindingMemberIsUnmutated(
+  declaration: ts.VariableDeclaration,
+  memberName: string,
+  source: ts.SourceFile
+): boolean {
+  if (!ts.isIdentifier(declaration.name)) return false;
+  const bindingName = declaration.name.text;
+  let mutated = false;
+  const root = executionRoot(declaration.name);
+  const visitNode = (node: ts.Node): void => {
+    if (mutated || (node !== root && ts.isFunctionLike(node))) return;
+    if (ts.isIdentifier(node) && node !== declaration.name && node.text === bindingName
+      && resolveLexicalBinding(bindingName, node, source)?.node === declaration) {
+      const parent = node.parent;
+      if ((ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent)) && parent.expression === node) {
+        const member = ts.isPropertyAccessExpression(parent) ? parent.name.text
+          : parent.argumentExpression && ts.isStringLiteralLike(parent.argumentExpression) ? parent.argumentExpression.text : "";
+        const use = parent.parent;
+        if (member === memberName
+          && ((ts.isBinaryExpression(use) && isAssignmentOperator(use.operatorToken.kind) && isAncestorNode(use.left, parent))
+            || (ts.isDeleteExpression(use) && use.expression === parent))) {
+          mutated = true;
+          return;
+        }
+      }
+    }
+    ts.forEachChild(node, visitNode);
+  };
+  visitNode(root);
+  return !mutated;
 }
 
 function selectorBindingReferenceIsSafe(node: ts.Identifier): boolean {
