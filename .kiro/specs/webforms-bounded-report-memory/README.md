@@ -38,6 +38,15 @@ admission. The wrapper now passes a bounded 5,000-row gap cap and prints the
 remaining limit classifications after each run. Pull and run the same
 zero-argument script again; no scan or source change is required.
 
+After a non-truncated report completes, run
+`scripts/Summarize-FocusedWebFormsPageList.ps1`. It automatically reads the
+newest `webforms-page-list-*` JSON under `C:\work\tracemap-output` and prints
+mutually exclusive counts for handler-unavailable chains, handler-resolved
+chains without a terminal, and terminal-resolved chains. It also prints page
+category counts and safe `page-NNN` aliases, plus terminal-kind counts. It does
+not print repository paths, source symbols, SQL, procedure names, or source
+content. Set `$ReportPath` at the top only when an older report must be selected.
+
 ## Tuesday handoff: report every page in a saved list
 
 Pull this branch, then open

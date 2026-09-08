@@ -33,6 +33,13 @@ the 1,000-row output gap cap. The committed page-list wrapper now passes
 report retention only; it does not widen graph traversal, scan the repository,
 or alter application evidence.
 
+The completed non-truncated report exposed overlapping human-readable states:
+a handler-unavailable chain also has no terminal, so raw text counts cannot be
+added. `Summarize-FocusedWebFormsPageList.ps1` now selects the newest retained
+page-list JSON and emits three mutually exclusive chain counts, exclusive page
+categories with safe aliases, and terminal-kind totals. The script is read-only
+and excludes private paths, symbols, SQL, and source content from its output.
+
 ## Retained-index page-list report (2026-09-06)
 
 Rebased this diagnostic branch cleanly onto `origin/dev` at `af72e8b9`, which
