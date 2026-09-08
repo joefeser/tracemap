@@ -1,3 +1,5 @@
+param([switch]$CompareDepths)
+
 # EDIT ONLY THIS BLOCK.
 $IndexPath = 'C:\work\tracemap-output\focused-webforms-20260903-145829\scan\index.sqlite'
 $OutputRoot = 'C:\work\tracemap-output'
@@ -32,10 +34,22 @@ $runner = Join-Path $PSScriptRoot 'Invoke-FocusedWebFormsPageListReport.ps1'
 
 try {
     [System.IO.File]::WriteAllLines($temporaryList, $pagePaths, [System.Text.UTF8Encoding]::new($false))
-    & $runner `
-        -IndexPath $IndexPath `
-        -PageListPath $temporaryList `
-        -OutputDirectory $outputDirectory
+    if ($CompareDepths) {
+        $reports = @()
+        $comparisonDirectory = Join-Path $OutputRoot "webforms-depth-comparison-$timestamp-$([Guid]::NewGuid().ToString('N'))"
+        foreach ($depth in @(8, 10, 12)) {
+            $depthOutput = Join-Path $comparisonDirectory "depth-$depth"
+            & $runner -IndexPath $IndexPath -PageListPath $temporaryList -OutputDirectory $depthOutput -MaxDepth $depth
+            $reports += Join-Path $depthOutput 'webforms-modernization.json'
+        }
+        & (Join-Path $PSScriptRoot 'Compare-FocusedWebFormsDepth.ps1') -ReportPaths $reports
+    }
+    else {
+        & $runner `
+            -IndexPath $IndexPath `
+            -PageListPath $temporaryList `
+            -OutputDirectory $outputDirectory
+    }
 }
 finally {
     Remove-Item -LiteralPath $temporaryList -Force -ErrorAction SilentlyContinue

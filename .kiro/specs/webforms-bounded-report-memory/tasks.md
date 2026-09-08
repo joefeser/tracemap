@@ -28,3 +28,4 @@
 - [x] Permit clearly labeled partial diagnostic triage of retained truncated packets without inferring missing truncation reasons.
 - [x] Preserve closed truncation reasons in new packet JSON and print counts while tolerating older packets.
 - [x] Schedule legacy branches depth-first to reduce frontier pressure while preserving alternate paths and explicit cycle/resource gaps.
+- [x] Add sequential retained-index depth 8/10/12 comparison with alias-only per-page and distinct-terminal counts, provenance checks, and unchanged other caps.

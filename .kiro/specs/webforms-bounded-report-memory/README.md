@@ -536,6 +536,22 @@ point and emits `ComReferenceResolutionFallbackUnavailable` instead. The
 application repository and its normal Visual Studio build are never modified.
 # Partial retained-report triage
 
+## Depth comparison (one command)
+
+Run `./scripts/Compare-FocusedWebFormsDepth.ps1` after pulling. It reuses the
+existing IndexPath, OutputRoot and Forms block in Run-FocusedWebFormsPageList.ps1;
+do not retype the form list. Runs depths 8, 10 and 12 sequentially with unchanged
+path/event-chain/gap caps, writing under a separate webforms-depth-comparison
+directory so ordinary latest-report triage is unaffected. No source rescan occurs.
+The wrapper may build TraceMap itself via dotnet run, not the private application.
+Console output includes per-depth totals, alias-only per-page counts, closed gap
+reasons, and added/lost retained terminal identities. Distinct means the exact
+boundaryKind + boundaryTargetId + terminalEvidenceId tuple, not distinct runtime
+database operations. Shared terminals reached by alternate routes count once.
+Reports must agree on source provenance and page selection. Any cap keeps results
+partial; deeper traversal can replace a bounded subset rather than only add to it.
+Send photos of the final comparison output, especially depth/depthDelta/depthGap.
+
 Legacy path exploration now uses deterministic depth-first branch scheduling to
 reduce breadth-wide pending paths. Alternate routes are not globally deduplicated.
 This is not shortest-path ordering or exhaustive runtime analysis. Existing depth,

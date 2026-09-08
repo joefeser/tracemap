@@ -16,7 +16,10 @@ param(
     [int]$MaxPaths = 2000,
 
     [ValidateRange(1, 10000)]
-    [int]$MaxGaps = 5000
+    [int]$MaxGaps = 5000,
+
+    [ValidateRange(1, 16)]
+    [int]$MaxDepth = 8
 )
 
 $ErrorActionPreference = 'Stop'
@@ -39,7 +42,8 @@ $arguments = @(
     '--max-event-chains', $MaxEventChains.ToString(),
     '--max-paths', $MaxPaths.ToString(),
     '--max-boundaries', $MaxPaths.ToString(),
-    '--max-gaps', $MaxGaps.ToString()
+    '--max-gaps', $MaxGaps.ToString(),
+    '--max-depth', $MaxDepth.ToString()
 )
 
 & dotnet @arguments

@@ -466,3 +466,20 @@ passed. The final added breadth-first comparison assertion also passed: ordinary
 breadth-first hits frontier 24 on the same fixture. Formatting, private-path
 guard, and diff check passed. Existing nullable warning in PropertyMappingTests
 is unchanged.
+## Bounded depth comparison handoff
+
+Added Compare-FocusedWebFormsDepth.ps1, reusing the user's configured runner
+without re-entering forms. Sequential depths 8/10/12 reuse the retained index,
+with other caps unchanged and separate output directories. Summary counts exact
+boundary kind/target/evidence tuples, page aliases, gains/losses and closed limit
+reasons; source and page-selection mismatch fails comparison. It does not equate
+boundary records with runtime operations or treat missing evidence as absence.
+Field result after depth-first scheduling: frontier gap cleared, 931 boundary
+records, 1031 chains, 59 resolved-handler chains without terminal, 349 cycle and
+394 depth gaps. Work-machine depth comparison is pending.
+
+Validation: synthetic PowerShell test covers duplicate tuple counting, gains and
+losses, page counts, gap reasons, private identity non-disclosure, provenance
+rejection and CLI depth forwarding. All changed runner scripts parse; private-path
+guard and diff check passed. No .NET code changed; full suite not rerun (previous
+code commit passed 1765/1765). Test entry: scripts/tests/Test-FocusedWebFormsDepth.ps1.
