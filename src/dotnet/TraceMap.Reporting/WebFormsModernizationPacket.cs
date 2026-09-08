@@ -520,9 +520,20 @@ public static class WebFormsModernizationPacketReporter
             var handlers = handlersByBinding.GetValueOrDefault(binding.FactId) ?? [];
             var handler = handlers.Length == 1 ? handlers[0] : null;
             var flowFact = handler is null ? null : flowFacts.FirstOrDefault(fact => SplitIds(fact.Properties.GetValueOrDefault("supportingFactIds")).Contains(handler.FactId, StringComparer.Ordinal));
+            var handlerSymbols = handler is null
+                ? new HashSet<string>(StringComparer.Ordinal)
+                : new[]
+                    {
+                        handler.TargetSymbol,
+                        handler.Properties.GetValueOrDefault("handlerSymbol"),
+                        handler.Properties.GetValueOrDefault("handlerSymbolId")
+                    }
+                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                    .Select(value => value!)
+                    .ToHashSet(StringComparer.Ordinal);
             var legacyPaths = legacyFlow.Paths.Where(path => !inputLimited && (path.SupportingFactIds.Contains(binding.FactId, StringComparer.Ordinal)
                 || (handler is not null && (path.SupportingFactIds.Contains(handler.FactId, StringComparer.Ordinal)
-                    || path.Nodes.FirstOrDefault()?.SymbolId == handler.TargetSymbol))))
+                    || (path.Nodes.FirstOrDefault()?.SymbolId is { } rootSymbol && handlerSymbols.Contains(rootSymbol))))))
                 .OrderBy(path => path.PathId, StringComparer.Ordinal).ToArray();
             var concreteTerminals = legacyPaths
                 .Select(path => path.Nodes.LastOrDefault())
