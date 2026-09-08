@@ -105,6 +105,72 @@ export async function run(runtimeEntity) {
     expect(entityGaps.every((gap) => gap.category === "entity" && gap.surface.includes("entities.dynamic."))).toBe(true);
   });
 
+  it("keeps selector arrays open when local helpers mutate captured state before use", async () => {
+    const repo = await fixtureRepo();
+    await fs.writeFile(path.join(repo, "src/captured-array-mutation.ts"), `import { base44 } from "@base44/sdk";
+export async function run(runtimeEntity) {
+  const entities = ["Order"];
+  function add() { entities.push(runtimeEntity); }
+  add();
+  for (const entity of entities) await base44.entities[entity].list();
+}
+`);
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-captured-array-mutation-"));
+    const { packet } = await buildBase44Evidence(options(repo, out));
+    const operations = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation
+      && fact.evidence.filePath === "src/captured-array-mutation.ts");
+    expect(operations).toHaveLength(1);
+    expect(operations[0]).toMatchObject({
+      evidenceTier: "Tier4Unknown",
+      targetSymbol: "dynamic",
+      properties: { entitySelectorGap: "entity-selector-dynamic-unresolved" }
+    });
+  });
+
+  it("keeps React selector state open when the state value is mutated in place", async () => {
+    const repo = await fixtureRepo();
+    await fs.writeFile(path.join(repo, "src/react-state-mutation.tsx"), `import { useState } from "react";
+import { base44 } from "@base44/sdk";
+export default function Screen() {
+  const [entities] = useState(["Order"]);
+  entities.push("Customer");
+  for (const entity of entities) base44.entities[entity].list();
+  return null;
+}
+`);
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-react-state-mutation-"));
+    const { packet } = await buildBase44Evidence(options(repo, out));
+    const operations = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation
+      && fact.evidence.filePath === "src/react-state-mutation.tsx");
+    expect(operations).toHaveLength(1);
+    expect(operations[0]).toMatchObject({
+      evidenceTier: "Tier4Unknown",
+      targetSymbol: "dynamic",
+      properties: { entitySelectorGap: "entity-selector-dynamic-unresolved" }
+    });
+  });
+
+  it("keeps array selectors open when the receiver overrides filter before use", async () => {
+    const repo = await fixtureRepo();
+    await fs.writeFile(path.join(repo, "src/receiver-filter-override.ts"), `import { base44 } from "@base44/sdk";
+export async function run(runtimeEntity) {
+  const entities = ["Order"];
+  entities.filter = () => [runtimeEntity];
+  for (const entity of entities.filter(Boolean)) await base44.entities[entity].list();
+}
+`);
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-receiver-filter-override-"));
+    const { packet } = await buildBase44Evidence(options(repo, out));
+    const operations = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation
+      && fact.evidence.filePath === "src/receiver-filter-override.ts");
+    expect(operations).toHaveLength(1);
+    expect(operations[0]).toMatchObject({
+      evidenceTier: "Tier4Unknown",
+      targetSymbol: "dynamic",
+      properties: { entitySelectorGap: "entity-selector-dynamic-unresolved" }
+    });
+  });
+
   it("keeps Object.values selectors open when object spreads make the value set unbounded", async () => {
     const repo = await fixtureRepo();
     await fs.writeFile(path.join(repo, "src/open-object-values.ts"), `import { base44 } from "@base44/sdk";
