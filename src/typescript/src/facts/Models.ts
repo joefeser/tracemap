@@ -131,10 +131,12 @@ export const FactTypes = {
   Base44FunctionInvocation: "Base44FunctionInvocation",
   Base44FunctionSurface: "Base44FunctionSurface",
   Base44EntityOperation: "Base44EntityOperation",
+  Base44EntityCallsiteDisposition: "Base44EntityCallsiteDisposition",
   Base44EntityPayload: "Base44EntityPayload",
   Base44EntityQuery: "Base44EntityQuery",
   Base44EnvironmentAccess: "Base44EnvironmentAccess",
   Base44HttpTarget: "Base44HttpTarget",
   Base44MigrationSurface: "Base44MigrationSurface",
+  Base44SourceAuthority: "Base44SourceAuthority",
   Base44CustomerBoundary: "Base44CustomerBoundary"
 } as const;

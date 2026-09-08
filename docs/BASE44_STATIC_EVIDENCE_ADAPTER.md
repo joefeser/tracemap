@@ -18,7 +18,7 @@ tracemap-ts base44-diff \
   --out <diff.json>
 ```
 
-The evidence command also writes the normal `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and analyzer log. It adds stable JSON and Markdown packets plus a credential-free static HTML explorer. Artifact SHA-256 values bind the normal scan outputs. The accepted source and normalized tree digests are supplied by the authority that inspected the packet; TraceMap validates their shape and binds them without claiming to have established packet trust.
+The evidence command also writes the normal `scan-manifest.json`, `facts.ndjson`, `index.sqlite`, `report.md`, and analyzer log. It adds stable JSON and Markdown packets plus a credential-free static HTML explorer. The portable packet binds the deterministic `facts.ndjson`, `report.md`, and analyzer log by SHA-256. `scan-manifest.json` carries the operational `scannedAt` timestamp and `index.sqlite` serializes that manifest, so both remain required scan outputs that the artifact validator checks separately but are deliberately excluded from the portable packet's source-evidence digest map. Two scans of identical accepted source therefore produce byte-identical `base44-evidence.json` packets without hiding or rewriting the operational scan timestamp. The accepted source and normalized tree digests are supplied by the authority that inspected the packet; TraceMap validates their shape and binds them without claiming to have established packet trust.
 
 ## Facts
 
@@ -38,6 +38,26 @@ The additive JavaScript/JSX/TypeScript/TSX `base44.*.v1` rules cover:
 - customer-authored function/entity boundaries.
 
 Facts contain repository and commit identity, rule, evidence tier, extractor identity/version, relative path, a first-class line span, source-file digest, and snippet digest. Each statically derived field also carries the contributing syntax's line span and snippet digest so identifier, spread, and mutation evidence remains independently inspectable even when it is defined away from the SDK callsite. They never store source snippets, environment values, URL paths/query strings, tokens, or cookies.
+
+Extractor `base44-evidence/0.7.0` adds the producer-owned
+`coverage.gaps[]` contract. Every `Tier4Unknown` Base44 fact appears exactly
+once with its non-null `factId`, rule, tier, a closed category (`entity`,
+`function`, `auth`, `http-integration`, `storage`, `provider`, or `unknown`),
+and a deterministic declared-surface label. Its `gapId` binds the gap schema,
+packet repository and commit, both accepted source identities, fact ID,
+category, and surface. The packet always emits `coverage.gaps`, including an
+empty array, and identifies the entry schema as
+`tracemap.base44.coverage-gap.v1`. Missing, duplicate, malformed, orphaned, or
+misclassified entries fail packet validation. Manifest-only `knownGaps` remain
+separate aggregate coverage limitations because they have no source fact ID;
+consumers must retain them as unknown blockers rather than invent source
+evidence. Host-generated cross-producer comparison gaps are also separate and
+must be classified and composed by the host.
+
+The packet schema remains `tracemap.base44.static-evidence.v1`; these fields
+are additive so historical v1 artifacts remain structurally recognizable.
+Consumers admitting extractor `0.7.0` or later must require both fields and
+validate the exact one-to-one relationship with Tier-4 packet facts.
 
 `base44.entity.payload.v1` and `base44.entity.query.v1` are additive facts in
 the v1 packet. Structured field, spread, binding, and gap collections are
@@ -119,6 +139,69 @@ Extractor `base44-evidence/0.5.0` emits the versioned
 `88mph.entity-query.v2` correction for direct runtime-reference operands. See
 [Base44 query semantics v2](BASE44_QUERY_SEMANTICS_V2.md). Consumers must admit
 the new extractor and descriptor identities explicitly.
+
+Extractor `base44-evidence/0.8.0` adds the narrow
+`88mph.entity-query.v3` descriptor for source-bound local filter objects with
+conditionally added fields. V3 preserves v2 and adds explicit per-entry
+`always`/`conditional` presence plus source derivation; direct object literals
+continue to emit v2. See
+[Base44 query semantics v3](BASE44_QUERY_SEMANTICS_V3.md). Consumers that do
+not explicitly validate and admit v3 must block it.
+
+The same extractor emits the closed payload shape-v2 contract documented in
+[Base44 entity payload shape v2](BASE44_ENTITY_PAYLOAD_SHAPE_V2.md). It
+distinguishes a source-bounded outer object with runtime-deferred fields from
+an unresolved outer kind and carries the Docker write/readback/cleanup
+obligation without relabeling static evidence complete. It also models a
+statically named object-rest payload only
+when the source object is independently resolved, every excluded key is
+static, and the rest binding is not mutated or escaped before the SDK call.
+All source gaps are retained; array destructuring, selected-property bindings,
+computed/default exclusions, and runtime-open inputs remain unresolved.
+
+Extractor `base44-evidence/0.9.0` preserves query-v3 and payload shape-v2,
+adds explicit outer-kind propagation, forbids complete/unknown payloads, and
+models only finite source-derived local-array `.push(...)` to `.map(...)`
+element paths. A parameter occupying an SDK payload position does not by
+itself prove object kind; absent caller/construction evidence remains a typed
+blocker.
+
+Extractor `base44-evidence/0.10.0` adds a source-derived SDK identity to every
+entity operation and its payload/query shape. It distinguishes exact
+`npm:@base44/sdk@0.8.4` function-runtime imports from frontend `@base44/sdk`
+imports resolved to `0.8.5` by the root manifest and lock. Missing, conflicting,
+unsupported, or ambiguous authority is a typed Tier-4 operation blocker; no
+directory or repository-wide default supplies identity. See
+[Base44 SDK callsite identity v1](BASE44_SDK_CALLSITE_IDENTITY_V1.md).
+
+Extractor `base44-evidence/0.11.0` preserves callsite SDK identity and adds
+narrow payload source-closure proofs for source-proven React dependency arrays,
+finite local computed-key caller domains, closed React object state, and
+mutually exclusive `if/else` or conditional-expression arms. Runtime-open
+fields remain deferred and cross-component/ref-indirect or unused mutation
+paths remain typed blockers. See
+[Base44 payload source closure v1](BASE44_PAYLOAD_SOURCE_CLOSURE_V1.md).
+
+Extractor `base44-evidence/0.12.0` adds a source-bound entity-selector contract
+for static and computed SDK entity access. It expands only finite immutable
+domains and emits a typed Tier-4 row when the selector graph is runtime-open,
+mutated, escaped, or only partially known. See
+[Base44 entity selector v1](BASE44_ENTITY_SELECTOR_V1.md).
+
+Extractor `base44-evidence/0.13.0` extends that contract through closed
+state/caller/relationship flows while preserving per-object entity/query-field
+correlation. It also publishes an explicit source-bound disposition instead of
+an entity row for a narrowly proven unreachable exported helper or uninvoked
+real React Query mutation callback. Ambiguous module graphs, mutation handles,
+branch predicates, callers, or assignments remain Tier-4 blockers. See
+[Base44 entity callsite disposition v2](BASE44_ENTITY_CALLSITE_DISPOSITION_V2.md).
+
+Extractor `base44-evidence/0.14.0` emits payload shape v3. It preserves the
+complete syntactic `fieldsJson` alternative set and adds a unique-by-name
+`semanticFieldsJson` projection with closed presence, value-type, explicit-null,
+and exact provenance semantics. Unknown or conflicting types remain unknown;
+the static projection does not by itself authorize a database column type. See
+[Base44 entity payload shape v3](BASE44_ENTITY_PAYLOAD_SHAPE_V3.md).
 
 Extractor `base44-evidence/0.4.1` also follows an SDK client through a local
 helper parameter when executable callsites prove the binding. The proof is
