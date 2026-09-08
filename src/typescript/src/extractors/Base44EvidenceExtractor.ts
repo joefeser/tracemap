@@ -1947,6 +1947,9 @@ function evaluateAppendOnlyArrayBinding(
   const elements = [...(initial[0].elements ?? [])];
   let unsafe = false;
   const scope = executionRoot(declaration.name);
+  // Append order cannot be inferred from a deferred closure's source position.
+  // The immutable-binding fallback still handles unchanged captured arrays.
+  if (executionRoot(use) !== scope) return null;
   if (isStaticallyUnreachable(use, scope)) return null;
   const usePosition = use.getStart(context.source);
   const visit = (node: ts.Node): void => {
@@ -2829,7 +2832,10 @@ function selectorBindingIsUnmutated(
   const bindingName = declaration.name.text;
   let unsafe = false;
   const root = executionRoot(declaration.name);
-  const usePosition = evaluatedUse?.getStart(source) ?? Number.POSITIVE_INFINITY;
+  // Source order only bounds execution within the same frame. A closure can
+  // run after statements following its declaration have mutated captured state.
+  const usePosition = evaluatedUse && executionRoot(evaluatedUse) === root
+    ? evaluatedUse.getStart(source) : Number.POSITIVE_INFINITY;
   const visitNode = (node: ts.Node): void => {
     if (unsafe) return;
     if (node.getStart(source) > usePosition) return;
