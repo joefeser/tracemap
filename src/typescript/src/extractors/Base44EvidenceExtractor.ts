@@ -1991,9 +1991,6 @@ function selectorAccumulatedArrayReferenceIsSafe(node: ts.Identifier, evaluatedU
   if (ts.isPropertyAssignment(parent) && parent.name === node) return true;
   if (ts.isPropertyAccessExpression(parent) && parent.expression === node && parent.name.text === "length") return true;
   if (ts.isForOfStatement(parent) && parent.expression === node) return true;
-  if (ts.isPropertyAssignment(parent) && parent.initializer === node) return true;
-  if (ts.isShorthandPropertyAssignment(parent) && parent.name === node) return true;
-  if (ts.isReturnStatement(parent) && parent.expression === node) return true;
   return false;
 }
 
@@ -2025,13 +2022,17 @@ function evaluateSelectorReactStateBinding(
   let setterCalls = 0;
   let unsafe = false;
   const scope = executionRoot(declaration.name);
+  const usePosition = use.getStart(context.source);
   const visit = (node: ts.Node): void => {
     if (unsafe) return;
     if (node === setterElement.name) return;
     if (ts.isIdentifier(node) && node !== valueElement.name && node.text === bindingName
-      && resolveLexicalBinding(bindingName, node, context.source)?.node === declaration
-      && selectorBindingReferenceMutatesValue(node)) {
-      unsafe = true;
+      && resolveLexicalBinding(bindingName, node, context.source)?.node === declaration) {
+      if (node.getStart(context.source) > usePosition) return;
+      if (node === use) return;
+      if (selectorBindingReferenceMutatesValue(node) || !selectorBindingReferenceIsSafe(node)) {
+        unsafe = true;
+      }
       return;
     }
     if (ts.isIdentifier(node) && node.text === setterName
@@ -2956,6 +2957,9 @@ function selectorBindingReferenceIsSafe(node: ts.Identifier): boolean {
   if (ts.isForOfStatement(parent) && parent.expression === node) return true;
   if (ts.isSpreadElement(parent) || ts.isSpreadAssignment(parent)) return true;
   if (ts.isElementAccessExpression(parent) && parent.argumentExpression === node) return true;
+  if (ts.isPropertyAssignment(parent) && parent.initializer === node) return false;
+  if (ts.isShorthandPropertyAssignment(parent) && parent.name === node) return false;
+  if (ts.isReturnStatement(parent) && parent.expression === node) return false;
   if (ts.isCallExpression(parent)) return false;
   if (ts.isCallExpression(parent.parent) && parent.parent.arguments.includes(parent as ts.Expression)) {
     const callee = unwrapAliasExpression(parent.parent.expression);

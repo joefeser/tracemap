@@ -127,6 +127,28 @@ export async function run(runtimeEntity) {
     });
   });
 
+  it("keeps append-only selector arrays open when the array escapes through an object alias", async () => {
+    const repo = await fixtureRepo();
+    await fs.writeFile(path.join(repo, "src/escaped-array-object-alias.ts"), `import { base44 } from "@base44/sdk";
+export async function run() {
+  const entities = ["Order"];
+  const holder = { entities };
+  holder.entities.push("Customer");
+  for (const entity of entities) await base44.entities[entity].list();
+}
+`);
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-escaped-array-object-alias-"));
+    const { packet } = await buildBase44Evidence(options(repo, out));
+    const operations = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation
+      && fact.evidence.filePath === "src/escaped-array-object-alias.ts");
+    expect(operations).toHaveLength(1);
+    expect(operations[0]).toMatchObject({
+      evidenceTier: "Tier4Unknown",
+      targetSymbol: "dynamic",
+      properties: { entitySelectorGap: "entity-selector-dynamic-unresolved" }
+    });
+  });
+
   it("keeps React selector state open when the state value is mutated in place", async () => {
     const repo = await fixtureRepo();
     await fs.writeFile(path.join(repo, "src/react-state-mutation.tsx"), `import { useState } from "react";
@@ -142,6 +164,29 @@ export default function Screen() {
     const { packet } = await buildBase44Evidence(options(repo, out));
     const operations = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation
       && fact.evidence.filePath === "src/react-state-mutation.tsx");
+    expect(operations).toHaveLength(1);
+    expect(operations[0]).toMatchObject({
+      evidenceTier: "Tier4Unknown",
+      targetSymbol: "dynamic",
+      properties: { entitySelectorGap: "entity-selector-dynamic-unresolved" }
+    });
+  });
+
+  it("keeps React selector state open when the state value escapes through an ordinary call", async () => {
+    const repo = await fixtureRepo();
+    await fs.writeFile(path.join(repo, "src/react-state-call-escape.tsx"), `import { useState } from "react";
+import { base44 } from "@base44/sdk";
+export default function Screen() {
+  const [entities] = useState(["Order"]);
+  consume(entities);
+  for (const entity of entities) base44.entities[entity].list();
+  return null;
+}
+`);
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-react-state-call-escape-"));
+    const { packet } = await buildBase44Evidence(options(repo, out));
+    const operations = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation
+      && fact.evidence.filePath === "src/react-state-call-escape.tsx");
     expect(operations).toHaveLength(1);
     expect(operations[0]).toMatchObject({
       evidenceTier: "Tier4Unknown",
