@@ -24,7 +24,7 @@
     },
     "coverage": {
       "type": "object",
-      "required": ["label", "analysisLevel", "buildStatus", "knownGaps", "ruleIds", "extractorIdentities", "evidenceTiers"],
+      "required": ["label", "analysisLevel", "buildStatus", "knownGaps", "gapSchemaVersion", "gaps", "ruleIds", "extractorIdentities", "evidenceTiers"],
       "properties": {
         "label": { "type": "string", "minLength": 1 },
         "analysisLevel": { "type": "string" },
@@ -43,7 +43,7 @@
     },
     "artifacts": {
       "type": "object",
-      "required": ["scan-manifest.json", "facts.ndjson", "index.sqlite", "report.md", "logs/analyzer.log"],
+      "required": ["facts.ndjson", "report.md", "logs/analyzer.log"],
       "additionalProperties": {
         "type": "object",
         "required": ["sha256"],
@@ -96,14 +96,26 @@
     "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "coverageGap": {
       "type": "object",
-      "required": ["gapId", "surface", "category", "factId", "ruleId", "evidenceTier"],
+      "required": ["gapId", "surface", "category", "factId", "ruleId", "evidenceTier", "filePath", "lineSpan", "commitSha", "extractorVersion"],
       "properties": {
         "gapId": { "type": "string", "pattern": "^gap-[0-9a-f]{64}$" },
         "surface": { "type": "string", "minLength": 1 },
         "category": { "enum": ["entity", "function", "auth", "http-integration", "storage", "provider", "unknown"] },
         "factId": { "type": "string", "pattern": "^fact-[0-9a-f]{20}$" },
         "ruleId": { "type": "string", "pattern": "^base44\\." },
-        "evidenceTier": { "const": "Tier4Unknown" }
+        "evidenceTier": { "const": "Tier4Unknown" },
+        "filePath": { "type": "string", "minLength": 1 },
+        "lineSpan": {
+          "type": "object",
+          "required": ["startLine", "endLine"],
+          "properties": {
+            "startLine": { "type": "integer", "minimum": 1 },
+            "endLine": { "type": "integer", "minimum": 1 }
+          },
+          "additionalProperties": false
+        },
+        "commitSha": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+        "extractorVersion": { "type": "string", "minLength": 1 }
       },
       "additionalProperties": false
     }
