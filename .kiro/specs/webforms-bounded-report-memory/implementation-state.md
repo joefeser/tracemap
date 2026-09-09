@@ -485,6 +485,12 @@ guard and diff check passed. No .NET code changed; full suite not rerun (previou
 code commit passed 1765/1765). Test entry: scripts/tests/Test-FocusedWebFormsDepth.ps1.
 ## Read-only completed depth summary
 
+Follow-up: field failure at line 59 was the mandatory GetProperty call for
+terminalKind. Production serialization omits null fields. The reader now treats
+omitted or explicit-null handlerFactId/terminalKind as unavailable; other required
+schema fields remain required. Regression covers omitted, null, and populated
+optional fields. PowerShell regression, private-path guard and diff check passed.
+
 The depth comparison consumed unacceptable resources on the work machine; depth 8
 and 10 completed and remain local (66 and 84 MB), while no depth-12 completion is
 established. New Summarize-CompletedWebFormsDepths.ps1 only reads those files.

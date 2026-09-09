@@ -12,13 +12,14 @@ try {
             sources=@(@{commitSha='fixture'}); summary=@{truncated=$true}
             surfaceSelection=@{items=@(@{alias='page-001';surfaceIds=@('s')})}
             downstreamBoundaries=$boundaries
-            eventChains=@(@{handlerFactId=$null;terminalKind=$null},@{handlerFactId='h';terminalKind=$null})
+            # Production JSON omits null fields; also retain explicit-null coverage.
+            eventChains=@(@{},@{handlerFactId='h'},@{handlerFactId=$null;terminalKind=$null},@{handlerFactId='h';terminalKind='sql-query'})
             gaps=@(@{classification='TruncatedByLimit';truncationReason='depth'},@{classification='TruncatedByLimit'})
         }
         [IO.File]::WriteAllText((Join-Path $dir 'webforms-modernization.json'), ($packet | ConvertTo-Json -Depth 20))
     }
     $output = (& $scriptPath -OutputRoot $temp 6>&1 | Out-String)
-    foreach ($expected in @('boundaryRecords=2|distinctTerminalEvidence=1', 'boundaryRecords=3|distinctTerminalEvidence=2', 'terminalDelta=added:1|lost:0', 'handlerUnavailable=1|resolvedWithoutTerminal=1', 'unknownReason=1')) {
+    foreach ($expected in @('boundaryRecords=2|distinctTerminalEvidence=1', 'boundaryRecords=3|distinctTerminalEvidence=2', 'terminalDelta=added:1|lost:0', 'handlerUnavailable=2|resolvedWithoutTerminal=1', 'unknownReason=1')) {
         if (-not $output.Contains($expected)) { throw "Missing: $expected" }
     }
     if ($output.Contains('PRIVATE')) { throw 'Private identity disclosed.' }
