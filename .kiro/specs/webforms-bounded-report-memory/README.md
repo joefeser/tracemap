@@ -536,6 +536,20 @@ point and emits `ComReferenceResolutionFallbackUnavailable` instead. The
 application repository and its normal Visual Studio build are never modified.
 # Partial retained-report triage
 
+## Current safe handoff: completed files only
+
+Run `./scripts/Summarize-CompletedWebFormsDepths.ps1` in PowerShell 7 after pulling.
+It automatically finds the newest comparison folder containing both depth-8 and
+depth-10 JSON reports. It NEVER launches TraceMap, dotnet, another script, or a
+traversal. Do not rerun Compare-FocusedWebFormsDepth.ps1 while resource safeguards
+are pending. The new summary reads one JSON document at a time with JsonDocument,
+refuses files above 128 MiB, and retains only compact identities/counts between
+reads. The reported 66/84 MB completed files fit that input limit. Console output
+is count/alias-only, roughly a dozen lines, suitable for a photo. Source/selection
+mismatch fails closed. Optional ComparisonDirectory at the top can override folder
+discovery. No output files are modified. Distinct terminal evidence is an exact
+kind/target/evidence tuple, not distinct runtime database operations.
+
 ## Depth comparison (one command)
 
 Run `./scripts/Compare-FocusedWebFormsDepth.ps1` after pulling. It reuses the

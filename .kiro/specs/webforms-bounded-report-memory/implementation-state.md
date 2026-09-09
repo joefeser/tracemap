@@ -483,3 +483,18 @@ losses, page counts, gap reasons, private identity non-disclosure, provenance
 rejection and CLI depth forwarding. All changed runner scripts parse; private-path
 guard and diff check passed. No .NET code changed; full suite not rerun (previous
 code commit passed 1765/1765). Test entry: scripts/tests/Test-FocusedWebFormsDepth.ps1.
+## Read-only completed depth summary
+
+The depth comparison consumed unacceptable resources on the work machine; depth 8
+and 10 completed and remain local (66 and 84 MB), while no depth-12 completion is
+established. New Summarize-CompletedWebFormsDepths.ps1 only reads those files.
+It discovers a shared comparison folder, processes one bounded JSON document at
+a time, keeps compact terminal identity sets, validates provenance/selection, and
+prints counts plus gained/lost page aliases. No code path launches another script
+or process; no outputs are changed. Hard input cap 128 MiB per report; boundary and
+chain count caps 10,000, selection cap 1,000. This does not fix traversal resource
+safety; deeper traversal must remain paused pending that separate change.
+
+Validation: PowerShell synthetic fixture verifies auto-discovery, duplicate terminal
+identity handling, gains, null handlers, unknown reasons, private identity omission
+and mismatched provenance rejection. No .NET changes; full .NET suite not rerun.

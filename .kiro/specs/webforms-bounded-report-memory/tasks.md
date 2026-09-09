@@ -29,3 +29,4 @@
 - [x] Preserve closed truncation reasons in new packet JSON and print counts while tolerating older packets.
 - [x] Schedule legacy branches depth-first to reduce frontier pressure while preserving alternate paths and explicit cycle/resource gaps.
 - [x] Add sequential retained-index depth 8/10/12 comparison with alias-only per-page and distinct-terminal counts, provenance checks, and unchanged other caps.
+- [x] Add standalone completed-depth-8/10 read-only small summary with bounded input and no traversal launch path.
