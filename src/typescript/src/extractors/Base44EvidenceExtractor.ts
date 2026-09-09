@@ -3897,6 +3897,8 @@ function resolveRuntimeAlias(name: string, use: ts.Node, source: ts.SourceFile, 
       ? { prefix, kind: "callsite-proven-parameter" } : null;
   }
   if (binding.kind === "variable") {
+    const assigned = resolveSingleAssignedRuntimeAlias(binding.node, use, source, aliases, factoryAliases, injected, next);
+    if (assigned) return assigned;
     if (!isImmutableVariable(binding.node, use) || !binding.node.initializer) return null;
     if (!ts.isIdentifier(binding.node.name)) {
       const prefix = aliases.get(name);
@@ -3915,6 +3917,53 @@ function resolveRuntimeAlias(name: string, use: ts.Node, source: ts.SourceFile, 
     return prefix ? { prefix, kind: "source-import-or-derived" } : null;
   }
   return null;
+}
+
+function resolveSingleAssignedRuntimeAlias(
+  declaration: ts.VariableDeclaration,
+  use: ts.Node,
+  source: ts.SourceFile,
+  aliases: Map<string, string[]>,
+  factoryAliases: Set<string>,
+  injected: Map<number, string[]>,
+  visited: Set<ts.Node>
+): RuntimeAlias | null {
+  if (!ts.isIdentifier(declaration.name) || !declaration.initializer) return null;
+  const initializer = unwrapAliasExpression(declaration.initializer);
+  if (!initializerIsNullish(initializer)) return null;
+  const useStatement = findAncestor(use, ts.isStatement);
+  if (!useStatement || !useStatement.parent || !ts.isBlock(useStatement.parent)) return null;
+  const useBlock = useStatement.parent;
+  const useIndex = useBlock.statements.findIndex((statement) => statement === useStatement);
+  if (useIndex < 1) return null;
+  const assignments: ts.BinaryExpression[] = [];
+  for (let index = 0; index < useIndex; index++) {
+    const statement = useBlock.statements[index];
+    const collect = (node: ts.Node): void => {
+      if (ts.isFunctionLike(node)) return;
+      if (ts.isBinaryExpression(node)) {
+        const target = unwrapAliasExpression(node.left);
+        if (ts.isIdentifier(target) && target.text === declaration.name.getText(source)
+          && resolveLexicalBinding(target.text, target, source)?.node === declaration) {
+          assignments.push(node);
+        }
+      }
+      ts.forEachChild(node, collect);
+    };
+    collect(statement);
+  }
+  if (assignments.length !== 1 || assignments[0].operatorToken.kind !== ts.SyntaxKind.EqualsToken) return null;
+  const assignedFactory = factoryAlias(assignments[0].right, source, aliases, factoryAliases);
+  if (assignedFactory) return { prefix: assignedFactory, kind: "source-import-or-derived" };
+  const chain = expressionChain(unwrapAliasExpression(assignments[0].right));
+  if (!chain) return null;
+  const parent = resolveRuntimeAlias(chain[0], assignments[0], source, aliases, factoryAliases, injected, visited);
+  return parent ? { prefix: [...parent.prefix, ...chain.slice(1)], kind: parent.kind } : null;
+}
+
+function initializerIsNullish(expression: ts.Expression): boolean {
+  return expression.kind === ts.SyntaxKind.NullKeyword
+    || (ts.isIdentifier(expression) && expression.text === "undefined");
 }
 
 function parameterSourceFromExpression(input: ts.Expression, use: ts.Node, context: SourceContext, visited: Set<ts.Node>): ParameterSource {
