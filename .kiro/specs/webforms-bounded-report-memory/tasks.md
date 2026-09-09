@@ -36,3 +36,4 @@
 - [x] Compare retained depth-8/10 page triage with provenance gating and exact-node reason associations, preserving unknown causes and testing mismatched inputs.
 - [x] Report closed per-page traversal and call-evidence states from retained observations so field triage can distinguish traversal, join, and extraction limitations.
 - [x] Preserve deterministic closed truncation-reason sets directly on each root traversal observation and expose them compatibly in packet JSON, Markdown, and retained triage.
+- [x] Run retained per-chain triage automatically against the exact successful bounded page-list artifact for a one-command field workflow.

@@ -24,6 +24,10 @@ Packets produced after the per-root reason update additionally carry
 readable. A reason identifies the bounded static-search limit observed for that
 chain root. It does not identify a runtime condition or prove that a single
 reason exclusively prevented terminal discovery.
+`Run-FocusedWebFormsPageList.ps1` now invokes the retained triage against the
+exact JSON it just produced, so the bounded report and its alias-only direct
+reason summary require one command. It fails if the expected JSON artifact is
+missing; it does not search for or accidentally summarize an older run.
 
 After `git pull`, run ` .\scripts\Triage-CompletedWebFormsPages.ps1` from the repository root.
 This reads the newest completed depth-8 report under `C:\work\tracemap-output`;

@@ -20,6 +20,12 @@ passed for both changed C# files. The whole-solution formatting check remains
 noisy in unrelated pre-existing files and was not used to rewrite them. Private
 path guard and diff check passed before commit.
 
+Field handoff: the page-list runner now calls the read-only triage with the
+exact JSON path returned by its successful bounded report. Missing JSON fails
+closed; no prior report is selected. Operator workflow remains `git pull` then
+one invocation of `Run-FocusedWebFormsPageList.ps1` using its existing edited
+index and 43-form list.
+
 ## Retained observation-state output (2026-09-09)
 
 Field comparison at depths 8 and 10 found the same terminal-free page buckets;

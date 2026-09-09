@@ -39,6 +39,12 @@ try {
         -IndexPath $IndexPath `
         -PageListPath $temporaryList `
         -OutputDirectory $outputDirectory
+
+    $reportPath = Join-Path $outputDirectory 'webforms-modernization.json'
+    if (-not (Test-Path -LiteralPath $reportPath -PathType Leaf)) {
+        throw 'The bounded report completed without its required JSON artifact.'
+    }
+    & (Join-Path $PSScriptRoot 'Triage-CompletedWebFormsPages.ps1') -ReportPath $reportPath
 }
 finally {
     Remove-Item -LiteralPath $temporaryList -Force -ErrorAction SilentlyContinue
