@@ -100,7 +100,7 @@ foreach ($group in @($gaps | Where-Object { $_.classification -match '(LimitReac
     Write-Host "truncationGap=$($group.Name)|count=$($group.Count)"
     if ($group.Name -eq 'TruncatedByLimit') {
         foreach ($reasonGroup in @($group.Group | ForEach-Object {
-            if ($_.truncationReason -cin @('depth', 'frontier', 'path', 'cycle')) { $_.truncationReason }
+            if ($_.truncationReason -cin @('depth', 'frontier', 'path', 'cycle', 'work')) { $_.truncationReason }
             else { 'unavailable' }
         } | Group-Object | Sort-Object Name)) {
             Write-Host "truncationReason=$($reasonGroup.Name)|count=$($reasonGroup.Count)"

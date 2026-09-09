@@ -1015,7 +1015,7 @@ public static class WebFormsModernizationPacketReporter
             "legacy-flow.v1",
             gap.EffectiveSupportingFactIds.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             ["The legacy-flow gap preserves incomplete static path coverage and does not prove absence."],
-            gap.GapKind == "TruncatedByLimit" && gap.Reason is "depth" or "frontier" or "path" or "cycle"
+            gap.GapKind == "TruncatedByLimit" && gap.Reason is "depth" or "frontier" or "path" or "cycle" or "work"
                 ? gap.Reason : null));
     }
 

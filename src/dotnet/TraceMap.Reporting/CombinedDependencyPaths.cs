@@ -30,6 +30,8 @@ public sealed record CombinedDependencyPathOptions(
     // the historical selector ceiling and selection behavior.
     internal int StartingNodeLimit { get; init; } = 250;
     internal IReadOnlySet<string>? StartingFactIds { get; init; }
+    // Deterministic work bound, including nonterminal/cyclic exploration.
+    public int MaxTraversalWork { get; init; } = 100_000;
 }
 
 public sealed record CombinedDependencyPathResult(
@@ -72,7 +74,8 @@ public sealed record CombinedPathQuery(
     string Algorithm,
     string AlgorithmVersion,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    string? MessageDirection);
+    string? MessageDirection,
+    int MaxTraversalWork = 100_000);
 
 public sealed record CombinedPathSummary(
     int SourceCount,
@@ -344,7 +347,7 @@ public static partial class CombinedDependencyPathReporter
             return (report, starts.Select(node => node.NodeId).ToHashSet(StringComparer.Ordinal));
         }
 
-        return (report, Search(graph, starts, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier, options.IncludeLegacyRoots || IsLegacyView(options.View)).ReachedNodeIds);
+        return (report, Search(graph, starts, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier, options.IncludeLegacyRoots || IsLegacyView(options.View), options.MaxTraversalWork).ReachedNodeIds);
     }
 
     internal static async Task<CombinedPathGraphInventory> BuildGraphInventoryAsync(
@@ -524,7 +527,9 @@ public static partial class CombinedDependencyPathReporter
             // Preserve bounded outgoing-graph observations even when the index
             // contains no supported terminal surface. The public path result
             // remains SelectorNoMatch and makes no terminal claim.
-            search = Search(graph, startNodes, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier, legacyMode);
+            search = Search(graph, startNodes, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier, legacyMode, options.MaxTraversalWork);
+            gaps.AddRange(search.Gaps);
+            truncated = truncated || search.Truncated;
             gaps.Add(new CombinedPathGap(
                 "gap:selector:no-terminal-surface",
                 "SelectorNoMatch",
@@ -542,7 +547,7 @@ public static partial class CombinedDependencyPathReporter
         }
         else
         {
-            search = Search(graph, startNodes, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier, legacyMode);
+            search = Search(graph, startNodes, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier, legacyMode, options.MaxTraversalWork);
             paths.AddRange(search.Paths);
             gaps.AddRange(search.Gaps);
             truncated = truncated || search.Truncated;
@@ -660,7 +665,8 @@ public static partial class CombinedDependencyPathReporter
                 options.MaxFrontier,
                 Algorithm,
                 AlgorithmVersion,
-                CombinedReportHelpers.NormalizeMessageDirection(options.MessageDirection, "paths")),
+                CombinedReportHelpers.NormalizeMessageDirection(options.MessageDirection, "paths"),
+                options.MaxTraversalWork),
             read.Sources.Select(source => legacyMode ? SanitizeSource(source) : source).OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceIndexId, StringComparer.Ordinal).ToArray(),
             new CombinedPathSummary(
                 read.Sources.Count,
@@ -2646,8 +2652,9 @@ public static partial class CombinedDependencyPathReporter
         return cleaned.Length == 0 ? null : cleaned.ToLowerInvariant();
     }
 
-    private static SearchResult Search(EvidenceGraph graph, IReadOnlyList<GraphNode> starts, IReadOnlySet<string> terminalNodeIds, int maxDepth, int maxPaths, int maxFrontier, bool depthFirst = false)
+    private static SearchResult Search(EvidenceGraph graph, IReadOnlyList<GraphNode> starts, IReadOnlySet<string> terminalNodeIds, int maxDepth, int maxPaths, int maxFrontier, bool depthFirst = false, int maxTraversalWork = 100_000)
     {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxTraversalWork);
         // Legacy reports enumerate bounded evidence paths, not shortest paths.
         // Finish one branch before expanding siblings to avoid a breadth-wide
         // frontier. Do not globally deduplicate nodes: alternate routes can carry
@@ -2667,8 +2674,21 @@ public static partial class CombinedDependencyPathReporter
         var reachedNodeIds = starts.Select(node => node.NodeId).ToHashSet(StringComparer.Ordinal);
         var truncated = false;
         var sequence = 0;
+        var work = 0;
+        var workExhausted = false;
+        void ExhaustWork(string rootNodeId)
+        {
+            truncated = true;
+            workExhausted = true;
+            traversal[rootNodeId].Truncated = true;
+            foreach (var pendingRoot in queue.Select(item => item.RootNodeId).Distinct(StringComparer.Ordinal))
+                traversal[pendingRoot].Truncated = true;
+            gaps.Add(TruncatedGap("work", rootNodeId, graph));
+        }
         while (queue.Count > 0 && paths.Count < maxPaths)
         {
+            if (work >= maxTraversalWork) { ExhaustWork(queue.First!.Value.RootNodeId); break; }
+            work++;
             if (queue.Count > maxFrontier)
             {
                 truncated = true;
@@ -2704,6 +2724,8 @@ public static partial class CombinedDependencyPathReporter
 
             foreach (var edge in depthFirst ? outgoing.AsEnumerable().Reverse() : outgoing)
             {
+                if (work >= maxTraversalWork) { ExhaustWork(state.RootNodeId); break; }
+                work++;
                 if (IsDispatchCandidateCrossHop(graph, state, edge))
                 {
                     continue;
@@ -2726,6 +2748,7 @@ public static partial class CombinedDependencyPathReporter
                 else queue.AddLast(next);
                 reachedNodeIds.Add(edge.ToNodeId);
             }
+            if (workExhausted) break;
         }
 
         if (paths.Count >= maxPaths && queue.Count > 0)

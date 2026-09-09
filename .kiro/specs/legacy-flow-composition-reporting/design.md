@@ -591,6 +591,15 @@ Kiro review plus private-path and diff checks are sufficient unless repo
 validation scripts require more.
 ## Bounded legacy traversal scheduling
 
+Search work is independently bounded: each dequeued state and each inspected edge
+consumes one unit, including cycle-rejected and dispatch-rejected edges. The default
+is 100,000 units per Search call; query provenance records MaxTraversalWork. A work
+exhaustion gap uses the existing truncation rule with closed reason work and marks
+current/pending roots incomplete. Already observed evidence remains valid within
+its tiers. This is deterministic but not a global scan time/memory guarantee. The
+same guard protects ordinary path searches. Terminal-free searches must also
+publish their truncation gaps rather than silently dropping resource exhaustion.
+
 Legacy-flow searches use deterministic depth-first scheduling over the existing
 sorted roots and edges. Ordinary non-legacy path searches retain breadth-first
 scheduling. The legacy traversal rule does not promise shortest-path ordering.

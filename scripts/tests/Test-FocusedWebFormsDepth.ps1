@@ -33,11 +33,15 @@ try {
     catch { $rejected = $_.Exception.Message -like '*not comparable*' }
     if (-not $rejected) { throw 'Mismatched provenance was not rejected.' }
 
-    function dotnet { $global:DepthTestArguments = $args; $global:LASTEXITCODE = 0 }
-    & (Join-Path $scripts 'Invoke-FocusedWebFormsPageListReport.ps1') -IndexPath $reports[0] -PageListPath $reports[1] -OutputDirectory (Join-Path $temp 'out') -MaxDepth 12
-    $depthPosition = [Array]::IndexOf($global:DepthTestArguments, '--max-depth')
-    if ($depthPosition -lt 0 -or $global:DepthTestArguments[$depthPosition + 1] -ne '12') { throw 'Depth not forwarded to CLI.' }
-    Write-Host 'PASS duplicate terminals, gains/losses, aliases, gaps, privacy, provenance and depth forwarding'
+    $disabled = $false
+    try { & (Join-Path $scripts 'Invoke-FocusedWebFormsPageListReport.ps1') -IndexPath $reports[0] -PageListPath $reports[1] -OutputDirectory (Join-Path $temp 'out') -MaxDepth 12 }
+    catch { $disabled = $_.Exception.Message -like '*disabled*' }
+    if (-not $disabled) { throw 'Depth 12 was not disabled.' }
+    $disabled = $false
+    try { & (Join-Path $scripts 'Compare-FocusedWebFormsDepth.ps1') }
+    catch { $disabled = $_.Exception.Message -like '*disabled*' }
+    if (-not $disabled) { throw 'Automatic comparison was not disabled.' }
+    Write-Host 'PASS summaries and unsafe-depth launch rejection'
 }
 finally {
     Remove-Item -LiteralPath $temp -Recurse -Force
