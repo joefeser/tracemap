@@ -614,3 +614,21 @@ serialized model comparison.
 Validation: focused Web Forms packet and combined traversal tests 68/68; full .NET
 solution 1766/1766; scoped formatting, private-path guard, and diff check passed.
 The existing nullable warning in PropertyMappingTests remains unchanged.
+
+### Post-fairness field result and actionable summary
+
+The work-machine rerun retained 466 event chains and 361 downstream boundaries.
+The exclusive summary found 361 terminal-resolved chains across 25 of 43 pages:
+275 SQL-query, 70 SQL-persistence, and 16 HTTP-client terminals. The remaining
+chains are 41 handler-unavailable and 64 handler-resolved without a terminal.
+Among the latter, retained observations separate 51 bounded-traversal truncations,
+six chains with no observed downstream edge, and seven chains across three pages
+with downstream evidence but no supported terminal. These are static retained
+counts, not runtime reachability or absence claims.
+
+Added `Summarize-FocusedWebFormsActionableGaps.ps1`, a zero-argument, read-only,
+128-MiB-bounded handoff. It reports aliases and aggregate allowlisted rule, tier,
+coverage, and linked-gap metadata for handler resolution, missing handler-owned
+call evidence, and terminal-coverage review. It keeps traversal-truncated chains
+separate and deferred. Synthetic validation covers all buckets, linked gaps,
+priority ordering, and private identity non-disclosure.

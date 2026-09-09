@@ -38,3 +38,4 @@
 - [x] Preserve deterministic closed truncation-reason sets directly on each root traversal observation and expose them compatibly in packet JSON, Markdown, and retained triage.
 - [x] Add a separate one-command bounded-run-and-triage wrapper that preserves the operator's locally edited 43-form runner and rejects stale or ambiguous artifacts.
 - [x] Fair-slice bounded legacy traversal across selected handlers and regress a noisy first handler against a later cheap terminal without raising global limits.
+- [x] Add a zero-argument privacy-bounded aggregate diagnostic for actionable unresolved-chain buckets.

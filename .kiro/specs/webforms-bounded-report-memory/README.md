@@ -1,5 +1,16 @@
 # Restricted Web Forms run: diagnostic follow-up
 
+## Current next command: actionable unresolved buckets
+
+After pulling, run `./scripts/Summarize-FocusedWebFormsActionableGaps.ps1` from
+PowerShell 7. With no arguments it reads the newest completed page-list packet
+under `C:\work\tracemap-output`. It does not scan, build, traverse, or modify an
+artifact. Output is limited to page aliases and aggregate public rule IDs,
+evidence tiers, coverage labels, and linked gap classifications for three
+actionable buckets; bounded traversal truncation is reported separately and
+deferred. Source paths, symbols, SQL, raw diagnostics, and fact IDs are never
+printed. Input is capped at 128 MiB and unexpected metadata values are withheld.
+
 ## Next work-machine command: retained page triage
 
 For the next comparison, run `git pull`, then
