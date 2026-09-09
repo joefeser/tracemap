@@ -129,7 +129,10 @@ public sealed record WebFormsModernizationTraversalObservation(
     bool Truncated,
     IReadOnlyList<string> Limitations,
     string CallEvidenceState = "unavailable",
-    int HandlerOwnedCallEvidenceCount = 0);
+    int HandlerOwnedCallEvidenceCount = 0)
+{
+    public IReadOnlyList<string> TruncationReasons { get; init; } = [];
+}
 
 public sealed record WebFormsModernizationPathEvidence(
     string EvidenceId,
@@ -419,7 +422,10 @@ public static class WebFormsModernizationPacketReporter
             observation.Truncated,
             ["Counts describe bounded static graph observations after handler-root selection; handler-owned call evidence is limited to call-edge facts explicitly retained by the handler flow projection. These observations do not prove runtime reachability, execution, branch feasibility, successful binding, or absence."],
             callEvidenceState,
-            handlerOwnedCallEvidenceCount);
+            handlerOwnedCallEvidenceCount)
+        {
+            TruncationReasons = observation.TruncationReasons
+        };
     }
 
     internal static WebFormsModernizationPacket Build(
@@ -1206,9 +1212,12 @@ public static class WebFormsModernizationPacketReporter
         if (packet.EventChains.Count == 0) b.AppendLine("- No supported static event chains were composed; this is not proof of absence.");
         foreach (var chain in packet.EventChains)
         {
+            var truncationReasons = chain.TraversalObservation?.TruncationReasons.Count > 0
+                ? string.Join(", ", chain.TraversalObservation.TruncationReasons.Select(reason => $"`{reason}`"))
+                : "none retained";
             var traversal = chain.TraversalObservation is null
                 ? "traversal observation unavailable"
-                : $"traversal `{chain.TraversalObservation.StopState}` (reached nodes {chain.TraversalObservation.ReachedNodeCount}, traversed edges {chain.TraversalObservation.TraversedEdgeCount}, downstream edges {chain.TraversalObservation.DownstreamEdgeCount}); call evidence `{chain.TraversalObservation.CallEvidenceState}` (handler-owned call edges {chain.TraversalObservation.HandlerOwnedCallEvidenceCount})";
+                : $"traversal `{chain.TraversalObservation.StopState}` (reached nodes {chain.TraversalObservation.ReachedNodeCount}, traversed edges {chain.TraversalObservation.TraversedEdgeCount}, downstream edges {chain.TraversalObservation.DownstreamEdgeCount}, truncation reasons {truncationReasons}); call evidence `{chain.TraversalObservation.CallEvidenceState}` (handler-owned call edges {chain.TraversalObservation.HandlerOwnedCallEvidenceCount})";
             b.AppendLine($"- `{chain.ChainId}` — `{chain.EventSourceId}` -> `{chain.HandlerId ?? "handler-unavailable"}` -> `{chain.TerminalKind ?? "terminal-unavailable"}`; classification `{chain.Classification}`; {traversal}; supporting facts {string.Join(", ", chain.SupportingFactIds.Select(id => $"`{id}`"))}.");
         }
         b.AppendLine().AppendLine("## Downstream boundaries").AppendLine();

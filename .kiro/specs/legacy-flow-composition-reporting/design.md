@@ -204,6 +204,13 @@ bridge remains projection evidence under
 `legacy.flow.static-traversal.v1`; it cannot upgrade confidence or prove runtime
 dispatch, execution, binding, or reachability.
 
+Each root traversal observation preserves the sorted, closed set of limits that
+actually marked that root truncated: `depth`, `cycle`, `frontier`, `path`, or
+`work`. Multiple values are allowed because separate static branches from one
+root can encounter different limits. Empty means no reason was retained; it is
+not evidence that traversal was complete. These are bounded-search observations,
+not runtime stopping conditions or exclusive causes.
+
 ## Proposed Rule IDs
 
 Add rule catalog entries before implementation emits new results:

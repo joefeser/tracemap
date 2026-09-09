@@ -68,6 +68,7 @@ public sealed class WebFormsModernizationPacketTests
         {
             Assert.NotNull(chain.TraversalObservation);
             Assert.Equal(RuleIds.LegacyFlowStaticTraversal, chain.TraversalObservation.RuleId);
+            Assert.Equal(chain.TraversalObservation.Truncated, chain.TraversalObservation.TruncationReasons.Count > 0);
         });
         Assert.Contains(first.Packet.Gaps, gap => gap.Classification == "NoBackendEvidence");
         Assert.Contains(first.Packet.Gaps, gap => gap.Classification == "MissingWebFormsHandler");
@@ -166,6 +167,7 @@ public sealed class WebFormsModernizationPacketTests
         Assert.All(packet.EventChains, chain =>
         {
             Assert.Equal(RuleIds.LegacyFlowStaticTraversal, chain.TraversalObservation?.RuleId);
+            Assert.Equal(chain.TraversalObservation?.Truncated, chain.TraversalObservation?.TruncationReasons.Count > 0);
             Assert.Contains("do not prove runtime", string.Join(' ', chain.TraversalObservation?.Limitations ?? []), StringComparison.OrdinalIgnoreCase);
         });
     }
@@ -233,8 +235,14 @@ public sealed class WebFormsModernizationPacketTests
         var bounded = await WebFormsModernizationPacketReporter.WriteAsync(new(index, Path.Combine(temp.Path, "bounded"), MaxDepth: 3));
         Assert.True(bounded.Packet.Summary.Truncated);
         Assert.Contains(bounded.Packet.Gaps, gap => gap.Classification == "TruncatedByLimit" && gap.TruncationReason == "depth");
+        Assert.Contains(bounded.Packet.EventChains, chain => chain.TraversalObservation?.TruncationReasons.Contains("depth", StringComparer.Ordinal) == true);
+        Assert.All(bounded.Packet.EventChains.Where(chain => chain.TraversalObservation?.Truncated == true),
+            chain => Assert.NotEmpty(chain.TraversalObservation!.TruncationReasons));
+        Assert.All(bounded.Packet.EventChains.SelectMany(chain => chain.TraversalObservation?.TruncationReasons ?? []),
+            reason => Assert.Contains(reason, new[] { "depth", "frontier", "path", "cycle", "work" }));
         Assert.All(bounded.Packet.Gaps, gap => Assert.True(gap.TruncationReason is null or "depth" or "frontier" or "path" or "cycle" or "work"));
         Assert.Contains("\"truncationReason\": \"depth\"", await File.ReadAllTextAsync(bounded.JsonPath));
+        Assert.Contains("\"truncationReasons\": [", await File.ReadAllTextAsync(bounded.JsonPath));
     }
 
     [Fact]

@@ -67,7 +67,7 @@ try {
         if ($hasTerminal -and $alias -cnotin @('page-004','page-026')) { continue }
         $counts = @{terminal=0;missing=0;truncated=0;downstream=0;noEdge=0;unknown=0}
         $pageReasons = [Collections.Generic.HashSet[string]]::new()
-        $stopStates = @{}; $callStates = @{}; $handlerOwnedCalls = 0
+        $stopStates = @{}; $callStates = @{}; $directReasons = @{}; $handlerOwnedCalls = 0
         foreach ($chain in $pageChains) {
             $pathEvidence = Optional $chain 'pathEvidence'
             if ($pathEvidence.ValueKind -eq 'Array') {
@@ -102,7 +102,20 @@ try {
             $owned = Optional $obs 'handlerOwnedCallEvidenceCount'
             if ($owned.ValueKind -eq 'Number') { $handlerOwnedCalls += $owned.GetInt32() }
             $truncated = Optional $obs 'truncated'
-            if ($truncated.ValueKind -eq 'True') { $counts.truncated++; continue }
+            if ($truncated.ValueKind -eq 'True') {
+                $counts.truncated++
+                $retainedReasons = Optional $obs 'truncationReasons'
+                $reasonCount = 0
+                if ($retainedReasons.ValueKind -eq 'Array') {
+                    foreach ($reasonElement in $retainedReasons.EnumerateArray()) {
+                        if ($reasonElement.ValueKind -ne 'String') { continue }
+                        Add-ClosedCount $directReasons $reasonElement.GetString() @('depth','cycle','frontier','path','work')
+                        $reasonCount++
+                    }
+                }
+                if ($reasonCount -eq 0) { $directReasons['not-retained'] = 1 + [int]$directReasons['not-retained'] }
+                continue
+            }
             $edges = Optional $obs 'downstreamEdgeCount'
             if ($edges.ValueKind -ne 'Number') { $counts.unknown++ }
             elseif ($edges.GetInt32() -gt 0) { $counts.downstream++ }
@@ -110,6 +123,7 @@ try {
         }
         $lines.Add("page=$alias|hasTerminal=$hasTerminal|chains=$($pageChains.Count)|terminal=$($counts.terminal)|noRetainedEvents=$($pageChains.Count -eq 0)|handlerUnavailable=$($counts.missing)|truncated=$($counts.truncated)|downstreamNoTerminal=$($counts.downstream)|noEdge=$($counts.noEdge)|observationUnavailable=$($counts.unknown)")
         $lines.Add("page=$alias|stopStates=$(Format-Counts $stopStates)|callEvidenceStates=$(Format-Counts $callStates)|handlerOwnedCallEvidence=$handlerOwnedCalls")
+        $lines.Add("page=$alias|directTruncationReasons=$(Format-Counts $directReasons)|basis=per-chain-retained-observation")
         $reasonText = if ($pageReasons.Count) { ($pageReasons | Sort-Object) -join ',' } else { 'not-established' }
         $lines.Add("page=$alias|nodeAssociatedReasons=$reasonText|basis=exact-retained-node-not-proof-of-chain-stop")
     }

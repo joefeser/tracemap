@@ -35,3 +35,4 @@
 - [x] Add bounded retained-page bucket triage and exact-binding-linked gap inspection for focus aliases, with synthetic privacy and optional-field tests.
 - [x] Compare retained depth-8/10 page triage with provenance gating and exact-node reason associations, preserving unknown causes and testing mismatched inputs.
 - [x] Report closed per-page traversal and call-evidence states from retained observations so field triage can distinguish traversal, join, and extraction limitations.
+- [x] Preserve deterministic closed truncation-reason sets directly on each root traversal observation and expose them compatibly in packet JSON, Markdown, and retained triage.
