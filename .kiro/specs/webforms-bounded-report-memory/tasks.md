@@ -32,3 +32,4 @@
 - [x] Add standalone completed-depth-8/10 read-only small summary with bounded input and no traversal launch path.
 - [x] Disable deep-run entry points; add deterministic traversal-work exhaustion and sampled owned-process timeout/memory safeguards with tests.
 - [x] Add read-only baseline page aliases for missing terminal evidence and unavailable-handler counts.
+- [x] Add bounded retained-page bucket triage and exact-binding-linked gap inspection for focus aliases, with synthetic privacy and optional-field tests.
