@@ -1573,15 +1573,23 @@ function payloadShapeContract(analysis: ShapeAnalysis): {
   const hasFiniteHookGraph = analysis.candidateBindings.some((binding) => binding.startsWith("mutation-hook:"));
   const hasFiniteCallerGraph = analysis.candidateBindings.includes("source-bounded-caller-graph");
   const deferredFieldSource = /^(?:spread:)+(?:binding-initializer-unresolved|destructured-binding-unresolved)$/u;
+  const conditionalSpreadExecutionSource = /^(?:spread:)+payload-expression-unresolved:(?:call-expression|binary-expression|property-access)$/u;
   const isDeferredFieldGap = (gap: string): boolean =>
     deferredFieldSource.test(gap) || gap === runtimeDeferredObjectGap;
+  const finiteConditionalSpreadExecution = analysis.fields.length > 0
+    && analysis.gaps.length > 0
+    && analysis.gaps.every((gap) => conditionalSpreadExecutionSource.test(gap))
+    && analysis.spreads.some((spread) => spread.resolution === "partial"
+      && spread.fieldNames.length > 0
+      && ["call-expression", "binary-expression", "property-access"].includes(spread.expressionType));
   const executionGapSources = new Set(["mutation-hook-argument-unresolved", "mutation-hook-callsite-incomplete"]);
   const fieldGaps = analysis.gaps.filter(isDeferredFieldGap);
-  const executionGaps = analysis.gaps.filter((gap) => executionGapSources.has(gap));
+  const executionGaps = analysis.gaps.filter((gap) =>
+    executionGapSources.has(gap) || finiteConditionalSpreadExecution && conditionalSpreadExecutionSource.test(gap));
   const onlyRuntimeDeferredGaps = analysis.gaps.length > 0
     && fieldGaps.length + executionGaps.length === analysis.gaps.length;
   if (outerKind === "object" && onlyRuntimeDeferredGaps
-    && (hasFiniteHookGraph || hasFiniteCallerGraph)
+    && (hasFiniteHookGraph || hasFiniteCallerGraph || finiteConditionalSpreadExecution)
     && (fieldGaps.length > 0 || (executionGaps.length > 0 && analysis.fields.length > 0))) {
     const runtimeObligations = unique([
       ...(executionGaps.length > 0 ? [deferredSourceExecutionObligation] : []),

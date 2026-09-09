@@ -1994,6 +1994,101 @@ export function Screen() {
       .rejects.toThrow("orphaned runtime obligation");
   });
 
+  it("classifies finite conditional payload spreads as runtime-deferred proof obligations", async () => {
+    const { packet } = await mutationHookFixture(`
+export async function submit(message, specialContext, getPayload) {
+  await base44.entities.Feedback.create({
+    owner_email: "user@example.invalid",
+    feedback_type: "story_rating",
+    rating: 5,
+    ...(message.trim() && { message: message.trim() })
+  });
+  await base44.entities.StoryRequest.create({
+    request_type: "special",
+    ...(specialContext.special_story_type && { special_story_type: specialContext.special_story_type }),
+    ...(specialContext.event && { event: specialContext.event }),
+    ...(specialContext.memory_focus && { memory_focus: specialContext.memory_focus }),
+    ...(specialContext.dog_moment_states && Object.keys(specialContext.dog_moment_states).length > 0 && {
+      dog_moment_states: JSON.stringify(specialContext.dog_moment_states)
+    }),
+    ...(specialContext.special_note && { special_note: specialContext.special_note })
+  });
+  await base44.entities.UnsafeSpread.create({
+    known: true,
+    ...getPayload()
+  });
+  await base44.entities.ConditionalUnsafeSpread.create({
+    known: true,
+    ...(specialContext.enabled && getPayload())
+  });
+}
+`);
+    const feedback = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "Feedback")!;
+    expect(feedback).toMatchObject({
+      evidenceTier: "Tier4Unknown",
+      properties: {
+        ...feedback.properties,
+        completeness: "partial",
+        outerKind: "object",
+        referenceAccounting: "source-bounded",
+        runtimeObligationsJson: '["entity-execution:docker-workflow-readback-cleanup"]',
+        shapeVersion: "3"
+      }
+    });
+    expect(JSON.parse(feedback.properties.analysisGapsJson)).toEqual([
+      "runtime-deferred-callsite-execution"
+    ]);
+    expect(JSON.parse(feedback.properties.fieldsJson)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "owner_email", presence: "unconditional" }),
+      expect.objectContaining({ name: "feedback_type", presence: "unconditional" }),
+      expect.objectContaining({ name: "rating", presence: "unconditional" }),
+      expect.objectContaining({ name: "message", presence: "conditional" })
+    ]));
+
+    const storyRequest = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "StoryRequest")!;
+    expect(storyRequest).toMatchObject({
+      evidenceTier: "Tier4Unknown",
+      properties: {
+        ...storyRequest.properties,
+        completeness: "partial",
+        outerKind: "object",
+        referenceAccounting: "source-bounded",
+        runtimeObligationsJson: '["entity-execution:docker-workflow-readback-cleanup"]',
+        shapeVersion: "3"
+      }
+    });
+    expect(JSON.parse(storyRequest.properties.analysisGapsJson)).toEqual([
+      "runtime-deferred-callsite-execution"
+    ]);
+    expect(JSON.parse(storyRequest.properties.fieldsJson)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "request_type", presence: "unconditional" }),
+      expect.objectContaining({ name: "special_story_type", presence: "conditional" }),
+      expect.objectContaining({ name: "event", presence: "conditional" }),
+      expect.objectContaining({ name: "memory_focus", presence: "conditional" }),
+      expect.objectContaining({ name: "dog_moment_states", presence: "conditional" }),
+      expect.objectContaining({ name: "special_note", presence: "conditional" })
+    ]));
+
+    for (const targetSymbol of ["UnsafeSpread", "ConditionalUnsafeSpread"]) {
+      const unsafePayload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+        && fact.targetSymbol === targetSymbol)!;
+      expect(unsafePayload).toMatchObject({
+        evidenceTier: "Tier4Unknown",
+        properties: expect.objectContaining({
+          completeness: "partial",
+          outerKind: "object",
+          referenceAccounting: "unresolved"
+        })
+      });
+      expect(JSON.parse(unsafePayload.properties.analysisGapsJson)).not.toEqual([
+        "runtime-deferred-callsite-execution"
+      ]);
+      expect(JSON.parse(unsafePayload.properties.runtimeObligationsJson)).toEqual([]);
+    }
+  });
+
   it("follows a finite mutation-array push and map-element path", async () => {
     const { packet } = await mutationHookFixture(`
 export function Screen(enabled) {
