@@ -607,9 +607,15 @@ its tiers. This is deterministic but not a global scan time/memory guarantee. Th
 same guard protects ordinary path searches. Terminal-free searches must also
 publish their truncation gaps rather than silently dropping resource exhaustion.
 
-Legacy-flow searches use deterministic depth-first scheduling over the existing
-sorted roots and edges. Ordinary non-legacy path searches retain breadth-first
-scheduling. The legacy traversal rule does not promise shortest-path ordering.
+Legacy-flow searches use deterministic, fair-sliced depth-first scheduling over
+the existing sorted roots and edges. A root receives at most the smaller of 64
+work units or its equal share of the configured global work ceiling before its
+pending depth-first states rotate behind the next root. High-fan-out state
+expansion is resumable at an edge boundary, so inspected edges also obey the
+slice. This does not reserve work for every root when the global ceiling is lower
+than the root count, guarantee a terminal per root, or change the shared work,
+frontier, depth, or path ceilings. Ordinary non-legacy path searches retain
+breadth-first scheduling. The legacy traversal rule does not promise shortest-path ordering.
 No global node-visited filter is used: reconvergent routes retain their independent
 edge evidence and path-local cycle constraints. Depth, frontier, and path bounds
 remain unchanged. Cycle revisits still emit explicit truncation gaps and preserve
