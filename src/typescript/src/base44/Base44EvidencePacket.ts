@@ -958,7 +958,7 @@ function validateSdkIdentityJson(fact: Base44PacketFact, identityJson: string, r
   }
   requireClosedKeys(identity, ["schemaVersion", "packageName", "version", "scope", "rawSpecifier", "evidence"], `SDK identity ${fact.factId}`);
   if (identity.schemaVersion !== "88mph.base44-sdk-callsite-identity.v1" || identity.packageName !== "@base44/sdk"
-    || !["0.8.4", "0.8.5"].includes(identity.version)
+    || !/^\d+\.\d+\.\d+$/u.test(identity.version)
     || !["function-runtime", "frontend-package"].includes(identity.scope)
     || typeof identity.rawSpecifier !== "string" || !Array.isArray(identity.evidence)) {
     throw new Error(`Base44 fact ${fact.factId} has an invalid SDK identity`);
@@ -988,7 +988,7 @@ function validateSdkIdentityJson(fact: Base44PacketFact, identityJson: string, r
     throw new Error(`Base44 fact ${fact.factId} has SDK identity evidence not bound to an extracted runtime import`);
   }
   if (identity.scope === "function-runtime") {
-    if (identity.version !== "0.8.4" || identity.rawSpecifier !== "npm:@base44/sdk@0.8.4"
+    if (identity.rawSpecifier !== `npm:@base44/sdk@${identity.version}`
       || evidence.length !== 1 || evidence[0].kind !== "source-import"
       || evidence[0].authorityPath !== fact.evidence.filePath
       || evidence[0].authoritySha256 !== fact.properties.sourceFileSha256) {
@@ -996,7 +996,7 @@ function validateSdkIdentityJson(fact: Base44PacketFact, identityJson: string, r
     }
   } else {
     const kinds = evidence.map((item) => item.kind);
-    if (identity.version !== "0.8.5" || identity.rawSpecifier !== "@base44/sdk"
+    if (identity.rawSpecifier !== "@base44/sdk"
       || JSON.stringify(kinds) !== JSON.stringify(["package-lock-resolution", "package-manifest", "source-import"])
       || evidence.find((item) => item.kind === "package-lock-resolution")?.authorityPath !== "package-lock.json"
       || evidence.find((item) => item.kind === "package-manifest")?.authorityPath !== "package.json") {
