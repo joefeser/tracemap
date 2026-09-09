@@ -591,6 +591,14 @@ TruncatedByLimit with reason work, retains collected evidence and marks pending
 roots incomplete. This also applies when no terminal exists. It is not a whole
 pipeline memory bound; graph loading and report construction are separate stages.
 
+Legacy Web Forms roots now share that same ceiling through deterministic slices:
+each handler explores depth-first for at most 64 work units (or its smaller equal
+share) and then yields to the next waiting handler. Expansion resumes at the exact
+edge cursor, so a high-fan-out handler cannot bypass the slice. The public command
+accepts `--max-traversal-work`; the focused wrapper keeps the safe 100,000 default.
+This improves coverage fairness but does not prove complete traversal or justify
+raising the limit.
+
 The report wrapper requires PowerShell 7, builds TraceMap without restore, then
 launches the DLL directly under an owned-process watchdog. Each build/report
 process gets 300 seconds; the direct report process is sampled every 250 ms for

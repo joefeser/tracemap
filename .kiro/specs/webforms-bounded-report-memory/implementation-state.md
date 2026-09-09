@@ -589,3 +589,28 @@ Final validation: full .NET solution 1765/1765; focused packet/traversal 17/17;
 all three PowerShell regression scripts passed. Formatting verification, PowerShell
 parsing, private-path guard and diff check passed. Existing CS8602 warning at
 PropertyMappingTests.cs:560 remains unchanged.
+
+## Fair bounded handler scheduling
+
+The post-rebase 43-page field run retained 262 event chains but only 96 downstream
+boundaries. Its closed truncation evidence contained 64 cycle, 50 depth, and one
+global work exhaustion; per-chain observations showed later handler roots inheriting
+`work`. This establishes deterministic root starvation under the single 100,000-unit
+depth-first queue, not absence of downstream behavior.
+
+Legacy traversal now retains the same global work/frontier/depth/path ceilings but
+rotates a root after the smaller of 64 work units or its equal ceiling share. A
+partially expanded high-fan-out state resumes at its deterministic edge cursor.
+Ordinary breadth-first paths are unchanged. `webforms-modernization` now exposes
+`--max-traversal-work` (default 100000) and packet construction forwards it to the
+shared traversal. Fairness does not guarantee completion, runtime reachability,
+successful binding, or a terminal for every handler.
+
+The synthetic regression places the noisy handler first, caps global work at 40,
+and proves a later cheap handler still retains its SQL terminal while the noisy
+root receives explicit `work` truncation. A repeated packet is byte-equivalent by
+serialized model comparison.
+
+Validation: focused Web Forms packet and combined traversal tests 68/68; full .NET
+solution 1766/1766; scoped formatting, private-path guard, and diff check passed.
+The existing nullable warning in PropertyMappingTests remains unchanged.

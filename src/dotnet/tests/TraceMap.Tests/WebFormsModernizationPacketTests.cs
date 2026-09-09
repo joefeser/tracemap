@@ -246,6 +246,83 @@ public sealed class WebFormsModernizationPacketTests
     }
 
     [Fact]
+    public async Task Legacy_work_budget_rotates_noisy_handler_and_retains_later_cheap_terminal()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("Succeeded");
+        const string surface = "webforms-surface:fair-work";
+        const string noisyHandlerId = "symbol-id:a-noisy-handler";
+        const string cheapHandlerId = "symbol-id:z-cheap-handler";
+        const string noisyHandler = "Sample.FairWork.A_Noisy_Click(object, System.EventArgs)";
+        const string cheapHandler = "Sample.FairWork.Z_Cheap_Click(object, System.EventArgs)";
+        var page = Fact(manifest, FactTypes.WebFormsPageDeclared, RuleIds.LegacyWebFormsInventory, "Pages/FairWork.aspx", 1,
+            source: surface, target: "Sample.FairWork", contract: "FairWork.aspx",
+            ("surfaceIdentity", surface), ("directiveKind", "Page"), ("coverageLabel", "bounded-static-webforms-inventory"));
+        var noisyBinding = Fact(manifest, FactTypes.WebFormsEventBindingDeclared, RuleIds.LegacyWebFormsEventBinding, "Pages/FairWork.aspx", 8,
+            source: "control:noisy", target: noisyHandlerId, contract: "A_Noisy_Click",
+            ("surfaceIdentity", surface), ("eventSourceIdentity", "control:noisy"), ("eventName", "OnClick"),
+            ("controlId", "noisy"), ("handlerName", "A_Noisy_Click"), ("markupFile", "Pages/FairWork.aspx"),
+            ("coverageLabel", "bounded-static-webforms-event"));
+        var cheapBinding = Fact(manifest, FactTypes.WebFormsEventBindingDeclared, RuleIds.LegacyWebFormsEventBinding, "Pages/FairWork.aspx", 9,
+            source: "control:cheap", target: cheapHandlerId, contract: "Z_Cheap_Click",
+            ("surfaceIdentity", surface), ("eventSourceIdentity", "control:cheap"), ("eventName", "OnClick"),
+            ("controlId", "cheap"), ("handlerName", "Z_Cheap_Click"), ("markupFile", "Pages/FairWork.aspx"),
+            ("coverageLabel", "bounded-static-webforms-event"));
+        var noisyResolved = Fact(manifest, FactTypes.WebFormsHandlerResolved, RuleIds.LegacyWebFormsHandlerResolution, "Pages/FairWork.aspx.cs", 20,
+            source: "control:noisy", target: noisyHandlerId, contract: "A_Noisy_Click",
+            ("surfaceIdentity", surface), ("bindingFactId", noisyBinding.FactId), ("handlerSymbolId", noisyHandlerId),
+            ("handlerSymbol", noisyHandler), ("handlerName", "A_Noisy_Click"), ("controlId", "noisy"),
+            ("eventName", "OnClick"), ("markupFile", "Pages/FairWork.aspx"), ("coverageLabel", "bounded-static-webforms-handler"));
+        var cheapResolved = Fact(manifest, FactTypes.WebFormsHandlerResolved, RuleIds.LegacyWebFormsHandlerResolution, "Pages/FairWork.aspx.cs", 21,
+            source: "control:cheap", target: cheapHandlerId, contract: "Z_Cheap_Click",
+            ("surfaceIdentity", surface), ("bindingFactId", cheapBinding.FactId), ("handlerSymbolId", cheapHandlerId),
+            ("handlerSymbol", cheapHandler), ("handlerName", "Z_Cheap_Click"), ("controlId", "cheap"),
+            ("eventName", "OnClick"), ("markupFile", "Pages/FairWork.aspx"), ("coverageLabel", "bounded-static-webforms-handler"));
+        var facts = new List<CodeFact> { page, noisyBinding, cheapBinding, noisyResolved, cheapResolved };
+        var noisyCalls = new List<CodeFact>();
+        for (var branch = 0; branch < 4; branch++)
+        {
+            var branchId = $"method:noisy-branch-{branch}";
+            noisyCalls.Add(Fact(manifest, FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, "Pages/FairWork.aspx.cs", 30 + branch,
+                source: noisyHandler, target: branchId, contract: $"Branch{branch}", ("coverageLabel", "bounded-static-call")));
+            for (var leaf = 0; leaf < 4; leaf++)
+                noisyCalls.Add(Fact(manifest, FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, "Services/Noisy.cs", 50 + branch * 4 + leaf,
+                    source: branchId, target: $"method:noisy-leaf-{branch}-{leaf}", contract: $"Leaf{leaf}", ("coverageLabel", "bounded-static-call")));
+        }
+        var cheapCall = Fact(manifest, FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, "Pages/FairWork.aspx.cs", 80,
+            source: cheapHandler, target: "method:cheap-query", contract: "Query", ("coverageLabel", "bounded-static-call"));
+        var query = Fact(manifest, FactTypes.QueryPatternDetected, RuleIds.CSharpSyntaxQueryPattern, "Services/FairRepository.cs", 90,
+            source: "method:cheap-query", target: "cheap-query-shape", contract: "query",
+            ("operationName", "SELECT"), ("tableName", "items"), ("columnNames", "id"),
+            ("sqlSourceKind", "literal-string"), ("queryShapeHash", "cheap-shape-hash"), ("coverageLabel", "bounded-static-query"));
+        facts.AddRange(noisyCalls);
+        facts.Add(cheapCall);
+        facts.Add(query);
+        facts.Add(Fact(manifest, FactTypes.WebFormsEventFlowProjected, RuleIds.LegacyWebFormsEventFlow, "Pages/FairWork.aspx.cs", 20,
+            source: noisyHandler, target: "flow-terminal-unavailable", contract: "A_Noisy_Click",
+            ("supportingFactIds", $"{noisyResolved.FactId},{noisyCalls[0].FactId}"), ("supportingEdgeIds", noisyCalls[0].FactId),
+            ("flowClassification", "UnknownAnalysisGap"), ("coverageLabel", "reduced-static-webforms-flow")));
+        facts.Add(Fact(manifest, FactTypes.WebFormsEventFlowProjected, RuleIds.LegacyWebFormsEventFlow, "Pages/FairWork.aspx.cs", 21,
+            source: cheapHandler, target: "flow-terminal-unavailable", contract: "Z_Cheap_Click",
+            ("supportingFactIds", $"{cheapResolved.FactId},{cheapCall.FactId}"), ("supportingEdgeIds", cheapCall.FactId),
+            ("flowClassification", "UnknownAnalysisGap"), ("coverageLabel", "reduced-static-webforms-flow")));
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, manifest, facts);
+
+        var first = await WebFormsModernizationPacketReporter.WriteAsync(new(
+            index, Path.Combine(temp.Path, "first"), MaxTraversalWork: 40));
+        var cheapChain = first.Packet.EventChains.Single(chain => chain.HandlerFactId == cheapResolved.FactId);
+        Assert.Equal("sql-query", cheapChain.TerminalKind);
+        Assert.Equal("supported-terminal-reached", cheapChain.TraversalObservation?.StopState);
+        Assert.DoesNotContain("work", cheapChain.TraversalObservation?.TruncationReasons ?? []);
+        Assert.Contains(first.Packet.EventChains, chain => chain.HandlerFactId == noisyResolved.FactId
+            && chain.TraversalObservation?.TruncationReasons.Contains("work", StringComparer.Ordinal) == true);
+        var second = await WebFormsModernizationPacketReporter.WriteAsync(new(
+            index, Path.Combine(temp.Path, "second"), MaxTraversalWork: 40));
+        Assert.Equal(JsonSerializer.Serialize(first.Packet), JsonSerializer.Serialize(second.Packet));
+    }
+
+    [Fact]
     public async Task Existing_static_terminal_path_is_composed_without_runtime_claims()
     {
         using var temp = new TempDirectory();
@@ -785,7 +862,7 @@ public sealed class WebFormsModernizationPacketTests
         using var stderr = new StringWriter();
         var output = Path.Combine(temp.Path, "packet");
         var exit = await TraceMapCommand.RunAsync([
-            "webforms-modernization", "--index", index, "--out", output, "--max-boundaries", "1", "--max-identity-state", "1", "--max-batch-data-movement", "1"
+            "webforms-modernization", "--index", index, "--out", output, "--max-boundaries", "1", "--max-identity-state", "1", "--max-batch-data-movement", "1", "--max-traversal-work", "100"
         ], stdout, stderr);
         Assert.Equal(0, exit);
         Assert.Equal(string.Empty, stderr.ToString());

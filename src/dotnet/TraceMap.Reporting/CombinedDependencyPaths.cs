@@ -2661,13 +2661,34 @@ public static partial class CombinedDependencyPathReporter
         // frontier. Do not globally deduplicate nodes: alternate routes can carry
         // different evidence and have different path-local cycle constraints.
         var queue = new LinkedList<PathState>();
+        var pendingRootCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+        void EnqueueFirst(PathState state)
+        {
+            queue.AddFirst(state);
+            pendingRootCounts[state.RootNodeId] = pendingRootCounts.GetValueOrDefault(state.RootNodeId) + 1;
+        }
+        void EnqueueLast(PathState state)
+        {
+            queue.AddLast(state);
+            pendingRootCounts[state.RootNodeId] = pendingRootCounts.GetValueOrDefault(state.RootNodeId) + 1;
+        }
+        PathState DequeueFirst()
+        {
+            var state = queue.First!.Value;
+            queue.RemoveFirst();
+            if (pendingRootCounts[state.RootNodeId] == 1) pendingRootCounts.Remove(state.RootNodeId);
+            else pendingRootCounts[state.RootNodeId]--;
+            return state;
+        }
+        bool HasWaitingOtherRoot(string rootNodeId) => pendingRootCounts.Count
+            > (pendingRootCounts.ContainsKey(rootNodeId) ? 1 : 0);
         var traversal = starts.ToDictionary(
             node => node.NodeId,
             _ => new TraversalAccumulator(),
             StringComparer.Ordinal);
         foreach (var start in starts.OrderBy(node => node.SourceLabel, StringComparer.Ordinal).ThenBy(node => node.DisplayName, StringComparer.Ordinal).ThenBy(node => node.NodeId, StringComparer.Ordinal))
         {
-            queue.AddLast(new PathState(start.NodeId, [start.NodeId], []));
+            EnqueueLast(new PathState(start.NodeId, [start.NodeId], []));
         }
 
         var paths = new List<CombinedPath>();
@@ -2677,6 +2698,42 @@ public static partial class CombinedDependencyPathReporter
         var sequence = 0;
         var work = 0;
         var workExhausted = false;
+        var activeLegacyRootId = "";
+        var activeLegacyRootWork = 0;
+        var legacyRootWorkSlice = Math.Max(1, Math.Min(64, maxTraversalWork / Math.Max(1, starts.Count)));
+        void CountWork(string rootNodeId)
+        {
+            work++;
+            if (!depthFirst) return;
+            if (!string.Equals(activeLegacyRootId, rootNodeId, StringComparison.Ordinal))
+            {
+                activeLegacyRootId = rootNodeId;
+                activeLegacyRootWork = 0;
+            }
+            activeLegacyRootWork++;
+        }
+        void YieldLegacyRoot(string rootNodeId)
+        {
+            if (!depthFirst
+                || activeLegacyRootWork < legacyRootWorkSlice
+                || queue.First is null
+                || !string.Equals(queue.First.Value.RootNodeId, rootNodeId, StringComparison.Ordinal)
+                || !HasWaitingOtherRoot(rootNodeId))
+                return;
+
+            while (queue.First is { } first
+                && string.Equals(first.Value.RootNodeId, rootNodeId, StringComparison.Ordinal))
+            {
+                var pending = first.Value;
+                queue.RemoveFirst();
+                queue.AddLast(pending);
+            }
+            activeLegacyRootId = "";
+            activeLegacyRootWork = 0;
+        }
+        bool ShouldPauseLegacyRoot(string rootNodeId) => depthFirst
+            && activeLegacyRootWork >= legacyRootWorkSlice
+            && HasWaitingOtherRoot(rootNodeId);
         void ExhaustWork(string rootNodeId)
         {
             truncated = true;
@@ -2689,7 +2746,6 @@ public static partial class CombinedDependencyPathReporter
         while (queue.Count > 0 && paths.Count < maxPaths)
         {
             if (work >= maxTraversalWork) { ExhaustWork(queue.First!.Value.RootNodeId); break; }
-            work++;
             if (queue.Count > maxFrontier)
             {
                 truncated = true;
@@ -2699,14 +2755,15 @@ public static partial class CombinedDependencyPathReporter
                 break;
             }
 
-            var state = queue.First!.Value;
-            queue.RemoveFirst();
+            var state = DequeueFirst();
+            CountWork(state.RootNodeId);
             var currentNodeId = state.NodeIds[^1];
             if (terminalNodeIds.Contains(currentNodeId) && state.EdgeIds.Count > 0)
             {
                 traversal[state.RootNodeId].TerminalPathCount++;
                 sequence++;
                 paths.Add(ToPath($"path:{sequence:0000}", graph, state));
+                YieldLegacyRoot(state.RootNodeId);
                 continue;
             }
 
@@ -2715,18 +2772,29 @@ public static partial class CombinedDependencyPathReporter
                 truncated = true;
                 traversal[state.RootNodeId].MarkTruncated("depth");
                 gaps.Add(TruncatedGap("depth", currentNodeId, graph));
+                YieldLegacyRoot(state.RootNodeId);
                 continue;
             }
 
             if (!graph.Outgoing.TryGetValue(currentNodeId, out var outgoing))
             {
+                YieldLegacyRoot(state.RootNodeId);
                 continue;
             }
 
-            foreach (var edge in depthFirst ? outgoing.AsEnumerable().Reverse() : outgoing)
+            IReadOnlyList<GraphEdge> orderedOutgoing = depthFirst
+                ? outgoing.AsEnumerable().Reverse().ToArray()
+                : outgoing;
+            for (var edgeIndex = state.NextOutgoingIndex; edgeIndex < orderedOutgoing.Count; edgeIndex++)
             {
+                if (edgeIndex > state.NextOutgoingIndex && ShouldPauseLegacyRoot(state.RootNodeId))
+                {
+                    EnqueueFirst(state with { NextOutgoingIndex = edgeIndex });
+                    break;
+                }
                 if (work >= maxTraversalWork) { ExhaustWork(state.RootNodeId); break; }
-                work++;
+                CountWork(state.RootNodeId);
+                var edge = orderedOutgoing[edgeIndex];
                 if (IsDispatchCandidateCrossHop(graph, state, edge))
                 {
                     continue;
@@ -2745,11 +2813,12 @@ public static partial class CombinedDependencyPathReporter
                 observation.TraversedEdgeIds.Add(edge.EdgeId);
                 if (edge.EdgeKind != "legacy-root-selection") observation.DownstreamEdgeIds.Add(edge.EdgeId);
                 var next = new PathState(state.RootNodeId, [.. state.NodeIds, edge.ToNodeId], [.. state.EdgeIds, edge.EdgeId]);
-                if (depthFirst) queue.AddFirst(next);
-                else queue.AddLast(next);
+                if (depthFirst) EnqueueFirst(next);
+                else EnqueueLast(next);
                 reachedNodeIds.Add(edge.ToNodeId);
             }
             if (workExhausted) break;
+            YieldLegacyRoot(state.RootNodeId);
         }
 
         if (paths.Count >= maxPaths && queue.Count > 0)
@@ -4672,7 +4741,11 @@ public static partial class CombinedDependencyPathReporter
         IReadOnlySet<string> ReachedNodeIds,
         IReadOnlyDictionary<string, CombinedDependencyTraversalObservation> TraversalByRootNodeId);
 
-    private sealed record PathState(string RootNodeId, IReadOnlyList<string> NodeIds, IReadOnlyList<string> EdgeIds);
+    private sealed record PathState(
+        string RootNodeId,
+        IReadOnlyList<string> NodeIds,
+        IReadOnlyList<string> EdgeIds,
+        int NextOutgoingIndex = 0);
 
     private sealed class TraversalAccumulator
     {

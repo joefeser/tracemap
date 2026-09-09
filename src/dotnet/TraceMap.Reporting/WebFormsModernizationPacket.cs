@@ -22,7 +22,8 @@ public sealed record WebFormsModernizationOptions(
     int MaxInputFacts = 250_000,
     int MaxInputEdges = 250_000,
     int MaxInputTextBytes = 128 * 1024 * 1024,
-    string? SurfaceListPath = null);
+    string? SurfaceListPath = null,
+    int MaxTraversalWork = 100_000);
 
 public sealed record WebFormsModernizationResult(
     WebFormsModernizationPacket Packet,
@@ -347,7 +348,8 @@ public static class WebFormsModernizationPacketReporter
             MaxPaths: options.MaxPaths)
         {
             StartingNodeLimit = Math.Max(1, startingFactIds.Count),
-            StartingFactIds = startingFactIds
+            StartingFactIds = startingFactIds,
+            MaxTraversalWork = options.MaxTraversalWork
         }, budget, cancellationToken);
         return Build(snapshot, legacyFlowBuild.Report, options, surfaceSelection, legacyFlowBuild.TraversalByStartingFactId);
     }
@@ -1332,7 +1334,7 @@ public static class WebFormsModernizationPacketReporter
         if (string.IsNullOrWhiteSpace(options.OutputDirectory)) throw new ArgumentException("webforms-modernization requires --out <directory>.");
         if (!File.Exists(options.IndexPath)) throw new FileNotFoundException("WebFormsModernizationIndexUnavailable");
         if (options.SurfaceListPath is not null && !File.Exists(options.SurfaceListPath)) throw new FileNotFoundException("WebFormsSurfaceListUnavailable");
-        if (options.MaxSurfaces <= 0 || options.MaxEventChains <= 0 || options.MaxCandidates <= 0 || options.MaxGaps <= 0 || options.MaxDepth <= 0 || options.MaxPaths <= 0 || options.MaxBoundaries <= 0 || options.MaxIdentityState <= 0 || options.MaxBatchDataMovement <= 0 || options.MaxInputFacts <= 0 || options.MaxInputEdges <= 0 || options.MaxInputTextBytes <= 0)
+        if (options.MaxSurfaces <= 0 || options.MaxEventChains <= 0 || options.MaxCandidates <= 0 || options.MaxGaps <= 0 || options.MaxDepth <= 0 || options.MaxPaths <= 0 || options.MaxBoundaries <= 0 || options.MaxIdentityState <= 0 || options.MaxBatchDataMovement <= 0 || options.MaxInputFacts <= 0 || options.MaxInputEdges <= 0 || options.MaxInputTextBytes <= 0 || options.MaxTraversalWork <= 0)
             throw new ArgumentOutOfRangeException(nameof(options), "Web Forms modernization bounds must be positive.");
     }
 
