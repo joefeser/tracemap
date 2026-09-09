@@ -130,6 +130,7 @@ public static partial class CombinedDependencyPathReporter
             command.CommandText = CompactFactQuery(hasExtractorVersion, targeted
                 ? "fact_id in (select value from json_each($fact_ids)) "
                     + "or source_symbol in (select value from json_each($symbols)) "
+                    + "or (fact_type = 'MethodDeclared' and target_symbol in (select value from json_each($symbols))) "
                     + "or (fact_type in ('SymbolRelationship', 'DependencyRegistered') "
                     + "and target_symbol in (select value from json_each($symbols))) "
                     + "or (fact_type = 'WebFormsEventFlowProjected' "
@@ -153,8 +154,12 @@ public static partial class CombinedDependencyPathReporter
                 budget.CheckRow(bytes);
                 var sourceSymbol = reader.IsDBNull(7) ? null : reader.GetString(7);
                 var targetSymbol = reader.IsDBNull(8) ? null : reader.GetString(8);
+                var factType = reader.GetString(4);
                 var symbolOnly = reader.GetBoolean(15);
-                if (symbolOnly && !NewSymbol(sourceSymbol) && !NewSymbol(targetSymbol)) continue;
+                if (symbolOnly
+                    && (!targeted || factType != FactTypes.MethodDeclared)
+                    && !NewSymbol(sourceSymbol)
+                    && !NewSymbol(targetSymbol)) continue;
                 budget.Retain(bytes);
                 var row = ReadProjectedFact(reader, source);
                 rows.Add(row);

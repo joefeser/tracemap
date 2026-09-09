@@ -718,6 +718,7 @@ public static partial class CombinedDependencyPathReporter
             LeafEvidenceTiers = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.LeafEvidenceTiers)),
             LeafReconciliationStates = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.LeafReconciliationStates)),
             LeafCallEvidenceStates = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.LeafCallEvidenceStates)),
+            LeafSourceAvailabilityStates = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.LeafSourceAvailabilityStates)),
             FrontierNodeKinds = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.FrontierNodeKinds)),
             FrontierSurfaceKinds = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.FrontierSurfaceKinds)),
             FrontierRuleIds = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.FrontierRuleIds)),
@@ -742,6 +743,7 @@ public static partial class CombinedDependencyPathReporter
         yield return rows.SelectMany(row => row.LeafEvidenceTiers);
         yield return rows.SelectMany(row => row.LeafReconciliationStates);
         yield return rows.SelectMany(row => row.LeafCallEvidenceStates);
+        yield return rows.SelectMany(row => row.LeafSourceAvailabilityStates);
         yield return rows.SelectMany(row => row.FrontierNodeKinds);
         yield return rows.SelectMany(row => row.FrontierSurfaceKinds);
         yield return rows.SelectMany(row => row.FrontierRuleIds);
@@ -806,6 +808,40 @@ public static partial class CombinedDependencyPathReporter
         return "no-call-shaped-source-evidence-retained";
     }
 
+    private static string LeafSourceAvailabilityState(EvidenceGraph graph, GraphNode node)
+    {
+        if (node.NodeKind is not ("Symbol" or "Method" or "Type"))
+        {
+            return "noncanonical-leaf-not-applicable";
+        }
+
+        var declaration = graph.ExactMethodDeclarationNodeIds.Contains(node.NodeId);
+        var body = graph.SourceBodyEvidenceNodeIds.Contains(node.NodeId);
+        return (declaration, body) switch
+        {
+            (true, true) => "exact-method-declaration-and-body-evidence-retained",
+            (true, false) => "exact-method-declaration-without-body-evidence",
+            (false, true) => "source-owned-body-evidence-without-exact-declaration",
+            _ => "no-exact-declaration-or-body-evidence-retained"
+        };
+    }
+
+    private static bool IsSourceBodyEvidenceFactType(string factType)
+        => factType is FactTypes.ArgumentPassed
+            or FactTypes.PropertyAccessed
+            or FactTypes.ObjectCreated
+            or FactTypes.CalculationExpression
+            or FactTypes.BranchingLogic
+            or FactTypes.RetryPolicyLogic
+            or FactTypes.SerializationLogic
+            or FactTypes.QueryPatternDetected
+            or FactTypes.HttpCallDetected
+            or FactTypes.DbChangeSaved
+            or FactTypes.DatabaseOperationCandidate
+            or FactTypes.DapperCallDetected
+            or FactTypes.SqlCommandDetected
+            or FactTypes.SqlTextUsed;
+
     private static EvidenceGraph BuildGraph(
         CombinedReadResult read,
         IReadOnlyList<CombinedEndpointFinding> endpointFindings,
@@ -842,6 +878,10 @@ public static partial class CombinedDependencyPathReporter
             if (!IsDependencySurfaceFact(fact))
             {
                 AddSymbolNodeAndAttachment(graph, fact, fact.TargetSymbol, fact.CombinedFactId);
+            }
+            if (fact.FactType == FactTypes.MethodDeclared && !string.IsNullOrWhiteSpace(fact.TargetSymbol))
+            {
+                graph.RecordExactMethodDeclaration(SymbolNodeId(fact.SourceIndexId, fact.TargetSymbol));
             }
         }
 
@@ -2863,6 +2903,7 @@ public static partial class CombinedDependencyPathReporter
                     node,
                     callEdgeFilteredByCycle,
                     edgeFilteredByDispatchCrossHop));
+                accumulator.LeafSourceAvailabilityStates.Add(LeafSourceAvailabilityState(graph, node));
             }
         }
         void RecordQueuedFrontiers()
@@ -3011,6 +3052,7 @@ public static partial class CombinedDependencyPathReporter
                     LeafEvidenceTiers = BoundedTraversalDiagnosticValues(item.Value.LeafEvidenceTiers),
                     LeafReconciliationStates = BoundedTraversalDiagnosticValues(item.Value.LeafReconciliationStates),
                     LeafCallEvidenceStates = BoundedTraversalDiagnosticValues(item.Value.LeafCallEvidenceStates),
+                    LeafSourceAvailabilityStates = BoundedTraversalDiagnosticValues(item.Value.LeafSourceAvailabilityStates),
                     FrontierNodeKinds = BoundedTraversalDiagnosticValues(item.Value.FrontierNodeKinds),
                     FrontierSurfaceKinds = BoundedTraversalDiagnosticValues(item.Value.FrontierSurfaceKinds),
                     FrontierRuleIds = BoundedTraversalDiagnosticValues(item.Value.FrontierRuleIds),
@@ -4778,6 +4820,8 @@ public static partial class CombinedDependencyPathReporter
         public Dictionary<string, List<GraphEdge>> Outgoing { get; } = new(StringComparer.Ordinal);
         public HashSet<string> CallFactSourceNodeIds { get; } = new(StringComparer.Ordinal);
         public HashSet<string> MethodInvocationSourceNodeIds { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> SourceBodyEvidenceNodeIds { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> ExactMethodDeclarationNodeIds { get; } = new(StringComparer.Ordinal);
         public List<CombinedPathGap> Gaps { get; } = [];
         private readonly Dictionary<string, CombinedReportSource> sourcesById = sources.ToDictionary(source => source.SourceIndexId, StringComparer.Ordinal);
 
@@ -4803,7 +4847,13 @@ public static partial class CombinedDependencyPathReporter
             {
                 MethodInvocationSourceNodeIds.Add(nodeId);
             }
+            else if (IsSourceBodyEvidenceFactType(factType))
+            {
+                SourceBodyEvidenceNodeIds.Add(nodeId);
+            }
         }
+
+        public void RecordExactMethodDeclaration(string nodeId) => ExactMethodDeclarationNodeIds.Add(nodeId);
 
         public GraphNode GetOrAddSymbolNode(string sourceIndexId, string sourceLabel, string displayName, string filePath, int startLine, int endLine, string ruleId, string evidenceTier)
         {
@@ -4929,6 +4979,7 @@ public static partial class CombinedDependencyPathReporter
         public IReadOnlyList<string> LeafEvidenceTiers { get; init; } = [];
         public IReadOnlyList<string> LeafReconciliationStates { get; init; } = [];
         public IReadOnlyList<string> LeafCallEvidenceStates { get; init; } = [];
+        public IReadOnlyList<string> LeafSourceAvailabilityStates { get; init; } = [];
         public IReadOnlyList<string> FrontierNodeKinds { get; init; } = [];
         public IReadOnlyList<string> FrontierSurfaceKinds { get; init; } = [];
         public IReadOnlyList<string> FrontierRuleIds { get; init; } = [];
@@ -4962,6 +5013,7 @@ public static partial class CombinedDependencyPathReporter
         public HashSet<string> LeafEvidenceTiers { get; } = new(StringComparer.Ordinal);
         public HashSet<string> LeafReconciliationStates { get; } = new(StringComparer.Ordinal);
         public HashSet<string> LeafCallEvidenceStates { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> LeafSourceAvailabilityStates { get; } = new(StringComparer.Ordinal);
         public HashSet<string> FrontierNodeKinds { get; } = new(StringComparer.Ordinal);
         public HashSet<string> FrontierSurfaceKinds { get; } = new(StringComparer.Ordinal);
         public HashSet<string> FrontierRuleIds { get; } = new(StringComparer.Ordinal);
@@ -4975,6 +5027,7 @@ public static partial class CombinedDependencyPathReporter
             LeafEvidenceTiers.Count,
             LeafReconciliationStates.Count,
             LeafCallEvidenceStates.Count,
+            LeafSourceAvailabilityStates.Count,
             FrontierNodeKinds.Count,
             FrontierSurfaceKinds.Count,
             FrontierRuleIds.Count,
