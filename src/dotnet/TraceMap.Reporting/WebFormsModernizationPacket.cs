@@ -133,6 +133,15 @@ public sealed record WebFormsModernizationTraversalObservation(
     int HandlerOwnedCallEvidenceCount = 0)
 {
     public IReadOnlyList<string> TruncationReasons { get; init; } = [];
+    public IReadOnlyList<string> LeafNodeKinds { get; init; } = [];
+    public IReadOnlyList<string> LeafSurfaceKinds { get; init; } = [];
+    public IReadOnlyList<string> LeafRuleIds { get; init; } = [];
+    public IReadOnlyList<string> FrontierNodeKinds { get; init; } = [];
+    public IReadOnlyList<string> FrontierSurfaceKinds { get; init; } = [];
+    public IReadOnlyList<string> FrontierRuleIds { get; init; } = [];
+    public IReadOnlyList<string> TraversedEdgeKinds { get; init; } = [];
+    public IReadOnlyList<string> TraversedRuleIds { get; init; } = [];
+    public bool DiagnosticShapesTruncated { get; init; }
 }
 
 public sealed record WebFormsModernizationPathEvidence(
@@ -426,7 +435,16 @@ public static class WebFormsModernizationPacketReporter
             callEvidenceState,
             handlerOwnedCallEvidenceCount)
         {
-            TruncationReasons = observation.TruncationReasons
+            TruncationReasons = observation.TruncationReasons,
+            LeafNodeKinds = observation.LeafNodeKinds,
+            LeafSurfaceKinds = observation.LeafSurfaceKinds,
+            LeafRuleIds = observation.LeafRuleIds,
+            FrontierNodeKinds = observation.FrontierNodeKinds,
+            FrontierSurfaceKinds = observation.FrontierSurfaceKinds,
+            FrontierRuleIds = observation.FrontierRuleIds,
+            TraversedEdgeKinds = observation.TraversedEdgeKinds,
+            TraversedRuleIds = observation.TraversedRuleIds,
+            DiagnosticShapesTruncated = observation.DiagnosticShapesTruncated
         };
     }
 
@@ -1219,7 +1237,7 @@ public static class WebFormsModernizationPacketReporter
                 : "none retained";
             var traversal = chain.TraversalObservation is null
                 ? "traversal observation unavailable"
-                : $"traversal `{chain.TraversalObservation.StopState}` (reached nodes {chain.TraversalObservation.ReachedNodeCount}, traversed edges {chain.TraversalObservation.TraversedEdgeCount}, downstream edges {chain.TraversalObservation.DownstreamEdgeCount}, truncation reasons {truncationReasons}); call evidence `{chain.TraversalObservation.CallEvidenceState}` (handler-owned call edges {chain.TraversalObservation.HandlerOwnedCallEvidenceCount})";
+                : $"traversal `{chain.TraversalObservation.StopState}` (reached nodes {chain.TraversalObservation.ReachedNodeCount}, traversed edges {chain.TraversalObservation.TraversedEdgeCount}, downstream edges {chain.TraversalObservation.DownstreamEdgeCount}, truncation reasons {truncationReasons}); call evidence `{chain.TraversalObservation.CallEvidenceState}` (handler-owned call edges {chain.TraversalObservation.HandlerOwnedCallEvidenceCount}); terminal-free shapes (leaf node kinds {MarkdownValues(chain.TraversalObservation.LeafNodeKinds)}, leaf surface kinds {MarkdownValues(chain.TraversalObservation.LeafSurfaceKinds)}, leaf rules {MarkdownValues(chain.TraversalObservation.LeafRuleIds)}, frontier node kinds {MarkdownValues(chain.TraversalObservation.FrontierNodeKinds)}, frontier surface kinds {MarkdownValues(chain.TraversalObservation.FrontierSurfaceKinds)}, frontier rules {MarkdownValues(chain.TraversalObservation.FrontierRuleIds)}, traversed edge kinds {MarkdownValues(chain.TraversalObservation.TraversedEdgeKinds)}, traversed rules {MarkdownValues(chain.TraversalObservation.TraversedRuleIds)}, shape sets truncated `{chain.TraversalObservation.DiagnosticShapesTruncated}`)";
             b.AppendLine($"- `{chain.ChainId}` — `{chain.EventSourceId}` -> `{chain.HandlerId ?? "handler-unavailable"}` -> `{chain.TerminalKind ?? "terminal-unavailable"}`; classification `{chain.Classification}`; {traversal}; supporting facts {string.Join(", ", chain.SupportingFactIds.Select(id => $"`{id}`"))}.");
         }
         b.AppendLine().AppendLine("## Downstream boundaries").AppendLine();
@@ -1251,6 +1269,9 @@ public static class WebFormsModernizationPacketReporter
         foreach (var limitation in packet.Limitations) b.AppendLine($"- {limitation}");
         return b.ToString().Replace("\r\n", "\n", StringComparison.Ordinal);
     }
+
+    private static string MarkdownValues(IReadOnlyList<string> values)
+        => values.Count == 0 ? "none retained" : string.Join(", ", values.Select(value => $"`{value}`"));
 
     private static async Task<WebFormsModernizationSurfaceSelection> ResolveSurfaceSelectionAsync(
         IReadOnlyList<CodeFact> facts,

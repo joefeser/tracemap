@@ -30,6 +30,7 @@ foreach ($item in @($packet.surfaceSelection.items)) {
 }
 
 function Values([object]$value, [string]$propertyName) {
+    if ($null -eq $value) { return @() }
     $property = $value.PSObject.Properties[$propertyName]
     if ($null -eq $property -or $null -eq $property.Value) { return @() }
     return @($property.Value)
@@ -93,6 +94,15 @@ $rows = foreach ($chain in @($packet.eventChains)) {
         Tiers = @((Values $chain 'evidenceTiers') | ForEach-Object { SafeTier ([string]$_) } | Sort-Object -Unique)
         Coverage = @((Values $chain 'coverageLabels') | ForEach-Object { SafeClosedValue ([string]$_) } | Sort-Object -Unique)
         LinkedGaps = $linkedGaps
+        LeafNodeKinds = @((Values $observation 'leafNodeKinds') | ForEach-Object { SafeClosedValue ([string]$_) } | Sort-Object -Unique)
+        LeafSurfaceKinds = @((Values $observation 'leafSurfaceKinds') | ForEach-Object { SafeClosedValue ([string]$_) } | Sort-Object -Unique)
+        LeafRuleIds = @((Values $observation 'leafRuleIds') | ForEach-Object { SafeRule ([string]$_) } | Sort-Object -Unique)
+        FrontierNodeKinds = @((Values $observation 'frontierNodeKinds') | ForEach-Object { SafeClosedValue ([string]$_) } | Sort-Object -Unique)
+        FrontierSurfaceKinds = @((Values $observation 'frontierSurfaceKinds') | ForEach-Object { SafeClosedValue ([string]$_) } | Sort-Object -Unique)
+        FrontierRuleIds = @((Values $observation 'frontierRuleIds') | ForEach-Object { SafeRule ([string]$_) } | Sort-Object -Unique)
+        TraversedEdgeKinds = @((Values $observation 'traversedEdgeKinds') | ForEach-Object { SafeClosedValue ([string]$_) } | Sort-Object -Unique)
+        TraversedRuleIds = @((Values $observation 'traversedRuleIds') | ForEach-Object { SafeRule ([string]$_) } | Sort-Object -Unique)
+        DiagnosticShapesTruncated = [bool]$observation.diagnosticShapesTruncated
     }
 }
 
@@ -110,7 +120,15 @@ foreach ($bucket in @('handler-resolution-unavailable', 'handler-call-evidence-m
         @{ Name = 'rule'; Property = 'Rules' },
         @{ Name = 'tier'; Property = 'Tiers' },
         @{ Name = 'coverage'; Property = 'Coverage' },
-        @{ Name = 'linkedGap'; Property = 'LinkedGaps' }
+        @{ Name = 'linkedGap'; Property = 'LinkedGaps' },
+        @{ Name = 'leafNodeKind'; Property = 'LeafNodeKinds' },
+        @{ Name = 'leafSurfaceKind'; Property = 'LeafSurfaceKinds' },
+        @{ Name = 'leafRule'; Property = 'LeafRuleIds' },
+        @{ Name = 'frontierNodeKind'; Property = 'FrontierNodeKinds' },
+        @{ Name = 'frontierSurfaceKind'; Property = 'FrontierSurfaceKinds' },
+        @{ Name = 'frontierRule'; Property = 'FrontierRuleIds' },
+        @{ Name = 'traversedEdgeKind'; Property = 'TraversedEdgeKinds' },
+        @{ Name = 'traversedRule'; Property = 'TraversedRuleIds' }
     )) {
         $values = @($selected | ForEach-Object { @($_.($definition.Property)) } | Group-Object | Sort-Object Name)
         if ($values.Count -eq 0) {
@@ -122,6 +140,7 @@ foreach ($bucket in @('handler-resolution-unavailable', 'handler-call-evidence-m
             }
         }
     }
+    Write-Host "bucketDiagnosticShapesTruncated-$bucket=$([bool](@($selected | Where-Object DiagnosticShapesTruncated).Count -gt 0))"
 }
 
 Write-Host 'priority01=terminal-coverage-review'

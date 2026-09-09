@@ -257,6 +257,7 @@ public static class CombinedValueOriginClassifications
 
 public static partial class CombinedDependencyPathReporter
 {
+    private const int MaxTraversalDiagnosticShapes = 32;
     private const string Version = "1.0";
     private const string Algorithm = "bounded-bfs";
     private const string AlgorithmVersion = "1.0";
@@ -703,14 +704,51 @@ public static partial class CombinedDependencyPathReporter
         IEnumerable<CombinedDependencyTraversalObservation> observations)
     {
         var rows = observations.ToArray();
-        return new CombinedDependencyTraversalObservation(
+        var merged = new CombinedDependencyTraversalObservation(
             rows.Sum(row => row.ReachedNodeCount),
             rows.Sum(row => row.TraversedEdgeCount),
             rows.Sum(row => row.DownstreamEdgeCount),
             rows.Sum(row => row.TerminalPathCount),
             rows.Any(row => row.Truncated),
-            rows.SelectMany(row => row.TruncationReasons).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray());
+            rows.SelectMany(row => row.TruncationReasons).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray())
+        {
+            LeafNodeKinds = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.LeafNodeKinds)),
+            LeafSurfaceKinds = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.LeafSurfaceKinds)),
+            LeafRuleIds = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.LeafRuleIds)),
+            FrontierNodeKinds = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.FrontierNodeKinds)),
+            FrontierSurfaceKinds = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.FrontierSurfaceKinds)),
+            FrontierRuleIds = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.FrontierRuleIds)),
+            TraversedEdgeKinds = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.TraversedEdgeKinds)),
+            TraversedRuleIds = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.TraversedRuleIds))
+        };
+        merged = merged with
+        {
+            DiagnosticShapesTruncated = rows.Any(row => row.DiagnosticShapesTruncated)
+                || TraversalDiagnosticShapeSets(rows).Any(values => values.Distinct(StringComparer.Ordinal).Skip(MaxTraversalDiagnosticShapes).Any())
+        };
+        return merged;
     }
+
+    private static IEnumerable<IEnumerable<string>> TraversalDiagnosticShapeSets(
+        IEnumerable<CombinedDependencyTraversalObservation> observations)
+    {
+        var rows = observations.ToArray();
+        yield return rows.SelectMany(row => row.LeafNodeKinds);
+        yield return rows.SelectMany(row => row.LeafSurfaceKinds);
+        yield return rows.SelectMany(row => row.LeafRuleIds);
+        yield return rows.SelectMany(row => row.FrontierNodeKinds);
+        yield return rows.SelectMany(row => row.FrontierSurfaceKinds);
+        yield return rows.SelectMany(row => row.FrontierRuleIds);
+        yield return rows.SelectMany(row => row.TraversedEdgeKinds);
+        yield return rows.SelectMany(row => row.TraversedRuleIds);
+    }
+
+    private static IReadOnlyList<string> BoundedTraversalDiagnosticValues(IEnumerable<string> values)
+        => values.Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .Take(MaxTraversalDiagnosticShapes)
+            .ToArray();
 
     private static EvidenceGraph BuildGraph(
         CombinedReadResult read,
@@ -2743,12 +2781,27 @@ public static partial class CombinedDependencyPathReporter
                 traversal[pendingRoot].MarkTruncated("work");
             gaps.Add(TruncatedGap("work", rootNodeId, graph));
         }
+        void RecordNodeShape(TraversalAccumulator accumulator, string nodeId, bool frontier)
+        {
+            if (!graph.Nodes.TryGetValue(nodeId, out var node)) return;
+            (frontier ? accumulator.FrontierNodeKinds : accumulator.LeafNodeKinds).Add(node.NodeKind);
+            if (!string.IsNullOrWhiteSpace(node.SurfaceKind))
+                (frontier ? accumulator.FrontierSurfaceKinds : accumulator.LeafSurfaceKinds).Add(node.SurfaceKind);
+            if (!string.IsNullOrWhiteSpace(node.RuleId))
+                (frontier ? accumulator.FrontierRuleIds : accumulator.LeafRuleIds).Add(node.RuleId);
+        }
+        void RecordQueuedFrontiers()
+        {
+            foreach (var pending in queue)
+                RecordNodeShape(traversal[pending.RootNodeId], pending.NodeIds[^1], frontier: true);
+        }
         while (queue.Count > 0 && paths.Count < maxPaths)
         {
-            if (work >= maxTraversalWork) { ExhaustWork(queue.First!.Value.RootNodeId); break; }
+            if (work >= maxTraversalWork) { RecordQueuedFrontiers(); ExhaustWork(queue.First!.Value.RootNodeId); break; }
             if (queue.Count > maxFrontier)
             {
                 truncated = true;
+                RecordQueuedFrontiers();
                 foreach (var rootNodeId in queue.Select(item => item.RootNodeId).Distinct(StringComparer.Ordinal))
                     traversal[rootNodeId].MarkTruncated("frontier");
                 gaps.Add(TruncatedGap("frontier", queue.First!.Value.NodeIds[0], graph));
@@ -2770,6 +2823,7 @@ public static partial class CombinedDependencyPathReporter
             if (state.EdgeIds.Count >= maxDepth)
             {
                 truncated = true;
+                RecordNodeShape(traversal[state.RootNodeId], currentNodeId, frontier: true);
                 traversal[state.RootNodeId].MarkTruncated("depth");
                 gaps.Add(TruncatedGap("depth", currentNodeId, graph));
                 YieldLegacyRoot(state.RootNodeId);
@@ -2778,6 +2832,7 @@ public static partial class CombinedDependencyPathReporter
 
             if (!graph.Outgoing.TryGetValue(currentNodeId, out var outgoing))
             {
+                RecordNodeShape(traversal[state.RootNodeId], currentNodeId, frontier: false);
                 YieldLegacyRoot(state.RootNodeId);
                 continue;
             }
@@ -2785,14 +2840,27 @@ public static partial class CombinedDependencyPathReporter
             IReadOnlyList<GraphEdge> orderedOutgoing = depthFirst
                 ? outgoing.AsEnumerable().Reverse().ToArray()
                 : outgoing;
+            var enqueuedChild = false;
+            var paused = false;
             for (var edgeIndex = state.NextOutgoingIndex; edgeIndex < orderedOutgoing.Count; edgeIndex++)
             {
                 if (edgeIndex > state.NextOutgoingIndex && ShouldPauseLegacyRoot(state.RootNodeId))
                 {
-                    EnqueueFirst(state with { NextOutgoingIndex = edgeIndex });
+                    EnqueueFirst(state with
+                    {
+                        NextOutgoingIndex = edgeIndex,
+                        TraversedOutgoing = state.TraversedOutgoing || enqueuedChild
+                    });
+                    paused = true;
                     break;
                 }
-                if (work >= maxTraversalWork) { ExhaustWork(state.RootNodeId); break; }
+                if (work >= maxTraversalWork)
+                {
+                    RecordNodeShape(traversal[state.RootNodeId], currentNodeId, frontier: true);
+                    RecordQueuedFrontiers();
+                    ExhaustWork(state.RootNodeId);
+                    break;
+                }
                 CountWork(state.RootNodeId);
                 var edge = orderedOutgoing[edgeIndex];
                 if (IsDispatchCandidateCrossHop(graph, state, edge))
@@ -2811,19 +2879,28 @@ public static partial class CombinedDependencyPathReporter
                 var observation = traversal[state.RootNodeId];
                 observation.ReachedNodeIds.Add(edge.ToNodeId);
                 observation.TraversedEdgeIds.Add(edge.EdgeId);
-                if (edge.EdgeKind != "legacy-root-selection") observation.DownstreamEdgeIds.Add(edge.EdgeId);
+                if (edge.EdgeKind != "legacy-root-selection")
+                {
+                    observation.DownstreamEdgeIds.Add(edge.EdgeId);
+                    observation.TraversedEdgeKinds.Add(edge.EdgeKind);
+                    observation.TraversedRuleIds.Add(edge.RuleId);
+                }
                 var next = new PathState(state.RootNodeId, [.. state.NodeIds, edge.ToNodeId], [.. state.EdgeIds, edge.EdgeId]);
                 if (depthFirst) EnqueueFirst(next);
                 else EnqueueLast(next);
                 reachedNodeIds.Add(edge.ToNodeId);
+                enqueuedChild = true;
             }
             if (workExhausted) break;
+            if (!paused && !state.TraversedOutgoing && !enqueuedChild)
+                RecordNodeShape(traversal[state.RootNodeId], currentNodeId, frontier: false);
             YieldLegacyRoot(state.RootNodeId);
         }
 
         if (paths.Count >= maxPaths && queue.Count > 0)
         {
             truncated = true;
+            RecordQueuedFrontiers();
             foreach (var rootNodeId in queue.Select(item => item.RootNodeId).Distinct(StringComparer.Ordinal))
                 traversal[rootNodeId].MarkTruncated("path");
             gaps.Add(TruncatedGap("path", queue.First!.Value.NodeIds[0], graph));
@@ -2842,7 +2919,18 @@ public static partial class CombinedDependencyPathReporter
                     item.Value.DownstreamEdgeIds.Count,
                     item.Value.TerminalPathCount,
                     item.Value.Truncated,
-                    item.Value.TruncationReasons.OrderBy(value => value, StringComparer.Ordinal).ToArray()),
+                    item.Value.TruncationReasons.OrderBy(value => value, StringComparer.Ordinal).ToArray())
+                {
+                    LeafNodeKinds = BoundedTraversalDiagnosticValues(item.Value.LeafNodeKinds),
+                    LeafSurfaceKinds = BoundedTraversalDiagnosticValues(item.Value.LeafSurfaceKinds),
+                    LeafRuleIds = BoundedTraversalDiagnosticValues(item.Value.LeafRuleIds),
+                    FrontierNodeKinds = BoundedTraversalDiagnosticValues(item.Value.FrontierNodeKinds),
+                    FrontierSurfaceKinds = BoundedTraversalDiagnosticValues(item.Value.FrontierSurfaceKinds),
+                    FrontierRuleIds = BoundedTraversalDiagnosticValues(item.Value.FrontierRuleIds),
+                    TraversedEdgeKinds = BoundedTraversalDiagnosticValues(item.Value.TraversedEdgeKinds),
+                    TraversedRuleIds = BoundedTraversalDiagnosticValues(item.Value.TraversedRuleIds),
+                    DiagnosticShapesTruncated = item.Value.DiagnosticShapeValueCount > MaxTraversalDiagnosticShapes
+                },
                 StringComparer.Ordinal));
     }
 
@@ -4732,7 +4820,18 @@ public static partial class CombinedDependencyPathReporter
         int DownstreamEdgeCount,
         int TerminalPathCount,
         bool Truncated,
-        IReadOnlyList<string> TruncationReasons);
+        IReadOnlyList<string> TruncationReasons)
+    {
+        public IReadOnlyList<string> LeafNodeKinds { get; init; } = [];
+        public IReadOnlyList<string> LeafSurfaceKinds { get; init; } = [];
+        public IReadOnlyList<string> LeafRuleIds { get; init; } = [];
+        public IReadOnlyList<string> FrontierNodeKinds { get; init; } = [];
+        public IReadOnlyList<string> FrontierSurfaceKinds { get; init; } = [];
+        public IReadOnlyList<string> FrontierRuleIds { get; init; } = [];
+        public IReadOnlyList<string> TraversedEdgeKinds { get; init; } = [];
+        public IReadOnlyList<string> TraversedRuleIds { get; init; } = [];
+        public bool DiagnosticShapesTruncated { get; init; }
+    }
 
     private sealed record SearchResult(
         IReadOnlyList<CombinedPath> Paths,
@@ -4745,13 +4844,33 @@ public static partial class CombinedDependencyPathReporter
         string RootNodeId,
         IReadOnlyList<string> NodeIds,
         IReadOnlyList<string> EdgeIds,
-        int NextOutgoingIndex = 0);
+        int NextOutgoingIndex = 0,
+        bool TraversedOutgoing = false);
 
     private sealed class TraversalAccumulator
     {
         public HashSet<string> ReachedNodeIds { get; } = new(StringComparer.Ordinal);
         public HashSet<string> TraversedEdgeIds { get; } = new(StringComparer.Ordinal);
         public HashSet<string> DownstreamEdgeIds { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> LeafNodeKinds { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> LeafSurfaceKinds { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> LeafRuleIds { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> FrontierNodeKinds { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> FrontierSurfaceKinds { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> FrontierRuleIds { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> TraversedEdgeKinds { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> TraversedRuleIds { get; } = new(StringComparer.Ordinal);
+        public int DiagnosticShapeValueCount => new[]
+        {
+            LeafNodeKinds.Count,
+            LeafSurfaceKinds.Count,
+            LeafRuleIds.Count,
+            FrontierNodeKinds.Count,
+            FrontierSurfaceKinds.Count,
+            FrontierRuleIds.Count,
+            TraversedEdgeKinds.Count,
+            TraversedRuleIds.Count
+        }.Max();
         public int TerminalPathCount { get; set; }
         public bool Truncated { get; set; }
         public HashSet<string> TruncationReasons { get; } = new(StringComparer.Ordinal);
