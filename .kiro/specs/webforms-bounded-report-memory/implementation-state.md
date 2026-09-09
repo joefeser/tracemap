@@ -1,5 +1,24 @@
 # Implementation state
 
+## Exact canonical leaf call-evidence classification (2026-09-09)
+
+Field leaf/reconciliation evidence showed seven terminal-free chains containing
+both canonical Tier1 method leaves and deliberately isolated Tier3 projected
+targets. Rule IDs on a leaf can originate from evidence that created the node and
+therefore do not prove that the leaf method owns an outgoing invocation. Added a
+bounded closed `LeafCallEvidenceStates` set that compares exact canonical source
+node IDs with retained `MethodInvoked`/`CallEdge` facts and actual outgoing graph
+edges. It distinguishes missing call-shaped evidence, an invocation without its
+paired call fact, a call fact without its graph edge, path-local cycle rejection,
+dispatch cross-hop rejection, and defensive retained-but-untraversed edges.
+Noncanonical leaves are marked not applicable. No raw identity is emitted and no
+name-based reconciliation or traversal bound changed. The actionable-gap script
+prints the new aggregate field and remains compatible with older packets.
+
+Validation: focused packet/path tests 68/68, full .NET solution 1766/1766, and
+the synthetic PowerShell actionable-gap test passed. Targeted formatting
+verification, private-path guard, and diff check passed before commit.
+
 ## Per-chain truncation reason retention (2026-09-09)
 
 Field evidence showed identical depth-8/10 terminal-free results: all resolved

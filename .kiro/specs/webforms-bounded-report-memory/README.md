@@ -694,3 +694,15 @@ kept as an isolated candidate rather than joined by a simple method name.
 symbol, method, or type whose retained outgoing graph was exhausted. These states
 explain the stopping condition without publishing target identities or weakening
 the fail-closed reconciliation policy.
+
+New packets also publish a closed `leafCallEvidenceStates` set. For canonical
+leaves it distinguishes no exact source-owned call-shaped evidence, a retained
+method-invocation fact without its paired call fact, a retained call fact without
+its graph edge, and an outgoing call edge rejected by path-local cycle protection.
+It can also identify a dispatch cross-hop filter or the defensive case where an
+outgoing call edge was retained but not traversed. Noncanonical candidates are
+explicitly not applicable. The diagnostic compares exact canonical source node
+IDs only: it does not expose symbols or paths, perform simple-name matching, or
+widen reconciliation. Run `Run-FocusedWebFormsPageList.ps1` once against the
+existing index, then run `Summarize-FocusedWebFormsActionableGaps.ps1`; the latter
+prints `bucketleafCallEvidence-*` counts without rebuilding or rescanning.
