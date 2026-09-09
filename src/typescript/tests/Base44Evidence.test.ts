@@ -1562,8 +1562,8 @@ export async function run(runtimeFlags) {
       const frontend = operations.find((fact) => fact.targetSymbol === "FrontendItem")!;
       const functionRuntime = operations.find((fact) => fact.targetSymbol === "FunctionItem")!;
       const ambiguous = operations.find((fact) => fact.targetSymbol === "AmbiguousItem")!;
-      expect(JSON.parse(frontend.properties.sdkIdentityJson)).toMatchObject({version: "0.8.5", scope: "frontend-package"});
-      expect(JSON.parse(functionRuntime.properties.sdkIdentityJson)).toMatchObject({version: "0.8.4", scope: "function-runtime"});
+      expect(JSON.parse(frontend.properties.sdkIdentityJson)).toMatchObject({version: "0.8.43", scope: "frontend-package"});
+      expect(JSON.parse(functionRuntime.properties.sdkIdentityJson)).toMatchObject({version: "0.8.23", scope: "function-runtime"});
       expect(ambiguous.properties).toMatchObject({
         sdkIdentityGap: "sdk-identity-source-root-ambiguous",
         sdkIdentityJson: ""
@@ -2893,7 +2893,7 @@ async function mixedSdkIdentityFixtureRepo(): Promise<string> {
   const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-mixed-sdk-identity-fixture-"));
   await fs.mkdir(path.join(repo, "src"), {recursive: true});
   await fs.mkdir(path.join(repo, "functions/task"), {recursive: true});
-  await writeFrontendSdkAuthority(repo);
+  await writeFrontendSdkAuthority(repo, "0.8.43", "^0.8.43");
   await fs.writeFile(path.join(repo, "src/helper.ts"), `
 export function writeAmbiguous(client, payload) {
   return client.entities.AmbiguousItem.create(payload);
@@ -2906,7 +2906,7 @@ export function run(payload) {
   return writeAmbiguous(base44, payload);
 }
 `);
-  await fs.writeFile(path.join(repo, "functions/task/index.ts"), `import {createClientFromRequest} from "npm:@base44/sdk@0.8.4";
+  await fs.writeFile(path.join(repo, "functions/task/index.ts"), `import {createClientFromRequest} from "npm:@base44/sdk@0.8.23";
 import {writeAmbiguous} from "../../src/helper";
 const base44 = createClientFromRequest(new Request("https://example.invalid"));
 export function run(payload) {
@@ -3130,8 +3130,7 @@ ${body}
   }
 }
 
-async function writeFrontendSdkAuthority(repo: string): Promise<void> {
-  const requested = "^0.8.3";
+async function writeFrontendSdkAuthority(repo: string, version = "0.8.5", requested = "^0.8.3"): Promise<void> {
   await fs.writeFile(path.join(repo, "package.json"), `${JSON.stringify({ dependencies: { "@base44/sdk": requested } }, null, 2)}\n`);
   await fs.writeFile(path.join(repo, "package-lock.json"), `${JSON.stringify({
     name: "base44-fixture",
@@ -3139,7 +3138,7 @@ async function writeFrontendSdkAuthority(repo: string): Promise<void> {
     requires: true,
     packages: {
       "": { dependencies: { "@base44/sdk": requested } },
-      "node_modules/@base44/sdk": { version: "0.8.5" }
+      "node_modules/@base44/sdk": { version }
     }
   }, null, 2)}\n`);
 }

@@ -3345,7 +3345,7 @@ interface SdkIdentityEvidence {
 interface SdkIdentity {
   schemaVersion: "88mph.base44-sdk-callsite-identity.v1";
   packageName: "@base44/sdk";
-  version: "0.8.4" | "0.8.5";
+  version: string;
   scope: "function-runtime" | "frontend-package";
   rawSpecifier: string;
   evidence: SdkIdentityEvidence[];
@@ -3525,13 +3525,14 @@ function resolveSdkIdentity(roots: SdkAuthorityRoot[], frontend: FrontendPackage
       authoritySha256: root.authoritySha256,
       kind: "source-import"
     };
-    if (root.rawSpecifier === "npm:@base44/sdk@0.8.4") {
-      return { identity: sdkIdentity("0.8.4", "function-runtime", root.rawSpecifier, [sourceEvidence]) };
+    const functionRuntimeVersion = /^npm:@base44\/sdk@(\d+\.\d+\.\d+)$/u.exec(root.rawSpecifier)?.[1];
+    if (functionRuntimeVersion) {
+      return { identity: sdkIdentity(functionRuntimeVersion, "function-runtime", root.rawSpecifier, [sourceEvidence]) };
     }
     if (root.rawSpecifier === "@base44/sdk") {
       if (frontend.gap || !frontend.identityEvidence || !frontend.version) return { gap: frontend.gap ?? "sdk-identity-package-authority-invalid" };
-      if (frontend.version !== "0.8.5") return { gap: "sdk-identity-version-unsupported" };
-      return { identity: sdkIdentity("0.8.5", "frontend-package", root.rawSpecifier, [sourceEvidence, ...frontend.identityEvidence]) };
+      if (!/^\d+\.\d+\.\d+$/u.test(frontend.version)) return { gap: "sdk-identity-version-unsupported" };
+      return { identity: sdkIdentity(frontend.version, "frontend-package", root.rawSpecifier, [sourceEvidence, ...frontend.identityEvidence]) };
     }
     return { gap: "sdk-identity-specifier-unsupported" };
   });
@@ -3544,7 +3545,7 @@ function resolveSdkIdentity(roots: SdkAuthorityRoot[], frontend: FrontendPackage
 }
 
 function sdkIdentity(
-  version: "0.8.4" | "0.8.5",
+  version: string,
   scope: "function-runtime" | "frontend-package",
   rawSpecifier: string,
   evidence: SdkIdentityEvidence[]
