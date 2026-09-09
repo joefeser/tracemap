@@ -135,6 +135,8 @@ public sealed class WebFormsModernizationPacketTests
             ("coverageLabel", "reduced-static-webforms-flow"));
         var downstreamCall = Fact(manifest, FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, "Pages/Traversal.aspx.cs", 30,
             source: "method:downstream", target: "method:leaf", contract: "Leaf", ("coverageLabel", "bounded-static-call"));
+        var leafInvocationWithoutCall = Fact(manifest, FactTypes.MethodInvoked, RuleIds.CSharpSemanticMethodInvocation, "Pages/Traversal.aspx.cs", 32,
+            source: "method:leaf", target: "method:missing-call-edge", contract: "MissingCallEdge", ("coverageLabel", "bounded-static-call"));
         var terminalCall = Fact(manifest, FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, "Pages/Traversal.aspx.cs", 31,
             source: "method:terminal", target: "method:query", contract: "Query", ("coverageLabel", "bounded-static-call"));
         var query = Fact(manifest, FactTypes.QueryPatternDetected, RuleIds.CSharpSyntaxQueryPattern, "Services/Query.cs", 40,
@@ -142,7 +144,7 @@ public sealed class WebFormsModernizationPacketTests
             ("operationName", "SELECT"), ("tableName", "items"), ("columnNames", "id"),
             ("sqlSourceKind", "literal-string"), ("queryShapeHash", "shape-hash"), ("coverageLabel", "bounded-static-query"));
         var index = Path.Combine(temp.Path, "index.sqlite");
-        SqliteIndexWriter.Write(index, manifest, [page, .. bindings, .. handlers, unjoinedSyntaxCall, unrelatedSameNameCall, unjoinedFlow, downstreamCall, terminalCall, query]);
+        SqliteIndexWriter.Write(index, manifest, [page, .. bindings, .. handlers, unjoinedSyntaxCall, unrelatedSameNameCall, unjoinedFlow, downstreamCall, leafInvocationWithoutCall, terminalCall, query]);
 
         var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(index, Path.Combine(temp.Path, "output")));
 
@@ -159,6 +161,7 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Contains("SymbolCandidate", unjoined.TraversalObservation?.LeafNodeKinds ?? []);
         Assert.Contains(EvidenceTiers.Tier2Structural, unjoined.TraversalObservation?.LeafEvidenceTiers ?? []);
         Assert.Contains("nonsemantic-projection-isolated-by-evidence-tier", unjoined.TraversalObservation?.LeafReconciliationStates ?? []);
+        Assert.Contains("noncanonical-leaf-not-applicable", unjoined.TraversalObservation?.LeafCallEvidenceStates ?? []);
         var downstream = packet.EventChains.Single(chain => chain.HandlerFactId == handlers[2].FactId);
         Assert.Equal("observed-downstream-without-supported-terminal", downstream.TraversalObservation?.StopState);
         Assert.True(downstream.TraversalObservation?.DownstreamEdgeCount > 0);
@@ -168,6 +171,7 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Contains(RuleIds.CSharpSemanticCallGraph, downstream.TraversalObservation?.TraversedRuleIds ?? []);
         Assert.Contains(EvidenceTiers.Tier2Structural, downstream.TraversalObservation?.LeafEvidenceTiers ?? []);
         Assert.Contains("canonical-symbol-no-reconciliation-needed", downstream.TraversalObservation?.LeafReconciliationStates ?? []);
+        Assert.Contains("method-invocation-source-retained-without-call-fact", downstream.TraversalObservation?.LeafCallEvidenceStates ?? []);
         Assert.False(downstream.TraversalObservation?.DiagnosticShapesTruncated);
         var terminal = packet.EventChains.Single(chain => chain.HandlerFactId == handlers[3].FactId);
         Assert.Equal("supported-terminal-reached", terminal.TraversalObservation?.StopState);
