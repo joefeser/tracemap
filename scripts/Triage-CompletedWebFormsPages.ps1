@@ -35,6 +35,17 @@ try {
         if (Text $chain 'terminalKind') { [void]$terminalSurfaces.Add($surface) }
     }
     $lines = [Collections.Generic.List[string]]::new()
+    $reasonsByNode = @{}
+    foreach ($gap in $gaps.EnumerateArray()) {
+        if ((Text $gap 'classification') -cne 'TruncatedByLimit' -or (Text $gap 'scopeKind') -cne 'legacy-flow') { continue }
+        $node = Text $gap 'scopeId'
+        if (-not $node) { continue }
+        $reason = Text $gap 'truncationReason'
+        if ($reason -cnotin @('depth','cycle','frontier','path','work')) { $reason = 'unavailable' }
+        if (-not $reasonsByNode.ContainsKey($node)) { $reasonsByNode[$node] = [Collections.Generic.HashSet[string]]::new() }
+        [void]$reasonsByNode[$node].Add($reason)
+    }
+    $nodeWork = 0
     $focusBindings = @{}
     foreach ($item in $items.EnumerateArray()) {
         $alias = Text $item 'alias'
@@ -47,7 +58,18 @@ try {
         }
         if ($hasTerminal -and $alias -cnotin @('page-004','page-026')) { continue }
         $counts = @{terminal=0;missing=0;truncated=0;downstream=0;noEdge=0;unknown=0}
+        $pageReasons = [Collections.Generic.HashSet[string]]::new()
         foreach ($chain in $pageChains) {
+            $pathEvidence = Optional $chain 'pathEvidence'
+            if ($pathEvidence.ValueKind -eq 'Array') {
+                foreach ($evidence in $pathEvidence.EnumerateArray()) {
+                    if (++$nodeWork -gt 200000) { throw 'Node-link inspection budget exceeded; output withheld.' }
+                    $node = Text $evidence 'evidenceId'
+                    if ((Text $evidence 'evidenceKind') -ceq 'path-node' -and $reasonsByNode.ContainsKey($node)) {
+                        foreach ($reason in $reasonsByNode[$node]) { [void]$pageReasons.Add($reason) }
+                    }
+                }
+            }
             if (Text $chain 'terminalKind') { $counts.terminal++; continue }
             if (-not (Text $chain 'handlerFactId')) {
                 $counts.missing++
@@ -70,6 +92,8 @@ try {
             else { $counts.noEdge++ }
         }
         $lines.Add("page=$alias|hasTerminal=$hasTerminal|chains=$($pageChains.Count)|terminal=$($counts.terminal)|noRetainedEvents=$($pageChains.Count -eq 0)|handlerUnavailable=$($counts.missing)|truncated=$($counts.truncated)|downstreamNoTerminal=$($counts.downstream)|noEdge=$($counts.noEdge)|observationUnavailable=$($counts.unknown)")
+        $reasonText = if ($pageReasons.Count) { ($pageReasons | Sort-Object) -join ',' } else { 'not-established' }
+        $lines.Add("page=$alias|nodeAssociatedReasons=$reasonText|basis=exact-retained-node-not-proof-of-chain-stop")
     }
     $linked = @{}; $work = 0
     foreach ($gap in $gaps.EnumerateArray()) {
@@ -91,7 +115,7 @@ try {
             $linked[$key] = 1 + [int]$linked[$key]
         }
     }
-    Write-Host 'targeted-page-triage=read-only|baseline=retained-depth-8'
+    Write-Host 'targeted-page-triage=read-only|input=selected-retained-report'
     Write-Host "packetPartial=$($root.GetProperty('summary').GetProperty('truncated').GetBoolean())"
     foreach ($line in $lines) { Write-Host $line }
     foreach ($alias in @('page-004','page-026')) {
