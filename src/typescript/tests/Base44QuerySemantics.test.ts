@@ -53,6 +53,33 @@ describe("normalized Base44 query syntax", () => {
     expect(JSON.stringify(result)).not.toContain("user.id");
     expect(JSON.stringify(result)).not.toContain("ids[index]");
   });
+  it("records dynamic pagination controls as redacted deferred wire values", () => {
+    const result = extract("filter", "{}, '-created_date', pageSize, offset");
+    expect(result).toMatchObject({
+      schemaVersion: "88mph.entity-query.v2",
+      completeness: "complete",
+      gaps: [],
+    });
+    expect(result.arguments[1].value).toEqual({
+      kind: "sort",
+      encoding: "string",
+      fields: [{ name: "created_date", direction: "desc" }],
+    });
+    expect(result.arguments[2]).toMatchObject({
+      role: "limit",
+      presence: "supplied",
+      value: { kind: "reference" },
+    });
+    expect(result.arguments[3]).toMatchObject({
+      role: "skip",
+      presence: "supplied",
+      value: { kind: "reference" },
+    });
+    expect(JSON.stringify(result)).not.toContain("pageSize");
+    expect(JSON.stringify(result)).not.toContain("offset");
+    expect(extract("filter", "{}, '-created_date', computeLimit(), offset").gaps)
+      .toContain("query:limit_unresolved");
+  });
   it.each([
     "{id: helper().id}",
     "{id: values[makeKey()]}",
@@ -68,7 +95,7 @@ describe("normalized Base44 query syntax", () => {
     ["filter", "{$or: [{a:1},{a:2}]}"], ["filter", "{a: {$unknown: 1}}"],
     ["filter", "{a: {}}"], ["filter", "{a:1,a:2}"], ["filter", "{get a(){return 1}}"],
     ["filter", "{a: helper()}"], ["filter", "{a: {$in: [,1]}}"],
-    ["list", "sort"], ["list", "'-id', count"], ["list", "'-id', -1"],
+    ["list", "sort"], ["list", "'-id', computeCount()"], ["list", "'-id', -1"],
     ["list", "'-id', 1.5"], ["list", "'-id', 10, 0, fields"],
     ["list", "'-id', 10, 0, ['id', ...extra]"], ["list", "'-id', 10, 0, ['id'], 1"]
   ])("marks unsupported %s(%s) unresolved", (method,args) => {
