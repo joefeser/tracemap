@@ -1,6 +1,6 @@
 # Base44 entity selector v1
 
-Extractors `base44-evidence/0.12.0` through `base44-evidence/0.14.0` publish a closed, source-bound selector
+Extractors `base44-evidence/0.12.0` through `base44-evidence/0.15.0` publish a closed, source-bound selector
 contract on every entity operation and its paired payload/query fact:
 
 ```json

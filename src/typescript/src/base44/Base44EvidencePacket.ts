@@ -409,7 +409,7 @@ function validatePayloadShapeContracts(packet: Base44EvidencePacket): void {
       && fact.properties.shapeVersion !== "2") {
       throw new Error(`Base44 payload ${fact.factId} must use shapeVersion 2 for extractor ${fact.evidence.extractorVersion}`);
     }
-    if (fact.evidence.extractorVersion === "base44-evidence/0.14.0" && fact.properties.shapeVersion !== "3") {
+    if (["base44-evidence/0.14.0", "base44-evidence/0.15.0"].includes(fact.evidence.extractorVersion) && fact.properties.shapeVersion !== "3") {
       throw new Error(`Base44 payload ${fact.factId} must use shapeVersion 3 for extractor ${fact.evidence.extractorVersion}`);
     }
     if (!new Set(["2", "3"]).has(fact.properties.shapeVersion)) continue;
@@ -578,7 +578,7 @@ function validateEntitySelectorContracts(packet: Base44EvidencePacket): void {
     FactTypes.Base44EntityPayload,
     FactTypes.Base44EntityQuery
   ]);
-  const facts = packet.facts.filter((fact) => ["base44-evidence/0.12.0", "base44-evidence/0.13.0", "base44-evidence/0.14.0"].includes(fact.evidence.extractorVersion)
+  const facts = packet.facts.filter((fact) => ["base44-evidence/0.12.0", "base44-evidence/0.13.0", "base44-evidence/0.14.0", "base44-evidence/0.15.0"].includes(fact.evidence.extractorVersion)
     && selectorFactTypes.has(fact.factType));
   const operations = new Map(facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation)
     .map((fact) => [fact.properties.operationEvidenceId, fact]));
@@ -677,7 +677,7 @@ function validateEntityCallsiteDispositions(packet: Base44EvidencePacket): void 
       "sourceSnapshotDigest", "externalModuleReferences", "ambiguousDynamicModuleReferences", "operationName",
       "operationEvidenceIds", "primitiveCapabilities", "entitySelector", "sdkIdentity", "sdkIdentityGap", "callsite"],
     `entity callsite disposition ${fact.factId}`);
-    if (fact.evidence.extractorVersion !== "base44-evidence/0.14.0"
+    if (!["base44-evidence/0.14.0", "base44-evidence/0.15.0"].includes(fact.evidence.extractorVersion)
       || disposition.schemaVersion !== "88mph.base44-entity-callsite-disposition.v2"
       || disposition.disposition !== "dormant-unreachable"
       || typeof disposition.callableName !== "string" || !disposition.callableName
@@ -804,7 +804,7 @@ function validateEntityPrimitiveDenominator(
   const primitivesByOperationId = new Map<string, Base44PacketFact[]>();
   const entityPrimitivePattern = /^(?:asServiceRole\.)?entities\.([A-Z][A-Za-z0-9_]*|dynamic)\.([A-Za-z][A-Za-z0-9_]*)$/u;
   const primitives = packet.facts.filter((fact) => fact.factType === FactTypes.Base44SdkPrimitive
-    && fact.evidence.extractorVersion === "base44-evidence/0.14.0"
+    && ["base44-evidence/0.14.0", "base44-evidence/0.15.0"].includes(fact.evidence.extractorVersion)
     && entityPrimitivePattern.test(fact.properties.capability ?? ""));
   for (const primitive of primitives) {
     const match = entityPrimitivePattern.exec(primitive.properties.capability)!;
@@ -838,7 +838,7 @@ function validateEntityPrimitiveDenominator(
   }
 
   for (const operation of packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation
-    && fact.evidence.extractorVersion === "base44-evidence/0.14.0")) {
+    && ["base44-evidence/0.14.0", "base44-evidence/0.15.0"].includes(fact.evidence.extractorVersion))) {
     const callsite = exactEntityFactCallsite(operation);
     const expectedOperationId = entityOperationIdFromCallsite(callsite,
       operation.properties.entityName, operation.properties.operationName);
@@ -918,7 +918,7 @@ function validateSdkIdentityContracts(packet: Base44EvidencePacket): void {
     FactTypes.Base44EntityPayload,
     FactTypes.Base44EntityQuery
   ]);
-  const facts = packet.facts.filter((fact) => ["base44-evidence/0.10.0", "base44-evidence/0.11.0", "base44-evidence/0.12.0", "base44-evidence/0.13.0", "base44-evidence/0.14.0"].includes(fact.evidence.extractorVersion)
+  const facts = packet.facts.filter((fact) => ["base44-evidence/0.10.0", "base44-evidence/0.11.0", "base44-evidence/0.12.0", "base44-evidence/0.13.0", "base44-evidence/0.14.0", "base44-evidence/0.15.0"].includes(fact.evidence.extractorVersion)
     && identityFactTypes.has(fact.factType));
   const operations = new Map(facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation)
     .map((fact) => [fact.properties.operationEvidenceId, fact]));
