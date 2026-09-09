@@ -11,9 +11,9 @@ try {
         eventChains=@(
             @{surfaceId='s';bindingFactId='PRIVATE-binding'},
             @{surfaceId='s';handlerFactId='h';terminalKind='sql-query'},
-            @{surfaceId='s';handlerFactId='h';traversalObservation=@{truncated=$true};pathEvidence=@(@{evidenceId='PRIVATE-node';evidenceKind='path-node'})},
-            @{surfaceId='s';handlerFactId='h';traversalObservation=@{downstreamEdgeCount=2}},
-            @{surfaceId='s';handlerFactId='h';traversalObservation=@{downstreamEdgeCount=0}},
+            @{surfaceId='s';handlerFactId='h';traversalObservation=@{truncated=$true;stopState='bounded-traversal-truncated';callEvidenceState='call-evidence-observation-incomplete';handlerOwnedCallEvidenceCount=1};pathEvidence=@(@{evidenceId='PRIVATE-node';evidenceKind='path-node'})},
+            @{surfaceId='s';handlerFactId='h';traversalObservation=@{downstreamEdgeCount=2;stopState='observed-downstream-without-supported-terminal';callEvidenceState='joined-downstream-edge-observed';handlerOwnedCallEvidenceCount=2}},
+            @{surfaceId='s';handlerFactId='h';traversalObservation=@{downstreamEdgeCount=0;stopState='no-observed-downstream-edge';callEvidenceState='handler-owned-call-evidence-unjoined';handlerOwnedCallEvidenceCount=3}},
             @{surfaceId='s';handlerFactId='h';traversalObservation=$null}
         )
         gaps=@(
@@ -29,6 +29,8 @@ try {
     foreach ($expected in @(
         'chains=6|terminal=1|noRetainedEvents=False|handlerUnavailable=1|truncated=1|downstreamNoTerminal=1|noEdge=1|observationUnavailable=1',
         'page=page-020|hasTerminal=False|chains=0|terminal=0|noRetainedEvents=True',
+        'stopStates=bounded-traversal-truncated:1,no-observed-downstream-edge:1,observed-downstream-without-supported-terminal:1',
+        'callEvidenceStates=call-evidence-observation-incomplete:1,handler-owned-call-evidence-unjoined:1,joined-downstream-edge-observed:1|handlerOwnedCallEvidence=6',
         'handlerFocus=page-004|gap=HandlerUnavailable|rule=legacy.webforms.handler-resolution.v1|count=1',
         'gap=other-retained-gap|rule=other-rule|count=1',
         'page=page-004|nodeAssociatedReasons=depth|basis=exact-retained-node-not-proof-of-chain-stop',

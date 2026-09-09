@@ -34,3 +34,4 @@
 - [x] Add read-only baseline page aliases for missing terminal evidence and unavailable-handler counts.
 - [x] Add bounded retained-page bucket triage and exact-binding-linked gap inspection for focus aliases, with synthetic privacy and optional-field tests.
 - [x] Compare retained depth-8/10 page triage with provenance gating and exact-node reason associations, preserving unknown causes and testing mismatched inputs.
+- [x] Report closed per-page traversal and call-evidence states from retained observations so field triage can distinguish traversal, join, and extraction limitations.
