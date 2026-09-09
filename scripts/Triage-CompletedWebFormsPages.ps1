@@ -20,6 +20,14 @@ function Text([System.Text.Json.JsonElement]$Element, [string]$Name) {
     if ($value.ValueKind -eq 'String') { return $value.GetString() }
     return ''
 }
+function Add-ClosedCount([hashtable]$Counts, [string]$Value, [string[]]$Allowed) {
+    $key = if ($Value -cin $Allowed) { $Value } else { 'unavailable' }
+    $Counts[$key] = 1 + [int]$Counts[$key]
+}
+function Format-Counts([hashtable]$Counts) {
+    if (-not $Counts.Count) { return 'none' }
+    return (($Counts.Keys | Sort-Object | ForEach-Object { "$_`:$($Counts[$_])" }) -join ',')
+}
 $stream = [IO.File]::OpenRead($ReportPath); $doc = $null
 try {
     $doc = [System.Text.Json.JsonDocument]::Parse($stream)
@@ -59,6 +67,7 @@ try {
         if ($hasTerminal -and $alias -cnotin @('page-004','page-026')) { continue }
         $counts = @{terminal=0;missing=0;truncated=0;downstream=0;noEdge=0;unknown=0}
         $pageReasons = [Collections.Generic.HashSet[string]]::new()
+        $stopStates = @{}; $callStates = @{}; $handlerOwnedCalls = 0
         foreach ($chain in $pageChains) {
             $pathEvidence = Optional $chain 'pathEvidence'
             if ($pathEvidence.ValueKind -eq 'Array') {
@@ -84,6 +93,14 @@ try {
             }
             $obs = Optional $chain 'traversalObservation'
             if ($obs.ValueKind -ne 'Object') { $counts.unknown++; continue }
+            Add-ClosedCount $stopStates (Text $obs 'stopState') @(
+                'bounded-traversal-truncated','supported-terminal-reached','no-observed-downstream-edge',
+                'observed-downstream-without-supported-terminal','traversal-observation-unavailable')
+            Add-ClosedCount $callStates (Text $obs 'callEvidenceState') @(
+                'joined-downstream-edge-observed','handler-owned-call-evidence-unjoined',
+                'call-evidence-observation-incomplete','no-handler-owned-call-evidence-retained','unavailable')
+            $owned = Optional $obs 'handlerOwnedCallEvidenceCount'
+            if ($owned.ValueKind -eq 'Number') { $handlerOwnedCalls += $owned.GetInt32() }
             $truncated = Optional $obs 'truncated'
             if ($truncated.ValueKind -eq 'True') { $counts.truncated++; continue }
             $edges = Optional $obs 'downstreamEdgeCount'
@@ -92,6 +109,7 @@ try {
             else { $counts.noEdge++ }
         }
         $lines.Add("page=$alias|hasTerminal=$hasTerminal|chains=$($pageChains.Count)|terminal=$($counts.terminal)|noRetainedEvents=$($pageChains.Count -eq 0)|handlerUnavailable=$($counts.missing)|truncated=$($counts.truncated)|downstreamNoTerminal=$($counts.downstream)|noEdge=$($counts.noEdge)|observationUnavailable=$($counts.unknown)")
+        $lines.Add("page=$alias|stopStates=$(Format-Counts $stopStates)|callEvidenceStates=$(Format-Counts $callStates)|handlerOwnedCallEvidence=$handlerOwnedCalls")
         $reasonText = if ($pageReasons.Count) { ($pageReasons | Sort-Object) -join ',' } else { 'not-established' }
         $lines.Add("page=$alias|nodeAssociatedReasons=$reasonText|basis=exact-retained-node-not-proof-of-chain-stop")
     }

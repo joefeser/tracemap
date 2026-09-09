@@ -13,6 +13,11 @@ shared nodes can associate with multiple pages, and unpublished visited nodes
 cannot be linked. `not-established` means no such retained link, not no limit.
 The additional node-evidence inspection budget is 200,000 entries per report.
 Each depth reports its own terminal-free pages plus the two focus aliases.
+The page triage also prints closed traversal `stopState` and `callEvidenceState`
+counts already retained on each resolved-handler chain, plus the bounded total
+of retained handler-owned call evidence. These fields can separate incomplete
+traversal from an unjoined call edge or no retained call evidence without
+exposing symbols or claiming a runtime cause.
 
 After `git pull`, run ` .\scripts\Triage-CompletedWebFormsPages.ps1` from the repository root.
 This reads the newest completed depth-8 report under `C:\work\tracemap-output`;

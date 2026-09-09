@@ -1,5 +1,15 @@
 # Implementation state
 
+## Retained observation-state output (2026-09-09)
+
+Field comparison at depths 8 and 10 found the same terminal-free page buckets;
+all exact-node truncation-reason associations remained `not-established`.
+Extended the existing read-only triage to print whitelisted `stopState` and
+`callEvidenceState` counts plus aggregate retained handler-owned call evidence
+per alias. This uses packet fields already present in the completed JSON and
+does not launch another traversal. Synthetic tests cover each useful state,
+numeric aggregation, unknown-state withholding, and existing privacy bounds.
+
 ## Retained reason comparison (2026-09-09)
 
 Added `Compare-CompletedWebFormsPageTriage.ps1` on the existing restricted-run
