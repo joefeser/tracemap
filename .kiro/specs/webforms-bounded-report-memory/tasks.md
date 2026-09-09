@@ -40,3 +40,4 @@
 - [x] Fair-slice bounded legacy traversal across selected handlers and regress a noisy first handler against a later cheap terminal without raising global limits.
 - [x] Add a zero-argument privacy-bounded aggregate diagnostic for actionable unresolved-chain buckets.
 - [x] Retain bounded privacy-safe leaf/frontier and downstream-edge shapes for terminal-free handler traversal triage.
+- [x] Classify terminal-free leaves by evidence tier and closed reconciliation state without widening syntax-only joins.

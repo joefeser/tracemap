@@ -715,6 +715,8 @@ public static partial class CombinedDependencyPathReporter
             LeafNodeKinds = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.LeafNodeKinds)),
             LeafSurfaceKinds = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.LeafSurfaceKinds)),
             LeafRuleIds = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.LeafRuleIds)),
+            LeafEvidenceTiers = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.LeafEvidenceTiers)),
+            LeafReconciliationStates = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.LeafReconciliationStates)),
             FrontierNodeKinds = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.FrontierNodeKinds)),
             FrontierSurfaceKinds = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.FrontierSurfaceKinds)),
             FrontierRuleIds = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.FrontierRuleIds)),
@@ -736,6 +738,8 @@ public static partial class CombinedDependencyPathReporter
         yield return rows.SelectMany(row => row.LeafNodeKinds);
         yield return rows.SelectMany(row => row.LeafSurfaceKinds);
         yield return rows.SelectMany(row => row.LeafRuleIds);
+        yield return rows.SelectMany(row => row.LeafEvidenceTiers);
+        yield return rows.SelectMany(row => row.LeafReconciliationStates);
         yield return rows.SelectMany(row => row.FrontierNodeKinds);
         yield return rows.SelectMany(row => row.FrontierSurfaceKinds);
         yield return rows.SelectMany(row => row.FrontierRuleIds);
@@ -749,6 +753,15 @@ public static partial class CombinedDependencyPathReporter
             .OrderBy(value => value, StringComparer.Ordinal)
             .Take(MaxTraversalDiagnosticShapes)
             .ToArray();
+
+    private static string LeafReconciliationState(GraphNode node)
+        => node.NodeKind == "SymbolCandidate" && node.SourceKind == "projection"
+            ? "nonsemantic-projection-isolated-by-evidence-tier"
+            : node.NodeKind is "Symbol" or "Method" or "Type"
+                ? "canonical-symbol-no-reconciliation-needed"
+                : node.SurfaceKind is not null
+                    ? "surface-not-supported-as-terminal"
+                    : "not-applicable";
 
     private static EvidenceGraph BuildGraph(
         CombinedReadResult read,
@@ -2789,6 +2802,11 @@ public static partial class CombinedDependencyPathReporter
                 (frontier ? accumulator.FrontierSurfaceKinds : accumulator.LeafSurfaceKinds).Add(node.SurfaceKind);
             if (!string.IsNullOrWhiteSpace(node.RuleId))
                 (frontier ? accumulator.FrontierRuleIds : accumulator.LeafRuleIds).Add(node.RuleId);
+            if (!frontier)
+            {
+                if (!string.IsNullOrWhiteSpace(node.EvidenceTier)) accumulator.LeafEvidenceTiers.Add(node.EvidenceTier);
+                accumulator.LeafReconciliationStates.Add(LeafReconciliationState(node));
+            }
         }
         void RecordQueuedFrontiers()
         {
@@ -2924,6 +2942,8 @@ public static partial class CombinedDependencyPathReporter
                     LeafNodeKinds = BoundedTraversalDiagnosticValues(item.Value.LeafNodeKinds),
                     LeafSurfaceKinds = BoundedTraversalDiagnosticValues(item.Value.LeafSurfaceKinds),
                     LeafRuleIds = BoundedTraversalDiagnosticValues(item.Value.LeafRuleIds),
+                    LeafEvidenceTiers = BoundedTraversalDiagnosticValues(item.Value.LeafEvidenceTiers),
+                    LeafReconciliationStates = BoundedTraversalDiagnosticValues(item.Value.LeafReconciliationStates),
                     FrontierNodeKinds = BoundedTraversalDiagnosticValues(item.Value.FrontierNodeKinds),
                     FrontierSurfaceKinds = BoundedTraversalDiagnosticValues(item.Value.FrontierSurfaceKinds),
                     FrontierRuleIds = BoundedTraversalDiagnosticValues(item.Value.FrontierRuleIds),
@@ -4825,6 +4845,8 @@ public static partial class CombinedDependencyPathReporter
         public IReadOnlyList<string> LeafNodeKinds { get; init; } = [];
         public IReadOnlyList<string> LeafSurfaceKinds { get; init; } = [];
         public IReadOnlyList<string> LeafRuleIds { get; init; } = [];
+        public IReadOnlyList<string> LeafEvidenceTiers { get; init; } = [];
+        public IReadOnlyList<string> LeafReconciliationStates { get; init; } = [];
         public IReadOnlyList<string> FrontierNodeKinds { get; init; } = [];
         public IReadOnlyList<string> FrontierSurfaceKinds { get; init; } = [];
         public IReadOnlyList<string> FrontierRuleIds { get; init; } = [];
@@ -4855,6 +4877,8 @@ public static partial class CombinedDependencyPathReporter
         public HashSet<string> LeafNodeKinds { get; } = new(StringComparer.Ordinal);
         public HashSet<string> LeafSurfaceKinds { get; } = new(StringComparer.Ordinal);
         public HashSet<string> LeafRuleIds { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> LeafEvidenceTiers { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> LeafReconciliationStates { get; } = new(StringComparer.Ordinal);
         public HashSet<string> FrontierNodeKinds { get; } = new(StringComparer.Ordinal);
         public HashSet<string> FrontierSurfaceKinds { get; } = new(StringComparer.Ordinal);
         public HashSet<string> FrontierRuleIds { get; } = new(StringComparer.Ordinal);
@@ -4865,6 +4889,8 @@ public static partial class CombinedDependencyPathReporter
             LeafNodeKinds.Count,
             LeafSurfaceKinds.Count,
             LeafRuleIds.Count,
+            LeafEvidenceTiers.Count,
+            LeafReconciliationStates.Count,
             FrontierNodeKinds.Count,
             FrontierSurfaceKinds.Count,
             FrontierRuleIds.Count,

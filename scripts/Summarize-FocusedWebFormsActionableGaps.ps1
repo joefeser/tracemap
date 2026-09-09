@@ -97,6 +97,8 @@ $rows = foreach ($chain in @($packet.eventChains)) {
         LeafNodeKinds = @((Values $observation 'leafNodeKinds') | ForEach-Object { SafeClosedValue ([string]$_) } | Sort-Object -Unique)
         LeafSurfaceKinds = @((Values $observation 'leafSurfaceKinds') | ForEach-Object { SafeClosedValue ([string]$_) } | Sort-Object -Unique)
         LeafRuleIds = @((Values $observation 'leafRuleIds') | ForEach-Object { SafeRule ([string]$_) } | Sort-Object -Unique)
+        LeafEvidenceTiers = @((Values $observation 'leafEvidenceTiers') | ForEach-Object { SafeTier ([string]$_) } | Sort-Object -Unique)
+        LeafReconciliationStates = @((Values $observation 'leafReconciliationStates') | ForEach-Object { SafeClosedValue ([string]$_) } | Sort-Object -Unique)
         FrontierNodeKinds = @((Values $observation 'frontierNodeKinds') | ForEach-Object { SafeClosedValue ([string]$_) } | Sort-Object -Unique)
         FrontierSurfaceKinds = @((Values $observation 'frontierSurfaceKinds') | ForEach-Object { SafeClosedValue ([string]$_) } | Sort-Object -Unique)
         FrontierRuleIds = @((Values $observation 'frontierRuleIds') | ForEach-Object { SafeRule ([string]$_) } | Sort-Object -Unique)
@@ -124,6 +126,8 @@ foreach ($bucket in @('handler-resolution-unavailable', 'handler-call-evidence-m
         @{ Name = 'leafNodeKind'; Property = 'LeafNodeKinds' },
         @{ Name = 'leafSurfaceKind'; Property = 'LeafSurfaceKinds' },
         @{ Name = 'leafRule'; Property = 'LeafRuleIds' },
+        @{ Name = 'leafTier'; Property = 'LeafEvidenceTiers' },
+        @{ Name = 'leafReconciliation'; Property = 'LeafReconciliationStates' },
         @{ Name = 'frontierNodeKind'; Property = 'FrontierNodeKinds' },
         @{ Name = 'frontierSurfaceKind'; Property = 'FrontierSurfaceKinds' },
         @{ Name = 'frontierRule'; Property = 'FrontierRuleIds' },
