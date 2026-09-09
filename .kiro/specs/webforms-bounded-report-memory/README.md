@@ -2,6 +2,18 @@
 
 ## Next work-machine command: retained page triage
 
+For the next comparison, run `git pull`, then
+`.\scripts\Compare-CompletedWebFormsPageTriage.ps1`.
+It reads the newest completed depth-8/10 pair sequentially, checks identical
+retained sources and selection, and withholds comparison on mismatch. No scan,
+build, or traversal runs. Optional `-ComparisonDirectory` selects an older pair.
+Per-page reason associations require exact `legacy-flow` gap scope ID matches
+to retained `path-node` evidence IDs. They are not proven chain stopping causes:
+shared nodes can associate with multiple pages, and unpublished visited nodes
+cannot be linked. `not-established` means no such retained link, not no limit.
+The additional node-evidence inspection budget is 200,000 entries per report.
+Each depth reports its own terminal-free pages plus the two focus aliases.
+
 After `git pull`, run ` .\scripts\Triage-CompletedWebFormsPages.ps1` from the repository root.
 This reads the newest completed depth-8 report under `C:\work\tracemap-output`;
 it does not build, scan, launch a process, or traverse the graph. Set `-ReportPath`

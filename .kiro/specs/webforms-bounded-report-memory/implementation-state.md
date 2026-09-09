@@ -1,5 +1,18 @@
 # Implementation state
 
+## Retained reason comparison (2026-09-09)
+
+Added `Compare-CompletedWebFormsPageTriage.ps1` on the existing restricted-run
+branch. Reads depth-8/10 sequentially, buffers small output until source and
+selection equality checks pass. Extended triage with closed truncation reasons
+associated only through exact retained path-node IDs. No causal attribution or
+new traversal. Missing associations stay `not-established`; shared-node matches
+are not exclusive per-page stopping reasons. Synthetic tests pass for linked
+depth reason, unrelated-node exclusion, missing associations, matched pairs,
+source mismatch rejection, optional fields and private-string suppression.
+Scripts-only change; Windows field run pending. No .NET changes or full suite
+rerun for this follow-up.
+
 ## Retained page triage (2026-09-09)
 
 On `codex/restricted-webforms-run-evidence-20260902`, added
