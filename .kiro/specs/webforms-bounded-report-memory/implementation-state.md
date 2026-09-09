@@ -1,5 +1,25 @@
 # Implementation state
 
+## Per-chain truncation reason retention (2026-09-09)
+
+Field evidence showed identical depth-8/10 terminal-free results: all resolved
+truncated chains already had joined downstream edges and nonzero handler-owned
+call evidence. Added a closed, sorted `TruncationReasons` set to internal root
+observations and an additive initialized property on the public Web Forms
+observation, preserving its existing constructor and older JSON readability.
+Search marks the applicable root for `depth`/`cycle` and all affected pending
+roots for `frontier`/`path`/`work`; merged roots take a deterministic union.
+Packet JSON and Markdown expose the set under the existing rule and limitations.
+The read-only triage prints direct per-chain reason counts; old packets print
+`not-retained`. Reasons describe static bounds, can coexist, and are neither
+runtime conditions nor exclusive causal claims.
+
+Validation: focused packet/path tests 67/67, full .NET solution 1765/1765,
+and the synthetic PowerShell retained-triage test passed. Formatting verification
+passed for both changed C# files. The whole-solution formatting check remains
+noisy in unrelated pre-existing files and was not used to rewrite them. Private
+path guard and diff check passed before commit.
+
 ## Retained observation-state output (2026-09-09)
 
 Field comparison at depths 8 and 10 found the same terminal-free page buckets;

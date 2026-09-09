@@ -18,6 +18,12 @@ counts already retained on each resolved-handler chain, plus the bounded total
 of retained handler-owned call evidence. These fields can separate incomplete
 traversal from an unjoined call edge or no retained call evidence without
 exposing symbols or claiming a runtime cause.
+Packets produced after the per-root reason update additionally carry
+`truncationReasons` on each traversal observation. The triage prints these as
+`directTruncationReasons`; older retained packets report `not-retained` and stay
+readable. A reason identifies the bounded static-search limit observed for that
+chain root. It does not identify a runtime condition or prove that a single
+reason exclusively prevented terminal discovery.
 
 After `git pull`, run ` .\scripts\Triage-CompletedWebFormsPages.ps1` from the repository root.
 This reads the newest completed depth-8 report under `C:\work\tracemap-output`;
