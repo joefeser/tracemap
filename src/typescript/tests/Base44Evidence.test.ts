@@ -1561,9 +1561,19 @@ export async function run(runtimeFlags) {
       const operations = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation);
       const frontend = operations.find((fact) => fact.targetSymbol === "FrontendItem")!;
       const functionRuntime = operations.find((fact) => fact.targetSymbol === "FunctionItem")!;
+      const mutableFunctionRuntime = operations.find((fact) => fact.targetSymbol === "Story"
+        && fact.evidence.filePath === "base44/functions/serveSharedStoryOG/entry.ts")!;
       const ambiguous = operations.find((fact) => fact.targetSymbol === "AmbiguousItem")!;
       expect(JSON.parse(frontend.properties.sdkIdentityJson)).toMatchObject({version: "0.8.43", scope: "frontend-package"});
       expect(JSON.parse(functionRuntime.properties.sdkIdentityJson)).toMatchObject({version: "0.8.23", scope: "function-runtime"});
+      expect(JSON.parse(mutableFunctionRuntime.properties.sdkIdentityJson)).toMatchObject({version: "0.8.25", scope: "function-runtime"});
+      expect(mutableFunctionRuntime).toMatchObject({
+        evidenceTier: "Tier3SyntaxOrTextual",
+        properties: expect.objectContaining({
+          operationName: "filter",
+          sdkIdentityGap: ""
+        })
+      });
       expect(ambiguous.properties).toMatchObject({
         sdkIdentityGap: "sdk-identity-source-root-ambiguous",
         sdkIdentityJson: ""
@@ -2893,6 +2903,7 @@ async function mixedSdkIdentityFixtureRepo(): Promise<string> {
   const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-mixed-sdk-identity-fixture-"));
   await fs.mkdir(path.join(repo, "src"), {recursive: true});
   await fs.mkdir(path.join(repo, "functions/task"), {recursive: true});
+  await fs.mkdir(path.join(repo, "base44/functions/serveSharedStoryOG"), {recursive: true});
   await writeFrontendSdkAuthority(repo, "0.8.43", "^0.8.43");
   await fs.writeFile(path.join(repo, "src/helper.ts"), `
 export function writeAmbiguous(client, payload) {
@@ -2912,6 +2923,21 @@ const base44 = createClientFromRequest(new Request("https://example.invalid"));
 export function run(payload) {
   base44.entities.FunctionItem.create(payload);
   return writeAmbiguous(base44, payload);
+}
+`);
+  await fs.writeFile(path.join(repo, "base44/functions/serveSharedStoryOG/entry.ts"), `import {createClientFromRequest} from "npm:@base44/sdk@0.8.25";
+export default async function handler(req: Request) {
+  let base44 = null;
+  try {
+    base44 = createClientFromRequest(req);
+    const stories = await base44.asServiceRole.entities.Story.filter({
+      share_token: "token",
+      is_shared: true
+    });
+    return Response.json(stories);
+  } catch (error) {
+    return Response.json({error: "not-found"}, {status: 404});
+  }
 }
 `);
   execFileSync("git", ["init", "-q"], {cwd: repo});
