@@ -16,6 +16,12 @@ if (-not $ComparisonDirectory) {
     $ComparisonDirectory = $latest.FullName
 }
 
+function Get-OptionalString([System.Text.Json.JsonElement]$Element, [string]$Name) {
+    $value = [System.Text.Json.JsonElement]::new()
+    if (-not $Element.TryGetProperty($Name, [ref]$value) -or $value.ValueKind -eq [System.Text.Json.JsonValueKind]::Null) { return $null }
+    return $value.GetString()
+}
+
 function Read-SmallSummary([string]$Path) {
     if ((Get-Item -LiteralPath $Path).Length -gt 128MB) { throw 'Report exceeds the 128 MiB input safety limit. No traversal was started.' }
     $stream = [IO.File]::OpenRead($Path)
@@ -55,8 +61,8 @@ function Read-SmallSummary([string]$Path) {
         if ($chains.GetArrayLength() -gt 10000) { throw 'Chain safety limit exceeded.' }
         $missingHandler = 0; $missingTerminal = 0
         foreach ($chain in $chains.EnumerateArray()) {
-            if ([string]::IsNullOrWhiteSpace($chain.GetProperty('handlerFactId').GetString())) { $missingHandler++ }
-            elseif ([string]::IsNullOrWhiteSpace($chain.GetProperty('terminalKind').GetString())) { $missingTerminal++ }
+            if ([string]::IsNullOrWhiteSpace((Get-OptionalString $chain 'handlerFactId'))) { $missingHandler++ }
+            elseif ([string]::IsNullOrWhiteSpace((Get-OptionalString $chain 'terminalKind'))) { $missingTerminal++ }
         }
         $counts = @{ cycle=0; depth=0; frontier=0; path=0; unavailable=0; otherLimits=0 }
         foreach ($gap in $root.GetProperty('gaps').EnumerateArray()) {
