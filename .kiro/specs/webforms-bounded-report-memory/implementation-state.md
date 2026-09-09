@@ -653,3 +653,13 @@ Validation: focused packet/traversal tests 68/68; full .NET solution 1766/1766;
 PowerShell actionable-summary regression, scoped formatting, private-path guard,
 and diff check passed. The pre-existing nullable warning in
 `PropertyMappingTests.cs:560` remains unchanged.
+
+The first field run with leaf shapes showed all seven terminal-coverage chains
+exhausting both `Method` and `SymbolCandidate` leaves, with no frontier and no
+surface kind. The candidate leaves are created only for exact handler-owned
+syntax-tier call support; their target is intentionally hashed and isolated rather
+than globally reconciled by a simple method name. This is not evidence of a missed
+safe reconciliation candidate. Added leaf evidence-tier and closed reconciliation
+states so the next packet distinguishes intentional syntax isolation from canonical
+symbol exhaustion without retaining the private target identity. Matching behavior
+remains fail closed.

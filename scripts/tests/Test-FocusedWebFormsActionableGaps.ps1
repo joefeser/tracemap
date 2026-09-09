@@ -6,7 +6,7 @@ try {
     $chains = @(
         @{ surfaceId = 's1'; handlerFactId = $null; terminalKind = $null; supportingFactIds = @('private-1'); ruleIds = @('legacy.webforms.handler-resolution.v1'); evidenceTiers = @('Tier3SyntaxOrTextual'); coverageLabels = @('reduced-static-webforms-handler') },
         @{ surfaceId = 's2'; handlerFactId = 'private-handler-2'; terminalKind = $null; supportingFactIds = @('private-2'); ruleIds = @('legacy.webforms.event-flow.v1'); evidenceTiers = @('Tier1Semantic'); coverageLabels = @('bounded-static-webforms-flow'); traversalObservation = @{ stopState = 'no-observed-downstream-edge' } },
-        @{ surfaceId = 's3'; handlerFactId = 'private-handler-3'; terminalKind = $null; supportingFactIds = @('private-3'); ruleIds = @('legacy.webforms.event-flow.v1'); evidenceTiers = @('Tier2Structural'); coverageLabels = @('bounded-static-webforms-flow'); traversalObservation = @{ stopState = 'observed-downstream-without-supported-terminal'; leafNodeKinds = @('symbol'); leafSurfaceKinds = @('http-client'); leafRuleIds = @('csharp.semantic.callgraph.v1'); traversedEdgeKinds = @('calls'); traversedRuleIds = @('csharp.semantic.callgraph.v1'); diagnosticShapesTruncated = $false } },
+        @{ surfaceId = 's3'; handlerFactId = 'private-handler-3'; terminalKind = $null; supportingFactIds = @('private-3'); ruleIds = @('legacy.webforms.event-flow.v1'); evidenceTiers = @('Tier2Structural'); coverageLabels = @('bounded-static-webforms-flow'); traversalObservation = @{ stopState = 'observed-downstream-without-supported-terminal'; leafNodeKinds = @('SymbolCandidate'); leafSurfaceKinds = @('http-client'); leafRuleIds = @('csharp.syntax.callgraph.v1'); leafEvidenceTiers = @('Tier3SyntaxOrTextual'); leafReconciliationStates = @('nonsemantic-projection-isolated-by-evidence-tier'); traversedEdgeKinds = @('calls'); traversedRuleIds = @('csharp.syntax.callgraph.v1'); diagnosticShapesTruncated = $false } },
         @{ surfaceId = 's4'; handlerFactId = 'private-handler-4'; terminalKind = $null; supportingFactIds = @('private-4'); ruleIds = @('legacy.webforms.event-flow.v1'); evidenceTiers = @('Tier4Unknown'); coverageLabels = @('reduced-static-webforms-flow'); traversalObservation = @{ stopState = 'bounded-traversal-truncated' } },
         @{ surfaceId = 's5'; handlerFactId = 'private-handler-5'; terminalKind = 'sql-query'; supportingFactIds = @('private-5') }
     )
@@ -28,9 +28,11 @@ try {
         'bucketrule-terminal-coverage-review=legacy.webforms.event-flow.v1|chains=1',
         'buckettier-handler-call-evidence-missing=Tier1Semantic|chains=1',
         'bucketlinkedGap-terminal-coverage-review=NoBackendEvidence|chains=1',
-        'bucketleafNodeKind-terminal-coverage-review=symbol|chains=1',
+        'bucketleafNodeKind-terminal-coverage-review=SymbolCandidate|chains=1',
         'bucketleafSurfaceKind-terminal-coverage-review=http-client|chains=1',
-        'bucketleafRule-terminal-coverage-review=csharp.semantic.callgraph.v1|chains=1',
+        'bucketleafRule-terminal-coverage-review=csharp.syntax.callgraph.v1|chains=1',
+        'bucketleafTier-terminal-coverage-review=Tier3SyntaxOrTextual|chains=1',
+        'bucketleafReconciliation-terminal-coverage-review=nonsemantic-projection-isolated-by-evidence-tier|chains=1',
         'buckettraversedEdgeKind-terminal-coverage-review=calls|chains=1',
         'bucketDiagnosticShapesTruncated-terminal-coverage-review=False',
         'priority01=terminal-coverage-review'

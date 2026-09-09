@@ -156,6 +156,9 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Equal("joined-downstream-edge-observed", unjoined.TraversalObservation?.CallEvidenceState);
         Assert.Equal(1, unjoined.TraversalObservation?.HandlerOwnedCallEvidenceCount);
         Assert.Equal(1, unjoined.TraversalObservation?.DownstreamEdgeCount);
+        Assert.Contains("SymbolCandidate", unjoined.TraversalObservation?.LeafNodeKinds ?? []);
+        Assert.Contains(EvidenceTiers.Tier2Structural, unjoined.TraversalObservation?.LeafEvidenceTiers ?? []);
+        Assert.Contains("nonsemantic-projection-isolated-by-evidence-tier", unjoined.TraversalObservation?.LeafReconciliationStates ?? []);
         var downstream = packet.EventChains.Single(chain => chain.HandlerFactId == handlers[2].FactId);
         Assert.Equal("observed-downstream-without-supported-terminal", downstream.TraversalObservation?.StopState);
         Assert.True(downstream.TraversalObservation?.DownstreamEdgeCount > 0);
@@ -163,6 +166,8 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Contains("Symbol", downstream.TraversalObservation?.LeafNodeKinds ?? []);
         Assert.Contains("calls", downstream.TraversalObservation?.TraversedEdgeKinds ?? []);
         Assert.Contains(RuleIds.CSharpSemanticCallGraph, downstream.TraversalObservation?.TraversedRuleIds ?? []);
+        Assert.Contains(EvidenceTiers.Tier2Structural, downstream.TraversalObservation?.LeafEvidenceTiers ?? []);
+        Assert.Contains("canonical-symbol-no-reconciliation-needed", downstream.TraversalObservation?.LeafReconciliationStates ?? []);
         Assert.False(downstream.TraversalObservation?.DiagnosticShapesTruncated);
         var terminal = packet.EventChains.Single(chain => chain.HandlerFactId == handlers[3].FactId);
         Assert.Equal("supported-terminal-reached", terminal.TraversalObservation?.StopState);

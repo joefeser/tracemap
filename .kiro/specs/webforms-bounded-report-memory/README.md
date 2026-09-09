@@ -685,3 +685,12 @@ SQL, or terminal target is added by these diagnostics. Pull and rerun
 `Summarize-FocusedWebFormsActionableGaps.ps1`. The second command prints the new
 aggregate fields and does not rebuild or rescan. Leaf and frontier observations
 remain bounded static evidence; they do not prove runtime execution or absence.
+
+The leaf diagnostic also publishes the leaf evidence tiers and a closed
+reconciliation state. `nonsemantic-projection-isolated-by-evidence-tier` means an exact
+handler-owned call was retained, but its target was syntax-only and intentionally
+kept as an isolated candidate rather than joined by a simple method name.
+`canonical-symbol-no-reconciliation-needed` means traversal reached a canonical
+symbol, method, or type whose retained outgoing graph was exhausted. These states
+explain the stopping condition without publishing target identities or weakening
+the fail-closed reconciliation policy.
