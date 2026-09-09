@@ -536,6 +536,30 @@ point and emits `ComReferenceResolutionFallbackUnavailable` instead. The
 application repository and its normal Visual Studio build are never modified.
 # Partial retained-report triage
 
+## Resource safeguards and next read-only action
+
+Use `./scripts/Summarize-CompletedWebFormsDepths.ps1 -Details` for the next work
+handoff. It prints baseline depth-8 aliases missing terminal evidence or containing
+unavailable-handler chains. It only reads completed reports. No rerun is needed.
+
+Automatic depth comparisons and wrapper depths above 8 are disabled. Searches now
+count state removals plus inspected edges (including cycle-rejected edges) against
+a deterministic 100,000-work-unit default per Search invocation. Exhaustion emits
+TruncatedByLimit with reason work, retains collected evidence and marks pending
+roots incomplete. This also applies when no terminal exists. It is not a whole
+pipeline memory bound; graph loading and report construction are separate stages.
+
+The report wrapper requires PowerShell 7, builds TraceMap without restore, then
+launches the DLL directly under an owned-process watchdog. Each build/report
+process gets 300 seconds; the direct report process is sampled every 250 ms for
+working/private memory over 4 GiB. A 2 GiB managed-heap limit is also set. These
+are not an OS-enforced total-memory cap: native memory can exceed a threshold
+between samples, and build-child memory is not aggregated. Timeout, memory stop,
+nonzero exit or cancellation aborts the wrapper and cleans up its owned process
+tree. Killed outputs are incomplete, not a successful partial packet. No raw
+diagnostic logs or dumps are created. Do not resume deeper runs based on these
+local tests; private-workload validation is still pending.
+
 ## Current safe handoff: completed files only
 
 Run `./scripts/Summarize-CompletedWebFormsDepths.ps1` in PowerShell 7 after pulling.
@@ -551,6 +575,9 @@ discovery. No output files are modified. Distinct terminal evidence is an exact
 kind/target/evidence tuple, not distinct runtime database operations.
 
 ## Depth comparison (one command)
+
+**Historical workflow: automatic execution is now disabled.** Use the completed
+file summary above instead. The following describes the earlier experiment only.
 
 Run `./scripts/Compare-FocusedWebFormsDepth.ps1` after pulling. It reuses the
 existing IndexPath, OutputRoot and Forms block in Run-FocusedWebFormsPageList.ps1;

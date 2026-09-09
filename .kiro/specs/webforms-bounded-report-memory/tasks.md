@@ -30,3 +30,5 @@
 - [x] Schedule legacy branches depth-first to reduce frontier pressure while preserving alternate paths and explicit cycle/resource gaps.
 - [x] Add sequential retained-index depth 8/10/12 comparison with alias-only per-page and distinct-terminal counts, provenance checks, and unchanged other caps.
 - [x] Add standalone completed-depth-8/10 read-only small summary with bounded input and no traversal launch path.
+- [x] Disable deep-run entry points; add deterministic traversal-work exhaustion and sampled owned-process timeout/memory safeguards with tests.
+- [x] Add read-only baseline page aliases for missing terminal evidence and unavailable-handler counts.

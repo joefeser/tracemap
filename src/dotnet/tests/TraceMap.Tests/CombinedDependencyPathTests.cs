@@ -53,6 +53,18 @@ public sealed class CombinedDependencyPathTests
         var cycle = await CombinedDependencyPathReporter.WriteAsync(options with { IndexPath = cycleCombined });
         Assert.Equal(64, cycle.Report.Paths.Count);
         Assert.Contains(cycle.Report.Gaps, gap => gap.Reason == "cycle" && gap.GapKind == "TruncatedByLimit");
+        var workOptions = options with { MaxTraversalWork = 20 };
+        var workBounded = await CombinedDependencyPathReporter.WriteAsync(workOptions);
+        Assert.Contains(workBounded.Report.Gaps, gap => gap.Reason == "work" && gap.GapKind == "TruncatedByLimit");
+        Assert.True(workBounded.Report.Paths.Count < 64);
+        var workAgain = await CombinedDependencyPathReporter.WriteAsync(workOptions);
+        Assert.Equal(JsonSerializer.Serialize(workBounded.Report), JsonSerializer.Serialize(workAgain.Report));
+        var noTerminalIndex = Path.Combine(temp.Path, "no-terminal.sqlite");
+        var noTerminalCombined = Path.Combine(temp.Path, "no-terminal-combined.sqlite");
+        SqliteIndexWriter.Write(noTerminalIndex, manifest, facts.Where(fact => fact.FactType == FactTypes.CallEdge).ToArray());
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([noTerminalIndex], noTerminalCombined, ["server"]));
+        var noTerminal = await CombinedDependencyPathReporter.WriteAsync(workOptions with { IndexPath = noTerminalCombined });
+        Assert.Contains(noTerminal.Report.Gaps, gap => gap.Reason == "work" && gap.GapKind == "TruncatedByLimit");
     }
 
     [Fact]

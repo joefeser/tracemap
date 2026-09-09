@@ -2,8 +2,7 @@
 param([string[]]$ReportPaths = @())
 $ErrorActionPreference = 'Stop'
 if ($ReportPaths.Count -eq 0) {
-    & (Join-Path $PSScriptRoot 'Run-FocusedWebFormsPageList.ps1') -CompareDepths
-    return
+    throw 'Deeper comparison runs are disabled. Use Summarize-CompletedWebFormsDepths.ps1 to read completed reports.'
 }
 if ($ReportPaths.Count -ne 3) { throw 'Expected the depth 8, 10, and 12 reports in that order.' }
 
@@ -53,10 +52,10 @@ for ($i = 0; $i -lt 3; $i++) {
         }
         Write-Host "depthPage=$depth|alias=$alias|distinctTerminals=$($pageKeys.Count)"
     }
-    foreach ($reason in @('cycle', 'depth', 'frontier', 'path', 'unavailable')) {
+    foreach ($reason in @('cycle', 'depth', 'frontier', 'path', 'work', 'unavailable')) {
         $count = @($packet.gaps | Where-Object {
             $_.classification -eq 'TruncatedByLimit' -and
-            $(if ($_.truncationReason -cin @('cycle', 'depth', 'frontier', 'path')) { $_.truncationReason } else { 'unavailable' }) -eq $reason
+            $(if ($_.truncationReason -cin @('cycle', 'depth', 'frontier', 'path', 'work')) { $_.truncationReason } else { 'unavailable' }) -eq $reason
         }).Count
         $overview.Add("depthGap=$depth|reason=$reason|count=$count")
     }

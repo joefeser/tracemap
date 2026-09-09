@@ -504,3 +504,26 @@ safety; deeper traversal must remain paused pending that separate change.
 Validation: PowerShell synthetic fixture verifies auto-discovery, duplicate terminal
 identity handling, gains, null handlers, unknown reasons, private identity omission
 and mismatched provenance rejection. No .NET changes; full .NET suite not rerun.
+## Resource safety and targeted baseline triage
+
+Depth 8/10 read-only comparison confirmed 153/161 distinct terminal evidence tuples,
+29 pages with terminals in both, 8 gained terminal tuples and none lost. Unavailable
+handlers remain 41 chains; resolved without terminal remains 59. No further deeper
+run is justified. Automatic comparison and wrapper depth >8 now fail closed.
+
+Implemented Search work budget (100,000 state/edge operations per invocation),
+typed work truncation, and preservation of terminal-free search gaps. Pending roots
+are marked truncated. Wrapper directly supervises the built report DLL rather than
+a dotnet-run parent: 300-second timeout, sampled 4-GiB working/private memory,
+2-GiB managed-heap limit, kill owned tree on failure/cancel. These limits do not
+prove whole-process-tree memory containment; build child memory is not aggregated.
+No private 50-GiB workload reproduced here. Windows watchdog validation remains
+pending; no user rerun requested. Only the read-only -Details handoff is recommended.
+
+Synthetic work tests cover bounded terminal-free/reconvergent/cyclic paths and
+deterministic exhaustion; process tests cover success, nonzero exit, timeout and
+sampled memory termination. Read-only tests cover targeted alias handler counts.
+Final validation: full .NET solution 1765/1765; focused packet/traversal 17/17;
+all three PowerShell regression scripts passed. Formatting verification, PowerShell
+parsing, private-path guard and diff check passed. Existing CS8602 warning at
+PropertyMappingTests.cs:560 remains unchanged.

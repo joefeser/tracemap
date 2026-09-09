@@ -10,6 +10,7 @@ $Forms = @'
 # END EDIT BLOCK.
 
 $ErrorActionPreference = 'Stop'
+if ($CompareDepths) { throw 'Deeper comparison runs are disabled. Use Summarize-CompletedWebFormsDepths.ps1.' }
 $pagePaths = @($Forms -split '\r?\n' | ForEach-Object { $_.Trim() } | Where-Object {
     $_ -and -not $_.StartsWith('#')
 })
@@ -34,22 +35,10 @@ $runner = Join-Path $PSScriptRoot 'Invoke-FocusedWebFormsPageListReport.ps1'
 
 try {
     [System.IO.File]::WriteAllLines($temporaryList, $pagePaths, [System.Text.UTF8Encoding]::new($false))
-    if ($CompareDepths) {
-        $reports = @()
-        $comparisonDirectory = Join-Path $OutputRoot "webforms-depth-comparison-$timestamp-$([Guid]::NewGuid().ToString('N'))"
-        foreach ($depth in @(8, 10, 12)) {
-            $depthOutput = Join-Path $comparisonDirectory "depth-$depth"
-            & $runner -IndexPath $IndexPath -PageListPath $temporaryList -OutputDirectory $depthOutput -MaxDepth $depth
-            $reports += Join-Path $depthOutput 'webforms-modernization.json'
-        }
-        & (Join-Path $PSScriptRoot 'Compare-FocusedWebFormsDepth.ps1') -ReportPaths $reports
-    }
-    else {
-        & $runner `
-            -IndexPath $IndexPath `
-            -PageListPath $temporaryList `
-            -OutputDirectory $outputDirectory
-    }
+    & $runner `
+        -IndexPath $IndexPath `
+        -PageListPath $temporaryList `
+        -OutputDirectory $outputDirectory
 }
 finally {
     Remove-Item -LiteralPath $temporaryList -Force -ErrorAction SilentlyContinue

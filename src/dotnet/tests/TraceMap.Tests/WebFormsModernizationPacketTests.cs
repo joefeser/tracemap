@@ -233,7 +233,7 @@ public sealed class WebFormsModernizationPacketTests
         var bounded = await WebFormsModernizationPacketReporter.WriteAsync(new(index, Path.Combine(temp.Path, "bounded"), MaxDepth: 3));
         Assert.True(bounded.Packet.Summary.Truncated);
         Assert.Contains(bounded.Packet.Gaps, gap => gap.Classification == "TruncatedByLimit" && gap.TruncationReason == "depth");
-        Assert.All(bounded.Packet.Gaps, gap => Assert.True(gap.TruncationReason is null or "depth" or "frontier" or "path" or "cycle"));
+        Assert.All(bounded.Packet.Gaps, gap => Assert.True(gap.TruncationReason is null or "depth" or "frontier" or "path" or "cycle" or "work"));
         Assert.Contains("\"truncationReason\": \"depth\"", await File.ReadAllTextAsync(bounded.JsonPath));
     }
 
