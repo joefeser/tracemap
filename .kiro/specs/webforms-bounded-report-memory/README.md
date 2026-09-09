@@ -1,5 +1,19 @@
 # Restricted Web Forms run: diagnostic follow-up
 
+## Next work-machine command: retained page triage
+
+After `git pull`, run ` .\scripts\Triage-CompletedWebFormsPages.ps1` from the repository root.
+This reads the newest completed depth-8 report under `C:\work\tracemap-output`;
+it does not build, scan, launch a process, or traverse the graph. Set `-ReportPath`
+explicitly if the newest comparison folder is not the intended baseline.
+It prints small alias-only chain buckets for pages without retained terminals,
+plus exact binding-support gap links for page-004 and page-026. Missing links
+do not establish a cause. Truncated packets remain explicitly partial, and
+no retained events does not establish that the application has no events.
+Inputs are bounded to 128 MiB, 1,000 selections, 10,000 chains/gaps each, and
+200,000 inspected gap-support entries. Unknown gap/rule strings are withheld.
+Do not rerun the depth comparison for this step.
+
 ## Current fix: selected-page graph admission
 
 The 43-page field report matched every requested page, but its 191 event chains

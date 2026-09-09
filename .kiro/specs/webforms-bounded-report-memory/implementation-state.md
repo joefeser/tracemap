@@ -1,5 +1,18 @@
 # Implementation state
 
+## Retained page triage (2026-09-09)
+
+On `codex/restricted-webforms-run-evidence-20260902`, added
+`Triage-CompletedWebFormsPages.ps1` after the user confirmed the completed run
+used ff4059. Reads existing depth-8 only; no execution or traversal path.
+Separates terminal, missing handler, truncated observation, downstream without
+terminal, zero downstream edge, and unavailable observation buckets. Includes
+no-retained-event pages. Focus aliases page-004/page-026 link gaps by exact
+binding supporting ID only, without treating links as proof of cause.
+Synthetic PowerShell tests passed for discovery, absent/null fields, buckets,
+exact links, unrelated-gap exclusion, and private-string suppression.
+No .NET code changed in this follow-up; Windows field execution remains pending.
+
 ## Selected-handler graph admission follow-up (2026-09-08)
 
 The 43-page work-machine report matched all requested forms but returned 191
