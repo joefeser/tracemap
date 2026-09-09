@@ -139,6 +139,7 @@ public sealed record WebFormsModernizationTraversalObservation(
     public IReadOnlyList<string> LeafEvidenceTiers { get; init; } = [];
     public IReadOnlyList<string> LeafReconciliationStates { get; init; } = [];
     public IReadOnlyList<string> LeafCallEvidenceStates { get; init; } = [];
+    public IReadOnlyList<string> LeafSourceAvailabilityStates { get; init; } = [];
     public IReadOnlyList<string> FrontierNodeKinds { get; init; } = [];
     public IReadOnlyList<string> FrontierSurfaceKinds { get; init; } = [];
     public IReadOnlyList<string> FrontierRuleIds { get; init; } = [];
@@ -445,6 +446,7 @@ public static class WebFormsModernizationPacketReporter
             LeafEvidenceTiers = observation.LeafEvidenceTiers,
             LeafReconciliationStates = observation.LeafReconciliationStates,
             LeafCallEvidenceStates = observation.LeafCallEvidenceStates,
+            LeafSourceAvailabilityStates = observation.LeafSourceAvailabilityStates,
             FrontierNodeKinds = observation.FrontierNodeKinds,
             FrontierSurfaceKinds = observation.FrontierSurfaceKinds,
             FrontierRuleIds = observation.FrontierRuleIds,
@@ -1243,7 +1245,7 @@ public static class WebFormsModernizationPacketReporter
                 : "none retained";
             var traversal = chain.TraversalObservation is null
                 ? "traversal observation unavailable"
-                : $"traversal `{chain.TraversalObservation.StopState}` (reached nodes {chain.TraversalObservation.ReachedNodeCount}, traversed edges {chain.TraversalObservation.TraversedEdgeCount}, downstream edges {chain.TraversalObservation.DownstreamEdgeCount}, truncation reasons {truncationReasons}); call evidence `{chain.TraversalObservation.CallEvidenceState}` (handler-owned call edges {chain.TraversalObservation.HandlerOwnedCallEvidenceCount}); terminal-free shapes (leaf node kinds {MarkdownValues(chain.TraversalObservation.LeafNodeKinds)}, leaf surface kinds {MarkdownValues(chain.TraversalObservation.LeafSurfaceKinds)}, leaf rules {MarkdownValues(chain.TraversalObservation.LeafRuleIds)}, leaf tiers {MarkdownValues(chain.TraversalObservation.LeafEvidenceTiers)}, leaf reconciliation states {MarkdownValues(chain.TraversalObservation.LeafReconciliationStates)}, leaf call evidence states {MarkdownValues(chain.TraversalObservation.LeafCallEvidenceStates)}, frontier node kinds {MarkdownValues(chain.TraversalObservation.FrontierNodeKinds)}, frontier surface kinds {MarkdownValues(chain.TraversalObservation.FrontierSurfaceKinds)}, frontier rules {MarkdownValues(chain.TraversalObservation.FrontierRuleIds)}, traversed edge kinds {MarkdownValues(chain.TraversalObservation.TraversedEdgeKinds)}, traversed rules {MarkdownValues(chain.TraversalObservation.TraversedRuleIds)}, shape sets truncated `{chain.TraversalObservation.DiagnosticShapesTruncated}`)";
+                : $"traversal `{chain.TraversalObservation.StopState}` (reached nodes {chain.TraversalObservation.ReachedNodeCount}, traversed edges {chain.TraversalObservation.TraversedEdgeCount}, downstream edges {chain.TraversalObservation.DownstreamEdgeCount}, truncation reasons {truncationReasons}); call evidence `{chain.TraversalObservation.CallEvidenceState}` (handler-owned call edges {chain.TraversalObservation.HandlerOwnedCallEvidenceCount}); terminal-free shapes (leaf node kinds {MarkdownValues(chain.TraversalObservation.LeafNodeKinds)}, leaf surface kinds {MarkdownValues(chain.TraversalObservation.LeafSurfaceKinds)}, leaf rules {MarkdownValues(chain.TraversalObservation.LeafRuleIds)}, leaf tiers {MarkdownValues(chain.TraversalObservation.LeafEvidenceTiers)}, leaf reconciliation states {MarkdownValues(chain.TraversalObservation.LeafReconciliationStates)}, leaf call evidence states {MarkdownValues(chain.TraversalObservation.LeafCallEvidenceStates)}, leaf source availability states {MarkdownValues(chain.TraversalObservation.LeafSourceAvailabilityStates)}, frontier node kinds {MarkdownValues(chain.TraversalObservation.FrontierNodeKinds)}, frontier surface kinds {MarkdownValues(chain.TraversalObservation.FrontierSurfaceKinds)}, frontier rules {MarkdownValues(chain.TraversalObservation.FrontierRuleIds)}, traversed edge kinds {MarkdownValues(chain.TraversalObservation.TraversedEdgeKinds)}, traversed rules {MarkdownValues(chain.TraversalObservation.TraversedRuleIds)}, shape sets truncated `{chain.TraversalObservation.DiagnosticShapesTruncated}`)";
             b.AppendLine($"- `{chain.ChainId}` — `{chain.EventSourceId}` -> `{chain.HandlerId ?? "handler-unavailable"}` -> `{chain.TerminalKind ?? "terminal-unavailable"}`; classification `{chain.Classification}`; {traversal}; supporting facts {string.Join(", ", chain.SupportingFactIds.Select(id => $"`{id}`"))}.");
         }
         b.AppendLine().AppendLine("## Downstream boundaries").AppendLine();

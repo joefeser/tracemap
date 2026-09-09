@@ -42,3 +42,4 @@
 - [x] Retain bounded privacy-safe leaf/frontier and downstream-edge shapes for terminal-free handler traversal triage.
 - [x] Classify terminal-free leaves by evidence tier and closed reconciliation state without widening syntax-only joins.
 - [x] Classify exact canonical leaf call evidence without publishing identities or widening reconciliation.
+- [x] Classify exact canonical leaf declaration and source-owned body availability without name guessing.

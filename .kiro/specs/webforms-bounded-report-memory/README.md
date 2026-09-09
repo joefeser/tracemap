@@ -706,3 +706,14 @@ IDs only: it does not expose symbols or paths, perform simple-name matching, or
 widen reconciliation. Run `Run-FocusedWebFormsPageList.ps1` once against the
 existing index, then run `Summarize-FocusedWebFormsActionableGaps.ps1`; the latter
 prints `bucketleafCallEvidence-*` counts without rebuilding or rescanning.
+
+`leafSourceAvailabilityStates` then distinguishes exact method declaration and
+source-owned body evidence, either one alone, or neither. The bounded reader
+retains a `MethodDeclared` witness only when its target symbol exactly equals a
+selected canonical symbol; it never joins a simple declaration name to a
+qualified method. Body availability is supported only by an exact source symbol
+on a closed operation-fact family. Consequently,
+`no-exact-declaration-or-body-evidence-retained` means the retained index cannot distinguish an external,
+generated, excluded, empty, or otherwise unavailable method body. It is a
+coverage result, not proof that source or behavior is absent. The actionable-gap
+summary prints this as `bucketleafSourceAvailability-*` without identities.

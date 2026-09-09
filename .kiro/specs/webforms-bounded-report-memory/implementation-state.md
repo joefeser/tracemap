@@ -1,5 +1,24 @@
 # Implementation state
 
+## Exact canonical leaf source availability (2026-09-09)
+
+The field call-evidence diagnostic classified all seven terminal-coverage-review
+chains as having no exact source-owned call-shaped evidence; it found no missing
+graph attachment, missing paired call fact, cycle filter, or dispatch filter.
+Added a second closed leaf diagnostic that independently records exact method
+declaration evidence and exact source-owned body-operation evidence. The selected
+bounded reader admits `MethodDeclared` rows only by exact target-symbol equality
+and retains those witnesses even when the symbol node already exists. Simple-name
+syntax declarations are not reconciled to qualified canonical methods. The four
+canonical states distinguish declaration+body, declaration only, body only, and
+neither; noncanonical leaves are not applicable. The last state deliberately
+cannot distinguish external, generated, excluded, empty, or unavailable bodies.
+No identities, paths, or source are published and no traversal/join changed.
+
+Validation: focused packet/path tests 68/68, full .NET solution 1766/1766, and
+the synthetic PowerShell summary test passed. Targeted formatting verification,
+private-path guard, and diff check passed before commit.
+
 ## Exact canonical leaf call-evidence classification (2026-09-09)
 
 Field leaf/reconciliation evidence showed seven terminal-free chains containing
