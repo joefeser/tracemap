@@ -57,6 +57,16 @@ export function extractQuerySemantics(
     }
     return false;
   }
+  const redactedStringTransforms = new Set(["trim", "trimStart", "trimEnd", "toUpperCase", "toLowerCase"]);
+  function admittedRedactedStringTransform(input: ts.Expression, depth: number): boolean {
+    const node = unwrap(input);
+    if (!admit(node, depth)) return false;
+    if (!ts.isCallExpression(node) || node.arguments.length !== 0) return false;
+    const callee = unwrap(node.expression);
+    if (!ts.isPropertyAccessExpression(callee) || !redactedStringTransforms.has(callee.name.text)) return false;
+    const receiver = unwrap(callee.expression);
+    return admittedReference(receiver, depth + 1) || admittedRedactedStringTransform(receiver, depth + 1);
+  }
   function operand(input: ts.Expression, depth = 0): Record<string, unknown> {
     const node = unwrap(input);
     if (!admit(node, depth)) return { kind: "unknown" };
@@ -71,6 +81,9 @@ export function extractQuerySemantics(
     if ((ts.isIdentifier(node) || node.kind === ts.SyntaxKind.ThisKeyword
       || ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node))
       && admittedReference(node, depth + 1)) {
+      return { kind: "reference", span: span(node) };
+    }
+    if (admittedRedactedStringTransform(node, depth + 1)) {
       return { kind: "reference", span: span(node) };
     }
     if (ts.isArrayLiteralExpression(node)) {

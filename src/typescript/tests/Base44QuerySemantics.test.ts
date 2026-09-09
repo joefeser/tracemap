@@ -53,6 +53,18 @@ describe("normalized Base44 query syntax", () => {
     expect(JSON.stringify(result)).not.toContain("user.id");
     expect(JSON.stringify(result)).not.toContain("ids[index]");
   });
+  it("records bounded zero-argument string normalization chains as redacted deferred wire values", () => {
+    const result = extract("filter", "{code: code.trim().toUpperCase(), alternate: user.email.toLowerCase()}");
+    expect(result).toMatchObject({
+      schemaVersion: "88mph.entity-query.v2",
+      completeness: "complete",
+      gaps: [],
+    });
+    expect((result.arguments[0].value as any).entries.map((entry: any) => entry.operand.kind))
+      .toEqual(["reference", "reference"]);
+    expect(JSON.stringify(result)).not.toContain("toUpperCase");
+    expect(JSON.stringify(result)).not.toContain("toLowerCase");
+  });
   it("records dynamic pagination controls as redacted deferred wire values", () => {
     const result = extract("filter", "{}, '-created_date', pageSize, offset");
     expect(result).toMatchObject({
