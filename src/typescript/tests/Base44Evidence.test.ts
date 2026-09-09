@@ -2089,6 +2089,73 @@ export async function submit(message, specialContext, getPayload) {
     }
   });
 
+  it("resolves guarded finite computed payload fields from closed source maps", async () => {
+    const { packet } = await mutationHookFixture(`
+export async function submit(req, runtimeKey, value) {
+  const { voice_choice } = await req.json();
+  const VOICE_MAP = {
+    male: "onyx",
+    female: "nova"
+  };
+  const FIELD_MAP = {
+    male: "narration_url_male",
+    female: "narration_url_female"
+  };
+  if (!voice_choice || !VOICE_MAP[voice_choice]) return;
+  const field = FIELD_MAP[voice_choice];
+  await base44.entities.Story.update("story-id", { [field]: value });
+
+  const UNGUARDED_FIELD_MAP = {
+    known: "safe_field"
+  };
+  const unguarded = UNGUARDED_FIELD_MAP[runtimeKey];
+  await base44.entities.UnguardedStory.update("story-id", { [unguarded]: value });
+
+  const MUTATED_FIELD_MAP = {
+    known: "safe_field"
+  };
+  mutate(MUTATED_FIELD_MAP);
+  if (!runtimeKey || !MUTATED_FIELD_MAP[runtimeKey]) return;
+  const mutated = MUTATED_FIELD_MAP[runtimeKey];
+  await base44.entities.MutatedStory.update("story-id", { [mutated]: value });
+}
+`);
+    const story = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "Story")!;
+    expect(story).toMatchObject({
+      evidenceTier: "Tier3SyntaxOrTextual",
+      properties: expect.objectContaining({
+        completeness: "complete",
+        outerKind: "object",
+        referenceAccounting: "source-bounded",
+        runtimeObligationsJson: "[]",
+        analysisGapsJson: "[]",
+        shapeVersion: "3"
+      })
+    });
+    expect(JSON.parse(story.properties.fieldsJson)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "narration_url_female", presence: "conditional", origin: "computed:binding:field" }),
+      expect.objectContaining({ name: "narration_url_male", presence: "conditional", origin: "computed:binding:field" })
+    ]));
+
+    for (const targetSymbol of ["UnguardedStory", "MutatedStory"]) {
+      const unsafePayload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+        && fact.targetSymbol === targetSymbol)!;
+      expect(unsafePayload).toMatchObject({
+        evidenceTier: "Tier4Unknown",
+        properties: expect.objectContaining({
+          completeness: "partial",
+          referenceAccounting: "unresolved"
+        })
+      });
+      expect(JSON.parse(unsafePayload.properties.fieldsJson)).toContainEqual(expect.objectContaining({
+        name: "<dynamic>",
+        presence: "dynamic-computed"
+      }));
+      expect(JSON.parse(unsafePayload.properties.analysisGapsJson)).toContain("dynamic-computed-property");
+    }
+  });
+
   it("follows a finite mutation-array push and map-element path", async () => {
     const { packet } = await mutationHookFixture(`
 export function Screen(enabled) {

@@ -1734,6 +1734,26 @@ function resolveFiniteStringExpression(expression: ts.Expression, context: Shape
     const right = resolveFiniteStringExpression(unwrapped.whenFalse, context, new Set(visited));
     return left.length > 0 && right.length > 0 ? unique([...left, ...right]) : [];
   }
+  if (ts.isElementAccessExpression(unwrapped) && unwrapped.argumentExpression) {
+    const owner = resolveClosedStringPropertyMap(unwrapped.expression, context, new Set(visited));
+    if (!owner) return [];
+    const directKeys = resolveFiniteStringExpression(unwrapped.argumentExpression, context, new Set(visited));
+    const guardedKeys = directKeys.length > 0
+      ? directKeys
+      : ts.isIdentifier(unwrapExpression(unwrapped.argumentExpression))
+        ? finiteDominatingTruthyMapGuardKeys(unwrapExpression(unwrapped.argumentExpression) as ts.Identifier,
+          unwrapped.argumentExpression, context, new Set(visited))
+        : [];
+    if (guardedKeys.length === 0) return [];
+    const selected: string[] = [];
+    for (const key of guardedKeys) {
+      const values = owner.stringValues.get(key);
+      if (!values || values.length === 0) return [];
+      selected.push(...values);
+    }
+    const strings = unique(selected.filter(isSafeFieldName));
+    return strings.length === selected.length ? strings : [];
+  }
   if (!ts.isIdentifier(unwrapped)) return [];
   const declaration = resolveDeclarationAt(unwrapped.text, unwrapped, context);
   if (declaration?.initializer && ts.isIdentifier(declaration.name)) {
@@ -1746,6 +1766,141 @@ function resolveFiniteStringExpression(expression: ts.Expression, context: Shape
   const key = `string-parameter:${parameter.getStart(context.source)}`;
   if (visited.has(key)) return [];
   return finiteParameterArguments(parameter, context, new Set(visited).add(key));
+}
+
+interface ClosedStringPropertyMap {
+  stringValues: Map<string, string[]>;
+  truthyKeys: string[];
+}
+
+function resolveClosedStringPropertyMap(expression: ts.Expression, context: ShapeContext, visited: Set<string>): ClosedStringPropertyMap | null {
+  const unwrapped = unwrapExpression(expression);
+  if (ts.isIdentifier(unwrapped)) {
+    const declaration = resolveDeclarationAt(unwrapped.text, unwrapped, context);
+    if (!declaration?.initializer || !ts.isVariableDeclarationList(declaration.parent)
+      || !declaration.parent.flags || (declaration.parent.flags & ts.NodeFlags.Const) === 0
+      || !closedMapBindingIsReadOnly(unwrapped.text, declaration, context)) return null;
+    const key = `closed-string-map:${declaration.getStart(context.source)}`;
+    if (visited.has(key)) return null;
+    return resolveClosedStringPropertyMap(declaration.initializer, context, new Set(visited).add(key));
+  }
+  if (!ts.isObjectLiteralExpression(unwrapped)) return null;
+  const stringValues = new Map<string, string[]>();
+  const truthyKeys: string[] = [];
+  for (const property of unwrapped.properties) {
+    if (!ts.isPropertyAssignment(property)) return null;
+    const name = staticPropertyName(property.name);
+    if (!name || !isSafeFieldName(name) || stringValues.has(name)) return null;
+    const value = unwrapExpression(property.initializer);
+    if (!ts.isStringLiteralLike(value)) return null;
+    stringValues.set(name, [value.text]);
+    if (value.text.length > 0) truthyKeys.push(name);
+  }
+  return { stringValues, truthyKeys: unique(truthyKeys) };
+}
+
+function closedMapBindingIsReadOnly(bindingName: string, declaration: ts.VariableDeclaration, context: ShapeContext): boolean {
+  let safe = true;
+  const visit = (node: ts.Node): void => {
+    if (!safe || node === declaration) return;
+    if (ts.isIdentifier(node) && node.text === bindingName
+      && resolveDeclarationAt(bindingName, node, context) === declaration
+      && !isReadOnlyMapReference(node)) {
+      safe = false;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(context.source);
+  return safe;
+}
+
+function isReadOnlyMapReference(identifier: ts.Identifier): boolean {
+  const parent = identifier.parent;
+  if ((ts.isElementAccessExpression(parent) || ts.isPropertyAccessExpression(parent)) && parent.expression === identifier) {
+    return !isWriteTarget(parent);
+  }
+  return false;
+}
+
+function isWriteTarget(expression: ts.Expression): boolean {
+  const parent = expression.parent;
+  if (ts.isBinaryExpression(parent) && parent.left === expression && isAssignmentOperator(parent.operatorToken.kind)) return true;
+  if (ts.isDeleteExpression(parent) && parent.expression === expression) return true;
+  if (ts.isPrefixUnaryExpression(parent) && parent.operand === expression
+    && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(parent.operator)) return true;
+  if (ts.isPostfixUnaryExpression(parent) && parent.operand === expression) return true;
+  return false;
+}
+
+function finiteDominatingTruthyMapGuardKeys(identifier: ts.Identifier, useNode: ts.Node, context: ShapeContext, visited: Set<string>): string[] {
+  const binding = resolveDeclarationAt(identifier.text, identifier, context);
+  if (!binding || !ts.isVariableDeclarationList(binding.parent)
+    || (binding.parent.flags & ts.NodeFlags.Const) === 0) return [];
+  const collected: string[] = [];
+  for (const guard of precedingTerminatingIfStatements(useNode)) {
+    const keys = falseBranchTruthyMapKeys(guard.expression, identifier.text, binding, context, new Set(visited));
+    if (keys.length > 0) collected.push(...keys);
+  }
+  return unique(collected);
+}
+
+function precedingTerminatingIfStatements(useNode: ts.Node): ts.IfStatement[] {
+  const result: ts.IfStatement[] = [];
+  let child: ts.Node = useNode;
+  for (let current = useNode.parent; current; child = current, current = current.parent) {
+    if (ts.isBlock(current) || ts.isSourceFile(current)) {
+      const statement = current.statements.find((candidate) => candidate === child || isAncestor(candidate, child));
+      if (statement) {
+        const index = current.statements.indexOf(statement);
+        for (const prior of current.statements.slice(0, index)) {
+          if (ts.isIfStatement(prior) && statementTerminatesExecution(prior.thenStatement)) result.push(prior);
+        }
+      }
+    }
+    if (ts.isFunctionLike(current) || ts.isSourceFile(current)) break;
+  }
+  return result;
+}
+
+function falseBranchTruthyMapKeys(
+  expression: ts.Expression,
+  bindingName: string,
+  binding: ts.VariableDeclaration,
+  context: ShapeContext,
+  visited: Set<string>
+): string[] {
+  const terms = disjunctionTerms(unwrapExpression(expression));
+  const keySets = terms.map((term) => truthyMapKeysFromNegatedTerm(term, bindingName, binding, context, new Set(visited)))
+    .filter((keys): keys is string[] => Boolean(keys));
+  if (keySets.length === 0) return [];
+  return keySets.reduce((left, right) => left.filter((key) => right.includes(key)));
+}
+
+function disjunctionTerms(expression: ts.Expression): ts.Expression[] {
+  const unwrapped = unwrapExpression(expression);
+  if (ts.isBinaryExpression(unwrapped) && unwrapped.operatorToken.kind === ts.SyntaxKind.BarBarToken) {
+    return [...disjunctionTerms(unwrapped.left), ...disjunctionTerms(unwrapped.right)];
+  }
+  return [unwrapped];
+}
+
+function truthyMapKeysFromNegatedTerm(
+  expression: ts.Expression,
+  bindingName: string,
+  binding: ts.VariableDeclaration,
+  context: ShapeContext,
+  visited: Set<string>
+): string[] | null {
+  const unwrapped = unwrapExpression(expression);
+  if (!ts.isPrefixUnaryExpression(unwrapped) || unwrapped.operator !== ts.SyntaxKind.ExclamationToken) return null;
+  const operand = unwrapExpression(unwrapped.operand);
+  if (!ts.isElementAccessExpression(operand) || !operand.argumentExpression) return null;
+  const argument = unwrapExpression(operand.argumentExpression);
+  if (!ts.isIdentifier(argument) || argument.text !== bindingName
+    || resolveDeclarationAt(bindingName, argument, context) !== binding) return null;
+  const owner = resolveClosedStringPropertyMap(operand.expression, context, new Set(visited));
+  return owner && owner.truthyKeys.length > 0 ? owner.truthyKeys : null;
 }
 
 function resolvePlainIdentifierParameterAt(bindingName: string, useNode: ts.Node): ts.ParameterDeclaration | null {
