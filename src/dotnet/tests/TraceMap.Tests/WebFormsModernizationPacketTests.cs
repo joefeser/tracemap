@@ -160,6 +160,10 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Equal("observed-downstream-without-supported-terminal", downstream.TraversalObservation?.StopState);
         Assert.True(downstream.TraversalObservation?.DownstreamEdgeCount > 0);
         Assert.Equal("joined-downstream-edge-observed", downstream.TraversalObservation?.CallEvidenceState);
+        Assert.Contains("Symbol", downstream.TraversalObservation?.LeafNodeKinds ?? []);
+        Assert.Contains("calls", downstream.TraversalObservation?.TraversedEdgeKinds ?? []);
+        Assert.Contains(RuleIds.CSharpSemanticCallGraph, downstream.TraversalObservation?.TraversedRuleIds ?? []);
+        Assert.False(downstream.TraversalObservation?.DiagnosticShapesTruncated);
         var terminal = packet.EventChains.Single(chain => chain.HandlerFactId == handlers[3].FactId);
         Assert.Equal("supported-terminal-reached", terminal.TraversalObservation?.StopState);
         Assert.True(terminal.TraversalObservation?.TerminalPathCount > 0);
@@ -238,6 +242,7 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Contains(bounded.Packet.EventChains, chain => chain.TraversalObservation?.TruncationReasons.Contains("depth", StringComparer.Ordinal) == true);
         Assert.All(bounded.Packet.EventChains.Where(chain => chain.TraversalObservation?.Truncated == true),
             chain => Assert.NotEmpty(chain.TraversalObservation!.TruncationReasons));
+        Assert.Contains(bounded.Packet.EventChains, chain => chain.TraversalObservation?.FrontierNodeKinds.Count > 0);
         Assert.All(bounded.Packet.EventChains.SelectMany(chain => chain.TraversalObservation?.TruncationReasons ?? []),
             reason => Assert.Contains(reason, new[] { "depth", "frontier", "path", "cycle", "work" }));
         Assert.All(bounded.Packet.Gaps, gap => Assert.True(gap.TruncationReason is null or "depth" or "frontier" or "path" or "cycle" or "work"));

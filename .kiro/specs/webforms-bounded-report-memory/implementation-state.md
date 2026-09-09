@@ -632,3 +632,24 @@ coverage, and linked-gap metadata for handler resolution, missing handler-owned
 call evidence, and terminal-coverage review. It keeps traversal-truncated chains
 separate and deferred. Synthetic validation covers all buckets, linked gaps,
 priority ordering, and private identity non-disclosure.
+
+## Terminal-free leaf and frontier diagnostics
+
+Field actionable triage reduced the highest-value unknown set to seven chains on
+three page aliases with joined downstream edges but no supported terminal. Existing
+packet observations retained only counts and therefore could not identify which
+closed evidence shapes exhausted or bounded those traversals.
+
+Per-root traversal observations now retain deterministic, sorted sets of exhausted
+leaf node kinds, leaf surface kinds, leaf rule IDs, bounded frontier node/surface
+kinds and rule IDs, plus traversed downstream edge kinds and rule IDs. Each set is
+capped at 32 distinct values with an explicit `diagnosticShapesTruncated` marker.
+Synthetic root-selection edges are excluded from downstream shape metadata. The
+packet and Markdown carry only these public aggregate classifications; identities,
+names, paths, source text, SQL, and terminal targets are not added. The actionable
+summary prints the new fields by existing alias-only bucket.
+
+Validation: focused packet/traversal tests 68/68; full .NET solution 1766/1766;
+PowerShell actionable-summary regression, scoped formatting, private-path guard,
+and diff check passed. The pre-existing nullable warning in
+`PropertyMappingTests.cs:560` remains unchanged.

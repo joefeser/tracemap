@@ -674,3 +674,14 @@ Older packets report unavailable; no reason is inferred from IDs or private text
 After pulling this change, run `./scripts/Run-FocusedWebFormsPageList.ps1` once
 to regenerate the report from the existing index, then run the triage script.
 No source rescan is required. Cycle means revisit protection, not a proven runtime loop.
+
+Newly generated packets retain bounded, sorted traversal-shape sets for each
+handler root: exhausted leaf node/surface kinds and rule IDs, bounded frontier
+node/surface kinds and rule IDs, and traversed downstream edge kinds and rule IDs.
+Each set is capped at 32 distinct closed values and the packet explicitly marks
+shape-set truncation. No node identity, display name, source symbol, file path,
+SQL, or terminal target is added by these diagnostics. Pull and rerun
+`Run-FocusedWebFormsPageList.ps1` once against the existing index, then rerun
+`Summarize-FocusedWebFormsActionableGaps.ps1`. The second command prints the new
+aggregate fields and does not rebuild or rescan. Leaf and frontier observations
+remain bounded static evidence; they do not prove runtime execution or absence.
