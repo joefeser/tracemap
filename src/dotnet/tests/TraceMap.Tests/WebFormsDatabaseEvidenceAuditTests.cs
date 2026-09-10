@@ -150,6 +150,9 @@ public sealed class WebFormsDatabaseEvidenceAuditTests
             Assert.Contains("inspectionFillNamedHops=1", shapeDiagnostics);
             Assert.Contains("inspectionRecognizedFrameworkFillHops=0", shapeDiagnostics);
             Assert.DoesNotContain("Private", string.Join('\n', shapeDiagnostics));
+            File.WriteAllText(inspection, File.ReadAllText(inspection).Replace("Private.Adapter.Fill(System.Data.DataSet)", "System.Data.Common.DbDataAdapter.Fill(", StringComparison.Ordinal));
+            var malformed = Assert.Throws<InvalidDataException>(() => WebFormsDatabaseEvidenceAudit.Run(db, inspection));
+            Assert.Equal("RawAuditNoRecognizedFillHop", malformed.Message);
         }
         finally { Directory.Delete(directory, true); }
     }

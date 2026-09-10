@@ -46,7 +46,9 @@ public static class BuildEnvironmentDiagnosticExtractor
         "ProjectLoadFailed",
         "SolutionLoadFailed",
         "MSBuildRegistrationFailed",
-        "RestoreFailed"
+        "RestoreFailed",
+        "ComReferenceResolutionSkipped",
+        "ComReferenceResolutionFallbackUnavailable"
     };
 
     private static readonly Dictionary<string, string> UnsupportedProjectGuids = new(StringComparer.OrdinalIgnoreCase)

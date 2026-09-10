@@ -204,12 +204,13 @@ it does not prove backend absence. Manual review status remains independent.
 To dogfood one private source review after creating the batch inspection:
 
 ```powershell
-.\scripts\New-FocusedWebFormsCodePathReview.ps1
+.\scripts\New-FocusedWebFormsCodePathReview.ps1 -IncludeRawSource
 ```
 
 The command prompts for the private source repository root and defaults to
 `case-001`; `-CaseId case-004` selects another case. Git is not required. The
-report reads current working-tree files, says explicitly that equality with the
+Raw source is excluded by default. The explicit `-IncludeRawSource` switch is
+required for source-bearing private reports. The report reads current working-tree files, says explicitly that equality with the
 inspection commit is not established, and opens a private HTML file containing
 at most 64 evidence excerpts of at most 100 lines each. Exact call locations come from
 retained evidence. A helper definition is added only when its method name is unique
@@ -226,7 +227,7 @@ After the one-case layout is verified, generate a review set for every case in
 the newest retained batch inspection:
 
 ```powershell
-.\scripts\New-FocusedWebFormsCodePathReviewSet.ps1 -TriggerContextLines 50
+.\scripts\New-FocusedWebFormsCodePathReviewSet.ps1 -TriggerContextLines 50 -IncludeRawSource
 ```
 
 The command builds the helper once, creates one timestamped subfolder under
@@ -292,7 +293,8 @@ of retained handler-owned call evidence. These fields can separate incomplete
 traversal from an unjoined call edge or no retained call evidence without
 exposing symbols or claiming a runtime cause.
 Packets produced after the per-root reason update additionally carry
-`truncationReasons` on each traversal observation. The triage prints these as
+`truncationReasons` on each traversal observation. The singular packet gap field
+is `truncationReason`. The triage prints these as
 `directTruncationReasons`; older retained packets report `not-retained` and stay
 readable. A reason identifies the bounded static-search limit observed for that
 chain root. It does not identify a runtime condition or prove that a single
@@ -931,7 +933,7 @@ It reads the existing latest page-list JSON; it does not rebuild or rescan.
 Truncated packets now produce partial diagnostic output instead of throwing.
 All counts describe retained evidence only and cannot establish absence or completeness.
 Newly generated packets retain an optional `truncationReason` for
-`TruncatedByLimit`: depth, frontier, path, or cycle. Scripts print reason counts.
+`TruncatedByLimit`: depth, frontier, path, cycle, or work. Scripts print reason counts.
 Older packets report unavailable; no reason is inferred from IDs or private text.
 After pulling this change, run `./scripts/Run-FocusedWebFormsPageList.ps1` once
 to regenerate the report from the existing index, then run the triage script.

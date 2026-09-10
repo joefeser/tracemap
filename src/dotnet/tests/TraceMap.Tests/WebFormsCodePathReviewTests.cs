@@ -11,7 +11,7 @@ public sealed class WebFormsCodePathReviewTests
         WithFixture((directory, sourceRoot, inspection) =>
         {
             var output = Path.Combine(directory, "review.private.html");
-            var lines = WebFormsCodePathReview.Run(inspection, sourceRoot, "case-001", output);
+            var lines = WebFormsCodePathReview.Run(inspection, sourceRoot, "case-001", output, includeRawSource: true);
             Assert.Contains("codePathReview=created", lines);
             Assert.Contains(lines, line => line == "case=case-001|sourceMode=working-tree|triggerContextLines=12|excerpts=4|definitionCandidates=1|anonymousNodes=2|anonymousEdges=1|review=unreviewed");
             Assert.DoesNotContain("Private", string.Join('\n', lines));
@@ -55,15 +55,44 @@ public sealed class WebFormsCodePathReviewTests
             Assert.DoesNotContain("Private", shareableJson);
             Assert.DoesNotContain("UiReset", shareableJson);
             Assert.DoesNotContain("source/Page", shareableJson);
-            Assert.Throws<IOException>(() => WebFormsCodePathReview.Run(inspection, sourceRoot, "case-001", output));
+            Assert.Throws<IOException>(() => WebFormsCodePathReview.Run(inspection, sourceRoot, "case-001", output, includeRawSource: true));
 
             var indexedOutput = Path.Combine(directory, "indexed.private.html");
-            WebFormsCodePathReview.Run(inspection, sourceRoot, "case-001", indexedOutput, returnHref: "index.html");
+            WebFormsCodePathReview.Run(inspection, sourceRoot, "case-001", indexedOutput, returnHref: "index.html", includeRawSource: true);
             var indexedReport = File.ReadAllText(indexedOutput);
             Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(indexedReport, "← Return to review index").Count);
             Assert.Contains("href=\"index.html\"", indexedReport);
             Assert.Throws<InvalidDataException>(() => WebFormsCodePathReview.Run(inspection, sourceRoot, "case-001",
                 Path.Combine(directory, "unsafe.private.html"), returnHref: "../private.html"));
+        });
+    }
+
+    [Fact]
+    public void WorkingTreeReviewOmitsRawSourceByDefault()
+    {
+        WithFixture((directory, sourceRoot, inspection) =>
+        {
+            var output = Path.Combine(directory, "review.private.html");
+            WebFormsCodePathReview.Run(inspection, sourceRoot, "case-001", output);
+            var report = File.ReadAllText(output);
+            Assert.DoesNotContain("UiReset();", report, StringComparison.Ordinal);
+            Assert.Contains("Raw source excerpts were not included", report, StringComparison.Ordinal);
+        });
+    }
+
+    [Fact]
+    public void WorkingTreeReviewRejectsSymlinkEscape()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        WithFixture((directory, sourceRoot, inspection) =>
+        {
+            var outside = Path.Combine(directory, "outside");
+            Directory.CreateDirectory(outside);
+            File.Copy(Path.Combine(sourceRoot, "source", "Page.aspx.cs"), Path.Combine(outside, "Page.aspx.cs"));
+            Directory.Delete(Path.Combine(sourceRoot, "source"), recursive: true);
+            Directory.CreateSymbolicLink(Path.Combine(sourceRoot, "source"), outside);
+            Assert.Throws<InvalidDataException>(() => WebFormsCodePathReview.Run(
+                inspection, sourceRoot, "case-001", Path.Combine(directory, "review.private.html"), includeRawSource: true));
         });
     }
 

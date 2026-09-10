@@ -27,7 +27,7 @@ From the TraceMap repository root:
 
 ```powershell
 .\scripts\New-FocusedWebFormsBatchInspection.ps1
-.\scripts\New-FocusedWebFormsCodePathReviewSet.ps1 -SourceRoot C:\path\to\authorized-source -TriggerContextLines 50
+.\scripts\New-FocusedWebFormsCodePathReviewSet.ps1 -SourceRoot C:\path\to\authorized-source -TriggerContextLines 50 -IncludeRawSource
 ```
 
 The first command reads existing scan evidence and creates a private batch
@@ -44,7 +44,7 @@ Each set contains:
 - `index.html` — browser entry point for every case;
 - `index.md` — editable private verdict/comment queue;
 - `inspection.snapshot.json` — immutable private input used for the set;
-- `case-NNN.private.html` — source-bearing local review;
+- `case-NNN.private.html` — private local review, source-bearing only when `-IncludeRawSource` was explicitly supplied;
 - `case-NNN.shareable.html` — anonymous structural review; and
 - `case-NNN.shareable.json` — anonymous machine-readable graph.
 
@@ -66,6 +66,9 @@ Generate only selected cases:
 Use `-TriggerContextLines 0..100` to control lines shown before and after the
 retained event-binding span. This is display context only and does not widen the
 underlying evidence.
+
+Raw source excerpts are excluded by default. Add `-IncludeRawSource` only for an
+authorized private work-machine review; anonymous artifacts never contain source.
 
 For one report instead of a set, use
 `scripts/New-FocusedWebFormsCodePathReview.ps1`. It defaults to `case-001` and

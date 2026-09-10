@@ -4,7 +4,8 @@ param(
     [string]$OutputRoot = '',
     [string]$CaseId = 'case-001',
     [ValidateRange(0, 100)]
-    [int]$TriggerContextLines = 12
+    [int]$TriggerContextLines = 12,
+    [switch]$IncludeRawSource
 )
 
 $ErrorActionPreference = 'Stop'
@@ -46,7 +47,9 @@ Write-Host 'Building local review helper; reading current working-tree source.'
 $buildOutput = & dotnet build $project -c Release --nologo -v quiet 2>&1
 if ($LASTEXITCODE -ne 0) { throw 'CodePathReviewHelperBuildFailed; inspect the helper build locally.' }
 $dll = Join-Path $PSScriptRoot 'diagnostics/RawWebFormsEvidence/bin/Release/net10.0/RawWebFormsEvidence.dll'
-& dotnet $dll --code-path-review $InspectionPath $SourceRoot $CaseId $reviewPath $TriggerContextLines
+$reviewArguments = @($dll, '--code-path-review', $InspectionPath, $SourceRoot, $CaseId, $reviewPath, $TriggerContextLines)
+if ($IncludeRawSource) { $reviewArguments += '--include-raw-source' }
+& dotnet @reviewArguments
 if ($LASTEXITCODE -ne 0) { throw 'CodePathReviewFailed; no review report is available.' }
 Write-Host "PRIVATE local code-path review: $reviewPath"
 $shareablePath = $reviewPath -replace '\.private\.html$', '.shareable.html'

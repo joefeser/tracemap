@@ -15,7 +15,7 @@ public static class WebFormsCodePathReview
 
     public static IReadOnlyList<string> Run(string inspectionPath, string sourceRoot, string caseId, string outputPath,
         int contextLines = 4, int maxExcerpts = 64, int maxSourceBytes = 16 * 1024 * 1024, int triggerContextLines = 12,
-        string? returnHref = null)
+        string? returnHref = null, bool includeRawSource = false)
     {
         if (contextLines is < 0 or > 12 || triggerContextLines is < 0 or > 100 || maxExcerpts is < 1 or > 128 || maxSourceBytes is < 1 or > 32 * 1024 * 1024)
             throw new InvalidDataException("CodePathReviewInvalidLimit");
@@ -25,8 +25,9 @@ public static class WebFormsCodePathReview
             throw new InvalidDataException("CodePathReviewReturnLinkInvalid");
         var inspection = new FileInfo(inspectionPath);
         if (!inspection.Exists || inspection.Length > 32 * 1024 * 1024) throw new InvalidDataException("CodePathReviewInspectionUnavailable");
-        var rootPath = Path.GetFullPath(sourceRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var rootPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(sourceRoot));
         if (!Directory.Exists(rootPath)) throw new InvalidDataException("CodePathReviewSourceRootUnavailable");
+        var physicalRootPath = ResolvePhysicalPath(rootPath);
 
         var privatePath = Path.GetFullPath(outputPath);
         var outputStem = Path.GetFileNameWithoutExtension(privatePath);
@@ -93,8 +94,10 @@ public static class WebFormsCodePathReview
         {
             if (Path.IsPathRooted(relativePath)) throw new InvalidDataException("CodePathReviewSourcePathInvalid");
             var candidate = Path.GetFullPath(Path.Combine(rootPath, relativePath.Replace('/', Path.DirectorySeparatorChar)));
-            var prefix = rootPath + Path.DirectorySeparatorChar;
-            if (!candidate.StartsWith(prefix, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+            if (!IsWithinRoot(rootPath, candidate))
+                throw new InvalidDataException("CodePathReviewSourcePathInvalid");
+            var physicalCandidate = ResolvePhysicalPath(candidate);
+            if (!IsWithinRoot(physicalRootPath, physicalCandidate))
                 throw new InvalidDataException("CodePathReviewSourcePathInvalid");
             return candidate;
         }
@@ -118,7 +121,13 @@ public static class WebFormsCodePathReview
             : selected.GetProperty("methods").EnumerateArray()
                 .Where(m => m.TryGetProperty("stopReason", out var reason) && reason.GetString() != "retained-outgoing-calls")
                 .Select(m => m.GetProperty("symbol").GetString()).ToArray();
-        foreach (var unresolved in unresolvedLeaves.Where(v => !string.IsNullOrWhiteSpace(v)))
+        var boundedUnresolvedLeaves = unresolvedLeaves.Where(v => !string.IsNullOrWhiteSpace(v)).ToArray();
+        if (boundedUnresolvedLeaves.Length > 512 || (long)boundedUnresolvedLeaves.Length * evidenceFiles.Length > 8_192)
+            throw new InvalidDataException("CodePathReviewCandidateWorkLimit");
+        var syntaxRoots = evidenceFiles.ToDictionary(relativePath => relativePath,
+            relativePath => CSharpSyntaxTree.ParseText(string.Join(Environment.NewLine, ReadSource(relativePath)), path: relativePath).GetCompilationUnitRoot(),
+            StringComparer.OrdinalIgnoreCase);
+        foreach (var unresolved in boundedUnresolvedLeaves)
         {
             var open = unresolved!.IndexOf('(');
             if (open < 1) continue;
@@ -127,8 +136,7 @@ public static class WebFormsCodePathReview
             var candidates = new List<ReviewLocation>();
             foreach (var relativePath in evidenceFiles)
             {
-                var text = string.Join(Environment.NewLine, ReadSource(relativePath));
-                var syntax = CSharpSyntaxTree.ParseText(text, path: relativePath).GetCompilationUnitRoot();
+                var syntax = syntaxRoots[relativePath];
                 foreach (var method in syntax.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.ValueText == name))
                 {
                     var span = method.GetLocation().GetLineSpan();
@@ -293,6 +301,11 @@ public static class WebFormsCodePathReview
 
         void WriteSourceCode(StreamWriter writer, ReviewLocation location, int? surroundingLines = null, int maximumLines = 100)
         {
+            if (!includeRawSource)
+            {
+                writer.WriteLine("<p><em>Raw source excerpts were not included. Regenerate with the explicit raw-source option for a private work-machine review.</em></p>");
+                return;
+            }
             var lines = ReadSource(location.FilePath);
             if (location.StartLine > lines.Length) throw new InvalidDataException("CodePathReviewSourceSpanInvalid");
             var effectiveContext = surroundingLines ?? contextLines;
@@ -348,7 +361,7 @@ public static class WebFormsCodePathReview
                 writer.WriteLine($"<title>Private Web Forms code-path review {H(caseId)}</title><style>{PrivateCss}</style></head><body id=\"top\"><main>");
                 if (returnHref is not null) writer.WriteLine($"<nav class=\"review-nav\"><a href=\"{H(returnHref)}\">← Return to review index</a></nav>");
                 writer.WriteLine($"<h1>Local Web Forms code-path review: {H(caseId)}</h1>");
-                writer.WriteLine("<p class=\"private\">PRIVATE: working-tree source excerpts and identities. Keep this artifact on the work machine.</p>");
+                writer.WriteLine($"<p class=\"private\">PRIVATE: working-tree source identities{(includeRawSource ? " and explicitly requested excerpts" : "")}. Keep this artifact on the work machine.</p>");
                 writer.WriteLine("<section id=\"summary\"><h2>Summary</h2><ul>");
                 writer.WriteLine($"<li>Inspection commit: <code>{H(root.GetProperty("commitSha").GetString())}</code></li>");
                 writer.WriteLine("<li>Source mode: <code>working-tree</code>; Git is not required and commit equality is not established.</li>");
@@ -494,6 +507,31 @@ public static class WebFormsCodePathReview
         return ["codePathReview=created", $"case={caseId}|sourceMode=working-tree|triggerContextLines={triggerContextLines}|excerpts={deduplicated.Count}|definitionCandidates={candidateCount}|anonymousNodes={anonymousNodes.Length}|anonymousEdges={groupedEdges.Length}|review=unreviewed",
             "artifacts=private-html;shareable-html;shareable-json",
             "nonClaim=working-tree-may-differ-from-inspection-commit;static-calls-do-not-prove-runtime-execution-or-absence"];
+    }
+
+    private static bool IsWithinRoot(string root, string candidate)
+    {
+        var relative = Path.GetRelativePath(root, candidate);
+        return !Path.IsPathRooted(relative)
+            && relative != ".."
+            && !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+            && !relative.StartsWith(".." + Path.AltDirectorySeparatorChar, StringComparison.Ordinal);
+    }
+
+    private static string ResolvePhysicalPath(string path)
+    {
+        var fullPath = Path.GetFullPath(path);
+        var root = Path.GetPathRoot(fullPath) ?? throw new InvalidDataException("CodePathReviewSourcePathInvalid");
+        var current = root;
+        foreach (var segment in fullPath[root.Length..].Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries))
+        {
+            current = Path.Combine(current, segment);
+            FileSystemInfo info = Directory.Exists(current) ? new DirectoryInfo(current) : new FileInfo(current);
+            if (info.Exists && info.LinkTarget is not null)
+                current = info.ResolveLinkTarget(returnFinalTarget: true)?.FullName
+                    ?? throw new InvalidDataException("CodePathReviewSourcePathInvalid");
+        }
+        return Path.GetFullPath(current);
     }
 
     private const string PrivateCss = """

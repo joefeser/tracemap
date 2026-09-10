@@ -1046,3 +1046,25 @@ safe reconciliation candidate. Added leaf evidence-tier and closed reconciliatio
 states so the next packet distinguishes intentional syntax isolation from canonical
 symbol exhaustion without retaining the private target identity. Matching behavior
 remains fail closed.
+
+## PR 723 head-review hardening
+
+Head-review remediation preserves the field workflow while closing its remaining
+boundedness and evidence-labeling gaps. Surface lists are streamed under byte,
+row, and entry ceilings, comma-bearing list paths stay verbatim, and requests
+that cannot be resolved after a truncated fact snapshot are labeled
+`unavailable` rather than `unmatched`. Selected-symbol closure now applies its
+frontier limit in SQL and while reading, and path work limits are validated even
+when no root matches.
+
+Private code-path reports require explicit `-IncludeRawSource` opt-in before
+serializing excerpts. Physical link resolution prevents source-root escapes,
+filesystem roots remain valid, and witnessed C# files are parsed once under a
+bounded definition-candidate work limit. COM fallback discovery now includes
+repository-contained literal imports and `Directory.Build.props/targets`, while
+preserving imported custom-after-target settings. Database Fill audits require a
+complete selected method symbol and an exact normalized Tier1 caller witness.
+
+Validation: affected focused tests 112/112; full .NET solution 1799/1799;
+PowerShell review-set regression and diff check passed. The pre-existing nullable
+warning in `PropertyMappingTests.cs:560` remains unchanged.

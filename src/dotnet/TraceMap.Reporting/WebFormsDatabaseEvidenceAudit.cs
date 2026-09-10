@@ -13,6 +13,8 @@ public static class WebFormsDatabaseEvidenceAudit
         if (root.GetProperty("schemaVersion").GetString() != "webforms-local-inspection.v1") throw new InvalidDataException("RawAuditSchemaMismatch");
         var hops = root.GetProperty("hops").EnumerateArray().ToArray();
         var recognized = hops.Where(h => IsFill(h.GetProperty("callee").GetString() ?? "")).ToArray();
+        var recognizedFillSymbols = recognized.Select(h => NormalizeFrameworkSymbol(h.GetProperty("callee").GetString() ?? ""))
+            .ToHashSet(StringComparer.Ordinal);
         diagnostic?.Invoke($"inspectionHopCount={hops.Length}");
         diagnostic?.Invoke($"inspectionFillNamedHops={hops.Count(h => (h.GetProperty("callee").GetString() ?? "").Contains(".Fill(", StringComparison.Ordinal))}");
         diagnostic?.Invoke($"inspectionRecognizedFrameworkFillHops={recognized.Length}");
@@ -67,7 +69,7 @@ public static class WebFormsDatabaseEvidenceAudit
             if (counts.ContainsKey(type)) counts[type]++;
             if (tier != "Tier1Semantic") continue;
             semantic++;
-            var fill = IsFill(target);
+            var fill = IsFill(target) && recognizedFillSymbols.Contains(NormalizeFrameworkSymbol(target));
             // Normalize only framework classification, never the exact source-symbol lookup.
             target = FrameworkDisplayName(target);
             if (type is "CallEdge" or "MethodInvoked" && fill) fillWitness = true;
@@ -117,5 +119,14 @@ public static class WebFormsDatabaseEvidenceAudit
 
     private static string FrameworkDisplayName(string symbol) => symbol.StartsWith("global::", StringComparison.Ordinal) ? symbol[8..] : symbol;
 
-    private static bool IsFill(string symbol) => new[] { "System.Data.Common.DbDataAdapter.Fill(", "System.Data.SqlClient.SqlDataAdapter.Fill(", "Microsoft.Data.SqlClient.SqlDataAdapter.Fill(" }.Any(p => FrameworkDisplayName(symbol).StartsWith(p, StringComparison.Ordinal));
+    private static string NormalizeFrameworkSymbol(string symbol) => symbol.Replace("global::", string.Empty, StringComparison.Ordinal);
+
+    private static bool IsFill(string symbol)
+    {
+        var display = FrameworkDisplayName(symbol);
+        string[] owners = ["System.Data.Common.DbDataAdapter", "System.Data.SqlClient.SqlDataAdapter", "Microsoft.Data.SqlClient.SqlDataAdapter"];
+        return owners.Any(owner => display.StartsWith(owner + ".Fill(", StringComparison.Ordinal)
+            && display.EndsWith(')')
+            && display.Length > owner.Length + ".Fill()".Length);
+    }
 }

@@ -5,7 +5,8 @@ param(
     [string]$OutputRoot = '',
     [string[]]$CaseId = @(),
     [ValidateRange(0, 100)]
-    [int]$TriggerContextLines = 12
+    [int]$TriggerContextLines = 12,
+    [switch]$IncludeRawSource
 )
 
 Set-StrictMode -Version Latest
@@ -86,6 +87,7 @@ try {
     foreach ($reviewCase in $reviewCases) {
         $reviewPath = Join-Path $setDirectory "$($reviewCase.CaseId).private.html"
         $reviewArguments = @($dll, '--code-path-review', $inspectionSnapshotPath, $SourceRoot, $reviewCase.CaseId, $reviewPath, $TriggerContextLines, 'index.html')
+        if ($IncludeRawSource) { $reviewArguments += '--include-raw-source' }
         & dotnet @reviewArguments
         if ($LASTEXITCODE -ne 0) { throw 'CodePathReviewSetCaseFailed' }
     }

@@ -628,7 +628,7 @@ public static class TraceMapCommand
         await output.WriteLineAsync($"Identity/state declarations: {result.Packet.Summary.IdentityStateCount}");
         await output.WriteLineAsync($"Batch/data-movement declarations: {result.Packet.Summary.BatchDataMovementCount}");
         if (result.Packet.SurfaceSelection is not null)
-            await output.WriteLineAsync($"Requested pages: {result.Packet.SurfaceSelection.RequestedCount}; matched: {result.Packet.SurfaceSelection.MatchedCount}; unmatched: {result.Packet.SurfaceSelection.UnmatchedCount}; ambiguous: {result.Packet.SurfaceSelection.AmbiguousCount}");
+            await output.WriteLineAsync($"Requested pages: {result.Packet.SurfaceSelection.RequestedCount}; matched: {result.Packet.SurfaceSelection.MatchedCount}; unmatched: {result.Packet.SurfaceSelection.UnmatchedCount}; ambiguous: {result.Packet.SurfaceSelection.AmbiguousCount}; unavailable: {result.Packet.SurfaceSelection.UnavailableCount}");
         await output.WriteLineAsync($"Gaps: {result.Packet.Summary.GapCount}");
         return 0;
     }
@@ -2234,8 +2234,9 @@ public static class TraceMapCommand
                 values[arg] = list;
             }
 
-            list.AddRange(args[++index]
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+            var rawValue = args[++index];
+            if (arg == "--surface-list") list.Add(rawValue);
+            else list.AddRange(rawValue.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
         }
 
         return new ParsedOptions(values, flags);

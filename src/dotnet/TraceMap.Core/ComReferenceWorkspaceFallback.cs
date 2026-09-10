@@ -45,11 +45,11 @@ internal sealed class ComReferenceWorkspaceFallback : IDisposable
         IReadOnlyList<FileInventoryItem> projects)
     {
         var projectDocuments = projects
-            .Select(project => (Project: project, Document: TryLoadProject(repoPath, project.RelativePath)))
-            .Where(item => item.Document is not null)
+            .Select(project => (Project: project, Documents: LoadProjectDocuments(repoPath, project.RelativePath)))
+            .Where(item => item.Documents.Count > 0)
             .ToArray();
         var comReferenceProjects = projectDocuments
-            .Where(item => DeclaresComReference(item.Document!))
+            .Where(item => item.Documents.Any(DeclaresComReference))
             .Select(item => FileInventory.NormalizeRelativePath(item.Project.RelativePath))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(path => path, StringComparer.Ordinal)
@@ -60,7 +60,7 @@ internal sealed class ComReferenceWorkspaceFallback : IDisposable
             return new ComReferenceWorkspaceFallback([], null, null, null);
         }
 
-        if (projectDocuments.Any(item => DefinesCustomAfterTargets(item.Document!)))
+        if (projectDocuments.Any(item => item.Documents.Any(DefinesCustomAfterTargets)))
         {
             return new ComReferenceWorkspaceFallback(
                 comReferenceProjects,
@@ -121,6 +121,53 @@ internal sealed class ComReferenceWorkspaceFallback : IDisposable
         {
             return null;
         }
+    }
+
+    private static IReadOnlyList<XDocument> LoadProjectDocuments(string repoPath, string relativePath)
+    {
+        const int maximumDocuments = 64;
+        var root = Path.GetFullPath(repoPath);
+        var pending = new Queue<string>();
+        var visited = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        pending.Enqueue(Path.GetFullPath(Path.Combine(root, relativePath)));
+
+        var projectDirectory = Path.GetDirectoryName(Path.GetFullPath(Path.Combine(root, relativePath)))!;
+        for (var directory = projectDirectory; IsWithinRoot(root, directory); directory = Path.GetDirectoryName(directory)!)
+        {
+            foreach (var name in new[] { "Directory.Build.props", "Directory.Build.targets" })
+            {
+                var candidate = Path.Combine(directory, name);
+                if (File.Exists(candidate)) pending.Enqueue(candidate);
+            }
+            if (Path.GetFullPath(directory) == root || Path.GetDirectoryName(directory) is null) break;
+        }
+
+        var documents = new List<XDocument>();
+        while (pending.Count > 0)
+        {
+            var path = Path.GetFullPath(pending.Dequeue());
+            if (!IsWithinRoot(root, path) || !visited.Add(path) || documents.Count >= maximumDocuments) continue;
+            var document = TryLoadProject(root, Path.GetRelativePath(root, path));
+            if (document is null) continue;
+            documents.Add(document);
+            foreach (var import in document.Descendants().Where(element => element.Name.LocalName == "Import")
+                         .Select(element => element.Attribute("Project")?.Value)
+                         .Where(value => !string.IsNullOrWhiteSpace(value) && !value!.Contains("$(", StringComparison.Ordinal)
+                             && value.IndexOfAny(['*', '?']) < 0))
+            {
+                var importedPath = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(path)!, import!.Replace('\\', Path.DirectorySeparatorChar)));
+                if (File.Exists(importedPath) && IsWithinRoot(root, importedPath)) pending.Enqueue(importedPath);
+            }
+        }
+        return documents;
+    }
+
+    private static bool IsWithinRoot(string root, string candidate)
+    {
+        var relative = Path.GetRelativePath(root, candidate);
+        return !Path.IsPathRooted(relative) && relative != ".."
+            && !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+            && !relative.StartsWith(".." + Path.AltDirectorySeparatorChar, StringComparison.Ordinal);
     }
 
     private static bool DeclaresComReference(XDocument document)

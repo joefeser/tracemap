@@ -451,6 +451,10 @@ public static partial class CombinedDependencyPathReporter
         {
             throw new ArgumentException("--max-frontier must be a positive integer.");
         }
+        if (options.MaxTraversalWork <= 0)
+        {
+            throw new ArgumentException("--max-traversal-work must be a positive integer.");
+        }
         if (options.StartingNodeLimit <= 0) throw new ArgumentOutOfRangeException(nameof(options));
 
         if (!string.IsNullOrWhiteSpace(options.ToSurface))
