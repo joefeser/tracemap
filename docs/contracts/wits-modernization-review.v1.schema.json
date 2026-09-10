@@ -22,7 +22,7 @@
     },
     "reviewState": { "enum": ["draft", "completed"] },
     "reviewer": { "type": ["string", "null"], "minLength": 1, "maxLength": 128 },
-    "reviewedAtUtc": { "type": ["string", "null"], "format": "date-time" },
+    "reviewedAtUtc": { "type": ["string", "null"], "format": "date-time", "pattern": "Z$" },
     "decisions": { "type": "array", "minItems": 1, "maxItems": 64, "items": { "$ref": "#/$defs/decision" } },
     "limitations": {
       "type": "array",
@@ -64,11 +64,27 @@
   },
   "allOf": [
     {
+      "oneOf": [
+        {
+          "properties": {
+            "reviewer": { "type": "null" },
+            "reviewedAtUtc": { "type": "null" }
+          }
+        },
+        {
+          "properties": {
+            "reviewer": { "type": "string", "minLength": 1, "maxLength": 128 },
+            "reviewedAtUtc": { "type": "string", "format": "date-time", "pattern": "Z$" }
+          }
+        }
+      ]
+    },
+    {
       "if": { "properties": { "reviewState": { "const": "completed" } }, "required": ["reviewState"] },
       "then": {
         "properties": {
           "reviewer": { "type": "string", "minLength": 1 },
-          "reviewedAtUtc": { "type": "string", "format": "date-time" },
+          "reviewedAtUtc": { "type": "string", "format": "date-time", "pattern": "Z$" },
           "decisions": {
             "items": {
               "properties": {

@@ -18,3 +18,10 @@ Validation on 2026-09-10:
 - JSON Schema parses with `jq`.
 - `git diff --check`: passed.
 - `scripts/check-private-paths.sh`: passed.
+
+PR #725 review follow-up tightened required-field enforcement, ordinal
+case-sensitive identifiers and closed codes, atomic create-new output, and the
+UTC/draft-metadata agreement between the schema and validator. The review-only
+decision boundary is now explicit in `design.md`; per-fact tier and location
+remain in the digest-bound inspection rather than being copied into mutable
+human decisions.

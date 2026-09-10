@@ -10,6 +10,13 @@ the inspection. Decisions start as `unreviewed` with no comment, correction,
 reviewer, or timestamp. The validator compares every reference against the exact
 inspection and rejects rather than repairs mismatches.
 
+A decision is human review metadata, not an emitted scanner finding. Its exact
+case, handler-fact, binding-fact, and surface references are normalized foreign
+keys into the inspection identified by the overlay-level scan, commit, rule, and
+inspection digest. Consumers join those references to the immutable inspection
+for tier and location detail; duplicating that fact metadata on the mutable
+decision would create a second, drift-prone evidence record.
+
 The overlay is private because surface IDs, handler fact IDs, binding fact IDs,
 comments, and corrections can disclose application structure. A future WITS
 adapter may store it or derive a separately specified anonymous projection, but
