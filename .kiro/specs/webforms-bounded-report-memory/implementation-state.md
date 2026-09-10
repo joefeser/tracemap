@@ -1,10 +1,27 @@
 # Implementation state
 
+## Independent raw-index audit (2026-09-09)
+
+Correction: compacted symbol witnesses cannot rule out extraction/attachment
+problems. The packet does not retain exact unresolved leaf IDs. Added
+`Test-FocusedWebFormsRawEvidence.ps1` and a separate .NET helper to audit exact
+semantic call/invocation closure from priority handlers against the original
+read-only index, before compaction. This is not report-leaf reconstruction.
+The helper validates scan/commit, enforces input and traversal bounds, and emits
+closed counts only. No form-list edits, application scans, or report generation.
+See README for limits and diagnostic rule limitations.
+
+Validation: full solution 1769/1769 (before the additional traversal-bound test),
+then focused audit tests 4/4 including that test. PowerShell/helper end-to-end
+SQLite fixture passed; the index-byte preservation and syntax-isolation checks
+passed. Private-path guard and diff check passed. No work-machine index or
+application source was available locally, so field behavior remains unverified.
+
 ## Exact canonical leaf source availability (2026-09-09)
 
 The field call-evidence diagnostic classified all seven terminal-coverage-review
-chains as having no exact source-owned call-shaped evidence; it found no missing
-graph attachment, missing paired call fact, cycle filter, or dispatch filter.
+chains as having no exact source-owned call-shaped evidence in the compacted
+reader. This cannot rule out original-index call facts or attachment problems.
 Added a second closed leaf diagnostic that independently records exact method
 declaration evidence and exact source-owned body-operation evidence. The selected
 bounded reader admits `MethodDeclared` rows only by exact target-symbol equality

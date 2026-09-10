@@ -43,3 +43,4 @@
 - [x] Classify terminal-free leaves by evidence tier and closed reconciliation state without widening syntax-only joins.
 - [x] Classify exact canonical leaf call evidence without publishing identities or widening reconciliation.
 - [x] Classify exact canonical leaf declaration and source-owned body availability without name guessing.
+- [x] Add bounded read-only original-index witness audit with snapshot validation and no scan/report regeneration.

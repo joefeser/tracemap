@@ -1,6 +1,40 @@
 # Restricted Web Forms run: diagnostic follow-up
 
-## Current next command: actionable unresolved buckets
+## Current command: independent original-index audit
+
+```powershell
+git pull
+.\scripts\Test-FocusedWebFormsRawEvidence.ps1
+```
+
+Uses the literal IndexPath/OutputRoot settings from the form-list runner without
+executing or editing it. Selects the latest completed page-list JSON; optional
+`-IndexPath` and `-ReportPath` choose explicit inputs. Builds the diagnostic helper
+only, not the application being analyzed. No scan/report regeneration is needed.
+Send the short console summary, not the index or private source.
+
+Important correction: previous leaf diagnostics ran after symbol-witness
+compaction. Their missing-witness states cannot rule out extraction or attachment
+problems. Saved packets contain leaf categories, not exact unresolved leaf IDs.
+This new read-only check independently follows exact semantic CallEdge and
+MethodInvoked endpoints from the priority handlers; it does NOT reproduce the
+report's leaf set, specialized edges, terminal classification, or runtime paths.
+
+Diagnostic rule `diagnostic.webforms.raw-exact-call-evidence.v1`: snapshot scan
+and commit must match; source/target strings use ordinal equality with no name
+guessing. Counts preserve raw invocation/call presence before report compaction.
+Syntax-only edges are not traversed. Declaration target formatting may differ,
+so missing exact declarations are not evidence of missing source. Bounds are
+32 handlers, 500k selected rows, 64 MiB text, a 60-second read-loop budget and
+30-second SQLite command timeout; each handler gets depth10/500 symbols/10k
+edge work. Input limits fail closed; traversal limits emit `bounded=true`.
+Ordinals are local handler labels, not the earlier page aliases. Report partial
+coverage remains partial; raw evidence does not prove execution or completeness.
+`invocationWithoutCallFact` counts source symbols with semantic invocation facts
+but no semantic CallEdge source witness; it is not an exact call-pair comparison.
+Only CallEdge, MethodInvoked, and MethodDeclared facts are read for this audit.
+
+## Previous command: actionable unresolved buckets
 
 After pulling, run `./scripts/Summarize-FocusedWebFormsActionableGaps.ps1` from
 PowerShell 7. With no arguments it reads the newest completed page-list packet
