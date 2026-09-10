@@ -32,7 +32,10 @@ try {
     $first = Join-Path $temp 'review-one.json'
     $second = Join-Path $temp 'review-two.json'
     $lowercaseMode = Join-Path $temp 'review-lowercase-mode.json'
-    & $scriptPath -Mode Export -InspectionPath $inspectionPath -ReviewPath $first | Out-Null
+    $exportOutput = @(& $scriptPath -Mode Export -InspectionPath $inspectionPath -ReviewPath $first 6>&1)
+    if (($exportOutput | Out-String) -notlike '*editingGuide=scripts/webforms-review/WITS_REVIEW_EDITING.md;one-verdict-and-one-disposition-per-case*') {
+        throw 'Review export did not identify the editing guide and single-value decision shape.'
+    }
     & $scriptPath -Mode Export -InspectionPath $inspectionPath -ReviewPath $second | Out-Null
     & $scriptPath -Mode export -InspectionPath $inspectionPath -ReviewPath $lowercaseMode | Out-Null
     if ((Get-FileHash $first).Hash -ne (Get-FileHash $second).Hash) { throw 'Review export is not deterministic.' }
@@ -125,6 +128,13 @@ try {
         $schema.allOf[1].then.properties.reviewer.pattern
     )
     if (@($reviewerPatterns | Where-Object { $_ -cne '\S' }).Count -ne 0) { throw 'Reviewer schemas do not consistently reject whitespace-only values.' }
+
+    $editingGuidePath = Join-Path $PSScriptRoot 'WITS_REVIEW_EDITING.md'
+    $editingGuide = [IO.File]::ReadAllText($editingGuidePath)
+    if (!$editingGuide.Contains('Do not comma-separate values', [StringComparison]::Ordinal) -or
+        !$editingGuide.Contains('The overlay records human review of the exceptional cases', [StringComparison]::Ordinal)) {
+        throw 'Review editing guide does not explain decision cardinality and exception-only scope.'
+    }
 
     if ((Get-FileHash -LiteralPath $inspectionPath -Algorithm SHA256).Hash -ne $before) { throw 'Review workflow modified the inspection.' }
     Write-Host 'PASS WITS modernization review overlay'

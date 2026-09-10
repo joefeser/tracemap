@@ -180,6 +180,20 @@ Do not infer runtime execution, branch feasibility, successful binding, database
 results, or source absence from these static artifacts. Human verdicts are review
 metadata and never rewrite scanner evidence.
 
+## Exception review versus complete modernization evidence
+
+The batch review set selects handlers whose retained paths did not reach a
+supported terminal. It is an exception-review queue, not an inventory of every
+selected page, resolved call path, control, or data operation. Its cases
+supplement the full focused Web Forms packet; they do not replace that packet and
+are not sufficient by themselves to produce a BRD.
+
+TraceMap keeps both sides deterministic: the full packet records supported
+evidence and explicit gaps, while the overlay below records human statements
+about selected exceptional cases. Business-intent synthesis, BRD generation,
+WITS-hosted workflow, and Angular/.NET/PostgreSQL generation remain downstream
+of this repository's scanner and reducer.
+
 ## Experimental WITS review overlay
 
 Issue #724 begins the next, separate layer. Export a deterministic private draft
@@ -204,4 +218,7 @@ the exact overlay against the same snapshot:
 
 The overlay is private. Validation rejects changed evidence references and does
 not import the verdict into TraceMap facts. The contract is
-`docs/contracts/wits-modernization-review.v1.schema.json`.
+`docs/contracts/wits-modernization-review.v1.schema.json`. Before editing, read
+[`WITS_REVIEW_EDITING.md`](WITS_REVIEW_EDITING.md). Every case accepts one
+verdict string and one migration-disposition string, not comma-separated values;
+comments carry nuance and corrections carry explicit human amendments.
