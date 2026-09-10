@@ -51,7 +51,8 @@ function Test-OrdinalSequence($Left, $Right) {
 function Test-UtcTimestamp($Value) {
     $timestamp = [DateTimeOffset]::MinValue
     if ($Value -is [DateTime]) { return $Value.Kind -eq [DateTimeKind]::Utc }
-    if ($Value -isnot [string] -or $Value -cnotmatch 'Z$') { return $false }
+    $utcRfc3339 = '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](\.[0-9]+)?Z$'
+    if ($Value -isnot [string] -or $Value -cnotmatch $utcRfc3339) { return $false }
     return [DateTimeOffset]::TryParse($Value, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::RoundtripKind, [ref]$timestamp)
 }
 
