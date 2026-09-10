@@ -839,6 +839,22 @@ Validation: focused raw-audit tests 14/14; full .NET solution 1787/1787;
 scoped formatting and diff checks passed. The existing nullable warning in
 `PropertyMappingTests.cs:560` remains unchanged.
 
+## Local working-tree code-path review prototype
+
+Added a one-case, local-only Markdown review over the batch inspection. It reads
+bounded excerpts directly from a supplied source root without requiring Git,
+renders retained call edges and evidence locations, and provides a human verdict
+checklist. The report explicitly labels source mode as `working-tree` and does not
+claim equality with the scan commit. A missing exact declaration may receive a
+definition navigation candidate only when a syntax parse finds one unique method
+name within already witnessed files; that candidate is not promoted to evidence.
+Console output is counts-only and contains no private paths, symbols, or source.
+
+Validation: code-path and raw-audit tests 16/16; full .NET solution 1789/1789;
+Release diagnostic helper build, PowerShell parse, scoped formatting, and diff
+checks passed. The existing nullable warning in `PropertyMappingTests.cs:560`
+remains unchanged.
+
 ## Compiler-resolved DataAdapter Fill terminal projection
 
 The fresh field scan retained the exact public framework Fill target plus receiver

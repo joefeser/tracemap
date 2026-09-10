@@ -197,6 +197,22 @@ Batch inspection labels exact allowlisted framework UI/control endpoints separat
 from other unresolved leaves and prints privacy-safe counts and an evidence conclusion
 for each case. `no-supported-backend-terminal-observed` describes retained evidence;
 it does not prove backend absence. Manual review status remains independent.
+
+To dogfood one private source review after creating the batch inspection:
+
+```powershell
+.\scripts\New-FocusedWebFormsCodePathReview.ps1
+```
+
+The command prompts for the private source repository root and defaults to
+`case-001`; `-CaseId case-004` selects another case. Git is not required. The
+report reads current working-tree files, says explicitly that equality with the
+inspection commit is not established, and opens a private Markdown file containing
+at most 64 excerpts of at most 100 lines each. Exact call locations come from
+retained evidence. A helper definition is added only when its method name is unique
+within already witnessed C# files, and is labeled a navigation candidate rather
+than evidence. The report ends with a human verdict checklist. Source excerpts,
+symbols, and paths never appear in the console summary.
 The raw audit now filters each read to exact symbols on the selected handlers'
 current frontier (declarations match target; calls/invocations match source).
 All handler frontiers are batched, and each symbol is queried once. Unrelated

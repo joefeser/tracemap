@@ -2,6 +2,11 @@ using TraceMap.Reporting;
 
 try
 {
+    if (args.Length == 5 && args[0] == "--code-path-review")
+    {
+        foreach (var line in WebFormsCodePathReview.Run(args[1], args[2], args[3], args[4])) Console.WriteLine(line);
+        return 0;
+    }
     if (args.Length == 4 && args[0] == "--batch-inspection")
     {
         foreach (var line in WebFormsRawEvidenceAudit.Run(args[1], args[2], inspectionPath: args[3], inspectAllHandlers: true)) Console.WriteLine(line);
@@ -24,6 +29,9 @@ catch (Exception error)
         "RawAuditHandlerNotFound", "RawAuditHandlerSymbolMissing", "RawAuditInputLimit", "RawAuditTextLimit", "RawAuditInspectionUnavailable",
         "RawAuditMethodHintInvalid", "RawAuditMethodAmbiguous", "RawAuditMethodNotFound", "RawAuditFillCallerUnavailable",
         "RawAuditNoRecognizedFillHop", "RawAuditFillCallerIdentityMissing", "RawAuditMultipleFillCallers", "RawAuditFillIndexWitnessMissing"];
+    safeCodes = [.. safeCodes, "CodePathReviewInvalidLimit", "CodePathReviewCaseInvalid", "CodePathReviewInspectionUnavailable",
+        "CodePathReviewSourceRootUnavailable", "CodePathReviewSchemaMismatch", "CodePathReviewCaseUnavailable",
+        "CodePathReviewSourcePathInvalid", "CodePathReviewSourceUnavailable", "CodePathReviewExcerptLimit", "CodePathReviewSourceSpanInvalid"];
     var code = error is InvalidDataException && safeCodes.Contains(error.Message, StringComparer.Ordinal)
         ? error.Message : "RawAuditInputOrRuntimeFailure";
     Console.Error.WriteLine($"raw-webforms-evidence=failed;code={code}");
