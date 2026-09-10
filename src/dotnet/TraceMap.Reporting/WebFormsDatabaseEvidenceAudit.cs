@@ -48,6 +48,8 @@ public static class WebFormsDatabaseEvidenceAudit
         var rows = 0;
         var semantic = 0;
         var fillWitness = false;
+        var commandLocals = new HashSet<string>(StringComparer.Ordinal);
+        var adapterCommandArguments = new List<string>();
         long bytes = 0;
         using var reader = query.ExecuteReader();
         while (reader.Read())
@@ -68,6 +70,7 @@ public static class WebFormsDatabaseEvidenceAudit
             if (type is "CallEdge" or "MethodInvoked" && fill) fillWitness = true;
             using var properties = JsonDocument.Parse(json);
             bool Has(string key) => properties.RootElement.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(value.GetString());
+            string? Value(string key) => Has(key) ? properties.RootElement.GetProperty(key).GetString() : null;
             bool IsType(string name) => target == name || target.StartsWith(name + ".", StringComparison.Ordinal);
             var command = IsType("System.Data.SqlClient.SqlCommand") || IsType("Microsoft.Data.SqlClient.SqlCommand");
             var adapter = IsType("System.Data.SqlClient.SqlDataAdapter") || IsType("Microsoft.Data.SqlClient.SqlDataAdapter");
@@ -83,7 +86,10 @@ public static class WebFormsDatabaseEvidenceAudit
             Hit("adapter-assigned-variable-retained", type == "ObjectCreated" && adapter && Has("assignedTo"));
             Hit("adapter-argument-symbol-retained", type == "ArgumentPassed" && adapter && Has("argumentSymbol"));
             Hit("fill-receiver-symbol-retained", type == "MethodInvoked" && fill && Has("receiverSymbol"));
+            if (type == "ObjectCreated" && command && Value("assignedTo") is { } commandLocal) commandLocals.Add(commandLocal);
+            if (type == "ArgumentPassed" && adapter && Value("argumentSymbol") is { } adapterArgument) adapterCommandArguments.Add(adapterArgument);
         }
+        var commandAdapterLocalMatches = adapterCommandArguments.Count(commandLocals.Contains);
         diagnostic?.Invoke("indexProvenance=matched");
         diagnostic?.Invoke($"exactCallerFactRows={rows}");
         diagnostic?.Invoke($"exactCallerFrameworkFillWitness={(fillWitness ? "present" : "missing")}");
@@ -91,7 +97,10 @@ public static class WebFormsDatabaseEvidenceAudit
         return new[] { "database-evidence-audit=completed", "provenance=matched", "scope=exact-fill-caller-only", "rule=diagnostic.webforms.database-evidence-census.v1", $"retainedFacts={rows}", $"semanticFacts={semantic}" }
             .Concat(counts.Select(c => $"factType={c.Key}|count={c.Value}"))
             .Concat(signals.Select(s => $"semanticSignal={s.Key}|count={s.Value}"))
-            .Append("linkage=not-established-by-census;cooccurrence-is-not-object-identity")
+            .Append($"commandAdapterLocalNameMatch={commandAdapterLocalMatches}")
+            .Append("fillReceiverIdentity=not-retained-by-method-invocation-fact")
+            .Append("commandTypeAssignedValue=not-retained-by-property-access-fact")
+            .Append("linkage=local-name-match-is-same-method-support-not-object-identity;adapter-to-fill-not-established")
             .Append("nonClaim=missing-retained-metadata-is-not-missing-source;commandtype-property-is-not-proof-of-storedprocedure-assignment;no-sql-or-private-values-exported")
             .ToArray();
     }

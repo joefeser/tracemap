@@ -30,6 +30,7 @@ public sealed class WebFormsDatabaseEvidenceAuditTests
                     insert into facts(fact_type,target_symbol,properties_json) values
                     ('ObjectCreated','System.Data.SqlClient.SqlCommand','{"assignedTo":"privateCommand","sql":"PRIVATE_SQL"}'),
                     ('ObjectCreated','System.Data.SqlClient.SqlDataAdapter','{"assignedTo":"privateAdapter"}'),
+                    ('ArgumentPassed','System.Data.SqlClient.SqlDataAdapter.SqlDataAdapter(System.Data.SqlClient.SqlCommand)', '{"argumentSymbol":"privateCommand"}'),
                     ('MethodInvoked','System.Data.Common.DbDataAdapter.Fill(System.Data.DataSet)','{}'),
                     ('PropertyAccessed','System.Data.Common.DbCommand.CommandType','{}'),
                     ('ObjectCreated','System.Data.SqlClient.SqlCommandBuilder','{}');
@@ -64,11 +65,14 @@ public sealed class WebFormsDatabaseEvidenceAuditTests
             }
             var before = File.ReadAllBytes(db);
             var output = WebFormsDatabaseEvidenceAudit.Run(db, inspection);
-            Assert.Contains("retainedFacts=5", output);
+            Assert.Contains("retainedFacts=6", output);
             Assert.Contains("semanticSignal=commandtype-property|count=1", output);
             Assert.Contains("semanticSignal=command-construction|count=1", output);
             Assert.Contains("semanticSignal=fill-invocation|count=1", output);
             Assert.Contains("semanticSignal=command-assigned-variable-retained|count=1", output);
+            Assert.Contains("commandAdapterLocalNameMatch=1", output);
+            Assert.Contains("fillReceiverIdentity=not-retained-by-method-invocation-fact", output);
+            Assert.Contains("commandTypeAssignedValue=not-retained-by-property-access-fact", output);
             Assert.Contains("factType=SqlCommandDetected|count=0", output);
             Assert.DoesNotContain("PRIVATE_SQL", string.Join('\n', output));
             Assert.DoesNotContain("Private.Method", string.Join('\n', output));

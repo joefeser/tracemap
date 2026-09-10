@@ -51,3 +51,4 @@
 - [x] Add a privacy-safe exact Fill-caller database evidence census without inferring object linkage from cooccurrence.
 - [x] Separate Fill-hop selection failures from missing index witnesses and identify the selected inspection safely.
 - [x] Recognize qualified framework display symbols without changing exact caller identity.
+- [x] Diagnose retained command-to-adapter linkage and label fact-shape limitations.
