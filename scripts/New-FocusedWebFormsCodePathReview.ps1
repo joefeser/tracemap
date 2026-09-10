@@ -5,31 +5,17 @@ param(
     [string]$CaseId = 'case-001',
     [ValidateRange(0, 100)]
     [int]$TriggerContextLines = 12,
-    [switch]$IncludeRawSource
+    [switch]$IncludeRawSource,
+    [string]$ConfigPath = ''
 )
 
 $ErrorActionPreference = 'Stop'
 
-function Read-LiteralSetting([string]$Name) {
-    $runner = Join-Path $PSScriptRoot 'Run-FocusedWebFormsPageList.ps1'
-    $tokens = $null
-    $errors = $null
-    $ast = [System.Management.Automation.Language.Parser]::ParseFile($runner, [ref]$tokens, [ref]$errors)
-    $assignments = @($ast.FindAll({ param($node)
-        $node -is [System.Management.Automation.Language.AssignmentStatementAst] -and
-        $node.Left -is [System.Management.Automation.Language.VariableExpressionAst] -and
-        $node.Left.VariablePath.UserPath -eq $Name
-    }, $true))
-    if ($assignments.Count -ne 1) { throw 'CodePathReviewPathSettingUnavailable' }
-    $right = $assignments[0].Right
-    $literal = @($right.FindAll({ param($node) $node -is [System.Management.Automation.Language.StringConstantExpressionAst] }, $true))
-    if ($literal.Count -ne 1 -or $right.Extent.Text.Trim() -ne $literal[0].Extent.Text) {
-        throw 'CodePathReviewPathMustBeLiteral; supply the path parameter explicitly.'
-    }
-    return [string]$literal[0].Value
+if (!$ConfigPath) { $ConfigPath = Join-Path $PSScriptRoot 'Run-FocusedWebFormsPageList.json' }
+if (!$OutputRoot) {
+    . (Join-Path $PSScriptRoot 'webforms-review/FocusedWebFormsConfig.ps1')
+    $OutputRoot = (Read-FocusedWebFormsConfig -ConfigPath $ConfigPath).OutputRoot
 }
-
-if (!$OutputRoot) { $OutputRoot = Read-LiteralSetting 'OutputRoot' }
 if (!$SourceRoot) { $SourceRoot = (Read-Host 'Private source repository root').Trim() }
 if (!$SourceRoot) { throw 'CodePathReviewSourceRootUnavailable' }
 if (!$InspectionPath) {

@@ -1,0 +1,8 @@
+{
+  "indexPath": "C:/work/tracemap-output/focused-webforms-example/scan/index.sqlite",
+  "outputRoot": "C:/work/tracemap-output",
+  "forms": [
+    "source/WebApp/Area/Orders.aspx",
+    "source/WebApp/Area/Status.aspx"
+  ]
+}

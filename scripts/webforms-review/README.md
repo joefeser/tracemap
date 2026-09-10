@@ -14,10 +14,11 @@ commands.
 | A locally configured page-list runner | `Run-AndTriage-FocusedWebFormsPageList.ps1` | A focused packet followed by exact-new-report page triage. |
 | A completed focused packet | `New-FocusedWebFormsBatchInspection.ps1`, then `New-FocusedWebFormsCodePathReviewSet.ps1` | A private browser index, editable verdict queue, and one private/anonymous report pair per case. |
 
-`Run-FocusedWebFormsPageList.ps1` is the convenient work-machine template: its
-literal edit block holds the index, output root, and forms. For automation or a
-clean checkout, prefer `Invoke-FocusedWebFormsPageListReport.ps1` and pass every
-path explicitly.
+`Run-FocusedWebFormsPageList.ps1` reads its three workstation settings from the
+ignored `scripts/Run-FocusedWebFormsPageList.json`: `indexPath`, `outputRoot`,
+and `forms`. A pull cannot overwrite that local file. For automation or a clean
+checkout, prefer `Invoke-FocusedWebFormsPageListReport.ps1` and pass every path
+explicitly.
 
 ## Prerequisites
 
@@ -27,8 +28,8 @@ path explicitly.
 - A local checkout of the reviewed application source. Git is optional for the
   source review, and working-tree equality with the recorded commit is not
   inferred.
-- Literal `IndexPath` and `OutputRoot` settings in
-  `scripts/Run-FocusedWebFormsPageList.ps1`.
+- A local `scripts/Run-FocusedWebFormsPageList.json`, created from the checked-in
+  example as described below.
 
 All batch inspections, source excerpts, paths, symbols, and human comments are
 private. Keep the complete output folder on the authorized work machine. Only a
@@ -38,6 +39,18 @@ sanitized console summary is intended for sharing.
 ## Normal review-set workflow
 
 From the TraceMap repository root:
+
+```powershell
+Copy-Item .\scripts\Run-FocusedWebFormsPageList.example.json .\scripts\Run-FocusedWebFormsPageList.json
+notepad .\scripts\Run-FocusedWebFormsPageList.json
+```
+
+Do that setup once per work-machine checkout. Keep the JSON local: it is ignored
+because the paths and form list may identify private source. The example uses
+generic forward-slash paths, which PowerShell accepts on Windows; JSON
+backslashes must be doubled.
+
+Then run:
 
 ```powershell
 .\scripts\New-FocusedWebFormsBatchInspection.ps1
@@ -117,7 +130,7 @@ wrappers and would not improve the generated artifact layout.
 | --- | --- | --- | --- |
 | `Invoke-FocusedWebFormsReview.ps1` | Yes | Yes, one bounded focused scan | Initial restricted-workstation collection. |
 | `Invoke-FocusedWebFormsPageListReport.ps1` | No | Existing-index report traversal only | Parameterized page-list packet generation. |
-| `Run-FocusedWebFormsPageList.ps1` | No | Existing-index report traversal only | Locally edited page-list runner. |
+| `Run-FocusedWebFormsPageList.ps1` | No | Existing-index report traversal only | Runner backed by the ignored local JSON configuration. |
 | `Run-AndTriage-FocusedWebFormsPageList.ps1` | No | Existing-index report traversal only | Run the configured packet and triage only its exact new artifact. |
 | `New-FocusedWebFormsBatchInspection.ps1` | No | No scan; reads retained index evidence | Build the private case inventory used by review sets. |
 | `New-FocusedWebFormsCodePathReviewSet.ps1` | Yes, bounded local reads; raw serialization is opt-in | No scan | Generate the normal multi-case HTML review set and `index.md` verdict queue. |
@@ -154,6 +167,7 @@ From the repository root, the focused synthetic checks are:
 
 ```powershell
 pwsh -NoProfile -File .\scripts\Invoke-FocusedWebFormsReview.Tests.ps1
+pwsh -NoProfile -File .\scripts\tests\Test-FocusedWebFormsConfiguration.ps1
 pwsh -NoProfile -File .\scripts\tests\Test-FocusedWebFormsCodePathReviewSet.ps1
 pwsh -NoProfile -File .\scripts\tests\Test-FocusedWebFormsActionableGaps.ps1
 pwsh -NoProfile -File .\scripts\tests\Test-CompletedWebFormsPageTriage.ps1
