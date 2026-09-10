@@ -43,6 +43,38 @@ public sealed class WebFormsRawEvidenceAuditTests
     }
 
     [Fact]
+    public void LocalInspectionShowsSiblingCallsAndRepeatedSitesSeparately()
+    {
+        WithFixture((db, report) =>
+        {
+            using (var c = new SqliteConnection($"Data Source={db};Pooling=False"))
+            {
+                c.Open();
+                using var cmd = c.CreateCommand();
+                cmd.CommandText = """
+                    insert into facts(fact_id,fact_type,source_symbol,target_symbol,start_line,end_line) values
+                    ('ui','CallEdge','Private.Handler()','Private.UiOnly()',3,3),
+                    ('later','CallEdge','Private.Handler()','Private.Later()',20,20),
+                    ('repeat','CallEdge','Private.Handler()','Private.Leaf()',25,25);
+                    """;
+                cmd.ExecuteNonQuery();
+            }
+            var path = Path.Combine(Path.GetDirectoryName(report)!, "private.json");
+            var output = WebFormsRawEvidenceAudit.Run(db, report, inspectionPath: path);
+            Assert.Contains("localInspectionDirectCallSites=4", output);
+            Assert.DoesNotContain("Private", string.Join('\n', output));
+            using var inspection = JsonDocument.Parse(File.ReadAllText(path));
+            var calls = inspection.RootElement.GetProperty("directCalls");
+            Assert.Equal(4, calls.GetArrayLength());
+            Assert.Equal(2, calls[0].GetProperty("witnesses").GetArrayLength());
+            Assert.Equal("Private.UiOnly()", calls[1].GetProperty("callee").GetString());
+            Assert.Equal("Private.UiOnly()", calls[1].GetProperty("branch").GetProperty("stoppingSymbols")[0].GetString());
+            Assert.Equal("Private.Later()", calls[2].GetProperty("callee").GetString());
+            Assert.Equal(25, calls[3].GetProperty("startLine").GetInt32());
+        });
+    }
+
+    [Fact]
     public void LocalInspectionLabelsMissingSourceLocations()
     {
         WithFixture((db, report) =>

@@ -222,6 +222,77 @@ public static class WebFormsRawEvidenceAudit
                 locationKind = "call-site-not-callee-definition",
                 location = Location(null, caller, callee)
             }).ToArray();
+            var directFacts = new List<DirectCallWitness>();
+            using (var cmd = db.CreateCommand())
+            {
+                cmd.Transaction = transaction;
+                cmd.CommandText = """
+                    select fact_id, target_symbol, file_path, start_line, end_line, rule_id, evidence_tier
+                    from facts where scan_id=$scan and commit_sha=$commit and source_symbol=$handler
+                    and evidence_tier='Tier1Semantic' and fact_type in ('CallEdge','MethodInvoked')
+                    and target_symbol is not null and target_symbol<>''
+                    order by file_path, start_line, end_line, target_symbol, fact_id limit $limit
+                    """;
+                cmd.Parameters.AddWithValue("$scan", scan!);
+                cmd.Parameters.AddWithValue("$commit", commit!);
+                cmd.Parameters.AddWithValue("$handler", symbols[0]);
+                cmd.Parameters.AddWithValue("$limit", Math.Min(maxRows, 2000) + 1);
+                using var r = cmd.ExecuteReader();
+                while (r.Read())
+                {
+                    if (directFacts.Count >= Math.Min(maxRows, 2000)) throw new InvalidDataException("RawAuditInputLimit");
+                    directFacts.Add(new(r.GetString(0), r.GetString(1), r.IsDBNull(2) ? null : r.GetString(2),
+                        r.IsDBNull(3) ? 0 : r.GetInt32(3), r.IsDBNull(4) ? 0 : r.GetInt32(4), r.GetString(5), r.GetString(6)));
+                }
+            }
+            var branchCache = new Dictionary<string, object>(StringComparer.Ordinal);
+            object Branch(string callee)
+            {
+                if (branchCache.TryGetValue(callee, out var cached)) return cached;
+                var seen = new HashSet<string>(StringComparer.Ordinal) { callee };
+                var pending = new Queue<string>();
+                pending.Enqueue(callee);
+                var stops = new SortedSet<string>(StringComparer.Ordinal);
+                var partial = false;
+                var work = 0;
+                while (pending.TryDequeue(out var node))
+                {
+                    if (!loaded.Contains(node)) { partial = true; continue; }
+                    if (!edges.TryGetValue(node, out var next) || next.Count == 0) { stops.Add(node); continue; }
+                    foreach (var target in next)
+                    {
+                        if (++work > 10_000) { partial = true; break; }
+                        if (seen.Contains(target)) continue;
+                        if (seen.Count >= 500) { partial = true; continue; }
+                        seen.Add(target);
+                        pending.Enqueue(target);
+                    }
+                    if (work > 10_000) break;
+                }
+                var result = new
+                {
+                    status = partial ? "bounded-or-unloaded-branch" : stops.Count == 0 ? "no-leaf-in-retained-call-graph" : "retained-stopping-symbols-found",
+                    stoppingSymbols = stops.ToArray(),
+                    meaning = "Each stopping symbol has no selected exact semantic outgoing call evidence. It is not proof of no runtime calls or a database terminal. Cycles are visited once."
+                };
+                branchCache[callee] = result;
+                return result;
+            }
+            var directCalls = directFacts.GroupBy(f => new { f.Callee, f.FilePath, f.StartLine, f.EndLine })
+                .Select((group, index) => new
+                {
+                    callSiteOrdinal = index + 1,
+                    caller = symbols[0],
+                    callee = group.Key.Callee,
+                    locationKind = "call-site-not-callee-definition",
+                    locationAvailability = !string.IsNullOrWhiteSpace(group.Key.FilePath) && group.Key.StartLine > 0 && group.Key.EndLine >= group.Key.StartLine
+                        ? "retained-evidence-location" : "source-location-unavailable",
+                    filePath = group.Key.FilePath,
+                    startLine = group.Key.StartLine,
+                    endLine = group.Key.EndLine,
+                    witnesses = group.Select(f => new { factId = f.FactId, ruleId = f.RuleId, evidenceTier = f.EvidenceTier }).ToArray(),
+                    branch = Branch(group.Key.Callee)
+                }).ToArray();
             var privateReport = new
             {
                 privacy = "LOCAL ONLY: contains private paths and symbols. Do not share this file or photograph its contents.",
@@ -230,24 +301,31 @@ public static class WebFormsRawEvidenceAudit
                 scanId = scan,
                 commitSha = commit,
                 sourceReport = Path.GetFullPath(reportPath),
-                instructions = "Open the last hop's file at startLine in Visual Studio using your application checkout. This is the CALL SITE. Use Go To Definition locally to inspect the callee. Confirm the checkout matches the recorded commit. Do not execute the application or call a database for this inspection.",
+                instructions = "Start with directCalls: compare ALL retained direct call sites against the selected event handler in Visual Studio. Entries are source-location order, NOT proven execution order. Each entry has its own branch summary; a finished UI-only branch does not end the parent handler. Locations are CALL SITES, not callee definitions. Use Go To Definition locally. Confirm the checkout matches the recorded commit. Do not execute the application or call a database.",
                 surfaceId = chain.GetProperty("surfaceId").GetString(),
                 bindingLocation = Location(chain.GetProperty("bindingFactId").GetString()),
                 handler = symbols[0],
                 handlerEvidenceLocation = Location(handlers[selected.Index]),
+                directCallSiteCount = directCalls.Length,
+                directCalls,
+                directCallScope = "All retained exact Tier1 CallEdge/MethodInvoked sites owned by this handler; not a claim that every source call was extracted. Same-target same-span witnesses are grouped; repeated sites on different lines remain separate.",
+                samplePathScope = "The following hops are only ONE sample branch, not the complete handler sequence. See directCalls for sibling calls.",
                 hops,
                 stoppingSymbol = selected.Symbol,
                 stoppingReason = "no-selected-exact-semantic-call-or-invocation-outgoing-edge",
                 stoppingDefinitionLocation = "not-established-use-go-to-definition-locally",
                 nonClaim = "Independent raw-call sample, not a report leaf reconstruction. Missing exact edges do not prove absent source, absent runtime behavior, or an external method.",
-                shareBackOnly = "Report one category: source-body-found, metadata-or-external-definition, generated-source, definition-unavailable, or checkout-mismatch. Say whether the body contains another call, a database operation, or neither; do not send private names, paths, SQL, or source."
+                shareBackOnly = "Report direct-call-list-matches-source, source-call-missing-from-list, definition-unavailable, or checkout-mismatch. If a call is missing, describe only its kind (application method, framework control operation, database operation). Do not send private names, paths, SQL, or source."
             };
             using var file = new FileStream(inspectionPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
             JsonSerializer.Serialize(file, privateReport, new JsonSerializerOptions { WriteIndented = true });
             output.Add("localInspection=created;selectedSamples=1;keep-file-on-work-machine");
+            output.Add($"localInspectionDirectCallSites={directCalls.Length}");
         }
         return output;
     }
+
+    private sealed record DirectCallWitness(string FactId, string Callee, string? FilePath, int StartLine, int EndLine, string RuleId, string EvidenceTier);
 
     private sealed class AuditState(string seed)
     {

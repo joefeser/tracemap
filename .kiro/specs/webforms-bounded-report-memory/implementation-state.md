@@ -1,5 +1,21 @@
 # Implementation state
 
+## Whole-handler direct-call inspection (2026-09-09)
+
+Operator inspection showed the selected stopping branch only toggles panel
+visibility; later operations are sibling calls in the parent event handler.
+This is not evidence of a tracing defect. Extended the local inspection with
+all retained exact Tier1 direct call sites and a separate downstream stopping
+summary per callee. CallEdge/MethodInvoked witnesses at the same target/span
+are grouped; repeated sites are retained. Source order is not execution order.
+The previous one-path section remains compatible but is explicitly one sample
+branch. The form list, application index and sanitized console stay unchanged
+except a safe direct-site count. Bounds: 2,000 direct witness rows, 500 symbols
+and 10k edges per cached callee summary; limits are not silently hidden.
+Validation: focused audit tests 9/9, full solution 1775/1775, and local inspection
+PowerShell/helper smoke passed. Formatting, private-path guard, and diff checks
+passed. Field source comparison is still required; no extraction defect claimed.
+
 ## Local-only source inspection (2026-09-09)
 
 User requested concrete source locations after the raw audit found seven

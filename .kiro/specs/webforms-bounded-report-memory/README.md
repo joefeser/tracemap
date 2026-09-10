@@ -13,21 +13,30 @@ Reuses your existing IndexPath/OutputRoot settings. Open the newest JSON inside
 it contains private paths and symbols; do not send it or photographs of it.**
 
 The file selects one deterministic unbounded raw exact-call sample from the
-priority handlers. It provides the selected surface ID, binding/handler evidence
-locations, and a parent-chain to one stopping symbol. Open the final hop's file
-at its start line in Visual Studio, then use Go To Definition on the callee.
+priority handlers. Start with `directCalls`: it lists all retained direct
+semantic call sites owned by that handler, with individual branch stopping
+symbols. Compare these against the whole event-handler body in Visual Studio.
+A UI-only child method finishing does not mean later calls in the parent are
+missing. Source-line order is not proof of runtime execution order. Repeated
+calls on different lines remain separate; same-target same-span witnesses are
+grouped. The old `hops` section is explicitly labeled as only one sample branch.
+It also provides the selected surface ID and binding/handler evidence locations.
+Open each relevant call-site file at its start line, then use Go To Definition.
 These are retained CALL-SITE locations, not inferred callee definitions. Missing
 locations are explicitly unavailable. Paths may be relative to the application
 checkout; verify the recorded source commit before inspecting. No application
 execution, source-text capture, rescan, or report regeneration is performed.
 
-Share back only one category: `source-body-found`, `metadata-or-external-definition`,
-`generated-source`, `definition-unavailable`, or `checkout-mismatch`. If a body
-is found, say whether it contains another call, a database operation, or neither.
+Share back only `direct-call-list-matches-source`, `source-call-missing-from-list`,
+`definition-unavailable`, or `checkout-mismatch`. If a call is missing, describe
+only its kind: application method, framework control operation, or database operation.
 Do not send names, paths, source, SQL, or configuration. This single sample is
 not the report's unresolved-leaf inventory and does not prove runtime behavior.
 Console output remains the sanitized raw-audit summary plus a creation marker;
 the private JSON is a separate explicitly requested inspection artifact.
+The inspection accepts at most 2,000 direct witness rows (otherwise fails,
+never silently drops later calls). Per distinct direct callee, branch summaries
+visit at most 500 symbols/10,000 edges, and label bounded or unloaded branches.
 
 ## Previous command: independent original-index audit
 
