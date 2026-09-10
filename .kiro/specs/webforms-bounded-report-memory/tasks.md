@@ -53,3 +53,4 @@
 - [x] Recognize qualified framework display symbols without changing exact caller identity.
 - [x] Diagnose retained command-to-adapter linkage and label fact-shape limitations.
 - [x] Retain semantic invocation receivers and direct property-assignment symbols; validate real framework extraction through SQLite and the census.
+- [x] Promote compiler-resolved framework DataAdapter Fill calls to SQL-query terminals in bounded Web Forms reports and regress the full handler-to-terminal path.

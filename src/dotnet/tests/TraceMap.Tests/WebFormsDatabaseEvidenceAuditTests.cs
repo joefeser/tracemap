@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
+using TraceMap.Core;
 using TraceMap.Reporting;
 
 namespace TraceMap.Tests;
@@ -36,6 +37,27 @@ public sealed class WebFormsDatabaseEvidenceAuditTests
         var fill = Assert.Single(scan.Facts, f => f.FactType == "MethodInvoked" && f.TargetSymbol!.StartsWith("global::System.Data.Common.DbDataAdapter.Fill(", StringComparison.Ordinal));
         Assert.Equal("global::System.Data.Common.DbDataAdapter adapter", fill.Properties["receiverSymbol"]);
         Assert.True(fill.Properties.ContainsKey("receiverSymbolId"));
+        var projectedFill = Assert.Single(CombinedSurfaceProjection.BuildSurfaces([
+            new CombinedSurfaceFactInput(
+                fill.FactId,
+                "single",
+                "sample",
+                fill.FactId,
+                fill.ScanId,
+                fill.CommitSha,
+                fill.FactType,
+                fill.RuleId,
+                fill.EvidenceTier,
+                fill.Evidence.FilePath,
+                fill.Evidence.StartLine,
+                fill.Evidence.EndLine,
+                fill.Properties,
+                fill.Evidence.ExtractorVersion,
+                fill.SourceSymbol,
+                fill.TargetSymbol)
+        ]));
+        Assert.Equal("sql-query", projectedFill.SurfaceKind);
+        Assert.Equal("data-adapter-fill", projectedFill.SurfaceSubtype);
         Assert.Contains(scan.Facts, f => f.FactType == "PropertyAccessed" && f.TargetSymbol!.EndsWith(".CommandType", StringComparison.Ordinal) && !f.Properties.ContainsKey("assignedValueSymbol"));
         var index = Path.Combine(temp.Path, "index.sqlite");
         TraceMap.Storage.SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);

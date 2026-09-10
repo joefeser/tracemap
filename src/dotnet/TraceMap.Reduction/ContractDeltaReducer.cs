@@ -2038,7 +2038,10 @@ public static class ContractDeltaReducer
             fact.FilePath,
             fact.StartLine,
             fact.EndLine,
-            fact.Properties);
+            fact.Properties,
+            null,
+            fact.SourceSymbol,
+            fact.TargetSymbol);
     }
 
     private static IndexedFact ToProjectedSurfaceFact(CombinedSurfaceProjectionRow surface, IReadOnlyDictionary<string, IndexedFact> factsById)

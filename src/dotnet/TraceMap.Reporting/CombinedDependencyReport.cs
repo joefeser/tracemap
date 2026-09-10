@@ -965,7 +965,9 @@ public static class CombinedDependencyReporter
             fact.StartLine,
             fact.EndLine,
             fact.Properties,
-            extractorVersion);
+            extractorVersion,
+            fact.SourceSymbol,
+            fact.TargetSymbol);
     }
 
     private static CombinedDependencySurfaceRow ToSurfaceRow(CombinedSurfaceProjectionRow surface)

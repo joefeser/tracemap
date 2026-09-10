@@ -2100,7 +2100,10 @@ public static partial class CombinedDependencyPathReporter
             fact.FilePath,
             fact.StartLine,
             fact.EndLine,
-            fact.Properties);
+            fact.Properties,
+            fact.ExtractorVersion,
+            fact.SourceSymbol,
+            fact.TargetSymbol);
     }
 
     private static GraphNode ToProjectionTerminalNode(CombinedFactRow fact, string surfaceKind, string? terminalHash)
