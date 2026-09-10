@@ -90,3 +90,29 @@ workflow:
 Do not infer runtime execution, branch feasibility, successful binding, database
 results, or source absence from these static artifacts. Human verdicts are review
 metadata and never rewrite scanner evidence.
+
+## Experimental WITS review overlay
+
+Issue #724 begins the next, separate layer. Export a deterministic private draft
+from a completed review set's inspection snapshot:
+
+```powershell
+.\scripts\webforms-review\Invoke-WitsModernizationReview.ps1 `
+  -Mode Export `
+  -InspectionPath C:\path\to\review-set\inspection.snapshot.json `
+  -ReviewPath C:\path\to\review-set\wits-modernization-review.json
+```
+
+After an authorized reviewer or workflow edits only the review metadata, validate
+the exact overlay against the same snapshot:
+
+```powershell
+.\scripts\webforms-review\Invoke-WitsModernizationReview.ps1 `
+  -Mode Validate `
+  -InspectionPath C:\path\to\review-set\inspection.snapshot.json `
+  -ReviewPath C:\path\to\review-set\wits-modernization-review.json
+```
+
+The overlay is private. Validation rejects changed evidence references and does
+not import the verdict into TraceMap facts. The contract is
+`docs/contracts/wits-modernization-review.v1.schema.json`.
