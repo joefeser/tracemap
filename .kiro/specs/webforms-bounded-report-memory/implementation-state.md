@@ -16,6 +16,16 @@ available; private HTML loads no remote script.
 Validation: focused code-path review tests 2/2; full .NET suite 1789/1789;
 PowerShell parse, scoped formatting, private-path guard, and diff checks passed.
 
+Field dogfood confirmed the alias graph and repeated-call collapse rendered in
+the work browser. The private report now embeds that shareable graph in a
+sandboxed script-only frame and provides a private alias-to-symbol/evidence
+legend outside the frame. The remote Mermaid module can access only the
+anonymous child document, not the source-bearing parent. Bounded trigger source
+is duplicated inline before the handler-rooted path so a reviewer can read down
+without an initial navigation jump; the full anchored evidence remains below.
+Validation after this layout refinement: focused tests 2/2 and full .NET suite
+1789/1789; scoped formatting, private-path guard, and diff checks passed.
+
 ## Batch local handler review (2026-09-10)
 
 Field triage after Fill terminal projection still has seven terminal-free chains

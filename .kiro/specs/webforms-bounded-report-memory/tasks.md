@@ -58,3 +58,4 @@
 - [x] Classify exact allowlisted UI/control endpoints separately from other unresolved leaves in batch review output without claiming backend absence.
 - [x] Add a one-case local working-tree code-path review with bounded source excerpts, call witnesses, optional definition candidates, and a human verdict section.
 - [x] Render handler-rooted HTML drill-down with evidence anchors and a separately generated anonymous Mermaid/JSON review packet.
+- [x] Embed the isolated alias Mermaid graph and private alias legend in the local review, and duplicate bounded trigger source above its full-evidence link.

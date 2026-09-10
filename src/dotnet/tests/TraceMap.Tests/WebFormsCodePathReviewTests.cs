@@ -13,7 +13,7 @@ public sealed class WebFormsCodePathReviewTests
             var output = Path.Combine(directory, "review.private.html");
             var lines = WebFormsCodePathReview.Run(inspection, sourceRoot, "case-001", output);
             Assert.Contains("codePathReview=created", lines);
-            Assert.Contains(lines, line => line == "case=case-001|sourceMode=working-tree|excerpts=3|definitionCandidates=1|anonymousNodes=2|anonymousEdges=1|review=unreviewed");
+            Assert.Contains(lines, line => line == "case=case-001|sourceMode=working-tree|excerpts=4|definitionCandidates=1|anonymousNodes=2|anonymousEdges=1|review=unreviewed");
             Assert.DoesNotContain("Private", string.Join('\n', lines));
             var report = File.ReadAllText(output);
             Assert.Contains("Source mode: <code>working-tree</code>", report);
@@ -23,6 +23,9 @@ public sealed class WebFormsCodePathReviewTests
             Assert.Contains("Expected UI/control-only behavior", report);
             Assert.Contains("id=\"call-path\"", report);
             Assert.Contains("href=\"#evidence-", report);
+            Assert.Contains("sandbox=\"allow-scripts\"", report);
+            Assert.Contains("Anonymous Mermaid call graph", report);
+            Assert.Contains("Private alias legend", report);
             var shareableHtml = File.ReadAllText(Path.Combine(directory, "review.shareable.html"));
             var shareableJson = File.ReadAllText(Path.Combine(directory, "review.shareable.json"));
             Assert.Contains("flowchart TD", shareableHtml);
@@ -86,7 +89,7 @@ public sealed class WebFormsCodePathReviewTests
                     bounded = false,
                     evidenceConclusion = "ui-control-operations-observed-with-unresolved-leaves",
                     handlerLocation = Witness("handler", "Private.Page.Handler()", 3, 6),
-                    bindings = Array.Empty<object>(),
+                    bindings = new[] { new { bindingLocation = Witness("Private.Page.Control", "Private.Page.Handler()", 3, 3) } },
                     unresolvedOtherLeaves = new[] { "Private.Page.UiReset()" },
                     methods = new object[]
                     {
