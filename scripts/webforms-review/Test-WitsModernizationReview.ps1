@@ -31,9 +31,12 @@ function Write-Variant($Value, [string]$Name) {
 try {
     $first = Join-Path $temp 'review-one.json'
     $second = Join-Path $temp 'review-two.json'
+    $lowercaseMode = Join-Path $temp 'review-lowercase-mode.json'
     & $scriptPath -Mode Export -InspectionPath $inspectionPath -ReviewPath $first | Out-Null
     & $scriptPath -Mode Export -InspectionPath $inspectionPath -ReviewPath $second | Out-Null
+    & $scriptPath -Mode export -InspectionPath $inspectionPath -ReviewPath $lowercaseMode | Out-Null
     if ((Get-FileHash $first).Hash -ne (Get-FileHash $second).Hash) { throw 'Review export is not deterministic.' }
+    if ((Get-FileHash $first).Hash -ne (Get-FileHash $lowercaseMode).Hash) { throw 'Accepted mode casing changed export behavior.' }
     if ([IO.File]::ReadAllText($first).Contains($privateSentinel, [StringComparison]::Ordinal)) { throw 'Review export leaked unrelated private inspection content.' }
     & $scriptPath -Mode Validate -InspectionPath $inspectionPath -ReviewPath $first | Out-Null
     $existingHash = (Get-FileHash $first).Hash
@@ -47,6 +50,7 @@ try {
     foreach ($decision in $valid.decisions) { $decision.verdict = 'needs-review'; $decision.migrationDisposition = 'defer' }
     $completed = Write-Variant $valid 'completed.json'
     & $scriptPath -Mode Validate -InspectionPath $inspectionPath -ReviewPath $completed | Out-Null
+    & $scriptPath -Mode validate -InspectionPath $inspectionPath -ReviewPath $completed | Out-Null
 
     $bad = [IO.File]::ReadAllText($first) | ConvertFrom-Json -Depth 32
     $bad.decisions[0].verdict = 'approved-by-magic'
@@ -54,6 +58,18 @@ try {
     $bad = [IO.File]::ReadAllText($first) | ConvertFrom-Json -Depth 32
     $bad.decisions[0].verdict = 'NEEDS-REVIEW'
     Expect-Failure 'WITS_REVIEW_DECISION_INVALID' { & $scriptPath -Mode Validate -InspectionPath $inspectionPath -ReviewPath (Write-Variant $bad 'case-changed-code.json') }
+    $bad = [IO.File]::ReadAllText($first) | ConvertFrom-Json -Depth 32
+    $bad.reviewState = $true
+    Expect-Failure 'WITS_REVIEW_STATE_INVALID' { & $scriptPath -Mode Validate -InspectionPath $inspectionPath -ReviewPath (Write-Variant $bad 'non-string-state.json') }
+    $bad = [IO.File]::ReadAllText($first) | ConvertFrom-Json -Depth 32
+    $bad.decisions[0].verdict = $true
+    Expect-Failure 'WITS_REVIEW_DECISION_INVALID' { & $scriptPath -Mode Validate -InspectionPath $inspectionPath -ReviewPath (Write-Variant $bad 'non-string-verdict.json') }
+    $bad = [IO.File]::ReadAllText($first) | ConvertFrom-Json -Depth 32
+    $bad.decisions[0].migrationDisposition = $true
+    Expect-Failure 'WITS_REVIEW_DECISION_INVALID' { & $scriptPath -Mode Validate -InspectionPath $inspectionPath -ReviewPath (Write-Variant $bad 'non-string-disposition.json') }
+    $bad = [IO.File]::ReadAllText($first) | ConvertFrom-Json -Depth 32
+    $bad.decisions[0].correction = [pscustomobject]@{ category = $true; statement = 'corrected statement' }
+    Expect-Failure 'WITS_REVIEW_DECISION_INVALID' { & $scriptPath -Mode Validate -InspectionPath $inspectionPath -ReviewPath (Write-Variant $bad 'non-string-correction-category.json') }
     $bad = [IO.File]::ReadAllText($first) | ConvertFrom-Json -Depth 32
     $bad.decisions[1].caseId = 'case-001'
     Expect-Failure 'WITS_REVIEW_CASE_SET_MISMATCH' { & $scriptPath -Mode Validate -InspectionPath $inspectionPath -ReviewPath (Write-Variant $bad 'duplicate.json') }
@@ -78,6 +94,9 @@ try {
     $bad = [IO.File]::ReadAllText($completed) | ConvertFrom-Json -Depth 32
     $bad.reviewer = $null
     Expect-Failure 'WITS_REVIEW_COMPLETION_INVALID' { & $scriptPath -Mode Validate -InspectionPath $inspectionPath -ReviewPath (Write-Variant $bad 'completion.json') }
+    $bad = [IO.File]::ReadAllText($completed) | ConvertFrom-Json -Depth 32
+    $bad.reviewer = '   '
+    Expect-Failure 'WITS_REVIEW_COMPLETION_INVALID' { & $scriptPath -Mode Validate -InspectionPath $inspectionPath -ReviewPath (Write-Variant $bad 'whitespace-reviewer.json') }
     $bad = [IO.File]::ReadAllText($first) | ConvertFrom-Json -Depth 32
     $bad.reviewer = 'reviewer-001'
     $bad.reviewedAtUtc = 'not-a-timestamp'
@@ -97,6 +116,15 @@ try {
     $bad = [IO.File]::ReadAllText($first) | ConvertFrom-Json -Depth 32
     $bad | Add-Member -NotePropertyName unexpected -NotePropertyValue $true
     Expect-Failure 'WITS_REVIEW_UNKNOWN_FIELD' { & $scriptPath -Mode Validate -InspectionPath $inspectionPath -ReviewPath (Write-Variant $bad 'unknown.json') }
+
+    $schemaPath = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'docs/contracts/wits-modernization-review.v1.schema.json'
+    $schema = [IO.File]::ReadAllText($schemaPath) | ConvertFrom-Json -Depth 32
+    $reviewerPatterns = @(
+        $schema.properties.reviewer.pattern,
+        $schema.allOf[0].oneOf[1].properties.reviewer.pattern,
+        $schema.allOf[1].then.properties.reviewer.pattern
+    )
+    if (@($reviewerPatterns | Where-Object { $_ -cne '\S' }).Count -ne 0) { throw 'Reviewer schemas do not consistently reject whitespace-only values.' }
 
     if ((Get-FileHash -LiteralPath $inspectionPath -Algorithm SHA256).Hash -ne $before) { throw 'Review workflow modified the inspection.' }
     Write-Host 'PASS WITS modernization review overlay'
