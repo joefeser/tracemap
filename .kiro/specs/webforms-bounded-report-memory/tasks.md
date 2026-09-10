@@ -57,3 +57,4 @@
 - [x] Replace single-sample follow-up with one local batch review of every terminal-free handler, including all calls, stopping locations, provenance, bounds, and manual result categories.
 - [x] Classify exact allowlisted UI/control endpoints separately from other unresolved leaves in batch review output without claiming backend absence.
 - [x] Add a one-case local working-tree code-path review with bounded source excerpts, call witnesses, optional definition candidates, and a human verdict section.
+- [x] Render handler-rooted HTML drill-down with evidence anchors and a separately generated anonymous Mermaid/JSON review packet.

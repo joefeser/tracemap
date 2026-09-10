@@ -38,7 +38,7 @@ if (!$InspectionPath) {
 
 $directory = Join-Path $OutputRoot 'local-inspection-private'
 $null = New-Item -ItemType Directory -Path $directory -Force
-$reviewPath = Join-Path $directory ("webforms-code-path-review-$CaseId-$([Guid]::NewGuid().ToString('N')).md")
+$reviewPath = Join-Path $directory ("webforms-code-path-review-$CaseId-$([Guid]::NewGuid().ToString('N')).private.html")
 $project = Join-Path $PSScriptRoot 'diagnostics/RawWebFormsEvidence/RawWebFormsEvidence.csproj'
 Write-Host 'Building local review helper; reading current working-tree source.'
 $buildOutput = & dotnet build $project -c Release --nologo -v quiet 2>&1
@@ -47,4 +47,6 @@ $dll = Join-Path $PSScriptRoot 'diagnostics/RawWebFormsEvidence/bin/Release/net1
 & dotnet $dll --code-path-review $InspectionPath $SourceRoot $CaseId $reviewPath
 if ($LASTEXITCODE -ne 0) { throw 'CodePathReviewFailed; no review report is available.' }
 Write-Host "PRIVATE local code-path review: $reviewPath"
-if ($IsWindows) { Start-Process -FilePath notepad.exe -ArgumentList ('"' + $reviewPath + '"') }
+$shareablePath = $reviewPath -replace '\.private\.html$', '.shareable.html'
+Write-Host "ANONYMOUS shareable review: $shareablePath"
+if ($IsWindows) { Start-Process -FilePath $reviewPath }

@@ -10,17 +10,30 @@ public sealed class WebFormsCodePathReviewTests
     {
         WithFixture((directory, sourceRoot, inspection) =>
         {
-            var output = Path.Combine(directory, "review.md");
+            var output = Path.Combine(directory, "review.private.html");
             var lines = WebFormsCodePathReview.Run(inspection, sourceRoot, "case-001", output);
             Assert.Contains("codePathReview=created", lines);
-            Assert.Contains(lines, line => line == "case=case-001|sourceMode=working-tree|excerpts=3|definitionCandidates=1|review=unreviewed");
+            Assert.Contains(lines, line => line == "case=case-001|sourceMode=working-tree|excerpts=3|definitionCandidates=1|anonymousNodes=2|anonymousEdges=1|review=unreviewed");
             Assert.DoesNotContain("Private", string.Join('\n', lines));
             var report = File.ReadAllText(output);
-            Assert.Contains("Source mode: `working-tree`", report);
+            Assert.Contains("Source mode: <code>working-tree</code>", report);
             Assert.Contains("Private.Page.Handler()", report);
             Assert.Contains("UiReset();", report);
             Assert.Contains("unique-name-definition-candidate-not-evidence", report);
             Assert.Contains("Expected UI/control-only behavior", report);
+            Assert.Contains("id=\"call-path\"", report);
+            Assert.Contains("href=\"#evidence-", report);
+            var shareableHtml = File.ReadAllText(Path.Combine(directory, "review.shareable.html"));
+            var shareableJson = File.ReadAllText(Path.Combine(directory, "review.shareable.json"));
+            Assert.Contains("flowchart TD", shareableHtml);
+            Assert.Contains("handler-001", shareableHtml);
+            Assert.Contains("diagnostic.webforms.anonymous-code-path-review.v1", shareableJson);
+            Assert.DoesNotContain("Private", shareableHtml);
+            Assert.DoesNotContain("UiReset", shareableHtml);
+            Assert.DoesNotContain("source/Page", shareableHtml);
+            Assert.DoesNotContain("Private", shareableJson);
+            Assert.DoesNotContain("UiReset", shareableJson);
+            Assert.DoesNotContain("source/Page", shareableJson);
             Assert.Throws<IOException>(() => WebFormsCodePathReview.Run(inspection, sourceRoot, "case-001", output));
         });
     }
