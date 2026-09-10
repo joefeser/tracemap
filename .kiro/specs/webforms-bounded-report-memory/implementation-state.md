@@ -992,6 +992,12 @@ longer has to display groups such as 001, 002, 005 followed by 003. A focused
 regression deliberately interleaves handler fact ordering across file paths and
 proves the emitted case IDs follow the file grouping.
 
+The accepted workflow is packaged in `scripts/webforms-review/README.md`. Public
+entry scripts remain at their already dogfooded root paths instead of being moved
+behind compatibility wrappers. The guide separates the normal two-command batch
+and review-set path from optional diagnostic tools, inventories every set artifact,
+and repeats the private/shareable and static-evidence boundaries.
+
 ### Post-fairness field result and actionable summary
 
 The work-machine rerun retained 466 event chains and 361 downstream boundaries.

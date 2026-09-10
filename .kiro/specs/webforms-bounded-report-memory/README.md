@@ -1,5 +1,8 @@
 # Restricted Web Forms run: diagnostic follow-up
 
+The supported operator sequence and diagnostic-script inventory are summarized in
+[`scripts/webforms-review/README.md`](../../../scripts/webforms-review/README.md).
+
 ## Current command: review every remaining terminal-free handler together
 
 ```powershell
