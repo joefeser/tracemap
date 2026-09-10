@@ -978,10 +978,11 @@ boundary. Validation included the two-case mocked PowerShell regression and a
 real one-case launcher-to-helper run that produced both indexes, the private and
 shareable reports, and the inspection snapshot.
 
-The private HTML and Markdown indexes now group cases by retained `surfaceId`,
-falling back to the handler location only when a binding has no surface identity.
-They report distinct item count separately from handler-case count and show the
-private handler identity on each row. This prevents seven handler cases across
+The private HTML and Markdown indexes now group cases by retained event-binding
+file path, falling back to the handler file and then `surfaceId` only when a more
+useful path is unavailable. They report distinct item count separately from
+handler-case count and show the private handler identity on each row. Evidence
+case IDs do not wrap in the HTML table. This prevents seven handler cases across
 three pages from reading as either seven pages or one unexplained batch.
 
 ### Post-fairness field result and actionable summary
