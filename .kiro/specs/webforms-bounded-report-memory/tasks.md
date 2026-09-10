@@ -49,3 +49,4 @@
 - [x] Show all retained direct handler call sites and independent branch summaries so one UI-only branch is not mistaken for the whole handler.
 - [x] Add unique-method-hint local inspection to trace retained calls across abstraction layers without guessing event associations.
 - [x] Add a privacy-safe exact Fill-caller database evidence census without inferring object linkage from cooccurrence.
+- [x] Separate Fill-hop selection failures from missing index witnesses and identify the selected inspection safely.

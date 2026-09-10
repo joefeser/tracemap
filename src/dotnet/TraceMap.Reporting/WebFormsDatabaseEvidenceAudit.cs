@@ -5,15 +5,22 @@ namespace TraceMap.Reporting;
 
 public static class WebFormsDatabaseEvidenceAudit
 {
-    public static IReadOnlyList<string> Run(string indexPath, string inspectionPath)
+    public static IReadOnlyList<string> Run(string indexPath, string inspectionPath, Action<string>? diagnostic = null)
     {
         if (new FileInfo(inspectionPath).Length > 128 * 1024 * 1024) throw new InvalidDataException("RawAuditReportLimit");
         using var document = JsonDocument.Parse(File.ReadAllText(inspectionPath));
         var root = document.RootElement;
         if (root.GetProperty("schemaVersion").GetString() != "webforms-local-inspection.v1") throw new InvalidDataException("RawAuditSchemaMismatch");
-        var callers = root.GetProperty("hops").EnumerateArray().Where(h => IsFill(h.GetProperty("callee").GetString() ?? ""))
+        var hops = root.GetProperty("hops").EnumerateArray().ToArray();
+        var recognized = hops.Where(h => IsFill(h.GetProperty("callee").GetString() ?? "")).ToArray();
+        diagnostic?.Invoke($"inspectionHopCount={hops.Length}");
+        diagnostic?.Invoke($"inspectionFillNamedHops={hops.Count(h => (h.GetProperty("callee").GetString() ?? "").Contains(".Fill(", StringComparison.Ordinal))}");
+        diagnostic?.Invoke($"inspectionRecognizedFrameworkFillHops={recognized.Length}");
+        if (recognized.Length == 0) throw new InvalidDataException("RawAuditNoRecognizedFillHop");
+        var callers = recognized
             .Select(h => h.GetProperty("caller").GetString()).Distinct(StringComparer.Ordinal).ToArray();
-        if (callers.Length != 1 || string.IsNullOrEmpty(callers[0])) throw new InvalidDataException("RawAuditFillCallerUnavailable");
+        if (callers.Any(string.IsNullOrEmpty)) throw new InvalidDataException("RawAuditFillCallerIdentityMissing");
+        if (callers.Length != 1) throw new InvalidDataException("RawAuditMultipleFillCallers");
         using var db = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = indexPath, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString());
         db.Open();
         using var transaction = db.BeginTransaction(deferred: true);
@@ -74,7 +81,10 @@ public static class WebFormsDatabaseEvidenceAudit
             Hit("adapter-argument-symbol-retained", type == "ArgumentPassed" && adapter && Has("argumentSymbol"));
             Hit("fill-receiver-symbol-retained", type == "MethodInvoked" && IsFill(target) && Has("receiverSymbol"));
         }
-        if (!fillWitness) throw new InvalidDataException("RawAuditFillCallerUnavailable");
+        diagnostic?.Invoke("indexProvenance=matched");
+        diagnostic?.Invoke($"exactCallerFactRows={rows}");
+        diagnostic?.Invoke($"exactCallerFrameworkFillWitness={(fillWitness ? "present" : "missing")}");
+        if (!fillWitness) throw new InvalidDataException("RawAuditFillIndexWitnessMissing");
         return new[] { "database-evidence-audit=completed", "provenance=matched", "scope=exact-fill-caller-only", "rule=diagnostic.webforms.database-evidence-census.v1", $"retainedFacts={rows}", $"semanticFacts={semantic}" }
             .Concat(counts.Select(c => $"factType={c.Key}|count={c.Value}"))
             .Concat(signals.Select(s => $"semanticSignal={s.Key}|count={s.Value}"))
