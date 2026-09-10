@@ -14,12 +14,15 @@ public static class WebFormsCodePathReview
     private sealed record AnonymousNode(string Id, string Classification);
 
     public static IReadOnlyList<string> Run(string inspectionPath, string sourceRoot, string caseId, string outputPath,
-        int contextLines = 4, int maxExcerpts = 64, int maxSourceBytes = 16 * 1024 * 1024, int triggerContextLines = 12)
+        int contextLines = 4, int maxExcerpts = 64, int maxSourceBytes = 16 * 1024 * 1024, int triggerContextLines = 12,
+        string? returnHref = null)
     {
         if (contextLines is < 0 or > 12 || triggerContextLines is < 0 or > 100 || maxExcerpts is < 1 or > 128 || maxSourceBytes is < 1 or > 32 * 1024 * 1024)
             throw new InvalidDataException("CodePathReviewInvalidLimit");
         if (!System.Text.RegularExpressions.Regex.IsMatch(caseId, "^case-[0-9]{3}$"))
             throw new InvalidDataException("CodePathReviewCaseInvalid");
+        if (returnHref is not null && !System.Text.RegularExpressions.Regex.IsMatch(returnHref, "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}\\.html$"))
+            throw new InvalidDataException("CodePathReviewReturnLinkInvalid");
         var inspection = new FileInfo(inspectionPath);
         if (!inspection.Exists || inspection.Length > 32 * 1024 * 1024) throw new InvalidDataException("CodePathReviewInspectionUnavailable");
         var rootPath = Path.GetFullPath(sourceRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
@@ -343,6 +346,7 @@ public static class WebFormsCodePathReview
             {
                 writer.WriteLine("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
                 writer.WriteLine($"<title>Private Web Forms code-path review {H(caseId)}</title><style>{PrivateCss}</style></head><body id=\"top\"><main>");
+                if (returnHref is not null) writer.WriteLine($"<nav class=\"review-nav\"><a href=\"{H(returnHref)}\">← Return to review index</a></nav>");
                 writer.WriteLine($"<h1>Local Web Forms code-path review: {H(caseId)}</h1>");
                 writer.WriteLine("<p class=\"private\">PRIVATE: working-tree source excerpts and identities. Keep this artifact on the work machine.</p>");
                 writer.WriteLine("<section id=\"summary\"><h2>Summary</h2><ul>");
@@ -392,7 +396,9 @@ public static class WebFormsCodePathReview
                 writer.WriteLine("</details><details class=\"panel\" id=\"verdict\" open><summary><h2>Human verdict</h2></summary><p>Choose one and add a short reason.</p>");
                 writer.WriteLine("<label><input type=\"checkbox\"> Expected UI/control-only behavior</label><label><input type=\"checkbox\"> Supported backend operation present</label><label><input type=\"checkbox\"> Backend operation expected but evidence missing</label><label><input type=\"checkbox\"> Incorrect binding or source mismatch</label><label><input type=\"checkbox\"> Needs further review</label>");
                 writer.WriteLine("<p>Reason:</p><p>Reviewer:</p><p>Reviewed at:</p></details>");
-                writer.WriteLine("<footer>Unique-name definition candidates are navigation aids, not evidence. Missing source or calls do not prove absence.</footer></main>");
+                writer.WriteLine("<footer>Unique-name definition candidates are navigation aids, not evidence. Missing source or calls do not prove absence.</footer>");
+                if (returnHref is not null) writer.WriteLine($"<nav class=\"review-nav bottom\"><a href=\"{H(returnHref)}\">← Return to review index</a></nav>");
+                writer.WriteLine("</main>");
                 writer.WriteLine("<script>function revealTarget(){const id=decodeURIComponent(location.hash.slice(1));if(!id)return;const target=document.getElementById(id);if(!target)return;let parent=target.closest('details');while(parent){parent.open=true;parent=parent.parentElement?.closest('details');}}addEventListener('hashchange',revealTarget);revealTarget();</script></body></html>");
             }
 
@@ -491,7 +497,7 @@ public static class WebFormsCodePathReview
     }
 
     private const string PrivateCss = """
-        :root{font-family:system-ui,sans-serif;color:#172033;background:#f5f7fb}body{margin:0}main{max-width:1100px;margin:auto;padding:24px}section,article,.panel{background:white;border:1px solid #dbe2ee;border-radius:10px;padding:18px;margin:16px 0}.panel>summary{cursor:pointer;display:flex;align-items:center;gap:.6rem}.panel>summary::before{content:'▸';color:#526177}.panel[open]>summary::before{content:'▾'}.panel>summary h2{display:inline;margin:0}.private{background:#fff1f0;border-left:5px solid #c62828;padding:12px}.root{font-size:1.05rem;padding:10px;background:#eaf1ff;border-radius:6px}.call-tree{border-left:2px solid #bed0ee;margin:.5rem 0 .5rem 1rem;padding-left:1.4rem}.call-tree li{margin:.55rem 0}.kind,.sites,.reference{font-size:.85rem;color:#526177}.callee{font-weight:650}a{color:#1558b0}pre{overflow:auto;background:#111827;color:#e5e7eb;padding:14px;border-radius:8px;line-height:1.4}.evidence:target{outline:3px solid #ffbf47}.trigger-code{background:#f8faff}.inline-graph{overflow:auto;background:#fff;border:1px solid #dbe2ee;border-radius:8px}.inline-graph svg{display:block;min-width:820px;width:100%;height:auto}.graph-edge{stroke:#3b4658;stroke-width:1.5}.inline-graph marker path{fill:#3b4658}.edge-label,.graph-node text{text-anchor:middle;font-size:13px;fill:#172033}.edge-label{paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round}.graph-node rect{fill:#eef0ff;stroke:#7467d8;stroke-width:1.5}.graph-node:hover rect,.graph-node:focus rect{fill:#e1e5ff;stroke-width:2.5}.node-kind{font-size:11px;fill:#526177}.legend{display:grid;grid-template-columns:max-content 1fr;gap:.45rem 1rem}.legend dt{font-weight:700}.legend dd{margin:0;overflow-wrap:anywhere}label{display:block;margin:.55rem 0}footer{color:#526177;margin:28px 0}
+        :root{font-family:system-ui,sans-serif;color:#172033;background:#f5f7fb}body{margin:0}main{max-width:1100px;margin:auto;padding:24px}section,article,.panel{background:white;border:1px solid #dbe2ee;border-radius:10px;padding:18px;margin:16px 0}.panel>summary{cursor:pointer;display:flex;align-items:center;gap:.6rem}.panel>summary::before{content:'▸';color:#526177}.panel[open]>summary::before{content:'▾'}.panel>summary h2{display:inline;margin:0}.private{background:#fff1f0;border-left:5px solid #c62828;padding:12px}.review-nav{margin:0 0 14px}.review-nav.bottom{margin:24px 0 0}.review-nav a{display:inline-block;background:#eaf1ff;border:1px solid #bed0ee;border-radius:6px;padding:8px 12px;text-decoration:none}.root{font-size:1.05rem;padding:10px;background:#eaf1ff;border-radius:6px}.call-tree{border-left:2px solid #bed0ee;margin:.5rem 0 .5rem 1rem;padding-left:1.4rem}.call-tree li{margin:.55rem 0}.kind,.sites,.reference{font-size:.85rem;color:#526177}.callee{font-weight:650}a{color:#1558b0}pre{overflow:auto;background:#111827;color:#e5e7eb;padding:14px;border-radius:8px;line-height:1.4}.evidence:target{outline:3px solid #ffbf47}.trigger-code{background:#f8faff}.inline-graph{overflow:auto;background:#fff;border:1px solid #dbe2ee;border-radius:8px}.inline-graph svg{display:block;min-width:820px;width:100%;height:auto}.graph-edge{stroke:#3b4658;stroke-width:1.5}.inline-graph marker path{fill:#3b4658}.edge-label,.graph-node text{text-anchor:middle;font-size:13px;fill:#172033}.edge-label{paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round}.graph-node rect{fill:#eef0ff;stroke:#7467d8;stroke-width:1.5}.graph-node:hover rect,.graph-node:focus rect{fill:#e1e5ff;stroke-width:2.5}.node-kind{font-size:11px;fill:#526177}.legend{display:grid;grid-template-columns:max-content 1fr;gap:.45rem 1rem}.legend dt{font-weight:700}.legend dd{margin:0;overflow-wrap:anywhere}label{display:block;margin:.55rem 0}footer{color:#526177;margin:28px 0}
         """;
 
     private const string ShareableCss = """

@@ -56,6 +56,14 @@ public sealed class WebFormsCodePathReviewTests
             Assert.DoesNotContain("UiReset", shareableJson);
             Assert.DoesNotContain("source/Page", shareableJson);
             Assert.Throws<IOException>(() => WebFormsCodePathReview.Run(inspection, sourceRoot, "case-001", output));
+
+            var indexedOutput = Path.Combine(directory, "indexed.private.html");
+            WebFormsCodePathReview.Run(inspection, sourceRoot, "case-001", indexedOutput, returnHref: "index.html");
+            var indexedReport = File.ReadAllText(indexedOutput);
+            Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(indexedReport, "← Return to review index").Count);
+            Assert.Contains("href=\"index.html\"", indexedReport);
+            Assert.Throws<InvalidDataException>(() => WebFormsCodePathReview.Run(inspection, sourceRoot, "case-001",
+                Path.Combine(directory, "unsafe.private.html"), returnHref: "../private.html"));
         });
     }
 
