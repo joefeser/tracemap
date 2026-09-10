@@ -5,6 +5,5 @@
 - [x] Validate provenance, exact case references, decisions, completion metadata, and limits.
 - [x] Add deterministic, mismatch, duplicate, unknown-code, completion, privacy, and immutability regressions.
 - [x] Document local use and the evidence/review boundary.
-- [ ] Define WITS persistence/API mapping without making WITS a validator dependency.
-- [ ] Define a separately bounded shareable review projection if a real workflow requires one.
-- [ ] Join validated reviews into a technology-neutral planning packet without generating code.
+- [x] Document single-value editing semantics and distinguish exception review from complete modernization evidence.
+- [x] Record WITS persistence, shareable review projection, BRD/planning synthesis, and code generation as downstream work outside this public overlay spec.
