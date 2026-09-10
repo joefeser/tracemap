@@ -43,6 +43,51 @@ public sealed class WebFormsRawEvidenceAuditTests
     }
 
     [Fact]
+    public void MethodHintFollowsThreeLayersWithoutInferringAnEventBinding()
+    {
+        WithFixture((db, report) =>
+        {
+            using (var c = new SqliteConnection($"Data Source={db};Pooling=False"))
+            {
+                c.Open();
+                using var cmd = c.CreateCommand();
+                cmd.CommandText = """
+                    insert into facts(fact_id,fact_type,source_symbol,target_symbol) values
+                    ('fill','CallEdge','Private.External()','System.Data.SqlDataAdapter.Fill(System.Data.DataTable)'),
+                    ('other','CallEdge','Private.Handler()','Private.AFirstLeaf()');
+                    """;
+                cmd.ExecuteNonQuery();
+            }
+            var path = Path.Combine(Path.GetDirectoryName(report)!, "private.json");
+            var output = WebFormsRawEvidenceAudit.Run(db, report, inspectionPath: path, startingMethodName: "Handler");
+            Assert.DoesNotContain("Private", string.Join('\n', output));
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            Assert.Equal(3, doc.RootElement.GetProperty("hops").GetArrayLength());
+            Assert.Equal(JsonValueKind.Null, doc.RootElement.GetProperty("surfaceId").ValueKind);
+            Assert.StartsWith("System.Data.SqlDataAdapter.Fill", doc.RootElement.GetProperty("stoppingSymbol").GetString());
+        });
+    }
+
+    [Theory]
+    [InlineData("Missing", "RawAuditMethodNotFound")]
+    [InlineData("Handler", "RawAuditMethodAmbiguous")]
+    public void MethodHintsFailClosedWhenNotUnique(string hint, string code)
+    {
+        WithFixture((db, report) =>
+        {
+            using (var c = new SqliteConnection($"Data Source={db};Pooling=False"))
+            {
+                c.Open();
+                using var cmd = c.CreateCommand();
+                cmd.CommandText = "insert into facts(fact_id,fact_type,source_symbol,target_symbol) values('overload','CallEdge','Other.Handler()','Other.End()')";
+                cmd.ExecuteNonQuery();
+            }
+            var ex = Assert.Throws<InvalidDataException>(() => WebFormsRawEvidenceAudit.Run(db, report, startingMethodName: hint));
+            Assert.Equal(code, ex.Message);
+        });
+    }
+
+    [Fact]
     public void LocalInspectionShowsSiblingCallsAndRepeatedSitesSeparately()
     {
         WithFixture((db, report) =>

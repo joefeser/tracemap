@@ -1,6 +1,30 @@
 # Restricted Web Forms run: diagnostic follow-up
 
-## Current command: local source inspection
+## Current command: start from a known method
+
+```powershell
+git pull
+.\scripts\New-FocusedWebFormsMethodInspection.ps1
+```
+
+Type the method name when prompted on the work machine. The hint is not stored
+in the repository. An optional `-MethodName` parameter also accepts a qualified
+name without parentheses. The original index must contain exactly one matching
+Tier1 call/invocation symbol signature. Missing or ambiguous matches fail closed;
+there is no overload guessing, source scan, or inference of an event binding.
+The existing report supplies only snapshot provenance in this mode.
+
+Open the newest JSON in `local-inspection-private` under your configured output
+root. `hops` follows one retained call chain up to the existing depth10 bounds;
+when available, a stopping symbol named `Fill` is preferred over the ordinal
+first leaf. This is an inspection preference, NOT proof of SQL, a stored
+procedure, or execution. `directCalls` still shows sibling calls. Locations are
+retained call sites; use Go To Definition locally if the chain stops early.
+Keep the file at work. Share only whether the expected data-access chain is
+present or the kind of call where it stops, without names, paths, SQL, or source.
+Hint discovery is limited to 50k matching fact rows and the existing text budget.
+
+## Event-handler mode: local source inspection
 
 ```powershell
 git pull

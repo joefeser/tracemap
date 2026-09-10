@@ -1,5 +1,19 @@
 # Implementation state
 
+## Method-starting local inspection (2026-09-09)
+
+Added New-FocusedWebFormsMethodInspection.ps1 with a local interactive method
+hint. Does not commit the private method name. Resolves one exact semantic
+call/invocation signature (short or qualified name); absent/ambiguous matches
+fail closed. Reuses the bounded raw closure and local call-site report, without
+requiring hints for intermediate abstraction layers. Report supplies snapshot
+identity, not an inferred page/event association. Fill-named stopping symbols
+are preferred for the sample path, but this is explicitly not SQL evidence.
+All direct sibling calls remain visible. No application scan or execution.
+Validation: focused audit 12/12, full solution 1778/1778, and method-wrapper
+PowerShell/helper smoke passed. Formatting, private-path guard, and diff checks
+passed. The work index must still be checked for the operator's method match.
+
 ## Whole-handler direct-call inspection (2026-09-09)
 
 Operator inspection showed the selected stopping branch only toggles panel
