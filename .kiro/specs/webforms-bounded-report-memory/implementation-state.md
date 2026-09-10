@@ -927,6 +927,13 @@ fragment navigation, matching the field-confirmed standalone rendering path
 while preserving the script-only sandbox. The report can be regenerated from
 the retained local inspection; no repository rescan is required.
 
+The first field rerun still rendered standalone but failed only inside Chrome
+and Edge iframes. Mermaid navigation directives are therefore no longer emitted
+as diagram grammar. The anonymous document renders a navigation-free graph with
+strict security, then attaches alias-only node navigation after rendering; plain
+HTML alias links remain as a no-script fallback. The remote module remains
+confined to the anonymous script-only sandbox.
+
 ### Post-fairness field result and actionable summary
 
 The work-machine rerun retained 466 event chains and 361 downstream boundaries.

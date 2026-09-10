@@ -37,7 +37,10 @@ public sealed class WebFormsCodePathReviewTests
             var shareableJson = File.ReadAllText(Path.Combine(directory, "review.shareable.json"));
             Assert.Contains("flowchart TD", shareableHtml);
             Assert.Contains("handler_001 -->|calls x 1| node_001", shareableHtml);
-            Assert.Contains("click handler_001 href \"#node-handler-001\" \"View structural details\"", shareableHtml);
+            Assert.DoesNotContain("  click ", shareableHtml);
+            Assert.Contains("const graphNavigation", shareableHtml);
+            Assert.Contains("targetId", shareableHtml);
+            Assert.Contains("href=\"#node-handler-001\"", shareableHtml);
             Assert.Contains("mermaid@11.17.2", shareableHtml);
             Assert.DoesNotContain("-->|\"", shareableHtml);
             Assert.Contains("handler-001", shareableHtml);

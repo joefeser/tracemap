@@ -357,8 +357,9 @@ public static class WebFormsCodePathReview
                 // Keep the generated diagram on Mermaid's conservative flowchart grammar
                 // so standalone and sandboxed rendering do not depend on permissive parsing.
                 foreach (var edge in anonymousEdges) writer.WriteLine($"  {edge.from.Replace('-', '_')} -->|calls x {edge.callSiteCount}| {edge.to.Replace('-', '_')}");
-                foreach (var node in anonymousNodes) writer.WriteLine($"  click {node.Id.Replace('-', '_')} href \"#node-{node.Id}\" \"View structural details\"");
-                writer.WriteLine("</pre></section><h2>Structural details</h2>");
+                writer.WriteLine("</pre><nav class=\"graph-links\" aria-label=\"Call graph navigation\">Jump to: ");
+                foreach (var node in anonymousNodes) writer.WriteLine($"<a href=\"#node-{node.Id}\">{node.Id}</a> ");
+                writer.WriteLine("</nav></section><h2>Structural details</h2>");
                 foreach (var node in anonymousNodes)
                 {
                     writer.WriteLine($"<section id=\"node-{node.Id}\"><h3>{node.Id}</h3><p>Classification: <code>{node.Classification}</code></p><ul>");
@@ -367,7 +368,28 @@ public static class WebFormsCodePathReview
                     writer.WriteLine("</ul><p><a href=\"#top\">Back to graph</a></p></section>");
                 }
                 writer.WriteLine("<h2>Human verdict</h2><p>Result: <strong>unreviewed</strong></p><p>Static retained calls do not prove runtime order, branch feasibility, or source completeness. Missing evidence does not prove absence.</p>");
-                writer.WriteLine("</main><script type=\"module\">import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.esm.min.mjs'; mermaid.initialize({startOnLoad:true,securityLevel:'loose'});</script></body></html>");
+                var graphNavigation = JsonSerializer.Serialize(anonymousNodes.Select(node => new
+                {
+                    diagramId = node.Id.Replace('-', '_'),
+                    targetId = $"node-{node.Id}"
+                }));
+                writer.WriteLine($$"""
+                    </main><script type="module">
+                    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.esm.min.mjs';
+                    mermaid.initialize({startOnLoad:false,securityLevel:'strict'});
+                    await mermaid.run();
+                    const graphNavigation = {{graphNavigation}};
+                    for (const item of graphNavigation) {
+                      for (const element of document.querySelectorAll(`[id^="flowchart-${item.diagramId}-"]`)) {
+                        element.style.cursor = 'pointer';
+                        element.setAttribute('tabindex', '0');
+                        const navigate = () => { location.hash = item.targetId; };
+                        element.addEventListener('click', navigate);
+                        element.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') navigate(); });
+                      }
+                    }
+                    </script></body></html>
+                    """);
             }
 
             // Fail closed before publication if a private identity entered either anonymous artifact.
