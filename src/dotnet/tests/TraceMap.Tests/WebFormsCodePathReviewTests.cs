@@ -23,9 +23,12 @@ public sealed class WebFormsCodePathReviewTests
             Assert.Contains("Expected UI/control-only behavior", report);
             Assert.Contains("id=\"call-path\"", report);
             Assert.Contains("href=\"#evidence-", report);
-            Assert.Contains("sandbox=\"allow-scripts\"", report);
-            Assert.Contains("Anonymous Mermaid call graph", report);
-            Assert.DoesNotContain(".shareable.html#call-graph", report);
+            Assert.Contains("aria-label=\"Anonymous retained call graph\"", report);
+            Assert.Contains("class=\"graph-node\"", report);
+            Assert.Contains("handler-001", report);
+            Assert.Contains("calls x 1", report);
+            Assert.DoesNotContain("<iframe", report);
+            Assert.DoesNotContain("mermaid.esm", report);
             Assert.Contains("Private alias legend", report);
             Assert.Contains("id=\"trigger\" open", report);
             Assert.Contains("id=\"call-path\" open", report);
