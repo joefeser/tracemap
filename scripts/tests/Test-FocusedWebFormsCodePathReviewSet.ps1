@@ -16,9 +16,9 @@ $inspectionPath = Join-Path $inspectionDirectory 'webforms-batch-inspection-test
 [IO.File]::WriteAllText($inspectionPath, (@{
     schemaVersion = 'webforms-batch-inspection.v1'
     cases = @(
-        @{ caseId = 'case-001'; handler = 'Private.FirstHandler()'; handlerLocation = @{ filePath = 'source/First.aspx.cs' }; bindings = @(@{ surfaceId = 'source/First.aspx' }) }
-        @{ caseId = 'case-002'; handler = 'Private.SecondHandler()'; handlerLocation = @{ filePath = 'source/First.aspx.cs' }; bindings = @(@{ surfaceId = 'source/First.aspx' }) }
-        @{ caseId = 'case-003'; handler = 'Private.ThirdHandler()'; handlerLocation = @{ filePath = 'source/Second.aspx.cs' }; bindings = @(@{ surfaceId = 'source/Second.aspx' }) }
+        @{ caseId = 'case-001'; handler = 'Private.FirstHandler()'; handlerLocation = @{ filePath = 'source/First.aspx.cs' }; bindings = @(@{ surfaceId = 'webforms-surface:hash-one'; bindingLocation = @{ filePath = 'source/First.aspx' } }) }
+        @{ caseId = 'case-002'; handler = 'Private.SecondHandler()'; handlerLocation = @{ filePath = 'source/First.aspx.cs' }; bindings = @(@{ surfaceId = 'webforms-surface:hash-one'; bindingLocation = @{ filePath = 'source/First.aspx' } }) }
+        @{ caseId = 'case-003'; handler = 'Private.ThirdHandler()'; handlerLocation = @{ filePath = 'source/Second.aspx.cs' }; bindings = @(@{ surfaceId = 'webforms-surface:hash-two'; bindingLocation = @{ filePath = 'source/Second.aspx' } }) }
     )
 } | ConvertTo-Json -Depth 8), [Text.UTF8Encoding]::new($false))
 
@@ -54,6 +54,8 @@ try {
         if (!$htmlIndex.Contains($expected, [StringComparison]::Ordinal)) { throw "HTML index is missing: $expected" }
     }
     if ([regex]::Matches($htmlIndex, '<tr class="item">').Count -ne 2) { throw 'HTML index did not group cases by item.' }
+    if ($htmlIndex.Contains('webforms-surface:', [StringComparison]::Ordinal)) { throw 'HTML index exposed the machine surface identity instead of the retained file path.' }
+    if (!$htmlIndex.Contains('tbody tr:not(.item) td:first-child{white-space:nowrap}', [StringComparison]::Ordinal)) { throw 'HTML index allows evidence IDs to wrap.' }
     $queue = [IO.File]::ReadAllText($indexPath)
     foreach ($expected in @(
         '## Item: `source/First.aspx`',

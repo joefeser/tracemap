@@ -54,10 +54,13 @@ if (@($selectedCases | Where-Object { $_ -notmatch '^case-[0-9]{3}$' -or $_ -not
 $reviewCases = @($selectedCases | ForEach-Object {
     $selectedCaseId = $_
     $case = @($inspection.cases | Where-Object { [string]$_.caseId -eq $selectedCaseId })[0]
+    $bindingPaths = @($case.bindings | ForEach-Object { [string]$_.bindingLocation.filePath } |
+        Where-Object { $_ } | Sort-Object -Unique)
     $surfaceIds = @($case.bindings | ForEach-Object { [string]$_.surfaceId } |
         Where-Object { $_ } | Sort-Object -Unique)
-    $item = if ($surfaceIds.Count -gt 0) { $surfaceIds -join '; ' }
+    $item = if ($bindingPaths.Count -gt 0) { $bindingPaths -join '; ' }
         elseif ($case.handlerLocation.filePath) { [string]$case.handlerLocation.filePath }
+        elseif ($surfaceIds.Count -gt 0) { $surfaceIds -join '; ' }
         else { 'item-unavailable' }
     [pscustomobject]@{
         CaseId = $selectedCaseId
@@ -98,7 +101,7 @@ try {
     $lines.Add('- Allowed verdicts: `unreviewed`, `expected-ui-only`, `supported-backend-present`, `backend-evidence-missing`, `binding-or-source-mismatch`, `needs-review`.')
     $lines.Add('')
     foreach ($group in @($reviewCases | Group-Object Item)) {
-        $markdownItem = ([string]$group.Name).Replace('`', '&#96;').Replace("`r", ' ').Replace("`n", ' ')
+        $markdownItem = ([string]$group.Name).Replace('|', '&#124;').Replace('`', '&#96;').Replace("`r", ' ').Replace("`n", ' ')
         $lines.Add("## Item: ``$markdownItem``")
         $lines.Add('')
         $lines.Add('| Evidence | Handler | Private path | Anonymous path | Human verdict | Comment |')
@@ -115,7 +118,7 @@ try {
     $htmlPath = Join-Path $setDirectory 'index.html'
     $html = [Collections.Generic.List[string]]::new()
     $html.Add('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">')
-    $html.Add('<title>Private Web Forms review index</title><style>:root{font-family:system-ui,sans-serif;color:#172033;background:#f5f7fb}main{max-width:1100px;margin:auto;padding:24px}.private{background:#fff1f0;border-left:5px solid #c62828;padding:12px}table{width:100%;border-collapse:collapse;background:white}th,td{padding:12px;border:1px solid #dbe2ee;text-align:left}th{background:#eaf1ff}.item th{background:#dce8fb;font-size:1.05rem}a{color:#1558b0}.button{display:inline-block;padding:7px 10px;background:#eaf1ff;border:1px solid #bed0ee;border-radius:6px;text-decoration:none}code{background:#edf1f7;padding:.1rem .3rem;border-radius:4px}</style></head><body><main>')
+    $html.Add('<title>Private Web Forms review index</title><style>:root{font-family:system-ui,sans-serif;color:#172033;background:#f5f7fb}main{max-width:1100px;margin:auto;padding:24px}.private{background:#fff1f0;border-left:5px solid #c62828;padding:12px}table{width:100%;border-collapse:collapse;background:white}th,td{padding:12px;border:1px solid #dbe2ee;text-align:left}th{background:#eaf1ff}tbody tr:not(.item) td:first-child{white-space:nowrap}.item th{background:#dce8fb;font-size:1.05rem}a{color:#1558b0}.button{display:inline-block;padding:7px 10px;background:#eaf1ff;border:1px solid #bed0ee;border-radius:6px;text-decoration:none}code{background:#edf1f7;padding:.1rem .3rem;border-radius:4px}</style></head><body><main>')
     $html.Add('<h1>Private Web Forms review index</h1>')
     $html.Add('<p class="private">PRIVATE: links include working-tree source reports. Keep this folder on the work machine.</p>')
     $html.Add("<p>Items: <code>$itemCount</code>. Handler cases: <code>$($selectedCases.Count)</code>. Trigger context: <code>$TriggerContextLines lines before and after</code>.</p>")
