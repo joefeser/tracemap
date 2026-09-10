@@ -15,7 +15,11 @@ $inspectionDirectory = Join-Path $output 'local-inspection-private'
 $inspectionPath = Join-Path $inspectionDirectory 'webforms-batch-inspection-test.json'
 [IO.File]::WriteAllText($inspectionPath, (@{
     schemaVersion = 'webforms-batch-inspection.v1'
-    cases = @(@{ caseId = 'case-001' }, @{ caseId = 'case-002' })
+    cases = @(
+        @{ caseId = 'case-001'; handler = 'Private.FirstHandler()'; handlerLocation = @{ filePath = 'source/First.aspx.cs' }; bindings = @(@{ surfaceId = 'source/First.aspx' }) }
+        @{ caseId = 'case-002'; handler = 'Private.SecondHandler()'; handlerLocation = @{ filePath = 'source/First.aspx.cs' }; bindings = @(@{ surfaceId = 'source/First.aspx' }) }
+        @{ caseId = 'case-003'; handler = 'Private.ThirdHandler()'; handlerLocation = @{ filePath = 'source/Second.aspx.cs' }; bindings = @(@{ surfaceId = 'source/Second.aspx' }) }
+    )
 } | ConvertTo-Json -Depth 8), [Text.UTF8Encoding]::new($false))
 
 function dotnet {
@@ -40,22 +44,30 @@ try {
     $htmlIndexPath = Join-Path $sets[0].FullName 'index.html'
     if (!(Test-Path -LiteralPath $htmlIndexPath -PathType Leaf)) { throw 'Expected index.html in the review-set folder.' }
     $htmlIndex = [IO.File]::ReadAllText($htmlIndexPath)
-    if (!$htmlIndex.Contains('case-001.private.html', [StringComparison]::Ordinal) -or
-        !$htmlIndex.Contains('case-002.shareable.html', [StringComparison]::Ordinal) -or
-        !$htmlIndex.Contains('target="_blank"', [StringComparison]::Ordinal)) {
-        throw 'HTML index is missing report links.'
+    foreach ($expected in @(
+        'case-001.private.html',
+        'case-002.shareable.html',
+        'case-003.private.html',
+        'Items: <code>2</code>. Handler cases: <code>3</code>.',
+        'target="_blank"'
+    )) {
+        if (!$htmlIndex.Contains($expected, [StringComparison]::Ordinal)) { throw "HTML index is missing: $expected" }
     }
+    if ([regex]::Matches($htmlIndex, '<tr class="item">').Count -ne 2) { throw 'HTML index did not group cases by item.' }
     $queue = [IO.File]::ReadAllText($indexPath)
     foreach ($expected in @(
-        '| Evidence | Private path | Anonymous path | Human verdict | Comment |',
-        '| case-001 | [case-001.private.html](case-001.private.html)',
-        '| case-002 | [case-002.private.html](case-002.private.html)',
+        '## Item: `source/First.aspx`',
+        '## Item: `source/Second.aspx`',
+        '| Evidence | Handler | Private path | Anonymous path | Human verdict | Comment |',
+        '| case-001 | Private.FirstHandler() | [case-001.private.html](case-001.private.html)',
+        '| case-002 | Private.SecondHandler() | [case-002.private.html](case-002.private.html)',
+        '| case-003 | Private.ThirdHandler() | [case-003.private.html](case-003.private.html)',
         'Trigger context: `50` lines before and after each retained binding span.',
         'A human verdict is review metadata, not scanner evidence.'
     )) {
         if (!$queue.Contains($expected, [StringComparison]::Ordinal)) { throw "Missing review queue text: $expected" }
     }
-    if (@(Get-ChildItem -LiteralPath $sets[0].FullName -Filter '*.private.html').Count -ne 2) { throw 'Expected two private reports.' }
+    if (@(Get-ChildItem -LiteralPath $sets[0].FullName -Filter '*.private.html').Count -ne 3) { throw 'Expected three private reports.' }
     Write-Host 'PASS focused Web Forms code-path review set'
 }
 finally {
