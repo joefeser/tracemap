@@ -25,3 +25,13 @@ UTC/draft-metadata agreement between the schema and validator. The review-only
 decision boundary is now explicit in `design.md`; per-fact tier and location
 remain in the digest-bound inspection rather than being copied into mutable
 human decisions.
+
+The current-head review follow-up also rejects non-string review states,
+verdicts, migration dispositions, and correction categories before exact closed
+code comparison, preventing PowerShell boolean coercion from bypassing the JSON
+Schema contract. `Export` and `Validate` now dispatch case-insensitively to match
+their `ValidateSet` admission behavior. Every reviewer occurrence in the schema
+requires at least one non-whitespace character, matching the bundled validator.
+The focused regression covers lowercase accepted modes, all four non-string
+closed-code fields, whitespace-only reviewer metadata, and all three schema
+reviewer branches.

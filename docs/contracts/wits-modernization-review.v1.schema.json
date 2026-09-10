@@ -21,7 +21,7 @@
       }
     },
     "reviewState": { "enum": ["draft", "completed"] },
-    "reviewer": { "type": ["string", "null"], "minLength": 1, "maxLength": 128 },
+    "reviewer": { "type": ["string", "null"], "minLength": 1, "maxLength": 128, "pattern": "\\S" },
     "reviewedAtUtc": { "type": ["string", "null"], "format": "date-time", "pattern": "Z$" },
     "decisions": { "type": "array", "minItems": 1, "maxItems": 64, "items": { "$ref": "#/$defs/decision" } },
     "limitations": {
@@ -73,7 +73,7 @@
         },
         {
           "properties": {
-            "reviewer": { "type": "string", "minLength": 1, "maxLength": 128 },
+            "reviewer": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "\\S" },
             "reviewedAtUtc": { "type": "string", "format": "date-time", "pattern": "Z$" }
           }
         }
@@ -83,7 +83,7 @@
       "if": { "properties": { "reviewState": { "const": "completed" } }, "required": ["reviewState"] },
       "then": {
         "properties": {
-          "reviewer": { "type": "string", "minLength": 1 },
+          "reviewer": { "type": "string", "minLength": 1, "pattern": "\\S" },
           "reviewedAtUtc": { "type": "string", "format": "date-time", "pattern": "Z$" },
           "decisions": {
             "items": {

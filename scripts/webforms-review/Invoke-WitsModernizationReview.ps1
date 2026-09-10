@@ -27,6 +27,9 @@ function Require-String($Value, [int]$Maximum, [string]$Code) {
     if ($Value -isnot [string] -or [string]::IsNullOrWhiteSpace($Value) -or $Value.Length -gt $Maximum) { Stop-Review $Code }
     return [string]$Value
 }
+function Test-ClosedCode($Value, [string[]]$Allowed) {
+    return $Value -is [string] -and $Value -cin $Allowed
+}
 function Get-SortedStrings($Values, [int]$Minimum, [int]$Maximum, [int]$MaximumLength, [string]$Code) {
     if ($Values -isnot [Array]) { Stop-Review $Code }
     $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
@@ -98,7 +101,7 @@ $verdicts = @('unreviewed', 'expected-ui-only', 'supported-backend-present', 'ba
 $dispositions = @('unassigned', 'retain', 'replace-angular', 'replace-dotnet', 'replace-postgresql', 'replace-multiple', 'retire', 'manual-redesign', 'defer')
 $correctionCategories = @('binding', 'callee', 'business-intent', 'coverage', 'other')
 
-if ($Mode -ceq 'Export') {
+if ([string]::Equals($Mode, 'Export', [StringComparison]::OrdinalIgnoreCase)) {
     if (Test-Path -LiteralPath $ReviewPath) { Stop-Review 'WITS_REVIEW_OUTPUT_EXISTS' }
     [string[]]$caseIds = @($expected.Keys)
     [Array]::Sort($caseIds, [StringComparer]::Ordinal)
@@ -171,7 +174,7 @@ $actualLimitations = @(Get-SortedStrings $review.limitations 3 3 64 'WITS_REVIEW
 if (!(Test-OrdinalSequence $actualLimitations $limitations)) {
     Stop-Review 'WITS_REVIEW_LIMITATION_INVALID'
 }
-if ($review.reviewState -cnotin @('draft','completed')) { Stop-Review 'WITS_REVIEW_STATE_INVALID' }
+if (!(Test-ClosedCode $review.reviewState @('draft','completed'))) { Stop-Review 'WITS_REVIEW_STATE_INVALID' }
 if ($review.decisions -isnot [Array]) { Stop-Review 'WITS_REVIEW_CASE_SET_MISMATCH' }
 $decisions = @($review.decisions)
 if ($decisions.Count -ne $expected.Count) { Stop-Review 'WITS_REVIEW_CASE_SET_MISMATCH' }
@@ -187,11 +190,12 @@ foreach ($decision in $decisions) {
     if (![string]::Equals($handlerFactId, $item.HandlerFactId, [StringComparison]::Ordinal) -or
         !(Test-OrdinalSequence $sortedDecisionBindingIds $item.BindingFactIds) -or
         !(Test-OrdinalSequence $sortedDecisionSurfaceIds $item.SurfaceIds)) { Stop-Review 'WITS_REVIEW_REFERENCE_MISMATCH' }
-    if ($decision.verdict -cnotin $verdicts -or $decision.migrationDisposition -cnotin $dispositions) { Stop-Review 'WITS_REVIEW_DECISION_INVALID' }
+    if (!(Test-ClosedCode $decision.verdict $verdicts) -or
+        !(Test-ClosedCode $decision.migrationDisposition $dispositions)) { Stop-Review 'WITS_REVIEW_DECISION_INVALID' }
     if ($null -ne $decision.comment -and ($decision.comment -isnot [string] -or $decision.comment.Length -gt 4000)) { Stop-Review 'WITS_REVIEW_DECISION_INVALID' }
     if ($null -ne $decision.correction) {
         Assert-Properties $decision.correction @('category','statement') @('category','statement') 'WITS_REVIEW_UNKNOWN_FIELD'
-        if ($decision.correction.category -cnotin $correctionCategories) { Stop-Review 'WITS_REVIEW_DECISION_INVALID' }
+        if (!(Test-ClosedCode $decision.correction.category $correctionCategories)) { Stop-Review 'WITS_REVIEW_DECISION_INVALID' }
         [void](Require-String $decision.correction.statement 4000 'WITS_REVIEW_DECISION_INVALID')
     }
 }
