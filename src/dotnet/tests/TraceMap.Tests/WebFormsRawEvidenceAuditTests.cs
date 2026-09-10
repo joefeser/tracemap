@@ -22,6 +22,37 @@ public sealed class WebFormsRawEvidenceAuditTests
     }
 
     [Fact]
+    public void RawAuditDoesNotChargeUnrelatedSymbolsToInputBudgets()
+    {
+        WithFixture((db, report) =>
+        {
+            using (var c = new SqliteConnection($"Data Source={db};Pooling=False"))
+            {
+                c.Open();
+                using var cmd = c.CreateCommand();
+                cmd.CommandText = """
+                    insert into facts(fact_id,fact_type,source_symbol,target_symbol)
+                    values('unrelated','MethodInvoked',$large,'Private.Handler()');
+                    insert into facts(fact_id,fact_type,source_symbol,target_symbol)
+                    values('unrelated-declaration','MethodDeclared','Private.Handler()',$large);
+                    """;
+                cmd.Parameters.AddWithValue("$large", new string('x', 10_000));
+                cmd.ExecuteNonQuery();
+            }
+            var lines = WebFormsRawEvidenceAudit.Run(db, report, maxRows: 4, maxTextBytes: 1024);
+            Assert.Contains("rawFactRows=4", lines);
+            Assert.Contains(lines, l => l.Contains("semanticInvocationSources=2"));
+        });
+    }
+
+    [Fact]
+    public void RawAuditStillRejectsOversizedSelectedEvidence()
+    {
+        WithFixture((db, report) => Assert.Throws<InvalidDataException>(() =>
+            WebFormsRawEvidenceAudit.Run(db, report, maxTextBytes: 1)));
+    }
+
+    [Fact]
     public void RawAuditRejectsIncompleteInputInsteadOfPublishingAbsence()
     {
         WithFixture((db, report) => Assert.Throws<InvalidDataException>(() => WebFormsRawEvidenceAudit.Run(db, report, 1)));

@@ -44,3 +44,4 @@
 - [x] Classify exact canonical leaf call evidence without publishing identities or widening reconciliation.
 - [x] Classify exact canonical leaf declaration and source-owned body availability without name guessing.
 - [x] Add bounded read-only original-index witness audit with snapshot validation and no scan/report regeneration.
+- [x] Restrict raw audit reads to batched exact-symbol frontiers so unrelated index text does not exhaust its budget.
