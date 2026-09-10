@@ -904,9 +904,10 @@ kind/target/evidence tuple, not distinct runtime database operations.
 **Historical workflow: automatic execution is now disabled.** Use the completed
 file summary above instead. The following describes the earlier experiment only.
 
-Run `./scripts/Compare-FocusedWebFormsDepth.ps1` after pulling. It reuses the
-existing IndexPath, OutputRoot and Forms block in Run-FocusedWebFormsPageList.ps1;
-do not retype the form list. Runs depths 8, 10 and 12 sequentially with unchanged
+Run `./scripts/Compare-FocusedWebFormsDepth.ps1` after pulling. This historical
+workflow originally reused the local page-list runner settings; current supported
+commands read the ignored Run-FocusedWebFormsPageList.json configuration instead.
+Runs depths 8, 10 and 12 sequentially with unchanged
 path/event-chain/gap caps, writing under a separate webforms-depth-comparison
 directory so ordinary latest-report triage is unaffected. No source rescan occurs.
 The wrapper may build TraceMap itself via dotnet run, not the private application.

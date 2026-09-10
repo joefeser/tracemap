@@ -68,3 +68,4 @@
 - [x] Add a browser index for each review set and private-report return navigation.
 - [x] Order batch-inspection case IDs by retained binding file so per-file review cases remain contiguous.
 - [x] Publish one compatibility-preserving operator guide for the focused review workflow and diagnostic scripts.
+- [x] Move the private index, output root, and form list into an ignored validated JSON configuration with a generic checked-in example.
