@@ -826,6 +826,19 @@ Validation: focused Web Forms packet and combined traversal tests 68/68; full .N
 solution 1766/1766; scoped formatting, private-path guard, and diff check passed.
 The existing nullable warning in PropertyMappingTests remains unchanged.
 
+## Batch terminal-free evidence conclusions
+
+The local batch inspection now separates exact allowlisted framework UI/control
+endpoints from other unresolved leaves. JSON, private Markdown, and privacy-safe
+console lines report the observed endpoint count, unresolved leaf count, and a
+deterministic evidence conclusion. The conclusion remains
+`no-supported-backend-terminal-observed`; it does not claim backend absence,
+runtime behavior, or complete source coverage. Human review remains `unreviewed`.
+
+Validation: focused raw-audit tests 14/14; full .NET solution 1787/1787;
+scoped formatting and diff checks passed. The existing nullable warning in
+`PropertyMappingTests.cs:560` remains unchanged.
+
 ## Compiler-resolved DataAdapter Fill terminal projection
 
 The fresh field scan retained the exact public framework Fill target plus receiver

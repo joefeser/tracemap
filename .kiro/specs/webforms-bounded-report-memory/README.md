@@ -193,6 +193,10 @@ coverage remains partial; raw evidence does not prove execution or completeness.
 `invocationWithoutCallFact` counts source symbols with semantic invocation facts
 but no semantic CallEdge source witness; it is not an exact call-pair comparison.
 Only CallEdge, MethodInvoked, and MethodDeclared facts are read for this audit.
+Batch inspection labels exact allowlisted framework UI/control endpoints separately
+from other unresolved leaves and prints privacy-safe counts and an evidence conclusion
+for each case. `no-supported-backend-terminal-observed` describes retained evidence;
+it does not prove backend absence. Manual review status remains independent.
 The raw audit now filters each read to exact symbols on the selected handlers'
 current frontier (declarations match target; calls/invocations match source).
 All handler frontiers are batched, and each symbol is queried once. Unrelated

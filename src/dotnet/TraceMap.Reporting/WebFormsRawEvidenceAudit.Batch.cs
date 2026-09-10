@@ -9,6 +9,14 @@ public static partial class WebFormsRawEvidenceAudit
     private sealed record BatchWitness(string FactId, string Kind, string? Caller, string? Callee,
         string? FilePath, int StartLine, int EndLine, string RuleId, string Tier);
 
+    private static bool IsKnownUiControlEndpoint(string symbol) => symbol is
+        "global::System.Web.UI.WebControls.ListControl.ClearSelection()" or
+        "global::System.Web.UI.WebControls.ListItemCollection.Clear()" or
+        "global::System.Web.UI.Control.DataBind()" or
+        "global::System.Web.UI.WebControls.BaseDataList.DataBind()" or
+        "global::System.Web.UI.WebControls.BaseDataBoundControl.DataBind()" or
+        "global::Telerik.Web.UI.RadGrid.DataBind()";
+
     private static void WriteBatchInspection(SqliteConnection db, SqliteTransaction transaction,
         JsonElement root, string scan, string commit, string reportPath, string outputPath,
         string?[] handlers, AuditState[] states, Dictionary<string, SortedSet<string>> edges,
@@ -73,6 +81,13 @@ public static partial class WebFormsRawEvidenceAudit
             var rootSymbol = state.Visited.Single(s => !state.Parents.ContainsKey(s));
             var stops = state.Visited.Where(s => loaded.Contains(s) && (!edges.TryGetValue(s, out var targets) || targets.Count == 0))
                 .Order(StringComparer.Ordinal).ToArray();
+            var uiControlEndpoints = stops.Where(IsKnownUiControlEndpoint).ToArray();
+            var unresolvedOtherLeaves = stops.Where(s => !IsKnownUiControlEndpoint(s)).ToArray();
+            var evidenceConclusion = uiControlEndpoints.Length == 0
+                ? "no-supported-backend-terminal-observed"
+                : unresolvedOtherLeaves.Length == 0
+                    ? "ui-control-operations-observed-no-other-unresolved-leaves"
+                    : "ui-control-operations-observed-with-unresolved-leaves";
             return new
             {
                 caseId = $"case-{index + 1:D3}",
@@ -98,6 +113,10 @@ public static partial class WebFormsRawEvidenceAudit
                         : "retained-outgoing-calls"
                 }).ToArray(),
                 stoppingSymbols = stops,
+                uiControlEndpoints,
+                unresolvedOtherLeaves,
+                evidenceConclusion,
+                backendTerminalConclusion = "no-supported-backend-terminal-observed",
                 reviewResult = "unreviewed"
             };
         }).ToArray();
@@ -133,15 +152,17 @@ public static partial class WebFormsRawEvidenceAudit
             writer.WriteLine("# Local review of all terminal-free handlers\n");
             writer.WriteLine("PRIVATE: keep this report and its JSON on the work machine.\n");
             writer.WriteLine($"Selected chains: {chains.Length}; distinct handlers: {cases.Length}; scan: {Safe(scan)}; commit: {Safe(commit)}.\n");
-            writer.WriteLine("For each case, open the handler location, review all direct calls, then use the stopping-call locations to inspect the leaves. Locations identify call sites; use Go To Definition in Visual Studio to inspect the callee. Complete the result line once. A UI-only handler may legitimately have no database terminal. This report lists retained static calls; it does not establish execution or source completeness.\n");
+            writer.WriteLine("For each case, the evidence conclusion distinguishes exact allowlisted UI/control endpoints from other unresolved leaves. Open unresolved leaves only when a stronger manual conclusion is needed. Locations identify call sites; use Go To Definition in Visual Studio to inspect the callee. This report lists retained static calls; it does not establish execution, source completeness, or absence of backend behavior.\n");
             writer.WriteLine("Share only case IDs and your result category: ui-only, database-call-present, source-call-missing, definition-unavailable, checkout-mismatch, or uncertain. Add only a generic description of a missing operation.\n");
             foreach (var item in cases)
             {
                 writer.WriteLine($"## {item.caseId}\n");
                 writer.WriteLine($"Handler: {Safe(item.handler)} — {Location(item.handlerLocation)}\n");
                 foreach (var binding in item.bindings) writer.WriteLine($"Binding: {Location(binding.bindingLocation)}\n");
-                writer.WriteLine($"Audit bounded: {item.bounded}; visited symbols: {item.visitedSymbolCount}. Case IDs are local to this report.\n");
-                writer.WriteLine("Result: **unreviewed**\n");
+                writer.WriteLine($"Traversal limit reached: {item.bounded}; visited symbols: {item.visitedSymbolCount}. Case IDs are local to this report.\n");
+                writer.WriteLine($"Evidence conclusion: **{item.evidenceConclusion}**\n");
+                writer.WriteLine($"Observed UI/control endpoints: {item.uiControlEndpoints.Length}; other unresolved leaves: {item.unresolvedOtherLeaves.Length}; supported backend terminal: not observed.\n");
+                writer.WriteLine("Manual result: **unreviewed**\n");
                 writer.WriteLine("### Direct handler calls\n");
                 foreach (var call in callsByCaller[item.handler].GroupBy(w => new { w.Callee, w.FilePath, w.StartLine, w.EndLine }))
                     writer.WriteLine($"- {Safe(call.Key.Callee)} — {Location(call.First())}");
@@ -164,7 +185,7 @@ public static partial class WebFormsRawEvidenceAudit
         }
         output.Add($"batchInspection=created|chains={chains.Length}|handlers={cases.Length}|boundedHandlers={cases.Count(c => c.bounded)}");
         foreach (var item in cases)
-            output.Add($"case={item.caseId}|bounded={item.bounded.ToString().ToLowerInvariant()}|symbols={item.visitedSymbolCount}|directCallSites={callsByCaller[item.handler].Select(w => (w.Callee, w.FilePath, w.StartLine, w.EndLine)).Distinct().Count()}|stoppingSymbols={item.stoppingSymbols.Length}|review=unreviewed");
+            output.Add($"case={item.caseId}|bounded={item.bounded.ToString().ToLowerInvariant()}|symbols={item.visitedSymbolCount}|directCallSites={callsByCaller[item.handler].Select(w => (w.Callee, w.FilePath, w.StartLine, w.EndLine)).Distinct().Count()}|stoppingSymbols={item.stoppingSymbols.Length}|uiControlEndpoints={item.uiControlEndpoints.Length}|unresolvedOtherLeaves={item.unresolvedOtherLeaves.Length}|evidence={item.evidenceConclusion}|review=unreviewed");
         output.Add("batchReview=read-private-markdown;share-only-case-ids-and-result-categories");
     }
 }

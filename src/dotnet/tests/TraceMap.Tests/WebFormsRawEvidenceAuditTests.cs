@@ -7,6 +7,33 @@ namespace TraceMap.Tests;
 public sealed class WebFormsRawEvidenceAuditTests
 {
     [Fact]
+    public void BatchInspectionDistinguishesUiEndpointsWithoutOtherUnresolvedLeaves()
+    {
+        WithFixture((db, report) =>
+        {
+            using (var connection = new SqliteConnection($"Data Source={db};Pooling=False"))
+            {
+                connection.Open();
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = """
+                    delete from facts where fact_id in ('call','invoke-one','invoke-two');
+                    insert into facts(fact_id,fact_type,source_symbol,target_symbol)
+                    values('ui-only','MethodInvoked','Private.Handler()','global::System.Web.UI.WebControls.ListItemCollection.Clear()');
+                    """;
+                cmd.ExecuteNonQuery();
+            }
+            var path = Path.Combine(Path.GetDirectoryName(report)!, "ui-only-batch.json");
+            var lines = WebFormsRawEvidenceAudit.Run(db, report, inspectionPath: path, inspectAllHandlers: true);
+            using var json = JsonDocument.Parse(File.ReadAllText(path));
+            var item = json.RootElement.GetProperty("cases")[0];
+            Assert.Equal("ui-control-operations-observed-no-other-unresolved-leaves", item.GetProperty("evidenceConclusion").GetString());
+            Assert.Single(item.GetProperty("uiControlEndpoints").EnumerateArray());
+            Assert.Empty(item.GetProperty("unresolvedOtherLeaves").EnumerateArray());
+            Assert.Contains(lines, line => line.Contains("uiControlEndpoints=1|unresolvedOtherLeaves=0|evidence=ui-control-operations-observed-no-other-unresolved-leaves", StringComparison.Ordinal));
+        });
+    }
+
+    [Fact]
     public void BatchInspectionIncludesEveryHandlerSiblingAndStoppingLocationWithoutConsoleDisclosure()
     {
         WithFixture((db, report) =>
@@ -19,6 +46,7 @@ public sealed class WebFormsRawEvidenceAuditTests
                     insert into facts(fact_id,fact_type,target_symbol) values('handler-two','WebFormsHandlerResolved','Private.SecondHandler()');
                     insert into facts(fact_id,fact_type,source_symbol,target_symbol,start_line) values
                         ('sibling','CallEdge','Private.Handler()','Private.UiReset()',42),
+                        ('ui-control','MethodInvoked','Private.Handler()','global::System.Web.UI.WebControls.ListControl.ClearSelection()',43),
                         ('second-call','MethodInvoked','Private.SecondHandler()','Private.OtherStop()',70);
                     """;
                 cmd.ExecuteNonQuery();
@@ -47,14 +75,22 @@ public sealed class WebFormsRawEvidenceAuditTests
             var first = Assert.Single(cases, c => c.GetProperty("handler").GetString() == "Private.Handler()");
             Assert.Contains(first.GetProperty("stoppingSymbols").EnumerateArray(), s => s.GetString() == "Private.UiReset()");
             Assert.Contains(first.GetProperty("stoppingSymbols").EnumerateArray(), s => s.GetString() == "Private.External()");
+            Assert.Equal("ui-control-operations-observed-with-unresolved-leaves", first.GetProperty("evidenceConclusion").GetString());
+            Assert.Single(first.GetProperty("uiControlEndpoints").EnumerateArray());
+            Assert.Equal(2, first.GetProperty("unresolvedOtherLeaves").GetArrayLength());
+            Assert.Equal("no-supported-backend-terminal-observed", first.GetProperty("backendTerminalConclusion").GetString());
             var second = Assert.Single(cases, c => c.GetProperty("handler").GetString() == "Private.SecondHandler()");
             Assert.Single(second.GetProperty("stoppingSymbols").EnumerateArray());
+            Assert.Equal("no-supported-backend-terminal-observed", second.GetProperty("evidenceConclusion").GetString());
             var markdown = File.ReadAllText(Path.ChangeExtension(path, ".md"));
             Assert.Contains("Private.cs:42", markdown);
             Assert.Contains("Private.cs:70", markdown);
             Assert.Contains("case-001", markdown);
             Assert.Contains("case-002", markdown);
-            Assert.Contains("Result: **unreviewed**", markdown);
+            Assert.Contains("Evidence conclusion: **ui-control-operations-observed-with-unresolved-leaves**", markdown);
+            Assert.Contains("Observed UI/control endpoints: 1; other unresolved leaves: 2; supported backend terminal: not observed.", markdown);
+            Assert.Contains("Manual result: **unreviewed**", markdown);
+            Assert.Contains(lines, line => line.Contains("uiControlEndpoints=1|unresolvedOtherLeaves=2|evidence=ui-control-operations-observed-with-unresolved-leaves", StringComparison.Ordinal));
             Assert.Equal(before, File.ReadAllBytes(db));
             Assert.Throws<IOException>(() => WebFormsRawEvidenceAudit.Run(db, report, inspectionPath: path, inspectAllHandlers: true));
             Assert.Equal(markdown, File.ReadAllText(Path.ChangeExtension(path, ".md")));
