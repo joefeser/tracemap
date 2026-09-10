@@ -1,14 +1,15 @@
 # WITS modernization review overlay implementation state
 
-- Branch: `codex/wits-modernization-review-overlay`
+- Integrated branch: `dev`
 - Parent integration PR: #723
 - Tracking issue: #724
 - Scope: deterministic private export and validation only
 
-The initial slice defines a private immutable overlay for one exact batch
-inspection. Human decisions remain separate from scanner evidence. WITS hosting,
-anonymous review projection, planning, and generation remain unchecked follow-up
-tasks.
+The completed public slice defines a private immutable overlay for one exact
+batch inspection. Human decisions remain separate from scanner evidence. WITS
+hosting, anonymous review projection, business-requirements synthesis, planning,
+and generation are downstream concerns outside this spec rather than unchecked
+TraceMap implementation tasks.
 
 Validation on 2026-09-10:
 
@@ -35,3 +36,10 @@ requires at least one non-whitespace character, matching the bundled validator.
 The focused regression covers lowercase accepted modes, all four non-string
 closed-code fields, whitespace-only reviewer metadata, and all three schema
 reviewer branches.
+
+The operator guide now explicitly identifies the batch cases as an exception
+review queue rather than complete modernization evidence. A dedicated editing
+guide documents that each decision accepts one verdict and one migration
+disposition, with comments for nuance and corrections for explicit human
+amendments. The exporter points operators to that guide without adding mutable
+instructions to the strict overlay contract.
