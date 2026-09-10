@@ -2,9 +2,11 @@ using TraceMap.Reporting;
 
 try
 {
-    if (args.Length == 5 && args[0] == "--code-path-review")
+    if (args.Length is 5 or 6 && args[0] == "--code-path-review")
     {
-        foreach (var line in WebFormsCodePathReview.Run(args[1], args[2], args[3], args[4])) Console.WriteLine(line);
+        if (args.Length == 6 && !int.TryParse(args[5], out _)) throw new InvalidDataException("CodePathReviewInvalidLimit");
+        var triggerContextLines = args.Length == 5 ? 12 : int.Parse(args[5], System.Globalization.CultureInfo.InvariantCulture);
+        foreach (var line in WebFormsCodePathReview.Run(args[1], args[2], args[3], args[4], triggerContextLines: triggerContextLines)) Console.WriteLine(line);
         return 0;
     }
     if (args.Length == 4 && args[0] == "--batch-inspection")

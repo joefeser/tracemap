@@ -13,10 +13,11 @@ public sealed class WebFormsCodePathReviewTests
             var output = Path.Combine(directory, "review.private.html");
             var lines = WebFormsCodePathReview.Run(inspection, sourceRoot, "case-001", output);
             Assert.Contains("codePathReview=created", lines);
-            Assert.Contains(lines, line => line == "case=case-001|sourceMode=working-tree|excerpts=4|definitionCandidates=1|anonymousNodes=2|anonymousEdges=1|review=unreviewed");
+            Assert.Contains(lines, line => line == "case=case-001|sourceMode=working-tree|triggerContextLines=12|excerpts=4|definitionCandidates=1|anonymousNodes=2|anonymousEdges=1|review=unreviewed");
             Assert.DoesNotContain("Private", string.Join('\n', lines));
             var report = File.ReadAllText(output);
             Assert.Contains("Source mode: <code>working-tree</code>", report);
+            Assert.Contains("Trigger context: <code>12 lines before and after the retained binding span</code>", report);
             Assert.Contains("Private.Page.Handler()", report);
             Assert.Contains("UiReset();", report);
             Assert.Contains("unique-name-definition-candidate-not-evidence", report);
