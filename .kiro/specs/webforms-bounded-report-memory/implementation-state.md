@@ -26,6 +26,15 @@ without an initial navigation jump; the full anchored evidence remains below.
 Validation after this layout refinement: focused tests 2/2 and full .NET suite
 1789/1789; scoped formatting, private-path guard, and diff checks passed.
 
+The private review now uses native disclosure regions. Trigger, retained call
+path, and human verdict start open; the Mermaid graph and detailed evidence
+start closed. Fragment navigation opens any enclosing disclosure automatically,
+so evidence links remain usable without forcing the long sections open at load.
+Validation for the disclosure refinement: focused review tests 2/2, formatting,
+privacy, and diff checks passed. The full suite passed 1788/1789; the unrelated
+global-activity isolation assertion observed a concurrent scan, then passed 1/1
+when rerun alone.
+
 ## Batch local handler review (2026-09-10)
 
 Field triage after Fill terminal projection still has seven terminal-free chains
