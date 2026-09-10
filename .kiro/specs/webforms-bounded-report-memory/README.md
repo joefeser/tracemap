@@ -235,6 +235,10 @@ the same cases and provides editable Human verdict and Comment cells. Each run
 uses a new folder, so a later run cannot overwrite review decisions. Both indexes
 and the private HTML stay on the work machine; an internal AI can read the
 Markdown and follow its relative links.
+
+The folder also contains `inspection.snapshot.json`, a private copy of the exact
+retained batch input used for every report in that set. This avoids dependence on
+later “newest file” selection and keeps report provenance stable.
 Use `-CaseId case-001,case-004` to generate only selected cases.
 
 The raw audit now filters each read to exact symbols on the selected handlers'

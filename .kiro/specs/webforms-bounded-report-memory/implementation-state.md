@@ -968,6 +968,16 @@ validated `index.html` return links at both the top and bottom. Anonymous report
 do not link into the private review set. Tests cover link validation, return-link
 placement, index generation, new-tab behavior, and the Markdown queue.
 
+The first field run of the indexed set failed before case generation because the
+helper could not reopen the selected inspection path. The batch launcher now
+copies the already validated input to `inspection.snapshot.json` inside the new
+private set and passes its explicit argument array to every helper invocation.
+This also freezes the provenance input for the set. Single-case selection remains
+an array, and regression mocks require the snapshot to exist at the helper
+boundary. Validation included the two-case mocked PowerShell regression and a
+real one-case launcher-to-helper run that produced both indexes, the private and
+shareable reports, and the inspection snapshot.
+
 ### Post-fairness field result and actionable summary
 
 The work-machine rerun retained 466 event chains and 361 downstream boundaries.
