@@ -1,0 +1,83 @@
+$ErrorActionPreference = 'Stop'
+$scriptPath = Join-Path $PSScriptRoot 'Invoke-WitsModernizationReview.ps1'
+$temp = Join-Path ([IO.Path]::GetTempPath()) ('tracemap-wits-review-' + [Guid]::NewGuid().ToString('N'))
+[IO.Directory]::CreateDirectory($temp) | Out-Null
+$inspectionPath = Join-Path $temp 'inspection.snapshot.json'
+$privateSentinel = 'PRIVATE_SOURCE_PATH_SENTINEL'
+$inspection = [ordered]@{
+    schemaVersion = 'webforms-batch-inspection.v1'
+    ruleId = 'diagnostic.webforms.raw-exact-call-evidence.v1'
+    scanId = 'scan-test'
+    commitSha = ('a' * 40)
+    sourceReport = $privateSentinel
+    cases = @(
+        [ordered]@{ caseId='case-001'; handlerFactId='handler-1'; bindings=@([ordered]@{ surfaceId='surface-1'; bindingLocation=[ordered]@{ factId='binding-1' } }) },
+        [ordered]@{ caseId='case-002'; handlerFactId='handler-2'; bindings=@([ordered]@{ surfaceId='surface-1'; bindingLocation=[ordered]@{ factId='binding-2' } }) }
+    )
+}
+[IO.File]::WriteAllText($inspectionPath, ($inspection | ConvertTo-Json -Depth 12), [Text.UTF8Encoding]::new($false))
+$before = (Get-FileHash -LiteralPath $inspectionPath -Algorithm SHA256).Hash
+
+function Expect-Failure([string]$Code, [scriptblock]$Action) {
+    try { & $Action; throw "Expected failure $Code" }
+    catch { if (!$_.Exception.Message.Contains($Code, [StringComparison]::Ordinal)) { throw } }
+}
+function Write-Variant($Value, [string]$Name) {
+    $path = Join-Path $temp $Name
+    [IO.File]::WriteAllText($path, ($Value | ConvertTo-Json -Depth 12), [Text.UTF8Encoding]::new($false))
+    return $path
+}
+
+try {
+    $first = Join-Path $temp 'review-one.json'
+    $second = Join-Path $temp 'review-two.json'
+    & $scriptPath -Mode Export -InspectionPath $inspectionPath -ReviewPath $first | Out-Null
+    & $scriptPath -Mode Export -InspectionPath $inspectionPath -ReviewPath $second | Out-Null
+    if ((Get-FileHash $first).Hash -ne (Get-FileHash $second).Hash) { throw 'Review export is not deterministic.' }
+    if ([IO.File]::ReadAllText($first).Contains($privateSentinel, [StringComparison]::Ordinal)) { throw 'Review export leaked unrelated private inspection content.' }
+    & $scriptPath -Mode Validate -InspectionPath $inspectionPath -ReviewPath $first | Out-Null
+    Expect-Failure 'WITS_REVIEW_OUTPUT_EXISTS' { & $scriptPath -Mode Export -InspectionPath $inspectionPath -ReviewPath $first }
+
+    $valid = [IO.File]::ReadAllText($first) | ConvertFrom-Json -Depth 32
+    $valid.reviewState = 'completed'
+    $valid.reviewer = 'reviewer-001'
+    $valid.reviewedAtUtc = '2026-09-10T18:45:00Z'
+    foreach ($decision in $valid.decisions) { $decision.verdict = 'needs-review'; $decision.migrationDisposition = 'defer' }
+    $completed = Write-Variant $valid 'completed.json'
+    & $scriptPath -Mode Validate -InspectionPath $inspectionPath -ReviewPath $completed | Out-Null
+
+    $bad = [IO.File]::ReadAllText($first) | ConvertFrom-Json -Depth 32
+    $bad.decisions[0].verdict = 'approved-by-magic'
+    Expect-Failure 'WITS_REVIEW_DECISION_INVALID' { & $scriptPath -Mode Validate -InspectionPath $inspectionPath -ReviewPath (Write-Variant $bad 'bad-code.json') }
+    $bad = [IO.File]::ReadAllText($first) | ConvertFrom-Json -Depth 32
+    $bad.decisions[1].caseId = 'case-001'
+    Expect-Failure 'WITS_REVIEW_CASE_SET_MISMATCH' { & $scriptPath -Mode Validate -InspectionPath $inspectionPath -ReviewPath (Write-Variant $bad 'duplicate.json') }
+    $bad = [IO.File]::ReadAllText($first) | ConvertFrom-Json -Depth 32
+    $bad.evidence.inspectionSha256 = ('0' * 64)
+    Expect-Failure 'WITS_REVIEW_PROVENANCE_MISMATCH' { & $scriptPath -Mode Validate -InspectionPath $inspectionPath -ReviewPath (Write-Variant $bad 'provenance.json') }
+    $bad = [IO.File]::ReadAllText($first) | ConvertFrom-Json -Depth 32
+    $bad.decisions[0].handlerFactId = 'different-handler'
+    Expect-Failure 'WITS_REVIEW_REFERENCE_MISMATCH' { & $scriptPath -Mode Validate -InspectionPath $inspectionPath -ReviewPath (Write-Variant $bad 'reference.json') }
+    $bad = [IO.File]::ReadAllText($first) | ConvertFrom-Json -Depth 32
+    $bad.decisions[0].bindingFactIds = @('binding-1', 'binding-1')
+    Expect-Failure 'WITS_REVIEW_REFERENCE_MISMATCH' { & $scriptPath -Mode Validate -InspectionPath $inspectionPath -ReviewPath (Write-Variant $bad 'duplicate-reference.json') }
+    $bad = [IO.File]::ReadAllText($first) | ConvertFrom-Json -Depth 32
+    $bad.decisions[0].bindingFactIds = 'binding-1'
+    Expect-Failure 'WITS_REVIEW_REFERENCE_MISMATCH' { & $scriptPath -Mode Validate -InspectionPath $inspectionPath -ReviewPath (Write-Variant $bad 'scalar-reference.json') }
+    $bad = [IO.File]::ReadAllText($completed) | ConvertFrom-Json -Depth 32
+    $bad.reviewer = $null
+    Expect-Failure 'WITS_REVIEW_COMPLETION_INVALID' { & $scriptPath -Mode Validate -InspectionPath $inspectionPath -ReviewPath (Write-Variant $bad 'completion.json') }
+    $bad = [IO.File]::ReadAllText($first) | ConvertFrom-Json -Depth 32
+    $bad.reviewer = 'reviewer-001'
+    $bad.reviewedAtUtc = 'not-a-timestamp'
+    Expect-Failure 'WITS_REVIEW_COMPLETION_INVALID' { & $scriptPath -Mode Validate -InspectionPath $inspectionPath -ReviewPath (Write-Variant $bad 'draft-metadata.json') }
+    $bad = [IO.File]::ReadAllText($first) | ConvertFrom-Json -Depth 32
+    $bad | Add-Member -NotePropertyName unexpected -NotePropertyValue $true
+    Expect-Failure 'WITS_REVIEW_UNKNOWN_FIELD' { & $scriptPath -Mode Validate -InspectionPath $inspectionPath -ReviewPath (Write-Variant $bad 'unknown.json') }
+
+    if ((Get-FileHash -LiteralPath $inspectionPath -Algorithm SHA256).Hash -ne $before) { throw 'Review workflow modified the inspection.' }
+    Write-Host 'PASS WITS modernization review overlay'
+}
+finally {
+    if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Recurse -Force }
+}
