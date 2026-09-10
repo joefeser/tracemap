@@ -236,6 +236,10 @@ uses a new folder, so a later run cannot overwrite review decisions. Both indexe
 and the private HTML stay on the work machine; an internal AI can read the
 Markdown and follow its relative links.
 
+Both indexes group handler cases under their originating private surface/item and
+show separate item and handler-case counts. This makes it explicit when several
+review cases came from one page rather than implying that every case is a page.
+
 The folder also contains `inspection.snapshot.json`, a private copy of the exact
 retained batch input used for every report in that set. This avoids dependence on
 later “newest file” selection and keeps report provenance stable.
