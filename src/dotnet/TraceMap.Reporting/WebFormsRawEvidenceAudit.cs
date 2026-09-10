@@ -5,10 +5,11 @@ using Microsoft.Data.Sqlite;
 namespace TraceMap.Reporting;
 
 /// <summary>Read-only diagnostic, independent of report graph compaction and terminal classification.</summary>
-public static class WebFormsRawEvidenceAudit
+public static partial class WebFormsRawEvidenceAudit
 {
-    public static IReadOnlyList<string> Run(string indexPath, string reportPath, int maxRows = 500_000, int maxTextBytes = 64 * 1024 * 1024, string? inspectionPath = null, string? startingMethodName = null)
+    public static IReadOnlyList<string> Run(string indexPath, string reportPath, int maxRows = 500_000, int maxTextBytes = 64 * 1024 * 1024, string? inspectionPath = null, string? startingMethodName = null, bool inspectAllHandlers = false)
     {
+        if (inspectAllHandlers && (inspectionPath is null || startingMethodName is not null)) throw new InvalidDataException("RawAuditInvalidLimit");
         if (maxRows < 1 || maxRows > 500_000) throw new InvalidDataException("RawAuditInvalidLimit");
         if (maxTextBytes < 1 || maxTextBytes > 64 * 1024 * 1024) throw new InvalidDataException("RawAuditInvalidLimit");
         if (new FileInfo(reportPath).Length > 128 * 1024 * 1024) throw new InvalidDataException("RawAuditReportLimit");
@@ -206,6 +207,12 @@ public static class WebFormsRawEvidenceAudit
             output.Add($"handler={++n:D3}|symbols={visited.Count}|bounded={bounded.ToString().ToLowerInvariant()}|semanticInvocationSources={visited.Count(s => Has(s, "MethodInvoked:semantic"))}|semanticCallSources={visited.Count(s => Has(s, "CallEdge:semantic"))}|invocationWithoutCallFact={visited.Count(s => Has(s, "MethodInvoked:semantic") && !Has(s, "CallEdge:semantic"))}|exactDeclarationTargets={visited.Count(s => Has(s, "MethodDeclared:semantic") || Has(s, "MethodDeclared:nonsemantic"))}|withoutSelectedSourceWitness={visited.Count(s => !evidence.ContainsKey(s))}");
         }
         output.Add("nonClaim=not-report-leaf-identities;not-runtime-execution;missing-exact-witness-is-not-source-absence;declaration-targets-may-use-different-symbol-format");
+        if (inspectAllHandlers)
+        {
+            WriteBatchInspection(db, transaction, root, scan!, commit!, reportPath, inspectionPath!, handlers!, states, edges, loaded,
+                maxRows - rows, maxTextBytes - bytes, output);
+            return output;
+        }
         if (inspectionPath is not null)
         {
             // Pick one reproducible, unbounded exact-call stopping point, not a
