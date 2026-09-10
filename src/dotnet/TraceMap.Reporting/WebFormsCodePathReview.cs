@@ -210,6 +210,23 @@ public static class WebFormsCodePathReview
         static string PublicTier(string value) => value is "Tier1Semantic" or "Tier2Structural" or "Tier3SyntaxOrTextual" or "Tier4Unknown"
             ? value : "withheld-unsafe-evidence-tier";
 
+        void WriteSourceCode(StreamWriter writer, ReviewLocation location)
+        {
+            var lines = ReadSource(location.FilePath);
+            if (location.StartLine > lines.Length) throw new InvalidDataException("CodePathReviewSourceSpanInvalid");
+            var desiredStart = location.PreferFullSpan ? location.StartLine : Math.Max(1, location.StartLine - contextLines);
+            var desiredEnd = location.PreferFullSpan ? location.EndLine : Math.Min(lines.Length, location.EndLine + contextLines);
+            var excerptEnd = Math.Min(lines.Length, Math.Min(desiredEnd, desiredStart + 99));
+            writer.WriteLine("<pre><code>");
+            for (var line = desiredStart; line <= excerptEnd; line++)
+            {
+                var marker = line >= location.StartLine && line <= location.EndLine ? "&gt;" : " ";
+                writer.WriteLine($"{marker} {line,5} | {H(BoundedSourceLine(lines[line - 1]))}");
+            }
+            if (excerptEnd < desiredEnd) writer.WriteLine("  ... | excerpt truncated at 100 lines");
+            writer.WriteLine("</code></pre>");
+        }
+
         string RenderTree(string symbol, HashSet<string> path, HashSet<string> expanded)
         {
             var builder = new StringBuilder();
@@ -256,10 +273,27 @@ public static class WebFormsCodePathReview
                 writer.WriteLine($"<li>Traversal limit reached: <code>{selected.GetProperty("bounded").GetBoolean().ToString().ToLowerInvariant()}</code></li>");
                 writer.WriteLine("<li>Rule: <code>diagnostic.webforms.local-code-path-review.v2</code></li></ul>");
                 writer.WriteLine($"<p><a href=\"{H(Path.GetFileName(shareableHtmlPath))}\">Open anonymous shareable graph</a></p></section>");
-                writer.WriteLine("<section id=\"trigger\"><h2>Trigger</h2><p>The event binding selects the handler; it is context for the rooted call path, not a sibling call.</p><ul>");
-                foreach (var location in deduplicated.Where(l => l.Role == "event-binding"))
-                    writer.WriteLine($"<li><a href=\"#{evidenceAnchors[location]}\">Event-binding evidence at {H(location.FilePath)}:{location.StartLine}</a></li>");
-                writer.WriteLine("</ul></section>");
+                writer.WriteLine("<section id=\"trigger\"><h2>Trigger</h2><p>The event binding selects the handler; it is context for the rooted call path, not a sibling call.</p>");
+                var bindingLocations = deduplicated.Where(l => l.Role == "event-binding").ToArray();
+                if (bindingLocations.Length == 0) writer.WriteLine("<p>No event-binding source location was retained for this case.</p>");
+                foreach (var location in bindingLocations)
+                {
+                    writer.WriteLine($"<article class=\"trigger-code\"><h3>{H(location.FilePath)}:{location.StartLine}</h3>");
+                    WriteSourceCode(writer, location);
+                    writer.WriteLine($"<p><a href=\"#{evidenceAnchors[location]}\">Jump to full event-binding evidence</a></p></article>");
+                }
+                writer.WriteLine("</section>");
+                writer.WriteLine("<section id=\"graph\"><h2>Call graph</h2><p>The diagram uses anonymous aliases inside an isolated frame. Use the private legend below to connect aliases to source evidence.</p>");
+                writer.WriteLine($"<iframe class=\"graph-frame\" sandbox=\"allow-scripts\" src=\"{H(Path.GetFileName(shareableHtmlPath))}#call-graph\" title=\"Anonymous Mermaid call graph\"></iframe>");
+                writer.WriteLine("<h3>Private alias legend</h3><dl class=\"legend\">");
+                foreach (var pair in aliases.OrderBy(pair => pair.Value, StringComparer.Ordinal))
+                {
+                    var location = deduplicated.FirstOrDefault(item => item.Callee == pair.Key || item.Caller == pair.Key || (pair.Key == handler && item.Role == "handler"));
+                    writer.Write($"<dt>{H(pair.Value)}</dt><dd>{H(pair.Key)}");
+                    if (location is not null) writer.Write($" — <a href=\"#{evidenceAnchors[location]}\">evidence</a>");
+                    writer.WriteLine("</dd>");
+                }
+                writer.WriteLine("</dl></section>");
                 writer.WriteLine("<section id=\"call-path\"><h2>Retained call path</h2><p>Static retained calls, organized from the selected handler. This is not runtime order or branch feasibility.</p>");
                 var handlerLocation = deduplicated.FirstOrDefault(l => l.Role == "handler");
                 writer.Write($"<div class=\"root\">Handler: <strong>{H(handler)}</strong>");
@@ -269,22 +303,11 @@ public static class WebFormsCodePathReview
                 writer.WriteLine("</section><section id=\"evidence\"><h2>Evidence and source excerpts</h2>");
                 foreach (var location in deduplicated)
                 {
-                    var lines = ReadSource(location.FilePath);
-                    if (location.StartLine > lines.Length) throw new InvalidDataException("CodePathReviewSourceSpanInvalid");
-                    var desiredStart = location.PreferFullSpan ? location.StartLine : Math.Max(1, location.StartLine - contextLines);
-                    var desiredEnd = location.PreferFullSpan ? location.EndLine : Math.Min(lines.Length, location.EndLine + contextLines);
-                    var excerptEnd = Math.Min(lines.Length, Math.Min(desiredEnd, desiredStart + 99));
                     writer.WriteLine($"<article class=\"evidence\" id=\"{evidenceAnchors[location]}\"><h3>{H(location.Role)} — {H(location.FilePath)}:{location.StartLine}</h3>");
                     if (location.Caller is not null || location.Callee is not null)
                         writer.WriteLine($"<p>Evidence edge: <code>{H(location.Caller)}</code> → <code>{H(location.Callee)}</code></p>");
-                    writer.WriteLine("<pre><code>");
-                    for (var line = desiredStart; line <= excerptEnd; line++)
-                    {
-                        var marker = line >= location.StartLine && line <= location.EndLine ? "&gt;" : " ";
-                        writer.WriteLine($"{marker} {line,5} | {H(BoundedSourceLine(lines[line - 1]))}");
-                    }
-                    if (excerptEnd < desiredEnd) writer.WriteLine("  ... | excerpt truncated at 100 lines");
-                    writer.WriteLine("</code></pre><p><a href=\"#call-path\">Back to call path</a></p></article>");
+                    WriteSourceCode(writer, location);
+                    writer.WriteLine("<p><a href=\"#call-path\">Back to call path</a></p></article>");
                 }
                 writer.WriteLine("</section><section id=\"verdict\"><h2>Human verdict</h2><p>Choose one and add a short reason.</p>");
                 writer.WriteLine("<label><input type=\"checkbox\"> Expected UI/control-only behavior</label><label><input type=\"checkbox\"> Supported backend operation present</label><label><input type=\"checkbox\"> Backend operation expected but evidence missing</label><label><input type=\"checkbox\"> Incorrect binding or source mismatch</label><label><input type=\"checkbox\"> Needs further review</label>");
@@ -327,12 +350,12 @@ public static class WebFormsCodePathReview
                 writer.WriteLine($"<title>Anonymous Web Forms call-path review {H(caseId)}</title><style>{ShareableCss}</style></head><body id=\"top\"><main>");
                 writer.WriteLine($"<h1>Anonymous Web Forms call-path review: {H(caseId)}</h1><p class=\"safe\">SHAREABLE: structural aliases only; no source text, paths, symbols, fact IDs, SQL, URLs, configuration, or commit identity.</p>");
                 writer.WriteLine($"<p>Evidence conclusion: <code>{H(EvidenceConclusion(selected))}</code>. Traversal limit reached: <code>{selected.GetProperty("bounded").GetBoolean().ToString().ToLowerInvariant()}</code>.</p>");
-                writer.WriteLine("<h2>Call graph</h2><p>Click a node to jump to its structural details. Mermaid rendering requires browser access to the Mermaid module; the source remains visible as a fallback.</p><pre class=\"mermaid\">");
+                writer.WriteLine("<section id=\"call-graph\"><h2>Call graph</h2><p>Click a node to jump to its structural details. Mermaid rendering requires browser access to the Mermaid module; the source remains visible as a fallback.</p><pre class=\"mermaid\">");
                 writer.WriteLine("flowchart TD");
                 foreach (var node in anonymousNodes) writer.WriteLine($"  {node.Id.Replace('-', '_')}[\"{node.Id}<br/>{node.Classification}\"]");
                 foreach (var edge in anonymousEdges) writer.WriteLine($"  {edge.from.Replace('-', '_')} -->|\"calls × {edge.callSiteCount}\"| {edge.to.Replace('-', '_')}");
                 foreach (var node in anonymousNodes) writer.WriteLine($"  click {node.Id.Replace('-', '_')} \"#node-{node.Id}\"");
-                writer.WriteLine("</pre><h2>Structural details</h2>");
+                writer.WriteLine("</pre></section><h2>Structural details</h2>");
                 foreach (var node in anonymousNodes)
                 {
                     writer.WriteLine($"<section id=\"node-{node.Id}\"><h3>{node.Id}</h3><p>Classification: <code>{node.Classification}</code></p><ul>");
@@ -371,7 +394,7 @@ public static class WebFormsCodePathReview
     }
 
     private const string PrivateCss = """
-        :root{font-family:system-ui,sans-serif;color:#172033;background:#f5f7fb}body{margin:0}main{max-width:1100px;margin:auto;padding:24px}section,article{background:white;border:1px solid #dbe2ee;border-radius:10px;padding:18px;margin:16px 0}.private{background:#fff1f0;border-left:5px solid #c62828;padding:12px}.root{font-size:1.05rem;padding:10px;background:#eaf1ff;border-radius:6px}.call-tree{border-left:2px solid #bed0ee;margin:.5rem 0 .5rem 1rem;padding-left:1.4rem}.call-tree li{margin:.55rem 0}.kind,.sites,.reference{font-size:.85rem;color:#526177}.callee{font-weight:650}a{color:#1558b0}pre{overflow:auto;background:#111827;color:#e5e7eb;padding:14px;border-radius:8px;line-height:1.4}.evidence:target{outline:3px solid #ffbf47}label{display:block;margin:.55rem 0}footer{color:#526177;margin:28px 0}
+        :root{font-family:system-ui,sans-serif;color:#172033;background:#f5f7fb}body{margin:0}main{max-width:1100px;margin:auto;padding:24px}section,article{background:white;border:1px solid #dbe2ee;border-radius:10px;padding:18px;margin:16px 0}.private{background:#fff1f0;border-left:5px solid #c62828;padding:12px}.root{font-size:1.05rem;padding:10px;background:#eaf1ff;border-radius:6px}.call-tree{border-left:2px solid #bed0ee;margin:.5rem 0 .5rem 1rem;padding-left:1.4rem}.call-tree li{margin:.55rem 0}.kind,.sites,.reference{font-size:.85rem;color:#526177}.callee{font-weight:650}a{color:#1558b0}pre{overflow:auto;background:#111827;color:#e5e7eb;padding:14px;border-radius:8px;line-height:1.4}.evidence:target{outline:3px solid #ffbf47}.trigger-code{background:#f8faff}.graph-frame{width:100%;height:620px;border:1px solid #dbe2ee;border-radius:8px;background:white}.legend{display:grid;grid-template-columns:max-content 1fr;gap:.45rem 1rem}.legend dt{font-weight:700}.legend dd{margin:0;overflow-wrap:anywhere}label{display:block;margin:.55rem 0}footer{color:#526177;margin:28px 0}
         """;
 
     private const string ShareableCss = """
