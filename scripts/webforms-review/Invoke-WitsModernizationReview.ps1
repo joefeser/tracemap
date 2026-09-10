@@ -152,6 +152,7 @@ if ([string]::Equals($Mode, 'Export', [StringComparison]::OrdinalIgnoreCase)) {
         $stream.Dispose()
     }
     Write-Host "witsModernizationReview=created;cases=$($decisions.Count);state=draft"
+    Write-Host 'editingGuide=scripts/webforms-review/WITS_REVIEW_EDITING.md;one-verdict-and-one-disposition-per-case'
     return
 }
 
