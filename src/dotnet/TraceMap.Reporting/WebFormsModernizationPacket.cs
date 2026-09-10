@@ -1298,7 +1298,8 @@ public static class WebFormsModernizationPacketReporter
         if (info.Length > maximumBytes) throw new InvalidDataException("WebFormsSurfaceListLimitReached");
         var lines = new List<string>();
         await using (var stream = new FileStream(surfaceListPath, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, useAsync: true))
-        using (var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true))
+        using (var boundedStream = new SurfaceListByteLimitStream(stream, maximumBytes))
+        using (var reader = new StreamReader(boundedStream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true))
         {
             while (await reader.ReadLineAsync(cancellationToken) is { } line)
             {
@@ -1595,4 +1596,63 @@ public static class WebFormsModernizationPacketReporter
         string BuildStatus,
         IReadOnlyList<CodeFact> Facts,
         string? InputLimit = null);
+}
+
+internal sealed class SurfaceListByteLimitStream(Stream inner, long maximumBytes) : Stream
+{
+    private long bytesRead;
+
+    public override bool CanRead => inner.CanRead;
+    public override bool CanSeek => false;
+    public override bool CanWrite => false;
+    public override long Length => throw new NotSupportedException();
+    public override long Position
+    {
+        get => throw new NotSupportedException();
+        set => throw new NotSupportedException();
+    }
+
+    public override int Read(byte[] buffer, int offset, int count)
+        => Account(inner.Read(buffer, offset, BoundedCount(count)));
+
+    public override int Read(Span<byte> buffer)
+        => Account(inner.Read(buffer[..BoundedCount(buffer.Length)]));
+
+    public override async Task<int> ReadAsync(
+        byte[] buffer,
+        int offset,
+        int count,
+        CancellationToken cancellationToken)
+        => Account(await inner.ReadAsync(buffer.AsMemory(offset, BoundedCount(count)), cancellationToken).ConfigureAwait(false));
+
+    public override async ValueTask<int> ReadAsync(
+        Memory<byte> buffer,
+        CancellationToken cancellationToken = default)
+        => Account(await inner.ReadAsync(buffer[..BoundedCount(buffer.Length)], cancellationToken).ConfigureAwait(false));
+
+    public override void Flush() => throw new NotSupportedException();
+    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+    public override void SetLength(long value) => throw new NotSupportedException();
+    public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) inner.Dispose();
+        base.Dispose(disposing);
+    }
+
+    private int BoundedCount(int requested)
+    {
+        if (requested == 0) return 0;
+        var remaining = maximumBytes - bytesRead;
+        return remaining > 0 ? (int)Math.Min(requested, remaining) : 1;
+    }
+
+    private int Account(int count)
+    {
+        if (count > 0 && bytesRead >= maximumBytes)
+            throw new InvalidDataException("WebFormsSurfaceListLimitReached");
+        bytesRead += count;
+        return count;
+    }
 }
