@@ -7,6 +7,61 @@ namespace TraceMap.Tests;
 public sealed class WebFormsRawEvidenceAuditTests
 {
     [Fact]
+    public void BatchInspectionIncludesEveryHandlerSiblingAndStoppingLocationWithoutConsoleDisclosure()
+    {
+        WithFixture((db, report) =>
+        {
+            using (var connection = new SqliteConnection($"Data Source={db};Pooling=False"))
+            {
+                connection.Open();
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = """
+                    insert into facts(fact_id,fact_type,target_symbol) values('handler-two','WebFormsHandlerResolved','Private.SecondHandler()');
+                    insert into facts(fact_id,fact_type,source_symbol,target_symbol,start_line) values
+                        ('sibling','CallEdge','Private.Handler()','Private.UiReset()',42),
+                        ('second-call','MethodInvoked','Private.SecondHandler()','Private.OtherStop()',70);
+                    """;
+                cmd.ExecuteNonQuery();
+            }
+            File.WriteAllText(report, JsonSerializer.Serialize(new
+            {
+                schemaVersion = "webforms-modernization-packet.v1",
+                sources = new[] { new { scanId = "scan-one", commitSha = "commit-one" } },
+                eventChains = new[] { "handler", "handler-two" }.Select(id => new
+                {
+                    handlerFactId = id,
+                    bindingFactId = id,
+                    surfaceId = "private-surface",
+                    terminalKind = "",
+                    traversalObservation = new { stopState = "observed-downstream-without-supported-terminal" }
+                })
+            }));
+            var before = File.ReadAllBytes(db);
+            var path = Path.Combine(Path.GetDirectoryName(report)!, "batch.json");
+            var lines = WebFormsRawEvidenceAudit.Run(db, report, inspectionPath: path, inspectAllHandlers: true);
+            Assert.Contains("batchInspection=created|chains=2|handlers=2|boundedHandlers=0", lines);
+            Assert.DoesNotContain("Private", string.Join('\n', lines));
+            using var json = JsonDocument.Parse(File.ReadAllText(path));
+            var cases = json.RootElement.GetProperty("cases").EnumerateArray().ToArray();
+            Assert.Equal(2, cases.Length);
+            var first = Assert.Single(cases, c => c.GetProperty("handler").GetString() == "Private.Handler()");
+            Assert.Contains(first.GetProperty("stoppingSymbols").EnumerateArray(), s => s.GetString() == "Private.UiReset()");
+            Assert.Contains(first.GetProperty("stoppingSymbols").EnumerateArray(), s => s.GetString() == "Private.External()");
+            var second = Assert.Single(cases, c => c.GetProperty("handler").GetString() == "Private.SecondHandler()");
+            Assert.Single(second.GetProperty("stoppingSymbols").EnumerateArray());
+            var markdown = File.ReadAllText(Path.ChangeExtension(path, ".md"));
+            Assert.Contains("Private.cs:42", markdown);
+            Assert.Contains("Private.cs:70", markdown);
+            Assert.Contains("case-001", markdown);
+            Assert.Contains("case-002", markdown);
+            Assert.Contains("Result: **unreviewed**", markdown);
+            Assert.Equal(before, File.ReadAllBytes(db));
+            Assert.Throws<IOException>(() => WebFormsRawEvidenceAudit.Run(db, report, inspectionPath: path, inspectAllHandlers: true));
+            Assert.Equal(markdown, File.ReadAllText(Path.ChangeExtension(path, ".md")));
+        });
+    }
+
+    [Fact]
     public void RawAuditReadsWitnessesWithoutCompactionAndDoesNotEchoSymbols()
     {
         WithFixture((db, report) =>
@@ -192,6 +247,11 @@ public sealed class WebFormsRawEvidenceAuditTests
                 cmd.ExecuteNonQuery();
             }
             Assert.Contains(WebFormsRawEvidenceAudit.Run(db, report), l => l.Contains("symbols=500|bounded=true"));
+            var path = Path.Combine(Path.GetDirectoryName(report)!, "bounded-batch.json");
+            Assert.Contains(WebFormsRawEvidenceAudit.Run(db, report, inspectionPath: path, inspectAllHandlers: true),
+                l => l == "batchInspection=created|chains=1|handlers=1|boundedHandlers=1");
+            using var batch = JsonDocument.Parse(File.ReadAllText(path));
+            Assert.True(batch.RootElement.GetProperty("cases")[0].GetProperty("bounded").GetBoolean());
         });
     }
 

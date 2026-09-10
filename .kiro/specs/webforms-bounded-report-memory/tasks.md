@@ -54,3 +54,4 @@
 - [x] Diagnose retained command-to-adapter linkage and label fact-shape limitations.
 - [x] Retain semantic invocation receivers and direct property-assignment symbols; validate real framework extraction through SQLite and the census.
 - [x] Promote compiler-resolved framework DataAdapter Fill calls to SQL-query terminals in bounded Web Forms reports and regress the full handler-to-terminal path.
+- [x] Replace single-sample follow-up with one local batch review of every terminal-free handler, including all calls, stopping locations, provenance, bounds, and manual result categories.

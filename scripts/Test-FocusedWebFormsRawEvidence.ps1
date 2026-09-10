@@ -1,6 +1,7 @@
-param([string]$IndexPath = '', [string]$ReportPath = '', [string]$OutputRoot = '', [string]$InspectionPath = '', [switch]$CreateLocalInspection, [string]$StartingMethodName = '', [switch]$DatabaseEvidence)
+param([string]$IndexPath = '', [string]$ReportPath = '', [string]$OutputRoot = '', [string]$InspectionPath = '', [switch]$CreateLocalInspection, [string]$StartingMethodName = '', [switch]$DatabaseEvidence, [switch]$BatchInspection)
 
 $ErrorActionPreference = 'Stop'
+if ($BatchInspection -and ($DatabaseEvidence -or $StartingMethodName)) { throw 'Batch inspection requires report-handler selection.' }
 # Reuse only literal path settings; never execute the form-list runner.
 $runner = Join-Path $PSScriptRoot 'Run-FocusedWebFormsPageList.ps1'
 $tokens = $null
@@ -33,16 +34,20 @@ if (!(Test-Path -LiteralPath $IndexPath -PathType Leaf) -or (!$DatabaseEvidence 
     throw 'RawAuditInputUnavailable'
 }
 $project = Join-Path $PSScriptRoot 'diagnostics/RawWebFormsEvidence/RawWebFormsEvidence.csproj'
-if ($CreateLocalInspection) {
+if ($CreateLocalInspection -or $BatchInspection) {
     $directory = Join-Path $OutputRoot 'local-inspection-private'
     $null = New-Item -ItemType Directory -Path $directory -Force
-    $InspectionPath = Join-Path $directory ('webforms-local-inspection-' + [Guid]::NewGuid().ToString('N') + '.json')
+    $prefix = if ($BatchInspection) { 'webforms-batch-inspection-' } else { 'webforms-local-inspection-' }
+    $InspectionPath = Join-Path $directory ($prefix + [Guid]::NewGuid().ToString('N') + '.json')
 }
-Write-Host 'Building diagnostic helper only; no application build, scan, or report generation.'
+Write-Host 'Building diagnostic helper; reading existing scan evidence.'
 $buildOutput = & dotnet build $project -c Release --nologo -v quiet 2>&1
 if ($LASTEXITCODE -ne 0) { throw 'RawAuditHelperBuildFailed; inspect the helper build locally.' }
 $dll = Join-Path $PSScriptRoot 'diagnostics/RawWebFormsEvidence/bin/Release/net10.0/RawWebFormsEvidence.dll'
-if ($DatabaseEvidence) {
+if ($BatchInspection) {
+    & dotnet $dll --batch-inspection $IndexPath $ReportPath $InspectionPath
+}
+elseif ($DatabaseEvidence) {
     if (!$InspectionPath) {
         $latestInspection = Get-ChildItem -LiteralPath (Join-Path $OutputRoot 'local-inspection-private') -File -Filter 'webforms-local-inspection-*.json' |
             Sort-Object LastWriteTimeUtc, FullName -Descending | Select-Object -First 1
@@ -61,3 +66,8 @@ elseif ($StartingMethodName) { & dotnet $dll $IndexPath $ReportPath $InspectionP
 elseif ($InspectionPath) { & dotnet $dll $IndexPath $ReportPath $InspectionPath }
 else { & dotnet $dll $IndexPath $ReportPath }
 if ($LASTEXITCODE -ne 0) { throw 'RawAuditFailed; no evidence conclusion is available.' }
+if ($BatchInspection) {
+    $markdownPath = [System.IO.Path]::ChangeExtension($InspectionPath, '.md')
+    Write-Host "PRIVATE local review: $markdownPath"
+    if ($IsWindows) { Start-Process -FilePath notepad.exe -ArgumentList ('"' + $markdownPath + '"') }
+}

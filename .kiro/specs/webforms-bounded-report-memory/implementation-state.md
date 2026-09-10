@@ -1,5 +1,29 @@
 # Implementation state
 
+## Batch local handler review (2026-09-10)
+
+Field triage after Fill terminal projection still has seven terminal-free chains
+on three pages, while the traversal-limited group fell from 51 to 50. The user
+requested an end to repeated single-question diagnostics. Added
+`New-FocusedWebFormsBatchInspection.ps1`: one command reuses the existing settings,
+builds the diagnostic helper, and writes a private Markdown review plus JSON for
+every selected handler. Windows opens the Markdown in Notepad. No rescan is needed.
+
+The existing raw exact semantic closure is shared across all handlers; one extra
+bounded query retrieves call sites, selected binding/handler locations, and exact
+declaration witnesses. Each case includes all direct calls, stopping locations,
+the retained closure, provenance, explicit bounds, and an unreviewed result slot.
+Private UI/database classifications require local source review. Reports use a
+separate filename prefix so database audits cannot accidentally select batch JSON.
+The location query shares remaining row/text budgets and has a 20k-record ceiling.
+Existing input and per-handler traversal limits remain in force.
+
+Validation: full .NET suite 1786/1786; multi-handler/sibling/location/privacy and
+bounded-case regressions passed; actual PowerShell command created both artifacts
+from a synthetic SQLite index. Modern sample CLI scan, scoped formatting,
+private-path guard, and diff checks passed. Windows Notepad launch awaits work
+machine use. Existing PropertyMappingTests nullable warning remains unrelated.
+
 ## Receiver and property assignment extraction (2026-09-09)
 
 Incremented semantic extractor to 0.21.0. Ordinary explicit member invocations

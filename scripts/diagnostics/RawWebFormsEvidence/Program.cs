@@ -2,6 +2,11 @@ using TraceMap.Reporting;
 
 try
 {
+    if (args.Length == 4 && args[0] == "--batch-inspection")
+    {
+        foreach (var line in WebFormsRawEvidenceAudit.Run(args[1], args[2], inspectionPath: args[3], inspectAllHandlers: true)) Console.WriteLine(line);
+        return 0;
+    }
     if (args.Length == 3 && args[0] == "--database-evidence")
     {
         foreach (var line in WebFormsDatabaseEvidenceAudit.Run(args[1], args[2], Console.WriteLine)) Console.WriteLine(line);

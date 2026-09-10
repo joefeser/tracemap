@@ -1,5 +1,37 @@
 # Restricted Web Forms run: diagnostic follow-up
 
+## Current command: review every remaining terminal-free handler together
+
+```powershell
+git pull
+.\scripts\New-FocusedWebFormsBatchInspection.ps1
+```
+
+Reuses the form-list runner's local path settings and latest report. Builds the
+diagnostic helper, reads the retained index, and creates one private Markdown
+review plus supporting JSON in `local-inspection-private`. Opens the Markdown
+automatically in Notepad on Windows. No application scan or page-list rerun is
+needed. Batch filenames are separate from the single-sample inspection pattern.
+
+Selects every distinct handler in the report's
+`observed-downstream-without-supported-terminal` bucket. Each case contains its
+binding and handler locations, all retained direct calls, stopping symbols with
+incoming call locations, and all retained calls in its bounded semantic closure.
+Review each case once and share only its case ID and one result: `ui-only`,
+`database-call-present`, `source-call-missing`, `definition-unavailable`,
+`checkout-mismatch`, or `uncertain`. The JSON and Markdown contain private symbols
+and paths and stay on the work machine. A result starts as `unreviewed`; no UI-only
+or missing-source conclusion is inferred automatically.
+
+Uses `diagnostic.webforms.raw-exact-call-evidence.v1` with the existing shared
+32-handler, depth-10, 500-symbol-per-handler and 10k-edge-per-handler bounds.
+The extra shared location read is capped at 20k records and the audit's remaining
+row/text budget. Bounded handlers are included and labeled. Snapshot mismatch or
+input admission failure stops publication. Call-site locations are not necessarily
+callee definitions; missing exact declarations are not proof of absent source.
+Case IDs belong to this report, not prior page aliases. Counts describe retained
+static evidence, not runtime execution or completeness.
+
 ## Current command: regenerate the page-list report
 
 The bounded reporter now treats an exact Tier1 semantic invocation of the public
