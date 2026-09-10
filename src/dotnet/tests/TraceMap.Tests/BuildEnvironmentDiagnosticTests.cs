@@ -9,6 +9,32 @@ namespace TraceMap.Tests;
 
 public sealed class BuildEnvironmentDiagnosticTests
 {
+    [Theory]
+    [InlineData("ComReferenceResolutionSkipped")]
+    [InlineData("ComReferenceResolutionFallbackUnavailable")]
+    public void Extract_projects_com_reference_workspace_gaps(string gapKind)
+    {
+        using var temp = new TempDirectory();
+        var manifest = new ScanManifest("scan-test", "repo", null, null, "abc123", ScannerVersions.TraceMap,
+            DateTimeOffset.UnixEpoch, "Level1SemanticAnalysisReduced", "FailedOrPartial", [], [], [], []);
+        var sanitized = BuildEnvironmentDiagnosticExtractor.SanitizeWorkspaceGap(gapKind, string.Empty);
+        var gap = new SemanticFactCandidate(FactTypes.AnalysisGap, RuleIds.CSharpSemanticWorkspace, EvidenceTiers.Tier4Unknown,
+            new EvidenceSpan("Legacy.csproj", 1, 1, null, "CSharpSemanticExtractor", ScannerVersions.CSharpSemanticExtractor),
+            ProjectPath: "Legacy.csproj", Properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["gapKind"] = gapKind,
+                ["diagnosticCode"] = sanitized.DiagnosticCode,
+                ["diagnosticKind"] = sanitized.DiagnosticKind,
+                ["sanitization"] = sanitized.Sanitization
+            });
+
+        var facts = BuildEnvironmentDiagnosticExtractor.Extract(temp.Path, manifest, [],
+            new SemanticExtractionResult([], [gap], Attempted: true, ReducedCoverage: true));
+
+        Assert.Contains(facts, fact => fact.FactType == FactTypes.BuildEnvironmentDiagnostic
+            && fact.Properties.GetValueOrDefault("originGapKind") == gapKind);
+    }
+
     [Fact]
     public void Scan_emits_legacy_build_environment_diagnostics()
     {

@@ -7,10 +7,13 @@ service, modify the index, or write a BRD.
 
 First read `claude-single-page-trace.prompt.md` in this directory and follow its
 provenance, read-only access, exact-identity joins, traversal bounds and evidence
-limitations. Also use `claude-projection-ownership-verification.prompt.md` for
-projection lookup and support verification. The selection instruction below
-replaces the first prompt's default selection and same-event instruction; the
-other safeguards remain in force.
+limitations. Also use the projection lookup, exact supporting-fact-token checks,
+and handler ownership verification rules from
+`claude-projection-ownership-verification.prompt.md`. Do not follow that
+prompt's conversational precondition or its instruction to reuse a previously
+selected event: this task supplies its own exact event below. The selection
+instruction below also replaces the first prompt's default selection and
+same-event instruction; the other safeguards remain in force.
 
 ## Selection
 

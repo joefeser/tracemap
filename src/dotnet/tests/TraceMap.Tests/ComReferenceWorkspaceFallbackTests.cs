@@ -58,6 +58,37 @@ public sealed class ComReferenceWorkspaceFallbackTests
     }
 
     [Fact]
+    public void Prepare_finds_com_reference_in_literal_import()
+    {
+        using var temp = new TempDirectory();
+        Directory.CreateDirectory(Path.Combine(temp.Path, "src"));
+        File.WriteAllText(Path.Combine(temp.Path, "src", "Legacy.csproj"), "<Project><Import Project=\"legacy.props\" /></Project>");
+        File.WriteAllText(Path.Combine(temp.Path, "src", "legacy.props"), "<Project><ItemGroup><COMReference Include=\"Legacy.Component\" /></ItemGroup></Project>");
+
+        using var fallback = ComReferenceWorkspaceFallback.Prepare(temp.Path,
+            [new FileInventoryItem("src/Legacy.csproj", "Project", 1)]);
+
+        Assert.True(fallback.IsActive);
+        Assert.Equal("src/Legacy.csproj", Assert.Single(fallback.ProjectPaths));
+    }
+
+    [Fact]
+    public void Prepare_preserves_custom_after_targets_from_directory_build_props()
+    {
+        using var temp = new TempDirectory();
+        Directory.CreateDirectory(Path.Combine(temp.Path, "src"));
+        File.WriteAllText(Path.Combine(temp.Path, "src", "Legacy.csproj"), ProjectWithComReference());
+        File.WriteAllText(Path.Combine(temp.Path, "Directory.Build.props"),
+            "<Project><PropertyGroup><CustomAfterMicrosoftCommonTargets>private.targets</CustomAfterMicrosoftCommonTargets></PropertyGroup></Project>");
+
+        using var fallback = ComReferenceWorkspaceFallback.Prepare(temp.Path,
+            [new FileInventoryItem("src/Legacy.csproj", "Project", 1)]);
+
+        Assert.False(fallback.IsActive);
+        Assert.Equal("project-custom-after-targets", fallback.UnavailableReason);
+    }
+
+    [Fact]
     public void Scan_preserves_independent_semantic_evidence_when_com_resolution_is_omitted()
     {
         using var temp = new TempDirectory();

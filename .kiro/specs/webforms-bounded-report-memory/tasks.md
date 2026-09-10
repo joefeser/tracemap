@@ -56,7 +56,7 @@
 - [x] Promote compiler-resolved framework DataAdapter Fill calls to SQL-query terminals in bounded Web Forms reports and regress the full handler-to-terminal path.
 - [x] Replace single-sample follow-up with one local batch review of every terminal-free handler, including all calls, stopping locations, provenance, bounds, and manual result categories.
 - [x] Classify exact allowlisted UI/control endpoints separately from other unresolved leaves in batch review output without claiming backend absence.
-- [x] Add a one-case local working-tree code-path review with bounded source excerpts, call witnesses, optional definition candidates, and a human verdict section.
+- [x] Add a one-case local working-tree code-path review with explicitly opted-in bounded source excerpts, call witnesses, optional definition candidates, and a human verdict section.
 - [x] Render handler-rooted HTML drill-down with evidence anchors and a separately generated anonymous Mermaid/JSON review packet.
 - [x] Embed the isolated alias Mermaid graph and private alias legend in the local review, and duplicate bounded trigger source above its full-evidence link.
 - [x] Default the private graph and evidence closed while keeping trigger, retained path, and verdict open; reveal collapsed parents for anchor navigation.

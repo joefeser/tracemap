@@ -1,4 +1,7 @@
-param([switch]$CompareDepths)
+param(
+    [switch]$CompareDepths,
+    [string]$OutputRootOverride = ''
+)
 
 # EDIT ONLY THIS BLOCK.
 $IndexPath = 'C:\work\tracemap-output\focused-webforms-20260903-145829\scan\index.sqlite'
@@ -8,6 +11,8 @@ $Forms = @'
 # Example: source/CCS/Area/Orders.aspx
 '@
 # END EDIT BLOCK.
+
+if ($OutputRootOverride) { $OutputRoot = $OutputRootOverride }
 
 $ErrorActionPreference = 'Stop'
 if ($CompareDepths) { throw 'Deeper comparison runs are disabled. Use Summarize-CompletedWebFormsDepths.ps1.' }

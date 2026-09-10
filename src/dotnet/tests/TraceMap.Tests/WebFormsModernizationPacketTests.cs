@@ -966,6 +966,7 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Equal(1, packet.SurfaceSelection.MatchedCount);
         Assert.Equal(1, packet.SurfaceSelection.AmbiguousCount);
         Assert.Equal(1, packet.SurfaceSelection.UnmatchedCount);
+        Assert.Equal(0, packet.SurfaceSelection.UnavailableCount);
         Assert.Single(packet.Surfaces);
         Assert.Equal("surface:c", packet.Surfaces.Single().SurfaceId);
         Assert.Single(packet.EventChains);
@@ -977,6 +978,63 @@ public sealed class WebFormsModernizationPacketTests
         Assert.DoesNotContain("Missing.aspx", json, StringComparison.Ordinal);
         Assert.Contains("## Requested page coverage", markdown, StringComparison.Ordinal);
         Assert.Contains("`page-001`", markdown, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Cli_treats_surface_list_path_with_comma_as_one_value()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("Succeeded") with { AnalysisLevel = "Level1SemanticAnalysis" };
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, manifest, [Page("surface:a", "Area/Orders.aspx", manifest)]);
+        var listDirectory = Path.Combine(temp.Path, "lists,review");
+        Directory.CreateDirectory(listDirectory);
+        var list = Path.Combine(listDirectory, "pages.csv");
+        await File.WriteAllTextAsync(list, "Area/Orders.aspx\n");
+
+        using var error = new StringWriter();
+        var exit = await TraceMapCommand.RunAsync([
+            "webforms-modernization", "--index", index, "--surface-list", list, "--out", Path.Combine(temp.Path, "out")
+        ], new StringWriter(), error);
+
+        Assert.Equal(0, exit);
+        Assert.Equal(string.Empty, error.ToString());
+    }
+
+    [Fact]
+    public async Task Surface_list_reader_fails_closed_at_row_limit()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("Succeeded") with { AnalysisLevel = "Level1SemanticAnalysis" };
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, manifest, [Page("surface:a", "Area/Orders.aspx", manifest)]);
+        var list = Path.Combine(temp.Path, "pages.txt");
+        await File.WriteAllLinesAsync(list, Enumerable.Repeat("Area/Orders.aspx", 10_001));
+
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() => WebFormsModernizationPacketReporter.BuildAsync(
+            new(index, Path.Combine(temp.Path, "out"), SurfaceListPath: list)));
+        Assert.Equal("WebFormsSurfaceListLimitReached", error.Message);
+    }
+
+    [Fact]
+    public async Task Truncated_fact_snapshot_marks_unseen_page_request_unavailable_not_unmatched()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("Succeeded") with { AnalysisLevel = "Level1SemanticAnalysis" };
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, manifest,
+            [Page("surface:a", "Area/Orders.aspx", manifest), Page("surface:b", "Area/Status.aspx", manifest)]);
+        var list = Path.Combine(temp.Path, "pages.txt");
+        await File.WriteAllTextAsync(list, "DefinitelyMissing.aspx\n");
+
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(
+            index, Path.Combine(temp.Path, "out"), MaxInputFacts: 1, SurfaceListPath: list));
+
+        Assert.NotNull(packet.SurfaceSelection);
+        Assert.Equal(1, packet.SurfaceSelection.UnavailableCount);
+        Assert.Equal(0, packet.SurfaceSelection.UnmatchedCount);
+        Assert.Equal("unavailable", Assert.Single(packet.SurfaceSelection.Items).Status);
+        Assert.Contains(packet.Gaps, gap => gap.Classification == "WebFormsSurfaceListEntryUnavailable");
     }
 
     private static CodeFact Page(string surface, string path, ScanManifest manifest) =>

@@ -56,6 +56,7 @@ public sealed record WebFormsModernizationSurfaceSelection(
     int MatchedCount,
     int UnmatchedCount,
     int AmbiguousCount,
+    int UnavailableCount,
     IReadOnlyList<WebFormsModernizationSurfaceSelectionItem> Items,
     IReadOnlyList<string> Limitations);
 
@@ -346,7 +347,7 @@ public static class WebFormsModernizationPacketReporter
         var snapshot = await ReadSnapshotAsync(options.IndexPath, budget, cancellationToken);
         var surfaceSelection = options.SurfaceListPath is null
             ? null
-            : await ResolveSurfaceSelectionAsync(snapshot.Facts, options.SurfaceListPath, cancellationToken);
+            : await ResolveSurfaceSelectionAsync(snapshot.Facts, options.SurfaceListPath, snapshot.InputLimit is not null, cancellationToken);
         var selectedSurfaceIds = surfaceSelection?.Items
             .Where(item => item.Status == "matched")
             .SelectMany(item => item.SurfaceIds)
@@ -484,7 +485,9 @@ public static class WebFormsModernizationPacketReporter
         {
             foreach (var item in surfaceSelection.Items.Where(item => item.Status != "matched"))
                 AddGeneratedGap(gaps, options.MaxGaps, snapshot,
-                    item.Status == "ambiguous" ? "WebFormsSurfaceListEntryAmbiguous" : "WebFormsSurfaceListEntryUnmatched",
+                    item.Status == "ambiguous" ? "WebFormsSurfaceListEntryAmbiguous"
+                        : item.Status == "unavailable" ? "WebFormsSurfaceListEntryUnavailable"
+                        : "WebFormsSurfaceListEntryUnmatched",
                     "surface-list-entry", item.RequestId, []);
         }
         var pageFacts = facts.Where(fact => fact.FactType == FactTypes.WebFormsPageDeclared)
@@ -1216,7 +1219,7 @@ public static class WebFormsModernizationPacketReporter
         if (packet.SurfaceSelection is not null)
         {
             b.AppendLine("## Requested page coverage").AppendLine();
-            b.AppendLine($"Requested: `{packet.SurfaceSelection.RequestedCount}`; matched: `{packet.SurfaceSelection.MatchedCount}`; unmatched: `{packet.SurfaceSelection.UnmatchedCount}`; ambiguous: `{packet.SurfaceSelection.AmbiguousCount}`.").AppendLine();
+            b.AppendLine($"Requested: `{packet.SurfaceSelection.RequestedCount}`; matched: `{packet.SurfaceSelection.MatchedCount}`; unmatched: `{packet.SurfaceSelection.UnmatchedCount}`; ambiguous: `{packet.SurfaceSelection.AmbiguousCount}`; unavailable: `{packet.SurfaceSelection.UnavailableCount}`.").AppendLine();
             b.AppendLine("| Page alias | Match status | Static event chains | Downstream boundaries | First unresolved state |");
             b.AppendLine("| --- | --- | ---: | ---: | --- |");
             foreach (var item in packet.SurfaceSelection.Items)
@@ -1284,16 +1287,32 @@ public static class WebFormsModernizationPacketReporter
     private static async Task<WebFormsModernizationSurfaceSelection> ResolveSurfaceSelectionAsync(
         IReadOnlyList<CodeFact> facts,
         string surfaceListPath,
+        bool factSnapshotTruncated,
         CancellationToken cancellationToken)
     {
         if (!File.Exists(surfaceListPath)) throw new FileNotFoundException("WebFormsSurfaceListUnavailable");
-        var lines = await File.ReadAllLinesAsync(surfaceListPath, cancellationToken);
+        const int maximumBytes = 4 * 1024 * 1024;
+        const int maximumRows = 10_000;
+        const int maximumEntries = 10_000;
+        var info = new FileInfo(surfaceListPath);
+        if (info.Length > maximumBytes) throw new InvalidDataException("WebFormsSurfaceListLimitReached");
+        var lines = new List<string>();
+        await using (var stream = new FileStream(surfaceListPath, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, useAsync: true))
+        using (var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true))
+        {
+            while (await reader.ReadLineAsync(cancellationToken) is { } line)
+            {
+                if (lines.Count >= maximumRows) throw new InvalidDataException("WebFormsSurfaceListLimitReached");
+                lines.Add(line);
+            }
+        }
         var requests = lines.Select(ExtractSurfaceListValue)
             .Where(value => value is not null)
             .Cast<string>()
             .Where(value => !IsSurfaceListHeader(value))
             .ToArray();
         if (requests.Length == 0) throw new InvalidDataException("WebFormsSurfaceListEmpty");
+        if (requests.Length > maximumEntries) throw new InvalidDataException("WebFormsSurfaceListLimitReached");
 
         var pages = facts.Where(HasRequiredProvenance)
             .Where(fact => fact.FactType == FactTypes.WebFormsPageDeclared)
@@ -1310,7 +1329,8 @@ public static class WebFormsModernizationPacketReporter
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(value => value, StringComparer.Ordinal)
                 .ToArray();
-            var status = matches.Length == 1 ? "matched" : matches.Length == 0 ? "unmatched" : "ambiguous";
+            var status = matches.Length == 1 ? "matched" : matches.Length > 1 ? "ambiguous"
+                : factSnapshotTruncated ? "unavailable" : "unmatched";
             return new WebFormsModernizationSurfaceSelectionItem(
                 $"page-{index + 1:000}",
                 HashId("surface-request", [normalized.ToUpperInvariant()]),
@@ -1323,6 +1343,7 @@ public static class WebFormsModernizationPacketReporter
             items.Count(item => item.Status == "matched"),
             items.Count(item => item.Status == "unmatched"),
             items.Count(item => item.Status == "ambiguous"),
+            items.Count(item => item.Status == "unavailable"),
             items,
             [
                 "Selection matches static Web Forms page declarations only and does not prove runtime routing, rendering, event firing, handler reachability, binding success, or downstream execution.",

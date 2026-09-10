@@ -293,13 +293,16 @@ public static partial class CombinedDependencyPathReporter
             // the frontier values are supplied externally and they are bound
             // through one JSON parameter.
             command.CommandText = $"select target_symbol from ({string.Join(" union all ", traversalQueries)}) "
-                + "where target_symbol is not null and trim(target_symbol) <> '' order by target_symbol collate binary;"; // nosemgrep: csharp.lang.security.sqli.csharp-sqli
+                + "where target_symbol is not null and trim(target_symbol) <> '' "
+                + "order by target_symbol collate binary limit $candidate_limit;"; // nosemgrep: csharp.lang.security.sqli.csharp-sqli
             command.Parameters.AddWithValue("$symbols", JsonSerializer.Serialize(frontier));
+            command.Parameters.AddWithValue("$candidate_limit", maxFrontier + 1L);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
                 var symbol = reader.GetString(0);
-                if (!symbols.Contains(symbol)) next.Add(symbol);
+                if (!symbols.Contains(symbol) && next.Add(symbol) && next.Count > maxFrontier)
+                    throw new ReportInputLimitException("graph-frontier");
             }
 
             if (next.Count > maxFrontier

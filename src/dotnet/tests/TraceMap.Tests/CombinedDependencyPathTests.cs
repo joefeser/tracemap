@@ -12,6 +12,14 @@ namespace TraceMap.Tests;
 public sealed class CombinedDependencyPathTests
 {
     [Fact]
+    public async Task Paths_rejects_nonpositive_traversal_work_even_without_matching_roots()
+    {
+        var error = await Assert.ThrowsAsync<ArgumentException>(() => CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions("missing.sqlite", "out") { MaxTraversalWork = 0 }));
+        Assert.Contains("--max-traversal-work", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Legacy_depth_first_traversal_preserves_reconvergent_routes_under_frontier_bound()
     {
         using var temp = new TempDirectory();
