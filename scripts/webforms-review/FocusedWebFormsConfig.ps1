@@ -2,13 +2,36 @@ function Read-FocusedWebFormsConfig {
     [CmdletBinding()]
     param([Parameter(Mandatory = $true)][string]$ConfigPath)
 
-    $file = Get-Item -LiteralPath $ConfigPath -ErrorAction SilentlyContinue
-    if ($null -eq $file -or $file.PSIsContainer) {
+    try {
+        $stream = [IO.File]::Open(
+            $ConfigPath,
+            [IO.FileMode]::Open,
+            [IO.FileAccess]::Read,
+            [IO.FileShare]::Read)
+    }
+    catch {
         throw 'FocusedWebFormsConfigUnavailable; copy Run-FocusedWebFormsPageList.example.json to Run-FocusedWebFormsPageList.json and edit the local copy.'
     }
-    if ($file.Length -gt 1MB) { throw 'FocusedWebFormsConfigLimitReached' }
 
-    try { $config = [IO.File]::ReadAllText($file.FullName) | ConvertFrom-Json }
+    try {
+        $maximumBytes = 1MB
+        $buffer = [byte[]]::new($maximumBytes + 1)
+        $bytesRead = 0
+        while ($bytesRead -lt $buffer.Length) {
+            $read = $stream.Read($buffer, $bytesRead, $buffer.Length - $bytesRead)
+            if ($read -eq 0) { break }
+            $bytesRead += $read
+        }
+        if ($bytesRead -gt $maximumBytes) { throw 'FocusedWebFormsConfigLimitReached' }
+    }
+    finally {
+        $stream.Dispose()
+    }
+
+    try {
+        $json = [Text.UTF8Encoding]::new($false, $true).GetString($buffer, 0, $bytesRead)
+        $config = $json | ConvertFrom-Json
+    }
     catch { throw 'FocusedWebFormsConfigInvalidJson' }
 
     if ($null -eq $config -or $config -isnot [pscustomobject]) {
@@ -21,23 +44,36 @@ function Read-FocusedWebFormsConfig {
         @($required | Where-Object { $_ -notin $propertyNames }).Count -ne 0) {
         throw 'FocusedWebFormsConfigPropertiesInvalid; expected only indexPath, outputRoot, and forms.'
     }
-    if ([string]::IsNullOrWhiteSpace([string]$config.indexPath) -or
-        [string]::IsNullOrWhiteSpace([string]$config.outputRoot)) {
+    if ($config.indexPath -isnot [string] -or
+        $config.outputRoot -isnot [string] -or
+        [string]::IsNullOrWhiteSpace($config.indexPath) -or
+        [string]::IsNullOrWhiteSpace($config.outputRoot)) {
         throw 'FocusedWebFormsConfigPathUnavailable'
     }
-    if ($config.forms -is [string] -or $config.forms -isnot [System.Collections.IEnumerable]) {
+    if ($config.forms -isnot [array]) {
         throw 'FocusedWebFormsConfigFormsInvalid'
     }
 
-    $forms = @($config.forms | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
-    if ($forms.Count -lt 1 -or $forms.Count -gt 10000 -or
-        @($forms | Where-Object { -not $_.EndsWith('.aspx', [StringComparison]::OrdinalIgnoreCase) }).Count -ne 0) {
+    if ($config.forms.Count -lt 1 -or $config.forms.Count -gt 10000) {
         throw 'FocusedWebFormsConfigFormsInvalid'
+    }
+    $forms = [Collections.Generic.List[string]]::new($config.forms.Count)
+    foreach ($form in $config.forms) {
+        if ($form -isnot [string] -or [string]::IsNullOrWhiteSpace($form) -or
+            $form.Contains("`r", [StringComparison]::Ordinal) -or
+            $form.Contains("`n", [StringComparison]::Ordinal)) {
+            throw 'FocusedWebFormsConfigFormsInvalid'
+        }
+        $normalized = $form.Trim()
+        if (!$normalized.EndsWith('.aspx', [StringComparison]::OrdinalIgnoreCase)) {
+            throw 'FocusedWebFormsConfigFormsInvalid'
+        }
+        $forms.Add($normalized)
     }
 
     [pscustomobject]@{
-        IndexPath = [string]$config.indexPath
-        OutputRoot = [string]$config.outputRoot
-        Forms = $forms
+        IndexPath = $config.indexPath.Trim()
+        OutputRoot = $config.outputRoot.Trim()
+        Forms = $forms.ToArray()
     }
 }

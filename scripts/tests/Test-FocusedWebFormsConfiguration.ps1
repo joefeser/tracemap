@@ -62,7 +62,32 @@ try {
     Assert-ConfigFailure -Path (Write-TestConfig ([ordered]@{ indexPath = 'index.sqlite'; outputRoot = 'output'; forms = @('One.aspx'); extra = $true })) -ExpectedCode 'FocusedWebFormsConfigPropertiesInvalid'
     Assert-ConfigFailure -Path (Write-TestConfig ([ordered]@{ indexPath = 'index.sqlite'; outputRoot = 'output'; forms = 'One.aspx' })) -ExpectedCode 'FocusedWebFormsConfigFormsInvalid'
     Assert-ConfigFailure -Path (Write-TestConfig ([ordered]@{ indexPath = 'index.sqlite'; outputRoot = 'output'; forms = @('One.txt') })) -ExpectedCode 'FocusedWebFormsConfigFormsInvalid'
+    Assert-ConfigFailure -Path (Write-TestConfig ([ordered]@{ indexPath = 42; outputRoot = 'output'; forms = @('One.aspx') })) -ExpectedCode 'FocusedWebFormsConfigPathUnavailable'
+    Assert-ConfigFailure -Path (Write-TestConfig ([ordered]@{ indexPath = 'index.sqlite'; outputRoot = $true; forms = @('One.aspx') })) -ExpectedCode 'FocusedWebFormsConfigPathUnavailable'
+    Assert-ConfigFailure -Path (Write-TestConfig ([ordered]@{ indexPath = @('index.sqlite'); outputRoot = 'output'; forms = @('One.aspx') })) -ExpectedCode 'FocusedWebFormsConfigPathUnavailable'
+    Assert-ConfigFailure -Path (Write-TestConfig ([ordered]@{ indexPath = [ordered]@{ path = 'index.sqlite' }; outputRoot = 'output'; forms = @('One.aspx') })) -ExpectedCode 'FocusedWebFormsConfigPathUnavailable'
+    Assert-ConfigFailure -Path (Write-TestConfig ([ordered]@{ indexPath = $null; outputRoot = 'output'; forms = @('One.aspx') })) -ExpectedCode 'FocusedWebFormsConfigPathUnavailable'
+    Assert-ConfigFailure -Path (Write-TestConfig ([ordered]@{ indexPath = ' '; outputRoot = 'output'; forms = @('One.aspx') })) -ExpectedCode 'FocusedWebFormsConfigPathUnavailable'
+    Assert-ConfigFailure -Path (Write-TestConfig ([ordered]@{ indexPath = 'index.sqlite'; outputRoot = 'output'; forms = @('One.aspx', 42) })) -ExpectedCode 'FocusedWebFormsConfigFormsInvalid'
+    Assert-ConfigFailure -Path (Write-TestConfig ([ordered]@{ indexPath = 'index.sqlite'; outputRoot = 'output'; forms = @('One.aspx', $null) })) -ExpectedCode 'FocusedWebFormsConfigFormsInvalid'
+    Assert-ConfigFailure -Path (Write-TestConfig ([ordered]@{ indexPath = 'index.sqlite'; outputRoot = 'output'; forms = @('One.aspx', ' ') })) -ExpectedCode 'FocusedWebFormsConfigFormsInvalid'
+    Assert-ConfigFailure -Path (Write-TestConfig ([ordered]@{ indexPath = 'index.sqlite'; outputRoot = 'output'; forms = @("One.aspx`nTwo.aspx") })) -ExpectedCode 'FocusedWebFormsConfigFormsInvalid'
     Assert-ConfigFailure -Path (Join-Path $temp 'missing.json') -ExpectedCode 'FocusedWebFormsConfigUnavailable'
+
+    $oversizedPath = Join-Path $temp 'oversized.json'
+    [IO.File]::WriteAllBytes($oversizedPath, [byte[]]::new(1MB + 1))
+    Assert-ConfigFailure -Path $oversizedPath -ExpectedCode 'FocusedWebFormsConfigLimitReached'
+
+    $indexPath = Join-Path $temp 'index.sqlite'
+    $reportPath = Join-Path $temp 'webforms-modernization.json'
+    $inspectionPath = Join-Path $temp 'webforms-local-inspection.json'
+    [IO.File]::WriteAllText($indexPath, '')
+    [IO.File]::WriteAllText($reportPath, '{}')
+    [IO.File]::WriteAllText($inspectionPath, '{}')
+    function dotnet { $global:LASTEXITCODE = 0 }
+    $missingConfigPath = Join-Path $temp 'explicit-paths-do-not-need-config.json'
+    & (Join-Path $scripts 'Test-FocusedWebFormsRawEvidence.ps1') -IndexPath $indexPath -ReportPath $reportPath -ConfigPath $missingConfigPath
+    & (Join-Path $scripts 'Test-FocusedWebFormsRawEvidence.ps1') -DatabaseEvidence -IndexPath $indexPath -InspectionPath $inspectionPath -ConfigPath $missingConfigPath
 
     $gitignore = [IO.File]::ReadAllText((Join-Path (Split-Path -Parent $scripts) '.gitignore'))
     if (!$gitignore.Contains('/scripts/Run-FocusedWebFormsPageList.json', [StringComparison]::Ordinal)) {
