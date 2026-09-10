@@ -55,4 +55,5 @@
 - [x] Retain semantic invocation receivers and direct property-assignment symbols; validate real framework extraction through SQLite and the census.
 - [x] Promote compiler-resolved framework DataAdapter Fill calls to SQL-query terminals in bounded Web Forms reports and regress the full handler-to-terminal path.
 - [x] Replace single-sample follow-up with one local batch review of every terminal-free handler, including all calls, stopping locations, provenance, bounds, and manual result categories.
-- [x] Classify exact allowlisted UI/control endpoints separately from unresolved local leaves in batch review output without claiming backend absence.
+- [x] Classify exact allowlisted UI/control endpoints separately from other unresolved leaves in batch review output without claiming backend absence.
+- [x] Add a one-case local working-tree code-path review with bounded source excerpts, call witnesses, optional definition candidates, and a human verdict section.
