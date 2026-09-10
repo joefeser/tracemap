@@ -85,6 +85,9 @@ try {
     $bad = [IO.File]::ReadAllText($completed) | ConvertFrom-Json -Depth 32
     $bad.reviewedAtUtc = '2026-09-10T20:45:00+02:00'
     Expect-Failure 'WITS_REVIEW_COMPLETION_INVALID' { & $scriptPath -Mode Validate -InspectionPath $inspectionPath -ReviewPath (Write-Variant $bad 'non-utc-metadata.json') }
+    $bad = [IO.File]::ReadAllText($completed) | ConvertFrom-Json -Depth 32
+    $bad.reviewedAtUtc = '09/10/2026 18:45:00Z'
+    Expect-Failure 'WITS_REVIEW_COMPLETION_INVALID' { & $scriptPath -Mode Validate -InspectionPath $inspectionPath -ReviewPath (Write-Variant $bad 'non-rfc3339-metadata.json') }
     $bad = [IO.File]::ReadAllText($first) | ConvertFrom-Json -Depth 32
     $bad.PSObject.Properties.Remove('reviewer')
     Expect-Failure 'WITS_REVIEW_UNKNOWN_FIELD' { & $scriptPath -Mode Validate -InspectionPath $inspectionPath -ReviewPath (Write-Variant $bad 'missing-root-field.json') }
