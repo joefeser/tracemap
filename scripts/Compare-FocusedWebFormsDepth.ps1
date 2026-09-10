@@ -1,4 +1,4 @@
-# No configuration needed: reuses the index and Forms block in the existing runner.
+# Historical completed-report comparison; it never reads local page-list configuration.
 param([string[]]$ReportPaths = @())
 $ErrorActionPreference = 'Stop'
 if ($ReportPaths.Count -eq 0) {

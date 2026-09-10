@@ -97,3 +97,6 @@ scripts/smoke-typescript-endpoints.sh
 .agent-control/tmp
 .agent-control/pr-loop-handoffs
 /outputs/
+
+# Restricted-workstation Web Forms page-list settings
+/scripts/Run-FocusedWebFormsPageList.json

@@ -1076,3 +1076,24 @@ race and prevents a newly oversized single line from allocating beyond the
 bounded workflow before the row ceiling can apply. A direct stream regression
 proves the fifth byte fails with the stable `WebFormsSurfaceListLimitReached`
 diagnostic under a four-byte test limit.
+
+## Local page-list configuration isolation
+
+The work-machine index path, output root, and `.aspx` page list now live in the
+ignored `scripts/Run-FocusedWebFormsPageList.json` rather than a tracked edit
+block. A generic `Run-FocusedWebFormsPageList.example.json` documents the exact
+three-property schema. The runner, run-and-triage wrapper, raw-evidence audit,
+batch/single inspections, database audit, and code-path review generators share
+one strict bounded reader. Missing, malformed, oversized, extra-property, and
+invalid-form configurations fail closed with stable diagnostics. Explicit path
+parameters remain supported for automation. Private application naming was
+removed from the checked-in example and runner.
+
+PR review hardening now reads the local configuration through one bounded open
+stream, requires JSON strings for both paths and every form, rejects blank or
+multiline form entries, and preserves one page per array element. Explicit
+index/report and index/inspection diagnostic invocations no longer require an
+unrelated output root or local configuration. Regression coverage exercises the
+strict schema, byte ceiling, and both clean-checkout explicit-input modes. The
+operator handoff now describes the ignored JSON workflow instead of editing the
+runner source.
