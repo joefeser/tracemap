@@ -46,7 +46,8 @@ $inspection = [IO.File]::ReadAllText($inspectionFile.FullName) | ConvertFrom-Jso
 if ($inspection.schemaVersion -ne 'webforms-batch-inspection.v1') { throw 'CodePathReviewSetSchemaMismatch' }
 $availableCases = @($inspection.cases | ForEach-Object { [string]$_.caseId } | Sort-Object -Unique)
 if ($availableCases.Count -lt 1 -or $availableCases.Count -gt 64) { throw 'CodePathReviewSetCaseLimit' }
-$selectedCases = if ($CaseId.Count -eq 0) { $availableCases } else { @($CaseId | Sort-Object -Unique) }
+if ($CaseId.Count -eq 0) { $selectedCases = @($availableCases) }
+else { $selectedCases = @($CaseId | Sort-Object -Unique) }
 if (@($selectedCases | Where-Object { $_ -notmatch '^case-[0-9]{3}$' -or $_ -notin $availableCases }).Count -ne 0) {
     throw 'CodePathReviewSetCaseUnavailable'
 }
@@ -59,11 +60,15 @@ $buildOutput = & dotnet build $project -c Release --nologo -v quiet 2>&1
 if ($LASTEXITCODE -ne 0) { throw 'CodePathReviewSetHelperBuildFailed; inspect the helper build locally.' }
 $dll = Join-Path $PSScriptRoot 'diagnostics/RawWebFormsEvidence/bin/Release/net10.0/RawWebFormsEvidence.dll'
 $null = New-Item -ItemType Directory -Path $setDirectory
+$inspectionSnapshotPath = Join-Path $setDirectory 'inspection.snapshot.json'
 
 try {
+    [IO.File]::Copy($inspectionFile.FullName, $inspectionSnapshotPath, $false)
+
     foreach ($selectedCase in $selectedCases) {
         $reviewPath = Join-Path $setDirectory "$selectedCase.private.html"
-        & dotnet $dll --code-path-review $inspectionFile.FullName $SourceRoot $selectedCase $reviewPath $TriggerContextLines 'index.html'
+        $reviewArguments = @($dll, '--code-path-review', $inspectionSnapshotPath, $SourceRoot, $selectedCase, $reviewPath, $TriggerContextLines, 'index.html')
+        & dotnet @reviewArguments
         if ($LASTEXITCODE -ne 0) { throw 'CodePathReviewSetCaseFailed' }
     }
 
@@ -72,7 +77,7 @@ try {
     $lines.Add('')
     $lines.Add('> PRIVATE: report links resolve to working-tree source identities and evidence. Keep this folder on the work machine.')
     $lines.Add('')
-    $lines.Add("- Inspection: ``$($inspectionFile.Name)``")
+    $lines.Add("- Inspection snapshot: ``inspection.snapshot.json`` (selected from ``$($inspectionFile.Name)``)")
     $lines.Add('- Source mode: `working-tree`; Git equality is not established.')
     $lines.Add(('- Trigger context: `{0}` lines before and after each retained binding span.' -f $TriggerContextLines))
     $lines.Add('- Allowed verdicts: `unreviewed`, `expected-ui-only`, `supported-backend-present`, `backend-evidence-missing`, `binding-or-source-mismatch`, `needs-review`.')

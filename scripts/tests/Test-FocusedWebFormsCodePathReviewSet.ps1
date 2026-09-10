@@ -21,6 +21,7 @@ $inspectionPath = Join-Path $inspectionDirectory 'webforms-batch-inspection-test
 function dotnet {
     if ($args[0] -eq 'build') { $global:LASTEXITCODE = 0; return }
     if ($args[1] -ne '--code-path-review') { $global:LASTEXITCODE = 1; return }
+    if (!(Test-Path -LiteralPath ([string]$args[2]) -PathType Leaf) -or (Split-Path -Leaf ([string]$args[2])) -ne 'inspection.snapshot.json') { $global:LASTEXITCODE = 1; return }
     $privatePath = [string]$args[5]
     if ($args[7] -ne 'index.html') { $global:LASTEXITCODE = 1; return }
     [IO.File]::WriteAllText($privatePath, 'private')
@@ -35,6 +36,7 @@ try {
     if ($sets.Count -ne 1) { throw 'Expected one review-set directory.' }
     $indexPath = Join-Path $sets[0].FullName 'index.md'
     if (!(Test-Path -LiteralPath $indexPath -PathType Leaf)) { throw 'Expected index.md in the review-set folder.' }
+    if (!(Test-Path -LiteralPath (Join-Path $sets[0].FullName 'inspection.snapshot.json') -PathType Leaf)) { throw 'Expected the private inspection snapshot in the review-set folder.' }
     $htmlIndexPath = Join-Path $sets[0].FullName 'index.html'
     if (!(Test-Path -LiteralPath $htmlIndexPath -PathType Leaf)) { throw 'Expected index.html in the review-set folder.' }
     $htmlIndex = [IO.File]::ReadAllText($htmlIndexPath)
