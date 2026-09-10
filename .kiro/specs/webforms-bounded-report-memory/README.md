@@ -7,10 +7,16 @@ The supported operator sequence and diagnostic-script inventory are summarized i
 
 ```powershell
 git pull
+if (!(Test-Path .\scripts\Run-FocusedWebFormsPageList.json)) {
+    Copy-Item .\scripts\Run-FocusedWebFormsPageList.example.json .\scripts\Run-FocusedWebFormsPageList.json
+}
+notepad .\scripts\Run-FocusedWebFormsPageList.json
 .\scripts\New-FocusedWebFormsBatchInspection.ps1
 ```
 
-Reuses the form-list runner's local path settings and latest report. Builds the
+Create the ignored local JSON only when it does not already exist, then set its
+`indexPath`, `outputRoot`, and `forms` values. The command reuses those local path
+settings and the latest report. It builds the
 diagnostic helper, reads the retained index, and creates one private Markdown
 review plus supporting JSON in `local-inspection-private`. Opens the Markdown
 automatically in Notepad on Windows. No application scan or page-list rerun is
@@ -170,9 +176,9 @@ git pull
 .\scripts\Test-FocusedWebFormsRawEvidence.ps1
 ```
 
-Uses the literal IndexPath/OutputRoot settings from the form-list runner without
-executing or editing it. Selects the latest completed page-list JSON; optional
-`-IndexPath` and `-ReportPath` choose explicit inputs. Builds the diagnostic helper
+Uses the `indexPath` and `outputRoot` settings from the ignored local JSON without
+executing or editing the form-list runner. Selects the latest completed page-list
+JSON; optional `-IndexPath` and `-ReportPath` choose explicit inputs. Builds the diagnostic helper
 only, not the application being analyzed. No scan/report regeneration is needed.
 Send the short console summary, not the index or private source.
 
@@ -401,13 +407,16 @@ compiles, or changes the private application.
 
 ## Tuesday handoff: report every page in a saved list
 
-Pull this branch, then open
-[`scripts/Run-FocusedWebFormsPageList.ps1`](../../../scripts/Run-FocusedWebFormsPageList.ps1).
-At the top of that file, confirm `$IndexPath` and put one repository-relative
-`.aspx` path per line inside the `$Forms` block. No quotes or commas are needed.
-Then save the file and run this one command from the TraceMap repo:
+Pull this branch, copy the checked-in example to the ignored local configuration,
+then edit `indexPath`, `outputRoot`, and the `forms` JSON array. Put exactly one
+repository-relative `.aspx` path in each array element. Keep the existing local
+file on later pulls. Then run the page-list command from the TraceMap repo:
 
 ```powershell
+if (!(Test-Path .\scripts\Run-FocusedWebFormsPageList.json)) {
+    Copy-Item .\scripts\Run-FocusedWebFormsPageList.example.json .\scripts\Run-FocusedWebFormsPageList.json
+}
+notepad .\scripts\Run-FocusedWebFormsPageList.json
 .\scripts\Run-FocusedWebFormsPageList.ps1
 ```
 

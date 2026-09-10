@@ -1088,3 +1088,12 @@ one strict bounded reader. Missing, malformed, oversized, extra-property, and
 invalid-form configurations fail closed with stable diagnostics. Explicit path
 parameters remain supported for automation. Private application naming was
 removed from the checked-in example and runner.
+
+PR review hardening now reads the local configuration through one bounded open
+stream, requires JSON strings for both paths and every form, rejects blank or
+multiline form entries, and preserves one page per array element. Explicit
+index/report and index/inspection diagnostic invocations no longer require an
+unrelated output root or local configuration. Regression coverage exercises the
+strict schema, byte ceiling, and both clean-checkout explicit-input modes. The
+operator handoff now describes the ignored JSON workflow instead of editing the
+runner source.

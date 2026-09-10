@@ -3,11 +3,15 @@ param([string]$IndexPath = '', [string]$ReportPath = '', [string]$OutputRoot = '
 $ErrorActionPreference = 'Stop'
 if ($BatchInspection -and ($DatabaseEvidence -or $StartingMethodName)) { throw 'Batch inspection requires report-handler selection.' }
 if (!$ConfigPath) { $ConfigPath = Join-Path $PSScriptRoot 'Run-FocusedWebFormsPageList.json' }
-if (!$IndexPath -or !$OutputRoot) {
+$requiresOutputRoot = (!$DatabaseEvidence -and !$ReportPath) -or
+    $CreateLocalInspection -or
+    $BatchInspection -or
+    ($DatabaseEvidence -and !$InspectionPath)
+if (!$IndexPath -or ($requiresOutputRoot -and !$OutputRoot)) {
     . (Join-Path $PSScriptRoot 'webforms-review/FocusedWebFormsConfig.ps1')
     $config = Read-FocusedWebFormsConfig -ConfigPath $ConfigPath
     if (!$IndexPath) { $IndexPath = $config.IndexPath }
-    if (!$OutputRoot) { $OutputRoot = $config.OutputRoot }
+    if ($requiresOutputRoot -and !$OutputRoot) { $OutputRoot = $config.OutputRoot }
 }
 if (!$ReportPath -and !$DatabaseEvidence) {
     $latest = Get-ChildItem -LiteralPath $OutputRoot -Directory -Filter 'webforms-page-list-*' |
