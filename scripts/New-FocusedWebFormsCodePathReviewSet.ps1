@@ -52,6 +52,7 @@ if (@($selectedCases | Where-Object { $_ -notmatch '^case-[0-9]{3}$' -or $_ -not
 }
 
 $setDirectory = Join-Path $inspectionDirectory ("webforms-code-path-review-set-$([DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss'))-$([Guid]::NewGuid().ToString('N').Substring(0, 8))")
+$queuePath = Join-Path $setDirectory 'index.md'
 $project = Join-Path $PSScriptRoot 'diagnostics/RawWebFormsEvidence/RawWebFormsEvidence.csproj'
 Write-Host "Building local review helper once for $($selectedCases.Count) case(s)."
 $buildOutput = & dotnet build $project -c Release --nologo -v quiet 2>&1
@@ -66,7 +67,6 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'CodePathReviewSetCaseFailed' }
     }
 
-    $queuePath = Join-Path $setDirectory 'review-queue.md'
     $lines = [Collections.Generic.List[string]]::new()
     $lines.Add('# Private Web Forms review queue')
     $lines.Add('')
@@ -87,11 +87,12 @@ try {
     [IO.File]::WriteAllLines($queuePath, $lines, [Text.UTF8Encoding]::new($false))
 }
 catch {
+    if (Test-Path -LiteralPath $queuePath) { Remove-Item -LiteralPath $queuePath -Force }
     if (Test-Path -LiteralPath $setDirectory) { Remove-Item -LiteralPath $setDirectory -Recurse -Force }
     throw
 }
 
 Write-Host "codePathReviewSet=completed;cases=$($selectedCases.Count);triggerContextLines=$TriggerContextLines"
 Write-Host "PRIVATE review queue: $queuePath"
-Write-Host 'Edit the Human verdict and Comment cells in review-queue.md; an internal AI can read that file and follow the private report links.'
+Write-Host 'Edit the Human verdict and Comment cells in index.md; an internal AI can read that file and follow the private report links.'
 if ($IsWindows) { Start-Process -FilePath $queuePath }

@@ -32,7 +32,9 @@ try {
     & $scriptPath -SourceRoot $source -InspectionPath $inspectionPath -OutputRoot $output -TriggerContextLines 50 | Out-Null
     $sets = @(Get-ChildItem -LiteralPath $inspectionDirectory -Directory -Filter 'webforms-code-path-review-set-*')
     if ($sets.Count -ne 1) { throw 'Expected one review-set directory.' }
-    $queue = [IO.File]::ReadAllText((Join-Path $sets[0].FullName 'review-queue.md'))
+    $indexPath = Join-Path $sets[0].FullName 'index.md'
+    if (!(Test-Path -LiteralPath $indexPath -PathType Leaf)) { throw 'Expected index.md in the review-set folder.' }
+    $queue = [IO.File]::ReadAllText($indexPath)
     foreach ($expected in @(
         '| Evidence | Private path | Anonymous path | Human verdict | Comment |',
         '| case-001 | [case-001.private.html](case-001.private.html)',
