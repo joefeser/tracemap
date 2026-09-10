@@ -1,4 +1,4 @@
-param([string]$IndexPath = '', [string]$ReportPath = '', [string]$OutputRoot = '', [string]$InspectionPath = '', [switch]$CreateLocalInspection)
+param([string]$IndexPath = '', [string]$ReportPath = '', [string]$OutputRoot = '', [string]$InspectionPath = '', [switch]$CreateLocalInspection, [string]$StartingMethodName = '')
 
 $ErrorActionPreference = 'Stop'
 # Reuse only literal path settings; never execute the form-list runner.
@@ -42,6 +42,8 @@ Write-Host 'Building diagnostic helper only; no application build, scan, or repo
 $buildOutput = & dotnet build $project -c Release --nologo -v quiet 2>&1
 if ($LASTEXITCODE -ne 0) { throw 'RawAuditHelperBuildFailed; inspect the helper build locally.' }
 $dll = Join-Path $PSScriptRoot 'diagnostics/RawWebFormsEvidence/bin/Release/net10.0/RawWebFormsEvidence.dll'
-if ($InspectionPath) { & dotnet $dll $IndexPath $ReportPath $InspectionPath }
+if ($StartingMethodName -and !$InspectionPath) { throw 'Method inspection requires a local output file.' }
+if ($StartingMethodName) { & dotnet $dll $IndexPath $ReportPath $InspectionPath $StartingMethodName }
+elseif ($InspectionPath) { & dotnet $dll $IndexPath $ReportPath $InspectionPath }
 else { & dotnet $dll $IndexPath $ReportPath }
 if ($LASTEXITCODE -ne 0) { throw 'RawAuditFailed; no evidence conclusion is available.' }

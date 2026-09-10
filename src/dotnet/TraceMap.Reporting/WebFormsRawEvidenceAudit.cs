@@ -7,7 +7,7 @@ namespace TraceMap.Reporting;
 /// <summary>Read-only diagnostic, independent of report graph compaction and terminal classification.</summary>
 public static class WebFormsRawEvidenceAudit
 {
-    public static IReadOnlyList<string> Run(string indexPath, string reportPath, int maxRows = 500_000, int maxTextBytes = 64 * 1024 * 1024, string? inspectionPath = null)
+    public static IReadOnlyList<string> Run(string indexPath, string reportPath, int maxRows = 500_000, int maxTextBytes = 64 * 1024 * 1024, string? inspectionPath = null, string? startingMethodName = null)
     {
         if (maxRows < 1 || maxRows > 500_000) throw new InvalidDataException("RawAuditInvalidLimit");
         if (maxTextBytes < 1 || maxTextBytes > 64 * 1024 * 1024) throw new InvalidDataException("RawAuditInvalidLimit");
@@ -46,8 +46,47 @@ public static class WebFormsRawEvidenceAudit
             .Where(IsPriorityChain)
             .Select(c => c.GetProperty("handlerFactId").GetString()).Where(id => !string.IsNullOrEmpty(id))
             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        if (startingMethodName is not null) handlers = [];
         if (handlers.Length > 32) throw new InvalidDataException("RawAuditHandlerLimit");
         var seeds = new List<string>();
+        if (startingMethodName is not null)
+        {
+            if (!System.Text.RegularExpressions.Regex.IsMatch(startingMethodName, "^[A-Za-z_][A-Za-z0-9_.]{0,255}$"))
+                throw new InvalidDataException("RawAuditMethodHintInvalid");
+            using var cmd = db.CreateCommand();
+            cmd.Transaction = transaction;
+            cmd.CommandText = """
+                select source_symbol, target_symbol from facts
+                where scan_id=$scan and commit_sha=$commit and evidence_tier='Tier1Semantic'
+                and fact_type in ('CallEdge','MethodInvoked')
+                and (instr(source_symbol,$hint)>0 or instr(target_symbol,$hint)>0) limit 50001
+                """;
+            cmd.Parameters.AddWithValue("$scan", scan!);
+            cmd.Parameters.AddWithValue("$commit", commit!);
+            cmd.Parameters.AddWithValue("$hint", startingMethodName);
+            var candidates = new HashSet<string>(StringComparer.Ordinal);
+            using var reader = cmd.ExecuteReader();
+            var count = 0;
+            long textBytes = 0;
+            while (reader.Read())
+            {
+                if (++count > 50_000) throw new InvalidDataException("RawAuditInputLimit");
+                for (var column = 0; column < 2; column++)
+                {
+                    if (reader.IsDBNull(column)) continue;
+                    var symbol = reader.GetString(column);
+                    textBytes += 2L * symbol.Length;
+                    if (textBytes > maxTextBytes) throw new InvalidDataException("RawAuditTextLimit");
+                    var paren = symbol.IndexOf('(');
+                    if (paren < 1) continue;
+                    var name = symbol[..paren];
+                    if (name == startingMethodName || name.EndsWith("." + startingMethodName, StringComparison.Ordinal)) candidates.Add(symbol);
+                    if (candidates.Count > 1) throw new InvalidDataException("RawAuditMethodAmbiguous");
+                }
+            }
+            if (candidates.Count != 1) throw new InvalidDataException("RawAuditMethodNotFound");
+            seeds.Add(candidates.Single());
+        }
         foreach (var id in handlers)
         {
             using var cmd = db.CreateCommand();
@@ -69,6 +108,7 @@ public static class WebFormsRawEvidenceAudit
         }
         var output = new List<string> { "raw-webforms-evidence=completed", "provenance=matched", $"selectedHandlers={seeds.Count}",
             "rule=diagnostic.webforms.raw-exact-call-evidence.v1", "scope=independent-exact-semantic-call-closure-not-report-leaves" };
+        output.Add(startingMethodName is null ? "selection=report-handlers" : "selection=unique-method-hint;not-page-or-event-selection");
         if (seeds.Count == 0)
         {
             if (inspectionPath is not null) throw new InvalidDataException("RawAuditInspectionUnavailable");
@@ -174,11 +214,12 @@ public static class WebFormsRawEvidenceAudit
                 .Where(s => !s.State.Bounded)
                 .SelectMany(s => s.State.Visited.Where(symbol => symbol != seeds[s.Index]
                     && (!edges.TryGetValue(symbol, out var targets) || targets.Count == 0))
-                    .Order(StringComparer.Ordinal).Select(symbol => new { s.State, s.Index, Symbol = symbol }))
+                    .OrderBy(symbol => symbol.Contains(".Fill(", StringComparison.Ordinal) ? 0 : 1)
+                    .ThenBy(symbol => symbol, StringComparer.Ordinal).Select(symbol => new { s.State, s.Index, Symbol = symbol }))
                 .FirstOrDefault();
             if (selected is null) throw new InvalidDataException("RawAuditInspectionUnavailable");
-            var chain = root.GetProperty("eventChains").EnumerateArray().First(c =>
-                IsPriorityChain(c) && c.GetProperty("handlerFactId").GetString() == handlers[selected.Index]);
+            JsonElement? chain = startingMethodName is null ? root.GetProperty("eventChains").EnumerateArray().First(c =>
+                IsPriorityChain(c) && c.GetProperty("handlerFactId").GetString() == handlers[selected.Index]) : null;
             var symbols = new List<string> { selected.Symbol };
             while (selected.State.Parents.TryGetValue(symbols[^1], out var parent)) symbols.Add(parent);
             symbols.Reverse();
@@ -302,14 +343,16 @@ public static class WebFormsRawEvidenceAudit
                 commitSha = commit,
                 sourceReport = Path.GetFullPath(reportPath),
                 instructions = "Start with directCalls: compare ALL retained direct call sites against the selected event handler in Visual Studio. Entries are source-location order, NOT proven execution order. Each entry has its own branch summary; a finished UI-only branch does not end the parent handler. Locations are CALL SITES, not callee definitions. Use Go To Definition locally. Confirm the checkout matches the recorded commit. Do not execute the application or call a database.",
-                surfaceId = chain.GetProperty("surfaceId").GetString(),
-                bindingLocation = Location(chain.GetProperty("bindingFactId").GetString()),
+                selection = startingMethodName is null ? "report-handler" : "unique-method-hint-not-event-handler",
+                surfaceId = chain?.GetProperty("surfaceId").GetString(),
+                bindingLocation = Location(chain?.GetProperty("bindingFactId").GetString()),
                 handler = symbols[0],
-                handlerEvidenceLocation = Location(handlers[selected.Index]),
+                handlerEvidenceLocation = Location(startingMethodName is null ? handlers[selected.Index] : null),
                 directCallSiteCount = directCalls.Length,
                 directCalls,
                 directCallScope = "All retained exact Tier1 CallEdge/MethodInvoked sites owned by this handler; not a claim that every source call was extracted. Same-target same-span witnesses are grouped; repeated sites on different lines remain separate.",
                 samplePathScope = "The following hops are only ONE sample branch, not the complete handler sequence. See directCalls for sibling calls.",
+                sampleSelection = "Prefer a retained stopping symbol named Fill, otherwise ordinal first. Name preference is not proof of a database operation. Method hints require one exact semantic symbol candidate; no page binding is inferred.",
                 hops,
                 stoppingSymbol = selected.Symbol,
                 stoppingReason = "no-selected-exact-semantic-call-or-invocation-outgoing-edge",
