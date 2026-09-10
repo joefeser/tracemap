@@ -961,6 +961,13 @@ scanner evidence automatically. A PowerShell regression covers multi-case
 selection, index placement, relative paths, trigger context, queue fields, and
 artifact counts.
 
+The review-set folder also contains a private `index.html` for browser-first
+navigation. It links every private and anonymous case report in a new tab and
+links the editable `index.md`. Batch-generated private reports contain bounded,
+validated `index.html` return links at both the top and bottom. Anonymous reports
+do not link into the private review set. Tests cover link validation, return-link
+placement, index generation, new-tab behavior, and the Markdown queue.
+
 ### Post-fairness field result and actionable summary
 
 The work-machine rerun retained 466 event chains and 361 downstream boundaries.

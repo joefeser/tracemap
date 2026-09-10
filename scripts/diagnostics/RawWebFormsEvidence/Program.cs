@@ -2,11 +2,12 @@ using TraceMap.Reporting;
 
 try
 {
-    if (args.Length is 5 or 6 && args[0] == "--code-path-review")
+    if (args.Length is 5 or 6 or 7 && args[0] == "--code-path-review")
     {
-        if (args.Length == 6 && !int.TryParse(args[5], out _)) throw new InvalidDataException("CodePathReviewInvalidLimit");
+        if (args.Length >= 6 && !int.TryParse(args[5], out _)) throw new InvalidDataException("CodePathReviewInvalidLimit");
         var triggerContextLines = args.Length == 5 ? 12 : int.Parse(args[5], System.Globalization.CultureInfo.InvariantCulture);
-        foreach (var line in WebFormsCodePathReview.Run(args[1], args[2], args[3], args[4], triggerContextLines: triggerContextLines)) Console.WriteLine(line);
+        var returnHref = args.Length == 7 ? args[6] : null;
+        foreach (var line in WebFormsCodePathReview.Run(args[1], args[2], args[3], args[4], triggerContextLines: triggerContextLines, returnHref: returnHref)) Console.WriteLine(line);
         return 0;
     }
     if (args.Length == 4 && args[0] == "--batch-inspection")
@@ -34,7 +35,7 @@ catch (Exception error)
     safeCodes = [.. safeCodes, "CodePathReviewInvalidLimit", "CodePathReviewCaseInvalid", "CodePathReviewInspectionUnavailable",
         "CodePathReviewSourceRootUnavailable", "CodePathReviewSchemaMismatch", "CodePathReviewCaseUnavailable",
         "CodePathReviewSourcePathInvalid", "CodePathReviewSourceUnavailable", "CodePathReviewExcerptLimit", "CodePathReviewSourceSpanInvalid",
-        "CodePathReviewAnonymousLeak"];
+        "CodePathReviewAnonymousLeak", "CodePathReviewReturnLinkInvalid"];
     var code = error is InvalidDataException && safeCodes.Contains(error.Message, StringComparer.Ordinal)
         ? error.Message : "RawAuditInputOrRuntimeFailure";
     Console.Error.WriteLine($"raw-webforms-evidence=failed;code={code}");

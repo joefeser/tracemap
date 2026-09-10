@@ -22,6 +22,7 @@ function dotnet {
     if ($args[0] -eq 'build') { $global:LASTEXITCODE = 0; return }
     if ($args[1] -ne '--code-path-review') { $global:LASTEXITCODE = 1; return }
     $privatePath = [string]$args[5]
+    if ($args[7] -ne 'index.html') { $global:LASTEXITCODE = 1; return }
     [IO.File]::WriteAllText($privatePath, 'private')
     [IO.File]::WriteAllText(($privatePath -replace '\.private\.html$', '.shareable.html'), 'shareable')
     [IO.File]::WriteAllText(($privatePath -replace '\.private\.html$', '.shareable.json'), '{}')
@@ -34,6 +35,14 @@ try {
     if ($sets.Count -ne 1) { throw 'Expected one review-set directory.' }
     $indexPath = Join-Path $sets[0].FullName 'index.md'
     if (!(Test-Path -LiteralPath $indexPath -PathType Leaf)) { throw 'Expected index.md in the review-set folder.' }
+    $htmlIndexPath = Join-Path $sets[0].FullName 'index.html'
+    if (!(Test-Path -LiteralPath $htmlIndexPath -PathType Leaf)) { throw 'Expected index.html in the review-set folder.' }
+    $htmlIndex = [IO.File]::ReadAllText($htmlIndexPath)
+    if (!$htmlIndex.Contains('case-001.private.html', [StringComparison]::Ordinal) -or
+        !$htmlIndex.Contains('case-002.shareable.html', [StringComparison]::Ordinal) -or
+        !$htmlIndex.Contains('target="_blank"', [StringComparison]::Ordinal)) {
+        throw 'HTML index is missing report links.'
+    }
     $queue = [IO.File]::ReadAllText($indexPath)
     foreach ($expected in @(
         '| Evidence | Private path | Anonymous path | Human verdict | Comment |',

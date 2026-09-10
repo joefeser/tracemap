@@ -63,7 +63,7 @@ $null = New-Item -ItemType Directory -Path $setDirectory
 try {
     foreach ($selectedCase in $selectedCases) {
         $reviewPath = Join-Path $setDirectory "$selectedCase.private.html"
-        & dotnet $dll --code-path-review $inspectionFile.FullName $SourceRoot $selectedCase $reviewPath $TriggerContextLines
+        & dotnet $dll --code-path-review $inspectionFile.FullName $SourceRoot $selectedCase $reviewPath $TriggerContextLines 'index.html'
         if ($LASTEXITCODE -ne 0) { throw 'CodePathReviewSetCaseFailed' }
     }
 
@@ -85,6 +85,21 @@ try {
     $lines.Add('')
     $lines.Add('Static retained calls do not prove runtime order, branch feasibility, or source completeness. A human verdict is review metadata, not scanner evidence.')
     [IO.File]::WriteAllLines($queuePath, $lines, [Text.UTF8Encoding]::new($false))
+
+    $htmlPath = Join-Path $setDirectory 'index.html'
+    $html = [Collections.Generic.List[string]]::new()
+    $html.Add('<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">')
+    $html.Add('<title>Private Web Forms review index</title><style>:root{font-family:system-ui,sans-serif;color:#172033;background:#f5f7fb}main{max-width:1000px;margin:auto;padding:24px}.private{background:#fff1f0;border-left:5px solid #c62828;padding:12px}table{width:100%;border-collapse:collapse;background:white}th,td{padding:12px;border:1px solid #dbe2ee;text-align:left}th{background:#eaf1ff}a{color:#1558b0}.button{display:inline-block;padding:7px 10px;background:#eaf1ff;border:1px solid #bed0ee;border-radius:6px;text-decoration:none}code{background:#edf1f7;padding:.1rem .3rem;border-radius:4px}</style></head><body><main>')
+    $html.Add('<h1>Private Web Forms review index</h1>')
+    $html.Add('<p class="private">PRIVATE: links include working-tree source reports. Keep this folder on the work machine.</p>')
+    $html.Add("<p>Cases: <code>$($selectedCases.Count)</code>. Trigger context: <code>$TriggerContextLines lines before and after</code>.</p>")
+    $html.Add('<p><a class="button" href="index.md">Open editable verdict/comment queue</a></p>')
+    $html.Add('<table><thead><tr><th>Evidence</th><th>Private review</th><th>Anonymous review</th><th>Verdict</th></tr></thead><tbody>')
+    foreach ($selectedCase in $selectedCases) {
+        $html.Add(('<tr><td><code>{0}</code></td><td><a target="_blank" rel="noopener" href="{0}.private.html">Open private report</a></td><td><a target="_blank" rel="noopener" href="{0}.shareable.html">Open anonymous report</a></td><td>unreviewed</td></tr>' -f $selectedCase))
+    }
+    $html.Add('</tbody></table><p>Static retained calls do not prove runtime order, branch feasibility, or source completeness. Human verdicts are review metadata.</p></main></body></html>')
+    [IO.File]::WriteAllLines($htmlPath, $html, [Text.UTF8Encoding]::new($false))
 }
 catch {
     if (Test-Path -LiteralPath $queuePath) { Remove-Item -LiteralPath $queuePath -Force }
@@ -94,5 +109,6 @@ catch {
 
 Write-Host "codePathReviewSet=completed;cases=$($selectedCases.Count);triggerContextLines=$TriggerContextLines"
 Write-Host "PRIVATE review queue: $queuePath"
+Write-Host "PRIVATE review index: $htmlPath"
 Write-Host 'Edit the Human verdict and Comment cells in index.md; an internal AI can read that file and follow the private report links.'
-if ($IsWindows) { Start-Process -FilePath $queuePath }
+if ($IsWindows) { Start-Process -FilePath $htmlPath }
