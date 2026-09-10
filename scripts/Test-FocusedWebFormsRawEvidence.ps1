@@ -1,4 +1,4 @@
-param([string]$IndexPath = '', [string]$ReportPath = '', [string]$OutputRoot = '')
+param([string]$IndexPath = '', [string]$ReportPath = '', [string]$OutputRoot = '', [string]$InspectionPath = '', [switch]$CreateLocalInspection)
 
 $ErrorActionPreference = 'Stop'
 # Reuse only literal path settings; never execute the form-list runner.
@@ -33,9 +33,15 @@ if (!(Test-Path -LiteralPath $IndexPath -PathType Leaf) -or !(Test-Path -Literal
     throw 'RawAuditInputUnavailable'
 }
 $project = Join-Path $PSScriptRoot 'diagnostics/RawWebFormsEvidence/RawWebFormsEvidence.csproj'
+if ($CreateLocalInspection) {
+    $directory = Join-Path $OutputRoot 'local-inspection-private'
+    $null = New-Item -ItemType Directory -Path $directory -Force
+    $InspectionPath = Join-Path $directory ('webforms-local-inspection-' + [Guid]::NewGuid().ToString('N') + '.json')
+}
 Write-Host 'Building diagnostic helper only; no application build, scan, or report generation.'
 $buildOutput = & dotnet build $project -c Release --nologo -v quiet 2>&1
 if ($LASTEXITCODE -ne 0) { throw 'RawAuditHelperBuildFailed; inspect the helper build locally.' }
 $dll = Join-Path $PSScriptRoot 'diagnostics/RawWebFormsEvidence/bin/Release/net10.0/RawWebFormsEvidence.dll'
-& dotnet $dll $IndexPath $ReportPath
+if ($InspectionPath) { & dotnet $dll $IndexPath $ReportPath $InspectionPath }
+else { & dotnet $dll $IndexPath $ReportPath }
 if ($LASTEXITCODE -ne 0) { throw 'RawAuditFailed; no evidence conclusion is available.' }

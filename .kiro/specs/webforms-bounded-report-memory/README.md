@@ -1,6 +1,35 @@
 # Restricted Web Forms run: diagnostic follow-up
 
-## Current command: independent original-index audit
+## Current command: local source inspection
+
+```powershell
+git pull
+.\scripts\New-FocusedWebFormsLocalInspection.ps1
+```
+
+Reuses your existing IndexPath/OutputRoot settings. Open the newest JSON inside
+`local-inspection-private` under the output root (normally
+`C:\work\tracemap-output\local-inspection-private`). **Keep this file at work:
+it contains private paths and symbols; do not send it or photographs of it.**
+
+The file selects one deterministic unbounded raw exact-call sample from the
+priority handlers. It provides the selected surface ID, binding/handler evidence
+locations, and a parent-chain to one stopping symbol. Open the final hop's file
+at its start line in Visual Studio, then use Go To Definition on the callee.
+These are retained CALL-SITE locations, not inferred callee definitions. Missing
+locations are explicitly unavailable. Paths may be relative to the application
+checkout; verify the recorded source commit before inspecting. No application
+execution, source-text capture, rescan, or report regeneration is performed.
+
+Share back only one category: `source-body-found`, `metadata-or-external-definition`,
+`generated-source`, `definition-unavailable`, or `checkout-mismatch`. If a body
+is found, say whether it contains another call, a database operation, or neither.
+Do not send names, paths, source, SQL, or configuration. This single sample is
+not the report's unresolved-leaf inventory and does not prove runtime behavior.
+Console output remains the sanitized raw-audit summary plus a creation marker;
+the private JSON is a separate explicitly requested inspection artifact.
+
+## Previous command: independent original-index audit
 
 ```powershell
 git pull

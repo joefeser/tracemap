@@ -22,6 +22,46 @@ public sealed class WebFormsRawEvidenceAuditTests
     }
 
     [Fact]
+    public void LocalInspectionKeepsPrivateCallSitesOutOfConsoleAndDoesNotOverwrite()
+    {
+        WithFixture((db, report) =>
+        {
+            var path = Path.Combine(Path.GetDirectoryName(report)!, "private.json");
+            var lines = WebFormsRawEvidenceAudit.Run(db, report, inspectionPath: path);
+            Assert.DoesNotContain("Private", string.Join('\n', lines));
+            using var inspection = JsonDocument.Parse(File.ReadAllText(path));
+            var root = inspection.RootElement;
+            Assert.Equal("Private.Handler()", root.GetProperty("handler").GetString());
+            Assert.Equal("Private.External()", root.GetProperty("stoppingSymbol").GetString());
+            Assert.Equal(2, root.GetProperty("hops").GetArrayLength());
+            Assert.Equal("call-site-not-callee-definition", root.GetProperty("hops")[1].GetProperty("locationKind").GetString());
+            Assert.Equal("Private.cs", root.GetProperty("hops")[1].GetProperty("location").GetProperty("filePath").GetString());
+            var before = File.ReadAllBytes(path);
+            Assert.Throws<IOException>(() => WebFormsRawEvidenceAudit.Run(db, report, inspectionPath: path));
+            Assert.Equal(before, File.ReadAllBytes(path));
+        });
+    }
+
+    [Fact]
+    public void LocalInspectionLabelsMissingSourceLocations()
+    {
+        WithFixture((db, report) =>
+        {
+            using (var c = new SqliteConnection($"Data Source={db};Pooling=False"))
+            {
+                c.Open();
+                using var cmd = c.CreateCommand();
+                cmd.CommandText = "update facts set file_path=null";
+                cmd.ExecuteNonQuery();
+            }
+            var path = Path.Combine(Path.GetDirectoryName(report)!, "private.json");
+            WebFormsRawEvidenceAudit.Run(db, report, inspectionPath: path);
+            using var inspection = JsonDocument.Parse(File.ReadAllText(path));
+            Assert.Equal("source-location-unavailable", inspection.RootElement.GetProperty("hops")[0].GetProperty("location").GetProperty("availability").GetString());
+        });
+    }
+
+    [Fact]
     public void RawAuditDoesNotChargeUnrelatedSymbolsToInputBudgets()
     {
         WithFixture((db, report) =>
@@ -102,7 +142,7 @@ public sealed class WebFormsRawEvidenceAuditTests
                 cmd.CommandText = """
                     create table scan_manifest(scan_id text, commit_sha text);
                     insert into scan_manifest values('scan-one','commit-one');
-                    create table facts(fact_id text, scan_id text default 'scan-one', commit_sha text default 'commit-one', fact_type text, source_symbol text, target_symbol text, evidence_tier text default 'Tier1Semantic', properties_json text default '{}');
+                    create table facts(fact_id text, scan_id text default 'scan-one', commit_sha text default 'commit-one', fact_type text, source_symbol text, target_symbol text, evidence_tier text default 'Tier1Semantic', properties_json text default '{}', file_path text default 'Private.cs', start_line integer default 1, end_line integer default 1, rule_id text default 'test.evidence.v1');
                     insert into facts(fact_id,fact_type,target_symbol) values('handler','WebFormsHandlerResolved','Private.Handler()');
                     insert into facts(fact_id,fact_type,source_symbol,target_symbol) values('call','CallEdge','Private.Handler()','Private.Leaf()');
                     insert into facts(fact_id,fact_type,source_symbol,target_symbol) values('invoke-one','MethodInvoked','Private.Handler()','Private.Leaf()');
@@ -116,7 +156,7 @@ public sealed class WebFormsRawEvidenceAuditTests
             {
                 schemaVersion = "webforms-modernization-packet.v1",
                 sources = new[] { new { scanId = "scan-one", commitSha = "commit-one" } },
-                eventChains = new[] { new { handlerFactId = "handler", terminalKind = "", traversalObservation = new { stopState = "observed-downstream-without-supported-terminal" } } }
+                eventChains = new[] { new { handlerFactId = "handler", bindingFactId = "handler", surfaceId = "private-surface", terminalKind = "", traversalObservation = new { stopState = "observed-downstream-without-supported-terminal" } } }
             }));
             test(db, report);
         }

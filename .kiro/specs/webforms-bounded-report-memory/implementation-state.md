@@ -1,5 +1,22 @@
 # Implementation state
 
+## Local-only source inspection (2026-09-09)
+
+User requested concrete source locations after the raw audit found seven
+handlers, 86 selected facts, 18 exact symbols, and no invocation-source without
+a semantic call source witness. Added an opt-in local inspection JSON via
+New-FocusedWebFormsLocalInspection.ps1. It selects one unbounded raw stopping
+sample, reconstructs its BFS parent chain, and queries retained fact locations.
+The final hop is labeled a call site, never a callee definition. A local Go To
+Definition check and source-commit verification are required. Private symbols
+and paths are stored only in this explicitly requested file, not console output.
+Existing raw summary behavior is unchanged unless inspection is requested.
+Output is create-new, uses the existing path configuration, and does not edit
+the form list, read source text, execute the application, or regenerate reports.
+Validation: full solution 1774/1774; final focused audit tests 8/8; new PowerShell
+wrapper/helper smoke passed. Formatting, private-path guard, and diff checks
+passed. Source lookup on the work checkout remains the operator's next step.
+
 ## Raw audit text-limit fix (2026-09-09)
 
 Field run failed with RawAuditTextLimit because the helper materialized all raw
