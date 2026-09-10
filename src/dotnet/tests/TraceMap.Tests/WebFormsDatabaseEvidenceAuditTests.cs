@@ -7,10 +7,12 @@ namespace TraceMap.Tests;
 public sealed class WebFormsDatabaseEvidenceAuditTests
 {
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    public void CensusIsScopedAndPrivateAndRejectsWrongSnapshot(bool mismatch, bool missingFill)
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, true)]
+    public void CensusIsScopedAndPrivateAndRejectsWrongSnapshot(bool mismatch, bool missingFill, bool qualified)
     {
         var directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
@@ -34,14 +36,24 @@ public sealed class WebFormsDatabaseEvidenceAuditTests
                     insert into facts(source_symbol,fact_type,target_symbol) values('Other.Method()','SqlCommandDetected','System.Data.SqlClient.SqlCommand');
                     """;
                 q.ExecuteNonQuery();
+                if (qualified)
+                {
+                    q.CommandText = """
+                        update facts set source_symbol='global::' || source_symbol, target_symbol='global::' || target_symbol;
+                        update facts set target_symbol='global::System.Data.Common.DbDataAdapter.Fill(global::System.Data.DataSet dataSet)' where fact_type='MethodInvoked';
+                        insert into facts(source_symbol,fact_type,target_symbol) values('Private.Method()','MethodInvoked','System.Data.Common.DbDataAdapter.Fill(System.Data.DataSet)');
+                        """;
+                    q.ExecuteNonQuery();
+                }
                 if (missingFill)
                 {
-                    q.CommandText = "delete from facts where fact_type='MethodInvoked'";
+                    q.CommandText = "delete from facts where fact_type='MethodInvoked' and source_symbol=$caller";
+                    q.Parameters.AddWithValue("$caller", qualified ? "global::Private.Method()" : "Private.Method()");
                     q.ExecuteNonQuery();
                 }
             }
             var inspection = Path.Combine(directory, "inspection.json");
-            File.WriteAllText(inspection, JsonSerializer.Serialize(new { schemaVersion = "webforms-local-inspection.v1", scanId = "s", commitSha = mismatch ? "wrong" : "c", hops = new[] { new { caller = "Private.Method()", callee = "System.Data.Common.DbDataAdapter.Fill(System.Data.DataSet)" } } }));
+            File.WriteAllText(inspection, JsonSerializer.Serialize(new { schemaVersion = "webforms-local-inspection.v1", scanId = "s", commitSha = mismatch ? "wrong" : "c", hops = new[] { new { caller = qualified ? "global::Private.Method()" : "Private.Method()", callee = qualified ? "global::System.Data.Common.DbDataAdapter.Fill(global::System.Data.DataSet dataSet)" : "System.Data.Common.DbDataAdapter.Fill(System.Data.DataSet)" } } }));
             if (mismatch || missingFill)
             {
                 var diagnostics = new List<string>();
