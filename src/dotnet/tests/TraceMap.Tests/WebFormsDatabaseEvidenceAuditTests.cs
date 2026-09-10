@@ -6,6 +6,48 @@ namespace TraceMap.Tests;
 
 public sealed class WebFormsDatabaseEvidenceAuditTests
 {
+    [Fact]
+    public void Real_framework_symbols_survive_scan_storage_and_database_audit()
+    {
+        using var temp = new TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "Sample.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "Sample.cs"), """
+            using System.Data;
+            using System.Data.Common;
+            public class Sample {
+                public void Click(DbCommand command, DbDataAdapter adapter) => Load(command, adapter);
+                void Load(DbCommand command, DbDataAdapter adapter) => Fetch(command, adapter);
+                void Fetch(DbCommand command, DbDataAdapter adapter) {
+                    command.CommandType = CommandType.StoredProcedure;
+                    var observed = command.CommandType;
+                    command.CommandType = CommandType.Text;
+                    adapter.Fill(new DataSet());
+                }
+            }
+            """);
+        File.WriteAllText(Path.Combine(temp.Path, "Sample.aspx"), """
+            <%@ Page Language="C#" CodeBehind="Sample.cs" Inherits="Sample" %>
+            <asp:Button ID="Load" runat="server" OnClick="Click" />
+            """);
+        var scan = TraceMap.Core.ScanEngine.Scan(new TraceMap.Core.ScanOptions(temp.Path, Path.Combine(temp.Path, "out")));
+        Assert.Equal("Succeeded", scan.Manifest.BuildStatus);
+        var fill = Assert.Single(scan.Facts, f => f.FactType == "MethodInvoked" && f.TargetSymbol!.StartsWith("global::System.Data.Common.DbDataAdapter.Fill(", StringComparison.Ordinal));
+        Assert.Equal("global::System.Data.Common.DbDataAdapter adapter", fill.Properties["receiverSymbol"]);
+        Assert.True(fill.Properties.ContainsKey("receiverSymbolId"));
+        Assert.Contains(scan.Facts, f => f.FactType == "PropertyAccessed" && f.TargetSymbol!.EndsWith(".CommandType", StringComparison.Ordinal) && !f.Properties.ContainsKey("assignedValueSymbol"));
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        TraceMap.Storage.SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
+        var inspection = Path.Combine(temp.Path, "inspection.json");
+        File.WriteAllText(inspection, JsonSerializer.Serialize(new { schemaVersion = "webforms-local-inspection.v1", scanId = scan.Manifest.ScanId, commitSha = scan.Manifest.CommitSha, hops = new[] { new { caller = fill.SourceSymbol, callee = fill.TargetSymbol } } }));
+        var output = WebFormsDatabaseEvidenceAudit.Run(index, inspection);
+        Assert.Contains("semanticSignal=fill-receiver-symbol-retained|count=1", output);
+        Assert.Contains("storedProcedureSimpleAssignments=1", output);
+        Assert.Contains("fillReceiverIdentity=retained", output);
+        Assert.Contains("adapterFillLocalNameMatch=0", output);
+    }
+
     [Theory]
     [InlineData(false, false, false)]
     [InlineData(true, false, false)]
@@ -31,7 +73,7 @@ public sealed class WebFormsDatabaseEvidenceAuditTests
                     ('ObjectCreated','System.Data.SqlClient.SqlCommand','{"assignedTo":"privateCommand","sql":"PRIVATE_SQL"}'),
                     ('ObjectCreated','System.Data.SqlClient.SqlDataAdapter','{"assignedTo":"privateAdapter"}'),
                     ('ArgumentPassed','System.Data.SqlClient.SqlDataAdapter.SqlDataAdapter(System.Data.SqlClient.SqlCommand)', '{"argumentSymbol":"privateCommand"}'),
-                    ('MethodInvoked','System.Data.Common.DbDataAdapter.Fill(System.Data.DataSet)','{}'),
+                    ('MethodInvoked','System.Data.Common.DbDataAdapter.Fill(System.Data.DataSet)','{"receiverSymbol":"privateAdapter"}'),
                     ('PropertyAccessed','System.Data.Common.DbCommand.CommandType','{}'),
                     ('ObjectCreated','System.Data.SqlClient.SqlCommandBuilder','{}');
                     insert into facts(source_symbol,fact_type,target_symbol) values('Other.Method()','SqlCommandDetected','System.Data.SqlClient.SqlCommand');
@@ -71,8 +113,9 @@ public sealed class WebFormsDatabaseEvidenceAuditTests
             Assert.Contains("semanticSignal=fill-invocation|count=1", output);
             Assert.Contains("semanticSignal=command-assigned-variable-retained|count=1", output);
             Assert.Contains("commandAdapterLocalNameMatch=1", output);
-            Assert.Contains("fillReceiverIdentity=not-retained-by-method-invocation-fact", output);
-            Assert.Contains("commandTypeAssignedValue=not-retained-by-property-access-fact", output);
+            Assert.Contains("fillReceiverIdentity=retained", output);
+            Assert.Contains("adapterFillLocalNameMatch=1", output);
+            Assert.Contains("storedProcedureSimpleAssignments=0", output);
             Assert.Contains("factType=SqlCommandDetected|count=0", output);
             Assert.DoesNotContain("PRIVATE_SQL", string.Join('\n', output));
             Assert.DoesNotContain("Private.Method", string.Join('\n', output));
