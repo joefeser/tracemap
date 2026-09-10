@@ -62,7 +62,10 @@ public static class WebFormsDatabaseEvidenceAudit
             if (counts.ContainsKey(type)) counts[type]++;
             if (tier != "Tier1Semantic") continue;
             semantic++;
-            if (type is "CallEdge" or "MethodInvoked" && IsFill(target)) fillWitness = true;
+            var fill = IsFill(target);
+            // Normalize only framework classification, never the exact source-symbol lookup.
+            target = FrameworkDisplayName(target);
+            if (type is "CallEdge" or "MethodInvoked" && fill) fillWitness = true;
             using var properties = JsonDocument.Parse(json);
             bool Has(string key) => properties.RootElement.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(value.GetString());
             bool IsType(string name) => target == name || target.StartsWith(name + ".", StringComparison.Ordinal);
@@ -71,15 +74,15 @@ public static class WebFormsDatabaseEvidenceAudit
             Hit("command-construction", type == "ObjectCreated" && command);
             Hit("adapter-construction", type == "ObjectCreated" && adapter);
             Hit("adapter-constructor-argument", type == "ArgumentPassed" && adapter && target.Contains(".SqlDataAdapter(", StringComparison.Ordinal));
-            Hit("fill-invocation", type == "MethodInvoked" && IsFill(target));
-            Hit("fill-argument", type == "ArgumentPassed" && IsFill(target));
+            Hit("fill-invocation", type == "MethodInvoked" && fill);
+            Hit("fill-argument", type == "ArgumentPassed" && fill);
             Hit("commandtype-property", type == "PropertyAccessed" && ((command && target.EndsWith(".CommandType", StringComparison.Ordinal))
                 || target is "System.Data.Common.DbCommand.CommandType" or "System.Data.IDbCommand.CommandType"));
             Hit("storedprocedure-enum-reference", target == "System.Data.CommandType.StoredProcedure");
             Hit("command-assigned-variable-retained", type == "ObjectCreated" && command && Has("assignedTo"));
             Hit("adapter-assigned-variable-retained", type == "ObjectCreated" && adapter && Has("assignedTo"));
             Hit("adapter-argument-symbol-retained", type == "ArgumentPassed" && adapter && Has("argumentSymbol"));
-            Hit("fill-receiver-symbol-retained", type == "MethodInvoked" && IsFill(target) && Has("receiverSymbol"));
+            Hit("fill-receiver-symbol-retained", type == "MethodInvoked" && fill && Has("receiverSymbol"));
         }
         diagnostic?.Invoke("indexProvenance=matched");
         diagnostic?.Invoke($"exactCallerFactRows={rows}");
@@ -93,5 +96,7 @@ public static class WebFormsDatabaseEvidenceAudit
             .ToArray();
     }
 
-    private static bool IsFill(string symbol) => new[] { "System.Data.Common.DbDataAdapter.Fill(", "System.Data.SqlClient.SqlDataAdapter.Fill(", "Microsoft.Data.SqlClient.SqlDataAdapter.Fill(" }.Any(p => symbol.StartsWith(p, StringComparison.Ordinal));
+    private static string FrameworkDisplayName(string symbol) => symbol.StartsWith("global::", StringComparison.Ordinal) ? symbol[8..] : symbol;
+
+    private static bool IsFill(string symbol) => new[] { "System.Data.Common.DbDataAdapter.Fill(", "System.Data.SqlClient.SqlDataAdapter.Fill(", "Microsoft.Data.SqlClient.SqlDataAdapter.Fill(" }.Any(p => FrameworkDisplayName(symbol).StartsWith(p, StringComparison.Ordinal));
 }

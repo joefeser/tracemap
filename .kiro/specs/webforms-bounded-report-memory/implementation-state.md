@@ -1,5 +1,16 @@
 # Implementation state
 
+## Qualified framework display symbols (2026-09-09)
+
+Accept one leading `global::` for database census framework classification only.
+Keep the original exact caller identity in SQLite queries. Regression coverage
+includes qualified Fill signatures with parameter names, qualified constructors
+and properties, fake framework names, and exclusion of unqualified caller rows.
+No application scan, source changes, or inspection regeneration required.
+Validation: focused audits 17/17; full solution 1783/1783; PowerShell/helper
+smoke, formatting, private-path guard, and diff checks passed.
+
+
 ## Distinct Fill audit failures (2026-09-09)
 
 Field returned RawAuditFillCallerUnavailable, which conflated inspection-hop

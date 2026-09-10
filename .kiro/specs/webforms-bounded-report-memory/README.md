@@ -9,6 +9,8 @@ git pull
 
 Uses the newest local inspection JSON and configured original index. The saved
 sample must include an actual framework DbDataAdapter/SqlDataAdapter Fill hop.
+Framework recognition accepts Roslyn's leading `global::` display qualifier;
+exact caller lookup remains unchanged. Existing inspections need no regeneration.
 Select an explicit private JSON with `-InspectionPath` if the latest file is a
 different sample. No scan, report regeneration, or source read occurs. Console
 summary can be shared; keep SQL and the private inspection JSON at work.
