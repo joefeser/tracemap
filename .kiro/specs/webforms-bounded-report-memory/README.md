@@ -242,6 +242,11 @@ is the fallback, while the internal surface identity is used only when neither
 retained path exists. This makes it explicit when several review cases came from
 one page rather than implying that every case is a page.
 
+Case IDs are assigned only after sorting handlers by retained binding file path,
+then handler identity. Cases from the same file therefore receive contiguous
+numbers in newly generated batch inspections. Case IDs remain local to their
+inspection and must not be joined to IDs from an older run.
+
 The folder also contains `inspection.snapshot.json`, a private copy of the exact
 retained batch input used for every report in that set. This avoids dependence on
 later “newest file” selection and keeps report provenance stable.

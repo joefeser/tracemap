@@ -985,6 +985,13 @@ handler-case count and show the private handler identity on each row. Evidence
 case IDs do not wrap in the HTML table. This prevents seven handler cases across
 three pages from reading as either seven pages or one unexplained batch.
 
+Field acceptance requested contiguous case numbering inside those file groups.
+Batch inspection now sorts candidate handlers by retained binding file path,
+then handler identity and fact ID, before assigning local case IDs. The index no
+longer has to display groups such as 001, 002, 005 followed by 003. A focused
+regression deliberately interleaves handler fact ordering across file paths and
+proves the emitted case IDs follow the file grouping.
+
 ### Post-fairness field result and actionable summary
 
 The work-machine rerun retained 466 event chains and 361 downstream boundaries.

@@ -76,9 +76,33 @@ public static partial class WebFormsRawEvidenceAudit
         var calls = witnesses.Where(w => w.Kind is "CallEdge" or "MethodInvoked" && !string.IsNullOrWhiteSpace(w.Caller) && !string.IsNullOrWhiteSpace(w.Callee)).ToArray();
         var callsByCaller = calls.ToLookup(w => w.Caller!, StringComparer.Ordinal);
         var declarations = witnesses.Where(w => w.Kind == "MethodDeclared" && w.Callee is not null).ToLookup(w => w.Callee!, StringComparer.Ordinal);
-        var cases = states.Select((state, index) =>
+        var orderedCases = states.Select((state, index) =>
+            {
+                var handlerFactId = handlers[index]!;
+                var handlerChains = chains.Where(c => c.GetProperty("handlerFactId").GetString() == handlerFactId).ToArray();
+                var bindingPath = handlerChains
+                    .Select(c => byId.GetValueOrDefault(c.GetProperty("bindingFactId").GetString()!)?.FilePath)
+                    .Where(path => !string.IsNullOrWhiteSpace(path)).Order(StringComparer.Ordinal).FirstOrDefault();
+                var surfaceId = handlerChains.Select(c => c.GetProperty("surfaceId").GetString())
+                    .Where(value => !string.IsNullOrWhiteSpace(value)).Order(StringComparer.Ordinal).FirstOrDefault();
+                var rootSymbol = state.Visited.Single(s => !state.Parents.ContainsKey(s));
+                return new
+                {
+                    State = state,
+                    HandlerFactId = handlerFactId,
+                    HandlerChains = handlerChains,
+                    RootSymbol = rootSymbol,
+                    ItemSortKey = bindingPath ?? byId.GetValueOrDefault(handlerFactId)?.FilePath ?? surfaceId ?? "item-unavailable"
+                };
+            })
+            .OrderBy(item => item.ItemSortKey, StringComparer.Ordinal)
+            .ThenBy(item => item.RootSymbol, StringComparer.Ordinal)
+            .ThenBy(item => item.HandlerFactId, StringComparer.Ordinal)
+            .ToArray();
+        var cases = orderedCases.Select((entry, index) =>
         {
-            var rootSymbol = state.Visited.Single(s => !state.Parents.ContainsKey(s));
+            var state = entry.State;
+            var rootSymbol = entry.RootSymbol;
             var stops = state.Visited.Where(s => loaded.Contains(s) && (!edges.TryGetValue(s, out var targets) || targets.Count == 0))
                 .Order(StringComparer.Ordinal).ToArray();
             var uiControlEndpoints = stops.Where(IsKnownUiControlEndpoint).ToArray();
@@ -92,9 +116,9 @@ public static partial class WebFormsRawEvidenceAudit
             {
                 caseId = $"case-{index + 1:D3}",
                 handler = rootSymbol,
-                handlerFactId = handlers[index],
-                handlerLocation = byId.GetValueOrDefault(handlers[index]!),
-                bindings = chains.Where(c => c.GetProperty("handlerFactId").GetString() == handlers[index]).Select(c => new
+                handlerFactId = entry.HandlerFactId,
+                handlerLocation = byId.GetValueOrDefault(entry.HandlerFactId),
+                bindings = entry.HandlerChains.Select(c => new
                 {
                     surfaceId = c.GetProperty("surfaceId").GetString(),
                     bindingLocation = byId.GetValueOrDefault(c.GetProperty("bindingFactId").GetString()!)
