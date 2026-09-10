@@ -1053,7 +1053,8 @@ Head-review remediation preserves the field workflow while closing its remaining
 boundedness and evidence-labeling gaps. Surface lists are streamed under byte,
 row, and entry ceilings, comma-bearing list paths stay verbatim, and requests
 that cannot be resolved after a truncated fact snapshot are labeled
-`unavailable` rather than `unmatched`. Selected-symbol closure now applies its
+`unavailable` rather than `unmatched`; filename-only matches also remain
+unavailable when truncation prevents a uniqueness claim. Selected-symbol closure now applies its
 frontier limit in SQL and while reading, and path work limits are validated even
 when no root matches.
 

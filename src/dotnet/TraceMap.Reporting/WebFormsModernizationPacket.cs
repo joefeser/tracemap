@@ -1329,7 +1329,8 @@ public static class WebFormsModernizationPacketReporter
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(value => value, StringComparer.Ordinal)
                 .ToArray();
-            var status = matches.Length == 1 ? "matched" : matches.Length > 1 ? "ambiguous"
+            var status = matches.Length > 1 ? "ambiguous"
+                : matches.Length == 1 && (pathQualified || !factSnapshotTruncated) ? "matched"
                 : factSnapshotTruncated ? "unavailable" : "unmatched";
             return new WebFormsModernizationSurfaceSelectionItem(
                 $"page-{index + 1:000}",
