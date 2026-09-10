@@ -48,3 +48,4 @@
 - [x] Add opt-in local-only call-site inspection artifact with a single bounded sample and sanitized console output.
 - [x] Show all retained direct handler call sites and independent branch summaries so one UI-only branch is not mistaken for the whole handler.
 - [x] Add unique-method-hint local inspection to trace retained calls across abstraction layers without guessing event associations.
+- [x] Add a privacy-safe exact Fill-caller database evidence census without inferring object linkage from cooccurrence.

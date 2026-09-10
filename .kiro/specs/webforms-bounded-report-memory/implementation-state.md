@@ -1,5 +1,21 @@
 # Implementation state
 
+## Database evidence census (2026-09-09)
+
+Operator confirmed command construction with SQL/connection, StoredProcedure
+assignment, parameters, adapter(command), and Fill in the source. Added a
+read-only original-index census scoped to the exact framework Fill caller from
+the newest local inspection. Reports closed fact and semantic metadata counts
+only; never SQL, parameters, symbols, paths, or arbitrary property values.
+Does not assert object linkage from cooccurrence or stored-procedure mode from
+a property reference. Validates snapshot; caps 10k rows/8MiB text. Wrapper uses
+existing path settings, requires no new method hint, and does not regenerate
+the local inspection or application report.
+Validation: full solution 1780/1780 before the additional missing-Fill regression;
+final focused audits 15/15, including inherited CommandType references and
+missing Fill rejection. PowerShell/helper smoke, formatting, privacy guard,
+and diff checks passed. No conclusion about command/adapter identity yet.
+
 ## Method-starting local inspection (2026-09-09)
 
 Added New-FocusedWebFormsMethodInspection.ps1 with a local interactive method

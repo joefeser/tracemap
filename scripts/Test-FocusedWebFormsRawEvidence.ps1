@@ -1,4 +1,4 @@
-param([string]$IndexPath = '', [string]$ReportPath = '', [string]$OutputRoot = '', [string]$InspectionPath = '', [switch]$CreateLocalInspection, [string]$StartingMethodName = '')
+param([string]$IndexPath = '', [string]$ReportPath = '', [string]$OutputRoot = '', [string]$InspectionPath = '', [switch]$CreateLocalInspection, [string]$StartingMethodName = '', [switch]$DatabaseEvidence)
 
 $ErrorActionPreference = 'Stop'
 # Reuse only literal path settings; never execute the form-list runner.
@@ -22,14 +22,14 @@ function Read-LiteralSetting([string]$name) {
 }
 if (!$IndexPath) { $IndexPath = Read-LiteralSetting 'IndexPath' }
 if (!$OutputRoot) { $OutputRoot = Read-LiteralSetting 'OutputRoot' }
-if (!$ReportPath) {
+if (!$ReportPath -and !$DatabaseEvidence) {
     $latest = Get-ChildItem -LiteralPath $OutputRoot -Directory -Filter 'webforms-page-list-*' |
         ForEach-Object { $p = Join-Path $_.FullName 'webforms-modernization.json'; if (Test-Path -LiteralPath $p) { Get-Item -LiteralPath $p } } |
         Sort-Object LastWriteTimeUtc, FullName -Descending | Select-Object -First 1
     if ($null -eq $latest) { throw 'RawAuditReportUnavailable' }
     $ReportPath = $latest.FullName
 }
-if (!(Test-Path -LiteralPath $IndexPath -PathType Leaf) -or !(Test-Path -LiteralPath $ReportPath -PathType Leaf)) {
+if (!(Test-Path -LiteralPath $IndexPath -PathType Leaf) -or (!$DatabaseEvidence -and !(Test-Path -LiteralPath $ReportPath -PathType Leaf))) {
     throw 'RawAuditInputUnavailable'
 }
 $project = Join-Path $PSScriptRoot 'diagnostics/RawWebFormsEvidence/RawWebFormsEvidence.csproj'
@@ -42,8 +42,17 @@ Write-Host 'Building diagnostic helper only; no application build, scan, or repo
 $buildOutput = & dotnet build $project -c Release --nologo -v quiet 2>&1
 if ($LASTEXITCODE -ne 0) { throw 'RawAuditHelperBuildFailed; inspect the helper build locally.' }
 $dll = Join-Path $PSScriptRoot 'diagnostics/RawWebFormsEvidence/bin/Release/net10.0/RawWebFormsEvidence.dll'
-if ($StartingMethodName -and !$InspectionPath) { throw 'Method inspection requires a local output file.' }
-if ($StartingMethodName) { & dotnet $dll $IndexPath $ReportPath $InspectionPath $StartingMethodName }
+if ($DatabaseEvidence) {
+    if (!$InspectionPath) {
+        $latestInspection = Get-ChildItem -LiteralPath (Join-Path $OutputRoot 'local-inspection-private') -File -Filter 'webforms-local-inspection-*.json' |
+            Sort-Object LastWriteTimeUtc, FullName -Descending | Select-Object -First 1
+        if ($null -eq $latestInspection) { throw 'No local inspection file was found.' }
+        $InspectionPath = $latestInspection.FullName
+    }
+    & dotnet $dll --database-evidence $IndexPath $InspectionPath
+}
+elseif ($StartingMethodName -and !$InspectionPath) { throw 'Method inspection requires a local output file.' }
+elseif ($StartingMethodName) { & dotnet $dll $IndexPath $ReportPath $InspectionPath $StartingMethodName }
 elseif ($InspectionPath) { & dotnet $dll $IndexPath $ReportPath $InspectionPath }
 else { & dotnet $dll $IndexPath $ReportPath }
 if ($LASTEXITCODE -ne 0) { throw 'RawAuditFailed; no evidence conclusion is available.' }

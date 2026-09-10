@@ -1,6 +1,29 @@
 # Restricted Web Forms run: diagnostic follow-up
 
-## Current command: start from a known method
+## Current command: retained database evidence
+
+```powershell
+git pull
+.\scripts\Test-FocusedWebFormsDatabaseEvidence.ps1
+```
+
+Uses the newest local inspection JSON and configured original index. The saved
+sample must include an actual framework DbDataAdapter/SqlDataAdapter Fill hop.
+Select an explicit private JSON with `-InspectionPath` if the latest file is a
+different sample. No scan, report regeneration, or source read occurs. Console
+summary can be shared; keep SQL and the private inspection JSON at work.
+
+Rule `diagnostic.webforms.database-evidence-census.v1`: verifies scan/commit and
+counts raw facts owned by the exact Fill caller. Public-type semantic signals
+include command/adapter construction, Fill invocation/arguments, CommandType
+property references, and presence of assigned-variable/argument/receiver
+metadata. Limits: 10k caller facts and 8 MiB selected target/property text.
+This is an evidence inventory, not an object-identity join: cooccurrence does
+not establish which command reaches Fill, and a CommandType property reference
+does not prove a StoredProcedure assignment. Missing exact-source metadata is
+not source absence. No SQL, property values, or unknown fact names are printed.
+
+## Previous command: start from a known method
 
 ```powershell
 git pull
