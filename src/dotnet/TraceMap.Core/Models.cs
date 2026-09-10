@@ -551,12 +551,12 @@ public static class ScannerVersions
     public const string FileInventoryExtractor = "file-inventory/0.1.0";
     public const string ProjectFileExtractor = "project-file/0.1.0";
     public const string NuGetLockfileExtractor = "nuget-lockfile/0.1.0";
-    public const string BuildEnvironmentExtractor = "build-environment/0.3.0";
+    public const string BuildEnvironmentExtractor = "build-environment/0.6.0";
     public const string AnalyzerCapabilityExtractor = "analyzer-capability/0.1.0";
     public const string CSharpSyntaxExtractor = "csharp-syntax/0.5.0";
     public const string CSharpAspNetSyntaxRouteExtractor = "csharp-aspnet-syntax-route/0.1.0";
     public const string CSharpIntegrationSyntaxExtractor = "csharp-integration-syntax/0.3.0";
-    public const string CSharpSemanticExtractor = "csharp-semantic/0.18.0";
+    public const string CSharpSemanticExtractor = "csharp-semantic/0.21.0";
     public const string CSharpPropertyMappingExtractor = "csharp-property-mapping/0.1.0";
     public const string FrameworkMigrationEvidenceExtractor = "framework-migration/0.1.0";
     public const string FrameworkMigrationSyntaxFallbackExtractor = "framework-migration-syntax-fallback/0.1.0";
@@ -573,7 +573,7 @@ public static class ScannerVersions
     public const string LegacyWcfExtractor = "legacy-wcf/0.2.0";
     public const string LegacyAsmxExtractor = "legacy-asmx/0.1.0";
     public const string LegacyRemotingExtractor = "legacy-remoting/0.1.0";
-    public const string LegacyWebFormsExtractor = "legacy-webforms/0.6.0";
+    public const string LegacyWebFormsExtractor = "legacy-webforms/0.7.1";
     public const string LegacyWinFormsExtractor = "legacy-winforms/0.1.0";
     public const string LegacyAspNetExtractor = "legacy-aspnet/0.2.0";
     public const string LegacyBatchDataMovementExtractor = "legacy-batch-data-movement/0.1.0";

@@ -123,6 +123,7 @@ try {
     $diagnosticCounts = [Collections.Generic.Dictionary[string, long]]::new([StringComparer]::Ordinal)
     $gapCounts = [Collections.Generic.Dictionary[string, long]]::new([StringComparer]::Ordinal)
     $registrationShapeCounts = [Collections.Generic.Dictionary[string, long]]::new([StringComparer]::Ordinal)
+    $workspaceFailureCodes = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     [long]$factTotal = 0
     [long]$inventoryTotal = 0
 
@@ -162,6 +163,11 @@ try {
             $effect = [string](Get-OptionalProperty $properties 'coverageEffect')
             if ($code -match $safeToken -and $kind -match $safeToken -and $effect -match $safeToken) {
                 Add-Count $diagnosticCounts "$scope|$code|$kind|$effect"
+                # Static legacy markers describe project shape, not a failed workspace.
+                if ($ruleId -eq 'build.environment.workspace-diagnostic.v1' -and
+                    $effect -ne 'informational') {
+                    [void]$workspaceFailureCodes.Add($code)
+                }
             }
         }
         if ($factType -eq 'WebFormsUserControlRegistered') {
@@ -202,9 +208,17 @@ try {
     foreach ($row in @($registrationShapeCounts.GetEnumerator() | Sort-Object Name)) { $lines.Add("registrationShape=$($row.Key)|count=$(Format-Count $row.Value)") }
     foreach ($row in @($gapCounts.GetEnumerator() | Sort-Object @{ Expression = { $_.Value }; Descending = $true }, Name | Select-Object -First 20)) { $lines.Add("accuracyGap=$($row.Key)|count=$(Format-Count $row.Value)") }
 
-    $referenceGap = @($diagnosticCounts.Keys | Where-Object { $_ -match '\|MissingReferenceAssemblies\|' }).Count -gt 0
-    $toolsetGap = @($diagnosticCounts.Keys | Where-Object { $_ -match '\|(LegacyTargetFramework|NonSdkStyleProject|WebApplicationProjectTargets|SdkResolutionFailed|MSBuildRegistrationFailed|LegacyWorkspacePrerequisitesUnresolved|UncategorizedWorkspaceFailure)\|' }).Count -gt 0
-    $lines.Add("priority01=$(if ($referenceGap) { 'restore-compatible-reference-assemblies' } elseif ($toolsetGap) { 'recreate-compatible-legacy-msbuild-workspace' } else { 'inspect-highest-count-accuracy-gap' })")
+    $referenceGap = $workspaceFailureCodes.Contains('MissingReferenceAssemblies')
+    $taskHostGap = $workspaceFailureCodes.Contains('MSBuildTaskHostIncompatible')
+    $toolsetGap = @('SdkResolutionFailed', 'MSBuildRegistrationFailed', 'LegacyWorkspacePrerequisitesUnresolved',
+        'WebApplicationTargetsUnavailable', 'ImportedTargetsUnavailable', 'LegacyProjectEvaluationFailed') |
+        Where-Object { $workspaceFailureCodes.Contains($_) }
+    $priority = if ($referenceGap) { 'restore-compatible-reference-assemblies' }
+        elseif ($taskHostGap) { 'use-compatible-msbuild-task-host' }
+        elseif (@($toolsetGap).Count -gt 0) { 'recreate-compatible-legacy-msbuild-workspace' }
+        elseif ($workspaceFailureCodes.Contains('UncategorizedWorkspaceFailure')) { 'classify-bounded-workspace-failure' }
+        else { 'inspect-highest-count-accuracy-gap' }
+    $lines.Add("priority01=$priority")
     $lines.Add('priority02=extend-only-proven-webforms-gap-shapes')
     $lines.Add('nonClaim=runtime-behavior-unproven')
 

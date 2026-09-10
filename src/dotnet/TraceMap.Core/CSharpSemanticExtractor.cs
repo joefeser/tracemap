@@ -203,13 +203,38 @@ public static class CSharpSemanticExtractor
 
         RunRestoreIfRequested(repoPath, projects, solutions, options, gaps, cancellationToken);
 
-        var workspaceProperties = string.IsNullOrWhiteSpace(options.TargetFramework)
-            ? null
-            : new Dictionary<string, string>(StringComparer.Ordinal)
+        using var comReferenceFallback = ComReferenceWorkspaceFallback.Prepare(repoPath, projects);
+        var workspaceProperties = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (!string.IsNullOrWhiteSpace(options.TargetFramework))
+        {
+            workspaceProperties["TargetFramework"] = options.TargetFramework;
+        }
+
+        if (comReferenceFallback.IsActive)
+        {
+            workspaceProperties[ComReferenceWorkspaceFallback.CustomAfterTargetsProperty] = comReferenceFallback.TargetsPath!;
+            foreach (var projectPath in comReferenceFallback.ProjectPaths)
             {
-                ["TargetFramework"] = options.TargetFramework
-            };
-        using var workspace = workspaceProperties is null
+                gaps.Add(CreateGap(
+                    projectPath,
+                    "TraceMap omitted COM-reference resolution during design-time project loading; COM-defined symbols may remain unresolved.",
+                    "ComReferenceResolutionSkipped",
+                    projectPath));
+            }
+        }
+        else if (comReferenceFallback.ProjectPaths.Count > 0)
+        {
+            foreach (var projectPath in comReferenceFallback.ProjectPaths)
+            {
+                gaps.Add(CreateGap(
+                    projectPath,
+                    "TraceMap could not install the bounded COM-reference design-time fallback; semantic project loading may remain reduced.",
+                    "ComReferenceResolutionFallbackUnavailable",
+                    projectPath));
+            }
+        }
+
+        using var workspace = workspaceProperties.Count == 0
             ? MSBuildWorkspace.Create()
             : MSBuildWorkspace.Create(workspaceProperties);
         workspace.RegisterWorkspaceFailedHandler(args =>
@@ -1379,6 +1404,21 @@ public static class CSharpSemanticExtractor
         AddSymbolProperties(properties, "source", enclosing);
         AddSymbolProperties(properties, "target", property);
 
+        if (node is MemberAccessExpressionSyntax access)
+        {
+            var receiver = model.GetSymbolInfo(access.Expression).Symbol;
+            properties["receiverSymbol"] = receiver?.ToDisplayString(SymbolFormat) ?? string.Empty;
+            AddSymbolProperties(properties, "receiver", receiver);
+        }
+        if (node.Parent is AssignmentExpressionSyntax assignment
+            && assignment.Left == node && assignment.IsKind(SyntaxKind.SimpleAssignmentExpression))
+        {
+            var valueSymbol = model.GetSymbolInfo(assignment.Right).Symbol;
+            properties["accessKind"] = "SimpleAssignmentTarget";
+            properties["assignedValueSymbol"] = valueSymbol?.ToDisplayString(SymbolFormat) ?? string.Empty;
+            AddSymbolProperties(properties, "assignedValue", valueSymbol);
+        }
+
         return CreateSemanticFact(
             FactTypes.PropertyAccessed,
             RuleIds.CSharpSemanticPropertyAccess,
@@ -1419,6 +1459,13 @@ public static class CSharpSemanticExtractor
                 method.ContainingAssembly);
             AddSymbolProperties(methodProperties, "source", enclosing);
             AddSymbolProperties(methodProperties, "target", method);
+            if (invocation.Expression is MemberAccessExpressionSyntax memberAccess)
+            {
+                var receiver = model.GetSymbolInfo(memberAccess.Expression).Symbol;
+                methodProperties["receiverSymbol"] = receiver?.ToDisplayString(SymbolFormat) ?? string.Empty;
+                methodProperties["receiverType"] = model.GetTypeInfo(memberAccess.Expression).Type?.ToDisplayString(SymbolFormat) ?? string.Empty;
+                AddSymbolProperties(methodProperties, "receiver", receiver);
+            }
 
             facts.Add(CreateSemanticFact(
                 FactTypes.MethodInvoked,
@@ -5180,9 +5227,9 @@ public static class CSharpSemanticExtractor
             ["messageHash"] = FactFactory.Hash(sanitized.Message, 32),
             ["sanitization"] = sanitized.Sanitization
         };
-        if (!string.IsNullOrWhiteSpace(diagnosticId))
+        if (!string.IsNullOrWhiteSpace(sanitized.DiagnosticId))
         {
-            properties["diagnosticId"] = diagnosticId;
+            properties["diagnosticId"] = sanitized.DiagnosticId;
         }
 
         var diagnosticTokens = ExtractSafeDiagnosticTokens(gapKind, message);

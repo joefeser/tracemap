@@ -1,4 +1,5 @@
 using Microsoft.Data.Sqlite;
+using System.Text.Json;
 using TraceMap.Core;
 
 namespace TraceMap.Reporting;
@@ -17,6 +18,12 @@ public static partial class CombinedDependencyPathReporter
     ];
 
     internal static async Task<CombinedDependencyPathReport> BuildBoundedSingleIndexReportAsync(
+        CombinedDependencyPathOptions options,
+        ReportInputBudget budget,
+        CancellationToken cancellationToken = default)
+        => (await BuildBoundedSingleIndexReportWithTraversalAsync(options, budget, cancellationToken)).Report;
+
+    internal static async Task<CombinedDependencyPathBuildResult> BuildBoundedSingleIndexReportWithTraversalAsync(
         CombinedDependencyPathOptions options,
         ReportInputBudget budget,
         CancellationToken cancellationToken = default)
@@ -40,11 +47,18 @@ public static partial class CombinedDependencyPathReporter
         var (source, _) = await ReadSingleSourceAsync(connection, options.IndexPath, cancellationToken);
         try
         {
-            var read = await ReadSingleIndexAsync(connection, options.IndexPath, cancellationToken, budget);
+            var read = await ReadSingleIndexAsync(
+                connection,
+                options.IndexPath,
+                cancellationToken,
+                budget,
+                options.StartingFactIds,
+                options.MaxDepth,
+                options.MaxFrontier);
             var endpoints = CombinedDependencyReporter.MatchEndpoints(read.Sources, read.Facts);
             var surfaces = CombinedDependencyReporter.BuildSurfaces(read.Facts, read.Sources);
             var graph = BuildGraph(read, endpoints, surfaces, null, includeLegacyRoots: true, budget);
-            return BuildReport(options, read, graph, null);
+            return BuildReportWithTraversalObservations(options, read, graph, null);
         }
         catch (ReportInputLimitException exception)
         {
@@ -61,11 +75,13 @@ public static partial class CombinedDependencyPathReporter
                 source.SourceIndexId, source.Label, null, null, TruncationGapRuleId, EvidenceTiers.Tier4Unknown,
                 null, null, exception.Limit));
             var report = BuildReport(options, read, graph, null);
-            return report with
-            {
-                ReportCoverage = "ReducedCoverage",
-                Summary = report.Summary with { Truncated = true }
-            };
+            return new CombinedDependencyPathBuildResult(
+                report with
+                {
+                    ReportCoverage = "ReducedCoverage",
+                    Summary = report.Summary with { Truncated = true }
+                },
+                new Dictionary<string, CombinedDependencyTraversalObservation>(StringComparer.Ordinal));
         }
     }
 
@@ -81,6 +97,14 @@ public static partial class CombinedDependencyPathReporter
             with projected as (
                 select *,
                     fact_type in ({{types}}) and rule_id not like 'legacy.%'
+                    and not (fact_type = 'MethodInvoked'
+                        and rule_id = '{{RuleIds.CSharpSemanticMethodInvocation}}'
+                        and (target_symbol like 'global::System.Data.Common.DbDataAdapter.Fill(%'
+                            or target_symbol like 'System.Data.Common.DbDataAdapter.Fill(%'
+                            or target_symbol like 'global::System.Data.SqlClient.SqlDataAdapter.Fill(%'
+                            or target_symbol like 'System.Data.SqlClient.SqlDataAdapter.Fill(%'
+                            or target_symbol like 'global::Microsoft.Data.SqlClient.SqlDataAdapter.Fill(%'
+                            or target_symbol like 'Microsoft.Data.SqlClient.SqlDataAdapter.Fill(%'))
                     and case when length(cast(properties_json as blob)) > {{ReportInputBudget.MaxRowTextBytes}} then 0
                         when json_valid(properties_json)
                         then json_type(properties_json, '$.surfaceKind') is null
@@ -100,7 +124,9 @@ public static partial class CombinedDependencyPathReporter
 
     private static async Task<IReadOnlyList<CombinedFactRow>> ReadCompactSingleFactsAsync(
         SqliteConnection connection, CombinedReportSource source, bool hasExtractorVersion,
-        ReportInputBudget budget, CancellationToken cancellationToken)
+        ReportInputBudget budget, CancellationToken cancellationToken,
+        IReadOnlySet<string>? selectedFactIds = null,
+        IReadOnlySet<string>? selectedSymbols = null)
     {
         var rows = new List<CombinedFactRow>();
         var symbols = new HashSet<string>(StringComparer.Ordinal);
@@ -108,7 +134,26 @@ public static partial class CombinedDependencyPathReporter
         var supportIds = new HashSet<string>(StringComparer.Ordinal);
         await using (var command = connection.CreateCommand())
         {
-            command.CommandText = CompactFactQuery(hasExtractorVersion);
+            var targeted = selectedFactIds is not null;
+            command.CommandText = CompactFactQuery(hasExtractorVersion, targeted
+                ? "fact_id in (select value from json_each($fact_ids)) "
+                    + "or source_symbol in (select value from json_each($symbols)) "
+                    + "or (fact_type = 'MethodDeclared' and target_symbol in (select value from json_each($symbols))) "
+                    + "or (fact_type in ('SymbolRelationship', 'DependencyRegistered') "
+                    + "and target_symbol in (select value from json_each($symbols))) "
+                    + "or (fact_type = 'WebFormsEventFlowProjected' "
+                    + "and length(cast(properties_json as blob)) <= " + ReportInputBudget.MaxRowTextBytes + " "
+                    + "and json_valid(properties_json) "
+                    + "and exists (select 1 from json_each($fact_ids) selected "
+                    + "where instr(',' || replace(replace(coalesce(json_extract(properties_json, '$.supportingFactIds'), ''), ';', ','), '|', ',') || ',', "
+                    + "',' || selected.value || ',') > 0))"
+                : "1 = 1");
+            if (targeted)
+            {
+                command.Parameters.AddWithValue("$fact_ids", JsonSerializer.Serialize(selectedFactIds!.Order(StringComparer.Ordinal)));
+                command.Parameters.AddWithValue("$symbols", JsonSerializer.Serialize(
+                    (selectedSymbols ?? new HashSet<string>(StringComparer.Ordinal)).Order(StringComparer.Ordinal)));
+            }
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
@@ -117,8 +162,12 @@ public static partial class CombinedDependencyPathReporter
                 budget.CheckRow(bytes);
                 var sourceSymbol = reader.IsDBNull(7) ? null : reader.GetString(7);
                 var targetSymbol = reader.IsDBNull(8) ? null : reader.GetString(8);
+                var factType = reader.GetString(4);
                 var symbolOnly = reader.GetBoolean(15);
-                if (symbolOnly && !NewSymbol(sourceSymbol) && !NewSymbol(targetSymbol)) continue;
+                if (symbolOnly
+                    && (!targeted || factType != FactTypes.MethodDeclared)
+                    && !NewSymbol(sourceSymbol)
+                    && !NewSymbol(targetSymbol)) continue;
                 budget.Retain(bytes);
                 var row = ReadProjectedFact(reader, source);
                 rows.Add(row);
@@ -160,12 +209,170 @@ public static partial class CombinedDependencyPathReporter
 
         void RecordSupport(CombinedFactRow row)
         {
-            foreach (var id in SplitList(row.Properties.GetValueOrDefault("supportingFactIds")))
+            foreach (var id in SplitList(row.Properties.GetValueOrDefault("supportingFactIds"))
+                .Concat(SplitList(row.Properties.GetValueOrDefault("supportingEdgeIds"))))
             {
                 supportIds.Add(id);
                 if (supportIds.Count > budget.MaxFacts) throw new ReportInputLimitException("support-reference-rows");
             }
         }
+    }
+
+    private static async Task<IReadOnlySet<string>> ReadSelectedSymbolClosureAsync(
+        SqliteConnection connection,
+        IReadOnlySet<string> selectedFactIds,
+        int maxDepth,
+        int maxFrontier,
+        CancellationToken cancellationToken)
+    {
+        if (selectedFactIds.Count == 0) return new HashSet<string>(StringComparer.Ordinal);
+
+        var originalIds = selectedFactIds
+            .Select(id => id.StartsWith("single:", StringComparison.Ordinal) ? id["single:".Length..] : id)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        var symbols = new HashSet<string>(StringComparer.Ordinal);
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText = $$"""
+                select target_symbol, fact_type,
+                       case when length(cast(properties_json as blob)) <= {{ReportInputBudget.MaxRowTextBytes}} and json_valid(properties_json)
+                            then properties_json else '{}' end
+                from facts where fact_id in (select value from json_each($ids)) order by fact_id collate binary;
+                """;
+            command.Parameters.AddWithValue("$ids", JsonSerializer.Serialize(originalIds));
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                if (!reader.IsDBNull(0) && !string.IsNullOrWhiteSpace(reader.GetString(0))) symbols.Add(reader.GetString(0));
+                if (reader.GetString(1) is FactTypes.WebFormsHandlerResolved or FactTypes.WinFormsHandlerResolved)
+                {
+                    var properties = ParseProperties(reader.GetString(2));
+                    foreach (var value in new[]
+                    {
+                        properties.GetValueOrDefault("handlerSymbol"),
+                        properties.GetValueOrDefault("handlerSymbolId")
+                    }.Where(value => !string.IsNullOrWhiteSpace(value)))
+                    {
+                        symbols.Add(value!);
+                    }
+                }
+            }
+        }
+        symbols.UnionWith(await ReadHandlerOwnedCallSymbolsAsync(connection, originalIds, maxFrontier, cancellationToken));
+        if (symbols.Count > maxFrontier) throw new ReportInputLimitException("graph-frontier");
+
+        var traversalQueries = new List<string>();
+        if (await TableExistsAsync(connection, "call_edges", cancellationToken))
+            traversalQueries.Add("select callee_symbol as target_symbol from call_edges where caller_symbol in (select value from json_each($symbols))");
+        if (await TableExistsAsync(connection, "object_creations", cancellationToken))
+            traversalQueries.Add("select created_type as target_symbol from object_creations where caller_symbol in (select value from json_each($symbols))");
+        if (await TableExistsAsync(connection, "parameter_forward_edges", cancellationToken))
+            traversalQueries.Add("select target_method_symbol as target_symbol from parameter_forward_edges where source_method_symbol in (select value from json_each($symbols))");
+        if (await TableExistsAsync(connection, "symbol_relationships", cancellationToken)
+            && await TableExistsAsync(connection, "symbols", cancellationToken))
+        {
+            const string relationships = "from symbol_relationships relationships "
+                + "left join symbols source_symbols on source_symbols.scan_id = relationships.scan_id and source_symbols.symbol_id = relationships.source_symbol_id "
+                + "left join symbols target_symbols on target_symbols.scan_id = relationships.scan_id and target_symbols.symbol_id = relationships.target_symbol_id ";
+            traversalQueries.Add("select coalesce(target_symbols.display_name, relationships.target_symbol_id) as target_symbol "
+                + relationships
+                + "where coalesce(source_symbols.display_name, relationships.source_symbol_id) in (select value from json_each($symbols))");
+            traversalQueries.Add("select coalesce(source_symbols.display_name, relationships.source_symbol_id) as target_symbol "
+                + relationships
+                + "where coalesce(target_symbols.display_name, relationships.target_symbol_id) in (select value from json_each($symbols))");
+        }
+        if (traversalQueries.Count == 0) return symbols;
+
+        var frontier = symbols.Order(StringComparer.Ordinal).ToArray();
+        for (var depth = 0; depth < maxDepth && frontier.Length > 0; depth++)
+        {
+            var next = new SortedSet<string>(StringComparer.Ordinal);
+            await using var command = connection.CreateCommand();
+            // The SQL fragments above are fixed scanner-schema queries; only
+            // the frontier values are supplied externally and they are bound
+            // through one JSON parameter.
+            command.CommandText = $"select target_symbol from ({string.Join(" union all ", traversalQueries)}) "
+                + "where target_symbol is not null and trim(target_symbol) <> '' "
+                + "order by target_symbol collate binary limit $candidate_limit;"; // nosemgrep: csharp.lang.security.sqli.csharp-sqli
+            command.Parameters.AddWithValue("$symbols", JsonSerializer.Serialize(frontier));
+            command.Parameters.AddWithValue("$candidate_limit", maxFrontier + 1L);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var symbol = reader.GetString(0);
+                if (!symbols.Contains(symbol) && next.Add(symbol) && next.Count > maxFrontier)
+                    throw new ReportInputLimitException("graph-frontier");
+            }
+
+            if (next.Count > maxFrontier
+                || (long)symbols.Count + next.Count > (long)maxFrontier * Math.Max(1, maxDepth + 1))
+                throw new ReportInputLimitException("graph-frontier");
+            symbols.UnionWith(next);
+            frontier = next.ToArray();
+        }
+
+        return symbols;
+    }
+
+    private static async Task<IReadOnlySet<string>> ReadHandlerOwnedCallSymbolsAsync(
+        SqliteConnection connection,
+        IReadOnlyList<string> selectedHandlerFactIds,
+        int maxTargets,
+        CancellationToken cancellationToken)
+    {
+        var supportingEdgeIds = new SortedSet<string>(StringComparer.Ordinal);
+        var symbols = new SortedSet<string>(StringComparer.Ordinal);
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText = $$"""
+                select source_symbol, properties_json
+                from facts
+                where fact_type = 'WebFormsEventFlowProjected'
+                  and length(cast(properties_json as blob)) <= {{ReportInputBudget.MaxRowTextBytes}}
+                  and json_valid(properties_json)
+                  and exists (
+                      select 1 from json_each($handler_ids) selected
+                      where instr(',' || replace(replace(coalesce(json_extract(properties_json, '$.supportingFactIds'), ''), ';', ','), '|', ',') || ',',
+                                  ',' || selected.value || ',') > 0)
+                order by fact_id collate binary;
+                """;
+            command.Parameters.AddWithValue("$handler_ids", JsonSerializer.Serialize(selectedHandlerFactIds));
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                if (!reader.IsDBNull(0) && !string.IsNullOrWhiteSpace(reader.GetString(0)))
+                {
+                    symbols.Add(reader.GetString(0));
+                    if (symbols.Count > maxTargets) throw new ReportInputLimitException("handler-call-symbol-frontier");
+                }
+                var properties = ParseProperties(reader.GetString(1));
+                foreach (var id in SplitList(properties.GetValueOrDefault("supportingEdgeIds")))
+                {
+                    supportingEdgeIds.Add(id);
+                    if (supportingEdgeIds.Count > maxTargets) throw new ReportInputLimitException("handler-call-support-frontier");
+                }
+            }
+        }
+
+        if (supportingEdgeIds.Count == 0) return symbols;
+
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "select target_symbol from facts "
+                + "where fact_type = 'CallEdge' and fact_id in (select value from json_each($edge_ids)) "
+                + "and evidence_tier = 'Tier1Semantic' "
+                + "and target_symbol is not null and trim(target_symbol) <> '' order by fact_id collate binary;";
+            command.Parameters.AddWithValue("$edge_ids", JsonSerializer.Serialize(supportingEdgeIds));
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                symbols.Add(reader.GetString(0));
+                if (symbols.Count > maxTargets) throw new ReportInputLimitException("handler-call-target-frontier");
+            }
+        }
+
+        return symbols;
     }
 
     private static CombinedFactRow ReadProjectedFact(SqliteDataReader reader, CombinedReportSource source) => new(
