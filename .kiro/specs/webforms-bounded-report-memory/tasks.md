@@ -66,3 +66,4 @@
 - [x] Add bounded configurable trigger context without widening retained evidence spans.
 - [x] Generate a private multi-case review set with a root Markdown verdict/comment queue.
 - [x] Add a browser index for each review set and private-report return navigation.
+- [x] Order batch-inspection case IDs by retained binding file so per-file review cases remain contiguous.

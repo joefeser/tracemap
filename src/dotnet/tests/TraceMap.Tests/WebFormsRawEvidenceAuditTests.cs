@@ -43,7 +43,7 @@ public sealed class WebFormsRawEvidenceAuditTests
                 connection.Open();
                 using var cmd = connection.CreateCommand();
                 cmd.CommandText = """
-                    insert into facts(fact_id,fact_type,target_symbol) values('handler-two','WebFormsHandlerResolved','Private.SecondHandler()');
+                    insert into facts(fact_id,fact_type,target_symbol,file_path) values('handler-two','WebFormsHandlerResolved','Private.SecondHandler()','A.aspx');
                     insert into facts(fact_id,fact_type,source_symbol,target_symbol,start_line) values
                         ('sibling','CallEdge','Private.Handler()','Private.UiReset()',42),
                         ('ui-control','MethodInvoked','Private.Handler()','global::System.Web.UI.WebControls.ListControl.ClearSelection()',43),
@@ -73,6 +73,7 @@ public sealed class WebFormsRawEvidenceAuditTests
             var cases = json.RootElement.GetProperty("cases").EnumerateArray().ToArray();
             Assert.Equal(2, cases.Length);
             var first = Assert.Single(cases, c => c.GetProperty("handler").GetString() == "Private.Handler()");
+            Assert.Equal("case-002", first.GetProperty("caseId").GetString());
             Assert.Contains(first.GetProperty("stoppingSymbols").EnumerateArray(), s => s.GetString() == "Private.UiReset()");
             Assert.Contains(first.GetProperty("stoppingSymbols").EnumerateArray(), s => s.GetString() == "Private.External()");
             Assert.Equal("ui-control-operations-observed-with-unresolved-leaves", first.GetProperty("evidenceConclusion").GetString());
@@ -80,6 +81,7 @@ public sealed class WebFormsRawEvidenceAuditTests
             Assert.Equal(2, first.GetProperty("unresolvedOtherLeaves").GetArrayLength());
             Assert.Equal("no-supported-backend-terminal-observed", first.GetProperty("backendTerminalConclusion").GetString());
             var second = Assert.Single(cases, c => c.GetProperty("handler").GetString() == "Private.SecondHandler()");
+            Assert.Equal("case-001", second.GetProperty("caseId").GetString());
             Assert.Single(second.GetProperty("stoppingSymbols").EnumerateArray());
             Assert.Equal("no-supported-backend-terminal-observed", second.GetProperty("evidenceConclusion").GetString());
             var markdown = File.ReadAllText(Path.ChangeExtension(path, ".md"));
