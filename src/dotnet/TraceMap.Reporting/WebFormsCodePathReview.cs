@@ -273,7 +273,7 @@ public static class WebFormsCodePathReview
                 writer.WriteLine($"<li>Traversal limit reached: <code>{selected.GetProperty("bounded").GetBoolean().ToString().ToLowerInvariant()}</code></li>");
                 writer.WriteLine("<li>Rule: <code>diagnostic.webforms.local-code-path-review.v2</code></li></ul>");
                 writer.WriteLine($"<p><a href=\"{H(Path.GetFileName(shareableHtmlPath))}\">Open anonymous shareable graph</a></p></section>");
-                writer.WriteLine("<section id=\"trigger\"><h2>Trigger</h2><p>The event binding selects the handler; it is context for the rooted call path, not a sibling call.</p>");
+                writer.WriteLine("<details class=\"panel\" id=\"trigger\" open><summary><h2>Trigger</h2></summary><p>The event binding selects the handler; it is context for the rooted call path, not a sibling call.</p>");
                 var bindingLocations = deduplicated.Where(l => l.Role == "event-binding").ToArray();
                 if (bindingLocations.Length == 0) writer.WriteLine("<p>No event-binding source location was retained for this case.</p>");
                 foreach (var location in bindingLocations)
@@ -282,8 +282,8 @@ public static class WebFormsCodePathReview
                     WriteSourceCode(writer, location);
                     writer.WriteLine($"<p><a href=\"#{evidenceAnchors[location]}\">Jump to full event-binding evidence</a></p></article>");
                 }
-                writer.WriteLine("</section>");
-                writer.WriteLine("<section id=\"graph\"><h2>Call graph</h2><p>The diagram uses anonymous aliases inside an isolated frame. Use the private legend below to connect aliases to source evidence.</p>");
+                writer.WriteLine("</details>");
+                writer.WriteLine("<details class=\"panel\" id=\"graph\"><summary><h2>Call graph</h2></summary><p>The diagram uses anonymous aliases inside an isolated frame. Use the private legend below to connect aliases to source evidence.</p>");
                 writer.WriteLine($"<iframe class=\"graph-frame\" sandbox=\"allow-scripts\" src=\"{H(Path.GetFileName(shareableHtmlPath))}#call-graph\" title=\"Anonymous Mermaid call graph\"></iframe>");
                 writer.WriteLine("<h3>Private alias legend</h3><dl class=\"legend\">");
                 foreach (var pair in aliases.OrderBy(pair => pair.Value, StringComparer.Ordinal))
@@ -293,14 +293,14 @@ public static class WebFormsCodePathReview
                     if (location is not null) writer.Write($" — <a href=\"#{evidenceAnchors[location]}\">evidence</a>");
                     writer.WriteLine("</dd>");
                 }
-                writer.WriteLine("</dl></section>");
-                writer.WriteLine("<section id=\"call-path\"><h2>Retained call path</h2><p>Static retained calls, organized from the selected handler. This is not runtime order or branch feasibility.</p>");
+                writer.WriteLine("</dl></details>");
+                writer.WriteLine("<details class=\"panel\" id=\"call-path\" open><summary><h2>Retained call path</h2></summary><p>Static retained calls, organized from the selected handler. This is not runtime order or branch feasibility.</p>");
                 var handlerLocation = deduplicated.FirstOrDefault(l => l.Role == "handler");
                 writer.Write($"<div class=\"root\">Handler: <strong>{H(handler)}</strong>");
                 if (handlerLocation is not null) writer.Write($" <a href=\"#{evidenceAnchors[handlerLocation]}\">source</a>");
                 writer.WriteLine("</div>");
                 writer.WriteLine(RenderTree(handler, new HashSet<string>(StringComparer.Ordinal) { handler }, new HashSet<string>(StringComparer.Ordinal) { handler }));
-                writer.WriteLine("</section><section id=\"evidence\"><h2>Evidence and source excerpts</h2>");
+                writer.WriteLine("</details><details class=\"panel\" id=\"evidence\"><summary><h2>Evidence and source excerpts</h2></summary>");
                 foreach (var location in deduplicated)
                 {
                     writer.WriteLine($"<article class=\"evidence\" id=\"{evidenceAnchors[location]}\"><h3>{H(location.Role)} — {H(location.FilePath)}:{location.StartLine}</h3>");
@@ -309,10 +309,11 @@ public static class WebFormsCodePathReview
                     WriteSourceCode(writer, location);
                     writer.WriteLine("<p><a href=\"#call-path\">Back to call path</a></p></article>");
                 }
-                writer.WriteLine("</section><section id=\"verdict\"><h2>Human verdict</h2><p>Choose one and add a short reason.</p>");
+                writer.WriteLine("</details><details class=\"panel\" id=\"verdict\" open><summary><h2>Human verdict</h2></summary><p>Choose one and add a short reason.</p>");
                 writer.WriteLine("<label><input type=\"checkbox\"> Expected UI/control-only behavior</label><label><input type=\"checkbox\"> Supported backend operation present</label><label><input type=\"checkbox\"> Backend operation expected but evidence missing</label><label><input type=\"checkbox\"> Incorrect binding or source mismatch</label><label><input type=\"checkbox\"> Needs further review</label>");
-                writer.WriteLine("<p>Reason:</p><p>Reviewer:</p><p>Reviewed at:</p></section>");
-                writer.WriteLine("<footer>Unique-name definition candidates are navigation aids, not evidence. Missing source or calls do not prove absence.</footer></main></body></html>");
+                writer.WriteLine("<p>Reason:</p><p>Reviewer:</p><p>Reviewed at:</p></details>");
+                writer.WriteLine("<footer>Unique-name definition candidates are navigation aids, not evidence. Missing source or calls do not prove absence.</footer></main>");
+                writer.WriteLine("<script>function revealTarget(){const id=decodeURIComponent(location.hash.slice(1));if(!id)return;const target=document.getElementById(id);if(!target)return;let parent=target.closest('details');while(parent){parent.open=true;parent=parent.parentElement?.closest('details');}}addEventListener('hashchange',revealTarget);revealTarget();</script></body></html>");
             }
 
             var anonymousEdges = groupedEdges.Select(edge => new
@@ -394,7 +395,7 @@ public static class WebFormsCodePathReview
     }
 
     private const string PrivateCss = """
-        :root{font-family:system-ui,sans-serif;color:#172033;background:#f5f7fb}body{margin:0}main{max-width:1100px;margin:auto;padding:24px}section,article{background:white;border:1px solid #dbe2ee;border-radius:10px;padding:18px;margin:16px 0}.private{background:#fff1f0;border-left:5px solid #c62828;padding:12px}.root{font-size:1.05rem;padding:10px;background:#eaf1ff;border-radius:6px}.call-tree{border-left:2px solid #bed0ee;margin:.5rem 0 .5rem 1rem;padding-left:1.4rem}.call-tree li{margin:.55rem 0}.kind,.sites,.reference{font-size:.85rem;color:#526177}.callee{font-weight:650}a{color:#1558b0}pre{overflow:auto;background:#111827;color:#e5e7eb;padding:14px;border-radius:8px;line-height:1.4}.evidence:target{outline:3px solid #ffbf47}.trigger-code{background:#f8faff}.graph-frame{width:100%;height:620px;border:1px solid #dbe2ee;border-radius:8px;background:white}.legend{display:grid;grid-template-columns:max-content 1fr;gap:.45rem 1rem}.legend dt{font-weight:700}.legend dd{margin:0;overflow-wrap:anywhere}label{display:block;margin:.55rem 0}footer{color:#526177;margin:28px 0}
+        :root{font-family:system-ui,sans-serif;color:#172033;background:#f5f7fb}body{margin:0}main{max-width:1100px;margin:auto;padding:24px}section,article,.panel{background:white;border:1px solid #dbe2ee;border-radius:10px;padding:18px;margin:16px 0}.panel>summary{cursor:pointer;display:flex;align-items:center;gap:.6rem}.panel>summary::before{content:'▸';color:#526177}.panel[open]>summary::before{content:'▾'}.panel>summary h2{display:inline;margin:0}.private{background:#fff1f0;border-left:5px solid #c62828;padding:12px}.root{font-size:1.05rem;padding:10px;background:#eaf1ff;border-radius:6px}.call-tree{border-left:2px solid #bed0ee;margin:.5rem 0 .5rem 1rem;padding-left:1.4rem}.call-tree li{margin:.55rem 0}.kind,.sites,.reference{font-size:.85rem;color:#526177}.callee{font-weight:650}a{color:#1558b0}pre{overflow:auto;background:#111827;color:#e5e7eb;padding:14px;border-radius:8px;line-height:1.4}.evidence:target{outline:3px solid #ffbf47}.trigger-code{background:#f8faff}.graph-frame{width:100%;height:620px;border:1px solid #dbe2ee;border-radius:8px;background:white}.legend{display:grid;grid-template-columns:max-content 1fr;gap:.45rem 1rem}.legend dt{font-weight:700}.legend dd{margin:0;overflow-wrap:anywhere}label{display:block;margin:.55rem 0}footer{color:#526177;margin:28px 0}
         """;
 
     private const string ShareableCss = """

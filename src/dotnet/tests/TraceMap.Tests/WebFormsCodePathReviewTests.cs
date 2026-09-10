@@ -26,6 +26,12 @@ public sealed class WebFormsCodePathReviewTests
             Assert.Contains("sandbox=\"allow-scripts\"", report);
             Assert.Contains("Anonymous Mermaid call graph", report);
             Assert.Contains("Private alias legend", report);
+            Assert.Contains("id=\"trigger\" open", report);
+            Assert.Contains("id=\"call-path\" open", report);
+            Assert.Contains("id=\"verdict\" open", report);
+            Assert.Contains("class=\"panel\" id=\"graph\"><summary>", report);
+            Assert.Contains("class=\"panel\" id=\"evidence\"><summary>", report);
+            Assert.Contains("function revealTarget()", report);
             var shareableHtml = File.ReadAllText(Path.Combine(directory, "review.shareable.html"));
             var shareableJson = File.ReadAllText(Path.Combine(directory, "review.shareable.json"));
             Assert.Contains("flowchart TD", shareableHtml);
