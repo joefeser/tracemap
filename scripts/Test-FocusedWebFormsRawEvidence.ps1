@@ -1,28 +1,18 @@
-param([string]$IndexPath = '', [string]$ReportPath = '', [string]$OutputRoot = '', [string]$InspectionPath = '', [switch]$CreateLocalInspection, [string]$StartingMethodName = '', [switch]$DatabaseEvidence, [switch]$BatchInspection)
+param([string]$IndexPath = '', [string]$ReportPath = '', [string]$OutputRoot = '', [string]$InspectionPath = '', [switch]$CreateLocalInspection, [string]$StartingMethodName = '', [switch]$DatabaseEvidence, [switch]$BatchInspection, [string]$ConfigPath = '')
 
 $ErrorActionPreference = 'Stop'
 if ($BatchInspection -and ($DatabaseEvidence -or $StartingMethodName)) { throw 'Batch inspection requires report-handler selection.' }
-# Reuse only literal path settings; never execute the form-list runner.
-$runner = Join-Path $PSScriptRoot 'Run-FocusedWebFormsPageList.ps1'
-$tokens = $null
-$errors = $null
-$ast = [System.Management.Automation.Language.Parser]::ParseFile($runner, [ref]$tokens, [ref]$errors)
-function Read-LiteralSetting([string]$name) {
-    $assignments = @($ast.FindAll({ param($node)
-        $node -is [System.Management.Automation.Language.AssignmentStatementAst] -and
-        $node.Left -is [System.Management.Automation.Language.VariableExpressionAst] -and
-        $node.Left.VariablePath.UserPath -eq $name
-    }, $true))
-    if ($assignments.Count -ne 1) { throw 'RawAuditPathSettingUnavailable' }
-    $right = $assignments[0].Right
-    $literal = @($right.FindAll({ param($node) $node -is [System.Management.Automation.Language.StringConstantExpressionAst] }, $true))
-    if ($literal.Count -ne 1 -or $right.Extent.Text.Trim() -ne $literal[0].Extent.Text) {
-        throw 'RawAuditPathMustBeLiteral; supply the path parameter explicitly.'
-    }
-    return [string]$literal[0].Value
+if (!$ConfigPath) { $ConfigPath = Join-Path $PSScriptRoot 'Run-FocusedWebFormsPageList.json' }
+$requiresOutputRoot = (!$DatabaseEvidence -and !$ReportPath) -or
+    $CreateLocalInspection -or
+    $BatchInspection -or
+    ($DatabaseEvidence -and !$InspectionPath)
+if (!$IndexPath -or ($requiresOutputRoot -and !$OutputRoot)) {
+    . (Join-Path $PSScriptRoot 'webforms-review/FocusedWebFormsConfig.ps1')
+    $config = Read-FocusedWebFormsConfig -ConfigPath $ConfigPath
+    if (!$IndexPath) { $IndexPath = $config.IndexPath }
+    if ($requiresOutputRoot -and !$OutputRoot) { $OutputRoot = $config.OutputRoot }
 }
-if (!$IndexPath) { $IndexPath = Read-LiteralSetting 'IndexPath' }
-if (!$OutputRoot) { $OutputRoot = Read-LiteralSetting 'OutputRoot' }
 if (!$ReportPath -and !$DatabaseEvidence) {
     $latest = Get-ChildItem -LiteralPath $OutputRoot -Directory -Filter 'webforms-page-list-*' |
         ForEach-Object { $p = Join-Path $_.FullName 'webforms-modernization.json'; if (Test-Path -LiteralPath $p) { Get-Item -LiteralPath $p } } |

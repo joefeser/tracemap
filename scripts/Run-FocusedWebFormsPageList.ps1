@@ -1,33 +1,19 @@
 param(
     [switch]$CompareDepths,
-    [string]$OutputRootOverride = ''
+    [string]$OutputRootOverride = '',
+    [string]$ConfigPath = ''
 )
 
-# EDIT ONLY THIS BLOCK.
-$IndexPath = 'C:\work\tracemap-output\focused-webforms-20260903-145829\scan\index.sqlite'
-$OutputRoot = 'C:\work\tracemap-output'
-$Forms = @'
-# Put one repository-relative .aspx path on each line below.
-# Example: source/CCS/Area/Orders.aspx
-'@
-# END EDIT BLOCK.
+$ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'webforms-review/FocusedWebFormsConfig.ps1')
+if (!$ConfigPath) { $ConfigPath = Join-Path $PSScriptRoot 'Run-FocusedWebFormsPageList.json' }
+$config = Read-FocusedWebFormsConfig -ConfigPath $ConfigPath
+$IndexPath = $config.IndexPath
+$OutputRoot = $config.OutputRoot
+$pagePaths = @($config.Forms)
 
 if ($OutputRootOverride) { $OutputRoot = $OutputRootOverride }
-
-$ErrorActionPreference = 'Stop'
 if ($CompareDepths) { throw 'Deeper comparison runs are disabled. Use Summarize-CompletedWebFormsDepths.ps1.' }
-$pagePaths = @($Forms -split '\r?\n' | ForEach-Object { $_.Trim() } | Where-Object {
-    $_ -and -not $_.StartsWith('#')
-})
-
-if ($pagePaths.Count -eq 0) {
-    throw 'Add at least one .aspx path to the $Forms block at the top of this file.'
-}
-
-$invalidPages = @($pagePaths | Where-Object { -not $_.EndsWith('.aspx', [StringComparison]::OrdinalIgnoreCase) })
-if ($invalidPages.Count -gt 0) {
-    throw 'Every non-comment line in the $Forms block must end with .aspx.'
-}
 
 if (-not (Test-Path -LiteralPath $IndexPath -PathType Leaf)) {
     throw "The configured index.sqlite was not found: $IndexPath"
