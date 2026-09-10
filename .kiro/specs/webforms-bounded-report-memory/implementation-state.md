@@ -1,5 +1,21 @@
 # Implementation state
 
+## Handler-rooted HTML and anonymous review packet (2026-09-10)
+
+The one-case source review now renders private HTML organized as trigger,
+handler root, nested retained callees, and anchored evidence excerpts. Repeated
+caller/callee edges collapse into one tree entry while retaining links to every
+call-site witness; cycles and shared callees are references rather than recursive
+duplication. A separately generated shareable HTML/JSON pair contains only
+report-local aliases, structural classifications, edge counts, public rule IDs,
+evidence tiers, closed conclusions, and limitations. It excludes source text,
+paths, symbols, fact IDs, SQL, URLs, configuration, and commit identity. The
+shareable HTML renders an alias-only Mermaid graph when its browser module is
+available; private HTML loads no remote script.
+
+Validation: focused code-path review tests 2/2; full .NET suite 1789/1789;
+PowerShell parse, scoped formatting, private-path guard, and diff checks passed.
+
 ## Batch local handler review (2026-09-10)
 
 Field triage after Fill terminal projection still has seven terminal-free chains
