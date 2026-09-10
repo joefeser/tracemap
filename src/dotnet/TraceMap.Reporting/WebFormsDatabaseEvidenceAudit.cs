@@ -50,6 +50,9 @@ public static class WebFormsDatabaseEvidenceAudit
         var fillWitness = false;
         var commandLocals = new HashSet<string>(StringComparer.Ordinal);
         var adapterCommandArguments = new List<string>();
+        var adapterLocals = new HashSet<string>(StringComparer.Ordinal);
+        var fillReceivers = new List<string>();
+        var storedProcedureAssignments = 0;
         long bytes = 0;
         using var reader = query.ExecuteReader();
         while (reader.Read())
@@ -87,6 +90,12 @@ public static class WebFormsDatabaseEvidenceAudit
             Hit("adapter-argument-symbol-retained", type == "ArgumentPassed" && adapter && Has("argumentSymbol"));
             Hit("fill-receiver-symbol-retained", type == "MethodInvoked" && fill && Has("receiverSymbol"));
             if (type == "ObjectCreated" && command && Value("assignedTo") is { } commandLocal) commandLocals.Add(commandLocal);
+            if (type == "ObjectCreated" && adapter && Value("assignedTo") is { } adapterLocal) adapterLocals.Add(adapterLocal);
+            if (type == "MethodInvoked" && fill && Value("receiverSymbol") is { } fillReceiver) fillReceivers.Add(fillReceiver);
+            if (type == "PropertyAccessed"
+                && ((command && target.EndsWith(".CommandType", StringComparison.Ordinal)) || target is "System.Data.Common.DbCommand.CommandType" or "System.Data.IDbCommand.CommandType")
+                && Value("accessKind") == "SimpleAssignmentTarget"
+                && FrameworkDisplayName(Value("assignedValueSymbol") ?? "") == "System.Data.CommandType.StoredProcedure") storedProcedureAssignments++;
             if (type == "ArgumentPassed" && adapter && Value("argumentSymbol") is { } adapterArgument) adapterCommandArguments.Add(adapterArgument);
         }
         var commandAdapterLocalMatches = adapterCommandArguments.Count(commandLocals.Contains);
@@ -98,9 +107,10 @@ public static class WebFormsDatabaseEvidenceAudit
             .Concat(counts.Select(c => $"factType={c.Key}|count={c.Value}"))
             .Concat(signals.Select(s => $"semanticSignal={s.Key}|count={s.Value}"))
             .Append($"commandAdapterLocalNameMatch={commandAdapterLocalMatches}")
-            .Append("fillReceiverIdentity=not-retained-by-method-invocation-fact")
-            .Append("commandTypeAssignedValue=not-retained-by-property-access-fact")
-            .Append("linkage=local-name-match-is-same-method-support-not-object-identity;adapter-to-fill-not-established")
+            .Append($"adapterFillLocalNameMatch={fillReceivers.Count(adapterLocals.Contains)}")
+            .Append($"storedProcedureSimpleAssignments={storedProcedureAssignments}")
+            .Append($"fillReceiverIdentity={(fillReceivers.Count > 0 ? "retained" : "unavailable-in-selected-facts")}")
+            .Append("linkage=local-name-match-is-same-method-support-not-object-identity;assignment-does-not-prove-value-at-fill")
             .Append("nonClaim=missing-retained-metadata-is-not-missing-source;commandtype-property-is-not-proof-of-storedprocedure-assignment;no-sql-or-private-values-exported")
             .ToArray();
     }

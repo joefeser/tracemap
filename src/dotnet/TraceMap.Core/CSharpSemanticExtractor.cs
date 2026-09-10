@@ -1404,6 +1404,21 @@ public static class CSharpSemanticExtractor
         AddSymbolProperties(properties, "source", enclosing);
         AddSymbolProperties(properties, "target", property);
 
+        if (node is MemberAccessExpressionSyntax access)
+        {
+            var receiver = model.GetSymbolInfo(access.Expression).Symbol;
+            properties["receiverSymbol"] = receiver?.ToDisplayString(SymbolFormat) ?? string.Empty;
+            AddSymbolProperties(properties, "receiver", receiver);
+        }
+        if (node.Parent is AssignmentExpressionSyntax assignment
+            && assignment.Left == node && assignment.IsKind(SyntaxKind.SimpleAssignmentExpression))
+        {
+            var valueSymbol = model.GetSymbolInfo(assignment.Right).Symbol;
+            properties["accessKind"] = "SimpleAssignmentTarget";
+            properties["assignedValueSymbol"] = valueSymbol?.ToDisplayString(SymbolFormat) ?? string.Empty;
+            AddSymbolProperties(properties, "assignedValue", valueSymbol);
+        }
+
         return CreateSemanticFact(
             FactTypes.PropertyAccessed,
             RuleIds.CSharpSemanticPropertyAccess,
@@ -1444,6 +1459,13 @@ public static class CSharpSemanticExtractor
                 method.ContainingAssembly);
             AddSymbolProperties(methodProperties, "source", enclosing);
             AddSymbolProperties(methodProperties, "target", method);
+            if (invocation.Expression is MemberAccessExpressionSyntax memberAccess)
+            {
+                var receiver = model.GetSymbolInfo(memberAccess.Expression).Symbol;
+                methodProperties["receiverSymbol"] = receiver?.ToDisplayString(SymbolFormat) ?? string.Empty;
+                methodProperties["receiverType"] = model.GetTypeInfo(memberAccess.Expression).Type?.ToDisplayString(SymbolFormat) ?? string.Empty;
+                AddSymbolProperties(methodProperties, "receiver", receiver);
+            }
 
             facts.Add(CreateSemanticFact(
                 FactTypes.MethodInvoked,

@@ -2,6 +2,21 @@
 
 ## Current command: retained database evidence
 
+Receiver/assignment metadata requires a new scan with `csharp-semantic/0.21.0`.
+Run `scripts/Invoke-FocusedWebFormsReview.ps1` with the same source folders and
+solution selection as before. Set `$IndexPath` in the page-list runner to the new
+scan's `scan/index.sqlite`, regenerate the page-list report, then recreate the
+method inspection before running the database diagnostic below. Old inspections
+must not be mixed with a new scan; provenance checks enforce this.
+
+`csharp.semantic.methodinvocation.v1` now records a compiler-resolved receiver
+symbol, type, and symbol identity for explicit member-access invocations.
+`csharp.semantic.propertyaccess.v1` records the receiver and, for a direct simple
+assignment target, the RHS symbol and identity. Literal values and source text
+are not stored by this addition. Conditional/implicit receivers and non-simple
+assignments are outside this slice. These are call-site observations; aliases,
+reassignment, branch execution, and the value in effect at Fill remain unproven.
+
 ```powershell
 git pull
 .\scripts\Test-FocusedWebFormsDatabaseEvidence.ps1
@@ -14,10 +29,10 @@ exact caller lookup remains unchanged. Existing inspections need no regeneration
 Select an explicit private JSON with `-InspectionPath` if the latest file is a
 different sample. No scan, report regeneration, or source read occurs. Console
 summary can be shared; keep SQL and the private inspection JSON at work.
-The census privately compares retained same-method local identities to report
-command-to-adapter support. It also identifies receiver and assigned-value
-metadata that the current fact shapes do not retain; those gaps do not prove
-the corresponding source code is absent.
+The census privately compares retained same-method local names to report
+command-to-adapter and adapter-to-Fill support. It counts explicit assignments
+of the StoredProcedure enum separately from property access and enum references.
+Missing metadata in older indexes does not prove absent source code.
 The wrapper prints the selected generated filename (custom names are withheld),
 UTC modification time, and SHA256 so the selected artifact can be identified.
 Safe hop-shape counts are printed before classification. Failures now distinguish

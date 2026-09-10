@@ -1,5 +1,24 @@
 # Implementation state
 
+## Receiver and property assignment extraction (2026-09-09)
+
+Incremented semantic extractor to 0.21.0. Ordinary explicit member invocations
+retain receiver symbol/type/identity; property access retains receiver identity
+and direct simple assignment RHS symbol/identity. No raw values or snippets added.
+Database census consumes this metadata and remains compatible with older indexes.
+Real System.Data.Common framework compilation is scanned and persisted through
+SQLite before audit assertions, including typed parameter display, inherited
+Fill, a StoredProcedure assignment, a read, and a later Text reassignment. The
+census deliberately does not infer value-at-Fill from assignment occurrence.
+Full provider-specific SQL command object flow and private Windows scan remain
+operator validation; the test uses real abstract framework parameter types.
+Pinned public OSS smoke is deferred for this slice; full .NET suite and the
+compiled framework scan/storage fixture provide local validation.
+Validation: full solution 1784/1784; modern-sample CLI scan completed with semantic
+analysis; formatting, private-path guard, and diff checks passed. Existing
+PropertyMappingTests nullable warning remains unrelated.
+
+
 ## Database evidence linkage diagnostic (2026-09-09)
 
 The exact-caller census now privately compares command construction `assignedTo`
