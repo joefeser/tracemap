@@ -63,3 +63,4 @@
 - [x] Emit Mermaid 11-compatible call-graph labels and links with a pinned renderer version.
 - [x] Move anonymous graph navigation out of Mermaid grammar for sandboxed Chrome and Edge rendering.
 - [x] Replace the unreliable private Mermaid iframe with a deterministic inline alias-only SVG graph.
+- [x] Add bounded configurable trigger context without widening retained evidence spans.

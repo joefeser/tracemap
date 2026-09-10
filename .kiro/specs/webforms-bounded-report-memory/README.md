@@ -207,12 +207,17 @@ To dogfood one private source review after creating the batch inspection:
 The command prompts for the private source repository root and defaults to
 `case-001`; `-CaseId case-004` selects another case. Git is not required. The
 report reads current working-tree files, says explicitly that equality with the
-inspection commit is not established, and opens a private Markdown file containing
-at most 64 excerpts of at most 100 lines each. Exact call locations come from
+inspection commit is not established, and opens a private HTML file containing
+at most 64 evidence excerpts of at most 100 lines each. Exact call locations come from
 retained evidence. A helper definition is added only when its method name is unique
 within already witnessed C# files, and is labeled a navigation candidate rather
 than evidence. The report ends with a human verdict checklist. Source excerpts,
 symbols, and paths never appear in the console summary.
+
+The duplicated trigger shows the retained binding span plus 12 lines before and
+after by default. Use `-TriggerContextLines 50` for controls whose attributes span
+many lines. This changes only the trigger display window, is capped at 100 context
+lines on each side and 256 rendered lines, and does not widen retained evidence.
 The raw audit now filters each read to exact symbols on the selected handlers'
 current frontier (declarations match target; calls/invocations match source).
 All handler frontiers are batched, and each symbol is queried once. Unrelated

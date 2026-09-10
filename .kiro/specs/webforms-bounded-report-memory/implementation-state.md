@@ -942,6 +942,12 @@ HTML remains Mermaid-based because standalone rendering was field-confirmed.
 Private graph rendering now has no CDN, script, sandbox, or browser-origin
 dependency.
 
+The private report trigger context is independently configurable from zero to
+100 lines on each side of the exact retained binding span, defaulting to 12 and
+capped at 256 displayed lines. This supports unusually tall Web Forms control
+declarations without widening downstream evidence excerpts or changing the
+underlying evidence span.
+
 ### Post-fairness field result and actionable summary
 
 The work-machine rerun retained 466 event chains and 361 downstream boundaries.

@@ -14,9 +14,9 @@ public static class WebFormsCodePathReview
     private sealed record AnonymousNode(string Id, string Classification);
 
     public static IReadOnlyList<string> Run(string inspectionPath, string sourceRoot, string caseId, string outputPath,
-        int contextLines = 4, int maxExcerpts = 64, int maxSourceBytes = 16 * 1024 * 1024)
+        int contextLines = 4, int maxExcerpts = 64, int maxSourceBytes = 16 * 1024 * 1024, int triggerContextLines = 12)
     {
-        if (contextLines is < 0 or > 12 || maxExcerpts is < 1 or > 128 || maxSourceBytes is < 1 or > 32 * 1024 * 1024)
+        if (contextLines is < 0 or > 12 || triggerContextLines is < 0 or > 100 || maxExcerpts is < 1 or > 128 || maxSourceBytes is < 1 or > 32 * 1024 * 1024)
             throw new InvalidDataException("CodePathReviewInvalidLimit");
         if (!System.Text.RegularExpressions.Regex.IsMatch(caseId, "^case-[0-9]{3}$"))
             throw new InvalidDataException("CodePathReviewCaseInvalid");
@@ -288,13 +288,14 @@ public static class WebFormsCodePathReview
             return graph.Append("</svg></div>").ToString();
         }
 
-        void WriteSourceCode(StreamWriter writer, ReviewLocation location)
+        void WriteSourceCode(StreamWriter writer, ReviewLocation location, int? surroundingLines = null, int maximumLines = 100)
         {
             var lines = ReadSource(location.FilePath);
             if (location.StartLine > lines.Length) throw new InvalidDataException("CodePathReviewSourceSpanInvalid");
-            var desiredStart = location.PreferFullSpan ? location.StartLine : Math.Max(1, location.StartLine - contextLines);
-            var desiredEnd = location.PreferFullSpan ? location.EndLine : Math.Min(lines.Length, location.EndLine + contextLines);
-            var excerptEnd = Math.Min(lines.Length, Math.Min(desiredEnd, desiredStart + 99));
+            var effectiveContext = surroundingLines ?? contextLines;
+            var desiredStart = location.PreferFullSpan ? location.StartLine : Math.Max(1, location.StartLine - effectiveContext);
+            var desiredEnd = location.PreferFullSpan ? location.EndLine : Math.Min(lines.Length, location.EndLine + effectiveContext);
+            var excerptEnd = Math.Min(lines.Length, Math.Min(desiredEnd, desiredStart + maximumLines - 1));
             writer.WriteLine("<pre><code>");
             for (var line = desiredStart; line <= excerptEnd; line++)
             {
@@ -349,6 +350,7 @@ public static class WebFormsCodePathReview
                 writer.WriteLine("<li>Source mode: <code>working-tree</code>; Git is not required and commit equality is not established.</li>");
                 writer.WriteLine($"<li>Retained evidence conclusion: <code>{H(EvidenceConclusion(selected))}</code></li>");
                 writer.WriteLine($"<li>Traversal limit reached: <code>{selected.GetProperty("bounded").GetBoolean().ToString().ToLowerInvariant()}</code></li>");
+                writer.WriteLine($"<li>Trigger context: <code>{triggerContextLines} lines before and after the retained binding span</code></li>");
                 writer.WriteLine("<li>Rule: <code>diagnostic.webforms.local-code-path-review.v2</code></li></ul>");
                 writer.WriteLine($"<p><a href=\"{H(Path.GetFileName(shareableHtmlPath))}\">Open anonymous shareable graph</a></p></section>");
                 writer.WriteLine("<details class=\"panel\" id=\"trigger\" open><summary><h2>Trigger</h2></summary><p>The event binding selects the handler; it is context for the rooted call path, not a sibling call.</p>");
@@ -357,7 +359,7 @@ public static class WebFormsCodePathReview
                 foreach (var location in bindingLocations)
                 {
                     writer.WriteLine($"<article class=\"trigger-code\"><h3>{H(location.FilePath)}:{location.StartLine}</h3>");
-                    WriteSourceCode(writer, location);
+                    WriteSourceCode(writer, location, triggerContextLines, 256);
                     writer.WriteLine($"<p><a href=\"#{evidenceAnchors[location]}\">Jump to full event-binding evidence</a></p></article>");
                 }
                 writer.WriteLine("</details>");
@@ -483,7 +485,7 @@ public static class WebFormsCodePathReview
             foreach (var destination in publishedPaths) if (File.Exists(destination)) File.Delete(destination);
             throw;
         }
-        return ["codePathReview=created", $"case={caseId}|sourceMode=working-tree|excerpts={deduplicated.Count}|definitionCandidates={candidateCount}|anonymousNodes={anonymousNodes.Length}|anonymousEdges={groupedEdges.Length}|review=unreviewed",
+        return ["codePathReview=created", $"case={caseId}|sourceMode=working-tree|triggerContextLines={triggerContextLines}|excerpts={deduplicated.Count}|definitionCandidates={candidateCount}|anonymousNodes={anonymousNodes.Length}|anonymousEdges={groupedEdges.Length}|review=unreviewed",
             "artifacts=private-html;shareable-html;shareable-json",
             "nonClaim=working-tree-may-differ-from-inspection-commit;static-calls-do-not-prove-runtime-execution-or-absence"];
     }
