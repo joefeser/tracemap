@@ -64,3 +64,4 @@
 - [x] Move anonymous graph navigation out of Mermaid grammar for sandboxed Chrome and Edge rendering.
 - [x] Replace the unreliable private Mermaid iframe with a deterministic inline alias-only SVG graph.
 - [x] Add bounded configurable trigger context without widening retained evidence spans.
+- [x] Generate a private multi-case review set with a root Markdown verdict/comment queue.
