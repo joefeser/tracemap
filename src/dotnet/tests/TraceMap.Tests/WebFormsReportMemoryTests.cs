@@ -74,11 +74,18 @@ public sealed class WebFormsReportMemoryTests(ITestOutputHelper output)
         facts.Add(Fact(FactTypes.MethodDeclared, "csharp.semantic.method.v1", "Other.Store.Save()", null, 40)
             with
         { FactId = "zz-competing-symbol" });
-        var options = PathOptions(Write(temp.Path, facts));
+        var options = PathOptions(Write(temp.Path, facts)) with
+        {
+            StartingFactIds = new HashSet<string>(StringComparer.Ordinal)
+            {
+                "single:" + facts.Single(fact => fact.FactType == FactTypes.WebFormsHandlerResolved).FactId
+            }
+        };
         var full = await CombinedDependencyPathReporter.BuildReportAsync(options);
         var compact = await CombinedDependencyPathReporter.BuildBoundedSingleIndexReportAsync(options, Budget());
-        Assert.Equal(JsonSerializer.Serialize(full), JsonSerializer.Serialize(compact));
+        Assert.DoesNotContain(full.Paths, path => path.Nodes.Last().SurfaceKind == "sql-query");
         Assert.DoesNotContain(compact.Paths, path => path.Nodes.Last().SurfaceKind == "sql-query");
+        Assert.DoesNotContain(compact.Gaps, gap => gap.GapKind == "GraphInputLimitReached");
     }
 
     [Fact]
@@ -162,13 +169,31 @@ public sealed class WebFormsReportMemoryTests(ITestOutputHelper output)
     {
         using var temp = new TempDirectory();
         var facts = Fixture();
-        facts.Add(Fact(factType, "future.rule.v1", null, null, 30,
+        facts.Add(Fact(factType, "future.rule.v1", "Sample.Page.Load()", null, 30,
             ("unusedPayload", new string('x', ReportInputBudget.MaxRowTextBytes + 1))));
         var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(Write(temp.Path, facts), "unused"));
         Assert.Contains(packet.Surfaces, surface => surface.Evidence.FilePath == "Pages/Page.aspx");
         Assert.Contains(packet.Gaps, gap => gap.Classification == "WebFormsModernizationInputLimitReached"
             && gap.ScopeId == "row-text-bytes");
         Assert.Empty(packet.DownstreamBoundaries);
+    }
+
+    [Fact]
+    public async Task Selected_handler_neighborhood_ignores_unrelated_fact_rows_without_hiding_its_path()
+    {
+        using var temp = new TempDirectory();
+        var facts = Fixture();
+        for (var index = 0; index < 100; index++)
+            facts.Add(Fact(FactTypes.ArgumentPassed, "csharp.semantic.argument.v1",
+                $"Unrelated.Type{index}.Method()", $"Unrelated.Target{index}.Method()", 100 + index));
+
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(Write(temp.Path, facts), "unused",
+            MaxInputFacts: 25, MaxInputEdges: 25, MaxInputTextBytes: 100_000));
+
+        var chain = Assert.Single(packet.EventChains);
+        Assert.NotNull(chain.LegacyPathId);
+        Assert.Single(packet.DownstreamBoundaries);
+        Assert.DoesNotContain(packet.Gaps, gap => gap.Classification == "WebFormsModernizationInputLimitReached");
     }
 
     [Fact]

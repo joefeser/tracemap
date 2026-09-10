@@ -2191,7 +2191,7 @@ rules:
       - AnalysisGap
     limitations:
       - Composition facts describe static markup declarations and do not prove runtime loading, rendering, control construction, navigation, event firing, deployment, or production use.
-      - Registered user-control and master-page targets are repository-relative declarations; registered assembly controls require exact namespace, type, and project assembly evidence. Missing, dynamic, unsafe, malformed, conflicting, or out-of-scope targets remain explicit analysis gaps.
+      - Registered user-control and master-page targets are repository-relative declarations; registered assembly controls require source-project assembly evidence and an exact namespace. Only the markup type-name segment uses ordinal case-insensitive matching, while preserving the canonical source type name. Multiple candidates, including case-only collisions, remain ambiguous even if one matches the tag exactly. Missing, dynamic, unsafe, malformed, conflicting, or out-of-scope targets remain explicit analysis gaps; DLL-only controls are not resolved by this rule.
       - ContentPlaceHolderID is a declared target candidate and is not proof that the referenced master page contains a compatible runtime placeholder.
       - Raw markup, page titles, source snippets, local absolute paths, URLs, configuration values, and unsafe expressions are omitted or hashed.
 
@@ -2205,6 +2205,7 @@ rules:
     limitations:
       - Event bindings are static declarations and do not prove that a control exists at runtime, a user can reach the event, event bubbling occurs, or the handler executes.
       - Safe OnX attributes outside the representative event allowlist are Tier3 event-like candidates, not proof that the target control exposes that server event; client-side, malformed, dynamic, generated, and unsafe shapes remain gaps rather than guessed handlers.
+      - OnClient-prefixed attributes emit ClientWebFormsEventAttribute gaps and never server bindings. Bounded event names with non-identifier values emit NonIdentifierWebFormsEventValue gaps without assuming JavaScript or C# execution; other malformed names retain UnsupportedWebFormsEventAttribute. Raw attribute values are not retained.
       - Duplicate controls or duplicate bindings are preserved as separate evidence rows with deterministic IDs; TraceMap does not collapse them into a single runtime control.
       - Explicit control subscriptions are limited to statically named receivers, representative events, and named handlers on the linked markup surface; lambdas, delegate expressions, unknown receivers, ambiguous controls, and dynamic wiring remain explicit gaps.
 
@@ -2241,6 +2242,7 @@ rules:
       - WebFormsEventFlowProjected
       - AnalysisGap
     limitations:
+      - Direct support must lie inside the resolved handler file and line span. Semantic support requires the same canonical source symbol ID; method-name matches across files, types, or assemblies are not ownership evidence. Syntax support remains a bounded name-and-span candidate and does not prove assembly identity or distinguish overlapping same-line declarations.
       - Event-flow projection is static evidence and does not prove runtime event firing, branch feasibility, dynamic dispatch, delegate invocation, reflection targets, event bubbling, generated-code freshness, service reachability, SQL execution, database state, or production usage.
       - MVP projection prefers direct handler-to-evidence facts and can miss multi-hop call chains, dependency injection, reflection, generated code, unsupported frameworks, or ORM metadata.
       - Reduced semantic coverage, missing call edges, ambiguous generated clients, or unavailable terminal evidence produce partial or unknown classifications rather than clean absence claims.
@@ -2253,20 +2255,21 @@ rules:
       - WebFormsLogicSignalDetected
       - AnalysisGap
     limitations:
+      - Backend support uses the same handler span and semantic identity admission as event-flow projection; syntax method selection must match the resolved handler span.
       - Logic signals are deterministic static heuristics, not proof of business logic, code quality, risk, runtime behavior, or production usage.
       - UI-boilerplate signals are lower-strength syntax evidence and do not prove that a handler is safe, irrelevant, or free of backend effects.
       - Generated code, partial methods, reflection, dynamic dispatch, branch feasibility, and indirect helper calls can hide or dilute signals.
 
   - id: legacy.webforms.lifecycle-context.v1
     name: Legacy WebForms lifecycle branch context candidates
-    description: Emits syntax-local lifecycle context candidates for bounded Page_Init, Page_Load, and Page_PreRender methods containing an explicit !IsPostBack branch.
+    description: Emits syntax-local lifecycle context candidates for bounded Page_Init, Page_Load, and Page_PreRender methods containing an explicit positive or negated IsPostBack branch.
     evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - WebFormsLifecycleBranchCandidate
       - AnalysisGap
     limitations:
-      - An enclosing !IsPostBack condition is syntax evidence only and does not prove that a branch ran, lifecycle ordering, state initialization, runtime reachability, or correctness.
-      - Local or parameter shadowing, equivalent, negated, compound, helper-based, or dynamic postback conditions outside the documented shape remain explicit gaps.
+      - Bare IsPostBack and this.IsPostBack conditions emit IsPostBackBranch with is-postback-syntax context; their logical negations retain NotIsPostBackBranch with not-is-postback-syntax context. One layer of parentheses is accepted at each existing expression boundary. These are syntax candidates, not proof of Page symbol identity, a branch running, lifecycle ordering, state initialization, runtime reachability, or correctness.
+      - Local or parameter shadowing, boolean comparisons, compound conditions, arbitrary receivers, helper-based conditions, and other expressions outside the documented shape remain explicit gaps. Positive branch support does not widen client-script inside-not-is-postback-syntax attribution or claim anything about else-branch execution.
 
   - id: legacy.webforms.client-script.v1
     name: Legacy WebForms client-script registration candidates
@@ -3698,6 +3701,8 @@ rules:
       - Source documents outside the repository use deterministic synthetic evidence paths derived from bounded non-host descriptors. The original path is not retained, and same-named unrecognized external sources can share an identity.
       - Explicit scan-scope gaps report only a categorical omitted-document count at repository evidence path `.`; they do not identify excluded source files, prove build failure, or describe runtime behavior.
       - Project-declared C# inputs missing from the captured inventory emit a project-scoped `CompilationInputUnavailable` gap; the missing path is not retained, and the gap does not prove why the input is absent.
+      - Projects declaring COMReference or COMFileReference items are loaded with COM-reference design-time targets omitted when TraceMap can install its bounded temporary target override. A project-scoped `ComReferenceResolutionSkipped` gap records that COM-defined symbols may remain unresolved; this does not prove the COM component is absent or broken at build or runtime.
+      - TraceMap does not replace a project-defined CustomAfterMicrosoftCommonTargets hook. In that case it emits `ComReferenceResolutionFallbackUnavailable` and leaves ordinary MSBuildWorkspace behavior intact.
       - Exclusion comparison follows detected host path case semantics and macOS Unicode-equivalence semantics without rewriting persisted evidence paths. Unicode-distinct names remain distinct on hosts whose filesystems treat them as distinct.
 
   - id: build.environment.target-framework.v1
@@ -3757,7 +3762,7 @@ rules:
 
   - id: build.environment.workspace-diagnostic.v1
     name: Build environment workspace diagnostics
-    description: Records sanitized MSBuildWorkspace, legacy Web Application/import/evaluation, SDK resolution, reference assembly, restore, and compilation setup categories that explain reduced semantic coverage.
+    description: Records sanitized MSBuildWorkspace, legacy Web Application/import/evaluation, SDK resolution, MSBuild task-host, reference assembly, restore, and compilation setup categories with closed origin lineage that explains reduced semantic coverage.
     evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - BuildEnvironmentDiagnostic
@@ -3767,6 +3772,10 @@ rules:
       - Syntax, config, SQL, WCF, and WebForms fallback facts remain valid within their own evidence tiers.
       - Legacy workspace categories are bounded pattern classifications of sanitized native diagnostics; they identify likely prerequisite classes, not a proven repair or compatible build environment.
       - LegacyWorkspacePrerequisitesUnresolved is emitted only when an otherwise uncategorized workspace failure shares project identity with static legacy framework, project-format, import, or toolset evidence; it does not identify the exact missing prerequisite.
+      - Projected diagnostics preserve a closed origin category, original gap kind, safe diagnostic ID when present, and deterministic occurrence count; they never retain native diagnostic text.
+      - MSBuildTaskHostIncompatible is a bounded classification for COM-reference task instantiation or host-support failures. It does not prove that the solution itself cannot compile under Visual Studio or full-framework MSBuild.
+      - Ordinary compiler diagnostics remain AnalysisGap evidence and are not projected or relabeled as workspace/toolset failures; recognized reference-assembly compiler diagnostics may be projected with compilation origin.
+      - Projection admits only the documented workspace, project/solution load, compilation setup/input, MSBuild registration, restore, and recognized reference-assembly gap kinds; unrelated semantic extractor limitations remain in their own rule families and are not duplicated as build-environment failures.
 
   - id: build.msbuild-binlog.observation.v1
     name: Bounded MSBuild binary-log observation

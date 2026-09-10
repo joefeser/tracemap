@@ -12,6 +12,70 @@ namespace TraceMap.Tests;
 public sealed class CombinedDependencyPathTests
 {
     [Fact]
+    public async Task Paths_rejects_nonpositive_traversal_work_even_without_matching_roots()
+    {
+        var error = await Assert.ThrowsAsync<ArgumentException>(() => CombinedDependencyPathReporter.WriteAsync(
+            new CombinedDependencyPathOptions("missing.sqlite", "out") { MaxTraversalWork = 0 }));
+        Assert.Contains("--max-traversal-work", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Legacy_depth_first_traversal_preserves_reconvergent_routes_under_frontier_bound()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("server", "tracemap-milestone15");
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        var facts = new List<CodeFact>();
+        for (var i = 0; i < 8; i++)
+        {
+            facts.Add(CallFact(manifest, "Root.Start()", $"Branch.B{i}()", "Graph.cs", i + 1));
+            for (var j = 0; j < 8; j++)
+                facts.Add(CallFact(manifest, $"Branch.B{i}()", $"Leaf.L{j}()", "Graph.cs", 20 + i * 8 + j));
+        }
+        for (var j = 0; j < 8; j++)
+            facts.Add(QueryPatternFact(manifest, $"Leaf.L{j}()", "Graph.cs", 100 + j));
+        SqliteIndexWriter.Write(index, manifest, facts);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["server"]));
+        var options = new CombinedDependencyPathOptions(combined, Path.Combine(temp.Path, "out"),
+            FromSymbol: "Root.Start()", ToSurface: "sql-query", View: LegacyFlowReportConstants.View,
+            MaxDepth: 8, MaxPaths: 1000, MaxFrontier: 24);
+        var first = await CombinedDependencyPathReporter.WriteAsync(options);
+        Assert.Equal(64, first.Report.Paths.Count);
+        Assert.DoesNotContain(first.Report.Gaps, gap => gap.GapKind == "TruncatedByLimit");
+        var breadthFirst = await CombinedDependencyPathReporter.WriteAsync(options with { View = null });
+        Assert.Contains(breadthFirst.Report.Gaps, gap => gap.Reason == "frontier" && gap.GapKind == "TruncatedByLimit");
+        var second = await CombinedDependencyPathReporter.WriteAsync(options with { OutputPath = Path.Combine(temp.Path, "again") });
+        Assert.Equal(JsonSerializer.Serialize(first.Report), JsonSerializer.Serialize(second.Report));
+        var frontier = await CombinedDependencyPathReporter.WriteAsync(options with { MaxFrontier = 1 });
+        Assert.Contains(frontier.Report.Gaps, gap => gap.Reason == "frontier" && gap.GapKind == "TruncatedByLimit");
+        var paths = await CombinedDependencyPathReporter.WriteAsync(options with { MaxPaths = 1 });
+        Assert.Contains(paths.Report.Gaps, gap => gap.Reason == "path" && gap.GapKind == "TruncatedByLimit");
+        var depth = await CombinedDependencyPathReporter.WriteAsync(options with { MaxDepth = 2 });
+        Assert.Contains(depth.Report.Gaps, gap => gap.Reason == "depth" && gap.GapKind == "TruncatedByLimit");
+        facts.Add(CallFact(manifest, "Leaf.L0()", "Root.Start()", "Graph.cs", 200));
+        var cycleIndex = Path.Combine(temp.Path, "cycle.sqlite");
+        var cycleCombined = Path.Combine(temp.Path, "cycle-combined.sqlite");
+        SqliteIndexWriter.Write(cycleIndex, manifest, facts);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([cycleIndex], cycleCombined, ["server"]));
+        var cycle = await CombinedDependencyPathReporter.WriteAsync(options with { IndexPath = cycleCombined });
+        Assert.Equal(64, cycle.Report.Paths.Count);
+        Assert.Contains(cycle.Report.Gaps, gap => gap.Reason == "cycle" && gap.GapKind == "TruncatedByLimit");
+        var workOptions = options with { MaxTraversalWork = 20 };
+        var workBounded = await CombinedDependencyPathReporter.WriteAsync(workOptions);
+        Assert.Contains(workBounded.Report.Gaps, gap => gap.Reason == "work" && gap.GapKind == "TruncatedByLimit");
+        Assert.True(workBounded.Report.Paths.Count < 64);
+        var workAgain = await CombinedDependencyPathReporter.WriteAsync(workOptions);
+        Assert.Equal(JsonSerializer.Serialize(workBounded.Report), JsonSerializer.Serialize(workAgain.Report));
+        var noTerminalIndex = Path.Combine(temp.Path, "no-terminal.sqlite");
+        var noTerminalCombined = Path.Combine(temp.Path, "no-terminal-combined.sqlite");
+        SqliteIndexWriter.Write(noTerminalIndex, manifest, facts.Where(fact => fact.FactType == FactTypes.CallEdge).ToArray());
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([noTerminalIndex], noTerminalCombined, ["server"]));
+        var noTerminal = await CombinedDependencyPathReporter.WriteAsync(workOptions with { IndexPath = noTerminalCombined });
+        Assert.Contains(noTerminal.Report.Gaps, gap => gap.Reason == "work" && gap.GapKind == "TruncatedByLimit");
+    }
+
+    [Fact]
     public async Task Paths_writes_endpoint_to_sql_markdown_and_json_without_mutating_combined_index()
     {
         using var temp = new TempDirectory();

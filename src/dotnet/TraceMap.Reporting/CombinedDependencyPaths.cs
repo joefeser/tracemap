@@ -30,6 +30,8 @@ public sealed record CombinedDependencyPathOptions(
     // the historical selector ceiling and selection behavior.
     internal int StartingNodeLimit { get; init; } = 250;
     internal IReadOnlySet<string>? StartingFactIds { get; init; }
+    // Deterministic work bound, including nonterminal/cyclic exploration.
+    public int MaxTraversalWork { get; init; } = 100_000;
 }
 
 public sealed record CombinedDependencyPathResult(
@@ -72,7 +74,8 @@ public sealed record CombinedPathQuery(
     string Algorithm,
     string AlgorithmVersion,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    string? MessageDirection);
+    string? MessageDirection,
+    int MaxTraversalWork = 100_000);
 
 public sealed record CombinedPathSummary(
     int SourceCount,
@@ -254,6 +257,7 @@ public static class CombinedValueOriginClassifications
 
 public static partial class CombinedDependencyPathReporter
 {
+    private const int MaxTraversalDiagnosticShapes = 32;
     private const string Version = "1.0";
     private const string Algorithm = "bounded-bfs";
     private const string AlgorithmVersion = "1.0";
@@ -344,7 +348,7 @@ public static partial class CombinedDependencyPathReporter
             return (report, starts.Select(node => node.NodeId).ToHashSet(StringComparer.Ordinal));
         }
 
-        return (report, Search(graph, starts, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier).ReachedNodeIds);
+        return (report, Search(graph, starts, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier, options.IncludeLegacyRoots || IsLegacyView(options.View), options.MaxTraversalWork).ReachedNodeIds);
     }
 
     internal static async Task<CombinedPathGraphInventory> BuildGraphInventoryAsync(
@@ -447,6 +451,10 @@ public static partial class CombinedDependencyPathReporter
         {
             throw new ArgumentException("--max-frontier must be a positive integer.");
         }
+        if (options.MaxTraversalWork <= 0)
+        {
+            throw new ArgumentException("--max-traversal-work must be a positive integer.");
+        }
         if (options.StartingNodeLimit <= 0) throw new ArgumentOutOfRangeException(nameof(options));
 
         if (!string.IsNullOrWhiteSpace(options.ToSurface))
@@ -477,6 +485,13 @@ public static partial class CombinedDependencyPathReporter
         CombinedReadResult read,
         EvidenceGraph graph,
         (string Client, string Server)? sourcePair)
+        => BuildReportWithTraversalObservations(options, read, graph, sourcePair).Report;
+
+    private static CombinedDependencyPathBuildResult BuildReportWithTraversalObservations(
+        CombinedDependencyPathOptions options,
+        CombinedReadResult read,
+        EvidenceGraph graph,
+        (string Client, string Server)? sourcePair)
     {
         var legacyMode = options.IncludeLegacyRoots || IsLegacyView(options.View);
         var sourceFilter = string.IsNullOrWhiteSpace(options.FromSource) ? null : options.FromSource.Trim();
@@ -487,6 +502,7 @@ public static partial class CombinedDependencyPathReporter
         var selectorCandidateCount = resolvedStarts.TotalMatchCount;
         var paths = new List<CombinedPath>();
         var truncated = false;
+        SearchResult? search = null;
 
         if (resolvedStarts.TotalMatchCount > startNodes.Count)
         {
@@ -513,6 +529,12 @@ public static partial class CombinedDependencyPathReporter
         }
         else if (terminalNodes.Count == 0)
         {
+            // Preserve bounded outgoing-graph observations even when the index
+            // contains no supported terminal surface. The public path result
+            // remains SelectorNoMatch and makes no terminal claim.
+            search = Search(graph, startNodes, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier, legacyMode, options.MaxTraversalWork);
+            gaps.AddRange(search.Gaps);
+            truncated = truncated || search.Truncated;
             gaps.Add(new CombinedPathGap(
                 "gap:selector:no-terminal-surface",
                 "SelectorNoMatch",
@@ -530,7 +552,7 @@ public static partial class CombinedDependencyPathReporter
         }
         else
         {
-            var search = Search(graph, startNodes, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier);
+            search = Search(graph, startNodes, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier, legacyMode, options.MaxTraversalWork);
             paths.AddRange(search.Paths);
             gaps.AddRange(search.Gaps);
             truncated = truncated || search.Truncated;
@@ -627,7 +649,7 @@ public static partial class CombinedDependencyPathReporter
             .ThenBy(edge => edge.EdgeId, StringComparer.Ordinal)
             .ToArray();
 
-        return new CombinedDependencyPathReport(
+        var report = new CombinedDependencyPathReport(
             Version,
             legacyMode ? LegacyFlowReportConstants.SchemaVersion : null,
             legacyMode ? LegacyFlowReportConstants.View : null,
@@ -648,7 +670,8 @@ public static partial class CombinedDependencyPathReporter
                 options.MaxFrontier,
                 Algorithm,
                 AlgorithmVersion,
-                CombinedReportHelpers.NormalizeMessageDirection(options.MessageDirection, "paths")),
+                CombinedReportHelpers.NormalizeMessageDirection(options.MessageDirection, "paths"),
+                options.MaxTraversalWork),
             read.Sources.Select(source => legacyMode ? SanitizeSource(source) : source).OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceIndexId, StringComparer.Ordinal).ToArray(),
             new CombinedPathSummary(
                 read.Sources.Count,
@@ -669,7 +692,159 @@ public static partial class CombinedDependencyPathReporter
                 participatingNodes,
                 participatingEdges),
             ReportLimitations(legacyMode, participatingNodes, sortedGaps));
+        var observations = startNodes
+            .Where(node => node.CombinedFactId is not null)
+            .GroupBy(node => node.CombinedFactId!, StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => MergeTraversalObservations(group.Select(node =>
+                    search?.TraversalByRootNodeId.GetValueOrDefault(node.NodeId)
+                        ?? new CombinedDependencyTraversalObservation(0, 0, 0, 0, false, []))),
+                StringComparer.Ordinal);
+        return new CombinedDependencyPathBuildResult(report, observations);
     }
+
+    private static CombinedDependencyTraversalObservation MergeTraversalObservations(
+        IEnumerable<CombinedDependencyTraversalObservation> observations)
+    {
+        var rows = observations.ToArray();
+        var merged = new CombinedDependencyTraversalObservation(
+            rows.Sum(row => row.ReachedNodeCount),
+            rows.Sum(row => row.TraversedEdgeCount),
+            rows.Sum(row => row.DownstreamEdgeCount),
+            rows.Sum(row => row.TerminalPathCount),
+            rows.Any(row => row.Truncated),
+            rows.SelectMany(row => row.TruncationReasons).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray())
+        {
+            LeafNodeKinds = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.LeafNodeKinds)),
+            LeafSurfaceKinds = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.LeafSurfaceKinds)),
+            LeafRuleIds = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.LeafRuleIds)),
+            LeafEvidenceTiers = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.LeafEvidenceTiers)),
+            LeafReconciliationStates = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.LeafReconciliationStates)),
+            LeafCallEvidenceStates = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.LeafCallEvidenceStates)),
+            LeafSourceAvailabilityStates = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.LeafSourceAvailabilityStates)),
+            FrontierNodeKinds = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.FrontierNodeKinds)),
+            FrontierSurfaceKinds = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.FrontierSurfaceKinds)),
+            FrontierRuleIds = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.FrontierRuleIds)),
+            TraversedEdgeKinds = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.TraversedEdgeKinds)),
+            TraversedRuleIds = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.TraversedRuleIds))
+        };
+        merged = merged with
+        {
+            DiagnosticShapesTruncated = rows.Any(row => row.DiagnosticShapesTruncated)
+                || TraversalDiagnosticShapeSets(rows).Any(values => values.Distinct(StringComparer.Ordinal).Skip(MaxTraversalDiagnosticShapes).Any())
+        };
+        return merged;
+    }
+
+    private static IEnumerable<IEnumerable<string>> TraversalDiagnosticShapeSets(
+        IEnumerable<CombinedDependencyTraversalObservation> observations)
+    {
+        var rows = observations.ToArray();
+        yield return rows.SelectMany(row => row.LeafNodeKinds);
+        yield return rows.SelectMany(row => row.LeafSurfaceKinds);
+        yield return rows.SelectMany(row => row.LeafRuleIds);
+        yield return rows.SelectMany(row => row.LeafEvidenceTiers);
+        yield return rows.SelectMany(row => row.LeafReconciliationStates);
+        yield return rows.SelectMany(row => row.LeafCallEvidenceStates);
+        yield return rows.SelectMany(row => row.LeafSourceAvailabilityStates);
+        yield return rows.SelectMany(row => row.FrontierNodeKinds);
+        yield return rows.SelectMany(row => row.FrontierSurfaceKinds);
+        yield return rows.SelectMany(row => row.FrontierRuleIds);
+        yield return rows.SelectMany(row => row.TraversedEdgeKinds);
+        yield return rows.SelectMany(row => row.TraversedRuleIds);
+    }
+
+    private static IReadOnlyList<string> BoundedTraversalDiagnosticValues(IEnumerable<string> values)
+        => values.Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .Take(MaxTraversalDiagnosticShapes)
+            .ToArray();
+
+    private static string LeafReconciliationState(GraphNode node)
+        => node.NodeKind == "SymbolCandidate" && node.SourceKind == "projection"
+            ? "nonsemantic-projection-isolated-by-evidence-tier"
+            : node.NodeKind is "Symbol" or "Method" or "Type"
+                ? "canonical-symbol-no-reconciliation-needed"
+                : node.SurfaceKind is not null
+                    ? "surface-not-supported-as-terminal"
+                    : "not-applicable";
+
+    private static string LeafCallEvidenceState(
+        EvidenceGraph graph,
+        GraphNode node,
+        bool callEdgeFilteredByCycle,
+        bool edgeFilteredByDispatchCrossHop)
+    {
+        if (node.NodeKind is not ("Symbol" or "Method" or "Type"))
+        {
+            return "noncanonical-leaf-not-applicable";
+        }
+
+        if (callEdgeFilteredByCycle)
+        {
+            return "outgoing-call-edge-filtered-by-cycle";
+        }
+
+        if (edgeFilteredByDispatchCrossHop)
+        {
+            return "outgoing-edge-filtered-by-dispatch-cross-hop";
+        }
+
+        var hasOutgoingCallEdge = graph.Outgoing.TryGetValue(node.NodeId, out var outgoing)
+            && outgoing.Any(edge => edge.EdgeKind == "calls");
+        if (hasOutgoingCallEdge)
+        {
+            return "outgoing-call-edge-retained-but-not-traversed";
+        }
+
+        if (graph.CallFactSourceNodeIds.Contains(node.NodeId))
+        {
+            return "call-fact-source-retained-without-graph-edge";
+        }
+
+        if (graph.MethodInvocationSourceNodeIds.Contains(node.NodeId))
+        {
+            return "method-invocation-source-retained-without-call-fact";
+        }
+
+        return "no-call-shaped-source-evidence-retained";
+    }
+
+    private static string LeafSourceAvailabilityState(EvidenceGraph graph, GraphNode node)
+    {
+        if (node.NodeKind is not ("Symbol" or "Method" or "Type"))
+        {
+            return "noncanonical-leaf-not-applicable";
+        }
+
+        var declaration = graph.ExactMethodDeclarationNodeIds.Contains(node.NodeId);
+        var body = graph.SourceBodyEvidenceNodeIds.Contains(node.NodeId);
+        return (declaration, body) switch
+        {
+            (true, true) => "exact-method-declaration-and-body-evidence-retained",
+            (true, false) => "exact-method-declaration-without-body-evidence",
+            (false, true) => "source-owned-body-evidence-without-exact-declaration",
+            _ => "no-exact-declaration-or-body-evidence-retained"
+        };
+    }
+
+    private static bool IsSourceBodyEvidenceFactType(string factType)
+        => factType is FactTypes.ArgumentPassed
+            or FactTypes.PropertyAccessed
+            or FactTypes.ObjectCreated
+            or FactTypes.CalculationExpression
+            or FactTypes.BranchingLogic
+            or FactTypes.RetryPolicyLogic
+            or FactTypes.SerializationLogic
+            or FactTypes.QueryPatternDetected
+            or FactTypes.HttpCallDetected
+            or FactTypes.DbChangeSaved
+            or FactTypes.DatabaseOperationCandidate
+            or FactTypes.DapperCallDetected
+            or FactTypes.SqlCommandDetected
+            or FactTypes.SqlTextUsed;
 
     private static EvidenceGraph BuildGraph(
         CombinedReadResult read,
@@ -700,9 +875,17 @@ public static partial class CombinedDependencyPathReporter
             }
 
             AddSymbolNodeAndAttachment(graph, fact, fact.SourceSymbol, fact.CombinedFactId);
+            if (!string.IsNullOrWhiteSpace(fact.SourceSymbol))
+            {
+                graph.RecordSourceFact(SymbolNodeId(fact.SourceIndexId, fact.SourceSymbol), fact.FactType);
+            }
             if (!IsDependencySurfaceFact(fact))
             {
                 AddSymbolNodeAndAttachment(graph, fact, fact.TargetSymbol, fact.CombinedFactId);
+            }
+            if (fact.FactType == FactTypes.MethodDeclared && !string.IsNullOrWhiteSpace(fact.TargetSymbol))
+            {
+                graph.RecordExactMethodDeclaration(SymbolNodeId(fact.SourceIndexId, fact.TargetSymbol));
             }
         }
 
@@ -881,7 +1064,14 @@ public static partial class CombinedDependencyPathReporter
             : "tracemap paths graph inventory requires a combined index produced by tracemap combine.");
     }
 
-    private static async Task<CombinedReadResult> ReadSingleIndexAsync(SqliteConnection connection, string indexPath, CancellationToken cancellationToken, ReportInputBudget? budget = null)
+    private static async Task<CombinedReadResult> ReadSingleIndexAsync(
+        SqliteConnection connection,
+        string indexPath,
+        CancellationToken cancellationToken,
+        ReportInputBudget? budget = null,
+        IReadOnlySet<string>? selectedFactIds = null,
+        int maxDepth = 8,
+        int maxFrontier = 10000)
     {
         var (source, manifestJson) = await ReadSingleSourceAsync(connection, indexPath, cancellationToken);
         var warnings = new List<string>();
@@ -891,10 +1081,17 @@ public static partial class CombinedDependencyPathReporter
             "facts",
             "extractor_version",
             cancellationToken);
+        var selectedSymbols = budget is not null && selectedFactIds is not null
+            ? await ReadSelectedSymbolClosureAsync(connection, selectedFactIds, maxDepth, maxFrontier, cancellationToken)
+            : null;
+        var originalSelectedFactIds = selectedFactIds?.Select(id => id.StartsWith("single:", StringComparison.Ordinal)
+            ? id["single:".Length..]
+            : id).ToHashSet(StringComparer.Ordinal);
         var facts = budget is null
             ? await ReadSingleFactsAsync(connection, source, hasFactExtractorVersion, cancellationToken)
-            : await ReadCompactSingleFactsAsync(connection, source, hasFactExtractorVersion, budget, cancellationToken);
-        var edges = await ReadSingleEdgesAsync(connection, source, cancellationToken, budget);
+            : await ReadCompactSingleFactsAsync(connection, source, hasFactExtractorVersion, budget, cancellationToken,
+                originalSelectedFactIds, selectedSymbols);
+        var edges = await ReadSingleEdgesAsync(connection, source, cancellationToken, budget, selectedSymbols);
         var counts = new SortedDictionary<string, long>(StringComparer.Ordinal);
         if (await TableExistsAsync(connection, "parameter_forward_edges", cancellationToken))
         {
@@ -1001,7 +1198,12 @@ public static partial class CombinedDependencyPathReporter
         return rows;
     }
 
-    private static async Task<IReadOnlyList<CombinedDependencyEdgeRow>> ReadSingleEdgesAsync(SqliteConnection connection, CombinedReportSource source, CancellationToken cancellationToken, ReportInputBudget? budget = null)
+    private static async Task<IReadOnlyList<CombinedDependencyEdgeRow>> ReadSingleEdgesAsync(
+        SqliteConnection connection,
+        CombinedReportSource source,
+        CancellationToken cancellationToken,
+        ReportInputBudget? budget = null,
+        IReadOnlySet<string>? selectedSymbols = null)
     {
         var edges = new List<CombinedDependencyEdgeRow>();
         if (await TableExistsAsync(connection, "call_edges", cancellationToken))
@@ -1009,8 +1211,9 @@ public static partial class CombinedDependencyPathReporter
             await ReadSingleEdgeQueryAsync(connection, source, edges, """
                 select 'calls', fact_id, fact_id, caller_symbol, callee_symbol, callee_assembly_name, callee_assembly_version, rule_id, evidence_tier, file_path, start_line, end_line
                 from call_edges
+                where $symbols is null or caller_symbol in (select value from json_each($symbols))
                 order by file_path, start_line, fact_id;
-                """, cancellationToken, budget);
+                """, cancellationToken, budget, selectedSymbols);
         }
 
         if (await TableExistsAsync(connection, "object_creations", cancellationToken))
@@ -1018,8 +1221,9 @@ public static partial class CombinedDependencyPathReporter
             await ReadSingleEdgeQueryAsync(connection, source, edges, """
                 select 'creates', fact_id, fact_id, caller_symbol, created_type, created_type_assembly_name, created_type_assembly_version, rule_id, evidence_tier, file_path, start_line, end_line
                 from object_creations
+                where $symbols is null or caller_symbol in (select value from json_each($symbols))
                 order by file_path, start_line, fact_id;
-                """, cancellationToken, budget);
+                """, cancellationToken, budget, selectedSymbols);
         }
 
         if (await TableExistsAsync(connection, "symbol_relationships", cancellationToken))
@@ -1040,8 +1244,11 @@ public static partial class CombinedDependencyPathReporter
                 from symbol_relationships relationships
                 left join symbols source_symbols on source_symbols.scan_id = relationships.scan_id and source_symbols.symbol_id = relationships.source_symbol_id
                 left join symbols target_symbols on target_symbols.scan_id = relationships.scan_id and target_symbols.symbol_id = relationships.target_symbol_id
+                where $symbols is null
+                   or coalesce(source_symbols.display_name, relationships.source_symbol_id) in (select value from json_each($symbols))
+                   or coalesce(target_symbols.display_name, relationships.target_symbol_id) in (select value from json_each($symbols))
                 order by relationships.file_path, relationships.start_line, relationships.relationship_id;
-                """, cancellationToken, budget);
+                """, cancellationToken, budget, selectedSymbols);
         }
 
         if (await TableExistsAsync(connection, "parameter_forward_edges", cancellationToken))
@@ -1052,8 +1259,9 @@ public static partial class CombinedDependencyPathReporter
                        target_method_symbol || ':' || target_parameter_symbol,
                        target_assembly_name, target_assembly_version, rule_id, evidence_tier, file_path, start_line, end_line
                 from parameter_forward_edges
+                where $symbols is null or source_method_symbol in (select value from json_each($symbols))
                 order by file_path, start_line, fact_id;
-                """, cancellationToken, budget);
+                """, cancellationToken, budget, selectedSymbols);
         }
 
         return edges
@@ -1072,7 +1280,8 @@ public static partial class CombinedDependencyPathReporter
         List<CombinedDependencyEdgeRow> edges,
         string sql,
         CancellationToken cancellationToken,
-        ReportInputBudget? budget = null)
+        ReportInputBudget? budget = null,
+        IReadOnlySet<string>? selectedSymbols = null)
     {
         await using var command = connection.CreateCommand();
         // This private helper receives only compile-time SQL literals from its
@@ -1085,6 +1294,9 @@ public static partial class CombinedDependencyPathReporter
             select *, {{TextByteCountSql("edge_kind", "edge_id", "original_fact_id", "source_symbol", "target_symbol", "assembly_name", "assembly_version", "rule_id", "evidence_tier", "file_path")}}
             from input;
             """; // nosemgrep: csharp.lang.security.sqli.csharp-sqli
+        command.Parameters.AddWithValue("$symbols", selectedSymbols is null
+            ? DBNull.Value
+            : JsonSerializer.Serialize(selectedSymbols.Order(StringComparer.Ordinal)));
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
@@ -1249,6 +1461,7 @@ public static partial class CombinedDependencyPathReporter
 
         foreach (var projection in facts.Where(fact => fact.FactType is FactTypes.WebFormsEventFlowProjected or FactTypes.WinFormsHandlerFlowProjected).OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
         {
+            AddHandlerOwnedCallProjectionEdges(graph, projection, factsBySourceOriginalId);
             AddProjectionEdge(graph, projection, factsBySourceOriginalId, surfacesByKind);
         }
 
@@ -1566,6 +1779,129 @@ public static partial class CombinedDependencyPathReporter
             projection.EndLine));
     }
 
+    private static void AddHandlerOwnedCallProjectionEdges(
+        EvidenceGraph graph,
+        CombinedFactRow projection,
+        IReadOnlyDictionary<string, CombinedFactRow> factsBySourceOriginalId)
+    {
+        if (projection.FactType != FactTypes.WebFormsEventFlowProjected)
+        {
+            return;
+        }
+
+        var supportingIds = SplitList(CombinedDependencyReporter.FirstValue(projection.Properties, "supportingFactIds"))
+            .ToHashSet(StringComparer.Ordinal);
+        var handlers = supportingIds
+            .Select(id => factsBySourceOriginalId.GetValueOrDefault(SourceFactKey(projection.SourceIndexId, id)))
+            .Where(fact => fact?.FactType == FactTypes.WebFormsHandlerResolved)
+            .Cast<CombinedFactRow>()
+            .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal)
+            .ToArray();
+        if (handlers.Length != 1)
+        {
+            return;
+        }
+
+        var handler = handlers[0];
+        var handlerSymbol = HandlerSymbol(handler);
+        if (string.IsNullOrWhiteSpace(handlerSymbol)
+            || !string.Equals(projection.SourceSymbol, handlerSymbol, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var source = graph.GetOrAddSymbolNode(
+            handler.SourceIndexId,
+            handler.SourceLabel,
+            handlerSymbol,
+            handler.FilePath,
+            handler.StartLine,
+            handler.EndLine,
+            handler.RuleId,
+            handler.EvidenceTier);
+        foreach (var edgeId in SplitList(CombinedDependencyReporter.FirstValue(projection.Properties, "supportingEdgeIds")))
+        {
+            if (!supportingIds.Contains(edgeId)
+                || !factsBySourceOriginalId.TryGetValue(SourceFactKey(projection.SourceIndexId, edgeId), out var call)
+                || call.FactType != FactTypes.CallEdge
+                || string.IsNullOrWhiteSpace(call.SourceSymbol)
+                || string.IsNullOrWhiteSpace(call.TargetSymbol)
+                || string.Equals(call.SourceSymbol, handlerSymbol, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var target = call.EvidenceTier == EvidenceTiers.Tier1Semantic
+                ? graph.GetOrAddSymbolNode(
+                    call.SourceIndexId,
+                    call.SourceLabel,
+                    call.TargetSymbol,
+                    call.FilePath,
+                    call.StartLine,
+                    call.EndLine,
+                    call.RuleId,
+                    call.EvidenceTier)
+                : ToHandlerCallProjectionNode(call);
+            graph.AddNode(target);
+            if (source.NodeId == target.NodeId || HasExistingNonProjectionPath(graph, source.NodeId, target.NodeId, maxDepth: 1))
+            {
+                continue;
+            }
+
+            graph.AddEdge(new GraphEdge(
+                $"legacy-handler-call:{projection.CombinedFactId}:{call.CombinedFactId}",
+                "webforms-handler-call-support-projection",
+                source.NodeId,
+                target.NodeId,
+                "EvidenceEdge",
+                RuleIds.LegacyFlowStaticTraversal,
+                MaxEvidenceTier(projection.EvidenceTier, call.EvidenceTier),
+                SupportingFacts(projection, factsBySourceOriginalId)
+                    .Append(handler.CombinedFactId)
+                    .Append(call.CombinedFactId)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(value => value, StringComparer.Ordinal)
+                    .ToArray(),
+                [call.CombinedFactId],
+                SafePath(call.FilePath),
+                call.StartLine,
+                call.EndLine));
+        }
+    }
+
+    private static GraphNode ToHandlerCallProjectionNode(CombinedFactRow call)
+    {
+        var targetHash = Hash(call.TargetSymbol ?? call.CombinedFactId, 16);
+        return new GraphNode(
+            $"handler-call-target:{call.CombinedFactId}:{targetHash}",
+            "SymbolCandidate",
+            $"call-target-candidate:{targetHash}",
+            call.SourceIndexId,
+            SafeSourceLabel(call.SourceLabel),
+            call.ScanId,
+            call.CommitSha,
+            null,
+            call.CombinedFactId,
+            call.RuleId,
+            call.EvidenceTier,
+            SafePath(call.FilePath),
+            call.StartLine,
+            call.EndLine,
+            SurfaceKind: null,
+            SurfaceName: null,
+            HttpMethod: null,
+            NormalizedPathKey: null,
+            OperationName: null,
+            TableName: null,
+            ColumnNames: null,
+            SourceKind: "projection",
+            ShapeHash: targetHash,
+            TextHash: null,
+            TextLength: null,
+            PackageName: null,
+            ConfigKey: null);
+    }
+
     private static GraphNode ToWebFormsRootNode(CombinedFactRow fact)
     {
         var handlerName = CombinedDependencyReporter.FirstValue(fact.Properties, "handlerName") ?? fact.ContractElement ?? fact.TargetSymbol ?? "handler";
@@ -1768,7 +2104,10 @@ public static partial class CombinedDependencyPathReporter
             fact.FilePath,
             fact.StartLine,
             fact.EndLine,
-            fact.Properties);
+            fact.Properties,
+            fact.ExtractorVersion,
+            fact.SourceSymbol,
+            fact.TargetSymbol);
     }
 
     private static GraphNode ToProjectionTerminalNode(CombinedFactRow fact, string surfaceKind, string? terminalHash)
@@ -2459,12 +2798,42 @@ public static partial class CombinedDependencyPathReporter
         return cleaned.Length == 0 ? null : cleaned.ToLowerInvariant();
     }
 
-    private static SearchResult Search(EvidenceGraph graph, IReadOnlyList<GraphNode> starts, IReadOnlySet<string> terminalNodeIds, int maxDepth, int maxPaths, int maxFrontier)
+    private static SearchResult Search(EvidenceGraph graph, IReadOnlyList<GraphNode> starts, IReadOnlySet<string> terminalNodeIds, int maxDepth, int maxPaths, int maxFrontier, bool depthFirst = false, int maxTraversalWork = 100_000)
     {
-        var queue = new Queue<PathState>();
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxTraversalWork);
+        // Legacy reports enumerate bounded evidence paths, not shortest paths.
+        // Finish one branch before expanding siblings to avoid a breadth-wide
+        // frontier. Do not globally deduplicate nodes: alternate routes can carry
+        // different evidence and have different path-local cycle constraints.
+        var queue = new LinkedList<PathState>();
+        var pendingRootCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+        void EnqueueFirst(PathState state)
+        {
+            queue.AddFirst(state);
+            pendingRootCounts[state.RootNodeId] = pendingRootCounts.GetValueOrDefault(state.RootNodeId) + 1;
+        }
+        void EnqueueLast(PathState state)
+        {
+            queue.AddLast(state);
+            pendingRootCounts[state.RootNodeId] = pendingRootCounts.GetValueOrDefault(state.RootNodeId) + 1;
+        }
+        PathState DequeueFirst()
+        {
+            var state = queue.First!.Value;
+            queue.RemoveFirst();
+            if (pendingRootCounts[state.RootNodeId] == 1) pendingRootCounts.Remove(state.RootNodeId);
+            else pendingRootCounts[state.RootNodeId]--;
+            return state;
+        }
+        bool HasWaitingOtherRoot(string rootNodeId) => pendingRootCounts.Count
+            > (pendingRootCounts.ContainsKey(rootNodeId) ? 1 : 0);
+        var traversal = starts.ToDictionary(
+            node => node.NodeId,
+            _ => new TraversalAccumulator(),
+            StringComparer.Ordinal);
         foreach (var start in starts.OrderBy(node => node.SourceLabel, StringComparer.Ordinal).ThenBy(node => node.DisplayName, StringComparer.Ordinal).ThenBy(node => node.NodeId, StringComparer.Ordinal))
         {
-            queue.Enqueue(new PathState([start.NodeId], []));
+            EnqueueLast(new PathState(start.NodeId, [start.NodeId], []));
         }
 
         var paths = new List<CombinedPath>();
@@ -2472,62 +2841,233 @@ public static partial class CombinedDependencyPathReporter
         var reachedNodeIds = starts.Select(node => node.NodeId).ToHashSet(StringComparer.Ordinal);
         var truncated = false;
         var sequence = 0;
+        var work = 0;
+        var workExhausted = false;
+        var activeLegacyRootId = "";
+        var activeLegacyRootWork = 0;
+        var legacyRootWorkSlice = Math.Max(1, Math.Min(64, maxTraversalWork / Math.Max(1, starts.Count)));
+        void CountWork(string rootNodeId)
+        {
+            work++;
+            if (!depthFirst) return;
+            if (!string.Equals(activeLegacyRootId, rootNodeId, StringComparison.Ordinal))
+            {
+                activeLegacyRootId = rootNodeId;
+                activeLegacyRootWork = 0;
+            }
+            activeLegacyRootWork++;
+        }
+        void YieldLegacyRoot(string rootNodeId)
+        {
+            if (!depthFirst
+                || activeLegacyRootWork < legacyRootWorkSlice
+                || queue.First is null
+                || !string.Equals(queue.First.Value.RootNodeId, rootNodeId, StringComparison.Ordinal)
+                || !HasWaitingOtherRoot(rootNodeId))
+                return;
+
+            while (queue.First is { } first
+                && string.Equals(first.Value.RootNodeId, rootNodeId, StringComparison.Ordinal))
+            {
+                var pending = first.Value;
+                queue.RemoveFirst();
+                queue.AddLast(pending);
+            }
+            activeLegacyRootId = "";
+            activeLegacyRootWork = 0;
+        }
+        bool ShouldPauseLegacyRoot(string rootNodeId) => depthFirst
+            && activeLegacyRootWork >= legacyRootWorkSlice
+            && HasWaitingOtherRoot(rootNodeId);
+        void ExhaustWork(string rootNodeId)
+        {
+            truncated = true;
+            workExhausted = true;
+            traversal[rootNodeId].MarkTruncated("work");
+            foreach (var pendingRoot in queue.Select(item => item.RootNodeId).Distinct(StringComparer.Ordinal))
+                traversal[pendingRoot].MarkTruncated("work");
+            gaps.Add(TruncatedGap("work", rootNodeId, graph));
+        }
+        void RecordNodeShape(
+            TraversalAccumulator accumulator,
+            string nodeId,
+            bool frontier,
+            bool callEdgeFilteredByCycle = false,
+            bool edgeFilteredByDispatchCrossHop = false)
+        {
+            if (!graph.Nodes.TryGetValue(nodeId, out var node)) return;
+            (frontier ? accumulator.FrontierNodeKinds : accumulator.LeafNodeKinds).Add(node.NodeKind);
+            if (!string.IsNullOrWhiteSpace(node.SurfaceKind))
+                (frontier ? accumulator.FrontierSurfaceKinds : accumulator.LeafSurfaceKinds).Add(node.SurfaceKind);
+            if (!string.IsNullOrWhiteSpace(node.RuleId))
+                (frontier ? accumulator.FrontierRuleIds : accumulator.LeafRuleIds).Add(node.RuleId);
+            if (!frontier)
+            {
+                if (!string.IsNullOrWhiteSpace(node.EvidenceTier)) accumulator.LeafEvidenceTiers.Add(node.EvidenceTier);
+                accumulator.LeafReconciliationStates.Add(LeafReconciliationState(node));
+                accumulator.LeafCallEvidenceStates.Add(LeafCallEvidenceState(
+                    graph,
+                    node,
+                    callEdgeFilteredByCycle,
+                    edgeFilteredByDispatchCrossHop));
+                accumulator.LeafSourceAvailabilityStates.Add(LeafSourceAvailabilityState(graph, node));
+            }
+        }
+        void RecordQueuedFrontiers()
+        {
+            foreach (var pending in queue)
+                RecordNodeShape(traversal[pending.RootNodeId], pending.NodeIds[^1], frontier: true);
+        }
         while (queue.Count > 0 && paths.Count < maxPaths)
         {
+            if (work >= maxTraversalWork) { RecordQueuedFrontiers(); ExhaustWork(queue.First!.Value.RootNodeId); break; }
             if (queue.Count > maxFrontier)
             {
                 truncated = true;
-                gaps.Add(TruncatedGap("frontier", queue.Peek().NodeIds[0], graph));
+                RecordQueuedFrontiers();
+                foreach (var rootNodeId in queue.Select(item => item.RootNodeId).Distinct(StringComparer.Ordinal))
+                    traversal[rootNodeId].MarkTruncated("frontier");
+                gaps.Add(TruncatedGap("frontier", queue.First!.Value.NodeIds[0], graph));
                 break;
             }
 
-            var state = queue.Dequeue();
+            var state = DequeueFirst();
+            CountWork(state.RootNodeId);
             var currentNodeId = state.NodeIds[^1];
             if (terminalNodeIds.Contains(currentNodeId) && state.EdgeIds.Count > 0)
             {
+                traversal[state.RootNodeId].TerminalPathCount++;
                 sequence++;
                 paths.Add(ToPath($"path:{sequence:0000}", graph, state));
+                YieldLegacyRoot(state.RootNodeId);
                 continue;
             }
 
             if (state.EdgeIds.Count >= maxDepth)
             {
                 truncated = true;
+                RecordNodeShape(traversal[state.RootNodeId], currentNodeId, frontier: true);
+                traversal[state.RootNodeId].MarkTruncated("depth");
                 gaps.Add(TruncatedGap("depth", currentNodeId, graph));
+                YieldLegacyRoot(state.RootNodeId);
                 continue;
             }
 
             if (!graph.Outgoing.TryGetValue(currentNodeId, out var outgoing))
             {
+                RecordNodeShape(traversal[state.RootNodeId], currentNodeId, frontier: false);
+                YieldLegacyRoot(state.RootNodeId);
                 continue;
             }
 
-            foreach (var edge in outgoing)
+            IReadOnlyList<GraphEdge> orderedOutgoing = depthFirst
+                ? outgoing.AsEnumerable().Reverse().ToArray()
+                : outgoing;
+            var enqueuedChild = false;
+            var paused = false;
+            var callEdgeFilteredByCycle = false;
+            var edgeFilteredByDispatchCrossHop = false;
+            for (var edgeIndex = state.NextOutgoingIndex; edgeIndex < orderedOutgoing.Count; edgeIndex++)
             {
+                if (edgeIndex > state.NextOutgoingIndex && ShouldPauseLegacyRoot(state.RootNodeId))
+                {
+                    EnqueueFirst(state with
+                    {
+                        NextOutgoingIndex = edgeIndex,
+                        TraversedOutgoing = state.TraversedOutgoing || enqueuedChild
+                    });
+                    paused = true;
+                    break;
+                }
+                if (work >= maxTraversalWork)
+                {
+                    RecordNodeShape(traversal[state.RootNodeId], currentNodeId, frontier: true);
+                    RecordQueuedFrontiers();
+                    ExhaustWork(state.RootNodeId);
+                    break;
+                }
+                CountWork(state.RootNodeId);
+                var edge = orderedOutgoing[edgeIndex];
                 if (IsDispatchCandidateCrossHop(graph, state, edge))
                 {
+                    edgeFilteredByDispatchCrossHop = true;
                     continue;
                 }
 
                 if (state.NodeIds.Contains(edge.ToNodeId, StringComparer.Ordinal))
                 {
+                    if (edge.EdgeKind == "calls") callEdgeFilteredByCycle = true;
                     truncated = true;
+                    traversal[state.RootNodeId].MarkTruncated("cycle");
                     gaps.Add(TruncatedGap("cycle", edge.ToNodeId, graph));
                     continue;
                 }
 
-                queue.Enqueue(new PathState([.. state.NodeIds, edge.ToNodeId], [.. state.EdgeIds, edge.EdgeId]));
+                var observation = traversal[state.RootNodeId];
+                observation.ReachedNodeIds.Add(edge.ToNodeId);
+                observation.TraversedEdgeIds.Add(edge.EdgeId);
+                if (edge.EdgeKind != "legacy-root-selection")
+                {
+                    observation.DownstreamEdgeIds.Add(edge.EdgeId);
+                    observation.TraversedEdgeKinds.Add(edge.EdgeKind);
+                    observation.TraversedRuleIds.Add(edge.RuleId);
+                }
+                var next = new PathState(state.RootNodeId, [.. state.NodeIds, edge.ToNodeId], [.. state.EdgeIds, edge.EdgeId]);
+                if (depthFirst) EnqueueFirst(next);
+                else EnqueueLast(next);
                 reachedNodeIds.Add(edge.ToNodeId);
+                enqueuedChild = true;
             }
+            if (workExhausted) break;
+            if (!paused && !state.TraversedOutgoing && !enqueuedChild)
+                RecordNodeShape(
+                    traversal[state.RootNodeId],
+                    currentNodeId,
+                    frontier: false,
+                    callEdgeFilteredByCycle,
+                    edgeFilteredByDispatchCrossHop);
+            YieldLegacyRoot(state.RootNodeId);
         }
 
         if (paths.Count >= maxPaths && queue.Count > 0)
         {
             truncated = true;
-            gaps.Add(TruncatedGap("path", queue.Peek().NodeIds[0], graph));
+            RecordQueuedFrontiers();
+            foreach (var rootNodeId in queue.Select(item => item.RootNodeId).Distinct(StringComparer.Ordinal))
+                traversal[rootNodeId].MarkTruncated("path");
+            gaps.Add(TruncatedGap("path", queue.First!.Value.NodeIds[0], graph));
         }
 
-        return new SearchResult(paths, gaps, truncated, reachedNodeIds);
+        return new SearchResult(
+            paths,
+            gaps,
+            truncated,
+            reachedNodeIds,
+            traversal.ToDictionary(
+                item => item.Key,
+                item => new CombinedDependencyTraversalObservation(
+                    item.Value.ReachedNodeIds.Count,
+                    item.Value.TraversedEdgeIds.Count,
+                    item.Value.DownstreamEdgeIds.Count,
+                    item.Value.TerminalPathCount,
+                    item.Value.Truncated,
+                    item.Value.TruncationReasons.OrderBy(value => value, StringComparer.Ordinal).ToArray())
+                {
+                    LeafNodeKinds = BoundedTraversalDiagnosticValues(item.Value.LeafNodeKinds),
+                    LeafSurfaceKinds = BoundedTraversalDiagnosticValues(item.Value.LeafSurfaceKinds),
+                    LeafRuleIds = BoundedTraversalDiagnosticValues(item.Value.LeafRuleIds),
+                    LeafEvidenceTiers = BoundedTraversalDiagnosticValues(item.Value.LeafEvidenceTiers),
+                    LeafReconciliationStates = BoundedTraversalDiagnosticValues(item.Value.LeafReconciliationStates),
+                    LeafCallEvidenceStates = BoundedTraversalDiagnosticValues(item.Value.LeafCallEvidenceStates),
+                    LeafSourceAvailabilityStates = BoundedTraversalDiagnosticValues(item.Value.LeafSourceAvailabilityStates),
+                    FrontierNodeKinds = BoundedTraversalDiagnosticValues(item.Value.FrontierNodeKinds),
+                    FrontierSurfaceKinds = BoundedTraversalDiagnosticValues(item.Value.FrontierSurfaceKinds),
+                    FrontierRuleIds = BoundedTraversalDiagnosticValues(item.Value.FrontierRuleIds),
+                    TraversedEdgeKinds = BoundedTraversalDiagnosticValues(item.Value.TraversedEdgeKinds),
+                    TraversedRuleIds = BoundedTraversalDiagnosticValues(item.Value.TraversedRuleIds),
+                    DiagnosticShapesTruncated = item.Value.DiagnosticShapeValueCount > MaxTraversalDiagnosticShapes
+                },
+                StringComparer.Ordinal));
     }
 
     private static bool IsDispatchCandidateCrossHop(EvidenceGraph graph, PathState state, GraphEdge edge)
@@ -2680,7 +3220,9 @@ public static partial class CombinedDependencyPathReporter
 
     private static bool IsLegacyFlowProjectionEdge(string? edgeKind)
     {
-        return edgeKind is "webforms-event-flow-projection" or "winforms-handler-flow-projection";
+        return edgeKind is "webforms-event-flow-projection"
+            or "winforms-handler-flow-projection"
+            or "webforms-handler-call-support-projection";
     }
 
     private static IReadOnlyList<string> LegacyFlowRuleIdsFor(CombinedPath path)
@@ -4283,6 +4825,10 @@ public static partial class CombinedDependencyPathReporter
         public List<GraphEdge> Edges { get; } = [];
         public Dictionary<string, GraphEdge> EdgesById { get; } = new(StringComparer.Ordinal);
         public Dictionary<string, List<GraphEdge>> Outgoing { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> CallFactSourceNodeIds { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> MethodInvocationSourceNodeIds { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> SourceBodyEvidenceNodeIds { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> ExactMethodDeclarationNodeIds { get; } = new(StringComparer.Ordinal);
         public List<CombinedPathGap> Gaps { get; } = [];
         private readonly Dictionary<string, CombinedReportSource> sourcesById = sources.ToDictionary(source => source.SourceIndexId, StringComparer.Ordinal);
 
@@ -4297,6 +4843,24 @@ public static partial class CombinedDependencyPathReporter
                 throw new ReportInputLimitException("graph-nodes");
             Nodes.TryAdd(node.NodeId, node);
         }
+
+        public void RecordSourceFact(string nodeId, string factType)
+        {
+            if (factType == FactTypes.CallEdge)
+            {
+                CallFactSourceNodeIds.Add(nodeId);
+            }
+            else if (factType == FactTypes.MethodInvoked)
+            {
+                MethodInvocationSourceNodeIds.Add(nodeId);
+            }
+            else if (IsSourceBodyEvidenceFactType(factType))
+            {
+                SourceBodyEvidenceNodeIds.Add(nodeId);
+            }
+        }
+
+        public void RecordExactMethodDeclaration(string nodeId) => ExactMethodDeclarationNodeIds.Add(nodeId);
 
         public GraphNode GetOrAddSymbolNode(string sourceIndexId, string sourceLabel, string displayName, string filePath, int startLine, int endLine, string ruleId, string evidenceTier)
         {
@@ -4404,13 +4968,89 @@ public static partial class CombinedDependencyPathReporter
         }
     }
 
+    internal sealed record CombinedDependencyPathBuildResult(
+        CombinedDependencyPathReport Report,
+        IReadOnlyDictionary<string, CombinedDependencyTraversalObservation> TraversalByStartingFactId);
+
+    internal sealed record CombinedDependencyTraversalObservation(
+        int ReachedNodeCount,
+        int TraversedEdgeCount,
+        int DownstreamEdgeCount,
+        int TerminalPathCount,
+        bool Truncated,
+        IReadOnlyList<string> TruncationReasons)
+    {
+        public IReadOnlyList<string> LeafNodeKinds { get; init; } = [];
+        public IReadOnlyList<string> LeafSurfaceKinds { get; init; } = [];
+        public IReadOnlyList<string> LeafRuleIds { get; init; } = [];
+        public IReadOnlyList<string> LeafEvidenceTiers { get; init; } = [];
+        public IReadOnlyList<string> LeafReconciliationStates { get; init; } = [];
+        public IReadOnlyList<string> LeafCallEvidenceStates { get; init; } = [];
+        public IReadOnlyList<string> LeafSourceAvailabilityStates { get; init; } = [];
+        public IReadOnlyList<string> FrontierNodeKinds { get; init; } = [];
+        public IReadOnlyList<string> FrontierSurfaceKinds { get; init; } = [];
+        public IReadOnlyList<string> FrontierRuleIds { get; init; } = [];
+        public IReadOnlyList<string> TraversedEdgeKinds { get; init; } = [];
+        public IReadOnlyList<string> TraversedRuleIds { get; init; } = [];
+        public bool DiagnosticShapesTruncated { get; init; }
+    }
+
     private sealed record SearchResult(
         IReadOnlyList<CombinedPath> Paths,
         IReadOnlyList<CombinedPathGap> Gaps,
         bool Truncated,
-        IReadOnlySet<string> ReachedNodeIds);
+        IReadOnlySet<string> ReachedNodeIds,
+        IReadOnlyDictionary<string, CombinedDependencyTraversalObservation> TraversalByRootNodeId);
 
-    private sealed record PathState(IReadOnlyList<string> NodeIds, IReadOnlyList<string> EdgeIds);
+    private sealed record PathState(
+        string RootNodeId,
+        IReadOnlyList<string> NodeIds,
+        IReadOnlyList<string> EdgeIds,
+        int NextOutgoingIndex = 0,
+        bool TraversedOutgoing = false);
+
+    private sealed class TraversalAccumulator
+    {
+        public HashSet<string> ReachedNodeIds { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> TraversedEdgeIds { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> DownstreamEdgeIds { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> LeafNodeKinds { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> LeafSurfaceKinds { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> LeafRuleIds { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> LeafEvidenceTiers { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> LeafReconciliationStates { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> LeafCallEvidenceStates { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> LeafSourceAvailabilityStates { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> FrontierNodeKinds { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> FrontierSurfaceKinds { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> FrontierRuleIds { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> TraversedEdgeKinds { get; } = new(StringComparer.Ordinal);
+        public HashSet<string> TraversedRuleIds { get; } = new(StringComparer.Ordinal);
+        public int DiagnosticShapeValueCount => new[]
+        {
+            LeafNodeKinds.Count,
+            LeafSurfaceKinds.Count,
+            LeafRuleIds.Count,
+            LeafEvidenceTiers.Count,
+            LeafReconciliationStates.Count,
+            LeafCallEvidenceStates.Count,
+            LeafSourceAvailabilityStates.Count,
+            FrontierNodeKinds.Count,
+            FrontierSurfaceKinds.Count,
+            FrontierRuleIds.Count,
+            TraversedEdgeKinds.Count,
+            TraversedRuleIds.Count
+        }.Max();
+        public int TerminalPathCount { get; set; }
+        public bool Truncated { get; set; }
+        public HashSet<string> TruncationReasons { get; } = new(StringComparer.Ordinal);
+
+        public void MarkTruncated(string reason)
+        {
+            Truncated = true;
+            TruncationReasons.Add(reason);
+        }
+    }
 
     private sealed record SelectorResolution(IReadOnlyList<GraphNode> Nodes, int TotalMatchCount);
 

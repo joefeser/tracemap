@@ -396,7 +396,11 @@ public static partial class LegacyWebFormsExtractor
                 }
                 foreach (var (name, value) in attrs.OrderBy(pair => pair.Key, StringComparer.Ordinal))
                 {
-                    if (SupportedEvents.Contains(name) && LooksLikeHandlerName(value))
+                    if (name.StartsWith("OnClient", StringComparison.OrdinalIgnoreCase))
+                    {
+                        gaps.Add(new WebFormsGap("ClientWebFormsEventAttribute", "An OnClient-prefixed attribute is outside server-event binding analysis; client execution and binding are unproven.", line));
+                    }
+                    else if (SupportedEvents.Contains(name) && LooksLikeHandlerName(value))
                     {
                         bindings.Add(new WebFormsBinding(controlType, controlId, name, SafeIdentifier(value)!, file.RelativePath, line, line, FactFactory.Hash(match.Value, 32), WebFormsBindingKind.MarkupAttribute));
                     }
@@ -406,7 +410,10 @@ public static partial class LegacyWebFormsExtractor
                     }
                     else if (name.StartsWith("On", StringComparison.OrdinalIgnoreCase))
                     {
-                        gaps.Add(new WebFormsGap("UnsupportedWebFormsEventAttribute", "A WebForms event-like attribute is client-side, dynamic, malformed, or outside the bounded static event shape.", line));
+                        var gapKind = IsBoundedStaticEventAttribute(name)
+                            ? "NonIdentifierWebFormsEventValue"
+                            : "UnsupportedWebFormsEventAttribute";
+                        gaps.Add(new WebFormsGap(gapKind, "An event-like attribute is malformed or has a value outside the bounded identifier-only server-handler shape; its execution language and binding are unproven.", line));
                     }
                 }
             }
@@ -1167,14 +1174,16 @@ public static partial class LegacyWebFormsExtractor
                 facts.Add(CreateGap(manifest, method.FilePath, line, "AmbiguousWebFormsIsPostBackReceiver", "A local or parameter shadows IsPostBack in this method; TraceMap did not treat the condition as Page lifecycle evidence."));
                 continue;
             }
-            if (!IsNotPostBackCondition(statement.Condition))
+            var isNotPostBack = IsNotPostBackCondition(statement.Condition);
+            if (!isNotPostBack && !IsPositivePostBackCondition(statement.Condition))
             {
-                facts.Add(CreateGap(manifest, method.FilePath, line, "UnsupportedWebFormsIsPostBackCondition", "An IsPostBack condition is visible, but it is outside the bounded static !IsPostBack shape."));
+                facts.Add(CreateGap(manifest, method.FilePath, line, "UnsupportedWebFormsIsPostBackCondition", "An IsPostBack condition is visible, but it is outside the bounded positive or negated IsPostBack shape."));
                 continue;
             }
 
             var sourceIdentity = StructuralHandlerIdentity(page, method.MethodName, method.FilePath, method.Line);
-            var targetIdentity = $"webforms-lifecycle-branch:{FactFactory.Hash($"{sourceIdentity}|not-is-postback|{line}", 24)}";
+            var branchKind = isNotPostBack ? "not-is-postback" : "is-postback";
+            var targetIdentity = $"webforms-lifecycle-branch:{FactFactory.Hash($"{sourceIdentity}|{branchKind}|{line}", 24)}";
             facts.Add(CreateStaticCompositionFact(
                 manifest,
                 FactTypes.WebFormsLifecycleBranchCandidate,
@@ -1185,13 +1194,15 @@ public static partial class LegacyWebFormsExtractor
                 FactFactory.Hash(statement.Condition.ToString(), 32),
                 sourceIdentity,
                 targetIdentity,
-                "NotIsPostBackBranch",
+                isNotPostBack ? "NotIsPostBackBranch" : "IsPostBackBranch",
                 "bounded-static-webforms-lifecycle-context",
-                "The syntax establishes an enclosing !IsPostBack branch candidate only; it does not prove which branch ran, lifecycle ordering, state availability, or runtime behavior.",
+                isNotPostBack
+                    ? "The syntax establishes an enclosing !IsPostBack branch candidate only; it does not prove which branch ran, lifecycle ordering, state availability, or runtime behavior."
+                    : "The syntax establishes a positive IsPostBack branch candidate only; it does not prove which branch ran, lifecycle ordering, state availability, or runtime behavior.",
                 [pageFact.FactId],
                 new SortedDictionary<string, string>(StringComparer.Ordinal)
                 {
-                    ["branchContext"] = "not-is-postback-syntax",
+                    ["branchContext"] = $"{branchKind}-syntax",
                     ["lifecycleMethod"] = method.MethodName
                 },
                 statement.SyntaxTree.GetLineSpan(statement.Condition.Span).EndLinePosition.Line + 1));
@@ -1729,7 +1740,7 @@ public static partial class LegacyWebFormsExtractor
         var handlerName = resolution.Properties.GetValueOrDefault("handlerName") ?? resolution.ContractElement ?? string.Empty;
         var handlerSymbol = resolution.Properties.GetValueOrDefault("handlerSymbol") ?? resolution.TargetSymbol ?? handlerName;
         var directFacts = directEvidenceIndex.Candidates(resolution.Evidence.FilePath, handlerName, handlerSymbol)
-            .Where(fact => IsDirectHandlerEvidence(fact, handlerName, handlerSymbol, resolution.Evidence.FilePath))
+            .Where(fact => IsDirectHandlerEvidence(fact, resolution))
             .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
             .ToArray();
         var terminals = directFacts
@@ -1766,7 +1777,7 @@ public static partial class LegacyWebFormsExtractor
             ["markupFile"] = resolution.Properties.GetValueOrDefault("markupFile") ?? string.Empty,
             ["pageTypeName"] = resolution.Properties.GetValueOrDefault("pageTypeName") ?? resolution.SourceSymbol ?? string.Empty,
             ["ruleIds"] = string.Join(",", supportingFacts.Select(fact => fact.RuleId).Append(RuleIds.LegacyWebFormsEventFlow).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal)),
-            ["ruleLimitations"] = "Event-flow projection is static direct evidence and does not prove runtime execution, branch feasibility, dynamic dispatch, event bubbling, generated-code freshness, service reachability, or SQL execution.",
+            ["ruleLimitations"] = "Direct support is bounded to the handler file/span; semantic support requires canonical source identity. Syntax name/span support does not prove assembly identity or distinguish overlapping same-line declarations. Event-flow projection does not prove runtime execution, branch feasibility, dynamic dispatch, event bubbling, generated-code freshness, service reachability, or SQL execution.",
             ["sourceSymbolId"] = resolution.Properties.GetValueOrDefault("sourceSymbolId") ?? string.Empty,
             ["supportingEdgeIds"] = string.Join(",", directFacts.Where(fact => fact.FactType == FactTypes.CallEdge).Select(fact => fact.FactId).OrderBy(value => value, StringComparer.Ordinal)),
             ["supportingFactIds"] = string.Join(",", supportingFacts.Select(fact => fact.FactId).OrderBy(value => value, StringComparer.Ordinal)),
@@ -1795,14 +1806,15 @@ public static partial class LegacyWebFormsExtractor
     {
         var handlerName = resolution.Properties.GetValueOrDefault("handlerName") ?? resolution.ContractElement ?? string.Empty;
         var methodPath = resolution.Evidence.FilePath;
-        var method = context.CodeFiles.FirstOrDefault(file => file.FilePath.Equals(methodPath, StringComparison.Ordinal))?.Methods.FirstOrDefault(method => method.MethodName.Equals(handlerName, StringComparison.Ordinal));
+        var method = context.CodeFiles.FirstOrDefault(file => file.FilePath.Equals(methodPath, StringComparison.Ordinal))?.Methods.FirstOrDefault(method => method.MethodName.Equals(handlerName, StringComparison.Ordinal)
+            && method.Line == resolution.Evidence.StartLine && method.EndLine == resolution.Evidence.EndLine);
         if (method is null)
         {
             return null;
         }
 
         var directFacts = directEvidenceIndex.Candidates(resolution.Evidence.FilePath, handlerName, resolution.TargetSymbol ?? handlerName)
-            .Where(fact => IsDirectHandlerEvidence(fact, handlerName, resolution.TargetSymbol ?? handlerName, resolution.Evidence.FilePath))
+            .Where(fact => IsDirectHandlerEvidence(fact, resolution))
             .ToArray();
         var hasBackend = directFacts.Any(IsTerminalSurfaceFact) || WcfMappingsForCalls(wcfMappings, directFacts).Any();
         var hasLogic = hasBackend
@@ -1838,24 +1850,35 @@ public static partial class LegacyWebFormsExtractor
             });
     }
 
-    private static bool IsDirectHandlerEvidence(CodeFact fact, string handlerName, string handlerSymbol, string handlerFilePath)
+    private static bool IsDirectHandlerEvidence(CodeFact fact, CodeFact resolution)
     {
         if (fact.FactType is FactTypes.WebFormsHandlerResolved or FactTypes.WebFormsEventBindingDeclared)
         {
             return false;
         }
 
-        var sameFile = fact.Evidence.FilePath.Equals(handlerFilePath, StringComparison.Ordinal);
+        // A member name is only an index hint, never proof of handler ownership.
+        var handlerName = resolution.Properties.GetValueOrDefault("handlerName") ?? resolution.ContractElement ?? string.Empty;
+        var handlerSymbol = resolution.Properties.GetValueOrDefault("handlerSymbol") ?? string.Empty;
+        var sameFile = fact.Evidence.FilePath.Equals(resolution.Evidence.FilePath, StringComparison.Ordinal);
+        if (!sameFile || fact.Evidence.StartLine < resolution.Evidence.StartLine
+            || fact.Evidence.EndLine > resolution.Evidence.EndLine)
+        {
+            return false;
+        }
+
+        var sourceId = fact.Properties.GetValueOrDefault("sourceSymbolId");
+        if (fact.EvidenceTier == EvidenceTiers.Tier1Semantic)
+        {
+            return resolution.EvidenceTier == EvidenceTiers.Tier1Semantic
+                && !string.IsNullOrWhiteSpace(sourceId)
+                && sourceId.Equals(resolution.Properties.GetValueOrDefault("handlerSymbolId"), StringComparison.Ordinal);
+        }
+
         if (!string.IsNullOrWhiteSpace(fact.SourceSymbol))
         {
             if (fact.SourceSymbol.Equals(handlerSymbol, StringComparison.Ordinal)
-                || fact.SourceSymbol.EndsWith("." + handlerName, StringComparison.Ordinal)
-                || fact.SourceSymbol.Contains("." + handlerName + "(", StringComparison.Ordinal))
-            {
-                return true;
-            }
-
-            if (sameFile && fact.SourceSymbol.Equals(handlerName, StringComparison.Ordinal))
+                || fact.SourceSymbol.Equals(handlerName, StringComparison.Ordinal))
             {
                 return true;
             }
@@ -1993,7 +2016,7 @@ public static partial class LegacyWebFormsExtractor
                 or "UnresolvedWebFormsControlRegistration" or "AmbiguousWebFormsUserControlRegistration"
                 or "UnresolvedWebFormsAssemblyControlRegistration" or "AmbiguousWebFormsAssemblyControlRegistration"
                 or "WebFormsAssemblyTypeUnavailable" or "WebFormsAssemblyProjectUnavailable" => RuleIds.LegacyWebFormsComposition,
-            "UnsupportedWebFormsEventAttribute" or "DynamicWebFormsEventSubscription"
+            "UnsupportedWebFormsEventAttribute" or "ClientWebFormsEventAttribute" or "NonIdentifierWebFormsEventValue" or "DynamicWebFormsEventSubscription"
                 or "UnsupportedWebFormsEventSubscription" or "UnknownWebFormsEventSubscriptionReceiver"
                 or "AmbiguousWebFormsEventSubscriptionReceiver" => RuleIds.LegacyWebFormsEventBinding,
             "UnsupportedWebFormsIsPostBackCondition" or "AmbiguousWebFormsIsPostBackReceiver" => RuleIds.LegacyWebFormsLifecycleContext,
@@ -2143,6 +2166,17 @@ public static partial class LegacyWebFormsExtractor
             : prefix.Operand;
         return operand is IdentifierNameSyntax identifier && identifier.Identifier.ValueText == "IsPostBack"
             || operand is MemberAccessExpressionSyntax
+            {
+                Expression: ThisExpressionSyntax,
+                Name: IdentifierNameSyntax member
+            } && member.Identifier.ValueText == "IsPostBack";
+    }
+
+    private static bool IsPositivePostBackCondition(ExpressionSyntax expression)
+    {
+        expression = expression is ParenthesizedExpressionSyntax parenthesized ? parenthesized.Expression : expression;
+        return expression is IdentifierNameSyntax identifier && identifier.Identifier.ValueText == "IsPostBack"
+            || expression is MemberAccessExpressionSyntax
             {
                 Expression: ThisExpressionSyntax,
                 Name: IdentifierNameSyntax member
@@ -2989,9 +3023,8 @@ public static partial class LegacyWebFormsExtractor
                 return [];
             }
 
-            var qualifiedName = $"{registration.NamespaceName}.{controlType}";
             var matches = candidates
-                .Where(item => item.QualifiedName.Equals(qualifiedName, StringComparison.Ordinal)
+                .Where(item => MatchesMarkupType(item.QualifiedName, registration.NamespaceName, controlType)
                     && item.AssemblyName.Equals(registration.AssemblyName, StringComparison.OrdinalIgnoreCase))
                 .ToArray();
             return matches
@@ -3011,12 +3044,18 @@ public static partial class LegacyWebFormsExtractor
                 return "WebFormsAssemblyProjectUnavailable";
             }
 
-            var qualifiedName = $"{registration.NamespaceName}.{controlType}";
             return candidates.Any(item =>
                 item.AssemblyName.Equals(registration.AssemblyName, StringComparison.OrdinalIgnoreCase)
-                && item.QualifiedName.Equals(qualifiedName, StringComparison.Ordinal))
+                && MatchesMarkupType(item.QualifiedName, registration.NamespaceName, controlType))
                     ? "AmbiguousWebFormsAssemblyControlRegistration"
                     : "WebFormsAssemblyTypeUnavailable";
+        }
+
+        private static bool MatchesMarkupType(string qualifiedName, string namespaceName, string controlType)
+        {
+            var prefix = namespaceName + ".";
+            return qualifiedName.StartsWith(prefix, StringComparison.Ordinal)
+                && qualifiedName.AsSpan(prefix.Length).Equals(controlType.AsSpan(), StringComparison.OrdinalIgnoreCase);
         }
 
         private static WebFormsProjectScope? ReadProject(string repoPath, string projectPath)

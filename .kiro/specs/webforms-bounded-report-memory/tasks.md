@@ -8,3 +8,63 @@
 - [x] Add large synthetic noise, graph parity, collision/support, limit, and cancellation regressions.
 - [x] Validate full .NET suite, CLI sample, memory experiment, formatting, privacy, and diff.
 - [x] Document existing-index reruns, limits, limitations, and ACK readback (preflight blocked; see implementation state).
+- [x] Restrict accuracy-summary workspace-repair priority to actual diagnostic evidence and regress static-only cases.
+- [x] Add a self-contained read-only retained-coverage prompt for the separate work computer.
+- [x] Add a deterministic retained-index page-list report command with explicit match gaps and alias-only coverage output.
+- [x] Add bounded case-insensitive markup type-name matching with strict namespace and collision gaps.
+- [x] Add positive IsPostBack syntax candidates without widening compound-condition or script-branch claims.
+- [x] Separate OnClient and non-identifier event-value gaps; preserve static server bindings.
+- [x] Add the read-only one-page event-to-database trace handoff with identity and traversal bounds.
+- [x] Isolate projected direct support by resolved handler span and semantic identity; regress same-name file/type/assembly collisions and retained syntax evidence.
+- [x] Add a read-only retained projection-ownership verification prompt using handler identity and exact support IDs.
+- [x] Record field ownership verification and add the separate database-backed event prompt for the existing index.
+- [x] Scope bounded graph admission to exact selected handlers and regress unrelated large-index noise without weakening fail-closed limits.
+- [x] Raise the page-list gap publication cap after field confirmation and print remaining truncation classifications.
+- [x] Add a zero-argument alias-only summarizer for mutually exclusive selected-page chain outcomes.
+- [x] Add a zero-argument unresolved-chain triage grouped by stop state and public evidence metadata.
+- [x] Retain bounded per-handler traversal observations and distinguish no observed downstream edge from nonterminal traversal.
+- [x] Distinguish exact handler-owned call evidence that failed to join from no retained handler-owned call evidence.
+- [x] Re-anchor exact handler-owned call support and continue its bounded target-symbol traversal without name guessing.
+- [x] Permit clearly labeled partial diagnostic triage of retained truncated packets without inferring missing truncation reasons.
+- [x] Preserve closed truncation reasons in new packet JSON and print counts while tolerating older packets.
+- [x] Schedule legacy branches depth-first to reduce frontier pressure while preserving alternate paths and explicit cycle/resource gaps.
+- [x] Add sequential retained-index depth 8/10/12 comparison with alias-only per-page and distinct-terminal counts, provenance checks, and unchanged other caps.
+- [x] Add standalone completed-depth-8/10 read-only small summary with bounded input and no traversal launch path.
+- [x] Disable deep-run entry points; add deterministic traversal-work exhaustion and sampled owned-process timeout/memory safeguards with tests.
+- [x] Add read-only baseline page aliases for missing terminal evidence and unavailable-handler counts.
+- [x] Add bounded retained-page bucket triage and exact-binding-linked gap inspection for focus aliases, with synthetic privacy and optional-field tests.
+- [x] Compare retained depth-8/10 page triage with provenance gating and exact-node reason associations, preserving unknown causes and testing mismatched inputs.
+- [x] Report closed per-page traversal and call-evidence states from retained observations so field triage can distinguish traversal, join, and extraction limitations.
+- [x] Preserve deterministic closed truncation-reason sets directly on each root traversal observation and expose them compatibly in packet JSON, Markdown, and retained triage.
+- [x] Add a separate one-command bounded-run-and-triage wrapper that preserves the operator's locally edited 43-form runner and rejects stale or ambiguous artifacts.
+- [x] Fair-slice bounded legacy traversal across selected handlers and regress a noisy first handler against a later cheap terminal without raising global limits.
+- [x] Add a zero-argument privacy-bounded aggregate diagnostic for actionable unresolved-chain buckets.
+- [x] Retain bounded privacy-safe leaf/frontier and downstream-edge shapes for terminal-free handler traversal triage.
+- [x] Classify terminal-free leaves by evidence tier and closed reconciliation state without widening syntax-only joins.
+- [x] Classify exact canonical leaf call evidence without publishing identities or widening reconciliation.
+- [x] Classify exact canonical leaf declaration and source-owned body availability without name guessing.
+- [x] Add bounded read-only original-index witness audit with snapshot validation and no scan/report regeneration.
+- [x] Restrict raw audit reads to batched exact-symbol frontiers so unrelated index text does not exhaust its budget.
+- [x] Add opt-in local-only call-site inspection artifact with a single bounded sample and sanitized console output.
+- [x] Show all retained direct handler call sites and independent branch summaries so one UI-only branch is not mistaken for the whole handler.
+- [x] Add unique-method-hint local inspection to trace retained calls across abstraction layers without guessing event associations.
+- [x] Add a privacy-safe exact Fill-caller database evidence census without inferring object linkage from cooccurrence.
+- [x] Separate Fill-hop selection failures from missing index witnesses and identify the selected inspection safely.
+- [x] Recognize qualified framework display symbols without changing exact caller identity.
+- [x] Diagnose retained command-to-adapter linkage and label fact-shape limitations.
+- [x] Retain semantic invocation receivers and direct property-assignment symbols; validate real framework extraction through SQLite and the census.
+- [x] Promote compiler-resolved framework DataAdapter Fill calls to SQL-query terminals in bounded Web Forms reports and regress the full handler-to-terminal path.
+- [x] Replace single-sample follow-up with one local batch review of every terminal-free handler, including all calls, stopping locations, provenance, bounds, and manual result categories.
+- [x] Classify exact allowlisted UI/control endpoints separately from other unresolved leaves in batch review output without claiming backend absence.
+- [x] Add a one-case local working-tree code-path review with explicitly opted-in bounded source excerpts, call witnesses, optional definition candidates, and a human verdict section.
+- [x] Render handler-rooted HTML drill-down with evidence anchors and a separately generated anonymous Mermaid/JSON review packet.
+- [x] Embed the isolated alias Mermaid graph and private alias legend in the local review, and duplicate bounded trigger source above its full-evidence link.
+- [x] Default the private graph and evidence closed while keeping trigger, retained path, and verdict open; reveal collapsed parents for anchor navigation.
+- [x] Emit Mermaid 11-compatible call-graph labels and links with a pinned renderer version.
+- [x] Move anonymous graph navigation out of Mermaid grammar for sandboxed Chrome and Edge rendering.
+- [x] Replace the unreliable private Mermaid iframe with a deterministic inline alias-only SVG graph.
+- [x] Add bounded configurable trigger context without widening retained evidence spans.
+- [x] Generate a private multi-case review set with a root Markdown verdict/comment queue.
+- [x] Add a browser index for each review set and private-report return navigation.
+- [x] Order batch-inspection case IDs by retained binding file so per-file review cases remain contiguous.
+- [x] Publish one compatibility-preserving operator guide for the focused review workflow and diagnostic scripts.

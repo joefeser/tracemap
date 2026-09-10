@@ -21,7 +21,9 @@ public sealed record WebFormsModernizationOptions(
     int MaxBatchDataMovement = 1_000,
     int MaxInputFacts = 250_000,
     int MaxInputEdges = 250_000,
-    int MaxInputTextBytes = 128 * 1024 * 1024);
+    int MaxInputTextBytes = 128 * 1024 * 1024,
+    string? SurfaceListPath = null,
+    int MaxTraversalWork = 100_000);
 
 public sealed record WebFormsModernizationResult(
     WebFormsModernizationPacket Packet,
@@ -45,7 +47,24 @@ public sealed record WebFormsModernizationPacket(
     IReadOnlyList<WebFormsModernizationSliceCandidate> StructuralSliceCandidates,
     IReadOnlyList<WebFormsModernizationGap> Gaps,
     IReadOnlyList<string> OwnerQuestions,
+    IReadOnlyList<string> Limitations,
+    WebFormsModernizationSurfaceSelection? SurfaceSelection = null);
+
+public sealed record WebFormsModernizationSurfaceSelection(
+    string RuleId,
+    int RequestedCount,
+    int MatchedCount,
+    int UnmatchedCount,
+    int AmbiguousCount,
+    int UnavailableCount,
+    IReadOnlyList<WebFormsModernizationSurfaceSelectionItem> Items,
     IReadOnlyList<string> Limitations);
+
+public sealed record WebFormsModernizationSurfaceSelectionItem(
+    string Alias,
+    string RequestId,
+    string Status,
+    IReadOnlyList<string> SurfaceIds);
 
 public sealed record WebFormsModernizationSource(
     string SourceId,
@@ -99,7 +118,36 @@ public sealed record WebFormsModernizationEventChain(
     IReadOnlyList<string> RuleIds,
     IReadOnlyList<string> EvidenceTiers,
     IReadOnlyList<string> CoverageLabels,
-    IReadOnlyList<string> Limitations);
+    IReadOnlyList<string> Limitations,
+    WebFormsModernizationTraversalObservation? TraversalObservation = null);
+
+public sealed record WebFormsModernizationTraversalObservation(
+    string RuleId,
+    string StopState,
+    int ReachedNodeCount,
+    int TraversedEdgeCount,
+    int DownstreamEdgeCount,
+    int TerminalPathCount,
+    bool Truncated,
+    IReadOnlyList<string> Limitations,
+    string CallEvidenceState = "unavailable",
+    int HandlerOwnedCallEvidenceCount = 0)
+{
+    public IReadOnlyList<string> TruncationReasons { get; init; } = [];
+    public IReadOnlyList<string> LeafNodeKinds { get; init; } = [];
+    public IReadOnlyList<string> LeafSurfaceKinds { get; init; } = [];
+    public IReadOnlyList<string> LeafRuleIds { get; init; } = [];
+    public IReadOnlyList<string> LeafEvidenceTiers { get; init; } = [];
+    public IReadOnlyList<string> LeafReconciliationStates { get; init; } = [];
+    public IReadOnlyList<string> LeafCallEvidenceStates { get; init; } = [];
+    public IReadOnlyList<string> LeafSourceAvailabilityStates { get; init; } = [];
+    public IReadOnlyList<string> FrontierNodeKinds { get; init; } = [];
+    public IReadOnlyList<string> FrontierSurfaceKinds { get; init; } = [];
+    public IReadOnlyList<string> FrontierRuleIds { get; init; } = [];
+    public IReadOnlyList<string> TraversedEdgeKinds { get; init; } = [];
+    public IReadOnlyList<string> TraversedRuleIds { get; init; } = [];
+    public bool DiagnosticShapesTruncated { get; init; }
+}
 
 public sealed record WebFormsModernizationPathEvidence(
     string EvidenceId,
@@ -202,7 +250,9 @@ public sealed record WebFormsModernizationGap(
     string? ExtractorId,
     string? ExtractorVersion,
     IReadOnlyList<string> SupportingFactIds,
-    IReadOnlyList<string> Limitations);
+    IReadOnlyList<string> Limitations,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    string? TruncationReason = null);
 
 public static class WebFormsModernizationPacketReporter
 {
@@ -295,8 +345,15 @@ public static class WebFormsModernizationPacketReporter
         Validate(options);
         var budget = new ReportInputBudget(options.MaxInputFacts, options.MaxInputEdges, options.MaxInputTextBytes);
         var snapshot = await ReadSnapshotAsync(options.IndexPath, budget, cancellationToken);
-        var startingFactIds = SelectStartingHandlerFactIds(snapshot.Facts, options.MaxEventChains);
-        var legacyFlow = await CombinedDependencyPathReporter.BuildBoundedSingleIndexReportAsync(new(
+        var surfaceSelection = options.SurfaceListPath is null
+            ? null
+            : await ResolveSurfaceSelectionAsync(snapshot.Facts, options.SurfaceListPath, snapshot.InputLimit is not null, cancellationToken);
+        var selectedSurfaceIds = surfaceSelection?.Items
+            .Where(item => item.Status == "matched")
+            .SelectMany(item => item.SurfaceIds)
+            .ToHashSet(StringComparer.Ordinal);
+        var startingFactIds = SelectStartingHandlerFactIds(snapshot.Facts, options.MaxEventChains, selectedSurfaceIds);
+        var legacyFlowBuild = await CombinedDependencyPathReporter.BuildBoundedSingleIndexReportWithTraversalAsync(new(
             options.IndexPath,
             Path.Combine(Path.GetTempPath(), "tracemap-webforms-modernization-unused"),
             View: LegacyFlowReportConstants.View,
@@ -305,18 +362,22 @@ public static class WebFormsModernizationPacketReporter
             MaxPaths: options.MaxPaths)
         {
             StartingNodeLimit = Math.Max(1, startingFactIds.Count),
-            StartingFactIds = startingFactIds
+            StartingFactIds = startingFactIds,
+            MaxTraversalWork = options.MaxTraversalWork
         }, budget, cancellationToken);
-        return Build(snapshot, legacyFlow, options);
+        return Build(snapshot, legacyFlowBuild.Report, options, surfaceSelection, legacyFlowBuild.TraversalByStartingFactId);
     }
 
     private static IReadOnlySet<string> SelectStartingHandlerFactIds(
         IReadOnlyList<CodeFact> facts,
-        int maxEventChains)
+        int maxEventChains,
+        IReadOnlySet<string>? selectedSurfaceIds = null)
     {
         var retainedBindingIds = facts
             .Where(HasRequiredProvenance)
             .Where(fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared)
+            .Where(fact => selectedSurfaceIds is null
+                || selectedSurfaceIds.Contains(fact.Properties.GetValueOrDefault("surfaceIdentity") ?? ""))
             .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
             .ThenBy(fact => fact.Evidence.StartLine)
             .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
@@ -334,10 +395,74 @@ public static class WebFormsModernizationPacketReporter
             .ToHashSet(StringComparer.Ordinal);
     }
 
+    private static WebFormsModernizationTraversalObservation ToTraversalObservation(
+        CombinedDependencyPathReporter.CombinedDependencyTraversalObservation? observation,
+        int handlerOwnedCallEvidenceCount)
+    {
+        if (observation is null)
+        {
+            return new WebFormsModernizationTraversalObservation(
+                RuleIds.LegacyFlowStaticTraversal,
+                "traversal-observation-unavailable",
+                0,
+                0,
+                0,
+                0,
+                false,
+                ["No bounded traversal observation was retained for this handler; no outgoing-edge or terminal absence conclusion is available."],
+                "unavailable",
+                handlerOwnedCallEvidenceCount);
+        }
+
+        var stopState = observation.Truncated
+            ? "bounded-traversal-truncated"
+            : observation.TerminalPathCount > 0
+                ? "supported-terminal-reached"
+                : observation.DownstreamEdgeCount == 0
+                    ? "no-observed-downstream-edge"
+                    : "observed-downstream-without-supported-terminal";
+        var callEvidenceState = observation.DownstreamEdgeCount > 0
+            ? "joined-downstream-edge-observed"
+            : handlerOwnedCallEvidenceCount > 0
+                ? "handler-owned-call-evidence-unjoined"
+                : observation.Truncated
+                    ? "call-evidence-observation-incomplete"
+                    : "no-handler-owned-call-evidence-retained";
+        return new WebFormsModernizationTraversalObservation(
+            RuleIds.LegacyFlowStaticTraversal,
+            stopState,
+            observation.ReachedNodeCount,
+            observation.TraversedEdgeCount,
+            observation.DownstreamEdgeCount,
+            observation.TerminalPathCount,
+            observation.Truncated,
+            ["Counts describe bounded static graph observations after handler-root selection; handler-owned call evidence is limited to call-edge facts explicitly retained by the handler flow projection. These observations do not prove runtime reachability, execution, branch feasibility, successful binding, or absence."],
+            callEvidenceState,
+            handlerOwnedCallEvidenceCount)
+        {
+            TruncationReasons = observation.TruncationReasons,
+            LeafNodeKinds = observation.LeafNodeKinds,
+            LeafSurfaceKinds = observation.LeafSurfaceKinds,
+            LeafRuleIds = observation.LeafRuleIds,
+            LeafEvidenceTiers = observation.LeafEvidenceTiers,
+            LeafReconciliationStates = observation.LeafReconciliationStates,
+            LeafCallEvidenceStates = observation.LeafCallEvidenceStates,
+            LeafSourceAvailabilityStates = observation.LeafSourceAvailabilityStates,
+            FrontierNodeKinds = observation.FrontierNodeKinds,
+            FrontierSurfaceKinds = observation.FrontierSurfaceKinds,
+            FrontierRuleIds = observation.FrontierRuleIds,
+            TraversedEdgeKinds = observation.TraversedEdgeKinds,
+            TraversedRuleIds = observation.TraversedRuleIds,
+            DiagnosticShapesTruncated = observation.DiagnosticShapesTruncated
+        };
+    }
+
     internal static WebFormsModernizationPacket Build(
         Snapshot snapshot,
         CombinedDependencyPathReport legacyFlow,
-        WebFormsModernizationOptions options)
+        WebFormsModernizationOptions options,
+        WebFormsModernizationSurfaceSelection? surfaceSelection = null,
+        IReadOnlyDictionary<string, CombinedDependencyPathReporter.CombinedDependencyTraversalObservation>? traversalByStartingFactId = null)
     {
         var gaps = new List<WebFormsModernizationGap>();
         var inputLimit = snapshot.InputLimit ?? legacyFlow.Gaps.FirstOrDefault(gap => gap.GapKind == "GraphInputLimitReached")?.Reason;
@@ -352,7 +477,22 @@ public static class WebFormsModernizationPacketReporter
         var facts = allFacts.Where(HasRequiredProvenance).ToArray();
         var factsById = facts.ToDictionary(fact => fact.FactId, StringComparer.Ordinal);
         var truncated = legacyFlow.Summary.Truncated || inputLimited;
-        var pageFacts = facts.Where(fact => fact.FactType == FactTypes.WebFormsPageDeclared).ToArray();
+        var selectedSurfaceIds = surfaceSelection?.Items
+            .Where(item => item.Status == "matched")
+            .SelectMany(item => item.SurfaceIds)
+            .ToHashSet(StringComparer.Ordinal);
+        if (surfaceSelection is not null)
+        {
+            foreach (var item in surfaceSelection.Items.Where(item => item.Status != "matched"))
+                AddGeneratedGap(gaps, options.MaxGaps, snapshot,
+                    item.Status == "ambiguous" ? "WebFormsSurfaceListEntryAmbiguous"
+                        : item.Status == "unavailable" ? "WebFormsSurfaceListEntryUnavailable"
+                        : "WebFormsSurfaceListEntryUnmatched",
+                    "surface-list-entry", item.RequestId, []);
+        }
+        var pageFacts = facts.Where(fact => fact.FactType == FactTypes.WebFormsPageDeclared)
+            .Where(fact => selectedSurfaceIds is null || selectedSurfaceIds.Contains(SurfaceIdentity(fact)))
+            .ToArray();
         var retainedPages = pageFacts.Take(options.MaxSurfaces).ToArray();
         if (retainedPages.Length < pageFacts.Length)
         {
@@ -399,6 +539,8 @@ public static class WebFormsModernizationPacketReporter
             .ToDictionary(group => group.Key, group => group.OrderBy(fact => fact.FactId, StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
         var flowFacts = facts.Where(fact => fact.FactType == FactTypes.WebFormsEventFlowProjected).ToArray();
         var bindings = facts.Where(fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared)
+            .Where(fact => selectedSurfaceIds is null
+                || selectedSurfaceIds.Contains(fact.Properties.GetValueOrDefault("surfaceIdentity") ?? ""))
             .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
             .ThenBy(fact => fact.Evidence.StartLine)
             .ThenBy(fact => fact.FactId, StringComparer.Ordinal).ToArray();
@@ -417,9 +559,20 @@ public static class WebFormsModernizationPacketReporter
             var handlers = handlersByBinding.GetValueOrDefault(binding.FactId) ?? [];
             var handler = handlers.Length == 1 ? handlers[0] : null;
             var flowFact = handler is null ? null : flowFacts.FirstOrDefault(fact => SplitIds(fact.Properties.GetValueOrDefault("supportingFactIds")).Contains(handler.FactId, StringComparer.Ordinal));
+            var handlerSymbols = handler is null
+                ? new HashSet<string>(StringComparer.Ordinal)
+                : new[]
+                    {
+                        handler.TargetSymbol,
+                        handler.Properties.GetValueOrDefault("handlerSymbol"),
+                        handler.Properties.GetValueOrDefault("handlerSymbolId")
+                    }
+                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                    .Select(value => value!)
+                    .ToHashSet(StringComparer.Ordinal);
             var legacyPaths = legacyFlow.Paths.Where(path => !inputLimited && (path.SupportingFactIds.Contains(binding.FactId, StringComparer.Ordinal)
                 || (handler is not null && (path.SupportingFactIds.Contains(handler.FactId, StringComparer.Ordinal)
-                    || path.Nodes.FirstOrDefault()?.SymbolId == handler.TargetSymbol))))
+                    || (path.Nodes.FirstOrDefault()?.SymbolId is { } rootSymbol && handlerSymbols.Contains(rootSymbol))))))
                 .OrderBy(path => path.PathId, StringComparer.Ordinal).ToArray();
             var concreteTerminals = legacyPaths
                 .Select(path => path.Nodes.LastOrDefault())
@@ -457,6 +610,14 @@ public static class WebFormsModernizationPacketReporter
                     : supportedLegacyPath is not null ? supportedLegacyPath.Classification
                     : flowFact?.Properties.GetValueOrDefault("flowClassification") ?? "NoBackendEvidence";
                 var terminalKind = inputLimited ? null : supportedLegacyPath?.Nodes.LastOrDefault()?.SurfaceKind ?? EmptyToNull(flowFact?.Properties.GetValueOrDefault("terminalSurfaceKind"));
+                var handlerOwnedCallEvidenceCount = flowFact is null
+                    ? 0
+                    : SplitIds(flowFact.Properties.GetValueOrDefault("supportingEdgeIds")).Count;
+                var traversalObservation = handler is null || inputLimited
+                    ? null
+                    : ToTraversalObservation(
+                        traversalByStartingFactId?.GetValueOrDefault("single:" + handler.FactId),
+                        handlerOwnedCallEvidenceCount);
                 if (!inputLimited && handler is not null && terminalKind is null)
                     AddGeneratedGap(gaps, options.MaxGaps, snapshot, "NoBackendEvidence", "event-chain", binding.FactId, support.Select(fact => fact.FactId));
                 var chain = new WebFormsModernizationEventChain(
@@ -480,7 +641,8 @@ public static class WebFormsModernizationPacketReporter
                         ? ["Input admission was truncated; no downstream path or absence conclusion was derived from the incomplete input."]
                         : terminalKind is null && handler is not null
                         ? ["No backend or terminal evidence was composed for this handler in the bounded static snapshot; this is not proof of absence."]
-                        : ["The chain is static evidence and does not prove runtime event firing or terminal execution."]);
+                        : ["The chain is static evidence and does not prove runtime event firing or terminal execution."],
+                    traversalObservation);
                 chains.Add(chain);
                 if (terminalKind is not null)
                 {
@@ -678,7 +840,8 @@ public static class WebFormsModernizationPacketReporter
             candidates,
             uniqueGaps,
             Questions,
-            PacketLimitations);
+            PacketLimitations,
+            surfaceSelection);
     }
 
     private static IReadOnlyList<WebFormsModernizationSliceCandidate> BuildCandidates(
@@ -888,7 +1051,9 @@ public static class WebFormsModernizationPacketReporter
             "CombinedDependencyPathReporter",
             "legacy-flow.v1",
             gap.EffectiveSupportingFactIds.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
-            ["The legacy-flow gap preserves incomplete static path coverage and does not prove absence."]));
+            ["The legacy-flow gap preserves incomplete static path coverage and does not prove absence."],
+            gap.GapKind == "TruncatedByLimit" && gap.Reason is "depth" or "frontier" or "path" or "cycle" or "work"
+                ? gap.Reason : null));
     }
 
     private static void AddGeneratedGap(List<WebFormsModernizationGap> gaps, int maxGaps, Snapshot snapshot, string classification, string scopeKind, string? scopeId, IEnumerable<string> support)
@@ -1051,6 +1216,25 @@ public static class WebFormsModernizationPacketReporter
         b.AppendLine($"- Repository: `{packet.Sources.Single().RepositoryId}`");
         b.AppendLine($"- Commit: `{packet.Sources.Single().CommitSha}`");
         b.AppendLine($"- Surfaces: `{packet.Summary.SurfaceCount}`; event chains: `{packet.Summary.EventChainCount}`; downstream boundaries: `{packet.Summary.DownstreamBoundaryCount}`; identity/state declarations: `{packet.Summary.IdentityStateCount}`; batch/data-movement declarations: `{packet.Summary.BatchDataMovementCount}`; structural candidates: `{packet.Summary.StructuralSliceCandidateCount}`; gaps: `{packet.Summary.GapCount}`; truncated: `{packet.Summary.Truncated}`.").AppendLine();
+        if (packet.SurfaceSelection is not null)
+        {
+            b.AppendLine("## Requested page coverage").AppendLine();
+            b.AppendLine($"Requested: `{packet.SurfaceSelection.RequestedCount}`; matched: `{packet.SurfaceSelection.MatchedCount}`; unmatched: `{packet.SurfaceSelection.UnmatchedCount}`; ambiguous: `{packet.SurfaceSelection.AmbiguousCount}`; unavailable: `{packet.SurfaceSelection.UnavailableCount}`.").AppendLine();
+            b.AppendLine("| Page alias | Match status | Static event chains | Downstream boundaries | First unresolved state |");
+            b.AppendLine("| --- | --- | ---: | ---: | --- |");
+            foreach (var item in packet.SurfaceSelection.Items)
+            {
+                var chains = packet.EventChains.Where(chain => item.SurfaceIds.Contains(chain.SurfaceId, StringComparer.Ordinal)).ToArray();
+                var boundaries = packet.DownstreamBoundaries.Count(boundary => item.SurfaceIds.Contains(boundary.SurfaceId, StringComparer.Ordinal));
+                var unresolved = item.Status != "matched" ? item.Status
+                    : chains.Length == 0 ? "no-static-event-binding"
+                    : chains.All(chain => chain.HandlerFactId is null) ? "handler-unavailable"
+                    : chains.All(chain => chain.TerminalKind is null) ? "terminal-unavailable"
+                    : "none-within-bounds";
+                b.AppendLine($"| `{item.Alias}` | `{item.Status}` | {chains.Length} | {boundaries} | `{unresolved}` |");
+            }
+            b.AppendLine().AppendLine("Page aliases preserve input order; the source list and its raw paths are not copied into this packet.").AppendLine();
+        }
         b.AppendLine("## Surfaces").AppendLine();
         if (packet.Surfaces.Count == 0) b.AppendLine("- No supported Web Forms surfaces were available; see gaps.");
         foreach (var surface in packet.Surfaces)
@@ -1058,7 +1242,15 @@ public static class WebFormsModernizationPacketReporter
         b.AppendLine().AppendLine("## Event chains").AppendLine();
         if (packet.EventChains.Count == 0) b.AppendLine("- No supported static event chains were composed; this is not proof of absence.");
         foreach (var chain in packet.EventChains)
-            b.AppendLine($"- `{chain.ChainId}` — `{chain.EventSourceId}` -> `{chain.HandlerId ?? "handler-unavailable"}` -> `{chain.TerminalKind ?? "terminal-unavailable"}`; classification `{chain.Classification}`; supporting facts {string.Join(", ", chain.SupportingFactIds.Select(id => $"`{id}`"))}.");
+        {
+            var truncationReasons = chain.TraversalObservation?.TruncationReasons.Count > 0
+                ? string.Join(", ", chain.TraversalObservation.TruncationReasons.Select(reason => $"`{reason}`"))
+                : "none retained";
+            var traversal = chain.TraversalObservation is null
+                ? "traversal observation unavailable"
+                : $"traversal `{chain.TraversalObservation.StopState}` (reached nodes {chain.TraversalObservation.ReachedNodeCount}, traversed edges {chain.TraversalObservation.TraversedEdgeCount}, downstream edges {chain.TraversalObservation.DownstreamEdgeCount}, truncation reasons {truncationReasons}); call evidence `{chain.TraversalObservation.CallEvidenceState}` (handler-owned call edges {chain.TraversalObservation.HandlerOwnedCallEvidenceCount}); terminal-free shapes (leaf node kinds {MarkdownValues(chain.TraversalObservation.LeafNodeKinds)}, leaf surface kinds {MarkdownValues(chain.TraversalObservation.LeafSurfaceKinds)}, leaf rules {MarkdownValues(chain.TraversalObservation.LeafRuleIds)}, leaf tiers {MarkdownValues(chain.TraversalObservation.LeafEvidenceTiers)}, leaf reconciliation states {MarkdownValues(chain.TraversalObservation.LeafReconciliationStates)}, leaf call evidence states {MarkdownValues(chain.TraversalObservation.LeafCallEvidenceStates)}, leaf source availability states {MarkdownValues(chain.TraversalObservation.LeafSourceAvailabilityStates)}, frontier node kinds {MarkdownValues(chain.TraversalObservation.FrontierNodeKinds)}, frontier surface kinds {MarkdownValues(chain.TraversalObservation.FrontierSurfaceKinds)}, frontier rules {MarkdownValues(chain.TraversalObservation.FrontierRuleIds)}, traversed edge kinds {MarkdownValues(chain.TraversalObservation.TraversedEdgeKinds)}, traversed rules {MarkdownValues(chain.TraversalObservation.TraversedRuleIds)}, shape sets truncated `{chain.TraversalObservation.DiagnosticShapesTruncated}`)";
+            b.AppendLine($"- `{chain.ChainId}` — `{chain.EventSourceId}` -> `{chain.HandlerId ?? "handler-unavailable"}` -> `{chain.TerminalKind ?? "terminal-unavailable"}`; classification `{chain.Classification}`; {traversal}; supporting facts {string.Join(", ", chain.SupportingFactIds.Select(id => $"`{id}`"))}.");
+        }
         b.AppendLine().AppendLine("## Downstream boundaries").AppendLine();
         if (packet.DownstreamBoundaries.Count == 0) b.AppendLine("- No supported downstream boundary was composed; this is not proof of absence.");
         foreach (var boundary in packet.DownstreamBoundaries)
@@ -1089,12 +1281,112 @@ public static class WebFormsModernizationPacketReporter
         return b.ToString().Replace("\r\n", "\n", StringComparison.Ordinal);
     }
 
+    private static string MarkdownValues(IReadOnlyList<string> values)
+        => values.Count == 0 ? "none retained" : string.Join(", ", values.Select(value => $"`{value}`"));
+
+    private static async Task<WebFormsModernizationSurfaceSelection> ResolveSurfaceSelectionAsync(
+        IReadOnlyList<CodeFact> facts,
+        string surfaceListPath,
+        bool factSnapshotTruncated,
+        CancellationToken cancellationToken)
+    {
+        if (!File.Exists(surfaceListPath)) throw new FileNotFoundException("WebFormsSurfaceListUnavailable");
+        const int maximumBytes = 4 * 1024 * 1024;
+        const int maximumRows = 10_000;
+        const int maximumEntries = 10_000;
+        var info = new FileInfo(surfaceListPath);
+        if (info.Length > maximumBytes) throw new InvalidDataException("WebFormsSurfaceListLimitReached");
+        var lines = new List<string>();
+        await using (var stream = new FileStream(surfaceListPath, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, useAsync: true))
+        using (var boundedStream = new SurfaceListByteLimitStream(stream, maximumBytes))
+        using (var reader = new StreamReader(boundedStream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true))
+        {
+            while (await reader.ReadLineAsync(cancellationToken) is { } line)
+            {
+                if (lines.Count >= maximumRows) throw new InvalidDataException("WebFormsSurfaceListLimitReached");
+                lines.Add(line);
+            }
+        }
+        var requests = lines.Select(ExtractSurfaceListValue)
+            .Where(value => value is not null)
+            .Cast<string>()
+            .Where(value => !IsSurfaceListHeader(value))
+            .ToArray();
+        if (requests.Length == 0) throw new InvalidDataException("WebFormsSurfaceListEmpty");
+        if (requests.Length > maximumEntries) throw new InvalidDataException("WebFormsSurfaceListLimitReached");
+
+        var pages = facts.Where(HasRequiredProvenance)
+            .Where(fact => fact.FactType == FactTypes.WebFormsPageDeclared)
+            .Select(fact => (Fact: fact, Path: NormalizeSurfaceListPath(fact.Evidence.FilePath)))
+            .ToArray();
+        var items = requests.Select((request, index) =>
+        {
+            var normalized = NormalizeSurfaceListPath(request);
+            var pathQualified = normalized.Contains('/', StringComparison.Ordinal);
+            var matches = pages.Where(page => pathQualified
+                    ? page.Path.Equals(normalized, StringComparison.OrdinalIgnoreCase)
+                    : Path.GetFileName(page.Path).Equals(normalized, StringComparison.OrdinalIgnoreCase))
+                .Select(page => SurfaceIdentity(page.Fact))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray();
+            var status = matches.Length > 1 ? "ambiguous"
+                : matches.Length == 1 && (pathQualified || !factSnapshotTruncated) ? "matched"
+                : factSnapshotTruncated ? "unavailable" : "unmatched";
+            return new WebFormsModernizationSurfaceSelectionItem(
+                $"page-{index + 1:000}",
+                HashId("surface-request", [normalized.ToUpperInvariant()]),
+                status,
+                matches);
+        }).ToArray();
+        return new(
+            PacketRuleId,
+            items.Length,
+            items.Count(item => item.Status == "matched"),
+            items.Count(item => item.Status == "unmatched"),
+            items.Count(item => item.Status == "ambiguous"),
+            items.Count(item => item.Status == "unavailable"),
+            items,
+            [
+                "Selection matches static Web Forms page declarations only and does not prove runtime routing, rendering, event firing, handler reachability, binding success, or downstream execution.",
+                "Filename-only entries are accepted only when they identify one surface; ambiguous and unmatched entries remain explicit gaps.",
+                "Raw page-list values are not retained in the packet; deterministic aliases preserve input order."
+            ]);
+    }
+
+    private static string? ExtractSurfaceListValue(string line)
+    {
+        var value = line.Trim();
+        if (value.Length == 0 || value.StartsWith('#')) return null;
+        if (value[0] == '"')
+        {
+            var closingQuote = value.IndexOf('"', 1);
+            return closingQuote < 0 ? value[1..].Trim() : value[1..closingQuote].Replace("\"\"", "\"", StringComparison.Ordinal).Trim();
+        }
+        var comma = value.IndexOf(',');
+        return (comma < 0 ? value : value[..comma]).Trim();
+    }
+
+    private static bool IsSurfaceListHeader(string value) =>
+        value.Equals("path", StringComparison.OrdinalIgnoreCase)
+        || value.Equals("page", StringComparison.OrdinalIgnoreCase)
+        || value.Equals("file", StringComparison.OrdinalIgnoreCase)
+        || value.Equals("surface", StringComparison.OrdinalIgnoreCase);
+
+    private static string NormalizeSurfaceListPath(string value)
+    {
+        var normalized = value.Trim().Replace('\\', '/');
+        while (normalized.StartsWith("./", StringComparison.Ordinal)) normalized = normalized[2..];
+        return normalized.TrimStart('/');
+    }
+
     private static void Validate(WebFormsModernizationOptions options)
     {
         if (string.IsNullOrWhiteSpace(options.IndexPath)) throw new ArgumentException("webforms-modernization requires --index <index.sqlite>.");
         if (string.IsNullOrWhiteSpace(options.OutputDirectory)) throw new ArgumentException("webforms-modernization requires --out <directory>.");
         if (!File.Exists(options.IndexPath)) throw new FileNotFoundException("WebFormsModernizationIndexUnavailable");
-        if (options.MaxSurfaces <= 0 || options.MaxEventChains <= 0 || options.MaxCandidates <= 0 || options.MaxGaps <= 0 || options.MaxDepth <= 0 || options.MaxPaths <= 0 || options.MaxBoundaries <= 0 || options.MaxIdentityState <= 0 || options.MaxBatchDataMovement <= 0 || options.MaxInputFacts <= 0 || options.MaxInputEdges <= 0 || options.MaxInputTextBytes <= 0)
+        if (options.SurfaceListPath is not null && !File.Exists(options.SurfaceListPath)) throw new FileNotFoundException("WebFormsSurfaceListUnavailable");
+        if (options.MaxSurfaces <= 0 || options.MaxEventChains <= 0 || options.MaxCandidates <= 0 || options.MaxGaps <= 0 || options.MaxDepth <= 0 || options.MaxPaths <= 0 || options.MaxBoundaries <= 0 || options.MaxIdentityState <= 0 || options.MaxBatchDataMovement <= 0 || options.MaxInputFacts <= 0 || options.MaxInputEdges <= 0 || options.MaxInputTextBytes <= 0 || options.MaxTraversalWork <= 0)
             throw new ArgumentOutOfRangeException(nameof(options), "Web Forms modernization bounds must be positive.");
     }
 
@@ -1304,4 +1596,63 @@ public static class WebFormsModernizationPacketReporter
         string BuildStatus,
         IReadOnlyList<CodeFact> Facts,
         string? InputLimit = null);
+}
+
+internal sealed class SurfaceListByteLimitStream(Stream inner, long maximumBytes) : Stream
+{
+    private long bytesRead;
+
+    public override bool CanRead => inner.CanRead;
+    public override bool CanSeek => false;
+    public override bool CanWrite => false;
+    public override long Length => throw new NotSupportedException();
+    public override long Position
+    {
+        get => throw new NotSupportedException();
+        set => throw new NotSupportedException();
+    }
+
+    public override int Read(byte[] buffer, int offset, int count)
+        => Account(inner.Read(buffer, offset, BoundedCount(count)));
+
+    public override int Read(Span<byte> buffer)
+        => Account(inner.Read(buffer[..BoundedCount(buffer.Length)]));
+
+    public override async Task<int> ReadAsync(
+        byte[] buffer,
+        int offset,
+        int count,
+        CancellationToken cancellationToken)
+        => Account(await inner.ReadAsync(buffer.AsMemory(offset, BoundedCount(count)), cancellationToken).ConfigureAwait(false));
+
+    public override async ValueTask<int> ReadAsync(
+        Memory<byte> buffer,
+        CancellationToken cancellationToken = default)
+        => Account(await inner.ReadAsync(buffer[..BoundedCount(buffer.Length)], cancellationToken).ConfigureAwait(false));
+
+    public override void Flush() => throw new NotSupportedException();
+    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+    public override void SetLength(long value) => throw new NotSupportedException();
+    public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) inner.Dispose();
+        base.Dispose(disposing);
+    }
+
+    private int BoundedCount(int requested)
+    {
+        if (requested == 0) return 0;
+        var remaining = maximumBytes - bytesRead;
+        return remaining > 0 ? (int)Math.Min(requested, remaining) : 1;
+    }
+
+    private int Account(int count)
+    {
+        if (count > 0 && bytesRead >= maximumBytes)
+            throw new InvalidDataException("WebFormsSurfaceListLimitReached");
+        bytesRead += count;
+        return count;
+    }
 }
