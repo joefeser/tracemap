@@ -1,5 +1,20 @@
 # Implementation state
 
+## Raw audit text-limit fix (2026-09-09)
+
+Field run failed with RawAuditTextLimit because the helper materialized all raw
+call/invocation/declaration symbol text before traversal. Replaced that preload
+with parameterized exact-symbol frontier reads batched across all handlers.
+Each symbol is loaded once; declarations select by target and call witnesses by
+source. At most twelve fact queries (eleven depth layers plus a final witness
+read for admitted work-bounded symbols). No limits were raised. Index remains
+read-only; no source index is added or original scan/report regenerated.
+Regressions cover unrelated oversized text/row exclusion and continued rejection
+of oversized selected evidence, alongside snapshot, privacy, and traversal tests.
+Validation: focused audit tests 6/6; full solution 1772/1772; PowerShell helper
+smoke against a retained SQLite fixture passed. Formatting, private-path guard,
+and diff checks passed. Work-machine performance is still a field check.
+
 ## Independent raw-index audit (2026-09-09)
 
 Correction: compacted symbol witnesses cannot rule out extraction/attachment

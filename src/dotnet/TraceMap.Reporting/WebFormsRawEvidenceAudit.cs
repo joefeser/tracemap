@@ -7,9 +7,10 @@ namespace TraceMap.Reporting;
 /// <summary>Read-only diagnostic, independent of report graph compaction and terminal classification.</summary>
 public static class WebFormsRawEvidenceAudit
 {
-    public static IReadOnlyList<string> Run(string indexPath, string reportPath, int maxRows = 500_000)
+    public static IReadOnlyList<string> Run(string indexPath, string reportPath, int maxRows = 500_000, int maxTextBytes = 64 * 1024 * 1024)
     {
         if (maxRows < 1 || maxRows > 500_000) throw new InvalidDataException("RawAuditInvalidLimit");
+        if (maxTextBytes < 1 || maxTextBytes > 64 * 1024 * 1024) throw new InvalidDataException("RawAuditInvalidLimit");
         if (new FileInfo(reportPath).Length > 128 * 1024 * 1024) throw new InvalidDataException("RawAuditReportLimit");
         using var packet = JsonDocument.Parse(File.ReadAllText(reportPath));
         var root = packet.RootElement;
@@ -73,19 +74,27 @@ public static class WebFormsRawEvidenceAudit
         var watch = Stopwatch.StartNew();
         long bytes = 0;
         var rows = 0;
-        using (var cmd = db.CreateCommand())
+        var loaded = new HashSet<string>(StringComparer.Ordinal);
+        void LoadSymbols(IEnumerable<string> symbols)
         {
+            var selected = symbols.Where(s => !loaded.Contains(s)).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+            if (selected.Length == 0) return;
+            if (watch.Elapsed > TimeSpan.FromSeconds(60)) throw new InvalidDataException("RawAuditInputLimit");
+            using var cmd = db.CreateCommand();
             cmd.Transaction = transaction;
             cmd.CommandTimeout = 30;
             cmd.CommandText = """
                 select fact_type, source_symbol, target_symbol, evidence_tier from facts
                 where scan_id=$scan and commit_sha=$commit and fact_type in
                 ('CallEdge','MethodInvoked','MethodDeclared')
+                and ((fact_type='MethodDeclared' and target_symbol in (select value from json_each($symbols)))
+                  or (fact_type in ('CallEdge','MethodInvoked') and source_symbol in (select value from json_each($symbols))))
                 limit $limit
                 """;
             cmd.Parameters.AddWithValue("$scan", scan!);
             cmd.Parameters.AddWithValue("$commit", commit!);
-            cmd.Parameters.AddWithValue("$limit", maxRows + 1);
+            cmd.Parameters.AddWithValue("$symbols", JsonSerializer.Serialize(selected));
+            cmd.Parameters.AddWithValue("$limit", maxRows - rows + 1);
             using var r = cmd.ExecuteReader();
             while (r.Read())
             {
@@ -95,7 +104,7 @@ public static class WebFormsRawEvidenceAudit
                 var to = r.IsDBNull(2) ? null : r.GetString(2);
                 var tier = r.GetString(3);
                 bytes += 2L * ((from?.Length ?? 0) + (to?.Length ?? 0));
-                if (bytes > 64 * 1024 * 1024) throw new InvalidDataException("RawAuditTextLimit");
+                if (bytes > maxTextBytes) throw new InvalidDataException("RawAuditTextLimit");
                 var owner = type == "MethodDeclared" ? to : from;
                 if (!string.IsNullOrEmpty(owner))
                 {
@@ -109,33 +118,55 @@ public static class WebFormsRawEvidenceAudit
                     targets.Add(to);
                 }
             }
+            loaded.UnionWith(selected);
         }
-        output.Add($"rawFactRows={rows}");
-        var n = 0;
-        foreach (var seed in seeds)
+        // Batch all handlers' current frontiers: at most twelve fact queries,
+        // not one whole-index materialization or one query per visited symbol.
+        var states = seeds.Select(seed => new AuditState(seed)).ToArray();
+        for (var depth = 0; depth <= 10; depth++)
         {
-            var visited = new HashSet<string>(StringComparer.Ordinal) { seed };
-            var queue = new Queue<(string Symbol, int Depth)>();
-            queue.Enqueue((seed, 0));
-            var bounded = false;
-            var work = 0;
-            while (queue.TryDequeue(out var item))
+            LoadSymbols(states.SelectMany(s => s.Frontier));
+            foreach (var state in states)
             {
-                if (!edges.TryGetValue(item.Symbol, out var targets)) continue;
-                foreach (var target in targets)
+                var next = new List<string>();
+                foreach (var symbol in state.Frontier)
                 {
-                    if (++work > 10_000) { bounded = true; break; }
-                    if (visited.Contains(target)) continue;
-                    if (item.Depth >= 10 || visited.Count >= 500) { bounded = true; continue; }
-                    visited.Add(target);
-                    queue.Enqueue((target, item.Depth + 1));
+                    if (!edges.TryGetValue(symbol, out var targets)) continue;
+                    foreach (var target in targets)
+                    {
+                        if (++state.Work > 10_000) { state.Bounded = true; break; }
+                        if (state.Visited.Contains(target)) continue;
+                        if (depth >= 10 || state.Visited.Count >= 500) { state.Bounded = true; continue; }
+                        state.Visited.Add(target);
+                        next.Add(target);
+                    }
+                    if (state.Work > 10_000) break;
                 }
-                if (work > 10_000) break;
+                state.Frontier = state.Work > 10_000 ? [] : next;
             }
+        }
+        // A work-bound stop may leave admitted symbols unexpanded. Read their
+        // witnesses once for the summary without expanding their outgoing edges.
+        LoadSymbols(states.SelectMany(s => s.Visited));
+        output.Add($"rawFactRows={rows}");
+        output.Add($"rawSymbolsQueried={loaded.Count}");
+        var n = 0;
+        foreach (var state in states)
+        {
+            var visited = state.Visited;
+            var bounded = state.Bounded;
             bool Has(string symbol, string kind) => evidence.TryGetValue(symbol, out var kinds) && kinds.Contains(kind);
             output.Add($"handler={++n:D3}|symbols={visited.Count}|bounded={bounded.ToString().ToLowerInvariant()}|semanticInvocationSources={visited.Count(s => Has(s, "MethodInvoked:semantic"))}|semanticCallSources={visited.Count(s => Has(s, "CallEdge:semantic"))}|invocationWithoutCallFact={visited.Count(s => Has(s, "MethodInvoked:semantic") && !Has(s, "CallEdge:semantic"))}|exactDeclarationTargets={visited.Count(s => Has(s, "MethodDeclared:semantic") || Has(s, "MethodDeclared:nonsemantic"))}|withoutSelectedSourceWitness={visited.Count(s => !evidence.ContainsKey(s))}");
         }
         output.Add("nonClaim=not-report-leaf-identities;not-runtime-execution;missing-exact-witness-is-not-source-absence;declaration-targets-may-use-different-symbol-format");
         return output;
+    }
+
+    private sealed class AuditState(string seed)
+    {
+        public HashSet<string> Visited { get; } = new(StringComparer.Ordinal) { seed };
+        public List<string> Frontier { get; set; } = [seed];
+        public int Work { get; set; }
+        public bool Bounded { get; set; }
     }
 }
