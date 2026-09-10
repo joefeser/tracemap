@@ -1037,6 +1037,25 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Contains(packet.Gaps, gap => gap.Classification == "WebFormsSurfaceListEntryUnavailable");
     }
 
+    [Fact]
+    public async Task Truncated_fact_snapshot_does_not_claim_filename_match_is_unique()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("Succeeded") with { AnalysisLevel = "Level1SemanticAnalysis" };
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, manifest,
+            [Page("surface:a", "AreaA/Orders.aspx", manifest), Page("surface:b", "AreaB/Orders.aspx", manifest)]);
+        var list = Path.Combine(temp.Path, "pages.txt");
+        await File.WriteAllTextAsync(list, "Orders.aspx\n");
+
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(
+            index, Path.Combine(temp.Path, "out"), MaxInputFacts: 1, SurfaceListPath: list));
+
+        Assert.NotNull(packet.SurfaceSelection);
+        Assert.Equal("unavailable", Assert.Single(packet.SurfaceSelection.Items).Status);
+        Assert.Empty(packet.Surfaces);
+    }
+
     private static CodeFact Page(string surface, string path, ScanManifest manifest) =>
         Fact(manifest, FactTypes.WebFormsPageDeclared, RuleIds.LegacyWebFormsInventory, path, 1,
             source: surface, target: surface, contract: Path.GetFileName(path),
