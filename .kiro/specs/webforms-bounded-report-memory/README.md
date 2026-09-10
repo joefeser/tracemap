@@ -228,9 +228,11 @@ the newest retained batch inspection:
 
 The command builds the helper once, creates one timestamped subfolder under
 `local-inspection-private`, and writes private HTML, anonymous HTML, and anonymous
-JSON for each case. Its root `review-queue.md` links every case and provides
-editable Human verdict and Comment cells. The queue and private HTML stay on the
-work machine; an internal AI can read the Markdown and follow its relative links.
+JSON for each case. The report-set folder's `index.md` links every case and
+provides editable Human verdict and Comment cells. Each run uses a new folder,
+so a later run cannot overwrite review decisions. The index and private HTML
+stay on the work machine; an internal AI can read the Markdown and follow its
+relative links.
 Use `-CaseId case-001,case-004` to generate only selected cases.
 
 The raw audit now filters each read to exact symbols on the selected handlers'

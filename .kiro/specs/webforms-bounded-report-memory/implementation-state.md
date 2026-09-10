@@ -953,9 +953,12 @@ It selects all retained batch-inspection cases by default, builds the diagnostic
 helper once, and places each private/shareable report triplet in one timestamped
 private subfolder. A root `review-queue.md` contains case/evidence IDs, relative
 private and anonymous report paths, an allowlisted human-verdict column, and a
-free-form comment column for local AI or workflow ingestion. Review decisions
-remain metadata and do not become scanner evidence automatically. A PowerShell
-regression covers multi-case selection, paths, trigger context, queue fields, and
+free-form comment column for local AI or workflow ingestion. Field review made
+the entry-point convention explicit: the queue is named `index.md` in the root
+of its timestamped report-set folder. Later runs use new folders and cannot
+overwrite edited decisions. Review decisions remain metadata and do not become
+scanner evidence automatically. A PowerShell regression covers multi-case
+selection, index placement, relative paths, trigger context, queue fields, and
 artifact counts.
 
 ### Post-fairness field result and actionable summary
