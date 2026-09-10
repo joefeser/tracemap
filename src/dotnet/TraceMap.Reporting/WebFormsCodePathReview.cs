@@ -186,6 +186,14 @@ public static class WebFormsCodePathReview
             : "external-or-unresolved-target";
         var anonymousNodes = aliases.OrderBy(pair => pair.Value, StringComparer.Ordinal)
             .Select(pair => new AnonymousNode(pair.Value, Classification(pair.Key))).ToArray();
+        var anonymousEdges = groupedEdges.Select(edge => new
+        {
+            from = aliases[edge.Caller],
+            to = aliases[edge.Callee],
+            callSiteCount = edge.Locations.Count,
+            ruleIds = edge.RuleIds.Select(PublicRuleId).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
+            evidenceTiers = edge.Tiers.Select(PublicTier).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray()
+        }).ToArray();
 
         var evidenceAnchors = deduplicated.Select((location, index) => (location, anchor: $"evidence-{index + 1:D3}"))
             .ToDictionary(item => item.location, item => item.anchor);
@@ -209,6 +217,76 @@ public static class WebFormsCodePathReview
 
         static string PublicTier(string value) => value is "Tier1Semantic" or "Tier2Structural" or "Tier3SyntaxOrTextual" or "Tier4Unknown"
             ? value : "withheld-unsafe-evidence-tier";
+
+        string RenderPrivateGraph()
+        {
+            const int nodeWidth = 180;
+            const int nodeHeight = 58;
+            const int horizontalGap = 34;
+            const int verticalGap = 92;
+            const int margin = 28;
+            var depths = new Dictionary<string, int>(StringComparer.Ordinal) { [handler] = 0 };
+            var pending = new Queue<string>();
+            pending.Enqueue(handler);
+            while (pending.Count > 0)
+            {
+                var current = pending.Dequeue();
+                foreach (var edge in edgesByCaller[current])
+                {
+                    if (depths.ContainsKey(edge.Callee)) continue;
+                    depths[edge.Callee] = depths[current] + 1;
+                    pending.Enqueue(edge.Callee);
+                }
+            }
+            var unconnectedDepth = depths.Count == 0 ? 0 : depths.Values.Max() + 1;
+            foreach (var symbol in aliases.Keys.Order(StringComparer.Ordinal))
+                depths.TryAdd(symbol, unconnectedDepth);
+            var layers = aliases.Keys.GroupBy(symbol => depths[symbol]).OrderBy(group => group.Key)
+                .Select(group => group.OrderBy(symbol => aliases[symbol], StringComparer.Ordinal).ToArray()).ToArray();
+            var widestLayer = layers.Max(layer => layer.Length);
+            var width = Math.Max(820, (widestLayer * nodeWidth) + ((widestLayer - 1) * horizontalGap) + (2 * margin));
+            var height = (layers.Length * nodeHeight) + ((layers.Length - 1) * verticalGap) + (2 * margin);
+            var positions = new Dictionary<string, (int X, int Y)>(StringComparer.Ordinal);
+            for (var layerIndex = 0; layerIndex < layers.Length; layerIndex++)
+            {
+                var layer = layers[layerIndex];
+                var layerWidth = (layer.Length * nodeWidth) + ((layer.Length - 1) * horizontalGap);
+                var startX = (width - layerWidth) / 2;
+                for (var nodeIndex = 0; nodeIndex < layer.Length; nodeIndex++)
+                    positions[layer[nodeIndex]] = (startX + (nodeIndex * (nodeWidth + horizontalGap)), margin + (layerIndex * (nodeHeight + verticalGap)));
+            }
+
+            var graph = new StringBuilder();
+            graph.Append("<div class=\"inline-graph\"><svg role=\"img\" aria-label=\"Anonymous retained call graph\" viewBox=\"0 0 ")
+                .Append(width).Append(' ').Append(height).Append("\" xmlns=\"http://www.w3.org/2000/svg\"><defs><marker id=\"call-arrow\" markerWidth=\"8\" markerHeight=\"8\" refX=\"7\" refY=\"4\" orient=\"auto\"><path d=\"M0,0 L8,4 L0,8 z\"/></marker></defs>");
+            foreach (var edge in groupedEdges)
+            {
+                var from = positions[edge.Caller];
+                var to = positions[edge.Callee];
+                var x1 = from.X + (nodeWidth / 2);
+                var y1 = from.Y + nodeHeight;
+                var x2 = to.X + (nodeWidth / 2);
+                var y2 = to.Y;
+                graph.Append("<line class=\"graph-edge\" x1=\"").Append(x1).Append("\" y1=\"").Append(y1)
+                    .Append("\" x2=\"").Append(x2).Append("\" y2=\"").Append(y2).Append("\" marker-end=\"url(#call-arrow)\"/>")
+                    .Append("<text class=\"edge-label\" x=\"").Append((x1 + x2) / 2).Append("\" y=\"").Append(((y1 + y2) / 2) - 5)
+                    .Append("\">calls x ").Append(edge.Locations.Count).Append("</text>");
+            }
+            foreach (var node in anonymousNodes)
+            {
+                var symbol = aliases.Single(pair => pair.Value == node.Id).Key;
+                var position = positions[symbol];
+                var location = deduplicated.FirstOrDefault(item => item.Callee == symbol || item.Caller == symbol || (symbol == handler && item.Role == "handler"));
+                if (location is not null) graph.Append("<a href=\"#").Append(evidenceAnchors[location]).Append("\">");
+                graph.Append("<g class=\"graph-node\"><rect x=\"").Append(position.X).Append("\" y=\"").Append(position.Y)
+                    .Append("\" width=\"").Append(nodeWidth).Append("\" height=\"").Append(nodeHeight).Append("\" rx=\"6\"/>")
+                    .Append("<text x=\"").Append(position.X + (nodeWidth / 2)).Append("\" y=\"").Append(position.Y + 23).Append("\">")
+                    .Append(H(node.Id)).Append("</text><text class=\"node-kind\" x=\"").Append(position.X + (nodeWidth / 2)).Append("\" y=\"")
+                    .Append(position.Y + 43).Append("\">").Append(H(node.Classification)).Append("</text></g>");
+                if (location is not null) graph.Append("</a>");
+            }
+            return graph.Append("</svg></div>").ToString();
+        }
 
         void WriteSourceCode(StreamWriter writer, ReviewLocation location)
         {
@@ -283,8 +361,8 @@ public static class WebFormsCodePathReview
                     writer.WriteLine($"<p><a href=\"#{evidenceAnchors[location]}\">Jump to full event-binding evidence</a></p></article>");
                 }
                 writer.WriteLine("</details>");
-                writer.WriteLine("<details class=\"panel\" id=\"graph\"><summary><h2>Call graph</h2></summary><p>The diagram uses anonymous aliases inside an isolated frame. Use the private legend below to connect aliases to source evidence.</p>");
-                writer.WriteLine($"<iframe class=\"graph-frame\" sandbox=\"allow-scripts\" src=\"{H(Path.GetFileName(shareableHtmlPath))}\" title=\"Anonymous Mermaid call graph\"></iframe>");
+                writer.WriteLine("<details class=\"panel\" id=\"graph\"><summary><h2>Call graph</h2></summary><p>This dependency-free diagram uses anonymous aliases. Click a node to jump to retained evidence; use the private legend below to connect aliases to source identities.</p>");
+                writer.WriteLine(RenderPrivateGraph());
                 writer.WriteLine("<h3>Private alias legend</h3><dl class=\"legend\">");
                 foreach (var pair in aliases.OrderBy(pair => pair.Value, StringComparer.Ordinal))
                 {
@@ -316,14 +394,6 @@ public static class WebFormsCodePathReview
                 writer.WriteLine("<script>function revealTarget(){const id=decodeURIComponent(location.hash.slice(1));if(!id)return;const target=document.getElementById(id);if(!target)return;let parent=target.closest('details');while(parent){parent.open=true;parent=parent.parentElement?.closest('details');}}addEventListener('hashchange',revealTarget);revealTarget();</script></body></html>");
             }
 
-            var anonymousEdges = groupedEdges.Select(edge => new
-            {
-                from = aliases[edge.Caller],
-                to = aliases[edge.Callee],
-                callSiteCount = edge.Locations.Count,
-                ruleIds = edge.RuleIds.Select(PublicRuleId).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
-                evidenceTiers = edge.Tiers.Select(PublicTier).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray()
-            }).ToArray();
             using (var file = new FileStream(temporaryPaths[shareableJsonPath], FileMode.CreateNew, FileAccess.Write, FileShare.None))
                 JsonSerializer.Serialize(file, new
                 {
@@ -419,7 +489,7 @@ public static class WebFormsCodePathReview
     }
 
     private const string PrivateCss = """
-        :root{font-family:system-ui,sans-serif;color:#172033;background:#f5f7fb}body{margin:0}main{max-width:1100px;margin:auto;padding:24px}section,article,.panel{background:white;border:1px solid #dbe2ee;border-radius:10px;padding:18px;margin:16px 0}.panel>summary{cursor:pointer;display:flex;align-items:center;gap:.6rem}.panel>summary::before{content:'▸';color:#526177}.panel[open]>summary::before{content:'▾'}.panel>summary h2{display:inline;margin:0}.private{background:#fff1f0;border-left:5px solid #c62828;padding:12px}.root{font-size:1.05rem;padding:10px;background:#eaf1ff;border-radius:6px}.call-tree{border-left:2px solid #bed0ee;margin:.5rem 0 .5rem 1rem;padding-left:1.4rem}.call-tree li{margin:.55rem 0}.kind,.sites,.reference{font-size:.85rem;color:#526177}.callee{font-weight:650}a{color:#1558b0}pre{overflow:auto;background:#111827;color:#e5e7eb;padding:14px;border-radius:8px;line-height:1.4}.evidence:target{outline:3px solid #ffbf47}.trigger-code{background:#f8faff}.graph-frame{width:100%;height:620px;border:1px solid #dbe2ee;border-radius:8px;background:white}.legend{display:grid;grid-template-columns:max-content 1fr;gap:.45rem 1rem}.legend dt{font-weight:700}.legend dd{margin:0;overflow-wrap:anywhere}label{display:block;margin:.55rem 0}footer{color:#526177;margin:28px 0}
+        :root{font-family:system-ui,sans-serif;color:#172033;background:#f5f7fb}body{margin:0}main{max-width:1100px;margin:auto;padding:24px}section,article,.panel{background:white;border:1px solid #dbe2ee;border-radius:10px;padding:18px;margin:16px 0}.panel>summary{cursor:pointer;display:flex;align-items:center;gap:.6rem}.panel>summary::before{content:'▸';color:#526177}.panel[open]>summary::before{content:'▾'}.panel>summary h2{display:inline;margin:0}.private{background:#fff1f0;border-left:5px solid #c62828;padding:12px}.root{font-size:1.05rem;padding:10px;background:#eaf1ff;border-radius:6px}.call-tree{border-left:2px solid #bed0ee;margin:.5rem 0 .5rem 1rem;padding-left:1.4rem}.call-tree li{margin:.55rem 0}.kind,.sites,.reference{font-size:.85rem;color:#526177}.callee{font-weight:650}a{color:#1558b0}pre{overflow:auto;background:#111827;color:#e5e7eb;padding:14px;border-radius:8px;line-height:1.4}.evidence:target{outline:3px solid #ffbf47}.trigger-code{background:#f8faff}.inline-graph{overflow:auto;background:#fff;border:1px solid #dbe2ee;border-radius:8px}.inline-graph svg{display:block;min-width:820px;width:100%;height:auto}.graph-edge{stroke:#3b4658;stroke-width:1.5}.inline-graph marker path{fill:#3b4658}.edge-label,.graph-node text{text-anchor:middle;font-size:13px;fill:#172033}.edge-label{paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round}.graph-node rect{fill:#eef0ff;stroke:#7467d8;stroke-width:1.5}.graph-node:hover rect,.graph-node:focus rect{fill:#e1e5ff;stroke-width:2.5}.node-kind{font-size:11px;fill:#526177}.legend{display:grid;grid-template-columns:max-content 1fr;gap:.45rem 1rem}.legend dt{font-weight:700}.legend dd{margin:0;overflow-wrap:anywhere}label{display:block;margin:.55rem 0}footer{color:#526177;margin:28px 0}
         """;
 
     private const string ShareableCss = """

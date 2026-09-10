@@ -934,6 +934,14 @@ strict security, then attaches alias-only node navigation after rendering; plain
 HTML alias links remain as a no-script fallback. The remote module remains
 confined to the anonymous script-only sandbox.
 
+The second field rerun showed that browser-specific iframe rendering remained
+unreliable even with navigation removed. The private report no longer embeds an
+iframe or loads Mermaid at all. It renders the same alias-only nodes and retained
+edges as deterministic inline SVG with evidence links. The separately shareable
+HTML remains Mermaid-based because standalone rendering was field-confirmed.
+Private graph rendering now has no CDN, script, sandbox, or browser-origin
+dependency.
+
 ### Post-fairness field result and actionable summary
 
 The work-machine rerun retained 466 event chains and 361 downstream boundaries.
