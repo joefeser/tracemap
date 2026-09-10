@@ -1,5 +1,20 @@
 # Restricted Web Forms run: diagnostic follow-up
 
+## Current command: regenerate the page-list report
+
+The bounded reporter now treats an exact Tier1 semantic invocation of the public
+`System.Data.Common.DbDataAdapter.Fill`, `System.Data.SqlClient.SqlDataAdapter.Fill`,
+or `Microsoft.Data.SqlClient.SqlDataAdapter.Fill` API as an `sql-query` terminal
+when the invocation receiver identity was retained. The compact bounded reader
+preserves those otherwise compactable invocation properties. A private same-name
+method, syntax-only evidence, or a call without receiver identity is not promoted.
+
+After pulling and rebuilding, rerun only the existing page-list command against
+the fresh `csharp-semantic/0.21.0` index. No additional application scan is needed.
+This is static evidence of a database adapter Fill boundary; it does not prove
+runtime execution, successful database access, command assignment at that point,
+stored-procedure execution, returned data, or branch feasibility.
+
 ## Current command: retained database evidence
 
 Receiver/assignment metadata requires a new scan with `csharp-semantic/0.21.0`.

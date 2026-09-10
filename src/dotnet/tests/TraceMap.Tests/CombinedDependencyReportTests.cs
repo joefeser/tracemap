@@ -551,6 +551,54 @@ public sealed class CombinedDependencyReportTests
     }
 
     [Fact]
+    public void Surface_projection_promotes_only_compiler_resolved_framework_data_adapter_fill_calls()
+    {
+        static CombinedSurfaceFactInput Fill(
+            string id,
+            string target,
+            string tier = EvidenceTiers.Tier1Semantic,
+            string? receiver = "local:adapter") => new(
+                id,
+                "src-1",
+                "api",
+                $"of-{id}",
+                "scan-api",
+                "abc123",
+                FactTypes.MethodInvoked,
+                RuleIds.CSharpSemanticMethodInvocation,
+                tier,
+                "Data/Repository.cs",
+                42,
+                42,
+                new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["receiverSymbol"] = receiver ?? string.Empty
+                },
+                SourceSymbol: "Sample.Repository.Load()",
+                TargetSymbol: target);
+
+        var surfaces = CombinedSurfaceProjection.BuildSurfaces([
+            Fill("framework", "global::System.Data.Common.DbDataAdapter.Fill(global::System.Data.DataSet dataSet)"),
+            Fill("provider", "System.Data.SqlClient.SqlDataAdapter.Fill(System.Data.DataSet dataSet)"),
+            Fill("private", "Sample.PrivateAdapter.Fill(System.Data.DataSet dataSet)"),
+            Fill("structural", "System.Data.Common.DbDataAdapter.Fill(System.Data.DataSet dataSet)", EvidenceTiers.Tier2Structural),
+            Fill("no-receiver", "System.Data.Common.DbDataAdapter.Fill(System.Data.DataSet dataSet)", receiver: null)
+        ]);
+
+        Assert.Equal(2, surfaces.Count);
+        Assert.All(surfaces, surface =>
+        {
+            Assert.Equal("sql-query", surface.SurfaceKind);
+            Assert.Equal("data-adapter-fill", surface.DisplayName);
+            Assert.Equal("data-adapter-fill", surface.SurfaceSubtype);
+            Assert.Equal("fill", surface.OperationName);
+            Assert.Equal("compiler-resolved-data-adapter-fill", surface.SourceKind);
+            Assert.Equal(RuleIds.CSharpSemanticMethodInvocation, surface.RuleId);
+            Assert.Equal(EvidenceTiers.Tier1Semantic, surface.EvidenceTier);
+        });
+    }
+
+    [Fact]
     public void Surface_projection_scopes_remoting_hash_identity_to_remoting_facts()
     {
         var surfaces = CombinedSurfaceProjection.BuildSurfaces([

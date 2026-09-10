@@ -109,7 +109,8 @@ public sealed class WebFormsModernizationPacketTests
             (Control: "none", Handler: "method:none", Name: "None_Click", Line: 10),
             (Control: "unjoined", Handler: "method:unjoined", Name: "Unjoined_Click", Line: 11),
             (Control: "downstream", Handler: "method:downstream", Name: "Downstream_Click", Line: 12),
-            (Control: "terminal", Handler: "method:terminal", Name: "Terminal_Click", Line: 13)
+            (Control: "terminal", Handler: "method:terminal", Name: "Terminal_Click", Line: 13),
+            (Control: "fill", Handler: "method:fill-handler", Name: "Fill_Click", Line: 14)
         };
         var bindings = definitions.Select(item => Fact(manifest, FactTypes.WebFormsEventBindingDeclared, RuleIds.LegacyWebFormsEventBinding, "Pages/Traversal.aspx", item.Line,
             source: $"control:{item.Control}", target: item.Handler, contract: item.Name,
@@ -147,8 +148,25 @@ public sealed class WebFormsModernizationPacketTests
             source: "method:query", target: "query-shape", contract: "query",
             ("operationName", "SELECT"), ("tableName", "items"), ("columnNames", "id"),
             ("sqlSourceKind", "literal-string"), ("queryShapeHash", "shape-hash"), ("coverageLabel", "bounded-static-query"));
+        var fillCall = Fact(manifest, FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, "Pages/Traversal.aspx.cs", 34,
+            source: "method:fill-handler", target: "method:fill", contract: "FillData", ("coverageLabel", "bounded-static-call"));
+        var frameworkFill = FactFactory.Create(
+            manifest,
+            FactTypes.MethodInvoked,
+            RuleIds.CSharpSemanticMethodInvocation,
+            EvidenceTiers.Tier1Semantic,
+            new("Services/Repository.cs", 50, 50, null, "SyntheticFixture", "1.0"),
+            sourceSymbol: "method:fill",
+            targetSymbol: "global::System.Data.Common.DbDataAdapter.Fill(global::System.Data.DataSet dataSet)",
+            contractElement: "Fill",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["receiverSymbol"] = "local:adapter",
+                ["receiverType"] = "global::System.Data.Common.DbDataAdapter",
+                ["coverageLabel"] = "bounded-static-call"
+            });
         var index = Path.Combine(temp.Path, "index.sqlite");
-        SqliteIndexWriter.Write(index, manifest, [page, .. bindings, .. handlers, unjoinedSyntaxCall, unrelatedSameNameCall, unjoinedFlow, downstreamCall, leafInvocationWithoutCall, leafDeclaration, leafBodyEvidence, terminalCall, query]);
+        SqliteIndexWriter.Write(index, manifest, [page, .. bindings, .. handlers, unjoinedSyntaxCall, unrelatedSameNameCall, unjoinedFlow, downstreamCall, leafInvocationWithoutCall, leafDeclaration, leafBodyEvidence, terminalCall, query, fillCall, frameworkFill]);
 
         var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(index, Path.Combine(temp.Path, "output")));
 
@@ -184,6 +202,10 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Equal("supported-terminal-reached", terminal.TraversalObservation?.StopState);
         Assert.True(terminal.TraversalObservation?.TerminalPathCount > 0);
         Assert.Equal("joined-downstream-edge-observed", terminal.TraversalObservation?.CallEvidenceState);
+        var fill = packet.EventChains.Single(chain => chain.HandlerFactId == handlers[4].FactId);
+        Assert.Equal("supported-terminal-reached", fill.TraversalObservation?.StopState);
+        Assert.Equal("sql-query", fill.TerminalKind);
+        Assert.Contains(fill.SupportingFactIds, id => id.EndsWith(frameworkFill.FactId, StringComparison.Ordinal));
         Assert.All(packet.EventChains, chain =>
         {
             Assert.Equal(RuleIds.LegacyFlowStaticTraversal, chain.TraversalObservation?.RuleId);

@@ -97,6 +97,14 @@ public static partial class CombinedDependencyPathReporter
             with projected as (
                 select *,
                     fact_type in ({{types}}) and rule_id not like 'legacy.%'
+                    and not (fact_type = 'MethodInvoked'
+                        and rule_id = '{{RuleIds.CSharpSemanticMethodInvocation}}'
+                        and (target_symbol like 'global::System.Data.Common.DbDataAdapter.Fill(%'
+                            or target_symbol like 'System.Data.Common.DbDataAdapter.Fill(%'
+                            or target_symbol like 'global::System.Data.SqlClient.SqlDataAdapter.Fill(%'
+                            or target_symbol like 'System.Data.SqlClient.SqlDataAdapter.Fill(%'
+                            or target_symbol like 'global::Microsoft.Data.SqlClient.SqlDataAdapter.Fill(%'
+                            or target_symbol like 'Microsoft.Data.SqlClient.SqlDataAdapter.Fill(%'))
                     and case when length(cast(properties_json as blob)) > {{ReportInputBudget.MaxRowTextBytes}} then 0
                         when json_valid(properties_json)
                         then json_type(properties_json, '$.surfaceKind') is null

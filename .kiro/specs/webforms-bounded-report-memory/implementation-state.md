@@ -802,6 +802,31 @@ Validation: focused Web Forms packet and combined traversal tests 68/68; full .N
 solution 1766/1766; scoped formatting, private-path guard, and diff check passed.
 The existing nullable warning in PropertyMappingTests remains unchanged.
 
+## Compiler-resolved DataAdapter Fill terminal projection
+
+The fresh field scan retained the exact public framework Fill target plus receiver
+identity, while the database census independently confirmed same-method command,
+adapter, CommandType assignment, and Fill shapes. The bounded page reporter still
+left that call as a nonterminal because `MethodInvoked` was treated only as compact
+symbol metadata and the shared surface projection did not recognize framework Fill.
+
+The shared surface projection now maps only Tier1 `csharp.semantic.methodinvocation.v1`
+facts whose exact target is a supported public `DbDataAdapter`/`SqlDataAdapter.Fill`
+signature and whose receiver symbol is retained to an `sql-query` surface subtype
+`data-adapter-fill`. The compact single-index reader preserves properties for that
+narrow fact shape. Same-name application methods, lower-tier facts, and missing
+receiver evidence remain nonterminals. Tests cover positive/negative projection,
+real framework extraction into the projection, and a complete Web Forms handler
+path reaching the new SQL terminal. This remains static boundary evidence only;
+command value flow, execution, success, returned rows, and branch feasibility are
+not claimed.
+
+Validation: full .NET solution 1785/1785; focused projection, real-framework
+extraction, and handler-to-Fill terminal tests 3/3; modern sample CLI scan passed;
+scoped formatting and diff checks passed. Repository-wide formatting remains
+blocked by pre-existing whitespace findings outside this change. The existing
+nullable warning in `PropertyMappingTests.cs:560` remains unchanged.
+
 ### Post-fairness field result and actionable summary
 
 The work-machine rerun retained 466 event chains and 361 downstream boundaries.
