@@ -1017,6 +1017,20 @@ public sealed class WebFormsModernizationPacketTests
     }
 
     [Fact]
+    public async Task Surface_list_reader_enforces_byte_limit_while_consuming_open_stream()
+    {
+        await using var source = new MemoryStream([1, 2, 3, 4, 5]);
+        using var bounded = new SurfaceListByteLimitStream(source, 4);
+        var buffer = new byte[4];
+
+        await bounded.ReadExactlyAsync(buffer);
+        var error = await Assert.ThrowsAsync<InvalidDataException>(async () =>
+            await bounded.ReadExactlyAsync(new byte[1]));
+
+        Assert.Equal("WebFormsSurfaceListLimitReached", error.Message);
+    }
+
+    [Fact]
     public async Task Truncated_fact_snapshot_marks_unseen_page_request_unavailable_not_unmatched()
     {
         using var temp = new TempDirectory();

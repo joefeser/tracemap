@@ -1069,3 +1069,10 @@ complete selected method symbol and an exact normalized Tier1 caller witness.
 Validation: affected focused tests 112/112; full .NET solution 1799/1799;
 PowerShell review-set regression and diff check passed. The pre-existing nullable
 warning in `PropertyMappingTests.cs:560` remains unchanged.
+
+The surface-list byte ceiling is also enforced by the opened read stream, not
+only by a pre-open file-length observation. This closes the replacement/append
+race and prevents a newly oversized single line from allocating beyond the
+bounded workflow before the row ceiling can apply. A direct stream regression
+proves the fifth byte fails with the stable `WebFormsSurfaceListLimitReached`
+diagnostic under a four-byte test limit.
