@@ -14,6 +14,10 @@ exact caller lookup remains unchanged. Existing inspections need no regeneration
 Select an explicit private JSON with `-InspectionPath` if the latest file is a
 different sample. No scan, report regeneration, or source read occurs. Console
 summary can be shared; keep SQL and the private inspection JSON at work.
+The census privately compares retained same-method local identities to report
+command-to-adapter support. It also identifies receiver and assigned-value
+metadata that the current fact shapes do not retain; those gaps do not prove
+the corresponding source code is absent.
 The wrapper prints the selected generated filename (custom names are withheld),
 UTC modification time, and SHA256 so the selected artifact can be identified.
 Safe hop-shape counts are printed before classification. Failures now distinguish

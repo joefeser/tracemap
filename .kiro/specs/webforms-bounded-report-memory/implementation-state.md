@@ -1,5 +1,17 @@
 # Implementation state
 
+## Database evidence linkage diagnostic (2026-09-09)
+
+The exact-caller census now privately compares command construction `assignedTo`
+metadata with adapter-constructor `argumentSymbol` metadata and reports only the
+match count. It explicitly distinguishes unretained Fill receiver identity and
+CommandType assigned-value metadata from absent source. Same-method local-name
+matching supports command-to-adapter flow but is not claimed as object identity;
+adapter-to-Fill linkage remains unestablished by the retained fact shapes.
+Validation: focused audits 17/17; full solution 1783/1783; PowerShell/helper
+smoke, formatting, private-path guard, and diff checks passed.
+
+
 ## Qualified framework display symbols (2026-09-09)
 
 Accept one leading `global::` for database census framework classification only.
