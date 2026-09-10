@@ -22,6 +22,7 @@ Start here:
 - [Language adapter contract](docs/LANGUAGE_ADAPTER_CONTRACT.md)
 - [Adapter runway](docs/ADAPTER_RUNWAY.md)
 - [Web Forms modernization packet runbook](docs/WEBFORMS_MODERNIZATION_PACKET.md)
+- [Focused Web Forms human-review workflow](scripts/webforms-review/README.md): supported PowerShell entry points, private/shareable artifact boundaries, and review-set usage.
 - [Large Web Forms indexes and OOM recovery](docs/WEBFORMS_MODERNIZATION_PACKET.md#large-indexes-and-oom-recovery): retry packet generation from the existing read-only scan index, with bounded input and streamed JSON.
 - [PR review loop](docs/PR_REVIEW_LOOP.md)
 - [Static HTML evidence explorer](docs/STATIC_HTML_EVIDENCE_EXPLORER.md)
@@ -450,6 +451,12 @@ succeeds does not by itself prove that Roslyn `MSBuildWorkspace` admitted the
 solution; `semanticCompilation=available` plus Tier1 evidence is the relevant
 readback. Reduced results remain useful, but must not be described as complete
 call-chain or runtime evidence.
+
+To select specific `.aspx` pages from the completed index and generate the
+private/anonymous browser review set, continue with the [focused Web Forms
+human-review workflow](scripts/webforms-review/README.md). That guide separates
+the supported operator path from the narrower diagnostic and historical-depth
+utilities.
 
 ## License
 
