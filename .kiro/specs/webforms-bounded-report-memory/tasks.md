@@ -60,3 +60,4 @@
 - [x] Render handler-rooted HTML drill-down with evidence anchors and a separately generated anonymous Mermaid/JSON review packet.
 - [x] Embed the isolated alias Mermaid graph and private alias legend in the local review, and duplicate bounded trigger source above its full-evidence link.
 - [x] Default the private graph and evidence closed while keeping trigger, retained path, and verdict open; reveal collapsed parents for anchor navigation.
+- [x] Emit Mermaid 11-compatible call-graph labels and links with a pinned renderer version.

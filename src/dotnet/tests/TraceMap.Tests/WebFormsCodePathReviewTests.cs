@@ -25,6 +25,7 @@ public sealed class WebFormsCodePathReviewTests
             Assert.Contains("href=\"#evidence-", report);
             Assert.Contains("sandbox=\"allow-scripts\"", report);
             Assert.Contains("Anonymous Mermaid call graph", report);
+            Assert.DoesNotContain(".shareable.html#call-graph", report);
             Assert.Contains("Private alias legend", report);
             Assert.Contains("id=\"trigger\" open", report);
             Assert.Contains("id=\"call-path\" open", report);
@@ -35,6 +36,10 @@ public sealed class WebFormsCodePathReviewTests
             var shareableHtml = File.ReadAllText(Path.Combine(directory, "review.shareable.html"));
             var shareableJson = File.ReadAllText(Path.Combine(directory, "review.shareable.json"));
             Assert.Contains("flowchart TD", shareableHtml);
+            Assert.Contains("handler_001 -->|calls x 1| node_001", shareableHtml);
+            Assert.Contains("click handler_001 href \"#node-handler-001\" \"View structural details\"", shareableHtml);
+            Assert.Contains("mermaid@11.17.2", shareableHtml);
+            Assert.DoesNotContain("-->|\"", shareableHtml);
             Assert.Contains("handler-001", shareableHtml);
             Assert.Contains("diagnostic.webforms.anonymous-code-path-review.v1", shareableJson);
             Assert.DoesNotContain("Private", shareableHtml);

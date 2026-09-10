@@ -284,7 +284,7 @@ public static class WebFormsCodePathReview
                 }
                 writer.WriteLine("</details>");
                 writer.WriteLine("<details class=\"panel\" id=\"graph\"><summary><h2>Call graph</h2></summary><p>The diagram uses anonymous aliases inside an isolated frame. Use the private legend below to connect aliases to source evidence.</p>");
-                writer.WriteLine($"<iframe class=\"graph-frame\" sandbox=\"allow-scripts\" src=\"{H(Path.GetFileName(shareableHtmlPath))}#call-graph\" title=\"Anonymous Mermaid call graph\"></iframe>");
+                writer.WriteLine($"<iframe class=\"graph-frame\" sandbox=\"allow-scripts\" src=\"{H(Path.GetFileName(shareableHtmlPath))}\" title=\"Anonymous Mermaid call graph\"></iframe>");
                 writer.WriteLine("<h3>Private alias legend</h3><dl class=\"legend\">");
                 foreach (var pair in aliases.OrderBy(pair => pair.Value, StringComparer.Ordinal))
                 {
@@ -354,8 +354,10 @@ public static class WebFormsCodePathReview
                 writer.WriteLine("<section id=\"call-graph\"><h2>Call graph</h2><p>Click a node to jump to its structural details. Mermaid rendering requires browser access to the Mermaid module; the source remains visible as a fallback.</p><pre class=\"mermaid\">");
                 writer.WriteLine("flowchart TD");
                 foreach (var node in anonymousNodes) writer.WriteLine($"  {node.Id.Replace('-', '_')}[\"{node.Id}<br/>{node.Classification}\"]");
-                foreach (var edge in anonymousEdges) writer.WriteLine($"  {edge.from.Replace('-', '_')} -->|\"calls × {edge.callSiteCount}\"| {edge.to.Replace('-', '_')}");
-                foreach (var node in anonymousNodes) writer.WriteLine($"  click {node.Id.Replace('-', '_')} \"#node-{node.Id}\"");
+                // Keep the generated diagram on Mermaid's conservative flowchart grammar
+                // so standalone and sandboxed rendering do not depend on permissive parsing.
+                foreach (var edge in anonymousEdges) writer.WriteLine($"  {edge.from.Replace('-', '_')} -->|calls x {edge.callSiteCount}| {edge.to.Replace('-', '_')}");
+                foreach (var node in anonymousNodes) writer.WriteLine($"  click {node.Id.Replace('-', '_')} href \"#node-{node.Id}\" \"View structural details\"");
                 writer.WriteLine("</pre></section><h2>Structural details</h2>");
                 foreach (var node in anonymousNodes)
                 {
@@ -365,7 +367,7 @@ public static class WebFormsCodePathReview
                     writer.WriteLine("</ul><p><a href=\"#top\">Back to graph</a></p></section>");
                 }
                 writer.WriteLine("<h2>Human verdict</h2><p>Result: <strong>unreviewed</strong></p><p>Static retained calls do not prove runtime order, branch feasibility, or source completeness. Missing evidence does not prove absence.</p>");
-                writer.WriteLine("</main><script type=\"module\">import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs'; mermaid.initialize({startOnLoad:true,securityLevel:'loose'});</script></body></html>");
+                writer.WriteLine("</main><script type=\"module\">import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.esm.min.mjs'; mermaid.initialize({startOnLoad:true,securityLevel:'loose'});</script></body></html>");
             }
 
             // Fail closed before publication if a private identity entered either anonymous artifact.

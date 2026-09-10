@@ -915,6 +915,18 @@ scoped formatting and diff checks passed. Repository-wide formatting remains
 blocked by pre-existing whitespace findings outside this change. The existing
 nullable warning in `PropertyMappingTests.cs:560` remains unchanged.
 
+### Mermaid 11 report compatibility
+
+The anonymous call-path graph now emits conservative Mermaid 11 flowchart
+syntax: pipe-delimited edge labels are unquoted, node navigation uses the
+explicit `click ... href` form, and the browser module is pinned to 11.17.2.
+This removes permissive-parser and floating-version dependencies from field
+reports that displayed Mermaid's syntax-error fallback only in the iframe. The
+private iframe also loads the anonymous document at its root rather than during
+fragment navigation, matching the field-confirmed standalone rendering path
+while preserving the script-only sandbox. The report can be regenerated from
+the retained local inspection; no repository rescan is required.
+
 ### Post-fairness field result and actionable summary
 
 The work-machine rerun retained 466 event chains and 361 downstream boundaries.
