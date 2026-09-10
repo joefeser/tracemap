@@ -44,7 +44,10 @@ public sealed class WebFormsDatabaseEvidenceAuditTests
             File.WriteAllText(inspection, JsonSerializer.Serialize(new { schemaVersion = "webforms-local-inspection.v1", scanId = "s", commitSha = mismatch ? "wrong" : "c", hops = new[] { new { caller = "Private.Method()", callee = "System.Data.Common.DbDataAdapter.Fill(System.Data.DataSet)" } } }));
             if (mismatch || missingFill)
             {
-                Assert.Throws<InvalidDataException>(() => WebFormsDatabaseEvidenceAudit.Run(db, inspection));
+                var diagnostics = new List<string>();
+                var error = Assert.Throws<InvalidDataException>(() => WebFormsDatabaseEvidenceAudit.Run(db, inspection, diagnostics.Add));
+                Assert.Equal(mismatch ? "RawAuditProvenanceMismatch" : "RawAuditFillIndexWitnessMissing", error.Message);
+                if (missingFill) Assert.Contains("exactCallerFrameworkFillWitness=missing", diagnostics);
                 return;
             }
             var before = File.ReadAllBytes(db);
@@ -59,6 +62,13 @@ public sealed class WebFormsDatabaseEvidenceAuditTests
             Assert.DoesNotContain("Private.Method", string.Join('\n', output));
             Assert.DoesNotContain("privateCommand", string.Join('\n', output));
             Assert.Equal(before, File.ReadAllBytes(db));
+            File.WriteAllText(inspection, File.ReadAllText(inspection).Replace("System.Data.Common.DbDataAdapter.Fill", "Private.Adapter.Fill", StringComparison.Ordinal));
+            var shapeDiagnostics = new List<string>();
+            var shapeError = Assert.Throws<InvalidDataException>(() => WebFormsDatabaseEvidenceAudit.Run(db, inspection, shapeDiagnostics.Add));
+            Assert.Equal("RawAuditNoRecognizedFillHop", shapeError.Message);
+            Assert.Contains("inspectionFillNamedHops=1", shapeDiagnostics);
+            Assert.Contains("inspectionRecognizedFrameworkFillHops=0", shapeDiagnostics);
+            Assert.DoesNotContain("Private", string.Join('\n', shapeDiagnostics));
         }
         finally { Directory.Delete(directory, true); }
     }

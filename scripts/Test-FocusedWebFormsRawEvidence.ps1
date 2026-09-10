@@ -49,6 +49,11 @@ if ($DatabaseEvidence) {
         if ($null -eq $latestInspection) { throw 'No local inspection file was found.' }
         $InspectionPath = $latestInspection.FullName
     }
+    $inspectionItem = Get-Item -LiteralPath $InspectionPath
+    $safeName = if ($inspectionItem.Name -cmatch '^webforms-local-inspection-[a-f0-9]{32}\.json$') { $inspectionItem.Name } else { 'custom-name-withheld' }
+    Write-Host "selectedInspectionFile=$safeName"
+    Write-Host "selectedInspectionModifiedUtc=$($inspectionItem.LastWriteTimeUtc.ToString('o'))"
+    Write-Host "selectedInspectionSha256=$((Get-FileHash -LiteralPath $InspectionPath -Algorithm SHA256).Hash.ToLowerInvariant())"
     & dotnet $dll --database-evidence $IndexPath $InspectionPath
 }
 elseif ($StartingMethodName -and !$InspectionPath) { throw 'Method inspection requires a local output file.' }

@@ -12,6 +12,13 @@ sample must include an actual framework DbDataAdapter/SqlDataAdapter Fill hop.
 Select an explicit private JSON with `-InspectionPath` if the latest file is a
 different sample. No scan, report regeneration, or source read occurs. Console
 summary can be shared; keep SQL and the private inspection JSON at work.
+The wrapper prints the selected generated filename (custom names are withheld),
+UTC modification time, and SHA256 so the selected artifact can be identified.
+Safe hop-shape counts are printed before classification. Failures now distinguish
+`RawAuditNoRecognizedFillHop`, `RawAuditMultipleFillCallers`,
+`RawAuditFillCallerIdentityMissing`, and `RawAuditFillIndexWitnessMissing`.
+These separate selection/signature recognition from missing exact index evidence;
+none is automatically an extraction defect. Send the whole safe console output.
 
 Rule `diagnostic.webforms.database-evidence-census.v1`: verifies scan/commit and
 counts raw facts owned by the exact Fill caller. Public-type semantic signals

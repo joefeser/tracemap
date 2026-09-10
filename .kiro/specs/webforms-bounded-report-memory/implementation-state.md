@@ -1,5 +1,17 @@
 # Implementation state
 
+## Distinct Fill audit failures (2026-09-09)
+
+Field returned RawAuditFillCallerUnavailable, which conflated inspection-hop
+recognition with missing exact-caller index evidence. Split these into closed
+codes for no recognized hop, missing caller identity, multiple callers, and
+missing index witness. Emit safe hop counts and post-provenance caller counts
+before failure. Wrapper prints allowlisted generated filename, UTC timestamp,
+and content hash, never a private path/custom filename. No type matching or
+source assumptions broadened; this diagnoses the actual cause on the next run.
+Validation: focused audits 15/15; full solution 1781/1781; PowerShell/helper
+smoke, formatting, private-path guard, and diff checks passed.
+
 ## Database evidence census (2026-09-09)
 
 Operator confirmed command construction with SQL/connection, StoredProcedure
