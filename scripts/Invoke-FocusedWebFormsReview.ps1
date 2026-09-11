@@ -113,8 +113,14 @@ if ($ProjectRelativePath.Count -eq 0 -and [string]::IsNullOrWhiteSpace($Solution
 
 $TraceMapRoot = [IO.Path]::GetFullPath($TraceMapRoot).TrimEnd('\', '/')
 $SourceRoot = [IO.Path]::GetFullPath((Resolve-Path -LiteralPath $SourceRoot)).TrimEnd('\', '/')
-if (git -C $TraceMapRoot status --porcelain) { throw "TRACEMAP_WORKTREE_DIRTY" }
-if (git -C $SourceRoot status --porcelain) { throw "SOURCE_WORKTREE_DIRTY" }
+$traceMapStatus = @(git -C $TraceMapRoot status --porcelain --untracked-files=all)
+$traceMapStatusExit = $LASTEXITCODE
+if ($traceMapStatusExit -ne 0) { throw "TRACEMAP_STATUS_UNAVAILABLE" }
+if ($traceMapStatus.Count -ne 0) { throw "TRACEMAP_WORKTREE_DIRTY" }
+$sourceStatus = @(git -C $SourceRoot status --porcelain --untracked-files=all)
+$sourceStatusExit = $LASTEXITCODE
+if ($sourceStatusExit -ne 0) { throw "SOURCE_STATUS_UNAVAILABLE" }
+if ($sourceStatus.Count -ne 0) { throw "SOURCE_WORKTREE_DIRTY" }
 
 $gitRoot = (git -C $SourceRoot rev-parse --show-toplevel).Trim()
 if ($LASTEXITCODE -ne 0 -or [IO.Path]::GetFullPath($gitRoot).TrimEnd('\', '/') -ne $SourceRoot) {

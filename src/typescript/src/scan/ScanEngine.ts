@@ -96,7 +96,7 @@ export async function scan(options: ScanOptions, testHooks: ScanTestHooks = {}):
   for (const skipped of inventory.filter((item) => item.skipped)) {
     gapCollector.add(manifest, "file-size-limit", "File exceeded max byte-size threshold.", skipped.relativePath, 1, { sizeBytes: skipped.sizeBytes });
   }
-  facts.push(...await extractPackageFacts(manifest, repoPath, inventory));
+  facts.push(...await extractPackageFacts(manifest, repoPath, inventory, gapCollector));
   facts.push(...await extractConfigFacts(manifest, inventory));
   facts.push(...await extractBase44Facts(manifest, inventory));
 

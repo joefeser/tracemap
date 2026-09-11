@@ -78,6 +78,9 @@ public static partial class PackageDecisionAdvisoryProfileReader
             if (root.ValueKind != JsonValueKind.Object)
                 return Failure("DecisionInputSchemaUnsupported", "The advisory profile envelope is not an object.");
 
+            if (HasDuplicateProperties(root))
+                return Failure("DecisionInputSchemaUnsupported", "The advisory profile contains duplicate properties.");
+
             if (!root.EnumerateObject().Select(property => property.Name).ToHashSet(StringComparer.Ordinal).SetEquals(["version", "producer", "claims"]))
                 return Failure("DecisionInputSchemaUnsupported", "The advisory profile envelope has unsupported properties.");
 
@@ -193,6 +196,23 @@ public static partial class PackageDecisionAdvisoryProfileReader
 
     private static PackageDecisionAdvisoryProfile Failure(string classification, string message) =>
         new([], [Gap(classification, message, null, null, "envelope")], false);
+
+    private static bool HasDuplicateProperties(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Array)
+            return element.EnumerateArray().Any(HasDuplicateProperties);
+        if (element.ValueKind != JsonValueKind.Object)
+            return false;
+
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var property in element.EnumerateObject())
+        {
+            if (!names.Add(property.Name) || HasDuplicateProperties(property.Value))
+                return true;
+        }
+
+        return false;
+    }
 
     private static PackageDecisionInputGap Gap(string classification, string message, string? claimId, string? producerId, string discriminator) =>
         new($"pd-advisory:{CombinedReportHelpers.Hash(string.Join('\u001f', classification, producerId ?? "unknown", claimId ?? "unknown", discriminator), 24)}",
