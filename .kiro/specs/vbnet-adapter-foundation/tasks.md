@@ -10,11 +10,11 @@ Issue: [#736](https://github.com/joefeser/tracemap/issues/736)
   cataloged VB rule IDs with limitation text.
 - [x] 4. Implement VB project selection and semantic loading without
   regressing C# or mixed-language solutions.
-- [ ] 5. Emit compiler-backed VB declarations, symbol occurrences,
+- [x] 5. Emit compiler-backed VB declarations, symbol occurrences,
   references, calls, construction, arguments, and direct relationships.
-- [ ] 6. Implement per-file VB syntax fallback with explicit gaps and reduced
+- [x] 6. Implement per-file VB syntax fallback with explicit gaps and reduced
   coverage.
-- [ ] 7. Merge VB results into shared artifacts with deterministic ordering and
+- [x] 7. Merge VB results into shared artifacts with deterministic ordering and
   backing-fact integrity.
 - [ ] 8. Add synthetic semantic, fallback, mixed-language, generated-source,
   determinism, snapshot-mutation, and public-safety tests.

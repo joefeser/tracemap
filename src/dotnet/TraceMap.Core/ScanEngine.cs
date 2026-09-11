@@ -774,7 +774,10 @@ public static class ScanEngine
                 RuleIds.ProjectFile,
                 EvidenceTiers.Tier2Structural,
                 new EvidenceSpan(item.ProjectPath, item.Line, item.Line, null, "ProjectFileExtractor", ScannerVersions.ProjectFileExtractor),
-                projectPath: item.ProjectPath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) ? item.ProjectPath : null,
+                projectPath: item.ProjectPath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
+                    || item.ProjectPath.EndsWith(".vbproj", StringComparison.OrdinalIgnoreCase)
+                    ? item.ProjectPath
+                    : null,
                 targetSymbol: item.PackageName,
                 properties: packageProperties));
         }
@@ -856,6 +859,7 @@ public static class ScanEngine
         facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, migrationSyntaxFallback.Gaps));
         progress?.StartStage(ScanProgressReporter.ScanOperation, ScanProgressStages.SyntaxFallback);
         facts.AddRange(CSharpSyntaxExtractor.Extract(repoPath, manifest, inventory, protectedSourceSpans));
+        facts.AddRange(VisualBasicSyntaxExtractor.Extract(repoPath, manifest, inventory, semanticallyAnalyzedFiles, protectedSourceSpans));
         progress?.FinishStage(ScanProgressReporter.ScanOperation, ScanProgressStages.SyntaxFallback, "completed");
         cancellationToken.ThrowIfCancellationRequested();
         progress?.StartStage(ScanProgressReporter.ScanOperation, ScanProgressStages.SpecializedExtraction);
