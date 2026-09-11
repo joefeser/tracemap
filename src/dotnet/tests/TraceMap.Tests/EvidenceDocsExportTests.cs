@@ -864,8 +864,8 @@ public sealed class EvidenceDocsExportTests
         var result = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(indexPath, Path.Combine(temp.Path, "docs")));
         Assert.Contains(result.Chunks.SelectMany(chunk => chunk.Gaps), gap => gap.Reason == "missing-provenance");
 
-        var rawSql = string.Concat("sel", "ect * fr", "om Customers wh", "ere Pass", "word = 'secret'");
-        var sqlIndex = CreateSingleIndex(temp.Path, propertiesJson: $$"""{"query":"{{rawSql}}"}""");
+        var rawSql = string.Concat("sel", "ect * fr", "om Customers wh", "ere Id = 1");
+        var sqlIndex = CreateSingleIndex(temp.Path, propertiesJson: $$"""{"a":"1","b":"2","c":"3","d":"4","e":"5","extractorId":"test-extractor","query":"{{rawSql}}"}""");
         var sqlResult = await EvidenceDocsExporter.ExportAsync(
             new EvidenceDocsExportOptions(sqlIndex, Path.Combine(temp.Path, "sql-docs")));
         var sqlSerialized = JsonSerializer.Serialize(sqlResult);
@@ -875,17 +875,65 @@ public sealed class EvidenceDocsExportTests
             gap => gap.Reason == "unsafe-property-redacted");
         Assert.Equal("docs-export.redaction.unsafe-property.v1", sqlGap.RuleId);
         Assert.Contains("property:query", sqlGap.SupportingIds);
+        Assert.Contains("redaction-category:raw-sql", sqlGap.SupportingIds);
+        Assert.Equal("src/Api/Controller.cs", sqlGap.FilePath);
+        Assert.Equal(10, sqlGap.StartLine);
+        Assert.Equal(12, sqlGap.EndLine);
+        Assert.Equal("1111111111111111111111111111111111111111", sqlGap.CommitSha);
+        Assert.Equal("test-extractor", sqlGap.ExtractorName);
+        Assert.Equal("tracemap-tests", sqlGap.ExtractorVersion);
+        Assert.Contains(sqlResult.Chunks.SelectMany(chunk => chunk.Redactions), redaction =>
+            redaction.Category == "raw-sql" && redaction.Location == "property:query");
 
-        var configValue = string.Concat("connection", "String=Server=private;Pass", "word=private");
+        var configValue = string.Concat("connection", "String=Server=https://db.example.com;Pass", "word=private");
         var configIndex = CreateSingleIndex(temp.Path, propertiesJson: $$"""{"connection":"{{configValue}}"}""");
         var configResult = await EvidenceDocsExporter.ExportAsync(
             new EvidenceDocsExportOptions(configIndex, Path.Combine(temp.Path, "config-docs")));
         var configSerialized = JsonSerializer.Serialize(configResult);
-        Assert.DoesNotContain("Server=private", configSerialized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("db.example.com", configSerialized, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Password", configSerialized, StringComparison.OrdinalIgnoreCase);
         var configGap = Assert.Single(configResult.Chunks.SelectMany(chunk => chunk.Gaps),
             gap => gap.Reason == "unsafe-property-redacted");
         Assert.Contains("property:connection", configGap.SupportingIds);
+        Assert.Contains("redaction-category:credential-or-config", configGap.SupportingIds);
+
+        var literalIndex = CreateSingleIndex(temp.Path, propertiesJson: """{"note":"redacted-raw-sql"}""");
+        var literalResult = await EvidenceDocsExporter.ExportAsync(
+            new EvidenceDocsExportOptions(literalIndex, Path.Combine(temp.Path, "literal-docs")));
+        Assert.DoesNotContain(literalResult.Chunks.SelectMany(chunk => chunk.Gaps),
+            gap => gap.Reason == "unsafe-property-redacted");
+
+        var analysisGapIndex = CreateSingleIndex(temp.Path, propertiesJson: $$"""{"diagnostic":"{{rawSql}}"}""");
+        await using (var connection = new SqliteConnection($"Data Source={analysisGapIndex}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "update facts set fact_type = 'AnalysisGap', rule_id = 'test.analysis-gap.v1', evidence_tier = 'Tier4Unknown';";
+            await command.ExecuteNonQueryAsync();
+        }
+        var analysisGapResult = await EvidenceDocsExporter.ExportAsync(new(
+            analysisGapIndex,
+            Path.Combine(temp.Path, "analysis-gap-docs"),
+            Families: "gap,limitation"));
+        Assert.Contains(analysisGapResult.Chunks.SelectMany(chunk => chunk.Gaps), gap =>
+            gap.Reason == "unsafe-property-redacted"
+            && gap.SupportingIds.Contains("redaction-category:raw-sql", StringComparer.Ordinal));
+        Assert.Contains(analysisGapResult.Chunks.SelectMany(chunk => chunk.Redactions), redaction =>
+            redaction.Category == "raw-sql" && redaction.Location == "property:diagnostic");
+
+        var frameworkGapIndex = CreateSingleIndex(temp.Path, propertiesJson: $$"""{"diagnostic":"{{rawSql}}"}""");
+        await using (var connection = new SqliteConnection($"Data Source={frameworkGapIndex}"))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "update facts set rule_id = 'database.framework-migration.gap.v1', evidence_tier = 'Tier4Unknown';";
+            await command.ExecuteNonQueryAsync();
+        }
+        var frameworkGapResult = await EvidenceDocsExporter.ExportAsync(new(
+            frameworkGapIndex,
+            Path.Combine(temp.Path, "framework-gap-docs")));
+        Assert.Contains(frameworkGapResult.Chunks.SelectMany(chunk => chunk.Redactions), redaction =>
+            redaction.Category == "raw-sql" && redaction.Location == "property:diagnostic");
 
         var nullPropertiesIndex = CreateSingleIndex(temp.Path, propertiesJson: null);
         var nullPropertiesResult = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(nullPropertiesIndex, Path.Combine(temp.Path, "null-properties-docs")));

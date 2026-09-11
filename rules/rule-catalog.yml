@@ -800,7 +800,7 @@ rules:
     evidenceTier: Tier4Unknown
     emits:
       - unsafe-property-redacted gap
-      - category-only redaction marker
+      - category-only redaction record
     limitations:
       - Redaction preserves no source value, SQL text, configuration value, credential, token, host, or connection detail.
       - The retained property key and supporting fact identify where authorized local review may be needed; they do not prove the redacted value's semantics or runtime use.
