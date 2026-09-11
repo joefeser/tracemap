@@ -240,6 +240,7 @@ public static partial class EvidenceDocsExporter
     private const string UserFileCollisionRuleId = "docs-export.validation.user-file-collision.v1";
     private const string UnsafeRejectedRuleId = "docs-export.validation.unsafe-value-rejected.v1";
     private const string UnsafePropertyRedactionRuleId = "docs-export.redaction.unsafe-property.v1";
+    private const string UnsafeLimitationRedactionRuleId = "docs-export.redaction.unsafe-limitation.v1";
     private const string ProhibitedClaimRuleId = "docs-export.validation.prohibited-claim-wording.v1";
     private const string SchemaGapRuleId = "docs-export.gap.schema-incompatible.v1";
     private const string ClaimHiddenRuleId = "docs-export.gap.claim-level-hidden.v1";
@@ -1637,8 +1638,35 @@ public static partial class EvidenceDocsExporter
         IReadOnlyList<EvidenceDocGap> gaps,
         IReadOnlyList<EvidenceDocLimitation> limitations)
     {
+        var sanitizedGaps = gaps.Select(gap => gap with
+        {
+            Limitations = gap.Limitations.Select(SafeLimitationMessage).ToArray()
+        }).ToArray();
+        var sanitizedLimitations = limitations.Select(limitation => limitation with
+        {
+            RuleId = UnsafeCategory(limitation.Message) is null ? limitation.RuleId : UnsafeLimitationRedactionRuleId,
+            EvidenceTier = UnsafeCategory(limitation.Message) is null ? limitation.EvidenceTier : Tier4Unknown,
+            Message = SafeLimitationMessage(limitation.Message)
+        }).ToArray();
+        var redactions = gaps
+            .SelectMany(gap => gap.Limitations.Select(message => (Id: gap.GapId, Message: message, Location: "gap-limitation")))
+            .Concat(limitations.Select(limitation => (Id: limitation.LimitationId, Message: limitation.Message, Location: "limitation")))
+            .Select(item => (item.Id, item.Location, Category: UnsafeCategory(item.Message)))
+            .Where(item => item.Category is not null)
+            .Select(item => new EvidenceDocRedaction(
+                StableId("redaction", "docs-export/unsafe-limitation/v1", [new("id", item.Id), new("category", item.Category)]),
+                UnsafeLimitationRedactionRuleId,
+                item.Category!,
+                item.Location))
+            .OrderBy(redaction => redaction.RedactionId, StringComparer.Ordinal)
+            .ToArray();
         var orderedSupportingIds = supportingIds.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
-        var orderedRules = ruleIds.Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        var orderedRules = ruleIds
+            .Concat(redactions.Length == 0 ? [] : [UnsafeLimitationRedactionRuleId])
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
         var orderedTiers = evidenceTiers.Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
         var orderedCoverage = coverageLabels.Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
         var sourceKey = string.Join('|', sourceRefs.Select(source => source.SourceId).OrderBy(value => value, StringComparer.Ordinal));
@@ -1656,8 +1684,8 @@ public static partial class EvidenceDocsExporter
         ]);
         var sortKey = $"{Array.IndexOf(AllFamilies, family):D2}|{family}|{string.Join('|', orderedCoverage)}|{string.Join('|', orderedRules)}|{id}|{title}";
         var sectionTitle = SectionTitleFor(family, type);
-        var questionFamilies = QuestionFamiliesFor(family, type, orderedTiers, orderedCoverage, gaps, limitations);
-        var claim = ClaimFor(type, family, claimLevel, orderedRules.Length == 0 ? [GapChunkRuleId] : orderedRules, orderedTiers.Length == 0 ? [Tier4Unknown] : orderedTiers, orderedCoverage, orderedSupportingIds, gaps, limitations);
+        var questionFamilies = QuestionFamiliesFor(family, type, orderedTiers, orderedCoverage, sanitizedGaps, sanitizedLimitations);
+        var claim = ClaimFor(type, family, claimLevel, orderedRules.Length == 0 ? [GapChunkRuleId] : orderedRules, orderedTiers.Length == 0 ? [Tier4Unknown] : orderedTiers, orderedCoverage, orderedSupportingIds, sanitizedGaps, sanitizedLimitations);
         return new EvidenceDocChunk(
             SchemaVersion,
             id,
@@ -1677,10 +1705,18 @@ public static partial class EvidenceDocsExporter
             orderedRules.Length == 0 ? [GapChunkRuleId] : orderedRules,
             orderedTiers.Length == 0 ? [Tier4Unknown] : orderedTiers,
             orderedCoverage,
-            gaps.OrderBy(gap => gap.GapId, StringComparer.Ordinal).ToArray(),
-            limitations.OrderBy(limitation => limitation.LimitationId, StringComparer.Ordinal).ToArray(),
-            [],
+            sanitizedGaps.OrderBy(gap => gap.GapId, StringComparer.Ordinal).ToArray(),
+            sanitizedLimitations.OrderBy(limitation => limitation.LimitationId, StringComparer.Ordinal).ToArray(),
+            redactions,
             []);
+    }
+
+    private static string SafeLimitationMessage(string message)
+    {
+        var category = UnsafeCategory(message);
+        return category is null
+            ? message
+            : $"An unsafe limitation value was omitted; category: {category}. Review the retained supporting IDs in authorized local evidence.";
     }
 
     private static string SectionTitleFor(string family, string type)
