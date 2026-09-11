@@ -3789,6 +3789,7 @@ rules:
     limitations:
       - Workspace and compiler diagnostics can be environment-specific because they depend on installed SDKs, reference assemblies, and available project references.
       - Native workspace messages are sanitized to stable categories before shareable artifacts are written; raw local paths, remotes, package sources, config values, credentials, and source-like snippets are omitted.
+      - Compiler-diagnostic gaps carry a bounded Visual Basic diagnostic id (`BCxxxxx`) alongside the category; the id is a safe categorical code and never retains the raw diagnostic message.
       - A Visual Basic workspace or compilation gap reduces the aggregate scan coverage label; the scan is never reported as clean or complete while such a gap is present.
       - Compiler diagnostics that point at no source location and reference the classic My template surface are excluded as SDK design-time injection noise; this exclusion is bounded to that template surface and does not suppress source-referencing compiler errors.
       - Per-file `SemanticAnalysisUnavailable` gaps are emitted by the bounded syntax fallback for Visual Basic files that received no compiler-resolved coverage; they do not claim why semantic evidence is unavailable, and syntax facts that accompany them are governed by the `vb.syntax.*` rules.

@@ -1165,6 +1165,7 @@ The script uses exact commit SHAs so results are comparable over time.
 | --- | --- | --- | --- | --- |
 | `ProjectExtensions.Azure.ServiceBus` | C# | `https://github.com/ProjectExtensions/ProjectExtensions.Azure.ServiceBus.git` | `2a8e72c8f5680edf2096b05ac08c39d47a95cef8` | usually `Level1SemanticAnalysisReduced` |
 | `fluentjdf` | C# | `https://github.com/joefeser/fluentjdf.git` | `9490e699a89bb21f4aabf198173fc6382f84a53f` | usually `Level1SemanticAnalysisReduced` |
+| `community-visual-basic` | VB.NET | `https://github.com/CommunityVB/Community.VisualBasic.git` | `20d2a51dfc9f342848ad134952ceaa8d79302559` | `Level1SemanticAnalysisReduced`; see the VB.NET adapter section |
 | `scip-typescript` | TypeScript | `https://github.com/sourcegraph/scip-typescript.git` | `891eb4293709a6a587bf4468dfa1b45a85182fd9` | usually `Level1SemanticAnalysisReduced` |
 | `axios-npm-lock` | JavaScript/TypeScript | `https://github.com/axios/axios.git` | `84a9f3b9a4f3244b8c8e818f557d64c7b964fb25` | usually `Level1SemanticAnalysisReduced`; committed npm `package-lock.json` v3 evidence |
 | `scip-java` | JVM | `https://github.com/sourcegraph/scip-java.git` | `825463cb15d540d45c680593aad1f634330435cf` | usually `Level1SemanticAnalysisReduced` |
@@ -1205,6 +1206,91 @@ sqlite3 <out>/index.sqlite "select count(*) from object_creations;"
 sqlite3 <out>/index.sqlite "select count(*) from argument_flows;"
 sqlite3 <out>/index.sqlite "select target_symbol, properties_json from facts where fact_type='HttpRouteBinding';"
 ```
+
+## VB.NET Adapter
+
+The VB.NET adapter follows the same matrix: local modern/legacy/Web Forms
+fixtures, a reducer-compatible shared index, the pinned OSS smoke, and the
+private-path guard. Adapter scope, extractor identities, fact families,
+fallback behavior, supported project types, and limitations are documented in
+[`VBNET_ADAPTER.md`](VBNET_ADAPTER.md); the fixture corpus and the pinned
+smoke repository are documented in
+[`VBNET_FIXTURES.md`](VBNET_FIXTURES.md).
+
+Required local validation for VB.NET adapter changes:
+
+```bash
+dotnet build src/dotnet/TraceMap.sln
+dotnet test src/dotnet/TraceMap.sln
+
+# Focused VB.NET suites: extraction facts, foundation inventory/loading, the
+# synthetic validation matrix, and fixture syntax checks.
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter 'FullyQualifiedName~VisualBasic|FullyQualifiedName~VbNetFixture'
+
+# Modern (semantic success), legacy (fallback/reduced), and Web Forms
+# (inventory + reduced) CLI fixture scans.
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/vb-modern-sample --out <tmp>/vb-modern
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/vb-legacy-sample --out <tmp>/vb-legacy
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/vb-webforms-sample --out <tmp>/vb-webforms
+
+# Shared artifact conformance (also enforces rule registration) for each scan.
+python3 scripts/validate-adapter-artifacts.py <tmp>/vb-modern
+python3 scripts/validate-adapter-artifacts.py <tmp>/vb-legacy
+python3 scripts/validate-adapter-artifacts.py <tmp>/vb-webforms
+
+# Determinism: two consecutive modern-fixture scans are byte-identical.
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/vb-modern-sample --out <tmp>/vb-modern-repeat
+cmp <tmp>/vb-modern/facts.ndjson <tmp>/vb-modern-repeat/facts.ndjson
+
+# Useful inspection queries.
+sqlite3 <tmp>/vb-modern/index.sqlite "select fact_type, count(*) from facts where rule_id like 'vb.%' group by fact_type order by fact_type;"
+sqlite3 <tmp>/vb-modern/index.sqlite "select count(*) from symbols where language = 'visualbasic';"
+sqlite3 <tmp>/vb-modern/index.sqlite "select count(*) from call_edges where rule_id like 'vb.semantic.%';"
+sqlite3 <tmp>/vb-modern/index.sqlite "select count(*) from call_edges where rule_id like 'vb.syntax.%';"
+
+./scripts/check-private-paths.sh
+git diff --check
+```
+
+Expected fixture postures:
+
+- `vb-modern-sample`: `Level1SemanticAnalysis` / `Succeeded`, Tier1 families
+  only, no `vb.syntax.*` facts, no `vb.semantic.workspace.v1` gaps.
+- `vb-legacy-sample`: `Level1SemanticAnalysisReduced` / `FailedOrPartial`,
+  partial Tier1 evidence over the readable files, zero `vb.syntax.*` facts
+  (the per-file fallback boundary keeps Tier1-covered files free of Tier3
+  duplicates), and category-only gaps carrying bounded `BCxxxxx` ids.
+- `vb-webforms-sample`: `Level1SemanticAnalysisReduced` / `FailedOrPartial`
+  on cross-platform SDKs; handler methods appear as declared evidence only
+  and no event wiring becomes edges.
+
+VB.NET pinned OSS smoke (`community-visual-basic` —
+`CommunityVB/Community.VisualBasic`, MIT, pinned at
+`20d2a51dfc9f342848ad134952ceaa8d79302559`):
+
+```bash
+TRACEMAP_OSS_SMOKE_REPOS=community-visual-basic \
+  scripts/smoke-open-source-repos.sh /tmp/tracemap-oss-cache /tmp/tracemap-oss-smoke
+```
+
+The script clones the pin, resets the working tree with `git clean -fdx`
+(required: design-time builds write `obj/` state inside the clone, which
+changes later design-time loads and gap counts if it is not cleaned), scans
+it, and asserts the required artifacts. Recorded expectations at the pin:
+`Level1SemanticAnalysisReduced` / `FailedOrPartial` with 71,940 facts,
+6,341 `visualbasic` symbols, 1,087 `vb.semantic` call edges, 518 object
+creations, 175 argument flows, 98 symbol relationships, and 62,358
+category-only `AnalysisGap` rows. Reduced coverage is expected at this pin
+(unrestored packages and out-of-support target frameworks); the smoke proves
+artifact generation and static evidence extraction over a real VB.NET
+repository, not that the repository builds or that coverage is complete.
+
+VB.NET evidence is static and bounded: it never proves compilation success,
+runtime reachability, event firing, execution, deployment, or impact.
+Cross-language symbol-identity joins between VB-scan symbols and C#-declared
+symbols are not established, and Web Forms event wiring is not established
+(issue #738).
 
 ## What SQL Means Here
 

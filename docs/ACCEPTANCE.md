@@ -424,6 +424,9 @@ Minimum checks:
 - WebForms generated reports and validation summaries must not include raw source snippets, raw SQL, config values, raw URLs, local absolute paths, raw remotes, private sample identifiers, or secrets.
 - legacy WinForms facts expose static form/control/component/resource/event/handler/navigation/callback/handler-flow evidence with rule IDs, evidence tiers, supporting fact IDs, coverage labels, and limitations; they do not prove runtime event firing, form visibility, user reachability, branch feasibility, auth/role outcome, scheduling, service reachability, SQL execution, database existence, deployment, or production usage.
 - WinForms generated reports and validation summaries must not include raw source snippets, raw resource values, raw SQL, config values, raw URLs, endpoint addresses, hostnames, local absolute paths, raw remotes, private sample identifiers, or secrets.
+- Visual Basic facts expose compiler-resolved declaration/reference/call/construction/argument/relationship evidence and bounded syntax-only fallback with rule IDs, evidence tiers, repository-relative spans, commit SHAs, extractor versions, and honest reduced coverage; per-file syntax fallback never duplicates Tier1-covered files with Tier3 facts.
+- Visual Basic scans never promote event wiring (`Handles`/`AddHandler`/`RemoveHandler`/`RaiseEvent`/`WithEvents`) to resolved event edges, never represent syntax-only callee text as a compiler-resolved target, and never join VB-scan symbol identities to C#-declared symbols across languages; these remain explicit scope boundaries until their owning slices land.
+- Visual Basic workspace and compiler-diagnostic gaps are sanitized to category-only messages with bounded diagnostic ids (`CSxxxxx`, `MSBxxxx`, `BCxxxxx`); raw compiler message text, local absolute paths, clone paths, and source snippets never appear in VB scan artifacts.
 
 ## Endpoint Alignment Acceptance
 
