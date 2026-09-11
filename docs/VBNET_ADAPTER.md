@@ -32,8 +32,8 @@ build success, or impact.
 
 | Extractor | Identity/version | Tier | Rules |
 | --- | --- | --- | --- |
-| Visual Basic semantic extractor | `vb-semantic/0.2.0` | Tier1 (facts), Tier2 (project observation), Tier4 (workspace gaps) | `vb.semantic.compilation.v1`, `vb.semantic.workspace.v1`, `vb.semantic.declarations.v1`, `vb.semantic.propertyaccess.v1`, `vb.semantic.methodinvocation.v1`, `vb.semantic.callgraph.v1`, `vb.semantic.objectcreation.v1`, `vb.semantic.valueflow.v1`, `vb.semantic.symbolrelationship.v1` |
-| Visual Basic syntax fallback | `vb-syntax/0.1.0` | Tier3 (facts), Tier4 (parse/read/budget/semantic-unavailable gaps) | `vb.syntax.declarations.v1`, `vb.syntax.memberaccess.v1`, `vb.syntax.invocation.v1`, `vb.syntax.callgraph.v1`, `vb.syntax.objectcreation.v1` |
+| Visual Basic semantic extractor | `vb-semantic/0.3.0` | Tier1 (facts), Tier2 (project observation), Tier4 (workspace gaps) | `vb.semantic.compilation.v1`, `vb.semantic.workspace.v1`, `vb.semantic.declarations.v1`, `vb.semantic.propertyaccess.v1`, `vb.semantic.methodinvocation.v1`, `vb.semantic.callgraph.v1`, `vb.semantic.objectcreation.v1`, `vb.semantic.valueflow.v1`, `vb.semantic.symbolrelationship.v1` |
+| Visual Basic syntax fallback | `vb-syntax/0.2.0` | Tier3 (facts), Tier4 (parse/read/budget/semantic-unavailable gaps) | `vb.syntax.declarations.v1`, `vb.syntax.memberaccess.v1`, `vb.syntax.invocation.v1`, `vb.syntax.callgraph.v1`, `vb.syntax.objectcreation.v1` |
 
 Symbol identities use the canonical .NET normalization shape with
 `visualbasic`-tagged language values (see `VisualBasicSymbolIdentityProvider`).

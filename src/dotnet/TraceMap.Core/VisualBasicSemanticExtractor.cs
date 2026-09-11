@@ -14,6 +14,7 @@ namespace TraceMap.Core;
 // VisualBasicSyntaxExtractor; the two are never merged by rule or tier.
 public static class VisualBasicSemanticExtractor
 {
+    private const int MaxCallSiteSyntaxFallbackFactsPerDocument = 2000;
     // Language-aware display format mirroring the C# extractor's shape so VB
     // display strings stay directly comparable to C# ones.
     private static readonly SymbolDisplayFormat SymbolFormat = new(
@@ -499,11 +500,12 @@ public static class VisualBasicSemanticExtractor
         AddPropertyDeclarationFacts(projectPath, filePath, root, model, facts);
         AddFieldDeclarationFacts(projectPath, filePath, root, model, facts);
         AddParameterDeclarationFacts(projectPath, filePath, root, model, facts);
+        AddEventDeclarationFacts(projectPath, filePath, root, model, facts);
         AddTypeSymbolRelationshipFacts(projectPath, filePath, root, model, facts);
         AddMemberSymbolRelationshipFacts(projectPath, filePath, root, model, facts);
         AddPropertyAccessFacts(projectPath, filePath, root, model, facts);
-        AddMethodInvocationFacts(repoPath, projectPath, filePath, root, model, facts);
-        AddObjectCreationFacts(repoPath, projectPath, filePath, root, model, facts);
+        AddMethodInvocationFacts(repoPath, projectPath, filePath, root, model, facts, gaps);
+        AddObjectCreationFacts(repoPath, projectPath, filePath, root, model, facts, gaps);
     }
 
     private static void AddTypeDeclarationFacts(
@@ -776,6 +778,47 @@ public static class VisualBasicSemanticExtractor
                 sourceSymbol: containingSymbol.ToDisplayString(SymbolFormat),
                 targetSymbol: parameter.ToDisplayString(SymbolFormat),
                 contractElement: parameter.Name,
+                properties: properties));
+        }
+    }
+
+    private static void AddEventDeclarationFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        foreach (var statement in root.DescendantNodes().OfType<EventStatementSyntax>())
+        {
+            if (model.GetDeclaredSymbol(statement) is not IEventSymbol eventSymbol
+                || eventSymbol.ContainingType.TypeKind == TypeKind.Error)
+            {
+                continue;
+            }
+
+            var properties = AddAssemblyProperties(
+                AddSymbolProperties(
+                    new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["containingType"] = eventSymbol.ContainingType.ToDisplayString(SymbolFormat),
+                        ["eventName"] = eventSymbol.Name,
+                        ["eventType"] = eventSymbol.Type.ToDisplayString(SymbolFormat),
+                        ["isShared"] = eventSymbol.IsShared().ToString()
+                    },
+                    "target",
+                    eventSymbol),
+                eventSymbol.ContainingAssembly,
+                eventSymbol.Type.ContainingAssembly);
+            facts.Add(CreateSemanticFact(
+                FactTypes.EventDeclared,
+                RuleIds.VisualBasicSemanticDeclarations,
+                projectPath,
+                filePath,
+                statement,
+                sourceSymbol: eventSymbol.ContainingType.ToDisplayString(SymbolFormat),
+                targetSymbol: eventSymbol.ToDisplayString(SymbolFormat),
+                contractElement: eventSymbol.Name,
                 properties: properties));
         }
     }
@@ -1064,13 +1107,39 @@ public static class VisualBasicSemanticExtractor
         string filePath,
         SyntaxNode root,
         SemanticModel model,
-        List<SemanticFactCandidate> facts)
+        List<SemanticFactCandidate> facts,
+        List<SemanticFactCandidate> gaps)
     {
+        var fallbackFactCount = 0;
+        var fallbackTruncationReported = false;
         foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
-            if (model.GetSymbolInfo(invocation).Symbol is not IMethodSymbol method
+            var symbolInfo = model.GetSymbolInfo(invocation);
+            var operation = model.GetOperation(invocation);
+            if ((symbolInfo.Symbol is not null && symbolInfo.Symbol is not IMethodSymbol)
+                || operation is IPropertyReferenceOperation or IArrayElementReferenceOperation)
+            {
+                // Compiler-resolved non-method invocation shapes (including
+                // default-property indexing and array access) are not calls.
+                continue;
+            }
+
+            if (symbolInfo.Symbol is not IMethodSymbol method
                 || method.ContainingType.TypeKind == TypeKind.Error)
             {
+                if (fallbackFactCount <= MaxCallSiteSyntaxFallbackFactsPerDocument - 2)
+                {
+                    AddUnresolvedInvocationFallback(projectPath, filePath, invocation, model, facts);
+                    fallbackFactCount += 2;
+                }
+                else if (!fallbackTruncationReported)
+                {
+                    gaps.Add(CreateGap(filePath,
+                        "Visual Basic unresolved invocation fallback reached its deterministic per-document fact budget; remaining call sites were not emitted.",
+                        "CallSiteSyntaxFallbackBudgetExhausted",
+                        projectPath));
+                    fallbackTruncationReported = true;
+                }
                 continue;
             }
 
@@ -1155,14 +1224,60 @@ public static class VisualBasicSemanticExtractor
         }
     }
 
+    private static void AddUnresolvedInvocationFallback(
+        string? projectPath,
+        string filePath,
+        InvocationExpressionSyntax invocation,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        var invocationName = GetSafeInvocationName(invocation.Expression);
+        var enclosing = model.GetEnclosingSymbol(invocation.SpanStart);
+        var callerName = enclosing?.ToDisplayString(SymbolFormat);
+        var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["expressionHash"] = FactFactory.Hash(invocation.Expression.ToString(), 32),
+            ["expressionKind"] = invocation.Expression.Kind().ToString(),
+            ["invocationName"] = invocationName,
+            ["resolution"] = "unresolved"
+        };
+        facts.Add(CreateSyntaxFallbackFact(
+            FactTypes.InvocationName,
+            RuleIds.VisualBasicSyntaxInvocation,
+            projectPath,
+            filePath,
+            invocation,
+            sourceSymbol: callerName,
+            targetSymbol: invocationName,
+            properties: properties));
+        facts.Add(CreateSyntaxFallbackFact(
+            FactTypes.CallEdge,
+            RuleIds.VisualBasicSyntaxCallGraph,
+            projectPath,
+            filePath,
+            invocation,
+            sourceSymbol: callerName,
+            targetSymbol: invocationName,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["callKind"] = "SyntaxInvocation",
+                ["calleeName"] = invocationName,
+                ["callerName"] = callerName ?? string.Empty,
+                ["resolution"] = "unresolved"
+            }));
+    }
+
     private static void AddObjectCreationFacts(
         string repoPath,
         string? projectPath,
         string filePath,
         SyntaxNode root,
         SemanticModel model,
-        List<SemanticFactCandidate> facts)
+        List<SemanticFactCandidate> facts,
+        List<SemanticFactCandidate> gaps)
     {
+        var fallbackFactCount = 0;
+        var fallbackTruncationReported = false;
         foreach (var creation in root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
         {
             if (model.GetTypeInfo(creation).Type is not INamedTypeSymbol type
@@ -1172,15 +1287,28 @@ public static class VisualBasicSemanticExtractor
             }
 
             var constructor = model.GetSymbolInfo(creation).Symbol as IMethodSymbol;
-            if (constructor?.ContainingType.TypeKind == TypeKind.Error)
+            if (constructor is null || constructor.ContainingType.TypeKind == TypeKind.Error)
             {
+                if (fallbackFactCount <= MaxCallSiteSyntaxFallbackFactsPerDocument - 2)
+                {
+                    AddUnresolvedObjectCreationFallback(projectPath, filePath, creation, model, type, facts);
+                    fallbackFactCount += 2;
+                }
+                else if (!fallbackTruncationReported)
+                {
+                    gaps.Add(CreateGap(filePath,
+                        "Visual Basic unresolved constructor fallback reached its deterministic per-document fact budget; remaining creation sites were not emitted.",
+                        "CallSiteSyntaxFallbackBudgetExhausted",
+                        projectPath));
+                    fallbackTruncationReported = true;
+                }
                 continue;
             }
 
             var enclosing = model.GetEnclosingSymbol(creation.SpanStart);
             var enclosingSymbol = enclosing?.ToDisplayString(SymbolFormat);
             var createdType = type.ToDisplayString(SymbolFormat);
-            var constructorSymbol = constructor?.ToDisplayString(SymbolFormat) ?? createdType;
+            var constructorSymbol = constructor.ToDisplayString(SymbolFormat);
             var assignedTo = GetAssignedVariableName(creation);
 
             var objectProperties = AddAssemblyProperties(
@@ -1232,7 +1360,7 @@ public static class VisualBasicSemanticExtractor
                         "source",
                         enclosing),
                     "target",
-                    (ISymbol?)constructor ?? type),
+                    constructor),
                 enclosing?.ContainingAssembly,
                 type.ContainingAssembly);
 
@@ -1247,7 +1375,7 @@ public static class VisualBasicSemanticExtractor
                 contractElement: type.Name,
                 properties: callProperties));
 
-            if (constructor is not null && creation.ArgumentList is not null)
+            if (creation.ArgumentList is not null)
             {
                 AddArgumentPassedFacts(
                     repoPath,
@@ -1264,6 +1392,56 @@ public static class VisualBasicSemanticExtractor
                     "SemanticObjectCreation");
             }
         }
+    }
+
+    private static void AddUnresolvedObjectCreationFallback(
+        string? projectPath,
+        string filePath,
+        ObjectCreationExpressionSyntax creation,
+        SemanticModel model,
+        INamedTypeSymbol type,
+        List<SemanticFactCandidate> facts)
+    {
+        var enclosing = model.GetEnclosingSymbol(creation.SpanStart);
+        var callerName = enclosing?.ToDisplayString(SymbolFormat);
+        var typeName = type.Name;
+        var assignedTo = GetAssignedVariableName(creation) ?? string.Empty;
+        facts.Add(CreateSyntaxFallbackFact(
+            FactTypes.ObjectCreated,
+            RuleIds.VisualBasicSyntaxObjectCreation,
+            projectPath,
+            filePath,
+            creation,
+            sourceSymbol: callerName,
+            targetSymbol: typeName,
+            contractElement: typeName,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["argumentCount"] = (creation.ArgumentList?.Arguments.Count ?? 0).ToString(),
+                ["assignedTo"] = assignedTo,
+                ["callerName"] = callerName ?? string.Empty,
+                ["createdType"] = typeName,
+                ["creationKind"] = "SyntaxObjectCreation",
+                ["resolution"] = "unresolved-constructor"
+            }));
+        facts.Add(CreateSyntaxFallbackFact(
+            FactTypes.CallEdge,
+            RuleIds.VisualBasicSyntaxCallGraph,
+            projectPath,
+            filePath,
+            creation,
+            sourceSymbol: callerName,
+            targetSymbol: typeName,
+            contractElement: typeName,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["assignedTo"] = assignedTo,
+                ["callKind"] = "SyntaxObjectCreation",
+                ["calleeContainingType"] = typeName,
+                ["calleeName"] = typeName,
+                ["callerName"] = callerName ?? string.Empty,
+                ["resolution"] = "unresolved-constructor"
+            }));
     }
 
     private static void AddArgumentPassedFacts(
@@ -1287,7 +1465,7 @@ public static class VisualBasicSemanticExtractor
                 continue;
             }
 
-            var parameter = ResolveParameter(model, argument, callee, index);
+            var parameter = ResolveParameter(model, argument);
             if (parameter is null)
             {
                 continue;
@@ -1349,30 +1527,19 @@ public static class VisualBasicSemanticExtractor
         }
     }
 
-    private static IParameterSymbol? ResolveParameter(
-        SemanticModel model,
-        SimpleArgumentSyntax argument,
-        IMethodSymbol method,
-        int ordinal)
+    private static IParameterSymbol? ResolveParameter(SemanticModel model, SimpleArgumentSyntax argument)
     {
-        if (model.GetOperation(argument) is IArgumentOperation boundArgument
-            && boundArgument.Parameter is not null)
+        for (var operation = model.GetOperation(argument) ?? model.GetOperation(argument.Expression);
+             operation is not null;
+             operation = operation.Parent)
         {
-            return boundArgument.Parameter;
+            if (operation is IArgumentOperation { Parameter: not null } boundArgument)
+            {
+                return boundArgument.Parameter;
+            }
         }
 
-        if (argument.NameColonEquals is not null)
-        {
-            var name = argument.NameColonEquals.Name.Identifier.ValueText;
-            return method.Parameters.FirstOrDefault(parameter => parameter.Name.Equals(name, StringComparison.Ordinal));
-        }
-
-        if (ordinal < method.Parameters.Length)
-        {
-            return method.Parameters[ordinal];
-        }
-
-        return method.Parameters.LastOrDefault(parameter => parameter.IsParams);
+        return null;
     }
 
     private static SemanticFactCandidate CreateSymbolRelationshipFact(
@@ -1471,6 +1638,11 @@ public static class VisualBasicSemanticExtractor
         if (creation.Parent is AsNewClauseSyntax { Parent: VariableDeclaratorSyntax declarator })
         {
             return declarator.Names.FirstOrDefault()?.Identifier.ValueText;
+        }
+
+        if (creation.Parent is EqualsValueSyntax { Parent: VariableDeclaratorSyntax equalsDeclarator })
+        {
+            return equalsDeclarator.Names.FirstOrDefault()?.Identifier.ValueText;
         }
 
         if (creation.Parent is AssignmentStatementSyntax assignment)
@@ -1622,6 +1794,45 @@ public static class VisualBasicSemanticExtractor
             node.Span.Length);
     }
 
+    private static SemanticFactCandidate CreateSyntaxFallbackFact(
+        string factType,
+        string ruleId,
+        string? projectPath,
+        string filePath,
+        SyntaxNode node,
+        string? sourceSymbol = null,
+        string? targetSymbol = null,
+        string? contractElement = null,
+        IReadOnlyDictionary<string, string>? properties = null)
+    {
+        var span = node.SyntaxTree.GetLineSpan(node.Span);
+        return new SemanticFactCandidate(
+            factType,
+            ruleId,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan(
+                FileInventory.NormalizeRelativePath(filePath),
+                span.StartLinePosition.Line + 1,
+                Math.Max(span.StartLinePosition.Line + 1, span.EndLinePosition.Line + 1),
+                null,
+                "VisualBasicSyntaxExtractor",
+                ScannerVersions.VisualBasicSyntaxExtractor),
+            projectPath,
+            sourceSymbol,
+            targetSymbol,
+            contractElement,
+            properties,
+            node.SpanStart,
+            node.Span.Length);
+    }
+
+    private static string GetSafeInvocationName(ExpressionSyntax expression) => expression switch
+    {
+        MemberAccessExpressionSyntax memberAccess => memberAccess.Name.Identifier.ValueText,
+        IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+        _ => $"unsupported-{expression.Kind()}-{FactFactory.Hash(expression.ToString(), 16)}"
+    };
+
     private static EvidenceSpan ToEvidenceSpan(string filePath, SyntaxNode node)
     {
         var span = node.SyntaxTree.GetLineSpan(node.Span);
@@ -1693,6 +1904,7 @@ public static class VisualBasicSemanticExtractor
             || fileName.EndsWith(".g.i.vb", StringComparison.OrdinalIgnoreCase)
             || fileName.EndsWith(".generated.vb", StringComparison.OrdinalIgnoreCase)
             || fileName.EndsWith(".designer.vb", StringComparison.OrdinalIgnoreCase)
+            || fileName.Equals("AssemblyInfo.vb", StringComparison.OrdinalIgnoreCase)
             || fileName.EndsWith(".AssemblyInfo.vb", StringComparison.OrdinalIgnoreCase)
             || fileName.EndsWith(".AssemblyAttributes.vb", StringComparison.OrdinalIgnoreCase);
     }

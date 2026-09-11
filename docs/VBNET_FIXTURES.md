@@ -16,7 +16,7 @@ configuration, or business logic are used.
 | Fixture | Shape | Cross-platform build | Intended coverage when scanned by the future VB adapter |
 | --- | --- | --- | --- |
 | `samples/vb-modern-sample` | SDK-style `.vbproj`, net10.0, `Option Strict On` | Builds with the .NET SDK (verified on macOS arm64, SDK 10.0.302) | Full semantic path (`Tier1Semantic`), no reduced-coverage label expected from the VB side |
-| `samples/vb-legacy-sample` | Old-style `ToolsVersion=3.5` `.vbproj`, `Option Strict Off`, `My Project` folder | Does not build with the modern SDK (expected MSB3644: .NET Framework 3.5 reference assemblies unavailable) | Project load/compile failure path: per-file syntax fallback (`Tier3SyntaxOrTextual`) plus explicit `Tier4Unknown` gaps and a reduced-coverage label |
+| `samples/vb-legacy-sample` | Old-style `ToolsVersion=3.5` `.vbproj`, `Option Strict Off`, `My Project` folder | Does not build with the modern SDK (expected MSB3644: .NET Framework 3.5 reference assemblies unavailable) | Partial compiler-backed evidence where syntax trees load, bounded call-site fallback for unresolved invocations, explicit `Tier4Unknown` gaps, and a reduced-coverage label |
 | `samples/vb-webforms-sample` | Old-style .NET Framework 4.8 Web Application project with `.aspx`, code-behind, and designer | Does not build with the modern SDK (expected MSB3644: net48 reference assemblies; Web Application targets) | Inventory/classification corpus for #738. #736 makes no claim about event relationships in this fixture |
 
 ## samples/vb-modern-sample (semantic success fixture)
@@ -62,7 +62,7 @@ unresolved or ambiguous default member must instead produce an explicit
 limitation or gap. Expected gaps for this buildable fixture are otherwise none
 from the VB side beyond ordinary absence claims.
 
-## samples/vb-legacy-sample (syntax fallback fixture)
+## samples/vb-legacy-sample (reduced semantic-coverage fixture)
 
 Files: `VbLegacyCatalog.vbproj`, `CatalogModels.vb`, `CatalogService.vb`,
 `LegacyQueueBridge.vb`, `My Project/AssemblyInfo.vb`,
@@ -101,13 +101,13 @@ Legacy shapes exercised:
   members on `Object` returned by `CreateObject`, which cannot have
   compiler-resolved targets.
 
-Expected evidence categories once the adapter lands: readable `.vb` files
-continue to be scanned via VB syntax fallback with
-`Tier3SyntaxOrTextual` declaration/call candidates; the failed project
-load/compile path emits `Tier4Unknown` gaps for the unresolved vendor
-reference, the late-bound calls, and the conditional-compilation surfaces, and
-the scan is labeled reduced coverage. Syntax-only callee text must not be
-represented as a compiler-resolved target.
+Expected evidence categories: readable `.vb` files whose syntax trees load keep
+their partial `Tier1Semantic` facts plus sanitized `Tier4Unknown` compiler and
+workspace gaps. `Tier3SyntaxOrTextual` fallback is limited to files that receive
+no semantic coverage; it is not added as a duplicate merely because the overall
+project compilation is partial. The scan remains labeled reduced coverage, and
+unresolved call sites in otherwise semantic files are represented only by
+bounded syntax-tier evidence, never as compiler-resolved targets.
 
 ## samples/vb-webforms-sample (future #738 corpus)
 
@@ -189,7 +189,7 @@ repeatable smoke, and exercises the full Tier1 VB fact surface.
 | `community-visual-basic` | `https://github.com/CommunityVB/Community.VisualBasic.git` | `20d2a51dfc9f342848ad134952ceaa8d79302559` | yes (`git ls-remote` and pinned checkout, 2026-09-11) |
 
 Recorded validation (macOS arm64, .NET SDK 10.0.302, TraceMap
-`vb-semantic/0.2.0` at the extraction slice):
+`vb-semantic/0.3.0` at the extraction slice):
 
 - Scan completes with `Level1SemanticAnalysisReduced` / `FailedOrPartial`; all
   six `.vbproj` files load and produce compilations, and every project reports

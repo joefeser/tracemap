@@ -243,7 +243,71 @@ public static class VisualBasicSyntaxExtractor
                         ["propertyName"] = propertyName
                     },
                     budget,
-                    sourceSymbol: containingType))
+                    sourceSymbol: containingType,
+                    contractElement: propertyName))
+            {
+                return;
+            }
+        }
+
+        foreach (var field in root.DescendantNodes().OfType<FieldDeclarationSyntax>())
+        {
+            var containingType = field.Ancestors().OfType<TypeBlockSyntax>().FirstOrDefault()?.BlockStatement.Identifier.ValueText ?? string.Empty;
+            foreach (var name in field.Declarators.SelectMany(declarator => declarator.Names))
+            {
+                var fieldName = name.Identifier.ValueText;
+                if (!TryAddSyntaxFact(manifest, facts, FactTypes.FieldDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+                        filePath, name,
+                        string.IsNullOrWhiteSpace(containingType) ? fieldName : $"{containingType}.{fieldName}",
+                        new SortedDictionary<string, string>(StringComparer.Ordinal)
+                        {
+                            ["containingType"] = containingType,
+                            ["fieldName"] = fieldName,
+                            ["isWithEvents"] = field.Modifiers.Any(SyntaxKind.WithEventsKeyword) ? "True" : "False"
+                        },
+                        budget,
+                        sourceSymbol: containingType,
+                        contractElement: fieldName))
+                {
+                    return;
+                }
+            }
+        }
+
+        foreach (var parameter in root.DescendantNodes().OfType<ParameterSyntax>())
+        {
+            var parameterName = parameter.Identifier.Identifier.ValueText;
+            var containingMember = GetContainingMemberName(parameter) ?? string.Empty;
+            if (!TryAddSyntaxFact(manifest, facts, FactTypes.ParameterDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+                    filePath, parameter, parameterName,
+                    new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["containingSymbol"] = containingMember,
+                        ["parameterName"] = parameterName
+                    },
+                    budget,
+                    sourceSymbol: containingMember,
+                    contractElement: parameterName))
+            {
+                return;
+            }
+        }
+
+        foreach (var statement in root.DescendantNodes().OfType<EventStatementSyntax>())
+        {
+            var eventName = statement.Identifier.ValueText;
+            var containingType = statement.Ancestors().OfType<TypeBlockSyntax>().FirstOrDefault()?.BlockStatement.Identifier.ValueText ?? string.Empty;
+            if (!TryAddSyntaxFact(manifest, facts, FactTypes.EventDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+                    filePath, statement,
+                    string.IsNullOrWhiteSpace(containingType) ? eventName : $"{containingType}.{eventName}",
+                    new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["containingType"] = containingType,
+                        ["eventName"] = eventName
+                    },
+                    budget,
+                    sourceSymbol: containingType,
+                    contractElement: eventName))
             {
                 return;
             }
@@ -427,7 +491,8 @@ public static class VisualBasicSyntaxExtractor
         string targetSymbol,
         SortedDictionary<string, string> properties,
         FactBudget budget,
-        string? sourceSymbol = null)
+        string? sourceSymbol = null,
+        string? contractElement = null)
     {
         if (!budget.TryReserve())
         {
@@ -467,6 +532,7 @@ public static class VisualBasicSyntaxExtractor
                 ScannerVersions.VisualBasicSyntaxExtractor),
             sourceSymbol: sourceSymbol,
             targetSymbol: targetSymbol,
+            contractElement: contractElement,
             properties: properties));
         return true;
     }
@@ -540,7 +606,7 @@ public static class VisualBasicSyntaxExtractor
         {
             MemberAccessExpressionSyntax memberAccess => memberAccess.Name.Identifier.ValueText,
             IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
-            _ => expression.ToString()
+            _ => $"unsupported-{expression.Kind()}-{FactFactory.Hash(expression.ToString(), 16)}"
         };
     }
 
@@ -608,6 +674,11 @@ public static class VisualBasicSyntaxExtractor
             return declarator.Names.FirstOrDefault()?.Identifier.ValueText;
         }
 
+        if (creation.Parent is EqualsValueSyntax { Parent: VariableDeclaratorSyntax equalsDeclarator })
+        {
+            return equalsDeclarator.Names.FirstOrDefault()?.Identifier.ValueText;
+        }
+
         if (creation.Parent is AssignmentStatementSyntax assignment)
         {
             return GetSafeExpressionName(assignment.Left);
@@ -643,6 +714,7 @@ public static class VisualBasicSyntaxExtractor
             || fileName.EndsWith(".g.i.vb", StringComparison.OrdinalIgnoreCase)
             || fileName.EndsWith(".generated.vb", StringComparison.OrdinalIgnoreCase)
             || fileName.EndsWith(".designer.vb", StringComparison.OrdinalIgnoreCase)
+            || fileName.Equals("AssemblyInfo.vb", StringComparison.OrdinalIgnoreCase)
             || fileName.EndsWith(".AssemblyInfo.vb", StringComparison.OrdinalIgnoreCase);
     }
 

@@ -42,6 +42,10 @@ public sealed class VisualBasicExtractionTests
             fact.FactType == FactTypes.TypeDeclared
             && fact.Properties["typeKind"] == "Delegate"
             && fact.TargetSymbol?.Contains("PriceFormatter", StringComparison.Ordinal) == true);
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.EventDeclared
+            && fact.ContractElement == "PriceRecalculated"
+            && fact.EvidenceTier == EvidenceTiers.Tier1Semantic);
     }
 
     [Fact]
@@ -186,8 +190,11 @@ public sealed class VisualBasicExtractionTests
         File.WriteAllText(Path.Combine(repo, "Orphan.vb"), """
             Namespace Orphan
                 Public Class Widget
-                    Public Function Describe() As String
-                        Dim factory As New WidgetFactory()
+                    Private _name As String
+                    Public Event Changed As EventHandler
+                    Public Property Name As String
+                    Public Function Describe(prefix As String) As String
+                        Dim factory As WidgetFactory = New WidgetFactory()
                         Return factory.Build()
                     End Function
                 End Class
@@ -216,6 +223,13 @@ public sealed class VisualBasicExtractionTests
             fact.FactType == FactTypes.MethodDeclared
             && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
             && fact.TargetSymbol == "Describe");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.FieldDeclared && fact.ContractElement == "_name");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.ParameterDeclared && fact.ContractElement == "prefix");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.EventDeclared && fact.ContractElement == "Changed");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.PropertyDeclared && fact.ContractElement == "Name");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.ObjectCreated
+            && fact.Properties["assignedTo"] == "factory");
 
         // Explicit per-file Tier4 gap plus the scan-level no-project gap; the
         // manifest records sanitized categorical gap messages.
@@ -447,6 +461,7 @@ public sealed class VisualBasicExtractionTests
                 Const PasswordMarker As String = "super-secret-sentinel-value"
                 Sub Main()
                     System.Console.WriteLine(PasswordMarker)
+                    DirectCast(GetHandler("tenant-secret"), Action)()
                 End Sub
             End Module
             """);
@@ -465,6 +480,48 @@ public sealed class VisualBasicExtractionTests
             Assert.DoesNotContain(temp.Path, factText, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("super-secret-sentinel-value", factText, StringComparison.Ordinal);
         }
+    }
+
+    [Fact]
+    public void Unresolved_semantic_calls_and_constructors_are_downgraded_to_safe_syntax_evidence()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Broken.vbproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Broken.vb"), """
+            Public Class Widget
+            End Class
+            Public Class Caller
+                Public Sub Run()
+                    MissingCall("tenant-secret")
+                    Dim explicitValue As Widget = New Widget(1)
+                    Dim inferredValue = New Widget(2)
+                End Sub
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var downgraded = result.Facts.Where(fact =>
+            fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+            && fact.Properties.GetValueOrDefault("resolution") is "unresolved" or "unresolved-constructor").ToArray();
+
+        Assert.Contains(downgraded, fact => fact.FactType == FactTypes.InvocationName && fact.TargetSymbol == "MissingCall");
+        Assert.Contains(downgraded, fact => fact.FactType == FactTypes.ObjectCreated && fact.Properties["assignedTo"] == "explicitValue");
+        Assert.Contains(downgraded, fact => fact.FactType == FactTypes.ObjectCreated && fact.Properties["assignedTo"] == "inferredValue");
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+            && fact.FactType == FactTypes.CallEdge
+            && fact.TargetSymbol?.Contains("Widget", StringComparison.Ordinal) == true
+            && fact.Evidence.StartLine >= 6);
+        Assert.DoesNotContain(result.Facts, fact =>
+            string.Join('|', fact.TargetSymbol, string.Join(';', fact.Properties.Values))
+                .Contains("tenant-secret", StringComparison.Ordinal));
     }
 
     // ---------- Helpers ----------
