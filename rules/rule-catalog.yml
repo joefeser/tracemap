@@ -725,6 +725,27 @@ rules:
       - Packet truncation, reduced coverage, missing provenance, unresolved handlers, and unsupported terminal evidence remain explicit gaps or limitations.
       - Raw source, raw SQL, configuration values, credentials, local absolute paths, and private workflow prompts are not added by this projection.
 
+  - id: docs-export.query-recipe.v1
+    name: Docs export deterministic evidence query recipe
+    description: Publishes a closed catalog of bounded parameterized read-only queries over documented TraceMap single-index and combined-index evidence tables.
+    evidenceTier: Tier2Structural
+    emits:
+      - docs-export evidence query recipe
+    limitations:
+      - Recipes retrieve retained static evidence only and do not add findings, close gaps, prove absence, or prove runtime behavior.
+      - Recipe SQL targets TraceMap-owned evidence tables only; it is not captured application SQL and does not query an application database.
+      - Downstream callers remain responsible for bounded parameter values, access control, orchestration, and interpretation.
+
+  - id: docs-export.retrieval-hint.v1
+    name: Docs export typed retrieval hint
+    description: Associates a documentation chunk with applicable deterministic query recipe IDs and parameter values already retained in the chunk's evidence.
+    evidenceTier: Tier2Structural
+    emits:
+      - docs-export retrieval hint
+    limitations:
+      - Retrieval hints are navigation metadata and do not add evidence, upgrade a claim, choose a runtime target, or close a gap.
+      - Hints are bounded and may omit additional applicable facts, spans, symbols, or recipes.
+
   - id: docs-export.chunk.gap.v1
     name: Docs export gap chunk
     description: Emits first-class gap chunks for unavailable, reduced, hidden, incompatible, unsupported, truncated, or missing-provenance evidence.
