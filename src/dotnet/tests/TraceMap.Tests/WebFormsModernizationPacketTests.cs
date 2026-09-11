@@ -35,6 +35,8 @@ public sealed class WebFormsModernizationPacketTests
             WebFormsPacketPaths: [packet.JsonPath]));
 
         Assert.Contains(result.Manifest.Inputs, input => input.Kind == "webforms-modernization-packet" && input.Compatibility == "compatible");
+        Assert.DoesNotContain(result.Chunks.SelectMany(chunk => chunk.Gaps), gap =>
+            gap.Reason == "missing-provenance" && gap.SupportingIds.Contains("index:facts", StringComparer.Ordinal));
         Assert.All(result.Manifest.Inputs.SelectMany(input => input.SourceRefs), source =>
             Assert.Equal(commitSha.ToLowerInvariant(), source.CommitSha));
     }
