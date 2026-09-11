@@ -4,7 +4,7 @@
 - Branch: `codex/issue-736-vbnet-adapter-foundation`
 - Slice start: `673cf6f19af4b470f4a031479317fed3947d26b9` (foundation slice,
   tasks 1-4)
-- Slice end: see "Validation recorded" below for the exact pushed SHA.
+- Slice end: `23c5cca0d550faf93662e4d0ae35c10e8f8baf0c` (tasks 5-7)
 - Base: `origin/dev` at `c50f82ce0920d3c948e6ec798c6eb4b4d0959c24`
 - Fixture corpus merged into this branch via PR #740 (merge commit
   `a357f7b9`); `samples/vb-modern-sample`, `samples/vb-legacy-sample`,
