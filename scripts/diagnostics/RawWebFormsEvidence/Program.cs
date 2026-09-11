@@ -37,7 +37,8 @@ catch (Exception error)
     safeCodes = [.. safeCodes, "CodePathReviewInvalidLimit", "CodePathReviewCaseInvalid", "CodePathReviewInspectionUnavailable",
         "CodePathReviewSourceRootUnavailable", "CodePathReviewSchemaMismatch", "CodePathReviewCaseUnavailable",
         "CodePathReviewSourcePathInvalid", "CodePathReviewSourceUnavailable", "CodePathReviewExcerptLimit", "CodePathReviewSourceSpanInvalid",
-        "CodePathReviewSourceLineLimit", "CodePathReviewAnonymousLeak", "CodePathReviewReturnLinkInvalid", "CodePathReviewRawSourceOptionInvalid", "CodePathReviewCandidateWorkLimit"];
+        "CodePathReviewSourceLineLimit", "CodePathReviewSourceAggregateLineLimit", "CodePathReviewSourceAggregateOutputLimit",
+        "CodePathReviewAnonymousLeak", "CodePathReviewReturnLinkInvalid", "CodePathReviewRawSourceOptionInvalid", "CodePathReviewCandidateWorkLimit"];
     var code = error is InvalidDataException && safeCodes.Contains(error.Message, StringComparer.Ordinal)
         ? error.Message : "RawAuditInputOrRuntimeFailure";
     Console.Error.WriteLine($"raw-webforms-evidence=failed;code={code}");
