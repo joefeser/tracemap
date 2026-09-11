@@ -37,6 +37,7 @@ catch (Exception error)
     safeCodes = [.. safeCodes, "CodePathReviewInvalidLimit", "CodePathReviewCaseInvalid", "CodePathReviewInspectionUnavailable",
         "CodePathReviewSourceRootUnavailable", "CodePathReviewSchemaMismatch", "CodePathReviewCaseUnavailable",
         "CodePathReviewSourcePathInvalid", "CodePathReviewSourceUnavailable", "CodePathReviewExcerptLimit", "CodePathReviewSourceSpanInvalid",
+        "CodePathReviewSourceLineLimit", "CodePathReviewSourceAggregateLineLimit", "CodePathReviewSourceAggregateOutputLimit",
         "CodePathReviewAnonymousLeak", "CodePathReviewReturnLinkInvalid", "CodePathReviewRawSourceOptionInvalid", "CodePathReviewCandidateWorkLimit"];
     var code = error is InvalidDataException && safeCodes.Contains(error.Message, StringComparer.Ordinal)
         ? error.Message : "RawAuditInputOrRuntimeFailure";

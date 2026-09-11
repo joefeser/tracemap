@@ -2055,3 +2055,21 @@ existing `.ashx`, handler, redirect/transfer, markup-event, lifecycle, and
 reduced-compilation evidence remains present. These candidates do not prove
 runtime reachability, execution, branch selection, rendering, postback dispatch,
 or successful data binding.
+
+### Web Forms annotated private source views
+
+For changes to focused Web Forms code-path source navigation, run:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter WebFormsCodePathReviewTests
+pwsh -NoProfile -File scripts/tests/Test-FocusedWebFormsCodePathReviewSet.ps1
+```
+
+Confirm that explicit raw-source opt-in creates deterministic sibling annotated
+HTML files with complete bounded working-tree source, stable line anchors,
+categorical retained-evidence highlighting, and bidirectional evidence links.
+Confirm that default runs create no source views and anonymous HTML/JSON contain
+neither source nor private navigation. Highlighting is static evidence
+navigation; it does not prove runtime coverage, execution, branch feasibility,
+correctness, or completeness.

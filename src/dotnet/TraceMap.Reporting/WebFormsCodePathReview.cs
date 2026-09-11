@@ -9,6 +9,10 @@ namespace TraceMap.Reporting;
 /// <summary>Builds bounded private and anonymous working-tree review artifacts from a batch inspection.</summary>
 public static class WebFormsCodePathReview
 {
+    private const int MaximumAnnotatedSourceLinesPerFile = 100_000;
+    private const int MaximumAnnotatedSourceLinesPerReport = 150_000;
+    private const long MaximumAnnotatedSourceOutputBytesPerReport = 64L * 1024 * 1024;
+
     private sealed record ReviewLocation(string Role, string FilePath, int StartLine, int EndLine, string? Caller, string? Callee, bool PreferFullSpan = false);
     private sealed record GroupedEdge(string Caller, string Callee, IReadOnlyList<ReviewLocation> Locations, IReadOnlyList<string> RuleIds, IReadOnlyList<string> Tiers);
     private sealed record AnonymousNode(string Id, string Classification);
@@ -88,7 +92,9 @@ public static class WebFormsCodePathReview
             .GroupBy(l => new { l.Role, l.FilePath, l.StartLine, l.EndLine, l.Caller, l.Callee })
             .Select(g => g.First()).OrderBy(l => l.FilePath, StringComparer.Ordinal).ThenBy(l => l.StartLine).ThenBy(l => l.Role, StringComparer.Ordinal)
             .ToList();
-        var sourceFiles = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
+        // Repository-relative paths are evidence identities. Preserve their casing so distinct
+        // files on case-sensitive source volumes can never share cached contents or artifacts.
+        var sourceFiles = new Dictionary<string, string[]>(StringComparer.Ordinal);
         long bytesRead = 0;
         string ResolveSource(string relativePath)
         {
@@ -114,7 +120,7 @@ public static class WebFormsCodePathReview
         // Definition candidates are navigation aids, not evidence. Restrict name lookup
         // to already witnessed C# files and publish only globally unique candidates.
         var evidenceFiles = deduplicated.Select(l => l.FilePath).Where(p => p.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
-            .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.Ordinal).ToArray();
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
         var candidateCount = 0;
         var unresolvedLeaves = selected.TryGetProperty("unresolvedOtherLeaves", out var unresolvedValues)
             ? unresolvedValues.EnumerateArray().Select(v => v.GetString()).ToArray()
@@ -126,7 +132,7 @@ public static class WebFormsCodePathReview
             throw new InvalidDataException("CodePathReviewCandidateWorkLimit");
         var syntaxRoots = evidenceFiles.ToDictionary(relativePath => relativePath,
             relativePath => CSharpSyntaxTree.ParseText(string.Join(Environment.NewLine, ReadSource(relativePath)), path: relativePath).GetCompilationUnitRoot(),
-            StringComparer.OrdinalIgnoreCase);
+            StringComparer.Ordinal);
         foreach (var unresolved in boundedUnresolvedLeaves)
         {
             var open = unresolved!.IndexOf('(');
@@ -208,6 +214,32 @@ public static class WebFormsCodePathReview
 
         var evidenceAnchors = deduplicated.Select((location, index) => (location, anchor: $"evidence-{index + 1:D3}"))
             .ToDictionary(item => item.location, item => item.anchor);
+        var annotatedSourceFiles = includeRawSource
+            ? deduplicated.Select(location => location.FilePath)
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+                .Select((filePath, index) => new
+                {
+                    FilePath = filePath,
+                    OutputPath = Path.Combine(outputDirectory, $"{outputStem}.source-{index + 1:D3}.html")
+                })
+                .ToDictionary(item => item.FilePath, item => item.OutputPath, StringComparer.Ordinal)
+            : new Dictionary<string, string>(StringComparer.Ordinal);
+        if (annotatedSourceFiles.Values.Any(File.Exists))
+            throw new IOException("CodePathReviewOutputExists");
+        var annotatedLineCount = 0L;
+        foreach (var relativePath in annotatedSourceFiles.Keys)
+        {
+            var lines = ReadSource(relativePath);
+            if (lines.Length > MaximumAnnotatedSourceLinesPerFile)
+                throw new InvalidDataException("CodePathReviewSourceLineLimit");
+            annotatedLineCount += lines.Length;
+            if (annotatedLineCount > MaximumAnnotatedSourceLinesPerReport)
+                throw new InvalidDataException("CodePathReviewSourceAggregateLineLimit");
+            if (deduplicated.Any(location => location.FilePath.Equals(relativePath, StringComparison.Ordinal) &&
+                    (location.StartLine > lines.Length || location.EndLine > lines.Length)))
+                throw new InvalidDataException("CodePathReviewSourceSpanInvalid");
+        }
         static string H(string? value) => WebUtility.HtmlEncode(value ?? "unavailable");
         static string BoundedSourceLine(string value) => value.Length <= 500 ? value : value[..500] + " … [line truncated]";
         static string EvidenceConclusion(JsonElement selected)
@@ -288,7 +320,13 @@ public static class WebFormsCodePathReview
                 var symbol = aliases.Single(pair => pair.Value == node.Id).Key;
                 var position = positions[symbol];
                 var location = deduplicated.FirstOrDefault(item => item.Callee == symbol || item.Caller == symbol || (symbol == handler && item.Role == "handler"));
-                if (location is not null) graph.Append("<a href=\"#").Append(evidenceAnchors[location]).Append("\">");
+                if (location is not null)
+                {
+                    var href = includeRawSource
+                        ? Path.GetFileName(annotatedSourceFiles[location.FilePath]) + $"#L{location.StartLine}"
+                        : "#" + evidenceAnchors[location];
+                    graph.Append("<a href=\"").Append(H(href)).Append("\">");
+                }
                 graph.Append("<g class=\"graph-node\"><rect x=\"").Append(position.X).Append("\" y=\"").Append(position.Y)
                     .Append("\" width=\"").Append(nodeWidth).Append("\" height=\"").Append(nodeHeight).Append("\" rx=\"6\"/>")
                     .Append("<text x=\"").Append(position.X + (nodeWidth / 2)).Append("\" y=\"").Append(position.Y + 23).Append("\">")
@@ -322,6 +360,53 @@ public static class WebFormsCodePathReview
             writer.WriteLine("</code></pre>");
         }
 
+        string AnnotatedSourceHref(ReviewLocation location) =>
+            H(Path.GetFileName(annotatedSourceFiles[location.FilePath]) + $"#L{location.StartLine}");
+
+        void WriteAnnotatedSource(StreamWriter writer, string relativePath, string privateReportFileName)
+        {
+            var lines = ReadSource(relativePath);
+            var fileLocations = deduplicated.Where(location =>
+                    location.FilePath.Equals(relativePath, StringComparison.Ordinal))
+                .OrderBy(location => location.StartLine)
+                .ThenBy(location => location.Role, StringComparer.Ordinal)
+                .ToArray();
+            var starts = fileLocations.GroupBy(location => location.StartLine)
+                .ToDictionary(group => group.Key, group => group.ToArray());
+            var ends = fileLocations.GroupBy(location => location.EndLine + 1)
+                .ToDictionary(group => group.Key, group => group.ToArray());
+            var active = new HashSet<ReviewLocation>();
+
+            writer.WriteLine("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
+            writer.WriteLine($"<title>Private annotated source {H(relativePath)}</title><style>{AnnotatedSourceCss}</style></head><body><header>");
+            writer.WriteLine($"<h1>{H(relativePath)}</h1><p class=\"private\">PRIVATE: complete authorized working-tree source. Inspection-commit equality is not established.</p>");
+            writer.WriteLine($"<nav><a href=\"{H(privateReportFileName)}\">← Return to case review</a>{(returnHref is null ? "" : $" <a href=\"{H(returnHref)}\">Return to review index</a>")}</nav>");
+            writer.WriteLine("<p class=\"legend\"><span class=\"key handler\">handler</span><span class=\"key event-binding\">event binding</span><span class=\"key exact-declaration\">declaration</span><span class=\"key retained-call\">retained call</span><span class=\"key definition-candidate\">definition candidate—not evidence</span></p></header><main><pre class=\"source\"><code>");
+            for (var lineNumber = 1; lineNumber <= lines.Length; lineNumber++)
+            {
+                if (ends.TryGetValue(lineNumber, out var ending))
+                    foreach (var location in ending) active.Remove(location);
+                if (starts.TryGetValue(lineNumber, out var starting))
+                    foreach (var location in starting) active.Add(location);
+                var classes = active.Select(location => location.Role switch
+                    {
+                        "handler" => "handler",
+                        "event-binding" => "event-binding",
+                        "exact-declaration" => "exact-declaration",
+                        "retained-call" => "retained-call",
+                        _ => "definition-candidate"
+                    })
+                    .Distinct(StringComparer.Ordinal)
+                    .Order(StringComparer.Ordinal);
+                writer.Write($"<span class=\"source-line {H(string.Join(' ', classes))}\" id=\"L{lineNumber}\"><a class=\"line-number\" href=\"#L{lineNumber}\">{lineNumber}</a><span class=\"source-text\">{H(lines[lineNumber - 1])}</span>");
+                if (starting is not null)
+                    foreach (var location in starting)
+                        writer.Write($"<a class=\"evidence-link\" href=\"{H(privateReportFileName)}#{evidenceAnchors[location]}\">{H(location.Role)}</a>");
+                writer.WriteLine("</span>");
+            }
+            writer.WriteLine("</code></pre></main><footer>Highlighted spans are retained static evidence, not runtime coverage or execution.</footer></body></html>");
+        }
+
         string RenderTree(string symbol, HashSet<string> path, HashSet<string> expanded)
         {
             var builder = new StringBuilder();
@@ -334,7 +419,11 @@ public static class WebFormsCodePathReview
                     .Append(H(Classification(edge.Callee))).Append("</span> <span class=\"sites\">")
                     .Append(edge.Locations.Count).Append(edge.Locations.Count == 1 ? " call site" : " call sites").Append("</span>");
                 foreach (var location in edge.Locations)
+                {
                     builder.Append(" <a href=\"#").Append(evidenceAnchors[location]).Append("\">evidence</a>");
+                    if (includeRawSource)
+                        builder.Append(" <a href=\"").Append(AnnotatedSourceHref(location)).Append("\">source</a>");
+                }
                 if (path.Contains(edge.Callee)) builder.Append(" <span class=\"reference\">cycle reference</span>");
                 else if (expanded.Contains(edge.Callee)) builder.Append(" <span class=\"reference\">shared callee; shown earlier</span>");
                 else
@@ -350,7 +439,10 @@ public static class WebFormsCodePathReview
         }
 
         Directory.CreateDirectory(outputDirectory);
-        var temporaryPaths = new[] { privatePath, shareableHtmlPath, shareableJsonPath }
+        var destinations = new[] { privatePath, shareableHtmlPath, shareableJsonPath }
+            .Concat(annotatedSourceFiles.Values)
+            .ToArray();
+        var temporaryPaths = destinations
             .ToDictionary(path => path, path => path + ".tmp-" + Guid.NewGuid().ToString("N"), StringComparer.Ordinal);
         var publishedPaths = new List<string>();
         try
@@ -368,14 +460,14 @@ public static class WebFormsCodePathReview
                 writer.WriteLine($"<li>Retained evidence conclusion: <code>{H(EvidenceConclusion(selected))}</code></li>");
                 writer.WriteLine($"<li>Traversal limit reached: <code>{selected.GetProperty("bounded").GetBoolean().ToString().ToLowerInvariant()}</code></li>");
                 writer.WriteLine($"<li>Trigger context: <code>{triggerContextLines} lines before and after the retained binding span</code></li>");
-                writer.WriteLine("<li>Rule: <code>diagnostic.webforms.local-code-path-review.v2</code></li></ul>");
+                writer.WriteLine("<li>Rule: <code>diagnostic.webforms.local-code-path-review.v3</code></li></ul>");
                 writer.WriteLine($"<p><a href=\"{H(Path.GetFileName(shareableHtmlPath))}\">Open anonymous shareable graph</a></p></section>");
                 writer.WriteLine("<details class=\"panel\" id=\"trigger\" open><summary><h2>Trigger</h2></summary><p>The event binding selects the handler; it is context for the rooted call path, not a sibling call.</p>");
                 var bindingLocations = deduplicated.Where(l => l.Role == "event-binding").ToArray();
                 if (bindingLocations.Length == 0) writer.WriteLine("<p>No event-binding source location was retained for this case.</p>");
                 foreach (var location in bindingLocations)
                 {
-                    writer.WriteLine($"<article class=\"trigger-code\"><h3>{H(location.FilePath)}:{location.StartLine}</h3>");
+                    writer.WriteLine($"<article class=\"trigger-code\"><h3>{H(location.FilePath)}:{location.StartLine}{(includeRawSource ? $" — <a href=\"{AnnotatedSourceHref(location)}\">annotated file</a>" : "")}</h3>");
                     WriteSourceCode(writer, location, triggerContextLines, 256);
                     writer.WriteLine($"<p><a href=\"#{evidenceAnchors[location]}\">Jump to full event-binding evidence</a></p></article>");
                 }
@@ -388,19 +480,21 @@ public static class WebFormsCodePathReview
                     var location = deduplicated.FirstOrDefault(item => item.Callee == pair.Key || item.Caller == pair.Key || (pair.Key == handler && item.Role == "handler"));
                     writer.Write($"<dt>{H(pair.Value)}</dt><dd>{H(pair.Key)}");
                     if (location is not null) writer.Write($" — <a href=\"#{evidenceAnchors[location]}\">evidence</a>");
+                    if (includeRawSource && location is not null) writer.Write($" — <a href=\"{AnnotatedSourceHref(location)}\">annotated source</a>");
                     writer.WriteLine("</dd>");
                 }
                 writer.WriteLine("</dl></details>");
                 writer.WriteLine("<details class=\"panel\" id=\"call-path\" open><summary><h2>Retained call path</h2></summary><p>Static retained calls, organized from the selected handler. This is not runtime order or branch feasibility.</p>");
                 var handlerLocation = deduplicated.FirstOrDefault(l => l.Role == "handler");
                 writer.Write($"<div class=\"root\">Handler: <strong>{H(handler)}</strong>");
-                if (handlerLocation is not null) writer.Write($" <a href=\"#{evidenceAnchors[handlerLocation]}\">source</a>");
+                if (handlerLocation is not null) writer.Write($" <a href=\"#{evidenceAnchors[handlerLocation]}\">evidence</a>");
+                if (includeRawSource && handlerLocation is not null) writer.Write($" <a href=\"{AnnotatedSourceHref(handlerLocation)}\">annotated source</a>");
                 writer.WriteLine("</div>");
                 writer.WriteLine(RenderTree(handler, new HashSet<string>(StringComparer.Ordinal) { handler }, new HashSet<string>(StringComparer.Ordinal) { handler }));
                 writer.WriteLine("</details><details class=\"panel\" id=\"evidence\"><summary><h2>Evidence and source excerpts</h2></summary>");
                 foreach (var location in deduplicated)
                 {
-                    writer.WriteLine($"<article class=\"evidence\" id=\"{evidenceAnchors[location]}\"><h3>{H(location.Role)} — {H(location.FilePath)}:{location.StartLine}</h3>");
+                    writer.WriteLine($"<article class=\"evidence\" id=\"{evidenceAnchors[location]}\"><h3>{H(location.Role)} — {H(location.FilePath)}:{location.StartLine}{(includeRawSource ? $" — <a href=\"{AnnotatedSourceHref(location)}\">annotated file</a>" : "")}</h3>");
                     if (location.Caller is not null || location.Callee is not null)
                         writer.WriteLine($"<p>Evidence edge: <code>{H(location.Caller)}</code> → <code>{H(location.Callee)}</code></p>");
                     WriteSourceCode(writer, location);
@@ -413,6 +507,17 @@ public static class WebFormsCodePathReview
                 if (returnHref is not null) writer.WriteLine($"<nav class=\"review-nav bottom\"><a href=\"{H(returnHref)}\">← Return to review index</a></nav>");
                 writer.WriteLine("</main>");
                 writer.WriteLine("<script>function revealTarget(){const id=decodeURIComponent(location.hash.slice(1));if(!id)return;const target=document.getElementById(id);if(!target)return;let parent=target.closest('details');while(parent){parent.open=true;parent=parent.parentElement?.closest('details');}}addEventListener('hashchange',revealTarget);revealTarget();</script></body></html>");
+            }
+
+            var annotatedOutputBytes = 0L;
+            foreach (var sourceFile in annotatedSourceFiles.OrderBy(item => item.Key, StringComparer.Ordinal))
+            {
+                var temporarySourcePath = temporaryPaths[sourceFile.Value];
+                using (var writer = new StreamWriter(new FileStream(temporarySourcePath, FileMode.CreateNew, FileAccess.Write, FileShare.None), new UTF8Encoding(false)))
+                    WriteAnnotatedSource(writer, sourceFile.Key, Path.GetFileName(privatePath));
+                annotatedOutputBytes += new FileInfo(temporarySourcePath).Length;
+                if (annotatedOutputBytes > MaximumAnnotatedSourceOutputBytesPerReport)
+                    throw new InvalidDataException("CodePathReviewSourceAggregateOutputLimit");
             }
 
             using (var file = new FileStream(temporaryPaths[shareableJsonPath], FileMode.CreateNew, FileAccess.Write, FileShare.None))
@@ -505,7 +610,7 @@ public static class WebFormsCodePathReview
             throw;
         }
         return ["codePathReview=created", $"case={caseId}|sourceMode=working-tree|triggerContextLines={triggerContextLines}|excerpts={deduplicated.Count}|definitionCandidates={candidateCount}|anonymousNodes={anonymousNodes.Length}|anonymousEdges={groupedEdges.Length}|review=unreviewed",
-            "artifacts=private-html;shareable-html;shareable-json",
+            $"artifacts=private-html;shareable-html;shareable-json{(includeRawSource ? $";annotated-source-html:{annotatedSourceFiles.Count}" : "")}",
             "nonClaim=working-tree-may-differ-from-inspection-commit;static-calls-do-not-prove-runtime-execution-or-absence"];
     }
 
@@ -540,5 +645,9 @@ public static class WebFormsCodePathReview
 
     private const string ShareableCss = """
         :root{font-family:system-ui,sans-serif;color:#172033;background:#f5f7fb}body{margin:0}main{max-width:1100px;margin:auto;padding:24px}section{background:white;border:1px solid #dbe2ee;border-radius:10px;padding:16px;margin:14px 0}.safe{background:#e9f7ee;border-left:5px solid #26834a;padding:12px}a{color:#1558b0}.mermaid{background:white;border:1px solid #dbe2ee;border-radius:10px;padding:16px;overflow:auto}code{background:#edf1f7;padding:.1rem .3rem;border-radius:4px}
+        """;
+
+    private const string AnnotatedSourceCss = """
+        :root{font-family:system-ui,sans-serif;color:#172033;background:#f5f7fb}body{margin:0}header,footer{padding:18px 24px;background:#fff;border-bottom:1px solid #dbe2ee}h1{margin:.2rem 0;font-size:1.3rem;overflow-wrap:anywhere}.private{background:#fff1f0;border-left:5px solid #c62828;padding:10px}nav a{display:inline-block;margin-right:.6rem;color:#1558b0}.legend{display:flex;flex-wrap:wrap;gap:.45rem}.key,.evidence-link{border-radius:4px;padding:.15rem .4rem;font-size:.78rem}.handler{background:#fff0b8}.event-binding{box-shadow:inset 4px 0 #1b7f5c}.exact-declaration{box-shadow:inset 4px 0 #7467d8}.retained-call{box-shadow:inset 4px 0 #1769aa}.definition-candidate{box-shadow:inset 4px 0 #8a5a00}.source{margin:0;padding:16px 0;background:#111827;color:#e5e7eb;overflow:auto;line-height:1.45}.source-line{display:block;min-width:max-content;padding-right:18px}.source-line:target{outline:2px solid #ffbf47;outline-offset:-2px}.line-number{display:inline-block;width:5rem;padding-right:1rem;text-align:right;color:#8da2bf;text-decoration:none;user-select:none}.source-text{white-space:pre}.evidence-link{margin-left:1rem;background:#dce8fb;color:#123c70;text-decoration:none}footer{border-top:1px solid #dbe2ee;border-bottom:0;color:#526177}
         """;
 }
