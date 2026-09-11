@@ -1,0 +1,98 @@
+$ErrorActionPreference = 'Stop'
+$scripts = Split-Path -Parent $PSScriptRoot
+$scriptPath = Join-Path $scripts 'New-FocusedWebFormsApplicationWorkbench.ps1'
+$tokens = $null
+$parseErrors = $null
+[Management.Automation.Language.Parser]::ParseFile($scriptPath, [ref]$tokens, [ref]$parseErrors) | Out-Null
+if ($parseErrors.Count -ne 0) { throw 'Application workbench script syntax is invalid.' }
+
+$temp = Join-Path ([IO.Path]::GetTempPath()) ('tracemap-application-workbench-' + [Guid]::NewGuid().ToString('N'))
+$outputRoot = Join-Path $temp 'output'
+$sourceRoot = Join-Path $temp 'source'
+$corpus = Join-Path $temp 'evidence-docs'
+[IO.Directory]::CreateDirectory($outputRoot) | Out-Null
+[IO.Directory]::CreateDirectory((Join-Path $sourceRoot 'Pages')) | Out-Null
+[IO.Directory]::CreateDirectory($corpus) | Out-Null
+[IO.File]::WriteAllText((Join-Path $sourceRoot 'Pages/First.aspx'), "<%@ Page Language=`"C#`" %>`n<asp:Button ID=`"Go`" runat=`"server`" />`n", [Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllText((Join-Path $corpus 'manifest.json'), (@{
+    schemaVersion = 'tracemap-evidence-docs.v1'; tracemapGenerated = $true
+    inputs = @(@{ sourceRefs = @(@{ scanId = 'scan-one'; commitSha = ('a' * 40) }) })
+} | ConvertTo-Json -Depth 8), [Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllText((Join-Path $corpus 'query-recipes.json'), '{"schemaVersion":"tracemap-evidence-query-recipes.v1"}', [Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllText((Join-Path $corpus 'chunks.jsonl'), "{`"chunkId`":`"chunk-001`"}`n", [Text.UTF8Encoding]::new($false))
+$chunksHashBefore = (Get-FileHash -LiteralPath (Join-Path $corpus 'chunks.jsonl') -Algorithm SHA256).Hash
+
+$packetPath = Join-Path $temp 'webforms-modernization.json'
+$evidence = @{ factId = 'fact-surface-1'; ruleId = 'legacy.webforms.surface.v1'; evidenceTier = 'Tier2Structural'; coverageLabel = 'complete'; commitSha = ('a' * 40); filePath = 'Pages/First.aspx'; startLine = 1; endLine = 2; extractorId = 'legacy-webforms'; extractorVersion = '1'; supportingFactIds = @(); supportingEdgeIds = @(); limitations = @() }
+$packet = [ordered]@{
+    schemaVersion = 'webforms-modernization-packet.v1'; packetId = 'packet-one'; ruleId = 'legacy.webforms.modernization-packet.v1'; claimLevel = 'local-only'; coverage = 'reduced'
+    sources = @(@{ sourceId = 'source-one'; repositoryId = 'repo-one'; scanId = 'scan-one'; commitSha = ('a' * 40); analysisLevel = 'semantic'; buildStatus = 'succeeded' })
+    summary = @{ projectCount = 1; surfaceCount = 2; eventChainCount = 1; downstreamBoundaryCount = 1; identityStateCount = 1; batchDataMovementCount = 1; structuralSliceCandidateCount = 1; gapCount = 1; truncated = $false }
+    projects = @(@{ projectId = 'project-one'; surfaceCount = 2; evidence = @(); supportingFactIds = @() })
+    surfaces = @(
+        @{ surfaceId = 'surface-two'; surfaceKind = 'page'; projectId = 'project-one'; compositionTargetIds = @(); controlIds = @(); evidence = @{ factId = 'fact-surface-2'; ruleId = 'legacy.webforms.surface.v1'; evidenceTier = 'Tier2Structural'; coverageLabel = 'complete'; commitSha = ('a' * 40); filePath = 'Pages/Second.aspx'; startLine = 1; endLine = 1; extractorId = 'legacy-webforms'; extractorVersion = '1'; supportingFactIds = @(); supportingEdgeIds = @(); limitations = @() }; supportingEvidence = @(); supportingFactIds = @() },
+        @{ surfaceId = 'surface-one'; surfaceKind = 'page'; projectId = 'project-one'; compositionTargetIds = @(); controlIds = @('Go'); evidence = $evidence; supportingEvidence = @(); supportingFactIds = @('fact-surface-1') }
+    )
+    eventChains = @(@{ chainId = 'chain-one'; surfaceId = 'surface-one'; eventSourceId = 'Go.Click'; bindingFactId = 'binding-one'; handlerId = 'handler-one'; handlerFactId = 'fact-handler'; handlerSymbol = 'App.First.Go_Click()'; classification = 'terminal-reached'; legacyPathId = 'path-one'; terminalKind = 'database'; evidence = @($evidence); pathEvidence = @(); supportingFactIds = @('fact-handler'); supportingEdgeIds = @(); ruleIds = @('legacy.webforms.event-flow.v1'); evidenceTiers = @('Tier1Semantic'); coverageLabels = @('complete'); limitations = @(); traversalObservation = @{ stopState = 'supported-terminal-reached' } })
+    downstreamBoundaries = @(@{ boundaryId = 'boundary-one'; chainId = 'chain-one'; surfaceId = 'surface-one'; handlerId = 'handler-one'; boundaryCategory = 'database'; boundaryKind = 'stored-procedure-candidate'; boundaryTargetId = 'target-one'; terminalEvidenceId = 'fact-db'; classification = 'retained'; legacyPathId = 'path-one'; evidence = @($evidence); pathEvidence = @(); supportingFactIds = @('fact-db'); supportingEdgeIds = @(); ruleIds = @('legacy.boundary.v1'); evidenceTiers = @('Tier2Structural'); coverageLabels = @('complete'); limitations = @() })
+    identityStateInventory = @(@{ identityStateId = 'identity-one'; identityKind = 'session'; classification = 'observed'; surfaceId = 'surface-one'; safeMetadata = @{}; evidence = $evidence; supportingFactIds = @(); limitations = @() })
+    batchDataMovementInventory = @(@{ batchDataMovementId = 'batch-one'; surfaceKind = 'file-data-movement'; mechanism = 'system-io'; operationKind = 'read'; ownerStatus = 'member-declared'; projectResolution = 'resolved'; projectId = 'project-one'; safeMetadata = @{}; evidence = $evidence; supportingFactIds = @(); limitations = @() })
+    structuralSliceCandidates = @(@{ candidateId = 'candidate-one'; classification = 'structural'; ruleId = 'legacy.slice.v1'; evidenceTier = 'Tier2Structural'; ownerNamingRequired = $true; surfaceIds = @('surface-one'); evidence = @($evidence); supportingFactIds = @(); coverageLabels = @('complete'); limitations = @() })
+    gaps = @(@{ gapId = 'gap-one'; classification = 'HandlerTerminalUnavailable'; scopeKind = 'event-chain'; scopeId = 'chain-one'; ruleId = 'legacy.gap.v1'; evidenceTier = 'Tier4Unknown'; coverageLabel = 'reduced'; commitSha = ('a' * 40); filePath = 'Pages/First.aspx'; startLine = 2; endLine = 2; extractorId = 'legacy-webforms'; extractorVersion = '1'; supportingFactIds = @(); limitations = @('missing evidence is not absence') })
+    ownerQuestions = @(); limitations = @()
+}
+[IO.File]::WriteAllText($packetPath, (($packet | ConvertTo-Json -Depth 30) + "`n"), [Text.UTF8Encoding]::new($false))
+
+try {
+    $workbench = Join-Path $outputRoot 'workbench-one'
+    & $scriptPath -PacketPath $packetPath -OutputRoot $outputRoot -OutputDirectory $workbench -EvidenceDocsRoot $corpus | Out-Null
+    foreach ($expected in @('index.html', 'application-handoff.json', 'webforms-modernization.snapshot.json', 'page-001.html', 'page-001.handoff.json', 'page-002.html', 'page-002.handoff.json')) {
+        if (!(Test-Path -LiteralPath (Join-Path $workbench $expected) -PathType Leaf)) { throw "Missing workbench file: $expected" }
+    }
+    $index = [IO.File]::ReadAllText((Join-Path $workbench 'index.html'))
+    if ($index.IndexOf('Pages/First.aspx', [StringComparison]::Ordinal) -gt $index.IndexOf('Pages/Second.aspx', [StringComparison]::Ordinal)) { throw 'Pages were not ordered by retained path.' }
+    if (!$index.Contains('43', [StringComparison]::Ordinal) -and !$index.Contains('2 selected surfaces', [StringComparison]::Ordinal)) { throw 'Index did not report surface count.' }
+    $first = [IO.File]::ReadAllText((Join-Path $workbench 'page-001.html'))
+    foreach ($expected in @('Go.Click', 'App.First.Go_Click()', 'stored-procedure-candidate', 'HandlerTerminalUnavailable', 'Raw source omitted')) {
+        if (!$first.Contains($expected, [StringComparison]::Ordinal)) { throw "Page report missing: $expected" }
+    }
+    $handoff = [IO.File]::ReadAllText((Join-Path $workbench 'page-001.handoff.json')) | ConvertFrom-Json -Depth 30
+    if ($handoff.subject.filePath -ne 'Pages/First.aspx' -or $handoff.counts.eventChains -ne 1 -or $handoff.evidenceDocs.status -ne 'supplied-read-only') { throw 'Page handoff projection was incomplete.' }
+    $chunksHashAfter = (Get-FileHash -LiteralPath (Join-Path $corpus 'chunks.jsonl') -Algorithm SHA256).Hash
+    if ($chunksHashAfter -ne $chunksHashBefore) { throw 'Workbench modified chunks.jsonl.' }
+
+    $sourceWorkbench = Join-Path $outputRoot 'workbench-source'
+    & $scriptPath -PacketPath $packetPath -OutputRoot $outputRoot -OutputDirectory $sourceWorkbench -SourceRoot $sourceRoot -IncludeRawSource -SourceContextLines 1 | Out-Null
+    $sourceReport = [IO.File]::ReadAllText((Join-Path $sourceWorkbench 'page-001.html'))
+    if (!$sourceReport.Contains('asp:Button', [StringComparison]::Ordinal)) { throw 'Opt-in source excerpt was not rendered.' }
+    if ((Get-FileHash -LiteralPath (Join-Path $corpus 'chunks.jsonl') -Algorithm SHA256).Hash -ne $chunksHashBefore) { throw 'Source-mode workbench modified chunks.jsonl.' }
+
+    $reviewScript = Join-Path $scripts 'webforms-review/Invoke-WitsApplicationReview.ps1'
+    $reviewPath = Join-Path $temp 'application-review.json'
+    & $reviewScript -Mode Export -PacketPath $packetPath -ReviewPath $reviewPath | Out-Null
+    $review = [IO.File]::ReadAllText($reviewPath) | ConvertFrom-Json -Depth 30
+    $review.decisions[0].verdict = 'needs-review'; $review.decisions[0].migrationDisposition = 'defer'; $review.decisions[0].capabilityLabel = 'Crew meal review'
+    [IO.File]::WriteAllText($reviewPath, (($review | ConvertTo-Json -Depth 20) + "`n"), [Text.UTF8Encoding]::new($false))
+    $reviewedWorkbench = Join-Path $outputRoot 'workbench-reviewed'
+    & $scriptPath -PacketPath $packetPath -OutputRoot $outputRoot -OutputDirectory $reviewedWorkbench -ReviewPath $reviewPath | Out-Null
+    $reviewedIndex = [IO.File]::ReadAllText((Join-Path $reviewedWorkbench 'index.html'))
+    $reviewedPage = [IO.File]::ReadAllText((Join-Path $reviewedWorkbench 'page-001.html'))
+    if (!$reviewedIndex.Contains('needs-review', [StringComparison]::Ordinal) -or !$reviewedPage.Contains('Crew meal review', [StringComparison]::Ordinal)) { throw 'Validated application review was not projected into HTML.' }
+
+    $badCorpus = Join-Path $temp 'bad-corpus'
+    [IO.Directory]::CreateDirectory($badCorpus) | Out-Null
+    [IO.File]::Copy((Join-Path $corpus 'query-recipes.json'), (Join-Path $badCorpus 'query-recipes.json'))
+    [IO.File]::Copy((Join-Path $corpus 'chunks.jsonl'), (Join-Path $badCorpus 'chunks.jsonl'))
+    [IO.File]::WriteAllText((Join-Path $badCorpus 'manifest.json'), (@{ schemaVersion = 'tracemap-evidence-docs.v1'; tracemapGenerated = $true; inputs = @(@{ sourceRefs = @(@{ scanId = 'different'; commitSha = ('b' * 40) }) }) } | ConvertTo-Json -Depth 8), [Text.UTF8Encoding]::new($false))
+    try {
+        & $scriptPath -PacketPath $packetPath -OutputRoot $outputRoot -OutputDirectory (Join-Path $outputRoot 'bad-workbench') -EvidenceDocsRoot $badCorpus | Out-Null
+        throw 'Expected mismatched corpus provenance to fail.'
+    }
+    catch {
+        if ($_.Exception.Message -ne 'ApplicationWorkbenchCorpusProvenanceMismatch') { throw }
+    }
+    Write-Host 'PASS focused Web Forms application workbench'
+}
+finally {
+    if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Recurse -Force }
+}

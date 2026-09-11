@@ -2249,6 +2249,26 @@ rules:
       - Application-database observations remain structural static evidence. The handoff never contains credentials, connection strings, configuration values, raw application SQL, or database execution instructions.
       - The handoff does not infer business intent, generate a BRD, select a target architecture, call an LLM, or generate modernization or migration code.
 
+  - id: diagnostic.webforms.application-handoff.v1
+    name: Web Forms application workbench handoff
+    description: Projects one existing modernization packet into deterministic private navigation metadata for every selected surface, including stable evidence references and closed read-only retrieval recipes.
+    evidenceTier: Tier2Structural
+    emits:
+      - webforms-application-handoff.v1 private application handoff
+    limitations:
+      - This is navigation metadata over retained packet evidence; it does not add scanner facts, infer business intent, generate a BRD, or prove runtime behavior or migration correctness.
+      - The optional evidence-docs corpus is referenced read-only and is not copied, modified, truncated, or deleted.
+
+  - id: diagnostic.webforms.application-page-handoff.v1
+    name: Web Forms application page handoff
+    description: Projects one selected Web Forms surface and its retained chains, boundaries, gaps, and citations into a bounded private page-level handoff.
+    evidenceTier: Tier2Structural
+    emits:
+      - webforms-application-page-handoff.v1 private page handoff
+    limitations:
+      - Surface association is limited to identities retained in the source modernization packet; project-level data-movement rows may require human scoping to a specific page.
+      - Retained call paths and boundaries are static evidence and do not prove runtime order, branch feasibility, successful binding, or complete transitive closure.
+
   - id: legacy.webforms.inventory.v1
     name: Legacy WebForms file and page inventory
     description: Inventories WebForms markup, code-behind, designer files, directives, static server controls, checked-in configuration registrations, and safe page linkage metadata.
