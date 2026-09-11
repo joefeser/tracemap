@@ -95,6 +95,15 @@ public sealed class VisualBasicValidationMatrixTests
         // it after snapshot capture must fail verification loudly even though
         // it never contributes evidence.
         var inventory = FileInventory.Collect(repo);
+        var semanticInputs = VisualBasicSemanticExtractor.Extract(
+            repo,
+            inventory,
+            new ScanOptions(repo, Path.Combine(temp.Path, "semantic-out")),
+            inventory);
+        foreach (var generatedPath in new[] { "Live.designer.vb", "Tooling.g.vb", "AssemblyInfo.vb" })
+        {
+            Assert.Contains(generatedPath, semanticInputs.CompilationInputFiles!);
+        }
         var baseline = ScanEngine.CaptureSemanticInputSnapshot(repo, inventory);
         foreach (var generatedPath in new[] { "Live.designer.vb", "Tooling.g.vb", "HeaderGenerated.vb" })
         {

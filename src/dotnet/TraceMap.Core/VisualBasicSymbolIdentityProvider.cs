@@ -86,9 +86,10 @@ public static class VisualBasicSymbolIdentityProvider
 
     private static string CreatePropertyId(IPropertySymbol property)
     {
-        var containingTypeId = property.ContainingType is null ? string.Empty : CreateNamedTypeId(property.ContainingType);
-        var parameterTypes = string.Join(",", property.Parameters.Select(parameter => TypeKey(parameter.Type)));
-        return $"visualbasic property {Escape(containingTypeId)} {Escape(property.MetadataName)}({Escape(parameterTypes)}):{Escape(TypeKey(property.Type))}";
+        var definition = property.OriginalDefinition;
+        var containingTypeId = definition.ContainingType is null ? string.Empty : CreateNamedTypeId(definition.ContainingType);
+        var parameterTypes = string.Join(",", definition.Parameters.Select(parameter => TypeKey(parameter.Type)));
+        return $"visualbasic property {Escape(containingTypeId)} {Escape(definition.MetadataName)}({Escape(parameterTypes)}):{Escape(TypeKey(definition.Type))}";
     }
 
     private static string CreateFieldId(IFieldSymbol field)

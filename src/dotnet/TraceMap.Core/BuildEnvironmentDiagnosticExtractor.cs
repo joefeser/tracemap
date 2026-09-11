@@ -465,7 +465,7 @@ public static class BuildEnvironmentDiagnosticExtractor
     {
         var byPath = inventory.Select(item => item.RelativePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var projectDirectories = inventory
-            .Where(item => item.Kind == "Project")
+            .Where(item => item.Kind is "Project" or "VisualBasicProject")
             .Select(item => NormalizeDirectory(Path.GetDirectoryName(item.RelativePath)))
             .ToArray();
         var diagnostics = new List<BuildEnvironmentDiagnosticCandidate>();
@@ -489,8 +489,8 @@ public static class BuildEnvironmentDiagnosticExtractor
                 continue;
             }
 
-            var allExpected = ExpectedGeneratedFiles(item).ToArray();
-            var expected = allExpected.Where(path => !byPath.Contains(path)).ToArray();
+            var allExpected = ExpectedGeneratedFileAlternatives(item).ToArray();
+            var expected = allExpected.Where(alternatives => !alternatives.Any(byPath.Contains)).ToArray();
             foreach (var missing in expected)
             {
                 diagnostics.Add(Candidate(
@@ -502,7 +502,7 @@ public static class BuildEnvironmentDiagnosticExtractor
                     1,
                     null,
                     null,
-                    safeObservedValue: Path.GetFileName(missing),
+                    safeObservedValue: string.Join("|", missing.Select(Path.GetFileName)),
                     guidanceCode: GuidanceFor("GeneratedFileMissing"),
                     coverageEffect: "caps-to-syntax",
                     sanitization: "none"));
@@ -551,7 +551,7 @@ public static class BuildEnvironmentDiagnosticExtractor
             : FileInventory.NormalizeRelativePath(directory);
     }
 
-    private static IEnumerable<string> ExpectedGeneratedFiles(FileInventoryItem item)
+    private static IEnumerable<IReadOnlyList<string>> ExpectedGeneratedFileAlternatives(FileInventoryItem item)
     {
         var directory = Path.GetDirectoryName(item.RelativePath)?.Replace('\\', '/') ?? string.Empty;
         var fileName = Path.GetFileName(item.RelativePath);
@@ -560,20 +560,20 @@ public static class BuildEnvironmentDiagnosticExtractor
         var prefix = string.IsNullOrWhiteSpace(directory) ? string.Empty : directory + "/";
         if (item.Kind == "WebFormsMarkup")
         {
-            yield return $"{prefix}{fileName}.cs";
-            yield return $"{prefix}{fileName}.designer.cs";
+            yield return [$"{prefix}{fileName}.cs", $"{prefix}{fileName}.vb"];
+            yield return [$"{prefix}{fileName}.designer.cs", $"{prefix}{fileName}.designer.vb"];
         }
         else if (item.Kind == "ServiceReferenceMetadata" && extension.Equals(".svcmap", StringComparison.OrdinalIgnoreCase))
         {
-            yield return $"{prefix}Reference.cs";
+            yield return [$"{prefix}Reference.cs", $"{prefix}Reference.vb"];
         }
         else if (item.Kind == "Resource")
         {
-            yield return $"{prefix}{baseName}.Designer.cs";
+            yield return [$"{prefix}{baseName}.Designer.cs", $"{prefix}{baseName}.Designer.vb"];
         }
         else if (item.Kind == "Settings")
         {
-            yield return $"{prefix}{baseName}.Designer.cs";
+            yield return [$"{prefix}{baseName}.Designer.cs", $"{prefix}{baseName}.Designer.vb"];
         }
     }
 

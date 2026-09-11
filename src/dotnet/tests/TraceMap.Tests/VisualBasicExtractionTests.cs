@@ -655,6 +655,42 @@ public sealed class VisualBasicExtractionTests
         Assert.Equal(declaration.Properties["targetSymbolId"], invocation.Properties["targetSymbolId"]);
     }
 
+    [Fact]
+    public void Constructed_generic_property_access_joins_to_original_declaration_identity()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "GenericProperty.vbproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(repo, "GenericProperty.vb"), """
+            Public Class Box(Of T)
+                Public Property Value As T
+            End Class
+            Public Module GenericProperties
+                Public Function ReadValue(box As Box(Of Integer)) As Integer
+                    Return box.Value
+                End Function
+            End Module
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var declaration = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.PropertyDeclared
+            && fact.RuleId == RuleIds.VisualBasicSemanticDeclarations
+            && fact.ContractElement == "Value");
+        var access = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.PropertyAccessed
+            && fact.RuleId == RuleIds.VisualBasicSemanticPropertyAccess
+            && fact.ContractElement == "Value");
+
+        Assert.Equal(declaration.Properties["targetSymbolId"], access.Properties["targetSymbolId"]);
+    }
+
     // ---------- Helpers ----------
 
     private static ScanResult ScanModernFixture()
