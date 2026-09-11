@@ -10,12 +10,17 @@ The initial observation established two separate behaviors:
   no edges, 1,000 gaps, and one file.
 - Two tested variants containing a combined index did not complete before
   manual termination.
-- Docs export rejected `credential-or-config` at `input.properties` under
-  `docs-export.validation.unsafe-value-rejected.v1`.
+- Docs export originally rejected `credential-or-config` at `input.properties`
+  under `docs-export.validation.unsafe-value-rejected.v1`. The bounded follow-up
+  changes structured fact-property handling to omit the value while retaining
+  its safe property key, supporting fact ID, category-only marker, and a
+  `docs-export.redaction.unsafe-property.v1` gap. Other unsafe output locations
+  remain fail closed.
 
 This proves correlation with the combined-index path, not deadlock or root
-cause. The docs-export result is a deliberate fail-closed decision unless a
-fully synthetic fixture proves incorrect classification.
+cause. The original docs-export result was a deliberate fail-closed decision.
+Synthetic coverage now proves that structured property values can be omitted
+without weakening final output safety validation or echoing private content.
 
 Safe follow-up data is limited to closed stage tokens, elapsed-time buckets,
 aggregate count buckets, completion state, TraceMap's public commit, and

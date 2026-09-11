@@ -232,6 +232,7 @@ public static partial class EvidenceDocsExporter
     private const string GeneratedFileStaleRuleId = "docs-export.validation.generated-file-stale.v1";
     private const string UserFileCollisionRuleId = "docs-export.validation.user-file-collision.v1";
     private const string UnsafeRejectedRuleId = "docs-export.validation.unsafe-value-rejected.v1";
+    private const string UnsafePropertyRedactionRuleId = "docs-export.redaction.unsafe-property.v1";
     private const string ProhibitedClaimRuleId = "docs-export.validation.prohibited-claim-wording.v1";
     private const string SchemaGapRuleId = "docs-export.gap.schema-incompatible.v1";
     private const string ClaimHiddenRuleId = "docs-export.gap.claim-level-hidden.v1";
@@ -2521,6 +2522,26 @@ public static partial class EvidenceDocsExporter
     private static IReadOnlyList<EvidenceDocGap> GapsForFact(DocFact fact, string family)
     {
         var gaps = new List<EvidenceDocGap>();
+        foreach (var property in fact.Properties
+            .Where(pair => IsUnsafePropertyRedaction(pair.Value))
+            .OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            gaps.Add(new EvidenceDocGap(
+                StableId("gap", "docs-export/gap/v1",
+                [
+                    new("reason", "unsafe-property-redacted"),
+                    new("fact", fact.FactId),
+                    new("property", property.Key)
+                ]),
+                UnsafePropertyRedactionRuleId,
+                Tier4Unknown,
+                "unsafe-property-redacted",
+                family,
+                [ToSourceRef(fact.Source)],
+                [fact.FactId, $"property:{property.Key}"],
+                ["An unsafe source property value was omitted. Its category, property key, and supporting fact remain available without revealing the value."]));
+        }
+
         if (fact.CommitSha is null or "unknown")
         {
             gaps.Add(new EvidenceDocGap(
@@ -2987,24 +3008,29 @@ public static partial class EvidenceDocsExporter
         try
         {
             var values = JsonSerializer.Deserialize<Dictionary<string, string>>(json, JsonOptions) ?? [];
-            foreach (var value in values.Values)
-            {
-                var category = UnsafeCategory(value);
-                if (category is "raw-sql" or "credential-or-config" or "credential")
-                {
-                    throw new InvalidOperationException($"UnsafeValueRejected: {UnsafeRejectedRuleId} [{Tier4Unknown}]: {category} at input.properties.");
-                }
-            }
-
             return values
                 .Where(pair => IsSafeMetadataKey(pair.Key))
-                .ToDictionary(pair => pair.Key, pair => pair.Value ?? string.Empty, StringComparer.Ordinal);
+                .ToDictionary(
+                    pair => pair.Key,
+                    pair => RedactUnsafePropertyValue(pair.Value ?? string.Empty),
+                    StringComparer.Ordinal);
         }
         catch (JsonException)
         {
             return [];
         }
     }
+
+    private static string RedactUnsafePropertyValue(string value)
+    {
+        var category = UnsafeCategory(value);
+        return category is "raw-sql" or "credential-or-config" or "credential"
+            ? $"redacted-{category}"
+            : value;
+    }
+
+    private static bool IsUnsafePropertyRedaction(string value) =>
+        value is "redacted-raw-sql" or "redacted-credential-or-config" or "redacted-credential";
 
     private static string? ExtractorName(DocFact fact)
     {
