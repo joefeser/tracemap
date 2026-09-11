@@ -77,10 +77,11 @@ public static class VisualBasicSymbolIdentityProvider
 
     private static string CreateMethodId(IMethodSymbol method)
     {
-        var containingTypeId = method.ContainingType is null ? string.Empty : CreateNamedTypeId(method.ContainingType);
-        var parameterTypes = string.Join(",", method.Parameters.Select(parameter => TypeKey(parameter.Type)));
-        var returnType = method.ReturnsVoid ? "void" : TypeKey(method.ReturnType);
-        return $"visualbasic method {Escape(containingTypeId)} {Escape(method.MetadataName)}({Escape(parameterTypes)})->{Escape(returnType)}";
+        var definition = (method.ReducedFrom ?? method).OriginalDefinition;
+        var containingTypeId = definition.ContainingType is null ? string.Empty : CreateNamedTypeId(definition.ContainingType);
+        var parameterTypes = string.Join(",", definition.Parameters.Select(parameter => TypeKey(parameter.Type)));
+        var returnType = definition.ReturnsVoid ? "void" : TypeKey(definition.ReturnType);
+        return $"visualbasic method {Escape(containingTypeId)} {Escape(definition.MetadataName)}({Escape(parameterTypes)})->{Escape(returnType)}";
     }
 
     private static string CreatePropertyId(IPropertySymbol property)

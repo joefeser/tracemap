@@ -586,6 +586,75 @@ public sealed class VisualBasicExtractionTests
                 .Contains("tenant-secret", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void Late_bound_call_site_retains_tier3_evidence_and_reduces_coverage()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "LateBound.vbproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework><OptionStrict>Off</OptionStrict></PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(repo, "LateBound.vb"), """
+            Public Module LateBound
+                Public Sub Run(value As Object)
+                    value.Execute()
+                End Sub
+            End Module
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        Assert.Equal("Level1SemanticAnalysisReduced", result.Manifest.AnalysisLevel);
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.CallEdge
+            && fact.RuleId == RuleIds.VisualBasicSyntaxCallGraph
+            && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+            && fact.TargetSymbol == "Execute");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "CallSiteSemanticResolutionUnavailable"
+            && fact.Properties.ContainsKey("siteHash"));
+    }
+
+    [Fact]
+    public void Constructed_generic_method_call_joins_to_original_declaration_identity()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Generic.vbproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Generic.vb"), """
+            Public Module GenericCalls
+                Public Function Echo(Of T)(value As T) As T
+                    Return value
+                End Function
+                Public Function Run() As Integer
+                    Return Echo(Of Integer)(1)
+                End Function
+            End Module
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var declaration = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.MethodDeclared
+            && fact.RuleId == RuleIds.VisualBasicSemanticDeclarations
+            && fact.ContractElement == "Echo");
+        var invocation = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.MethodInvoked
+            && fact.RuleId == RuleIds.VisualBasicSemanticMethodInvocation
+            && fact.ContractElement == "Echo");
+
+        Assert.Equal(declaration.Properties["targetSymbolId"], invocation.Properties["targetSymbolId"]);
+    }
+
     // ---------- Helpers ----------
 
     private static ScanResult ScanModernFixture()

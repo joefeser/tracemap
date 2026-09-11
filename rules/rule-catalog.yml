@@ -3840,6 +3840,7 @@ rules:
       - A Visual Basic workspace or compilation gap reduces the aggregate scan coverage label; the scan is never reported as clean or complete while such a gap is present.
       - Compiler diagnostics that point at no source location and reference the classic My template surface are excluded as SDK design-time injection noise; this exclusion is bounded to that template surface and does not suppress source-referencing compiler errors.
       - Per-file `SemanticAnalysisUnavailable` gaps are emitted by the bounded syntax fallback for Visual Basic files that received no compiler-resolved coverage; they do not claim why semantic evidence is unavailable, and syntax facts that accompany them are governed by the `vb.syntax.*` rules.
+      - `CallSiteSemanticResolutionUnavailable` gaps mark individual invocation or constructor sites where compiler binding was unavailable but bounded Tier3 call-site evidence was retained; these gaps reduce coverage and never assert a target.
       - Exclusion comparison follows detected host path case semantics and macOS Unicode-equivalence semantics without rewriting persisted evidence paths.
 
   - id: vb.semantic.declarations.v1
@@ -3879,9 +3880,9 @@ rules:
     emits:
       - MethodInvoked
     limitations:
-      - Requires Roslyn semantic binding; late binding, overload resolution failures, and error-typed receivers produce no fact rather than a guessed target.
+      - Requires Roslyn semantic binding; late binding, overload resolution failures, and error-typed receivers produce no Tier1 fact rather than a guessed target.
       - An invocation proves a compiler-resolved call site in source; it does not prove the callee executes, is reachable, or completes at runtime.
-      - Unresolved call sites are visible only through `vb.semantic.workspace.v1` compiler-diagnostic gaps, not as per-call-site gap rows.
+      - Unresolved invocation sites retain bounded Tier3 call-site facts and a `CallSiteSemanticResolutionUnavailable` Tier4 gap; they never become compiler-resolved targets.
 
   - id: vb.semantic.callgraph.v1
     name: Visual Basic semantic call graph
@@ -3891,7 +3892,7 @@ rules:
       - CallEdge
     limitations:
       - Edges are compiler-resolved call sites, not proven execution: dynamic dispatch to overrides, delegates, AddHandler/Handles event wiring, RaiseEvent, and interface dispatch beyond the resolved target are not expanded.
-      - Late-bound invocations and unresolved callees produce no edge.
+      - Late-bound invocations and unresolved callees produce no Tier1 edge; bounded Tier3 syntax edges and Tier4 call-site gaps may accompany them.
       - The caller is the lexically containing symbol at the call site; runtime call paths, recursion depth, and branch feasibility are not proven.
 
   - id: vb.semantic.objectcreation.v1
@@ -3901,7 +3902,7 @@ rules:
     emits:
       - ObjectCreated
     limitations:
-      - Requires Roslyn semantic binding of the created type; error-typed or unresolved creations produce no fact.
+      - Requires Roslyn semantic binding of the created type; error-typed creations produce no fact, while a known type with an unresolved constructor retains bounded Tier3 call-site evidence and a Tier4 gap.
       - An object creation proves a constructor call site in source; it does not prove the constructor executes or the object survives to runtime.
       - Constructor call edges are carried separately by `vb.semantic.callgraph.v1`; argument flow is carried by `vb.semantic.valueflow.v1`.
 

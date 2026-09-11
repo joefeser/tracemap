@@ -32,7 +32,7 @@ build success, or impact.
 
 | Extractor | Identity/version | Tier | Rules |
 | --- | --- | --- | --- |
-| Visual Basic semantic extractor | `vb-semantic/0.3.0` | Tier1 (facts), Tier2 (project observation), Tier4 (workspace gaps) | `vb.semantic.compilation.v1`, `vb.semantic.workspace.v1`, `vb.semantic.declarations.v1`, `vb.semantic.propertyaccess.v1`, `vb.semantic.methodinvocation.v1`, `vb.semantic.callgraph.v1`, `vb.semantic.objectcreation.v1`, `vb.semantic.valueflow.v1`, `vb.semantic.symbolrelationship.v1` |
+| Visual Basic semantic extractor | `vb-semantic/0.4.0` | Tier1 (facts), Tier2 (project observation), Tier4 (workspace and call-site gaps) | `vb.semantic.compilation.v1`, `vb.semantic.workspace.v1`, `vb.semantic.declarations.v1`, `vb.semantic.propertyaccess.v1`, `vb.semantic.methodinvocation.v1`, `vb.semantic.callgraph.v1`, `vb.semantic.objectcreation.v1`, `vb.semantic.valueflow.v1`, `vb.semantic.symbolrelationship.v1` |
 | Visual Basic syntax fallback | `vb-syntax/0.2.0` | Tier3 (facts), Tier4 (parse/read/budget/semantic-unavailable gaps) | `vb.syntax.declarations.v1`, `vb.syntax.memberaccess.v1`, `vb.syntax.invocation.v1`, `vb.syntax.callgraph.v1`, `vb.syntax.objectcreation.v1` |
 
 Symbol identities use the canonical .NET normalization shape with
@@ -114,12 +114,13 @@ catalog documents them per rule:
   control-event bindings never become resolved event edges in this slice.
   Handler methods appear only as declared method evidence. Event composition
   belongs to issue [#738](https://github.com/joefeser/tracemap/issues/738).
-- Event declarations, operator statements, and `Declare` (P/Invoke) statements
-  are not emitted as declarations in this slice.
+- Event declarations are emitted. Operator statements and `Declare` (P/Invoke)
+  statements are not emitted as declarations in this slice.
 - Late-bound invocations, unresolved or ambiguous default members, overload
   resolution failures, reflection, and conditional-compilation branches that
-  did not compile produce no fact rather than a guessed target; they are
-  visible only through compiler-diagnostic gaps.
+  did not compile never produce a guessed Tier1 target. Unresolved invocation
+  and constructor sites retain bounded Tier3 call-site evidence plus a Tier4
+  gap; other unsupported shapes remain visible through compiler diagnostics.
 - No runtime claims of any kind: facts prove source structure and
   compiler-resolved binding at scan time only, never execution,
   reachability, deployment state, or impact.

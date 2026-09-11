@@ -189,7 +189,7 @@ repeatable smoke, and exercises the full Tier1 VB fact surface.
 | `community-visual-basic` | `https://github.com/CommunityVB/Community.VisualBasic.git` | `20d2a51dfc9f342848ad134952ceaa8d79302559` | yes (`git ls-remote` and pinned checkout, 2026-09-11) |
 
 Recorded validation (macOS arm64, .NET SDK 10.0.302, TraceMap
-`vb-semantic/0.3.0` at the extraction slice):
+`vb-semantic/0.4.0` at the extraction slice):
 
 - Scan completes with `Level1SemanticAnalysisReduced` / `FailedOrPartial`; all
   six `.vbproj` files load and produce compilations, and every project reports
