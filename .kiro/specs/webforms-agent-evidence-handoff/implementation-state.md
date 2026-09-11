@@ -30,10 +30,11 @@ Pull request: #735
 - Full .NET solution: 1,815 passed, 0 failed, with the pre-existing nullable
   warning in `PropertyMappingTests.cs`.
 - `git diff --check` passed.
-- Review-remediation focused validation: 49 evidence-docs, index-reader, and
+- Review-remediation focused validation: 50 evidence-docs, index-reader, and
   Web Forms handoff tests passed; adversarial coverage includes corrupted
   outputs, cross-source provenance, altered recipe catalogs, malformed chunks,
-  invalid evidence metadata, and noncanonical indexes.
+  invalid evidence metadata, noncanonical indexes, and missing recipe query
+  tables. Full post-review solution validation passed 1,822 tests.
 
 ## Boundaries
 
