@@ -34,7 +34,7 @@
       "type": "object", "additionalProperties": false,
       "required": ["pageId", "surfaceId", "surfaceFactId", "verdict", "migrationDisposition", "capabilityLabel", "comment", "correction"],
       "properties": {
-        "pageId": { "type": "string", "pattern": "^page-[0-9]{3}$" },
+        "pageId": { "type": "string", "pattern": "^page-[0-9]{3,4}$" },
         "surfaceId": { "type": "string", "minLength": 1, "maxLength": 1024 },
         "surfaceFactId": { "type": "string", "minLength": 1, "maxLength": 256 },
         "verdict": { "enum": ["unreviewed", "expected-ui-only", "supported-backend-present", "backend-evidence-missing", "binding-or-source-mismatch", "needs-review"] },

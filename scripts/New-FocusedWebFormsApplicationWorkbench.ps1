@@ -19,6 +19,35 @@ function ConvertTo-HtmlText([object]$Value) { [Net.WebUtility]::HtmlEncode([stri
 function Values([object]$Value) { if ($null -eq $Value) { @() } else { @($Value) } }
 function New-StableAlias([string]$Prefix, [int]$Number) { '{0}-{1:d3}' -f $Prefix, $Number }
 function Same([object]$Left, [object]$Right) { [string]::Equals([string]$Left, [string]$Right, [StringComparison]::Ordinal) }
+function Get-PathStringComparison([string]$ExistingRoot) {
+    if ($IsWindows) { return [StringComparison]::OrdinalIgnoreCase }
+    $probeName = '.tracemap-case-probe-' + [Guid]::NewGuid().ToString('N') + '-a'
+    $probePath = Join-Path $ExistingRoot $probeName
+    try {
+        [IO.File]::WriteAllText($probePath, '', [Text.UTF8Encoding]::new($false))
+        $alternatePath = Join-Path $ExistingRoot $probeName.ToUpperInvariant()
+        if (Test-Path -LiteralPath $alternatePath -PathType Leaf) { return [StringComparison]::OrdinalIgnoreCase }
+        return [StringComparison]::Ordinal
+    }
+    finally {
+        if (Test-Path -LiteralPath $probePath) { Remove-Item -LiteralPath $probePath -Force }
+    }
+}
+function Project-Evidence([object]$Evidence) {
+    if ($null -eq $Evidence) { return $null }
+    return [ordered]@{
+        factId = [string]$Evidence.factId
+        ruleId = [string]$Evidence.ruleId
+        evidenceTier = [string]$Evidence.evidenceTier
+        coverageLabel = [string]$Evidence.coverageLabel
+        commitSha = [string]$Evidence.commitSha
+        filePath = $Evidence.filePath
+        startLine = $Evidence.startLine
+        endLine = $Evidence.endLine
+        extractorId = $Evidence.extractorId
+        extractorVersion = $Evidence.extractorVersion
+    }
+}
 function Property-Value([object]$Value, [string]$Name) {
     if ($null -eq $Value) { return $null }
     $property = $Value.PSObject.Properties[$Name]
@@ -122,7 +151,8 @@ $stamp = [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss')
 if (!$OutputDirectory) { $OutputDirectory = Join-Path $OutputRoot "webforms-application-workbench-$stamp" }
 $OutputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 $outputPrefix = $OutputRoot.TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
-if (!$OutputDirectory.StartsWith($outputPrefix, [StringComparison]::OrdinalIgnoreCase)) { throw 'ApplicationWorkbenchOutputOutsideRoot' }
+$outputComparison = Get-PathStringComparison $OutputRoot
+if (!$OutputDirectory.StartsWith($outputPrefix, $outputComparison)) { throw 'ApplicationWorkbenchOutputOutsideRoot' }
 if (Test-Path -LiteralPath $OutputDirectory) { throw 'ApplicationWorkbenchOutputExists' }
 $parent = Split-Path -Parent $OutputDirectory
 if (!(Test-Path -LiteralPath $parent -PathType Container)) { [IO.Directory]::CreateDirectory($parent) | Out-Null }
@@ -177,6 +207,10 @@ try {
         if ($coverage.Count -eq 0) { $coverage = @([string]$surface.evidence.coverageLabel) }
         $decision = if ($reviewBySurface.ContainsKey([string]$surface.surfaceId)) { $reviewBySurface[[string]$surface.surfaceId] } else { [pscustomobject]@{ verdict = 'unreviewed'; migrationDisposition = 'unassigned'; capabilityLabel = $null; comment = $null; correction = $null } }
         $analysisStatus = if ([string]$packet.coverage -like 'reduced-*' -or $packet.summary.truncated -or $gaps.Count -gt 0) { 'partial' } else { 'complete' }
+        $retrievalHints = [Collections.Generic.List[object]]::new()
+        $retrievalHints.Add([ordered]@{ recipeId = 'webforms-surface-facts'; parameters = [ordered]@{ surface_id = [string]$surface.surfaceId; limit = 500 } })
+        foreach ($handler in $handlers) { $retrievalHints.Add([ordered]@{ recipeId = 'calls-from-handler'; parameters = [ordered]@{ handler_symbol = $handler; limit = 500 } }) }
+        foreach ($boundary in @($boundaries | Where-Object { (Property-Value $_ 'terminalEvidenceIsFact') -eq $true })) { $retrievalHints.Add([ordered]@{ recipeId = 'boundary-supporting-facts'; parameters = [ordered]@{ terminal_evidence_id = [string]$boundary.terminalEvidenceId; limit = 100 } }) }
         $handoff = [ordered]@{
             schemaVersion = 'webforms-application-page-handoff.v1'
             ruleId = 'diagnostic.webforms.application-page-handoff.v1'
@@ -196,11 +230,7 @@ try {
                 @($evidence | ForEach-Object { [string]$_.factId; Values $_.supportingFactIds; Values $_.supportingEdgeIds })
                 @($pathEvidence | ForEach-Object { [string]$_.evidenceId; Values $_.supportingFactIds })
             ) | Where-Object { $_ } | Sort-Object -Unique
-            retrievalHints = @(
-                [ordered]@{ recipeId = 'webforms-surface-facts'; parameters = [ordered]@{ surface_id = [string]$surface.surfaceId; limit = 500 } },
-                @($handlers | ForEach-Object { [ordered]@{ recipeId = 'calls-from-handler'; parameters = [ordered]@{ handler_symbol = $_; limit = 500 } } }),
-                @($boundaries | Where-Object { (Property-Value $_ 'terminalEvidenceIsFact') -eq $true } | ForEach-Object { [ordered]@{ recipeId = 'boundary-supporting-facts'; parameters = [ordered]@{ terminal_evidence_id = [string]$_.terminalEvidenceId; limit = 100 } } })
-            )
+            retrievalHints = @($retrievalHints)
             evidenceDocs = if ($EvidenceDocsRoot) { [ordered]@{ status = 'supplied-read-only'; locator = [IO.Path]::GetRelativePath($staging, [IO.Path]::GetFullPath($EvidenceDocsRoot)).Replace('\', '/'); chunks = 'chunks.jsonl'; manifest = 'manifest.json'; queryRecipes = 'query-recipes.json' } } else { [ordered]@{ status = 'not-supplied' } }
             humanReview = [ordered]@{ status = if ($ReviewPath) { 'validated-overlay' } else { 'not-supplied' }; verdict = [string]$decision.verdict; migrationDisposition = [string]$decision.migrationDisposition; capabilityLabel = $decision.capabilityLabel; comment = $decision.comment; correction = $decision.correction }
             limitations = @('Static evidence does not prove runtime execution, branch feasibility, successful binding, business intent, or migration correctness.', 'Human review must remain an overlay and must not rewrite this handoff or its source packet.')
@@ -256,8 +286,8 @@ try {
         analysis = [ordered]@{ status = $applicationStatus; coverage = [string]$packet.coverage; packetTruncated = [bool]$packet.summary.truncated; totalGapCount = @(Values $packet.gaps).Count }
         pageCount = $applicationPages.Count; pages = @($applicationPages)
         applicationGaps = @($applicationGaps | ForEach-Object { [ordered]@{ gapId = [string]$_.gapId; classification = [string]$_.classification; scopeKind = [string]$_.scopeKind; scopeId = $_.scopeId; ruleId = [string]$_.ruleId; evidenceTier = [string]$_.evidenceTier; coverageLabel = [string]$_.coverageLabel; commitSha = [string]$_.commitSha; filePath = $_.filePath; startLine = $_.startLine; endLine = $_.endLine; extractorId = $_.extractorId; extractorVersion = $_.extractorVersion; supportingFactIds = @(Values $_.supportingFactIds); limitations = @(Values $_.limitations) } })
-        unassociatedIdentityState = @($unassociatedIdentity | ForEach-Object { [ordered]@{ id = [string]$_.identityStateId; kind = [string]$_.identityKind; classification = [string]$_.classification; safeMetadata = $_.safeMetadata; evidenceFactId = [string]$_.evidence.factId; supportingFactIds = @(Values $_.supportingFactIds) } })
-        unassociatedBatchDataMovement = @($unassociatedBatch | ForEach-Object { [ordered]@{ id = [string]$_.batchDataMovementId; surfaceKind = [string]$_.surfaceKind; mechanism = [string]$_.mechanism; operationKind = [string]$_.operationKind; projectId = $_.projectId; safeMetadata = $_.safeMetadata; evidenceFactId = [string]$_.evidence.factId; supportingFactIds = @(Values $_.supportingFactIds) } })
+        unassociatedIdentityState = @($unassociatedIdentity | ForEach-Object { [ordered]@{ id = [string]$_.identityStateId; kind = [string]$_.identityKind; classification = [string]$_.classification; safeMetadata = $_.safeMetadata; evidenceFactId = [string]$_.evidence.factId; evidence = Project-Evidence $_.evidence; supportingFactIds = @(Values $_.supportingFactIds) } })
+        unassociatedBatchDataMovement = @($unassociatedBatch | ForEach-Object { [ordered]@{ id = [string]$_.batchDataMovementId; surfaceKind = [string]$_.surfaceKind; mechanism = [string]$_.mechanism; operationKind = [string]$_.operationKind; projectId = $_.projectId; safeMetadata = $_.safeMetadata; evidenceFactId = [string]$_.evidence.factId; evidence = Project-Evidence $_.evidence; supportingFactIds = @(Values $_.supportingFactIds) } })
         unassociatedStructuralCandidates = @($unassociatedCandidates | ForEach-Object { [ordered]@{ id = [string]$_.candidateId; classification = [string]$_.classification; ruleId = [string]$_.ruleId; evidenceTier = [string]$_.evidenceTier; surfaceIds = @(Values $_.surfaceIds); supportingFactIds = @(Values $_.supportingFactIds) } })
         evidenceDocs = if ($EvidenceDocsRoot) { [ordered]@{ status = 'supplied-read-only'; locator = [IO.Path]::GetRelativePath($staging, [IO.Path]::GetFullPath($EvidenceDocsRoot)).Replace('\', '/'); chunks = 'chunks.jsonl'; manifest = 'manifest.json'; queryRecipes = 'query-recipes.json' } } else { [ordered]@{ status = 'not-supplied' } }
         humanReview = if ($ReviewPath) { [ordered]@{ status = 'validated-overlay'; schemaVersion = [string]$review.schemaVersion; overlayId = [string]$review.overlayId; reviewState = [string]$review.reviewState } } else { [ordered]@{ status = 'not-supplied' } }
@@ -265,8 +295,8 @@ try {
     }
     [IO.File]::WriteAllText((Join-Path $staging 'application-handoff.json'), (($appHandoff | ConvertTo-Json -Depth 30) + "`n"), [Text.UTF8Encoding]::new($false))
     $applicationGapRows = foreach ($gap in $applicationGaps) { '<li><code>{0}</code> <code>{1}</code> <code>{2}</code> — {3}; scope <code>{4}/{5}</code>; {6}:L{7}-{8}; commit <code>{9}</code>; extractor <code>{10}/{11}</code>; support <code>{12}</code></li>' -f (ConvertTo-HtmlText $gap.gapId), (ConvertTo-HtmlText $gap.ruleId), (ConvertTo-HtmlText $gap.evidenceTier), (ConvertTo-HtmlText $gap.classification), (ConvertTo-HtmlText $gap.scopeKind), (ConvertTo-HtmlText $gap.scopeId), (ConvertTo-HtmlText $gap.filePath), (ConvertTo-HtmlText $gap.startLine), (ConvertTo-HtmlText $gap.endLine), (ConvertTo-HtmlText $gap.commitSha), (ConvertTo-HtmlText $gap.extractorId), (ConvertTo-HtmlText $gap.extractorVersion), (ConvertTo-HtmlText ((Values $gap.supportingFactIds) -join ', ')) }
-    $unassociatedIdentityRows = foreach ($item in $unassociatedIdentity) { '<li><code>{0}</code> {1} — {2}; evidence <code>{3}</code></li>' -f (ConvertTo-HtmlText $item.identityStateId), (ConvertTo-HtmlText $item.identityKind), (ConvertTo-HtmlText $item.classification), (ConvertTo-HtmlText $item.evidence.factId) }
-    $unassociatedBatchRows = foreach ($item in $unassociatedBatch) { '<li><code>{0}</code> {1}/{2}; project <code>{3}</code>; evidence <code>{4}</code></li>' -f (ConvertTo-HtmlText $item.batchDataMovementId), (ConvertTo-HtmlText $item.mechanism), (ConvertTo-HtmlText $item.operationKind), (ConvertTo-HtmlText $item.projectId), (ConvertTo-HtmlText $item.evidence.factId) }
+    $unassociatedIdentityRows = foreach ($item in $unassociatedIdentity) { '<li><code>{0}</code> {1} — {2}; evidence <code>{3}</code> <code>{4}</code> <code>{5}</code> — {6}:L{7}-{8}; commit <code>{9}</code>; extractor <code>{10}/{11}</code></li>' -f (ConvertTo-HtmlText $item.identityStateId), (ConvertTo-HtmlText $item.identityKind), (ConvertTo-HtmlText $item.classification), (ConvertTo-HtmlText $item.evidence.factId), (ConvertTo-HtmlText $item.evidence.ruleId), (ConvertTo-HtmlText $item.evidence.evidenceTier), (ConvertTo-HtmlText $item.evidence.filePath), (ConvertTo-HtmlText $item.evidence.startLine), (ConvertTo-HtmlText $item.evidence.endLine), (ConvertTo-HtmlText $item.evidence.commitSha), (ConvertTo-HtmlText $item.evidence.extractorId), (ConvertTo-HtmlText $item.evidence.extractorVersion) }
+    $unassociatedBatchRows = foreach ($item in $unassociatedBatch) { '<li><code>{0}</code> {1}/{2}; project <code>{3}</code>; evidence <code>{4}</code> <code>{5}</code> <code>{6}</code> — {7}:L{8}-{9}; commit <code>{10}</code>; extractor <code>{11}/{12}</code></li>' -f (ConvertTo-HtmlText $item.batchDataMovementId), (ConvertTo-HtmlText $item.mechanism), (ConvertTo-HtmlText $item.operationKind), (ConvertTo-HtmlText $item.projectId), (ConvertTo-HtmlText $item.evidence.factId), (ConvertTo-HtmlText $item.evidence.ruleId), (ConvertTo-HtmlText $item.evidence.evidenceTier), (ConvertTo-HtmlText $item.evidence.filePath), (ConvertTo-HtmlText $item.evidence.startLine), (ConvertTo-HtmlText $item.evidence.endLine), (ConvertTo-HtmlText $item.evidence.commitSha), (ConvertTo-HtmlText $item.evidence.extractorId), (ConvertTo-HtmlText $item.evidence.extractorVersion) }
     $unassociatedCandidateRows = foreach ($item in $unassociatedCandidates) { '<li><code>{0}</code> {1}; surfaces <code>{2}</code>; support <code>{3}</code></li>' -f (ConvertTo-HtmlText $item.candidateId), (ConvertTo-HtmlText $item.classification), (ConvertTo-HtmlText ((Values $item.surfaceIds) -join ', ')), (ConvertTo-HtmlText ((Values $item.supportingFactIds) -join ', ')) }
     $tableRows = foreach ($row in $pageRows) { '<tr><td><a target="_blank" rel="noopener" href="{0}.html">{0}</a></td><td><code>{1}</code></td><td>{2}</td><td>{3}</td><td>{4}</td><td>{5}</td><td>{6}</td><td>{7}</td><td><a href="{0}.handoff.json">JSON</a></td></tr>' -f $row.PageId, (ConvertTo-HtmlText $row.Path), (ConvertTo-HtmlText $row.SurfaceKind), $row.Chains, $row.Boundaries, $row.Gaps, (ConvertTo-HtmlText $row.Verdict), (ConvertTo-HtmlText $row.Disposition) }
     $index = @"

@@ -40,8 +40,14 @@ $packet = [ordered]@{
     )
     eventChains = @(@{ chainId = 'chain-one'; surfaceId = 'surface-one'; eventSourceId = 'Go.Click'; bindingFactId = 'binding-one'; handlerId = 'handler-one'; handlerFactId = 'fact-handler'; handlerSymbol = 'App.First.Go_Click()'; classification = 'terminal-reached'; legacyPathId = 'path-one'; terminalKind = 'database'; evidence = @($evidence); pathEvidence = @(); supportingFactIds = @('fact-handler'); supportingEdgeIds = @(); ruleIds = @('legacy.webforms.event-flow.v1'); evidenceTiers = @('Tier1Semantic'); coverageLabels = @('complete'); limitations = @(); traversalObservation = @{ stopState = 'supported-terminal-reached' } })
     downstreamBoundaries = @(@{ boundaryId = 'boundary-one'; chainId = 'chain-one'; surfaceId = 'surface-one'; handlerId = 'handler-one'; boundaryCategory = 'database'; boundaryKind = 'stored-procedure-candidate'; boundaryTargetId = 'target-one'; terminalEvidenceId = 'fact-db'; classification = 'retained'; legacyPathId = 'path-one'; evidence = @($evidence); pathEvidence = @(); supportingFactIds = @('fact-db'); supportingEdgeIds = @(); ruleIds = @('legacy.boundary.v1'); evidenceTiers = @('Tier2Structural'); coverageLabels = @('complete'); limitations = @() })
-    identityStateInventory = @(@{ identityStateId = 'identity-one'; identityKind = 'session'; classification = 'observed'; surfaceId = 'surface-one'; safeMetadata = @{}; evidence = $evidence; supportingFactIds = @(); limitations = @() })
-    batchDataMovementInventory = @(@{ batchDataMovementId = 'batch-one'; surfaceKind = 'file-data-movement'; mechanism = 'system-io'; operationKind = 'read'; ownerStatus = 'member-declared'; projectResolution = 'resolved'; projectId = 'project-one'; safeMetadata = @{}; evidence = $evidence; supportingFactIds = @(); limitations = @() })
+    identityStateInventory = @(
+        @{ identityStateId = 'identity-one'; identityKind = 'session'; classification = 'observed'; surfaceId = 'surface-one'; safeMetadata = @{}; evidence = $evidence; supportingFactIds = @(); limitations = @() },
+        @{ identityStateId = 'identity-unassociated'; identityKind = 'principal'; classification = 'observed'; surfaceId = $null; safeMetadata = @{}; evidence = $evidence; supportingFactIds = @(); limitations = @() }
+    )
+    batchDataMovementInventory = @(
+        @{ batchDataMovementId = 'batch-one'; surfaceKind = 'file-data-movement'; mechanism = 'system-io'; operationKind = 'read'; ownerStatus = 'member-declared'; projectResolution = 'resolved'; projectId = 'project-one'; safeMetadata = @{}; evidence = $evidence; supportingFactIds = @(); limitations = @() },
+        @{ batchDataMovementId = 'batch-unassociated'; surfaceKind = 'database-operation'; mechanism = 'ado-net'; operationKind = 'read'; ownerStatus = 'member-declared'; projectResolution = 'unmatched'; projectId = 'project-missing'; safeMetadata = @{}; evidence = $evidence; supportingFactIds = @(); limitations = @() }
+    )
     structuralSliceCandidates = @(@{ candidateId = 'candidate-one'; classification = 'structural'; ruleId = 'legacy.slice.v1'; evidenceTier = 'Tier2Structural'; ownerNamingRequired = $true; surfaceIds = @('surface-one'); evidence = @($evidence); supportingFactIds = @(); coverageLabels = @('complete'); limitations = @() })
     gaps = @(@{ gapId = 'gap-one'; classification = 'HandlerTerminalUnavailable'; scopeKind = 'event-chain'; scopeId = 'chain-one'; ruleId = 'legacy.gap.v1'; evidenceTier = 'Tier4Unknown'; coverageLabel = 'reduced'; commitSha = ('a' * 40); filePath = 'Pages/First.aspx'; startLine = 2; endLine = 2; extractorId = 'legacy-webforms'; extractorVersion = '1'; supportingFactIds = @(); limitations = @('missing evidence is not absence') })
     ownerQuestions = @(); limitations = @()
@@ -63,6 +69,14 @@ try {
     }
     $handoff = [IO.File]::ReadAllText((Join-Path $workbench 'page-001.handoff.json')) | ConvertFrom-Json -Depth 30
     if ($handoff.subject.filePath -ne 'Pages/First.aspx' -or $handoff.counts.eventChains -ne 1 -or $handoff.evidenceDocs.status -ne 'supplied-read-only') { throw 'Page handoff projection was incomplete.' }
+    if (@($handoff.retrievalHints).Count -ne 2 -or @($handoff.retrievalHints | Where-Object { !$_.recipeId }).Count -ne 0) { throw 'Retrieval hints were not serialized as a flat recipe list.' }
+    $applicationHandoff = [IO.File]::ReadAllText((Join-Path $workbench 'application-handoff.json')) | ConvertFrom-Json -Depth 30
+    foreach ($unassociated in @($applicationHandoff.unassociatedIdentityState[0], $applicationHandoff.unassociatedBatchDataMovement[0])) {
+        if (!$unassociated.evidence.factId -or !$unassociated.evidence.ruleId -or !$unassociated.evidence.evidenceTier -or !$unassociated.evidence.filePath -or !$unassociated.evidence.commitSha -or !$unassociated.evidence.extractorId -or !$unassociated.evidence.extractorVersion) { throw 'Unassociated inventory evidence provenance was incomplete.' }
+    }
+    foreach ($expected in @('identity-unassociated', 'batch-unassociated', 'legacy.webforms.surface.v1', 'Tier2Structural', 'Pages/First.aspx', 'legacy-webforms/1')) {
+        if (!$index.Contains($expected, [StringComparison]::Ordinal)) { throw "Application index missing unassociated provenance: $expected" }
+    }
     $chunksHashAfter = (Get-FileHash -LiteralPath (Join-Path $corpus 'chunks.jsonl') -Algorithm SHA256).Hash
     if ($chunksHashAfter -ne $chunksHashBefore) { throw 'Workbench modified chunks.jsonl.' }
 
@@ -83,6 +97,20 @@ try {
         $symlinkReport = [IO.File]::ReadAllText((Join-Path $symlinkWorkbench 'page-001.html'))
         if ($symlinkReport.Contains($outsideSentinel, [StringComparison]::Ordinal) -or !$symlinkReport.Contains('crossed a symlink or junction', [StringComparison]::Ordinal)) { throw 'Source symlink escape was not rejected.' }
     }
+
+    if ($IsLinux) {
+        $caseSibling = Join-Path $temp 'OUTPUT/case-escape'
+        try {
+            & $scriptPath -PacketPath $packetPath -OutputRoot $outputRoot -OutputDirectory $caseSibling | Out-Null
+            throw 'Case-distinct output sibling was accepted outside the configured root.'
+        }
+        catch {
+            if ($_.Exception.Message -ne 'ApplicationWorkbenchOutputOutsideRoot') { throw }
+        }
+    }
+
+    $reviewSchema = [IO.File]::ReadAllText((Join-Path (Split-Path -Parent $scripts) 'docs/contracts/wits-webforms-application-review.v1.schema.json')) | ConvertFrom-Json -Depth 30
+    if ($reviewSchema.'$defs'.decision.properties.pageId.pattern -ne '^page-[0-9]{3,4}$') { throw 'Review schema does not accept the generated page-1000 identifier.' }
 
     $reviewScript = Join-Path $scripts 'webforms-review/Invoke-WitsApplicationReview.ps1'
     $reviewPath = Join-Path $temp 'application-review.json'
