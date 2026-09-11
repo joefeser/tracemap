@@ -1255,12 +1255,15 @@ git diff --check
 
 Expected fixture postures:
 
-- `vb-modern-sample`: `Level1SemanticAnalysis` / `Succeeded`, Tier1 families
-  only, no `vb.syntax.*` facts, no `vb.semantic.workspace.v1` gaps.
+- `vb-modern-sample`: `Level1SemanticAnalysis` / `Succeeded`, compiler-resolved
+  Tier1 families, no file-wide fallback duplicates, and no
+  `vb.semantic.workspace.v1` gaps. Individual unresolved call sites may retain
+  bounded Tier3 facts under `vb.syntax.invocation.v1`,
+  `vb.syntax.callgraph.v1`, or `vb.syntax.objectcreation.v1`.
 - `vb-legacy-sample`: `Level1SemanticAnalysisReduced` / `FailedOrPartial`,
-  partial Tier1 evidence over the readable files, zero `vb.syntax.*` facts
-  (the per-file fallback boundary keeps Tier1-covered files free of Tier3
-  duplicates), and category-only gaps carrying bounded `BCxxxxx` ids.
+  partial Tier1 evidence over the readable files, no file-wide fallback
+  duplicates, bounded Tier3 evidence for individual unresolved call sites,
+  and category-only gaps carrying bounded `BCxxxxx` ids.
 - `vb-webforms-sample`: `Level1SemanticAnalysisReduced` / `FailedOrPartial`
   on cross-platform SDKs; handler methods appear as declared evidence only
   and no event wiring becomes edges.

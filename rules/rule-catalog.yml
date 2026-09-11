@@ -3844,7 +3844,7 @@ rules:
 
   - id: vb.semantic.declarations.v1
     name: Visual Basic semantic declarations
-    description: Records compiler-resolved Visual Basic type, module, interface, structure, enum, delegate, method, constructor, property, field, and parameter declarations using Roslyn semantic symbols.
+    description: Records compiler-resolved Visual Basic type, module, interface, structure, enum, delegate, method, constructor, property, field, parameter, and event declarations using Roslyn semantic symbols.
     evidenceTier: Tier1Semantic
     emits:
       - TypeDeclared
@@ -3852,10 +3852,11 @@ rules:
       - PropertyDeclared
       - FieldDeclared
       - ParameterDeclared
+      - EventDeclared
     limitations:
       - Requires project load and enough references to create a Roslyn Visual Basic compilation; when binding is reduced, absence of these facts is not absence of declarations in source.
       - Designer and generated documents (filename convention) are not analyzed for semantic facts; checked-in designer content is composition evidence for a later slice, not proof of resolved members.
-      - Event declarations and WithEvents event wiring are deliberately not emitted by this rule; event composition belongs to the Web Forms/events slice and is never promoted to resolved event edges here.
+      - Event declarations are emitted, but WithEvents, Handles, AddHandler, and RemoveHandler wiring is deliberately excluded; event composition belongs to the Web Forms/events slice and is never promoted to resolved event edges here.
       - Operator and Declare (P/Invoke) statements are not emitted as method declarations in this slice.
       - Symbols resolved by a Visual Basic scan carry `visualbasic`-tagged symbol identities; cross-language joins between C#-declared and Visual Basic-declared symbols by identity are not established in this slice.
       - A declaration proves source structure only; it does not prove compilation success, runtime reachability, or execution.
@@ -3935,6 +3936,9 @@ rules:
       - MethodDeclared
       - PropertyDeclared
       - EnumDeclared
+      - FieldDeclared
+      - ParameterDeclared
+      - EventDeclared
       - AnalysisGap
     limitations:
       - Syntax-only names are text evidence; they are never compiler-resolved targets and never join to semantic symbols by identity.

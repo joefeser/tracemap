@@ -44,7 +44,7 @@
 ## Implemented in the extraction slice (tasks 5-7, commit 23c5cca0)
 
 - **Task 5 - compiler-backed semantic facts.** `VisualBasicSemanticExtractor`
-  (identity `vb-semantic/0.2.0`) walks each repo-local, inventoried,
+  (identity `vb-semantic/0.3.0`) walks each repo-local, inventoried,
   non-generated VB document of every compiled project and emits Tier1 facts
   under `vb.semantic.declarations.v1` (TypeDeclared for
   class/module/structure/interface/enum/delegate, MethodDeclared incl.
@@ -78,7 +78,7 @@
   facts. Unresolved or late-bound call sites produce no fact (visible only
   through compiler-diagnostic gaps), never a guessed target.
 - **Task 6 - bounded per-file syntax fallback.** `VisualBasicSyntaxExtractor`
-  (`vb-syntax/0.1.0`) runs inside the shared SyntaxFallback stage over
+  (`vb-syntax/0.2.0`) runs inside the shared SyntaxFallback stage over
   inventoried VB files that received NO compiler-resolved coverage
   (`SemanticAnalysisUnavailable` Tier4 gap per file under
   `vb.semantic.workspace.v1`). It emits Tier3 facts under
@@ -265,3 +265,27 @@ caller-text regression over the full scan pipeline.
   events) is #738. Data/external boundaries (ADO-class surfaces) are #737.
 - `dotnet/roslyn` (VB compiler subtree) remains a future scale lane for a
   second, larger VB smoke; not required by this spec.
+
+## PR #742 reconciliation (2026-09-11)
+
+- Merged the current `origin/dev` into the feature branch without dropping the
+  completed VB adapter work.
+- Added compiler-resolved event declarations while continuing to exclude event
+  wiring and event-flow claims.
+- Added field, parameter, and event declarations to the bounded per-file syntax
+  fallback and populated property contract elements.
+- Unresolved invocation and constructor sites in otherwise semantic files now
+  retain bounded Tier3 call-site evidence; they are never emitted as Tier1
+  call edges. Unsupported invocation shapes use a categorical label plus a
+  deterministic hash and never retain raw expression text.
+- Tier1 argument-to-parameter facts now require Roslyn's
+  `IArgumentOperation.Parameter`; name/ordinal guesses are not promoted.
+- Equals-value object initializers retain their assigned variable names, and an
+  exact `AssemblyInfo.vb` filename is excluded by the generated-document
+  boundary.
+- Reconciliation validation: full solution tests 1883/1883; focused
+  `VisualBasic|VbNetFixture` tests 35/35; modern/legacy/Web Forms scans contain
+  221/177/158 total facts and all pass the adapter artifact validator; a second
+  modern scan is byte-identical; private-path and diff guards pass. The legacy
+  scan retains 24 Tier1 facts plus 14 bounded call-site Tier3 facts, and the Web
+  Forms scan retains 19 Tier1 facts plus 8 bounded call-site Tier3 facts.
