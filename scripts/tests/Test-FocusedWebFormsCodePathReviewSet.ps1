@@ -12,6 +12,8 @@ $output = Join-Path $temp 'output'
 $inspectionDirectory = Join-Path $output 'local-inspection-private'
 $indexPath = Join-Path $temp 'index.sqlite'
 $evidenceDocsRoot = Join-Path $temp 'evidence-docs'
+$expectedHandoffIndex = $indexPath
+$expectedEvidenceDocsRoot = $evidenceDocsRoot
 [IO.Directory]::CreateDirectory($source) | Out-Null
 [IO.Directory]::CreateDirectory($inspectionDirectory) | Out-Null
 [IO.Directory]::CreateDirectory($evidenceDocsRoot) | Out-Null
@@ -31,7 +33,8 @@ $inspectionPath = Join-Path $inspectionDirectory 'webforms-batch-inspection-test
 function dotnet {
     if ($args[0] -eq 'build') { $global:LASTEXITCODE = 0; return }
     if ($args[1] -eq '--code-path-review-set-handoff') {
-        if ([string]$args[4] -ne $indexPath -or [string]$args[5] -ne $evidenceDocsRoot) { $global:LASTEXITCODE = 1; return }
+        if ([string]$args[4] -ne $expectedHandoffIndex -or
+            ($expectedEvidenceDocsRoot -and [string]$args[5] -ne $expectedEvidenceDocsRoot)) { $global:LASTEXITCODE = 1; return }
         [IO.File]::WriteAllText((Join-Path ([string]$args[3]) 'agent-evidence-handoff.json'), '{"schemaVersion":"tracemap-agent-evidence-handoff.v1"}')
         $global:LASTEXITCODE = 0
         return
@@ -88,6 +91,33 @@ try {
     }
     if (@(Get-ChildItem -LiteralPath $sets[0].FullName -Filter '*.private.html').Count -ne 3) { throw 'Expected three private reports.' }
     if (@(Get-ChildItem -LiteralPath $sets[0].FullName -Filter 'case-*.handoff.json').Count -ne 3) { throw 'Expected three private case handoffs.' }
+
+    $optionalOutput = Join-Path $temp 'optional-output'
+    $optionalInspectionDirectory = Join-Path $optionalOutput 'local-inspection-private'
+    [IO.Directory]::CreateDirectory($optionalInspectionDirectory) | Out-Null
+    $optionalInspection = Join-Path $optionalInspectionDirectory 'webforms-batch-inspection-test.json'
+    [IO.File]::Copy($inspectionPath, $optionalInspection)
+    $configPath = Join-Path $temp 'review-config.json'
+    [IO.File]::WriteAllText($configPath, (@{
+        indexPath = (Join-Path $temp 'deleted-index.sqlite')
+        outputRoot = $optionalOutput
+        forms = @('source/First.aspx')
+    } | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
+    $expectedHandoffIndex = '-'
+    $expectedEvidenceDocsRoot = ''
+
+    & $scriptPath -SourceRoot $source -InspectionPath $optionalInspection -ConfigPath $configPath -IncludeRawSource | Out-Null
+
+    $optionalSets = @(Get-ChildItem -LiteralPath $optionalInspectionDirectory -Directory -Filter 'webforms-code-path-review-set-*')
+    if ($optionalSets.Count -ne 1) { throw 'Expected review-set generation without the unavailable configured index.' }
+
+    try {
+        & $scriptPath -SourceRoot $source -InspectionPath $optionalInspection -OutputRoot $optionalOutput -IndexPath (Join-Path $temp 'explicitly-missing.sqlite') | Out-Null
+        throw 'Expected an explicitly supplied unavailable index to fail.'
+    }
+    catch {
+        if ($_.Exception.Message -ne 'CodePathReviewSetIndexUnavailable') { throw }
+    }
     Write-Host 'PASS focused Web Forms code-path review set'
 }
 finally {
