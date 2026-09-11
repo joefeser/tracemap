@@ -59,6 +59,12 @@
   },
   "allOf": [
     {
+      "oneOf": [
+        { "properties": { "reviewer": { "type": "null" }, "reviewedAtUtc": { "type": "null" } } },
+        { "properties": { "reviewer": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "\\S" }, "reviewedAtUtc": { "type": "string", "format": "date-time", "pattern": "Z$" } } }
+      ]
+    },
+    {
       "if": { "properties": { "reviewState": { "const": "completed" } }, "required": ["reviewState"] },
       "then": {
         "properties": {

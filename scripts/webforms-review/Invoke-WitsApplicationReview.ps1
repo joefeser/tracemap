@@ -31,6 +31,13 @@ function Test-Utc($Value) {
 
 $packetFile = Get-Item -LiteralPath $PacketPath -ErrorAction Stop
 if ($packetFile.PSIsContainer -or $packetFile.Length -le 0 -or $packetFile.Length -gt 128MB) { Stop-ApplicationReview 'WITS_APPLICATION_REVIEW_PACKET_UNAVAILABLE' }
+$scriptsRoot = Split-Path -Parent $PSScriptRoot
+$validatorProject = Join-Path $scriptsRoot 'diagnostics/RawWebFormsEvidence/RawWebFormsEvidence.csproj'
+& dotnet build $validatorProject -c Release --nologo -v quiet
+if ($LASTEXITCODE -ne 0) { Stop-ApplicationReview 'WITS_APPLICATION_REVIEW_PACKET_INVALID' }
+$validatorDll = Join-Path $scriptsRoot 'diagnostics/RawWebFormsEvidence/bin/Release/net10.0/RawWebFormsEvidence.dll'
+& dotnet $validatorDll '--validate-application-workbench-inputs' $packetFile.FullName '-'
+if ($LASTEXITCODE -ne 0) { Stop-ApplicationReview 'WITS_APPLICATION_REVIEW_PACKET_INVALID' }
 $bytes = [IO.File]::ReadAllBytes($packetFile.FullName)
 $packetSha = ([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes))).ToLowerInvariant()
 $packet = [Text.Encoding]::UTF8.GetString($bytes) | ConvertFrom-Json -Depth 100
