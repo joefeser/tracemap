@@ -3,7 +3,8 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
-using Microsoft.Data.Sqlite;
+using TraceMap.Core;
+using TraceMap.Storage;
 
 namespace TraceMap.Reporting;
 
@@ -87,6 +88,13 @@ public static class WebFormsAgentEvidenceHandoff
     private static readonly StringComparison PathComparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
     private static readonly Regex CaseIdPattern = new("^case-[0-9]{3}$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex SafeChunkTokenPattern = new("^[a-z0-9][a-z0-9.:-]{0,255}$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly HashSet<string> ValidEvidenceTiers =
+    [
+        EvidenceTiers.Tier1Semantic,
+        EvidenceTiers.Tier2Structural,
+        EvidenceTiers.Tier3SyntaxOrTextual,
+        EvidenceTiers.Tier4Unknown
+    ];
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -364,6 +372,9 @@ public static class WebFormsAgentEvidenceHandoff
         if (value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined) return;
         var factId = OptionalBoundedString(value, "factId");
         if (factId is null) return;
+        var ruleId = RequiredBoundedString(value, "ruleId");
+        var evidenceTier = OptionalBoundedString(value, "tier") ?? OptionalBoundedString(value, "evidenceTier") ?? EvidenceTiers.Tier4Unknown;
+        if (!ValidEvidenceTiers.Contains(evidenceTier)) throw new InvalidDataException("AgentHandoffEvidenceTierInvalid");
         values.Add(new(
             factId,
             role,
@@ -372,8 +383,8 @@ public static class WebFormsAgentEvidenceHandoff
             OptionalBoundedString(value, "filePath"),
             OptionalPositiveInt(value, "startLine"),
             OptionalPositiveInt(value, "endLine"),
-            OptionalBoundedString(value, "ruleId") ?? "rule-unavailable",
-            OptionalBoundedString(value, "tier") ?? OptionalBoundedString(value, "evidenceTier") ?? "Tier4Unknown"));
+            ruleId,
+            evidenceTier));
     }
 
     private static IReadOnlyList<WebFormsHandoffRetrievalHint> BuildHints(
@@ -441,19 +452,31 @@ public static class WebFormsAgentEvidenceHandoff
             || handoff.Provenance.InspectionSchemaVersion != "webforms-batch-inspection.v1"
             || handoff.Provenance.InspectionSha256.Length != 64 || handoff.Evidence.Count > 512 || handoff.RetrievalHints.Count > MaximumHintsPerCase)
             throw new InvalidDataException("AgentHandoffContractInvalid");
+        if (handoff.QueryRecipeSchemaVersion != EvidenceDocsQueryRecipes.SchemaVersion
+            || handoff.Evidence.Any(value => string.IsNullOrWhiteSpace(value.RuleId) || value.RuleId == "rule-unavailable" || !ValidEvidenceTiers.Contains(value.EvidenceTier)))
+            throw new InvalidDataException("AgentHandoffContractInvalid");
         var catalog = EvidenceDocsQueryRecipes.Build().Recipes.ToDictionary(value => value.RecipeId, StringComparer.Ordinal);
         foreach (var hint in handoff.RetrievalHints)
         {
-            var required = catalog.GetValueOrDefault(hint.RecipeId)?.Parameters
-                .Where(value => value.RequiredForInputKinds.Contains(hint.InputKind, StringComparer.Ordinal))
-                .Select(value => value.Name)
-                .ToArray() ?? [];
-            if (!catalog.TryGetValue(hint.RecipeId, out var recipe) || hint.RuleId != recipe.RuleId || hint.EvidenceTier != recipe.EvidenceTier
-                || hint.InputKind != "single-index" || required.Any(value => !hint.Parameters.ContainsKey(value))
-                || hint.Parameters.Keys.Any(value => recipe.Parameters.All(parameter => parameter.Name != value))
-                || !hint.Parameters.TryGetValue("limit", out var limitText) || !int.TryParse(limitText, out var limit) || limit is < 1 or > 10_000
+            if (!catalog.TryGetValue(hint.RecipeId, out var recipe)
+                || hint.RuleId != recipe.RuleId
                 || !hint.ExpectedResultFields.SequenceEqual(recipe.ResultFields, StringComparer.Ordinal))
                 throw new InvalidDataException("AgentHandoffRecipeUnavailable");
+            try
+            {
+                EvidenceDocsQueryRecipes.ValidateRetrievalHint(new(
+                    hint.RecipeId,
+                    hint.InputKind,
+                    EvidenceDocsQueryRecipes.HintRuleId,
+                    hint.EvidenceTier,
+                    hint.Reason,
+                    hint.Parameters,
+                    hint.SupportingIds));
+            }
+            catch (InvalidOperationException exception)
+            {
+                throw new InvalidDataException("AgentHandoffRecipeUnavailable", exception);
+            }
         }
     }
 
@@ -478,24 +501,25 @@ public static class WebFormsAgentEvidenceHandoff
                 "Supply -IndexPath or a configured indexPath to enable read-only source-of-truth queries.");
         var info = new FileInfo(Path.GetFullPath(indexPath));
         if (!info.Exists || info.Length is < 1 or > MaximumIndexBytes) throw new InvalidDataException("AgentHandoffIndexUnavailable");
-        using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = info.FullName, Mode = SqliteOpenMode.ReadOnly }.ToString());
-        connection.Open();
-        using var command = connection.CreateCommand();
-        command.CommandText = "select repo, scanner_version, analysis_level, build_status from scan_manifest where scan_id=$scan and commit_sha=$commit order by repo limit 2;";
-        command.Parameters.AddWithValue("$scan", scanId);
-        command.Parameters.AddWithValue("$commit", commitSha);
-        using var reader = command.ExecuteReader();
-        var rows = new List<string[]>();
-        while (reader.Read())
+        try
         {
-            var row = new[] { reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3) };
-            if (row.Any(value => value.Length > 4096)) throw new InvalidDataException("AgentHandoffIndexUnavailable");
-            rows.Add(row);
+            var summary = ReverseImpactArtifactReader.ReadSummaryAsync(info.FullName).GetAwaiter().GetResult();
+            var manifest = summary.Manifest;
+            if (!string.Equals(manifest.ScanId, scanId, StringComparison.Ordinal)
+                || !string.Equals(manifest.CommitSha, commitSha, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("AgentHandoffIndexProvenanceMismatch");
+            var locator = RelativeLocator(outputRoot, info.FullName);
+            return new("validated", "tracemap-index-sqlite", locator, scanId, commitSha, manifest.RepoName, manifest.ScannerVersion, manifest.AnalysisLevel,
+                $"Opened read-only; canonical index validation retained {summary.FactCount} facts and scan_manifest build status: {manifest.BuildStatus}. Run only recipes from {EvidenceDocsQueryRecipes.SchemaVersion}.");
         }
-        if (rows.Count != 1) throw new InvalidDataException("AgentHandoffIndexProvenanceMismatch");
-        var locator = RelativeLocator(outputRoot, info.FullName);
-        return new("validated", "tracemap-index-sqlite", locator, scanId, commitSha, rows[0][0], rows[0][1], rows[0][2],
-            $"Opened read-only; scan_manifest build status: {rows[0][3]}. Run only recipes from {EvidenceDocsQueryRecipes.SchemaVersion}.");
+        catch (InvalidDataException)
+        {
+            throw;
+        }
+        catch (ReverseImpactArtifactException exception)
+        {
+            throw new InvalidDataException("AgentHandoffIndexInvalid", exception);
+        }
     }
 
     private static CorpusProjection ReadCorpus(string? corpusRoot, string outputRoot, string scanId, string commitSha, IReadOnlyList<WebFormsAgentCaseHandoff> cases)
@@ -509,26 +533,59 @@ public static class WebFormsAgentEvidenceHandoff
         var manifestPath = BoundedCorpusFile(root, "manifest.json", 16L * 1024 * 1024);
         var recipesPath = BoundedCorpusFile(root, "query-recipes.json", 4L * 1024 * 1024);
         var chunksPath = BoundedCorpusFile(root, "chunks.jsonl", MaximumCorpusJsonLinesBytes);
-        using var manifestDocument = JsonDocument.Parse(File.ReadAllText(manifestPath));
+        var manifestText = File.ReadAllText(manifestPath);
+        using var manifestDocument = JsonDocument.Parse(manifestText);
         StaticHtmlEvidenceExplorer.RejectDuplicateJsonProperties(manifestDocument.RootElement);
-        var manifest = manifestDocument.RootElement;
-        var schemaVersion = RequiredBoundedString(manifest, "schemaVersion");
-        if (schemaVersion != EvidenceDocsExporter.SchemaVersion)
+        if (!EvidenceDocsExporter.IsSelfConsistentManifest(manifestText))
+            throw new InvalidDataException("AgentHandoffCorpusIntegrityMismatch");
+        var manifest = JsonSerializer.Deserialize<EvidenceDocsManifest>(manifestText, JsonOptions)
+            ?? throw new InvalidDataException("AgentHandoffCorpusSchemaMismatch");
+        var schemaVersion = manifest.SchemaVersion;
+        if (schemaVersion != EvidenceDocsExporter.SchemaVersion
+            || !manifest.TracemapGenerated
+            || manifest.Generator is null
+            || manifest.Formats is null
+            || manifest.Inputs is null
+            || manifest.Outputs is null
+            || manifest.Generator.Name != EvidenceDocsExporter.GeneratorName
+            || manifest.Generator.Version != EvidenceDocsExporter.SchemaVersion
+            || !manifest.Formats.Contains("jsonl", StringComparer.Ordinal))
             throw new InvalidDataException("AgentHandoffCorpusSchemaMismatch");
-        var commits = StringArray(manifest, "commitShas", 256);
-        var scans = manifest.GetProperty("inputs").EnumerateArray()
-            .SelectMany(input => input.GetProperty("sourceRefs").EnumerateArray())
-            .Select(source => OptionalBoundedString(source, "scanId"))
-            .Where(value => value is not null).Cast<string>().Distinct(StringComparer.Ordinal).ToArray();
-        if (!commits.Contains(commitSha, StringComparer.OrdinalIgnoreCase) || !scans.Contains(scanId, StringComparer.Ordinal))
+        var sourceRefs = manifest.Inputs.SelectMany(input => input.SourceRefs ?? []).ToArray();
+        if (!sourceRefs.Any(source => string.Equals(source.ScanId, scanId, StringComparison.Ordinal)
+            && string.Equals(source.CommitSha, commitSha, StringComparison.OrdinalIgnoreCase)))
             throw new InvalidDataException("AgentHandoffCorpusProvenanceMismatch");
-        using var recipeDocument = JsonDocument.Parse(File.ReadAllText(recipesPath));
-        StaticHtmlEvidenceExplorer.RejectDuplicateJsonProperties(recipeDocument.RootElement);
-        if (RequiredBoundedString(recipeDocument.RootElement, "schemaVersion") != EvidenceDocsQueryRecipes.SchemaVersion)
-            throw new InvalidDataException("AgentHandoffRecipeSchemaMismatch");
 
-        var selectorValues = cases.ToDictionary(value => value.Subject.CaseId,
-            value => value.CorpusSelectors.Select(selector => selector.Value).ToHashSet(StringComparer.Ordinal), StringComparer.Ordinal);
+        var outputs = manifest.Outputs.GroupBy(value => value.Path, StringComparer.Ordinal).ToArray();
+        if (outputs.Any(group => group.Count() != 1)) throw new InvalidDataException("AgentHandoffCorpusSchemaMismatch");
+        var outputByPath = outputs.ToDictionary(group => group.Key, group => group.Single(), StringComparer.Ordinal);
+        ValidateDeclaredOutput(root, recipesPath, "query-recipes.json", outputByPath);
+        ValidateDeclaredOutput(root, chunksPath, "chunks.jsonl", outputByPath);
+
+        var recipesText = File.ReadAllText(recipesPath);
+        using var recipeDocument = JsonDocument.Parse(recipesText);
+        StaticHtmlEvidenceExplorer.RejectDuplicateJsonProperties(recipeDocument.RootElement);
+        var suppliedCatalog = JsonSerializer.Deserialize<EvidenceQueryRecipeCatalog>(recipesText, JsonOptions)
+            ?? throw new InvalidDataException("AgentHandoffRecipeSchemaMismatch");
+        try
+        {
+            EvidenceDocsQueryRecipes.Validate(suppliedCatalog);
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or NullReferenceException)
+        {
+            throw new InvalidDataException("AgentHandoffRecipeSchemaMismatch", exception);
+        }
+        if (!string.Equals(
+                EvidenceDocsQueryRecipes.RenderJson(suppliedCatalog),
+                EvidenceDocsQueryRecipes.RenderJson(EvidenceDocsQueryRecipes.Build()),
+                StringComparison.Ordinal))
+            throw new InvalidDataException("AgentHandoffRecipeCatalogMismatch");
+
+        var supportingIds = cases.ToDictionary(value => value.Subject.CaseId,
+            value => value.CorpusSelectors.Where(selector => selector.Kind is "surface-id" or "supporting-id")
+                .Select(selector => selector.Value).ToHashSet(StringComparer.Ordinal), StringComparer.Ordinal);
+        var hintIdentities = cases.ToDictionary(value => value.Subject.CaseId,
+            value => value.RetrievalHints.Select(HintIdentity).ToHashSet(StringComparer.Ordinal), StringComparer.Ordinal);
         var selected = cases.ToDictionary(value => value.Subject.CaseId, _ => new List<RecommendedChunk>(), StringComparer.Ordinal);
         using var reader = new StreamReader(chunksPath, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
         var lineCount = 0;
@@ -539,33 +596,101 @@ public static class WebFormsAgentEvidenceHandoff
             if (string.IsNullOrWhiteSpace(line)) continue;
             using var chunkDocument = JsonDocument.Parse(line);
             StaticHtmlEvidenceExplorer.RejectDuplicateJsonProperties(chunkDocument.RootElement);
-            var chunk = chunkDocument.RootElement;
-            var chunkId = RequiredBoundedString(chunk, "chunkId");
-            var chunkFamily = RequiredBoundedString(chunk, "chunkFamily");
-            var chunkType = RequiredBoundedString(chunk, "chunkType");
-            if (!SafeChunkTokenPattern.IsMatch(chunkId) || !SafeChunkTokenPattern.IsMatch(chunkFamily) || !SafeChunkTokenPattern.IsMatch(chunkType))
-                throw new InvalidDataException("AgentHandoffCorpusSchemaMismatch");
-            var values = StringArray(chunk, "supportingIds", 2048).ToHashSet(StringComparer.Ordinal);
-            if (chunk.TryGetProperty("retrievalHints", out var hintValues) && hintValues.ValueKind == JsonValueKind.Array)
+            var chunk = JsonSerializer.Deserialize<EvidenceDocChunk>(line, JsonOptions)
+                ?? throw new InvalidDataException("AgentHandoffCorpusSchemaMismatch");
+            try
             {
-                foreach (var hint in hintValues.EnumerateArray())
-                    if (hint.TryGetProperty("parameters", out var parameters) && parameters.ValueKind == JsonValueKind.Object)
-                        foreach (var parameter in parameters.EnumerateObject())
-                            if (parameter.Value.ValueKind == JsonValueKind.String && parameter.Value.GetString() is { } value && value.Length <= 4096)
-                                values.Add(value);
+                EvidenceDocsExporter.ValidateChunkContract(chunk);
             }
+            catch (InvalidOperationException exception)
+            {
+                throw new InvalidDataException("AgentHandoffCorpusSchemaMismatch", exception);
+            }
+            if (!SafeChunkTokenPattern.IsMatch(chunk.ChunkId) || !SafeChunkTokenPattern.IsMatch(chunk.ChunkFamily) || !SafeChunkTokenPattern.IsMatch(chunk.ChunkType))
+                throw new InvalidDataException("AgentHandoffCorpusSchemaMismatch");
+            if (chunk.SupportingIds.Count > 2048) throw new InvalidDataException("AgentHandoffCorpusLimit");
+            var chunkSupports = chunk.SupportingIds.ToHashSet(StringComparer.Ordinal);
+            var chunkHints = chunk.RetrievalHints.Select(HintIdentity).ToHashSet(StringComparer.Ordinal);
+            var belongsToSnapshot = chunk.SourceRefs.Any(source => string.Equals(source.ScanId, scanId, StringComparison.Ordinal)
+                && string.Equals(source.CommitSha, commitSha, StringComparison.OrdinalIgnoreCase));
             foreach (var item in cases)
             {
-                if (selected[item.Subject.CaseId].Count >= MaximumRecommendedChunksPerCase || !values.Overlaps(selectorValues[item.Subject.CaseId])) continue;
-                selected[item.Subject.CaseId].Add(new(chunkId, chunkFamily, chunkType,
-                    $"chunks/{chunkFamily}/{Slug(chunkId)}.md", "Matches a retained case supporting ID or exact retrieval parameter."));
+                var supportingMatch = chunkSupports.Overlaps(supportingIds[item.Subject.CaseId]);
+                var hintMatch = chunkHints.Overlaps(hintIdentities[item.Subject.CaseId]);
+                if (!belongsToSnapshot || selected[item.Subject.CaseId].Count >= MaximumRecommendedChunksPerCase || (!supportingMatch && !hintMatch)) continue;
+                var markdownPath = $"chunks/{chunk.ChunkFamily}/{Slug(chunk.ChunkId)}.md";
+                var locator = manifest.Formats.Contains("markdown", StringComparer.Ordinal)
+                    && TryValidateDeclaredOutput(root, markdownPath, outputByPath)
+                        ? markdownPath
+                        : $"chunks.jsonl#line={lineCount}";
+                selected[item.Subject.CaseId].Add(new(chunk.ChunkId, chunk.ChunkFamily, chunk.ChunkType,
+                    locator, supportingMatch ? "Matches a retained case supporting ID." : "Matches an exact recipe, input-kind, and named-parameter retrieval hint."));
             }
         }
         var projected = selected.ToDictionary(pair => pair.Key,
             pair => (IReadOnlyList<RecommendedChunk>)pair.Value.OrderBy(value => ChunkRank(value.ChunkType)).ThenBy(value => value.ChunkId, StringComparer.Ordinal).ToArray(),
             StringComparer.Ordinal);
         return new(new("validated", "tracemap-evidence-docs-export", RelativeLocator(outputRoot, root), schemaVersion,
-            projected.Values.Sum(value => value.Count), "Matched only by retained supporting IDs or exact retrieval-hint parameters; no semantic inference was added."), projected);
+            projected.Values.Sum(value => value.Count), "Matched only by retained supporting IDs or exact recipe/input/parameter retrieval hints; no semantic inference was added."), projected);
+    }
+
+    private static string HintIdentity(WebFormsHandoffRetrievalHint hint) =>
+        HintIdentity(hint.RecipeId, hint.InputKind, hint.Parameters);
+
+    private static string HintIdentity(EvidenceDocRetrievalHint hint) =>
+        HintIdentity(hint.RecipeId, hint.InputKind, hint.Parameters);
+
+    private static string HintIdentity(string recipeId, string inputKind, IReadOnlyDictionary<string, string> parameters) =>
+        $"{inputKind}|{recipeId}|{string.Join('|', parameters.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => $"{pair.Key}={pair.Value}"))}";
+
+    private static void ValidateDeclaredOutput(
+        string root,
+        string fullPath,
+        string relativePath,
+        IReadOnlyDictionary<string, EvidenceDocsOutputSummary> outputs)
+    {
+        if (!outputs.TryGetValue(relativePath, out var output)
+            || output.SchemaVersion != EvidenceDocsExporter.SchemaVersion
+            || output.Generator != EvidenceDocsExporter.GeneratorName
+            || output.Kind != (relativePath.EndsWith(".jsonl", StringComparison.Ordinal) ? "jsonl"
+                : relativePath.EndsWith(".json", StringComparison.Ordinal) ? "json" : "markdown")
+            || output.SizeBytes != new FileInfo(fullPath).Length
+            || output.LineCount != CountNewlines(fullPath)
+            || !string.Equals(output.Sha256, HashFile(fullPath), StringComparison.Ordinal))
+            throw new InvalidDataException("AgentHandoffCorpusIntegrityMismatch");
+        var expectedPath = Path.GetFullPath(Path.Combine(root, relativePath));
+        if (!string.Equals(expectedPath, fullPath, PathComparison))
+            throw new InvalidDataException("AgentHandoffCorpusIntegrityMismatch");
+    }
+
+    private static bool TryValidateDeclaredOutput(
+        string root,
+        string relativePath,
+        IReadOnlyDictionary<string, EvidenceDocsOutputSummary> outputs)
+    {
+        var fullPath = Path.GetFullPath(Path.Combine(root, relativePath));
+        if (!fullPath.StartsWith(root + Path.DirectorySeparatorChar, PathComparison) || !File.Exists(fullPath)) return false;
+        try
+        {
+            ValidateDeclaredOutput(root, fullPath, relativePath, outputs);
+            return true;
+        }
+        catch (InvalidDataException)
+        {
+            return false;
+        }
+    }
+
+    private static int CountNewlines(string path)
+    {
+        var count = 0;
+        using var stream = File.OpenRead(path);
+        var buffer = new byte[64 * 1024];
+        int read;
+        while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
+            for (var index = 0; index < read; index++)
+                if (buffer[index] == (byte)'\n') count++;
+        return count;
     }
 
     private static string BoundedCorpusFile(string root, string name, long maximumBytes)

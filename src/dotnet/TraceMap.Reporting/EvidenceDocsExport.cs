@@ -458,6 +458,61 @@ public static partial class EvidenceDocsExporter
         }
     }
 
+    public static void ValidateChunkContract(EvidenceDocChunk chunk)
+    {
+        if (chunk.SchemaVersion != SchemaVersion
+            || string.IsNullOrWhiteSpace(chunk.ChunkId)
+            || string.IsNullOrWhiteSpace(chunk.ChunkType)
+            || string.IsNullOrWhiteSpace(chunk.ChunkFamily)
+            || string.IsNullOrWhiteSpace(chunk.ClaimLevel)
+            || string.IsNullOrWhiteSpace(chunk.Title)
+            || string.IsNullOrWhiteSpace(chunk.SectionTitle)
+            || string.IsNullOrWhiteSpace(chunk.SortKey)
+            || string.IsNullOrWhiteSpace(chunk.Summary)
+            || chunk.BodyMarkdown is null
+            || chunk.Claim is null
+            || chunk.QuestionFamilies is null
+            || chunk.Citations is null
+            || chunk.SourceRefs is null
+            || chunk.SupportingIds is null
+            || chunk.RuleIds is null
+            || chunk.EvidenceTiers is null
+            || chunk.CoverageLabels is null
+            || chunk.Gaps is null
+            || chunk.Limitations is null
+            || chunk.Redactions is null
+            || chunk.Links is null
+            || chunk.RetrievalHints is null
+            || chunk.SourceRefs.Count == 0
+            || chunk.RuleIds.Count == 0
+            || chunk.EvidenceTiers.Count == 0
+            || chunk.RuleIds.Any(string.IsNullOrWhiteSpace)
+            || chunk.SourceRefs.Any(source => string.IsNullOrWhiteSpace(source.SourceId)
+                || string.IsNullOrWhiteSpace(source.SourceLabel)
+                || string.IsNullOrWhiteSpace(source.SourceScope)
+                || string.IsNullOrWhiteSpace(source.CoverageLabel))
+            || string.IsNullOrWhiteSpace(chunk.Claim.Kind)
+            || string.IsNullOrWhiteSpace(chunk.Claim.Text)
+            || string.IsNullOrWhiteSpace(chunk.Claim.ClaimLevel)
+            || chunk.Claim.RuleIds is null
+            || chunk.Claim.EvidenceTiers is null
+            || chunk.Claim.CoverageLabels is null
+            || chunk.Claim.SupportingIds is null
+            || chunk.Claim.Limitations is null
+            || chunk.EvidenceTiers.Any(tier => tier is not EvidenceTiers.Tier1Semantic
+                and not EvidenceTiers.Tier2Structural
+                and not EvidenceTiers.Tier3SyntaxOrTextual
+                and not EvidenceTiers.Tier4Unknown))
+        {
+            throw new InvalidOperationException("EvidenceDocChunkInvalid");
+        }
+
+        foreach (var hint in chunk.RetrievalHints)
+        {
+            EvidenceDocsQueryRecipes.ValidateRetrievalHint(hint);
+        }
+    }
+
     public static bool IsSelfConsistentMarkdown(string content)
     {
         if (!TryReadFrontmatter(content, out var metadata, out _)
@@ -1833,6 +1888,9 @@ public static partial class EvidenceDocsExporter
         var blank = manifest with { ContentHash = string.Empty };
         return manifest with { ContentHash = Hash(SerializeJson(blank), 64) };
     }
+
+    internal static string RenderSelfConsistentManifest(EvidenceDocsManifest manifest) =>
+        SerializeJson(WithManifestHash(manifest));
 
     private static Dictionary<string, string> BuildGeneratedFiles(string outputPath, EvidenceDocsManifest manifest, IReadOnlyList<EvidenceDocChunk> chunks, IReadOnlyList<string> formats)
     {

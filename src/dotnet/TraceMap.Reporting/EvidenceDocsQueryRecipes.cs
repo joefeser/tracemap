@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using TraceMap.Core;
 
 namespace TraceMap.Reporting;
 
@@ -121,7 +122,12 @@ public static class EvidenceDocsQueryRecipes
 
     public static void Validate(EvidenceQueryRecipeCatalog catalog)
     {
-        if (catalog.SchemaVersion != SchemaVersion || catalog.Recipes.Count == 0
+        if (catalog.SchemaVersion != SchemaVersion
+            || catalog.Generator != EvidenceDocsExporter.GeneratorName
+            || catalog.RuleId != RecipeRuleId
+            || catalog.Recipes is null
+            || catalog.Limitations is null
+            || catalog.Recipes.Count == 0
             || catalog.Recipes.Select(recipe => recipe.RecipeId).Distinct(StringComparer.Ordinal).Count() != catalog.Recipes.Count)
         {
             throw new InvalidOperationException("EvidenceQueryRecipeCatalogInvalid");
@@ -129,7 +135,17 @@ public static class EvidenceDocsQueryRecipes
 
         foreach (var recipe in catalog.Recipes)
         {
-            if (recipe.RuleId != RecipeRuleId || recipe.EvidenceTier != "Tier2Structural"
+            if (string.IsNullOrWhiteSpace(recipe.RecipeId)
+                || string.IsNullOrWhiteSpace(recipe.Title)
+                || string.IsNullOrWhiteSpace(recipe.Purpose)
+                || recipe.RuleId != RecipeRuleId || recipe.EvidenceTier != EvidenceTiers.Tier2Structural
+                || recipe.SupportedInputKinds is null
+                || recipe.Parameters is null
+                || recipe.ResultFields is null
+                || recipe.SqlByInputKind is null
+                || recipe.EvidenceRequirements is null
+                || recipe.Limitations is null
+                || recipe.ResultFields.Count == 0
                 || recipe.SupportedInputKinds.Count != 2
                 || recipe.SqlByInputKind.Count != 2
                 || !recipe.SupportedInputKinds.Contains("single-index", StringComparer.Ordinal)
@@ -171,6 +187,42 @@ public static class EvidenceDocsQueryRecipes
                         throw new InvalidOperationException("EvidenceQueryRecipeParameterUnused");
                     }
                 }
+            }
+        }
+    }
+
+    public static void ValidateRetrievalHint(EvidenceDocRetrievalHint hint)
+    {
+        var recipes = Build().Recipes.ToDictionary(recipe => recipe.RecipeId, StringComparer.Ordinal);
+        if (hint.RuleId != HintRuleId
+            || hint.EvidenceTier != EvidenceTiers.Tier2Structural
+            || !recipes.TryGetValue(hint.RecipeId, out var recipe)
+            || !recipe.SupportedInputKinds.Contains(hint.InputKind, StringComparer.Ordinal)
+            || hint.SupportingIds.Count == 0
+            || hint.SupportingIds.Any(string.IsNullOrWhiteSpace))
+        {
+            throw new InvalidOperationException("EvidenceDocRetrievalHintInvalid");
+        }
+
+        var expectedParameters = recipe.Parameters
+            .Where(parameter => parameter.RequiredForInputKinds.Contains(hint.InputKind, StringComparer.Ordinal))
+            .Select(parameter => parameter.Name)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        var actualParameters = hint.Parameters.Keys.OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        if (!expectedParameters.SequenceEqual(actualParameters, StringComparer.Ordinal))
+        {
+            throw new InvalidOperationException("EvidenceDocRetrievalHintParameterInvalid");
+        }
+
+        foreach (var parameter in recipe.Parameters.Where(parameter => parameter.RequiredForInputKinds.Contains(hint.InputKind, StringComparer.Ordinal)))
+        {
+            var value = hint.Parameters[parameter.Name];
+            if (string.IsNullOrWhiteSpace(value)
+                || parameter.Type == "integer" && (!int.TryParse(value, out var parsed) || parsed < 1)
+                || parameter.Name == "limit" && int.Parse(value) > 1000)
+            {
+                throw new InvalidOperationException("EvidenceDocRetrievalHintValueInvalid");
             }
         }
     }
@@ -410,39 +462,9 @@ public static partial class EvidenceDocsExporter
 
     private static void ValidateRetrievalHints(IReadOnlyList<EvidenceDocChunk> chunks)
     {
-        var recipes = EvidenceDocsQueryRecipes.Build().Recipes.ToDictionary(recipe => recipe.RecipeId, StringComparer.Ordinal);
         foreach (var hint in chunks.SelectMany(chunk => chunk.RetrievalHints))
         {
-            if (hint.RuleId != EvidenceDocsQueryRecipes.HintRuleId
-                || hint.EvidenceTier != "Tier2Structural"
-                || !recipes.TryGetValue(hint.RecipeId, out var recipe)
-                || !recipe.SupportedInputKinds.Contains(hint.InputKind, StringComparer.Ordinal)
-                || hint.SupportingIds.Count == 0)
-            {
-                throw new InvalidOperationException("EvidenceDocRetrievalHintInvalid");
-            }
-
-            var expectedParameters = recipe.Parameters
-                .Where(parameter => parameter.RequiredForInputKinds.Contains(hint.InputKind, StringComparer.Ordinal))
-                .Select(parameter => parameter.Name)
-                .OrderBy(value => value, StringComparer.Ordinal)
-                .ToArray();
-            var actualParameters = hint.Parameters.Keys.OrderBy(value => value, StringComparer.Ordinal).ToArray();
-            if (!expectedParameters.SequenceEqual(actualParameters, StringComparer.Ordinal))
-            {
-                throw new InvalidOperationException("EvidenceDocRetrievalHintParameterInvalid");
-            }
-
-            foreach (var parameter in recipe.Parameters.Where(parameter => parameter.RequiredForInputKinds.Contains(hint.InputKind, StringComparer.Ordinal)))
-            {
-                var value = hint.Parameters[parameter.Name];
-                if (string.IsNullOrWhiteSpace(value)
-                    || parameter.Type == "integer" && (!int.TryParse(value, out var parsed) || parsed < 1)
-                    || parameter.Name == "limit" && int.Parse(value) > 1000)
-                {
-                    throw new InvalidOperationException("EvidenceDocRetrievalHintValueInvalid");
-                }
-            }
+            EvidenceDocsQueryRecipes.ValidateRetrievalHint(hint);
         }
     }
 }
