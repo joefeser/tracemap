@@ -734,6 +734,7 @@ rules:
     limitations:
       - Recipes retrieve retained static evidence only and do not add findings, close gaps, prove absence, or prove runtime behavior.
       - Recipe SQL targets TraceMap-owned evidence tables only; it is not captured application SQL and does not query an application database.
+      - Combined-index recipes require and filter by the owning source-index identity; multi-source chunks without one unambiguous owner do not emit retrieval hints.
       - Downstream callers remain responsible for bounded parameter values, access control, orchestration, and interpretation.
 
   - id: docs-export.retrieval-hint.v1
@@ -745,6 +746,7 @@ rules:
     limitations:
       - Retrieval hints are navigation metadata and do not add evidence, upgrade a claim, choose a runtime target, or close a gap.
       - Hints are bounded and may omit additional applicable facts, spans, symbols, or recipes.
+      - Each hint is scoped to one supported input kind and, for combined indexes, one owning source-index identity.
 
   - id: docs-export.chunk.gap.v1
     name: Docs export gap chunk

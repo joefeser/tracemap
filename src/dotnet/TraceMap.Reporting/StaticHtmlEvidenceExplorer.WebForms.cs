@@ -416,13 +416,14 @@ public static partial class StaticHtmlEvidenceExplorer
         }
     }
 
-    private static void ValidateWebFormsPacket(WebFormsModernizationPacket packet, string? expectedCommitSha)
+    internal static void ValidateWebFormsPacket(WebFormsModernizationPacket packet, string? expectedCommitSha)
     {
         if (packet.SchemaVersion != WebFormsModernizationPacketReporter.SchemaVersion
             || packet.RuleId != WebFormsModernizationPacketReporter.PacketRuleId
             || packet.ClaimLevel != "local-only"
             || packet.Coverage is not ("bounded-static-webforms-modernization" or "reduced-static-webforms-modernization")
             || packet.Sources?.Count != 1
+            || packet.Summary is null
             || !IsUsableCommitSha(packet.Sources[0].CommitSha)
             || !IsWebFormsHashedId(packet.Sources[0].SourceId, "source-")
             || !IsWebFormsHashedId(packet.Sources[0].RepositoryId, "repository-")
@@ -436,6 +437,21 @@ public static partial class StaticHtmlEvidenceExplorer
             || packet.BatchDataMovementInventory is null
             || packet.StructuralSliceCandidates is null || packet.Gaps is null
             || packet.OwnerQuestions is null || packet.Limitations is null
+            || packet.SurfaceSelection is { } selection
+                && (selection.RuleId != WebFormsModernizationPacketReporter.PacketRuleId
+                    || selection.Items is null || selection.Limitations is null
+                    || selection.Items.Count > MaxWebFormsRowsPerCollection
+                    || selection.RequestedCount != selection.Items.Count
+                    || selection.MatchedCount != selection.Items.Count(item => item.Status == "matched")
+                    || selection.UnmatchedCount != selection.Items.Count(item => item.Status == "unmatched")
+                    || selection.AmbiguousCount != selection.Items.Count(item => item.Status == "ambiguous")
+                    || selection.UnavailableCount != selection.Items.Count(item => item.Status == "unavailable")
+                    || selection.Items.Select(item => item.Alias).Distinct(StringComparer.Ordinal).Count() != selection.Items.Count
+                    || selection.Items.Select(item => item.RequestId).Distinct(StringComparer.Ordinal).Count() != selection.Items.Count
+                    || selection.Items.Any(item => string.IsNullOrWhiteSpace(item.Alias)
+                        || string.IsNullOrWhiteSpace(item.RequestId)
+                        || item.Status is not ("matched" or "unmatched" or "ambiguous" or "unavailable")
+                        || item.SurfaceIds is null))
             || new[]
             {
                 packet.Projects.Count, packet.Surfaces.Count, packet.EventChains.Count,
@@ -471,6 +487,7 @@ public static partial class StaticHtmlEvidenceExplorer
             || packet.EventChains.Any(chain => !surfaceIds.Contains(chain.SurfaceId))
             || packet.DownstreamBoundaries.Any(boundary => !surfaceIds.Contains(boundary.SurfaceId) || !chainIds.Contains(boundary.ChainId))
             || packet.IdentityStateInventory.Any(state => state.SurfaceId is not null && !surfaceIds.Contains(state.SurfaceId))
+            || packet.SurfaceSelection?.Items.Any(item => item.SurfaceIds.Any(id => !surfaceIds.Contains(id))) == true
             || packet.StructuralSliceCandidates.Any(candidate => candidate.SurfaceIds is null || candidate.SurfaceIds.Any(id => !surfaceIds.Contains(id))))
         {
             throw new InvalidDataException("inconsistent Web Forms packet identity graph");

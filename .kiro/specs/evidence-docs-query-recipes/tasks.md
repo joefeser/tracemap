@@ -7,3 +7,4 @@
 - [x] 5. Add safety, determinism, schema, and hint regression tests.
 - [x] 6. Update docs and the rule catalog.
 - [x] 7. Run focused/full validation, update implementation state, and open a stacked PR.
+- [x] 8. Remediate exact-head review findings for packet validation, provenance, determinism, safety, gap identity, and combined-source query scoping.

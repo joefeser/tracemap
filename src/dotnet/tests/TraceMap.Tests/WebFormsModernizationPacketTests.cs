@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using TraceMap.Cli;
+using TraceMap.Combine;
 using TraceMap.Core;
 using TraceMap.Reporting;
 using TraceMap.Storage;
@@ -10,6 +11,73 @@ namespace TraceMap.Tests;
 
 public sealed class WebFormsModernizationPacketTests
 {
+    [Theory]
+    [InlineData("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]
+    [InlineData("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB")]
+    public async Task Docs_export_accepts_packet_producer_commit_identity_shapes(string commitSha)
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), "<%@ Page Language=\"C#\" CodeBehind=\"Default.aspx.cs\" Inherits=\"Sample.Default\" %>");
+        File.WriteAllText(Path.Combine(repo, "Default.aspx.cs"), "namespace Sample; public partial class Default { }");
+        var scan = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "scan")));
+        var manifest = scan.Manifest with { CommitSha = commitSha };
+        var facts = scan.Facts.Select(fact => fact with { CommitSha = commitSha }).ToArray();
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, manifest, facts);
+        var packet = await WebFormsModernizationPacketReporter.WriteAsync(new(index, Path.Combine(temp.Path, "packet")));
+
+        var result = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
+            index,
+            Path.Combine(temp.Path, "docs"),
+            Families: "webforms-modernization,gap,limitation",
+            WebFormsPacketPaths: [packet.JsonPath]));
+
+        Assert.Contains(result.Manifest.Inputs, input => input.Kind == "webforms-modernization-packet" && input.Compatibility == "compatible");
+        Assert.All(result.Manifest.Inputs.SelectMany(input => input.SourceRefs), source =>
+            Assert.Equal(commitSha.ToLowerInvariant(), source.CommitSha));
+    }
+
+    [Fact]
+    public async Task Docs_export_keeps_same_packet_gap_separate_for_each_combined_source()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), "<%@ Page Language=\"C#\" CodeBehind=\"Default.aspx.cs\" Inherits=\"Sample.Default\" %><asp:Button runat=\"server\" ID=\"Save\" OnClick=\"Missing_Click\" />");
+        File.WriteAllText(Path.Combine(repo, "Default.aspx.cs"), "namespace Sample; public partial class Default { }");
+        var scan = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "scan")));
+        const string firstCommit = "1111111111111111111111111111111111111111";
+        const string secondCommit = "2222222222222222222222222222222222222222";
+        var firstManifest = scan.Manifest with { ScanId = "scan-first", RepoName = "repo-first", CommitSha = firstCommit };
+        var firstFacts = scan.Facts.Select(fact => fact with { ScanId = firstManifest.ScanId, Repo = firstManifest.RepoName, CommitSha = firstCommit }).ToArray();
+        var firstIndex = Path.Combine(temp.Path, "first.sqlite");
+        SqliteIndexWriter.Write(firstIndex, firstManifest, firstFacts);
+        var firstResult = await WebFormsModernizationPacketReporter.WriteAsync(new(firstIndex, Path.Combine(temp.Path, "packet-first")));
+        var originalGap = Assert.Single(firstResult.Packet.Gaps, gap => gap.Classification == "MissingWebFormsHandler");
+
+        var secondManifest = firstManifest with { ScanId = "scan-second", RepoName = "repo-second", CommitSha = secondCommit };
+        var secondFacts = firstFacts.Select(fact => fact with { ScanId = secondManifest.ScanId, Repo = secondManifest.RepoName, CommitSha = secondCommit }).ToArray();
+        var secondIndex = Path.Combine(temp.Path, "second.sqlite");
+        SqliteIndexWriter.Write(secondIndex, secondManifest, secondFacts);
+        var secondPacket = ReidentifyPacket(firstResult.Packet, secondManifest, "3");
+        var secondPacketPath = Path.Combine(temp.Path, "packet-second.json");
+        await File.WriteAllTextAsync(secondPacketPath, JsonSerializer.Serialize(secondPacket, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([firstIndex, secondIndex], combined, ["first", "second"]));
+        var docs = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
+            combined,
+            Path.Combine(temp.Path, "docs"),
+            Families: "webforms-modernization,gap,limitation",
+            WebFormsPacketPaths: [firstResult.JsonPath, secondPacketPath]));
+
+        var matching = docs.Manifest.Gaps.Where(gap => gap.SupportingIds.Contains(originalGap.GapId, StringComparer.Ordinal)).ToArray();
+        Assert.Equal(2, matching.Length);
+        Assert.Equal(2, matching.SelectMany(gap => gap.SourceRefs).Select(source => source.SourceId).Distinct(StringComparer.Ordinal).Count());
+    }
+
     [Fact]
     public async Task Synthetic_scan_index_packet_is_deterministic_typed_private_and_preserves_partial_evidence()
     {
@@ -112,12 +180,26 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Contains(docsA.Chunks, chunk => chunk.ChunkFamily == "webforms-modernization"
             && chunk.Title == "Web Forms surface evidence"
             && chunk.RetrievalHints.Any(hint => hint.RecipeId == "webforms-surface-facts"));
+        Assert.All(docsA.Chunks.Where(chunk => chunk.ChunkFamily == "webforms-modernization" && chunk.Title == "Web Forms surface evidence"), chunk =>
+        {
+            var surface = Assert.Single(first.Packet.Surfaces, item => chunk.SupportingIds.Contains(item.SurfaceId));
+            Assert.Equal(
+                new[] { surface.Evidence }.Concat(surface.SupportingEvidence).Select(item => item.FactId).Distinct(StringComparer.Ordinal).Count(),
+                chunk.Citations.Count);
+            Assert.All(surface.SupportingEvidence, item => Assert.Contains(chunk.Citations, citation => citation.SupportingFactIds.Contains(item.FactId)));
+        });
         Assert.Contains(docsA.Chunks, chunk => chunk.ChunkFamily == "webforms-modernization"
             && chunk.Title == "Web Forms event-chain evidence"
             && chunk.RetrievalHints.Any(hint => hint.RecipeId == "calls-from-handler")
             && chunk.RetrievalHints.Any(hint => hint.RecipeId == "database-evidence-by-handler")
             && chunk.RetrievalHints.Any(hint => hint.RecipeId == "stored-procedure-candidate-context"));
         Assert.Contains(docsA.Chunks, chunk => chunk.ChunkFamily == "gap" && chunk.Gaps.Any(gap => gap.ChunkFamily == "webforms-modernization"));
+        Assert.All(docsA.Chunks.SelectMany(chunk => chunk.Gaps).Where(gap => gap.ChunkFamily == "webforms-modernization"), gap =>
+        {
+            Assert.NotNull(gap.CommitSha);
+            Assert.False(string.IsNullOrWhiteSpace(gap.ExtractorName));
+            Assert.False(string.IsNullOrWhiteSpace(gap.ExtractorVersion));
+        });
         Assert.All(docsA.Chunks.Where(chunk => chunk.ChunkFamily == "webforms-modernization" && chunk.Title != "Web Forms evidence packet overview"), chunk =>
         {
             Assert.NotEmpty(chunk.Citations);
@@ -146,16 +228,73 @@ public sealed class WebFormsModernizationPacketTests
 
         var reorderedPacket = first.Packet with
         {
-            Projects = first.Packet.Projects.Reverse().ToArray(),
-            Surfaces = first.Packet.Surfaces.Reverse().ToArray(),
-            EventChains = first.Packet.EventChains.Reverse().ToArray(),
-            DownstreamBoundaries = first.Packet.DownstreamBoundaries.Reverse().ToArray(),
-            IdentityStateInventory = first.Packet.IdentityStateInventory.Reverse().ToArray(),
-            BatchDataMovementInventory = first.Packet.BatchDataMovementInventory.Reverse().ToArray(),
-            StructuralSliceCandidates = first.Packet.StructuralSliceCandidates.Reverse().ToArray(),
-            Gaps = first.Packet.Gaps.Reverse().ToArray(),
+            Projects = first.Packet.Projects.Reverse().Select(item => item with
+            {
+                Evidence = item.Evidence.Reverse().Select(ReverseEvidence).ToArray(),
+                SupportingFactIds = item.SupportingFactIds.Reverse().ToArray()
+            }).ToArray(),
+            Surfaces = first.Packet.Surfaces.Reverse().Select(item => item with
+            {
+                CompositionTargetIds = item.CompositionTargetIds.Reverse().ToArray(),
+                ControlIds = item.ControlIds.Reverse().ToArray(),
+                Evidence = ReverseEvidence(item.Evidence),
+                SupportingEvidence = item.SupportingEvidence.Reverse().Select(ReverseEvidence).ToArray(),
+                SupportingFactIds = item.SupportingFactIds.Reverse().ToArray()
+            }).ToArray(),
+            EventChains = first.Packet.EventChains.Reverse().Select(item => item with
+            {
+                Evidence = item.Evidence.Reverse().Select(ReverseEvidence).ToArray(),
+                PathEvidence = item.PathEvidence.Reverse().Select(ReversePathEvidence).ToArray(),
+                SupportingFactIds = item.SupportingFactIds.Reverse().ToArray(),
+                SupportingEdgeIds = item.SupportingEdgeIds.Reverse().ToArray(),
+                RuleIds = item.RuleIds.Reverse().ToArray(),
+                EvidenceTiers = item.EvidenceTiers.Reverse().ToArray(),
+                CoverageLabels = item.CoverageLabels.Reverse().ToArray(),
+                Limitations = item.Limitations.Reverse().ToArray()
+            }).ToArray(),
+            DownstreamBoundaries = first.Packet.DownstreamBoundaries.Reverse().Select(item => item with
+            {
+                Evidence = item.Evidence.Reverse().Select(ReverseEvidence).ToArray(),
+                PathEvidence = item.PathEvidence.Reverse().Select(ReversePathEvidence).ToArray(),
+                SupportingFactIds = item.SupportingFactIds.Reverse().ToArray(),
+                SupportingEdgeIds = item.SupportingEdgeIds.Reverse().ToArray(),
+                RuleIds = item.RuleIds.Reverse().ToArray(),
+                EvidenceTiers = item.EvidenceTiers.Reverse().ToArray(),
+                CoverageLabels = item.CoverageLabels.Reverse().ToArray(),
+                Limitations = item.Limitations.Reverse().ToArray()
+            }).ToArray(),
+            IdentityStateInventory = first.Packet.IdentityStateInventory.Reverse().Select(item => item with
+            {
+                Evidence = ReverseEvidence(item.Evidence),
+                SupportingFactIds = item.SupportingFactIds.Reverse().ToArray(),
+                Limitations = item.Limitations.Reverse().ToArray()
+            }).ToArray(),
+            BatchDataMovementInventory = first.Packet.BatchDataMovementInventory.Reverse().Select(item => item with
+            {
+                Evidence = ReverseEvidence(item.Evidence),
+                SupportingFactIds = item.SupportingFactIds.Reverse().ToArray(),
+                Limitations = item.Limitations.Reverse().ToArray()
+            }).ToArray(),
+            StructuralSliceCandidates = first.Packet.StructuralSliceCandidates.Reverse().Select(item => item with
+            {
+                SurfaceIds = item.SurfaceIds.Reverse().ToArray(),
+                Evidence = item.Evidence.Reverse().Select(ReverseEvidence).ToArray(),
+                SupportingFactIds = item.SupportingFactIds.Reverse().ToArray(),
+                CoverageLabels = item.CoverageLabels.Reverse().ToArray(),
+                Limitations = item.Limitations.Reverse().ToArray()
+            }).ToArray(),
+            Gaps = first.Packet.Gaps.Reverse().Select(item => item with
+            {
+                SupportingFactIds = item.SupportingFactIds.Reverse().ToArray(),
+                Limitations = item.Limitations.Reverse().ToArray()
+            }).ToArray(),
             OwnerQuestions = first.Packet.OwnerQuestions.Reverse().ToArray(),
-            Limitations = first.Packet.Limitations.Reverse().ToArray()
+            Limitations = first.Packet.Limitations.Reverse().ToArray(),
+            SurfaceSelection = first.Packet.SurfaceSelection is null ? null : first.Packet.SurfaceSelection with
+            {
+                Items = first.Packet.SurfaceSelection.Items.Reverse().Select(item => item with { SurfaceIds = item.SurfaceIds.Reverse().ToArray() }).ToArray(),
+                Limitations = first.Packet.SurfaceSelection.Limitations.Reverse().ToArray()
+            }
         };
         var reorderedPath = Path.Combine(temp.Path, "webforms-modernization-reordered.json");
         await File.WriteAllTextAsync(reorderedPath, JsonSerializer.Serialize(reorderedPacket, new JsonSerializerOptions
@@ -180,6 +319,31 @@ public sealed class WebFormsModernizationPacketTests
             Path.Combine(temp.Path, "docs-incompatible"),
             WebFormsPacketPaths: [incompatiblePath])));
         Assert.Contains("InputSchemaUnsupported", incompatible.Message);
+
+        var inconsistentPath = Path.Combine(temp.Path, "webforms-modernization-inconsistent.json");
+        await File.WriteAllTextAsync(inconsistentPath, JsonSerializer.Serialize(first.Packet with
+        {
+            Summary = first.Packet.Summary with { SurfaceCount = first.Packet.Summary.SurfaceCount + 1 }
+        }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+        var inconsistent = await Assert.ThrowsAsync<InvalidOperationException>(() => EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
+            index,
+            Path.Combine(temp.Path, "docs-inconsistent"),
+            WebFormsPacketPaths: [inconsistentPath])));
+        Assert.Contains("InputSchemaUnsupported", inconsistent.Message);
+
+        var absolutePath = Path.Combine(temp.Path, "private", "Default.aspx");
+        var unsafePacketPath = Path.Combine(temp.Path, "webforms-modernization-unsafe-path.json");
+        await File.WriteAllTextAsync(unsafePacketPath, JsonSerializer.Serialize(first.Packet with
+        {
+            Surfaces = first.Packet.Surfaces.Select((surface, index) => index == 0
+                ? surface with { Evidence = surface.Evidence with { FilePath = absolutePath } }
+                : surface).ToArray()
+        }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+        var sanitizedOutput = Path.Combine(temp.Path, "docs-sanitized-path");
+        await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(index, sanitizedOutput, WebFormsPacketPaths: [unsafePacketPath]));
+        var sanitizedText = string.Join('\n', Directory.EnumerateFiles(sanitizedOutput, "*", SearchOption.AllDirectories).Select(File.ReadAllText));
+        Assert.DoesNotContain(absolutePath, sanitizedText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("source-span-unavailable", sanitizedText, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1342,6 +1506,56 @@ public sealed class WebFormsModernizationPacketTests
             root.NodeId, terminal.NodeId, [root, terminal], [edge],
             new[] { bindingId, handlerId }.Concat(additionalSupport ?? []).Distinct(StringComparer.Ordinal).ToArray(),
             [edge.EdgeId], []);
+    }
+
+    private static WebFormsModernizationEvidence ReverseEvidence(WebFormsModernizationEvidence evidence) => evidence with
+    {
+        SupportingFactIds = evidence.SupportingFactIds.Reverse().ToArray(),
+        SupportingEdgeIds = evidence.SupportingEdgeIds.Reverse().ToArray(),
+        Limitations = evidence.Limitations.Reverse().ToArray()
+    };
+
+    private static WebFormsModernizationPathEvidence ReversePathEvidence(WebFormsModernizationPathEvidence evidence) => evidence with
+    {
+        SupportingFactIds = evidence.SupportingFactIds.Reverse().ToArray(),
+        Limitations = evidence.Limitations.Reverse().ToArray()
+    };
+
+    private static WebFormsModernizationPacket ReidentifyPacket(WebFormsModernizationPacket packet, ScanManifest manifest, string identityDigit)
+    {
+        WebFormsModernizationEvidence Evidence(WebFormsModernizationEvidence evidence) => evidence with { CommitSha = manifest.CommitSha };
+        WebFormsModernizationPathEvidence PathEvidence(WebFormsModernizationPathEvidence evidence) => evidence with { CommitSha = manifest.CommitSha };
+        return packet with
+        {
+            PacketId = "packet-" + new string(identityDigit[0], 24),
+            Sources = [new(
+                "source-" + new string(identityDigit[0], 24),
+                "repository-" + new string(identityDigit[0], 24),
+                manifest.ScanId,
+                manifest.CommitSha,
+                manifest.AnalysisLevel,
+                manifest.BuildStatus)],
+            Projects = packet.Projects.Select(item => item with { Evidence = item.Evidence.Select(Evidence).ToArray() }).ToArray(),
+            Surfaces = packet.Surfaces.Select(item => item with
+            {
+                Evidence = Evidence(item.Evidence),
+                SupportingEvidence = item.SupportingEvidence.Select(Evidence).ToArray()
+            }).ToArray(),
+            EventChains = packet.EventChains.Select(item => item with
+            {
+                Evidence = item.Evidence.Select(Evidence).ToArray(),
+                PathEvidence = item.PathEvidence.Select(PathEvidence).ToArray()
+            }).ToArray(),
+            DownstreamBoundaries = packet.DownstreamBoundaries.Select(item => item with
+            {
+                Evidence = item.Evidence.Select(Evidence).ToArray(),
+                PathEvidence = item.PathEvidence.Select(PathEvidence).ToArray()
+            }).ToArray(),
+            IdentityStateInventory = packet.IdentityStateInventory.Select(item => item with { Evidence = Evidence(item.Evidence) }).ToArray(),
+            BatchDataMovementInventory = packet.BatchDataMovementInventory.Select(item => item with { Evidence = Evidence(item.Evidence) }).ToArray(),
+            StructuralSliceCandidates = packet.StructuralSliceCandidates.Select(item => item with { Evidence = item.Evidence.Select(Evidence).ToArray() }).ToArray(),
+            Gaps = packet.Gaps.Select(item => item with { CommitSha = manifest.CommitSha }).ToArray()
+        };
     }
 
     private static string Hash(string path) => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));

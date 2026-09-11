@@ -7,3 +7,4 @@
 5. Query recipes and hints shall preserve the requirement that useful results include stable evidence IDs, rule IDs, evidence tiers, coverage or source context, commit identity, and file spans when available.
 6. The catalog shall not contain application SQL, source snippets, configuration values, credentials, local absolute paths, company terminology, private workflow prompts, business intent, target architecture, or code-generation instructions.
 7. Equivalent evidence input ordering shall produce identical hints, catalog bytes, and manifest hashes.
+8. Combined-index recipes and hints shall require the owning source-index identity and shall not return same-shaped evidence from another source.

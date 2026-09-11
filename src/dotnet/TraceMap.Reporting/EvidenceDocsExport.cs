@@ -176,7 +176,15 @@ public sealed record EvidenceDocGap(
     string ChunkFamily,
     IReadOnlyList<EvidenceDocSourceRef> SourceRefs,
     IReadOnlyList<string> SupportingIds,
-    IReadOnlyList<string> Limitations);
+    IReadOnlyList<string> Limitations)
+{
+    public string? FilePath { get; init; }
+    public int? StartLine { get; init; }
+    public int? EndLine { get; init; }
+    public string? CommitSha { get; init; }
+    public string? ExtractorName { get; init; }
+    public string? ExtractorVersion { get; init; }
+}
 
 public sealed record EvidenceDocLimitation(
     string LimitationId,
@@ -286,7 +294,7 @@ public static partial class EvidenceDocsExporter
     private static readonly Regex SafeClosedTextPattern = new(@"^[A-Za-z0-9._:/@,+ \[\]\-]+$", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
     private static readonly Regex SafePathPattern = new(@"^[A-Za-z0-9._/\-]+$", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
     private static readonly Regex UnixLocalPathPattern = new("(?:^|[\\s:='\\\"])/(Users|home|opt|var|srv|app|mnt|private|tmp)/", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
-    private static readonly Regex Hex40Pattern = new(@"^[0-9a-fA-F]{40}$", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
+    private static readonly Regex CommitIdentityPattern = new(@"^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
     private static readonly Regex WindowsPathPattern = new("(?:^|[\\s:='\\\"])(?:[A-Za-z]:[\\\\/]|\\\\\\\\)", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
     private static readonly Regex RawHostPattern = new(@"\b(www\.|[A-Za-z0-9.-]+\.(com|net|org|io|local))\b", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
     private static readonly Regex RawSqlPattern = new(@"\b(select|insert|update|delete|merge)\b.+\b(from|into|set|where|values)\b", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
@@ -2000,7 +2008,7 @@ public static partial class EvidenceDocsExporter
             foreach (var hint in chunk.RetrievalHints)
             {
                 var parameters = string.Join(", ", hint.Parameters.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => $"{pair.Key}={pair.Value}"));
-                builder.AppendLine($"- `{EscapeInline(hint.RecipeId)}` with `{EscapeInline(parameters)}` — rule `{EscapeInline(hint.RuleId)}`, tier `{EscapeInline(hint.EvidenceTier)}`. {EscapeText(hint.Reason)}");
+                builder.AppendLine($"- `{EscapeInline(hint.RecipeId)}` for `{EscapeInline(hint.InputKind)}` with `{EscapeInline(parameters)}` — rule `{EscapeInline(hint.RuleId)}`, tier `{EscapeInline(hint.EvidenceTier)}`. {EscapeText(hint.Reason)}");
             }
         }
         builder.AppendLine();
@@ -2984,7 +2992,7 @@ public static partial class EvidenceDocsExporter
             return null;
         }
 
-        return Hex40Pattern.IsMatch(value) ? value.ToLowerInvariant() : null;
+        return CommitIdentityPattern.IsMatch(value) ? value.ToLowerInvariant() : null;
     }
 
     private static string SafeSourceLabel(string value, string claimLevel)

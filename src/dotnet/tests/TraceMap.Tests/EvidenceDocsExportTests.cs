@@ -35,9 +35,12 @@ public sealed class EvidenceDocsExportTests
                 Assert.StartsWith("select ", sql.Trim(), StringComparison.OrdinalIgnoreCase);
                 Assert.Contains("limit $limit", sql, StringComparison.OrdinalIgnoreCase);
             });
+            Assert.Contains("source_index_id = $source_index_id", recipe.SqlByInputKind["combined-index"], StringComparison.Ordinal);
+            Assert.DoesNotContain("$source_index_id", recipe.SqlByInputKind["single-index"], StringComparison.Ordinal);
         });
         Assert.Contains(result.Chunks, chunk => chunk.RetrievalHints.Any(hint => hint.RecipeId == "fact-by-id"));
         Assert.Contains(result.Chunks, chunk => chunk.RetrievalHints.Any(hint => hint.RecipeId == "facts-by-file-span"));
+        Assert.All(result.Chunks.SelectMany(chunk => chunk.RetrievalHints), hint => Assert.Equal("combined-index", hint.InputKind));
         Assert.All(result.Chunks.SelectMany(chunk => chunk.RetrievalHints), hint =>
         {
             var recipe = Assert.Single(catalog.Recipes, recipe => recipe.RecipeId == hint.RecipeId);
@@ -46,15 +49,21 @@ public sealed class EvidenceDocsExportTests
             Assert.NotEmpty(hint.Parameters);
             Assert.NotEmpty(hint.SupportingIds);
             Assert.Equal(
-                recipe.Parameters.Select(parameter => parameter.Name).OrderBy(value => value, StringComparer.Ordinal),
+                recipe.Parameters
+                    .Where(parameter => parameter.RequiredForInputKinds.Contains(hint.InputKind, StringComparer.Ordinal))
+                    .Select(parameter => parameter.Name)
+                    .OrderBy(value => value, StringComparer.Ordinal),
                 hint.Parameters.Keys.OrderBy(value => value, StringComparer.Ordinal));
             Assert.InRange(int.Parse(hint.Parameters["limit"]), 1, 1000);
+            if (hint.InputKind == "combined-index") Assert.NotEmpty(hint.Parameters["source_index_id"]);
         });
 
         await EnsureCallRecipeTableAsync(singlePath, combined: false);
         await EnsureCallRecipeTableAsync(combinedPath, combined: true);
+        await AddCombinedCrossSourceDuplicateAsync(combinedPath);
         await AssertRecipesExecuteAsync(singlePath, "single-index", catalog);
         await AssertRecipesExecuteAsync(combinedPath, "combined-index", catalog);
+        await AssertCombinedRecipeIsSourceScopedAsync(combinedPath, catalog);
 
         var unsafeCatalog = catalog with
         {
@@ -127,7 +136,7 @@ public sealed class EvidenceDocsExportTests
         {
             await using var command = connection.CreateCommand();
             command.CommandText = recipe.SqlByInputKind[inputKind];
-            foreach (var parameter in recipe.Parameters)
+            foreach (var parameter in recipe.Parameters.Where(parameter => parameter.RequiredForInputKinds.Contains(inputKind, StringComparer.Ordinal)))
             {
                 object value = parameter.Name switch
                 {
@@ -163,6 +172,45 @@ public sealed class EvidenceDocsExportTests
               );
               """;
         await command.ExecuteNonQueryAsync();
+    }
+
+    private static async Task AddCombinedCrossSourceDuplicateAsync(string indexPath)
+    {
+        await using var connection = new SqliteConnection($"Data Source={indexPath}");
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            insert into combined_facts
+            select 'source-client:fact-route-copy', 'source-client', 'fact-route-copy', 'scan-client', 'scan-client', repo,
+                   '2222222222222222222222222222222222222222', project_path, fact_type, rule_id, evidence_tier,
+                   source_symbol, target_symbol, contract_element, file_path, start_line, end_line, snippet_hash,
+                   properties_json, payload_json
+            from combined_facts where combined_fact_id = 'source-api:fact-route';
+            """;
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private static async Task AssertCombinedRecipeIsSourceScopedAsync(string indexPath, EvidenceQueryRecipeCatalog catalog)
+    {
+        var recipe = Assert.Single(catalog.Recipes, item => item.RecipeId == "facts-by-file-span");
+        await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = indexPath,
+            Mode = SqliteOpenMode.ReadOnly
+        }.ToString());
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = recipe.SqlByInputKind["combined-index"];
+        command.Parameters.AddWithValue("$source_index_id", "source-api");
+        command.Parameters.AddWithValue("$file_path", "src/Api/OrdersController.cs");
+        command.Parameters.AddWithValue("$start_line", 20);
+        command.Parameters.AddWithValue("$end_line", 22);
+        command.Parameters.AddWithValue("$limit", 100);
+        await using var reader = await command.ExecuteReaderAsync();
+        var sourceIds = new List<string>();
+        while (await reader.ReadAsync()) sourceIds.Add(reader.GetString(1));
+        Assert.NotEmpty(sourceIds);
+        Assert.All(sourceIds, sourceId => Assert.Equal("source-api", sourceId));
     }
 
     [Fact]
