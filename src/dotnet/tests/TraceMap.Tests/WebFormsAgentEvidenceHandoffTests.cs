@@ -1,11 +1,19 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using Microsoft.Data.Sqlite;
+using TraceMap.Core;
 using TraceMap.Reporting;
+using TraceMap.Storage;
 
 namespace TraceMap.Tests;
 
 public sealed class WebFormsAgentEvidenceHandoffTests
 {
+    private const string CommitSha = "1111111111111111111111111111111111111111";
+
     [Fact]
     public void SetHandoffValidatesIndexAndSelectsMatchingCorpusChunks()
     {
@@ -18,32 +26,9 @@ public sealed class WebFormsAgentEvidenceHandoffTests
             File.WriteAllText(Path.Combine(set, "case-001.private.html"), "private");
 
             var index = Path.Combine(root, "index.sqlite");
-            CreateIndex(index, "scan-one", "commit-one");
+            CreateIndex(index, "scan-one", CommitSha);
             var corpus = Path.Combine(root, "docs");
-            Directory.CreateDirectory(corpus);
-            File.WriteAllText(Path.Combine(corpus, "manifest.json"), JsonSerializer.Serialize(new
-            {
-                schemaVersion = EvidenceDocsExporter.SchemaVersion,
-                commitShas = new[] { "commit-one" },
-                inputs = new[] { new { sourceRefs = new[] { new { scanId = "scan-one" } } } }
-            }));
-            File.WriteAllText(Path.Combine(corpus, "query-recipes.json"),
-                EvidenceDocsQueryRecipes.RenderJson(EvidenceDocsQueryRecipes.Build()));
-            File.WriteAllText(Path.Combine(corpus, "chunks.jsonl"), JsonSerializer.Serialize(new
-            {
-                chunkId = "chunk:matching-one",
-                chunkFamily = "webforms-modernization",
-                chunkType = "event-chain",
-                supportingIds = new[] { "fact-handler" },
-                retrievalHints = Array.Empty<object>()
-            }) + "\n" + JsonSerializer.Serialize(new
-            {
-                chunkId = "chunk:unrelated",
-                chunkFamily = "gap",
-                chunkType = "gap",
-                supportingIds = new[] { "unrelated" },
-                retrievalHints = Array.Empty<object>()
-            }) + "\n");
+            EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(index, corpus, Format: "jsonl")).GetAwaiter().GetResult();
 
             var output = Path.Combine(set, "agent-evidence-handoff.json");
             var lines = WebFormsAgentEvidenceHandoff.WriteSet(
@@ -56,9 +41,8 @@ public sealed class WebFormsAgentEvidenceHandoffTests
             Assert.Equal("validated", result.GetProperty("evidenceStore").GetProperty("availability").GetString());
             Assert.Equal("validated", result.GetProperty("evidenceCorpus").GetProperty("availability").GetString());
             var recommended = result.GetProperty("cases")[0].GetProperty("recommendedChunks");
-            Assert.Single(recommended.EnumerateArray());
-            Assert.Equal("chunk:matching-one", recommended[0].GetProperty("chunkId").GetString());
-            Assert.Equal("chunks/webforms-modernization/chunk-matching-one.md", recommended[0].GetProperty("locator").GetString());
+            Assert.NotEmpty(recommended.EnumerateArray());
+            Assert.All(recommended.EnumerateArray(), item => Assert.StartsWith("chunks.jsonl#line=", item.GetProperty("locator").GetString()));
             Assert.Contains("index.sqlite", result.GetProperty("evidenceStore").GetProperty("relativeLocator").GetString());
         });
     }
@@ -101,6 +85,173 @@ public sealed class WebFormsAgentEvidenceHandoffTests
                 ]
             };
             Assert.Throws<InvalidDataException>(() => WebFormsAgentEvidenceHandoff.WriteCase(Path.Combine(root, "invalid.json"), invalidLimit));
+
+            var invalidSpan = handoff.RetrievalHints.First(hint => hint.RecipeId == "facts-by-file-span");
+            var invalidStartLine = handoff with
+            {
+                RetrievalHints =
+                [
+                    invalidSpan with
+                    {
+                        Parameters = invalidSpan.Parameters.ToDictionary(
+                            pair => pair.Key,
+                            pair => pair.Key == "start_line" ? "not-a-line" : pair.Value,
+                            StringComparer.Ordinal)
+                    }
+                ]
+            };
+            Assert.Throws<InvalidDataException>(() => WebFormsAgentEvidenceHandoff.WriteCase(Path.Combine(root, "invalid-span.json"), invalidStartLine));
+        });
+    }
+
+    [Fact]
+    public void CaseHandoffRejectsEvidenceWithoutDocumentedRuleOrTier()
+    {
+        WithFixture((root, _, handoff) =>
+        {
+            var witness = handoff.Evidence[0];
+            Assert.Throws<InvalidDataException>(() => WebFormsAgentEvidenceHandoff.WriteCase(
+                Path.Combine(root, "missing-rule.json"),
+                handoff with { Evidence = [witness with { RuleId = "rule-unavailable" }] }));
+            Assert.Throws<InvalidDataException>(() => WebFormsAgentEvidenceHandoff.WriteCase(
+                Path.Combine(root, "invalid-tier.json"),
+                handoff with { Evidence = [witness with { EvidenceTier = "Tier5Maybe" }] }));
+            foreach (var tier in new[]
+                     {
+                         EvidenceTiers.Tier1Semantic,
+                         EvidenceTiers.Tier2Structural,
+                         EvidenceTiers.Tier3SyntaxOrTextual,
+                         EvidenceTiers.Tier4Unknown
+                     })
+            {
+                WebFormsAgentEvidenceHandoff.WriteCase(
+                    Path.Combine(root, $"valid-{tier}.json"),
+                    handoff with { Evidence = [witness with { EvidenceTier = tier }] });
+            }
+        });
+    }
+
+    [Fact]
+    public void SetHandoffRejectsTamperedCorpusWithoutPublishing()
+    {
+        WithFixture((root, inspection, handoff) =>
+        {
+            var set = PrepareSet(root, inspection, handoff);
+            var index = Path.Combine(root, "index.sqlite");
+            CreateIndex(index, "scan-one", CommitSha);
+            var corpus = Path.Combine(root, "docs");
+            EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(index, corpus, Format: "jsonl")).GetAwaiter().GetResult();
+            File.AppendAllText(Path.Combine(corpus, "chunks.jsonl"), "{}\n");
+            var output = Path.Combine(set, "agent-evidence-handoff.json");
+
+            var error = Assert.Throws<InvalidDataException>(() => WebFormsAgentEvidenceHandoff.WriteSet(
+                Path.Combine(set, "inspection.snapshot.json"), set, output, index, corpus));
+
+            Assert.Equal("AgentHandoffCorpusIntegrityMismatch", error.Message);
+            Assert.False(File.Exists(output));
+        });
+    }
+
+    [Fact]
+    public void SetHandoffRejectsCrossProductCorpusProvenance()
+    {
+        WithFixture((root, inspection, handoff) =>
+        {
+            var set = PrepareSet(root, inspection, handoff);
+            var index = Path.Combine(root, "index.sqlite");
+            CreateIndex(index, "scan-one", CommitSha);
+            var corpus = Path.Combine(root, "docs");
+            EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(index, corpus, Format: "jsonl")).GetAwaiter().GetResult();
+            RewriteManifest(corpus, manifest =>
+            {
+                var refs = manifest["inputs"]![0]!["sourceRefs"]!.AsArray();
+                var first = refs[0]!.DeepClone().AsObject();
+                var second = refs[0]!.DeepClone().AsObject();
+                first["commitSha"] = "2222222222222222222222222222222222222222";
+                second["scanId"] = "scan-two";
+                refs.Clear();
+                refs.Add(first);
+                refs.Add(second);
+            });
+            var output = Path.Combine(set, "agent-evidence-handoff.json");
+
+            var error = Assert.Throws<InvalidDataException>(() => WebFormsAgentEvidenceHandoff.WriteSet(
+                Path.Combine(set, "inspection.snapshot.json"), set, output, index, corpus));
+
+            Assert.Equal("AgentHandoffCorpusProvenanceMismatch", error.Message);
+            Assert.False(File.Exists(output));
+        });
+    }
+
+    [Fact]
+    public void SetHandoffRejectsAlteredRecipeCatalogEvenWithUpdatedManifestDigest()
+    {
+        WithFixture((root, inspection, handoff) =>
+        {
+            var set = PrepareSet(root, inspection, handoff);
+            var index = Path.Combine(root, "index.sqlite");
+            CreateIndex(index, "scan-one", CommitSha);
+            var corpus = Path.Combine(root, "docs");
+            EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(index, corpus, Format: "jsonl")).GetAwaiter().GetResult();
+            var recipesPath = Path.Combine(corpus, "query-recipes.json");
+            var recipes = JsonNode.Parse(File.ReadAllText(recipesPath))!.AsObject();
+            recipes["recipes"]![0]!["title"] = "altered title";
+            File.WriteAllText(recipesPath, SerializeNode(recipes), new UTF8Encoding(false));
+            RewriteManifest(corpus, manifest => UpdateOutputDigest(manifest, corpus, "query-recipes.json"));
+            var output = Path.Combine(set, "agent-evidence-handoff.json");
+
+            var error = Assert.Throws<InvalidDataException>(() => WebFormsAgentEvidenceHandoff.WriteSet(
+                Path.Combine(set, "inspection.snapshot.json"), set, output, index, corpus));
+
+            Assert.Equal("AgentHandoffRecipeCatalogMismatch", error.Message);
+            Assert.False(File.Exists(output));
+        });
+    }
+
+    [Fact]
+    public void SetHandoffRejectsMalformedChunkEvenWithUpdatedManifestDigest()
+    {
+        WithFixture((root, inspection, handoff) =>
+        {
+            var set = PrepareSet(root, inspection, handoff);
+            var index = Path.Combine(root, "index.sqlite");
+            CreateIndex(index, "scan-one", CommitSha);
+            var corpus = Path.Combine(root, "docs");
+            EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(index, corpus, Format: "jsonl")).GetAwaiter().GetResult();
+            File.WriteAllText(Path.Combine(corpus, "chunks.jsonl"), "{\"schemaVersion\":\"tracemap-evidence-docs.v1\"}\n", new UTF8Encoding(false));
+            RewriteManifest(corpus, manifest => UpdateOutputDigest(manifest, corpus, "chunks.jsonl"));
+            var output = Path.Combine(set, "agent-evidence-handoff.json");
+
+            var error = Assert.Throws<InvalidDataException>(() => WebFormsAgentEvidenceHandoff.WriteSet(
+                Path.Combine(set, "inspection.snapshot.json"), set, output, index, corpus));
+
+            Assert.Equal("AgentHandoffCorpusSchemaMismatch", error.Message);
+            Assert.False(File.Exists(output));
+        });
+    }
+
+    [Fact]
+    public void SetHandoffRejectsNoncanonicalIndexWithStableCode()
+    {
+        WithFixture((root, inspection, handoff) =>
+        {
+            var set = PrepareSet(root, inspection, handoff);
+            var index = Path.Combine(root, "index.sqlite");
+            CreateIndex(index, "scan-one", CommitSha);
+            using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = index }.ToString()))
+            {
+                connection.Open();
+                using var command = connection.CreateCommand();
+                command.CommandText = "drop table facts;";
+                command.ExecuteNonQuery();
+            }
+            var output = Path.Combine(set, "agent-evidence-handoff.json");
+
+            var error = Assert.Throws<InvalidDataException>(() => WebFormsAgentEvidenceHandoff.WriteSet(
+                Path.Combine(set, "inspection.snapshot.json"), set, output, index));
+
+            Assert.Equal("AgentHandoffIndexInvalid", error.Message);
+            Assert.False(File.Exists(output));
         });
     }
 
@@ -134,7 +285,7 @@ public sealed class WebFormsAgentEvidenceHandoffTests
         {
             schemaVersion = "webforms-batch-inspection.v1",
             scanId = "scan-one",
-            commitSha = "commit-one",
+                    commitSha = CommitSha,
             cases = new[]
             {
                 new
@@ -184,26 +335,79 @@ public sealed class WebFormsAgentEvidenceHandoffTests
         };
     }
 
+    private static string PrepareSet(string root, string inspection, WebFormsAgentCaseHandoff handoff)
+    {
+        var set = Path.Combine(root, "set");
+        Directory.CreateDirectory(set);
+        File.Copy(inspection, Path.Combine(set, "inspection.snapshot.json"));
+        WebFormsAgentEvidenceHandoff.WriteCase(Path.Combine(set, "case-001.handoff.json"), handoff);
+        File.WriteAllText(Path.Combine(set, "case-001.private.html"), "private");
+        return set;
+    }
+
+    private static void RewriteManifest(string corpus, Action<JsonObject> mutate)
+    {
+        var path = Path.Combine(corpus, "manifest.json");
+        var manifest = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
+        mutate(manifest);
+        var typed = JsonSerializer.Deserialize<EvidenceDocsManifest>(manifest.ToJsonString(), TestJsonOptions)!;
+        File.WriteAllText(path, EvidenceDocsExporter.RenderSelfConsistentManifest(typed), new UTF8Encoding(false));
+    }
+
+    private static void UpdateOutputDigest(JsonObject manifest, string corpus, string relativePath)
+    {
+        var output = manifest["outputs"]!.AsArray().Select(value => value!.AsObject())
+            .Single(value => value["path"]!.GetValue<string>() == relativePath);
+        var path = Path.Combine(corpus, relativePath);
+        var bytes = File.ReadAllBytes(path);
+        output["sizeBytes"] = bytes.LongLength;
+        output["lineCount"] = bytes.Count(value => value == (byte)'\n');
+        output["sha256"] = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+    }
+
+    private static readonly JsonSerializerOptions TestJsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        PropertyNameCaseInsensitive = true
+    };
+
+    private static string SerializeNode(JsonNode node) => Normalize(node.ToJsonString(TestJsonOptions));
+
+    private static string Normalize(string value) => value.Replace("\r\n", "\n", StringComparison.Ordinal)
+        .Replace("\r", "\n", StringComparison.Ordinal).TrimEnd('\n') + "\n";
+
     private static void CreateIndex(string path, string scanId, string commitSha)
     {
-        using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path }.ToString());
-        connection.Open();
-        using var command = connection.CreateCommand();
-        command.CommandText = """
-            create table scan_manifest (
-              scan_id text primary key,
-              repo text not null,
-              commit_sha text not null,
-              scanner_version text not null,
-              scanned_at text not null,
-              analysis_level text not null,
-              build_status text not null,
-              manifest_json text not null
-            );
-            insert into scan_manifest values ($scan, 'private-repository', $commit, 'test-version', '2026-09-11T00:00:00Z', 'semantic', 'Succeeded', '{}');
-            """;
-        command.Parameters.AddWithValue("$scan", scanId);
-        command.Parameters.AddWithValue("$commit", commitSha);
-        command.ExecuteNonQuery();
+        var manifest = new ScanManifest(
+            scanId,
+            "private-repository",
+            null,
+            "test",
+            commitSha,
+            "test-version",
+            DateTimeOffset.Parse("2026-09-11T00:00:00Z"),
+            "Level1SemanticAnalysis",
+            "Succeeded",
+            [],
+            [],
+            [],
+            []);
+        var fact = new CodeFact(
+            "fact-handler",
+            scanId,
+            manifest.RepoName,
+            commitSha,
+            null,
+            FactTypes.MethodInvoked,
+            "csharp.semantic.methodinvocation.v1",
+            EvidenceTiers.Tier1Semantic,
+            "Private.Page.Handler()",
+            "Private.Page.LoadData()",
+            null,
+            new EvidenceSpan("source/Page.aspx.cs", 10, 10, null, "test", "1"),
+            new Dictionary<string, string>(StringComparer.Ordinal) { ["surfaceIdentity"] = "surface-one" });
+        SqliteIndexWriter.Write(path, manifest, [fact]);
     }
 }

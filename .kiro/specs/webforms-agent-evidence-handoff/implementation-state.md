@@ -13,6 +13,12 @@ Pull request: #735
 - Closed query-recipe reuse with bounded known parameters and expected result fields.
 - Optional read-only `index.sqlite` scan/commit validation.
 - Optional docs-export manifest/catalog validation and deterministic matching chunk selection.
+- Review remediation now reuses canonical single-index schema/snapshot validation,
+  verifies docs-export manifest and consumed-file digests, requires a paired
+  scan/commit source reference, validates complete chunk and closed retrieval-hint
+  contracts, and falls back to JSONL line locators when Markdown was not emitted.
+- Evidence references fail closed without a documented rule ID and accept only
+  the four shared TraceMap evidence tiers.
 - Explicit application-database evidence questions without database execution instructions.
 - Anonymous artifacts remain disconnected from private handoffs.
 
@@ -24,6 +30,10 @@ Pull request: #735
 - Full .NET solution: 1,815 passed, 0 failed, with the pre-existing nullable
   warning in `PropertyMappingTests.cs`.
 - `git diff --check` passed.
+- Review-remediation focused validation: 49 evidence-docs, index-reader, and
+  Web Forms handoff tests passed; adversarial coverage includes corrupted
+  outputs, cross-source provenance, altered recipe catalogs, malformed chunks,
+  invalid evidence metadata, and noncanonical indexes.
 
 ## Boundaries
 

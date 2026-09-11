@@ -8,6 +8,10 @@ public sealed record ReverseImpactArtifact(
     ScanManifest Manifest,
     IReadOnlyList<CodeFact> Facts);
 
+public sealed record ReverseImpactArtifactSummary(
+    ScanManifest Manifest,
+    int FactCount);
+
 public sealed class ReverseImpactArtifactException : Exception
 {
     public ReverseImpactArtifactException(string errorCode, string message, Exception? innerException = null)
@@ -62,6 +66,61 @@ public static class ReverseImpactArtifactReader
         new("properties_json", "TEXT", true, 0)
     ];
 
+    /// <summary>
+    /// Validates one standard TraceMap index without materializing its facts.
+    /// </summary>
+    public static async Task<ReverseImpactArtifactSummary> ReadSummaryAsync(
+        string indexPath,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(indexPath) || !File.Exists(indexPath))
+        {
+            throw Error("ReverseImpactArtifactUnavailable", "The requested TraceMap index is unavailable.");
+        }
+
+        var fullPath = Path.GetFullPath(indexPath);
+        var connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = fullPath,
+            Mode = SqliteOpenMode.ReadOnly,
+            Cache = SqliteCacheMode.Private
+        }.ToString();
+
+        try
+        {
+            await using var connection = new SqliteConnection(connectionString);
+            await connection.OpenAsync(cancellationToken);
+            await SetQueryOnlyAsync(connection, cancellationToken);
+            using var transaction = connection.BeginTransaction(deferred: true);
+            await ValidateStandardIndexAsync(connection, transaction, cancellationToken);
+            var manifest = await ReadManifestAsync(connection, transaction, cancellationToken);
+            var factCount = await CountFactsAsync(connection, transaction, cancellationToken);
+            if (factCount == 0)
+            {
+                throw Error("ReverseImpactArtifactEmpty", "The TraceMap index contains no facts.");
+            }
+
+            await ValidateFactSnapshotAsync(connection, transaction, manifest, cancellationToken);
+            return new ReverseImpactArtifactSummary(manifest, factCount);
+        }
+        catch (ReverseImpactArtifactException)
+        {
+            throw;
+        }
+        catch (JsonException exception)
+        {
+            throw Error("ReverseImpactArtifactJsonInvalid", "The TraceMap index contains invalid JSON metadata.", exception);
+        }
+        catch (SqliteException exception)
+        {
+            throw Error("ReverseImpactArtifactUnreadable", "The TraceMap index could not be read as a supported SQLite artifact.", exception);
+        }
+        catch (Exception exception) when (exception is InvalidCastException or FormatException or OverflowException)
+        {
+            throw Error("ReverseImpactArtifactSchemaUnsupported", "The TraceMap index contains values that do not match the standard scan schema.", exception);
+        }
+    }
+
     public static async Task<ReverseImpactArtifact> ReadAsync(
         string indexPath,
         int maxFacts = DefaultMaxFacts,
@@ -94,17 +153,7 @@ public static class ReverseImpactArtifactReader
             await SetQueryOnlyAsync(connection, cancellationToken);
             using var transaction = connection.BeginTransaction(deferred: true);
 
-            if (!await TableExistsAsync(connection, transaction, "scan_manifest", cancellationToken)
-                || !await TableExistsAsync(connection, transaction, "facts", cancellationToken)
-                || await TableExistsAsync(connection, transaction, "index_sources", cancellationToken))
-            {
-                throw Error(
-                    "ReverseImpactArtifactSchemaUnsupported",
-                    "Reverse impact requires one standard TraceMap scan index, not a combined or unrelated SQLite artifact.");
-            }
-
-            await ValidateTableSchemaAsync(connection, transaction, "scan_manifest", ManifestColumns, cancellationToken);
-            await ValidateTableSchemaAsync(connection, transaction, "facts", FactColumns, cancellationToken);
+            await ValidateStandardIndexAsync(connection, transaction, cancellationToken);
 
             var manifest = await ReadManifestAsync(connection, transaction, cancellationToken);
             var factCount = await CountFactsAsync(connection, transaction, cancellationToken);
@@ -141,6 +190,42 @@ public static class ReverseImpactArtifactReader
                 "ReverseImpactArtifactSchemaUnsupported",
                 "The TraceMap index contains values that do not match the standard scan schema.",
                 exception);
+        }
+    }
+
+    private static async Task ValidateStandardIndexAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        if (!await TableExistsAsync(connection, transaction, "scan_manifest", cancellationToken)
+            || !await TableExistsAsync(connection, transaction, "facts", cancellationToken)
+            || await TableExistsAsync(connection, transaction, "index_sources", cancellationToken))
+        {
+            throw Error(
+                "ReverseImpactArtifactSchemaUnsupported",
+                "Reverse impact requires one standard TraceMap scan index, not a combined or unrelated SQLite artifact.");
+        }
+
+        await ValidateTableSchemaAsync(connection, transaction, "scan_manifest", ManifestColumns, cancellationToken);
+        await ValidateTableSchemaAsync(connection, transaction, "facts", FactColumns, cancellationToken);
+    }
+
+    private static async Task ValidateFactSnapshotAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        ScanManifest manifest,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = "select count(*) from facts where scan_id <> $scan or repo <> $repo or commit_sha <> $commit;";
+        command.Parameters.AddWithValue("$scan", manifest.ScanId);
+        command.Parameters.AddWithValue("$repo", manifest.RepoName);
+        command.Parameters.AddWithValue("$commit", manifest.CommitSha);
+        if (Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken)) != 0)
+        {
+            throw Error("ReverseImpactArtifactMixedSnapshot", "A fact does not belong to the index scan manifest's repository and commit snapshot.");
         }
     }
 
