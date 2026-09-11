@@ -7,6 +7,7 @@ import { scan } from "../scan/ScanEngine";
 
 export const base44PacketSchemaVersion = "tracemap.base44.static-evidence.v1";
 export const base44CoverageGapSchemaVersion = "tracemap.base44.coverage-gap.v1";
+export const base44ArtifactProfile = "tracemap.base44.deterministic-artifacts.v1";
 
 export const base44CoverageGapCategories = [
   "entity",
@@ -51,7 +52,7 @@ export interface Base44EvidencePacket {
     acceptedTreeSha256: string;
     scanRootRelativePath: string;
   };
-  scanner: { version: string; scanId: string };
+  scanner: { version: string; scanId: string; artifactProfile: typeof base44ArtifactProfile };
   coverage: {
     label: string;
     analysisLevel: string;
@@ -122,7 +123,11 @@ export async function buildBase44Evidence(options: Base44EvidenceOptions): Promi
       acceptedTreeSha256: options.acceptedTreeSha256.toLowerCase(),
       scanRootRelativePath: result.manifest.scanRootRelativePath ?? "."
     },
-    scanner: { version: result.manifest.scannerVersion, scanId: result.manifest.scanId },
+    scanner: {
+      version: result.manifest.scannerVersion,
+      scanId: result.manifest.scanId,
+      artifactProfile: base44ArtifactProfile
+    },
     coverage: {
       label: options.coverageLabel,
       analysisLevel: result.manifest.analysisLevel,
