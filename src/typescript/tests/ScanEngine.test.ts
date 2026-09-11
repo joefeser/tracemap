@@ -249,7 +249,7 @@ describe("ScanEngine", () => {
     }));
     expect(facts).toContainEqual(expect.objectContaining({
       factType: FactTypes.AnalysisGap,
-      properties: expect.objectContaining({ category: "lockfile-digest-unavailable" })
+      properties: expect.objectContaining({ category: "LockfileDigestUnavailable" })
     }));
     expect(facts).toContainEqual(expect.objectContaining({
       factType: FactTypes.PackageReferenced,

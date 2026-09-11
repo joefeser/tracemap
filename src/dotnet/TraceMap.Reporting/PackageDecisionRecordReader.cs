@@ -87,9 +87,9 @@ public static partial class PackageDecisionRecordReader
             if (root.ValueKind != JsonValueKind.Object)
                 return Failure("DecisionInputSchemaUnsupported", "The package decision envelope is not an object.");
 
+            if (HasDuplicateProperties(root))
+                return Failure("DecisionInputSchemaUnsupported", "The package decision input contains duplicate properties.");
             var rootPropertyNames = root.EnumerateObject().Select(property => property.Name).ToArray();
-            if (rootPropertyNames.Distinct(StringComparer.Ordinal).Count() != rootPropertyNames.Length)
-                return Failure("DecisionInputSchemaUnsupported", "The package decision envelope contains duplicate properties.");
             var rootProperties = rootPropertyNames.ToHashSet(StringComparer.Ordinal);
             if (!rootProperties.SetEquals(["version", "records"]))
                 return Failure("DecisionInputSchemaUnsupported", "The package decision envelope has unsupported properties.");
@@ -245,6 +245,23 @@ public static partial class PackageDecisionRecordReader
         {
             return Invalid("DecisionInputMalformed", "A package decision record did not satisfy the strict v1 shape.", ordinal);
         }
+    }
+
+    private static bool HasDuplicateProperties(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Array)
+            return element.EnumerateArray().Any(HasDuplicateProperties);
+        if (element.ValueKind != JsonValueKind.Object)
+            return false;
+
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var property in element.EnumerateObject())
+        {
+            if (!names.Add(property.Name) || HasDuplicateProperties(property.Value))
+                return true;
+        }
+
+        return false;
     }
 
     private static PackageDecisionRecordAdmission Failure(string classification, string message) =>
