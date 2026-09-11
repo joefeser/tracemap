@@ -119,7 +119,10 @@ public sealed record WebFormsModernizationEventChain(
     IReadOnlyList<string> EvidenceTiers,
     IReadOnlyList<string> CoverageLabels,
     IReadOnlyList<string> Limitations,
-    WebFormsModernizationTraversalObservation? TraversalObservation = null);
+    WebFormsModernizationTraversalObservation? TraversalObservation = null)
+{
+    public string? HandlerSymbol { get; init; }
+}
 
 public sealed record WebFormsModernizationTraversalObservation(
     string RuleId,
@@ -182,7 +185,10 @@ public sealed record WebFormsModernizationDownstreamBoundary(
     IReadOnlyList<string> RuleIds,
     IReadOnlyList<string> EvidenceTiers,
     IReadOnlyList<string> CoverageLabels,
-    IReadOnlyList<string> Limitations);
+    IReadOnlyList<string> Limitations)
+{
+    public bool TerminalEvidenceIsFact { get; init; }
+}
 
 public sealed record WebFormsModernizationIdentityState(
     string IdentityStateId,
@@ -642,7 +648,10 @@ public static class WebFormsModernizationPacketReporter
                         : terminalKind is null && handler is not null
                         ? ["No backend or terminal evidence was composed for this handler in the bounded static snapshot; this is not proof of absence."]
                         : ["The chain is static evidence and does not prove runtime event firing or terminal execution."],
-                    traversalObservation);
+                    traversalObservation)
+                {
+                    HandlerSymbol = handler?.Properties.GetValueOrDefault("handlerSymbol")
+                };
                 chains.Add(chain);
                 if (terminalKind is not null)
                 {
@@ -693,7 +702,10 @@ public static class WebFormsModernizationPacketReporter
                             boundaryRuleIds,
                             boundaryEvidenceTiers,
                             boundaryCoverageLabels,
-                            ["The boundary is a possible static downstream path; it does not prove runtime reachability, execution, successful interaction, configuration resolution, transaction outcome, or production use."]);
+                            ["The boundary is a possible static downstream path; it does not prove runtime reachability, execution, successful interaction, configuration resolution, transaction outcome, or production use."])
+                        {
+                            TerminalEvidenceIsFact = terminalNode?.CombinedFactId is not null || terminalNode is null && flowFact is not null
+                        };
                         boundaries.Add(boundary);
                         if (category == "configuration" && IsNeedsReviewClassification(chain.Classification))
                             AddGeneratedGap(gaps, options.MaxGaps, snapshot, "ConfigurationBoundaryNeedsReview", "downstream-boundary", boundary.BoundaryId, boundary.SupportingFactIds);
@@ -822,7 +834,29 @@ public static class WebFormsModernizationPacketReporter
             snapshot.CommitSha,
             snapshot.AnalysisLevel,
             snapshot.BuildStatus);
-        var packetId = HashId("packet", [SchemaVersion, source.SourceId, snapshot.ScanId, snapshot.CommitSha]);
+        var packetIdentity = new List<string>
+        {
+            SchemaVersion,
+            source.SourceId,
+            snapshot.ScanId,
+            snapshot.CommitSha,
+            coverage,
+            $"truncated:{truncated.ToString().ToLowerInvariant()}"
+        };
+        packetIdentity.AddRange(projects.Select(project => $"project:{project.ProjectId}:{project.SurfaceCount}"));
+        packetIdentity.AddRange(surfaces.Select(surface => $"surface:{surface.SurfaceId}"));
+        packetIdentity.AddRange(chains.OrderBy(chain => chain.ChainId, StringComparer.Ordinal).Select(chain => $"chain:{chain.ChainId}"));
+        packetIdentity.AddRange(boundaries.OrderBy(boundary => boundary.BoundaryId, StringComparer.Ordinal).Select(boundary => $"boundary:{boundary.BoundaryId}"));
+        packetIdentity.AddRange(identityState.Select(state => $"identity:{state.IdentityStateId}"));
+        packetIdentity.AddRange(batchDataMovement.Select(item => $"batch:{item.BatchDataMovementId}"));
+        packetIdentity.AddRange(candidates.Select(candidate => $"candidate:{candidate.CandidateId}"));
+        packetIdentity.AddRange(uniqueGaps.Select(gap => $"gap:{gap.GapId}"));
+        packetIdentity.AddRange(surfaceSelection?.Items
+            .OrderBy(item => item.RequestId, StringComparer.Ordinal)
+            .ThenBy(item => item.Alias, StringComparer.Ordinal)
+            .Select(item => $"selection:{item.Alias}:{item.RequestId}:{item.Status}:{string.Join(',', item.SurfaceIds.OrderBy(id => id, StringComparer.Ordinal))}")
+            ?? []);
+        var packetId = HashId("packet", packetIdentity);
         return new(
             SchemaVersion,
             packetId,
