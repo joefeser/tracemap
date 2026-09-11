@@ -63,6 +63,17 @@ public sealed class WebFormsAgentEvidenceHandoffTests
     }
 
     [Fact]
+    public void CaseHandoffUsesCorpusCompatibleLimitsForGenericHints()
+    {
+        WithFixture((_, _, handoff) =>
+        {
+            Assert.All(handoff.RetrievalHints.Where(hint => hint.RecipeId == "fact-by-id"), hint => Assert.Equal("1", hint.Parameters["limit"]));
+            Assert.All(handoff.RetrievalHints.Where(hint => hint.RecipeId == "facts-by-file-span"), hint => Assert.Equal("100", hint.Parameters["limit"]));
+            Assert.All(handoff.RetrievalHints.Where(hint => hint.RecipeId == "calls-from-handler"), hint => Assert.Equal("250", hint.Parameters["limit"]));
+        });
+    }
+
+    [Fact]
     public void CaseHandoffRejectsUnknownRecipeAndInvalidParameters()
     {
         WithFixture((root, _, handoff) =>
@@ -297,6 +308,64 @@ public sealed class WebFormsAgentEvidenceHandoffTests
                 Path.Combine(set, "inspection.snapshot.json"), set, output));
 
             Assert.Equal("AgentHandoffCaseInspectionMismatch", error.Message);
+            Assert.False(File.Exists(output));
+        });
+    }
+
+    [Fact]
+    public void SetHandoffAcceptsASelectedSubsetOfInspectionCases()
+    {
+        WithFixture((root, inspection, _) =>
+        {
+            var inspectionJson = JsonNode.Parse(File.ReadAllText(inspection))!.AsObject();
+            var cases = inspectionJson["cases"]!.AsArray();
+            var second = cases[0]!.DeepClone().AsObject();
+            second["caseId"] = "case-002";
+            second["handler"] = "Private.Page.OtherHandler()";
+            cases.Add(second);
+            File.WriteAllText(inspection, SerializeNode(inspectionJson), new UTF8Encoding(false));
+
+            using var document = JsonDocument.Parse(File.ReadAllText(inspection));
+            var selected = WebFormsAgentEvidenceHandoff.BuildCase(
+                document.RootElement,
+                document.RootElement.GetProperty("cases")[0],
+                "case-001",
+                "case-001.private.html",
+                "inspection.snapshot.json",
+                WebFormsAgentEvidenceHandoff.HashFile(inspection),
+                "agent-evidence-handoff.json");
+            var set = PrepareSet(root, inspection, selected);
+            var output = Path.Combine(set, "agent-evidence-handoff.json");
+
+            WebFormsAgentEvidenceHandoff.WriteSet(
+                Path.Combine(set, "inspection.snapshot.json"), set, output);
+
+            using var result = JsonDocument.Parse(File.ReadAllText(output));
+            Assert.Equal("case-001", result.RootElement.GetProperty("cases").EnumerateArray().Single().GetProperty("caseId").GetString());
+        });
+    }
+
+    [Fact]
+    public void SetHandoffRejectsIndexWithMalformedFactJson()
+    {
+        WithFixture((root, inspection, handoff) =>
+        {
+            var set = PrepareSet(root, inspection, handoff);
+            var index = Path.Combine(root, "index.sqlite");
+            CreateIndex(index, "scan-one", CommitSha);
+            using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = index }.ToString()))
+            {
+                connection.Open();
+                using var command = connection.CreateCommand();
+                command.CommandText = "update facts set properties_json = '{';";
+                command.ExecuteNonQuery();
+            }
+            var output = Path.Combine(set, "agent-evidence-handoff.json");
+
+            var error = Assert.Throws<InvalidDataException>(() => WebFormsAgentEvidenceHandoff.WriteSet(
+                Path.Combine(set, "inspection.snapshot.json"), set, output, index));
+
+            Assert.Equal("AgentHandoffIndexInvalid", error.Message);
             Assert.False(File.Exists(output));
         });
     }

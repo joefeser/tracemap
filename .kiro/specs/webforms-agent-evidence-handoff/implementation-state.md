@@ -19,6 +19,9 @@ Pull request: #735
   contracts, and falls back to JSONL line locators when Markdown was not emitted.
 - Evidence references fail closed without a documented rule ID and accept only
   the four shared TraceMap evidence tiers.
+- Review-set handoffs support a selected subset of inspection cases, validate
+  fact JSON used by read-only recipes, and use corpus-compatible per-recipe
+  execution limits for exact retrieval-hint matching.
 - Explicit application-database evidence questions without database execution instructions.
 - Anonymous artifacts remain disconnected from private handoffs.
 
@@ -30,12 +33,13 @@ Pull request: #735
 - Full .NET solution: 1,815 passed, 0 failed, with the pre-existing nullable
   warning in `PropertyMappingTests.cs`.
 - `git diff --check` passed.
-- Review-remediation focused validation: 51 evidence-docs, index-reader, and
+- Review-remediation focused validation: 54 evidence-docs, index-reader, and
   Web Forms handoff tests passed; adversarial coverage includes corrupted
   outputs, cross-source provenance, altered recipe catalogs, malformed chunks,
   invalid evidence metadata, noncanonical indexes, and missing recipe query
-  tables, plus edited case handoffs that diverge from their inspection.
-  Full post-review solution validation passed 1,823 tests.
+  tables, edited case handoffs that diverge from their inspection, selected
+  case subsets, malformed fact JSON, and corpus-compatible retrieval limits.
+  Full post-review solution validation passed 1,826 tests.
 
 ## Boundaries
 
