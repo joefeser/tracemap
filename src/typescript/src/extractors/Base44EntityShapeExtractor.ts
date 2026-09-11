@@ -71,6 +71,8 @@ interface ShapeContext {
   declarations: Map<string, ts.VariableDeclaration[]>;
   computedQueryFields: Record<string, string[]>;
   arrayIntrinsicsPristine: boolean;
+  workBudget: { remaining: number };
+  analysisCache: Map<string, ShapeAnalysis>;
 }
 
 interface ParameterBinding {
@@ -109,6 +111,7 @@ const mutationPayloadIndex = new Map<string, number>([
   ["update", 1],
   ["bulkCreate", 0]
 ]);
+const maxShapeCollectionItems = 512;
 
 export function extractEntityShapeFacts(input: EntityShapeInput): CodeFact[] {
   const declarations = collectVariableDeclarations(input.source);
@@ -119,7 +122,9 @@ export function extractEntityShapeFacts(input: EntityShapeInput): CodeFact[] {
     callPosition: input.node.getStart(input.source),
     declarations,
     computedQueryFields: input.computedQueryFields ?? {},
-    arrayIntrinsicsPristine: input.arrayIntrinsicsPristine
+    arrayIntrinsicsPristine: input.arrayIntrinsicsPristine,
+    workBudget: { remaining: 128 },
+    analysisCache: new Map()
   };
   const payloadIndex = mutationPayloadIndex.get(input.operationName);
   if (payloadIndex !== undefined) {
@@ -390,6 +395,9 @@ function addSelectEvidence(expression: ts.Expression | undefined, fields: ShapeF
 }
 
 function analyzeExpression(expression: ts.Expression, context: ShapeContext, visitedBindings: Set<string>, presence: Presence): ShapeAnalysis {
+  if (--context.workBudget.remaining < 0) {
+    return unresolvedAnalysis("complexity-limited", "payload-complexity-limit");
+  }
   const unwrapped = unwrapExpression(expression);
   if (ts.isObjectLiteralExpression(unwrapped)) return analyzeObjectLiteral(unwrapped, context, visitedBindings, presence);
   if (ts.isArrayLiteralExpression(unwrapped)) return analyzeArrayLiteral(unwrapped, context, visitedBindings, presence);
@@ -413,21 +421,26 @@ function analyzeExpression(expression: ts.Expression, context: ShapeContext, vis
 function analyzeObjectLiteral(node: ts.ObjectLiteralExpression, context: ShapeContext, visitedBindings: Set<string>, inheritedPresence: Presence): ShapeAnalysis {
   const result = emptyAnalysis("object-literal", ["object"]);
   for (const property of node.properties) {
+    if (context.workBudget.remaining <= 0) {
+      result.gaps.push("payload-complexity-limit");
+      break;
+    }
     if (ts.isSpreadAssignment(property)) {
       const spread = analyzeExpression(property.expression, context, new Set(visitedBindings), inheritedPresence === "conditional" ? "conditional" : "spread-derived");
       const spreadOrigin = expressionOrigin(property.expression);
-      result.spreads.push({
+      appendBounded(result.spreads, [{
         expressionType: expressionType(property.expression),
         origin: spreadOrigin,
         resolution: spread.gaps.length === 0 ? "resolved" : spread.fields.length > 0 ? "partial" : "unresolved",
         fieldNames: unique(spread.fields.map((field) => field.name).filter((name) => name !== "<dynamic>"))
-      });
-      result.candidateBindings.push(spreadOrigin, ...spread.candidateBindings);
-      result.gaps.push(...spread.gaps.map((gap) => `spread:${gap}`));
-      for (const field of spread.fields) {
-        result.fields.push({ ...field, presence: inheritedPresence === "conditional" || field.presence === "conditional" ? "conditional" : "spread-derived" });
-      }
-      result.spreads.push(...spread.spreads);
+      }], result);
+      appendBounded(result.candidateBindings, [spreadOrigin, ...spread.candidateBindings], result);
+      appendBounded(result.gaps, spread.gaps.map((gap) => `spread:${gap}`), result);
+      appendBounded(result.fields, spread.fields.map((field) => ({
+        ...field,
+        presence: inheritedPresence === "conditional" || field.presence === "conditional" ? "conditional" : "spread-derived"
+      })), result);
+      appendBounded(result.spreads, spread.spreads, result);
       continue;
     }
     if (ts.isPropertyAssignment(property)) {
@@ -473,6 +486,9 @@ function analyzeIdentifier(identifier: ts.Identifier, context: ShapeContext, vis
   const candidate = `binding:${bindingName}`;
   if (visitedBindings.has(bindingName)) return unresolvedAnalysis("identifier-reference", "binding-cycle", candidate);
   const referencePosition = identifier.getStart(context.source);
+  const cacheKey = `${referencePosition}:${presence}:${[...visitedBindings].sort().join(",")}`;
+  const cached = context.analysisCache.get(cacheKey);
+  if (cached) return cloneAnalysis(cached);
   const declaration = resolveDeclarationAt(bindingName, identifier, context);
   if (!declaration?.initializer) {
     const parameter = resolveParameterBindingAt(bindingName, identifier);
@@ -506,6 +522,7 @@ function analyzeIdentifier(identifier: ts.Identifier, context: ShapeContext, vis
     result.gaps.push("post-capture-alias-mutation-unresolved");
   }
   result.candidateBindings.push(candidate);
+  context.analysisCache.set(cacheKey, cloneAnalysis(result));
   return result;
 }
 
@@ -1487,6 +1504,10 @@ function analyzeArrayLiteral(node: ts.ArrayLiteralExpression, context: ShapeCont
   const perElement: ShapeAnalysis[] = [];
   let hasUnresolvedSpread = false;
   for (const element of node.elements) {
+    if (context.workBudget.remaining <= 0) {
+      result.gaps.push("payload-complexity-limit");
+      break;
+    }
     if (ts.isSpreadElement(element)) {
       hasUnresolvedSpread = true;
       result.spreads.push({ expressionType: expressionType(element.expression), origin: expressionOrigin(element.expression), resolution: "unresolved", fieldNames: [] });
@@ -1905,13 +1926,34 @@ function unwrapExpression(expression: ts.Expression): ts.Expression {
 }
 
 function mergeAnalysis(target: ShapeAnalysis, source: ShapeAnalysis, originPrefix?: string): void {
-  target.outerKinds.push(...source.outerKinds);
-  target.arrayElementOuterKinds.push(...source.arrayElementOuterKinds);
+  appendBounded(target.outerKinds, source.outerKinds, target);
+  appendBounded(target.arrayElementOuterKinds, source.arrayElementOuterKinds, target);
   target.arrayElementCount += source.arrayElementCount;
-  target.fields.push(...source.fields.map((field) => originPrefix ? { ...field, origin: `${originPrefix}:${field.origin}` } : field));
-  target.spreads.push(...source.spreads);
-  target.candidateBindings.push(...source.candidateBindings);
-  target.gaps.push(...source.gaps);
+  appendBounded(target.fields, source.fields.map((field) => originPrefix ? { ...field, origin: `${originPrefix}:${field.origin}` } : field), target);
+  appendBounded(target.spreads, source.spreads, target);
+  appendBounded(target.candidateBindings, source.candidateBindings, target);
+  appendBounded(target.gaps, source.gaps, target);
+}
+
+function appendBounded<T>(target: T[], values: readonly T[], analysis: ShapeAnalysis): void {
+  const remaining = maxShapeCollectionItems - target.length;
+  if (remaining > 0) target.push(...values.slice(0, remaining));
+  if (values.length > remaining && !analysis.gaps.includes("payload-complexity-limit")) {
+    analysis.gaps.push("payload-complexity-limit");
+  }
+}
+
+function cloneAnalysis(source: ShapeAnalysis): ShapeAnalysis {
+  return {
+    constructionKind: source.constructionKind,
+    outerKinds: [...source.outerKinds],
+    arrayElementOuterKinds: [...source.arrayElementOuterKinds],
+    arrayElementCount: source.arrayElementCount,
+    fields: source.fields.map((field) => ({ ...field })),
+    spreads: source.spreads.map((spread) => ({ ...spread, fieldNames: [...spread.fieldNames] })),
+    candidateBindings: [...source.candidateBindings],
+    gaps: [...source.gaps]
+  };
 }
 
 function emptyAnalysis(constructionKind: string, outerKinds: PayloadOuterKind[] = []): ShapeAnalysis {

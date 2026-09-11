@@ -653,10 +653,10 @@ internal static class LegacyDataEdmxSymbolComposition
         var expectedFileName = baseName + ".Designer.cs";
         return inventory
             .Where(item => item.Kind == "CSharp"
-                && string.Equals(Path.GetDirectoryName(item.RelativePath) ?? string.Empty, directory, StringComparison.Ordinal)
-                && string.Equals(Path.GetFileName(item.RelativePath), expectedFileName, StringComparison.Ordinal))
+                && string.Equals(Path.GetDirectoryName(item.RelativePath) ?? string.Empty, directory, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(Path.GetFileName(item.RelativePath), expectedFileName, StringComparison.OrdinalIgnoreCase))
             .Select(item => item.RelativePath)
-            .ToHashSet(StringComparer.Ordinal);
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
     private static void AddCompositionGap(ScanManifest manifest, List<CodeFact> output, HashSet<string> gapKeys, string path, int line, string classification, string message)

@@ -100,3 +100,6 @@ scripts/smoke-typescript-endpoints.sh
 
 # Restricted-workstation Web Forms page-list settings
 /scripts/Run-FocusedWebFormsPageList.json
+
+# Private Web Forms inspection and review artifacts
+local-inspection-private/

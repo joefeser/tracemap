@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
+using TraceMap.Core;
 
 namespace TraceMap.Reporting;
 
@@ -152,7 +153,7 @@ public static partial class WebFormsRawEvidenceAudit
             JsonSerializer.Serialize(file, new
             {
                 schemaVersion = "webforms-batch-inspection.v1",
-                ruleId = "diagnostic.webforms.raw-exact-call-evidence.v1",
+                ruleId = RuleIds.DiagnosticWebFormsRawExactCallEvidence,
                 privacy = "LOCAL ONLY: private paths and symbols; do not share this file or photographs of its contents.",
                 scanId = scan,
                 commitSha = commit,

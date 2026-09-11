@@ -10,6 +10,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$isWindowsPlatform = [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
 
 if (!$ConfigPath) { $ConfigPath = Join-Path $PSScriptRoot 'Run-FocusedWebFormsPageList.json' }
 if (!$OutputRoot) {
@@ -37,7 +38,7 @@ $reviewArguments = @($dll, '--code-path-review', $InspectionPath, $SourceRoot, $
 if ($IncludeRawSource) { $reviewArguments += '--include-raw-source' }
 & dotnet @reviewArguments
 if ($LASTEXITCODE -ne 0) { throw 'CodePathReviewFailed; no review report is available.' }
-Write-Host "PRIVATE local code-path review: $reviewPath"
+Write-Host "PRIVATE local code-path review: $(Split-Path -Leaf $reviewPath)"
 $shareablePath = $reviewPath -replace '\.private\.html$', '.shareable.html'
-Write-Host "ANONYMOUS shareable review: $shareablePath"
-if ($IsWindows) { Start-Process -FilePath $reviewPath }
+Write-Host "ANONYMOUS shareable review: $(Split-Path -Leaf $shareablePath)"
+if ($isWindowsPlatform) { Start-Process -FilePath $reviewPath }
