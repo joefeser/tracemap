@@ -79,6 +79,9 @@ public static partial class PackageDecisionDeploymentReferenceReader
             if (root.ValueKind != JsonValueKind.Object)
                 return Failure("DecisionInputSchemaUnsupported", "The package deployment reference envelope is not an object.");
 
+            if (HasDuplicateProperties(root))
+                return Failure("DecisionInputSchemaUnsupported", "The package deployment reference input contains duplicate properties.");
+
             if (!root.EnumerateObject().Select(property => property.Name).ToHashSet(StringComparer.Ordinal).SetEquals(["version", "producer", "references"]))
                 return Failure("DecisionInputSchemaUnsupported", "The package deployment reference envelope has unsupported properties.");
 
@@ -148,6 +151,23 @@ public static partial class PackageDecisionDeploymentReferenceReader
                 .ToArray();
             return new PackageDecisionDeploymentReferenceAdmission(references, gaps.OrderBy(gap => gap.GapId, StringComparer.Ordinal).ToArray(), true, CanonicalJsonDigest.Compute(json));
         }
+    }
+
+    private static bool HasDuplicateProperties(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Array)
+            return element.EnumerateArray().Any(HasDuplicateProperties);
+        if (element.ValueKind != JsonValueKind.Object)
+            return false;
+
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var property in element.EnumerateObject())
+        {
+            if (!names.Add(property.Name) || HasDuplicateProperties(property.Value))
+                return true;
+        }
+
+        return false;
     }
 
     private static ReferenceCandidate ParseReference(JsonElement element, string producerId, string producerVersion, int ordinal)

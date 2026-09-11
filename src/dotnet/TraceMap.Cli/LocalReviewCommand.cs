@@ -471,10 +471,14 @@ public static class LocalReviewCommand
             // The final writes observe the timeout token so a deadline that
             // fires mid-write unwinds to the timeout path instead of
             // publishing success. Disarm the deadline timer right before the
-            // publication rename and recheck: no new timeout may arm during
-            // the atomic move itself.
+            // publication rename and drain any callback that was already
+            // dispatched. Only then can the final cancellation check prove
+            // that no deadline callback can race the atomic move.
             await WriteResultAsync(staging, result, effectiveToken);
-            timeoutTimer?.Dispose();
+            if (timeoutTimer is not null)
+            {
+                await timeoutTimer.DisposeAsync();
+            }
             effectiveToken.ThrowIfCancellationRequested();
             Publish(staging, fullOutput);
             progress?.Emit(

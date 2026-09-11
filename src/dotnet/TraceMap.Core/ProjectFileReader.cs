@@ -215,6 +215,12 @@ public static class ProjectFileReader
         List<NuGetLockfileEntry> entries,
         List<NuGetLockfileGap> gaps)
     {
+        using (var document = JsonDocument.Parse(bytes))
+        {
+            if (HasDuplicateJsonProperties(document.RootElement))
+                throw new JsonException("packages.lock.json contains duplicate properties.");
+        }
+
         var reader = new Utf8JsonReader(bytes, isFinalBlock: true, default);
         if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject)
             throw new JsonException("packages.lock.json must contain a JSON object.");
@@ -258,6 +264,23 @@ public static class ProjectFileReader
 
         if (!sawDependencies)
             gaps.Add(new NuGetLockfileGap(relativePath, "packages-lock-unsupported", "packages.lock.json did not declare a dependencies object; resolved-version evidence is unavailable.", 1));
+    }
+
+    private static bool HasDuplicateJsonProperties(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Array)
+            return element.EnumerateArray().Any(HasDuplicateJsonProperties);
+        if (element.ValueKind != JsonValueKind.Object)
+            return false;
+
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var property in element.EnumerateObject())
+        {
+            if (!names.Add(property.Name) || HasDuplicateJsonProperties(property.Value))
+                return true;
+        }
+
+        return false;
     }
 
     private static bool TryReadLockfileVersion(ref Utf8JsonReader reader, out int version)
@@ -371,6 +394,13 @@ public static class ProjectFileReader
                 SkipLockfileValue(ref reader);
             }
         }
+
+        // NuGet emits project-to-project references in packages.lock.json as
+        // type "Project" entries without a resolved package version. They are
+        // not package artifacts and are indexed through project-reference
+        // evidence elsewhere, so do not misclassify them as malformed packages.
+        if (string.Equals(type?.Trim(), "Project", StringComparison.OrdinalIgnoreCase))
+            return;
 
         if (string.IsNullOrWhiteSpace(resolved))
         {

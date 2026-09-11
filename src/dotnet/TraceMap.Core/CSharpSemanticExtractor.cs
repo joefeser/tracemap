@@ -813,7 +813,7 @@ public static class CSharpSemanticExtractor
         AddFlowBoundaryFacts(projectPath, filePath, root, model, facts);
         AddRuntimeEvidenceFacts(projectPath, filePath, root, model, facts);
         AddContractMappingFacts(projectPath, filePath, root, model, facts);
-        AddIntegrationFacts(projectPath, filePath, root, model, facts);
+        AddIntegrationFacts(projectPath, filePath, root, model, facts, gaps);
         RemoveProtectedSemanticFacts(facts, protectedFactStart, filePath, protectedSourceSpans);
     }
 
@@ -862,7 +862,8 @@ public static class CSharpSemanticExtractor
         string filePath,
         SyntaxNode root,
         SemanticModel model,
-        List<SemanticFactCandidate> facts)
+        List<SemanticFactCandidate> facts,
+        List<SemanticFactCandidate> gaps)
     {
         // Bounded eligibility per design D5: only entity types carrying EF6
         // generated conceptual identity attributes, types referenced in this
@@ -888,7 +889,7 @@ public static class CSharpSemanticExtractor
                     .Any(attribute => attribute.Name.ToString() is "EdmEntityType" or "EdmEntityTypeAttribute");
                 if (designerShapedFile || carriesEdmAttributeSyntax)
                 {
-                    facts.Add(CreateGap(
+                    gaps.Add(CreateGap(
                         filePath,
                         $"A type declaration in an EDMX generated-code candidate file did not resolve to a compiler symbol at line {declaration.GetLocation().GetLineSpan().StartLinePosition.Line + 1}; EF6 composition evidence for it is unavailable.",
                         "EdmxCandidateSymbolResolution",
@@ -922,7 +923,7 @@ public static class CSharpSemanticExtractor
 
                 if (model.GetDeclaredSymbol(declarationSyntax) is not IPropertySymbol resolvedProperty || !ReferenceEquals(resolvedProperty, property))
                 {
-                    facts.Add(CreateGap(
+                    gaps.Add(CreateGap(
                         filePath,
                         $"A property declaration on EDMX composition candidate {symbol.ToDisplayString(SymbolFormat)} did not resolve to a compiler symbol; member evidence for it is unavailable.",
                         "EdmxCandidateSymbolResolution",
@@ -1689,10 +1690,11 @@ public static class CSharpSemanticExtractor
         string filePath,
         SyntaxNode root,
         SemanticModel model,
-        List<SemanticFactCandidate> facts)
+        List<SemanticFactCandidate> facts,
+        List<SemanticFactCandidate> gaps)
     {
         AddDbContextFacts(projectPath, filePath, root, model, facts);
-        AddEdmxCompositionCandidateFacts(projectPath, filePath, root, model, facts);
+        AddEdmxCompositionCandidateFacts(projectPath, filePath, root, model, facts, gaps);
         AddIntegrationInvocationFacts(projectPath, filePath, root, model, facts);
         AddSqlCommandFacts(projectPath, filePath, root, model, facts);
     }

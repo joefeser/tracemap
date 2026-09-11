@@ -80,7 +80,8 @@ public static class WebFormsAgentEvidenceHandoff
     public const string RuleId = "diagnostic.webforms.agent-evidence-handoff.v1";
     private const int MaximumCaseHandoffBytes = 4 * 1024 * 1024;
     private const long MaximumIndexBytes = 16L * 1024 * 1024 * 1024;
-    private const long MaximumCorpusJsonLinesBytes = 256L * 1024 * 1024;
+    internal const long MaximumCorpusManifestBytes = 64L * 1024 * 1024;
+    internal const long MaximumCorpusJsonLinesBytes = 2L * 1024 * 1024 * 1024;
     private const int MaximumCorpusLines = 100_000;
     private const int MaximumCorpusLineCharacters = 4 * 1024 * 1024;
     private const int MaximumHintsPerCase = 128;
@@ -428,6 +429,13 @@ public static class WebFormsAgentEvidenceHandoff
         {
             if (hints.Count >= MaximumHintsPerCase) return;
             if (!byId.TryGetValue(recipeId, out var recipe)) throw new InvalidDataException("AgentHandoffRecipeUnavailable");
+            var normalizedSupportingIds = supportingIds
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+                .Take(64)
+                .ToArray();
+            if (normalizedSupportingIds.Length == 0) return;
             var values = new SortedDictionary<string, string>(StringComparer.Ordinal);
             foreach (var (name, value) in parameters) values[name] = value;
             values["limit"] = values.GetValueOrDefault("limit", RetrievalLimit(recipeId));
@@ -435,7 +443,7 @@ public static class WebFormsAgentEvidenceHandoff
             if (required.Any(value => !values.ContainsKey(value)) || values.Keys.Any(value => recipe.Parameters.All(parameter => parameter.Name != value)))
                 throw new InvalidDataException("AgentHandoffRecipeParameterInvalid");
             hints.Add(new(recipeId, "single-index", recipe.RuleId, recipe.EvidenceTier, reason, values,
-                supportingIds.Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).Take(64).ToArray(),
+                normalizedSupportingIds,
                 recipe.ResultFields));
         }
 
@@ -563,7 +571,7 @@ public static class WebFormsAgentEvidenceHandoff
                 "Supply -EvidenceDocsRoot to resolve corpus selectors to exact generated chunk IDs."), empty);
         var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(corpusRoot));
         if (!Directory.Exists(root)) throw new InvalidDataException("AgentHandoffCorpusUnavailable");
-        var manifestPath = BoundedCorpusFile(root, "manifest.json", 16L * 1024 * 1024);
+        var manifestPath = BoundedCorpusFile(root, "manifest.json", MaximumCorpusManifestBytes);
         var recipesPath = BoundedCorpusFile(root, "query-recipes.json", 4L * 1024 * 1024);
         var chunksPath = BoundedCorpusFile(root, "chunks.jsonl", MaximumCorpusJsonLinesBytes);
         var manifestText = File.ReadAllText(manifestPath);
@@ -731,7 +739,8 @@ public static class WebFormsAgentEvidenceHandoff
         var path = Path.GetFullPath(Path.Combine(root, name));
         if (!string.Equals(Path.GetDirectoryName(path), root, PathComparison)) throw new InvalidDataException("AgentHandoffCorpusUnavailable");
         var info = new FileInfo(path);
-        if (!info.Exists || info.Length is < 1 || info.Length > maximumBytes) throw new InvalidDataException("AgentHandoffCorpusUnavailable");
+        if (!info.Exists || info.Length < 1) throw new InvalidDataException("AgentHandoffCorpusUnavailable");
+        if (info.Length > maximumBytes) throw new InvalidDataException("AgentHandoffCorpusLimit");
         return path;
     }
 

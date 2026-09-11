@@ -19,12 +19,16 @@
     },
     "scanner": {
       "type": "object",
-      "required": ["version", "scanId"],
-      "properties": { "version": { "type": "string" }, "scanId": { "type": "string" } }
+      "required": ["version", "scanId", "artifactProfile"],
+      "properties": {
+        "version": { "type": "string" },
+        "scanId": { "type": "string" },
+        "artifactProfile": { "const": "tracemap.base44.deterministic-artifacts.v1" }
+      }
     },
     "coverage": {
       "type": "object",
-      "required": ["label", "analysisLevel", "buildStatus", "knownGaps", "gapSchemaVersion", "gaps", "ruleIds", "extractorIdentities", "evidenceTiers"],
+      "required": ["label", "analysisLevel", "buildStatus", "knownGaps", "ruleIds", "extractorIdentities", "evidenceTiers"],
       "properties": {
         "label": { "type": "string", "minLength": 1 },
         "analysisLevel": { "type": "string" },
