@@ -17,6 +17,7 @@ public sealed class WebFormsAgentEvidenceHandoffTests
     [Fact]
     public void Corpus_json_lines_limit_supports_large_streamed_exports()
     {
+        Assert.Equal(64L * 1024 * 1024, WebFormsAgentEvidenceHandoff.MaximumCorpusManifestBytes);
         Assert.Equal(2L * 1024 * 1024 * 1024, WebFormsAgentEvidenceHandoff.MaximumCorpusJsonLinesBytes);
     }
 
