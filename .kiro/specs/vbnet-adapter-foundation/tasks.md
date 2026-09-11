@@ -2,13 +2,13 @@
 
 Issue: [#736](https://github.com/joefeser/tracemap/issues/736)
 
-- [ ] 1. Confirm the exact `origin/dev` base and document the implementation
+- [x] 1. Confirm the exact `origin/dev` base and document the implementation
   branch and scope decisions.
-- [ ] 2. Add VB inventory/classification and protect `.vb` inputs in snapshot
+- [x] 2. Add VB inventory/classification and protect `.vb` inputs in snapshot
   capture and verification.
-- [ ] 3. Add the pinned Roslyn Visual Basic packages, extractor versions, and
+- [x] 3. Add the pinned Roslyn Visual Basic packages, extractor versions, and
   cataloged VB rule IDs with limitation text.
-- [ ] 4. Implement VB project selection and semantic loading without
+- [x] 4. Implement VB project selection and semantic loading without
   regressing C# or mixed-language solutions.
 - [ ] 5. Emit compiler-backed VB declarations, symbol occurrences,
   references, calls, construction, arguments, and direct relationships.

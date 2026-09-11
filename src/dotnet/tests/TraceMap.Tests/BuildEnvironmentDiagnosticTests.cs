@@ -70,6 +70,7 @@ public sealed class BuildEnvironmentDiagnosticTests
         File.WriteAllText(Path.Combine(repo, "src", "LegacyWeb", "Service References", "Orders", "Orders.svcmap"), "<ReferenceGroup />");
         File.WriteAllText(Path.Combine(repo, "src", "LegacyWeb", "Properties", "Resources.resx"), "<root>");
         File.WriteAllText(Path.Combine(repo, "src", "Tools.vbproj"), "<Project><PropertyGroup><TargetFrameworkVersion>v4.8</TargetFrameworkVersion></PropertyGroup></Project>");
+        File.WriteAllText(Path.Combine(repo, "src", "Tools.fsproj"), "<Project><PropertyGroup><TargetFrameworkVersion>v4.8</TargetFrameworkVersion></PropertyGroup></Project>");
         File.WriteAllText(Path.Combine(repo, "Orphan.aspx"), "<%@ Page Language=\"C#\" %>");
         File.WriteAllText(Path.Combine(repo, "Orphan.aspx.cs"), "public partial class Orphan { }");
         File.WriteAllText(Path.Combine(repo, "Orphan.aspx.designer.cs"), "public partial class Orphan { }");
@@ -85,6 +86,9 @@ public sealed class BuildEnvironmentDiagnosticTests
         AssertDiagnostic(diagnostics, "ImportedLegacyTargets", RuleIds.BuildEnvironmentToolset, EvidenceTiers.Tier2Structural);
         AssertDiagnostic(diagnostics, "WebApplicationProjectTargets", RuleIds.BuildEnvironmentProjectFormat, EvidenceTiers.Tier2Structural);
         AssertDiagnostic(diagnostics, "UnknownLegacyProjectFormat", RuleIds.BuildEnvironmentProjectFormat, EvidenceTiers.Tier4Unknown);
+        // A non-SDK .vbproj is now a recognized Visual Basic project, so it is
+        // categorized as non-SDK-style rather than as an unknown project format.
+        AssertDiagnostic(diagnostics, "NonSdkStyleProject", RuleIds.BuildEnvironmentProjectFormat, EvidenceTiers.Tier2Structural);
         AssertDiagnostic(diagnostics, "PackagesConfigPresent", RuleIds.BuildEnvironmentRestore, EvidenceTiers.Tier2Structural);
         AssertDiagnostic(diagnostics, "NuGetConfigPresent", RuleIds.BuildEnvironmentRestore, EvidenceTiers.Tier2Structural);
         AssertDiagnostic(diagnostics, "PackagesLockPresent", RuleIds.BuildEnvironmentRestore, EvidenceTiers.Tier2Structural);

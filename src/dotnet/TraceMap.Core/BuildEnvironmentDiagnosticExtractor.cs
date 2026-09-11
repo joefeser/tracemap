@@ -64,7 +64,7 @@ public static class BuildEnvironmentDiagnosticExtractor
         SemanticExtractionResult semanticResult)
     {
         var diagnostics = new List<BuildEnvironmentDiagnosticCandidate>();
-        foreach (var project in inventory.Where(item => item.Kind is "Project" or "NonCSharpProject"))
+        foreach (var project in inventory.Where(item => item.Kind is "Project" or "NonCSharpProject" or "VisualBasicProject"))
         {
             diagnostics.AddRange(ReadProjectDiagnostics(repoPath, project));
         }
@@ -215,18 +215,19 @@ public static class BuildEnvironmentDiagnosticExtractor
         var root = document.Root;
         var isSdkStyle = IsSdkStyleProject(root);
         var projectStyle = ProjectStyle(project, isSdkStyle);
-        if (!isSdkStyle || project.Kind == "NonCSharpProject")
+        var isUnknownFormat = project.Kind == "NonCSharpProject";
+        if (!isSdkStyle || isUnknownFormat)
         {
             diagnostics.Add(Candidate(
-                project.Kind == "NonCSharpProject" ? "UnknownLegacyProjectFormat" : "NonSdkStyleProject",
+                isUnknownFormat ? "UnknownLegacyProjectFormat" : "NonSdkStyleProject",
                 DiagnosticKindProjectFormat,
                 RuleIds.BuildEnvironmentProjectFormat,
-                project.Kind == "NonCSharpProject" ? EvidenceTiers.Tier4Unknown : EvidenceTiers.Tier2Structural,
+                isUnknownFormat ? EvidenceTiers.Tier4Unknown : EvidenceTiers.Tier2Structural,
                 project.RelativePath,
                 1,
                 project.RelativePath,
                 projectStyle,
-                guidanceCode: GuidanceFor(project.Kind == "NonCSharpProject" ? "UnknownLegacyProjectFormat" : "NonSdkStyleProject"),
+                guidanceCode: GuidanceFor(isUnknownFormat ? "UnknownLegacyProjectFormat" : "NonSdkStyleProject"),
                 coverageEffect: "caps-to-structural",
                 sanitization: "none"));
         }
