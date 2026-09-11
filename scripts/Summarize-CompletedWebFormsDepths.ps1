@@ -114,8 +114,8 @@ foreach ($entry in @(@{Depth=8; Data=$a}, @{Depth=10; Data=$b})) {
     Write-Host "depth=$d|handlerUnavailable=$($s.MissingHandler)|resolvedWithoutTerminal=$($s.MissingTerminal)"
     Write-Host "depth=$d|cycle=$($s.Gaps.cycle)|depthGap=$($s.Gaps.depth)|frontier=$($s.Gaps.frontier)|path=$($s.Gaps.path)|work=$($s.Gaps.work)|unknownReason=$($s.Gaps.unavailable)|otherLimits=$($s.Gaps.otherLimits)"
 }
-$added = @($b.Keys | Where-Object { -not $a.Keys.Contains($_) }).Count
-$lost = @($a.Keys | Where-Object { -not $b.Keys.Contains($_) }).Count
+$added = @(@($b.Keys) | Where-Object { -not $a.Keys.Contains($_) }).Count
+$lost = @(@($a.Keys) | Where-Object { -not $b.Keys.Contains($_) }).Count
 $gainedPages = @($b.Aliases | Where-Object { -not $a.Aliases.Contains($_) } | Sort-Object)
 $lostPages = @($a.Aliases | Where-Object { -not $b.Aliases.Contains($_) } | Sort-Object)
 Write-Host "terminalDelta=added:$added|lost:$lost"

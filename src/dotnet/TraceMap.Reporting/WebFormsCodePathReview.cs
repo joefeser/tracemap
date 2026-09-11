@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using TraceMap.Core;
 
 namespace TraceMap.Reporting;
 
@@ -262,7 +263,7 @@ public static class WebFormsCodePathReview
         static string PublicTier(string value) => value is "Tier1Semantic" or "Tier2Structural" or "Tier3SyntaxOrTextual" or "Tier4Unknown"
             ? value : "withheld-unsafe-evidence-tier";
 
-        string RenderPrivateGraph()
+        string RenderGraph(bool structuralOnly = false)
         {
             const int nodeWidth = 180;
             const int nodeHeight = 58;
@@ -323,9 +324,11 @@ public static class WebFormsCodePathReview
                 var location = deduplicated.FirstOrDefault(item => item.Callee == symbol || item.Caller == symbol || (symbol == handler && item.Role == "handler"));
                 if (location is not null)
                 {
-                    var href = includeRawSource
-                        ? Path.GetFileName(annotatedSourceFiles[location.FilePath]) + $"#L{location.StartLine}"
-                        : "#" + evidenceAnchors[location];
+                    var href = structuralOnly
+                        ? "#node-" + aliases[symbol]
+                        : includeRawSource
+                            ? Path.GetFileName(annotatedSourceFiles[location.FilePath]) + $"#L{location.StartLine}"
+                            : "#" + evidenceAnchors[location];
                     graph.Append("<a href=\"").Append(H(href)).Append("\">");
                 }
                 graph.Append("<g class=\"graph-node\"><rect x=\"").Append(position.X).Append("\" y=\"").Append(position.Y)
@@ -482,7 +485,7 @@ public static class WebFormsCodePathReview
                 }
                 writer.WriteLine("</details>");
                 writer.WriteLine("<details class=\"panel\" id=\"graph\"><summary><h2>Call graph</h2></summary><p>This dependency-free diagram uses anonymous aliases. Click a node to jump to retained evidence; use the private legend below to connect aliases to source identities.</p>");
-                writer.WriteLine(RenderPrivateGraph());
+                writer.WriteLine(RenderGraph());
                 writer.WriteLine("<h3>Private alias legend</h3><dl class=\"legend\">");
                 foreach (var pair in aliases.OrderBy(pair => pair.Value, StringComparer.Ordinal))
                 {
@@ -541,7 +544,7 @@ public static class WebFormsCodePathReview
                     root = aliases[handler],
                     evidenceConclusion = EvidenceConclusion(selected),
                     traversalLimitReached = selected.GetProperty("bounded").GetBoolean(),
-                    ruleId = "diagnostic.webforms.anonymous-code-path-review.v1",
+                    ruleId = RuleIds.DiagnosticWebFormsAnonymousCodePathReview,
                     nodes = anonymousNodes.Select(node => new { id = node.Id, classification = node.Classification }),
                     edges = anonymousEdges,
                     reviewResult = "unreviewed",
@@ -559,13 +562,9 @@ public static class WebFormsCodePathReview
                 writer.WriteLine($"<title>Anonymous Web Forms call-path review {H(caseId)}</title><style>{ShareableCss}</style></head><body id=\"top\"><main>");
                 writer.WriteLine($"<h1>Anonymous Web Forms call-path review: {H(caseId)}</h1><p class=\"safe\">SHAREABLE: structural aliases only; no source text, paths, symbols, fact IDs, SQL, URLs, configuration, or commit identity.</p>");
                 writer.WriteLine($"<p>Evidence conclusion: <code>{H(EvidenceConclusion(selected))}</code>. Traversal limit reached: <code>{selected.GetProperty("bounded").GetBoolean().ToString().ToLowerInvariant()}</code>.</p>");
-                writer.WriteLine("<section id=\"call-graph\"><h2>Call graph</h2><p>Click a node to jump to its structural details. Mermaid rendering requires browser access to the Mermaid module; the source remains visible as a fallback.</p><pre class=\"mermaid\">");
-                writer.WriteLine("flowchart TD");
-                foreach (var node in anonymousNodes) writer.WriteLine($"  {node.Id.Replace('-', '_')}[\"{node.Id}<br/>{node.Classification}\"]");
-                // Keep the generated diagram on Mermaid's conservative flowchart grammar
-                // so standalone and sandboxed rendering do not depend on permissive parsing.
-                foreach (var edge in anonymousEdges) writer.WriteLine($"  {edge.from.Replace('-', '_')} -->|calls x {edge.callSiteCount}| {edge.to.Replace('-', '_')}");
-                writer.WriteLine("</pre><nav class=\"graph-links\" aria-label=\"Call graph navigation\">Jump to: ");
+                writer.WriteLine("<section id=\"call-graph\"><h2>Call graph</h2><p>Click a node to jump to its structural details. The graph is rendered locally without scripts or network access.</p>");
+                writer.WriteLine(RenderGraph(structuralOnly: true));
+                writer.WriteLine("<nav class=\"graph-links\" aria-label=\"Call graph navigation\">Jump to: ");
                 foreach (var node in anonymousNodes) writer.WriteLine($"<a href=\"#node-{node.Id}\">{node.Id}</a> ");
                 writer.WriteLine("</nav></section><h2>Structural details</h2>");
                 foreach (var node in anonymousNodes)
@@ -576,28 +575,7 @@ public static class WebFormsCodePathReview
                     writer.WriteLine("</ul><p><a href=\"#top\">Back to graph</a></p></section>");
                 }
                 writer.WriteLine("<h2>Human verdict</h2><p>Result: <strong>unreviewed</strong></p><p>Static retained calls do not prove runtime order, branch feasibility, or source completeness. Missing evidence does not prove absence.</p>");
-                var graphNavigation = JsonSerializer.Serialize(anonymousNodes.Select(node => new
-                {
-                    diagramId = node.Id.Replace('-', '_'),
-                    targetId = $"node-{node.Id}"
-                }));
-                writer.WriteLine($$"""
-                    </main><script type="module">
-                    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.esm.min.mjs';
-                    mermaid.initialize({startOnLoad:false,securityLevel:'strict'});
-                    await mermaid.run();
-                    const graphNavigation = {{graphNavigation}};
-                    for (const item of graphNavigation) {
-                      for (const element of document.querySelectorAll(`[id^="flowchart-${item.diagramId}-"]`)) {
-                        element.style.cursor = 'pointer';
-                        element.setAttribute('tabindex', '0');
-                        const navigate = () => { location.hash = item.targetId; };
-                        element.addEventListener('click', navigate);
-                        element.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') navigate(); });
-                      }
-                    }
-                    </script></body></html>
-                    """);
+                writer.WriteLine("</main></body></html>");
             }
 
             // Fail closed before publication if a private identity entered either anonymous artifact.
@@ -656,7 +634,7 @@ public static class WebFormsCodePathReview
         """;
 
     private const string ShareableCss = """
-        :root{font-family:system-ui,sans-serif;color:#172033;background:#f5f7fb}body{margin:0}main{max-width:1100px;margin:auto;padding:24px}section{background:white;border:1px solid #dbe2ee;border-radius:10px;padding:16px;margin:14px 0}.safe{background:#e9f7ee;border-left:5px solid #26834a;padding:12px}a{color:#1558b0}.mermaid{background:white;border:1px solid #dbe2ee;border-radius:10px;padding:16px;overflow:auto}code{background:#edf1f7;padding:.1rem .3rem;border-radius:4px}
+        :root{font-family:system-ui,sans-serif;color:#172033;background:#f5f7fb}body{margin:0}main{max-width:1100px;margin:auto;padding:24px}section{background:white;border:1px solid #dbe2ee;border-radius:10px;padding:16px;margin:14px 0}.safe{background:#e9f7ee;border-left:5px solid #26834a;padding:12px}a{color:#1558b0}code{background:#edf1f7;padding:.1rem .3rem;border-radius:4px}.inline-graph{overflow:auto;background:#fff;border:1px solid #dbe2ee;border-radius:8px}.inline-graph svg{display:block;min-width:820px;width:100%;height:auto}.graph-edge{stroke:#3b4658;stroke-width:1.5}.inline-graph marker path{fill:#3b4658}.edge-label,.graph-node text{text-anchor:middle;font-size:13px;fill:#172033}.edge-label{paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round}.graph-node rect{fill:#eef0ff;stroke:#7467d8;stroke-width:1.5}.graph-node:hover rect,.graph-node:focus rect{fill:#e1e5ff;stroke-width:2.5}.node-kind{font-size:11px;fill:#526177}
         """;
 
     private const string AnnotatedSourceCss = """

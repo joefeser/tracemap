@@ -76,10 +76,25 @@ public sealed class PackageDecisionTests
         Assert.All(conflict.Gaps, gap => Assert.Equal("DecisionInputDuplicateConflict", gap.Classification));
     }
 
+    [Theory]
+    [InlineData("{\"version\":\"package-decision.v1\",\"records\":[{\"decisionId\":\"dec-duplicate-record\",\"decisionId\":\"dec-other\",\"decisionKind\":\"admit\",\"ecosystem\":\"npm\",\"packageName\":\"example\",\"artifactVersion\":\"1.0.0\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\"}]}")]
+    [InlineData("{\"version\":\"package-decision.v1\",\"records\":[{\"decisionId\":\"dec-duplicate-producer\",\"decisionKind\":\"admit\",\"ecosystem\":\"npm\",\"packageName\":\"example\",\"artifactVersion\":\"1.0.0\",\"producer\":{\"id\":\"producer\",\"id\":\"other\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\"}]}")]
+    [InlineData("{\"version\":\"package-decision.v1\",\"records\":[{\"decisionId\":\"dec-duplicate-provenance\",\"decisionKind\":\"admit\",\"ecosystem\":\"npm\",\"packageName\":\"example\",\"artifactVersion\":\"1.0.0\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\",\"provenance\":{\"sourceRepo\":\"repo\",\"sourceCommitSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"sourceCommitSha\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}}]}")]
+    public void Reader_rejects_duplicate_properties_recursively(string json)
+    {
+        var result = PackageDecisionRecordReader.Read(json);
+
+        Assert.False(result.Accepted);
+        Assert.Empty(result.Records);
+        Assert.Equal("DecisionInputSchemaUnsupported", Assert.Single(result.Gaps).Classification);
+    }
+
     [Fact]
     public async Task Reader_emits_closed_failure_classifications_and_verifies_self_digest()
     {
         Assert.Equal("DecisionInputSchemaUnsupported", PackageDecisionRecordReader.Read("{}").Gaps.Single().Classification);
+        Assert.Equal("DecisionInputSchemaUnsupported", PackageDecisionRecordReader.Read("{\"version\":\"package-decision.v1\",\"version\":\"package-decision.v1\",\"records\":[]}").Gaps.Single().Classification);
+        Assert.Equal("DecisionInputSchemaUnsupported", PackageDecisionRecordReader.Read("{\"version\":\"package-decision.v1\",\"records\":[],\"records\":[]}").Gaps.Single().Classification);
         Assert.Equal("DecisionInputReadFailed", (await PackageDecisionRecordReader.ReadAsync(Path.Combine(Path.GetTempPath(), "missing-package-decision.json"))).Gaps.Single().Classification);
         Assert.Equal("DecisionInputDecisionKindUnsupported", PackageDecisionRecordReader.Read("{\"version\":\"package-decision.v1\",\"records\":[{\"decisionId\":\"dec-kind\",\"decisionKind\":\"future\",\"ecosystem\":\"npm\",\"packageName\":\"example\",\"artifactVersion\":\"1.0.0\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\"}]} ").Gaps.Single().Classification);
         var limited = PackageDecisionRecordReader.Read("{\"version\":\"package-decision.v1\",\"records\":[{\"decisionId\":\"dec-long\",\"decisionKind\":\"admit\",\"ecosystem\":\"npm\",\"packageName\":\"example\",\"artifactVersion\":\"1.0.0\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\",\"recordDigest\":\"" + new string('a', 257) + "\"}]} ");
@@ -120,6 +135,9 @@ public sealed class PackageDecisionTests
         Assert.DoesNotContain("/Users/", json, StringComparison.Ordinal);
         Assert.Equal(json, await File.ReadAllTextAsync(Path.Combine(output, "package-decision-report.json")));
         Assert.Contains("Possible Matches", markdown);
+        Assert.Contains("## Source Snapshots", markdown, StringComparison.Ordinal);
+        Assert.Contains($"repo-hash:{CombinedReportHelpers.Hash(manifest.RepoName, 16)}", markdown, StringComparison.Ordinal);
+        Assert.Contains(manifest.CommitSha, markdown, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -344,12 +362,37 @@ public sealed class PackageDecisionTests
         var report = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decisionPath, indexPath, Path.Combine(temp.Path, "report"), Source: "missing", Classification: "ExactArtifactMatch"));
 
         Assert.Contains(report.Report.Gaps, gap => gap.Classification == "SelectorNoMatch" && gap.SourceLabel == "missing");
+        Assert.Equal(manifest.CommitSha, Assert.Single(report.Report.Sources).CommitSha);
         Assert.Contains(report.Report.Gaps, gap => gap.Classification == "SelectorNoMatch" && gap.Message.Contains("classification", StringComparison.Ordinal));
         Assert.Empty(report.Report.ExcludedSources);
 
         var capabilityReport = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decisionPath, indexPath, Path.Combine(temp.Path, "capability")));
         Assert.Contains(capabilityReport.Report.Gaps, gap => gap.Classification == "UnknownAnalysisGap");
         Assert.Empty(capabilityReport.Report.ExcludedSources);
+    }
+
+    [Fact]
+    public async Task Correlation_routes_legacy_stale_rows_without_extractor_identity_to_a_gap()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        var decisionPath = Path.Combine(temp.Path, "decision.json");
+        var manifest = Manifest("fixture", "legacy-scanner");
+        SqliteIndexWriter.Write(indexPath, manifest, [PackageFact(manifest, "example", "npm", "package.json", "dependencies", "1.0.0")]);
+        await using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = indexPath }.ToString()))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "alter table facts drop column extractor_id; alter table facts drop column extractor_version;";
+            await command.ExecuteNonQueryAsync();
+        }
+        await File.WriteAllTextAsync(decisionPath, "{\"version\":\"package-decision.v1\",\"records\":[{\"decisionId\":\"dec-stale\",\"decisionKind\":\"admit\",\"ecosystem\":\"npm\",\"packageName\":\"example\",\"artifactVersion\":\"1.0.0\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\"}]}");
+
+        var result = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(decisionPath, indexPath, Path.Combine(temp.Path, "report")));
+
+        Assert.Empty(result.Report.StaleReferences);
+        var gap = Assert.Single(result.Report.Gaps, item => item.Classification == "ExtractorIdentityUnavailable");
+        Assert.Equal("pkg-fixture-example", Assert.Single(gap.SupportingFactIds!));
     }
 
     [Fact]

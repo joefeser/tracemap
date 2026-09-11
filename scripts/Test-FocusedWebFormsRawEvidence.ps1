@@ -1,6 +1,7 @@
 param([string]$IndexPath = '', [string]$ReportPath = '', [string]$OutputRoot = '', [string]$InspectionPath = '', [switch]$CreateLocalInspection, [string]$StartingMethodName = '', [switch]$DatabaseEvidence, [switch]$BatchInspection, [string]$ConfigPath = '')
 
 $ErrorActionPreference = 'Stop'
+$isWindowsPlatform = [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
 if ($BatchInspection -and ($DatabaseEvidence -or $StartingMethodName)) { throw 'Batch inspection requires report-handler selection.' }
 if (!$ConfigPath) { $ConfigPath = Join-Path $PSScriptRoot 'Run-FocusedWebFormsPageList.json' }
 $requiresOutputRoot = (!$DatabaseEvidence -and !$ReportPath) -or
@@ -58,6 +59,6 @@ else { & dotnet $dll $IndexPath $ReportPath }
 if ($LASTEXITCODE -ne 0) { throw 'RawAuditFailed; no evidence conclusion is available.' }
 if ($BatchInspection) {
     $markdownPath = [System.IO.Path]::ChangeExtension($InspectionPath, '.md')
-    Write-Host "PRIVATE local review: $markdownPath"
-    if ($IsWindows) { Start-Process -FilePath notepad.exe -ArgumentList ('"' + $markdownPath + '"') }
+    Write-Host "PRIVATE local review: $(Split-Path -Leaf $markdownPath)"
+    if ($isWindowsPlatform) { Start-Process -FilePath notepad.exe -ArgumentList ('"' + $markdownPath + '"') }
 }

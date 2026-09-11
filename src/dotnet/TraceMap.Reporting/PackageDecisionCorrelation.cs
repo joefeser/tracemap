@@ -181,7 +181,7 @@ public sealed record PackageDecisionEvidence(
 
 public sealed record PackageDecisionNote(string Code, string Message);
 public sealed record PackageDecisionExclusion(string RowId, string Classification, string SourceLabel, string SourceIndexId, string ScanId, string? CommitSha, string RuleId, string EvidenceTier, string Message);
-public sealed record PackageDecisionStaleReference(string RowId, string Classification, string DecisionId, string SourceLabel, string ScanId, string? CommitSha, string RuleId, string EvidenceTier, bool SnapshotPredatesDecision, string Message);
+public sealed record PackageDecisionStaleReference(string RowId, string Classification, string DecisionId, string SourceLabel, string ScanId, string? CommitSha, string RuleId, string EvidenceTier, bool SnapshotPredatesDecision, string Message, PackageDecisionEvidence Evidence);
 public sealed record PackageDecisionExternalReference(
     string RowId,
     string Classification,
@@ -349,6 +349,8 @@ public static class PackageDecisionCorrelationReporter
 
         var index = await ReadInputsAsync(inputSpecs, cancellationToken);
         var unfilteredSources = index.Sources.OrderBy(source => source.Label, StringComparer.Ordinal).ThenBy(source => source.SourceIndexId, StringComparer.Ordinal).ToArray();
+        if (unfilteredSources.Length == 0)
+            throw new InvalidDataException("package-decision requires at least one source snapshot with repository and commit provenance.");
         var sources = unfilteredSources;
         if (!string.IsNullOrWhiteSpace(options.Source))
             sources = sources.Where(source => SourceMatches(index.RawLabels.GetValueOrDefault(source.SourceIndexId) ?? source.Label, options.Source)).ToArray();
@@ -473,7 +475,31 @@ public static class PackageDecisionCorrelationReporter
                         default: ambiguous.Add(row); break;
                     }
                     if (row.SnapshotPredatesDecision)
-                        stale.Add(new PackageDecisionStaleReference(row.RowId, row.Classification, row.DecisionId, row.SourceLabel, row.ScanId, row.CommitSha, RuleId, row.Evidence.EvidenceTier, true, "The scan predates the producer-declared decision time; later remediation is not represented."));
+                    {
+                        if (!string.IsNullOrWhiteSpace(row.Evidence.ExtractorId) && !string.IsNullOrWhiteSpace(row.Evidence.ExtractorVersion))
+                        {
+                            stale.Add(new PackageDecisionStaleReference(row.RowId, row.Classification, row.DecisionId, row.SourceLabel, row.ScanId, row.CommitSha, RuleId, row.Evidence.EvidenceTier, true, "The scan predates the producer-declared decision time; later remediation is not represented.", row.Evidence));
+                        }
+                        else
+                        {
+                            AddGap(gaps, options.MaxGaps, ref gapCapReached, new PackageDecisionGap(
+                                $"pd-stale-extractor:{Hash(row.RowId)}",
+                                "ExtractorIdentityUnavailable",
+                                "A legacy evidence row lacks complete extractor identity; no stale-reference finding was emitted.",
+                                RuleId,
+                                EvidenceTiers.Tier4Unknown,
+                                row.DecisionId,
+                                row.SourceLabel,
+                                record.Ecosystem,
+                                row.SourceIndexId,
+                                row.ScanId,
+                                row.CommitSha,
+                                FilePath: row.Evidence.FilePath,
+                                StartLine: row.Evidence.StartLine,
+                                EndLine: row.Evidence.EndLine,
+                                SupportingFactIds: [row.Evidence.FactId]));
+                        }
+                    }
                 }
             }
         }
@@ -508,7 +534,7 @@ public static class PackageDecisionCorrelationReporter
             "package-decision-correlation", Version, comparisonMode ? "DecisionComparisonV1" : "DecisionSnapshotV1",
             new PackageDecisionQuery($"value-hash:{CombinedReportHelpers.Hash(options.DecisionPath, 16)}", $"value-hash:{InputIdentity(inputSpecs, options.ManifestPath, options.BeforeManifestPath, options.AfterManifestPath)}", options.Source is null ? "default" : SafeInputLabel(options.Source), options.Ecosystem, options.DecisionId, options.Classification, options.MaxFindings, options.MaxGaps, options.ExitCode, options.AsOf),
             recordRows.OrderBy(row => row.Classification ?? string.Empty, StringComparer.Ordinal).ThenBy(row => row.ProducerId ?? string.Empty, StringComparer.Ordinal).ThenBy(row => row.DecisionId ?? string.Empty, StringComparer.Ordinal).ToArray(),
-            sources.Select(source => ToSource(source, index.ScannedAt.GetValueOrDefault(source.SourceIndexId), index.KnownGaps.Where(gap => gap.SourceIndexId == source.SourceIndexId))).ToArray(),
+            (sources.Length == 0 ? unfilteredSources : sources).Select(source => ToSource(source, index.ScannedAt.GetValueOrDefault(source.SourceIndexId), index.KnownGaps.Where(gap => gap.SourceIndexId == source.SourceIndexId))).ToArray(),
             selectedExact, selectedMismatch, selectedPossible, selectedAmbiguous,
             excluded.OrderBy(row => row.SourceLabel, StringComparer.Ordinal).ThenBy(row => row.RowId, StringComparer.Ordinal).ToArray(),
             stale.OrderBy(row => row.SourceLabel, StringComparer.Ordinal).ThenBy(row => row.RowId, StringComparer.Ordinal).ToArray(),
@@ -1598,18 +1624,19 @@ public static class PackageDecisionCorrelationReporter
         var builder = new StringBuilder();
         builder.AppendLine("# TraceMap Package Decision Correlation Report\n");
         builder.AppendLine($"- Mode: `{report.Mode}`\n- Version: `{report.Version}`\n- Coverage: `{report.Summary.Coverage}`\n- Sources: `{report.Summary.SourceCount}`\n- Records: `{report.Summary.RecordCount}`\n- Exact matches: `{report.Summary.ExactCount}`\n- Digest mismatches: `{report.Summary.DigestMismatchCount}`\n- Possible matches: `{report.Summary.PossibleCount}`\n- Ambiguous references: `{report.Summary.AmbiguousCount}`\n- Excluded sources: `{report.Summary.ExcludedCount}`\n- Stale references: `{report.Summary.StaleCount}`\n- Runtime-unproven references: `{report.Summary.RuntimeUnprovenCount}`\n- Artifact changes: `{report.Summary.ArtifactChangeCount}`\n- Gaps: `{report.Summary.GapCount}`\n");
+        SectionSources(builder, report.Sources);
         SectionRecords(builder, report);
         SectionRows(builder, "Exact Matches", report.ExactMatches);
         SectionRows(builder, "Possible Matches", report.PossibleMatches);
         SectionRows(builder, "Artifact Identity Mismatches", report.DigestMismatches);
         SectionRows(builder, "Ambiguous References", report.AmbiguousReferences);
         builder.AppendLine("## Excluded Sources\n");
-        foreach (var row in report.ExcludedSources) builder.AppendLine($"- `{Cell(row.SourceLabel)}`: {Cell(row.Message)} ({Cell(row.RuleId)}, {Cell(row.EvidenceTier)})");
+        foreach (var row in report.ExcludedSources) builder.AppendLine($"- `{Cell(row.SourceLabel)}` source `{Cell(row.SourceIndexId)}` scan `{Cell(row.ScanId)}` commit `{Cell(row.CommitSha)}`: {Cell(row.Message)} ({Cell(row.RuleId)}, {Cell(row.EvidenceTier)})");
         builder.AppendLine("\n## Stale and Runtime-Unproven References\n");
-        foreach (var row in report.StaleReferences) builder.AppendLine($"- `{Cell(row.SourceLabel)}` `{Cell(row.Classification)}`: {Cell(row.Message)}");
+        foreach (var row in report.StaleReferences) builder.AppendLine($"- `{Cell(row.SourceLabel)}` scan `{Cell(row.ScanId)}` commit `{Cell(row.CommitSha)}` `{Cell(row.Classification)}`{EvidenceSuffix(row.Evidence)}: {Cell(row.Message)} ({Cell(row.RuleId)}, {Cell(row.EvidenceTier)})");
         if (report.StaleReferences.Count == 0) builder.AppendLine("No stale references were observed.");
         foreach (var row in report.RuntimeUnprovenReferences)
-            builder.AppendLine($"- `{Cell(row.ReferenceId)}` `{Cell(row.ReferenceKind)}` `{Cell(row.Ecosystem)}` `{Cell(row.PackageName)}` `{Cell(row.ArtifactVersion)}` (producer `{Cell(row.ProducerId)}` version `{Cell(row.ProducerVersion)}`, join `{Cell(row.JoinBasis)}`): {Cell(row.Message)} ({Cell(row.RuleId)}, {Cell(row.EvidenceTier)})");
+            builder.AppendLine($"- `{Cell(row.ReferenceId)}` `{Cell(row.ReferenceKind)}` `{Cell(row.Ecosystem)}` `{Cell(row.PackageName)}` `{Cell(row.ArtifactVersion)}` (producer `{Cell(row.ProducerId)}` version `{Cell(row.ProducerVersion)}`, join `{Cell(row.JoinBasis)}`, sources `{Cell(string.Join(',', row.MatchedSourceLabels ?? []))}`, facts `{Cell(string.Join(',', row.MatchedFactIds ?? []))}`): {Cell(row.Message)} ({Cell(row.RuleId)}, {Cell(row.EvidenceTier)})");
         if (report.RuntimeUnprovenReferences.Count == 0) builder.AppendLine("No runtime-unproven references were supplied.");
         builder.AppendLine();
         RenderAdvisoryClaims(builder, report);
@@ -1617,11 +1644,37 @@ public static class PackageDecisionCorrelationReporter
         RenderContext(builder, "Optional Reverse Context", report.ReverseContext);
         RenderArtifactChanges(builder, report);
         builder.AppendLine("## Gaps\n");
-        foreach (var gap in report.Gaps) builder.AppendLine($"- `{Cell(gap.Classification)}`: {Cell(gap.Message)} ({Cell(gap.RuleId)}, {Cell(gap.EvidenceTier)})");
+        foreach (var gap in report.Gaps) builder.AppendLine($"- `{Cell(gap.Classification)}`{GapEvidenceSuffix(gap)}: {Cell(gap.Message)} ({Cell(gap.RuleId)}, {Cell(gap.EvidenceTier)})");
         if (report.Gaps.Count == 0) builder.AppendLine("No gaps were recorded.\n");
         builder.AppendLine("## Limitations\n");
         foreach (var limitation in report.Limitations) builder.AppendLine($"- {Cell(limitation)}");
         return builder.ToString();
+    }
+
+    private static void SectionSources(StringBuilder builder, IReadOnlyList<PackageDecisionSource> sources)
+    {
+        builder.AppendLine("## Source Snapshots\n");
+        builder.AppendLine("| Source | Repository identity | Commit | Scan | Scanner | Coverage |");
+        builder.AppendLine("|---|---|---|---|---|---|");
+        foreach (var source in sources.OrderBy(value => value.Label, StringComparer.Ordinal).ThenBy(value => value.SourceIndexId, StringComparer.Ordinal))
+            builder.AppendLine($"| {Cell(source.Label)} | {Cell(source.RepoIdentityHash)} | {Cell(source.CommitSha)} | {Cell(source.ScanId)} | {Cell(source.ScannerVersion)} | {Cell(source.CoverageStatus)} |");
+        if (sources.Count == 0) throw new InvalidDataException("package-decision report cannot be rendered without source provenance.");
+        builder.AppendLine();
+    }
+
+    private static string EvidenceSuffix(PackageDecisionEvidence? evidence) => evidence is null
+        ? string.Empty
+        : $" fact `{Cell(evidence.FactId)}` at `{Cell(evidence.FilePath)}:{evidence.StartLine}-{evidence.EndLine}` extractor `{Cell(evidence.ExtractorId)}@{Cell(evidence.ExtractorVersion)}`";
+
+    private static string GapEvidenceSuffix(PackageDecisionGap gap)
+    {
+        var parts = new List<string>();
+        if (gap.SourceLabel is not null) parts.Add($"source `{Cell(gap.SourceLabel)}`");
+        if (gap.CommitSha is not null) parts.Add($"commit `{Cell(gap.CommitSha)}`");
+        if (gap.FilePath is not null) parts.Add($"at `{Cell(gap.FilePath)}:{gap.StartLine}-{gap.EndLine}`");
+        if (gap.ExtractorId is not null || gap.ExtractorVersion is not null) parts.Add($"extractor `{Cell(gap.ExtractorId)}@{Cell(gap.ExtractorVersion)}`");
+        if (gap.SupportingFactIds is { Count: > 0 }) parts.Add($"facts `{Cell(string.Join(',', gap.SupportingFactIds))}`");
+        return parts.Count == 0 ? string.Empty : " " + string.Join(' ', parts);
     }
 
     private static void RenderAdvisoryClaims(StringBuilder builder, PackageDecisionDocument report)
@@ -1664,7 +1717,7 @@ public static class PackageDecisionCorrelationReporter
 
     private static string ChangeSideCell(PackageDecisionChangeSide? side) => side is null
         ? "absent"
-        : $"{side.Side} {side.Evidence.FilePath}:{side.Evidence.StartLine}-{side.Evidence.EndLine} commit {side.CommitSha ?? "unknown"}";
+        : $"{side.Side} {side.Evidence.FilePath}:{side.Evidence.StartLine}-{side.Evidence.EndLine} commit {side.CommitSha ?? "unknown"} fact {side.Evidence.FactId} extractor {side.Evidence.ExtractorId ?? "unknown"}@{side.Evidence.ExtractorVersion ?? "unknown"}";
 
     private static void SectionRecords(StringBuilder builder, PackageDecisionDocument report)
     {
@@ -1677,8 +1730,8 @@ public static class PackageDecisionCorrelationReporter
     {
         builder.AppendLine($"## {title}\n");
         if (rows.Count == 0) { builder.AppendLine("No rows.\n"); return; }
-        builder.AppendLine("| Package | Version | Decision | Source | Commit | Relation | File:line | Rule |\n| --- | --- | --- | --- | --- | --- | --- | --- |");
-        foreach (var row in rows) builder.AppendLine($"| {Cell(row.PackageName)} | {Cell(row.ArtifactVersion)} | {Cell(row.DecisionKind)} | {Cell(row.SourceLabel)} | {Cell(row.CommitSha)} | {Cell(row.DependencyRelation)} | {Cell($"{row.Evidence.FilePath}:{row.Evidence.StartLine}-{row.Evidence.EndLine}")} | {Cell(RuleId)} |");
+        builder.AppendLine("| Package | Version | Decision | Source | Commit | Relation | File:line | Fact | Rule | Tier | Extractor |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+        foreach (var row in rows) builder.AppendLine($"| {Cell(row.PackageName)} | {Cell(row.ArtifactVersion)} | {Cell(row.DecisionKind)} | {Cell(row.SourceLabel)} | {Cell(row.CommitSha)} | {Cell(row.DependencyRelation)} | {Cell($"{row.Evidence.FilePath}:{row.Evidence.StartLine}-{row.Evidence.EndLine}")} | {Cell(row.Evidence.FactId)} | {Cell(row.Evidence.RuleId)} | {Cell(row.Evidence.EvidenceTier)} | {Cell($"{row.Evidence.ExtractorId}@{row.Evidence.ExtractorVersion}")} |");
     }
 
     private static void RenderContext(StringBuilder builder, string title, object? context)

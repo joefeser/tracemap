@@ -33,6 +33,7 @@ import java.util.regex.Pattern;
 public final class GradleLockfileExtractor {
     private static final Pattern COORDINATE = Pattern.compile("^([^:=]+):([^:=]+):([^:=]+)$");
     private static final Pattern SAFE_COORDINATE_PART = Pattern.compile("[A-Za-z0-9][A-Za-z0-9_.-]*");
+    private static final Pattern SAFE_VERSION = Pattern.compile("[A-Za-z0-9][A-Za-z0-9._+~-]{0,127}");
     private static final Pattern SAFE_CONFIGURATION_LIST = Pattern.compile("[A-Za-z0-9][A-Za-z0-9_.-]*(?:,[A-Za-z0-9][A-Za-z0-9_.-]*)*");
     private static final String DIGEST_GAP_MESSAGE =
         "gradle.lockfile provides resolved versions only; artifact digests are not available from this format";
@@ -155,7 +156,7 @@ public final class GradleLockfileExtractor {
             return;
         }
         String trimmed = version.trim();
-        if (BuildFileExtractor.unsafePackageVersion(trimmed)) {
+        if (!SAFE_VERSION.matcher(trimmed).matches() || BuildFileExtractor.unsafePackageVersion(trimmed)) {
             props.put("versionHash", Hashes.sha256(trimmed, 32));
             props.put("redactionReason", "unsafe-package-version");
         } else {

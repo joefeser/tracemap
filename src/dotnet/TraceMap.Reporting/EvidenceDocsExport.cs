@@ -207,6 +207,13 @@ public sealed record EvidenceDocLink(
 
 public static partial class EvidenceDocsExporter
 {
+    internal enum IndexFactLoadMode
+    {
+        None,
+        GapsOnly,
+        All
+    }
+
     public const string SchemaVersion = "tracemap-evidence-docs.v1";
     public const string GeneratorName = "tracemap-docs-export";
     private const string GeneratorVersion = SchemaVersion;
@@ -232,6 +239,8 @@ public static partial class EvidenceDocsExporter
     private const string GeneratedFileStaleRuleId = "docs-export.validation.generated-file-stale.v1";
     private const string UserFileCollisionRuleId = "docs-export.validation.user-file-collision.v1";
     private const string UnsafeRejectedRuleId = "docs-export.validation.unsafe-value-rejected.v1";
+    private const string UnsafePropertyRedactionRuleId = "docs-export.redaction.unsafe-property.v1";
+    private const string UnsafeLimitationRedactionRuleId = "docs-export.redaction.unsafe-limitation.v1";
     private const string ProhibitedClaimRuleId = "docs-export.validation.prohibited-claim-wording.v1";
     private const string SchemaGapRuleId = "docs-export.gap.schema-incompatible.v1";
     private const string ClaimHiddenRuleId = "docs-export.gap.claim-level-hidden.v1";
@@ -300,6 +309,7 @@ public static partial class EvidenceDocsExporter
     private static readonly Regex RawSqlPattern = new(@"\b(select|insert|update|delete|merge)\b.+\b(from|into|set|where|values)\b", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
     private static readonly Regex ConfigSecretPattern = new(@"(password|passwd|pwd|secret|token|apikey|api_key|connectionstring|connection string)\s*[=:]", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
     private static readonly Regex CredentialPattern = new(@"(sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16})", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
+    private static readonly Regex StackTracePattern = new(@"(?:\bSystem\.(?:[A-Za-z_][A-Za-z0-9_`]*\.)*[A-Za-z_][A-Za-z0-9_`]*Exception\b(?:\s*:\s*|\s+at\s+)|(?:^|\s)at\s+[A-Za-z_][A-Za-z0-9_.+`<>]*\([^)]*\)|--- End of stack trace)", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
     private static readonly Regex SafeMetadataKeyPattern = new(@"^[A-Za-z0-9_.-]+$", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
     private static readonly Regex ContentHashLinePattern = new(@"tracemap_content_sha256: [0-9a-f]{64}", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
     private static readonly Regex RepeatedDashPattern = new("-+", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
@@ -318,7 +328,7 @@ public static partial class EvidenceDocsExporter
         var catalog = await ReadClaimCatalogAsync(options.SourceClaimCatalogPath, cancellationToken);
         var diagnostics = new List<EvidenceDocsDiagnostic>();
 
-        var input = await ReadIndexAsync(options.IndexPath, cancellationToken);
+        var input = await ReadIndexAsync(options.IndexPath, ResolveIndexFactLoadMode(selectedFamilies), cancellationToken);
         ApplyCatalogClaims(input.Sources, catalog, diagnostics);
 
         var chunks = ProjectIndexChunks(input, selectedFamilies, diagnostics);
@@ -621,7 +631,22 @@ public static partial class EvidenceDocsExporter
         return date;
     }
 
-    private static async Task<IndexInput> ReadIndexAsync(string indexPath, CancellationToken cancellationToken)
+    internal static IndexFactLoadMode ResolveIndexFactLoadMode(IReadOnlyList<string> selectedFamilies)
+    {
+        if (selectedFamilies.Any(family => family is not "webforms-modernization" and not "gap" and not "limitation"))
+        {
+            return IndexFactLoadMode.All;
+        }
+
+        return selectedFamilies.Contains("gap", StringComparer.Ordinal)
+            ? IndexFactLoadMode.GapsOnly
+            : IndexFactLoadMode.None;
+    }
+
+    private static async Task<IndexInput> ReadIndexAsync(
+        string indexPath,
+        IndexFactLoadMode factLoadMode,
+        CancellationToken cancellationToken)
     {
         if (!File.Exists(indexPath))
         {
@@ -646,19 +671,22 @@ public static partial class EvidenceDocsExporter
         if (await TableExistsAsync(connection, "index_sources", cancellationToken)
             && await TableExistsAsync(connection, "combined_facts", cancellationToken))
         {
-            return await ReadCombinedIndexAsync(connection, cancellationToken);
+            return await ReadCombinedIndexAsync(connection, factLoadMode, cancellationToken);
         }
 
         if (await TableExistsAsync(connection, "scan_manifest", cancellationToken)
             && await TableExistsAsync(connection, "facts", cancellationToken))
         {
-            return await ReadSingleIndexAsync(connection, cancellationToken);
+            return await ReadSingleIndexAsync(connection, factLoadMode, cancellationToken);
         }
 
         throw new InvalidOperationException("InputSchemaUnsupported: docs-export --index must contain TraceMap scan or combined index tables.");
     }
 
-    private static async Task<IndexInput> ReadCombinedIndexAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    private static async Task<IndexInput> ReadCombinedIndexAsync(
+        SqliteConnection connection,
+        IndexFactLoadMode factLoadMode,
+        CancellationToken cancellationToken)
     {
         var sources = new List<DocSource>();
         await using (var command = connection.CreateCommand())
@@ -687,14 +715,16 @@ public static partial class EvidenceDocsExporter
             }
         }
 
-        var sourceById = sources.ToDictionary(source => source.SourceId, StringComparer.Ordinal);
         var facts = new List<DocFact>();
-        await using (var command = connection.CreateCommand())
+        if (factLoadMode != IndexFactLoadMode.None)
         {
-            command.CommandText = """
+            var sourceById = sources.ToDictionary(source => source.SourceId, StringComparer.Ordinal);
+            await using var command = connection.CreateCommand();
+            command.CommandText = $"""
                 select combined_fact_id, source_index_id, original_fact_id, scan_id, commit_sha, fact_type, rule_id,
                        evidence_tier, source_symbol, target_symbol, contract_element, file_path, start_line, end_line, properties_json
                 from combined_facts
+                {GapFactWhereClause(factLoadMode)}
                 order by source_index_id, file_path, start_line, fact_type, combined_fact_id;
                 """;
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -705,6 +735,7 @@ public static partial class EvidenceDocsExporter
                     continue;
                 }
 
+                var properties = SafeProperties(StringOrNull(reader, 14));
                 facts.Add(new DocFact(
                     reader.GetString(0),
                     StringOrNull(reader, 2),
@@ -720,7 +751,8 @@ public static partial class EvidenceDocsExporter
                     SafeRelativePathOrNull(StringOrNull(reader, 11)),
                     IntOrNull(reader, 12),
                     IntOrNull(reader, 13),
-                    SafeProperties(StringOrNull(reader, 14))));
+                    properties.Values,
+                    properties.Redactions));
             }
         }
 
@@ -732,7 +764,10 @@ public static partial class EvidenceDocsExporter
         return new IndexInput("combined-index", sources, facts);
     }
 
-    private static async Task<IndexInput> ReadSingleIndexAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    private static async Task<IndexInput> ReadSingleIndexAsync(
+        SqliteConnection connection,
+        IndexFactLoadMode factLoadMode,
+        CancellationToken cancellationToken)
     {
         DocSource? source = null;
         await using (var command = connection.CreateCommand())
@@ -767,17 +802,20 @@ public static partial class EvidenceDocsExporter
         }
 
         var facts = new List<DocFact>();
-        await using (var command = connection.CreateCommand())
+        if (factLoadMode != IndexFactLoadMode.None)
         {
-            command.CommandText = """
+            await using var command = connection.CreateCommand();
+            command.CommandText = $"""
                 select fact_id, scan_id, commit_sha, fact_type, rule_id, evidence_tier, source_symbol, target_symbol,
                        contract_element, file_path, start_line, end_line, properties_json
                 from facts
+                {GapFactWhereClause(factLoadMode)}
                 order by file_path, start_line, fact_type, fact_id;
                 """;
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
             while (await reader.ReadAsync(cancellationToken))
             {
+                var properties = SafeProperties(StringOrNull(reader, 12));
                 facts.Add(new DocFact(
                     reader.GetString(0),
                     reader.GetString(0),
@@ -793,12 +831,19 @@ public static partial class EvidenceDocsExporter
                     SafeRelativePathOrNull(StringOrNull(reader, 9)),
                     IntOrNull(reader, 10),
                     IntOrNull(reader, 11),
-                    SafeProperties(StringOrNull(reader, 12))));
+                    properties.Values,
+                    properties.Redactions));
             }
         }
 
         return new IndexInput("single-index", [source], facts);
     }
+
+    private static string GapFactWhereClause(IndexFactLoadMode factLoadMode) => factLoadMode switch
+    {
+        IndexFactLoadMode.GapsOnly => "where fact_type = 'AnalysisGap' or fact_type like '%Gap'",
+        _ => string.Empty
+    };
 
     private static List<EvidenceDocChunk> ProjectIndexChunks(IndexInput input, IReadOnlyList<string> selectedFamilies, List<EvidenceDocsDiagnostic> diagnostics)
     {
@@ -848,6 +893,9 @@ public static partial class EvidenceDocsExporter
                 frameworkMigrationFacts.Select(fact => fact.Source).DistinctBy(source => source.SourceId).ToArray(),
                 frameworkMigrationFacts.Select(fact => fact.FactId).ToArray(),
                 MinClaim(frameworkMigrationFacts.Select(fact => fact.Source.ClaimLevel))));
+            chunks.AddRange(frameworkMigrationFacts
+                .Where(fact => fact.PropertyRedactions.Count > 0)
+                .Select(CreatePropertyRedactionGapChunk));
         }
 
         if (input.Kind == "single-index")
@@ -865,7 +913,9 @@ public static partial class EvidenceDocsExporter
             }
         }
 
-        if (input.Facts.Count == 0 && selectedFamilies.Contains("gap", StringComparer.Ordinal))
+        if (input.Facts.Count == 0
+            && selectedFamilies.Contains("gap", StringComparer.Ordinal)
+            && ResolveIndexFactLoadMode(selectedFamilies) == IndexFactLoadMode.All)
         {
             chunks.Add(CreateGapChunk("no-facts", UnknownAnalysisRuleId, "missing-provenance", "gap", input.Sources, ["index:facts"], "hidden"));
         }
@@ -1404,7 +1454,8 @@ public static partial class EvidenceDocsExporter
             DistinctSorted([fact.EvidenceTier]),
             [fact.Source.CoverageLabel],
             GapsForFact(fact, family),
-            [LimitationForFamily(family, [fact.FactId])]);
+            [LimitationForFamily(family, [fact.FactId])],
+            PropertyRedactionsForFact(fact));
     }
 
     private static EvidenceDocChunk CreateLegacyDataDescriptorChunk(
@@ -1472,7 +1523,8 @@ public static partial class EvidenceDocsExporter
             evidenceTiers,
             coverageLabels,
             GapsForFact(fact, family),
-            limitations);
+            limitations,
+            PropertyRedactionsForFact(fact));
     }
 
     private static EvidenceDocChunk CreateFactGapChunk(DocFact fact)
@@ -1486,7 +1538,14 @@ public static partial class EvidenceDocsExporter
             [ToSourceRef(fact.Source)],
             [fact.FactId],
             ["Analysis gap facts preserve uncertainty and do not prove absence."]);
-        return CreateGapChunkFromGap(gap, fact.Source.ClaimLevel);
+        var redactionGaps = PropertyRedactionGapsForFact(fact, "gap");
+        return CreateGapChunkFromGap(gap, fact.Source.ClaimLevel, redactionGaps, PropertyRedactionsForFact(fact));
+    }
+
+    private static EvidenceDocChunk CreatePropertyRedactionGapChunk(DocFact fact)
+    {
+        var gaps = PropertyRedactionGapsForFact(fact, "gap");
+        return CreateGapChunkFromGap(gaps[0], fact.Source.ClaimLevel, gaps.Skip(1).ToArray(), PropertyRedactionsForFact(fact));
     }
 
     private static EvidenceDocChunk CreateGapChunk(string key, string ruleId, string reason, string family, IReadOnlyList<DocSource> sources, IReadOnlyList<string> supportingIds, string claimLevel)
@@ -1503,8 +1562,13 @@ public static partial class EvidenceDocsExporter
         return CreateGapChunkFromGap(gap, claimLevel);
     }
 
-    private static EvidenceDocChunk CreateGapChunkFromGap(EvidenceDocGap gap, string claimLevel)
+    private static EvidenceDocChunk CreateGapChunkFromGap(
+        EvidenceDocGap gap,
+        string claimLevel,
+        IReadOnlyList<EvidenceDocGap>? additionalGaps = null,
+        IReadOnlyList<EvidenceDocRedaction>? redactions = null)
     {
+        var allGaps = new[] { gap }.Concat(additionalGaps ?? []).ToArray();
         var body = $"""
             ## Evidence gap
 
@@ -1528,18 +1592,19 @@ public static partial class EvidenceDocsExporter
             body,
             [],
             gap.SourceRefs,
-            gap.SupportingIds,
-            [GapChunkRuleId, gap.RuleId],
-            [gap.EvidenceTier],
+            DistinctSorted(allGaps.SelectMany(item => item.SupportingIds)),
+            DistinctSorted([GapChunkRuleId, .. allGaps.Select(item => item.RuleId)]),
+            DistinctSorted(allGaps.Select(item => item.EvidenceTier)),
             gap.SourceRefs.Select(source => source.CoverageLabel).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
-            [gap],
+            allGaps,
             [new EvidenceDocLimitation(
                 StableId("limitation", "docs-export/limitation/v1", [new("gap", gap.GapId)]),
                 gap.RuleId,
                 gap.EvidenceTier,
                 "Gap chunks are evidence availability records and must not be read as clean absence findings.",
                 "gap",
-                gap.SupportingIds)]);
+                gap.SupportingIds)],
+            redactions);
     }
 
     private static EvidenceDocChunk CreateLimitationChunk(IReadOnlyList<DocSource> sources)
@@ -1594,10 +1659,43 @@ public static partial class EvidenceDocsExporter
         IReadOnlyList<string> evidenceTiers,
         IReadOnlyList<string> coverageLabels,
         IReadOnlyList<EvidenceDocGap> gaps,
-        IReadOnlyList<EvidenceDocLimitation> limitations)
+        IReadOnlyList<EvidenceDocLimitation> limitations,
+        IReadOnlyList<EvidenceDocRedaction>? explicitRedactions = null)
     {
+        var sanitizedGaps = gaps.Select(gap => gap with
+        {
+            Limitations = gap.Limitations.Select(SafeLimitationMessage).ToArray()
+        }).ToArray();
+        var sanitizedLimitations = limitations.Select(limitation => limitation with
+        {
+            RuleId = UnsafeCategory(limitation.Message) is null ? limitation.RuleId : UnsafeLimitationRedactionRuleId,
+            EvidenceTier = UnsafeCategory(limitation.Message) is null ? limitation.EvidenceTier : Tier4Unknown,
+            Message = SafeLimitationMessage(limitation.Message)
+        }).ToArray();
+        var limitationRedactions = gaps
+            .SelectMany(gap => gap.Limitations.Select(message => (Id: gap.GapId, Message: message, Location: "gap-limitation")))
+            .Concat(limitations.Select(limitation => (Id: limitation.LimitationId, Message: limitation.Message, Location: "limitation")))
+            .Select(item => (item.Id, item.Location, Category: UnsafeCategory(item.Message)))
+            .Where(item => item.Category is not null)
+            .Select(item => new EvidenceDocRedaction(
+                StableId("redaction", "docs-export/unsafe-limitation/v1", [new("id", item.Id), new("category", item.Category)]),
+                UnsafeLimitationRedactionRuleId,
+                item.Category!,
+                item.Location))
+            .OrderBy(redaction => redaction.RedactionId, StringComparer.Ordinal)
+            .ToArray();
+        var redactions = (explicitRedactions ?? [])
+            .Concat(limitationRedactions)
+            .DistinctBy(redaction => redaction.RedactionId)
+            .OrderBy(redaction => redaction.RedactionId, StringComparer.Ordinal)
+            .ToArray();
         var orderedSupportingIds = supportingIds.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
-        var orderedRules = ruleIds.Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        var orderedRules = ruleIds
+            .Concat(redactions.Select(redaction => redaction.RuleId))
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
         var orderedTiers = evidenceTiers.Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
         var orderedCoverage = coverageLabels.Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
         var sourceKey = string.Join('|', sourceRefs.Select(source => source.SourceId).OrderBy(value => value, StringComparer.Ordinal));
@@ -1615,8 +1713,8 @@ public static partial class EvidenceDocsExporter
         ]);
         var sortKey = $"{Array.IndexOf(AllFamilies, family):D2}|{family}|{string.Join('|', orderedCoverage)}|{string.Join('|', orderedRules)}|{id}|{title}";
         var sectionTitle = SectionTitleFor(family, type);
-        var questionFamilies = QuestionFamiliesFor(family, type, orderedTiers, orderedCoverage, gaps, limitations);
-        var claim = ClaimFor(type, family, claimLevel, orderedRules.Length == 0 ? [GapChunkRuleId] : orderedRules, orderedTiers.Length == 0 ? [Tier4Unknown] : orderedTiers, orderedCoverage, orderedSupportingIds, gaps, limitations);
+        var questionFamilies = QuestionFamiliesFor(family, type, orderedTiers, orderedCoverage, sanitizedGaps, sanitizedLimitations);
+        var claim = ClaimFor(type, family, claimLevel, orderedRules.Length == 0 ? [GapChunkRuleId] : orderedRules, orderedTiers.Length == 0 ? [Tier4Unknown] : orderedTiers, orderedCoverage, orderedSupportingIds, sanitizedGaps, sanitizedLimitations);
         return new EvidenceDocChunk(
             SchemaVersion,
             id,
@@ -1636,10 +1734,18 @@ public static partial class EvidenceDocsExporter
             orderedRules.Length == 0 ? [GapChunkRuleId] : orderedRules,
             orderedTiers.Length == 0 ? [Tier4Unknown] : orderedTiers,
             orderedCoverage,
-            gaps.OrderBy(gap => gap.GapId, StringComparer.Ordinal).ToArray(),
-            limitations.OrderBy(limitation => limitation.LimitationId, StringComparer.Ordinal).ToArray(),
-            [],
+            sanitizedGaps.OrderBy(gap => gap.GapId, StringComparer.Ordinal).ToArray(),
+            sanitizedLimitations.OrderBy(limitation => limitation.LimitationId, StringComparer.Ordinal).ToArray(),
+            redactions,
             []);
+    }
+
+    private static string SafeLimitationMessage(string message)
+    {
+        var category = UnsafeCategory(message);
+        return category is null
+            ? message
+            : $"An unsafe limitation value was omitted; category: {category}. Review the retained supporting IDs in authorized local evidence.";
     }
 
     private static string SectionTitleFor(string family, string type)
@@ -2245,6 +2351,16 @@ public static partial class EvidenceDocsExporter
             var lines = content.Split('\n');
             for (var i = 0; i < lines.Length; i++)
             {
+                if (path == "chunks.jsonl")
+                {
+                    if (TryUnsafeJsonLineDiagnostic(lines[i], out var jsonCategory, out var context))
+                    {
+                        throw new InvalidOperationException($"UnsafeValueRejected: {UnsafeRejectedRuleId} [{Tier4Unknown}]: {jsonCategory} at {path}:{i + 1}{context}.");
+                    }
+
+                    continue;
+                }
+
                 var category = UnsafeCategory(lines[i]);
                 if (category == "raw-sql" && path is "query-recipes.json" or "QUERY_RECIPES.md")
                 {
@@ -2262,6 +2378,110 @@ public static partial class EvidenceDocsExporter
                 throw new InvalidOperationException($"ProhibitedClaimWording: {ProhibitedClaimRuleId} [{Tier4Unknown}]: unsupported-static-claim at {path}.");
             }
         }
+    }
+
+    private static bool TryUnsafeJsonLineDiagnostic(string json, out string category, out string context)
+    {
+        if (string.IsNullOrEmpty(json))
+        {
+            category = string.Empty;
+            context = string.Empty;
+            return false;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+            var chunkId = SafeDiagnosticJsonToken(root, "chunkId");
+            var chunkFamily = SafeDiagnosticJsonToken(root, "chunkFamily");
+            if (TryFindUnsafeJsonString(root, "$", out var field, out var fieldLine, out var value, out category))
+            {
+                context = $"; chunk={chunkId}; family={chunkFamily}; field={field}#line={fieldLine}; valueLength={value.Length}; valueSha256={Hash(value, 64)}";
+                return true;
+            }
+
+            category = string.Empty;
+            context = string.Empty;
+            return false;
+        }
+        catch (JsonException)
+        {
+            category = UnsafeCategory(json) ?? "malformed-json";
+            context = $"; chunk=unavailable; family=unavailable; field=unresolved; recordLength={json.Length}; recordSha256={Hash(json, 64)}";
+            return true;
+        }
+    }
+
+    private static string SafeDiagnosticJsonToken(JsonElement root, string propertyName)
+    {
+        if (root.ValueKind != JsonValueKind.Object
+            || !root.TryGetProperty(propertyName, out var property)
+            || property.ValueKind != JsonValueKind.String)
+        {
+            return "unavailable";
+        }
+
+        var value = property.GetString();
+        return string.IsNullOrWhiteSpace(value) ? "unavailable" : SafeTokenOrHash(value);
+    }
+
+    private static bool TryFindUnsafeJsonString(
+        JsonElement element,
+        string path,
+        out string field,
+        out int fieldLine,
+        out string value,
+        out string category)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                foreach (var property in element.EnumerateObject())
+                {
+                    var propertyToken = IsSafeMetadataKey(property.Name)
+                        ? property.Name
+                        : $"property-{Hash(property.Name, 16)}";
+                    if (TryFindUnsafeJsonString(property.Value, $"{path}.{propertyToken}", out field, out fieldLine, out value, out category))
+                    {
+                        return true;
+                    }
+                }
+                break;
+            case JsonValueKind.Array:
+                var index = 0;
+                foreach (var item in element.EnumerateArray())
+                {
+                    if (TryFindUnsafeJsonString(item, $"{path}[{index}]", out field, out fieldLine, out value, out category))
+                    {
+                        return true;
+                    }
+                    index++;
+                }
+                break;
+            case JsonValueKind.String:
+                var candidate = element.GetString() ?? string.Empty;
+                var candidateLines = NormalizeLineEndings(candidate).Split('\n');
+                for (var lineIndex = 0; lineIndex < candidateLines.Length; lineIndex++)
+                {
+                    var candidateCategory = UnsafeCategory(candidateLines[lineIndex]);
+                    if (candidateCategory is not null)
+                    {
+                        field = path;
+                        fieldLine = lineIndex + 1;
+                        value = candidateLines[lineIndex];
+                        category = candidateCategory;
+                        return true;
+                    }
+                }
+                break;
+        }
+
+        field = string.Empty;
+        fieldLine = 0;
+        value = string.Empty;
+        category = string.Empty;
+        return false;
     }
 
     private static async Task ValidateExistingFilesAsync(string outputPath, IReadOnlyDictionary<string, string> files, bool force, CancellationToken cancellationToken)
@@ -2520,7 +2740,7 @@ public static partial class EvidenceDocsExporter
 
     private static IReadOnlyList<EvidenceDocGap> GapsForFact(DocFact fact, string family)
     {
-        var gaps = new List<EvidenceDocGap>();
+        var gaps = new List<EvidenceDocGap>(PropertyRedactionGapsForFact(fact, family));
         if (fact.CommitSha is null or "unknown")
         {
             gaps.Add(new EvidenceDocGap(
@@ -2564,6 +2784,49 @@ public static partial class EvidenceDocsExporter
 
         return gaps;
     }
+
+    private static IReadOnlyList<EvidenceDocGap> PropertyRedactionGapsForFact(DocFact fact, string family) =>
+        fact.PropertyRedactions
+            .OrderBy(redaction => redaction.Key, StringComparer.Ordinal)
+            .Select(redaction => new EvidenceDocGap(
+                StableId("gap", "docs-export/gap/v1",
+                [
+                    new("reason", "unsafe-property-redacted"),
+                    new("fact", fact.FactId),
+                    new("property", redaction.Key),
+                    new("category", redaction.Category)
+                ]),
+                UnsafePropertyRedactionRuleId,
+                Tier4Unknown,
+                "unsafe-property-redacted",
+                family,
+                [ToSourceRef(fact.Source)],
+                [fact.FactId, $"property:{redaction.Key}", $"redaction-category:{redaction.Category}"],
+                ["An unsafe source property value was omitted. Its category, property key, and supporting fact remain available without revealing the value."])
+            {
+                FilePath = fact.FilePath,
+                StartLine = fact.StartLine,
+                EndLine = fact.EndLine,
+                CommitSha = fact.CommitSha ?? fact.Source.CommitSha,
+                ExtractorName = ExtractorName(fact) ?? "unknown",
+                ExtractorVersion = fact.Source.ExtractorVersion ?? "unknown"
+            })
+            .ToArray();
+
+    private static IReadOnlyList<EvidenceDocRedaction> PropertyRedactionsForFact(DocFact fact) =>
+        fact.PropertyRedactions
+            .OrderBy(redaction => redaction.Key, StringComparer.Ordinal)
+            .Select(redaction => new EvidenceDocRedaction(
+                StableId("redaction", "docs-export/unsafe-property/v1",
+                [
+                    new("fact", fact.FactId),
+                    new("property", redaction.Key),
+                    new("category", redaction.Category)
+                ]),
+                UnsafePropertyRedactionRuleId,
+                redaction.Category,
+                $"property:{redaction.Key}"))
+            .ToArray();
 
     private static IReadOnlyList<EvidenceDocLimitation> BuildManifestLimitations(IReadOnlyList<EvidenceDocChunk> chunks, IReadOnlyList<string> selectedFamilies)
     {
@@ -2977,33 +3240,53 @@ public static partial class EvidenceDocsExporter
         return IsSafeMetadataValue(value) ? value : $"hash:{Hash(value, 16)}";
     }
 
-    private static Dictionary<string, string> SafeProperties(string? json)
+    private static SafePropertiesProjection SafeProperties(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))
         {
-            return [];
+            return new(new Dictionary<string, string>(StringComparer.Ordinal), []);
         }
 
         try
         {
             var values = JsonSerializer.Deserialize<Dictionary<string, string>>(json, JsonOptions) ?? [];
-            foreach (var value in values.Values)
+            var safeValues = new Dictionary<string, string>(StringComparer.Ordinal);
+            var redactions = new List<UnsafePropertyRedaction>();
+            foreach (var pair in values.Where(pair => IsSafeMetadataKey(pair.Key)))
             {
-                var category = UnsafeCategory(value);
-                if (category is "raw-sql" or "credential-or-config" or "credential")
+                var value = pair.Value ?? string.Empty;
+                var category = RedactionEligiblePropertyCategory(value);
+                if (category is null)
                 {
-                    throw new InvalidOperationException($"UnsafeValueRejected: {UnsafeRejectedRuleId} [{Tier4Unknown}]: {category} at input.properties.");
+                    safeValues[pair.Key] = value;
+                    continue;
                 }
+
+                safeValues[pair.Key] = "redacted-value";
+                redactions.Add(new UnsafePropertyRedaction(pair.Key, category));
             }
 
-            return values
-                .Where(pair => IsSafeMetadataKey(pair.Key))
-                .ToDictionary(pair => pair.Key, pair => pair.Value ?? string.Empty, StringComparer.Ordinal);
+            return new(safeValues, redactions);
         }
         catch (JsonException)
         {
-            return [];
+            return new(new Dictionary<string, string>(StringComparer.Ordinal), []);
         }
+    }
+
+    private static string? RedactionEligiblePropertyCategory(string value)
+    {
+        if (ConfigSecretPattern.IsMatch(value))
+        {
+            return "credential-or-config";
+        }
+
+        if (CredentialPattern.IsMatch(value))
+        {
+            return "credential";
+        }
+
+        return RawSqlPattern.IsMatch(value) ? "raw-sql" : null;
     }
 
     private static string? ExtractorName(DocFact fact)
@@ -3118,7 +3401,7 @@ public static partial class EvidenceDocsExporter
             return "credential";
         }
 
-        if (value.Contains("System.", StringComparison.Ordinal) && value.Contains("Exception", StringComparison.Ordinal))
+        if (StackTracePattern.IsMatch(value))
         {
             return "stack-trace";
         }
@@ -3366,7 +3649,14 @@ public static partial class EvidenceDocsExporter
         string? FilePath,
         int? StartLine,
         int? EndLine,
-        IReadOnlyDictionary<string, string> Properties);
+        IReadOnlyDictionary<string, string> Properties,
+        IReadOnlyList<UnsafePropertyRedaction> PropertyRedactions);
+
+    private sealed record SafePropertiesProjection(
+        IReadOnlyDictionary<string, string> Values,
+        IReadOnlyList<UnsafePropertyRedaction> Redactions);
+
+    private sealed record UnsafePropertyRedaction(string Key, string Category);
 
     private sealed record PropertyFlowTerminalContextProjection(
         string PathLabel,

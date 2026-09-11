@@ -15,6 +15,13 @@ public sealed class WebFormsAgentEvidenceHandoffTests
     private const string CommitSha = "1111111111111111111111111111111111111111";
 
     [Fact]
+    public void Corpus_json_lines_limit_supports_large_streamed_exports()
+    {
+        Assert.Equal(64L * 1024 * 1024, WebFormsAgentEvidenceHandoff.MaximumCorpusManifestBytes);
+        Assert.Equal(2L * 1024 * 1024 * 1024, WebFormsAgentEvidenceHandoff.MaximumCorpusJsonLinesBytes);
+    }
+
+    [Fact]
     public void SetHandoffValidatesIndexAndSelectsMatchingCorpusChunks()
     {
         WithFixture((root, inspection, handoff) =>
@@ -70,6 +77,35 @@ public sealed class WebFormsAgentEvidenceHandoffTests
             Assert.All(handoff.RetrievalHints.Where(hint => hint.RecipeId == "fact-by-id"), hint => Assert.Equal("1", hint.Parameters["limit"]));
             Assert.All(handoff.RetrievalHints.Where(hint => hint.RecipeId == "facts-by-file-span"), hint => Assert.Equal("100", hint.Parameters["limit"]));
             Assert.All(handoff.RetrievalHints.Where(hint => hint.RecipeId == "calls-from-handler"), hint => Assert.Equal("250", hint.Parameters["limit"]));
+        });
+    }
+
+    [Fact]
+    public void CaseHandoffOmitsRetrievalHintsWithoutSupportingEvidence()
+    {
+        WithFixture((_, inspection, _) =>
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(inspection));
+            var selectedCase = document.RootElement.GetProperty("cases")[0];
+            var withoutCalls = JsonNode.Parse(selectedCase.GetRawText())!.AsObject();
+            withoutCalls["stoppingSymbols"] = new JsonArray();
+            foreach (var method in withoutCalls["methods"]!.AsArray())
+            {
+                method!["outgoingCallSites"] = new JsonArray();
+            }
+
+            using var narrowed = JsonDocument.Parse(withoutCalls.ToJsonString());
+            var handoff = WebFormsAgentEvidenceHandoff.BuildCase(
+                document.RootElement,
+                narrowed.RootElement,
+                "case-001",
+                "case-001.private.html",
+                "inspection.snapshot.json",
+                WebFormsAgentEvidenceHandoff.HashFile(inspection),
+                "agent-evidence-handoff.json");
+
+            Assert.DoesNotContain(handoff.RetrievalHints, hint => hint.RecipeId == "calls-from-handler");
+            Assert.DoesNotContain(handoff.RetrievalHints, hint => hint.SupportingIds.Count == 0);
         });
     }
 
@@ -159,6 +195,30 @@ public sealed class WebFormsAgentEvidenceHandoffTests
                 Path.Combine(set, "inspection.snapshot.json"), set, output, index, corpus));
 
             Assert.Equal("AgentHandoffCorpusIntegrityMismatch", error.Message);
+            Assert.False(File.Exists(output));
+        });
+    }
+
+    [Fact]
+    public void SetHandoffReportsCorpusLimitSeparatelyFromMissingCorpusFiles()
+    {
+        WithFixture((root, inspection, handoff) =>
+        {
+            var set = PrepareSet(root, inspection, handoff);
+            var index = Path.Combine(root, "index.sqlite");
+            CreateIndex(index, "scan-one", CommitSha);
+            var corpus = Path.Combine(root, "docs");
+            EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(index, corpus, Format: "jsonl")).GetAwaiter().GetResult();
+            using (var stream = new FileStream(Path.Combine(corpus, "query-recipes.json"), FileMode.Open, FileAccess.Write, FileShare.None))
+            {
+                stream.SetLength((4L * 1024 * 1024) + 1);
+            }
+            var output = Path.Combine(set, "agent-evidence-handoff.json");
+
+            var error = Assert.Throws<InvalidDataException>(() => WebFormsAgentEvidenceHandoff.WriteSet(
+                Path.Combine(set, "inspection.snapshot.json"), set, output, index, corpus));
+
+            Assert.Equal("AgentHandoffCorpusLimit", error.Message);
             Assert.False(File.Exists(output));
         });
     }
