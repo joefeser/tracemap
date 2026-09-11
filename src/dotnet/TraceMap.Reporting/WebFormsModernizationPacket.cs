@@ -834,7 +834,28 @@ public static class WebFormsModernizationPacketReporter
             snapshot.CommitSha,
             snapshot.AnalysisLevel,
             snapshot.BuildStatus);
-        var packetId = HashId("packet", [SchemaVersion, source.SourceId, snapshot.ScanId, snapshot.CommitSha]);
+        var packetIdentity = new List<string>
+        {
+            SchemaVersion,
+            source.SourceId,
+            snapshot.ScanId,
+            snapshot.CommitSha,
+            coverage,
+            $"truncated:{truncated.ToString().ToLowerInvariant()}"
+        };
+        packetIdentity.AddRange(projects.Select(project => $"project:{project.ProjectId}:{project.SurfaceCount}"));
+        packetIdentity.AddRange(surfaces.Select(surface => $"surface:{surface.SurfaceId}"));
+        packetIdentity.AddRange(chains.OrderBy(chain => chain.ChainId, StringComparer.Ordinal).Select(chain => $"chain:{chain.ChainId}"));
+        packetIdentity.AddRange(boundaries.OrderBy(boundary => boundary.BoundaryId, StringComparer.Ordinal).Select(boundary => $"boundary:{boundary.BoundaryId}"));
+        packetIdentity.AddRange(identityState.Select(state => $"identity:{state.IdentityStateId}"));
+        packetIdentity.AddRange(batchDataMovement.Select(item => $"batch:{item.BatchDataMovementId}"));
+        packetIdentity.AddRange(candidates.Select(candidate => $"candidate:{candidate.CandidateId}"));
+        packetIdentity.AddRange(uniqueGaps.Select(gap => $"gap:{gap.GapId}"));
+        packetIdentity.AddRange(surfaceSelection?.Items
+            .OrderBy(item => item.RequestId, StringComparer.Ordinal)
+            .Select(item => $"selection:{item.RequestId}:{item.Status}:{string.Join(',', item.SurfaceIds.OrderBy(id => id, StringComparer.Ordinal))}")
+            ?? []);
+        var packetId = HashId("packet", packetIdentity);
         return new(
             SchemaVersion,
             packetId,

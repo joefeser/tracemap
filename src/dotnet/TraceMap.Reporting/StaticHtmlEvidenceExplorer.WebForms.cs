@@ -488,7 +488,7 @@ public static partial class StaticHtmlEvidenceExplorer
             || packet.EventChains.Any(chain => !surfaceIds.Contains(chain.SurfaceId))
             || packet.DownstreamBoundaries.Any(boundary => !surfaceIds.Contains(boundary.SurfaceId) || !chainIds.Contains(boundary.ChainId))
             || packet.IdentityStateInventory.Any(state => state.SurfaceId is not null && !surfaceIds.Contains(state.SurfaceId))
-            || packet.SurfaceSelection?.Items.Any(item => item.SurfaceIds.Any(id => !surfaceIds.Contains(id))) == true
+            || packet.SurfaceSelection?.Items.Any(item => item.Status == "matched" && item.SurfaceIds.Any(id => !surfaceIds.Contains(id))) == true
             || packet.StructuralSliceCandidates.Any(candidate => candidate.SurfaceIds is null || candidate.SurfaceIds.Any(id => !surfaceIds.Contains(id))))
         {
             throw new InvalidDataException("inconsistent Web Forms packet identity graph");
@@ -526,6 +526,7 @@ public static partial class StaticHtmlEvidenceExplorer
         {
             if (string.IsNullOrWhiteSpace(chain.ChainId) || string.IsNullOrWhiteSpace(chain.SurfaceId)
                 || string.IsNullOrWhiteSpace(chain.EventSourceId) || string.IsNullOrWhiteSpace(chain.Classification)
+                || chain.Evidence is null || chain.Evidence.Count == 0 || chain.PathEvidence is null
                 || chain.SupportingFactIds is null || chain.SupportingEdgeIds is null || chain.RuleIds is null
                 || chain.EvidenceTiers is null || chain.CoverageLabels is null || chain.Limitations is null
                 || chain.HandlerSymbol is not null && string.IsNullOrWhiteSpace(chain.HandlerSymbol)

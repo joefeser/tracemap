@@ -93,6 +93,9 @@ Gap records retain their own source references, commit identity, safe
 repository-relative file path and structured line span when available, plus
 extractor identity/version and supporting IDs. Metadata that is unavailable
 remains null on the gap rather than being inferred from an unrelated citation.
+Web Forms packet identity includes the retained packet contents and requested
+surface selection, so distinct bounded views of the same scan remain separate
+retrieval inputs instead of colliding.
 
 Each chunk includes deterministic navigation links to its Markdown file, the
 family index, and the top-level docs index. Markdown output renders the same

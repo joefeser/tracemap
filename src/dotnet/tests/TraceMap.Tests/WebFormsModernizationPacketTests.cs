@@ -352,6 +352,20 @@ public sealed class WebFormsModernizationPacketTests
             WebFormsPacketPaths: [inconsistentProjectPath])));
         Assert.Contains("InputSchemaUnsupported", inconsistentProject.Message);
 
+        var evidenceFreeChainPath = Path.Combine(temp.Path, "webforms-modernization-evidence-free-chain.json");
+        var retainedChain = first.Packet.EventChains.First(chain => chain.Evidence.Count > 0);
+        await File.WriteAllTextAsync(evidenceFreeChainPath, JsonSerializer.Serialize(first.Packet with
+        {
+            EventChains = first.Packet.EventChains.Select(chain => chain.ChainId == retainedChain.ChainId
+                ? chain with { Evidence = [], PathEvidence = [] }
+                : chain).ToArray()
+        }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+        var evidenceFreeChain = await Assert.ThrowsAsync<InvalidOperationException>(() => EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
+            index,
+            Path.Combine(temp.Path, "docs-evidence-free-chain"),
+            WebFormsPacketPaths: [evidenceFreeChainPath])));
+        Assert.Contains("InputSchemaUnsupported", evidenceFreeChain.Message);
+
         var absolutePath = Path.Combine(temp.Path, "private", "Default.aspx");
         var unsafePacketPath = Path.Combine(temp.Path, "webforms-modernization-unsafe-path.json");
         await File.WriteAllTextAsync(unsafePacketPath, JsonSerializer.Serialize(first.Packet with
@@ -1267,6 +1281,16 @@ public sealed class WebFormsModernizationPacketTests
         Assert.DoesNotContain("Missing.aspx", json, StringComparison.Ordinal);
         Assert.Contains("## Requested page coverage", markdown, StringComparison.Ordinal);
         Assert.Contains("`page-001`", markdown, StringComparison.Ordinal);
+
+        var unfiltered = await WebFormsModernizationPacketReporter.WriteAsync(new(index, Path.Combine(temp.Path, "packet-unfiltered")));
+        Assert.NotEqual(packet.PacketId, unfiltered.Packet.PacketId);
+        var docs = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
+            index,
+            Path.Combine(temp.Path, "docs-both-packets"),
+            Families: "webforms-modernization,gap,limitation",
+            WebFormsPacketPaths: [Path.Combine(output, "webforms-modernization.json"), unfiltered.JsonPath]));
+        Assert.Equal(2, docs.Manifest.Inputs.Count(input => input.Kind == "webforms-modernization-packet"));
+        Assert.Equal(2, docs.Chunks.Count(chunk => chunk.Title == "Web Forms evidence packet overview"));
     }
 
     [Fact]
