@@ -289,3 +289,15 @@ caller-text regression over the full scan pipeline.
   modern scan is byte-identical; private-path and diff guards pass. The legacy
   scan retains 24 Tier1 facts plus 14 bounded call-site Tier3 facts, and the Web
   Forms scan retains 19 Tier1 facts plus 8 bounded call-site Tier3 facts.
+- Exact-HEAD review follow-up removed optional parameter default literals from
+  both persisted VB display strings and canonical symbol identities, kept VB
+  operator declarations outside the documented declaration scope, and made
+  capability diagnostics language-honest: VB-only scans no longer emit the
+  C# semantic-compilation capability while VB syntax fallback contributes to
+  the language-neutral syntax capability.
+- Restore remains enabled for VB-only scans, but a mixed C#/VB scan performs
+  the requested restore during the C# workspace pass and reuses that restored
+  state for the VB workspace pass instead of restoring the solution twice.
+- Follow-up validation: full solution tests 1886/1886 and focused
+  `FullyQualifiedName~VisualBasic` tests 36/36; privacy, VB capability,
+  syntax-fallback, and operator-boundary regressions are included.

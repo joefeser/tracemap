@@ -22,8 +22,7 @@ public static class VisualBasicSymbolIdentityProvider
         parameterOptions:
             SymbolDisplayParameterOptions.IncludeType
             | SymbolDisplayParameterOptions.IncludeName
-            | SymbolDisplayParameterOptions.IncludeParamsRefOut
-            | SymbolDisplayParameterOptions.IncludeDefaultValue,
+            | SymbolDisplayParameterOptions.IncludeParamsRefOut,
         miscellaneousOptions:
             SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers
             | SymbolDisplayMiscellaneousOptions.UseSpecialTypes);
