@@ -64,13 +64,19 @@ try {
     if ($index.IndexOf('Pages/First.aspx', [StringComparison]::Ordinal) -gt $index.IndexOf('Pages/Second.aspx', [StringComparison]::Ordinal)) { throw 'Pages were not ordered by retained path.' }
     if (!$index.Contains('43', [StringComparison]::Ordinal) -and !$index.Contains('2 selected surfaces', [StringComparison]::Ordinal)) { throw 'Index did not report surface count.' }
     $first = [IO.File]::ReadAllText((Join-Path $workbench 'page-001.html'))
-    foreach ($expected in @('Go.Click', 'App.First.Go_Click()', 'stored-procedure-candidate', 'HandlerTerminalUnavailable', 'Tier4Unknown', ('a' * 40), 'legacy-webforms/1', 'identity-one', 'batch-one', 'candidate-one', 'Raw source omitted')) {
+    foreach ($expected in @('Go.Click', 'App.First.Go_Click()', 'stored-procedure-candidate', 'HandlerTerminalUnavailable', 'Tier4Unknown', ('a' * 40), 'legacy-webforms/1', 'identity-one', 'candidate-one', 'Raw source omitted')) {
         if (!$first.Contains($expected, [StringComparison]::Ordinal)) { throw "Page report missing: $expected" }
     }
     $handoff = [IO.File]::ReadAllText((Join-Path $workbench 'page-001.handoff.json')) | ConvertFrom-Json -Depth 30
     if ($handoff.subject.filePath -ne 'Pages/First.aspx' -or $handoff.counts.eventChains -ne 1 -or $handoff.evidenceDocs.status -ne 'supplied-read-only') { throw 'Page handoff projection was incomplete.' }
+    if ($handoff.eventChains[0].chainId -ne 'chain-one' -or $handoff.eventChains[0].evidence[0].factId -ne 'fact-surface-1' -or
+        $handoff.downstreamBoundaries[0].boundaryId -ne 'boundary-one' -or $handoff.downstreamBoundaries[0].terminalEvidenceId -ne 'fact-db') { throw 'Page handoff omitted bounded chain or boundary evidence.' }
+    if ($handoff.inventories.PSObject.Properties.Name -contains 'projectDataMovement') { throw 'Project-scoped data movement was duplicated into the page handoff.' }
     if (@($handoff.retrievalHints).Count -ne 2 -or @($handoff.retrievalHints | Where-Object { !$_.recipeId }).Count -ne 0) { throw 'Retrieval hints were not serialized as a flat recipe list.' }
     $applicationHandoff = [IO.File]::ReadAllText((Join-Path $workbench 'application-handoff.json')) | ConvertFrom-Json -Depth 30
+    if (@($applicationHandoff.projectDataMovement).Count -ne 1 -or $applicationHandoff.projectDataMovement[0].id -ne 'batch-one' -or
+        $applicationHandoff.projectDataMovement[0].evidence.factId -ne 'fact-surface-1') { throw 'Application handoff omitted project-scoped data movement evidence.' }
+    if (!$index.Contains('batch-one', [StringComparison]::Ordinal)) { throw 'Application index omitted project-scoped data movement.' }
     foreach ($unassociated in @($applicationHandoff.unassociatedIdentityState[0], $applicationHandoff.unassociatedBatchDataMovement[0])) {
         if (!$unassociated.evidence.factId -or !$unassociated.evidence.ruleId -or !$unassociated.evidence.evidenceTier -or !$unassociated.evidence.filePath -or !$unassociated.evidence.commitSha -or !$unassociated.evidence.extractorId -or !$unassociated.evidence.extractorVersion) { throw 'Unassociated inventory evidence provenance was incomplete.' }
     }
