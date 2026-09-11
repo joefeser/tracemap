@@ -1871,7 +1871,7 @@ public static partial class StaticHtmlEvidenceExplorer
             : throw new InvalidDataException("release-review property unavailable or duplicated");
     }
 
-    private static void RejectDuplicateJsonProperties(JsonElement element)
+    internal static void RejectDuplicateJsonProperties(JsonElement element)
     {
         if (element.ValueKind == JsonValueKind.Array)
         {

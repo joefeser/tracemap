@@ -1,0 +1,247 @@
+[CmdletBinding()]
+param(
+    [string]$SourceRoot,
+    [string]$WebFormsFolder,
+    [string]$BackendFolder,
+    [string]$ControlsFolder,
+    [string]$SolutionRelativePath,
+    [string[]]$ProjectRelativePath = @(),
+    [string]$TraceMapRoot = (Split-Path $PSScriptRoot -Parent),
+    [int]$TimeoutSeconds = 7200
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+
+function Read-RequiredValue {
+    param([string]$Value, [string]$Prompt)
+
+    if (-not [string]::IsNullOrWhiteSpace($Value)) { return $Value.Trim() }
+    $answer = Read-Host $Prompt
+    if ([string]::IsNullOrWhiteSpace($answer)) { throw "FOCUSED_REVIEW_VALUE_REQUIRED" }
+    return $answer.Trim()
+}
+
+function Resolve-RelativeChild {
+    param([string]$Root, [string]$RelativePath, [string]$FailureCode, [bool]$RequireFile)
+
+    if ([IO.Path]::IsPathRooted($RelativePath) -or $RelativePath -match '(^|/|\\)\.\.($|/|\\)') {
+        throw $FailureCode
+    }
+    $candidate = [IO.Path]::GetFullPath((Join-Path $Root $RelativePath))
+    if (-not $candidate.StartsWith($Root + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+        throw $FailureCode
+    }
+    $pathType = if ($RequireFile) { "Leaf" } else { "Container" }
+    if (-not (Test-Path -LiteralPath $candidate -PathType $pathType)) { throw $FailureCode }
+    return $candidate
+}
+
+function Get-InScopeSolutionProjects {
+    param(
+        [string]$SolutionPath,
+        [string]$SourceRoot,
+        [string[]]$SelectedFolders
+    )
+
+    $solutionDirectory = Split-Path -Parent $SolutionPath
+    $projectRows = @(dotnet sln $SolutionPath list)
+    if ($LASTEXITCODE -ne 0) { throw "SOLUTION_PROJECT_LIST_FAILED" }
+
+    $scopeRoots = @($SelectedFolders | ForEach-Object {
+        [IO.Path]::GetFullPath((Join-Path $SourceRoot $_)).TrimEnd('\', '/')
+    })
+    $sourcePrefix = $SourceRoot.TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
+    $projects = [Collections.Generic.List[string]]::new()
+    foreach ($row in $projectRows) {
+        $listedPath = ([string]$row).Trim()
+        if (-not $listedPath.EndsWith('.csproj', [StringComparison]::OrdinalIgnoreCase)) { continue }
+        $candidate = if ([IO.Path]::IsPathRooted($listedPath)) {
+            [IO.Path]::GetFullPath($listedPath)
+        } else {
+            [IO.Path]::GetFullPath((Join-Path $solutionDirectory $listedPath))
+        }
+        if (-not $candidate.StartsWith($sourcePrefix, [StringComparison]::OrdinalIgnoreCase)) { continue }
+        foreach ($scopeRoot in $scopeRoots) {
+            if ($candidate.StartsWith($scopeRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+                $projects.Add($candidate.Substring($sourcePrefix.Length).Replace('\', '/'))
+                break
+            }
+        }
+    }
+    $selected = @($projects | Sort-Object -Unique)
+    if ($selected.Count -eq 0) { throw "SOLUTION_SCOPE_HAS_NO_IN_SCOPE_PROJECTS" }
+    return $selected
+}
+
+function Assert-ProjectsBelongToSolution {
+    param(
+        [string[]]$ExplicitProjects,
+        [string[]]$SolutionProjects,
+        [string]$SourceRoot
+    )
+
+    $sourcePrefix = $SourceRoot.TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
+    $solutionProjectSet = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($project in $SolutionProjects) { [void]$solutionProjectSet.Add($project.Replace('\', '/')) }
+    foreach ($project in $ExplicitProjects) {
+        $platformRelativePath = $project.Replace('\', [IO.Path]::DirectorySeparatorChar).Replace('/', [IO.Path]::DirectorySeparatorChar)
+        $candidate = [IO.Path]::GetFullPath((Join-Path $SourceRoot $platformRelativePath))
+        if (-not $candidate.StartsWith($sourcePrefix, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "PROJECT_NOT_IN_SELECTED_SOLUTION"
+        }
+        $normalizedProject = $candidate.Substring($sourcePrefix.Length).Replace('\', '/')
+        if (-not $solutionProjectSet.Contains($normalizedProject)) {
+            throw "PROJECT_NOT_IN_SELECTED_SOLUTION"
+        }
+    }
+}
+
+$SourceRoot = Read-RequiredValue $SourceRoot "Private source repository root"
+$WebFormsFolder = Read-RequiredValue $WebFormsFolder "Web Forms folder, relative to the source root"
+$BackendFolder = Read-RequiredValue $BackendFolder "Backend folder, relative to the source root"
+$ControlsFolder = Read-RequiredValue $ControlsFolder "Shared controls folder, relative to the source root"
+if ([string]::IsNullOrWhiteSpace($SolutionRelativePath) -and $ProjectRelativePath.Count -eq 0) {
+    $SolutionRelativePath = (Read-Host "Solution path, relative to the source root (blank if unavailable)").Trim()
+}
+if ($ProjectRelativePath.Count -eq 0 -and [string]::IsNullOrWhiteSpace($SolutionRelativePath)) {
+    $projectInput = Read-Host "Comma-separated in-scope project paths, relative to the source root (blank for a projectless scan)"
+    if (-not [string]::IsNullOrWhiteSpace($projectInput)) {
+        $ProjectRelativePath = @($projectInput.Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    }
+}
+
+$TraceMapRoot = [IO.Path]::GetFullPath($TraceMapRoot).TrimEnd('\', '/')
+$SourceRoot = [IO.Path]::GetFullPath((Resolve-Path -LiteralPath $SourceRoot)).TrimEnd('\', '/')
+$traceMapStatus = @(git -C $TraceMapRoot status --porcelain --untracked-files=all)
+$traceMapStatusExit = $LASTEXITCODE
+if ($traceMapStatusExit -ne 0) { throw "TRACEMAP_STATUS_UNAVAILABLE" }
+if ($traceMapStatus.Count -ne 0) { throw "TRACEMAP_WORKTREE_DIRTY" }
+$sourceStatus = @(git -C $SourceRoot status --porcelain --untracked-files=all)
+$sourceStatusExit = $LASTEXITCODE
+if ($sourceStatusExit -ne 0) { throw "SOURCE_STATUS_UNAVAILABLE" }
+if ($sourceStatus.Count -ne 0) { throw "SOURCE_WORKTREE_DIRTY" }
+
+$gitRoot = (git -C $SourceRoot rev-parse --show-toplevel).Trim()
+if ($LASTEXITCODE -ne 0 -or [IO.Path]::GetFullPath($gitRoot).TrimEnd('\', '/') -ne $SourceRoot) {
+    throw "SOURCE_ROOT_NOT_GIT_ROOT"
+}
+
+$selectedFolders = @($WebFormsFolder, $BackendFolder, $ControlsFolder)
+if (($selectedFolders | Select-Object -Unique).Count -ne 3) { throw "THREE_FOLDER_SCOPE_INVALID" }
+foreach ($folder in $selectedFolders) {
+    [void](Resolve-RelativeChild $SourceRoot $folder "THREE_FOLDER_SCOPE_UNAVAILABLE" $false)
+}
+if (-not [string]::IsNullOrWhiteSpace($SolutionRelativePath)) {
+    $solutionPath = Resolve-RelativeChild $SourceRoot $SolutionRelativePath "SOLUTION_SCOPE_UNAVAILABLE" $true
+    if ([IO.Path]::GetExtension($solutionPath) -ne '.sln') { throw "SOLUTION_SCOPE_INVALID" }
+    $solutionProjects = @(Get-InScopeSolutionProjects $solutionPath $SourceRoot $selectedFolders)
+    if ($ProjectRelativePath.Count -eq 0) {
+        $ProjectRelativePath = $solutionProjects
+    }
+    else {
+        Assert-ProjectsBelongToSolution `
+            -ExplicitProjects $ProjectRelativePath `
+            -SolutionProjects $solutionProjects `
+            -SourceRoot $SourceRoot
+    }
+}
+foreach ($project in $ProjectRelativePath) {
+    $projectPath = Resolve-RelativeChild $SourceRoot $project "PROJECT_SCOPE_UNAVAILABLE" $true
+    $allowed = $false
+    foreach ($folder in $selectedFolders) {
+        $folderPath = [IO.Path]::GetFullPath((Join-Path $SourceRoot $folder)).TrimEnd('\', '/')
+        if ($projectPath.StartsWith($folderPath + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+            $allowed = $true
+            break
+        }
+    }
+    if (-not $allowed) { throw "PROJECT_OUTSIDE_THREE_FOLDER_SCOPE" }
+}
+
+Set-Location $TraceMapRoot
+dotnet build "$TraceMapRoot\src\dotnet\TraceMap.sln"
+if ($LASTEXITCODE -ne 0) { throw "TRACEMAP_BUILD_FAILED" }
+
+$stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+$outputParent = "C:\work\tracemap-output"
+$progressParent = "C:\work\tracemap-progress"
+$summaryParent = "C:\work\tracemap-summary"
+$outRoot = Join-Path $outputParent "focused-webforms-$stamp"
+$progressPath = Join-Path $progressParent "focused-webforms-$stamp.json"
+New-Item -ItemType Directory -Path $outputParent, $progressParent, $summaryParent -Force | Out-Null
+
+$reviewArguments = @("run", "--repo", $SourceRoot, "--out", $outRoot)
+foreach ($folder in $selectedFolders) { $reviewArguments += @("--include", ($folder.TrimEnd('/', '\') + "/**")) }
+if (-not [string]::IsNullOrWhiteSpace($SolutionRelativePath)) {
+    # Explicit selection does not bypass inventory scope filtering. Preserve the
+    # solution itself while the derived project list bounds semantic loading.
+    $reviewArguments += @("--include", $SolutionRelativePath)
+    $reviewArguments += @("--solution", $SolutionRelativePath)
+}
+foreach ($project in $ProjectRelativePath) { $reviewArguments += @("--project", $project) }
+foreach ($pattern in @(
+    ".vs/**", "**/bin/**", "**/obj/**", "**/node_modules/**", "**/dist/**",
+    "**/coverage/**", "**/TestResults/**", "**/.angular/**", "**/.next/**"
+)) { $reviewArguments += @("--exclude", $pattern) }
+$reviewArguments += @(
+    "--webforms-modernization",
+    "--diagnostic-progress", $progressPath,
+    "--timeout-seconds", $TimeoutSeconds.ToString([Globalization.CultureInfo]::InvariantCulture)
+)
+
+dotnet run --project "$TraceMapRoot\src\dotnet\TraceMap.Cli" -- local-review @reviewArguments
+$reviewExitCode = $LASTEXITCODE
+"focused-review-process-exit=$reviewExitCode"
+
+# Progress and performance receipts are the primary diagnostics for failed or
+# timed-out runs. Export them before attempting summaries that require a
+# complete scan artifact set.
+& "$TraceMapRoot\scripts\Export-FocusedWebFormsProgressSummary.ps1" -ProgressPath $progressPath
+& "$TraceMapRoot\scripts\Export-FocusedWebFormsPerformanceSummary.ps1" -ProgressPath $progressPath
+
+$factsPath = Join-Path $outRoot "scan/facts.ndjson"
+$manifestPath = Join-Path $outRoot "scan/scan-manifest.json"
+$resultPath = Join-Path $outRoot "local-review-result.json"
+$scanArtifactsAvailable =
+    (Test-Path -LiteralPath $factsPath -PathType Leaf) -and
+    (Test-Path -LiteralPath $manifestPath -PathType Leaf)
+$completeReviewArtifacts =
+    $scanArtifactsAvailable -and
+    (Test-Path -LiteralPath $resultPath -PathType Leaf)
+
+if ($scanArtifactsAvailable) {
+    $traceMapHead = (git -C $TraceMapRoot rev-parse HEAD).Trim()
+    if ($LASTEXITCODE -ne 0 -or $traceMapHead -notmatch '^[0-9a-fA-F]{40}$') {
+        throw "TRACEMAP_HEAD_UNAVAILABLE"
+    }
+    & "$TraceMapRoot\scripts\Export-FocusedWebFormsWorkspaceSummary.ps1" `
+        -ReviewOutputPath $outRoot `
+        -WebFormsFolder $WebFormsFolder `
+        -BackendFolder $BackendFolder `
+        -ControlsFolder $ControlsFolder `
+        -TraceMapHead $traceMapHead `
+        -OutputDirectory $summaryParent
+}
+else {
+    "focused-webforms-workspace-summary=skipped;reason=incomplete-scan-artifacts"
+}
+
+if ($completeReviewArtifacts) {
+    & "$TraceMapRoot\scripts\Export-FocusedWebFormsEvidenceSummary.ps1" `
+        -ReviewOutputPath $outRoot `
+        -OutputDirectory $summaryParent
+    & "$TraceMapRoot\scripts\Export-FocusedWebFormsAccuracySummary.ps1" `
+        -ReviewOutputPath $outRoot `
+        -WebFormsFolder $WebFormsFolder `
+        -BackendFolder $BackendFolder `
+        -ControlsFolder $ControlsFolder `
+        -OutputDirectory $summaryParent
+}
+else {
+    "focused-webforms-evidence-summary=skipped;reason=incomplete-review-artifacts"
+}
+
+"retained-output-directory=$([IO.Path]::GetFileName($outRoot))"
+"retained-progress-file=$([IO.Path]::GetFileName($progressPath))"
+exit $reviewExitCode

@@ -42,6 +42,43 @@ python3 scripts/test_validate_adapter_artifacts.py
 ./scripts/check-private-paths.sh
 ```
 
+## Web Forms large-index report memory
+
+For changes to packet input loading or serialization, run the memory regressions
+alongside the full .NET suite:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter 'FullyQualifiedName~WebFormsReportMemoryTests'
+TRACEMAP_MEMORY_TEST_FULL_READER=1 dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --no-build --filter 'FullyQualifiedName~Large_repetitive_fact_payload' \
+  --logger 'console;verbosity=detailed'
+TRACEMAP_MEMORY_TEST_ROWS=1000000 dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --no-build --filter 'FullyQualifiedName~Large_repetitive_fact_payload' \
+  --logger 'console;verbosity=detailed'
+```
+
+The fixture inserts 1 KiB unused syntax properties directly into SQLite rather
+than building a million in-memory test facts. Normal CI uses 100,000 noise rows;
+the opt-in scale is clamped to 100,000–2,000,000. The full-reader comparison is
+opt-in because it deliberately exercises the old allocation-heavy reader. Run
+it in its own test process; do not enable it for the million-row check on a
+memory-constrained host.
+
+Assertions cover byte-equivalent path/provenance output, an unchanged index
+hash, global symbol collisions, unknown/declared surfaces, referenced supporting
+IDs, oversized rows, fact/edge/text/snapshot admission limits, explicit partial
+coverage without incomplete-graph absence conclusions, 518 independent roots,
+streamed JSON byte parity, and cancellation without partial publication.
+
+The test logs retained text/row counts and process-wide managed allocation deltas
+around each report call. These are not live heap or OS working-set quotas.
+Temporary row allocations may grow with visited rows even while retained graph
+input stays constant. Record process peak RSS separately with a platform profiler
+and describe whether it includes the test runner, fixture construction, and child
+processes. Synthetic results do not prove that an owner's full private index fits
+the default limits; the existing-index Windows rerun remains required.
+
 ## Public Demo Workflow
 
 Run the public demo when validating the open-source walkthrough or generated public artifacts:
@@ -91,6 +128,72 @@ Troubleshooting:
 - If the demo refuses an in-repo output directory, use `.tracemap-demo/` or add a generic ignored output path before running the script.
 - If .NET or TypeScript build restore fails, run the build/test commands above directly to restore local toolchain dependencies and inspect their native diagnostics.
 - Reduced sample scan and report coverage is expected for samples that intentionally rely on syntax fallback or missing framework packages. The summary labels those sections as partial while preserving rule-backed evidence counts.
+
+## Local Review Progress Diagnostics Smoke
+
+Run this when changing `LocalReviewCommand`, `ScanProgressReporter`,
+`ScanEngine` progress instrumentation, or the Roslyn cancellation seams:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter 'FullyQualifiedName~ScanProgressDiagnosticsTests|FullyQualifiedName~LocalReviewCommandTests'
+```
+
+Expected coverage:
+
+- progress lines reach the immediate progress console (stderr) before a
+  blocking scan completes, and never route through the buffered scan output
+  capture;
+- heartbeats every 15 seconds report only categorical stage, elapsed
+  milliseconds, last completed stage, and sequence, with bounded checkpoint
+  history (heartbeats excluded, at most 32 events);
+- the sanitized checkpoint contains no repository, project, path, or symbol
+  values supplied by adversarial fixtures;
+- the durable checkpoint exists before final publication and survives
+  cancellation and timeout with the exact last successful categorical stage;
+- `--timeout-seconds` returns the typed `LOCAL_REVIEW_TIMEOUT` failure and
+  never publishes a successful review; invalid bounds and unsafe progress
+  paths fail closed before scanning;
+- solution, project, and compilation ordinals are deterministic across runs;
+- enabled diagnostics leave deterministic evidence bytes unchanged (facts and
+  report byte-identical; manifest and receipt compared after normalizing the
+  pre-existing `scannedAt` and stage-duration observations).
+
+For a manual synthetic Web Forms smoke with diagnostics enabled (the fixture
+is synthesized on the fly; tests build equivalent ones):
+
+```bash
+mkdir -p /tmp/tracemap-webforms-smoke && cd /tmp/tracemap-webforms-smoke
+cat > Sample.csproj <<'EOF'
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+</Project>
+EOF
+printf '<%%@ Page Language="C#" CodeBehind="Default.aspx.cs" Inherits="Sample.Default" %%><asp:Button ID="Save" runat="server" OnClick="Save_Click" />' > Default.aspx
+printf 'namespace Sample; public class Default { protected void Save_Click(object sender, System.EventArgs e) { } }' > Default.aspx.cs
+git init -q . && git add . && git -c user.name=TraceMap -c user.email=smoke@example.invalid commit -qm smoke
+
+dotnet run --project <repository-root>/src/dotnet/TraceMap.Cli -- local-review run \
+  --repo /tmp/tracemap-webforms-smoke \
+  --out /tmp/tracemap-review-smoke \
+  --webforms-modernization \
+  --diagnostic-progress /tmp/tracemap-review-progress.json \
+  --timeout-seconds 600
+```
+
+The run must emit `tracemap-progress ...` lines to stderr immediately, keep
+`/tmp/tracemap-review-progress.json` valid per
+`docs/contracts/tracemap-scan-progress.v1.schema.json` throughout, and leave
+the checkpoint behind with `local-review-publication` completed on success.
+It must also leave
+`/tmp/tracemap-review-progress.json.performance.json` valid per
+`docs/contracts/tracemap-scan-performance.v1.schema.json`, with complete
+specialized-extractor timing coverage on success, a bounded heartbeat count,
+and no source identity. The slowest extractor is reported only from a
+retained start/terminal pair. Both receipts are operational observations, not
+evidence facts.
+An empty `/tmp/tracemap-review-smoke` during execution is expected: work is
+staged in a hidden sibling until the atomic publication rename.
 
 ## MSBuild Binary-Log Evidence
 
@@ -684,6 +787,31 @@ The resulting semantic facts remain available in NDJSON/SQLite but must not
 change generic reducer or legacy name-based property-flow output until the
 exact-identity composition slice lands.
 
+For direct property-mapping producer changes, also run the producer, collision,
+direction, bounds, and isolation regressions:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter "FullyQualifiedName~PropertyMappingTests|FullyQualifiedName~Reduce_excludes_semantic_property_mapping|FullyQualifiedName~Property_flow_ignores_direct_property_mapping"
+```
+
+Expected behavior: supported shapes emit `PropertyMappingDeclared` Tier1 facts
+with canonical source/target property identities, containing-type and method
+identities, closed mapping shape, direction, span, coverage label, and fixed
+limitations; transforming, dynamic, ambiguous, conversion-requiring, indexer,
+and compound-assignment counterparts fail closed as rule-backed
+`AnalysisGap` rows with closed PascalCase gap kinds and `shapeState` values,
+never storing expression text; per-method/per-document bounds fold suppressed
+emissions into one aggregated `PropertyMappingTruncated` gap whose
+`shapeState=truncation` row remains inside the 100-gap document bound; record
+`with` initializers and getter-only, inaccessible, or otherwise invalid target
+writes fail closed rather than producing Tier1 evidence; same-name
+cross-assembly properties keep distinct canonical identities through extern
+aliases; partial/non-compiling projects keep healthy-file evidence byte-stable
+while the manifest remains truthfully reduced. Mapping facts and gaps stay
+available in NDJSON/SQLite but must not change generic reducer or legacy
+name-based property-flow output until exact-ID composition lands in PR 3.
+
 Expected behavior: Angular template fixtures emit `UiTemplateBinding`,
 `UiFormControlBinding`, `UiEventBinding`, `UiTemplateVariable`, and
 `UiBindingGap` facts with rule IDs and safe metadata only; Razor fixtures emit
@@ -819,9 +947,17 @@ python3 -m unittest scripts.tests.test_legacy_codebase_validation
 git diff --check
 ```
 
-Checked-in fixtures should cover explicit markup event bindings, bounded named control subscriptions, lambda/dynamic and unknown-receiver gaps, missing or stale designer files, exact semantic or linked structural code-behind resolution, proven and unproven cross-file partial handlers, overload/ambiguity gaps, explicit `AutoEventWireup="true"` for `Page_Load`/`Page_Init`, false or unknown auto-wireup gaps, master/content declarations, registered and nested user controls, validator/data-source/command metadata, same-named surfaces in separate folders, surface-qualified combined-path resolution, extractor-to-NDJSON-to-SQLite identity/direction persistence, missing composition targets, direct WCF/SQL reachability, reduced coverage, no-backend-evidence cases, static logic signals, UI-boilerplate signals, deterministic duplicate bindings, and privacy redaction.
+Checked-in fixtures should cover explicit markup event bindings, Tier3 bounded static `OnX` event-like candidates, client-side/dynamic attribute gaps, bounded named control subscriptions, lambda/dynamic and unknown-receiver gaps, missing or stale designer files, exact semantic or linked structural code-behind resolution, proven and unproven cross-file partial handlers, overload/ambiguity gaps, explicit `AutoEventWireup="true"` for `Page_Load`/`Page_Init`, false or unknown auto-wireup gaps, master/content declarations, markup and ancestor-`web.config` user-control registrations, conflicting inherited registration gaps, registered and nested user controls, validator/data-source/command metadata, same-named surfaces in separate folders, surface-qualified combined-path resolution, extractor-to-NDJSON-to-SQLite identity/direction persistence, missing composition targets, direct WCF/SQL reachability, reduced coverage, no-backend-evidence cases, sanitized legacy workspace failure categories, static logic signals, UI-boilerplate signals, deterministic duplicate bindings, and privacy redaction.
 
 Useful inspection queries:
+
+For `legacy-webforms/0.7.0`, `WebFormsBoundedCoverageTests` additionally covers
+case-insensitive markup type names with strict namespace/project identity and
+case-collision ambiguity, positive versus negative postback candidates, unchanged
+negative-only script attribution, shadowing/compound/comparison gaps, and separate
+OnClient/non-identifier event-value gaps. These fixtures intentionally target
+non-compiling Framework 4.5 projects; gap reductions do not establish runtime
+binding or branch execution.
 
 ```bash
 sqlite3 <out>/index.sqlite "select fact_type, count(*) from facts where fact_type like 'WebForms%' group by fact_type order by fact_type;"
@@ -997,7 +1133,13 @@ dotnet test src/dotnet/TraceMap.sln
 git diff --check
 ```
 
-Checked-in fixtures should cover DBML entities/tables/columns/associations/routines, EDMX CSDL/SSDL/MSL mappings and unsupported shapes, typed DataSet XSD gating, TableAdapter command hashing, normalized model identity keys, config provider/connection metadata, generated-code links, unsupported old ORM descriptor gaps, malformed XML, DTD/entity rejection, deterministic output, and privacy suppression in facts, reports, logs, and SQLite.
+When changing the EF6 EDMX symbol composition (`legacy.data.edmx.symbol-composition.v1`), also run the focused suites:
+
+```bash
+dotnet test src/dotnet/TraceMap.sln --filter "FullyQualifiedName~LegacyDataEdmxSymbolCompositionTests|FullyQualifiedName~LegacyDataMetadataExtractorTests|FullyQualifiedName~LegacyDataModelRuleCatalogTests|FullyQualifiedName~CSharpSemanticExtractorTests|FullyQualifiedName~ReverseImpactTraversalTests"
+```
+
+Checked-in fixtures should cover DBML entities/tables/columns/associations/routines, EDMX CSDL/SSDL/MSL mappings and unsupported shapes, typed DataSet XSD gating, TableAdapter command hashing, normalized model identity keys, config provider/connection metadata, generated-code links, unsupported old ORM descriptor gaps, malformed XML, DTD/entity rejection, deterministic output, and privacy suppression in facts, reports, logs, and SQLite. EF6 composition fixtures additionally cover the F1-F18 matrix: namespace-parity and attribute-bridged composition, decoy type names, SSDL storage-type identity joins, same simple names across namespaces, identical assembly name/version across compilation scopes, scope decoys in sibling directories and prefix siblings, per-EDMX compiler availability in multi-project scans, ambiguous and unsupported fail-closed gaps, persistence round-trip through `symbol_relationships` and `combined_dependency_edges`, and reverse-impact traversal with hop provenance and mid-traversal member expansion.
 
 Useful inspection queries:
 
@@ -1024,6 +1166,7 @@ The script uses exact commit SHAs so results are comparable over time.
 | `ProjectExtensions.Azure.ServiceBus` | C# | `https://github.com/ProjectExtensions/ProjectExtensions.Azure.ServiceBus.git` | `2a8e72c8f5680edf2096b05ac08c39d47a95cef8` | usually `Level1SemanticAnalysisReduced` |
 | `fluentjdf` | C# | `https://github.com/joefeser/fluentjdf.git` | `9490e699a89bb21f4aabf198173fc6382f84a53f` | usually `Level1SemanticAnalysisReduced` |
 | `scip-typescript` | TypeScript | `https://github.com/sourcegraph/scip-typescript.git` | `891eb4293709a6a587bf4468dfa1b45a85182fd9` | usually `Level1SemanticAnalysisReduced` |
+| `axios-npm-lock` | JavaScript/TypeScript | `https://github.com/axios/axios.git` | `84a9f3b9a4f3244b8c8e818f557d64c7b964fb25` | usually `Level1SemanticAnalysisReduced`; committed npm `package-lock.json` v3 evidence |
 | `scip-java` | JVM | `https://github.com/sourcegraph/scip-java.git` | `825463cb15d540d45c680593aad1f634330435cf` | usually `Level1SemanticAnalysisReduced` |
 | `spring-petclinic` | JVM | `https://github.com/spring-projects/spring-petclinic.git` | `a2c2ef994340d3970eb6db51247456a51bb161f8` | usually `Level1SemanticAnalysisReduced` |
 | `okio` | JVM/Kotlin | `https://github.com/square/okio.git` | `cad7ff1057307142149b1a28dfcb49117e89b0d3` | usually reduced or syntax fallback for Kotlin-heavy areas |
@@ -1032,6 +1175,12 @@ The script uses exact commit SHAs so results are comparable over time.
 | `sqlalchemy` | Python | `https://github.com/sqlalchemy/sqlalchemy.git` | `bfe559a7e4d69e5699c390ac9cafd2a5a2d38078` | `Level1SemanticAnalysisReduced` |
 
 Reduced coverage is acceptable for OSS smoke when project/dependency/classpath gaps are recorded as `AnalysisGap` facts. A successful smoke means the scan completes, artifacts exist, the manifest is honest about coverage, and important relationship tables can be queried.
+
+`axios-npm-lock` is a modest MIT-licensed, widely used JavaScript HTTP client.
+The pinned revision contains both `package.json` and a committed npm lockfile v3
+with direct and transitive package entries. It is a metadata-only fixture: the
+smoke neither runs package-manager commands inside the checkout nor fetches,
+executes, or verifies package content.
 
 ## JVM Smoke Expectations
 
@@ -1543,6 +1692,327 @@ not attach to PostgreSQL objects. Confirm outputs contain no protected source
 symbol, raw SQL, local path, or claims of application, ordering, rollback,
 generated SQL, compatibility, safety, database state, or approval.
 
+### Package decision correlation (PR1 + PR2)
+
+The external `package-decision.v1` reader and single/combined/portfolio
+correlation command are deterministic, read-only, and offline. TypeScript npm
+lockfile evidence is registry-declared metadata only; TraceMap does not fetch
+or verify package content. Run the focused suite and CLI help check before
+reviewing generated artifacts:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~PackageDecision
+dotnet run --project src/dotnet/TraceMap.Cli -- package-decision --help
+npm run check --prefix src/typescript
+```
+
+For a synthetic scan output, run:
+
+```bash
+tracemap package-decision --decision <package-decision.json> \
+  --index <index.sqlite> --out <report-directory> [--format json] [--exit-code]
+
+tracemap package-decision --decision <package-decision.json> \
+  --index <web.sqlite> --label web \
+  --index <api.sqlite> --label api \
+  --out <report-directory> --include-paths --include-reverse
+
+tracemap package-decision --decision <package-decision.json> \
+  --manifest <portfolio.json> --out <report-directory>
+```
+
+Verify `package-decision-report.json` and `.md` preserve separate exact,
+digest-mismatch, possible, ambiguous, excluded, and unknown sections; every
+row carries rule, tier, span, and commit provenance; and missing digest or
+direct/transitive capability is an explicit gap. Lockfile rows preserve the
+resolved version, host-only registry origin, lockfile path/hash, declared
+integrity digest, direct/transitive relation, and proven path depth. Optional
+path/reverse context is bounded graph evidence and never upgrades a rung.
+`--exit-code` is nonzero only
+for an exact match tied to an external `reject` or `revoke` record. The command
+does not fetch, execute, authenticate, approve, block, or enforce packages.
+
+#### Pinned npm-lockfile admission and composition smoke
+
+After `npm run check --prefix src/typescript`, use the built adapter and the
+`axios-npm-lock` entry in `scripts/smoke-open-source-repos.sh`. Clone and
+checkout may use the network; after checkout all scanning is offline. Do not
+run npm, lifecycle scripts, builds, tests, binaries, or any package-manager
+command in the scanned checkout. Keep the clone and every generated artifact
+under one temporary directory and delete that directory after recording the
+results. Pass the script paths below rather than using the script's persistent
+default cache/output roots:
+
+```bash
+smoke_root="$(mktemp -d)"
+trap 'test -n "${smoke_root:-}" && test -d "$smoke_root" && rm -rf -- "$smoke_root"' EXIT
+TRACEMAP_SKIP_BUILD=1 TRACEMAP_OSS_SMOKE_REPOS=axios-npm-lock \
+  scripts/smoke-open-source-repos.sh "$smoke_root/cache" "$smoke_root/out"
+axios_npm_lock_scan="$smoke_root/out/axios-npm-lock"
+```
+
+The selector accepts a comma-separated list of documented labels; omit it to
+run the complete OSS matrix. Keep this shell open through the validation below
+so the trap removes only the mktemp-created root after results are recorded.
+
+The pinned scan must contain all five standard scan artifacts and pass:
+
+```bash
+python3 scripts/validate-adapter-artifacts.py "$axios_npm_lock_scan"
+```
+
+Inspect the lockfile-sourced `PackageReferenced` facts. Require
+`sourceKind=lockfile`, exact `resolvedVersion`, `lockfilePath`, `lockfileHash`,
+host-only `registryOrigin` when the lock entry records one,
+`artifactDigestAlgorithm=sha512-base64` plus an eligible declared integrity
+digest, and proven direct/transitive `dependencyRelation`. Each row must retain
+the `typescript.package.v1` rule, Tier 2 evidence, repository-relative lockfile
+span, pinned full commit SHA, extractor identity/version, and deterministic fact
+ID. Registry-declared integrity is metadata only, never downloaded or content
+verified by TraceMap.
+
+For downstream composition, derive one temporary `package-decision.v1` reject
+record from an eligible public lockfile row (copy only its ecosystem, package
+name, exact version, digest algorithm, and digest). Scan the checked-in
+`samples/typescript-modern-sample` with the same built adapter and validate
+that second scan output before combining it, then run:
+
+```bash
+synthetic_typescript_scan="$smoke_root/synthetic-typescript-scan"
+node src/typescript/dist/src/cli.js scan \
+  --repo samples/typescript-modern-sample --out "$synthetic_typescript_scan"
+python3 scripts/validate-adapter-artifacts.py "$synthetic_typescript_scan"
+dotnet run --project src/dotnet/TraceMap.Cli -- combine \
+  --index "$axios_npm_lock_scan/index.sqlite" --label axios-npm-lock \
+  --index "$synthetic_typescript_scan/index.sqlite" --label synthetic-typescript \
+  --out "$smoke_root/combined.sqlite"
+dotnet run --project src/dotnet/TraceMap.Cli -- report \
+  --index "$smoke_root/combined.sqlite" --out "$smoke_root/combined-report"
+dotnet run --project src/dotnet/TraceMap.Cli -- package-decision \
+  --decision <temporary-decision.json> --index "$smoke_root/combined.sqlite" \
+  --out "$smoke_root/decision-report" --include-paths --include-reverse
+```
+
+Require one `ExactArtifactMatch` for the generated record. The combined report
+must preserve both source labels. If the selected package-config fact has no
+graph attachment, the path/reverse result must be a typed unavailable gap, not
+an invented path or reverse relationship. Repeat the scan-independent combine,
+report, and package-decision commands with identical inputs and require
+byte-identical report outputs.
+
+### Package decision correlation (PR3: NuGet + Swift resolved evidence)
+
+NuGet `packages.lock.json` and Swift lockfile evidence never prove an artifact
+digest (NuGet `contentHash` is package-content metadata, a podspec checksum is
+a podspec SHA-1, and SwiftPM/Carthage lockfiles carry no digest at all), so
+both ecosystems correlate at `PossibleNameVersionMatch` with
+`matchBasis=resolved-version` plus a `LockfileDigestUnavailable` gap and never
+produce `ExactArtifactMatch`. Run the focused suites:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~PackageDecision
+swift run --package-path src/swift tracemap-swift-smoke-tests
+```
+
+For the synthetic NuGet lockfile end-to-end smoke (offline, no restore):
+
+```bash
+smoke_root="$(mktemp -d)"
+mkdir -p "$smoke_root/repo/src"
+cp samples/package-decisions/nuget-lock-fixture/App.csproj "$smoke_root/repo/src/"
+cp samples/package-decisions/nuget-lock-fixture/packages.lock.json "$smoke_root/repo/src/"
+git -C "$smoke_root/repo" init -q
+git -C "$smoke_root/repo" add .
+git -C "$smoke_root/repo" -c user.email=tracemap@example.invalid \
+  -c user.name=TraceMap commit -qm fixture
+dotnet run --project src/dotnet/TraceMap.Cli -- scan \
+  --repo "$smoke_root/repo" --out "$smoke_root/scan"
+dotnet run --project src/dotnet/TraceMap.Cli -- package-decision \
+  --decision samples/package-decisions/nuget-lock-fixture/decision-nuget.json \
+  --index "$smoke_root/scan/index.sqlite" \
+  --out "$smoke_root/decision-report" --exit-code
+```
+
+Confirm: the direct record yields `resolved-version` possible rows for both
+target frameworks with `dependencyRelation=direct`, the transitive record
+yields `dependencyRelation=transitive`, `LockfileDigestUnavailable` and
+`DirectTransitiveUnavailable`-bounded behavior stay explicit, the lockfile
+`contentHash` values never appear in facts or reports, the exit code stays 0
+(possible matches never trigger `--exit-code`), and repeated runs are
+byte-identical.
+
+For the Swift composed-consumer smoke, scan the checked-in dependency-surfaces
+sample and correlate it through the Swift lockfile projection seam:
+
+```bash
+swift run --package-path src/swift tracemap-swift scan \
+  --repo samples/swift-dependency-surfaces \
+  --out /tmp/tracemap-swift-dependency-surfaces-pr3
+python3 scripts/validate-adapter-artifacts.py /tmp/tracemap-swift-dependency-surfaces-pr3
+dotnet run --project src/dotnet/TraceMap.Cli -- package-decision \
+  --decision samples/package-decisions/swift-possible.json \
+  --index /tmp/tracemap-swift-dependency-surfaces-pr3/index.sqlite \
+  --out /tmp/tracemap-swift-decision-report
+```
+
+Confirm: SwiftPM `Package.resolved` pins, `Podfile.lock` PODS entries, and
+`Cartfile.resolved` semver literals carry `resolvedVersion` (v1 and v2
+`Package.resolved` schemas); revision-only, branch-only, and unsafe values
+stay hashed with no `resolvedVersion`; `SPEC CHECKSUMS` render only as
+explicitly labeled `specChecksum`/`specChecksumKind=podspec-sha1` metadata and
+never as `artifactDigest`; the swift decision records correlate only as
+`resolved-version` possible matches with the Swift lockfile rule IDs and tiers
+on the evidence rows; no `ExactArtifactMatch` is possible; unsupported
+`Package.resolved` schemas keep their gap; and outputs stay byte-deterministic
+with no raw URLs, revisions, or non-hex checksum values.
+
+### Package decision correlation (PR4: Python + JVM resolved evidence)
+
+Python `uv.lock`/`poetry.lock` and JVM `gradle.lockfile` rows carry resolved
+versions, lockfile path/hash, and (Python only, where proven) a direct or
+transitive relation. None of these formats can prove an artifact digest against
+a `package-decision.v1` record: Python lockfile hashes are wheel/sdist
+artifact-form specific, `gradle.lockfile` has no hashes, and
+`gradle/verification-metadata.xml` checksums cannot be tied to the record's
+unnamed artifact form. Both ecosystems therefore correlate at
+`PossibleNameVersionMatch` with `matchBasis=resolved-version` plus
+`LockfileDigestUnavailable` (and `DirectTransitiveUnavailable` where the
+relation is unproven) and never produce `ExactArtifactMatch` or
+`ArtifactDigestMismatch`.
+
+Adapter validation (Python): the temp venv pytest suite above covers the
+uv/poetry happy paths, malformed/truncated/unsupported lockfiles, unsafe names
+and versions, non-registry sources, duplicate entries, wheel-versus-sdist hash
+ambiguity, uv development groups and qualifier-aware same-name resolution,
+Poetry main/development/named groups, incomplete declaration gaps, absent
+relation proof, Pipfile `unsupported-metadata`, and repeated deterministic
+output. Adapter validation (JVM): `gradle -p src/jvm test`
+covers gradle.lockfile rows, malformed/unsupported/unsafe rows, duplicate and
+conflicting coordinates, Maven capability gaps, verification-metadata
+non-consumption, and repeat-scan determinism.
+
+For the Python end-to-end smoke, copy the fixture into a temporary git repo,
+scan it with the Python adapter, validate the artifacts, and correlate:
+
+```bash
+smoke_root="$(mktemp -d)"
+mkdir -p "$smoke_root/repo"
+cp samples/package-decisions/python-lock-fixture/pyproject.toml \
+   samples/package-decisions/python-lock-fixture/uv.lock "$smoke_root/repo/"
+git -C "$smoke_root/repo" init
+git -C "$smoke_root/repo" add .
+git -C "$smoke_root/repo" -c user.email=tracemap@example.invalid \
+  -c user.name=TraceMap commit -m fixture
+/tmp/tracemap-python-venv/bin/python -m tracemap_py.cli scan \
+  --repo "$smoke_root/repo" --out "$smoke_root/scan"
+python3 scripts/validate-adapter-artifacts.py "$smoke_root/scan"
+dotnet run --project src/dotnet/TraceMap.Cli -- package-decision \
+  --decision samples/package-decisions/python-lock-fixture/decision-python.json \
+  --index "$smoke_root/scan/index.sqlite" \
+  --out "$smoke_root/decision-report" --exit-code
+```
+
+Confirm: `requests` (whose revoke record carries the sha256 value that equals
+the lockfile's synthetic sdist hash) and `urllib3` correlate only as
+`resolved-version` possible matches; the `requests` rows carry
+`dependencyRelation=direct` and `urllib3` `transitive` (proven from well-typed
+dependency declarations on the uv.lock root entry); every matched pairing reports
+`LockfileDigestUnavailable`; the exit code stays 0; no `artifactDigest`
+appears anywhere; and re-running the correlation produces byte-identical
+outputs. A repository with an inventoried `Pipfile` emits an
+`unsupported-metadata` analysis gap instead of silence.
+
+For the Gradle end-to-end smoke, install the JVM scanner distribution, scan
+the fixture repo, validate the artifacts, and correlate:
+
+```bash
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \
+  gradle -p src/jvm installDist
+src/jvm/build/install/tracemap-jvm/bin/tracemap-jvm scan \
+  --repo samples/package-decisions/gradle-lock-fixture \
+  --out /tmp/tracemap-gradle-lock-fixture
+python3 scripts/validate-adapter-artifacts.py /tmp/tracemap-gradle-lock-fixture
+dotnet run --project src/dotnet/TraceMap.Cli -- package-decision \
+  --decision samples/package-decisions/gradle-lock-fixture/decision-gradle.json \
+  --index /tmp/tracemap-gradle-lock-fixture/index.sqlite \
+  --out /tmp/tracemap-gradle-decision-report --exit-code
+```
+
+Confirm: `org.springframework:spring-web` (whose reject record carries a
+sha256 digest) and `com.example:fixture-lib` correlate only as
+`resolved-version` possible matches under `jvm.buildfile.v1` with the
+`GradleLockfileExtractor` provenance; every matched pairing reports
+`LockfileDigestUnavailable` and `DirectTransitiveUnavailable`; the exit code
+stays 0; a scanned `pom.xml` additionally emits a `MavenLockfileUnavailable`
+capability gap while its declared build-file rows are unchanged; and repeated
+correlation runs are byte-identical.
+
+### Package decision correlation (PR5: comparison, advisory, deployment references)
+
+The before/after comparison mode, external advisory claims, and deployment
+references are deterministic, read-only, and offline. Comparison rows are
+cross-snapshot portfolio evidence, advisory claims are external producer
+opinions, and deployment references are runtime-unproven lineage metadata.
+Run the focused suite:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~PackageDecision
+```
+
+The committed fixtures are `samples/package-decisions/comparison/`
+(before/after portfolio manifests plus `decision-comparison.json`),
+`advisory-profile-example.json`, and `deployment-references-example.json`;
+the focused tests build the synthetic indexes in a temp directory, copy the
+committed manifests next to them, and assert the committed expected shapes.
+
+For a synthetic comparison smoke, create two scan outputs (or any two
+portfolio-manifest-paired index sets), then run:
+
+```bash
+tracemap package-decision \
+  --decision samples/package-decisions/comparison/decision-comparison.json \
+  --before-manifest <before-portfolio.json> \
+  --after-manifest <after-portfolio.json> \
+  --out <report-directory> [--exit-code]
+```
+
+Confirm: `ArtifactReplaced` appears only when both sides are digest-bound
+with equal name and exact version and differing digests (each change row
+carries both evidence chains and the fixed wording "cross-snapshot
+portfolio evidence, not a single coherent release state"); digest-absent
+evidence yields possible-only change rows that never claim replacement;
+unchanged digest pairs produce no change row; added/removed evidence is
+labeled possible; same-label repo-identity differences emit an
+`IdentityAmbiguous` gap and downgrade the change classification; mixing
+`--before-manifest`/`--after-manifest` with `--index`/`--manifest`, or
+supplying only one of the pair, fails closed; the snapshot-mode
+exact/possible/mismatch rungs are unchanged by comparison context.
+
+For the advisory and deployment-reference smoke over any snapshot input:
+
+```bash
+tracemap package-decision --decision <package-decision.json> \
+  --index <index.sqlite> \
+  --advisory-profile samples/package-decisions/advisory-profile-example.json \
+  --deployment-references samples/package-decisions/deployment-references-example.json \
+  --out <report-directory> [--exit-code]
+```
+
+Confirm: the Advisory Claims (external) section renders producer identity,
+profile version, canonical profile digest, and the external-opinion
+limitation, and the claims never appear as facts or correlation rows and
+never change rung counts, summary counts, path/reverse context, or the
+exit code; every deployment reference renders as `RuntimeUnprovenReference`
+with the fixed limitation "TraceMap did not verify the build, deployment,
+installation, reachability, or runtime load", carries hashed source-repo
+provenance, a bounded digest or name-version join detail, and never counts
+as an exact match; `runtime-load`/`observed-execution` reference kinds and
+severity/CVE-shaped advisory fields are rejected with closed-set input
+gaps; repeat runs are byte-identical (JSON and Markdown).
+
 ### Cross-adapter scan-truth conformance
 
 For changes to adapter inventory, scan identity, snapshot verification,
@@ -1564,3 +2034,60 @@ reduced-analysis preservation, five-artifact publication, NDJSON/SQLite parity,
 malformed-schema rejection, and repository-relative evidence. The matrix uses
 only generated repositories and never proves semantic parity, runtime behavior,
 build success, or complete dependency coverage.
+
+### Legacy Web Forms static composition
+
+For changes to Web Forms lifecycle context, client-script registration,
+postback-target, or declarative data-binding evidence, run:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter LegacyWebFormsExtractorTests
+```
+
+The focused suite includes a synthetic, non-compiling .NET Framework 4.5 Web
+Application fixture. Confirm that `!IsPostBack` context, supported literal
+client-script registrations, literal `__doPostBack` targets, exact same-surface
+`DataSourceID` matches, and literal `Eval`/`Bind` expressions emit deterministic,
+rule-backed candidates. Confirm that dynamic or ambiguous shapes emit explicit
+gaps, literal script and binding payloads are retained only as hashes, and
+existing `.ashx`, handler, redirect/transfer, markup-event, lifecycle, and
+reduced-compilation evidence remains present. These candidates do not prove
+runtime reachability, execution, branch selection, rendering, postback dispatch,
+or successful data binding.
+
+### Web Forms annotated private source views
+
+For changes to focused Web Forms code-path source navigation, run:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter WebFormsCodePathReviewTests
+pwsh -NoProfile -File scripts/tests/Test-FocusedWebFormsCodePathReviewSet.ps1
+```
+
+Confirm that explicit raw-source opt-in creates deterministic sibling annotated
+HTML files with complete bounded working-tree source, stable line anchors,
+categorical retained-evidence highlighting, and bidirectional evidence links.
+Confirm that default runs create no source views and anonymous HTML/JSON contain
+neither source nor private navigation. Highlighting is static evidence
+navigation; it does not prove runtime coverage, execution, branch feasibility,
+correctness, or completeness.
+
+### Web Forms private agent evidence handoffs
+
+For changes to review-set evidence discovery metadata, run:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter 'FullyQualifiedName~WebFormsCodePathReviewTests|FullyQualifiedName~WebFormsAgentEvidenceHandoffTests'
+pwsh -NoProfile -File scripts/tests/Test-FocusedWebFormsCodePathReviewSet.ps1
+```
+
+Confirm that each private case has a deterministic adjacent handoff, the root
+handoff validates an explicitly supplied index and docs corpus against the
+inspection scan and commit, and every retrieval hint names a closed read-only
+TraceMap query recipe. Confirm that mismatches fail before root publication and
+anonymous artifacts contain no handoff links, private identities, local paths,
+fact IDs, or source-of-truth locators. Application-database questions must never
+contain credentials, configuration, raw SQL, or execution instructions.

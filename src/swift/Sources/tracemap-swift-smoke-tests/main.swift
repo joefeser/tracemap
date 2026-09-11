@@ -441,6 +441,11 @@ struct TraceMapSwiftSmokeTests {
               {"identity":"swift-argument-parser","location":"https://example.invalid/swift-argument-parser.git","state":{"branch":"main","revision":"cccccccccccccccccccccccccccccccccccccccc"}}
             ]}
             """,
+            "Legacy/Package.resolved": """
+            {"version":1,"object":{"pins":[
+              {"package":"LegacyKit","repositoryURL":"https://example.invalid/LegacyKit.git","state":{"revision":"dddddddddddddddddddddddddddddddddddddddd","version":"2.1.0"}}
+            ]}}
+            """,
             "Unsupported/Package.resolved": #"{"version":3,"pins":[]}"#,
             "Podfile": """
             target 'App' do
@@ -454,16 +459,17 @@ struct TraceMapSwiftSmokeTests {
             "Podfile.lock": """
             PODS:
               - Alamofire (5.0.0)
-              - RxSwift (6.0.0)
+              - RxSwift (6.0.0):
 
             DEPENDENCIES:
               - Alamofire
               - RxSwift
 
             SPEC CHECKSUMS:
-              Alamofire: publicchecksum1
-              Alamofire: duplicatechecksum
-              RxSwift: publicchecksum2
+              Alamofire: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+              Alamofire: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+              RxSwift: eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+              BadChecksum: publicchecksum1
             """,
             "Cartfile": """
             github "AcmeSecret/PaymentsSDK" ~> 1.0
@@ -472,7 +478,8 @@ struct TraceMapSwiftSmokeTests {
             """,
             "Cartfile.resolved": """
             github "ReactiveX/RxSwift" "6.0.0"
-            binary "https://example.invalid/BinaryKit.json" "2.0.0"
+            git "https://example.invalid/UtilityKit.git" "abcdef123456"
+            binary "https://example.invalid/BinaryKit.json" "2.0.0+build.4"
             """
 	        ])
 	        let out = fixture.temp.url.appendingPathComponent("scan")
@@ -484,14 +491,33 @@ struct TraceMapSwiftSmokeTests {
         assert(declarations.allSatisfy { $0.ruleId == "swift.dependency.manifest.v1" })
         assert(lockfileEntries.contains { $0.ruleId == "swift.dependency.lockfile.swiftpm.v1" && $0.evidenceTier == .tier2Structural })
         assert(lockfileEntries.contains { $0.ruleId == "swift.dependency.lockfile.text.v1" && $0.evidenceTier == .tier3SyntaxOrTextual })
-        assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.ruleId == "swift.dependency.analysis-gap.v1" && $0.properties["gapKind"] == "swift-dependency-local-path-omitted" })
-	        assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.ruleId == "swift.dependency.analysis-gap.v1" && $0.properties["gapKind"] == "swift-dependency-lockfile-unsupported-schema" && $0.evidence.filePath == "Unsupported/Package.resolved" })
-	        assert(!result.facts.contains { $0.factType == "SwiftDependencyLockfileEntryDeclared" && $0.evidence.filePath == "Unsupported/Package.resolved" })
-	        assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.properties["gapKind"] == "swift-dependency-lockfile-malformed" })
-	        assert(result.facts.contains { $0.factType == "SwiftEcosystemMetadataDeclared" && $0.properties["podChecksumSectionHash"]?.count == 64 })
-	        assert(result.facts.allSatisfy { $0.properties["stableDependencySurfaceKey"] == nil })
-	        assert(result.facts.filter { $0.properties["dependencyIdentityStatus"] == "hashed" || $0.properties["dependencyIdentityStatus"] == "unsafe-omitted" }.allSatisfy { $0.properties["normalizedDependencyIdentity"] == nil })
-	        assert(declarations.contains { $0.properties["normalizedDependencyIdentity"] == "ExactKit" && $0.properties["versionStatus"] == "present" })
+	        assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.ruleId == "swift.dependency.analysis-gap.v1" && $0.properties["gapKind"] == "swift-dependency-local-path-omitted" })
+		        assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.ruleId == "swift.dependency.analysis-gap.v1" && $0.properties["gapKind"] == "swift-dependency-lockfile-unsupported-schema" && $0.evidence.filePath == "Unsupported/Package.resolved" })
+		        assert(!result.facts.contains { $0.factType == "SwiftDependencyLockfileEntryDeclared" && $0.evidence.filePath == "Unsupported/Package.resolved" })
+		        assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.properties["gapKind"] == "swift-dependency-lockfile-malformed" })
+		        assert(result.facts.contains { $0.factType == "AnalysisGap" && $0.properties["gapKind"] == "swift-dependency-lockfile-checksum-unusable" })
+		        assert(result.facts.contains { $0.factType == "SwiftEcosystemMetadataDeclared" && $0.properties["podChecksumSectionHash"]?.count == 64 })
+		        assert(result.facts.allSatisfy { $0.properties["stableDependencySurfaceKey"] == nil })
+		        assert(result.facts.filter { $0.properties["dependencyIdentityStatus"] == "hashed" || $0.properties["dependencyIdentityStatus"] == "unsafe-omitted" }.allSatisfy { $0.properties["normalizedDependencyIdentity"] == nil })
+
+		        // Resolved identities: safe literal versions are promoted to resolvedVersion while
+		        // revisions, locations, and non-hex checksums stay hashed or omitted. No Swift source
+		        // ever emits an artifactDigest, so exact-artifact matching stays impossible.
+		        assert(lockfileEntries.contains { $0.evidence.filePath == "Package.resolved" && $0.properties["normalizedDependencyIdentity"] == "alamofire" && $0.properties["resolvedVersion"] == "5.0.0" && $0.properties["revisionHash"]?.count == 64 })
+		        assert(lockfileEntries.contains { $0.evidence.filePath == "Package.resolved" && $0.properties["normalizedDependencyIdentity"] == "alamofire" && $0.properties["resolvedVersion"] == "5.0.1" })
+		        let branchPin = lockfileEntries.first { $0.evidence.filePath == "Package.resolved" && $0.properties["normalizedDependencyIdentity"] == "swift-argument-parser" }
+		        assert(branchPin?.properties["resolvedVersion"] == nil && branchPin?.properties["revisionHash"]?.count == 64)
+		        assert(lockfileEntries.contains { $0.evidence.filePath == "Legacy/Package.resolved" && $0.properties["normalizedDependencyIdentity"] == "LegacyKit" && $0.properties["resolvedVersion"] == "2.1.0" && $0.properties["sourceLocationHash"]?.count == 64 })
+		        assert(lockfileEntries.contains { $0.evidence.filePath == "Podfile.lock" && $0.properties["normalizedDependencyIdentity"] == "Alamofire" && $0.properties["resolvedVersion"] == "5.0.0" && $0.properties["specChecksum"] == nil })
+		        let rxPod = lockfileEntries.first { $0.evidence.filePath == "Podfile.lock" && $0.properties["sourceSection"] == "PODS" && $0.properties["normalizedDependencyIdentity"] == "RxSwift" }
+		        assert(rxPod?.properties["resolvedVersion"] == "6.0.0" && rxPod?.properties["specChecksum"] == "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" && rxPod?.properties["specChecksumKind"] == "podspec-sha1")
+		        assert(lockfileEntries.contains { $0.evidence.filePath == "Podfile.lock" && $0.properties["sourceSection"] == "DEPENDENCIES" && $0.properties["normalizedDependencyIdentity"] == "RxSwift" && $0.properties["resolvedVersion"] == nil })
+		        assert(lockfileEntries.contains { $0.evidence.filePath == "Cartfile.resolved" && $0.properties["version"] == "6.0.0" && $0.properties["resolvedVersion"] == "6.0.0" })
+		        assert(lockfileEntries.contains { $0.evidence.filePath == "Cartfile.resolved" && $0.properties["sourceKind"] == "binary" && $0.properties["resolvedVersion"] == "2.0.0+build.4" })
+		        let revisionCart = lockfileEntries.first { $0.evidence.filePath == "Cartfile.resolved" && $0.properties["normalizedDependencyIdentity"] == "UtilityKit" }
+		        assert(revisionCart?.properties["resolvedVersion"] == nil && revisionCart?.properties["versionHash"]?.count == 64)
+		        assert(result.facts.allSatisfy { $0.properties["artifactDigest"] == nil && $0.properties["artifactDigestAlgorithm"] == nil })
+		        assert(declarations.contains { $0.properties["normalizedDependencyIdentity"] == "ExactKit" && $0.properties["versionStatus"] == "present" })
 	        assert(declarations.contains { $0.evidence.filePath == "Podfile" && $0.properties["normalizedDependencyIdentity"] == "RxSwift" && $0.properties["versionStatus"] == "present" && $0.evidence.endLine > $0.evidence.startLine })
 	        assert(!declarations.contains { $0.properties["normalizedDependencyIdentity"] == "CommentOnly" || $0.properties["normalizedDependencyIdentity"] == "StringOnly" })
 	        let factsText = try String(contentsOf: out.appendingPathComponent("facts.ndjson"), encoding: .utf8)
@@ -500,6 +526,10 @@ struct TraceMapSwiftSmokeTests {
         assert(!factsText.contains("AcmeSecret"))
         assert(!factsText.contains("PaymentsSDK"))
         assert(!factsText.contains("stableDependencySurfaceKey"))
+        assert(!factsText.contains("publicchecksum1"))
+        assert(!factsText.contains("duplicatechecksum"))
+        assert(!factsText.contains("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
+        assert(!factsText.contains("abcdef123456"))
         let aggregateLine = factsText.components(separatedBy: "\n").firstIndex { $0.contains("SwiftPackageManifestDeclared") } ?? -1
         let dependencyLine = factsText.components(separatedBy: "\n").firstIndex { $0.contains("SwiftDependencyDeclared") } ?? -1
         assert(aggregateLine >= 0 && dependencyLine > aggregateLine)

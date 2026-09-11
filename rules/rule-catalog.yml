@@ -31,6 +31,8 @@ rules:
     emits: [Base44SdkPrimitive]
     limitations:
       - Static call syntax does not prove runtime reachability, execution, authorization, response compatibility, or provider delivery.
+      - Injected client authority is bounded to immutable lexical bindings and consistently proven direct callsites; unknown inputs invalidate downstream helpers. Rest, destructured, and spread-shifted bindings are unsupported.
+      - Dynamic dispatch, escaped callbacks, and unresolved re-exports are not followed; missing operations do not prove source absence. See docs/BASE44_INJECTED_CLIENT_DATAFLOW.md.
 
   - id: base44.function.invocation.v1
     name: Base44 frontend function invocation
@@ -39,6 +41,8 @@ rules:
     emits: [Base44FunctionInvocation]
     limitations:
       - A named invocation does not prove route binding or execution; dynamic targets remain Tier4Unknown.
+      - Injected client authority is bounded to immutable lexical bindings and consistently proven direct callsites; unknown inputs invalidate downstream helpers. Rest, destructured, and spread-shifted bindings are unsupported.
+      - Dynamic dispatch, escaped callbacks, and unresolved re-exports are not followed; missing operations do not prove source absence. See docs/BASE44_INJECTED_CLIENT_DATAFLOW.md.
 
   - id: base44.function.surface.v1
     name: Base44 function source surface
@@ -55,6 +59,41 @@ rules:
     emits: [Base44EntityOperation]
     limitations:
       - Entity calls do not prove schema, migration, RLS, service-role, tenant isolation, persistence, or runtime success.
+      - Injected client authority is bounded to immutable lexical bindings and consistently proven direct callsites; unknown inputs invalidate downstream helpers. Rest, destructured, and spread-shifted bindings are unsupported.
+      - Dynamic dispatch, escaped callbacks, and unresolved re-exports are not followed; missing operations do not prove source absence. See docs/BASE44_INJECTED_CLIENT_DATAFLOW.md.
+
+  - id: base44.entity.callsite-disposition.v2
+    name: Base44 entity callsite disposition
+    description: Records source-bound dormant or unreachable entity callsites with exact selector, SDK, primitive, and suppressed-operation accounting under a closed rooted-module and callback-invocation proof.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits: [Base44EntityCallsiteDisposition]
+    limitations:
+      - A dormant disposition proves only that the bounded source graph has no rooted executable path to the callsite; it does not prove that deleted, generated, dynamically imported, or runtime-injected code cannot introduce one.
+      - Dynamic imports, unresolved re-exports, escaped callbacks, ambiguous module references, or any unknown invocation path prevent a dormant disposition and remain typed blockers.
+      - Dispositions do not prove runtime behavior, deployment reachability, authorization, persistence, or compatibility.
+      - The paired SDK primitive remains in the raw denominator; removing a disposition is a coverage reduction.
+
+  - id: base44.entity.payload.v1
+    name: Base44 entity mutation payload shape
+    description: Records source-bound create, update, upsert, and bulk payload field presence, expression classes, bounded binding derivation, spreads, and typed ambiguity without literal values.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits: [Base44EntityPayload]
+    limitations:
+      - Static payload shape does not prove branch execution, runtime values, validation, persistence, authorization, tenant isolation, or schema compatibility.
+      - Unresolved bindings, computed fields, spreads, call results, and unsupported constructions remain Tier4Unknown and never prove that an unobserved field is absent.
+      - Binding and expression classes are bounded intrafile evidence; this rule does not execute helpers or infer fields from documentation, schema prose, fixtures, or naming conventions.
+      - Aliases, helper arguments, and method calls can mutate payloads; unmodeled reference uses emit typed gaps rather than proving a complete shape or absence. Nested spreads preserve inherited conditional presence.
+      - Parameters, catch bindings, destructuring, and later local declarations shadow outer variables. Unsupported binding initializers remain unresolved.
+
+  - id: base44.entity.query.v1
+    name: Base44 entity query shape
+    description: Records source-bound filter, sort, and select field evidence plus typed ambiguity without literal filter values.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits: [Base44EntityQuery]
+    limitations:
+      - Static query shape does not prove runtime reachability, returned rows, ordering, projection, authorization, tenant isolation, or backend compatibility.
+      - Dynamic filter, sort, and select constructions remain Tier4Unknown and missing fields are not clean absence outside complete per-callsite coverage.
+      - Filter bindings share the payload rule limitations for lexical shadowing, aliases, helper calls, method calls, and inherited conditional spread presence.
 
   - id: base44.environment.access.v1
     name: Base44 function environment access
@@ -79,6 +118,15 @@ rules:
     emits: [Base44MigrationSurface]
     limitations:
       - Migration source does not prove SQL validity, execution, completion, schema state, RLS correctness, rollback, or runtime compatibility.
+
+  - id: base44.source.authority.v1
+    name: Base44 accepted source authority
+    description: Records the accepted customer source tree identity and source-bound authority metadata used to validate Base44 evidence facts.
+    evidenceTier: Tier2Structural
+    emits: [Base44SourceAuthority]
+    limitations:
+      - Source authority proves only the bounded analyzed source identity; it does not prove runtime execution, dependency integrity, build success, deployment, semantic compatibility, customer intent, or complete behavior.
+      - Consumers must treat this as an identity boundary for emitted evidence, not as permission to infer behavior from documentation, generated prose, fixtures, or filenames.
 
   - id: base44.customer.boundary.v1
     name: Base44 customer-authored source boundary
@@ -666,6 +714,40 @@ rules:
     limitations:
       - Impact-summary chunks preserve static classifications only and do not prove business impact, runtime impact, deployment impact, or release safety.
 
+  - id: docs-export.chunk.webforms-modernization.v1
+    name: Docs export Web Forms modernization packet chunk
+    description: Projects compatible Web Forms modernization packet inventory, event chains, boundaries, identity/state declarations, batch/data-movement declarations, structural slices, gaps, questions, and limitations into deterministic citation-bearing evidence documents.
+    evidenceTier: Inherits weakest supporting packet evidence tier
+    emits:
+      - docs-export Web Forms modernization chunk
+    limitations:
+      - These chunks package existing bounded static evidence and do not infer business intent, generate a BRD, plan a migration, generate replacement code, or prove runtime behavior.
+      - Packet truncation, reduced coverage, missing provenance, unresolved handlers, and unsupported terminal evidence remain explicit gaps or limitations.
+      - Raw source, raw SQL, configuration values, credentials, local absolute paths, and private workflow prompts are not added by this projection.
+
+  - id: docs-export.query-recipe.v1
+    name: Docs export deterministic evidence query recipe
+    description: Publishes a closed catalog of bounded parameterized read-only queries over documented TraceMap single-index and combined-index evidence tables.
+    evidenceTier: Tier2Structural
+    emits:
+      - docs-export evidence query recipe
+    limitations:
+      - Recipes retrieve retained static evidence only and do not add findings, close gaps, prove absence, or prove runtime behavior.
+      - Recipe SQL targets TraceMap-owned evidence tables only; it is not captured application SQL and does not query an application database.
+      - Combined-index recipes require and filter by the owning source-index identity; multi-source chunks without one unambiguous owner do not emit retrieval hints.
+      - Downstream callers remain responsible for bounded parameter values, access control, orchestration, and interpretation.
+
+  - id: docs-export.retrieval-hint.v1
+    name: Docs export typed retrieval hint
+    description: Associates a documentation chunk with applicable deterministic query recipe IDs and parameter values already retained in the chunk's evidence.
+    evidenceTier: Tier2Structural
+    emits:
+      - docs-export retrieval hint
+    limitations:
+      - Retrieval hints are navigation metadata and do not add evidence, upgrade a claim, choose a runtime target, or close a gap.
+      - Hints are bounded and may omit additional applicable facts, spans, symbols, or recipes.
+      - Each hint is scoped to one supported input kind and, for combined indexes, one owning source-index identity.
+
   - id: docs-export.chunk.gap.v1
     name: Docs export gap chunk
     description: Emits first-class gap chunks for unavailable, reduced, hidden, incompatible, unsupported, truncated, or missing-provenance evidence.
@@ -1026,6 +1108,32 @@ rules:
     limitations:
       - A gap reduces semantic model-binding coverage and does not prove that a runtime binding, handler, model property, route, or submitted value is absent.
       - Gap records contain categorical state, canonical symbol identities where available, bounded counts, and limitations; they do not store source snippets, host-local paths, or raw submitted values.
+
+  - id: csharp.semantic.propertymapping.v1
+    name: Direct property mapping evidence
+    description: Extracts compiler-resolved direct property-to-property mapping facts for the bounded v0 shapes of simple assignment and object-initializer member assignment, including the same initializer rule inside LINQ-style projections.
+    evidenceTier: Tier1Semantic
+    emits:
+      - PropertyMappingDeclared
+    limitations:
+      - Evidence proves only a recorded directed source-property to target-property static assignment relationship; it does not prove that any mapping executed, that an object was created, persisted, serialized, or reached a handler, nor any runtime values, business meaning, correctness, completeness, or impact.
+      - v0 admits only simple assignment `target.Property = source.Property` and object-initializer member assignment `new Target { Property = source.Property }`; parentheses, null-forgiving syntax, and same-type (identity) casts may be unwrapped only when the resolved source property symbol is preserved.
+      - Method calls, arithmetic, string interpolation, pattern expressions, conditional/null-coalescing access, compound assignments, element/indexer access, dynamic values, user-defined or built-in type conversions, generic or non-generic transforms, and ambiguity fail closed as rule-backed gaps; no expression text is retained anywhere.
+      - Both endpoints must resolve through Roslyn to ordinary non-indexer properties with canonical symbol identities, and the target write must be semantically valid and accessible in the containing method; getter-only, inaccessible, invalid, or incomplete writes fail closed as PropertyMappingSemanticUnavailable gaps. Source/target containing types, assemblies, the containing method identity, closed mapping shape, direction, span, tier, coverage label, and fixed limitations are preserved on every fact.
+      - Same-name properties without an admitted mapping shape emit no fact; reverse direction is never inferred from a single fact. Assignments whose resolved endpoints are the identical property symbol are skipped in v0, which also excludes same-symbol cross-instance copies between two receivers of one type; compiler-generated anonymous-type members participate when Roslyn resolves them canonically, though their canonical IDs embed compilation-order anonymous-type indices that can shift when unrelated files are added. Resolved chained member access on either side participates when Roslyn resolves the final property. Distinct symbols whose canonical IDs collapse (for example different generic instantiations of one property) fail closed as PropertyMappingTargetAmbiguous canonical-identity-collision gaps rather than emitting colliding IDs. Emission is bounded deterministically per method and per document with one aggregated PropertyMappingTruncated gap.
+      - Plain value copies between properties and fully resolved locals, parameters, fields, method groups, or value literals (including object-initializer constant defaults) produce neither facts nor gaps; compound accumulation into a non-property receiver or literal stays silent the same way. Indexers, element access, compound assignments that touch a property on a transforming counterpart, conditionals, switch expressions, dynamic-against-property access, and incomplete bindings emit categorical gaps with closed shape states; assignments with no resolved property on either side never gap.
+      - Assignments in constructors, field/property initializers, record `with` initializers, tuple-deconstruction forms, dictionary-key assignments, generated/excluded scan-scope files, and top-level statements are outside v0 admission; recognized property-to-property attempts fail closed where applicable and unrelated forms produce no global noise.
+      - These facts remain excluded from the legacy name-based property-flow reporter and generic contract reducer until exact-identity composition is implemented under the property-flow depth runway.
+
+  - id: csharp.semantic.propertymapping-gap.v1
+    name: Direct property mapping analysis gap
+    description: Records categorical compiler-evidence boundaries that prevent precise direct property-mapping extraction, including deterministic per-method/per-document emission-bound truncation.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - A gap reduces direct property-mapping coverage and does not prove that a mapping, source property, target property, or transformation is absent or present at runtime.
+      - Gap records contain categorical shape state, canonical symbol identities where available, bounded counts, and limitations; the aggregate PropertyMappingTruncated row uses shapeState `truncation` and counts inside the 100-gap document bound. Gap rows do not store source snippets, expressions, constant values, host-local paths, or digests of protected content.
 
   - id: csharp.razor.binding-gap.v1
     name: Razor binding analysis gap
@@ -1849,6 +1957,41 @@ rules:
       - Safe reducer-facing properties include entityName, typeName, tableName, storageObjectName, propertyName, fieldName, columnName, mappingKind, and hash variants for unsafe identifiers.
       - Namespace URIs, provider details, unsafe identifiers, and raw metadata content are hashed or omitted.
 
+  - id: legacy.data.edmx.symbol-composition.v1
+    name: Legacy EF6 EDMX symbol composition
+    description: Composes compiler-resolved EF6 CLR entity and property symbols with checked-in EDMX CSDL, SSDL, and MSL evidence through deterministic namespace reconciliation and a persisted generated-file scope bridge.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - SymbolRelationship
+      - LegacyDataGeneratedFileScope
+      - AnalysisGap
+    relationshipKinds:
+      - MapsToConceptualEntity
+      - MapsToConceptualProperty
+      - MapsToStorageTable
+      - MapsToStorageColumn
+    limitations:
+      - Composition is static design-time evidence and does not prove EF runtime model loading, generated-code execution, query execution, lazy loading, change tracking, database access, schema existence, EDMX deployment, currency, or provider compatibility.
+      - Composed conceptual and storage edges are capped at Tier2Structural through the weakest supporting link; EDMX descriptors remain Tier2Structural under legacy.data.edmx.v1 and generated links keep their legacy.data.generated-link.v1 tiers; no composition upgrades any existing fact or classification.
+      - Reconciliation is namespace-qualified and never global short-name, case-folded, prefix-trimmed, or fuzzy; display labels are never identity; duplicate qualified types across assemblies or distinct compilation scopes sharing one canonical ID fail closed as AmbiguousClrSymbolReconciliation.
+      - Generated or custom CLR namespaces without a deterministic bridge (compiler-resolved generated-type metadata, proven deterministic generation or project metadata, or the same-directory equality convention) gap closed as UnresolvedGeneratedNamespace; scoped files that are semantically covered but declaration-free gap as MissingGeneratedCode; scoped files without confirmed semantic coverage gap as ClrSymbolEvidenceUnavailable so failed analysis is never reported as missing code.
+      - The LegacyDataGeneratedFileScope fact proves same-directory exact-base designer-file scope only (never CLR identity); legacy.data.generated-link.v1 facts of any tier are corroboration only and never identity evidence.
+      - Bridge provenance is explicit and required; every composed edge carries namespaceBridgeFactId within supportingFactIds and namespaceBridgeMechanism of semantic-attribute, generation-metadata, or generated-file-scope.
+      - Mechanism-2 generation or project metadata support requires a proven deterministic read; until enumerated and implemented it contributes no matches, and IsTypeOf, split, conditional, complex, function, association, provider-extension, and malformed shapes fail closed with explicit gaps.
+      - Safe reducer-facing properties include relationshipKind, relationshipSource, sourceSymbolId, targetSymbolId, targetSymbolLanguage, targetSymbolKind, namespaceBridgeFactId, namespaceBridgeMechanism, supportingFactIds, coverageLabel, limitations, scopeRule, scopedFilePaths, and hash variants for unsafe identifiers.
+    gapClassifications:
+      owned:
+        - AmbiguousClrSymbolReconciliation
+        - ClrSymbolEvidenceUnavailable
+        - UnresolvedGeneratedNamespace
+        - MissingSemanticPropertyEvidence
+      reused:
+        - AmbiguousLegacyDataModelIdentity
+        - UnsupportedLegacyOrmMappingShape
+        - MissingGeneratedCode
+        - MalformedLegacyDataMetadata
+        - UnsupportedLegacyDataMetadataVersion
+
   - id: legacy.data.typed-dataset.v1
     name: Legacy typed DataSet and TableAdapter metadata
     description: Extracts safe typed DataSet table/column/relation, TableAdapter, command descriptor, and complete static command-text hash/shape evidence.
@@ -2054,9 +2197,60 @@ rules:
       - The summary omits repository paths, source identifiers, route templates, symbols, SQL, configuration values, and source content, but rare counts and rule combinations can still disclose architectural characteristics and require owner review before sharing.
       - A missing or unresolved static link is unknown under stated coverage, never proof that a runtime behavior, dependency, feature, or defect is absent.
 
+  - id: diagnostic.webforms.local-code-path-review.v3
+    name: Private Web Forms local code-path review
+    description: Composes one bounded batch-inspection case into private local HTML, optional explicitly requested annotated working-tree source views, and anonymous structural review artifacts.
+    evidenceTier: Tier4Unknown
+    emits:
+      - private Web Forms code-path review artifacts
+      - anonymous structural Web Forms code-path review artifacts
+    limitations:
+      - The review composes retained static evidence and navigation aids; it does not prove runtime execution, branch feasibility, successful binding, behavior, correctness, or absence of unsupported calls.
+      - Working-tree source may differ from the inspected commit because Git identity equality is not required or established; paths and source are private local output and are excluded from anonymous artifacts.
+      - Raw source and complete annotated source files are emitted only through the explicit include-raw-source option and remain subject to deterministic file-count, source-byte, line-count, rendered-output, path-containment, and transactional publication limits.
+      - Unique-name definition candidates are navigation aids rather than evidence, and ambiguous or missing definitions remain unresolved.
+      - The report preserves upstream rule IDs and evidence tiers but does not upgrade their confidence; missing evidence remains unknown under stated coverage.
+
+  - id: diagnostic.webforms.agent-evidence-handoff.v1
+    name: Private Web Forms agent evidence handoff
+    description: Projects one bounded private Web Forms review case or review set into deterministic navigation metadata, closed TraceMap retrieval hints, optional matching evidence-corpus chunks, and explicit external-evidence questions.
+    evidenceTier: Tier4Unknown
+    emits:
+      - tracemap-agent-evidence-handoff.v1 private case handoff
+      - tracemap-agent-evidence-handoff.v1 private review-set handoff
+    limitations:
+      - Handoffs are navigation projections over retained evidence and never replace facts.ndjson, index.sqlite, the source packet, rule catalog, or human review overlay as a source of truth.
+      - Retrieval hints reference only the closed read-only TraceMap query-recipe catalog and do not prove runtime execution, reachability, ordering, successful binding, completeness, or absence.
+      - Optional index and documentation-corpus locators are private local metadata and require exact scan/commit provenance validation; they are never emitted or linked from anonymous artifacts.
+      - Application-database observations remain structural static evidence. The handoff never contains credentials, connection strings, configuration values, raw application SQL, or database execution instructions.
+      - The handoff does not infer business intent, generate a BRD, select a target architecture, call an LLM, or generate modernization or migration code.
+
+  - id: diagnostic.webforms.raw-exact-call-evidence.v1
+    name: Private Web Forms raw exact-call evidence audit
+    description: Audits a bounded set of selected handlers against retained exact semantic call evidence for local diagnostic review.
+    evidenceTier: Tier4Unknown
+    emits:
+      - private Web Forms local inspection artifacts
+      - bounded exact-call diagnostic summaries
+    limitations:
+      - This is a read-only diagnostic projection over retained static evidence and does not prove runtime execution, reachability, ordering, successful binding, or absence.
+      - Missing exact witnesses remain unknown under the inspected scan coverage and may reflect unavailable source, unresolved symbols, unsupported framework behavior, or bounded traversal.
+      - Outputs are private local artifacts and can contain source identities and repository-relative paths; they are not anonymous or shareable by default.
+
+  - id: diagnostic.webforms.anonymous-code-path-review.v1
+    name: Anonymous Web Forms code-path review projection
+    description: Projects a private bounded Web Forms code-path review into structural aliases suitable for human review without source identities.
+    evidenceTier: Tier4Unknown
+    emits:
+      - anonymous structural Web Forms code-path review artifacts
+    limitations:
+      - Structural aliases preserve graph shape and evidence categories but omit source text, paths, symbols, fact IDs, SQL, configuration, URLs, and commit identity.
+      - Anonymous output does not prove runtime execution, reachability, ordering, successful binding, behavior, correctness, or absence of unsupported calls.
+      - Rare graph shapes and counts may still reveal architectural characteristics and require owner review before sharing.
+
   - id: legacy.webforms.inventory.v1
     name: Legacy WebForms file and page inventory
-    description: Inventories WebForms markup, code-behind, designer files, directives, static server controls, and safe page linkage metadata.
+    description: Inventories WebForms markup, code-behind, designer files, directives, static server controls, checked-in configuration registrations, and safe page linkage metadata.
     evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
     emits:
       - WebFormsPageDeclared
@@ -2069,30 +2263,34 @@ rules:
       - Malformed or unreadable markup is an analysis gap, not proof that no WebForms page, control, or handler exists.
       - Page titles are represented only by presence and a bounded digest; raw display text is not stored.
       - Surface and control identities are derived from normalized repository-relative markup paths and declaration sites; page or control labels alone are not canonical identity.
+      - Configuration registrations include static tagPrefix/tagName/src declarations and bounded namespace/assembly declarations inherited from ancestor web.config files; namespace/assembly composition requires one exact syntax-visible qualified type in a project whose declared assembly identity matches.
+      - Missing, ambiguous, linked, wildcard, generated-only, or unsafe namespace/assembly candidates remain gaps; missing in-scope assembly evidence is distinguished from a missing qualified type within a known assembly, but neither category proves the dependency is absent at runtime.
+      - TraceMap does not guess from a simple type or assembly label.
 
   - id: legacy.webforms.composition.v1
     name: Legacy WebForms static composition declarations
-    description: Records bounded master-page, content-placeholder, and registered user-control composition declared by checked-in WebForms markup.
+    description: Records bounded master-page, content-placeholder, and registered user-control composition declared by checked-in WebForms markup or ancestor web.config files.
     evidenceTier: Tier2Structural or Tier4Unknown
     emits:
       - WebFormsCompositionDeclared
       - AnalysisGap
     limitations:
       - Composition facts describe static markup declarations and do not prove runtime loading, rendering, control construction, navigation, event firing, deployment, or production use.
-      - Registered user-control and master-page targets are repository-relative declarations; missing, dynamic, unsafe, malformed, or out-of-scope targets remain explicit analysis gaps.
+      - Registered user-control and master-page targets are repository-relative declarations; registered assembly controls require source-project assembly evidence and an exact namespace. Only the markup type-name segment uses ordinal case-insensitive matching, while preserving the canonical source type name. Multiple candidates, including case-only collisions, remain ambiguous even if one matches the tag exactly. Missing, dynamic, unsafe, malformed, conflicting, or out-of-scope targets remain explicit analysis gaps; DLL-only controls are not resolved by this rule.
       - ContentPlaceHolderID is a declared target candidate and is not proof that the referenced master page contains a compatible runtime placeholder.
       - Raw markup, page titles, source snippets, local absolute paths, URLs, configuration values, and unsafe expressions are omitted or hashed.
 
   - id: legacy.webforms.event-binding.v1
     name: Legacy WebForms static event binding evidence
-    description: Extracts supported static WebForms server-control event attributes and bounded code-behind control subscriptions such as OnClick, OnCommand, OnLoad, OnInit, and Button.Click += Handler with surface-qualified control identities, handler identities, and line spans.
+    description: Extracts supported static WebForms server-control event attributes, bounded Tier3 event-like OnX candidates, and bounded code-behind control subscriptions such as OnClick, OnCommand, OnLoad, OnInit, and Button.Click += Handler with surface-qualified control identities, handler identities, and line spans.
     evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
     emits:
       - WebFormsEventBindingDeclared
       - AnalysisGap
     limitations:
       - Event bindings are static declarations and do not prove that a control exists at runtime, a user can reach the event, event bubbling occurs, or the handler executes.
-      - Unsupported event-like attributes, dynamic wiring, generated controls, data-bound command names, and unsafe handler values are needs-review or gap evidence rather than guessed handlers.
+      - Safe OnX attributes outside the representative event allowlist are Tier3 event-like candidates, not proof that the target control exposes that server event; client-side, malformed, dynamic, generated, and unsafe shapes remain gaps rather than guessed handlers.
+      - OnClient-prefixed attributes emit ClientWebFormsEventAttribute gaps and never server bindings. Bounded event names with non-identifier values emit NonIdentifierWebFormsEventValue gaps without assuming JavaScript or C# execution; other malformed names retain UnsupportedWebFormsEventAttribute. Raw attribute values are not retained.
       - Duplicate controls or duplicate bindings are preserved as separate evidence rows with deterministic IDs; TraceMap does not collapse them into a single runtime control.
       - Explicit control subscriptions are limited to statically named receivers, representative events, and named handlers on the linked markup surface; lambdas, delegate expressions, unknown receivers, ambiguous controls, and dynamic wiring remain explicit gaps.
 
@@ -2129,6 +2327,7 @@ rules:
       - WebFormsEventFlowProjected
       - AnalysisGap
     limitations:
+      - Direct support must lie inside the resolved handler file and line span. Semantic support requires the same canonical source symbol ID; method-name matches across files, types, or assemblies are not ownership evidence. Syntax support remains a bounded name-and-span candidate and does not prove assembly identity or distinguish overlapping same-line declarations.
       - Event-flow projection is static evidence and does not prove runtime event firing, branch feasibility, dynamic dispatch, delegate invocation, reflection targets, event bubbling, generated-code freshness, service reachability, SQL execution, database state, or production usage.
       - MVP projection prefers direct handler-to-evidence facts and can miss multi-hop call chains, dependency injection, reflection, generated code, unsupported frameworks, or ORM metadata.
       - Reduced semantic coverage, missing call edges, ambiguous generated clients, or unavailable terminal evidence produce partial or unknown classifications rather than clean absence claims.
@@ -2141,9 +2340,56 @@ rules:
       - WebFormsLogicSignalDetected
       - AnalysisGap
     limitations:
+      - Backend support uses the same handler span and semantic identity admission as event-flow projection; syntax method selection must match the resolved handler span.
       - Logic signals are deterministic static heuristics, not proof of business logic, code quality, risk, runtime behavior, or production usage.
       - UI-boilerplate signals are lower-strength syntax evidence and do not prove that a handler is safe, irrelevant, or free of backend effects.
       - Generated code, partial methods, reflection, dynamic dispatch, branch feasibility, and indirect helper calls can hide or dilute signals.
+
+  - id: legacy.webforms.lifecycle-context.v1
+    name: Legacy WebForms lifecycle branch context candidates
+    description: Emits syntax-local lifecycle context candidates for bounded Page_Init, Page_Load, and Page_PreRender methods containing an explicit positive or negated IsPostBack branch.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - WebFormsLifecycleBranchCandidate
+      - AnalysisGap
+    limitations:
+      - Bare IsPostBack and this.IsPostBack conditions emit IsPostBackBranch with is-postback-syntax context; their logical negations retain NotIsPostBackBranch with not-is-postback-syntax context. One layer of parentheses is accepted at each existing expression boundary. These are syntax candidates, not proof of Page symbol identity, a branch running, lifecycle ordering, state initialization, runtime reachability, or correctness.
+      - Local or parameter shadowing, boolean comparisons, compound conditions, arbitrary receivers, helper-based conditions, and other expressions outside the documented shape remain explicit gaps. Positive branch support does not widen client-script inside-not-is-postback-syntax attribution or claim anything about else-branch execution.
+
+  - id: legacy.webforms.client-script.v1
+    name: Legacy WebForms client-script registration candidates
+    description: Emits bounded syntax candidates for supported RegisterStartupScript and related client-script registration calls with literal string payloads stored only as hashes.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - WebFormsClientScriptRegistrationCandidate
+      - AnalysisGap
+    limitations:
+      - Supported receiver names are rejected when aliased or redeclared by a file-local custom type; semantic framework identity is not inferred under reduced compilation.
+      - Registration-call syntax does not prove successful registration, rendered output, script execution, browser behavior, branch execution, or runtime reachability.
+      - Dynamic payloads, ambiguous, shadowed, or custom same-named receivers, unsupported positional or named argument shapes, wrapper methods, reflection, generated scripts, and unsupported registration APIs remain gaps; raw script bodies are not retained.
+
+  - id: legacy.webforms.postback-target.v1
+    name: Legacy WebForms postback target candidates
+    description: Emits bounded syntax candidates for literal __doPostBack targets in markup and literal registered client-script payloads, with same-surface control correlation where exact.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - WebFormsPostBackTargetCandidate
+      - AnalysisGap
+    limitations:
+      - Only standalone `__doPostBack` identifiers are considered; prefixed identifiers and member-qualified custom functions are ignored.
+      - Literal targets are hashed and do not prove generated UniqueID values, browser execution, form submission, server dispatch, event handling, or runtime reachability.
+      - Dynamic targets, naming containers, templated controls, event validation, and cross-surface resolution remain gaps.
+
+  - id: legacy.webforms.data-binding.v1
+    name: Legacy WebForms declarative data-binding candidates
+    description: Correlates explicit same-surface DataSourceID declarations and inventories literal Eval/Bind field-expression candidates without evaluating markup.
+    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - WebFormsDataBindingCandidate
+      - AnalysisGap
+    limitations:
+      - Static DataSourceID, Eval, and Bind evidence does not prove successful binding, returned rows, evaluated values, rendering, persistence, or runtime reachability.
+      - Blank, composed, or dynamic values and expressions, naming-container resolution, templates outside opening-tag attributes, programmatic binding, unsupported property shapes, and ambiguous control IDs remain gaps; field literals are retained only as hashes.
 
   - id: legacy.webforms.modernization-packet.v1
     name: Web Forms modernization evidence packet composition
@@ -2159,6 +2405,8 @@ rules:
       - Structural slice candidates do not infer business capabilities, parity, migration scope, effort, cloud readiness, target architecture, test completeness, security approval, release approval, or safety to change; owner naming and confirmation remain required.
       - Missing coverage labels, source identity mismatch, unsupported evidence, missing handlers or terminals, reduced scans, and deterministic traversal or output limits remain explicit gaps rather than clean-absence claims.
       - The local-only packet omits snippets, raw SQL, configuration values, URLs, connection strings, credentials, source values, repository remotes, and absolute local paths.
+      - Web Forms packet input admission bounds retained fact and edge rows, UTF-8 text bytes, per-row size, and graph nodes/edges; these are deterministic admission limits, not a hard OS working-set guarantee. On admission failure, WebFormsModernizationInputLimitReached preserves admitted inventory but no downstream paths or absence classifications are derived from the incomplete graph.
+      - A closed audited set of graph-inert syntax facts may be compacted to symbol witnesses; unknown types, declared dependency surfaces, legacy rules, supporting evidence IDs, and repository-wide symbol competitors are preserved. This is not root-specific lazy graph loading.
 
   - id: legacy.webforms.batch-data-movement.v1
     name: Legacy Web Forms batch and data-movement evidence
@@ -2185,6 +2433,7 @@ rules:
     limitations:
       - WinForms surface inventory is static repository evidence and does not prove runtime form creation, visibility, user reachability, authorization, deployment, or production usage.
       - Syntax and designer fallback can be reduced by failed MSBuild load, stale generated files, missing partial classes, malformed C#, duplicate type identities, or unsupported generated shapes.
+      - Syntax-only recognition of unqualified `Form`, `UserControl`, `Control`, `ApplicationContext`, or `Component` bases requires a matching `System.Windows.Forms` or `System.ComponentModel` namespace import; aliases, inherited framework identity hidden behind a custom base, and ambiguous framework names remain unsupported rather than being matched by simple name.
       - File paths are repo-relative; raw source snippets, local absolute paths, raw remotes, resource values, config values, URLs, endpoint addresses, and secrets are omitted.
 
   - id: legacy.winforms.control.v1
@@ -2864,13 +3113,15 @@ rules:
 
   - id: combined.paths.truncation-gap.v1
     name: Combined dependency path truncation gap
-    description: Emits path-search limit gaps when selector candidate, depth, cycle, path-count, or frontier bounds stop traversal.
+    description: Emits path-search limit gaps when selector candidate, depth, cycle, path-count, or frontier bounds stop traversal, or Web Forms packet graph-input admission is incomplete.
     evidenceTier: Tier4Unknown
     emits:
       - TruncatedByLimit path gap
+      - GraphInputLimitReached path gap
     limitations:
       - Truncation means the returned path set is intentionally partial and must not be treated as complete dependency coverage.
       - The triggering evidence span is best-effort and may point to the nearest traversed node rather than the omitted dependency.
+      - Web Forms graph-input admission gaps have no source span and discard the incomplete graph before classification; they do not imply missing runtime dependencies or a clean graph.
 
   - id: combined.route-flow.selector.v1
     name: Route-flow selector handling
@@ -3147,17 +3398,21 @@ rules:
 
   - id: project.file.v1
     name: Project file inventory
-    description: Reads solution and C# project declarations, target frameworks, and package references from project files and packages.config.
+    description: Reads solution and C# project declarations, target frameworks, and package references from project files, packages.config, and checked-in packages.lock.json resolved-version metadata.
     evidenceTier: Tier2Structural
     emits:
       - SolutionDeclared
       - ProjectDeclared
       - TargetFrameworkDeclared
       - PackageReferenced
+      - AnalysisGap
     limitations:
       - XML files that cannot be parsed are still inventoried but do not emit project metadata facts.
       - Conditional MSBuild properties are not evaluated in Milestone 1.
       - PackageReferenced facts are static project-file or packages.config declarations and do not prove NuGet restore, resolved transitive dependencies, runtime loading, or deployment.
+      - packages.lock.json rows are checked-in lockfile metadata only; the direct/transitive relation comes from the lockfile's own type field and never from package presence alone.
+      - NuGet packages.lock.json carries no registry artifact digest; its contentHash is package-content metadata and is never emitted as artifactDigest, so exact-artifact matching is unavailable for NuGet evidence.
+      - packages.lock.json extraction is offline and deterministic; restore, dependency solving, package-manager execution, and network access are out of scope, and malformed, unsupported, truncated, or unsafe lockfile shapes emit analysis gaps.
       - Central package management, imported props/targets, and unresolved property interpolation may reduce package metadata precision.
 
   - id: csharp.syntax.memberaccess.v1
@@ -3509,11 +3764,14 @@ rules:
     evidenceTier: Tier1Semantic
     emits:
       - TypeDeclared
+      - PropertyDeclared
     limitations:
       - Requires project load and enough references to create a Roslyn compilation.
       - Generated source excluded from inventory is not reported.
       - External Roslyn source paths use deterministic synthetic identities; original host-local paths are omitted, and same-named unrecognized external sources can share an identity.
       - Each external source document also emits a `csharp.semantic.workspace.v1` gap because repository presence and immutable source identity are not established.
+      - Type declarations carrying an EF6 EdmEntityType generated-identity attribute additionally expose safe-or-hash generatedConceptualNamespace and generatedConceptualName properties; raw attribute text is never retained.
+      - PropertyDeclared facts are emitted only for bounded EF/EDMX composition candidates (generated-identity attributes, in-file DbSet or IDbSet entity arguments, or designer-shaped files) with canonical member symbol IDs; no global property inventory exists under this rule.
 
   - id: csharp.semantic.workspace.v1
     name: C# semantic workspace gaps
@@ -3527,6 +3785,9 @@ rules:
       - Native workspace messages are sanitized to stable categories before shareable artifacts are written; raw local paths, remotes, package sources, config values, credentials, and source-like snippets are omitted.
       - Source documents outside the repository use deterministic synthetic evidence paths derived from bounded non-host descriptors. The original path is not retained, and same-named unrecognized external sources can share an identity.
       - Explicit scan-scope gaps report only a categorical omitted-document count at repository evidence path `.`; they do not identify excluded source files, prove build failure, or describe runtime behavior.
+      - Project-declared C# inputs missing from the captured inventory emit a project-scoped `CompilationInputUnavailable` gap; the missing path is not retained, and the gap does not prove why the input is absent.
+      - Projects declaring COMReference or COMFileReference items are loaded with COM-reference design-time targets omitted when TraceMap can install its bounded temporary target override. A project-scoped `ComReferenceResolutionSkipped` gap records that COM-defined symbols may remain unresolved; this does not prove the COM component is absent or broken at build or runtime.
+      - TraceMap does not replace a project-defined CustomAfterMicrosoftCommonTargets hook. In that case it emits `ComReferenceResolutionFallbackUnavailable` and leaves ordinary MSBuildWorkspace behavior intact.
       - Exclusion comparison follows detected host path case semantics and macOS Unicode-equivalence semantics without rewriting persisted evidence paths. Unicode-distinct names remain distinct on hosts whose filesystems treat them as distinct.
 
   - id: build.environment.target-framework.v1
@@ -3586,7 +3847,7 @@ rules:
 
   - id: build.environment.workspace-diagnostic.v1
     name: Build environment workspace diagnostics
-    description: Records sanitized MSBuildWorkspace, SDK resolution, reference assembly, restore, and compilation setup categories that explain reduced semantic coverage.
+    description: Records sanitized MSBuildWorkspace, legacy Web Application/import/evaluation, SDK resolution, MSBuild task-host, reference assembly, restore, and compilation setup categories with closed origin lineage that explains reduced semantic coverage.
     evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - BuildEnvironmentDiagnostic
@@ -3594,6 +3855,12 @@ rules:
       - Workspace diagnostics are sanitized categories and do not include raw native output, local paths, private repository names, remotes, package sources, config values, credentials, or source snippets.
       - Categories explain why semantic coverage was reduced; they do not prove runtime compatibility or absence of repository evidence.
       - Syntax, config, SQL, WCF, and WebForms fallback facts remain valid within their own evidence tiers.
+      - Legacy workspace categories are bounded pattern classifications of sanitized native diagnostics; they identify likely prerequisite classes, not a proven repair or compatible build environment.
+      - LegacyWorkspacePrerequisitesUnresolved is emitted only when an otherwise uncategorized workspace failure shares project identity with static legacy framework, project-format, import, or toolset evidence; it does not identify the exact missing prerequisite.
+      - Projected diagnostics preserve a closed origin category, original gap kind, safe diagnostic ID when present, and deterministic occurrence count; they never retain native diagnostic text.
+      - MSBuildTaskHostIncompatible is a bounded classification for COM-reference task instantiation or host-support failures. It does not prove that the solution itself cannot compile under Visual Studio or full-framework MSBuild.
+      - Ordinary compiler diagnostics remain AnalysisGap evidence and are not projected or relabeled as workspace/toolset failures; recognized reference-assembly compiler diagnostics may be projected with compilation origin.
+      - Projection admits only the documented workspace, project/solution load, compilation setup/input, MSBuild registration, restore, and recognized reference-assembly gap kinds; unrelated semantic extractor limitations remain in their own rule families and are not duplicated as build-environment failures.
 
   - id: build.msbuild-binlog.observation.v1
     name: Bounded MSBuild binary-log observation
@@ -4163,7 +4430,7 @@ rules:
 
   - id: typescript.package.v1
     name: TypeScript package metadata
-    description: Reads package.json package identity, dependencies, and script key facts without storing raw script commands.
+    description: Reads bounded package.json and npm package-lock.json v2/v3 package identity and dependency metadata without storing raw script commands or registry URLs.
     evidenceTier: Tier2Structural
     emits:
       - ProjectDeclared
@@ -4173,8 +4440,9 @@ rules:
     limitations:
       - Package scripts are stored as hashes and key paths only.
       - Package metadata is structural evidence; it does not prove runtime loading.
-      - Package dependency rows are static package.json declarations and do not prove install, lockfile resolution, bundler inclusion, import/use, or deployment.
-      - Workspace resolution, registry metadata, package-manager execution, and transitive dependency solving are out of scope.
+      - Package dependency rows are static declarations or lockfile metadata and do not prove install, package content, bundler inclusion, import/use, or deployment.
+      - Lockfile integrity is registry-declared tarball metadata; TraceMap does not fetch or verify package content.
+      - npm lockfile extraction is offline and bounded to v2/v3; dependency solving, workspace resolution, and package-manager execution are out of scope.
 
   - id: typescript.config.v1
     name: TypeScript config keys
@@ -4479,7 +4747,7 @@ rules:
 
   - id: jvm.buildfile.v1
     name: JVM build file metadata
-    description: Extracts local Maven and literal Gradle module/dependency metadata without running build tools.
+    description: Extracts local Maven and literal Gradle module/dependency metadata plus bounded offline gradle.lockfile resolved versions without running build tools.
     evidenceTier: Tier2Structural
     emits:
       - ProjectDeclared
@@ -4490,6 +4758,11 @@ rules:
       - Gradle extraction is literal-only; version catalogs, convention plugins, buildSrc, composite builds, and interpolation are reduced-coverage gaps.
       - Dependency metadata is structural and does not prove the dependency is resolved on the scanner classpath.
       - JVM package facts do not prove Maven/Gradle execution, dependency cache contents, transitive dependency resolution, runtime class loading, or deployment.
+      - gradle.lockfile rows carry exact resolved versions, lockfile path, and a lockfile content hash only; coordinates and non-empty comma-separated configuration names must satisfy closed safe shapes, while malformed rows emit gaps instead of facts.
+      - The format has no artifact digest and its configuration names do not prove direct versus transitive, so both capabilities are reported as explicit fact and manifest analysis gaps.
+      - gradle/verification-metadata.xml is inventoried but not consumed for digests: its per-artifact checksums cannot be correlated to a package-decision record because the record contract does not identify the artifact form (module jar, sources, POM, classifier), so JVM evidence can never prove an exact artifact match from verification metadata.
+      - Maven has no standard lockfile; Maven scans emit MavenLockfileUnavailable as both a rule-backed fact and manifest gap, and Maven rows keep declared build-file evidence only.
+      - Malformed or unsupported gradle.lockfile rows (including the empty= placeholder notation, unsafe coordinates, and empty or malformed configuration suffixes) emit GradleLockRow gaps and downgrade scan coverage instead of guessing rows.
 
   - id: jvm.config.v1
     name: JVM config files
@@ -4727,7 +5000,7 @@ rules:
 
   - id: python.package.metadata.v1
     name: Python package metadata
-    description: Emits Python package dependency facts from pyproject.toml, setup.cfg, setup.py literals, and requirements files.
+    description: Emits Python package dependency facts from pyproject.toml, setup.cfg, setup.py literals, requirements files, and bounded offline uv.lock/poetry.lock resolved-version extraction.
     evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
     emits:
       - PackageReferenced
@@ -4736,6 +5009,14 @@ rules:
       - setup.py is parsed for literal dependency lists only and is never executed.
       - Dependency resolution, extras, lockfile solving, environment markers, and installed package versions are not proven.
       - Direct URLs, editable installs, local paths, and dynamic declarations are represented as hash-only metadata or gaps; raw values are not rendered.
+      - uv.lock extraction is bounded to lock format version 1 and poetry.lock to lock-versions 1.0/1.1/2.0/2.1; unsupported versions, malformed or truncated TOML, unsafe names, non-registry sources, and entries without a literal resolved version emit analysis gaps instead of guessed facts.
+      - uv.lock and poetry.lock artifact hashes are wheel or source-distribution form specific and are never emitted as artifact digests; a decision record cannot identify the artifact form, so this evidence can never prove an exact artifact match.
+      - Direct versus transitive for uv.lock comes only from complete, well-typed main, development-group, and optional-group dependency declarations on proven root/workspace entries; malformed version/source/marker qualifiers invalidate relation proof, and valid version and registry qualifiers are used only when they uniquely identify a locked registry package.
+      - Direct versus transitive for poetry.lock comes only from complete sibling pyproject.toml project, optional, Poetry main, legacy development, and named-group dependency declarations with supported top-level and nested value shapes; malformed, dynamic, missing, or incomplete declarations leave every relation unproven with a DirectTransitiveUnavailable gap rather than labeling undeclared rows transitive.
+      - A declared Poetry name with multiple eligible same-name lock rows remains unclassified because TraceMap does not interpret version constraints or environment markers; ambiguity emits DirectTransitiveUnavailable instead of labeling every variant direct.
+      - Python lockfile digest and relation limitations are recorded in both rule-backed facts and manifest known gaps so machine and human coverage summaries remain consistent.
+      - Proven uv.lock root/workspace entries emit no dependency row; invalid registry origins and other editable, virtual, Git, URL, path, or directory sources emit unsupported-source gaps. Poetry entries without a source use the default registry semantics, bounded legacy registry sources retain host-only origin, and invalid origins or other source types emit unsupported-source gaps.
+      - Pipfile is inventoried but unsupported and emits an unsupported-metadata gap; Pipfile.lock is not inventoried or parsed.
 
   - id: python.ast.declarations.v1
     name: Python AST declarations
@@ -5237,6 +5518,52 @@ rules:
       - Exact package-name matching can miss aliases, relocated packages, shaded dependencies, generated manifests, imported build files, and dynamically declared dependencies.
       - No vulnerability database, registry, changelog, license, LLM, embedding, vector, or prompt-based analysis is used.
 
+  - id: package.decision.record.v1
+    status: active
+    name: External package decision record admission
+    description: Validates versioned package-decision.v1 records, computes canonical record digests, and classifies rejected input without trusting producer claims.
+    evidenceTier: Tier4Unknown
+    emits:
+      - PackageDecisionRecord
+      - PackageDecisionInputGap
+    limitations:
+      - Record digests prove canonical input integrity only; they do not authenticate the producer or confer admission, rejection, revocation, or quarantine authority.
+      - The accepted decision vocabulary is closed to admit, reject, revoke, and non-terminal quarantine; unsupported values fail closed.
+      - Safe metadata validation rejects credentials, raw URLs, paths, free text, and executable material; rejected values are not rendered.
+      - The reader does not resolve supersession chains or infer an effective decision.
+
+  - id: package.decision.correlation.v1
+    status: active
+    name: Package decision exact-artifact correlation
+    description: Correlates admitted package decisions with PackageReferenced static evidence in single, combined, portfolio, and before/after comparison inputs using a fixed exact-versus-possible ladder.
+    evidenceTier: Tier4Unknown
+    emits:
+      - PackageDecisionCorrelation
+      - PackageDecisionGap
+      - PackageDecisionArtifactChange
+      - PackageDecisionExternalReference
+    limitations:
+      - Exact and possible matches remain separate; missing adapter digest or dependency-relation capability is an explicit gap.
+      - Correlation is static snapshot evidence and does not prove restore, execution, runtime loading, deployment, safety, or business impact.
+      - Reduced coverage and unknown commit identity produce analysis gaps rather than excluded-source conclusions.
+      - Origin metadata is bounded and does not authenticate a registry or producer. Version comparisons are exact strings; semantic versioning is not interpreted.
+      - Before/after artifact changes are cross-snapshot portfolio evidence, not a single coherent release state; ArtifactReplaced requires digest-bound evidence on both sides with equal name and exact version, and possible-only changes never claim replacement.
+      - Before/after comparison retains bounded evidence representatives and examines at most 1000 matching facts per decision/source pairing; exceeding that bound emits TruncatedByLimit and suppresses the affected change claim.
+      - Deployment references render as RuntimeUnprovenReference lineage metadata; TraceMap did not verify the build, deployment, installation, reachability, or runtime load, and references never upgrade a rung, count as exact matches, or trigger --exit-code.
+      - The command is read-only reporting and never enforces external admission, rejection, revocation, or quarantine decisions.
+
+  - id: package.decision.advisory.v1
+    status: active
+    name: External framework-implied exposure advisory claims
+    description: Renders bounded, versioned external advisory claims such as framework-implied server surfaces with exact producer and profile provenance; never converts them into TraceMap-proven facts, rungs, or vulnerability statements.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - PackageDecisionAdvisoryClaim
+    limitations:
+      - Advisory claims are external producer opinions; TraceMap neither validates nor endorses them, and the profile digest proves input integrity only, not producer authenticity or authority.
+      - The claim grammar is closed to exact/any version predicates and the framework-implied-server-surface claim kind with a bounded framework parameter; severity, CVE, vulnerability, exploitability, remediation, runtime, and trust-shaped fields are rejected.
+      - Claims never merge into CodeFacts, correlation rungs, summaries, path or reverse context, or exit-code behavior, and TraceMap never invents, enriches, or extrapolates claims.
+
   - id: legacy.baseline.redacted-manifest.v1
     name: Legacy baseline redacted manifest
     description: Creates deterministic redacted legacy baseline manifests from TraceMap scan outputs using neutral labels and aggregate evidence counts.
@@ -5524,7 +5851,7 @@ rules:
   - id: swift.dependency.lockfile.swiftpm.v1
     status: active
     name: SwiftPM dependency lockfile row
-    description: Records per-pin dependency rows from supported checked-in Package.resolved v1/v2 JSON schemas.
+    description: Records per-pin dependency rows from supported checked-in Package.resolved v1/v2 JSON schemas, promoting safe literal state versions to resolvedVersion.
     evidenceTier: Tier2Structural
     emits:
       - SwiftDependencyLockfileEntryDeclared
@@ -5532,11 +5859,12 @@ rules:
       - Lockfile rows are checked-in static metadata only and do not prove packages are restored, installed, linked, loaded, compatible, licensed, vulnerable, fresh, reachable, or used at runtime.
       - Unsupported schema versions, malformed JSON, duplicate pins, and missing expected pin fields emit dependency analysis gaps.
       - Raw locations, URLs, hostnames, remotes, credentials, revisions, and private labels are omitted or represented only by hashes/status flags.
+      - resolvedVersion is the checked-in literal state.version only; SwiftPM lockfiles carry no artifact digest and never prove downloaded artifact bytes, so exact-artifact matching is unavailable for SwiftPM evidence.
 
   - id: swift.dependency.lockfile.text.v1
     status: active
     name: Swift text dependency lockfile row
-    description: Records per-entry dependency rows from checked-in Podfile.lock and Cartfile.resolved text metadata using conservative section or line scanning.
+    description: Records per-entry dependency rows from checked-in Podfile.lock and Cartfile.resolved text metadata using conservative section or line scanning, promoting safe literal resolved versions.
     evidenceTier: Tier3SyntaxOrTextual
     emits:
       - SwiftDependencyLockfileEntryDeclared
@@ -5544,6 +5872,8 @@ rules:
       - Text lockfile rows are syntax/text evidence only and do not prove package restore, install, transitive completeness, compatibility, license, vulnerability, freshness, link, load, runtime use, production use, or impact.
       - Unknown sections, malformed entries, duplicate checksum keys, unsafe locations, and unsupported text shapes emit gaps or hash-only evidence.
       - Raw source URLs, hostnames, remotes, local paths, snippets, credentials, and private labels are omitted or represented only by hashes/status flags.
+      - Podfile.lock resolvedVersion values come from PODS entries only; SPEC CHECKSUMS are recorded as explicitly labeled podspec SHA-1 metadata (specChecksum), never as an artifact digest, and CocoaPods/Carthage versions never prove downloaded artifact bytes.
+      - Cartfile resolvedVersion values are safe semver literals from Cartfile.resolved only; revision-only or unresolved values stay hashed and never masquerade as resolved semantic versions.
 
   - id: swift.dependency.analysis-gap.v1
     status: active

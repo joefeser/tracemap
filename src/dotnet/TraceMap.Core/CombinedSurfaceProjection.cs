@@ -18,7 +18,9 @@ public sealed record CombinedSurfaceFactInput(
     int StartLine,
     int EndLine,
     IReadOnlyDictionary<string, string> Properties,
-    string? ExtractorVersion = null);
+    string? ExtractorVersion = null,
+    string? SourceSymbol = null,
+    string? TargetSymbol = null);
 
 public sealed record CombinedSurfaceProjectionRow(
     string SurfaceKind,
@@ -127,7 +129,8 @@ public static class CombinedSurfaceProjection
 
     private static CombinedSurfaceProjectionRow? ToSurface(CombinedSurfaceFactInput fact)
     {
-        var surfaceKind = SurfaceKind(fact);
+        var isFrameworkDataAdapterFill = IsFrameworkDataAdapterFill(fact);
+        var surfaceKind = isFrameworkDataAdapterFill ? "sql-query" : SurfaceKind(fact);
         if (surfaceKind is null)
         {
             return null;
@@ -135,7 +138,9 @@ public static class CombinedSurfaceProjection
 
         var httpMethod = FirstValue(fact.Properties, "httpMethod", "httpMethods", "methodName");
         var normalizedPathKey = FirstValue(fact.Properties, "normalizedPathKey");
-        var operationName = FirstValue(fact.Properties, "operationName", "normalizedOperationName");
+        var operationName = isFrameworkDataAdapterFill
+            ? "fill"
+            : FirstValue(fact.Properties, "operationName", "normalizedOperationName");
         var mappingKind = FirstValue(fact.Properties, "mappingKind");
         var mappedName = FirstValue(fact.Properties, "mappedName");
         var tableName = SafeSqlIdentifierList(
@@ -146,7 +151,9 @@ public static class CombinedSurfaceProjection
             FirstValue(fact.Properties, "columnNames", "fieldNames", "columnName") ?? (IsColumnMappingKind(mappingKind) ? mappedName : null),
             80,
             allowSpaces: false);
-        var sourceKind = FirstValue(fact.Properties, "sqlSourceKind", "sourceKind");
+        var sourceKind = isFrameworkDataAdapterFill
+            ? "compiler-resolved-data-adapter-fill"
+            : FirstValue(fact.Properties, "sqlSourceKind", "sourceKind");
         var wcfMappingHash = fact.FactType == FactTypes.WcfServiceReferenceMapping
             ? FirstValue(fact.Properties, "mappingHash", "metadataHash")
             : null;
@@ -187,6 +194,7 @@ public static class CombinedSurfaceProjection
         var displayName = surfaceKind switch
         {
             "http-client" or "http-route" => normalizedPathKey ?? FirstValue(fact.Properties, "normalizedPathTemplate") ?? $"{httpMethod ?? "ANY"} unknown",
+            "sql-query" when isFrameworkDataAdapterFill => "data-adapter-fill",
             "sql-query" => SqlSurfaceDisplayName(fact, operationName, tableName, columns, sourceKind, shapeHash, textHash, sqlResourceName),
             "sql-persistence" => SqlPersistenceDisplayName(fact, tableName, columns, mappedName),
             "package-config" => packageName ?? configKey ?? $"unknown-package-config:{fact.CombinedFactId}",
@@ -244,7 +252,8 @@ public static class CombinedSurfaceProjection
             handlerSymbolId,
             publisherSymbolId,
             safeMetadataHash,
-            stableMessageSurfaceKey);
+            stableMessageSurfaceKey,
+            SurfaceSubtype: isFrameworkDataAdapterFill ? "data-adapter-fill" : null);
     }
 
     private static CombinedSurfaceProjectionRow ToLegacyDataSurface(LegacyDataModelDescriptorProjectionRow descriptor)
@@ -357,6 +366,27 @@ public static class CombinedSurfaceProjection
         }
 
         return null;
+    }
+
+    private static bool IsFrameworkDataAdapterFill(CombinedSurfaceFactInput fact)
+    {
+        if (fact.FactType != FactTypes.MethodInvoked
+            || fact.RuleId != RuleIds.CSharpSemanticMethodInvocation
+            || fact.EvidenceTier != EvidenceTiers.Tier1Semantic
+            || string.IsNullOrWhiteSpace(FirstValue(fact.Properties, "receiverSymbol")))
+        {
+            return false;
+        }
+
+        var target = fact.TargetSymbol?.Trim();
+        if (target?.StartsWith("global::", StringComparison.Ordinal) == true)
+        {
+            target = target[8..];
+        }
+
+        return target?.StartsWith("System.Data.Common.DbDataAdapter.Fill(", StringComparison.Ordinal) == true
+            || target?.StartsWith("System.Data.SqlClient.SqlDataAdapter.Fill(", StringComparison.Ordinal) == true
+            || target?.StartsWith("Microsoft.Data.SqlClient.SqlDataAdapter.Fill(", StringComparison.Ordinal) == true;
     }
 
     private static string? RemotingSurfaceKind(string factType)

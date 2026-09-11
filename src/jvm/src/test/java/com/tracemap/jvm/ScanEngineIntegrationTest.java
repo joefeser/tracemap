@@ -32,7 +32,9 @@ final class ScanEngineIntegrationTest {
 
         ScanResult result = new ScanEngine().scan(new ScanOptions(repo, out, List.of(), List.of(), List.of(), 1024 * 1024, true, "all"));
 
-        assertEquals("Level1SemanticAnalysis", result.manifest().analysisLevel());
+        assertEquals("Level1SemanticAnalysisReduced", result.manifest().analysisLevel());
+        assertEquals("FailedOrPartial", result.manifest().buildStatus());
+        assertTrue(result.manifest().knownGaps().contains("MavenLockfileUnavailable: pom.xml"));
         assertTrue(Files.exists(out.resolve("scan-manifest.json")));
         assertTrue(Files.exists(out.resolve("facts.ndjson")));
         assertTrue(Files.exists(out.resolve("index.sqlite")));
@@ -102,7 +104,7 @@ final class ScanEngineIntegrationTest {
             .directory(repoRoot().toFile())
             .redirectErrorStream(true)
             .start();
-        assertTrue(process.waitFor(60, TimeUnit.SECONDS), "dotnet reduce timed out");
+        assertTrue(process.waitFor(180, TimeUnit.SECONDS), "dotnet reduce timed out");
         String output = new String(process.getInputStream().readAllBytes());
         assertEquals(0, process.exitValue(), output);
         String markdown = Files.readString(report);

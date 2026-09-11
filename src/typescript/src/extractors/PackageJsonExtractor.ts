@@ -1,9 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import ts from "typescript";
 import { CodeFact, EvidenceTiers, FactTypes, FileInventoryItem, ScanManifest } from "../facts/Models";
 import { createEvidence, createFact } from "../facts/FactFactory";
 import { RuleIds, ScannerVersions } from "../facts/RuleIds";
 import { hash } from "../util/Hash";
+import { AnalysisGapCollector } from "../scan/AnalysisGapCollector";
 
 export interface PackageIdentity {
   name: string;
@@ -34,7 +36,7 @@ export async function findNearestPackageIdentity(repoPath: string, filePath: str
   return { name: path.basename(resolvedRepoPath), version: "HEAD", rootPath: resolvedRepoPath };
 }
 
-export async function extractPackageFacts(manifest: ScanManifest, repoPath: string, inventory: readonly FileInventoryItem[]): Promise<CodeFact[]> {
+export async function extractPackageFacts(manifest: ScanManifest, repoPath: string, inventory: readonly FileInventoryItem[], gapCollector?: AnalysisGapCollector): Promise<CodeFact[]> {
   const facts: CodeFact[] = [];
   for (const item of inventory.filter((file) => path.basename(file.relativePath) === "package.json")) {
     try {
@@ -129,6 +131,7 @@ export async function extractPackageFacts(manifest: ScanManifest, repoPath: stri
         }
       }
     } catch {
+      gapCollector?.record("package-json-parse", "package.json could not be parsed as bounded package metadata.");
       facts.push(
         createFact(
           manifest,
@@ -141,7 +144,188 @@ export async function extractPackageFacts(manifest: ScanManifest, repoPath: stri
       );
     }
   }
+  facts.push(...await extractPackageLockFacts(manifest, repoPath, inventory, gapCollector));
   return facts;
+}
+
+/**
+ * Reads npm lockfile v2/v3 metadata only.  This intentionally does not resolve,
+ * fetch, or verify a tarball: integrity is the registry-declared value copied
+ * from package-lock.json and is never treated as content verification.
+ */
+async function extractPackageLockFacts(manifest: ScanManifest, repoPath: string, inventory: readonly FileInventoryItem[], gapCollector?: AnalysisGapCollector): Promise<CodeFact[]> {
+  const facts: CodeFact[] = [];
+  for (const item of inventory.filter((file) => path.basename(file.relativePath) === "package-lock.json")) {
+    if (item.skipped) {
+      facts.push(lockfileGap(manifest, item, "package-lock-size-limit", "npm package-lock.json exceeded the configured inventory file-size limit.", undefined, 1, gapCollector));
+      continue;
+    }
+    try {
+      const text = await fs.readFile(item.absolutePath, "utf8");
+      if (hasDuplicateJsonProperties(text)) {
+        facts.push(lockfileGap(manifest, item, "package-lock-duplicate-property", "npm package-lock.json contains duplicate object properties.", undefined, 1, gapCollector));
+        continue;
+      }
+      const json = JSON.parse(text) as Record<string, unknown>;
+      const lockfileVersion = typeof json.lockfileVersion === "number" ? json.lockfileVersion : Number(json.lockfileVersion);
+      const packages = json.packages;
+      if ((lockfileVersion !== 2 && lockfileVersion !== 3) || !packages || typeof packages !== "object" || Array.isArray(packages)) {
+        facts.push(lockfileGap(manifest, item, "package-lock-unsupported", "package-lock.json must be npm lockfile v2 or v3 with a packages map.", undefined, 1, gapCollector));
+        continue;
+      }
+      const root = await readRootPackageJson(item.absolutePath, repoPath);
+      const directGroups = declaredDependencyGroups(root);
+      const lockHash = hash(text, 32);
+      for (const packagePath of Object.keys(packages as Record<string, unknown>).sort()) {
+        if (!packagePath || packagePath === "") continue;
+        const entry = (packages as Record<string, unknown>)[packagePath];
+        if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+        const installationName = packageNameFromLockPath(packagePath);
+        if (!installationName) continue;
+        const properties = entry as Record<string, unknown>;
+        const explicitName = typeof properties.name === "string" ? properties.name.trim() : "";
+        const packageName = explicitName && isSafePackageName(explicitName) ? explicitName : installationName;
+        const evidenceLine = lineOf(text, packagePath.replaceAll("\\", "/"));
+        const version = typeof properties.version === "string" ? properties.version : "";
+        if (!version.trim()) {
+          facts.push(lockfileGap(manifest, item, "package-lock-entry-version-missing", "npm lockfile package entry did not provide a resolved version.", packageName, evidenceLine, gapCollector));
+          continue;
+        }
+        const integrity = typeof properties.integrity === "string" ? properties.integrity.trim() : "";
+        const digest = parseSha512Integrity(integrity);
+        const resolved = typeof properties.resolved === "string" ? properties.resolved.trim() : "";
+        const registryOrigin = hostOnlyOrigin(resolved);
+        const depth = dependencyPathDepth(packagePath);
+        const direct = isDirectLockEntry(packagePath, installationName, directGroups);
+        const declaredGroups = directGroups.get(installationName) ?? [];
+        const safeVersion = resolvedPackageVersionProperties(version);
+        const packageProperties: Record<string, string> = {
+          dependencyGroup: direct ? (declaredGroups.length === 1 ? declaredGroups[0] : "multiple") : "lockfile",
+          dependencyRelation: direct ? "direct" : depth > 1 ? "transitive" : "unknown",
+          dependencyPathDepth: String(depth),
+          ecosystem: "npm",
+          manifestKind: "package-lock.json",
+          packageManager: "npm",
+          packageName,
+          lockfilePath: item.relativePath,
+          lockfileHash: lockHash,
+          sourceKind: "lockfile",
+          surfaceKind: "package-config",
+          ...safeVersion
+        };
+        if (safeVersion.version) packageProperties.resolvedVersion = safeVersion.version;
+        if (installationName !== packageName) packageProperties.installationName = installationName;
+        if (direct && declaredGroups.length > 1) packageProperties.dependencyGroups = declaredGroups.join(",");
+        if (registryOrigin) packageProperties.registryOrigin = registryOrigin;
+        if (digest) {
+          packageProperties.artifactDigestAlgorithm = "sha512-base64";
+          packageProperties.artifactDigest = digest;
+        } else {
+          facts.push(lockfileGap(manifest, item, "lockfile-digest-unavailable", "npm lockfile entry did not provide a supported sha512 integrity value.", packageName, evidenceLine, gapCollector));
+        }
+        facts.push(createFact(
+          manifest,
+          FactTypes.PackageReferenced,
+          RuleIds.TypeScriptPackage,
+          EvidenceTiers.Tier2Structural,
+          createEvidence(item.relativePath, evidenceLine, evidenceLine, "typescript-package-lock", ScannerVersions.TypeScriptPackageExtractor),
+          { targetSymbol: packageName, properties: packageProperties }
+        ));
+      }
+    } catch {
+      facts.push(lockfileGap(manifest, item, "package-lock-parse", "npm package-lock.json could not be admitted as bounded metadata.", undefined, 1, gapCollector));
+    }
+  }
+  return facts;
+}
+
+async function readRootPackageJson(lockfilePath: string, repoPath: string): Promise<Record<string, unknown>> {
+  const root = path.dirname(lockfilePath);
+  const candidates = [path.join(root, "package.json"), path.join(repoPath, "package.json")];
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(await fs.readFile(candidate, "utf8")) as Record<string, unknown>;
+    } catch {
+      // A lockfile can be nested under a workspace; try the repository root.
+    }
+  }
+  return {};
+}
+
+function declaredDependencyGroups(json: Record<string, unknown>): Map<string, string[]> {
+  const groups = new Map<string, string[]>();
+  for (const section of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"]) {
+    const values = json[section];
+    if (!values || typeof values !== "object" || Array.isArray(values)) continue;
+    for (const name of Object.keys(values as Record<string, unknown>).sort()) {
+      const current = groups.get(name) ?? [];
+      if (!current.includes(section)) groups.set(name, [...current, section].sort());
+    }
+  }
+  return groups;
+}
+
+function packageNameFromLockPath(packagePath: string): string | null {
+  const segments = packagePath.split("/").filter(Boolean);
+  for (let i = segments.length - 1; i >= 0; i--) {
+    if (segments[i] === "node_modules" && segments[i + 1]) {
+      const name = segments[i + 1].startsWith("@") && segments[i + 2] ? `${segments[i + 1]}/${segments[i + 2]}` : segments[i + 1];
+      return isSafePackageName(name) ? name : null;
+    }
+  }
+  return null;
+}
+
+function dependencyPathDepth(packagePath: string): number {
+  return Math.max(1, packagePath.split("/").filter((segment) => segment === "node_modules").length);
+}
+
+function isDirectLockEntry(packagePath: string, packageName: string, directGroups: ReadonlyMap<string, readonly string[]>): boolean {
+  if (!directGroups.has(packageName) || dependencyPathDepth(packagePath) !== 1) return false;
+  return packagePath.replaceAll("\\", "/") === `node_modules/${packageName}`;
+}
+
+function parseSha512Integrity(value: string): string | null {
+  if (!value.startsWith("sha512-")) return null;
+  const digest = value.slice("sha512-".length);
+  if (digest.length === 0 || digest.length > 128 || !/^[A-Za-z0-9+/]+={0,2}$/.test(digest)) return null;
+  try {
+    const decoded = Buffer.from(digest, "base64");
+    const canonical = decoded.toString("base64");
+    const normalizedInput = digest.replace(/=+$/, "");
+    return decoded.length === 64 && canonical.replace(/=+$/, "") === normalizedInput ? canonical : null;
+  } catch {
+    return null;
+  }
+}
+
+function hostOnlyOrigin(value: string): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    if (url.username || url.password || url.port) return null;
+    const host = url.hostname.toLowerCase();
+    return /^[a-z0-9.-]+$/.test(host) ? host : null;
+  } catch {
+    return null;
+  }
+}
+
+function isSafePackageName(value: string): boolean {
+  return value.length > 0 && value.length <= 160 && /^(?:@[a-z0-9._-]+\/)?[a-z0-9._-]+$/i.test(value);
+}
+
+function lockfileGap(manifest: ScanManifest, item: FileInventoryItem, category: string, message: string, packageName?: string, line = 1, gapCollector?: AnalysisGapCollector): CodeFact {
+  gapCollector?.record(category, message);
+  return createFact(
+    manifest,
+    FactTypes.AnalysisGap,
+    RuleIds.TypeScriptPackage,
+    EvidenceTiers.Tier4Unknown,
+    createEvidence(item.relativePath, line, line, "typescript-package-lock", ScannerVersions.TypeScriptPackageExtractor),
+    { targetSymbol: packageName ?? undefined, properties: { category, messageHash: hash(message, 16) } }
+  );
 }
 
 function dependencyScope(section: string): string {
@@ -171,6 +355,44 @@ function packageVersionProperties(value: string): Record<string, string> {
     };
   }
   return { packageVersion: trimmed, version: trimmed };
+}
+
+const SAFE_LITERAL_VERSION = /^(?=[0-9A-Za-z._+!-]{1,128}$)(?=.*[0-9])[0-9A-Za-z][0-9A-Za-z._+!-]*$/u;
+
+function resolvedPackageVersionProperties(value: string): Record<string, string> {
+  const trimmed = value.trim();
+  if (value !== trimmed || !SAFE_LITERAL_VERSION.test(trimmed) || isUnsafePackageVersion(trimmed)) {
+    return {
+      versionHash: hash(value, 32),
+      redactionReason: "unsafe-package-version"
+    };
+  }
+  return { packageVersion: trimmed, version: trimmed };
+}
+
+function hasDuplicateJsonProperties(text: string): boolean {
+  const source = ts.parseJsonText("package-lock.json", text);
+  let duplicate = false;
+  const visit = (node: ts.Node): void => {
+    if (duplicate) return;
+    if (ts.isObjectLiteralExpression(node)) {
+      const seen = new Set<string>();
+      for (const property of node.properties) {
+        if (!ts.isPropertyAssignment(property)) continue;
+        const name = ts.isStringLiteralLike(property.name) || ts.isIdentifier(property.name)
+          ? property.name.text
+          : property.name.getText(source);
+        if (seen.has(name)) {
+          duplicate = true;
+          return;
+        }
+        seen.add(name);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return duplicate;
 }
 
 function isUnsafePackageVersion(value: string): boolean {

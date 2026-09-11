@@ -144,9 +144,12 @@ public static class CSharpSemanticExtractor
         string repoPath,
         IReadOnlyList<FileInventoryItem> inventory,
         ScanOptions? options = null,
-        IReadOnlyList<FileInventoryItem>? fullInventory = null)
+        IReadOnlyList<FileInventoryItem>? fullInventory = null,
+        CancellationToken cancellationToken = default,
+        ScanProgressReporter? progress = null)
     {
         options ??= new ScanOptions(repoPath, ".");
+        cancellationToken.ThrowIfCancellationRequested();
         var facts = new List<SemanticFactCandidate>();
         var gaps = new List<SemanticFactCandidate>();
         var analyzedFiles = new HashSet<string>(StringComparer.Ordinal);
@@ -174,7 +177,7 @@ public static class CSharpSemanticExtractor
         var explicitlyExcludedSourcePaths = new HashSet<string>(sourcePathComparer);
         var selectedProjectPaths = projects
             .Select(item => item.RelativePath)
-            .ToHashSet(StringComparer.Ordinal);
+            .ToHashSet(sourcePathComparer);
         var excludeGlobs = (options.ExcludeGlobs ?? [])
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .ToArray();
@@ -193,20 +196,45 @@ public static class CSharpSemanticExtractor
             return new SemanticExtractionResult(facts, gaps, Attempted: false, ReducedCoverage: false, AnalyzedFiles: analyzedFiles);
         }
 
-        if (!TryRegisterMsBuild(gaps))
+        if (!TryRegisterMsBuild(gaps, progress))
         {
             return new SemanticExtractionResult(facts, gaps, Attempted: true, ReducedCoverage: true, AnalyzedFiles: analyzedFiles);
         }
 
-        RunRestoreIfRequested(repoPath, projects, solutions, options, gaps);
+        RunRestoreIfRequested(repoPath, projects, solutions, options, gaps, cancellationToken);
 
-        var workspaceProperties = string.IsNullOrWhiteSpace(options.TargetFramework)
-            ? null
-            : new Dictionary<string, string>(StringComparer.Ordinal)
+        using var comReferenceFallback = ComReferenceWorkspaceFallback.Prepare(repoPath, projects);
+        var workspaceProperties = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (!string.IsNullOrWhiteSpace(options.TargetFramework))
+        {
+            workspaceProperties["TargetFramework"] = options.TargetFramework;
+        }
+
+        if (comReferenceFallback.IsActive)
+        {
+            workspaceProperties[ComReferenceWorkspaceFallback.CustomAfterTargetsProperty] = comReferenceFallback.TargetsPath!;
+            foreach (var projectPath in comReferenceFallback.ProjectPaths)
             {
-                ["TargetFramework"] = options.TargetFramework
-            };
-        using var workspace = workspaceProperties is null
+                gaps.Add(CreateGap(
+                    projectPath,
+                    "TraceMap omitted COM-reference resolution during design-time project loading; COM-defined symbols may remain unresolved.",
+                    "ComReferenceResolutionSkipped",
+                    projectPath));
+            }
+        }
+        else if (comReferenceFallback.ProjectPaths.Count > 0)
+        {
+            foreach (var projectPath in comReferenceFallback.ProjectPaths)
+            {
+                gaps.Add(CreateGap(
+                    projectPath,
+                    "TraceMap could not install the bounded COM-reference design-time fallback; semantic project loading may remain reduced.",
+                    "ComReferenceResolutionFallbackUnavailable",
+                    projectPath));
+            }
+        }
+
+        using var workspace = workspaceProperties.Count == 0
             ? MSBuildWorkspace.Create()
             : MSBuildWorkspace.Create(workspaceProperties);
         workspace.RegisterWorkspaceFailedHandler(args =>
@@ -217,18 +245,27 @@ public static class CSharpSemanticExtractor
                 "WorkspaceDiagnostic"));
         });
 
-        var loadedProjectPaths = new HashSet<string>(StringComparer.Ordinal);
+        var loadedProjectPaths = new HashSet<string>(sourcePathComparer);
         var attempted = false;
 
         if (solutions.Length > 0)
         {
-            foreach (var solutionItem in solutions)
+            for (var solutionIndex = 0; solutionIndex < solutions.Length; solutionIndex++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+                var solutionItem = solutions[solutionIndex];
+                var solutionOrdinal = solutionIndex + 1;
                 attempted = true;
                 var solutionPath = Path.Combine(repoPath, solutionItem.RelativePath);
+                progress?.StartStage(
+                    ScanProgressReporter.ScanOperation,
+                    ScanProgressStages.SolutionLoad,
+                    solutionOrdinal);
                 try
                 {
-                    var solution = workspace.OpenSolutionAsync(solutionPath).GetAwaiter().GetResult();
+                    var solution = BlockOnWorkspaceWait(
+                        workspace.OpenSolutionAsync(solutionPath, cancellationToken: cancellationToken),
+                        cancellationToken);
                     ExtractSolution(
                         repoPath,
                         solution,
@@ -242,7 +279,18 @@ public static class CSharpSemanticExtractor
                         analyzedFiles,
                         compilationInputFiles,
                         protectedSourceSpans,
-                        options.ProjectPaths is { Count: > 0 } ? selectedProjectPaths : null);
+                        options.ProjectPaths is { Count: > 0 } ? selectedProjectPaths : null,
+                        cancellationToken,
+                        progress);
+                    progress?.FinishStage(
+                        ScanProgressReporter.ScanOperation,
+                        ScanProgressStages.SolutionLoad,
+                        "completed",
+                        ordinal: solutionOrdinal);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
                 }
                 catch (Exception ex) when (IsWorkspaceException(ex))
                 {
@@ -250,18 +298,36 @@ public static class CSharpSemanticExtractor
                         solutionItem.RelativePath,
                         $"Unable to load solution with MSBuildWorkspace: {ex.Message}",
                         "SolutionLoadFailed"));
+                    progress?.FinishStage(
+                        ScanProgressReporter.ScanOperation,
+                        ScanProgressStages.SolutionLoad,
+                        "failed",
+                        ordinal: solutionOrdinal,
+                        failureCode: "SOLUTION_LOAD_FAILED");
                 }
             }
         }
 
         var shouldLoadStandaloneProjects = options.SolutionPaths is not { Count: > 0 };
-        foreach (var projectItem in shouldLoadStandaloneProjects ? projects.Where(project => !loadedProjectPaths.Contains(project.RelativePath)) : [])
+        var standaloneProjects = shouldLoadStandaloneProjects
+            ? projects.Where(project => !loadedProjectPaths.Contains(project.RelativePath)).ToArray()
+            : [];
+        for (var projectIndex = 0; projectIndex < standaloneProjects.Length; projectIndex++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            var projectItem = standaloneProjects[projectIndex];
+            var projectOrdinal = projectIndex + 1;
             attempted = true;
             var projectPath = Path.Combine(repoPath, projectItem.RelativePath);
+            progress?.StartStage(
+                ScanProgressReporter.ScanOperation,
+                ScanProgressStages.ProjectLoad,
+                projectOrdinal);
             try
             {
-                var project = workspace.OpenProjectAsync(projectPath).GetAwaiter().GetResult();
+                var project = BlockOnWorkspaceWait(
+                    workspace.OpenProjectAsync(projectPath, cancellationToken: cancellationToken),
+                    cancellationToken);
                 var filteredSolution = RemoveExplicitlyExcludedSourceDocuments(
                     repoPath,
                     project.Solution,
@@ -279,15 +345,34 @@ public static class CSharpSemanticExtractor
                     gaps,
                     analyzedFiles,
                     compilationInputFiles,
-                    protectedSourceSpans);
+                    protectedSourceSpans,
+                    projectOrdinal,
+                    cancellationToken,
+                    progress);
                 loadedProjectPaths.Add(projectItem.RelativePath);
+                progress?.FinishStage(
+                    ScanProgressReporter.ScanOperation,
+                    ScanProgressStages.ProjectLoad,
+                    "completed",
+                    ordinal: projectOrdinal);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex) when (IsWorkspaceException(ex))
             {
                 gaps.Add(CreateGap(
                     projectItem.RelativePath,
                     $"Unable to load project with MSBuildWorkspace: {ex.Message}",
-                    "ProjectLoadFailed"));
+                    "ProjectLoadFailed",
+                    projectItem.RelativePath));
+                progress?.FinishStage(
+                    ScanProgressReporter.ScanOperation,
+                    ScanProgressStages.ProjectLoad,
+                    "failed",
+                    ordinal: projectOrdinal,
+                    failureCode: "PROJECT_LOAD_FAILED");
             }
         }
 
@@ -324,10 +409,12 @@ public static class CSharpSemanticExtractor
             .ToArray();
     }
 
-    private static bool TryRegisterMsBuild(List<SemanticFactCandidate> gaps)
+    private static bool TryRegisterMsBuild(List<SemanticFactCandidate> gaps, ScanProgressReporter? progress)
     {
+        progress?.StartStage(ScanProgressReporter.ScanOperation, ScanProgressStages.MsBuildRegistration);
         if (MsBuildRuntimeRegistration.TryRegister(out var error))
         {
+            progress?.FinishStage(ScanProgressReporter.ScanOperation, ScanProgressStages.MsBuildRegistration, "completed");
             return true;
         }
 
@@ -335,6 +422,11 @@ public static class CSharpSemanticExtractor
             ".",
             $"Unable to register MSBuild for Roslyn semantic analysis: {error}",
             "MSBuildRegistrationFailed"));
+        progress?.FinishStage(
+            ScanProgressReporter.ScanOperation,
+            ScanProgressStages.MsBuildRegistration,
+            "failed",
+            failureCode: "MSBUILD_REGISTRATION_FAILED");
         return false;
     }
 
@@ -343,7 +435,8 @@ public static class CSharpSemanticExtractor
         IReadOnlyList<FileInventoryItem> projects,
         IReadOnlyList<FileInventoryItem> solutions,
         ScanOptions options,
-        List<SemanticFactCandidate> gaps)
+        List<SemanticFactCandidate> gaps,
+        CancellationToken cancellationToken)
     {
         if (!options.Restore)
         {
@@ -433,7 +526,9 @@ public static class CSharpSemanticExtractor
         HashSet<string> analyzedFiles,
         HashSet<string> compilationInputFiles,
         List<ProtectedSourceSpan> protectedSourceSpans,
-        IReadOnlySet<string>? selectedProjectPaths)
+        IReadOnlySet<string>? selectedProjectPaths,
+        CancellationToken cancellationToken,
+        ScanProgressReporter? progress)
     {
         solution = RemoveExplicitlyExcludedSourceDocuments(
             repoPath,
@@ -441,14 +536,16 @@ public static class CSharpSemanticExtractor
             excludeGlobs,
             out var excludedPaths);
         explicitlyExcludedSourcePaths.UnionWith(excludedPaths);
-        foreach (var project in solution.Projects.OrderBy(project => ToRelativePath(repoPath, project.FilePath), StringComparer.Ordinal))
+        var selectedProjects = solution.Projects
+            .OrderBy(project => ToRelativePath(repoPath, project.FilePath), StringComparer.Ordinal)
+            .Where(project => selectedProjectPaths is null
+                || selectedProjectPaths.Contains(ToRelativePath(repoPath, project.FilePath)))
+            .ToArray();
+        for (var projectIndex = 0; projectIndex < selectedProjects.Length; projectIndex++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            var project = selectedProjects[projectIndex];
             var relativeProjectPath = ToRelativePath(repoPath, project.FilePath);
-            if (selectedProjectPaths is not null && !selectedProjectPaths.Contains(relativeProjectPath))
-            {
-                continue;
-            }
-
             ExtractProject(
                 repoPath,
                 project,
@@ -458,7 +555,10 @@ public static class CSharpSemanticExtractor
                 gaps,
                 analyzedFiles,
                 compilationInputFiles,
-                protectedSourceSpans);
+                protectedSourceSpans,
+                projectOrdinal: projectIndex + 1,
+                cancellationToken,
+                progress);
             if (!string.IsNullOrWhiteSpace(project.FilePath))
             {
                 loadedProjectPaths.Add(relativeProjectPath);
@@ -475,13 +575,21 @@ public static class CSharpSemanticExtractor
         List<SemanticFactCandidate> gaps,
         HashSet<string> analyzedFiles,
         HashSet<string> compilationInputFiles,
-        List<ProtectedSourceSpan> protectedSourceSpans)
+        List<ProtectedSourceSpan> protectedSourceSpans,
+        int? projectOrdinal,
+        CancellationToken cancellationToken,
+        ScanProgressReporter? progress)
     {
         var projectPath = ToRelativePath(repoPath, project.FilePath);
         Compilation? compilation;
+        progress?.StartStage(ScanProgressReporter.ScanOperation, ScanProgressStages.Compilation, projectOrdinal);
         try
         {
-            compilation = project.GetCompilationAsync().GetAwaiter().GetResult();
+            compilation = BlockOnWorkspaceWait(project.GetCompilationAsync(cancellationToken), cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex) when (IsWorkspaceException(ex))
         {
@@ -490,26 +598,55 @@ public static class CSharpSemanticExtractor
                 $"Unable to create Roslyn compilation for project: {ex.Message}",
                 "CompilationCreateFailed",
                 projectPath));
+            progress?.FinishStage(
+                ScanProgressReporter.ScanOperation,
+                ScanProgressStages.Compilation,
+                "failed",
+                ordinal: projectOrdinal,
+                failureCode: "COMPILATION_CREATE_FAILED");
             return;
         }
 
         if (compilation is null)
         {
             gaps.Add(CreateGap(projectPath, "Roslyn returned no compilation for project.", "CompilationMissing", projectPath));
+            progress?.FinishStage(
+                ScanProgressReporter.ScanOperation,
+                ScanProgressStages.Compilation,
+                "failed",
+                ordinal: projectOrdinal,
+                failureCode: "COMPILATION_MISSING");
             return;
         }
 
         AddCompilationDiagnostics(repoPath, projectPath, compilation, gaps);
+        progress?.FinishStage(
+            ScanProgressReporter.ScanOperation,
+            ScanProgressStages.Compilation,
+            "completed",
+            ordinal: projectOrdinal);
 
+        var unavailableCompilationInputObserved = false;
         foreach (var document in project.Documents.OrderBy(document => ToRelativePath(repoPath, document.FilePath), StringComparer.Ordinal))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var projection = ToRelativePathProjection(repoPath, document.FilePath);
-            if (!projection.IsExternal && !IsCompilerGeneratedDocument(document))
+            if (!projection.IsExternal && !IsCompilerGeneratedDocument(document, cancellationToken))
             {
-                compilationInputFiles.Add(
-                    compilationInputPaths.TryGetValue(projection.Path, out var canonicalCompilationInputPath)
-                        ? canonicalCompilationInputPath
-                        : projection.Path);
+                if (compilationInputPaths.TryGetValue(projection.Path, out var canonicalCompilationInputPath))
+                {
+                    compilationInputFiles.Add(canonicalCompilationInputPath);
+                }
+                else if (File.Exists(Path.Combine(repoPath, projection.Path.Replace('/', Path.DirectorySeparatorChar))))
+                {
+                    // A repository-local compilation input that appeared after initial
+                    // inventory remains protected so source mutation fails loudly.
+                    compilationInputFiles.Add(projection.Path);
+                }
+                else
+                {
+                    unavailableCompilationInputObserved = true;
+                }
             }
 
             string? canonicalEvidencePath = null;
@@ -528,7 +665,17 @@ public static class CSharpSemanticExtractor
                 gaps,
                 analyzedFiles,
                 protectedSourceSpans,
-                canonicalEvidencePath);
+                canonicalEvidencePath,
+                cancellationToken);
+        }
+
+        if (unavailableCompilationInputObserved)
+        {
+            gaps.Add(CreateGap(
+                projectPath,
+                "A project-declared C# compilation input was unavailable in the captured source inventory.",
+                "CompilationInputUnavailable",
+                projectPath));
         }
     }
 
@@ -608,9 +755,10 @@ public static class CSharpSemanticExtractor
         List<SemanticFactCandidate> gaps,
         HashSet<string> analyzedFiles,
         List<ProtectedSourceSpan> protectedSourceSpans,
-        string? canonicalEvidencePath)
+        string? canonicalEvidencePath,
+        CancellationToken cancellationToken)
     {
-        if (!document.SupportsSyntaxTree || IsCompilerGeneratedDocument(document))
+        if (!document.SupportsSyntaxTree || IsCompilerGeneratedDocument(document, cancellationToken))
         {
             return;
         }
@@ -629,8 +777,12 @@ public static class CSharpSemanticExtractor
         SyntaxNode? root;
         try
         {
-            tree = document.GetSyntaxTreeAsync().GetAwaiter().GetResult();
+            tree = BlockOnWorkspaceWait(document.GetSyntaxTreeAsync(cancellationToken), cancellationToken);
             root = tree is null ? null : tree.GetRoot();
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex) when (IsWorkspaceException(ex))
         {
@@ -650,6 +802,7 @@ public static class CSharpSemanticExtractor
         FrameworkMigrationEvidenceExtractor.Extract(projectPath, filePath, root, model, facts, gaps, protectedSourceSpans);
         var protectedFactStart = facts.Count;
         RazorSemanticModelBindingExtractor.Extract(projectPath, filePath, root, model, facts, gaps);
+        PropertyMappingExtractor.Extract(projectPath, filePath, root, model, facts, gaps);
         AddSymbolRelationshipFacts(projectPath, filePath, root, model, facts);
         AddFieldDeclarationFacts(projectPath, filePath, root, model, facts);
         AddParameterDeclarationFacts(projectPath, filePath, root, model, facts);
@@ -661,7 +814,7 @@ public static class CSharpSemanticExtractor
         AddFlowBoundaryFacts(projectPath, filePath, root, model, facts);
         AddRuntimeEvidenceFacts(projectPath, filePath, root, model, facts);
         AddContractMappingFacts(projectPath, filePath, root, model, facts);
-        AddIntegrationFacts(projectPath, filePath, root, model, facts);
+        AddIntegrationFacts(projectPath, filePath, root, model, facts, gaps);
         RemoveProtectedSemanticFacts(facts, protectedFactStart, filePath, protectedSourceSpans);
     }
 
@@ -679,6 +832,21 @@ public static class CSharpSemanticExtractor
                 continue;
             }
 
+            var properties = AddSymbolProperties(
+                new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["name"] = symbol.Name,
+                    ["namespace"] = symbol.ContainingNamespace?.IsGlobalNamespace == false ? symbol.ContainingNamespace.ToDisplayString() : string.Empty,
+                    ["typeKind"] = symbol.TypeKind.ToString()
+                },
+                "target",
+                symbol);
+            if (TryGetEdmEntityTypeIdentity(symbol) is { } conceptualIdentity)
+            {
+                LegacyDataSafeValues.AddSafeOrHash(properties, "generatedConceptualNamespace", "generatedConceptualNamespaceHash", conceptualIdentity.NamespaceName);
+                LegacyDataSafeValues.AddSafeOrHash(properties, "generatedConceptualName", "generatedConceptualNameHash", conceptualIdentity.Name);
+            }
+
             facts.Add(CreateSemanticFact(
                 FactTypes.TypeDeclared,
                 RuleIds.CSharpSemanticDeclarations,
@@ -686,16 +854,159 @@ public static class CSharpSemanticExtractor
                 filePath,
                 declaration,
                 targetSymbol: symbol.ToDisplayString(SymbolFormat),
-                properties: AddSymbolProperties(
-                    new SortedDictionary<string, string>(StringComparer.Ordinal)
-                    {
-                        ["name"] = symbol.Name,
-                        ["namespace"] = symbol.ContainingNamespace?.IsGlobalNamespace == false ? symbol.ContainingNamespace.ToDisplayString() : string.Empty,
-                        ["typeKind"] = symbol.TypeKind.ToString()
-                    },
-                    "target",
-                    symbol)));
+                properties: properties));
         }
+    }
+
+    private static void AddEdmxCompositionCandidateFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts,
+        List<SemanticFactCandidate> gaps)
+    {
+        // Bounded eligibility per design D5: only entity types carrying EF6
+        // generated conceptual identity attributes, types referenced in this
+        // file as DbSet/IDbSet entity arguments, or declarations in
+        // designer-shaped files. No global property inventory is emitted.
+        var dbSetEntityTypeIds = root.DescendantNodes().OfType<PropertyDeclarationSyntax>()
+            .Select(property => model.GetDeclaredSymbol(property))
+            .Where(propertySymbol => propertySymbol is not null && IsDbSetType(propertySymbol.Type))
+            .Select(propertySymbol => propertySymbol!.Type is INamedTypeSymbol { TypeArguments.Length: 1 } dbSetType
+                ? dbSetType.TypeArguments[0]
+                : null)
+            .Where(entityType => entityType is not null)
+            .Select(entityType => entityType!.ToDisplayString(SymbolFormat))
+            .ToHashSet(StringComparer.Ordinal);
+        var designerShapedFile = Path.GetFileName(filePath).EndsWith(".designer.cs", StringComparison.OrdinalIgnoreCase);
+
+        foreach (var declaration in root.DescendantNodes().OfType<TypeDeclarationSyntax>())
+        {
+            if (model.GetDeclaredSymbol(declaration) is not INamedTypeSymbol symbol)
+            {
+                var carriesEdmAttributeSyntax = declaration.AttributeLists
+                    .SelectMany(list => list.Attributes)
+                    .Any(attribute => attribute.Name.ToString() is "EdmEntityType" or "EdmEntityTypeAttribute");
+                if (designerShapedFile || carriesEdmAttributeSyntax)
+                {
+                    gaps.Add(CreateGap(
+                        filePath,
+                        $"A type declaration in an EDMX generated-code candidate file did not resolve to a compiler symbol at line {declaration.GetLocation().GetLineSpan().StartLinePosition.Line + 1}; EF6 composition evidence for it is unavailable.",
+                        "EdmxCandidateSymbolResolution",
+                        projectPath,
+                        declaration.GetLocation().GetLineSpan().StartLinePosition.Line + 1));
+                }
+
+                continue;
+            }
+
+            var attributeBearing = TryGetEdmEntityTypeIdentity(symbol) is not null;
+            var dbSetCandidate = dbSetEntityTypeIds.Contains(symbol.ToDisplayString(SymbolFormat));
+            if (!attributeBearing && !dbSetCandidate && !designerShapedFile)
+            {
+                continue;
+            }
+
+            foreach (var property in symbol.GetMembers().OfType<IPropertySymbol>())
+            {
+                if (!ReferenceEquals(property.ContainingType, symbol)
+                    || !property.Locations.Any(location => location.SourceTree == root.SyntaxTree))
+                {
+                    continue;
+                }
+
+                var declarationSyntax = property.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() as BasePropertyDeclarationSyntax;
+                if (declarationSyntax is null)
+                {
+                    continue;
+                }
+
+                if (model.GetDeclaredSymbol(declarationSyntax) is not IPropertySymbol resolvedProperty || !ReferenceEquals(resolvedProperty, property))
+                {
+                    gaps.Add(CreateGap(
+                        filePath,
+                        $"A property declaration on EDMX composition candidate {symbol.ToDisplayString(SymbolFormat)} did not resolve to a compiler symbol; member evidence for it is unavailable.",
+                        "EdmxCandidateSymbolResolution",
+                        projectPath,
+                        declarationSyntax.GetLocation().GetLineSpan().StartLinePosition.Line + 1));
+                    continue;
+                }
+
+                var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["name"] = property.Name,
+                    ["propertyName"] = property.Name,
+                    ["edmxCompositionCandidate"] = "True",
+                    ["candidateSignal"] = attributeBearing ? "generated-identity-attribute" : dbSetCandidate ? "dbset-entity-argument" : "designer-shaped-file"
+                };
+                AddSymbolProperties(properties, "target", property);
+                AddSymbolProperties(properties, "containingType", symbol);
+                facts.Add(CreateSemanticFact(
+                    FactTypes.PropertyDeclared,
+                    RuleIds.CSharpSemanticDeclarations,
+                    projectPath,
+                    filePath,
+                    declarationSyntax,
+                    sourceSymbol: symbol.ToDisplayString(SymbolFormat),
+                    targetSymbol: property.ToDisplayString(SymbolFormat),
+                    contractElement: property.Name,
+                    properties: properties));
+            }
+        }
+    }
+
+    private static readonly HashSet<string> SupportedEdmEntityTypeAttributeNamespaces = new(StringComparer.Ordinal)
+    {
+        "System.Data.Entity.Core.Objects.DataClasses",
+        "System.Data.Objects.DataClasses"
+    };
+
+    private static (string NamespaceName, string Name)? TryGetEdmEntityTypeIdentity(INamedTypeSymbol symbol)
+    {
+        foreach (var attribute in symbol.GetAttributes())
+        {
+            if (attribute.AttributeClass is not { } attributeClass
+                || attributeClass.Name is not ("EdmEntityTypeAttribute" or "EdmEntityType"))
+            {
+                continue;
+            }
+
+            var attributeNamespace = attributeClass.ContainingNamespace?.ToDisplayString() ?? string.Empty;
+            if (!SupportedEdmEntityTypeAttributeNamespaces.Contains(attributeNamespace))
+            {
+                continue;
+            }
+
+            string? namespaceName = null;
+            string? name = null;
+            foreach (var argument in attribute.NamedArguments)
+            {
+                if (argument.Key == "NamespaceName" && argument.Value.Value is string namespaceValue)
+                {
+                    namespaceName = namespaceValue;
+                }
+                else if (argument.Key == "Name" && argument.Value.Value is string nameValue)
+                {
+                    name = nameValue;
+                }
+            }
+
+            if (namespaceName is null && attribute.ConstructorArguments.Length == 2
+                && attribute.ConstructorArguments[0].Value is string constructorNamespace
+                && attribute.ConstructorArguments[1].Value is string constructorName)
+            {
+                namespaceName = constructorNamespace;
+                name ??= constructorName;
+            }
+
+            if (!string.IsNullOrWhiteSpace(namespaceName) && !string.IsNullOrWhiteSpace(name))
+            {
+                return (namespaceName!, name!);
+            }
+        }
+
+        return null;
     }
 
     private static void AddSymbolRelationshipFacts(
@@ -1094,6 +1405,21 @@ public static class CSharpSemanticExtractor
         AddSymbolProperties(properties, "source", enclosing);
         AddSymbolProperties(properties, "target", property);
 
+        if (node is MemberAccessExpressionSyntax access)
+        {
+            var receiver = model.GetSymbolInfo(access.Expression).Symbol;
+            properties["receiverSymbol"] = receiver?.ToDisplayString(SymbolFormat) ?? string.Empty;
+            AddSymbolProperties(properties, "receiver", receiver);
+        }
+        if (node.Parent is AssignmentExpressionSyntax assignment
+            && assignment.Left == node && assignment.IsKind(SyntaxKind.SimpleAssignmentExpression))
+        {
+            var valueSymbol = model.GetSymbolInfo(assignment.Right).Symbol;
+            properties["accessKind"] = "SimpleAssignmentTarget";
+            properties["assignedValueSymbol"] = valueSymbol?.ToDisplayString(SymbolFormat) ?? string.Empty;
+            AddSymbolProperties(properties, "assignedValue", valueSymbol);
+        }
+
         return CreateSemanticFact(
             FactTypes.PropertyAccessed,
             RuleIds.CSharpSemanticPropertyAccess,
@@ -1134,6 +1460,13 @@ public static class CSharpSemanticExtractor
                 method.ContainingAssembly);
             AddSymbolProperties(methodProperties, "source", enclosing);
             AddSymbolProperties(methodProperties, "target", method);
+            if (invocation.Expression is MemberAccessExpressionSyntax memberAccess)
+            {
+                var receiver = model.GetSymbolInfo(memberAccess.Expression).Symbol;
+                methodProperties["receiverSymbol"] = receiver?.ToDisplayString(SymbolFormat) ?? string.Empty;
+                methodProperties["receiverType"] = model.GetTypeInfo(memberAccess.Expression).Type?.ToDisplayString(SymbolFormat) ?? string.Empty;
+                AddSymbolProperties(methodProperties, "receiver", receiver);
+            }
 
             facts.Add(CreateSemanticFact(
                 FactTypes.MethodInvoked,
@@ -1358,9 +1691,11 @@ public static class CSharpSemanticExtractor
         string filePath,
         SyntaxNode root,
         SemanticModel model,
-        List<SemanticFactCandidate> facts)
+        List<SemanticFactCandidate> facts,
+        List<SemanticFactCandidate> gaps)
     {
         AddDbContextFacts(projectPath, filePath, root, model, facts);
+        AddEdmxCompositionCandidateFacts(projectPath, filePath, root, model, facts, gaps);
         AddIntegrationInvocationFacts(projectPath, filePath, root, model, facts);
         AddSqlCommandFacts(projectPath, filePath, root, model, facts);
     }
@@ -4894,9 +5229,9 @@ public static class CSharpSemanticExtractor
             ["messageHash"] = FactFactory.Hash(sanitized.Message, 32),
             ["sanitization"] = sanitized.Sanitization
         };
-        if (!string.IsNullOrWhiteSpace(diagnosticId))
+        if (!string.IsNullOrWhiteSpace(sanitized.DiagnosticId))
         {
-            properties["diagnosticId"] = diagnosticId;
+            properties["diagnosticId"] = sanitized.DiagnosticId;
         }
 
         var diagnosticTokens = ExtractSafeDiagnosticTokens(gapKind, message);
@@ -5088,7 +5423,7 @@ public static class CSharpSemanticExtractor
         });
     }
 
-    private static bool IsCompilerGeneratedDocument(Document document)
+    private static bool IsCompilerGeneratedDocument(Document document, CancellationToken cancellationToken)
     {
         if (!IsGeneratedSource(document.FilePath))
         {
@@ -5097,11 +5432,15 @@ public static class CSharpSemanticExtractor
 
         try
         {
-            var text = document.GetTextAsync().GetAwaiter().GetResult();
+            var text = BlockOnWorkspaceWait(document.GetTextAsync(cancellationToken), cancellationToken);
             var prefixLength = Math.Min(text.Length, 512);
             var prefix = text.ToString(new Microsoft.CodeAnalysis.Text.TextSpan(0, prefixLength));
             return prefix.Contains("<auto-generated", StringComparison.OrdinalIgnoreCase)
                 || prefix.Contains("<autogenerated", StringComparison.OrdinalIgnoreCase);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex) when (IsWorkspaceException(ex))
         {
@@ -5126,6 +5465,14 @@ public static class CSharpSemanticExtractor
             || fileName.EndsWith(".AssemblyInfo.cs", StringComparison.OrdinalIgnoreCase)
             || fileName.EndsWith(".AssemblyAttributes.cs", StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// Blocks on a MSBuildWorkspace/Roslyn wait while honoring cancellation.
+    /// Cancellation unblocks the caller promptly; the underlying Roslyn work may
+    /// continue in the background because these APIs cannot be aborted.
+    /// </summary>
+    private static T BlockOnWorkspaceWait<T>(Task<T> task, CancellationToken cancellationToken) =>
+        task.WaitAsync(cancellationToken).GetAwaiter().GetResult();
 
     private static bool IsWorkspaceException(Exception ex)
     {

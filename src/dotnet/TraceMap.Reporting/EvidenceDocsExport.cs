@@ -26,7 +26,8 @@ public sealed record EvidenceDocsExportOptions(
     string? Date = null,
     bool DryRun = false,
     bool Force = false,
-    IReadOnlyList<string>? PropertyFlowReportPaths = null);
+    IReadOnlyList<string>? PropertyFlowReportPaths = null,
+    IReadOnlyList<string>? WebFormsPacketPaths = null);
 
 public sealed record EvidenceDocsExportResult(
     EvidenceDocsManifest Manifest,
@@ -121,7 +122,10 @@ public sealed record EvidenceDocChunk(
     IReadOnlyList<EvidenceDocGap> Gaps,
     IReadOnlyList<EvidenceDocLimitation> Limitations,
     IReadOnlyList<EvidenceDocRedaction> Redactions,
-    IReadOnlyList<EvidenceDocLink> Links);
+    IReadOnlyList<EvidenceDocLink> Links)
+{
+    public IReadOnlyList<EvidenceDocRetrievalHint> RetrievalHints { get; init; } = [];
+}
 
 public sealed record EvidenceDocClaim(
     string Kind,
@@ -172,7 +176,15 @@ public sealed record EvidenceDocGap(
     string ChunkFamily,
     IReadOnlyList<EvidenceDocSourceRef> SourceRefs,
     IReadOnlyList<string> SupportingIds,
-    IReadOnlyList<string> Limitations);
+    IReadOnlyList<string> Limitations)
+{
+    public string? FilePath { get; init; }
+    public int? StartLine { get; init; }
+    public int? EndLine { get; init; }
+    public string? CommitSha { get; init; }
+    public string? ExtractorName { get; init; }
+    public string? ExtractorVersion { get; init; }
+}
 
 public sealed record EvidenceDocLimitation(
     string LimitationId,
@@ -193,7 +205,7 @@ public sealed record EvidenceDocLink(
     string Label,
     string Target);
 
-public static class EvidenceDocsExporter
+public static partial class EvidenceDocsExporter
 {
     public const string SchemaVersion = "tracemap-evidence-docs.v1";
     public const string GeneratorName = "tracemap-docs-export";
@@ -214,6 +226,7 @@ public static class EvidenceDocsExporter
     private const string ImpactSummaryRuleId = "docs-export.chunk.impact-summary.v1";
     private const string GapChunkRuleId = "docs-export.chunk.gap.v1";
     private const string LimitationChunkRuleId = "docs-export.chunk.limitation.v1";
+    private const string WebFormsModernizationRuleId = "docs-export.chunk.webforms-modernization.v1";
     private const string TerminalContextKindMetadataKey = "terminalContextKind";
     private const long MaxPropertyFlowReportBytes = 4L * 1024 * 1024;
     private const string GeneratedFileStaleRuleId = "docs-export.validation.generated-file-stale.v1";
@@ -243,6 +256,7 @@ public static class EvidenceDocsExporter
         "legacy",
         "release-review",
         "impact-summary",
+        "webforms-modernization",
         "gap",
         "limitation"
     ];
@@ -253,6 +267,7 @@ public static class EvidenceDocsExporter
         "data-surface-question",
         "package-question",
         "snapshot-change-question",
+        "modernization-evidence-question",
         "weak-evidence-question",
         "gap-question",
         "limitation-question"
@@ -278,8 +293,8 @@ public static class EvidenceDocsExporter
     private static readonly Regex YearMonthPattern = new(@"^\d{4}-\d{2}$", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
     private static readonly Regex SafeClosedTextPattern = new(@"^[A-Za-z0-9._:/@,+ \[\]\-]+$", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
     private static readonly Regex SafePathPattern = new(@"^[A-Za-z0-9._/\-]+$", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
-    private static readonly Regex UnixLocalPathPattern = new("(?:^|[\\s:='\\\"])/(Users|home|opt|var|srv|app|mnt|private|tmp)/", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
-    private static readonly Regex Hex40Pattern = new(@"^[0-9a-fA-F]{40}$", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
+    private static readonly Regex UnixLocalPathPattern = new("(?:^|[\\s:='\\\"(\\[])/(?!/)[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
+    private static readonly Regex CommitIdentityPattern = new(@"^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
     private static readonly Regex WindowsPathPattern = new("(?:^|[\\s:='\\\"])(?:[A-Za-z]:[\\\\/]|\\\\\\\\)", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
     private static readonly Regex RawHostPattern = new(@"\b(www\.|[A-Za-z0-9.-]+\.(com|net|org|io|local))\b", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
     private static readonly Regex RawSqlPattern = new(@"\b(select|insert|update|delete|merge)\b.+\b(from|into|set|where|values)\b", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
@@ -294,6 +309,10 @@ public static class EvidenceDocsExporter
         ValidateRequiredOptions(options);
         var formats = NormalizeFormats(options.Format);
         var selectedFamilies = NormalizeFamilies(options.Families);
+        if (options.Families is null && (options.WebFormsPacketPaths is null || options.WebFormsPacketPaths.Count == 0))
+        {
+            selectedFamilies = selectedFamilies.Where(family => family != "webforms-modernization").ToArray();
+        }
         var minimumClaimLevel = NormalizeClaimLevel(options.MinimumClaimLevel ?? "hidden", "--minimum-claim-level");
         var generatedAt = ResolveGeneratedAt(options.Date, minimumClaimLevel);
         var catalog = await ReadClaimCatalogAsync(options.SourceClaimCatalogPath, cancellationToken);
@@ -305,6 +324,8 @@ public static class EvidenceDocsExporter
         var chunks = ProjectIndexChunks(input, selectedFamilies, diagnostics);
         chunks.AddRange(await ProjectDispatchCandidateChunksAsync(options.IndexPath, input, selectedFamilies, cancellationToken));
         chunks.AddRange(await ProjectReportChunksAsync(options, input.Sources, selectedFamilies, diagnostics, cancellationToken));
+        var webFormsProjection = await ProjectWebFormsPacketChunksAsync(options.WebFormsPacketPaths ?? [], input.Sources, selectedFamilies, cancellationToken);
+        chunks.AddRange(webFormsProjection.Chunks);
         AddRequestedUnsupportedFamilyGaps(input.Sources, selectedFamilies, chunks);
         AddCatalogUnmatchedGaps(input.Sources, catalog, selectedFamilies, chunks, diagnostics);
 
@@ -334,6 +355,7 @@ public static class EvidenceDocsExporter
             throw new InvalidOperationException("InputSchemaUnsupported: docs-export requires a TraceMap index with usable source or fact evidence.");
         }
 
+        chunks = AddRetrievalHints(chunks).ToList();
         chunks = AddNavigationLinks(SortChunks(chunks), formats).ToList();
         var limitations = BuildManifestLimitations(chunks, selectedFamilies);
         var manifest = BuildManifest(
@@ -345,7 +367,8 @@ public static class EvidenceDocsExporter
             minimumClaimLevel,
             generatedAt,
             [],
-            limitations);
+            limitations,
+            webFormsProjection.Inputs);
 
         var files = BuildGeneratedFiles(options.OutputPath, manifest, chunks, formats);
         ValidateGeneratedStrings(files);
@@ -360,7 +383,8 @@ public static class EvidenceDocsExporter
             minimumClaimLevel,
             generatedAt,
             outputs,
-            limitations);
+            limitations,
+            webFormsProjection.Inputs);
         manifest = WithManifestHash(manifest);
         files["manifest.json"] = SerializeJson(manifest);
         ValidateGeneratedStrings(files);
@@ -431,6 +455,61 @@ public static class EvidenceDocsExporter
         catch
         {
             return false;
+        }
+    }
+
+    public static void ValidateChunkContract(EvidenceDocChunk chunk)
+    {
+        if (chunk.SchemaVersion != SchemaVersion
+            || string.IsNullOrWhiteSpace(chunk.ChunkId)
+            || string.IsNullOrWhiteSpace(chunk.ChunkType)
+            || string.IsNullOrWhiteSpace(chunk.ChunkFamily)
+            || string.IsNullOrWhiteSpace(chunk.ClaimLevel)
+            || string.IsNullOrWhiteSpace(chunk.Title)
+            || string.IsNullOrWhiteSpace(chunk.SectionTitle)
+            || string.IsNullOrWhiteSpace(chunk.SortKey)
+            || string.IsNullOrWhiteSpace(chunk.Summary)
+            || chunk.BodyMarkdown is null
+            || chunk.Claim is null
+            || chunk.QuestionFamilies is null
+            || chunk.Citations is null
+            || chunk.SourceRefs is null
+            || chunk.SupportingIds is null
+            || chunk.RuleIds is null
+            || chunk.EvidenceTiers is null
+            || chunk.CoverageLabels is null
+            || chunk.Gaps is null
+            || chunk.Limitations is null
+            || chunk.Redactions is null
+            || chunk.Links is null
+            || chunk.RetrievalHints is null
+            || chunk.SourceRefs.Count == 0
+            || chunk.RuleIds.Count == 0
+            || chunk.EvidenceTiers.Count == 0
+            || chunk.RuleIds.Any(string.IsNullOrWhiteSpace)
+            || chunk.SourceRefs.Any(source => string.IsNullOrWhiteSpace(source.SourceId)
+                || string.IsNullOrWhiteSpace(source.SourceLabel)
+                || string.IsNullOrWhiteSpace(source.SourceScope)
+                || string.IsNullOrWhiteSpace(source.CoverageLabel))
+            || string.IsNullOrWhiteSpace(chunk.Claim.Kind)
+            || string.IsNullOrWhiteSpace(chunk.Claim.Text)
+            || string.IsNullOrWhiteSpace(chunk.Claim.ClaimLevel)
+            || chunk.Claim.RuleIds is null
+            || chunk.Claim.EvidenceTiers is null
+            || chunk.Claim.CoverageLabels is null
+            || chunk.Claim.SupportingIds is null
+            || chunk.Claim.Limitations is null
+            || chunk.EvidenceTiers.Any(tier => tier is not EvidenceTiers.Tier1Semantic
+                and not EvidenceTiers.Tier2Structural
+                and not EvidenceTiers.Tier3SyntaxOrTextual
+                and not EvidenceTiers.Tier4Unknown))
+        {
+            throw new InvalidOperationException("EvidenceDocChunkInvalid");
+        }
+
+        foreach (var hint in chunk.RetrievalHints)
+        {
+            EvidenceDocsQueryRecipes.ValidateRetrievalHint(hint);
         }
     }
 
@@ -1581,6 +1660,7 @@ public static class EvidenceDocsExporter
             "dependency-surface" or "data-surface" or "query-sql-shape" or "property-flow" => "What code has static evidence of touching this surface?",
             "package-config" => "What package or configuration metadata is present?",
             "release-review" => "What changed in the supplied release-review evidence?",
+            "webforms-modernization" => "What deterministic Web Forms modernization evidence is available?",
             "gap" => "What could TraceMap not prove or export?",
             "limitation" => "What limitations constrain this evidence?",
             _ => "What static evidence does this chunk cite?"
@@ -1613,6 +1693,9 @@ public static class EvidenceDocsExporter
                 break;
             case "release-review":
                 values.Add("snapshot-change-question");
+                break;
+            case "webforms-modernization":
+                values.Add("modernization-evidence-question");
                 break;
         }
 
@@ -1741,7 +1824,8 @@ public static class EvidenceDocsExporter
         string minimumClaimLevel,
         string generatedAt,
         IReadOnlyList<EvidenceDocsOutputSummary> outputs,
-        IReadOnlyList<EvidenceDocLimitation> limitations)
+        IReadOnlyList<EvidenceDocLimitation> limitations,
+        IReadOnlyList<EvidenceDocsInputSummary> supplementalInputs)
     {
         var inputs = new List<EvidenceDocsInputSummary>
         {
@@ -1757,6 +1841,7 @@ public static class EvidenceDocsExporter
                     : [],
                 input.Sources.Select(ToSourceRef).ToArray())
         };
+        inputs.AddRange(supplementalInputs);
         var chunkCounts = chunks
             .GroupBy(chunk => chunk.ChunkFamily, StringComparer.Ordinal)
             .OrderBy(group => Array.IndexOf(AllFamilies, group.Key))
@@ -1779,7 +1864,11 @@ public static class EvidenceDocsExporter
             minimumClaimLevel,
             formats,
             new EvidenceDocsGenerationSettings(selectedFamilies, minimumClaimLevel, IncludeRawSnippets: false),
-            inputs,
+            inputs.GroupBy(input => $"{input.Kind}|{input.Identity}", StringComparer.Ordinal)
+                .Select(group => group.First())
+                .OrderBy(input => input.Kind, StringComparer.Ordinal)
+                .ThenBy(input => input.Identity, StringComparer.Ordinal)
+                .ToArray(),
             outputs.OrderBy(output => output.Path, StringComparer.Ordinal).ToArray(),
             chunkCounts,
             omittedCounts,
@@ -1799,6 +1888,9 @@ public static class EvidenceDocsExporter
         var blank = manifest with { ContentHash = string.Empty };
         return manifest with { ContentHash = Hash(SerializeJson(blank), 64) };
     }
+
+    internal static string RenderSelfConsistentManifest(EvidenceDocsManifest manifest) =>
+        SerializeJson(WithManifestHash(manifest));
 
     private static Dictionary<string, string> BuildGeneratedFiles(string outputPath, EvidenceDocsManifest manifest, IReadOnlyList<EvidenceDocChunk> chunks, IReadOnlyList<string> formats)
     {
@@ -1831,7 +1923,12 @@ public static class EvidenceDocsExporter
             {
                 files[ChunkPath(chunk)] = ChunkMarkdown(chunk);
             }
+
+            files["QUERY_RECIPES.md"] = EvidenceDocsQueryRecipes.RenderMarkdown(EvidenceDocsQueryRecipes.Build());
         }
+
+        var queryRecipes = EvidenceDocsQueryRecipes.Build();
+        files["query-recipes.json"] = EvidenceDocsQueryRecipes.RenderJson(queryRecipes);
 
         return files.ToDictionary(pair => pair.Key, pair => WithMarkdownHash(pair.Value), StringComparer.Ordinal);
     }
@@ -1846,7 +1943,9 @@ public static class EvidenceDocsExporter
                 var bytes = Encoding.UTF8.GetBytes(pair.Value);
                 return new EvidenceDocsOutputSummary(
                     pair.Key,
-                    pair.Key.EndsWith(".jsonl", StringComparison.Ordinal) ? "jsonl" : "markdown",
+                    pair.Key.EndsWith(".jsonl", StringComparison.Ordinal) ? "jsonl"
+                        : pair.Key.EndsWith(".json", StringComparison.Ordinal) ? "json"
+                        : "markdown",
                     SchemaVersion,
                     GeneratorName,
                     bytes.LongLength,
@@ -1885,6 +1984,7 @@ public static class EvidenceDocsExporter
         body.AppendLine("## Navigation");
         body.AppendLine();
         body.AppendLine("- [Chunk index](index.md)");
+        body.AppendLine("- [Evidence query recipes](QUERY_RECIPES.md)");
         foreach (var family in chunks.Select(chunk => chunk.ChunkFamily).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal))
         {
             body.AppendLine($"- [{EscapeText(TitleForFamily(family))} chunks](chunks/{EscapeInline(family)}/index.md)");
@@ -1957,6 +2057,18 @@ public static class EvidenceDocsExporter
 
         builder.AppendLine();
         builder.AppendLine(chunk.BodyMarkdown.TrimEnd());
+        if (chunk.RetrievalHints.Count > 0)
+        {
+            builder.AppendLine();
+            builder.AppendLine("## Evidence retrieval hints");
+            builder.AppendLine();
+            builder.AppendLine("These hints select read-only TraceMap evidence recipes; they do not add or upgrade a finding.");
+            foreach (var hint in chunk.RetrievalHints)
+            {
+                var parameters = string.Join(", ", hint.Parameters.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => $"{pair.Key}={pair.Value}"));
+                builder.AppendLine($"- `{EscapeInline(hint.RecipeId)}` for `{EscapeInline(hint.InputKind)}` with `{EscapeInline(parameters)}` — rule `{EscapeInline(hint.RuleId)}`, tier `{EscapeInline(hint.EvidenceTier)}`. {EscapeText(hint.Reason)}");
+            }
+        }
         builder.AppendLine();
         builder.AppendLine("## Citations");
         builder.AppendLine();
@@ -2134,6 +2246,10 @@ public static class EvidenceDocsExporter
             for (var i = 0; i < lines.Length; i++)
             {
                 var category = UnsafeCategory(lines[i]);
+                if (category == "raw-sql" && path is "query-recipes.json" or "QUERY_RECIPES.md")
+                {
+                    continue;
+                }
                 if (category is not null)
                 {
                     throw new InvalidOperationException($"UnsafeValueRejected: {UnsafeRejectedRuleId} [{Tier4Unknown}]: {category} at {path}:{i + 1}.");
@@ -2179,7 +2295,7 @@ public static class EvidenceDocsExporter
                     : $"UserFileCollision: {UserFileCollisionRuleId} [{Tier4Unknown}]: manifest.");
             }
 
-            if (relativePath == "chunks.jsonl")
+            if (relativePath is "chunks.jsonl" or "query-recipes.json")
             {
                 if (manifestGenerated && ManifestHasMatchingOutput(existingManifest!, relativePath, content)
                     || force && manifestHasGeneratedMarker)
@@ -2690,6 +2806,7 @@ public static class EvidenceDocsExporter
             "legacy" => LegacyRuleId,
             "release-review" => ReleaseReviewRuleId,
             "impact-summary" => ImpactSummaryRuleId,
+            "webforms-modernization" => WebFormsModernizationRuleId,
             "gap" => GapChunkRuleId,
             "limitation" => LimitationChunkRuleId,
             _ => UnsupportedFamilyRuleId
@@ -2933,7 +3050,7 @@ public static class EvidenceDocsExporter
             return null;
         }
 
-        return Hex40Pattern.IsMatch(value) ? value.ToLowerInvariant() : null;
+        return CommitIdentityPattern.IsMatch(value) ? value.ToLowerInvariant() : null;
     }
 
     private static string SafeSourceLabel(string value, string claimLevel)

@@ -22,6 +22,8 @@ Start here:
 - [Language adapter contract](docs/LANGUAGE_ADAPTER_CONTRACT.md)
 - [Adapter runway](docs/ADAPTER_RUNWAY.md)
 - [Web Forms modernization packet runbook](docs/WEBFORMS_MODERNIZATION_PACKET.md)
+- [Focused Web Forms human-review workflow](scripts/webforms-review/README.md): supported PowerShell entry points, private/shareable artifact boundaries, and review-set usage.
+- [Large Web Forms indexes and OOM recovery](docs/WEBFORMS_MODERNIZATION_PACKET.md#large-indexes-and-oom-recovery): retry packet generation from the existing read-only scan index, with bounded input and streamed JSON.
 - [PR review loop](docs/PR_REVIEW_LOOP.md)
 - [Static HTML evidence explorer](docs/STATIC_HTML_EVIDENCE_EXPLORER.md)
 - [Rule catalog](rules/rule-catalog.yml)
@@ -197,6 +199,24 @@ dotnet run --project src/dotnet/TraceMap.Cli -- package-impact \
 ```
 
 The package impact command writes `package-impact-report.md` and `package-impact-report.json` when `--out` is a directory. It matches `package-delta.v1` changes against indexed `PackageReferenced`/`package-config` evidence and reports source labels, commit SHAs, rule IDs, evidence tiers, file spans, safe version metadata, gaps, and limitations. Package impact reports are static evidence inventories; they do not infer compatibility, transitive dependency resolution, runtime loading, vulnerabilities, licenses, deployment, or release approval.
+
+Correlate external package admission/revocation decisions with indexed package evidence:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Cli -- package-decision \
+  --decision samples/package-decisions/possible-admit.json \
+  --index .tracemap/index.sqlite \
+  --out .tracemap-package-decision
+dotnet run --project src/dotnet/TraceMap.Cli -- package-decision \
+  --decision samples/package-decisions/comparison/decision-comparison.json \
+  --before-manifest before-portfolio.json \
+  --after-manifest after-portfolio.json \
+  --advisory-profile samples/package-decisions/advisory-profile-example.json \
+  --deployment-references samples/package-decisions/deployment-references-example.json \
+  --out .tracemap-package-decision-comparison
+```
+
+The package decision command writes `package-decision-report.md` and `package-decision-report.json` when `--out` is a directory. It reads a producer-authored `package-decision.v1` file read-only and correlates each record's artifact identity against `PackageReferenced`/`package-config` evidence in single, combined, portfolio, or before/after comparison inputs, keeping exact, digest-mismatch, possible, and ambiguous rows separate with their evidence chains. `--exit-code` returns 1 only for an exact match tied to an external `reject` or `revoke` record. Advisory claims render as external producer opinions only; deployment references render as runtime-unproven lineage metadata. Package decision reports are static snapshot evidence: they do not authenticate producers, fetch or execute packages, verify builds or deployments, prove runtime loading, assign severity or vulnerability meaning, or enforce admission and revocation decisions.
 
 The combined dependency paths command writes `paths-report.md` and `paths-report.json` when `--out` is a directory. It follows static evidence from endpoint, symbol, or source selectors to terminal dependency surfaces such as `sql-query`, `http-client`, `http-route`, and `package-config`. Paths are evidence trails, not runtime traces.
 
@@ -385,6 +405,58 @@ For a copy/paste Windows and Bash workflow that scans multiple Angular and .NET
 repositories, combines their indexes, and investigates UI-to-endpoint-to-
 dependency chains, see the [Angular and .NET interaction mapping
 runbook](docs/ANGULAR_DOTNET_INTERACTION_RUNBOOK.md).
+
+### Restricted Windows Web Forms workspace readback
+
+For a private legacy Web Forms repository that must remain on a restricted
+Windows endpoint, the focused runner scans three explicitly selected folders
+and writes sanitized summaries outside the source repository. It does not emit
+source text, object names, raw workspace messages, or machine-local paths in
+the summary files.
+
+Use a clean checkout of the owner-approved TraceMap revision containing the
+workspace readback, then run:
+
+```powershell
+pwsh -NoProfile -File .\scripts\Invoke-FocusedWebFormsReview.ps1 `
+  -SourceRoot 'C:\work\<private-client-app>' `
+  -WebFormsFolder 'source\<webforms-folder>' `
+  -BackendFolder 'source\<backend-folder>' `
+  -ControlsFolder 'source\<controls-folder>' `
+  -SolutionRelativePath '<solution-file>.sln'
+```
+
+When the solution owns projects under the three in-scope folders, omit
+`-ProjectRelativePath`; the runner derives and passes only those solution
+projects to the semantic extractor. This prevents unrelated solution projects
+from contributing compilation diagnostics to the focused readback. The root
+solution is explicitly added to the inventory scope because the three folder
+include globs do not otherwise include a solution stored at the repository
+root. If no solution is available, omit `-SolutionRelativePath`, leave the
+interactive solution prompt blank, and supply the in-scope project paths when
+prompted.
+
+After the run, inspect only the newest files in `C:\work\tracemap-summary`:
+
+- `focused-webforms-workspace-*.txt` identifies the exact TraceMap head,
+  semantic-compilation state, Tier1 fact count, typed workspace diagnostics by
+  scope, remaining uncategorized count, and one next action.
+- `focused-webforms-accuracy-*.txt` summarizes evidence tiers, capability
+  states, diagnostics, and the highest-count accuracy gaps.
+- `focused-webforms-performance-*.txt` identifies the slowest observed stage
+  and extractor without exposing source identities.
+
+Give those three summaries to the local reviewer. A legacy MSBuild build that
+succeeds does not by itself prove that Roslyn `MSBuildWorkspace` admitted the
+solution; `semanticCompilation=available` plus Tier1 evidence is the relevant
+readback. Reduced results remain useful, but must not be described as complete
+call-chain or runtime evidence.
+
+To select specific `.aspx` pages from the completed index and generate the
+private/anonymous browser review set, continue with the [focused Web Forms
+human-review workflow](scripts/webforms-review/README.md). That guide separates
+the supported operator path from the narrower diagnostic and historical-depth
+utilities.
 
 ## License
 

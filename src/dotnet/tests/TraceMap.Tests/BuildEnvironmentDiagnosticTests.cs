@@ -9,6 +9,32 @@ namespace TraceMap.Tests;
 
 public sealed class BuildEnvironmentDiagnosticTests
 {
+    [Theory]
+    [InlineData("ComReferenceResolutionSkipped")]
+    [InlineData("ComReferenceResolutionFallbackUnavailable")]
+    public void Extract_projects_com_reference_workspace_gaps(string gapKind)
+    {
+        using var temp = new TempDirectory();
+        var manifest = new ScanManifest("scan-test", "repo", null, null, "abc123", ScannerVersions.TraceMap,
+            DateTimeOffset.UnixEpoch, "Level1SemanticAnalysisReduced", "FailedOrPartial", [], [], [], []);
+        var sanitized = BuildEnvironmentDiagnosticExtractor.SanitizeWorkspaceGap(gapKind, string.Empty);
+        var gap = new SemanticFactCandidate(FactTypes.AnalysisGap, RuleIds.CSharpSemanticWorkspace, EvidenceTiers.Tier4Unknown,
+            new EvidenceSpan("Legacy.csproj", 1, 1, null, "CSharpSemanticExtractor", ScannerVersions.CSharpSemanticExtractor),
+            ProjectPath: "Legacy.csproj", Properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["gapKind"] = gapKind,
+                ["diagnosticCode"] = sanitized.DiagnosticCode,
+                ["diagnosticKind"] = sanitized.DiagnosticKind,
+                ["sanitization"] = sanitized.Sanitization
+            });
+
+        var facts = BuildEnvironmentDiagnosticExtractor.Extract(temp.Path, manifest, [],
+            new SemanticExtractionResult([], [gap], Attempted: true, ReducedCoverage: true));
+
+        Assert.Contains(facts, fact => fact.FactType == FactTypes.BuildEnvironmentDiagnostic
+            && fact.Properties.GetValueOrDefault("originGapKind") == gapKind);
+    }
+
     [Fact]
     public void Scan_emits_legacy_build_environment_diagnostics()
     {
@@ -227,6 +253,301 @@ public sealed class BuildEnvironmentDiagnosticTests
         Assert.DoesNotContain("private-two", second.Message);
     }
 
+    [Theory]
+    [InlineData("MSB4019", "The imported project Microsoft.WebApplication.targets was not found under VSToolsPath/WebApplications.", "WebApplicationTargetsUnavailable", "UseCompatibleWebApplicationTargets")]
+    [InlineData("MSB4019", "The imported project Legacy.Custom.targets was not found.", "ImportedTargetsUnavailable", "ReviewImportedTargets")]
+    [InlineData("MSB4025", "The project file could not be loaded because project evaluation failed.", "LegacyProjectEvaluationFailed", "UseCompatibleMSBuildToolset")]
+    [InlineData(null, "The ResolveComReference task could not be instantiated from Microsoft.Build.Tasks.Core because Microsoft.Build could not be loaded.", "MSBuildTaskHostIncompatible", "UseCompatibleMSBuildTaskHost")]
+    public void Sanitized_workspace_gaps_classify_common_legacy_project_load_failures(
+        string? diagnosticId,
+        string rawMessage,
+        string expectedCode,
+        string expectedGuidance)
+    {
+        var diagnostic = BuildEnvironmentDiagnosticExtractor.SanitizeWorkspaceGap(
+            "ProjectLoadFailed",
+            rawMessage,
+            diagnosticId);
+
+        Assert.Equal(expectedCode, diagnostic.DiagnosticCode);
+        Assert.Equal(expectedGuidance, diagnostic.GuidanceCode);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, diagnostic.EvidenceTier);
+        Assert.Equal("reduces-semantic-coverage", diagnostic.CoverageEffect);
+        Assert.Equal("category-only", diagnostic.Sanitization);
+        Assert.Equal(diagnosticId, diagnostic.DiagnosticId);
+        Assert.DoesNotContain("Legacy.Custom", diagnostic.Message);
+        Assert.DoesNotContain("VSToolsPath", diagnostic.Message);
+    }
+
+    [Fact]
+    public void Uncategorized_workspace_failure_uses_bounded_legacy_prerequisite_fallback_only_for_same_project()
+    {
+        var legacyProjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "src/Legacy/Legacy.csproj" };
+
+        Assert.Equal(
+            "LegacyWorkspacePrerequisitesUnresolved",
+            BuildEnvironmentDiagnosticExtractor.CorroborateLegacyWorkspaceDiagnosticCode(
+                "UncategorizedWorkspaceFailure",
+                "src/Legacy/Legacy.csproj",
+                legacyProjects,
+                BuildEnvironmentDiagnosticExtractor.OriginProjectLoad));
+        Assert.Equal(
+            "LegacyWorkspacePrerequisitesUnresolved",
+            BuildEnvironmentDiagnosticExtractor.CorroborateLegacyWorkspaceDiagnosticCode(
+                "UncategorizedWorkspaceFailure",
+                "SRC/LEGACY/LEGACY.CSPROJ",
+                legacyProjects,
+                BuildEnvironmentDiagnosticExtractor.OriginWorkspace));
+        Assert.Equal(
+            "UncategorizedWorkspaceFailure",
+            BuildEnvironmentDiagnosticExtractor.CorroborateLegacyWorkspaceDiagnosticCode(
+                "UncategorizedWorkspaceFailure",
+                "src/Modern/Modern.csproj",
+                legacyProjects,
+                BuildEnvironmentDiagnosticExtractor.OriginProjectLoad));
+        Assert.Equal(
+            "SdkResolutionFailed",
+            BuildEnvironmentDiagnosticExtractor.CorroborateLegacyWorkspaceDiagnosticCode(
+                "SdkResolutionFailed",
+                "src/Legacy/Legacy.csproj",
+                legacyProjects,
+                BuildEnvironmentDiagnosticExtractor.OriginProjectLoad));
+        Assert.Equal(
+            "UncategorizedWorkspaceFailure",
+            BuildEnvironmentDiagnosticExtractor.CorroborateLegacyWorkspaceDiagnosticCode(
+                "UncategorizedWorkspaceFailure",
+                "src/Legacy/Legacy.csproj",
+                legacyProjects,
+                BuildEnvironmentDiagnosticExtractor.OriginCompilation));
+        Assert.Equal(
+            "UncategorizedWorkspaceFailure",
+            BuildEnvironmentDiagnosticExtractor.CorroborateLegacyWorkspaceDiagnosticCode(
+                "UncategorizedWorkspaceFailure",
+                "src/Legacy/Legacy.csproj",
+                legacyProjects,
+                BuildEnvironmentDiagnosticExtractor.OriginUnknown));
+    }
+
+    [Fact]
+    public void Extract_correlates_uncategorized_workspace_failure_with_same_project_legacy_signals()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "src", "Legacy"));
+        var projectPath = "src/Legacy/Legacy.csproj";
+        File.WriteAllText(Path.Combine(repo, projectPath), """
+            <Project ToolsVersion="12.0">
+              <PropertyGroup><TargetFrameworkVersion>v4.5</TargetFrameworkVersion></PropertyGroup>
+            </Project>
+            """);
+        var inventory = FileInventory.Collect(repo, Path.Combine(temp.Path, "out"));
+        var manifest = new ScanManifest(
+            "scan-test", "repo", null, null, "abc123", ScannerVersions.TraceMap,
+            DateTimeOffset.UnixEpoch, "Level1SemanticAnalysisReduced", "FailedOrPartial",
+            [], [], [], []);
+        var gap = new SemanticFactCandidate(
+            FactTypes.AnalysisGap,
+            RuleIds.CSharpSemanticDeclarations,
+            EvidenceTiers.Tier4Unknown,
+            new EvidenceSpan(projectPath, 1, 1, null, "CSharpSemanticExtractor", ScannerVersions.CSharpSemanticExtractor),
+            ProjectPath: projectPath,
+            Properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["diagnosticCode"] = "UncategorizedWorkspaceFailure",
+                ["diagnosticKind"] = BuildEnvironmentDiagnosticExtractor.DiagnosticKindWorkspace,
+                ["gapKind"] = "WorkspaceDiagnostic",
+                ["sanitization"] = "category-only"
+            });
+
+        var facts = BuildEnvironmentDiagnosticExtractor.Extract(
+            repo,
+            manifest,
+            inventory,
+            new SemanticExtractionResult([], [gap], Attempted: true, ReducedCoverage: true));
+
+        Assert.Contains(facts, fact =>
+            fact.FactType == FactTypes.BuildEnvironmentDiagnostic
+            && fact.ProjectPath == projectPath
+            && fact.Properties.GetValueOrDefault("diagnosticCode") == "LegacyWorkspacePrerequisitesUnresolved"
+            && fact.Properties.GetValueOrDefault("guidanceCode") == "UseCompatibleMSBuildToolset"
+            && fact.Properties.GetValueOrDefault("originCategory") == BuildEnvironmentDiagnosticExtractor.OriginWorkspace
+            && fact.Properties.GetValueOrDefault("originGapKind") == "WorkspaceDiagnostic"
+            && fact.EvidenceTier == EvidenceTiers.Tier4Unknown);
+        Assert.DoesNotContain(facts, fact =>
+            fact.ProjectPath == projectPath
+            && fact.Properties.GetValueOrDefault("diagnosticCode") == "UncategorizedWorkspaceFailure");
+    }
+
+    [Fact]
+    public void Ordinary_compiler_diagnostic_is_not_projected_or_reclassified_as_workspace_failure()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "src", "Legacy"));
+        var projectPath = "src/Legacy/Legacy.csproj";
+        File.WriteAllText(Path.Combine(repo, projectPath), """
+            <Project ToolsVersion="12.0">
+              <PropertyGroup><TargetFrameworkVersion>v4.5</TargetFrameworkVersion></PropertyGroup>
+            </Project>
+            """);
+        var inventory = FileInventory.Collect(repo, Path.Combine(temp.Path, "out"));
+        var manifest = new ScanManifest(
+            "scan-test", "repo", null, null, "abc123", ScannerVersions.TraceMap,
+            DateTimeOffset.UnixEpoch, "Level1SemanticAnalysisReduced", "FailedOrPartial",
+            [], [], [], []);
+        var gap = WorkspaceGap(projectPath, "CompilationDiagnostic", "CompilerDiagnostic", "compilation", "CS0103");
+
+        var facts = BuildEnvironmentDiagnosticExtractor.Extract(
+            repo,
+            manifest,
+            inventory,
+            new SemanticExtractionResult([], [gap], Attempted: true, ReducedCoverage: true));
+
+        Assert.DoesNotContain(facts, fact =>
+            fact.Properties.GetValueOrDefault("diagnosticCode") is "CompilerDiagnostic" or "LegacyWorkspacePrerequisitesUnresolved");
+    }
+
+    [Fact]
+    public void Unrelated_semantic_gaps_are_not_projected_as_workspace_failures()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        var inventory = FileInventory.Collect(repo, Path.Combine(temp.Path, "out"));
+        var manifest = new ScanManifest(
+            "scan-test", "repo", null, null, "abc123", ScannerVersions.TraceMap,
+            DateTimeOffset.UnixEpoch, "Level1SemanticAnalysisReduced", "FailedOrPartial",
+            [], [], [], []);
+        var unrelatedGaps = new[]
+        {
+            new SemanticFactCandidate(
+                FactTypes.AnalysisGap,
+                RuleIds.CSharpSemanticPropertyMappingGap,
+                EvidenceTiers.Tier4Unknown,
+                new EvidenceSpan("src/Legacy/Model.cs", 1, 1, null, "CSharpPropertyMappingExtractor", ScannerVersions.CSharpPropertyMappingExtractor),
+                Properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["gapKind"] = "PropertyMappingShapeUnsupported",
+                    ["occurrenceCount"] = "10609"
+                }),
+            new SemanticFactCandidate(
+                FactTypes.AnalysisGap,
+                RuleIds.CSharpSemanticWorkspace,
+                EvidenceTiers.Tier4Unknown,
+                new EvidenceSpan("src/Legacy/Model.cs", 1, 1, null, "CSharpSemanticExtractor", ScannerVersions.CSharpSemanticExtractor),
+                Properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["gapKind"] = "SyntaxTreeReadFailed",
+                    ["diagnosticKind"] = BuildEnvironmentDiagnosticExtractor.DiagnosticKindWorkspace
+                })
+        };
+
+        var facts = BuildEnvironmentDiagnosticExtractor.Extract(
+            repo,
+            manifest,
+            inventory,
+            new SemanticExtractionResult([], unrelatedGaps, Attempted: true, ReducedCoverage: true));
+
+        Assert.Empty(facts);
+    }
+
+    [Fact]
+    public void Equivalent_workspace_diagnostics_are_aggregated_with_safe_origin_lineage()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "src", "Legacy"));
+        var projectPath = "src/Legacy/Legacy.csproj";
+        File.WriteAllText(Path.Combine(repo, projectPath), "<Project />");
+        var inventory = FileInventory.Collect(repo, Path.Combine(temp.Path, "out"));
+        var manifest = new ScanManifest(
+            "scan-test", "repo", null, null, "abc123", ScannerVersions.TraceMap,
+            DateTimeOffset.UnixEpoch, "Level1SemanticAnalysisReduced", "FailedOrPartial",
+            [], [], [], []);
+        var gap = WorkspaceGap(projectPath, "ProjectLoadFailed", "UncategorizedWorkspaceFailure", "workspace", "MSB4025");
+
+        var facts = BuildEnvironmentDiagnosticExtractor.Extract(
+            repo,
+            manifest,
+            inventory,
+            new SemanticExtractionResult([], [gap, gap], Attempted: true, ReducedCoverage: true));
+
+        var projected = Assert.Single(facts, fact =>
+            fact.FactType == FactTypes.BuildEnvironmentDiagnostic
+            && fact.Properties.GetValueOrDefault("originGapKind") == "ProjectLoadFailed");
+        Assert.Equal(BuildEnvironmentDiagnosticExtractor.OriginProjectLoad, projected.Properties["originCategory"]);
+        Assert.Equal("MSB4025", projected.Properties["diagnosticId"]);
+        Assert.Equal("2", projected.Properties["occurrenceCount"]);
+        Assert.Equal("aggregated-equivalent", projected.Properties["aggregationState"]);
+    }
+
+    [Fact]
+    public void Projected_environment_diagnostics_preserve_closed_origin_kinds_and_only_safe_ids()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        var inventory = FileInventory.Collect(repo, Path.Combine(temp.Path, "out"));
+        var manifest = new ScanManifest(
+            "scan-test", "repo", null, null, "abc123", ScannerVersions.TraceMap,
+            DateTimeOffset.UnixEpoch, "Level1SemanticAnalysisReduced", "FailedOrPartial",
+            [], [], [], []);
+        var gaps = new[]
+        {
+            WorkspaceGap(".", "WorkspaceDiagnostic", "UncategorizedWorkspaceFailure", "workspace", "MSB0001"),
+            WorkspaceGap(".", "ProjectLoadFailed", "UncategorizedWorkspaceFailure", "workspace", "MSB0002"),
+            WorkspaceGap(".", "SolutionLoadFailed", "UncategorizedWorkspaceFailure", "workspace", "MSB0003"),
+            WorkspaceGap(".", "CompilationCreateFailed", "CompilationCreationFailed", "workspace", "PrivateIdentifier123"),
+            WorkspaceGap(".", "CompilationMissing", "CompilationCreationFailed", "workspace", "MSB0005"),
+            WorkspaceGap(".", "MSBuildRegistrationFailed", "MSBuildRegistrationFailed", "workspace", "MSB0006")
+        };
+
+        var facts = BuildEnvironmentDiagnosticExtractor.Extract(
+            repo,
+            manifest,
+            inventory,
+            new SemanticExtractionResult([], gaps, Attempted: true, ReducedCoverage: true));
+
+        AssertOrigin(facts, "WorkspaceDiagnostic", BuildEnvironmentDiagnosticExtractor.OriginWorkspace, "MSB0001");
+        AssertOrigin(facts, "ProjectLoadFailed", BuildEnvironmentDiagnosticExtractor.OriginProjectLoad, "MSB0002");
+        AssertOrigin(facts, "SolutionLoadFailed", BuildEnvironmentDiagnosticExtractor.OriginSolutionLoad, "MSB0003");
+        AssertOrigin(facts, "CompilationCreateFailed", BuildEnvironmentDiagnosticExtractor.OriginCompilationCreation, null);
+        AssertOrigin(facts, "CompilationMissing", BuildEnvironmentDiagnosticExtractor.OriginCompilationCreation, "MSB0005");
+        AssertOrigin(facts, "MSBuildRegistrationFailed", BuildEnvironmentDiagnosticExtractor.OriginMsBuildRegistration, "MSB0006");
+        Assert.DoesNotContain(facts, fact => fact.Properties.Values.Any(value => value.Contains("PrivateIdentifier123", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void Sanitizer_keeps_ordinary_compiler_diagnostics_out_of_workspace_category()
+    {
+        var diagnostic = BuildEnvironmentDiagnosticExtractor.SanitizeWorkspaceGap(
+            "CompilationDiagnostic",
+            "The name 'privateIdentifier' does not exist in the current context.",
+            "CS0103");
+
+        Assert.Equal("CompilerDiagnostic", diagnostic.DiagnosticCode);
+        Assert.Equal(BuildEnvironmentDiagnosticExtractor.DiagnosticKindCompilation, diagnostic.DiagnosticKind);
+        Assert.Equal("ReviewCompilerDiagnostic", diagnostic.GuidanceCode);
+        Assert.DoesNotContain("privateIdentifier", diagnostic.Message);
+    }
+
+    [Fact]
+    public void Sanitizer_extracts_only_a_closed_diagnostic_id_from_native_workspace_text()
+    {
+        var diagnostic = BuildEnvironmentDiagnosticExtractor.SanitizeWorkspaceGap(
+            "WorkspaceDiagnostic",
+            "private project text MSB4019 followed by /private/location and SecretName123");
+        var unsafeSupplied = BuildEnvironmentDiagnosticExtractor.SanitizeWorkspaceGap(
+            "WorkspaceDiagnostic",
+            "no safe diagnostic code",
+            "SecretName123");
+
+        Assert.Equal("MSB4019", diagnostic.DiagnosticId);
+        Assert.Null(unsafeSupplied.DiagnosticId);
+        Assert.DoesNotContain("private", diagnostic.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("SecretName123", diagnostic.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Observed_value_hashes_are_stable_distinct_and_secret_categories_are_not_hashed()
     {
@@ -376,6 +697,42 @@ public sealed class BuildEnvironmentDiagnosticTests
                 ["messageHash"] = FactFactory.Hash(diagnostic.Message, 32),
                 ["sanitization"] = diagnostic.Sanitization
             });
+    }
+
+    private static SemanticFactCandidate WorkspaceGap(
+        string projectPath,
+        string gapKind,
+        string diagnosticCode,
+        string diagnosticKind,
+        string diagnosticId)
+    {
+        return new SemanticFactCandidate(
+            FactTypes.AnalysisGap,
+            RuleIds.CSharpSemanticWorkspace,
+            EvidenceTiers.Tier4Unknown,
+            new EvidenceSpan(projectPath, 1, 1, null, "CSharpSemanticExtractor", ScannerVersions.CSharpSemanticExtractor),
+            ProjectPath: projectPath,
+            Properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["diagnosticCode"] = diagnosticCode,
+                ["diagnosticId"] = diagnosticId,
+                ["diagnosticKind"] = diagnosticKind,
+                ["gapKind"] = gapKind,
+                ["sanitization"] = "category-only"
+            });
+    }
+
+    private static void AssertOrigin(
+        IReadOnlyList<CodeFact> facts,
+        string gapKind,
+        string originCategory,
+        string? diagnosticId)
+    {
+        var fact = Assert.Single(facts, item => item.Properties.GetValueOrDefault("originGapKind") == gapKind);
+        Assert.Equal(originCategory, fact.Properties["originCategory"]);
+        Assert.Equal(diagnosticId, fact.Properties.GetValueOrDefault("diagnosticId"));
+        Assert.Equal("1", fact.Properties["occurrenceCount"]);
+        Assert.Equal("single", fact.Properties["aggregationState"]);
     }
 
     private static async Task<T> ExecuteScalarAsync<T>(SqliteConnection connection, string sql)

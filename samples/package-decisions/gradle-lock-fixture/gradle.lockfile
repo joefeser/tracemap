@@ -1,0 +1,6 @@
+# This is a Gradle generated file for dependency locking.
+# Manual edits can break the build and are not advised.
+# This file is expected to be part of source control.
+org.springframework:spring-web:6.2.0=compileClasspath,runtimeClasspath
+com.example:fixture-lib:1.2.3=runtimeClasspath
+com.fasterxml.jackson.core:jackson-annotations:2.20.0=compileClasspath
