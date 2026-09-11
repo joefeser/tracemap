@@ -370,6 +370,38 @@ public sealed class WebFormsAgentEvidenceHandoffTests
         });
     }
 
+    [Theory]
+    [InlineData("facts", "rule_id", "")]
+    [InlineData("facts", "rule_id", "undocumented.rule.v1")]
+    [InlineData("facts", "evidence_tier", "Tier5Maybe")]
+    [InlineData("call_edges", "rule_id", "")]
+    [InlineData("call_edges", "rule_id", "undocumented.rule.v1")]
+    [InlineData("call_edges", "evidence_tier", "Tier5Maybe")]
+    public void SetHandoffRejectsIndexWithInvalidEvidenceMetadata(string table, string column, string value)
+    {
+        WithFixture((root, inspection, handoff) =>
+        {
+            var set = PrepareSet(root, inspection, handoff);
+            var index = Path.Combine(root, "index.sqlite");
+            CreateIndex(index, "scan-one", CommitSha);
+            using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = index }.ToString()))
+            {
+                connection.Open();
+                using var command = connection.CreateCommand();
+                command.CommandText = $"update {table} set {column} = $value;";
+                command.Parameters.AddWithValue("$value", value);
+                command.ExecuteNonQuery();
+            }
+            var output = Path.Combine(set, "agent-evidence-handoff.json");
+
+            var error = Assert.Throws<InvalidDataException>(() => WebFormsAgentEvidenceHandoff.WriteSet(
+                Path.Combine(set, "inspection.snapshot.json"), set, output, index));
+
+            Assert.Equal("AgentHandoffIndexInvalid", error.Message);
+            Assert.False(File.Exists(output));
+        });
+    }
+
     [Fact]
     public void SetHandoffRejectsMismatchedIndexWithoutPublishing()
     {
@@ -516,8 +548,8 @@ public sealed class WebFormsAgentEvidenceHandoffTests
             manifest.RepoName,
             commitSha,
             null,
-            FactTypes.MethodInvoked,
-            "csharp.semantic.methodinvocation.v1",
+            FactTypes.CallEdge,
+            RuleIds.CSharpSemanticCallGraph,
             EvidenceTiers.Tier1Semantic,
             "Private.Page.Handler()",
             "Private.Page.LoadData()",

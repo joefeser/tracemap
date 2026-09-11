@@ -22,6 +22,10 @@ Pull request: #735
 - Review-set handoffs support a selected subset of inspection cases, validate
   fact JSON used by read-only recipes, and use corpus-compatible per-recipe
   execution limits for exact retrieval-hint matching.
+- Missing configured indexes now preserve the optional `not-supplied` evidence
+  store while unavailable explicitly supplied indexes still fail closed.
+- Recipe-backed fact and call-edge rows require a canonical documented rule ID
+  and one of the four supported evidence tiers before the store is validated.
 - Explicit application-database evidence questions without database execution instructions.
 - Anonymous artifacts remain disconnected from private handoffs.
 
@@ -33,13 +37,15 @@ Pull request: #735
 - Full .NET solution: 1,815 passed, 0 failed, with the pre-existing nullable
   warning in `PropertyMappingTests.cs`.
 - `git diff --check` passed.
-- Review-remediation focused validation: 54 evidence-docs, index-reader, and
+- Review-remediation focused validation: 60 evidence-docs, index-reader, and
   Web Forms handoff tests passed; adversarial coverage includes corrupted
   outputs, cross-source provenance, altered recipe catalogs, malformed chunks,
   invalid evidence metadata, noncanonical indexes, and missing recipe query
   tables, edited case handoffs that diverge from their inspection, selected
   case subsets, malformed fact JSON, and corpus-compatible retrieval limits.
-  Full post-review solution validation passed 1,826 tests.
+  Full post-review solution validation passed 1,832 tests. The PowerShell
+  review-set smoke test also covers optional configured-index degradation and
+  explicit missing-index rejection.
 
 ## Boundaries
 

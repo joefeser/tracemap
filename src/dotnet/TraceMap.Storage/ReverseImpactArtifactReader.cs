@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using TraceMap.Core;
@@ -31,6 +32,20 @@ public static class ReverseImpactArtifactReader
 {
     public const int DefaultMaxFacts = 1_000_000;
     public const int MaximumFacts = 1_000_000;
+
+    private static readonly IReadOnlySet<string> SupportedRuleIds = typeof(RuleIds)
+        .GetFields(BindingFlags.Public | BindingFlags.Static)
+        .Where(field => field.IsLiteral && field.FieldType == typeof(string))
+        .Select(field => (string)field.GetRawConstantValue()!)
+        .ToHashSet(StringComparer.Ordinal);
+
+    private static readonly IReadOnlySet<string> SupportedEvidenceTiers = new HashSet<string>(StringComparer.Ordinal)
+    {
+        EvidenceTiers.Tier1Semantic,
+        EvidenceTiers.Tier2Structural,
+        EvidenceTiers.Tier3SyntaxOrTextual,
+        EvidenceTiers.Tier4Unknown
+    };
 
     private static readonly IReadOnlyList<RequiredColumn> ManifestColumns =
     [
@@ -126,8 +141,12 @@ public static class ReverseImpactArtifactReader
 
             await ValidateFactSnapshotAsync(connection, transaction, manifest, cancellationToken);
             await ValidateFactPropertiesJsonAsync(connection, transaction, cancellationToken);
+            await ValidateEvidenceMetadataAsync(connection, transaction, "facts", cancellationToken);
             if (requireCallEdges)
+            {
                 await ValidateCallEdgeSnapshotAsync(connection, transaction, manifest, cancellationToken);
+                await ValidateEvidenceMetadataAsync(connection, transaction, "call_edges", cancellationToken);
+            }
             return new ReverseImpactArtifactSummary(manifest, factCount);
         }
         catch (ReverseImpactArtifactException)
@@ -283,6 +302,34 @@ public static class ReverseImpactArtifactReader
         }
 
         await ValidateTableSchemaAsync(connection, transaction, "call_edges", CallEdgeColumns, cancellationToken);
+    }
+
+    private static async Task ValidateEvidenceMetadataAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        string tableName,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = tableName switch
+        {
+            "facts" => "select distinct rule_id, evidence_tier from facts;",
+            "call_edges" => "select distinct rule_id, evidence_tier from call_edges;",
+            _ => throw new ArgumentOutOfRangeException(nameof(tableName))
+        };
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var ruleId = reader.GetString(0);
+            var evidenceTier = reader.GetString(1);
+            if (!SupportedRuleIds.Contains(ruleId) || !SupportedEvidenceTiers.Contains(evidenceTier))
+            {
+                throw Error(
+                    "ReverseImpactArtifactEvidenceMetadataInvalid",
+                    $"A {tableName} row has an undocumented rule ID or unsupported evidence tier.");
+            }
+        }
     }
 
     private static async Task ValidateCallEdgeSnapshotAsync(

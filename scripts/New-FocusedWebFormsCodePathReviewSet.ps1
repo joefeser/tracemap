@@ -26,7 +26,9 @@ elseif (!$IndexPath -and (Test-Path -LiteralPath $ConfigPath -PathType Leaf)) {
     . (Join-Path $PSScriptRoot 'webforms-review/FocusedWebFormsConfig.ps1')
     $config = Read-FocusedWebFormsConfig -ConfigPath $ConfigPath
 }
-if (!$IndexPath -and $null -ne $config) { $IndexPath = $config.IndexPath }
+if (!$IndexPath -and $null -ne $config -and (Test-Path -LiteralPath $config.IndexPath -PathType Leaf)) {
+    $IndexPath = $config.IndexPath
+}
 if (!$SourceRoot) { $SourceRoot = (Read-Host 'Private source repository root').Trim() }
 if (!$SourceRoot -or !(Test-Path -LiteralPath $SourceRoot -PathType Container)) { throw 'CodePathReviewSetSourceRootUnavailable' }
 if ($IndexPath -and !(Test-Path -LiteralPath $IndexPath -PathType Leaf)) { throw 'CodePathReviewSetIndexUnavailable' }
