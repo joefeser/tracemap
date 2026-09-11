@@ -3767,6 +3767,33 @@ rules:
       - TraceMap does not replace a project-defined CustomAfterMicrosoftCommonTargets hook. In that case it emits `ComReferenceResolutionFallbackUnavailable` and leaves ordinary MSBuildWorkspace behavior intact.
       - Exclusion comparison follows detected host path case semantics and macOS Unicode-equivalence semantics without rewriting persisted evidence paths. Unicode-distinct names remain distinct on hosts whose filesystems treat them as distinct.
 
+  - id: vb.semantic.compilation.v1
+    name: Visual Basic semantic compilation observation
+    description: Records MSBuildWorkspace loading of Visual Basic projects and creation of a Roslyn Visual Basic compilation over the project's declared documents.
+    evidenceTier: Tier2Structural
+    emits:
+      - VisualBasicProjectObserved
+    limitations:
+      - The observation proves only that the project loaded into MSBuildWorkspace and Roslyn produced a compilation; it does not prove the project builds, that every document binds cleanly, or that any code runs.
+      - Compiler diagnostic error counts are aggregate counts only; per-diagnostic evidence is carried by `vb.semantic.workspace.v1` gap rows.
+      - The .NET SDK emits design-time compiler arguments without `_MyType="Empty"`, so MSBuildWorkspace loads inject the classic My template whose types do not bind on .NET Core. Errors caused by that injected template point at no source location, are excluded from coverage gaps, and remain visible as `injectedTemplateErrorCount` on the observation fact; a reduced coverage label is never inferred from them alone.
+      - Document counts are safe aggregate counts over project-declared compilation inputs; generated and designer documents are counted without treating filename conventions as semantic proof.
+      - Declaration, reference, call, construction, argument, and symbol-relationship evidence requires the later VB extraction slices; this rule claims none of them.
+
+  - id: vb.semantic.workspace.v1
+    name: Visual Basic semantic workspace gaps
+    description: Records MSBuild registration, project load, compilation, and compiler diagnostic gaps encountered while loading Visual Basic projects semantically.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Workspace and compiler diagnostics can be environment-specific because they depend on installed SDKs, reference assemblies, and available project references.
+      - Native workspace messages are sanitized to stable categories before shareable artifacts are written; raw local paths, remotes, package sources, config values, credentials, and source-like snippets are omitted.
+      - A Visual Basic workspace or compilation gap reduces the aggregate scan coverage label; the scan is never reported as clean or complete while such a gap is present.
+      - Compiler diagnostics that point at no source location and reference the classic My template surface are excluded as SDK design-time injection noise; this exclusion is bounded to that template surface and does not suppress source-referencing compiler errors.
+      - Syntax fallback over readable Visual Basic files is delivered by a later slice; until then a failed Visual Basic project load yields explicit gaps and reduced coverage rather than per-file syntax candidates.
+      - Exclusion comparison follows detected host path case semantics and macOS Unicode-equivalence semantics without rewriting persisted evidence paths.
+
   - id: build.environment.target-framework.v1
     name: Build environment target framework diagnostics
     description: Records static target framework declarations that may explain required reference assemblies or SDK families for semantic analysis.

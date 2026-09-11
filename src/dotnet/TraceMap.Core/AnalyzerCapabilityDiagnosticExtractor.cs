@@ -101,7 +101,7 @@ public static class AnalyzerCapabilityDiagnosticExtractor
             .ToArray();
 
         var projectScopes = inventory
-            .Where(item => item.Kind is "Project" or "NonCSharpProject")
+            .Where(item => item.Kind is "Project" or "NonCSharpProject" or "VisualBasicProject")
             .Select(item => item.RelativePath)
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)

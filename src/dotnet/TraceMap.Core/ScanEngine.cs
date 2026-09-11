@@ -111,6 +111,14 @@ public static class ScanEngine
                     fullInventory,
                     cancellationToken,
                     progress);
+                var visualBasicSemanticResult = VisualBasicSemanticExtractor.Extract(
+                    repoPath,
+                    inventory,
+                    options,
+                    fullInventory,
+                    cancellationToken,
+                    progress);
+                semanticResult = SemanticExtractionResultMerge.Merge(semanticResult, visualBasicSemanticResult);
                 semanticToolchainReducedCoverage = HasToolchainSemanticReduction(semanticResult);
                 var semanticStageCoverage = semanticResult.Attempted
                     ? semanticToolchainReducedCoverage ? "semantic-reduced" : "semantic"
@@ -201,7 +209,7 @@ public static class ScanEngine
             .OrderBy(path => path, StringComparer.Ordinal)
             .ToArray();
         var projects = inventory
-            .Where(item => item.Kind is "Project" or "SqlProject")
+            .Where(item => item.Kind is "Project" or "SqlProject" or "VisualBasicProject")
             .Select(item => item.RelativePath)
             .OrderBy(path => path, StringComparer.Ordinal)
             .ToArray();
@@ -426,7 +434,7 @@ public static class ScanEngine
         new Dictionary<string, long>
         {
             ["solutions"] = inventory.Count(item => item.Kind == "Solution"),
-            ["projects"] = inventory.Count(item => item.Kind is "Project" or "SqlProject")
+            ["projects"] = inventory.Count(item => item.Kind is "Project" or "SqlProject" or "VisualBasicProject")
         };
 
     internal static string CreateSourceSnapshotDigest(
@@ -505,7 +513,9 @@ public static class ScanEngine
         CancellationToken cancellationToken = default)
     {
         return inventory
-            .Where(item => FileInventory.IsCSharpKind(item.Kind) || IsSemanticMetadataKind(item.Kind))
+            .Where(item => FileInventory.IsCSharpKind(item.Kind)
+                || FileInventory.IsVisualBasicKind(item.Kind)
+                || IsSemanticMetadataKind(item.Kind))
             .ToDictionary(
                 item => item.RelativePath,
                 item => CreateSourceSnapshotDigest(repoPath, [item], cancellationToken),
@@ -548,7 +558,7 @@ public static class ScanEngine
     }
 
     private static bool IsSemanticMetadataKind(string kind) =>
-        kind is "Solution" or "Project" or "MSBuildProps" or "MSBuildTargets";
+        kind is "Solution" or "Project" or "VisualBasicProject" or "MSBuildProps" or "MSBuildTargets";
 
     private static IReadOnlyList<FileInventoryItem> IncludeSemanticInputs(
         IReadOnlyList<FileInventoryItem> inventory,
@@ -683,7 +693,7 @@ public static class ScanEngine
                         ["path"] = item.RelativePath
                     }));
             }
-            else if (item.Kind == "Project")
+            else if (item.Kind is "Project" or "VisualBasicProject")
             {
                 facts.Add(FactFactory.Create(
                     manifest,
@@ -1016,6 +1026,11 @@ public static class ScanEngine
             var gapKind = gap.Properties?.GetValueOrDefault("gapKind") ?? gap.ContractElement ?? "UnknownPropertyMappingGap";
             return $"Direct property-mapping coverage reduced: {gapKind}.";
         }
+        if (gap.RuleId == RuleIds.VisualBasicSemanticWorkspace)
+        {
+            var gapKind = gap.Properties?.GetValueOrDefault("gapKind") ?? gap.ContractElement ?? "UnknownVisualBasicWorkspaceGap";
+            return $"Visual Basic semantic coverage reduced: {gapKind}.";
+        }
         return "Roslyn semantic analysis reported a gap.";
     }
 
@@ -1038,7 +1053,7 @@ public static class ScanEngine
 
         if (manifest.BuildStatus != "FailedOrPartial")
         {
-            return "No C# project was available for MSBuildWorkspace semantic analysis.";
+            return "No C# or Visual Basic project was available for MSBuildWorkspace semantic analysis.";
         }
 
         var hasBinlogGap = binlogFacts.Any(fact =>
@@ -1107,7 +1122,7 @@ public static class ScanEngine
             .Where(item => includeGlobs.Length == 0 || includeGlobs.Any(glob => GlobMatches(item.RelativePath, glob, sourcePathComparer)))
             .Where(item => excludeGlobs.Length == 0 || !excludeGlobs.Any(glob => GlobMatches(item.RelativePath, glob, sourcePathComparer)))
             .Where(item => solutionPaths.Count == 0 || item.Kind != "Solution" || solutionPaths.Contains(item.RelativePath))
-            .Where(item => projectPaths.Count == 0 || item.Kind is not ("Project" or "SqlProject") || projectPaths.Contains(item.RelativePath))
+            .Where(item => projectPaths.Count == 0 || item.Kind is not ("Project" or "SqlProject" or "VisualBasicProject") || projectPaths.Contains(item.RelativePath))
             .Where(item => projectDirectories.Length == 0
                 || includeGlobs.Length > 0
                 || item.Kind is "Solution"
