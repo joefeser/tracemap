@@ -51,7 +51,7 @@ export interface Base44EvidencePacket {
     acceptedTreeSha256: string;
     scanRootRelativePath: string;
   };
-  scanner: { version: string; scanId: string };
+  scanner: { version: string; scanId: string; artifactProfile: typeof base44DeterministicArtifactProfile };
   coverage: {
     label: string;
     analysisLevel: string;
@@ -99,6 +99,8 @@ export interface Base44Diff {
   limitations: string[];
 }
 
+export const base44DeterministicArtifactProfile = "tracemap.base44.deterministic-artifacts.v1";
+
 export async function buildBase44Evidence(options: Base44EvidenceOptions): Promise<{ packet: Base44EvidencePacket; result: ScanResult }> {
   requireSha(options.acceptedSourceSha256, "--accepted-source-sha256");
   requireSha(options.acceptedTreeSha256, "--accepted-tree-sha256");
@@ -122,7 +124,11 @@ export async function buildBase44Evidence(options: Base44EvidenceOptions): Promi
       acceptedTreeSha256: options.acceptedTreeSha256.toLowerCase(),
       scanRootRelativePath: result.manifest.scanRootRelativePath ?? "."
     },
-    scanner: { version: result.manifest.scannerVersion, scanId: result.manifest.scanId },
+    scanner: {
+      version: result.manifest.scannerVersion,
+      scanId: result.manifest.scanId,
+      artifactProfile: base44DeterministicArtifactProfile
+    },
     coverage: {
       label: options.coverageLabel,
       analysisLevel: result.manifest.analysisLevel,
