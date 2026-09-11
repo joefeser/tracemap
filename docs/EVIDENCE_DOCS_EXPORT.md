@@ -20,7 +20,30 @@ tracemap docs-export \
 Optional inputs include `--route-flow-report`, `--property-flow-report`,
 `--paths-report`, `--reverse-report`, `--combined-report`,
 `--release-review-report`, `--vault-graph`, `--evidence-pack`, and
-`--source-claim-catalog`.
+`--webforms-packet`, and `--source-claim-catalog`.
+
+To add the bounded Web Forms modernization inventory to the same corpus:
+
+```bash
+tracemap docs-export \
+  --index <index.sqlite> \
+  --webforms-packet <webforms-modernization.json> \
+  --out <docs-output> \
+  --format markdown,jsonl
+```
+
+The packet source must uniquely match the supplied index by scan and commit
+identity. The `webforms-modernization` family emits separate retrieval units for
+the packet overview, surfaces, event chains, downstream boundaries,
+identity/state declarations, batch/data-movement declarations, and structural
+slice candidates. Packet gaps remain first-class gap chunks. Owner questions
+and limitations remain scoped static metadata rather than inferred findings.
+
+This export is deliberately a documentation corpus, not a BRD generator or
+modernization prompt. A downstream private workflow may retrieve and interpret
+the documents under its own access controls, but TraceMap does not infer
+business intent, recommend a target design, or generate Angular, .NET, SQL, or
+migration code as part of docs export.
 
 `--format` accepts one comma-separated value from `markdown`, `jsonl`, or
 `markdown,jsonl`. `manifest.json` is always the generated-file integrity anchor
@@ -29,7 +52,7 @@ for successful exports.
 `--families` accepts a comma-separated subset of:
 
 ```text
-source-overview,endpoint,route-flow,property-flow,dependency-surface,data-surface,package-config,query-sql-shape,legacy,release-review,impact-summary,gap,limitation
+source-overview,endpoint,route-flow,property-flow,dependency-surface,data-surface,package-config,query-sql-shape,legacy,release-review,impact-summary,webforms-modernization,gap,limitation
 ```
 
 Unselected families are recorded as `not_requested`. Requested families that
@@ -77,6 +100,7 @@ question-family values are:
 - `data-surface-question`
 - `package-question`
 - `snapshot-change-question`
+- `modernization-evidence-question`
 - `weak-evidence-question`
 - `gap-question`
 - `limitation-question`

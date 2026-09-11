@@ -714,6 +714,17 @@ rules:
     limitations:
       - Impact-summary chunks preserve static classifications only and do not prove business impact, runtime impact, deployment impact, or release safety.
 
+  - id: docs-export.chunk.webforms-modernization.v1
+    name: Docs export Web Forms modernization packet chunk
+    description: Projects compatible Web Forms modernization packet inventory, event chains, boundaries, identity/state declarations, batch/data-movement declarations, structural slices, gaps, questions, and limitations into deterministic citation-bearing evidence documents.
+    evidenceTier: Inherits weakest supporting packet evidence tier
+    emits:
+      - docs-export Web Forms modernization chunk
+    limitations:
+      - These chunks package existing bounded static evidence and do not infer business intent, generate a BRD, plan a migration, generate replacement code, or prove runtime behavior.
+      - Packet truncation, reduced coverage, missing provenance, unresolved handlers, and unsupported terminal evidence remain explicit gaps or limitations.
+      - Raw source, raw SQL, configuration values, credentials, local absolute paths, and private workflow prompts are not added by this projection.
+
   - id: docs-export.chunk.gap.v1
     name: Docs export gap chunk
     description: Emits first-class gap chunks for unavailable, reduced, hidden, incompatible, unsupported, truncated, or missing-provenance evidence.

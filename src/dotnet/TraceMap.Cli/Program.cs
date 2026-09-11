@@ -1651,7 +1651,8 @@ public static class TraceMapCommand
                 values.GetValueOrDefault("--date"),
                 values.HasFlag("--dry-run"),
                 values.HasFlag("--force"),
-                values.GetMany("--property-flow-report")),
+                values.GetMany("--property-flow-report"),
+                values.GetMany("--webforms-packet")),
             cancellationToken);
 
         await output.WriteLineAsync(values.HasFlag("--dry-run")
@@ -3335,6 +3336,7 @@ public static class TraceMapCommand
               --release-review-report <path>    Existing release-review JSON. Repeatable.
               --vault-graph <path>              Existing vault graph JSON. Schema gaps are emitted unless compatible.
               --evidence-pack <path>            Existing evidence-pack JSON. Repeatable.
+              --webforms-packet <path>          Existing webforms-modernization-packet.v1 JSON. Repeatable.
               --source-claim-catalog <path>     source-claim-catalog.v1 JSON for demo/public promotion.
 
             Options:

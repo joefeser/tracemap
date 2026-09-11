@@ -26,7 +26,8 @@ public sealed record EvidenceDocsExportOptions(
     string? Date = null,
     bool DryRun = false,
     bool Force = false,
-    IReadOnlyList<string>? PropertyFlowReportPaths = null);
+    IReadOnlyList<string>? PropertyFlowReportPaths = null,
+    IReadOnlyList<string>? WebFormsPacketPaths = null);
 
 public sealed record EvidenceDocsExportResult(
     EvidenceDocsManifest Manifest,
@@ -193,7 +194,7 @@ public sealed record EvidenceDocLink(
     string Label,
     string Target);
 
-public static class EvidenceDocsExporter
+public static partial class EvidenceDocsExporter
 {
     public const string SchemaVersion = "tracemap-evidence-docs.v1";
     public const string GeneratorName = "tracemap-docs-export";
@@ -214,6 +215,7 @@ public static class EvidenceDocsExporter
     private const string ImpactSummaryRuleId = "docs-export.chunk.impact-summary.v1";
     private const string GapChunkRuleId = "docs-export.chunk.gap.v1";
     private const string LimitationChunkRuleId = "docs-export.chunk.limitation.v1";
+    private const string WebFormsModernizationRuleId = "docs-export.chunk.webforms-modernization.v1";
     private const string TerminalContextKindMetadataKey = "terminalContextKind";
     private const long MaxPropertyFlowReportBytes = 4L * 1024 * 1024;
     private const string GeneratedFileStaleRuleId = "docs-export.validation.generated-file-stale.v1";
@@ -243,6 +245,7 @@ public static class EvidenceDocsExporter
         "legacy",
         "release-review",
         "impact-summary",
+        "webforms-modernization",
         "gap",
         "limitation"
     ];
@@ -253,6 +256,7 @@ public static class EvidenceDocsExporter
         "data-surface-question",
         "package-question",
         "snapshot-change-question",
+        "modernization-evidence-question",
         "weak-evidence-question",
         "gap-question",
         "limitation-question"
@@ -294,6 +298,10 @@ public static class EvidenceDocsExporter
         ValidateRequiredOptions(options);
         var formats = NormalizeFormats(options.Format);
         var selectedFamilies = NormalizeFamilies(options.Families);
+        if (options.Families is null && (options.WebFormsPacketPaths is null || options.WebFormsPacketPaths.Count == 0))
+        {
+            selectedFamilies = selectedFamilies.Where(family => family != "webforms-modernization").ToArray();
+        }
         var minimumClaimLevel = NormalizeClaimLevel(options.MinimumClaimLevel ?? "hidden", "--minimum-claim-level");
         var generatedAt = ResolveGeneratedAt(options.Date, minimumClaimLevel);
         var catalog = await ReadClaimCatalogAsync(options.SourceClaimCatalogPath, cancellationToken);
@@ -305,6 +313,8 @@ public static class EvidenceDocsExporter
         var chunks = ProjectIndexChunks(input, selectedFamilies, diagnostics);
         chunks.AddRange(await ProjectDispatchCandidateChunksAsync(options.IndexPath, input, selectedFamilies, cancellationToken));
         chunks.AddRange(await ProjectReportChunksAsync(options, input.Sources, selectedFamilies, diagnostics, cancellationToken));
+        var webFormsProjection = await ProjectWebFormsPacketChunksAsync(options.WebFormsPacketPaths ?? [], input.Sources, selectedFamilies, cancellationToken);
+        chunks.AddRange(webFormsProjection.Chunks);
         AddRequestedUnsupportedFamilyGaps(input.Sources, selectedFamilies, chunks);
         AddCatalogUnmatchedGaps(input.Sources, catalog, selectedFamilies, chunks, diagnostics);
 
@@ -345,7 +355,8 @@ public static class EvidenceDocsExporter
             minimumClaimLevel,
             generatedAt,
             [],
-            limitations);
+            limitations,
+            webFormsProjection.Inputs);
 
         var files = BuildGeneratedFiles(options.OutputPath, manifest, chunks, formats);
         ValidateGeneratedStrings(files);
@@ -360,7 +371,8 @@ public static class EvidenceDocsExporter
             minimumClaimLevel,
             generatedAt,
             outputs,
-            limitations);
+            limitations,
+            webFormsProjection.Inputs);
         manifest = WithManifestHash(manifest);
         files["manifest.json"] = SerializeJson(manifest);
         ValidateGeneratedStrings(files);
@@ -1581,6 +1593,7 @@ public static class EvidenceDocsExporter
             "dependency-surface" or "data-surface" or "query-sql-shape" or "property-flow" => "What code has static evidence of touching this surface?",
             "package-config" => "What package or configuration metadata is present?",
             "release-review" => "What changed in the supplied release-review evidence?",
+            "webforms-modernization" => "What deterministic Web Forms modernization evidence is available?",
             "gap" => "What could TraceMap not prove or export?",
             "limitation" => "What limitations constrain this evidence?",
             _ => "What static evidence does this chunk cite?"
@@ -1613,6 +1626,9 @@ public static class EvidenceDocsExporter
                 break;
             case "release-review":
                 values.Add("snapshot-change-question");
+                break;
+            case "webforms-modernization":
+                values.Add("modernization-evidence-question");
                 break;
         }
 
@@ -1741,7 +1757,8 @@ public static class EvidenceDocsExporter
         string minimumClaimLevel,
         string generatedAt,
         IReadOnlyList<EvidenceDocsOutputSummary> outputs,
-        IReadOnlyList<EvidenceDocLimitation> limitations)
+        IReadOnlyList<EvidenceDocLimitation> limitations,
+        IReadOnlyList<EvidenceDocsInputSummary> supplementalInputs)
     {
         var inputs = new List<EvidenceDocsInputSummary>
         {
@@ -1757,6 +1774,7 @@ public static class EvidenceDocsExporter
                     : [],
                 input.Sources.Select(ToSourceRef).ToArray())
         };
+        inputs.AddRange(supplementalInputs);
         var chunkCounts = chunks
             .GroupBy(chunk => chunk.ChunkFamily, StringComparer.Ordinal)
             .OrderBy(group => Array.IndexOf(AllFamilies, group.Key))
@@ -1779,7 +1797,11 @@ public static class EvidenceDocsExporter
             minimumClaimLevel,
             formats,
             new EvidenceDocsGenerationSettings(selectedFamilies, minimumClaimLevel, IncludeRawSnippets: false),
-            inputs,
+            inputs.GroupBy(input => $"{input.Kind}|{input.Identity}", StringComparer.Ordinal)
+                .Select(group => group.First())
+                .OrderBy(input => input.Kind, StringComparer.Ordinal)
+                .ThenBy(input => input.Identity, StringComparer.Ordinal)
+                .ToArray(),
             outputs.OrderBy(output => output.Path, StringComparer.Ordinal).ToArray(),
             chunkCounts,
             omittedCounts,
@@ -2690,6 +2712,7 @@ public static class EvidenceDocsExporter
             "legacy" => LegacyRuleId,
             "release-review" => ReleaseReviewRuleId,
             "impact-summary" => ImpactSummaryRuleId,
+            "webforms-modernization" => WebFormsModernizationRuleId,
             "gap" => GapChunkRuleId,
             "limitation" => LimitationChunkRuleId,
             _ => UnsupportedFamilyRuleId
