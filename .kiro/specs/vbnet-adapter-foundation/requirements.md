@@ -29,9 +29,10 @@ data slices.
    file path and one-based line span, extractor ID/version, rule ID, evidence
    tier, and sorted safe properties.
 6. Syntax-only callee text SHALL NOT be represented as a compiler-resolved
-   target. Late binding, overload ambiguity, default members, reflection,
-   conditional compilation, and unavailable generated sources SHALL produce
-   explicit limitations or gaps.
+   target. Late binding, overload ambiguity, unresolved or ambiguous default
+   members, reflection, conditional compilation, and unavailable generated
+   sources SHALL produce explicit limitations or gaps. A default member that
+   Roslyn resolves unambiguously MAY retain `Tier1Semantic` evidence.
 7. The adapter SHALL populate shared symbols, occurrences, fact-symbol joins,
    call edges, and object-creation rows only when a backing fact exists and the
    stored tier/rule preserves the original claim strength.
@@ -56,4 +57,3 @@ data slices.
   usage claims.
 - BRD inference, modernization planning, or Angular/.NET/PostgreSQL generation.
 - Raw source snippets by default.
-

@@ -59,8 +59,8 @@ Public Class CatalogService
 
 End Class
 
-' Minimal "form-like" host class so the generated application designer has a
-' main-form target. Synthetic and never built in this fixture.
+' Minimal host form for the generated application designer's main-form target.
 Partial Public Class CatalogHostForm
+    Inherits System.Windows.Forms.Form
 
 End Class

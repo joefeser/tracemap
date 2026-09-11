@@ -56,7 +56,11 @@ creation rows, argument/parameter relationships, and direct
 containment/inheritance/implementation/override relationships, all
 `Tier1Semantic` with VB rule IDs.
 
-Expected gaps: none from the VB side beyond ordinary absence claims.
+The `catalog(0)` default-member call is expected to retain `Tier1Semantic`
+evidence only when Roslyn resolves `PriceCatalog.Quote` unambiguously. An
+unresolved or ambiguous default member must instead produce an explicit
+limitation or gap. Expected gaps for this buildable fixture are otherwise none
+from the VB side beyond ordinary absence claims.
 
 ## samples/vb-legacy-sample (syntax fallback fixture)
 
@@ -140,19 +144,10 @@ dotnet build samples/vb-modern-sample/VbModernSample.vbproj
 dotnet build samples/vb-legacy-sample/VbLegacyCatalog.vbproj
 dotnet build samples/vb-webforms-sample/VbWebFormsSample.vbproj
 
-# Syntax-only validation of every fixture .vb file (legacy and Web Forms
-# fixtures cannot be compiled, so parse-level checking is the strongest
-# portable check). Throwaway scratch console referencing
-# Microsoft.CodeAnalysis.VisualBasic 5.3.0 - the version pinned by
-# TraceMap.Core:
-#
-#   var tree = VisualBasicSyntaxTree.ParseText(text, path: file);
-#   var errors = tree.GetDiagnostics()
-#       .Where(d => d.Severity == DiagnosticSeverity.Error);
-#
-# over samples/vb-modern-sample, samples/vb-legacy-sample, and
-# samples/vb-webforms-sample.
-# Result: all 13 checked-in fixture .vb files parse with 0 errors.
+# Automated syntax validation of all 13 fixture .vb files. The focused test
+# uses Microsoft.CodeAnalysis.VisualBasic at TraceMap's pinned Roslyn version.
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~VbNetFixtureTests
 
 # Regression guard for the solution (no production code changed in this
 # fixture branch, but the suite must stay green).
@@ -161,10 +156,10 @@ git diff --check
 ./scripts/check-private-paths.sh
 ```
 
-Note: the parse-check scratch project was temporary and is not committed;
-recreate it with `dotnet new console` plus
-`dotnet add package Microsoft.CodeAnalysis.VisualBasic --version 5.3.0` when
-revalidating.
+`TraceMap.Tests` also references the modern fixture project with
+`ReferenceOutputAssembly=false`, so the standard solution build continuously
+compiles that fixture without adding intentionally failing legacy projects to
+the product solution.
 
 ## Commit-pinned open-source smoke candidates
 
