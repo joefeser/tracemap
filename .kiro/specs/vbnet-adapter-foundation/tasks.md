@@ -16,13 +16,13 @@ Issue: [#736](https://github.com/joefeser/tracemap/issues/736)
   coverage.
 - [x] 7. Merge VB results into shared artifacts with deterministic ordering and
   backing-fact integrity.
-- [ ] 8. Add synthetic semantic, fallback, mixed-language, generated-source,
+- [x] 8. Add synthetic semantic, fallback, mixed-language, generated-source,
   determinism, snapshot-mutation, and public-safety tests.
-- [ ] 9. Select and pin an open-source VB.NET smoke repository, document the
+- [x] 9. Select and pin an open-source VB.NET smoke repository, document the
   expected commit and coverage, and validate its artifacts.
-- [ ] 10. Update the rule catalog, adapter documentation, acceptance guidance,
+- [x] 10. Update the rule catalog, adapter documentation, acceptance guidance,
   and `docs/VALIDATION.md` with exact commands.
-- [ ] 11. Run focused and full validation, update implementation state, and
+- [x] 11. Run focused and full validation, update implementation state, and
   open a PR to `dev`.
 
 ## Validation floor

@@ -1,10 +1,13 @@
 # VB.NET Adapter Foundation Implementation State
 
-- Status: extraction-slice-implemented (spec tasks 1-7 complete; 8-11 open)
+- Status: complete (spec tasks 1-11 done; PR to `dev` opened from this branch)
 - Branch: `codex/issue-736-vbnet-adapter-foundation`
 - Slice start: `673cf6f19af4b470f4a031479317fed3947d26b9` (foundation slice,
   tasks 1-4)
 - Slice end: `23c5cca0d550faf93662e4d0ae35c10e8f8baf0c` (tasks 5-7)
+- Completion slice: `ad35b8ba` (smoke-surfaced fixes), `40f80456` (task 8
+  matrix), `139875fc` (task 9 pin), `27731336` (task 10 docs), plus the
+  task-11 state update
 - Base: `origin/dev` at `c50f82ce0920d3c948e6ec798c6eb4b4d0959c24`
 - Fixture corpus merged into this branch via PR #740 (merge commit
   `a357f7b9`); `samples/vb-modern-sample`, `samples/vb-legacy-sample`,
@@ -38,49 +41,47 @@
   coverage reduction and counted as `injectedTemplateErrorCount`; this
   bounded behavior is preserved unchanged.
 
-## Implemented in this slice (tasks 5-7)
+## Implemented in the extraction slice (tasks 5-7, commit 23c5cca0)
 
 - **Task 5 - compiler-backed semantic facts.** `VisualBasicSemanticExtractor`
-  (bumped to `vb-semantic/0.2.0`) now walks each repo-local, inventoried,
+  (identity `vb-semantic/0.2.0`) walks each repo-local, inventoried,
   non-generated VB document of every compiled project and emits Tier1 facts
-  under new rules: `vb.semantic.declarations.v1` (TypeDeclared for
+  under `vb.semantic.declarations.v1` (TypeDeclared for
   class/module/structure/interface/enum/delegate, MethodDeclared incl.
   constructors, PropertyDeclared, FieldDeclared, ParameterDeclared),
   `vb.semantic.propertyaccess.v1` (PropertyAccessed incl. unambiguous
   default-member indexing such as `catalog(0)`),
   `vb.semantic.methodinvocation.v1` (MethodInvoked),
   `vb.semantic.callgraph.v1` (CallEdge, `SemanticMethodInvocation` and
-  `SemanticObjectCreation` kinds),
-  `vb.semantic.objectcreation.v1` (ObjectCreated),
-  `vb.semantic.valueflow.v1` (ArgumentPassed with compiler-resolved parameter
-  binding via `IArgumentOperation`, covering named, ByRef, optional-bound,
-  and params-expanded arguments), and
+  `SemanticObjectCreation` kinds), `vb.semantic.objectcreation.v1`
+  (ObjectCreated), `vb.semantic.valueflow.v1` (ArgumentPassed with
+  compiler-resolved parameter binding via `IArgumentOperation`, covering
+  named, ByRef, optional-bound, and params-expanded arguments), and
   `vb.semantic.symbolrelationship.v1` (SymbolRelationship kinds
   `InheritsFrom`, `ExtendsInterface`, `ImplementsInterface`,
   `ImplementsInterfaceMember`, `Overrides`). Every fact carries rule ID,
   tier, repo-relative path, one-based line span, commit SHA, project path,
   and extractor identity/version.
-- **Symbol identity.** New `VisualBasicSymbolIdentityProvider` mirrors the
+- **Symbol identity.** `VisualBasicSymbolIdentityProvider` mirrors the
   canonical .NET normalization with `visualbasic` language tags, so VB-scan
   symbol rows are distinguishable from C# rows while keeping the same ID
   shape. Cross-language symbol-identity joins (VB scan symbols to C#-declared
-  symbols) are NOT established in this slice; display strings, assembly
-  names, and fact-level evidence still cross the language boundary. Both
-  rules' catalog limitations document this.
+  symbols) are NOT established; display strings, assembly names, and
+  fact-level evidence still cross the language boundary. Both rules' catalog
+  limitations document this.
 - **Deliberate exclusions (documented in catalog limitations).** Event
-  declarations, `Handles`/`AddHandler`/`RemoveHandler`/`RaiseEvent`/ and
+  declarations, `Handles`/`AddHandler`/`RemoveHandler`/`RaiseEvent`/
   `WithEvents` wiring are never promoted to resolved event edges (#738 owns
   event composition; tests assert none appear). Operator/`Declare`
-  (P/Invoke) statements, event declarations, and LocalAlias/FieldAlias
-  families are not emitted in this slice. Designer/generated documents are
-  not analyzed for semantic facts. Unresolved or late-bound call sites
-  produce no fact (visible only through compiler-diagnostic gaps), never a
-  guessed target.
-- **Task 6 - bounded per-file syntax fallback.** New
-  `VisualBasicSyntaxExtractor` (`vb-syntax/0.1.0`) runs inside the shared
-  SyntaxFallback stage over inventoried VB files that received NO
-  compiler-resolved coverage (`SemanticAnalysisUnavailable` Tier4 gap per
-  file under `vb.semantic.workspace.v1`). It emits Tier3 facts under
+  (P/Invoke) statements and LocalAlias/FieldAlias families are not emitted in
+  this slice. Designer/generated documents are not analyzed for semantic
+  facts. Unresolved or late-bound call sites produce no fact (visible only
+  through compiler-diagnostic gaps), never a guessed target.
+- **Task 6 - bounded per-file syntax fallback.** `VisualBasicSyntaxExtractor`
+  (`vb-syntax/0.1.0`) runs inside the shared SyntaxFallback stage over
+  inventoried VB files that received NO compiler-resolved coverage
+  (`SemanticAnalysisUnavailable` Tier4 gap per file under
+  `vb.semantic.workspace.v1`). It emits Tier3 facts under
   `vb.syntax.declarations.v1`, `vb.syntax.memberaccess.v1`,
   `vb.syntax.invocation.v1`, `vb.syntax.callgraph.v1`, and
   `vb.syntax.objectcreation.v1` with text-only callees (`SyntaxInvocation` /
@@ -95,13 +96,74 @@
   `symbols` (language `visualbasic`), `fact_symbols`, `symbol_occurrences`,
   `call_edges`, `object_creations`, `argument_flows`,
   `symbol_relationships`, and `parameter_forward_edges` from VB evidence
-  with no new schema. `ProjectFileReader` now reads target frameworks and
+  with no new schema. `ProjectFileReader` reads target frameworks and
   package references for `VisualBasicProject` inventory items
   (`manifestKind=vbproj`); `PackageReferenced` facts set `projectPath` for
   `.vbproj`. Project *references* are not read by `ProjectFileReader` for
   either language (MSBuild workspace loading and binlog evidence carry
   them); VB is at C# parity. Ordering stays deterministic through
   `SemanticExtractionResultMerge` and the existing final fact sort.
+
+## Implemented in the completion slice (tasks 8-11)
+
+- **Two shared-code defects surfaced by the pinned smoke (commit ad35b8ba).**
+  1. `LegacyWebFormsExtractor.WebFormsDirectEvidenceIndex.SourceMemberName`
+     threw `ArgumentOutOfRangeException` on fact symbol text shaped like
+     `()` — the Visual Basic display string of an anonymous-method caller
+     (`Sub() ...` lambdas), where the member-name portion is empty. The
+     member-name join now returns null for signature-shaped text; such
+     symbols still join by full symbol text. Regression-covered.
+  2. `BuildEnvironmentDiagnosticExtractor.SafeDiagnosticIdRegex` only
+     accepted `CS`/`MSB` ids, so Visual Basic `BCxxxxx` compiler diagnostic
+     ids were dropped from `vb.semantic.workspace.v1` gaps. The pattern now
+     also accepts `BCxxxxx`. Besides labeling gaps, this stopped silent
+     collapse of distinct compiler diagnostics: the final fact list dedupes
+     by FactId, which hashes all properties, and gaps without a diagnostic
+     id at the same location shared identical properties and FactIds. VB now
+     behaves like C#, whose gaps always carried `CSxxxxx` ids. Visible
+     effect: the legacy fixture scan went from 140 to 163 facts — 23 gap
+     facts that previously collapsed are now distinct; Tier1 counts are
+     unchanged.
+- **Task 8 - validation matrix (`VisualBasicValidationMatrixTests`, 8
+  tests).** Generated/designer-source handling (designer/`.g.vb` skipped by
+  semantic analysis and fallback under the documented filename-convention
+  boundary; `<auto-generated>`-header files keep compiler-resolved analysis
+  like C# and stay protected compilation inputs); protected-input mutation
+  inside the live capture-extract-verify sequence failing with the typed
+  `SourceSnapshotException` (including mutating a designer file); per-file
+  semantic/syntax-fallback boundary (compiled file Tier1-only, orphan file
+  Tier3-only with exactly one `SemanticAnalysisUnavailable` gap); sanitized
+  gap honesty over the legacy fixture (category-only messages, no paths or
+  source text, bounded `BCxxxxx` ids, no Tier3 duplicates for partially
+  bound files); byte-identical repeated CLI scans; public artifact safety
+  over every output file (temp path, value sentinel, and a parse-broken
+  file's unique identifier must not appear — raw compiler diagnostic text is
+  suppressed); and cross-family symbol-identity stability for modules,
+  default properties, constructors (`.ctor`), named arguments, overrides,
+  and interface-member implementations.
+- **Task 9 - pinned OSS smoke.** Pinned `community-visual-basic`
+  (`CommunityVB/Community.VisualBasic`, MIT) at
+  `20d2a51dfc9f342848ad134952ceaa8d79302559` (re-verified via `git
+  ls-remote` and pinned checkout on 2026-09-11), wired into
+  `scripts/smoke-open-source-repos.sh`, documented with recorded totals in
+  `docs/VBNET_FIXTURES.md`. Candidates `dotnet/roslyn`, `mono/mono-basic`,
+  and `dotnet/docs` are documented as considered and not pinned.
+  Operational requirement discovered and documented: the clone must be reset
+  with `git clean -fdx` between scans because design-time builds write
+  `obj/` state inside the clone that changes later design-time loads
+  (without the reset, fact counts drifted between runs; with it, repeated
+  scans are byte-identical).
+- **Task 10 - documentation.** New `docs/VBNET_ADAPTER.md` (extractor
+  identities, fact families, tiers, fallback boundary, supported project
+  types, explicit not-established limits: cross-language symbol-identity
+  joins and Web Forms event wiring). `docs/VALIDATION.md` gained a VB.NET
+  adapter section with exact commands and expected fixture postures plus the
+  OSS smoke table row. `docs/ACCEPTANCE.md` gained VB acceptance bullets.
+  `rules/rule-catalog.yml` documents the bounded BC diagnostic id on
+  `vb.semantic.workspace.v1` gaps.
+- **No changes to C# extraction.** The completion slice touched only the two
+  shared-code defects above plus tests/docs; the full suite and the C#
+  regression tests stay green.
 
 ## Key decisions and oddities
 
@@ -110,89 +172,96 @@
   partial binding keeps its Tier1 facts and compiler-diagnostic gaps; adding
   Tier3 duplicates would blur evidence strength. This differs from C#, whose
   syntax extractor runs unconditionally; the difference is intentional and
-  requirement-driven (fallback "when loading/compilation is incomplete").
+  requirement-driven.
 - **Broken-vbproj behavior.** An unparseable `.vbproj` does not always throw
   from `OpenProjectAsync`; MSBuildWorkspace may surface it as a workspace
   diagnostic plus a compilation diagnostic at the project path. The scan
-  stays `FailedOrPartial`/`...Reduced` with sanitized gaps either way, and
-  the fallback still covers readable VB files. The focused test asserts the
-  reduced posture rather than one specific gapKind for this reason.
+  stays `FailedOrPartial`/`...Reduced` with sanitized gaps either way.
 - **Sanitized no-project gap.** A repo with VB files but no VB project emits
   the `NoVisualBasicProjectOrSolution` gap whose manifest message is the
-  sanitized category (e.g. `UncategorizedWorkspaceFailure`); the gap kind
-  remains visible on the fact. This mirrors C# symmetric behavior and was
-  left unchanged.
+  sanitized category. This mirrors C# symmetric behavior.
 - **My-template exclusion preserved.** The bounded
   no-source-location/My-template suppression and
   `injectedTemplateErrorCount` reporting are unchanged; source-referencing
-  compiler errors still reduce coverage (legacy/webforms fixtures remain
-  reduced with partial Tier1 evidence).
-- **C# behavior preserved.** No changes to C# extraction, tiering, or fact
-  families. The only shared-code changes: `ProjectFileReader` kind filters
-  (additive), `PackageReferenced` projectPath `.vbproj` acceptance
-  (additive), and the new VB syntax-fallback call in `ScanEngine`. The C#
-  no-regression test over `samples/modern-sample` still passes, and the full
-  suite is green.
-- **MSBuildRegistrationFailed watch.** No recurrence during this slice
-  (dozens of scans + full suite). The single historical non-reproducing
-  occurrence from the foundation slice remains documented here; nothing is
-  suppressed.
+  compiler errors still reduce coverage.
+- **Designer boundary detail.** Semantic analysis skips designer/generated
+  documents by filename convention (`.designer.vb`, `.g.vb`, `.generated.vb`,
+  assembly-info); files whose only generated marker is an
+  `<auto-generated>` header are analyzed semantically (C# parity — the C#
+  semantic extractor also analyzes them) and only skip the syntax fallback.
+  Both behaviors are pinned by tests.
+- **Fixture `obj/` state.** Design-time builds write `obj/`/`bin/` into
+  scanned fixture directories (gitignored). Repeated scans of the same
+  checkout are stable, but a cleaned checkout can legitimately produce
+  different compiler-diagnostic populations than an accumulated one. The
+  OSS smoke therefore requires `git clean -fdx` between runs; checked-in
+  fixture expectations were recorded on a clean checkout.
 - One intentional asymmetry: `ReadTargetFrameworks` reads SDK-style
   `TargetFramework`/`TargetFrameworks` elements only; legacy
   `TargetFrameworkVersion` (vb-webforms/vb-legacy) is covered by the build
   environment diagnostics, same as legacy C# projects.
+- **MSBuildRegistrationFailed watch.** No recurrence during this slice
+  (dozens of scans + full suite). The single historical non-reproducing
+  occurrence from the foundation slice remains documented here; nothing is
+  suppressed.
+- Pre-existing analyzer note: `VisualBasicSemanticExtractor.cs(613)` emits
+  an RS1039 warning claiming `GetDeclaredSymbol(MethodBaseSyntax)` always
+  returns null; runtime behavior is proven otherwise by the MethodDeclared
+  assertions across the VB suites (constructors and methods emit). Left
+  unchanged; not introduced by this branch.
 
-## Tests added (this slice)
+## Tests added (completion slice)
 
-`src/dotnet/tests/TraceMap.Tests/VisualBasicExtractionTests.cs` (14 tests):
-compiler-resolved declarations; overload-resolved call edges (Decimal vs
-Integer `Sum`); interface/inheritance/override relationships; default-member
-property access; argument flow for named/ByRef/params arguments; event-wiring
-non-promotion over modern+webforms fixtures; orphan-file syntax fallback with
-explicit gaps; failed-project-load fallback with reduced labels; no Tier3
-duplicates for semantically analyzed files; shared SQLite join coverage
-(call_edges/object_creations/argument_flows/symbol_relationships/
-fact_symbols/symbol_occurrences/parameter_forward_edges, language tagging);
-`.vbproj` target framework + package reference facts; mixed-solution
-single-ownership without duplication; fact-level determinism; and privacy
-(no absolute paths, no literal values; sentinel-based).
+`src/dotnet/tests/TraceMap.Tests/VisualBasicValidationMatrixTests.cs`
+(8 tests): generated/designer boundary + designer mutation protection;
+protected-source mutation in the live scan sequence; per-file fallback
+boundary; legacy reduced-coverage gap sanitization + BC ids + no-duplicate
+assertions; byte-identical repeated CLI scans; public artifact safety;
+symbol-identity stability across fact families and VB constructs; lambda
+caller-text regression over the full scan pipeline.
 
 ## Validation recorded (2026-09-11, macOS arm64, .NET SDK 10.0.302)
 
-- `dotnet build src/dotnet/TraceMap.sln` - clean.
-- Focused: `VisualBasicExtractionTests` + `VisualBasicFoundationTests` +
-  `VbNetFixtureTests` - 26/26 passed.
-- Full `dotnet test src/dotnet/TraceMap.sln` - 1858/1858 passed.
-- CLI scans (final code):
+- `dotnet build src/dotnet/TraceMap.sln` - clean (one pre-existing RS1039
+  analyzer warning, see notes).
+- Full `dotnet test src/dotnet/TraceMap.sln` - 1866/1866 passed (was 1858
+  before task 8).
+- Focused: `FullyQualifiedName~VisualBasic|FullyQualifiedName~VbNetFixture`
+  - 34/34 passed (14 extraction + 9 foundation + 8 validation matrix +
+    3 fixture).
+- CLI fixture scans (final code):
   - `samples/vb-modern-sample` -> `Level1SemanticAnalysis` / `Succeeded`,
-    220 facts, all Tier1 VB families present (31 call edges, 31 argument
-    flows, 6 object creations, 6 symbol relationships, 119 `visualbasic`
-    symbols), 9 parameter-forward edges.
+    220 facts (206 Tier1): 31 call edges, 31 argument flows, 6 object
+    creations, 6 symbol relationships, 119 `visualbasic` symbols,
+    9 parameter-forward edges. Repeat scan byte-identical
+    (`facts.ndjson` `cmp` clean).
   - `samples/vb-legacy-sample` -> `Level1SemanticAnalysisReduced` /
-    `FailedOrPartial`, 140 facts: sanitized compiler/workspace gaps plus 24
-    partial Tier1 declaration/access facts (vendor assembly missing).
+    `FailedOrPartial`, 163 facts: 24 partial Tier1 facts, 112 sanitized
+    workspace/compilation gaps carrying bounded BC ids (23 more gap facts
+    than the 140 recorded at the extraction slice; see the FactId
+    de-collision note above - Tier1 evidence is unchanged).
   - `samples/vb-webforms-sample` -> `Level1SemanticAnalysisReduced` /
-    `FailedOrPartial`, 121 facts: page-lifecycle handler declarations,
-    code-behind object creations, and status-notifier call evidence where
-    the compiler resolves them; event wiring never becomes edges.
+    `FailedOrPartial`, 151 facts: handler declarations, code-behind object
+    creations, and resolved calls only; event wiring never becomes edges.
 - `python3 scripts/validate-adapter-artifacts.py` passes on all three scan
-  outputs (also enforces rule-ID registration against `rules/rule-catalog.yml`).
-- Determinism: two consecutive modern-fixture scans produce byte-identical
-  `facts.ndjson` and identical fact signatures in-process; source snapshot
-  digests match.
-- Privacy: no private absolute paths and no raw diagnostic message text in
-  any of the three outputs; literal values are never stored (sentinel test).
+  outputs (enforces rule registration against `rules/rule-catalog.yml`).
+- Pinned OSS smoke (`community-visual-basic` @ `20d2a51d`):
+  `Level1SemanticAnalysisReduced` / `FailedOrPartial`, 71,940 facts,
+  6,341 `visualbasic` symbols, 1,087 `vb.semantic` call edges, 518 object
+  creations, 175 argument flows, 98 symbol relationships, 92
+  parameter-forward edges, 62,358 category-only `AnalysisGap` rows;
+  zero `vb.syntax.*` facts (per-file boundary); validator passes; no local
+  paths in any artifact; two clean-reset runs byte-identical.
+- Privacy: no local absolute paths and no raw diagnostic message text in any
+  validated output; value sentinels suppressed (test-enforced).
 - `git diff --check` clean; `scripts/check-private-paths.sh` passes.
-- MSBuildRegistrationFailed: 0 occurrences in all validation scans.
 
-## Remaining work
+## Remaining work / follow-ups
 
-- Task 8: full synthetic test matrix extension (generated-source,
-  snapshot-mutation during a live scan, expanded public-safety) on top of
-  tasks 5-7.
-- Task 9: pin and validate an open-source VB smoke repository (candidates
-  pre-researched in `docs/VBNET_FIXTURES.md`; re-verify pins).
-- Task 10: rule catalog/docs/acceptance updates beyond the catalog entries
-  already added here (adapter docs, acceptance guidance,
-  `docs/VALIDATION.md` exact commands).
-- Task 11: final validation pass and PR to `dev`.
+- Cross-language symbol-identity joins (VB symbols to C#-declared symbols)
+  remain unestablished; display-string and fact-level evidence cross the
+  language boundary. Future slice.
+- Event composition (Handles/AddHandler/WithEvents/RaiseEvent, .aspx control
+  events) is #738. Data/external boundaries (ADO-class surfaces) are #737.
+- `dotnet/roslyn` (VB compiler subtree) remains a future scale lane for a
+  second, larger VB smoke; not required by this spec.
