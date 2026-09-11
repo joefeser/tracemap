@@ -122,7 +122,10 @@ public sealed record EvidenceDocChunk(
     IReadOnlyList<EvidenceDocGap> Gaps,
     IReadOnlyList<EvidenceDocLimitation> Limitations,
     IReadOnlyList<EvidenceDocRedaction> Redactions,
-    IReadOnlyList<EvidenceDocLink> Links);
+    IReadOnlyList<EvidenceDocLink> Links)
+{
+    public IReadOnlyList<EvidenceDocRetrievalHint> RetrievalHints { get; init; } = [];
+}
 
 public sealed record EvidenceDocClaim(
     string Kind,
@@ -344,6 +347,7 @@ public static partial class EvidenceDocsExporter
             throw new InvalidOperationException("InputSchemaUnsupported: docs-export requires a TraceMap index with usable source or fact evidence.");
         }
 
+        chunks = AddRetrievalHints(chunks).ToList();
         chunks = AddNavigationLinks(SortChunks(chunks), formats).ToList();
         var limitations = BuildManifestLimitations(chunks, selectedFamilies);
         var manifest = BuildManifest(
@@ -1853,7 +1857,12 @@ public static partial class EvidenceDocsExporter
             {
                 files[ChunkPath(chunk)] = ChunkMarkdown(chunk);
             }
+
+            files["QUERY_RECIPES.md"] = EvidenceDocsQueryRecipes.RenderMarkdown(EvidenceDocsQueryRecipes.Build());
         }
+
+        var queryRecipes = EvidenceDocsQueryRecipes.Build();
+        files["query-recipes.json"] = EvidenceDocsQueryRecipes.RenderJson(queryRecipes);
 
         return files.ToDictionary(pair => pair.Key, pair => WithMarkdownHash(pair.Value), StringComparer.Ordinal);
     }
@@ -1868,7 +1877,9 @@ public static partial class EvidenceDocsExporter
                 var bytes = Encoding.UTF8.GetBytes(pair.Value);
                 return new EvidenceDocsOutputSummary(
                     pair.Key,
-                    pair.Key.EndsWith(".jsonl", StringComparison.Ordinal) ? "jsonl" : "markdown",
+                    pair.Key.EndsWith(".jsonl", StringComparison.Ordinal) ? "jsonl"
+                        : pair.Key.EndsWith(".json", StringComparison.Ordinal) ? "json"
+                        : "markdown",
                     SchemaVersion,
                     GeneratorName,
                     bytes.LongLength,
@@ -1907,6 +1918,7 @@ public static partial class EvidenceDocsExporter
         body.AppendLine("## Navigation");
         body.AppendLine();
         body.AppendLine("- [Chunk index](index.md)");
+        body.AppendLine("- [Evidence query recipes](QUERY_RECIPES.md)");
         foreach (var family in chunks.Select(chunk => chunk.ChunkFamily).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal))
         {
             body.AppendLine($"- [{EscapeText(TitleForFamily(family))} chunks](chunks/{EscapeInline(family)}/index.md)");
@@ -1979,6 +1991,18 @@ public static partial class EvidenceDocsExporter
 
         builder.AppendLine();
         builder.AppendLine(chunk.BodyMarkdown.TrimEnd());
+        if (chunk.RetrievalHints.Count > 0)
+        {
+            builder.AppendLine();
+            builder.AppendLine("## Evidence retrieval hints");
+            builder.AppendLine();
+            builder.AppendLine("These hints select read-only TraceMap evidence recipes; they do not add or upgrade a finding.");
+            foreach (var hint in chunk.RetrievalHints)
+            {
+                var parameters = string.Join(", ", hint.Parameters.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => $"{pair.Key}={pair.Value}"));
+                builder.AppendLine($"- `{EscapeInline(hint.RecipeId)}` with `{EscapeInline(parameters)}` — rule `{EscapeInline(hint.RuleId)}`, tier `{EscapeInline(hint.EvidenceTier)}`. {EscapeText(hint.Reason)}");
+            }
+        }
         builder.AppendLine();
         builder.AppendLine("## Citations");
         builder.AppendLine();
@@ -2156,6 +2180,10 @@ public static partial class EvidenceDocsExporter
             for (var i = 0; i < lines.Length; i++)
             {
                 var category = UnsafeCategory(lines[i]);
+                if (category == "raw-sql" && path is "query-recipes.json" or "QUERY_RECIPES.md")
+                {
+                    continue;
+                }
                 if (category is not null)
                 {
                     throw new InvalidOperationException($"UnsafeValueRejected: {UnsafeRejectedRuleId} [{Tier4Unknown}]: {category} at {path}:{i + 1}.");
@@ -2201,7 +2229,7 @@ public static partial class EvidenceDocsExporter
                     : $"UserFileCollision: {UserFileCollisionRuleId} [{Tier4Unknown}]: manifest.");
             }
 
-            if (relativePath == "chunks.jsonl")
+            if (relativePath is "chunks.jsonl" or "query-recipes.json")
             {
                 if (manifestGenerated && ManifestHasMatchingOutput(existingManifest!, relativePath, content)
                     || force && manifestHasGeneratedMarker)

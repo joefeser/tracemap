@@ -3349,7 +3349,7 @@ public static class TraceMapCommand
               --force                           Replace stale generated files after validation.
 
             Outputs:
-              manifest.json, chunks.jsonl, README.md, index.md, and chunk Markdown files depending on --format.
+              manifest.json, query-recipes.json, chunks.jsonl, README.md, index.md, QUERY_RECIPES.md, and chunk Markdown files depending on --format.
 
             Notes:
               Docs export emits deterministic evidence documents for external systems. TraceMap does not call LLMs, generate embeddings, write vector databases, prompt-classify claims, rank retrieval, or answer questions.

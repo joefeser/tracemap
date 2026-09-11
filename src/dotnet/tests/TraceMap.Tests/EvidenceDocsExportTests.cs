@@ -9,6 +9,68 @@ namespace TraceMap.Tests;
 public sealed class EvidenceDocsExportTests
 {
     [Fact]
+    public async Task Docs_export_emits_valid_bounded_query_recipes_and_typed_retrieval_hints()
+    {
+        using var temp = new TempDirectory();
+        var singlePath = CreateSingleIndex(temp.Path);
+        var combinedPath = CreateCombinedIndex(temp.Path);
+        var outputPath = Path.Combine(temp.Path, "docs-query-recipes");
+
+        var result = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(combinedPath, outputPath));
+
+        Assert.Contains("query-recipes.json", result.PlannedFiles);
+        Assert.Contains("QUERY_RECIPES.md", result.PlannedFiles);
+        Assert.Contains(result.Manifest.Outputs, output => output.Path == "query-recipes.json");
+        Assert.Contains(result.Manifest.Outputs, output => output.Path == "QUERY_RECIPES.md");
+        Assert.True(EvidenceDocsExporter.IsSelfConsistentMarkdown(await File.ReadAllTextAsync(Path.Combine(outputPath, "QUERY_RECIPES.md"))));
+        var catalog = EvidenceDocsQueryRecipes.Build();
+        Assert.Equal("tracemap-evidence-query-recipes.v1", catalog.SchemaVersion);
+        Assert.Equal(10, catalog.Recipes.Count);
+        Assert.Equal(EvidenceDocsQueryRecipes.RenderJson(catalog), EvidenceDocsQueryRecipes.RenderJson(EvidenceDocsQueryRecipes.Build()));
+        Assert.All(catalog.Recipes, recipe =>
+        {
+            Assert.Equal("docs-export.query-recipe.v1", recipe.RuleId);
+            Assert.All(recipe.SqlByInputKind.Values, sql =>
+            {
+                Assert.StartsWith("select ", sql.Trim(), StringComparison.OrdinalIgnoreCase);
+                Assert.Contains("limit $limit", sql, StringComparison.OrdinalIgnoreCase);
+            });
+        });
+        Assert.Contains(result.Chunks, chunk => chunk.RetrievalHints.Any(hint => hint.RecipeId == "fact-by-id"));
+        Assert.Contains(result.Chunks, chunk => chunk.RetrievalHints.Any(hint => hint.RecipeId == "facts-by-file-span"));
+        Assert.All(result.Chunks.SelectMany(chunk => chunk.RetrievalHints), hint =>
+        {
+            var recipe = Assert.Single(catalog.Recipes, recipe => recipe.RecipeId == hint.RecipeId);
+            Assert.Equal("docs-export.retrieval-hint.v1", hint.RuleId);
+            Assert.Equal(EvidenceTiers.Tier2Structural, hint.EvidenceTier);
+            Assert.NotEmpty(hint.Parameters);
+            Assert.NotEmpty(hint.SupportingIds);
+            Assert.Equal(
+                recipe.Parameters.Select(parameter => parameter.Name).OrderBy(value => value, StringComparer.Ordinal),
+                hint.Parameters.Keys.OrderBy(value => value, StringComparer.Ordinal));
+            Assert.InRange(int.Parse(hint.Parameters["limit"]), 1, 1000);
+        });
+
+        await EnsureCallRecipeTableAsync(singlePath, combined: false);
+        await EnsureCallRecipeTableAsync(combinedPath, combined: true);
+        await AssertRecipesExecuteAsync(singlePath, "single-index", catalog);
+        await AssertRecipesExecuteAsync(combinedPath, "combined-index", catalog);
+
+        var unsafeCatalog = catalog with
+        {
+            Recipes = [catalog.Recipes[0] with
+            {
+                SqlByInputKind = new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["combined-index"] = "delete from combined_facts;",
+                    ["single-index"] = "delete from facts;"
+                }
+            }, .. catalog.Recipes.Skip(1)]
+        };
+        Assert.Throws<InvalidOperationException>(() => EvidenceDocsQueryRecipes.Validate(unsafeCatalog));
+    }
+
+    [Fact]
     public async Task Docs_export_packages_static_dispatch_candidates_as_weak_review_evidence()
     {
         using var temp = new TempDirectory();
@@ -51,6 +113,56 @@ public sealed class EvidenceDocsExportTests
             && candidate.Claim.Kind == "weak-static-evidence"
             && candidate.BodyMarkdown.Contains("Symbol-backed dispatch candidates | `1`", StringComparison.Ordinal)
             && candidate.SupportingIds.Any(id => id.StartsWith("edge:", StringComparison.Ordinal)));
+    }
+
+    private static async Task AssertRecipesExecuteAsync(string indexPath, string inputKind, EvidenceQueryRecipeCatalog catalog)
+    {
+        await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = indexPath,
+            Mode = SqliteOpenMode.ReadOnly
+        }.ToString());
+        await connection.OpenAsync();
+        foreach (var recipe in catalog.Recipes)
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = recipe.SqlByInputKind[inputKind];
+            foreach (var parameter in recipe.Parameters)
+            {
+                object value = parameter.Name switch
+                {
+                    "limit" => 1,
+                    "start_line" or "end_line" => 1,
+                    _ => "not-present"
+                };
+                command.Parameters.AddWithValue($"${parameter.Name}", value);
+            }
+            await using var reader = await command.ExecuteReaderAsync();
+            Assert.Equal(recipe.ResultFields.Count, reader.FieldCount);
+        }
+    }
+
+    private static async Task EnsureCallRecipeTableAsync(string indexPath, bool combined)
+    {
+        await using var connection = new SqliteConnection($"Data Source={indexPath}");
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = combined
+            ? """
+              create table if not exists combined_call_edges (
+                combined_fact_id text primary key, source_index_id text not null, commit_sha text not null,
+                rule_id text not null, evidence_tier text not null, caller_symbol text, callee_symbol text not null,
+                call_kind text, file_path text not null, start_line integer not null, end_line integer not null
+              );
+              """
+            : """
+              create table if not exists call_edges (
+                fact_id text primary key, commit_sha text not null, rule_id text not null, evidence_tier text not null,
+                caller_symbol text, callee_symbol text not null, call_kind text, file_path text not null,
+                start_line integer not null, end_line integer not null
+              );
+              """;
+        await command.ExecuteNonQueryAsync();
     }
 
     [Fact]
