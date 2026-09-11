@@ -470,6 +470,8 @@ public static class RuleIds
     public const string LegacyWebFormsPostBackTarget = "legacy.webforms.postback-target.v1";
     public const string LegacyWebFormsDataBinding = "legacy.webforms.data-binding.v1";
     public const string LegacyWebFormsModernizationPacket = "legacy.webforms.modernization-packet.v1";
+    public const string DiagnosticWebFormsRawExactCallEvidence = "diagnostic.webforms.raw-exact-call-evidence.v1";
+    public const string DiagnosticWebFormsAnonymousCodePathReview = "diagnostic.webforms.anonymous-code-path-review.v1";
     public const string LegacyWinFormsInventory = "legacy.winforms.inventory.v1";
     public const string LegacyWinFormsControl = "legacy.winforms.control.v1";
     public const string LegacyWinFormsEventBinding = "legacy.winforms.event-binding.v1";

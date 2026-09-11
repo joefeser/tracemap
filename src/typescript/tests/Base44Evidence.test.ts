@@ -2,10 +2,12 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { buildBase44Evidence, diffBase44Evidence } from "../src/base44/Base44EvidencePacket";
+import { extractEntityShapeFacts } from "../src/extractors/Base44EntityShapeExtractor";
 import { createFactId } from "../src/facts/FactFactory";
-import { FactTypes } from "../src/facts/Models";
+import { FactTypes, ScanManifest } from "../src/facts/Models";
 
 const shaA = "a".repeat(64);
 const shaB = "b".repeat(64);
@@ -1628,8 +1630,11 @@ export async function run(runtimeFlags) {
     expect(Object.keys(first.packet.artifacts).sort()).toEqual([
       "facts.ndjson", "logs/analyzer.log", "report.md"
     ]);
+    expect(first.packet.scanner.artifactProfile).toBe("tracemap.base44.deterministic-artifacts.v1");
     const packetSchema = JSON.parse(await fs.readFile(path.resolve(process.cwd(), "../../docs/contracts/base44-static-evidence.v1.schema.json"), "utf8"));
     expect(packetSchema.properties.artifacts.required.sort()).toEqual(Object.keys(first.packet.artifacts).sort());
+    expect(packetSchema.properties.scanner.required).toContain("artifactProfile");
+    expect(packetSchema.properties.scanner.properties.artifactProfile.const).toBe("tracemap.base44.deterministic-artifacts.v1");
     expect(first.packet.artifacts).toEqual(second.packet.artifacts);
     await expect(fs.stat(path.join(firstOut, "scan-manifest.json"))).resolves.toBeTruthy();
     await expect(fs.stat(path.join(firstOut, "index.sqlite"))).resolves.toBeTruthy();
@@ -1728,6 +1733,113 @@ export async function run(runtimeFlags) {
     for (const prohibited of ["secret-tool-name", "secret-status", "private-dynamic-field", "SKU-PRIVATE", "private-customer-id", "phantom-private-value"]) {
       expect(serialized).not.toContain(prohibited);
     }
+  });
+
+  it("bounds repeated payload-spread expansion and records a coverage gap", async () => {
+    const declarations = ["const a0 = { seed: 1 };"];
+    for (let index = 1; index <= 18; index++) {
+      declarations.push(`const a${index} = { ...a${index - 1}, ...a${index - 1} };`);
+    }
+    const sourceText = `import { base44 } from "@base44/sdk";
+${declarations.join("\n")}
+export async function run() { await base44.entities.Example.create(a18); }
+`;
+    const source = ts.createSourceFile("repeated-spreads.ts", sourceText, ts.ScriptTarget.Latest, true);
+    let call: ts.CallExpression | undefined;
+    const visit = (node: ts.Node): void => {
+      if (ts.isCallExpression(node) && node.expression.getText(source).endsWith(".create")) call = node;
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+    expect(call).toBeDefined();
+    const manifest: ScanManifest = {
+      scanId: "spread-budget",
+      repoName: "fixture",
+      remoteUrl: null,
+      branch: "main",
+      commitSha: "a".repeat(40),
+      scannerVersion: "test",
+      scannedAt: "2026-01-01T00:00:00Z",
+      analysisLevel: "Level3SyntaxAnalysis",
+      buildStatus: "NotRun",
+      solutions: [], projects: [], targetFrameworks: [], knownGaps: [],
+      sourceSnapshotDigest: "b".repeat(64)
+    };
+
+    const [payload] = extractEntityShapeFacts({
+      manifest,
+      node: call!,
+      source,
+      filePath: "repeated-spreads.ts",
+      sourceText,
+      entityName: "Example",
+      operationName: "create",
+      operationEvidenceId: "operation-1",
+      entitySelectorGap: "",
+      entitySelectorJson: "{}",
+      arrayIntrinsicsPristine: true,
+      sdkIdentityGap: "",
+      sdkIdentityJson: "{}"
+    });
+
+    expect(payload.properties.completeness).toBe("partial");
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("payload-complexity-limit");
+  });
+
+  it("bounds direct object-literal fields and records a coverage gap", () => {
+    const directFields = Array.from({ length: 700 }, (_, index) => `field_${index}: ${index}`).join(",");
+    const sourceText = `base44.entities.Example.create({${directFields}});`;
+    const source = ts.createSourceFile("wide-payload.ts", sourceText, ts.ScriptTarget.Latest, true);
+    let call: ts.CallExpression | undefined;
+    const visit = (node: ts.Node): void => {
+      if (ts.isCallExpression(node) && node.expression.getText(source).endsWith(".create")) call = node;
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+    const manifest: ScanManifest = {
+      scanId: "field-budget",
+      repoName: "fixture",
+      remoteUrl: null,
+      branch: "main",
+      commitSha: "a".repeat(40),
+      scannerVersion: "test",
+      scannedAt: "2026-01-01T00:00:00Z",
+      analysisLevel: "Level3SyntaxAnalysis",
+      buildStatus: "NotRun",
+      solutions: [], projects: [], targetFrameworks: [], knownGaps: [],
+      sourceSnapshotDigest: "b".repeat(64)
+    };
+
+    const [payload] = extractEntityShapeFacts({
+      manifest,
+      node: call!,
+      source,
+      filePath: "wide-payload.ts",
+      sourceText,
+      entityName: "Example",
+      operationName: "create",
+      operationEvidenceId: "operation-1",
+      entitySelectorGap: "",
+      entitySelectorJson: "{}",
+      arrayIntrinsicsPristine: true,
+      sdkIdentityGap: "",
+      sdkIdentityJson: "{}"
+    });
+
+    expect(JSON.parse(payload.properties.fieldsJson)).toHaveLength(512);
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("payload-complexity-limit");
+    expect(payload.properties.completeness).toBe("partial");
+  });
+
+  it("bounds fields added by post-initialization mutations", async () => {
+    const assignments = Array.from({ length: 700 }, (_, index) => `payload.field_${index} = ${index};`).join("\n");
+    const { packet } = await reviewFixture(`const payload = {}; ${assignments} base44.entities.WideMutationItem.create(payload);`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "WideMutationItem")!;
+
+    expect(JSON.parse(payload.properties.fieldsJson)).toHaveLength(512);
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("payload-complexity-limit");
+    expect(payload.properties.completeness).toBe("partial");
   });
 
   it("derives payload fields from source-proven React Query mutation callsites", async () => {
@@ -2576,6 +2688,25 @@ export function Screen() {
     expect(payload.properties.completeness).toBe("partial");
     expect(payload.evidenceTier).toBe("Tier4Unknown");
     expect(JSON.parse(payload.properties.analysisGapsJson)).toContain(gap);
+  });
+
+  it("keeps call-position-dependent identifier analysis separate across mutation callsites", async () => {
+    const { packet } = await mutationHookFixture(`
+export function Screen() {
+  const save = useWrite({ mutationFn: (payload) => base44.entities.CachedAliasItem.create(payload) });
+  const shared = { initial: 1 };
+  const payload = shared;
+  save.mutate(payload);
+  const alias = shared;
+  alias.after_first_call = 2;
+  save.mutate(payload);
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "CachedAliasItem")!;
+
+    expect(payload.properties.completeness).toBe("partial");
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("post-capture-alias-mutation-unresolved");
   });
 
   it("models a finite array push without erasing the array payload kind", async () => {
