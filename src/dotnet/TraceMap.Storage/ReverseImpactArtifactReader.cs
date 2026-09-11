@@ -125,6 +125,7 @@ public static class ReverseImpactArtifactReader
             }
 
             await ValidateFactSnapshotAsync(connection, transaction, manifest, cancellationToken);
+            await ValidateFactPropertiesJsonAsync(connection, transaction, cancellationToken);
             if (requireCallEdges)
                 await ValidateCallEdgeSnapshotAsync(connection, transaction, manifest, cancellationToken);
             return new ReverseImpactArtifactSummary(manifest, factCount);
@@ -252,6 +253,22 @@ public static class ReverseImpactArtifactReader
         if (Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken)) != 0)
         {
             throw Error("ReverseImpactArtifactMixedSnapshot", "A fact does not belong to the index scan manifest's repository and commit snapshot.");
+        }
+    }
+
+    private static async Task ValidateFactPropertiesJsonAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = "select count(*) from facts where json_valid(properties_json) <> 1;";
+        if (Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken)) != 0)
+        {
+            throw Error(
+                "ReverseImpactArtifactJsonInvalid",
+                "A fact contains invalid JSON metadata required by the standard query recipes.");
         }
     }
 

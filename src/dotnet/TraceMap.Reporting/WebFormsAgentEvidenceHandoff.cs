@@ -270,7 +270,7 @@ public static class WebFormsAgentEvidenceHandoff
             group => group.Key,
             group => group.Single().Clone(),
             StringComparer.Ordinal);
-        if (inspectionByCase.Count != cases.Length || cases.Any(value => !inspectionByCase.ContainsKey(value.Subject.CaseId)))
+        if (cases.Any(value => !inspectionByCase.ContainsKey(value.Subject.CaseId)))
             throw new InvalidDataException("AgentHandoffCaseInspectionMismatch");
         foreach (var handoff in cases)
         {
@@ -430,7 +430,7 @@ public static class WebFormsAgentEvidenceHandoff
             if (!byId.TryGetValue(recipeId, out var recipe)) throw new InvalidDataException("AgentHandoffRecipeUnavailable");
             var values = new SortedDictionary<string, string>(StringComparer.Ordinal);
             foreach (var (name, value) in parameters) values[name] = value;
-            values["limit"] = values.GetValueOrDefault("limit", "250");
+            values["limit"] = values.GetValueOrDefault("limit", RetrievalLimit(recipeId));
             var required = recipe.Parameters.Where(value => value.RequiredForInputKinds.Contains("single-index", StringComparer.Ordinal)).Select(value => value.Name).ToArray();
             if (required.Any(value => !values.ContainsKey(value)) || values.Keys.Any(value => recipe.Parameters.All(parameter => parameter.Name != value)))
                 throw new InvalidDataException("AgentHandoffRecipeParameterInvalid");
@@ -471,6 +471,13 @@ public static class WebFormsAgentEvidenceHandoff
             .Take(MaximumHintsPerCase)
             .ToArray();
     }
+
+    private static string RetrievalLimit(string recipeId) => recipeId switch
+    {
+        "fact-by-id" or "boundary-supporting-facts" => "1",
+        "facts-by-file-span" or "gap-neighborhood" => "100",
+        _ => "250"
+    };
 
     private static void ValidateCase(WebFormsAgentCaseHandoff handoff)
     {
