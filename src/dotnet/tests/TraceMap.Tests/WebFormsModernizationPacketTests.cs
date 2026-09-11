@@ -60,6 +60,12 @@ public sealed class WebFormsModernizationPacketTests
             Path.Combine(temp.Path, "unsafe-docs"),
             WebFormsPacketPaths: [unsafePath])));
         Assert.Contains("UnsafeValueRejected", unsafeError.Message, StringComparison.Ordinal);
+        Assert.Contains("chunk=", unsafeError.Message, StringComparison.Ordinal);
+        Assert.Contains("family=webforms-modernization", unsafeError.Message, StringComparison.Ordinal);
+        Assert.Contains("field=$.bodyMarkdown", unsafeError.Message, StringComparison.Ordinal);
+        Assert.Contains("valueLength=", unsafeError.Message, StringComparison.Ordinal);
+        Assert.Contains("valueSha256=", unsafeError.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("customer-private", unsafeError.Message, StringComparison.OrdinalIgnoreCase);
 
         var duplicatePath = Path.Combine(temp.Path, "duplicate-packet.json");
         var json = await File.ReadAllTextAsync(written.JsonPath);
