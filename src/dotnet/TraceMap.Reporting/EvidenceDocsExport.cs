@@ -309,6 +309,7 @@ public static partial class EvidenceDocsExporter
     private static readonly Regex RawSqlPattern = new(@"\b(select|insert|update|delete|merge)\b.+\b(from|into|set|where|values)\b", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
     private static readonly Regex ConfigSecretPattern = new(@"(password|passwd|pwd|secret|token|apikey|api_key|connectionstring|connection string)\s*[=:]", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
     private static readonly Regex CredentialPattern = new(@"(sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16})", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
+    private static readonly Regex StackTracePattern = new(@"(?:\bSystem\.(?:[A-Za-z_][A-Za-z0-9_`]*\.)*[A-Za-z_][A-Za-z0-9_`]*Exception\b(?:\s*:\s*|\s+at\s+)|(?:^|\s)at\s+[A-Za-z_][A-Za-z0-9_.+`<>]*\([^)]*\)|--- End of stack trace)", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
     private static readonly Regex SafeMetadataKeyPattern = new(@"^[A-Za-z0-9_.-]+$", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
     private static readonly Regex ContentHashLinePattern = new(@"tracemap_content_sha256: [0-9a-f]{64}", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
     private static readonly Regex RepeatedDashPattern = new("-+", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
@@ -2350,6 +2351,16 @@ public static partial class EvidenceDocsExporter
             var lines = content.Split('\n');
             for (var i = 0; i < lines.Length; i++)
             {
+                if (path == "chunks.jsonl")
+                {
+                    if (TryUnsafeJsonLineDiagnostic(lines[i], out var jsonCategory, out var context))
+                    {
+                        throw new InvalidOperationException($"UnsafeValueRejected: {UnsafeRejectedRuleId} [{Tier4Unknown}]: {jsonCategory} at {path}:{i + 1}{context}.");
+                    }
+
+                    continue;
+                }
+
                 var category = UnsafeCategory(lines[i]);
                 if (category == "raw-sql" && path is "query-recipes.json" or "QUERY_RECIPES.md")
                 {
@@ -2357,10 +2368,7 @@ public static partial class EvidenceDocsExporter
                 }
                 if (category is not null)
                 {
-                    var context = path == "chunks.jsonl"
-                        ? UnsafeJsonLineDiagnosticContext(lines[i], category)
-                        : string.Empty;
-                    throw new InvalidOperationException($"UnsafeValueRejected: {UnsafeRejectedRuleId} [{Tier4Unknown}]: {category} at {path}:{i + 1}{context}.");
+                    throw new InvalidOperationException($"UnsafeValueRejected: {UnsafeRejectedRuleId} [{Tier4Unknown}]: {category} at {path}:{i + 1}.");
                 }
             }
 
@@ -2372,24 +2380,36 @@ public static partial class EvidenceDocsExporter
         }
     }
 
-    private static string UnsafeJsonLineDiagnosticContext(string json, string expectedCategory)
+    private static bool TryUnsafeJsonLineDiagnostic(string json, out string category, out string context)
     {
+        if (string.IsNullOrEmpty(json))
+        {
+            category = string.Empty;
+            context = string.Empty;
+            return false;
+        }
+
         try
         {
             using var document = JsonDocument.Parse(json);
             var root = document.RootElement;
             var chunkId = SafeDiagnosticJsonToken(root, "chunkId");
             var chunkFamily = SafeDiagnosticJsonToken(root, "chunkFamily");
-            if (TryFindUnsafeJsonString(root, "$", expectedCategory, out var field, out var value))
+            if (TryFindUnsafeJsonString(root, "$", out var field, out var fieldLine, out var value, out category))
             {
-                return $"; chunk={chunkId}; family={chunkFamily}; field={field}; valueLength={value.Length}; valueSha256={Hash(value, 64)}";
+                context = $"; chunk={chunkId}; family={chunkFamily}; field={field}#line={fieldLine}; valueLength={value.Length}; valueSha256={Hash(value, 64)}";
+                return true;
             }
 
-            return $"; chunk={chunkId}; family={chunkFamily}; field=unresolved; recordLength={json.Length}; recordSha256={Hash(json, 64)}";
+            category = string.Empty;
+            context = string.Empty;
+            return false;
         }
         catch (JsonException)
         {
-            return $"; chunk=unavailable; family=unavailable; field=unresolved; recordLength={json.Length}; recordSha256={Hash(json, 64)}";
+            category = UnsafeCategory(json) ?? "malformed-json";
+            context = $"; chunk=unavailable; family=unavailable; field=unresolved; recordLength={json.Length}; recordSha256={Hash(json, 64)}";
+            return true;
         }
     }
 
@@ -2409,9 +2429,10 @@ public static partial class EvidenceDocsExporter
     private static bool TryFindUnsafeJsonString(
         JsonElement element,
         string path,
-        string expectedCategory,
         out string field,
-        out string value)
+        out int fieldLine,
+        out string value,
+        out string category)
     {
         switch (element.ValueKind)
         {
@@ -2421,7 +2442,7 @@ public static partial class EvidenceDocsExporter
                     var propertyToken = IsSafeMetadataKey(property.Name)
                         ? property.Name
                         : $"property-{Hash(property.Name, 16)}";
-                    if (TryFindUnsafeJsonString(property.Value, $"{path}.{propertyToken}", expectedCategory, out field, out value))
+                    if (TryFindUnsafeJsonString(property.Value, $"{path}.{propertyToken}", out field, out fieldLine, out value, out category))
                     {
                         return true;
                     }
@@ -2431,7 +2452,7 @@ public static partial class EvidenceDocsExporter
                 var index = 0;
                 foreach (var item in element.EnumerateArray())
                 {
-                    if (TryFindUnsafeJsonString(item, $"{path}[{index}]", expectedCategory, out field, out value))
+                    if (TryFindUnsafeJsonString(item, $"{path}[{index}]", out field, out fieldLine, out value, out category))
                     {
                         return true;
                     }
@@ -2440,17 +2461,26 @@ public static partial class EvidenceDocsExporter
                 break;
             case JsonValueKind.String:
                 var candidate = element.GetString() ?? string.Empty;
-                if (UnsafeCategory(candidate) == expectedCategory)
+                var candidateLines = NormalizeLineEndings(candidate).Split('\n');
+                for (var lineIndex = 0; lineIndex < candidateLines.Length; lineIndex++)
                 {
-                    field = path;
-                    value = candidate;
-                    return true;
+                    var candidateCategory = UnsafeCategory(candidateLines[lineIndex]);
+                    if (candidateCategory is not null)
+                    {
+                        field = path;
+                        fieldLine = lineIndex + 1;
+                        value = candidateLines[lineIndex];
+                        category = candidateCategory;
+                        return true;
+                    }
                 }
                 break;
         }
 
         field = string.Empty;
+        fieldLine = 0;
         value = string.Empty;
+        category = string.Empty;
         return false;
     }
 
@@ -3371,7 +3401,7 @@ public static partial class EvidenceDocsExporter
             return "credential";
         }
 
-        if (value.Contains("System.", StringComparison.Ordinal) && value.Contains("Exception", StringComparison.Ordinal))
+        if (StackTracePattern.IsMatch(value))
         {
             return "stack-trace";
         }
