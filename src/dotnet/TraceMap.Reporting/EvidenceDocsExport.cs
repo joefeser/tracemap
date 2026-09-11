@@ -207,6 +207,13 @@ public sealed record EvidenceDocLink(
 
 public static partial class EvidenceDocsExporter
 {
+    internal enum IndexFactLoadMode
+    {
+        None,
+        GapsOnly,
+        All
+    }
+
     public const string SchemaVersion = "tracemap-evidence-docs.v1";
     public const string GeneratorName = "tracemap-docs-export";
     private const string GeneratorVersion = SchemaVersion;
@@ -319,7 +326,7 @@ public static partial class EvidenceDocsExporter
         var catalog = await ReadClaimCatalogAsync(options.SourceClaimCatalogPath, cancellationToken);
         var diagnostics = new List<EvidenceDocsDiagnostic>();
 
-        var input = await ReadIndexAsync(options.IndexPath, cancellationToken);
+        var input = await ReadIndexAsync(options.IndexPath, ResolveIndexFactLoadMode(selectedFamilies), cancellationToken);
         ApplyCatalogClaims(input.Sources, catalog, diagnostics);
 
         var chunks = ProjectIndexChunks(input, selectedFamilies, diagnostics);
@@ -622,7 +629,22 @@ public static partial class EvidenceDocsExporter
         return date;
     }
 
-    private static async Task<IndexInput> ReadIndexAsync(string indexPath, CancellationToken cancellationToken)
+    internal static IndexFactLoadMode ResolveIndexFactLoadMode(IReadOnlyList<string> selectedFamilies)
+    {
+        if (selectedFamilies.Any(family => family is not "webforms-modernization" and not "gap" and not "limitation"))
+        {
+            return IndexFactLoadMode.All;
+        }
+
+        return selectedFamilies.Contains("gap", StringComparer.Ordinal)
+            ? IndexFactLoadMode.GapsOnly
+            : IndexFactLoadMode.None;
+    }
+
+    private static async Task<IndexInput> ReadIndexAsync(
+        string indexPath,
+        IndexFactLoadMode factLoadMode,
+        CancellationToken cancellationToken)
     {
         if (!File.Exists(indexPath))
         {
@@ -647,19 +669,22 @@ public static partial class EvidenceDocsExporter
         if (await TableExistsAsync(connection, "index_sources", cancellationToken)
             && await TableExistsAsync(connection, "combined_facts", cancellationToken))
         {
-            return await ReadCombinedIndexAsync(connection, cancellationToken);
+            return await ReadCombinedIndexAsync(connection, factLoadMode, cancellationToken);
         }
 
         if (await TableExistsAsync(connection, "scan_manifest", cancellationToken)
             && await TableExistsAsync(connection, "facts", cancellationToken))
         {
-            return await ReadSingleIndexAsync(connection, cancellationToken);
+            return await ReadSingleIndexAsync(connection, factLoadMode, cancellationToken);
         }
 
         throw new InvalidOperationException("InputSchemaUnsupported: docs-export --index must contain TraceMap scan or combined index tables.");
     }
 
-    private static async Task<IndexInput> ReadCombinedIndexAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    private static async Task<IndexInput> ReadCombinedIndexAsync(
+        SqliteConnection connection,
+        IndexFactLoadMode factLoadMode,
+        CancellationToken cancellationToken)
     {
         var sources = new List<DocSource>();
         await using (var command = connection.CreateCommand())
@@ -688,14 +713,16 @@ public static partial class EvidenceDocsExporter
             }
         }
 
-        var sourceById = sources.ToDictionary(source => source.SourceId, StringComparer.Ordinal);
         var facts = new List<DocFact>();
-        await using (var command = connection.CreateCommand())
+        if (factLoadMode != IndexFactLoadMode.None)
         {
-            command.CommandText = """
+            var sourceById = sources.ToDictionary(source => source.SourceId, StringComparer.Ordinal);
+            await using var command = connection.CreateCommand();
+            command.CommandText = $"""
                 select combined_fact_id, source_index_id, original_fact_id, scan_id, commit_sha, fact_type, rule_id,
                        evidence_tier, source_symbol, target_symbol, contract_element, file_path, start_line, end_line, properties_json
                 from combined_facts
+                {GapFactWhereClause(factLoadMode)}
                 order by source_index_id, file_path, start_line, fact_type, combined_fact_id;
                 """;
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -733,7 +760,10 @@ public static partial class EvidenceDocsExporter
         return new IndexInput("combined-index", sources, facts);
     }
 
-    private static async Task<IndexInput> ReadSingleIndexAsync(SqliteConnection connection, CancellationToken cancellationToken)
+    private static async Task<IndexInput> ReadSingleIndexAsync(
+        SqliteConnection connection,
+        IndexFactLoadMode factLoadMode,
+        CancellationToken cancellationToken)
     {
         DocSource? source = null;
         await using (var command = connection.CreateCommand())
@@ -768,12 +798,14 @@ public static partial class EvidenceDocsExporter
         }
 
         var facts = new List<DocFact>();
-        await using (var command = connection.CreateCommand())
+        if (factLoadMode != IndexFactLoadMode.None)
         {
-            command.CommandText = """
+            await using var command = connection.CreateCommand();
+            command.CommandText = $"""
                 select fact_id, scan_id, commit_sha, fact_type, rule_id, evidence_tier, source_symbol, target_symbol,
                        contract_element, file_path, start_line, end_line, properties_json
                 from facts
+                {GapFactWhereClause(factLoadMode)}
                 order by file_path, start_line, fact_type, fact_id;
                 """;
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -800,6 +832,12 @@ public static partial class EvidenceDocsExporter
 
         return new IndexInput("single-index", [source], facts);
     }
+
+    private static string GapFactWhereClause(IndexFactLoadMode factLoadMode) => factLoadMode switch
+    {
+        IndexFactLoadMode.GapsOnly => "where fact_type = 'AnalysisGap' or fact_type like '%Gap'",
+        _ => string.Empty
+    };
 
     private static List<EvidenceDocChunk> ProjectIndexChunks(IndexInput input, IReadOnlyList<string> selectedFamilies, List<EvidenceDocsDiagnostic> diagnostics)
     {
@@ -866,7 +904,9 @@ public static partial class EvidenceDocsExporter
             }
         }
 
-        if (input.Facts.Count == 0 && selectedFamilies.Contains("gap", StringComparer.Ordinal))
+        if (input.Facts.Count == 0
+            && selectedFamilies.Contains("gap", StringComparer.Ordinal)
+            && ResolveIndexFactLoadMode(selectedFamilies) == IndexFactLoadMode.All)
         {
             chunks.Add(CreateGapChunk("no-facts", UnknownAnalysisRuleId, "missing-provenance", "gap", input.Sources, ["index:facts"], "hidden"));
         }

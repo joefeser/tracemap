@@ -58,6 +58,23 @@ source-overview,endpoint,route-flow,property-flow,dependency-surface,data-surfac
 Unselected families are recorded as `not_requested`. Requested families that
 the input cannot support emit rule-backed gaps.
 
+For a bounded Web Forms handoff from a very large scan, select only the packet,
+gap, and limitation families:
+
+```bash
+tracemap docs-export \
+  --index <index.sqlite> \
+  --webforms-packet <webforms-modernization.json> \
+  --families webforms-modernization,gap,limitation \
+  --out <docs-output> \
+  --format markdown,jsonl
+```
+
+This selection reads only index gap facts plus packet evidence. Omitting
+`--families` requests the full fact corpus; large indexes can require
+substantially more memory because the current all-family exporter materializes
+the generated corpus before writing it.
+
 ## Outputs
 
 Directory output uses schema `tracemap-evidence-docs.v1`:

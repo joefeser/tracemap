@@ -8,6 +8,17 @@ namespace TraceMap.Tests;
 
 public sealed class EvidenceDocsExportTests
 {
+    [Theory]
+    [InlineData("webforms-modernization,limitation", "None")]
+    [InlineData("webforms-modernization,gap,limitation", "GapsOnly")]
+    [InlineData("webforms-modernization,data-surface", "All")]
+    public void Docs_export_bounds_index_fact_loading_to_selected_families(
+        string families,
+        string expected)
+    {
+        Assert.Equal(expected, EvidenceDocsExporter.ResolveIndexFactLoadMode(families.Split(',')).ToString());
+    }
+
     [Fact]
     public async Task Docs_export_emits_valid_bounded_query_recipes_and_typed_retrieval_hints()
     {
