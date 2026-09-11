@@ -28,11 +28,12 @@ public sealed record EvidenceQueryRecipe(
 public sealed record EvidenceQueryParameter(
     string Name,
     string Type,
-    bool Required,
+    IReadOnlyList<string> RequiredForInputKinds,
     string Description);
 
 public sealed record EvidenceDocRetrievalHint(
     string RecipeId,
+    string InputKind,
     string RuleId,
     string EvidenceTier,
     string Reason,
@@ -136,7 +137,10 @@ public static class EvidenceDocsQueryRecipes
                 || !recipe.SqlByInputKind.ContainsKey("single-index")
                 || !recipe.SqlByInputKind.ContainsKey("combined-index")
                 || recipe.Parameters.Select(parameter => parameter.Name).Distinct(StringComparer.Ordinal).Count() != recipe.Parameters.Count
-                || recipe.Parameters.SingleOrDefault(parameter => parameter.Name == "limit") is not { Type: "integer", Required: true })
+                || recipe.Parameters.Any(parameter => parameter.RequiredForInputKinds.Count == 0
+                    || parameter.RequiredForInputKinds.Any(kind => !recipe.SupportedInputKinds.Contains(kind, StringComparer.Ordinal)))
+                || recipe.Parameters.SingleOrDefault(parameter => parameter.Name == "limit") is not { Type: "integer" } limitParameter
+                || !recipe.SupportedInputKinds.All(kind => limitParameter.RequiredForInputKinds.Contains(kind, StringComparer.Ordinal)))
             {
                 throw new InvalidOperationException("EvidenceQueryRecipeContractInvalid");
             }
@@ -160,7 +164,7 @@ public static class EvidenceDocsQueryRecipes
                     throw new InvalidOperationException("EvidenceQueryRecipeSqlTableUnsupported");
                 }
 
-                foreach (var parameter in recipe.Parameters.Where(parameter => parameter.Required))
+                foreach (var parameter in recipe.Parameters.Where(parameter => parameter.RequiredForInputKinds.Contains(inputKind, StringComparer.Ordinal)))
                 {
                     if (!normalized.Contains($"${parameter.Name}", StringComparison.Ordinal))
                     {
@@ -207,7 +211,7 @@ public static class EvidenceDocsQueryRecipes
                 .AppendLine("Parameters:");
             foreach (var parameter in recipe.Parameters)
             {
-                builder.AppendLine($"- `{parameter.Name}` (`{parameter.Type}`, required `{parameter.Required.ToString().ToLowerInvariant()}`): {parameter.Description}");
+                builder.AppendLine($"- `{parameter.Name}` (`{parameter.Type}`, required for `{string.Join("`, `", parameter.RequiredForInputKinds.OrderBy(value => value, StringComparer.Ordinal))}`): {parameter.Description}");
             }
             foreach (var inputKind in recipe.SupportedInputKinds.OrderBy(value => value, StringComparer.Ordinal))
             {
@@ -229,15 +233,16 @@ public static class EvidenceDocsQueryRecipes
             RecipeRuleId,
             "Tier2Structural",
             ["combined-index", "single-index"],
-            parameters,
+            parameters.Concat([SourceIndex()]).OrderBy(parameter => parameter.Name, StringComparer.Ordinal).ToArray(),
             ["evidence_id", "source_index_id", "commit_sha", "fact_type", "rule_id", "evidence_tier", "source_symbol", "target_symbol", "contract_element", "file_path", "start_line", "end_line"],
             new SortedDictionary<string, string>(StringComparer.Ordinal) { ["combined-index"] = combinedSql, ["single-index"] = singleSql },
             ["Treat every returned row as static evidence carrying its own rule, tier, commit, and source span.", "Preserve empty results as coverage-relative no-match outcomes rather than absence findings."],
             limitations);
 
-    private static EvidenceQueryParameter Text(string name, string description) => new(name, "string", true, description);
-    private static EvidenceQueryParameter Integer(string name, string description) => new(name, "integer", true, description);
-    private static EvidenceQueryParameter Limit() => new("limit", "integer", true, "Maximum rows; callers should use a positive bounded value.");
+    private static EvidenceQueryParameter Text(string name, string description) => new(name, "string", ["combined-index", "single-index"], description);
+    private static EvidenceQueryParameter Integer(string name, string description) => new(name, "integer", ["combined-index", "single-index"], description);
+    private static EvidenceQueryParameter Limit() => new("limit", "integer", ["combined-index", "single-index"], "Maximum rows; callers should use a positive bounded value.");
+    private static EvidenceQueryParameter SourceIndex() => new("source_index_id", "string", ["combined-index"], "Owning combined-index source ID retained by the evidence chunk.");
 
     private static string SingleFacts(string where) => $"""
         select fact_id as evidence_id, null as source_index_id, commit_sha, fact_type, rule_id, evidence_tier,
@@ -253,6 +258,7 @@ public static class EvidenceDocsQueryRecipes
                source_symbol, target_symbol, contract_element, file_path, start_line, end_line
         from combined_facts
         {where}
+          and source_index_id = $source_index_id
         order by source_index_id, file_path, start_line, combined_fact_id
         limit $limit;
         """;
@@ -271,6 +277,7 @@ public static class EvidenceDocsQueryRecipes
                caller_symbol as source_symbol, callee_symbol as target_symbol, call_kind as contract_element, file_path, start_line, end_line
         from combined_call_edges
         {where}
+          and source_index_id = $source_index_id
         order by source_index_id, file_path, start_line, combined_fact_id
         limit $limit;
         """;
@@ -290,6 +297,8 @@ public static partial class EvidenceDocsExporter
     private static EvidenceDocChunk WithRetrievalHints(EvidenceDocChunk chunk, IEnumerable<EvidenceDocRetrievalHint> hints)
     {
         var merged = chunk.RetrievalHints.Concat(hints)
+            .Select(hint => ScopeHint(chunk, hint))
+            .OfType<EvidenceDocRetrievalHint>()
             .GroupBy(HintIdentity, StringComparer.Ordinal)
             .Select(group => group.First())
             .OrderBy(hint => hint.RecipeId, StringComparer.Ordinal)
@@ -340,6 +349,7 @@ public static partial class EvidenceDocsExporter
         IReadOnlyList<string> supportingIds)
         => new(
             recipeId,
+            string.Empty,
             EvidenceDocsQueryRecipes.HintRuleId,
             "Tier2Structural",
             reason,
@@ -347,7 +357,41 @@ public static partial class EvidenceDocsExporter
             supportingIds.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray());
 
     private static string HintIdentity(EvidenceDocRetrievalHint hint)
-        => $"{hint.RecipeId}|{string.Join('|', hint.Parameters.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => $"{pair.Key}={pair.Value}"))}";
+        => $"{hint.InputKind}|{hint.RecipeId}|{string.Join('|', hint.Parameters.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => $"{pair.Key}={pair.Value}"))}";
+
+    private static EvidenceDocRetrievalHint? ScopeHint(EvidenceDocChunk chunk, EvidenceDocRetrievalHint hint)
+    {
+        var sources = chunk.SourceRefs.DistinctBy(source => source.SourceId).ToArray();
+        if (sources.Length != 1)
+        {
+            return null;
+        }
+
+        var inputKind = sources[0].SourceScope switch
+        {
+            "single-source" => "single-index",
+            "combined-source" => "combined-index",
+            _ => null
+        };
+        if (inputKind is null)
+        {
+            return null;
+        }
+
+        var parameters = new SortedDictionary<string, string>(
+            hint.Parameters.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+            StringComparer.Ordinal);
+        if (inputKind == "combined-index")
+        {
+            parameters["source_index_id"] = sources[0].SourceId;
+        }
+        else
+        {
+            parameters.Remove("source_index_id");
+        }
+
+        return hint with { InputKind = inputKind, Parameters = parameters };
+    }
 
     private static void ValidateRetrievalHints(IReadOnlyList<EvidenceDocChunk> chunks)
     {
@@ -357,19 +401,24 @@ public static partial class EvidenceDocsExporter
             if (hint.RuleId != EvidenceDocsQueryRecipes.HintRuleId
                 || hint.EvidenceTier != "Tier2Structural"
                 || !recipes.TryGetValue(hint.RecipeId, out var recipe)
+                || !recipe.SupportedInputKinds.Contains(hint.InputKind, StringComparer.Ordinal)
                 || hint.SupportingIds.Count == 0)
             {
                 throw new InvalidOperationException("EvidenceDocRetrievalHintInvalid");
             }
 
-            var expectedParameters = recipe.Parameters.Select(parameter => parameter.Name).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+            var expectedParameters = recipe.Parameters
+                .Where(parameter => parameter.RequiredForInputKinds.Contains(hint.InputKind, StringComparer.Ordinal))
+                .Select(parameter => parameter.Name)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray();
             var actualParameters = hint.Parameters.Keys.OrderBy(value => value, StringComparer.Ordinal).ToArray();
             if (!expectedParameters.SequenceEqual(actualParameters, StringComparer.Ordinal))
             {
                 throw new InvalidOperationException("EvidenceDocRetrievalHintParameterInvalid");
             }
 
-            foreach (var parameter in recipe.Parameters)
+            foreach (var parameter in recipe.Parameters.Where(parameter => parameter.RequiredForInputKinds.Contains(hint.InputKind, StringComparer.Ordinal)))
             {
                 var value = hint.Parameters[parameter.Name];
                 if (string.IsNullOrWhiteSpace(value)

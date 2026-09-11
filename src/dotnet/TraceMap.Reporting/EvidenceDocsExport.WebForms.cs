@@ -36,12 +36,13 @@ public static partial class EvidenceDocsExporter
                 throw new InvalidOperationException("InputSchemaUnsupported: docs-export requires webforms-modernization-packet.v1 JSON.", exception);
             }
 
-            if (packet.SchemaVersion != WebFormsModernizationPacketReporter.SchemaVersion
-                || packet.Sources.Count == 0
-                || string.IsNullOrWhiteSpace(packet.PacketId)
-                || string.IsNullOrWhiteSpace(packet.RuleId))
+            try
             {
-                throw new InvalidOperationException("InputSchemaUnsupported: docs-export requires webforms-modernization-packet.v1 JSON.");
+                StaticHtmlEvidenceExplorer.ValidateWebFormsPacket(packet, expectedCommitSha: null);
+            }
+            catch (Exception exception) when (exception is InvalidDataException or InvalidOperationException or ArgumentException or NullReferenceException)
+            {
+                throw new InvalidOperationException("InputSchemaUnsupported: docs-export requires a valid webforms-modernization-packet.v1 contract.", exception);
             }
 
             var sourceMap = MatchPacketSources(packet, indexSources);
@@ -83,7 +84,7 @@ public static partial class EvidenceDocsExporter
             if (selectedFamilies.Contains("gap", StringComparer.Ordinal))
             {
                 chunks.AddRange(packet.Gaps.OrderBy(value => value.GapId, StringComparer.Ordinal)
-                    .Select(value => CreateWebFormsGapChunk(packet, value, sourceMap, sourceRefs)));
+                    .Select(value => CreateWebFormsGapChunk(packet, value, sourceMap)));
             }
         }
 
@@ -95,9 +96,11 @@ public static partial class EvidenceDocsExporter
         var result = new Dictionary<string, DocSource>(StringComparer.Ordinal);
         foreach (var packetSource in packet.Sources)
         {
+            var packetCommitSha = CommitOrNull(packetSource.CommitSha);
             var matches = indexSources.Where(source =>
                     source.ScanId == packetSource.ScanId
-                    && source.CommitSha == packetSource.CommitSha)
+                    && packetCommitSha is not null
+                    && string.Equals(source.CommitSha, packetCommitSha, StringComparison.Ordinal))
                 .ToArray();
             if (matches.Length != 1)
             {
@@ -111,10 +114,16 @@ public static partial class EvidenceDocsExporter
     }
 
     private static DocSource SourceFor(WebFormsModernizationEvidence evidence, IReadOnlyDictionary<string, DocSource> sourceMap)
-        => sourceMap.Values.Single(source => source.CommitSha == evidence.CommitSha);
+        => SourceFor(evidence.CommitSha, sourceMap);
 
     private static DocSource SourceFor(WebFormsModernizationPathEvidence evidence, IReadOnlyDictionary<string, DocSource> sourceMap)
-        => sourceMap.Values.Single(source => source.CommitSha == evidence.CommitSha);
+        => SourceFor(evidence.CommitSha, sourceMap);
+
+    private static DocSource SourceFor(string commitSha, IReadOnlyDictionary<string, DocSource> sourceMap)
+    {
+        var normalized = CommitOrNull(commitSha);
+        return sourceMap.Values.Single(source => normalized is not null && string.Equals(source.CommitSha, normalized, StringComparison.Ordinal));
+    }
 
     private static EvidenceDocChunk CreateWebFormsOverviewChunk(WebFormsModernizationPacket packet, IReadOnlyList<EvidenceDocSourceRef> sourceRefs)
     {
@@ -222,6 +231,11 @@ public static partial class EvidenceDocsExporter
 
     private static EvidenceDocChunk CreateWebFormsSurfaceChunk(WebFormsModernizationPacket packet, WebFormsModernizationSurface value, DocSource source)
     {
+        var evidence = new[] { value.Evidence }.Concat(value.SupportingEvidence)
+            .DistinctBy(item => item.FactId)
+            .OrderBy(item => item.FactId, StringComparer.Ordinal)
+            .ToArray();
+        var citations = evidence.Select(item => Citation(item, source)).ToArray();
         var body = $"""
             ## Web Forms surface
 
@@ -234,7 +248,18 @@ public static partial class EvidenceDocsExporter
             | Controls | `{value.ControlIds.Count}` |
             | File span | `{EscapeInline(FormatSpan(value.Evidence))}` |
             """;
-        var chunk = CreateWebFormsChunk(packet, "surface", "Web Forms surface evidence", body, [Citation(value.Evidence, source)], [ToSourceRef(source)], [value.SurfaceId, .. value.SupportingFactIds], [value.Evidence.RuleId], [value.Evidence.EvidenceTier], [value.Evidence.CoverageLabel], value.Evidence.Limitations);
+        var chunk = CreateWebFormsChunk(
+            packet,
+            "surface",
+            "Web Forms surface evidence",
+            body,
+            citations,
+            [ToSourceRef(source)],
+            [value.SurfaceId, .. value.SupportingFactIds],
+            evidence.Select(item => item.RuleId).ToArray(),
+            evidence.Select(item => item.EvidenceTier).ToArray(),
+            evidence.Select(item => item.CoverageLabel).ToArray(),
+            evidence.SelectMany(item => item.Limitations).ToArray());
         return WithRetrievalHints(chunk, [Hint("webforms-surface-facts", "Retrieve retained facts explicitly associated with this Web Forms surface.", [("surface_id", value.SurfaceId), ("limit", "250")], [value.SurfaceId])]);
     }
 
@@ -357,36 +382,46 @@ public static partial class EvidenceDocsExporter
     private static EvidenceDocChunk CreateWebFormsGapChunk(
         WebFormsModernizationPacket packet,
         WebFormsModernizationGap value,
-        IReadOnlyDictionary<string, DocSource> sources,
-        IReadOnlyList<EvidenceDocSourceRef> sourceRefs)
+        IReadOnlyDictionary<string, DocSource> sources)
     {
+        var source = SourceFor(value.CommitSha, sources);
+        var sourceRef = ToSourceRef(source);
+        var safePath = SafeRelativePathOrNull(value.FilePath);
+        var exportedGapId = StableId("gap", "docs-export/webforms-gap/v1", [new("sourceId", source.SourceId), new("gapId", value.GapId)]);
         var gap = new EvidenceDocGap(
-            StableId("gap", "docs-export/webforms-gap/v1", [new("gapId", value.GapId)]),
+            exportedGapId,
             value.RuleId,
             value.EvidenceTier,
             value.Classification,
             "webforms-modernization",
-            sourceRefs,
+            [sourceRef],
             DistinctSorted([value.GapId, .. value.SupportingFactIds]),
-            value.Limitations);
-        var source = sources.Values.Single(item => item.CommitSha == value.CommitSha);
-        var citations = value.FilePath is null
+            value.Limitations.OrderBy(item => item, StringComparer.Ordinal).ToArray())
+        {
+            FilePath = safePath,
+            StartLine = safePath is null ? null : value.StartLine,
+            EndLine = safePath is null ? null : value.EndLine,
+            CommitSha = CommitOrNull(value.CommitSha),
+            ExtractorName = value.ExtractorId,
+            ExtractorVersion = value.ExtractorVersion
+        };
+        var citations = safePath is null
             ? Array.Empty<EvidenceDocCitation>()
             : [new EvidenceDocCitation(
-                StableId("citation", "docs-export/webforms-gap-evidence/v1", [new("gapId", value.GapId)]),
+                StableId("citation", "docs-export/webforms-gap-evidence/v1", [new("sourceId", source.SourceId), new("gapId", value.GapId)]),
                 source.Label,
                 source.Scope,
                 source.ScanId,
-                value.CommitSha,
+                CommitOrNull(value.CommitSha),
                 value.CoverageLabel,
-                SafeRelativePathOrNull(value.FilePath),
+                safePath,
                 value.StartLine,
                 value.EndLine,
                 [value.RuleId, WebFormsModernizationRuleId],
                 value.EvidenceTier,
                 value.ExtractorId,
                 value.ExtractorVersion,
-                value.SupportingFactIds,
+                DistinctSorted(value.SupportingFactIds),
                 [],
                 [packet.PacketId])];
         var body = $"""
@@ -404,8 +439,8 @@ public static partial class EvidenceDocsExporter
 
             This gap preserves bounded uncertainty and does not prove evidence or behavior is absent.
             """;
-        var limitationRecords = value.Limitations.Select(message => new EvidenceDocLimitation(
-            StableId("limitation", "docs-export/webforms-gap-limitation/v1", [new("gapId", value.GapId), new("message", message)]),
+        var limitationRecords = value.Limitations.Distinct(StringComparer.Ordinal).OrderBy(message => message, StringComparer.Ordinal).Select(message => new EvidenceDocLimitation(
+            StableId("limitation", "docs-export/webforms-gap-limitation/v1", [new("sourceId", source.SourceId), new("gapId", value.GapId), new("message", message)]),
             value.RuleId,
             EvidenceTiers.Tier4Unknown,
             message,
@@ -419,16 +454,16 @@ public static partial class EvidenceDocsExporter
             $"Web Forms packet gap: {value.Classification}.",
             body,
             citations,
-            sourceRefs,
+            [sourceRef],
             DistinctSorted([packet.PacketId, .. gap.SupportingIds]),
             DistinctSorted([GapChunkRuleId, WebFormsModernizationRuleId, value.RuleId]),
             [value.EvidenceTier],
             [value.CoverageLabel],
             [gap],
             limitationRecords);
-        return value.FilePath is null || value.StartLine is null || value.EndLine is null
+        return safePath is null || value.StartLine is null || value.EndLine is null
             ? chunk
-            : WithRetrievalHints(chunk, [Hint("gap-neighborhood", "Retrieve static evidence overlapping this gap's source span without treating it as gap closure.", [("file_path", value.FilePath), ("start_line", value.StartLine.Value.ToString()), ("end_line", value.EndLine.Value.ToString()), ("limit", "100")], [value.GapId])]);
+            : WithRetrievalHints(chunk, [Hint("gap-neighborhood", "Retrieve static evidence overlapping this gap's source span without treating it as gap closure.", [("file_path", safePath), ("start_line", value.StartLine.Value.ToString()), ("end_line", value.EndLine.Value.ToString()), ("limit", "100")], [exportedGapId])]);
     }
 
     private static EvidenceDocChunk CreateWebFormsChunk(
@@ -462,7 +497,7 @@ public static partial class EvidenceDocsExporter
             "Deterministic Web Forms packet evidence with TraceMap citations.",
             body,
             citations,
-            sourceRefs.DistinctBy(value => value.SourceId).ToArray(),
+            sourceRefs.DistinctBy(value => value.SourceId).OrderBy(value => value.SourceId, StringComparer.Ordinal).ToArray(),
             allSupporting,
             DistinctSorted([WebFormsModernizationRuleId, packet.RuleId, .. ruleIds]),
             tiers,
@@ -477,7 +512,7 @@ public static partial class EvidenceDocsExporter
             source.Label,
             source.Scope,
             source.ScanId,
-            evidence.CommitSha,
+            CommitOrNull(evidence.CommitSha) ?? source.CommitSha,
             evidence.CoverageLabel,
             SafeRelativePathOrNull(evidence.FilePath),
             evidence.StartLine,
@@ -487,7 +522,7 @@ public static partial class EvidenceDocsExporter
             evidence.ExtractorId,
             evidence.ExtractorVersion,
             DistinctSorted([evidence.FactId, .. evidence.SupportingFactIds]),
-            evidence.SupportingEdgeIds,
+            DistinctSorted(evidence.SupportingEdgeIds),
             []);
 
     private static EvidenceDocCitation Citation(WebFormsModernizationPathEvidence evidence, DocSource source)
@@ -496,7 +531,7 @@ public static partial class EvidenceDocsExporter
             source.Label,
             source.Scope,
             source.ScanId,
-            evidence.CommitSha,
+            CommitOrNull(evidence.CommitSha) ?? source.CommitSha,
             evidence.CoverageLabel,
             SafeRelativePathOrNull(evidence.FilePath),
             evidence.StartLine,
@@ -505,12 +540,14 @@ public static partial class EvidenceDocsExporter
             evidence.EvidenceTier,
             evidence.ExtractorId,
             evidence.ExtractorVersion,
-            evidence.SupportingFactIds,
+            DistinctSorted(evidence.SupportingFactIds),
             [],
             []);
 
     private static string FormatSpan(WebFormsModernizationEvidence evidence)
-        => $"{evidence.FilePath}:{evidence.StartLine}-{evidence.EndLine}";
+        => SafeRelativePathOrNull(evidence.FilePath) is { } path
+            ? $"{path}:{evidence.StartLine}-{evidence.EndLine}"
+            : "source-span-unavailable";
 
     private static IReadOnlyList<EvidenceDocSourceRef> SourceRefsOrPacketSources(
         IReadOnlyList<EvidenceDocSourceRef> sourceRefs,

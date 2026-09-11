@@ -85,6 +85,11 @@ Chunks also carry additive `retrievalHints`. Each hint names a recipe from
 chunk's citations or packet identity, and identifies the supporting evidence.
 Hints do not add a finding, raise an evidence tier, or close a gap.
 
+Gap records retain their own source references, commit identity, safe
+repository-relative file path and structured line span when available, plus
+extractor identity/version and supporting IDs. Metadata that is unavailable
+remains null on the gap rather than being inferred from an unrelated citation.
+
 Each chunk includes deterministic navigation links to its Markdown file, the
 family index, and the top-level docs index. Markdown output renders the same
 links near the top of each chunk and writes one family index per emitted chunk
@@ -174,6 +179,12 @@ variants are single-statement, parameterized, read-only, bounded by `$limit`,
 and restricted to documented TraceMap-owned evidence tables. Catalog validation
 rejects mutation or DDL tokens, multiple statements, missing parameters,
 unbounded recipes, and unapproved tables.
+
+Parameters declare the input kinds for which they are required. Every
+combined-index variant requires `source_index_id` and applies it as a predicate,
+so a file path, surface identity, or method symbol shared by multiple sources
+cannot consume another source's result budget. Chunk retrieval hints record the
+matching `inputKind` and include the owning combined-source ID when applicable.
 
 This internal retrieval SQL is not application SQL. It does not query an
 application database, expose captured SQL text, or prove runtime execution. A
