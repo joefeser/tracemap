@@ -428,6 +428,13 @@ public static class WebFormsAgentEvidenceHandoff
         {
             if (hints.Count >= MaximumHintsPerCase) return;
             if (!byId.TryGetValue(recipeId, out var recipe)) throw new InvalidDataException("AgentHandoffRecipeUnavailable");
+            var normalizedSupportingIds = supportingIds
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+                .Take(64)
+                .ToArray();
+            if (normalizedSupportingIds.Length == 0) return;
             var values = new SortedDictionary<string, string>(StringComparer.Ordinal);
             foreach (var (name, value) in parameters) values[name] = value;
             values["limit"] = values.GetValueOrDefault("limit", RetrievalLimit(recipeId));
@@ -435,7 +442,7 @@ public static class WebFormsAgentEvidenceHandoff
             if (required.Any(value => !values.ContainsKey(value)) || values.Keys.Any(value => recipe.Parameters.All(parameter => parameter.Name != value)))
                 throw new InvalidDataException("AgentHandoffRecipeParameterInvalid");
             hints.Add(new(recipeId, "single-index", recipe.RuleId, recipe.EvidenceTier, reason, values,
-                supportingIds.Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).Take(64).ToArray(),
+                normalizedSupportingIds,
                 recipe.ResultFields));
         }
 

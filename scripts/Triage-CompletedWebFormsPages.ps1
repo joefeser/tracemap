@@ -26,7 +26,7 @@ function Add-ClosedCount([hashtable]$Counts, [string]$Value, [string[]]$Allowed)
 }
 function Format-Counts([hashtable]$Counts) {
     if (-not $Counts.Count) { return 'none' }
-    return (($Counts.Keys | Sort-Object | ForEach-Object { "$_`:$($Counts[$_])" }) -join ',')
+    return ((@($Counts.Keys) | Sort-Object | ForEach-Object { "$_`:$($Counts[$_])" }) -join ',')
 }
 $stream = [IO.File]::OpenRead($ReportPath); $doc = $null
 try {
@@ -151,7 +151,7 @@ try {
     Write-Host "packetPartial=$($root.GetProperty('summary').GetProperty('truncated').GetBoolean())"
     foreach ($line in $lines) { Write-Host $line }
     foreach ($alias in @('page-004','page-026')) {
-        $matches = @($linked.Keys | Where-Object { $_.StartsWith("$alias|") } | Sort-Object)
+        $matches = @(@($linked.Keys) | Where-Object { $_.StartsWith("$alias|") } | Sort-Object)
         if (-not $matches.Count) { Write-Host "handlerFocus=$alias|exactBindingLinkedGaps=0|cause=not-established" }
         foreach ($key in $matches) { Write-Host "handlerFocus=$key|count=$($linked[$key])|link=exact-binding-support-not-proof-of-cause" }
     }

@@ -93,6 +93,9 @@ try {
     if (!$gitignore.Contains('/scripts/Run-FocusedWebFormsPageList.json', [StringComparison]::Ordinal)) {
         throw 'The private local configuration is not ignored.'
     }
+    if (!$gitignore.Contains('local-inspection-private/', [StringComparison]::Ordinal)) {
+        throw 'Private local inspection artifacts are not ignored.'
+    }
     Write-Host 'PASS focused Web Forms local configuration'
 }
 finally {

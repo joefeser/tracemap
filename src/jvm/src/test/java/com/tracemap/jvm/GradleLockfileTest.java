@@ -106,6 +106,18 @@ final class GradleLockfileTest {
     }
 
     @Test
+    void malformedLiteralLockfileVersionsAreHashedNotEmitted() throws Exception {
+        ScanResult result = scanLockfileRepo("com.example:fixture-lib:token secret=runtimeClasspath\n");
+
+        CodeFact fixtureLib = packageFact(result, "com.example:fixture-lib");
+        assertFalse(fixtureLib.properties().containsKey("resolvedVersion"));
+        assertFalse(fixtureLib.properties().containsKey("version"));
+        assertEquals("unsafe-package-version", fixtureLib.properties().get("redactionReason"));
+        assertEquals(32, fixtureLib.properties().get("versionHash").length());
+        assertFalse(result.facts().toString().contains("token secret"));
+    }
+
+    @Test
     void duplicateAndConflictingCoordinatesStayDeterministic() throws Exception {
         Path repo = lockfileRepo("""
             com.example:fixture-lib:1.2.3=compileClasspath

@@ -13,6 +13,7 @@ $safeExtractorIdPattern = '^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$'
 $safeExtractorVersionPattern = '^[A-Za-z0-9][A-Za-z0-9._-]{0,79}(?:/[A-Za-z0-9][A-Za-z0-9._+-]{0,39})?$'
 $invariantCulture = [Globalization.CultureInfo]::InvariantCulture
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
+$isWindowsPlatform = [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
 
 function Get-OptionalProperty {
     param(
@@ -32,7 +33,7 @@ function Test-WithinPath {
         [Parameter(Mandatory = $true)][string]$Parent
     )
 
-    $comparison = if ($IsWindows) {
+    $comparison = if ($isWindowsPlatform) {
         [StringComparison]::OrdinalIgnoreCase
     }
     else {
@@ -70,7 +71,7 @@ try {
     }
 
     if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
-        $OutputDirectory = if ($IsWindows) {
+        $OutputDirectory = if ($isWindowsPlatform) {
             "C:\work\tracemap-summary"
         }
         else {

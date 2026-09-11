@@ -120,7 +120,8 @@ public static class ReverseImpactArtifactReader
         {
             DataSource = fullPath,
             Mode = SqliteOpenMode.ReadOnly,
-            Cache = SqliteCacheMode.Private
+            Cache = SqliteCacheMode.Private,
+            Pooling = false
         }.ToString();
 
         try
@@ -189,7 +190,8 @@ public static class ReverseImpactArtifactReader
         {
             DataSource = fullPath,
             Mode = SqliteOpenMode.ReadOnly,
-            Cache = SqliteCacheMode.Private
+            Cache = SqliteCacheMode.Private,
+            Pooling = false
         }.ToString();
 
         try

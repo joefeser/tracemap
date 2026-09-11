@@ -152,14 +152,24 @@ internal sealed class ComReferenceWorkspaceFallback : IDisposable
             documents.Add(document);
             foreach (var import in document.Descendants().Where(element => element.Name.LocalName == "Import")
                          .Select(element => element.Attribute("Project")?.Value)
-                         .Where(value => !string.IsNullOrWhiteSpace(value) && !value!.Contains("$(", StringComparison.Ordinal)
-                             && value.IndexOfAny(['*', '?']) < 0))
+                         .Where(value => !string.IsNullOrWhiteSpace(value) && value!.IndexOfAny(['*', '?']) < 0))
             {
-                var importedPath = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(path)!, import!.Replace('\\', Path.DirectorySeparatorChar)));
+                var expandedImport = ExpandSupportedImportProperties(import!, path, projectDirectory);
+                if (expandedImport is null) continue;
+                var importedPath = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(path)!, expandedImport.Replace('\\', Path.DirectorySeparatorChar)));
                 if (File.Exists(importedPath) && IsWithinRoot(root, importedPath)) pending.Enqueue(importedPath);
             }
         }
         return documents;
+    }
+
+    private static string? ExpandSupportedImportProperties(string import, string importingDocumentPath, string projectDirectory)
+    {
+        var importingDirectory = Path.GetDirectoryName(importingDocumentPath)! + Path.DirectorySeparatorChar;
+        var expanded = import
+            .Replace("$(MSBuildThisFileDirectory)", importingDirectory, StringComparison.OrdinalIgnoreCase)
+            .Replace("$(MSBuildProjectDirectory)", projectDirectory, StringComparison.OrdinalIgnoreCase);
+        return expanded.Contains("$(", StringComparison.Ordinal) ? null : expanded;
     }
 
     private static bool IsWithinRoot(string root, string candidate)
