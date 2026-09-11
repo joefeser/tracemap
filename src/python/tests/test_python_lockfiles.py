@@ -383,6 +383,8 @@ def test_unsafe_names_and_versions_fail_closed(tmp_path: Path) -> None:
         "version = 1\n"
         '\n[[package]]\nname = "../etc/passwd"\nversion = "1.0.0"\nsource = { registry = "https://pypi.org/simple" }\n'
         '\n[[package]]\nname = "requests"\nversion = "git+https://example.invalid/x.git#deadbeef"\nsource = { registry = "https://pypi.org/simple" }\n'
+        '\n[[package]]\nname = "arbitrary"\nversion = "token secret"\nsource = { registry = "https://pypi.org/simple" }\n'
+        '\n[[package]]\nname = "padded"\nversion = " 1.2.3 "\nsource = { registry = "https://pypi.org/simple" }\n'
         '\n[[package]]\nname = "noversion"\nsource = { registry = "https://pypi.org/simple" }\n',
         encoding="utf-8",
     )
@@ -390,12 +392,21 @@ def test_unsafe_names_and_versions_fail_closed(tmp_path: Path) -> None:
     facts = read_lockfiles(tmp_path, _manifest("uv-unsafe"), [lock], [], [])
 
     packages = _package_facts(facts)
-    assert len(packages) == 1
-    requests = packages[0]
+    assert len(packages) == 3
+    requests = next(fact for fact in packages if fact.properties["packageName"] == "requests")
     assert requests.properties["packageName"] == "requests"
     assert "resolvedVersion" not in requests.properties
     assert requests.properties["redactionReason"] == "unsafe-package-version"
     assert requests.properties["versionHash"].startswith("version-hash:")
+    arbitrary = next(fact for fact in packages if fact.properties["packageName"] == "arbitrary")
+    assert "resolvedVersion" not in arbitrary.properties
+    assert "version" not in arbitrary.properties
+    assert arbitrary.properties["redactionReason"] == "unsafe-package-version"
+    assert arbitrary.properties["versionHash"].startswith("version-hash:")
+    assert "token secret" not in repr(facts)
+    padded = next(fact for fact in packages if fact.properties["packageName"] == "padded")
+    assert "resolvedVersion" not in padded.properties
+    assert padded.properties["redactionReason"] == "unsafe-package-version"
     gap_kinds = [fact.properties["gapKind"] for fact in _gap_facts(facts)]
     assert gap_kinds.count("python-lock-entry-unsafe") == 1
     assert gap_kinds.count("python-lock-entry-resolved-missing") == 1

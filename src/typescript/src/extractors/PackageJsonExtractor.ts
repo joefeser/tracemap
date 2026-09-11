@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import ts from "typescript";
 import { CodeFact, EvidenceTiers, FactTypes, FileInventoryItem, ScanManifest } from "../facts/Models";
 import { createEvidence, createFact } from "../facts/FactFactory";
 import { RuleIds, ScannerVersions } from "../facts/RuleIds";
@@ -161,6 +162,10 @@ async function extractPackageLockFacts(manifest: ScanManifest, repoPath: string,
     }
     try {
       const text = await fs.readFile(item.absolutePath, "utf8");
+      if (hasDuplicateJsonProperties(text)) {
+        facts.push(lockfileGap(manifest, item, "package-lock-duplicate-property", "npm package-lock.json contains duplicate object properties.", undefined, 1, gapCollector));
+        continue;
+      }
       const json = JSON.parse(text) as Record<string, unknown>;
       const lockfileVersion = typeof json.lockfileVersion === "number" ? json.lockfileVersion : Number(json.lockfileVersion);
       const packages = json.packages;
@@ -181,8 +186,8 @@ async function extractPackageLockFacts(manifest: ScanManifest, repoPath: string,
         const explicitName = typeof properties.name === "string" ? properties.name.trim() : "";
         const packageName = explicitName && isSafePackageName(explicitName) ? explicitName : installationName;
         const evidenceLine = lineOf(text, packagePath.replaceAll("\\", "/"));
-        const version = typeof properties.version === "string" ? properties.version.trim() : "";
-        if (!version) {
+        const version = typeof properties.version === "string" ? properties.version : "";
+        if (!version.trim()) {
           facts.push(lockfileGap(manifest, item, "package-lock-entry-version-missing", "npm lockfile package entry did not provide a resolved version.", packageName, evidenceLine, gapCollector));
           continue;
         }
@@ -193,7 +198,7 @@ async function extractPackageLockFacts(manifest: ScanManifest, repoPath: string,
         const depth = dependencyPathDepth(packagePath);
         const direct = isDirectLockEntry(packagePath, installationName, directGroups);
         const declaredGroups = directGroups.get(installationName) ?? [];
-        const safeVersion = packageVersionProperties(version);
+        const safeVersion = resolvedPackageVersionProperties(version);
         const packageProperties: Record<string, string> = {
           dependencyGroup: direct ? (declaredGroups.length === 1 ? declaredGroups[0] : "multiple") : "lockfile",
           dependencyRelation: direct ? "direct" : depth > 1 ? "transitive" : "unknown",
@@ -350,6 +355,44 @@ function packageVersionProperties(value: string): Record<string, string> {
     };
   }
   return { packageVersion: trimmed, version: trimmed };
+}
+
+const SAFE_LITERAL_VERSION = /^(?=[0-9A-Za-z._+!-]{1,128}$)(?=.*[0-9])[0-9A-Za-z][0-9A-Za-z._+!-]*$/u;
+
+function resolvedPackageVersionProperties(value: string): Record<string, string> {
+  const trimmed = value.trim();
+  if (value !== trimmed || !SAFE_LITERAL_VERSION.test(trimmed) || isUnsafePackageVersion(trimmed)) {
+    return {
+      versionHash: hash(value, 32),
+      redactionReason: "unsafe-package-version"
+    };
+  }
+  return { packageVersion: trimmed, version: trimmed };
+}
+
+function hasDuplicateJsonProperties(text: string): boolean {
+  const source = ts.parseJsonText("package-lock.json", text);
+  let duplicate = false;
+  const visit = (node: ts.Node): void => {
+    if (duplicate) return;
+    if (ts.isObjectLiteralExpression(node)) {
+      const seen = new Set<string>();
+      for (const property of node.properties) {
+        if (!ts.isPropertyAssignment(property)) continue;
+        const name = ts.isStringLiteralLike(property.name) || ts.isIdentifier(property.name)
+          ? property.name.text
+          : property.name.getText(source);
+        if (seen.has(name)) {
+          duplicate = true;
+          return;
+        }
+        seen.add(name);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return duplicate;
 }
 
 function isUnsafePackageVersion(value: string): boolean {

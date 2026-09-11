@@ -28,6 +28,7 @@ SUPPORTED_POETRY_LOCK_VERSIONS = {"1.0", "1.1", "2.0", "2.1"}
 
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$")
 _SAFE_HOST = re.compile(r"^[A-Za-z0-9.-]+(:[0-9]+)?$")
+_SAFE_LITERAL_VERSION = re.compile(r"^(?=[0-9A-Za-z._+!-]{1,128}$)(?=.*[0-9])[0-9A-Za-z][0-9A-Za-z._+!-]*$")
 _PACKAGE_HEADER = re.compile(r"^\s*\[\[package\]\]\s*(?:#.*)?$")
 
 
@@ -253,9 +254,9 @@ def _lockfile_fact(
         "surfaceKind": "package-config",
     }
     trimmed = resolved.strip()
-    if _unsafe_package_version(trimmed):
+    if resolved != trimmed or _unsafe_package_version(trimmed) or _SAFE_LITERAL_VERSION.fullmatch(trimmed) is None:
         props["redactionReason"] = "unsafe-package-version"
-        props["versionHash"] = f"version-hash:{sha256_hex(trimmed, 32)}"
+        props["versionHash"] = f"version-hash:{sha256_hex(resolved, 32)}"
     else:
         props["resolvedVersion"] = trimmed
         props["version"] = trimmed
