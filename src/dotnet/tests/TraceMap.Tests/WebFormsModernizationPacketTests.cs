@@ -109,6 +109,14 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Contains(docsA.Chunks, chunk => chunk.ChunkFamily == "webforms-modernization" && chunk.Title == "Web Forms evidence packet overview");
         Assert.Equal(first.Packet.Surfaces.Count, docsA.Chunks.Count(chunk => chunk.ChunkFamily == "webforms-modernization" && chunk.Title == "Web Forms surface evidence"));
         Assert.Contains(docsA.Chunks, chunk => chunk.ChunkFamily == "webforms-modernization" && chunk.Title == "Web Forms event-chain evidence");
+        Assert.Contains(docsA.Chunks, chunk => chunk.ChunkFamily == "webforms-modernization"
+            && chunk.Title == "Web Forms surface evidence"
+            && chunk.RetrievalHints.Any(hint => hint.RecipeId == "webforms-surface-facts"));
+        Assert.Contains(docsA.Chunks, chunk => chunk.ChunkFamily == "webforms-modernization"
+            && chunk.Title == "Web Forms event-chain evidence"
+            && chunk.RetrievalHints.Any(hint => hint.RecipeId == "calls-from-handler")
+            && chunk.RetrievalHints.Any(hint => hint.RecipeId == "database-evidence-by-handler")
+            && chunk.RetrievalHints.Any(hint => hint.RecipeId == "stored-procedure-candidate-context"));
         Assert.Contains(docsA.Chunks, chunk => chunk.ChunkFamily == "gap" && chunk.Gaps.Any(gap => gap.ChunkFamily == "webforms-modernization"));
         Assert.All(docsA.Chunks.Where(chunk => chunk.ChunkFamily == "webforms-modernization" && chunk.Title != "Web Forms evidence packet overview"), chunk =>
         {
@@ -119,6 +127,9 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Equal(
             await File.ReadAllBytesAsync(Path.Combine(temp.Path, "docs-a", "chunks.jsonl")),
             await File.ReadAllBytesAsync(Path.Combine(temp.Path, "docs-b", "chunks.jsonl")));
+        Assert.Equal(
+            await File.ReadAllBytesAsync(Path.Combine(temp.Path, "docs-a", "query-recipes.json")),
+            await File.ReadAllBytesAsync(Path.Combine(temp.Path, "docs-b", "query-recipes.json")));
         var docsText = string.Join('\n', Directory.EnumerateFiles(Path.Combine(temp.Path, "docs-a"), "*", SearchOption.AllDirectories).Select(File.ReadAllText));
         Assert.DoesNotContain(temp.Path, docsText, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("private-marker-value", docsText, StringComparison.OrdinalIgnoreCase);

@@ -234,7 +234,8 @@ public static partial class EvidenceDocsExporter
             | Controls | `{value.ControlIds.Count}` |
             | File span | `{EscapeInline(FormatSpan(value.Evidence))}` |
             """;
-        return CreateWebFormsChunk(packet, "surface", "Web Forms surface evidence", body, [Citation(value.Evidence, source)], [ToSourceRef(source)], [value.SurfaceId, .. value.SupportingFactIds], [value.Evidence.RuleId], [value.Evidence.EvidenceTier], [value.Evidence.CoverageLabel], value.Evidence.Limitations);
+        var chunk = CreateWebFormsChunk(packet, "surface", "Web Forms surface evidence", body, [Citation(value.Evidence, source)], [ToSourceRef(source)], [value.SurfaceId, .. value.SupportingFactIds], [value.Evidence.RuleId], [value.Evidence.EvidenceTier], [value.Evidence.CoverageLabel], value.Evidence.Limitations);
+        return WithRetrievalHints(chunk, [Hint("webforms-surface-facts", "Retrieve retained facts explicitly associated with this Web Forms surface.", [("surface_id", value.SurfaceId), ("limit", "250")], [value.SurfaceId])]);
     }
 
     private static EvidenceDocChunk CreateWebFormsEventChainChunk(WebFormsModernizationPacket packet, WebFormsModernizationEventChain value, IReadOnlyDictionary<string, DocSource> sources)
@@ -261,7 +262,15 @@ public static partial class EvidenceDocsExporter
         var sourceRefs = value.Evidence.Select(evidence => ToSourceRef(SourceFor(evidence, sources)))
             .Concat(value.PathEvidence.Select(evidence => ToSourceRef(SourceFor(evidence, sources))))
             .DistinctBy(source => source.SourceId).ToArray();
-        return CreateWebFormsChunk(packet, "event-chain", "Web Forms event-chain evidence", body, citations, SourceRefsOrPacketSources(sourceRefs, sources), [value.ChainId, .. value.SupportingFactIds, .. value.SupportingEdgeIds], value.RuleIds, value.EvidenceTiers, value.CoverageLabels, value.Limitations);
+        var chunk = CreateWebFormsChunk(packet, "event-chain", "Web Forms event-chain evidence", body, citations, SourceRefsOrPacketSources(sourceRefs, sources), [value.ChainId, .. value.SupportingFactIds, .. value.SupportingEdgeIds], value.RuleIds, value.EvidenceTiers, value.CoverageLabels, value.Limitations);
+        return value.HandlerId is null
+            ? chunk
+            : WithRetrievalHints(chunk,
+            [
+                Hint("calls-from-handler", "Retrieve retained direct call edges from this handler.", [("handler_symbol", value.HandlerId), ("limit", "250")], [value.ChainId]),
+                Hint("database-evidence-by-handler", "Retrieve database-shaped facts directly retained for this handler.", [("handler_symbol", value.HandlerId), ("limit", "250")], [value.ChainId]),
+                Hint("stored-procedure-candidate-context", "Retrieve command, property, invocation, and argument evidence retained for this handler without assuming object identity.", [("method_symbol", value.HandlerId), ("limit", "250")], [value.ChainId])
+            ]);
     }
 
     private static EvidenceDocChunk CreateWebFormsBoundaryChunk(WebFormsModernizationPacket packet, WebFormsModernizationDownstreamBoundary value, IReadOnlyDictionary<string, DocSource> sources)
@@ -284,7 +293,11 @@ public static partial class EvidenceDocsExporter
         var sourceRefs = value.Evidence.Select(evidence => ToSourceRef(SourceFor(evidence, sources)))
             .Concat(value.PathEvidence.Select(evidence => ToSourceRef(SourceFor(evidence, sources))))
             .DistinctBy(source => source.SourceId).ToArray();
-        return CreateWebFormsChunk(packet, "downstream-boundary", "Web Forms downstream-boundary evidence", body, citations, SourceRefsOrPacketSources(sourceRefs, sources), [value.BoundaryId, value.ChainId, .. value.SupportingFactIds, .. value.SupportingEdgeIds], value.RuleIds, value.EvidenceTiers, value.CoverageLabels, value.Limitations);
+        var chunk = CreateWebFormsChunk(packet, "downstream-boundary", "Web Forms downstream-boundary evidence", body, citations, SourceRefsOrPacketSources(sourceRefs, sources), [value.BoundaryId, value.ChainId, .. value.SupportingFactIds, .. value.SupportingEdgeIds], value.RuleIds, value.EvidenceTiers, value.CoverageLabels, value.Limitations);
+        return WithRetrievalHints(chunk,
+        [
+            Hint("boundary-supporting-facts", "Retrieve the retained terminal evidence row cited by this downstream boundary.", [("terminal_evidence_id", value.TerminalEvidenceId), ("limit", "1")], [value.BoundaryId, value.TerminalEvidenceId])
+        ]);
     }
 
     private static EvidenceDocChunk CreateWebFormsIdentityChunk(WebFormsModernizationPacket packet, WebFormsModernizationIdentityState value, DocSource source)
@@ -300,7 +313,10 @@ public static partial class EvidenceDocsExporter
             | Surface ID | `{EscapeInline(value.SurfaceId ?? "unassociated")}` |
             | File span | `{EscapeInline(FormatSpan(value.Evidence))}` |
             """;
-        return CreateWebFormsChunk(packet, "identity-state", "Web Forms identity/state evidence", body, [Citation(value.Evidence, source)], [ToSourceRef(source)], [value.IdentityStateId, .. value.SupportingFactIds], [value.Evidence.RuleId], [value.Evidence.EvidenceTier], [value.Evidence.CoverageLabel], value.Limitations);
+        var chunk = CreateWebFormsChunk(packet, "identity-state", "Web Forms identity/state evidence", body, [Citation(value.Evidence, source)], [ToSourceRef(source)], [value.IdentityStateId, .. value.SupportingFactIds], [value.Evidence.RuleId], [value.Evidence.EvidenceTier], [value.Evidence.CoverageLabel], value.Limitations);
+        return value.SurfaceId is null
+            ? chunk
+            : WithRetrievalHints(chunk, [Hint("webforms-surface-facts", "Retrieve other facts associated with this identity/state record's Web Forms surface.", [("surface_id", value.SurfaceId), ("limit", "250")], [value.IdentityStateId])]);
     }
 
     private static EvidenceDocChunk CreateWebFormsBatchChunk(WebFormsModernizationPacket packet, WebFormsModernizationBatchDataMovement value, DocSource source)
@@ -395,7 +411,7 @@ public static partial class EvidenceDocsExporter
             message,
             "webforms-modernization",
             gap.SupportingIds)).ToArray();
-        return CreateChunk(
+        var chunk = CreateChunk(
             "gap",
             "gap",
             "hidden",
@@ -410,6 +426,9 @@ public static partial class EvidenceDocsExporter
             [value.CoverageLabel],
             [gap],
             limitationRecords);
+        return value.FilePath is null || value.StartLine is null || value.EndLine is null
+            ? chunk
+            : WithRetrievalHints(chunk, [Hint("gap-neighborhood", "Retrieve static evidence overlapping this gap's source span without treating it as gap closure.", [("file_path", value.FilePath), ("start_line", value.StartLine.Value.ToString()), ("end_line", value.EndLine.Value.ToString()), ("limit", "100")], [value.GapId])]);
     }
 
     private static EvidenceDocChunk CreateWebFormsChunk(
