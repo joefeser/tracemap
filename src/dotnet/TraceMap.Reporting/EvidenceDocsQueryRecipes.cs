@@ -396,6 +396,13 @@ public static partial class EvidenceDocsExporter
         else
         {
             parameters.Remove("source_index_id");
+            foreach (var name in new[] { "fact_id", "terminal_evidence_id" })
+            {
+                if (parameters.TryGetValue(name, out var value) && value.StartsWith("single:", StringComparison.Ordinal))
+                {
+                    parameters[name] = value["single:".Length..];
+                }
+            }
         }
 
         return hint with { InputKind = inputKind, Parameters = parameters };

@@ -853,7 +853,8 @@ public static class WebFormsModernizationPacketReporter
         packetIdentity.AddRange(uniqueGaps.Select(gap => $"gap:{gap.GapId}"));
         packetIdentity.AddRange(surfaceSelection?.Items
             .OrderBy(item => item.RequestId, StringComparer.Ordinal)
-            .Select(item => $"selection:{item.RequestId}:{item.Status}:{string.Join(',', item.SurfaceIds.OrderBy(id => id, StringComparer.Ordinal))}")
+            .ThenBy(item => item.Alias, StringComparer.Ordinal)
+            .Select(item => $"selection:{item.Alias}:{item.RequestId}:{item.Status}:{string.Join(',', item.SurfaceIds.OrderBy(id => id, StringComparer.Ordinal))}")
             ?? []);
         var packetId = HashId("packet", packetIdentity);
         return new(

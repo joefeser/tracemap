@@ -447,7 +447,6 @@ public static partial class StaticHtmlEvidenceExplorer
                     || selection.AmbiguousCount != selection.Items.Count(item => item.Status == "ambiguous")
                     || selection.UnavailableCount != selection.Items.Count(item => item.Status == "unavailable")
                     || selection.Items.Select(item => item.Alias).Distinct(StringComparer.Ordinal).Count() != selection.Items.Count
-                    || selection.Items.Select(item => item.RequestId).Distinct(StringComparer.Ordinal).Count() != selection.Items.Count
                     || selection.Items.Any(item => string.IsNullOrWhiteSpace(item.Alias)
                         || string.IsNullOrWhiteSpace(item.RequestId)
                         || item.Status is not ("matched" or "unmatched" or "ambiguous" or "unavailable")
@@ -488,7 +487,9 @@ public static partial class StaticHtmlEvidenceExplorer
             || packet.EventChains.Any(chain => !surfaceIds.Contains(chain.SurfaceId))
             || packet.DownstreamBoundaries.Any(boundary => !surfaceIds.Contains(boundary.SurfaceId) || !chainIds.Contains(boundary.ChainId))
             || packet.IdentityStateInventory.Any(state => state.SurfaceId is not null && !surfaceIds.Contains(state.SurfaceId))
-            || packet.SurfaceSelection?.Items.Any(item => item.Status == "matched" && item.SurfaceIds.Any(id => !surfaceIds.Contains(id))) == true
+            || packet.SurfaceSelection?.Items.Any(item => item.Status == "matched"
+                && item.SurfaceIds.Any(id => !surfaceIds.Contains(id))
+                && !packet.Summary.Truncated) == true
             || packet.StructuralSliceCandidates.Any(candidate => candidate.SurfaceIds is null || candidate.SurfaceIds.Any(id => !surfaceIds.Contains(id))))
         {
             throw new InvalidDataException("inconsistent Web Forms packet identity graph");
@@ -544,7 +545,12 @@ public static partial class StaticHtmlEvidenceExplorer
                 || string.IsNullOrWhiteSpace(boundary.Classification) || boundary.SupportingFactIds is null
                 || boundary.SupportingEdgeIds is null || boundary.RuleIds is null || boundary.EvidenceTiers is null
                 || boundary.CoverageLabels is null || boundary.Limitations is null
-                || boundary.TerminalEvidenceIsFact && !boundary.SupportingFactIds.Contains(boundary.TerminalEvidenceId, StringComparer.Ordinal)
+                || boundary.Evidence.Count == 0 && boundary.PathEvidence.Count == 0
+                || !boundary.SupportingFactIds.Contains(boundary.TerminalEvidenceId, StringComparer.Ordinal)
+                    && !boundary.SupportingEdgeIds.Contains(boundary.TerminalEvidenceId, StringComparer.Ordinal)
+                    && !boundary.Evidence.Any(evidence => evidence.FactId == boundary.TerminalEvidenceId)
+                    && !boundary.PathEvidence.Any(evidence => evidence.EvidenceId == boundary.TerminalEvidenceId
+                        || evidence.SupportingFactIds.Contains(boundary.TerminalEvidenceId, StringComparer.Ordinal))
                 || boundary.RuleIds.Any(rule => !IsSafeRuleId(rule))
                 || boundary.EvidenceTiers.Any(tier => !IsSupportedEvidenceTier(tier)))
                 throw new InvalidDataException("invalid Web Forms downstream boundary");

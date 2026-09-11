@@ -10,3 +10,5 @@
 - Validation: focused docs-export/Web Forms suite passed 39/39; full solution passed 1,805/1,805; private-path guard and `git diff --check` passed. One pre-existing nullable warning remains in `PropertyMappingTests.cs`.
 - Delivery: commit `e5445f1e` opened PR #731 against `dev` and closes #730.
 - Current: implementation and local validation complete; exact-head review and CI remain.
+- Exact-head P1/P2 remediation: docs export now applies the explorer's recursive duplicate-property admission check, rejects arbitrary absolute Unix paths in packet-controlled prose, rejects downstream-boundary claims without retained evidence for the terminal, accepts producer-valid repeated and explicitly truncated surface selections, preserves evidence/path/traversal limitations in event-chain and boundary chunks, and includes selection aliases in packet identity.
+- Remediation validation: focused Web Forms/docs/static-explorer suite passed 105/105; full solution passed 1,811/1,811; focused code-path review-set smoke passed; `git diff --check` passed. The pre-existing nullable warning in `PropertyMappingTests.cs` remains unchanged.
