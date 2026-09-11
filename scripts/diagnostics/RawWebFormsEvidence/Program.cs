@@ -2,6 +2,14 @@ using TraceMap.Reporting;
 
 try
 {
+    if (args.Length is 4 or 5 && args[0] == "--code-path-review-set-handoff")
+    {
+        var indexPath = args[3] == "-" ? null : args[3];
+        var corpusRoot = args.Length == 5 && args[4] != "-" ? args[4] : null;
+        foreach (var line in WebFormsAgentEvidenceHandoff.WriteSet(
+            args[1], args[2], Path.Combine(args[2], "agent-evidence-handoff.json"), indexPath, corpusRoot)) Console.WriteLine(line);
+        return 0;
+    }
     if (args.Length is 5 or 6 or 7 or 8 && args[0] == "--code-path-review")
     {
         if (args.Length >= 6 && !int.TryParse(args[5], out _)) throw new InvalidDataException("CodePathReviewInvalidLimit");
@@ -39,6 +47,11 @@ catch (Exception error)
         "CodePathReviewSourcePathInvalid", "CodePathReviewSourceUnavailable", "CodePathReviewExcerptLimit", "CodePathReviewSourceSpanInvalid",
         "CodePathReviewSourceLineLimit", "CodePathReviewSourceAggregateLineLimit", "CodePathReviewSourceAggregateOutputLimit",
         "CodePathReviewAnonymousLeak", "CodePathReviewReturnLinkInvalid", "CodePathReviewRawSourceOptionInvalid", "CodePathReviewCandidateWorkLimit"];
+    safeCodes = [.. safeCodes, "AgentHandoffSchemaMismatch", "AgentHandoffContractInvalid", "AgentHandoffEvidenceLimit",
+        "AgentHandoffInputLimit", "AgentHandoffRecipeUnavailable", "AgentHandoffRecipeParameterInvalid", "AgentHandoffInspectionUnavailable",
+        "AgentHandoffOutputInvalid", "AgentHandoffCaseLimit", "AgentHandoffCaseUnavailable", "AgentHandoffProvenanceMismatch",
+        "AgentHandoffIndexUnavailable", "AgentHandoffIndexProvenanceMismatch", "AgentHandoffCorpusUnavailable", "AgentHandoffCorpusLimit",
+        "AgentHandoffCorpusSchemaMismatch", "AgentHandoffCorpusProvenanceMismatch", "AgentHandoffRecipeSchemaMismatch"];
     var code = error is InvalidDataException && safeCodes.Contains(error.Message, StringComparer.Ordinal)
         ? error.Message : "RawAuditInputOrRuntimeFailure";
     Console.Error.WriteLine($"raw-webforms-evidence=failed;code={code}");
