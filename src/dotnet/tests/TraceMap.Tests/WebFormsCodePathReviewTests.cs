@@ -14,7 +14,7 @@ public sealed class WebFormsCodePathReviewTests
             var output = Path.Combine(directory, "review.private.html");
             var lines = WebFormsCodePathReview.Run(inspection, sourceRoot, "case-001", output, includeRawSource: true);
             Assert.Contains("codePathReview=created", lines);
-            Assert.Contains("artifacts=private-html;shareable-html;shareable-json;annotated-source-html:2", lines);
+            Assert.Contains("artifacts=private-html;private-agent-handoff-json;shareable-html;shareable-json;annotated-source-html:2", lines);
             Assert.Contains(lines, line => line == "case=case-001|sourceMode=working-tree|triggerContextLines=12|excerpts=4|definitionCandidates=1|anonymousNodes=2|anonymousEdges=1|review=unreviewed");
             Assert.DoesNotContain("Private", string.Join('\n', lines));
             var report = File.ReadAllText(output);
@@ -38,6 +38,8 @@ public sealed class WebFormsCodePathReviewTests
             Assert.Contains("id=\"verdict\" open", report);
             Assert.Contains("class=\"panel\" id=\"graph\"><summary>", report);
             Assert.Contains("class=\"panel\" id=\"evidence\"><summary>", report);
+            Assert.Contains("id=\"agent-handoff\"", report);
+            Assert.Contains("review.handoff.json", report);
             Assert.Contains("function revealTarget()", report);
             Assert.Contains("diagnostic.webforms.local-code-path-review.v3", report);
             Assert.Contains("review.source-001.html#L3", report);
@@ -76,6 +78,23 @@ public sealed class WebFormsCodePathReviewTests
             Assert.DoesNotContain("source/Page", shareableJson);
             Assert.DoesNotContain("source-001.html", shareableHtml);
             Assert.DoesNotContain("source-001.html", shareableJson);
+            Assert.DoesNotContain("handoff", shareableHtml, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("handoff", shareableJson, StringComparison.OrdinalIgnoreCase);
+            var handoffPath = Path.Combine(directory, "review.handoff.json");
+            Assert.True(File.Exists(handoffPath));
+            var handoff = JsonSerializer.Deserialize<WebFormsAgentCaseHandoff>(File.ReadAllText(handoffPath), new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            });
+            Assert.NotNull(handoff);
+            Assert.Equal(WebFormsAgentEvidenceHandoff.SchemaVersion, handoff.SchemaVersion);
+            Assert.Equal("scan-one", handoff.Provenance.ScanId);
+            Assert.Equal("commit-one", handoff.Provenance.CommitSha);
+            Assert.Equal("case-001", handoff.Subject.CaseId);
+            Assert.Contains(handoff.RetrievalHints, value => value.RecipeId == "calls-from-handler");
+            Assert.Contains(handoff.RetrievalHints, value => value.RecipeId == "database-evidence-by-handler");
+            Assert.Contains(handoff.RetrievalHints, value => value.RecipeId == "callers-of-callee");
+            Assert.Contains(handoff.CorpusSelectors, value => value.Kind == "supporting-id");
             Assert.Throws<IOException>(() => WebFormsCodePathReview.Run(inspection, sourceRoot, "case-001", output, includeRawSource: true));
 
             var indexedOutput = Path.Combine(directory, "indexed.private.html");
@@ -242,6 +261,7 @@ public sealed class WebFormsCodePathReviewTests
         File.WriteAllText(inspection, JsonSerializer.Serialize(new
         {
             schemaVersion = "webforms-batch-inspection.v1",
+            scanId = "scan-one",
             commitSha = "commit-one",
             cases = new[]
             {

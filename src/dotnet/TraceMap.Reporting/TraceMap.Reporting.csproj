@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\TraceMap.Core\TraceMap.Core.csproj" />
     <ProjectReference Include="..\TraceMap.Reduction\TraceMap.Reduction.csproj" />
+    <ProjectReference Include="..\TraceMap.Storage\TraceMap.Storage.csproj" />
   </ItemGroup>
 
   <ItemGroup>

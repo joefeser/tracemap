@@ -2073,3 +2073,21 @@ Confirm that default runs create no source views and anonymous HTML/JSON contain
 neither source nor private navigation. Highlighting is static evidence
 navigation; it does not prove runtime coverage, execution, branch feasibility,
 correctness, or completeness.
+
+### Web Forms private agent evidence handoffs
+
+For changes to review-set evidence discovery metadata, run:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter 'FullyQualifiedName~WebFormsCodePathReviewTests|FullyQualifiedName~WebFormsAgentEvidenceHandoffTests'
+pwsh -NoProfile -File scripts/tests/Test-FocusedWebFormsCodePathReviewSet.ps1
+```
+
+Confirm that each private case has a deterministic adjacent handoff, the root
+handoff validates an explicitly supplied index and docs corpus against the
+inspection scan and commit, and every retrieval hint names a closed read-only
+TraceMap query recipe. Confirm that mismatches fail before root publication and
+anonymous artifacts contain no handoff links, private identities, local paths,
+fact IDs, or source-of-truth locators. Application-database questions must never
+contain credentials, configuration, raw SQL, or execution instructions.
