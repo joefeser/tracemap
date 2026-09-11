@@ -1,0 +1,132 @@
+# VB.NET Adapter
+
+Status: foundation adapter (issue [#736](https://github.com/joefeser/tracemap/issues/736),
+spec `.kiro/specs/vbnet-adapter-foundation/`). Every claim below is bounded by
+the cataloged rule limitations in `rules/rule-catalog.yml` (`vb.semantic.*`,
+`vb.syntax.*`). Nothing in this adapter proves runtime reachability, execution,
+build success, or impact.
+
+## What the adapter does
+
+- Inventories `.vb` sources and `.vbproj`/`.sln` inputs. Inventory classifies
+  `VisualBasic`, `VisualBasicCodeBehind`, `VisualBasicDesigner`,
+  `VisualBasicGenerated`, `VisualBasicAssemblyInfo`, and `VisualBasicProject`
+  kinds. Filename and header conventions are structural classification only,
+  never semantic proof.
+- Loads supported `.vbproj` inputs through MSBuildWorkspace and the pinned
+  Roslyn Visual Basic compiler when the projects and their references resolve;
+  emits compiler-resolved `Tier1Semantic` facts.
+- Falls back to bounded per-file Visual Basic syntax parsing
+  (`Tier3SyntaxOrTextual`) for inventoried `.vb` files that received no
+  compiler-resolved coverage, with explicit `Tier4Unknown` gaps and a reduced
+  coverage label.
+- Joins VB evidence into the shared SQLite tables (`symbols`,
+  `fact_symbols`, `symbol_occurrences`, `call_edges`, `object_creations`,
+  `argument_flows`, `symbol_relationships`, `parameter_forward_edges`) with no
+  VB-specific schema.
+- Protects VB sources, projects, and checked-in generated inputs with the
+  semantic-input snapshot; mutation inside the scan window fails the scan with
+  the typed `SourceSnapshotException`.
+
+## Extractor identities
+
+| Extractor | Identity/version | Tier | Rules |
+| --- | --- | --- | --- |
+| Visual Basic semantic extractor | `vb-semantic/0.2.0` | Tier1 (facts), Tier2 (project observation), Tier4 (workspace gaps) | `vb.semantic.compilation.v1`, `vb.semantic.workspace.v1`, `vb.semantic.declarations.v1`, `vb.semantic.propertyaccess.v1`, `vb.semantic.methodinvocation.v1`, `vb.semantic.callgraph.v1`, `vb.semantic.objectcreation.v1`, `vb.semantic.valueflow.v1`, `vb.semantic.symbolrelationship.v1` |
+| Visual Basic syntax fallback | `vb-syntax/0.1.0` | Tier3 (facts), Tier4 (parse/read/budget/semantic-unavailable gaps) | `vb.syntax.declarations.v1`, `vb.syntax.memberaccess.v1`, `vb.syntax.invocation.v1`, `vb.syntax.callgraph.v1`, `vb.syntax.objectcreation.v1` |
+
+Symbol identities use the canonical .NET normalization shape with
+`visualbasic`-tagged language values (see `VisualBasicSymbolIdentityProvider`).
+Symbols resolved by a VB scan are distinguishable from C# rows by language.
+
+## Fact families
+
+Compiler-resolved (Tier1): `TypeDeclared` (class/module/structure/interface/
+enum/delegate), `MethodDeclared` (including constructors), `PropertyDeclared`,
+`FieldDeclared`, `ParameterDeclared`, `PropertyAccessed` (including
+unambiguous default-member indexing such as `catalog(0)`), `MethodInvoked`,
+`CallEdge` (`SemanticMethodInvocation` and `SemanticObjectCreation` kinds),
+`ObjectCreated`, `ArgumentPassed` (compiler-resolved parameter binding via
+`IArgumentOperation`, covering positional, named, ByRef, optional-bound, and
+params-expanded arguments), and `SymbolRelationship` (`InheritsFrom`,
+`ExtendsInterface`, `ImplementsInterface`, `ImplementsInterfaceMember`,
+`Overrides`).
+
+Project observation (Tier2): `VisualBasicProjectObserved` records load and
+compilation only, with aggregate document and error-diagnostic counts.
+
+Gaps (Tier4): sanitized workspace/compilation/restore gaps under
+`vb.semantic.workspace.v1` (category-only messages with bounded `CSxxxxx`,
+`MSBxxxx`, or `BCxxxxx` diagnostic ids), plus per-file fallback gaps under the
+syntax rules (`SemanticAnalysisUnavailable`, `SyntaxParseDiagnostic`,
+`SyntaxFileReadFailed`, `SyntaxFallbackBudgetExhausted`).
+
+Syntax fallback (Tier3): `TypeDeclared`, `MethodDeclared`, `PropertyDeclared`,
+`EnumDeclared`, `MemberAccessName`, `InvocationName`, `CallEdge`
+(`SyntaxInvocation`/`SyntaxObjectCreation`), and `ObjectCreated` — text-only
+candidates that are never compiler-resolved targets and never join to semantic
+symbols by identity. Emission is bounded by a deterministic per-file budget
+(2,000 facts) and bounded parse-diagnostic gaps (20 per file, diagnostic id and
+message hash only).
+
+## Fallback boundary
+
+The fallback granularity is per file, not per scan. A `.vb` file that received
+any compiler-resolved coverage keeps only its Tier1 facts (plus compiler-
+diagnostic gaps when binding is partial); it never receives Tier3 duplicates.
+Only files with zero semantic coverage (failed load, orphan files outside any
+project) are parsed by the syntax fallback, and each emits one explicit
+`SemanticAnalysisUnavailable` gap. Designer, generated, and auto-generated-
+header files are skipped by the fallback; designer and generated
+(filename-convention) documents are also excluded from semantic facts, while
+ordinary-named files with an `<auto-generated>` header keep compiler-resolved
+analysis exactly like their C# counterparts.
+
+## Supported project types
+
+- SDK-style `.vbproj` (including `net10.0`, `netstandard2.0`, and other
+  SDK-resolvable targets): full semantic path when references resolve.
+- Solutions (`.sln`) containing VB projects: VB projects are extracted by the
+  VB adapter; C# projects inside the same solution stay with the C# adapter
+  (one language owner per project).
+- Legacy non-SDK `.vbproj` (old `ToolsVersion`, .NET Framework targets,
+  Web Application projects): these load only when the local MSBuild can
+  evaluate their targets and reference assemblies. When they cannot — the
+  normal case on cross-platform SDKs — the scan stays useful but reduced:
+  sanitized workspace/compilation gaps plus partial Tier1 evidence over the
+  readable files, with the reduced coverage label. This mirrors C# legacy
+  behavior; no legacy-specific VB targets are added.
+- Legacy `TargetFrameworkVersion` values are reported by the build-environment
+  diagnostics lane, same as legacy C# projects.
+
+## Not established by this adapter
+
+These limits are deliberate scope boundaries for the foundation slice, and the
+catalog documents them per rule:
+
+- Cross-language symbol-identity joins are NOT established. VB-scan symbols
+  carry `visualbasic`-tagged identities; they do not join by identity to
+  C#-declared symbols even when both compile into the same solution. Display
+  strings, assembly names, and fact-level evidence do cross the language
+  boundary; identity joins are future work.
+- Web Forms event wiring is NOT established. `Handles`, `AddHandler`,
+  `RemoveHandler`, `RaiseEvent`, `WithEvents` declarations, and `.aspx`
+  control-event bindings never become resolved event edges in this slice.
+  Handler methods appear only as declared method evidence. Event composition
+  belongs to issue [#738](https://github.com/joefeser/tracemap/issues/738).
+- Event declarations, operator statements, and `Declare` (P/Invoke) statements
+  are not emitted as declarations in this slice.
+- Late-bound invocations, unresolved or ambiguous default members, overload
+  resolution failures, reflection, and conditional-compilation branches that
+  did not compile produce no fact rather than a guessed target; they are
+  visible only through compiler-diagnostic gaps.
+- No runtime claims of any kind: facts prove source structure and
+  compiler-resolved binding at scan time only, never execution,
+  reachability, deployment state, or impact.
+
+## Validation
+
+Exact local commands, fixture scans, determinism, privacy, and the pinned OSS
+smoke procedure are in [`VALIDATION.md`](VALIDATION.md) under the VB.NET
+adapter section. The fixture corpus and the pinned smoke repository are
+documented in [`VBNET_FIXTURES.md`](VBNET_FIXTURES.md).
