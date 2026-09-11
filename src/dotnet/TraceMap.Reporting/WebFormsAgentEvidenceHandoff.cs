@@ -80,7 +80,7 @@ public static class WebFormsAgentEvidenceHandoff
     public const string RuleId = "diagnostic.webforms.agent-evidence-handoff.v1";
     private const int MaximumCaseHandoffBytes = 4 * 1024 * 1024;
     private const long MaximumIndexBytes = 16L * 1024 * 1024 * 1024;
-    private const long MaximumCorpusJsonLinesBytes = 256L * 1024 * 1024;
+    internal const long MaximumCorpusJsonLinesBytes = 2L * 1024 * 1024 * 1024;
     private const int MaximumCorpusLines = 100_000;
     private const int MaximumCorpusLineCharacters = 4 * 1024 * 1024;
     private const int MaximumHintsPerCase = 128;
@@ -731,7 +731,8 @@ public static class WebFormsAgentEvidenceHandoff
         var path = Path.GetFullPath(Path.Combine(root, name));
         if (!string.Equals(Path.GetDirectoryName(path), root, PathComparison)) throw new InvalidDataException("AgentHandoffCorpusUnavailable");
         var info = new FileInfo(path);
-        if (!info.Exists || info.Length is < 1 || info.Length > maximumBytes) throw new InvalidDataException("AgentHandoffCorpusUnavailable");
+        if (!info.Exists || info.Length < 1) throw new InvalidDataException("AgentHandoffCorpusUnavailable");
+        if (info.Length > maximumBytes) throw new InvalidDataException("AgentHandoffCorpusLimit");
         return path;
     }
 

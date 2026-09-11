@@ -15,6 +15,12 @@ public sealed class WebFormsAgentEvidenceHandoffTests
     private const string CommitSha = "1111111111111111111111111111111111111111";
 
     [Fact]
+    public void Corpus_json_lines_limit_supports_large_streamed_exports()
+    {
+        Assert.Equal(2L * 1024 * 1024 * 1024, WebFormsAgentEvidenceHandoff.MaximumCorpusJsonLinesBytes);
+    }
+
+    [Fact]
     public void SetHandoffValidatesIndexAndSelectsMatchingCorpusChunks()
     {
         WithFixture((root, inspection, handoff) =>
@@ -159,6 +165,30 @@ public sealed class WebFormsAgentEvidenceHandoffTests
                 Path.Combine(set, "inspection.snapshot.json"), set, output, index, corpus));
 
             Assert.Equal("AgentHandoffCorpusIntegrityMismatch", error.Message);
+            Assert.False(File.Exists(output));
+        });
+    }
+
+    [Fact]
+    public void SetHandoffReportsCorpusLimitSeparatelyFromMissingCorpusFiles()
+    {
+        WithFixture((root, inspection, handoff) =>
+        {
+            var set = PrepareSet(root, inspection, handoff);
+            var index = Path.Combine(root, "index.sqlite");
+            CreateIndex(index, "scan-one", CommitSha);
+            var corpus = Path.Combine(root, "docs");
+            EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(index, corpus, Format: "jsonl")).GetAwaiter().GetResult();
+            using (var stream = new FileStream(Path.Combine(corpus, "query-recipes.json"), FileMode.Open, FileAccess.Write, FileShare.None))
+            {
+                stream.SetLength((4L * 1024 * 1024) + 1);
+            }
+            var output = Path.Combine(set, "agent-evidence-handoff.json");
+
+            var error = Assert.Throws<InvalidDataException>(() => WebFormsAgentEvidenceHandoff.WriteSet(
+                Path.Combine(set, "inspection.snapshot.json"), set, output, index, corpus));
+
+            Assert.Equal("AgentHandoffCorpusLimit", error.Message);
             Assert.False(File.Exists(output));
         });
     }
