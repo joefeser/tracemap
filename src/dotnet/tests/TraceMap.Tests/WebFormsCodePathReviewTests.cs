@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using TraceMap.Reporting;
 
 namespace TraceMap.Tests;
@@ -143,6 +144,55 @@ public sealed class WebFormsCodePathReviewTests
                 inspection, sourceRoot, "case-001", Path.Combine(directory, "review.private.html"), includeRawSource: true));
             Assert.Empty(Directory.GetFiles(directory, "review.*.html"));
             Assert.False(File.Exists(Path.Combine(directory, "review.shareable.json")));
+        });
+    }
+
+    [Fact]
+    public void WorkingTreeReviewRejectsAggregateAnnotatedSourceLineCountTransactionally()
+    {
+        WithFixture((directory, sourceRoot, inspection) =>
+        {
+            File.WriteAllLines(Path.Combine(sourceRoot, "source", "Page.aspx"), Enumerable.Repeat("x", 80_000));
+            File.WriteAllLines(Path.Combine(sourceRoot, "source", "Page.aspx.cs"), Enumerable.Repeat("x", 80_000));
+            var exception = Assert.Throws<InvalidDataException>(() => WebFormsCodePathReview.Run(
+                inspection, sourceRoot, "case-001", Path.Combine(directory, "review.private.html"), includeRawSource: true));
+            Assert.Equal("CodePathReviewSourceAggregateLineLimit", exception.Message);
+            Assert.Empty(Directory.GetFiles(directory, "review.*.html"));
+            Assert.False(File.Exists(Path.Combine(directory, "review.shareable.json")));
+        });
+    }
+
+    [Fact]
+    public void WorkingTreeReviewPreservesCaseDistinctSourcePaths()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        WithFixture((directory, sourceRoot, inspection) =>
+        {
+            var upperPath = Path.Combine(sourceRoot, "source", "Page.aspx.cs");
+            var lowerPath = Path.Combine(sourceRoot, "source", "page.aspx.cs");
+            var upperSource = File.ReadAllText(upperPath);
+            var lowerSource = upperSource.Replace("UiReset();", "LowerCaseFile();", StringComparison.Ordinal);
+            File.WriteAllText(lowerPath, lowerSource);
+            if (File.ReadAllText(upperPath).Contains("LowerCaseFile();", StringComparison.Ordinal))
+            {
+                File.WriteAllText(upperPath, upperSource);
+                return;
+            }
+
+            var root = JsonNode.Parse(File.ReadAllText(inspection))!;
+            root["cases"]![0]!["methods"]![0]!["outgoingCallSites"]![0]!["filePath"] = "source/page.aspx.cs";
+            File.WriteAllText(inspection, root.ToJsonString());
+
+            var output = Path.Combine(directory, "review.private.html");
+            WebFormsCodePathReview.Run(inspection, sourceRoot, "case-001", output, includeRawSource: true);
+
+            var annotated = Directory.GetFiles(directory, "review.source-*.html")
+                .Select(File.ReadAllText).ToArray();
+            Assert.Equal(3, annotated.Length);
+            Assert.Contains(annotated, value => value.Contains("Private annotated source source/Page.aspx.cs", StringComparison.Ordinal) &&
+                value.Contains("UiReset();", StringComparison.Ordinal) && !value.Contains("LowerCaseFile();", StringComparison.Ordinal));
+            Assert.Contains(annotated, value => value.Contains("Private annotated source source/page.aspx.cs", StringComparison.Ordinal) &&
+                value.Contains("LowerCaseFile();", StringComparison.Ordinal) && !value.Contains("UiReset();", StringComparison.Ordinal));
         });
     }
 
