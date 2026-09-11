@@ -35,6 +35,8 @@ public sealed class WebFormsModernizationPacketTests
             WebFormsPacketPaths: [packet.JsonPath]));
 
         Assert.Contains(result.Manifest.Inputs, input => input.Kind == "webforms-modernization-packet" && input.Compatibility == "compatible");
+        Assert.DoesNotContain(result.Chunks.SelectMany(chunk => chunk.Gaps), gap =>
+            gap.Reason == "missing-provenance" && gap.SupportingIds.Contains("index:facts", StringComparer.Ordinal));
         Assert.All(result.Manifest.Inputs.SelectMany(input => input.SourceRefs), source =>
             Assert.Equal(commitSha.ToLowerInvariant(), source.CommitSha));
     }
@@ -58,6 +60,12 @@ public sealed class WebFormsModernizationPacketTests
             Path.Combine(temp.Path, "unsafe-docs"),
             WebFormsPacketPaths: [unsafePath])));
         Assert.Contains("UnsafeValueRejected", unsafeError.Message, StringComparison.Ordinal);
+        Assert.Contains("chunk=", unsafeError.Message, StringComparison.Ordinal);
+        Assert.Contains("family=webforms-modernization", unsafeError.Message, StringComparison.Ordinal);
+        Assert.Contains("field=$.bodyMarkdown#line=", unsafeError.Message, StringComparison.Ordinal);
+        Assert.Contains("valueLength=", unsafeError.Message, StringComparison.Ordinal);
+        Assert.Contains("valueSha256=", unsafeError.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("customer-private", unsafeError.Message, StringComparison.OrdinalIgnoreCase);
 
         var duplicatePath = Path.Combine(temp.Path, "duplicate-packet.json");
         var json = await File.ReadAllTextAsync(written.JsonPath);
@@ -67,6 +75,39 @@ public sealed class WebFormsModernizationPacketTests
             Path.Combine(temp.Path, "duplicate-docs"),
             WebFormsPacketPaths: [duplicatePath])));
         Assert.Contains("InputSchemaUnsupported", duplicateError.Message, StringComparison.Ordinal);
+
+        var stackTrace = string.Concat("System.InvalidOperation", "Exception at Private.Namespace.Handler()");
+        var stackTracePath = Path.Combine(temp.Path, "stack-trace-packet.json");
+        await File.WriteAllTextAsync(stackTracePath, JsonSerializer.Serialize(written.Packet with
+        {
+            Limitations = [stackTrace]
+        }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+        var redacted = await EvidenceDocsExporter.ExportAsync(new(
+            index,
+            Path.Combine(temp.Path, "stack-trace-docs"),
+            Families: "webforms-modernization,limitation",
+            WebFormsPacketPaths: [stackTracePath]));
+        var serialized = JsonSerializer.Serialize(redacted);
+        Assert.DoesNotContain("InvalidOperationException", serialized, StringComparison.Ordinal);
+        Assert.Contains(redacted.Chunks.SelectMany(chunk => chunk.Redactions), item =>
+            item.RuleId == "docs-export.redaction.unsafe-limitation.v1" && item.Category == "stack-trace");
+
+        var splitStackTraceTokensPath = Path.Combine(temp.Path, "split-stack-trace-tokens-packet.json");
+        await File.WriteAllTextAsync(splitStackTraceTokensPath, JsonSerializer.Serialize(written.Packet with
+        {
+            OwnerQuestions =
+            [
+                "Review the System.Data boundary.",
+                "Review the Exception handling boundary.",
+                "Review global::Sample.FlightMealExceptionsQuery.Get(global::System.Data.DataSet)."
+            ]
+        }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+        var splitStackTraceTokens = await EvidenceDocsExporter.ExportAsync(new(
+            index,
+            Path.Combine(temp.Path, "split-stack-trace-tokens-docs"),
+            Families: "webforms-modernization,limitation",
+            WebFormsPacketPaths: [splitStackTraceTokensPath]));
+        Assert.Contains(splitStackTraceTokens.Chunks, chunk => chunk.ChunkFamily == "webforms-modernization");
     }
 
     [Fact]

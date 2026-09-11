@@ -794,6 +794,30 @@ rules:
     limitations:
       - Diagnostics identify category and output-relative location only; they do not echo the unsafe value.
 
+  - id: docs-export.redaction.unsafe-property.v1
+    name: Docs export unsafe fact-property redaction
+    description: Omits raw SQL, config, connection-string, token, and credential values found in fact properties while retaining the safe property key, supporting fact ID, redaction category, and an explicit evidence gap.
+    evidenceTier: Tier4Unknown
+    emits:
+      - unsafe-property-redacted gap
+      - category-only redaction record
+    limitations:
+      - Redaction preserves no source value, SQL text, configuration value, credential, token, host, or connection detail.
+      - The retained property key and supporting fact identify where authorized local review may be needed; they do not prove the redacted value's semantics or runtime use.
+      - Unsafe values outside structured fact properties remain subject to the existing hard-fail output safety gate.
+
+  - id: docs-export.redaction.unsafe-limitation.v1
+    name: Docs export unsafe limitation redaction
+    description: Omits unsafe free-form limitation text while retaining its category, supporting evidence IDs, and an explicit redaction record.
+    evidenceTier: Tier4Unknown
+    emits:
+      - category-only redaction record
+      - value-free limitation marker
+    limitations:
+      - Redaction preserves no stack trace, source value, path, URL, SQL, configuration value, credential, token, host, or connection detail.
+      - The retained category and supporting IDs identify where authorized local review may be needed; they do not prove the omitted text's semantics or runtime relevance.
+      - Unsafe values in substantive packet or evidence fields remain subject to the existing hard-fail output safety gate.
+
   - id: docs-export.validation.prohibited-claim-wording.v1
     name: Docs export prohibited claim wording validation
     description: Rejects generated wording that claims unsupported runtime execution, production traffic, release approval, vulnerability, ownership, deployment, reachability, or business impact.

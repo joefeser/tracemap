@@ -130,7 +130,10 @@ The index is opened read-only and must contain exactly one `scan_manifest` row
 matching the inspection scan and commit. When a docs-export root is supplied,
 its manifest and query catalog must match the same provenance; matching chunks
 are selected only through retained supporting IDs or exact retrieval-hint
-parameters. If either optional artifact is omitted, the handoff records that it
+parameters. Manifests are bounded at 64 MiB, and large `chunks.jsonl` corpora
+are streamed and bounded at 2 GiB;
+missing/empty corpus files and corpus-size limit failures report distinct safe
+diagnostic codes. If either optional artifact is omitted, the handoff records that it
 was not supplied instead of guessing a location.
 
 TraceMap's `index.sqlite` is the source of truth for retained static evidence.
