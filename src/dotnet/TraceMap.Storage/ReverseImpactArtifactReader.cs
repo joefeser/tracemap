@@ -66,11 +66,33 @@ public static class ReverseImpactArtifactReader
         new("properties_json", "TEXT", true, 0)
     ];
 
+    private static readonly IReadOnlyList<RequiredColumn> CallEdgeColumns =
+    [
+        new("fact_id", "TEXT", false, 1),
+        new("scan_id", "TEXT", true, 0),
+        new("repo", "TEXT", true, 0),
+        new("commit_sha", "TEXT", true, 0),
+        new("evidence_tier", "TEXT", true, 0),
+        new("rule_id", "TEXT", true, 0),
+        new("caller_symbol", "TEXT", false, 0),
+        new("caller_assembly_name", "TEXT", false, 0),
+        new("caller_assembly_version", "TEXT", false, 0),
+        new("callee_symbol", "TEXT", true, 0),
+        new("callee_assembly_name", "TEXT", false, 0),
+        new("callee_assembly_version", "TEXT", false, 0),
+        new("callee_containing_type", "TEXT", false, 0),
+        new("call_kind", "TEXT", false, 0),
+        new("file_path", "TEXT", true, 0),
+        new("start_line", "INTEGER", true, 0),
+        new("end_line", "INTEGER", true, 0)
+    ];
+
     /// <summary>
     /// Validates one standard TraceMap index without materializing its facts.
     /// </summary>
     public static async Task<ReverseImpactArtifactSummary> ReadSummaryAsync(
         string indexPath,
+        bool requireCallEdges = false,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(indexPath) || !File.Exists(indexPath))
@@ -93,6 +115,8 @@ public static class ReverseImpactArtifactReader
             await SetQueryOnlyAsync(connection, cancellationToken);
             using var transaction = connection.BeginTransaction(deferred: true);
             await ValidateStandardIndexAsync(connection, transaction, cancellationToken);
+            if (requireCallEdges)
+                await ValidateCallEdgesAsync(connection, transaction, cancellationToken);
             var manifest = await ReadManifestAsync(connection, transaction, cancellationToken);
             var factCount = await CountFactsAsync(connection, transaction, cancellationToken);
             if (factCount == 0)
@@ -101,6 +125,8 @@ public static class ReverseImpactArtifactReader
             }
 
             await ValidateFactSnapshotAsync(connection, transaction, manifest, cancellationToken);
+            if (requireCallEdges)
+                await ValidateCallEdgeSnapshotAsync(connection, transaction, manifest, cancellationToken);
             return new ReverseImpactArtifactSummary(manifest, factCount);
         }
         catch (ReverseImpactArtifactException)
@@ -229,6 +255,37 @@ public static class ReverseImpactArtifactReader
         }
     }
 
+    private static async Task ValidateCallEdgesAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        if (!await TableExistsAsync(connection, transaction, "call_edges", cancellationToken))
+        {
+            throw Error("ReverseImpactArtifactSchemaUnsupported", "The TraceMap index is missing its standard call-edge query surface.");
+        }
+
+        await ValidateTableSchemaAsync(connection, transaction, "call_edges", CallEdgeColumns, cancellationToken);
+    }
+
+    private static async Task ValidateCallEdgeSnapshotAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        ScanManifest manifest,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = "select count(*) from call_edges where scan_id <> $scan or repo <> $repo or commit_sha <> $commit;";
+        command.Parameters.AddWithValue("$scan", manifest.ScanId);
+        command.Parameters.AddWithValue("$repo", manifest.RepoName);
+        command.Parameters.AddWithValue("$commit", manifest.CommitSha);
+        if (Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken)) != 0)
+        {
+            throw Error("ReverseImpactArtifactMixedSnapshot", "A call edge does not belong to the index scan manifest's repository and commit snapshot.");
+        }
+    }
+
     private static async Task SetQueryOnlyAsync(SqliteConnection connection, CancellationToken cancellationToken)
     {
         await using var command = connection.CreateCommand();
@@ -318,6 +375,7 @@ public static class ReverseImpactArtifactReader
         {
             "scan_manifest" => "pragma table_info(scan_manifest);",
             "facts" => "pragma table_info(facts);",
+            "call_edges" => "pragma table_info(call_edges);",
             _ => throw new ArgumentOutOfRangeException(nameof(tableName))
         };
         var actual = new Dictionary<string, RequiredColumn>(StringComparer.OrdinalIgnoreCase);

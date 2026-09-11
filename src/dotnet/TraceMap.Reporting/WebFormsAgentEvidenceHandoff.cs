@@ -503,7 +503,7 @@ public static class WebFormsAgentEvidenceHandoff
         if (!info.Exists || info.Length is < 1 or > MaximumIndexBytes) throw new InvalidDataException("AgentHandoffIndexUnavailable");
         try
         {
-            var summary = ReverseImpactArtifactReader.ReadSummaryAsync(info.FullName).GetAwaiter().GetResult();
+            var summary = ReverseImpactArtifactReader.ReadSummaryAsync(info.FullName, requireCallEdges: true).GetAwaiter().GetResult();
             var manifest = summary.Manifest;
             if (!string.Equals(manifest.ScanId, scanId, StringComparison.Ordinal)
                 || !string.Equals(manifest.CommitSha, commitSha, StringComparison.OrdinalIgnoreCase))

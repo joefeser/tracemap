@@ -256,6 +256,31 @@ public sealed class WebFormsAgentEvidenceHandoffTests
     }
 
     [Fact]
+    public void SetHandoffRejectsIndexWithoutRecipeCallEdgeSurface()
+    {
+        WithFixture((root, inspection, handoff) =>
+        {
+            var set = PrepareSet(root, inspection, handoff);
+            var index = Path.Combine(root, "index.sqlite");
+            CreateIndex(index, "scan-one", CommitSha);
+            using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = index }.ToString()))
+            {
+                connection.Open();
+                using var command = connection.CreateCommand();
+                command.CommandText = "drop table call_edges;";
+                command.ExecuteNonQuery();
+            }
+            var output = Path.Combine(set, "agent-evidence-handoff.json");
+
+            var error = Assert.Throws<InvalidDataException>(() => WebFormsAgentEvidenceHandoff.WriteSet(
+                Path.Combine(set, "inspection.snapshot.json"), set, output, index));
+
+            Assert.Equal("AgentHandoffIndexInvalid", error.Message);
+            Assert.False(File.Exists(output));
+        });
+    }
+
+    [Fact]
     public void SetHandoffRejectsMismatchedIndexWithoutPublishing()
     {
         WithFixture((root, inspection, handoff) =>
