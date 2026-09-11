@@ -28,8 +28,7 @@ public static class VisualBasicSemanticExtractor
         parameterOptions:
             SymbolDisplayParameterOptions.IncludeType
             | SymbolDisplayParameterOptions.IncludeName
-            | SymbolDisplayParameterOptions.IncludeParamsRefOut
-            | SymbolDisplayParameterOptions.IncludeDefaultValue,
+            | SymbolDisplayParameterOptions.IncludeParamsRefOut,
         miscellaneousOptions:
             SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers
             | SymbolDisplayMiscellaneousOptions.UseSpecialTypes);
@@ -607,7 +606,7 @@ public static class VisualBasicSemanticExtractor
     {
         foreach (var statement in root.DescendantNodes().OfType<MethodBaseSyntax>())
         {
-            if (statement is DeclareStatementSyntax or AccessorStatementSyntax)
+            if (statement is DeclareStatementSyntax or AccessorStatementSyntax or OperatorStatementSyntax)
             {
                 continue;
             }

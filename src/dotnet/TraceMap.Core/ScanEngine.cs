@@ -111,10 +111,14 @@ public static class ScanEngine
                     fullInventory,
                     cancellationToken,
                     progress);
+                var visualBasicOptions = options.Restore
+                    && inventory.Any(item => item.Kind == "Project")
+                    ? options with { Restore = false }
+                    : options;
                 var visualBasicSemanticResult = VisualBasicSemanticExtractor.Extract(
                     repoPath,
                     inventory,
-                    options,
+                    visualBasicOptions,
                     fullInventory,
                     cancellationToken,
                     progress);

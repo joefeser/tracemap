@@ -456,9 +456,16 @@ public sealed class VisualBasicExtractionTests
         using var temp = new TempDirectory();
         var repo = Path.Combine(temp.Path, "repo");
         Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Secrets.vbproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+            </Project>
+            """);
         File.WriteAllText(Path.Combine(repo, "Secrets.vb"), """
             Module Secrets
                 Const PasswordMarker As String = "super-secret-sentinel-value"
+                Sub Sensitive(Optional token As String = "optional-secret-default")
+                End Sub
                 Sub Main()
                     System.Console.WriteLine(PasswordMarker)
                     DirectCast(GetHandler("tenant-secret"), Action)()
@@ -479,7 +486,62 @@ public sealed class VisualBasicExtractionTests
                 string.Join(";", fact.Properties.Select(pair => $"{pair.Key}={pair.Value}")));
             Assert.DoesNotContain(temp.Path, factText, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("super-secret-sentinel-value", factText, StringComparison.Ordinal);
+            Assert.DoesNotContain("optional-secret-default", factText, StringComparison.Ordinal);
         }
+    }
+
+    [Fact]
+    public void Vb_only_capability_diagnostics_do_not_claim_csharp_semantic_availability()
+    {
+        var result = ScanModernFixture();
+        var capabilities = result.Facts.Where(fact => fact.FactType == FactTypes.AnalyzerCapabilityDiagnostic).ToArray();
+
+        Assert.DoesNotContain(capabilities, fact =>
+            fact.Properties.GetValueOrDefault("capabilityCode") == AnalyzerCapabilityDiagnosticExtractor.Codes.CSharpSemanticCompilation);
+    }
+
+    [Fact]
+    public void Vb_syntax_fallback_is_reported_as_available_by_language_neutral_capability_diagnostics()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Orphan.vb"), "Module Orphan\nSub Run()\nMissing()\nEnd Sub\nEnd Module");
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalyzerCapabilityDiagnostic
+            && fact.Properties.GetValueOrDefault("capabilityCode") == AnalyzerCapabilityDiagnosticExtractor.Codes.SyntaxFallbackAvailable
+            && fact.Properties.GetValueOrDefault("capabilityState") == AnalyzerCapabilityDiagnosticExtractor.States.Available);
+    }
+
+    [Fact]
+    public void Operator_declarations_remain_outside_the_documented_semantic_declaration_scope()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Operators.vbproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Operators.vb"), """
+            Public Structure Amount
+                Public Shared Operator +(left As Amount, right As Amount) As Amount
+                    Return left
+                End Operator
+            End Structure
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.MethodDeclared
+            && fact.RuleId == RuleIds.VisualBasicSemanticDeclarations
+            && fact.Evidence.FilePath == "Operators.vb"
+            && fact.Evidence.StartLine == 2);
     }
 
     [Fact]
