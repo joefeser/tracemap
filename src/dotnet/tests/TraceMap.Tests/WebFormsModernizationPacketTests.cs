@@ -69,6 +69,22 @@ public sealed class WebFormsModernizationPacketTests
             Path.Combine(temp.Path, "duplicate-docs"),
             WebFormsPacketPaths: [duplicatePath])));
         Assert.Contains("InputSchemaUnsupported", duplicateError.Message, StringComparison.Ordinal);
+
+        var stackTrace = string.Concat("System.InvalidOperation", "Exception at Private.Namespace.Handler()");
+        var stackTracePath = Path.Combine(temp.Path, "stack-trace-packet.json");
+        await File.WriteAllTextAsync(stackTracePath, JsonSerializer.Serialize(written.Packet with
+        {
+            Limitations = [stackTrace]
+        }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+        var redacted = await EvidenceDocsExporter.ExportAsync(new(
+            index,
+            Path.Combine(temp.Path, "stack-trace-docs"),
+            Families: "webforms-modernization,limitation",
+            WebFormsPacketPaths: [stackTracePath]));
+        var serialized = JsonSerializer.Serialize(redacted);
+        Assert.DoesNotContain("InvalidOperationException", serialized, StringComparison.Ordinal);
+        Assert.Contains(redacted.Chunks.SelectMany(chunk => chunk.Redactions), item =>
+            item.RuleId == "docs-export.redaction.unsafe-limitation.v1" && item.Category == "stack-trace");
     }
 
     [Fact]

@@ -63,7 +63,7 @@ public static partial class EvidenceDocsExporter
                 "compatible",
                 sourceRefs.Select(value => value.SourceLabel).ToArray(),
                 DistinctSorted([packet.Coverage, .. sourceRefs.Select(value => value.CoverageLabel)]),
-                packet.Limitations.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                packet.Limitations.Select(SafeLimitationMessage).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
                 sourceRefs,
                 packet.SchemaVersion));
 
