@@ -1630,8 +1630,10 @@ export async function run(runtimeFlags) {
     expect(Object.keys(first.packet.artifacts).sort()).toEqual([
       "facts.ndjson", "logs/analyzer.log", "report.md"
     ]);
+    expect(first.packet.scanner.artifactProfile).toBe("tracemap.base44.deterministic-artifacts.v1");
     const packetSchema = JSON.parse(await fs.readFile(path.resolve(process.cwd(), "../../docs/contracts/base44-static-evidence.v1.schema.json"), "utf8"));
     expect(packetSchema.properties.artifacts.required.sort()).toEqual(Object.keys(first.packet.artifacts).sort());
+    expect(packetSchema.properties.scanner.required).toContain("artifactProfile");
     expect(first.packet.artifacts).toEqual(second.packet.artifacts);
     await expect(fs.stat(path.join(firstOut, "scan-manifest.json"))).resolves.toBeTruthy();
     await expect(fs.stat(path.join(firstOut, "index.sqlite"))).resolves.toBeTruthy();
