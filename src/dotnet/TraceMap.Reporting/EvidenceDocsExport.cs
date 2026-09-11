@@ -2357,7 +2357,10 @@ public static partial class EvidenceDocsExporter
                 }
                 if (category is not null)
                 {
-                    throw new InvalidOperationException($"UnsafeValueRejected: {UnsafeRejectedRuleId} [{Tier4Unknown}]: {category} at {path}:{i + 1}.");
+                    var context = path == "chunks.jsonl"
+                        ? UnsafeJsonLineDiagnosticContext(lines[i], category)
+                        : string.Empty;
+                    throw new InvalidOperationException($"UnsafeValueRejected: {UnsafeRejectedRuleId} [{Tier4Unknown}]: {category} at {path}:{i + 1}{context}.");
                 }
             }
 
@@ -2367,6 +2370,88 @@ public static partial class EvidenceDocsExporter
                 throw new InvalidOperationException($"ProhibitedClaimWording: {ProhibitedClaimRuleId} [{Tier4Unknown}]: unsupported-static-claim at {path}.");
             }
         }
+    }
+
+    private static string UnsafeJsonLineDiagnosticContext(string json, string expectedCategory)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+            var chunkId = SafeDiagnosticJsonToken(root, "chunkId");
+            var chunkFamily = SafeDiagnosticJsonToken(root, "chunkFamily");
+            if (TryFindUnsafeJsonString(root, "$", expectedCategory, out var field, out var value))
+            {
+                return $"; chunk={chunkId}; family={chunkFamily}; field={field}; valueLength={value.Length}; valueSha256={Hash(value, 64)}";
+            }
+
+            return $"; chunk={chunkId}; family={chunkFamily}; field=unresolved; recordLength={json.Length}; recordSha256={Hash(json, 64)}";
+        }
+        catch (JsonException)
+        {
+            return $"; chunk=unavailable; family=unavailable; field=unresolved; recordLength={json.Length}; recordSha256={Hash(json, 64)}";
+        }
+    }
+
+    private static string SafeDiagnosticJsonToken(JsonElement root, string propertyName)
+    {
+        if (root.ValueKind != JsonValueKind.Object
+            || !root.TryGetProperty(propertyName, out var property)
+            || property.ValueKind != JsonValueKind.String)
+        {
+            return "unavailable";
+        }
+
+        var value = property.GetString();
+        return string.IsNullOrWhiteSpace(value) ? "unavailable" : SafeTokenOrHash(value);
+    }
+
+    private static bool TryFindUnsafeJsonString(
+        JsonElement element,
+        string path,
+        string expectedCategory,
+        out string field,
+        out string value)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                foreach (var property in element.EnumerateObject())
+                {
+                    var propertyToken = IsSafeMetadataKey(property.Name)
+                        ? property.Name
+                        : $"property-{Hash(property.Name, 16)}";
+                    if (TryFindUnsafeJsonString(property.Value, $"{path}.{propertyToken}", expectedCategory, out field, out value))
+                    {
+                        return true;
+                    }
+                }
+                break;
+            case JsonValueKind.Array:
+                var index = 0;
+                foreach (var item in element.EnumerateArray())
+                {
+                    if (TryFindUnsafeJsonString(item, $"{path}[{index}]", expectedCategory, out field, out value))
+                    {
+                        return true;
+                    }
+                    index++;
+                }
+                break;
+            case JsonValueKind.String:
+                var candidate = element.GetString() ?? string.Empty;
+                if (UnsafeCategory(candidate) == expectedCategory)
+                {
+                    field = path;
+                    value = candidate;
+                    return true;
+                }
+                break;
+        }
+
+        field = string.Empty;
+        value = string.Empty;
+        return false;
     }
 
     private static async Task ValidateExistingFilesAsync(string outputPath, IReadOnlyDictionary<string, string> files, bool force, CancellationToken cancellationToken)
