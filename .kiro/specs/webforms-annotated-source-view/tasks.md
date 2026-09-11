@@ -6,4 +6,4 @@
 - [x] 4. Preserve anonymous artifact privacy and default no-source behavior.
 - [x] 5. Add focused .NET and PowerShell regression coverage.
 - [x] 6. Update operator documentation and validation guidance.
-- [ ] 7. Run focused/full validation, update implementation state, and open a PR to `dev`.
+- [x] 7. Run focused/full validation, update implementation state, and open a PR to `dev`.
