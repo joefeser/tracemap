@@ -73,6 +73,23 @@ public sealed class ComReferenceWorkspaceFallbackTests
     }
 
     [Fact]
+    public void Prepare_finds_com_reference_in_repository_local_property_import()
+    {
+        using var temp = new TempDirectory();
+        Directory.CreateDirectory(Path.Combine(temp.Path, "src", "build"));
+        File.WriteAllText(Path.Combine(temp.Path, "src", "Legacy.csproj"),
+            "<Project><Import Project=\"$(MSBuildThisFileDirectory)build\\legacy.props\" /></Project>");
+        File.WriteAllText(Path.Combine(temp.Path, "src", "build", "legacy.props"),
+            "<Project><ItemGroup><COMReference Include=\"Legacy.Component\" /></ItemGroup></Project>");
+
+        using var fallback = ComReferenceWorkspaceFallback.Prepare(temp.Path,
+            [new FileInventoryItem("src/Legacy.csproj", "Project", 1)]);
+
+        Assert.True(fallback.IsActive);
+        Assert.Equal("src/Legacy.csproj", Assert.Single(fallback.ProjectPaths));
+    }
+
+    [Fact]
     public void Prepare_preserves_custom_after_targets_from_directory_build_props()
     {
         using var temp = new TempDirectory();

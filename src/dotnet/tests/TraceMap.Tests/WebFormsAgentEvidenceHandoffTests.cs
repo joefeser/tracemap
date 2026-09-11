@@ -74,6 +74,35 @@ public sealed class WebFormsAgentEvidenceHandoffTests
     }
 
     [Fact]
+    public void CaseHandoffOmitsRetrievalHintsWithoutSupportingEvidence()
+    {
+        WithFixture((_, inspection, _) =>
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(inspection));
+            var selectedCase = document.RootElement.GetProperty("cases")[0];
+            var withoutCalls = JsonNode.Parse(selectedCase.GetRawText())!.AsObject();
+            withoutCalls["stoppingSymbols"] = new JsonArray();
+            foreach (var method in withoutCalls["methods"]!.AsArray())
+            {
+                method!["outgoingCallSites"] = new JsonArray();
+            }
+
+            using var narrowed = JsonDocument.Parse(withoutCalls.ToJsonString());
+            var handoff = WebFormsAgentEvidenceHandoff.BuildCase(
+                document.RootElement,
+                narrowed.RootElement,
+                "case-001",
+                "case-001.private.html",
+                "inspection.snapshot.json",
+                WebFormsAgentEvidenceHandoff.HashFile(inspection),
+                "agent-evidence-handoff.json");
+
+            Assert.DoesNotContain(handoff.RetrievalHints, hint => hint.RecipeId == "calls-from-handler");
+            Assert.DoesNotContain(handoff.RetrievalHints, hint => hint.SupportingIds.Count == 0);
+        });
+    }
+
+    [Fact]
     public void CaseHandoffRejectsUnknownRecipeAndInvalidParameters()
     {
         WithFixture((root, _, handoff) =>

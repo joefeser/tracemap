@@ -1460,6 +1460,20 @@ public static class TraceMapCommand
     private static async Task<int> RunPackageDecisionAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
     {
         var values = ParseOptions(args);
+        var supportedOptions = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "--decision", "--index", "--label", "--manifest", "--before-manifest", "--after-manifest",
+            "--advisory-profile", "--deployment-references", "--out", "--format", "--source", "--ecosystem",
+            "--decision-id", "--classification", "--max-findings", "--max-gaps", "--as-of", "--max-depth",
+            "--max-paths", "--max-frontier", "--max-roots", "--max-paths-per-root", "--include-paths",
+            "--include-reverse", "--exit-code"
+        };
+        var unsupported = values.Keys.FirstOrDefault(key => !supportedOptions.Contains(key));
+        if (unsupported is not null)
+        {
+            await error.WriteLineAsync($"error: package-decision does not support option {unsupported}.");
+            return 1;
+        }
         if (!values.TryGetValue("--decision", out var decisionPath) || string.IsNullOrWhiteSpace(decisionPath))
         {
             await error.WriteLineAsync("error: package-decision requires --decision <path>.");

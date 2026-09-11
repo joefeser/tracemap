@@ -57,6 +57,19 @@ public sealed class PackageDecisionComparisonExternalClaimsTests
         Assert.False(PackageDecisionAdvisoryProfileReader.Read("{{" + envelope + "]}").Accepted);
         Assert.Equal("DecisionInputSchemaUnsupported", PackageDecisionAdvisoryProfileReader.Read("{\"version\":\"advisory-profile.v1\",\"producer\":{\"id\":\"producer\",\"version\":\"1\"},\"claims\":[],\"notes\":\"free text\"}").Gaps.Single().Classification);
 
+        foreach (var duplicateProfile in new[]
+        {
+            "{\"version\":\"advisory-profile.v1\",\"version\":\"advisory-profile.v1\",\"producer\":{\"id\":\"producer\",\"version\":\"1\"},\"claims\":[]}",
+            "{\"version\":\"advisory-profile.v1\",\"producer\":{\"id\":\"producer\",\"id\":\"other\",\"version\":\"1\"},\"claims\":[]}",
+            "{\"version\":\"advisory-profile.v1\",\"producer\":{\"id\":\"producer\",\"version\":\"1\"},\"claims\":[" + Claim("claim-duplicate-predicate", predicate: "{\"kind\":\"exact\",\"version\":\"1.0.0\",\"version\":\"2.0.0\"}") + "]}",
+            "{\"version\":\"advisory-profile.v1\",\"producer\":{\"id\":\"producer\",\"version\":\"1\"},\"claims\":[" + Claim("claim-duplicate-params", parameters: "{\"framework\":\"next-rsc\",\"framework\":\"other\"}") + "]}"
+        })
+        {
+            var duplicateAdmission = PackageDecisionAdvisoryProfileReader.Read(duplicateProfile);
+            Assert.False(duplicateAdmission.Accepted);
+            Assert.Equal("DecisionInputSchemaUnsupported", Assert.Single(duplicateAdmission.Gaps).Classification);
+        }
+
         var rejectedClaims = new[]
         {
             Claim("claim-severity", extras: "\"severity\":\"high\""),
@@ -154,6 +167,18 @@ public sealed class PackageDecisionComparisonExternalClaimsTests
         Assert.Contains(rejected.Gaps, gap => gap.Classification == "DecisionInputMalformed");
         Assert.DoesNotContain(rejected.Gaps, gap => gap.Message.Contains(secret, StringComparison.Ordinal));
         Assert.All(rejected.Gaps, gap => Assert.Equal("package.decision.correlation.v1", gap.RuleId));
+    }
+
+    [Theory]
+    [InlineData("{\"version\":\"package-deployment-reference.v1\",\"version\":\"package-deployment-reference.v1\",\"producer\":{\"id\":\"producer\",\"version\":\"1\"},\"references\":[{\"referenceId\":\"ref-1\",\"referenceKind\":\"build-attachment\",\"ecosystem\":\"npm\",\"packageName\":\"example\",\"artifactVersion\":\"1.0.0\"}]}")]
+    [InlineData("{\"version\":\"package-deployment-reference.v1\",\"producer\":{\"id\":\"producer\",\"id\":\"other\",\"version\":\"1\"},\"references\":[{\"referenceId\":\"ref-1\",\"referenceKind\":\"build-attachment\",\"ecosystem\":\"npm\",\"packageName\":\"example\",\"artifactVersion\":\"1.0.0\"}]}")]
+    [InlineData("{\"version\":\"package-deployment-reference.v1\",\"producer\":{\"id\":\"producer\",\"version\":\"1\"},\"references\":[{\"referenceId\":\"ref-1\",\"referenceId\":\"ref-2\",\"referenceKind\":\"build-attachment\",\"ecosystem\":\"npm\",\"packageName\":\"example\",\"artifactVersion\":\"1.0.0\"}]}")]
+    public void Deployment_reference_reader_rejects_duplicate_properties_recursively(string json)
+    {
+        var admission = PackageDecisionDeploymentReferenceReader.Read(json);
+
+        Assert.False(admission.Accepted);
+        Assert.Equal("DecisionInputSchemaUnsupported", Assert.Single(admission.Gaps).Classification);
     }
 
     [Fact]
@@ -586,6 +611,15 @@ public sealed class PackageDecisionComparisonExternalClaimsTests
             decisionPath, string.Empty, Path.Combine(temp.Path, "truncated"), BeforeManifestPath: beforeManifest, AfterManifestPath: afterManifest, MaxFindings: 1));
         Assert.Single(truncated.Report.ArtifactChanges!);
         Assert.Contains(truncated.Report.Gaps, gap => gap.Classification == "TruncatedByLimit" && gap.Message.Contains("artifact change limit", StringComparison.Ordinal));
+
+        using var unknownOutput = new StringWriter();
+        using var unknownError = new StringWriter();
+        var unknownExit = await TraceMapCommand.RunAsync(
+            ["package-decision", "--decision", decisionPath, "--index", indexPath, "--out", Path.Combine(temp.Path, "unknown"), "--ecosystm", "npm"],
+            unknownOutput,
+            unknownError);
+        Assert.Equal(1, unknownExit);
+        Assert.Contains("does not support option --ecosystm", unknownError.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]

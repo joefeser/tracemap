@@ -14,7 +14,7 @@ export class AnalysisGapCollector {
     startLine = 1,
     properties: Record<string, string | number | boolean | null | undefined> = {}
   ): void {
-    this.knownGaps.add(`${category}: ${message}`);
+    this.record(category, message);
     this.gaps.push(
       createFact(
         manifest,
@@ -32,6 +32,10 @@ export class AnalysisGapCollector {
         }
       )
     );
+  }
+
+  record(category: string, message: string): void {
+    this.knownGaps.add(`${category}: ${message}`);
   }
 
   facts(): CodeFact[] {

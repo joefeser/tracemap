@@ -60,13 +60,13 @@ public sealed class WebFormsCodePathReviewTests
             Assert.Contains("&lt;asp:Button", annotatedMarkup);
             var shareableHtml = File.ReadAllText(Path.Combine(directory, "review.shareable.html"));
             var shareableJson = File.ReadAllText(Path.Combine(directory, "review.shareable.json"));
-            Assert.Contains("flowchart TD", shareableHtml);
-            Assert.Contains("handler_001 -->|calls x 1| node_001", shareableHtml);
+            Assert.Contains("<svg role=\"img\" aria-label=\"Anonymous retained call graph\"", shareableHtml);
+            Assert.Contains(">calls x 1</text>", shareableHtml);
             Assert.DoesNotContain("  click ", shareableHtml);
-            Assert.Contains("const graphNavigation", shareableHtml);
-            Assert.Contains("targetId", shareableHtml);
+            Assert.DoesNotContain("const graphNavigation", shareableHtml);
             Assert.Contains("href=\"#node-handler-001\"", shareableHtml);
-            Assert.Contains("mermaid@11.17.2", shareableHtml);
+            Assert.DoesNotContain("mermaid", shareableHtml, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("https://", shareableHtml, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("-->|\"", shareableHtml);
             Assert.Contains("handler-001", shareableHtml);
             Assert.Contains("diagnostic.webforms.anonymous-code-path-review.v1", shareableJson);

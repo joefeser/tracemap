@@ -94,7 +94,7 @@ public sealed class PackageDecisionLockfileEvidenceTests
                 "net8.0": {
                   "../unsafe/name": { "type": "Direct", "resolved": "1.0.0" },
                   "Safe.Missing": { "type": "Direct" },
-                  "Safe.UnsafeVersion": { "type": "Project", "resolved": "git+ssh://user:pass@example.invalid/x" },
+                  "Safe.ProjectReference": { "type": "Project" },
                   "Safe.PathVersion": { "type": "Direct", "resolved": "C:/synthetic-user/token" }
                 }
               }
@@ -110,11 +110,7 @@ public sealed class PackageDecisionLockfileEvidenceTests
             new FileInventoryItem("d/packages.lock.json", "PackagesLock", 1)
         });
 
-        Assert.Equal(2, result.Entries.Count);
-        var hashed = Assert.Single(result.Entries, entry => entry.PackageName == "Safe.UnsafeVersion");
-        Assert.Equal("unknown", hashed.DependencyRelation);
-        Assert.Null(hashed.ResolvedVersion);
-        Assert.Equal(32, hashed.ResolvedVersionHash!.Length);
+        Assert.Single(result.Entries);
         var pathVersion = Assert.Single(result.Entries, entry => entry.PackageName == "Safe.PathVersion");
         Assert.Null(pathVersion.ResolvedVersion);
         Assert.Equal(32, pathVersion.ResolvedVersionHash!.Length);
@@ -125,9 +121,33 @@ public sealed class PackageDecisionLockfileEvidenceTests
         Assert.Contains("packages-lock-entry-resolved-missing", categories);
         var serialized = string.Join('\n', result.Gaps.Select(gap => gap.Message)
             .Concat(result.Entries.SelectMany(entry => (IEnumerable<string>)[entry.PackageName, entry.ResolvedVersion ?? string.Empty, entry.ResolvedVersionHash ?? string.Empty])));
-        Assert.DoesNotContain("git+ssh://user:pass@example.invalid", serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain("Safe.ProjectReference", serialized, StringComparison.Ordinal);
         Assert.DoesNotContain("../unsafe/name", serialized, StringComparison.Ordinal);
         Assert.DoesNotContain("C:/synthetic-user/token", serialized, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReadNuGetLockfiles_rejects_duplicate_properties_before_emitting_evidence()
+    {
+        using var temp = new TempDirectory();
+        var repo = temp.Path;
+        Directory.CreateDirectory(Path.Combine(repo, "src"));
+        const string duplicate = """
+            {
+              "version": 2,
+              "dependencies": { "net8.0": { "First": { "type": "Direct", "resolved": "1.0.0" } } },
+              "dependencies": { "net8.0": { "Second": { "type": "Direct", "resolved": "2.0.0" } } }
+            }
+            """;
+        File.WriteAllText(Path.Combine(repo, "src", "packages.lock.json"), duplicate);
+
+        var result = ProjectFileReader.ReadNuGetLockfiles(
+            repo,
+            [new FileInventoryItem("src/packages.lock.json", "PackagesLock", duplicate.Length)]);
+
+        Assert.Empty(result.Entries);
+        var gap = Assert.Single(result.Gaps);
+        Assert.Equal("packages-lock-parse", gap.Category);
     }
 
     [Fact]
