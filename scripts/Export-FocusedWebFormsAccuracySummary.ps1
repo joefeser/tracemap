@@ -12,6 +12,7 @@ $ErrorActionPreference = "Stop"
 $culture = [Globalization.CultureInfo]::InvariantCulture
 $safeToken = '^[A-Za-z][A-Za-z0-9._-]{0,99}$'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
+$isWindowsPlatform = [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
 
 function Get-OptionalProperty {
     param([AllowNull()][object]$Value, [string]$Name)
@@ -81,7 +82,7 @@ function Get-ArtifactKind {
 
 function Test-WithinPath {
     param([string]$Candidate, [string]$Parent)
-    $comparison = if ($IsWindows) { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
+    $comparison = if ($isWindowsPlatform) { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
     $separator = [IO.Path]::DirectorySeparatorChar
     $parentPath = $Parent.TrimEnd($separator)
     return $Candidate.Equals($parentPath, $comparison) -or $Candidate.StartsWith($parentPath + $separator, $comparison)
@@ -102,7 +103,7 @@ try {
     $reviewRoot = [IO.Path]::GetFullPath($ReviewOutputPath)
     if (-not (Test-Path -LiteralPath $reviewRoot -PathType Container)) { throw "RetainedOutputUnavailable" }
     if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
-        $OutputDirectory = if ($IsWindows) { "C:\work\tracemap-summary" } else { Join-Path ([IO.Path]::GetTempPath()) "tracemap-summary" }
+        $OutputDirectory = if ($isWindowsPlatform) { "C:\work\tracemap-summary" } else { Join-Path ([IO.Path]::GetTempPath()) "tracemap-summary" }
     }
     $summaryRoot = [IO.Path]::GetFullPath($OutputDirectory)
     if ((Test-WithinPath $summaryRoot $reviewRoot) -or (Test-WithinPath $summaryRoot $repoRoot)) { throw "SummaryOutputUnsafe" }
@@ -195,7 +196,7 @@ try {
         $lines.Add("scope-$scope=facts:$(Format-Count (Read-Count $scopeCounts "$scope|facts"))|tier1:$(Format-Count (Read-Count $scopeCounts "$scope|Tier1Semantic"))|tier2:$(Format-Count (Read-Count $scopeCounts "$scope|Tier2Structural"))|tier3:$(Format-Count (Read-Count $scopeCounts "$scope|Tier3SyntaxOrTextual"))|tier4:$(Format-Count (Read-Count $scopeCounts "$scope|Tier4Unknown"))|gaps:$(Format-Count (Read-Count $scopeCounts "$scope|gaps"))")
     }
 
-    $artifactKinds = @($artifactCounts.Keys | ForEach-Object { $_.Split('|', 2)[0] } | Sort-Object -Unique)
+    $artifactKinds = @(@($artifactCounts.Keys) | ForEach-Object { $_.Split('|', 2)[0] } | Sort-Object -Unique)
     $artifactRows = @($artifactKinds | ForEach-Object {
         [pscustomobject]@{ Kind = $_; Facts = Read-Count $artifactCounts "$_|facts"; Inventory = Read-Count $artifactCounts "$_|inventory"; Tier1 = Read-Count $artifactCounts "$_|Tier1Semantic"; Tier3 = Read-Count $artifactCounts "$_|Tier3SyntaxOrTextual"; Gaps = Read-Count $artifactCounts "$_|gaps" }
     } | Sort-Object @{ Expression = { $_.Facts }; Descending = $true }, Kind)

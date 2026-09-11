@@ -87,7 +87,10 @@ public static partial class PackageDecisionRecordReader
             if (root.ValueKind != JsonValueKind.Object)
                 return Failure("DecisionInputSchemaUnsupported", "The package decision envelope is not an object.");
 
-            var rootProperties = root.EnumerateObject().Select(property => property.Name).ToHashSet(StringComparer.Ordinal);
+            var rootPropertyNames = root.EnumerateObject().Select(property => property.Name).ToArray();
+            if (rootPropertyNames.Distinct(StringComparer.Ordinal).Count() != rootPropertyNames.Length)
+                return Failure("DecisionInputSchemaUnsupported", "The package decision envelope contains duplicate properties.");
+            var rootProperties = rootPropertyNames.ToHashSet(StringComparer.Ordinal);
             if (!rootProperties.SetEquals(["version", "records"]))
                 return Failure("DecisionInputSchemaUnsupported", "The package decision envelope has unsupported properties.");
 

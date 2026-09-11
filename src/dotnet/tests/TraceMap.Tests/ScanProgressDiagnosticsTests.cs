@@ -260,6 +260,36 @@ public sealed class ScanProgressDiagnosticsTests
     }
 
     [Fact]
+    public async Task Final_publication_drains_a_dispatched_timeout_callback()
+    {
+        using var temp = new TempDirectory();
+        var repo = CreateRepository(temp.Path, repoName: "plain-repo");
+        var review = Path.Combine(temp.Path, "review");
+        var checkpoint = Path.Combine(temp.Path, "progress.json");
+        using var error = new StringWriter();
+
+        var exit = await LocalReviewCommand.RunAsync(
+            [
+                "run", "--repo", repo, "--out", review,
+                "--diagnostic-progress", checkpoint,
+                "--timeout-seconds", "30"
+            ],
+            TextWriter.Null,
+            error,
+            async (args, stdout, stderr, token) =>
+            {
+                await WriteSyntheticScanAsync(args[Array.IndexOf(args, "--out") + 1], token);
+                return 0;
+            },
+            timeProvider: new DisposeCallbackTimeProvider());
+
+        Assert.Equal(1, exit);
+        Assert.Contains("LOCAL_REVIEW_TIMEOUT", error.ToString(), StringComparison.Ordinal);
+        using var result = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(review, "local-review-result.json")));
+        Assert.Equal("timed-out", result.RootElement.GetProperty("outcome").GetString());
+    }
+
+    [Fact]
     public async Task Checkpoint_survives_external_cancellation()
     {
         using var temp = new TempDirectory();
@@ -1096,6 +1126,10 @@ public sealed class ScanProgressDiagnosticsTests
         Assert.Equal(
             "tracemap-scan-progress/v1",
             document.RootElement.GetProperty("properties").GetProperty("schemaVersion").GetProperty("const").GetString());
+        Assert.Contains(
+            document.RootElement.GetProperty("$defs").GetProperty("event").GetProperty("properties")
+                .GetProperty("lastSuccessfulStage").GetProperty("enum").EnumerateArray(),
+            value => value.ValueKind == JsonValueKind.String && value.GetString() == "other");
         var eventSchema = document.RootElement.GetProperty("$defs").GetProperty("event");
         Assert.False(eventSchema.GetProperty("additionalProperties").GetBoolean());
         foreach (var property in eventSchema.GetProperty("properties").EnumerateObject())
@@ -1499,6 +1533,41 @@ public sealed class ScanProgressDiagnosticsTests
             public ValueTask DisposeAsync()
             {
                 Dispose();
+                return ValueTask.CompletedTask;
+            }
+        }
+    }
+
+    private sealed class DisposeCallbackTimeProvider : TimeProvider
+    {
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period) =>
+            new DisposeCallbackTimer(callback, state);
+
+        private sealed class DisposeCallbackTimer(TimerCallback callback, object? state) : ITimer
+        {
+            private int disposed;
+
+            public bool Change(TimeSpan dueTime, TimeSpan period) => Volatile.Read(ref disposed) == 0;
+
+            public void Dispose() => Interlocked.Exchange(ref disposed, 1);
+
+            public bool Dispose(WaitHandle notifyObject)
+            {
+                Dispose();
+                if (notifyObject is EventWaitHandle eventWaitHandle)
+                {
+                    eventWaitHandle.Set();
+                }
+                return true;
+            }
+
+            public ValueTask DisposeAsync()
+            {
+                if (Interlocked.Exchange(ref disposed, 1) == 0)
+                {
+                    callback(state);
+                }
+
                 return ValueTask.CompletedTask;
             }
         }

@@ -91,8 +91,8 @@ def _uv_lock_facts(
     version = data.get("version")
     packages = data.get("package")
     if version not in SUPPORTED_UV_LOCK_VERSIONS or not isinstance(packages, list):
-        gaps.append(f"PythonLockUnsupported: {rel}: uv.lock format version {version!r}")
-        return [_gap_fact(manifest, rel, 1, "python-lock-unsupported", f"uv.lock format version {version!r} is not supported")]
+        gaps.append(f"PythonLockUnsupported: {rel}: unsupported uv.lock format metadata")
+        return [_gap_fact(manifest, rel, 1, "python-lock-unsupported", "uv.lock format metadata is not supported")]
     direct_descriptors: list[dict] = []
     declarations_complete = True
     roots_present = False
@@ -170,8 +170,8 @@ def _poetry_lock_facts(
     lock_version = metadata.get("lock-version") if isinstance(metadata, dict) else None
     packages = data.get("package")
     if lock_version not in SUPPORTED_POETRY_LOCK_VERSIONS or not isinstance(packages, list):
-        gaps.append(f"PythonLockUnsupported: {rel}: poetry.lock lock-version {lock_version!r}")
-        return [_gap_fact(manifest, rel, 1, "python-lock-unsupported", f"poetry.lock lock-version {lock_version!r} is not supported")]
+        gaps.append(f"PythonLockUnsupported: {rel}: unsupported poetry.lock format metadata")
+        return [_gap_fact(manifest, rel, 1, "python-lock-unsupported", "poetry.lock format metadata is not supported")]
     facts: list[CodeFact] = []
     for index, package in enumerate(packages):
         line = _entry_line(header_lines, index, len(packages))

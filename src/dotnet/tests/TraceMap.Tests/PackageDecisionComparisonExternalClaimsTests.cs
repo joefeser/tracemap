@@ -586,6 +586,15 @@ public sealed class PackageDecisionComparisonExternalClaimsTests
             decisionPath, string.Empty, Path.Combine(temp.Path, "truncated"), BeforeManifestPath: beforeManifest, AfterManifestPath: afterManifest, MaxFindings: 1));
         Assert.Single(truncated.Report.ArtifactChanges!);
         Assert.Contains(truncated.Report.Gaps, gap => gap.Classification == "TruncatedByLimit" && gap.Message.Contains("artifact change limit", StringComparison.Ordinal));
+
+        using var unknownOutput = new StringWriter();
+        using var unknownError = new StringWriter();
+        var unknownExit = await TraceMapCommand.RunAsync(
+            ["package-decision", "--decision", decisionPath, "--index", indexPath, "--out", Path.Combine(temp.Path, "unknown"), "--ecosystm", "npm"],
+            unknownOutput,
+            unknownError);
+        Assert.Equal(1, unknownExit);
+        Assert.Contains("does not support option --ecosystm", unknownError.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]

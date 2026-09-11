@@ -80,6 +80,8 @@ public sealed class PackageDecisionTests
     public async Task Reader_emits_closed_failure_classifications_and_verifies_self_digest()
     {
         Assert.Equal("DecisionInputSchemaUnsupported", PackageDecisionRecordReader.Read("{}").Gaps.Single().Classification);
+        Assert.Equal("DecisionInputSchemaUnsupported", PackageDecisionRecordReader.Read("{\"version\":\"package-decision.v1\",\"version\":\"package-decision.v1\",\"records\":[]}").Gaps.Single().Classification);
+        Assert.Equal("DecisionInputSchemaUnsupported", PackageDecisionRecordReader.Read("{\"version\":\"package-decision.v1\",\"records\":[],\"records\":[]}").Gaps.Single().Classification);
         Assert.Equal("DecisionInputReadFailed", (await PackageDecisionRecordReader.ReadAsync(Path.Combine(Path.GetTempPath(), "missing-package-decision.json"))).Gaps.Single().Classification);
         Assert.Equal("DecisionInputDecisionKindUnsupported", PackageDecisionRecordReader.Read("{\"version\":\"package-decision.v1\",\"records\":[{\"decisionId\":\"dec-kind\",\"decisionKind\":\"future\",\"ecosystem\":\"npm\",\"packageName\":\"example\",\"artifactVersion\":\"1.0.0\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\"}]} ").Gaps.Single().Classification);
         var limited = PackageDecisionRecordReader.Read("{\"version\":\"package-decision.v1\",\"records\":[{\"decisionId\":\"dec-long\",\"decisionKind\":\"admit\",\"ecosystem\":\"npm\",\"packageName\":\"example\",\"artifactVersion\":\"1.0.0\",\"producer\":{\"id\":\"producer\",\"policyVersion\":\"1\"},\"decisionTimeUtc\":\"2026-08-18T00:00:00Z\",\"recordDigest\":\"" + new string('a', 257) + "\"}]} ");
@@ -120,6 +122,9 @@ public sealed class PackageDecisionTests
         Assert.DoesNotContain("/Users/", json, StringComparison.Ordinal);
         Assert.Equal(json, await File.ReadAllTextAsync(Path.Combine(output, "package-decision-report.json")));
         Assert.Contains("Possible Matches", markdown);
+        Assert.Contains("## Source Snapshots", markdown, StringComparison.Ordinal);
+        Assert.Contains($"repo-hash:{CombinedReportHelpers.Hash(manifest.RepoName, 16)}", markdown, StringComparison.Ordinal);
+        Assert.Contains(manifest.CommitSha, markdown, StringComparison.Ordinal);
     }
 
     [Fact]

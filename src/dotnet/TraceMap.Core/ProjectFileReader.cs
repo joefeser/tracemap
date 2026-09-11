@@ -369,6 +369,13 @@ public static class ProjectFileReader
             }
         }
 
+        // NuGet emits project-to-project references in packages.lock.json as
+        // type "Project" entries without a resolved package version. They are
+        // not package artifacts and are indexed through project-reference
+        // evidence elsewhere, so do not misclassify them as malformed packages.
+        if (string.Equals(type?.Trim(), "Project", StringComparison.OrdinalIgnoreCase))
+            return;
+
         if (string.IsNullOrWhiteSpace(resolved))
         {
             gaps.Add(new NuGetLockfileGap(relativePath, "packages-lock-entry-resolved-missing", $"packages.lock.json entry for a package in {targetFramework} did not provide a resolved version.", line));

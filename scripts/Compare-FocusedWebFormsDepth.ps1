@@ -35,8 +35,8 @@ for ($i = 0; $i -lt 3; $i++) {
         $key = @($boundary.boundaryKind, $boundary.boundaryTargetId, $boundary.terminalEvidenceId) | ConvertTo-Json -Compress
         $keys[$key] = $true
     }
-    $added = @($keys.Keys | Where-Object { -not $previous.ContainsKey($_) }).Count
-    $lost = @($previous.Keys | Where-Object { -not $keys.ContainsKey($_) }).Count
+    $added = @(@($keys.Keys) | Where-Object { -not $previous.ContainsKey($_) }).Count
+    $lost = @(@($previous.Keys) | Where-Object { -not $keys.ContainsKey($_) }).Count
     $terminalPages = @($boundaries.surfaceId | Sort-Object -Unique).Count
     $overview.Add("depth=$depth|truncated=$([bool]$packet.summary.truncated)|chains=$(@($packet.eventChains).Count)|boundaryRecords=$($boundaries.Count)|distinctTerminals=$($keys.Count)|pagesWithTerminal=$terminalPages")
     if ($i -gt 0) { $overview.Add("depthDelta=$depth|addedTerminalIdentities=$added|lostTerminalIdentities=$lost") }

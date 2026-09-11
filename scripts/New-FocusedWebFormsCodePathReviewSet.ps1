@@ -14,6 +14,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+$isWindowsPlatform = [Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT
 
 if (!$ConfigPath) { $ConfigPath = Join-Path $PSScriptRoot 'Run-FocusedWebFormsPageList.json' }
 $config = $null
@@ -147,7 +148,8 @@ catch {
 }
 
 Write-Host "codePathReviewSet=completed;cases=$($selectedCases.Count);triggerContextLines=$TriggerContextLines"
-Write-Host "PRIVATE review queue: $queuePath"
-Write-Host "PRIVATE review index: $htmlPath"
+Write-Host "PRIVATE review directory: $(Split-Path -Leaf $setDirectory)"
+Write-Host "PRIVATE review queue: $(Split-Path -Leaf $queuePath)"
+Write-Host "PRIVATE review index: $(Split-Path -Leaf $htmlPath)"
 Write-Host 'Edit the Human verdict and Comment cells in index.md; an internal AI can read that file and follow the private report links.'
-if ($IsWindows) { Start-Process -FilePath $htmlPath }
+if ($isWindowsPlatform) { Start-Process -FilePath $htmlPath }

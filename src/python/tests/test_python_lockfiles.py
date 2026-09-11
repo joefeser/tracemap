@@ -352,7 +352,8 @@ def test_uv_skips_only_declared_non_excluded_workspace_entries(tmp_path: Path) -
 
 def test_uv_lock_unsupported_version_fails_closed(tmp_path: Path) -> None:
     lock = tmp_path / "uv.lock"
-    lock.write_text('version = 2\n\n[[package]]\nname = "requests"\nversion = "2.32.3"\nsource = { registry = "https://pypi.org/simple" }\n', encoding="utf-8")
+    secret = "https://user:secret@example.invalid/format"
+    lock.write_text(f'version = "{secret}"\n\n[[package]]\nname = "requests"\nversion = "2.32.3"\nsource = {{ registry = "https://pypi.org/simple" }}\n', encoding="utf-8")
     gaps: list[str] = []
 
     facts = read_lockfiles(tmp_path, _manifest("uv-v2"), [lock], [], gaps)
@@ -360,6 +361,8 @@ def test_uv_lock_unsupported_version_fails_closed(tmp_path: Path) -> None:
     assert _package_facts(facts) == []
     assert [fact.properties["gapKind"] for fact in _gap_facts(facts)] == ["python-lock-unsupported"]
     assert gaps and gaps[0].startswith("PythonLockUnsupported:")
+    assert secret not in repr(gaps)
+    assert secret not in repr(facts)
 
 
 def test_malformed_or_truncated_lockfile_emits_parse_gap(tmp_path: Path) -> None:
@@ -631,7 +634,8 @@ def test_poetry_lock_without_pyproject_emits_relation_capability_gap(tmp_path: P
 
 def test_poetry_lock_unsupported_lock_version_fails_closed(tmp_path: Path) -> None:
     lock = tmp_path / "poetry.lock"
-    lock.write_text(POETRY_LOCK.replace('lock-version = "2.0"', 'lock-version = "9.9"'), encoding="utf-8")
+    secret = "https://user:secret@example.invalid/format"
+    lock.write_text(POETRY_LOCK.replace('lock-version = "2.0"', f'lock-version = "{secret}"'), encoding="utf-8")
     gaps: list[str] = []
 
     facts = read_lockfiles(tmp_path, _manifest("poetry-unsupported"), [lock], [], gaps)
@@ -639,6 +643,8 @@ def test_poetry_lock_unsupported_lock_version_fails_closed(tmp_path: Path) -> No
     assert _package_facts(facts) == []
     assert [fact.properties["gapKind"] for fact in _gap_facts(facts)] == ["python-lock-unsupported"]
     assert gaps and gaps[0].startswith("PythonLockUnsupported:")
+    assert secret not in repr(gaps)
+    assert secret not in repr(facts)
 
 
 def test_repeated_lockfile_extraction_is_byte_identical(tmp_path: Path) -> None:

@@ -2225,6 +2225,29 @@ rules:
       - Application-database observations remain structural static evidence. The handoff never contains credentials, connection strings, configuration values, raw application SQL, or database execution instructions.
       - The handoff does not infer business intent, generate a BRD, select a target architecture, call an LLM, or generate modernization or migration code.
 
+  - id: diagnostic.webforms.raw-exact-call-evidence.v1
+    name: Private Web Forms raw exact-call evidence audit
+    description: Audits a bounded set of selected handlers against retained exact semantic call evidence for local diagnostic review.
+    evidenceTier: Tier4Unknown
+    emits:
+      - private Web Forms local inspection artifacts
+      - bounded exact-call diagnostic summaries
+    limitations:
+      - This is a read-only diagnostic projection over retained static evidence and does not prove runtime execution, reachability, ordering, successful binding, or absence.
+      - Missing exact witnesses remain unknown under the inspected scan coverage and may reflect unavailable source, unresolved symbols, unsupported framework behavior, or bounded traversal.
+      - Outputs are private local artifacts and can contain source identities and repository-relative paths; they are not anonymous or shareable by default.
+
+  - id: diagnostic.webforms.anonymous-code-path-review.v1
+    name: Anonymous Web Forms code-path review projection
+    description: Projects a private bounded Web Forms code-path review into structural aliases suitable for human review without source identities.
+    evidenceTier: Tier4Unknown
+    emits:
+      - anonymous structural Web Forms code-path review artifacts
+    limitations:
+      - Structural aliases preserve graph shape and evidence categories but omit source text, paths, symbols, fact IDs, SQL, configuration, URLs, and commit identity.
+      - Anonymous output does not prove runtime execution, reachability, ordering, successful binding, behavior, correctness, or absence of unsupported calls.
+      - Rare graph shapes and counts may still reveal architectural characteristics and require owner review before sharing.
+
   - id: legacy.webforms.inventory.v1
     name: Legacy WebForms file and page inventory
     description: Inventories WebForms markup, code-behind, designer files, directives, static server controls, checked-in configuration registrations, and safe page linkage metadata.

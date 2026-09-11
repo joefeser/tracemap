@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
+using TraceMap.Core;
 
 namespace TraceMap.Reporting;
 
@@ -108,7 +109,7 @@ public static partial class WebFormsRawEvidenceAudit
             seeds.Add(symbol);
         }
         var output = new List<string> { "raw-webforms-evidence=completed", "provenance=matched", $"selectedHandlers={seeds.Count}",
-            "rule=diagnostic.webforms.raw-exact-call-evidence.v1", "scope=independent-exact-semantic-call-closure-not-report-leaves" };
+            $"rule={RuleIds.DiagnosticWebFormsRawExactCallEvidence}", "scope=independent-exact-semantic-call-closure-not-report-leaves" };
         output.Add(startingMethodName is null ? "selection=report-handlers" : "selection=unique-method-hint;not-page-or-event-selection");
         if (seeds.Count == 0)
         {
@@ -345,7 +346,7 @@ public static partial class WebFormsRawEvidenceAudit
             {
                 privacy = "LOCAL ONLY: contains private paths and symbols. Do not share this file or photograph its contents.",
                 schemaVersion = "webforms-local-inspection.v1",
-                ruleId = "diagnostic.webforms.raw-exact-call-evidence.v1",
+                ruleId = RuleIds.DiagnosticWebFormsRawExactCallEvidence,
                 scanId = scan,
                 commitSha = commit,
                 sourceReport = Path.GetFullPath(reportPath),
