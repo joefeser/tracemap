@@ -1,0 +1,9 @@
+# Design: Evidence docs query recipes
+
+The existing docs-export corpus gains two generated root artifacts: `query-recipes.json` and `QUERY_RECIPES.md`. Both render one closed in-code recipe catalog. Recipes provide separate SQL variants for single and combined TraceMap indexes while presenting a shared result contract. SQL validation rejects multiple statements, mutation/DDL/attachment pragmas, unbounded queries, unnamed parameters, and tables outside a closed TraceMap allowlist.
+
+`EvidenceDocChunk` gains additive `retrievalHints`. Generic hints are derived from retained citations: fact IDs map to exact-fact lookup and file spans map to overlapping-span lookup. Web Forms packet chunks add typed surface, handler, terminal-boundary-evidence, and gap hints from their deterministic packet identities. Symbol and call-direction recipes are published in the catalog but are only hinted when the exact retained symbol is available; anonymized boundary IDs are never substituted for literal callee symbols. Hints contain only stable recipe IDs, closed parameter names, and evidence values already present in the exported chunk.
+
+Recipes are guidance for deterministic evidence retrieval; they are not conclusions and are not executed by docs-export. Existing hashing, generated-file collision handling, and hard safety checks remain authoritative. Internal TraceMap query SQL is admitted only in the two recipe artifacts after the recipe-specific validator succeeds; application SQL remains forbidden everywhere.
+
+Recipe parameters identify the input kinds for which each value is required. Combined-index SQL always requires and filters by `source_index_id`; hints carry `inputKind` and gain that source identity only when their chunk has one unambiguous combined-source owner. Multi-source chunks do not emit ambiguous retrieval hints.

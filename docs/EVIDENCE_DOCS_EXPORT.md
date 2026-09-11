@@ -20,7 +20,30 @@ tracemap docs-export \
 Optional inputs include `--route-flow-report`, `--property-flow-report`,
 `--paths-report`, `--reverse-report`, `--combined-report`,
 `--release-review-report`, `--vault-graph`, `--evidence-pack`, and
-`--source-claim-catalog`.
+`--webforms-packet`, and `--source-claim-catalog`.
+
+To add the bounded Web Forms modernization inventory to the same corpus:
+
+```bash
+tracemap docs-export \
+  --index <index.sqlite> \
+  --webforms-packet <webforms-modernization.json> \
+  --out <docs-output> \
+  --format markdown,jsonl
+```
+
+The packet source must uniquely match the supplied index by scan and commit
+identity. The `webforms-modernization` family emits separate retrieval units for
+the packet overview, surfaces, event chains, downstream boundaries,
+identity/state declarations, batch/data-movement declarations, and structural
+slice candidates. Packet gaps remain first-class gap chunks. Owner questions
+and limitations remain scoped static metadata rather than inferred findings.
+
+This export is deliberately a documentation corpus, not a BRD generator or
+modernization prompt. A downstream private workflow may retrieve and interpret
+the documents under its own access controls, but TraceMap does not infer
+business intent, recommend a target design, or generate Angular, .NET, SQL, or
+migration code as part of docs export.
 
 `--format` accepts one comma-separated value from `markdown`, `jsonl`, or
 `markdown,jsonl`. `manifest.json` is always the generated-file integrity anchor
@@ -29,7 +52,7 @@ for successful exports.
 `--families` accepts a comma-separated subset of:
 
 ```text
-source-overview,endpoint,route-flow,property-flow,dependency-surface,data-surface,package-config,query-sql-shape,legacy,release-review,impact-summary,gap,limitation
+source-overview,endpoint,route-flow,property-flow,dependency-surface,data-surface,package-config,query-sql-shape,legacy,release-review,impact-summary,webforms-modernization,gap,limitation
 ```
 
 Unselected families are recorded as `not_requested`. Requested families that
@@ -41,9 +64,11 @@ Directory output uses schema `tracemap-evidence-docs.v1`:
 
 ```text
 manifest.json
+query-recipes.json
 chunks.jsonl
 README.md
 index.md
+QUERY_RECIPES.md
 chunks/<family>/index.md
 chunks/<family>/<chunk-id>.md
 ```
@@ -54,6 +79,23 @@ Each JSONL line is one chunk object with `schemaVersion`, `chunkId`,
 source refs, supporting IDs, rule IDs, evidence tiers, coverage labels, gaps,
 limitations, redactions, and links. `bodyMarkdown` is rendered from the same
 structured evidence fields and does not become source evidence by itself.
+
+Chunks also carry additive `retrievalHints`. Each hint names a recipe from
+`query-recipes.json`, supplies bounded parameter values already present in the
+chunk's citations or packet identity, and identifies the supporting evidence.
+Hints do not add a finding, raise an evidence tier, or close a gap.
+Web Forms handler hints bind the retained display symbol used by fact and call
+tables. Boundary fact lookups are emitted only when the terminal identity is a
+retained fact; projection-only path nodes remain cited without an inapplicable
+fact lookup.
+
+Gap records retain their own source references, commit identity, safe
+repository-relative file path and structured line span when available, plus
+extractor identity/version and supporting IDs. Metadata that is unavailable
+remains null on the gap rather than being inferred from an unrelated citation.
+Web Forms packet identity includes the retained packet contents and requested
+surface selection, so distinct bounded views of the same scan remain separate
+retrieval inputs instead of colliding.
 
 Each chunk includes deterministic navigation links to its Markdown file, the
 family index, and the top-level docs index. Markdown output renders the same
@@ -77,6 +119,7 @@ question-family values are:
 - `data-surface-question`
 - `package-question`
 - `snapshot-change-question`
+- `modernization-evidence-question`
 - `weak-evidence-question`
 - `gap-question`
 - `limitation-question`
@@ -125,6 +168,36 @@ fields:
 Displayed IDs are truncated to 24 lowercase hex characters. If distinct full
 identity records collide, docs export emits
 `docs-export.gap.duplicate-stable-identity.v1` rather than choosing a winner.
+
+## Evidence Query Recipes
+
+`query-recipes.json` is a machine-readable closed catalog, and
+`QUERY_RECIPES.md` is its human-readable rendering when Markdown output is
+enabled. The initial catalog covers exact facts, overlapping file spans, exact
+symbols, handler call edges, reverse callers, Web Forms surface facts,
+database-shaped handler evidence, boundary target evidence, and evidence near a
+gap span. A separate stored-procedure candidate-context recipe retrieves
+command construction, command-type, invocation, and argument facts without
+claiming that co-occurrence proves object identity or execution.
+
+Each recipe declares required parameters, supported single/combined index
+kinds, a shared result contract, evidence requirements, and limitations. SQL
+variants are single-statement, parameterized, read-only, bounded by `$limit`,
+and restricted to documented TraceMap-owned evidence tables. Catalog validation
+rejects mutation or DDL tokens, multiple statements, missing parameters,
+unbounded recipes, and unapproved tables.
+
+Parameters declare the input kinds for which they are required. Every
+combined-index variant requires `source_index_id` and applies it as a predicate,
+so a file path, surface identity, or method symbol shared by multiple sources
+cannot consume another source's result budget. Chunk retrieval hints record the
+matching `inputKind` and include the owning combined-source ID when applicable.
+
+This internal retrieval SQL is not application SQL. It does not query an
+application database, expose captured SQL text, or prove runtime execution. A
+downstream system can use the recipes to request more cited TraceMap evidence,
+but remains responsible for access controls, orchestration, interpretation, and
+any private planning or conversion workflow.
 
 ## Claim Levels
 
