@@ -302,6 +302,70 @@ describe("ScanEngine", () => {
     }));
   });
 
+  it("fails closed when npm lockfiles contain duplicate properties", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    await fsp.mkdir(repo, { recursive: true });
+    const packagePath = path.join(repo, "package.json");
+    const lockPath = path.join(repo, "package-lock.json");
+    await fsp.writeFile(packagePath, JSON.stringify({ name: "fixture" }));
+    await fsp.writeFile(lockPath, `{
+      "lockfileVersion": 3,
+      "packages": {
+        "node_modules/example": { "version": "1.0.0", "version": "2.0.0" }
+      }
+    }`);
+    const inventory = [
+      { absolutePath: packagePath, kind: "package-json", relativePath: "package.json", sizeBytes: (await fsp.stat(packagePath)).size, skipped: false },
+      { absolutePath: lockPath, kind: "package-lock", relativePath: "package-lock.json", sizeBytes: (await fsp.stat(lockPath)).size, skipped: false }
+    ];
+
+    const facts = await extractPackageFacts(manifest("npm-lock-duplicate"), repo, inventory);
+
+    expect(facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.AnalysisGap,
+      properties: expect.objectContaining({ category: "package-lock-duplicate-property" })
+    }));
+    expect(facts).not.toContainEqual(expect.objectContaining({
+      factType: FactTypes.PackageReferenced,
+      properties: expect.objectContaining({ sourceKind: "lockfile" })
+    }));
+  });
+
+  it("redacts non-literal npm lockfile versions", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    await fsp.mkdir(repo, { recursive: true });
+    const packagePath = path.join(repo, "package.json");
+    const lockPath = path.join(repo, "package-lock.json");
+    await fsp.writeFile(packagePath, JSON.stringify({ name: "fixture" }));
+    await fsp.writeFile(lockPath, JSON.stringify({
+      lockfileVersion: 3,
+      packages: {
+        "node_modules/example": { version: "token secret" },
+        "node_modules/padded": { version: " 1.2.3 " }
+      }
+    }));
+    const inventory = [
+      { absolutePath: packagePath, kind: "package-json", relativePath: "package.json", sizeBytes: (await fsp.stat(packagePath)).size, skipped: false },
+      { absolutePath: lockPath, kind: "package-lock", relativePath: "package-lock.json", sizeBytes: (await fsp.stat(lockPath)).size, skipped: false }
+    ];
+
+    const facts = await extractPackageFacts(manifest("npm-lock-version"), repo, inventory);
+    const packageFact = facts.find((fact) => fact.factType === FactTypes.PackageReferenced && fact.targetSymbol === "example");
+
+    expect(packageFact?.properties).toEqual(expect.objectContaining({
+      redactionReason: "unsafe-package-version",
+      versionHash: expect.stringMatching(/^[0-9a-f]{32}$/)
+    }));
+    expect(packageFact?.properties).not.toHaveProperty("version");
+    expect(packageFact?.properties).not.toHaveProperty("resolvedVersion");
+    expect(JSON.stringify(facts)).not.toContain("token secret");
+    const paddedFact = facts.find((fact) => fact.factType === FactTypes.PackageReferenced && fact.targetSymbol === "padded");
+    expect(paddedFact?.properties).toEqual(expect.objectContaining({ redactionReason: "unsafe-package-version" }));
+    expect(paddedFact?.properties).not.toHaveProperty("resolvedVersion");
+  });
+
   it("admits package-lock through production inventory and preserves size bounds", async () => {
     const root = await tempDir();
     const repo = path.join(root, "repo");
