@@ -6,4 +6,4 @@
 - [x] 4. Preserve packet gaps, questions, limitations, provenance, and safety boundaries.
 - [x] 5. Add focused CLI, determinism, safety, and schema regression coverage.
 - [x] 6. Update the rule catalog and operator documentation.
-- [ ] 7. Run focused/full validation, update implementation state, and open a PR to `dev`.
+- [x] 7. Run focused/full validation, update implementation state, and open a PR to `dev`.

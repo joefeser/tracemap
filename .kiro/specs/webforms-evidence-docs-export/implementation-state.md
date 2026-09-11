@@ -8,4 +8,5 @@
 - Determinism and safety: equivalent reordered packet collections produce identical corpus hashes and JSONL bytes. Existing generated-file hashing, collision protection, unsafe-value validation, and claim-level behavior remain authoritative. Ordinary exports without a packet retain their prior default family set.
 - Boundaries: the exporter emits only deterministic evidence documentation. It contains no BRD format, prompt, LLM call, embedding, vector database, inferred business intent, target architecture recommendation, migration plan, or generated application/database code.
 - Validation: focused docs-export/Web Forms suite passed 39/39; full solution passed 1,805/1,805; private-path guard and `git diff --check` passed. One pre-existing nullable warning remains in `PropertyMappingTests.cs`.
-- Current: implementation and local validation complete; commit, PR, and exact-head review remain.
+- Delivery: commit `e5445f1e` opened PR #731 against `dev` and closes #730.
+- Current: implementation and local validation complete; exact-head review and CI remain.
