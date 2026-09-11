@@ -257,7 +257,7 @@ public/demo safe.
 | Safe source label or repo-relative span such as `src/Api/Controller.cs:10-12` | Render as citation metadata when provenance is stable. | Render only after claim-level review permits the source. |
 | Secret-like safe-context display component | Use a hash, category label, or omission record when supported by the exporter. | Reject or filter under strict validation. |
 | Unsupported or missing citation provenance | Emit a rule-backed gap such as `docs-export.gap.missing-provenance.v1`. | Emit the same gap if the remaining output is claim-level safe. |
-| Raw SQL, config value, credential, or token in a structured fact property | Omit the value and retain only its safe property key, supporting fact ID, redaction category, and `unsafe-property-redacted` gap. | Apply the same value-free redaction and gap before claim-level filtering. |
+| Raw SQL, config value, credential, or token in a structured fact property | Omit the value and retain only its safe property key, supporting fact ID, explicit redaction category, provenance metadata, and `unsafe-property-redacted` gap. | Apply the same value-free redaction and gap before claim-level filtering. |
 | Stack trace or another unsafe value in free-form limitation metadata | Omit the limitation text and retain only its redaction category, supporting IDs, and `docs-export.redaction.unsafe-limitation.v1` record. | Apply the same value-free redaction before claim-level filtering. |
 | Raw URL, raw remote, local absolute path, source snippet, analyzer log, or unsafe value in a substantive evidence field | Hard fail or omit only when the value is not required for evidence identity; diagnostics stay sanitized. | Hard fail or omit under the same sanitized safety gate. |
 
