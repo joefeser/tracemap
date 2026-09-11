@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "tracemap-webforms-extraction-readiness-summary/v1",
+  "sanitized": true,
+  "captureMethod": "owner-supplied-photo-derived-aggregate-reconstruction",
+  "scopeCount": 9,
+  "scanCoverage": {
+    "fullSemanticSucceeded": 1,
+    "reducedOrPartial": 8
+  },
+  "positiveEvidence": {
+    "webFormsPageOrControlInventoryScopes": 0,
+    "webFormsEventBindingScopes": 0,
+    "webFormsResolvedHandlerScopes": 0,
+    "webFormsEventFlowScopes": 0,
+    "classicAspNetEvidenceScopes": 0
+  },
+  "adjacentEvidence": {
+    "winFormsEventBindingScopes": 4,
+    "winFormsEventBindingCount": 11,
+    "webFormsOverlapScopes": 0,
+    "classificationDefectProven": false
+  },
+  "interpretation": "The retained scans contain no positive Web Forms or classic ASP.NET evidence. Because one scope completed with full semantic coverage, reduced compilation alone cannot explain the result. The evidence does not establish whether the intended Web Forms source was absent from configuration, outside selected inventory, excluded by scan scope, or present but not projected.",
+  "nextDiagnostic": "Identify the intended Web Forms source locally, then compare its configured scope with categorical FileInventoried Web Forms kinds and include/exclude reachability without rescanning or returning private identifiers."
+}

@@ -190,6 +190,27 @@ the primitive path and projection disagree on terminal identity or
 classification, the result is capped at `NeedsReviewStaticPath` and includes an
 ambiguity note rather than choosing the stronger conclusion.
 
+For bounded Web Forms reads, the exact resolved handler fact seeds both its
+canonical display identity and symbol ID. A handler-flow projection may also
+re-anchor an already retained call edge from that handler. Admission
+requires one supported handler fact, the projection source to equal that
+handler's canonical display identity, and the call fact ID to appear in both
+`supportingFactIds` and `supportingEdgeIds`. The bounded reader admits only those
+exact call facts. Compiler-resolved call targets may seed ordinary target-symbol
+closure; syntax-only targets remain isolated call-target candidates so a simple
+method name cannot join unrelated callers. Same-named calls elsewhere are not
+candidates. Canonical compiler-resolved edges retain their own evidence; the
+bridge remains projection evidence under
+`legacy.flow.static-traversal.v1`; it cannot upgrade confidence or prove runtime
+dispatch, execution, binding, or reachability.
+
+Each root traversal observation preserves the sorted, closed set of limits that
+actually marked that root truncated: `depth`, `cycle`, `frontier`, `path`, or
+`work`. Multiple values are allowed because separate static branches from one
+root can encounter different limits. Empty means no reason was retained; it is
+not evidence that traversal was complete. These are bounded-search observations,
+not runtime stopping conditions or exclusive causes.
+
 ## Proposed Rule IDs
 
 Add rule catalog entries before implementation emits new results:
@@ -575,3 +596,29 @@ Run relevant pinned smoke checks from `docs/VALIDATION.md` when implementation
 touches language adapters or public validation scripts. For spec-only delivery,
 Kiro review plus private-path and diff checks are sufficient unless repo
 validation scripts require more.
+## Bounded legacy traversal scheduling
+
+Search work is independently bounded: each dequeued state and each inspected edge
+consumes one unit, including cycle-rejected and dispatch-rejected edges. The default
+is 100,000 units per Search call; query provenance records MaxTraversalWork. A work
+exhaustion gap uses the existing truncation rule with closed reason work and marks
+current/pending roots incomplete. Already observed evidence remains valid within
+its tiers. This is deterministic but not a global scan time/memory guarantee. The
+same guard protects ordinary path searches. Terminal-free searches must also
+publish their truncation gaps rather than silently dropping resource exhaustion.
+
+Legacy-flow searches use deterministic, fair-sliced depth-first scheduling over
+the existing sorted roots and edges. A root receives at most the smaller of 64
+work units or its equal share of the configured global work ceiling before its
+pending depth-first states rotate behind the next root. High-fan-out state
+expansion is resumable at an edge boundary, so inspected edges also obey the
+slice. This does not reserve work for every root when the global ceiling is lower
+than the root count, guarantee a terminal per root, or change the shared work,
+frontier, depth, or path ceilings. Ordinary non-legacy path searches retain
+breadth-first scheduling. The legacy traversal rule does not promise shortest-path ordering.
+No global node-visited filter is used: reconvergent routes retain their independent
+edge evidence and path-local cycle constraints. Depth, frontier, and path bounds
+remain unchanged. Cycle revisits still emit explicit truncation gaps and preserve
+partial status; they do not prove runtime recursion or infinite loops. A path cap
+can therefore select a different deterministic subset than earlier breadth-first
+reports, and omitted routes remain unknown.

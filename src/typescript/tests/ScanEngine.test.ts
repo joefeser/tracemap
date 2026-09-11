@@ -12,6 +12,7 @@ import { RuleIds } from "../src/facts/RuleIds";
 import { exportIndex } from "../src/export/IndexExporter";
 import { extractPackageFacts } from "../src/extractors/PackageJsonExtractor";
 import { findSqlJsFile } from "../src/storage/SqliteIndexWriter";
+import { collectFileInventory } from "../src/scan/FileInventory";
 
 const packageRoot = process.cwd();
 const repoRoot = path.resolve(packageRoot, "../..");
@@ -154,6 +155,241 @@ describe("ScanEngine", () => {
     }));
   });
 
+  it("extracts npm package-lock v2/v3 identity metadata without fetching packages", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    await fsp.mkdir(repo, { recursive: true });
+    const packagePath = path.join(repo, "package.json");
+    const lockPath = path.join(repo, "package-lock.json");
+    await fsp.writeFile(packagePath, JSON.stringify({
+      name: "fixture",
+      dependencies: { express: "^4.0.0" },
+      devDependencies: { "dev-tool": "1.0.0" },
+      optionalDependencies: { "optional-tool": "1.0.0" },
+      peerDependencies: { "peer-tool": "1.0.0" }
+    }, null, 2));
+    const sha512Digest = Buffer.alloc(64, 0x2a).toString("base64");
+    await fsp.writeFile(lockPath, JSON.stringify({
+      name: "fixture",
+      lockfileVersion: 3,
+      packages: {
+        "": { dependencies: { express: "^4.0.0" } },
+        "node_modules/express": {
+          version: "4.18.2",
+          resolved: "https://registry.npmjs.org/express/-/express-4.18.2.tgz",
+          integrity: "sha512-" + sha512Digest
+        },
+        "node_modules/dev-tool": { version: "1.0.0" },
+        "node_modules/optional-tool": { version: "1.0.0" },
+        "node_modules/peer-tool": { version: "1.0.0" },
+        "node_modules/versionless-one": {},
+        "node_modules/versionless-two": { resolved: "https://registry.npmjs.org/versionless-two" },
+        "node_modules/bar": {
+          version: "2.0.0"
+        },
+        "node_modules/alias-of-is-number": {
+          name: "is-number",
+          version: "7.0.0"
+        },
+        "node_modules/unsafe-version": {
+          version: "https://user:secret@example.invalid/package.tgz"
+        },
+        "node_modules/bar/node_modules/express": {
+          version: "3.0.0",
+          integrity: "sha512-AAAA"
+        },
+        "node_modules/express/node_modules/accepts": {
+          version: "1.3.8",
+          resolved: "https://registry.npmjs.org/accepts/-/accepts-1.3.8.tgz"
+        }
+      }
+    }, null, 2));
+    const inventory = [
+      { absolutePath: packagePath, kind: "package-json", relativePath: "package.json", sizeBytes: (await fsp.stat(packagePath)).size, skipped: false },
+      { absolutePath: lockPath, kind: "package-lock", relativePath: "package-lock.json", sizeBytes: (await fsp.stat(lockPath)).size, skipped: false }
+    ];
+    const facts = await extractPackageFacts(manifest("npm-lock"), repo, inventory);
+    expect(facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.PackageReferenced,
+      properties: expect.objectContaining({
+        manifestKind: "package-lock.json",
+        packageName: "express",
+        resolvedVersion: "4.18.2",
+        dependencyRelation: "direct",
+        dependencyPathDepth: "1",
+        registryOrigin: "registry.npmjs.org",
+        artifactDigestAlgorithm: "sha512-base64",
+        artifactDigest: sha512Digest,
+        lockfileHash: expect.stringMatching(/^[0-9a-f]{32}$/)
+      })
+    }));
+    expect(facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.PackageReferenced,
+      properties: expect.objectContaining({ packageName: "dev-tool", dependencyRelation: "direct", dependencyGroup: "devDependencies" })
+    }));
+    expect(facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.PackageReferenced,
+      properties: expect.objectContaining({ packageName: "optional-tool", dependencyRelation: "direct", dependencyGroup: "optionalDependencies" })
+    }));
+    expect(facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.PackageReferenced,
+      properties: expect.objectContaining({ packageName: "peer-tool", dependencyRelation: "direct", dependencyGroup: "peerDependencies" })
+    }));
+    const missingVersionGaps = facts.filter((fact) => fact.factType === FactTypes.AnalysisGap && fact.properties.category === "package-lock-entry-version-missing");
+    expect(missingVersionGaps).toHaveLength(2);
+    expect(missingVersionGaps.map((fact) => fact.targetSymbol).sort()).toEqual(["versionless-one", "versionless-two"]);
+    expect(new Set(missingVersionGaps.map((fact) => fact.evidence.startLine)).size).toBe(2);
+    expect(facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.PackageReferenced,
+      properties: expect.objectContaining({ packageName: "accepts", dependencyRelation: "transitive", dependencyPathDepth: "2" })
+    }));
+    expect(facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.PackageReferenced,
+      properties: expect.objectContaining({ packageName: "express", resolvedVersion: "3.0.0", dependencyRelation: "transitive", dependencyPathDepth: "2" })
+    }));
+    expect(facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.AnalysisGap,
+      properties: expect.objectContaining({ category: "lockfile-digest-unavailable" })
+    }));
+    expect(facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.PackageReferenced,
+      targetSymbol: "is-number",
+      properties: expect.objectContaining({
+        packageName: "is-number",
+        installationName: "alias-of-is-number",
+        resolvedVersion: "7.0.0",
+        dependencyRelation: "unknown"
+      })
+    }));
+    const unsafeVersion = facts.find((fact) => fact.factType === FactTypes.PackageReferenced && fact.targetSymbol === "unsafe-version");
+    expect(unsafeVersion?.properties).toEqual(expect.objectContaining({
+      redactionReason: "unsafe-package-version",
+      versionHash: expect.stringMatching(/^[0-9a-f]{32}$/),
+      dependencyRelation: "unknown"
+    }));
+    expect(JSON.stringify(unsafeVersion)).not.toContain("user:secret");
+    expect(JSON.stringify(facts)).not.toContain("express-4.18.2.tgz");
+  });
+
+  it("downgrades manifest coverage when npm lockfile evidence is incomplete", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    await fsp.mkdir(repo, { recursive: true });
+    await fsp.mkdir(path.join(repo, "src"), { recursive: true });
+    await fsp.writeFile(path.join(repo, "tsconfig.json"), JSON.stringify({
+      compilerOptions: { target: "ES2022", module: "CommonJS", strict: true },
+      include: ["src/**/*.ts"]
+    }));
+    await fsp.writeFile(path.join(repo, "src", "index.ts"), "export const value = 1;\n");
+    await fsp.writeFile(path.join(repo, "package.json"), JSON.stringify({ name: "fixture" }));
+    await fsp.writeFile(path.join(repo, "package-lock.json"), JSON.stringify({
+      name: "fixture",
+      lockfileVersion: 1,
+      dependencies: {}
+    }));
+    initGitRepo(repo);
+
+    const result = await scan(scanOptions(repo, path.join(root, "out")));
+
+    expect(result.manifest.analysisLevel).toBe("Level1SemanticAnalysisReduced");
+    expect(result.manifest.buildStatus).toBe("FailedOrPartial");
+    expect(result.manifest.knownGaps).toContain(
+      "package-lock-unsupported: package-lock.json must be npm lockfile v2 or v3 with a packages map."
+    );
+    expect(result.facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.AnalysisGap,
+      properties: expect.objectContaining({ category: "package-lock-unsupported" })
+    }));
+  });
+
+  it("fails closed when npm lockfiles contain duplicate properties", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    await fsp.mkdir(repo, { recursive: true });
+    const packagePath = path.join(repo, "package.json");
+    const lockPath = path.join(repo, "package-lock.json");
+    await fsp.writeFile(packagePath, JSON.stringify({ name: "fixture" }));
+    await fsp.writeFile(lockPath, `{
+      "lockfileVersion": 3,
+      "packages": {
+        "node_modules/example": { "version": "1.0.0", "version": "2.0.0" }
+      }
+    }`);
+    const inventory = [
+      { absolutePath: packagePath, kind: "package-json", relativePath: "package.json", sizeBytes: (await fsp.stat(packagePath)).size, skipped: false },
+      { absolutePath: lockPath, kind: "package-lock", relativePath: "package-lock.json", sizeBytes: (await fsp.stat(lockPath)).size, skipped: false }
+    ];
+
+    const facts = await extractPackageFacts(manifest("npm-lock-duplicate"), repo, inventory);
+
+    expect(facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.AnalysisGap,
+      properties: expect.objectContaining({ category: "package-lock-duplicate-property" })
+    }));
+    expect(facts).not.toContainEqual(expect.objectContaining({
+      factType: FactTypes.PackageReferenced,
+      properties: expect.objectContaining({ sourceKind: "lockfile" })
+    }));
+  });
+
+  it("redacts non-literal npm lockfile versions", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    await fsp.mkdir(repo, { recursive: true });
+    const packagePath = path.join(repo, "package.json");
+    const lockPath = path.join(repo, "package-lock.json");
+    await fsp.writeFile(packagePath, JSON.stringify({ name: "fixture" }));
+    await fsp.writeFile(lockPath, JSON.stringify({
+      lockfileVersion: 3,
+      packages: {
+        "node_modules/example": { version: "token secret" },
+        "node_modules/padded": { version: " 1.2.3 " }
+      }
+    }));
+    const inventory = [
+      { absolutePath: packagePath, kind: "package-json", relativePath: "package.json", sizeBytes: (await fsp.stat(packagePath)).size, skipped: false },
+      { absolutePath: lockPath, kind: "package-lock", relativePath: "package-lock.json", sizeBytes: (await fsp.stat(lockPath)).size, skipped: false }
+    ];
+
+    const facts = await extractPackageFacts(manifest("npm-lock-version"), repo, inventory);
+    const packageFact = facts.find((fact) => fact.factType === FactTypes.PackageReferenced && fact.targetSymbol === "example");
+
+    expect(packageFact?.properties).toEqual(expect.objectContaining({
+      redactionReason: "unsafe-package-version",
+      versionHash: expect.stringMatching(/^[0-9a-f]{32}$/)
+    }));
+    expect(packageFact?.properties).not.toHaveProperty("version");
+    expect(packageFact?.properties).not.toHaveProperty("resolvedVersion");
+    expect(JSON.stringify(facts)).not.toContain("token secret");
+    const paddedFact = facts.find((fact) => fact.factType === FactTypes.PackageReferenced && fact.targetSymbol === "padded");
+    expect(paddedFact?.properties).toEqual(expect.objectContaining({ redactionReason: "unsafe-package-version" }));
+    expect(paddedFact?.properties).not.toHaveProperty("resolvedVersion");
+  });
+
+  it("admits package-lock through production inventory and preserves size bounds", async () => {
+    const root = await tempDir();
+    const repo = path.join(root, "repo");
+    const output = path.join(root, "out");
+    await fsp.mkdir(repo, { recursive: true });
+    await fsp.writeFile(path.join(repo, "package.json"), JSON.stringify({ name: "fixture", dependencies: { example: "1.0.0" } }));
+    await fsp.writeFile(path.join(repo, "package-lock.json"), JSON.stringify({ lockfileVersion: 3, packages: { "node_modules/example": { version: "1.0.0" } } }));
+    const options = { repoPath: repo, outputPath: output, projectPaths: [], includeGlobs: [], excludeGlobs: [], maxFileByteSize: 16, semantic: false };
+
+    const inventory = await collectFileInventory(options);
+    const lockfile = inventory.find((item) => item.relativePath === "package-lock.json");
+    expect(lockfile).toEqual(expect.objectContaining({ kind: "package-lock", skipped: true }));
+
+    const facts = await extractPackageFacts(manifest("bounded-lock"), repo, inventory);
+    expect(facts).toContainEqual(expect.objectContaining({
+      factType: FactTypes.AnalysisGap,
+      properties: expect.objectContaining({ category: "package-lock-size-limit" })
+    }));
+    expect(facts).not.toContainEqual(expect.objectContaining({
+      factType: FactTypes.PackageReferenced,
+      properties: expect.objectContaining({ sourceKind: "lockfile" })
+    }));
+  });
+
   it("can be reduced by the existing .NET reducer with review-tier fan-out handling", async () => {
     const out = await tempDir();
     await scan({
@@ -189,7 +425,7 @@ describe("ScanEngine", () => {
     expect(markdown).toContain("NeedsReview");
     expect(markdown).toContain("High fan-out match set");
     expect(markdown).toContain("PropertyAccessed");
-  }, 60_000);
+  }, 120_000);
 
   it("exports deterministic JSON and Mermaid from a TypeScript index", async () => {
     const out = await tempDir();

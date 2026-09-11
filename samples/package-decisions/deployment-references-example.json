@@ -1,0 +1,28 @@
+{
+  "version": "package-deployment-reference.v1",
+  "producer": {
+    "id": "example-ci-producer",
+    "version": "1"
+  },
+  "references": [
+    {
+      "referenceId": "ref-build-0042",
+      "referenceKind": "build-attachment",
+      "ecosystem": "npm",
+      "packageName": "@example/lib",
+      "artifactVersion": "2.14.0",
+      "registryOrigin": "registry.npmjs.org",
+      "artifactDigestAlgorithm": "sha256",
+      "artifactDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "sourceRepo": "https://example.invalid/org/app.git",
+      "commitSha": "1111111111111111111111111111111111111111"
+    },
+    {
+      "referenceId": "ref-deploy-0043",
+      "referenceKind": "deployment-manifest",
+      "ecosystem": "npm",
+      "packageName": "fixture-unmatched",
+      "artifactVersion": "9.9.9"
+    }
+  ]
+}

@@ -14,6 +14,7 @@ from .fact_factory import create_fact, evidence
 from .git_metadata import read_git_metadata
 from .hashes import sha256_hex
 from .inventory import create_scan_id, discover_inventory, package_roots, source_snapshot_digest
+from .lockfiles import read_lockfiles
 from .metadata import read_package_metadata
 from .models import CodeFact, FileInventoryItem, ScanManifest, ScanOptions
 from .pathing import parse_byte_size
@@ -72,6 +73,8 @@ def scan(
     facts.extend(_inventory_facts(base_manifest, inventory, gaps))
     usable = [Path(item.absolute_path) for item in inventory if not item.skipped]
     metadata_files = [path for path in usable if _kind(path, inventory) == "PythonMetadata"]
+    lockfile_files = [path for path in usable if _kind(path, inventory) == "PythonLockfile"]
+    pyproject_files = [path for path in metadata_files if path.name == "pyproject.toml"]
     config_files = [path for path in usable if _kind(path, inventory) == "ConfigFile"]
     sql_files = [path for path in usable if _kind(path, inventory) == "SqlFile"]
     py_files = [path for path in usable if _kind(path, inventory) in {"PythonSource", "PythonStub"}]
@@ -79,6 +82,7 @@ def scan(
     if not options.no_metadata:
         deps, metadata_facts = read_package_metadata(repo, base_manifest, metadata_files, gaps)
         facts.extend(metadata_facts)
+        facts.extend(read_lockfiles(repo, base_manifest, lockfile_files, pyproject_files, gaps))
     facts.extend(extract_config_files(repo, base_manifest, config_files, gaps))
     facts.extend(extract_sql_files(repo, base_manifest, sql_files, gaps))
     facts.extend(extract_python_files(repo, base_manifest, py_files, roots, deps, gaps))

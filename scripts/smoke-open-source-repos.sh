@@ -9,8 +9,61 @@ TS_CLI="${ROOT_DIR}/src/typescript/dist/src/cli.js"
 JVM_CLI="${ROOT_DIR}/src/jvm/build/install/tracemap-jvm/bin/tracemap-jvm"
 JDK21_HOME="${JAVA_HOME:-"/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home"}"
 PYTHON_BIN="${TRACEMAP_PYTHON:-python3}"
+SELECTED_REPOS="${TRACEMAP_OSS_SMOKE_REPOS:-}"
+KNOWN_REPOS=(
+  "ProjectExtensions.Azure.ServiceBus"
+  "fluentjdf"
+  "scip-typescript"
+  "axios-npm-lock"
+  "scip-java"
+  "spring-petclinic"
+  "okio"
+  "full-stack-fastapi-template"
+  "microblog"
+  "sqlalchemy"
+)
+
+validate_selection() {
+  [[ -z "$SELECTED_REPOS" ]] && return 0
+
+  local selected
+  IFS=',' read -r -a selected <<< "$SELECTED_REPOS"
+  local candidate known
+  for candidate in "${selected[@]}"; do
+    [[ -n "$candidate" ]] || {
+      printf 'TRACEMAP_OSS_SMOKE_REPOS contains an empty label.\n' >&2
+      return 1
+    }
+    for known in "${KNOWN_REPOS[@]}"; do
+      [[ "$candidate" == "$known" ]] && break
+    done
+    if [[ "$candidate" != "$known" ]]; then
+      printf 'Unknown TRACEMAP_OSS_SMOKE_REPOS label: %s\n' "$candidate" >&2
+      return 1
+    fi
+  done
+}
+
+validate_selection
 
 mkdir -p "$CACHE_ROOT" "$OUT_ROOT"
+
+should_scan() {
+  local label="$1"
+  if [[ -z "$SELECTED_REPOS" ]]; then
+    return 0
+  fi
+
+  local selected
+  IFS=',' read -r -a selected <<< "$SELECTED_REPOS"
+  local candidate
+  for candidate in "${selected[@]}"; do
+    if [[ "$candidate" == "$label" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
 
 if [[ "${TRACEMAP_SKIP_BUILD:-0}" != "1" ]]; then
   dotnet build "$ROOT_DIR/src/dotnet/TraceMap.sln"
@@ -98,6 +151,7 @@ print_summary() {
 
 scan_dotnet() {
   local label="$1"
+  should_scan "$label" || return 0
   local url="$2"
   local sha="$3"
   local repo
@@ -111,6 +165,7 @@ scan_dotnet() {
 
 scan_typescript() {
   local label="$1"
+  should_scan "$label" || return 0
   local url="$2"
   local sha="$3"
   local repo
@@ -124,6 +179,7 @@ scan_typescript() {
 
 scan_jvm() {
   local label="$1"
+  should_scan "$label" || return 0
   local url="$2"
   local sha="$3"
   local repo
@@ -137,6 +193,7 @@ scan_jvm() {
 
 scan_python() {
   local label="$1"
+  should_scan "$label" || return 0
   local url="$2"
   local sha="$3"
   local scan_subdir="${4:-"."}"
@@ -159,6 +216,7 @@ printf 'TraceMap OSS smoke output: %s\n' "$OUT_ROOT"
 scan_dotnet "ProjectExtensions.Azure.ServiceBus" "https://github.com/ProjectExtensions/ProjectExtensions.Azure.ServiceBus.git" "2a8e72c8f5680edf2096b05ac08c39d47a95cef8"
 scan_dotnet "fluentjdf" "https://github.com/joefeser/fluentjdf.git" "9490e699a89bb21f4aabf198173fc6382f84a53f"
 scan_typescript "scip-typescript" "https://github.com/sourcegraph/scip-typescript.git" "891eb4293709a6a587bf4468dfa1b45a85182fd9"
+scan_typescript "axios-npm-lock" "https://github.com/axios/axios.git" "84a9f3b9a4f3244b8c8e818f557d64c7b964fb25"
 scan_jvm "scip-java" "https://github.com/sourcegraph/scip-java.git" "825463cb15d540d45c680593aad1f634330435cf"
 scan_jvm "spring-petclinic" "https://github.com/spring-projects/spring-petclinic.git" "a2c2ef994340d3970eb6db51247456a51bb161f8"
 scan_jvm "okio" "https://github.com/square/okio.git" "cad7ff1057307142149b1a28dfcb49117e89b0d3"

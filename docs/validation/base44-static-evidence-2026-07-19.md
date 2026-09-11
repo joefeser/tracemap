@@ -2,6 +2,12 @@
 
 Date: 2026-07-19
 
+> Historical receipt only. The ShopGenie row below scanned an older accepted
+> export/fixture source, not the later canonical `BigRiverMachine/ShopGenie`
+> repository. It must not be reused as the current ShopGenie denominator or
+> source authority. The canonical-source payload revalidation is recorded in
+> `base44-entity-payload-evidence-2026-09-05.md`.
+
 This receipt exercises the reusable TraceMap adapter against three immutable source authorities used by 88mph. It proves static extraction and source binding only. It does not replace the 88mph capability census, runtime, migration, requirements, deployment, or browser evidence.
 
 | Application | Repository commit | Accepted source SHA-256 | Accepted tree SHA-256 | Static facts | Packet SHA-256 |
@@ -18,7 +24,10 @@ All three scans correctly report `Level3SyntaxAnalysis` with one project-loading
 
 - Harbor: 94 customer boundary rows (93 function entry surfaces plus one shared function-library source), 664 entity operations, 93 environment accesses, 110 function invocations, 30 HTTP targets, 93 SDK imports, and 920 SDK primitive calls.
 - DigitalTwin-Fork: 133 function surfaces/customer boundaries, 1,195 entity operations, 48 environment accesses, 117 function invocations, 35 HTTP targets, 134 SDK imports, and 1,509 SDK primitive calls.
-- ShopGenie-Fork: 425 entity operations, 1 SDK import, and 430 SDK primitive calls. Its accepted source is a frontend-only legacy export, so no backend function entry surfaces are present in that repository commit.
+- ShopGenie-Fork: 425 entity operations, 1 SDK import, and 430 SDK primitive
+  calls in the historical export/fixture only. These numbers are not the
+  canonical ShopGenie repository denominator and are retained solely to make
+  the old receipt auditable.
 
 SDK aliases in these counts are source-proven through direct SDK imports or local import/export chains rooted at those imports. Identically named local objects and unrelated `createClient` factories are excluded.
 

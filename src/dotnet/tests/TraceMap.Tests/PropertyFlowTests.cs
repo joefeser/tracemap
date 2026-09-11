@@ -311,6 +311,95 @@ public sealed class PropertyFlowTests
     }
 
     [Fact]
+    public async Task Property_flow_ignores_direct_property_mapping_facts_until_exact_identity_composition_is_available()
+    {
+        using var temp = new TempDirectory();
+        var indexPath = Path.Combine(temp.Path, "server.sqlite");
+        var combinedPath = Path.Combine(temp.Path, "combined.sqlite");
+        var manifest = Manifest("server", "tracemap-milestone16");
+        var syntaxTarget = ModelBindingFact(
+            manifest,
+            "ProfileModel",
+            "Email",
+            "view-model",
+            "mvc-action-parameter",
+            "form",
+            "Profile",
+            "Save",
+            null,
+            "POST",
+            "Controllers/ProfileController.cs",
+            10);
+        // A directed mapping whose target shares the visible property name of the
+        // selected root must not become a root, node, or path in the name-based reader.
+        var mapping = FactFactory.Create(
+            manifest,
+            FactTypes.PropertyMappingDeclared,
+            RuleIds.CSharpSemanticPropertyMapping,
+            EvidenceTiers.Tier1Semantic,
+            new EvidenceSpan("Mappers/ProfileMapper.cs", 12, 12, null, "CSharpPropertyMappingExtractor", ScannerVersions.CSharpPropertyMappingExtractor),
+            sourceSymbol: "global::Server.ProfileModel.Email",
+            targetSymbol: "global::Server.ProfileView.Email",
+            contractElement: "object-initializer",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["coverageLabel"] = "bounded-static-property-mapping",
+                ["direction"] = "source-to-target",
+                ["limitations"] = "Static compiler evidence only.",
+                ["mappingShape"] = "object-initializer",
+                ["sourcePropertySymbolId"] = "property|assembly:server|type:Server.ProfileModel|member:Email",
+                ["targetPropertySymbolId"] = "property|assembly:server|type:Server.ProfileView|member:Email"
+            });
+        var mappingGap = FactFactory.Create(
+            manifest,
+            FactTypes.AnalysisGap,
+            RuleIds.CSharpSemanticPropertyMappingGap,
+            EvidenceTiers.Tier4Unknown,
+            new EvidenceSpan("Mappers/ProfileMapper.cs", 20, 20, null, "CSharpPropertyMappingExtractor", ScannerVersions.CSharpPropertyMappingExtractor),
+            contractElement: "PropertyMappingTruncated",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["coverageEffect"] = "reduces-direct-property-mapping-coverage",
+                ["gapKind"] = "PropertyMappingTruncated",
+                ["occurrenceCount"] = "2"
+            });
+        SqliteIndexWriter.Write(indexPath, manifest, [syntaxTarget, semanticRazorTarget(manifest), mapping, mappingGap]);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([indexPath], combinedPath, ["server"]));
+
+        var report = await PropertyFlowReporter.BuildReportAsync(new PropertyFlowOptions(
+            combinedPath,
+            Path.Combine(temp.Path, "out"),
+            "model:ProfileModel.Email",
+            Framework: "razor"));
+
+        var root = Assert.Single(report.SelectedRoots);
+        Assert.Equal(RuleIds.RazorModelBinding, root.RuleId);
+        Assert.Equal(1, report.Summary.TotalCandidateCount);
+        // The assertion below is only meaningful when at least one path exists;
+        // the syntax target must still produce its first-hop lineage row.
+        Assert.NotEmpty(report.LineagePaths);
+        Assert.DoesNotContain(report.LineagePaths.SelectMany(path => path.Nodes), node =>
+            node.RuleId is RuleIds.CSharpSemanticPropertyMapping or RuleIds.CSharpSemanticPropertyMappingGap);
+    }
+
+    private static CodeFact semanticRazorTarget(ScanManifest manifest) => FactFactory.Create(
+        manifest,
+        FactTypes.RazorModelBindingTarget,
+        RuleIds.CSharpRazorSemanticModelBinding,
+        EvidenceTiers.Tier1Semantic,
+        new EvidenceSpan("Controllers/ProfileController.cs", 10, 10, null, "CSharpSemanticExtractor", ScannerVersions.CSharpSemanticExtractor),
+        sourceSymbol: "global::Server.ProfileController.Save(global::Server.ProfileModel input)",
+        targetSymbol: "global::Server.ProfileModel.Email",
+        contractElement: "Email",
+        properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["modelKind"] = "view-model",
+            ["modelType"] = "ProfileModel",
+            ["propertyName"] = "Email",
+            ["targetSymbolId"] = "property|assembly:server|type:Server.ProfileModel|member:Email"
+        });
+
+    [Fact]
     public async Task Property_flow_ignores_semantic_razor_targets_until_exact_identity_composition_is_available()
     {
         using var temp = new TempDirectory();

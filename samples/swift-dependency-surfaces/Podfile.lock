@@ -7,8 +7,8 @@ DEPENDENCIES:
   - RxSwift
 
 SPEC CHECKSUMS:
-  Alamofire: publicchecksum1
-  Alamofire: duplicatechecksum
-  RxSwift: publicchecksum2
+  Alamofire: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  Alamofire: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  RxSwift: cccccccccccccccccccccccccccccccccccccccc
 
 COCOAPODS: 1.15.0

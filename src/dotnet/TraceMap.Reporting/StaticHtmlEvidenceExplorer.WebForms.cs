@@ -416,13 +416,14 @@ public static partial class StaticHtmlEvidenceExplorer
         }
     }
 
-    private static void ValidateWebFormsPacket(WebFormsModernizationPacket packet, string? expectedCommitSha)
+    internal static void ValidateWebFormsPacket(WebFormsModernizationPacket packet, string? expectedCommitSha)
     {
         if (packet.SchemaVersion != WebFormsModernizationPacketReporter.SchemaVersion
             || packet.RuleId != WebFormsModernizationPacketReporter.PacketRuleId
             || packet.ClaimLevel != "local-only"
             || packet.Coverage is not ("bounded-static-webforms-modernization" or "reduced-static-webforms-modernization")
             || packet.Sources?.Count != 1
+            || packet.Summary is null
             || !IsUsableCommitSha(packet.Sources[0].CommitSha)
             || !IsWebFormsHashedId(packet.Sources[0].SourceId, "source-")
             || !IsWebFormsHashedId(packet.Sources[0].RepositoryId, "repository-")
@@ -436,6 +437,20 @@ public static partial class StaticHtmlEvidenceExplorer
             || packet.BatchDataMovementInventory is null
             || packet.StructuralSliceCandidates is null || packet.Gaps is null
             || packet.OwnerQuestions is null || packet.Limitations is null
+            || packet.SurfaceSelection is { } selection
+                && (selection.RuleId != WebFormsModernizationPacketReporter.PacketRuleId
+                    || selection.Items is null || selection.Limitations is null
+                    || selection.Items.Count > MaxWebFormsRowsPerCollection
+                    || selection.RequestedCount != selection.Items.Count
+                    || selection.MatchedCount != selection.Items.Count(item => item.Status == "matched")
+                    || selection.UnmatchedCount != selection.Items.Count(item => item.Status == "unmatched")
+                    || selection.AmbiguousCount != selection.Items.Count(item => item.Status == "ambiguous")
+                    || selection.UnavailableCount != selection.Items.Count(item => item.Status == "unavailable")
+                    || selection.Items.Select(item => item.Alias).Distinct(StringComparer.Ordinal).Count() != selection.Items.Count
+                    || selection.Items.Any(item => string.IsNullOrWhiteSpace(item.Alias)
+                        || string.IsNullOrWhiteSpace(item.RequestId)
+                        || item.Status is not ("matched" or "unmatched" or "ambiguous" or "unavailable")
+                        || item.SurfaceIds is null))
             || new[]
             {
                 packet.Projects.Count, packet.Surfaces.Count, packet.EventChains.Count,
@@ -468,9 +483,13 @@ public static partial class StaticHtmlEvidenceExplorer
             || packet.StructuralSliceCandidates.Select(candidate => candidate.CandidateId).Distinct(StringComparer.Ordinal).Count() != packet.StructuralSliceCandidates.Count
             || packet.Gaps.Select(gap => gap.GapId).Distinct(StringComparer.Ordinal).Count() != packet.Gaps.Count
             || packet.Surfaces.Any(surface => !projectIds.Contains(surface.ProjectId))
+            || packet.Projects.Any(project => project.SurfaceCount != packet.Surfaces.Count(surface => surface.ProjectId == project.ProjectId))
             || packet.EventChains.Any(chain => !surfaceIds.Contains(chain.SurfaceId))
             || packet.DownstreamBoundaries.Any(boundary => !surfaceIds.Contains(boundary.SurfaceId) || !chainIds.Contains(boundary.ChainId))
             || packet.IdentityStateInventory.Any(state => state.SurfaceId is not null && !surfaceIds.Contains(state.SurfaceId))
+            || packet.SurfaceSelection?.Items.Any(item => item.Status == "matched"
+                && item.SurfaceIds.Any(id => !surfaceIds.Contains(id))
+                && !packet.Summary.Truncated) == true
             || packet.StructuralSliceCandidates.Any(candidate => candidate.SurfaceIds is null || candidate.SurfaceIds.Any(id => !surfaceIds.Contains(id))))
         {
             throw new InvalidDataException("inconsistent Web Forms packet identity graph");
@@ -508,8 +527,10 @@ public static partial class StaticHtmlEvidenceExplorer
         {
             if (string.IsNullOrWhiteSpace(chain.ChainId) || string.IsNullOrWhiteSpace(chain.SurfaceId)
                 || string.IsNullOrWhiteSpace(chain.EventSourceId) || string.IsNullOrWhiteSpace(chain.Classification)
+                || chain.Evidence is null || chain.Evidence.Count == 0 || chain.PathEvidence is null
                 || chain.SupportingFactIds is null || chain.SupportingEdgeIds is null || chain.RuleIds is null
                 || chain.EvidenceTiers is null || chain.CoverageLabels is null || chain.Limitations is null
+                || chain.HandlerSymbol is not null && string.IsNullOrWhiteSpace(chain.HandlerSymbol)
                 || chain.RuleIds.Any(rule => !IsSafeRuleId(rule))
                 || chain.EvidenceTiers.Any(tier => !IsSupportedEvidenceTier(tier)))
                 throw new InvalidDataException("invalid Web Forms event chain");
@@ -524,6 +545,12 @@ public static partial class StaticHtmlEvidenceExplorer
                 || string.IsNullOrWhiteSpace(boundary.Classification) || boundary.SupportingFactIds is null
                 || boundary.SupportingEdgeIds is null || boundary.RuleIds is null || boundary.EvidenceTiers is null
                 || boundary.CoverageLabels is null || boundary.Limitations is null
+                || boundary.Evidence.Count == 0 && boundary.PathEvidence.Count == 0
+                || !boundary.SupportingFactIds.Contains(boundary.TerminalEvidenceId, StringComparer.Ordinal)
+                    && !boundary.SupportingEdgeIds.Contains(boundary.TerminalEvidenceId, StringComparer.Ordinal)
+                    && !boundary.Evidence.Any(evidence => evidence.FactId == boundary.TerminalEvidenceId)
+                    && !boundary.PathEvidence.Any(evidence => evidence.EvidenceId == boundary.TerminalEvidenceId
+                        || evidence.SupportingFactIds.Contains(boundary.TerminalEvidenceId, StringComparer.Ordinal))
                 || boundary.RuleIds.Any(rule => !IsSafeRuleId(rule))
                 || boundary.EvidenceTiers.Any(tier => !IsSupportedEvidenceTier(tier)))
                 throw new InvalidDataException("invalid Web Forms downstream boundary");

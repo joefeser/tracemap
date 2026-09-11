@@ -58,6 +58,7 @@ public static class TraceMapCommand
                 "access-review" => AccessReviewHelp(),
                 "portfolio" => PortfolioHelp(),
                 "package-impact" => PackageImpactHelp(),
+                "package-decision" => PackageDecisionHelp(),
                 "vault" => VaultHelp(),
                 "docs-export" => DocsExportHelp(),
                 "contract-diff" => ContractDiffHelp(),
@@ -66,7 +67,7 @@ public static class TraceMapCommand
                 "explorer" => ExplorerHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "version" or "local-review" or "report" or "database-design-review" or "webforms-modernization" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
+            return command is "scan" or "version" or "local-review" or "report" or "database-design-review" or "webforms-modernization" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "package-decision" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
         }
 
         using var commandOperation = TraceMapDiagnostics.StartCommand(command);
@@ -98,6 +99,7 @@ public static class TraceMapCommand
                 "access-review" => await RunAccessReviewAsync(rest, output, error, cancellationToken),
                 "portfolio" => await RunPortfolioAsync(rest, output, error, cancellationToken),
                 "package-impact" => await RunPackageImpactAsync(rest, output, error, cancellationToken),
+                "package-decision" => await RunPackageDecisionAsync(rest, output, error, cancellationToken),
                 "vault" => await RunVaultAsync(rest, output, error, cancellationToken),
                 "docs-export" => await RunDocsExportAsync(rest, output, error, cancellationToken),
                 "contract-diff" => await RunContractDiffAsync(rest, output, error, cancellationToken),
@@ -276,9 +278,10 @@ public static class TraceMapCommand
             return 1;
         }
         ScanResult result;
+        var progress = ScanProgressAmbient.Current;
         try
         {
-            result = ScanEngine.Scan(scanOptions, receiptRecorder, cancellationToken);
+            result = ScanEngine.Scan(scanOptions, receiptRecorder, cancellationToken, progress);
         }
         catch (Exception ex)
         {
@@ -308,6 +311,7 @@ public static class TraceMapCommand
         }
         try
         {
+            progress?.StartStage(ScanProgressReporter.ScanOperation, ScanProgressStages.ArtifactWrite);
             using (var receiptOperation = receiptRecorder.StartStage("artifact-write", "output-directory-prepare", result.Manifest.AnalysisLevel, "occurred", "completed"))
             {
                 await RunReceiptStageAsync(receiptOperation, () =>
@@ -403,9 +407,23 @@ public static class TraceMapCommand
                         cancellationToken);
                 }
             });
+            progress?.FinishStage(
+                ScanProgressReporter.ScanOperation,
+                ScanProgressStages.ArtifactWrite,
+                "completed",
+                counts: new Dictionary<string, long> { ["facts"] = result.Facts.Count });
+            progress?.Emit(
+                ScanProgressReporter.ScanOperation,
+                ScanProgressStages.ScanPublication,
+                "completed");
         }
         catch (Exception ex)
         {
+            if (ex is not OperationCanceledException)
+            {
+                progress?.FailActiveStage(ScanProgressReporter.ScanOperation, "ARTIFACT_WRITE_FAILED");
+            }
+
             receiptRecorder.Complete(
                 ex is OperationCanceledException ? "cancelled" : ex is TimeoutException ? "timed-out" : "failed",
                 result.Manifest.AnalysisLevel,
@@ -561,8 +579,9 @@ public static class TraceMapCommand
         var values = ParseOptions(args);
         string[] supportedOptions =
         [
-            "--index", "--out", "--max-surfaces", "--max-event-chains", "--max-candidates",
-            "--max-gaps", "--max-depth", "--max-paths", "--max-boundaries", "--max-identity-state", "--max-batch-data-movement"
+            "--index", "--out", "--surface-list", "--max-surfaces", "--max-event-chains", "--max-candidates",
+            "--max-gaps", "--max-depth", "--max-paths", "--max-boundaries", "--max-identity-state", "--max-batch-data-movement",
+            "--max-input-facts", "--max-input-edges", "--max-input-text-bytes", "--max-traversal-work"
         ];
         var unknownOptions = values.Keys.Except(supportedOptions, StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
         if (unknownOptions.Length > 0)
@@ -593,7 +612,12 @@ public static class TraceMapCommand
             ParsePositiveInt(values, "--max-paths", 1_000),
             ParsePositiveInt(values, "--max-boundaries", 1_000),
             ParsePositiveInt(values, "--max-identity-state", 1_000),
-            ParsePositiveInt(values, "--max-batch-data-movement", 1_000)), cancellationToken);
+            ParsePositiveInt(values, "--max-batch-data-movement", 1_000),
+            ParsePositiveInt(values, "--max-input-facts", 250_000),
+            ParsePositiveInt(values, "--max-input-edges", 250_000),
+            ParsePositiveInt(values, "--max-input-text-bytes", 128 * 1024 * 1024),
+            values.GetValueOrDefault("--surface-list"),
+            ParsePositiveInt(values, "--max-traversal-work", 100_000)), cancellationToken);
         await output.WriteLineAsync($"TraceMap Web Forms modernization packet completed: {result.JsonPath}");
         await output.WriteLineAsync($"Repository: {result.Packet.Sources.Single().RepositoryId}");
         await output.WriteLineAsync($"Commit SHA: {result.Packet.Sources.Single().CommitSha}");
@@ -603,6 +627,8 @@ public static class TraceMapCommand
         await output.WriteLineAsync($"Downstream boundaries: {result.Packet.Summary.DownstreamBoundaryCount}");
         await output.WriteLineAsync($"Identity/state declarations: {result.Packet.Summary.IdentityStateCount}");
         await output.WriteLineAsync($"Batch/data-movement declarations: {result.Packet.Summary.BatchDataMovementCount}");
+        if (result.Packet.SurfaceSelection is not null)
+            await output.WriteLineAsync($"Requested pages: {result.Packet.SurfaceSelection.RequestedCount}; matched: {result.Packet.SurfaceSelection.MatchedCount}; unmatched: {result.Packet.SurfaceSelection.UnmatchedCount}; ambiguous: {result.Packet.SurfaceSelection.AmbiguousCount}; unavailable: {result.Packet.SurfaceSelection.UnavailableCount}");
         await output.WriteLineAsync($"Gaps: {result.Packet.Summary.GapCount}");
         return 0;
     }
@@ -1431,6 +1457,106 @@ public static class TraceMapCommand
         return values.HasFlag("--exit-code") && result.HasFindings ? 1 : 0;
     }
 
+    private static async Task<int> RunPackageDecisionAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
+    {
+        var values = ParseOptions(args);
+        var supportedOptions = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "--decision", "--index", "--label", "--manifest", "--before-manifest", "--after-manifest",
+            "--advisory-profile", "--deployment-references", "--out", "--format", "--source", "--ecosystem",
+            "--decision-id", "--classification", "--max-findings", "--max-gaps", "--as-of", "--max-depth",
+            "--max-paths", "--max-frontier", "--max-roots", "--max-paths-per-root", "--include-paths",
+            "--include-reverse", "--exit-code"
+        };
+        var unsupported = values.Keys.FirstOrDefault(key => !supportedOptions.Contains(key));
+        if (unsupported is not null)
+        {
+            await error.WriteLineAsync($"error: package-decision does not support option {unsupported}.");
+            return 1;
+        }
+        if (!values.TryGetValue("--decision", out var decisionPath) || string.IsNullOrWhiteSpace(decisionPath))
+        {
+            await error.WriteLineAsync("error: package-decision requires --decision <path>.");
+            return 1;
+        }
+        var indexes = values.GetMany("--index");
+        var labels = values.GetMany("--label");
+        var manifestPath = values.GetValueOrDefault("--manifest");
+        var beforeManifestPath = values.GetValueOrDefault("--before-manifest");
+        var afterManifestPath = values.GetValueOrDefault("--after-manifest");
+        var advisoryProfilePath = values.GetValueOrDefault("--advisory-profile");
+        var deploymentReferencesPath = values.GetValueOrDefault("--deployment-references");
+        var comparisonRequested = !string.IsNullOrWhiteSpace(beforeManifestPath) || !string.IsNullOrWhiteSpace(afterManifestPath);
+        if (comparisonRequested && (string.IsNullOrWhiteSpace(beforeManifestPath) || string.IsNullOrWhiteSpace(afterManifestPath)))
+        {
+            await error.WriteLineAsync("error: package-decision requires --before-manifest and --after-manifest together.");
+            return 1;
+        }
+        if (indexes.Count == 0 && string.IsNullOrWhiteSpace(manifestPath) && !comparisonRequested)
+        {
+            await error.WriteLineAsync("error: package-decision requires --index <path> or --manifest <portfolio.json>.");
+            return 1;
+        }
+        if (!string.IsNullOrWhiteSpace(manifestPath) && indexes.Count > 0)
+        {
+            await error.WriteLineAsync("error: package-decision --manifest cannot be mixed with --index.");
+            return 1;
+        }
+        if (comparisonRequested && (indexes.Count > 0 || !string.IsNullOrWhiteSpace(manifestPath)))
+        {
+            await error.WriteLineAsync("error: package-decision --before-manifest/--after-manifest cannot be mixed with --index or --manifest.");
+            return 1;
+        }
+        if (indexes.Count > 1 && labels.Count != indexes.Count || labels.Count > 0 && labels.Count != indexes.Count)
+        {
+            await error.WriteLineAsync("error: package-decision requires one --label for each --index.");
+            return 1;
+        }
+        if (!values.TryGetValue("--out", out var outputPath) || string.IsNullOrWhiteSpace(outputPath))
+        {
+            await error.WriteLineAsync("error: package-decision requires --out <path>.");
+            return 1;
+        }
+        var format = values.GetValueOrDefault("--format") ?? "markdown";
+        if (!format.Equals("markdown", StringComparison.OrdinalIgnoreCase) && !format.Equals("md", StringComparison.OrdinalIgnoreCase) && !format.Equals("json", StringComparison.OrdinalIgnoreCase))
+        {
+            await error.WriteLineAsync("error: package-decision --format must be markdown or json.");
+            return 1;
+        }
+        var result = await PackageDecisionCorrelationReporter.WriteAsync(new PackageDecisionOptions(
+            decisionPath,
+            indexes.FirstOrDefault() ?? string.Empty,
+            outputPath,
+            format,
+            values.GetValueOrDefault("--source"),
+            values.GetValueOrDefault("--ecosystem"),
+            values.GetValueOrDefault("--decision-id"),
+            values.GetValueOrDefault("--classification"),
+            ParsePositiveInt(values, "--max-findings", 200),
+            ParsePositiveInt(values, "--max-gaps", 1000),
+            values.HasFlag("--exit-code"),
+            values.GetValueOrDefault("--as-of"),
+            indexes,
+            labels,
+            manifestPath,
+            values.HasFlag("--include-paths"),
+            values.HasFlag("--include-reverse"),
+            ParsePositiveInt(values, "--max-depth", 8),
+            ParsePositiveInt(values, "--max-paths", 100),
+            ParsePositiveInt(values, "--max-frontier", 10000),
+            ParsePositiveInt(values, "--max-roots", 100),
+            ParsePositiveInt(values, "--max-paths-per-root", 5),
+            beforeManifestPath,
+            afterManifestPath,
+            advisoryProfilePath,
+            deploymentReferencesPath), cancellationToken);
+        await output.WriteLineAsync($"TraceMap package-decision completed: {result.MarkdownPath ?? result.JsonPath}");
+        await output.WriteLineAsync($"Exact matches: {result.Report.Summary.ExactCount}");
+        await output.WriteLineAsync($"Possible matches: {result.Report.Summary.PossibleCount}");
+        await output.WriteLineAsync($"Gaps: {result.Report.Summary.GapCount}");
+        return values.HasFlag("--exit-code") && result.ExitCodeTriggered ? 1 : 0;
+    }
+
     private static async Task<int> RunVaultAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
     {
         if (args.Length == 0 || IsHelp(args[0]))
@@ -1539,7 +1665,8 @@ public static class TraceMapCommand
                 values.GetValueOrDefault("--date"),
                 values.HasFlag("--dry-run"),
                 values.HasFlag("--force"),
-                values.GetMany("--property-flow-report")),
+                values.GetMany("--property-flow-report"),
+                values.GetMany("--webforms-packet")),
             cancellationToken);
 
         await output.WriteLineAsync(values.HasFlag("--dry-run")
@@ -2122,8 +2249,9 @@ public static class TraceMapCommand
                 values[arg] = list;
             }
 
-            list.AddRange(args[++index]
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+            var rawValue = args[++index];
+            if (arg == "--surface-list") list.Add(rawValue);
+            else list.AddRange(rawValue.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
         }
 
         return new ParsedOptions(values, flags);
@@ -2446,6 +2574,7 @@ public static class TraceMapCommand
               tracemap access-review create --scan-output <access-scan-directory> --out <bundle-directory>
               tracemap portfolio --out <path> (--index <index.sqlite> --label <label> ... | --manifest <portfolio.json>)
               tracemap package-impact --index <index.sqlite> --package-delta <delta.json> --out <path>
+              tracemap package-decision --decision <package-decision.json> --index <index.sqlite> --out <path> [--format <markdown|json>] [selectors]
               tracemap vault export --combined-index <combined.sqlite> --out <vault-output>
               tracemap docs-export --index <index-or-combined.sqlite> --out <docs-output>
               tracemap baseline create --scan-output <path> --label <neutral-slug> --purpose <neutral-slug> --out <path>
@@ -2477,6 +2606,7 @@ public static class TraceMapCommand
               access-review Compose an existing Access scan into a private local review bundle.
               portfolio Summarize dependency evidence across many TraceMap indexes.
               package-impact Report static package upgrade evidence from indexed package declarations.
+              package-decision Correlate external package decision records with static, combined, or portfolio inputs.
               vault    Export deterministic Markdown evidence notes and graph.json from existing TraceMap evidence.
               docs-export Generate deterministic Markdown and JSONL evidence docs for external ingestion.
               baseline Create, validate, and compare redacted legacy baseline summaries.
@@ -2502,7 +2632,7 @@ public static class TraceMapCommand
     {
         return """
             Usage:
-              tracemap local-review run --repo <path> --out <new-output-root> [scan options] [--webforms-modernization] [--explorer]
+              tracemap local-review run --repo <path> --out <new-output-root> [scan options] [--webforms-modernization] [--explorer] [--diagnostic-progress <file>] [--timeout-seconds <30-86400>]
 
             Safe scan options:
               --solution <path>        Repeatable solution selection.
@@ -2510,6 +2640,25 @@ public static class TraceMapCommand
               --include <glob>         Repeatable inventory inclusion.
               --exclude <glob>         Repeatable inventory exclusion.
               --target-framework <tfm> Semantic target-framework selection.
+
+            Diagnostic options:
+              --diagnostic-progress <file>
+                                       Enables bounded, privacy-safe progress
+                                       diagnostics. Emits categorical progress
+                                       lines to stderr immediately and atomically
+                                       maintains a sanitized checkpoint file at
+                                       the given path. The path must live outside
+                                       the scanned repository and the review
+                                       output. The checkpoint is an operational
+                                       observation, not scan evidence.
+              --timeout-seconds <30-86400>
+                                       Fails the review with LOCAL_REVIEW_TIMEOUT
+                                       after a cooperative cancellation budget is
+                                       exceeded. Omitted means no timeout. A timed
+                                       out or cancelled run never publishes a
+                                       successful review; cancellation is
+                                       cooperative and cannot interrupt APIs that
+                                       ignore it.
 
             The v1 guided path never restores packages, accesses a network service,
             uploads artifacts, or overwrites an existing nonempty output. It emits
@@ -2613,6 +2762,8 @@ public static class TraceMapCommand
               --out <directory>          New output directory.
 
             Optional:
+              --surface-list <path>      UTF-8 text/CSV page list; first column is a repo-relative
+                                         .aspx path or a unique filename. Restricts page/event output.
               --max-surfaces <n>         Maximum surface rows (default 1000).
               --max-event-chains <n>     Maximum event chains (default 1000).
               --max-boundaries <n>       Maximum downstream boundary rows (default 1000).
@@ -2623,6 +2774,10 @@ public static class TraceMapCommand
               --max-gaps <n>             Maximum gap rows (default 1000).
               --max-depth <n>            Legacy static-flow traversal depth (default 8).
               --max-paths <n>            Legacy static-flow path limit (default 1000).
+              --max-traversal-work <n>   Shared legacy traversal work ceiling (default 100000).
+              --max-input-facts <n>      Retained snapshot/graph fact rows (default 250000).
+              --max-input-edges <n>      Loaded and derived graph edge ceiling (default 250000).
+              --max-input-text-bytes <n> Retained UTF-8 input text budget (default 134217728).
 
             Outputs:
               webforms-modernization.json and webforms-modernization.md
@@ -2630,6 +2785,8 @@ public static class TraceMapCommand
             Boundaries:
               Local-only, single-snapshot static evidence composition. No runtime,
               business-capability, parity, migration-estimate, architecture, or release claim.
+              Surface-list values are represented by ordered aliases and hashes; raw values
+              are not copied into the packet. Unmatched or ambiguous entries remain gaps.
             """;
     }
 
@@ -2906,7 +3063,7 @@ public static class TraceMapCommand
               --out <result.json>        New file for machine-readable tracemap.reverse-impact.v1 output.
 
             Optional:
-              --relation <value>         calls, references, inheritance, http, or database. Repeat or comma-separate.
+              --relation <value>         calls, references, inheritance, http, database, or mapping. Repeat or comma-separate.
               --exclude-contained-members Do not expand a type seed to proven directly contained members.
               --max-input-facts <n>      Maximum facts loaded, from 1 through 1000000. Default: 1000000.
               --max-traversal-states <n> Processed states, from 1 through 1000000. Default: 100000.
@@ -3098,6 +3255,53 @@ public static class TraceMapCommand
             """;
     }
 
+    private static string PackageDecisionHelp()
+    {
+        return """
+            Usage:
+              tracemap package-decision --decision <package-decision.json> (--index <index.sqlite> --label <label> ... | --manifest <portfolio.json> | --before-manifest <p.json> --after-manifest <p.json>) --out <path> [options]
+
+            Required:
+              --decision <path>          package-decision.v1 external record file.
+              --index <path>             TraceMap single/combined index; repeat with one --label per input.
+              --label <label>            Stable input label; repeat in the same order as --index.
+              --manifest <path>          Existing portfolio manifest v1.0; mutually exclusive with --index.
+              --before-manifest <path>   Portfolio manifest v1.0 for the before snapshot; paired with --after-manifest.
+              --after-manifest <path>    Portfolio manifest v1.0 for the after snapshot; mutually exclusive with --index/--manifest.
+              --out <path>               Output directory or file path.
+
+            Optional:
+              --format <value>           markdown or json. Directory outputs write both.
+              --source <label>           Filter source, container, or original source label.
+              --ecosystem <name>         Filter ecosystem (also scopes deployment references).
+              --decision-id <id>         Filter producer-scoped decision ID.
+              --classification <rung>    Filter output correlation rung.
+              --advisory-profile <path>  advisory-profile.v1 external claims file; rendered as external opinions only.
+              --deployment-references <path>
+                                         package-deployment-reference.v1 file; all rows render as RuntimeUnprovenReference.
+              --max-findings <n>         Correlation row and artifact change cap. Default: 200.
+              --max-gaps <n>             Gap row cap. Default: 1000.
+              --include-paths            Attach bounded package-config graph context.
+              --include-reverse          Attach bounded reverse graph context.
+              --max-depth <n>            Optional context traversal bound. Default: 8.
+              --max-paths <n>            Optional forward context row cap. Default: 100.
+              --max-frontier <n>         Optional graph frontier bound. Default: 10000.
+              --max-roots <n>            Optional reverse context row cap. Default: 100.
+              --max-paths-per-root <n>   Optional reverse path bound. Default: 5.
+              --as-of <RFC3339 UTC>      Deterministic effectiveness context.
+              --exit-code                Return 1 only for exact reject/revoke matches; quarantine is non-terminal.
+
+            Outputs:
+              package-decision-report.md and/or package-decision-report.json
+
+            The command reports producer-supplied state and static evidence only. It does not
+            authenticate producers, fetch or execute packages, or enforce admission/revocation.
+            Before/after artifact changes are cross-snapshot portfolio evidence, not a single
+            coherent release state. Advisory claims are external producer opinions. Deployment
+            references are runtime-unproven and never count as exact matches.
+            """;
+    }
+
     private static string VaultHelp()
     {
         return """
@@ -3146,6 +3350,7 @@ public static class TraceMapCommand
               --release-review-report <path>    Existing release-review JSON. Repeatable.
               --vault-graph <path>              Existing vault graph JSON. Schema gaps are emitted unless compatible.
               --evidence-pack <path>            Existing evidence-pack JSON. Repeatable.
+              --webforms-packet <path>          Existing webforms-modernization-packet.v1 JSON. Repeatable.
               --source-claim-catalog <path>     source-claim-catalog.v1 JSON for demo/public promotion.
 
             Options:
@@ -3158,7 +3363,7 @@ public static class TraceMapCommand
               --force                           Replace stale generated files after validation.
 
             Outputs:
-              manifest.json, chunks.jsonl, README.md, index.md, and chunk Markdown files depending on --format.
+              manifest.json, query-recipes.json, chunks.jsonl, README.md, index.md, QUERY_RECIPES.md, and chunk Markdown files depending on --format.
 
             Notes:
               Docs export emits deterministic evidence documents for external systems. TraceMap does not call LLMs, generate embeddings, write vector databases, prompt-classify claims, rank retrieval, or answer questions.

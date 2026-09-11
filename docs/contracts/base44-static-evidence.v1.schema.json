@@ -20,7 +20,11 @@
     "scanner": {
       "type": "object",
       "required": ["version", "scanId"],
-      "properties": { "version": { "type": "string" }, "scanId": { "type": "string" } }
+      "properties": {
+        "version": { "type": "string" },
+        "scanId": { "type": "string" },
+        "artifactProfile": { "const": "tracemap.base44.deterministic-artifacts.v1" }
+      }
     },
     "coverage": {
       "type": "object",
@@ -30,6 +34,12 @@
         "analysisLevel": { "type": "string" },
         "buildStatus": { "type": "string" },
         "knownGaps": { "type": "array", "items": { "type": "string" } },
+        "gapSchemaVersion": { "const": "tracemap.base44.coverage-gap.v1" },
+        "gaps": {
+          "description": "Producer-owned Tier4 gaps. Extractor base44-evidence/0.7.0 and later always publish this field, including an empty array. Each entry references exactly one source-bound Tier4 fact; factId is never null.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/coverageGap" }
+        },
         "ruleIds": { "type": "array", "items": { "type": "string", "pattern": "^base44\\." } },
         "extractorIdentities": { "type": "array", "items": { "type": "string" } },
         "evidenceTiers": { "type": "array", "items": { "enum": ["Tier1Semantic", "Tier2Structural", "Tier3SyntaxOrTextual", "Tier4Unknown"] } }
@@ -37,7 +47,7 @@
     },
     "artifacts": {
       "type": "object",
-      "required": ["scan-manifest.json", "facts.ndjson", "index.sqlite", "report.md", "logs/analyzer.log"],
+      "required": ["facts.ndjson", "report.md", "logs/analyzer.log"],
       "additionalProperties": {
         "type": "object",
         "required": ["sha256"],
@@ -76,11 +86,42 @@
               "extractorVersion": { "type": "string" }
             }
           },
-          "properties": { "type": "object", "additionalProperties": { "type": "string" } }
+          "properties": {
+            "description": "String-valued deterministic fact properties. Base44 entity payload/query facts encode sorted field, spread, binding, and typed-gap arrays as JSON strings; consumers must parse them only for the matching versioned rule ID.",
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          }
         }
       }
     },
     "limitations": { "type": "array", "minItems": 1, "items": { "type": "string" } }
   },
-  "$defs": { "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" } }
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "coverageGap": {
+      "type": "object",
+      "required": ["gapId", "surface", "category", "factId", "ruleId", "evidenceTier", "filePath", "lineSpan", "commitSha", "extractorVersion"],
+      "properties": {
+        "gapId": { "type": "string", "pattern": "^gap-[0-9a-f]{64}$" },
+        "surface": { "type": "string", "minLength": 1 },
+        "category": { "enum": ["entity", "function", "auth", "http-integration", "storage", "provider", "unknown"] },
+        "factId": { "type": "string", "pattern": "^fact-[0-9a-f]{20}$" },
+        "ruleId": { "type": "string", "pattern": "^base44\\." },
+        "evidenceTier": { "const": "Tier4Unknown" },
+        "filePath": { "type": "string", "minLength": 1 },
+        "lineSpan": {
+          "type": "object",
+          "required": ["startLine", "endLine"],
+          "properties": {
+            "startLine": { "type": "integer", "minimum": 1 },
+            "endLine": { "type": "integer", "minimum": 1 }
+          },
+          "additionalProperties": false
+        },
+        "commitSha": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+        "extractorVersion": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  }
 }

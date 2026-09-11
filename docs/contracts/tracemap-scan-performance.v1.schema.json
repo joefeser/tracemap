@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tracemap.tools/contracts/tracemap-scan-performance.v1.schema.json",
+  "title": "TraceMap scan performance receipt",
+  "description": "Bounded, sanitized operational timing observations for specialized extraction. This receipt is not TraceMap evidence and contains no source or repository identity.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "runState", "heartbeatCount", "heartbeatObserved", "timingCoverage", "timingsTruncated", "extractorTimings", "nextAction", "limitations"],
+  "properties": {
+    "schemaVersion": { "const": "tracemap-scan-performance/v1" },
+    "runState": { "enum": ["running", "completed", "partial", "failed", "cancelled", "timed-out"] },
+    "heartbeatCount": { "type": "integer", "minimum": 0 },
+    "heartbeatObserved": { "type": "boolean" },
+    "timingCoverage": { "enum": ["unavailable", "partial", "complete"] },
+    "timingsTruncated": { "type": "boolean" },
+    "extractorTimings": {
+      "type": "array",
+      "maxItems": 64,
+      "items": { "$ref": "#/$defs/timing" }
+    },
+    "activeExtractor": {
+      "oneOf": [
+        { "$ref": "#/$defs/activeExtractor" },
+        { "type": "null" }
+      ]
+    },
+    "slowestExtractor": {
+      "oneOf": [
+        { "$ref": "#/$defs/timing" },
+        { "type": "null" }
+      ]
+    },
+    "nextAction": {
+      "enum": ["inspect-specialized-extractor", "inspect-scan-progress"]
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": { "type": "string", "maxLength": 300 }
+    }
+  },
+  "$defs": {
+    "extractor": {
+      "enum": [
+        "csharp-integration-syntax",
+        "razor-binding",
+        "legacy-wcf",
+        "legacy-asmx",
+        "legacy-remoting",
+        "sql-file",
+        "sql-execution-context",
+        "postgres-schema-migration",
+        "sql-project-refactor",
+        "config",
+        "legacy-data",
+        "legacy-data-symbol-composition",
+        "legacy-webforms",
+        "legacy-winforms",
+        "legacy-aspnet",
+        "legacy-batch-data-movement",
+        "analyzer-capability",
+        "other"
+      ]
+    },
+    "timing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["extractor", "extractorVersion", "ordinal", "state", "elapsedMilliseconds", "inputCount", "emittedFactCount", "emittedGapCount"],
+      "properties": {
+        "extractor": { "$ref": "#/$defs/extractor" },
+        "extractorVersion": { "type": "string", "pattern": "^[a-z0-9.+/-]{1,100}$" },
+        "ordinal": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+        "state": { "enum": ["completed", "partial", "failed", "cancelled", "timed-out"] },
+        "elapsedMilliseconds": { "type": "integer", "minimum": 0 },
+        "inputCount": { "type": "integer", "minimum": 0, "maximum": 1000000000 },
+        "emittedFactCount": { "type": "integer", "minimum": 0, "maximum": 1000000000 },
+        "emittedGapCount": { "type": "integer", "minimum": 0, "maximum": 1000000000 }
+      }
+    },
+    "activeExtractor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["extractor", "extractorVersion", "ordinal", "elapsedMilliseconds", "inputCount"],
+      "properties": {
+        "extractor": { "$ref": "#/$defs/extractor" },
+        "extractorVersion": { "type": "string", "pattern": "^[a-z0-9.+/-]{1,100}$" },
+        "ordinal": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+        "elapsedMilliseconds": { "type": "integer", "minimum": 0 },
+        "inputCount": { "type": "integer", "minimum": 0, "maximum": 1000000000 }
+      }
+    }
+  }
+}
