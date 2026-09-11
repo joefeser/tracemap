@@ -312,6 +312,14 @@ caller-text regression over the full scan pipeline.
   `VisualBasic|AnalyzerCapabilityDiagnostic` tests 48/48; generic identity,
   late-binding coverage, and mixed-language capability regressions are
   included. Extractor identity is `vb-semantic/0.4.0` for these evidence
-  semantics. Final modern/legacy/Web Forms fixture scans contain 221/185/163
+  semantics. Final modern/legacy/Web Forms fixture scans contain 221/183/160
   facts, all pass the adapter artifact validator, and a repeated modern scan
   is byte-identical.
+- Delayed exact-HEAD findings also established that checked-in generated and
+  designer VB documents enter the protected compilation-input set before fact
+  extraction skips them, normalize constructed generic properties to their
+  original declaration identity, and recognize `.vb` generated companions and
+  nearby `.vbproj` projects in build-environment diagnostics. The syntax-rule
+  catalog now distinguishes full-file fallback from bounded unresolved sites
+  inside otherwise semantic files. Final validation is 1891/1891 full tests
+  and 75/75 focused VB/build-environment/capability tests.

@@ -370,25 +370,32 @@ public static class VisualBasicSemanticExtractor
             cancellationToken.ThrowIfCancellationRequested();
             documentCount++;
             var projection = CSharpSemanticExtractor.ToRelativePathProjection(repoPath, document.FilePath);
-            if (projection.IsExternal || IsCompilerGeneratedDocument(document.FilePath))
+            if (projection.IsExternal)
             {
                 continue;
             }
 
+            var compilerGenerated = IsCompilerGeneratedDocument(document.FilePath);
             if (compilationInputPaths.TryGetValue(projection.Path, out var canonicalCompilationInputPath))
             {
                 compilationInputFiles.Add(canonicalCompilationInputPath);
             }
-            else if (File.Exists(Path.Combine(repoPath, projection.Path.Replace('/', Path.DirectorySeparatorChar))))
+            else if (!compilerGenerated
+                && File.Exists(Path.Combine(repoPath, projection.Path.Replace('/', Path.DirectorySeparatorChar))))
             {
                 // A repository-local Visual Basic compilation input that appeared
                 // after initial inventory remains protected so source mutation
                 // fails loudly.
                 compilationInputFiles.Add(projection.Path);
             }
-            else
+            else if (!compilerGenerated)
             {
                 unavailableCompilationInputObserved = true;
+            }
+
+            if (compilerGenerated)
+            {
+                continue;
             }
 
             string? canonicalEvidencePath = null;

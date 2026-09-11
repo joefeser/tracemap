@@ -3959,17 +3959,18 @@ rules:
 
   - id: vb.syntax.invocation.v1
     name: Visual Basic syntax invocation
-    description: Bounded syntax-only invocation names and receiver text over Visual Basic files that received no compiler-resolved coverage.
+    description: Bounded syntax-only invocation names and receiver text from full-file fallback or unresolved call sites within otherwise semantically analyzed Visual Basic files.
     evidenceTier: Tier3SyntaxOrTextual
     emits:
       - InvocationName
     limitations:
       - Invocation names are raw syntax text and are never represented as compiler-resolved targets; array indexing, late binding, and indexers are indistinguishable at this tier.
       - Raw expressions are not stored; expression hashes, kinds, and line spans are emitted.
+      - In an otherwise semantically analyzed file, this rule is used only for an individual unresolved invocation and is accompanied by a `CallSiteSemanticResolutionUnavailable` Tier4 gap.
 
   - id: vb.syntax.callgraph.v1
     name: Visual Basic syntax call graph
-    description: Bounded syntax-only call edges with caller text and callee text over Visual Basic files that received no compiler-resolved coverage.
+    description: Bounded syntax-only call edges with caller text and callee text from full-file fallback or unresolved call sites within otherwise semantically analyzed Visual Basic files.
     evidenceTier: Tier3SyntaxOrTextual
     emits:
       - CallEdge
@@ -3977,16 +3978,18 @@ rules:
       - Callees are invocation or creation text, never compiler-resolved targets; edges prove only that call-like syntax exists at a location.
       - The caller is the lexically containing member derived from syntax; no runtime reachability, dispatch, or execution is claimed.
       - Object-creation edges use `SyntaxObjectCreation` call kinds and are bounded by the same deterministic per-file budget as other fallback facts.
+      - In an otherwise semantically analyzed file, this rule is used only for an individual unresolved invocation or known-type constructor and is accompanied by a `CallSiteSemanticResolutionUnavailable` Tier4 gap.
 
   - id: vb.syntax.objectcreation.v1
     name: Visual Basic syntax object creation
-    description: Bounded syntax-only object creation candidates over Visual Basic files that received no compiler-resolved coverage.
+    description: Bounded syntax-only object creation candidates from full-file fallback or unresolved known-type constructor sites within otherwise semantically analyzed Visual Basic files.
     evidenceTier: Tier3SyntaxOrTextual
     emits:
       - ObjectCreated
     limitations:
       - Created types are raw `New ...` syntax text and are never compiler-resolved targets; the type may not resolve or exist.
       - Creation candidates prove syntax presence only; constructor identity, executed constructor, and runtime allocation are not claimed.
+      - In an otherwise semantically analyzed file, this rule is used only when the created type is known but its constructor is unresolved, and a `CallSiteSemanticResolutionUnavailable` Tier4 gap accompanies it.
 
   - id: build.environment.target-framework.v1
     name: Build environment target framework diagnostics

@@ -128,6 +128,25 @@ public sealed class BuildEnvironmentDiagnosticTests
     }
 
     [Fact]
+    public void Visual_basic_generated_companions_satisfy_generated_file_diagnostics()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "My Project"));
+        File.WriteAllText(Path.Combine(repo, "App.vbproj"), "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>");
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), "<%@ Page Language=\"VB\" %>");
+        File.WriteAllText(Path.Combine(repo, "Default.aspx.vb"), "Public Class DefaultPage : End Class");
+        File.WriteAllText(Path.Combine(repo, "Default.aspx.designer.vb"), "Partial Public Class DefaultPage : End Class");
+        File.WriteAllText(Path.Combine(repo, "My Project", "Resources.resx"), "<root />");
+        File.WriteAllText(Path.Combine(repo, "My Project", "Resources.Designer.vb"), "Friend Module Resources : End Module");
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.BuildEnvironmentDiagnostic
+            && fact.Properties.GetValueOrDefault("diagnosticCode") is "GeneratedFileMissing" or "GeneratedFileUnlinked");
+    }
+
+    [Fact]
     public void Scan_emits_one_package_reference_shape_diagnostic_per_project()
     {
         using var temp = new TempDirectory();
