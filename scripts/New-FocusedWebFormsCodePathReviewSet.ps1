@@ -7,6 +7,8 @@ param(
     [ValidateRange(0, 100)]
     [int]$TriggerContextLines = 12,
     [switch]$IncludeRawSource,
+    [string]$IndexPath = '',
+    [string]$EvidenceDocsRoot = '',
     [string]$ConfigPath = ''
 )
 
@@ -14,12 +16,23 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 if (!$ConfigPath) { $ConfigPath = Join-Path $PSScriptRoot 'Run-FocusedWebFormsPageList.json' }
+$config = $null
 if (!$OutputRoot) {
     . (Join-Path $PSScriptRoot 'webforms-review/FocusedWebFormsConfig.ps1')
-    $OutputRoot = (Read-FocusedWebFormsConfig -ConfigPath $ConfigPath).OutputRoot
+    $config = Read-FocusedWebFormsConfig -ConfigPath $ConfigPath
+    $OutputRoot = $config.OutputRoot
+}
+elseif (!$IndexPath -and (Test-Path -LiteralPath $ConfigPath -PathType Leaf)) {
+    . (Join-Path $PSScriptRoot 'webforms-review/FocusedWebFormsConfig.ps1')
+    $config = Read-FocusedWebFormsConfig -ConfigPath $ConfigPath
+}
+if (!$IndexPath -and $null -ne $config -and (Test-Path -LiteralPath $config.IndexPath -PathType Leaf)) {
+    $IndexPath = $config.IndexPath
 }
 if (!$SourceRoot) { $SourceRoot = (Read-Host 'Private source repository root').Trim() }
 if (!$SourceRoot -or !(Test-Path -LiteralPath $SourceRoot -PathType Container)) { throw 'CodePathReviewSetSourceRootUnavailable' }
+if ($IndexPath -and !(Test-Path -LiteralPath $IndexPath -PathType Leaf)) { throw 'CodePathReviewSetIndexUnavailable' }
+if ($EvidenceDocsRoot -and !(Test-Path -LiteralPath $EvidenceDocsRoot -PathType Container)) { throw 'CodePathReviewSetEvidenceDocsUnavailable' }
 $inspectionDirectory = Join-Path $OutputRoot 'local-inspection-private'
 if (!$InspectionPath) {
     $latest = Get-ChildItem -LiteralPath $inspectionDirectory -File -Filter 'webforms-batch-inspection-*.json' |
@@ -78,6 +91,11 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'CodePathReviewSetCaseFailed' }
     }
 
+    $handoffArguments = @($dll, '--code-path-review-set-handoff', $inspectionSnapshotPath, $setDirectory, $(if ($IndexPath) { $IndexPath } else { '-' }))
+    if ($EvidenceDocsRoot) { $handoffArguments += $EvidenceDocsRoot }
+    & dotnet @handoffArguments
+    if ($LASTEXITCODE -ne 0) { throw 'CodePathReviewSetHandoffFailed' }
+
     $lines = [Collections.Generic.List[string]]::new()
     $lines.Add('# Private Web Forms review queue')
     $lines.Add('')
@@ -87,6 +105,7 @@ try {
     $lines.Add('- Source mode: `working-tree`; Git equality is not established.')
     $lines.Add(('- Trigger context: `{0}` lines before and after each retained binding span.' -f $TriggerContextLines))
     $lines.Add('- Allowed verdicts: `unreviewed`, `expected-ui-only`, `supported-backend-present`, `backend-evidence-missing`, `binding-or-source-mismatch`, `needs-review`.')
+    $lines.Add('- Agent evidence handoff: [`agent-evidence-handoff.json`](agent-evidence-handoff.json). It identifies bounded evidence and read-only TraceMap queries; it is not a BRD.')
     $lines.Add('')
     foreach ($group in @($reviewCases | Group-Object Item)) {
         $markdownItem = ([string]$group.Name).Replace('|', '&#124;').Replace('`', '&#96;').Replace("`r", ' ').Replace("`n", ' ')
@@ -118,7 +137,7 @@ try {
             $html.Add(('<tr><td><code>{0}</code></td><td><code>{1}</code></td><td><a target="_blank" rel="noopener" href="{0}.private.html">Open private report</a></td><td><a target="_blank" rel="noopener" href="{0}.shareable.html">Open anonymous report</a></td><td>unreviewed</td></tr>' -f $reviewCase.CaseId, [Net.WebUtility]::HtmlEncode([string]$reviewCase.Handler)))
         }
     }
-    $html.Add('</tbody></table><p>Static retained calls do not prove runtime order, branch feasibility, or source completeness. Human verdicts are review metadata.</p></main></body></html>')
+    $html.Add('</tbody></table><details><summary><h2 style="display:inline">Agent evidence handoff</h2></summary><p><a class="button" href="agent-evidence-handoff.json">Open the private machine-readable handoff</a></p><p>The handoff identifies retained evidence, optional corpus chunks, and closed read-only TraceMap query recipes. It does not query an application database, infer business intent, or generate a BRD.</p></details><p>Static retained calls do not prove runtime order, branch feasibility, or source completeness. Human verdicts are review metadata.</p></main></body></html>')
     [IO.File]::WriteAllLines($htmlPath, $html, [Text.UTF8Encoding]::new($false))
 }
 catch {

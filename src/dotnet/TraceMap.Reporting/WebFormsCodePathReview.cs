@@ -39,7 +39,8 @@ public static class WebFormsCodePathReview
         var outputDirectory = Path.GetDirectoryName(privatePath)!;
         var shareableHtmlPath = Path.Combine(outputDirectory, outputStem + ".shareable.html");
         var shareableJsonPath = Path.Combine(outputDirectory, outputStem + ".shareable.json");
-        if (File.Exists(privatePath) || File.Exists(shareableHtmlPath) || File.Exists(shareableJsonPath))
+        var handoffPath = Path.Combine(outputDirectory, outputStem + ".handoff.json");
+        if (File.Exists(privatePath) || File.Exists(shareableHtmlPath) || File.Exists(shareableJsonPath) || File.Exists(handoffPath))
             throw new IOException("CodePathReviewOutputExists");
 
         using var document = JsonDocument.Parse(File.ReadAllText(inspectionPath));
@@ -439,7 +440,15 @@ public static class WebFormsCodePathReview
         }
 
         Directory.CreateDirectory(outputDirectory);
-        var destinations = new[] { privatePath, shareableHtmlPath, shareableJsonPath }
+        var caseHandoff = WebFormsAgentEvidenceHandoff.BuildCase(
+            root,
+            selected,
+            caseId,
+            Path.GetFileName(privatePath),
+            Path.GetFileName(inspectionPath),
+            WebFormsAgentEvidenceHandoff.HashFile(inspectionPath),
+            returnHref is null ? null : "agent-evidence-handoff.json");
+        var destinations = new[] { privatePath, shareableHtmlPath, shareableJsonPath, handoffPath }
             .Concat(annotatedSourceFiles.Values)
             .ToArray();
         var temporaryPaths = destinations
@@ -503,11 +512,14 @@ public static class WebFormsCodePathReview
                 writer.WriteLine("</details><details class=\"panel\" id=\"verdict\" open><summary><h2>Human verdict</h2></summary><p>Choose one and add a short reason.</p>");
                 writer.WriteLine("<label><input type=\"checkbox\"> Expected UI/control-only behavior</label><label><input type=\"checkbox\"> Supported backend operation present</label><label><input type=\"checkbox\"> Backend operation expected but evidence missing</label><label><input type=\"checkbox\"> Incorrect binding or source mismatch</label><label><input type=\"checkbox\"> Needs further review</label>");
                 writer.WriteLine("<p>Reason:</p><p>Reviewer:</p><p>Reviewed at:</p></details>");
+                writer.WriteLine($"<details class=\"panel\" id=\"agent-handoff\"><summary><h2>Agent evidence handoff</h2></summary><p>This navigation metadata identifies retained evidence and closed read-only TraceMap queries. It is not scanner evidence, business intent, or a BRD.</p><ul><li><a href=\"{H(Path.GetFileName(handoffPath))}\">Open this case handoff JSON</a></li>{(returnHref is null ? "" : "<li><a href=\"agent-evidence-handoff.json\">Open the review-set handoff JSON</a></li>")}</ul>{(returnHref is null ? "" : "<p>The set handoff identifies the matching TraceMap index and optional evidence corpus when supplied by the operator.</p>")}</details>");
                 writer.WriteLine("<footer>Unique-name definition candidates are navigation aids, not evidence. Missing source or calls do not prove absence.</footer>");
                 if (returnHref is not null) writer.WriteLine($"<nav class=\"review-nav bottom\"><a href=\"{H(returnHref)}\">← Return to review index</a></nav>");
                 writer.WriteLine("</main>");
                 writer.WriteLine("<script>function revealTarget(){const id=decodeURIComponent(location.hash.slice(1));if(!id)return;const target=document.getElementById(id);if(!target)return;let parent=target.closest('details');while(parent){parent.open=true;parent=parent.parentElement?.closest('details');}}addEventListener('hashchange',revealTarget);revealTarget();</script></body></html>");
             }
+
+            WebFormsAgentEvidenceHandoff.WriteCase(temporaryPaths[handoffPath], caseHandoff);
 
             var annotatedOutputBytes = 0L;
             foreach (var sourceFile in annotatedSourceFiles.OrderBy(item => item.Key, StringComparer.Ordinal))
@@ -610,7 +622,7 @@ public static class WebFormsCodePathReview
             throw;
         }
         return ["codePathReview=created", $"case={caseId}|sourceMode=working-tree|triggerContextLines={triggerContextLines}|excerpts={deduplicated.Count}|definitionCandidates={candidateCount}|anonymousNodes={anonymousNodes.Length}|anonymousEdges={groupedEdges.Length}|review=unreviewed",
-            $"artifacts=private-html;shareable-html;shareable-json{(includeRawSource ? $";annotated-source-html:{annotatedSourceFiles.Count}" : "")}",
+            $"artifacts=private-html;private-agent-handoff-json;shareable-html;shareable-json{(includeRawSource ? $";annotated-source-html:{annotatedSourceFiles.Count}" : "")}",
             "nonClaim=working-tree-may-differ-from-inspection-commit;static-calls-do-not-prove-runtime-execution-or-absence"];
     }
 
