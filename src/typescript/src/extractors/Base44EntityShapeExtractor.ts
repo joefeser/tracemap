@@ -421,7 +421,7 @@ function analyzeExpression(expression: ts.Expression, context: ShapeContext, vis
 function analyzeObjectLiteral(node: ts.ObjectLiteralExpression, context: ShapeContext, visitedBindings: Set<string>, inheritedPresence: Presence): ShapeAnalysis {
   const result = emptyAnalysis("object-literal", ["object"]);
   for (const property of node.properties) {
-    if (context.workBudget.remaining <= 0) {
+    if (context.workBudget.remaining <= 0 || result.fields.length >= maxShapeCollectionItems) {
       result.gaps.push("payload-complexity-limit");
       break;
     }
@@ -450,31 +450,36 @@ function analyzeObjectLiteral(node: ts.ObjectLiteralExpression, context: ShapeCo
         if (finiteNames.length > 0) {
           const computedPresence = inheritedPresence === "conditional" || finiteNames.length > 1 ? "conditional" : inheritedPresence;
           const computedOrigin = ts.isComputedPropertyName(property.name) ? expressionOrigin(property.name.expression) : "computed";
-          for (const finiteName of finiteNames) {
-            result.fields.push(fieldEvidence(finiteName, computedPresence, expressionType(property.initializer),
-              `computed:${computedOrigin}`, property, context, property.initializer));
-          }
-          result.candidateBindings.push(`computed:${computedOrigin}`);
+          appendBounded(result.fields, finiteNames.map((finiteName) => fieldEvidence(
+            finiteName,
+            computedPresence,
+            expressionType(property.initializer),
+            `computed:${computedOrigin}`,
+            property,
+            context,
+            property.initializer
+          )), result);
+          appendBounded(result.candidateBindings, [`computed:${computedOrigin}`], result);
         } else {
-          result.fields.push(fieldEvidence("<dynamic>", "dynamic-computed", expressionType(property.initializer), expressionOrigin(property.initializer), property, context, property.initializer));
-          result.gaps.push("dynamic-computed-property");
+          appendBounded(result.fields, [fieldEvidence("<dynamic>", "dynamic-computed", expressionType(property.initializer), expressionOrigin(property.initializer), property, context, property.initializer)], result);
+          appendBounded(result.gaps, ["dynamic-computed-property"], result);
         }
       } else {
-        result.fields.push(fieldEvidence(name, inheritedPresence, expressionType(property.initializer), expressionOrigin(property.initializer), property, context, property.initializer));
+        appendBounded(result.fields, [fieldEvidence(name, inheritedPresence, expressionType(property.initializer), expressionOrigin(property.initializer), property, context, property.initializer)], result);
       }
       continue;
     }
     if (ts.isShorthandPropertyAssignment(property)) {
-      result.fields.push(fieldEvidence(property.name.text, inheritedPresence, "identifier-reference", `binding:${property.name.text}`, property, context, property.name));
-      result.candidateBindings.push(`binding:${property.name.text}`);
+      appendBounded(result.fields, [fieldEvidence(property.name.text, inheritedPresence, "identifier-reference", `binding:${property.name.text}`, property, context, property.name)], result);
+      appendBounded(result.candidateBindings, [`binding:${property.name.text}`], result);
       continue;
     }
     if (ts.isMethodDeclaration(property) || ts.isGetAccessorDeclaration(property) || ts.isSetAccessorDeclaration(property)) {
       const name = staticPropertyName(property.name);
-      if (name) result.fields.push(fieldEvidence(name, inheritedPresence, "method", "inline-method", property, context));
+      if (name) appendBounded(result.fields, [fieldEvidence(name, inheritedPresence, "method", "inline-method", property, context)], result);
       else {
-        result.fields.push(fieldEvidence("<dynamic>", "dynamic-computed", "method", "inline-method", property, context));
-        result.gaps.push("dynamic-computed-property");
+        appendBounded(result.fields, [fieldEvidence("<dynamic>", "dynamic-computed", "method", "inline-method", property, context)], result);
+        appendBounded(result.gaps, ["dynamic-computed-property"], result);
       }
     }
   }
