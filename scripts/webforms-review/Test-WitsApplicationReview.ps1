@@ -30,6 +30,15 @@ try {
     $completed = Join-Path $temp 'completed.json'
     [IO.File]::WriteAllText($completed, (($review | ConvertTo-Json -Depth 20) + "`n"), [Text.UTF8Encoding]::new($false))
     & $scriptPath -Mode Validate -PacketPath $packetPath -ReviewPath $completed | Out-Null
+    $invalidDraftReviewer = [IO.File]::ReadAllText($first) | ConvertFrom-Json -Depth 30
+    $invalidDraftReviewer.reviewer = 42
+    $invalidDraftReviewer.reviewedAtUtc = '2026-09-11T18:00:00Z'
+    $invalidDraftReviewerPath = Join-Path $temp 'invalid-draft-reviewer.json'
+    [IO.File]::WriteAllText($invalidDraftReviewerPath, (($invalidDraftReviewer | ConvertTo-Json -Depth 20) + "`n"), [Text.UTF8Encoding]::new($false))
+    Expect-Failure 'WITS_APPLICATION_REVIEW_COMPLETION_INVALID' { & $scriptPath -Mode Validate -PacketPath $packetPath -ReviewPath $invalidDraftReviewerPath }
+    $invalidDraftReviewer.reviewer = 'r' * 129
+    [IO.File]::WriteAllText($invalidDraftReviewerPath, (($invalidDraftReviewer | ConvertTo-Json -Depth 20) + "`n"), [Text.UTF8Encoding]::new($false))
+    Expect-Failure 'WITS_APPLICATION_REVIEW_COMPLETION_INVALID' { & $scriptPath -Mode Validate -PacketPath $packetPath -ReviewPath $invalidDraftReviewerPath }
     $bad = [IO.File]::ReadAllText($completed) | ConvertFrom-Json -Depth 30
     $bad.decisions[1].surfaceId = 'surface-one'
     $badPath = Join-Path $temp 'bad.json'

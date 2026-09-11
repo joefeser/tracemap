@@ -106,6 +106,9 @@ if ($review.reviewState -ceq 'completed') {
     [void](Require-Text $review.reviewer 128 'WITS_APPLICATION_REVIEW_COMPLETION_INVALID')
     if (!(Test-Utc $review.reviewedAtUtc) -or @($review.decisions | Where-Object { $_.verdict -ceq 'unreviewed' }).Count -ne 0) { Stop-ApplicationReview 'WITS_APPLICATION_REVIEW_COMPLETION_INVALID' }
 } elseif (($null -eq $review.reviewer) -ne ($null -eq $review.reviewedAtUtc)) { Stop-ApplicationReview 'WITS_APPLICATION_REVIEW_COMPLETION_INVALID' }
-elseif ($null -ne $review.reviewer -and (!(Test-Utc $review.reviewedAtUtc) -or [string]::IsNullOrWhiteSpace([string]$review.reviewer))) { Stop-ApplicationReview 'WITS_APPLICATION_REVIEW_COMPLETION_INVALID' }
+elseif ($null -ne $review.reviewer) {
+    [void](Require-Text $review.reviewer 128 'WITS_APPLICATION_REVIEW_COMPLETION_INVALID')
+    if (!(Test-Utc $review.reviewedAtUtc)) { Stop-ApplicationReview 'WITS_APPLICATION_REVIEW_COMPLETION_INVALID' }
+}
 Write-Host "witsApplicationReview=valid;pages=$($expected.Count);state=$($review.reviewState)"
 Write-Host 'nonClaim=human-review-is-not-scanner-evidence;validation-does-not-prove-runtime-or-migration-correctness'

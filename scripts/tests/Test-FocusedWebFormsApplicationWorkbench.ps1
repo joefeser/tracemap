@@ -96,6 +96,18 @@ try {
         & $scriptPath -PacketPath $packetPath -OutputRoot $outputRoot -OutputDirectory $symlinkWorkbench -SourceRoot $sourceRoot -IncludeRawSource | Out-Null
         $symlinkReport = [IO.File]::ReadAllText((Join-Path $symlinkWorkbench 'page-001.html'))
         if ($symlinkReport.Contains($outsideSentinel, [StringComparison]::Ordinal) -or !$symlinkReport.Contains('crossed a symlink or junction', [StringComparison]::Ordinal)) { throw 'Source symlink escape was not rejected.' }
+
+        $outsideOutput = Join-Path $temp 'outside-output'
+        [IO.Directory]::CreateDirectory($outsideOutput) | Out-Null
+        $linkedOutputParent = Join-Path $outputRoot 'linked-output'
+        New-Item -ItemType SymbolicLink -Path $linkedOutputParent -Target $outsideOutput | Out-Null
+        try {
+            & $scriptPath -PacketPath $packetPath -OutputRoot $outputRoot -OutputDirectory (Join-Path $linkedOutputParent 'escaped-workbench') | Out-Null
+            throw 'Linked output ancestor was accepted below the configured root.'
+        }
+        catch {
+            if ($_.Exception.Message -ne 'ApplicationWorkbenchOutputOutsideRoot') { throw }
+        }
     }
 
     if ($IsLinux) {
