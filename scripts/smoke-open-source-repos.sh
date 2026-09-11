@@ -21,6 +21,7 @@ KNOWN_REPOS=(
   "full-stack-fastapi-template"
   "microblog"
   "sqlalchemy"
+  "community-visual-basic"
 )
 
 validate_selection() {
@@ -215,6 +216,7 @@ printf 'TraceMap OSS smoke output: %s\n' "$OUT_ROOT"
 
 scan_dotnet "ProjectExtensions.Azure.ServiceBus" "https://github.com/ProjectExtensions/ProjectExtensions.Azure.ServiceBus.git" "2a8e72c8f5680edf2096b05ac08c39d47a95cef8"
 scan_dotnet "fluentjdf" "https://github.com/joefeser/fluentjdf.git" "9490e699a89bb21f4aabf198173fc6382f84a53f"
+scan_dotnet "community-visual-basic" "https://github.com/CommunityVB/Community.VisualBasic.git" "20d2a51dfc9f342848ad134952ceaa8d79302559"
 scan_typescript "scip-typescript" "https://github.com/sourcegraph/scip-typescript.git" "891eb4293709a6a587bf4468dfa1b45a85182fd9"
 scan_typescript "axios-npm-lock" "https://github.com/axios/axios.git" "84a9f3b9a4f3244b8c8e818f557d64c7b964fb25"
 scan_jvm "scip-java" "https://github.com/sourcegraph/scip-java.git" "825463cb15d540d45c680593aad1f634330435cf"
