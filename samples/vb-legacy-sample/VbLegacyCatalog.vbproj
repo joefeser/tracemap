@@ -11,7 +11,11 @@
     <AssemblyName>VbLegacyCatalog</AssemblyName>
     <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
-    <MyType>Windows</MyType>
+    <!-- Windows Forms application-framework wiring: MyType=WindowsForms lets the
+         VB 3.5 toolset supply the application-framework Sub Main entry point from
+         Application.Designer.vb + Application.myapp, so no StartupObject is needed. -->
+    <MyType>WindowsForms</MyType>
+    <EnableApplicationFramework>true</EnableApplicationFramework>
     <OptionExplicit>On</OptionExplicit>
     <OptionCompare>Binary</OptionCompare>
     <OptionStrict>Off</OptionStrict>

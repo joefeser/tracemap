@@ -17,8 +17,8 @@ Namespace My.Resources
         Friend ReadOnly Property ResourceManager() As Global.System.Resources.ResourceManager
             Get
                 If Object.ReferenceEquals(_resourceManager, Nothing) Then
-                    Dim temp As Global.System.Resources.ResourceManager =
-                        New Global.System.Resources.ResourceManager("VbLegacyCatalog.Resource1",
+                    Dim temp As Global.System.Resources.ResourceManager = _
+                        New Global.System.Resources.ResourceManager("VbLegacyCatalog.Resource1", _
                             GetType(Resource1).Assembly)
                     _resourceManager = temp
                 End If

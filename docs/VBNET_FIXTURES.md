@@ -75,6 +75,17 @@ Legacy shapes exercised:
   project-level `<Import>` namespace aliases, `<Reference>` with
   `RequiredTargetFramework`, `HintPath` to a vendor DLL that is deliberately
   not shipped).
+- Windows Forms application-framework wiring: `OutputType=WinExe` with
+  `MyType=WindowsForms` and `EnableApplicationFramework=true`, so the VB 3.5
+  toolset supplies the application-framework entry point from
+  `Application.Designer.vb` plus `Application.myapp` instead of a checked-in
+  `Sub Main` or `StartupObject`. `CatalogHostForm` inherits
+  `System.Windows.Forms.Form` so the main-form assignment stays valid on
+  toolsets that get past the missing reference assemblies.
+- VB 9 (vbc 9.0) syntax compatibility: all readable `.vb` files use explicit
+  `_` line continuations and avoid VB 10+ syntax, so no unrelated syntax
+  errors are injected on top of the intentional failure below. Enforced by
+  the committed `Legacy_vb_fixture_files_parse_as_visual_basic_9` test.
 - Assembly-info file under `My Project/`.
 - Generated/designer pair (`Application.Designer.vb`,
   `Resources.Designer.vb`) plus generator metadata (`AutoGen`, `DesignTime`,
@@ -144,8 +155,11 @@ dotnet build samples/vb-modern-sample/VbModernSample.vbproj
 dotnet build samples/vb-legacy-sample/VbLegacyCatalog.vbproj
 dotnet build samples/vb-webforms-sample/VbWebFormsSample.vbproj
 
-# Automated syntax validation of all 13 fixture .vb files. The focused test
-# uses Microsoft.CodeAnalysis.VisualBasic at TraceMap's pinned Roslyn version.
+# Automated syntax validation of all 13 fixture .vb files at the latest
+# language version, plus the legacy fixture's six files re-parsed as
+# Visual Basic 9 (the toolset its ToolsVersion=3.5 project models). The
+# focused tests use Microsoft.CodeAnalysis.VisualBasic at TraceMap's pinned
+# Roslyn version.
 dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
   --filter FullyQualifiedName~VbNetFixtureTests
 
