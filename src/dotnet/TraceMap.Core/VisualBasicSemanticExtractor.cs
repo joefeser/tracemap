@@ -1129,6 +1129,15 @@ public static class VisualBasicSemanticExtractor
                 if (fallbackFactCount <= MaxCallSiteSyntaxFallbackFactsPerDocument - 2)
                 {
                     AddUnresolvedInvocationFallback(projectPath, filePath, invocation, model, facts);
+                    var lineSpan = invocation.SyntaxTree.GetLineSpan(invocation.Span);
+                    gaps.Add(CreateGap(
+                        filePath,
+                        "Visual Basic invocation target was unavailable; bounded syntax call-site evidence was retained.",
+                        "CallSiteSemanticResolutionUnavailable",
+                        projectPath,
+                        lineSpan.StartLinePosition.Line + 1,
+                        lineSpan.EndLinePosition.Line + 1,
+                        siteHash: FactFactory.Hash(invocation.Expression.ToString(), 32)));
                     fallbackFactCount += 2;
                 }
                 else if (!fallbackTruncationReported)
@@ -1291,6 +1300,15 @@ public static class VisualBasicSemanticExtractor
                 if (fallbackFactCount <= MaxCallSiteSyntaxFallbackFactsPerDocument - 2)
                 {
                     AddUnresolvedObjectCreationFallback(projectPath, filePath, creation, model, type, facts);
+                    var lineSpan = creation.SyntaxTree.GetLineSpan(creation.Span);
+                    gaps.Add(CreateGap(
+                        filePath,
+                        "Visual Basic constructor target was unavailable; bounded syntax call-site evidence was retained.",
+                        "CallSiteSemanticResolutionUnavailable",
+                        projectPath,
+                        lineSpan.StartLinePosition.Line + 1,
+                        lineSpan.EndLinePosition.Line + 1,
+                        siteHash: FactFactory.Hash(creation.Type.ToString(), 32)));
                     fallbackFactCount += 2;
                 }
                 else if (!fallbackTruncationReported)
@@ -1851,7 +1869,8 @@ public static class VisualBasicSemanticExtractor
         string? projectPath = null,
         int startLine = 1,
         int endLine = 1,
-        string? diagnosticId = null)
+        string? diagnosticId = null,
+        string? siteHash = null)
     {
         var sanitized = BuildEnvironmentDiagnosticExtractor.SanitizeWorkspaceGap(gapKind, message, diagnosticId);
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
@@ -1868,6 +1887,10 @@ public static class VisualBasicSemanticExtractor
         if (!string.IsNullOrWhiteSpace(sanitized.DiagnosticId))
         {
             properties["diagnosticId"] = sanitized.DiagnosticId;
+        }
+        if (!string.IsNullOrWhiteSpace(siteHash))
+        {
+            properties["siteHash"] = siteHash;
         }
 
         return new SemanticFactCandidate(

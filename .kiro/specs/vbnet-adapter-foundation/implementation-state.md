@@ -69,14 +69,15 @@
   symbols) are NOT established; display strings, assembly names, and
   fact-level evidence still cross the language boundary. Both rules' catalog
   limitations document this.
-- **Deliberate exclusions (documented in catalog limitations).** Event
-  declarations, `Handles`/`AddHandler`/`RemoveHandler`/`RaiseEvent`/
+- **Deliberate exclusions (documented in catalog limitations).**
+  `Handles`/`AddHandler`/`RemoveHandler`/`RaiseEvent`/
   `WithEvents` wiring are never promoted to resolved event edges (#738 owns
   event composition; tests assert none appear). Operator/`Declare`
   (P/Invoke) statements and LocalAlias/FieldAlias families are not emitted in
   this slice. Designer/generated documents are not analyzed for semantic
-  facts. Unresolved or late-bound call sites produce no fact (visible only
-  through compiler-diagnostic gaps), never a guessed target.
+  facts. Event declarations are retained, but never promoted to event wiring.
+  Unresolved or late-bound invocation and constructor sites retain bounded
+  Tier3 evidence plus Tier4 gaps, never a guessed Tier1 target.
 - **Task 6 - bounded per-file syntax fallback.** `VisualBasicSyntaxExtractor`
   (`vb-syntax/0.2.0`) runs inside the shared SyntaxFallback stage over
   inventoried VB files that received NO compiler-resolved coverage
@@ -301,3 +302,16 @@ caller-text regression over the full scan pipeline.
 - Follow-up validation: full solution tests 1886/1886 and focused
   `FullyQualifiedName~VisualBasic` tests 36/36; privacy, VB capability,
   syntax-fallback, and operator-boundary regressions are included.
+- Second exact-HEAD follow-up makes every unresolved invocation or known-type
+  constructor fallback coverage-reducing with a bounded Tier4 call-site gap,
+  normalizes constructed generic method identities to their original
+  definitions, and keeps C# capability status isolated from VB failures in
+  mixed-language scans. The public adapter guide and catalog now agree that
+  event declarations are emitted while event wiring is not.
+- Final follow-up validation: full solution tests 1889/1889 and focused
+  `VisualBasic|AnalyzerCapabilityDiagnostic` tests 48/48; generic identity,
+  late-binding coverage, and mixed-language capability regressions are
+  included. Extractor identity is `vb-semantic/0.4.0` for these evidence
+  semantics. Final modern/legacy/Web Forms fixture scans contain 221/185/163
+  facts, all pass the adapter artifact validator, and a repeated modern scan
+  is byte-identical.

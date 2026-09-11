@@ -83,7 +83,8 @@ public static class AnalyzerCapabilityDiagnosticExtractor
         IReadOnlyList<FileInventoryItem> inventory,
         SemanticExtractionResult semanticResult,
         IReadOnlyList<CodeFact> facts,
-        ScanOptions options)
+        ScanOptions options,
+        SemanticExtractionResult? csharpSemanticResult = null)
     {
         var diagnostics = new List<CapabilityCandidate>();
         var buildEnvironmentFacts = facts
@@ -94,6 +95,9 @@ public static class AnalyzerCapabilityDiagnosticExtractor
             .Where(fact => fact.FactType == FactTypes.AnalysisGap
                 && fact.RuleId != RuleIds.CSharpRazorSemanticModelBindingGap)
             .OrderBy(SupportFactSortKey, StringComparer.Ordinal)
+            .ToArray();
+        var csharpAnalysisGaps = analysisGaps
+            .Where(fact => fact.Evidence.ExtractorVersion == ScannerVersions.CSharpSemanticExtractor)
             .ToArray();
         var buildStatusFacts = facts
             .Where(fact => fact.FactType == FactTypes.BuildStatus)
@@ -123,7 +127,7 @@ public static class AnalyzerCapabilityDiagnosticExtractor
         {
             if (hasCSharpScope)
             {
-                diagnostics.Add(SemanticCapability(manifest, semanticResult, csharpProjectScopes, csharpFiles, buildStatusFacts, analysisGaps));
+                diagnostics.Add(SemanticCapability(manifest, csharpSemanticResult ?? semanticResult, csharpProjectScopes, csharpFiles, buildStatusFacts, csharpAnalysisGaps));
             }
             diagnostics.Add(ProjectLoadCapability(manifest, semanticResult, dotNetProjectScopes, dotNetSourceFiles, buildStatusFacts, buildEnvironmentFacts, analysisGaps));
             diagnostics.AddRange(ReferenceAssemblyCapabilities(manifest, semanticResult, buildEnvironmentFacts));

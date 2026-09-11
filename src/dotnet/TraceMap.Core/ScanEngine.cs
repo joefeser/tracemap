@@ -78,6 +78,7 @@ public static class ScanEngine
 
         IReadOnlyDictionary<string, string> semanticInputSnapshot;
         SemanticExtractionResult semanticResult;
+        SemanticExtractionResult csharpSemanticResult;
         bool semanticToolchainReducedCoverage;
         using var semanticReceipt = receiptRecorder?.StartStage("semantic-analysis", "compiler-and-syntax-analysis");
         try
@@ -104,13 +105,14 @@ public static class ScanEngine
             using (var semanticOperation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.SemanticAnalysis, cancellationToken))
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                semanticResult = CSharpSemanticExtractor.Extract(
+                csharpSemanticResult = CSharpSemanticExtractor.Extract(
                     repoPath,
                     inventory,
                     options,
                     fullInventory,
                     cancellationToken,
                     progress);
+                semanticResult = csharpSemanticResult;
                 var visualBasicOptions = options.Restore
                     && inventory.Any(item => item.Kind == "Project")
                     ? options with { Restore = false }
@@ -322,6 +324,7 @@ public static class ScanEngine
                     knownGaps,
                     repoPath,
                     semanticResult,
+                    csharpSemanticResult,
                     options,
                     binlogFacts,
                     migrationSyntaxFallback,
@@ -617,6 +620,7 @@ public static class ScanEngine
         IReadOnlyList<string> knownGaps,
         string repoPath,
         SemanticExtractionResult semanticResult,
+        SemanticExtractionResult csharpSemanticResult,
         ScanOptions options,
         IReadOnlyList<CodeFact> binlogFacts,
         FrameworkMigrationEvidenceExtractor.SyntaxProtectionResult migrationSyntaxFallback,
@@ -945,9 +949,14 @@ public static class ScanEngine
             GapFacts = semanticResult.GapFacts.Where(gap => !IsProducerLocalSemanticGap(gap)).ToArray(),
             ReducedCoverage = HasToolchainSemanticReduction(semanticResult)
         };
+        var diagnosticCSharpSemanticResult = csharpSemanticResult with
+        {
+            GapFacts = csharpSemanticResult.GapFacts.Where(gap => !IsProducerLocalSemanticGap(gap)).ToArray(),
+            ReducedCoverage = HasToolchainSemanticReduction(csharpSemanticResult)
+        };
         facts.AddRange(Observe(
             ScanPerformanceExtractors.AnalyzerCapability,
-            () => AnalyzerCapabilityDiagnosticExtractor.Extract(manifest, inventory, diagnosticSemanticResult, facts, options)));
+            () => AnalyzerCapabilityDiagnosticExtractor.Extract(manifest, inventory, diagnosticSemanticResult, facts, options, diagnosticCSharpSemanticResult)));
         progress?.FinishStage(
             ScanProgressReporter.ScanOperation,
             ScanProgressStages.SpecializedExtraction,
