@@ -72,6 +72,7 @@ Each set contains:
 - `index.md` — editable private verdict/comment queue;
 - `inspection.snapshot.json` — immutable private input used for the set;
 - `case-NNN.private.html` — private local review, source-bearing only when `-IncludeRawSource` was explicitly supplied;
+- `case-NNN.source-NNN.html` — complete private annotated working-tree files, generated only with `-IncludeRawSource`;
 - `case-NNN.shareable.html` — anonymous structural review; and
 - `case-NNN.shareable.json` — anonymous machine-readable graph.
 
@@ -94,8 +95,12 @@ Use `-TriggerContextLines 0..100` to control lines shown before and after the
 retained event-binding span. This is display context only and does not widen the
 underlying evidence.
 
-Raw source excerpts are excluded by default. Add `-IncludeRawSource` only for an
-authorized private work-machine review; anonymous artifacts never contain source.
+Raw source excerpts and annotated files are excluded by default. Add
+`-IncludeRawSource` only for an authorized private work-machine review. The
+private report then links graph nodes, retained calls, and evidence cards to
+exact lines in complete annotated working-tree files. Highlighted regions link
+back to their evidence cards. Anonymous artifacts never contain source or links
+to private source views, and Git is not required.
 
 For one report instead of a set, use
 `scripts/New-FocusedWebFormsCodePathReview.ps1`. It defaults to `case-001` and

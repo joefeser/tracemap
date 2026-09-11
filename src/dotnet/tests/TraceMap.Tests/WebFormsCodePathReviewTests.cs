@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using TraceMap.Reporting;
 
 namespace TraceMap.Tests;
@@ -13,6 +14,7 @@ public sealed class WebFormsCodePathReviewTests
             var output = Path.Combine(directory, "review.private.html");
             var lines = WebFormsCodePathReview.Run(inspection, sourceRoot, "case-001", output, includeRawSource: true);
             Assert.Contains("codePathReview=created", lines);
+            Assert.Contains("artifacts=private-html;shareable-html;shareable-json;annotated-source-html:2", lines);
             Assert.Contains(lines, line => line == "case=case-001|sourceMode=working-tree|triggerContextLines=12|excerpts=4|definitionCandidates=1|anonymousNodes=2|anonymousEdges=1|review=unreviewed");
             Assert.DoesNotContain("Private", string.Join('\n', lines));
             var report = File.ReadAllText(output);
@@ -37,6 +39,23 @@ public sealed class WebFormsCodePathReviewTests
             Assert.Contains("class=\"panel\" id=\"graph\"><summary>", report);
             Assert.Contains("class=\"panel\" id=\"evidence\"><summary>", report);
             Assert.Contains("function revealTarget()", report);
+            Assert.Contains("diagnostic.webforms.local-code-path-review.v3", report);
+            Assert.Contains("review.source-001.html#L3", report);
+            Assert.Contains("review.source-002.html#L3", report);
+            var annotatedSourcePath = Path.Combine(directory, "review.source-002.html");
+            Assert.True(File.Exists(annotatedSourcePath));
+            var annotatedSource = File.ReadAllText(annotatedSourcePath);
+            Assert.Contains("Private annotated source source/Page.aspx.cs", annotatedSource);
+            Assert.Contains("id=\"L5\"", annotatedSource);
+            Assert.Contains("class=\"source-line handler retained-call\" id=\"L5\"", annotatedSource);
+            Assert.Contains("review.private.html#evidence-", annotatedSource);
+            Assert.Contains("UiReset();", annotatedSource);
+            Assert.Contains(new string('x', 600), annotatedSource);
+            Assert.DoesNotContain("[line truncated]", annotatedSource);
+            var annotatedMarkup = File.ReadAllText(Path.Combine(directory, "review.source-001.html"));
+            Assert.Contains("Private annotated source source/Page.aspx", annotatedMarkup);
+            Assert.Contains("class=\"source-line event-binding\" id=\"L3\"", annotatedMarkup);
+            Assert.Contains("&lt;asp:Button", annotatedMarkup);
             var shareableHtml = File.ReadAllText(Path.Combine(directory, "review.shareable.html"));
             var shareableJson = File.ReadAllText(Path.Combine(directory, "review.shareable.json"));
             Assert.Contains("flowchart TD", shareableHtml);
@@ -55,6 +74,8 @@ public sealed class WebFormsCodePathReviewTests
             Assert.DoesNotContain("Private", shareableJson);
             Assert.DoesNotContain("UiReset", shareableJson);
             Assert.DoesNotContain("source/Page", shareableJson);
+            Assert.DoesNotContain("source-001.html", shareableHtml);
+            Assert.DoesNotContain("source-001.html", shareableJson);
             Assert.Throws<IOException>(() => WebFormsCodePathReview.Run(inspection, sourceRoot, "case-001", output, includeRawSource: true));
 
             var indexedOutput = Path.Combine(directory, "indexed.private.html");
@@ -77,6 +98,7 @@ public sealed class WebFormsCodePathReviewTests
             var report = File.ReadAllText(output);
             Assert.DoesNotContain("UiReset();", report, StringComparison.Ordinal);
             Assert.Contains("Raw source excerpts were not included", report, StringComparison.Ordinal);
+            Assert.Empty(Directory.GetFiles(directory, "review.source-*.html"));
         });
     }
 
@@ -93,6 +115,84 @@ public sealed class WebFormsCodePathReviewTests
             Directory.CreateSymbolicLink(Path.Combine(sourceRoot, "source"), outside);
             Assert.Throws<InvalidDataException>(() => WebFormsCodePathReview.Run(
                 inspection, sourceRoot, "case-001", Path.Combine(directory, "review.private.html"), includeRawSource: true));
+        });
+    }
+
+    [Fact]
+    public void WorkingTreeReviewRejectsAnnotatedSourceCollisionWithoutPublishingOtherArtifacts()
+    {
+        WithFixture((directory, sourceRoot, inspection) =>
+        {
+            var collision = Path.Combine(directory, "review.source-001.html");
+            File.WriteAllText(collision, "keep");
+            Assert.Throws<IOException>(() => WebFormsCodePathReview.Run(
+                inspection, sourceRoot, "case-001", Path.Combine(directory, "review.private.html"), includeRawSource: true));
+            Assert.Equal("keep", File.ReadAllText(collision));
+            Assert.False(File.Exists(Path.Combine(directory, "review.private.html")));
+            Assert.False(File.Exists(Path.Combine(directory, "review.shareable.html")));
+            Assert.False(File.Exists(Path.Combine(directory, "review.shareable.json")));
+        });
+    }
+
+    [Fact]
+    public void WorkingTreeReviewRejectsPathologicalAnnotatedSourceLineCountTransactionally()
+    {
+        WithFixture((directory, sourceRoot, inspection) =>
+        {
+            File.WriteAllLines(Path.Combine(sourceRoot, "source", "Page.aspx"), Enumerable.Repeat("x", 100_001));
+            Assert.Throws<InvalidDataException>(() => WebFormsCodePathReview.Run(
+                inspection, sourceRoot, "case-001", Path.Combine(directory, "review.private.html"), includeRawSource: true));
+            Assert.Empty(Directory.GetFiles(directory, "review.*.html"));
+            Assert.False(File.Exists(Path.Combine(directory, "review.shareable.json")));
+        });
+    }
+
+    [Fact]
+    public void WorkingTreeReviewRejectsAggregateAnnotatedSourceLineCountTransactionally()
+    {
+        WithFixture((directory, sourceRoot, inspection) =>
+        {
+            File.WriteAllLines(Path.Combine(sourceRoot, "source", "Page.aspx"), Enumerable.Repeat("x", 80_000));
+            File.WriteAllLines(Path.Combine(sourceRoot, "source", "Page.aspx.cs"), Enumerable.Repeat("x", 80_000));
+            var exception = Assert.Throws<InvalidDataException>(() => WebFormsCodePathReview.Run(
+                inspection, sourceRoot, "case-001", Path.Combine(directory, "review.private.html"), includeRawSource: true));
+            Assert.Equal("CodePathReviewSourceAggregateLineLimit", exception.Message);
+            Assert.Empty(Directory.GetFiles(directory, "review.*.html"));
+            Assert.False(File.Exists(Path.Combine(directory, "review.shareable.json")));
+        });
+    }
+
+    [Fact]
+    public void WorkingTreeReviewPreservesCaseDistinctSourcePaths()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        WithFixture((directory, sourceRoot, inspection) =>
+        {
+            var upperPath = Path.Combine(sourceRoot, "source", "Page.aspx.cs");
+            var lowerPath = Path.Combine(sourceRoot, "source", "page.aspx.cs");
+            var upperSource = File.ReadAllText(upperPath);
+            var lowerSource = upperSource.Replace("UiReset();", "LowerCaseFile();", StringComparison.Ordinal);
+            File.WriteAllText(lowerPath, lowerSource);
+            if (File.ReadAllText(upperPath).Contains("LowerCaseFile();", StringComparison.Ordinal))
+            {
+                File.WriteAllText(upperPath, upperSource);
+                return;
+            }
+
+            var root = JsonNode.Parse(File.ReadAllText(inspection))!;
+            root["cases"]![0]!["methods"]![0]!["outgoingCallSites"]![0]!["filePath"] = "source/page.aspx.cs";
+            File.WriteAllText(inspection, root.ToJsonString());
+
+            var output = Path.Combine(directory, "review.private.html");
+            WebFormsCodePathReview.Run(inspection, sourceRoot, "case-001", output, includeRawSource: true);
+
+            var annotated = Directory.GetFiles(directory, "review.source-*.html")
+                .Select(File.ReadAllText).ToArray();
+            Assert.Equal(3, annotated.Length);
+            Assert.Contains(annotated, value => value.Contains("Private annotated source source/Page.aspx.cs", StringComparison.Ordinal) &&
+                value.Contains("UiReset();", StringComparison.Ordinal) && !value.Contains("LowerCaseFile();", StringComparison.Ordinal));
+            Assert.Contains(annotated, value => value.Contains("Private annotated source source/page.aspx.cs", StringComparison.Ordinal) &&
+                value.Contains("LowerCaseFile();", StringComparison.Ordinal) && !value.Contains("UiReset();", StringComparison.Ordinal));
         });
     }
 
@@ -131,6 +231,13 @@ public sealed class WebFormsCodePathReviewTests
             }
             """;
         File.WriteAllText(Path.Combine(sourceRoot, "source", "Page.aspx.cs"), source);
+        File.AppendAllText(Path.Combine(sourceRoot, "source", "Page.aspx.cs"), Environment.NewLine + "// " + new string('x', 600));
+        File.WriteAllText(Path.Combine(sourceRoot, "source", "Page.aspx"), """
+            <asp:Page>
+              <asp:Button
+                OnClick="Handler" />
+            </asp:Page>
+            """);
         var inspection = Path.Combine(directory, "inspection.json");
         File.WriteAllText(inspection, JsonSerializer.Serialize(new
         {
@@ -144,7 +251,7 @@ public sealed class WebFormsCodePathReviewTests
                     bounded = false,
                     evidenceConclusion = "ui-control-operations-observed-with-unresolved-leaves",
                     handlerLocation = Witness("handler", "Private.Page.Handler()", 3, 6),
-                    bindings = new[] { new { bindingLocation = Witness("Private.Page.Control", "Private.Page.Handler()", 3, 3) } },
+                    bindings = new[] { new { bindingLocation = Witness("Private.Page.Control", "Private.Page.Handler()", 3, 3, "source/Page.aspx") } },
                     unresolvedOtherLeaves = new[] { "Private.Page.UiReset()" },
                     methods = new object[]
                     {
@@ -167,13 +274,13 @@ public sealed class WebFormsCodePathReviewTests
         try { test(directory, sourceRoot, inspection); }
         finally { Directory.Delete(directory, true); }
 
-        static object Witness(string caller, string callee, int startLine, int endLine) => new
+        static object Witness(string caller, string callee, int startLine, int endLine, string filePath = "source/Page.aspx.cs") => new
         {
             factId = Guid.NewGuid().ToString("N"),
             kind = "MethodInvoked",
             caller,
             callee,
-            filePath = "source/Page.aspx.cs",
+            filePath,
             startLine,
             endLine,
             ruleId = "csharp.semantic.methodinvocation.v1",
