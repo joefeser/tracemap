@@ -257,7 +257,7 @@ public static class EvidenceDocsQueryRecipes
         select combined_fact_id as evidence_id, source_index_id, commit_sha, fact_type, rule_id, evidence_tier,
                source_symbol, target_symbol, contract_element, file_path, start_line, end_line
         from combined_facts
-        {where}
+        {ParenthesizedWhere(where)}
           and source_index_id = $source_index_id
         order by source_index_id, file_path, start_line, combined_fact_id
         limit $limit;
@@ -276,11 +276,19 @@ public static class EvidenceDocsQueryRecipes
         select combined_fact_id as evidence_id, source_index_id, commit_sha, 'CallEdge' as fact_type, rule_id, evidence_tier,
                caller_symbol as source_symbol, callee_symbol as target_symbol, call_kind as contract_element, file_path, start_line, end_line
         from combined_call_edges
-        {where}
+        {ParenthesizedWhere(where)}
           and source_index_id = $source_index_id
         order by source_index_id, file_path, start_line, combined_fact_id
         limit $limit;
         """;
+
+    private static string ParenthesizedWhere(string where)
+    {
+        const string prefix = "where ";
+        if (!where.StartsWith(prefix, StringComparison.Ordinal) || where.Length == prefix.Length)
+            throw new InvalidOperationException("EvidenceQueryRecipeWhereInvalid");
+        return $"where ({where[prefix.Length..]})";
+    }
 }
 
 public static partial class EvidenceDocsExporter

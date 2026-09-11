@@ -192,25 +192,33 @@ public sealed class EvidenceDocsExportTests
 
     private static async Task AssertCombinedRecipeIsSourceScopedAsync(string indexPath, EvidenceQueryRecipeCatalog catalog)
     {
-        var recipe = Assert.Single(catalog.Recipes, item => item.RecipeId == "facts-by-file-span");
         await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
         {
             DataSource = indexPath,
             Mode = SqliteOpenMode.ReadOnly
         }.ToString());
         await connection.OpenAsync();
-        await using var command = connection.CreateCommand();
-        command.CommandText = recipe.SqlByInputKind["combined-index"];
-        command.Parameters.AddWithValue("$source_index_id", "source-api");
-        command.Parameters.AddWithValue("$file_path", "src/Api/OrdersController.cs");
-        command.Parameters.AddWithValue("$start_line", 20);
-        command.Parameters.AddWithValue("$end_line", 22);
-        command.Parameters.AddWithValue("$limit", 100);
-        await using var reader = await command.ExecuteReaderAsync();
-        var sourceIds = new List<string>();
-        while (await reader.ReadAsync()) sourceIds.Add(reader.GetString(1));
-        Assert.NotEmpty(sourceIds);
-        Assert.All(sourceIds, sourceId => Assert.Equal("source-api", sourceId));
+        foreach (var (recipeId, parameters) in new[]
+        {
+            ("facts-by-file-span", new Dictionary<string, object>
+            {
+                ["file_path"] = "src/Api/OrdersController.cs", ["start_line"] = 20, ["end_line"] = 22
+            }),
+            ("facts-by-symbol", new Dictionary<string, object> { ["symbol"] = "OrdersController.Get" })
+        })
+        {
+            var recipe = Assert.Single(catalog.Recipes, item => item.RecipeId == recipeId);
+            await using var command = connection.CreateCommand();
+            command.CommandText = recipe.SqlByInputKind["combined-index"];
+            command.Parameters.AddWithValue("$source_index_id", "source-api");
+            command.Parameters.AddWithValue("$limit", 100);
+            foreach (var parameter in parameters) command.Parameters.AddWithValue($"${parameter.Key}", parameter.Value);
+            await using var reader = await command.ExecuteReaderAsync();
+            var sourceIds = new List<string>();
+            while (await reader.ReadAsync()) sourceIds.Add(reader.GetString(1));
+            Assert.NotEmpty(sourceIds);
+            Assert.All(sourceIds, sourceId => Assert.Equal("source-api", sourceId));
+        }
     }
 
     [Fact]

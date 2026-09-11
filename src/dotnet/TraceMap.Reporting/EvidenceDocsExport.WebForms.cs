@@ -288,13 +288,13 @@ public static partial class EvidenceDocsExporter
             .Concat(value.PathEvidence.Select(evidence => ToSourceRef(SourceFor(evidence, sources))))
             .DistinctBy(source => source.SourceId).ToArray();
         var chunk = CreateWebFormsChunk(packet, "event-chain", "Web Forms event-chain evidence", body, citations, SourceRefsOrPacketSources(sourceRefs, sources), [value.ChainId, .. value.SupportingFactIds, .. value.SupportingEdgeIds], value.RuleIds, value.EvidenceTiers, value.CoverageLabels, value.Limitations);
-        return value.HandlerId is null
+        return string.IsNullOrWhiteSpace(value.HandlerSymbol)
             ? chunk
             : WithRetrievalHints(chunk,
             [
-                Hint("calls-from-handler", "Retrieve retained direct call edges from this handler.", [("handler_symbol", value.HandlerId), ("limit", "250")], [value.ChainId]),
-                Hint("database-evidence-by-handler", "Retrieve database-shaped facts directly retained for this handler.", [("handler_symbol", value.HandlerId), ("limit", "250")], [value.ChainId]),
-                Hint("stored-procedure-candidate-context", "Retrieve command, property, invocation, and argument evidence retained for this handler without assuming object identity.", [("method_symbol", value.HandlerId), ("limit", "250")], [value.ChainId])
+                Hint("calls-from-handler", "Retrieve retained direct call edges from this handler.", [("handler_symbol", value.HandlerSymbol), ("limit", "250")], [value.ChainId]),
+                Hint("database-evidence-by-handler", "Retrieve database-shaped facts directly retained for this handler.", [("handler_symbol", value.HandlerSymbol), ("limit", "250")], [value.ChainId]),
+                Hint("stored-procedure-candidate-context", "Retrieve command, property, invocation, and argument evidence retained for this handler without assuming object identity.", [("method_symbol", value.HandlerSymbol), ("limit", "250")], [value.ChainId])
             ]);
     }
 
@@ -319,7 +319,9 @@ public static partial class EvidenceDocsExporter
             .Concat(value.PathEvidence.Select(evidence => ToSourceRef(SourceFor(evidence, sources))))
             .DistinctBy(source => source.SourceId).ToArray();
         var chunk = CreateWebFormsChunk(packet, "downstream-boundary", "Web Forms downstream-boundary evidence", body, citations, SourceRefsOrPacketSources(sourceRefs, sources), [value.BoundaryId, value.ChainId, .. value.SupportingFactIds, .. value.SupportingEdgeIds], value.RuleIds, value.EvidenceTiers, value.CoverageLabels, value.Limitations);
-        return WithRetrievalHints(chunk,
+        return !value.TerminalEvidenceIsFact
+            ? chunk
+            : WithRetrievalHints(chunk,
         [
             Hint("boundary-supporting-facts", "Retrieve the retained terminal evidence row cited by this downstream boundary.", [("terminal_evidence_id", value.TerminalEvidenceId), ("limit", "1")], [value.BoundaryId, value.TerminalEvidenceId])
         ]);

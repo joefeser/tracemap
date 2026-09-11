@@ -84,6 +84,10 @@ Chunks also carry additive `retrievalHints`. Each hint names a recipe from
 `query-recipes.json`, supplies bounded parameter values already present in the
 chunk's citations or packet identity, and identifies the supporting evidence.
 Hints do not add a finding, raise an evidence tier, or close a gap.
+Web Forms handler hints bind the retained display symbol used by fact and call
+tables. Boundary fact lookups are emitted only when the terminal identity is a
+retained fact; projection-only path nodes remain cited without an inapplicable
+fact lookup.
 
 Gap records retain their own source references, commit identity, safe
 repository-relative file path and structured line span when available, plus
