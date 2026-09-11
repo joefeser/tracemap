@@ -484,6 +484,7 @@ public static partial class StaticHtmlEvidenceExplorer
             || packet.StructuralSliceCandidates.Select(candidate => candidate.CandidateId).Distinct(StringComparer.Ordinal).Count() != packet.StructuralSliceCandidates.Count
             || packet.Gaps.Select(gap => gap.GapId).Distinct(StringComparer.Ordinal).Count() != packet.Gaps.Count
             || packet.Surfaces.Any(surface => !projectIds.Contains(surface.ProjectId))
+            || packet.Projects.Any(project => project.SurfaceCount != packet.Surfaces.Count(surface => surface.ProjectId == project.ProjectId))
             || packet.EventChains.Any(chain => !surfaceIds.Contains(chain.SurfaceId))
             || packet.DownstreamBoundaries.Any(boundary => !surfaceIds.Contains(boundary.SurfaceId) || !chainIds.Contains(boundary.ChainId))
             || packet.IdentityStateInventory.Any(state => state.SurfaceId is not null && !surfaceIds.Contains(state.SurfaceId))
@@ -527,6 +528,7 @@ public static partial class StaticHtmlEvidenceExplorer
                 || string.IsNullOrWhiteSpace(chain.EventSourceId) || string.IsNullOrWhiteSpace(chain.Classification)
                 || chain.SupportingFactIds is null || chain.SupportingEdgeIds is null || chain.RuleIds is null
                 || chain.EvidenceTiers is null || chain.CoverageLabels is null || chain.Limitations is null
+                || chain.HandlerSymbol is not null && string.IsNullOrWhiteSpace(chain.HandlerSymbol)
                 || chain.RuleIds.Any(rule => !IsSafeRuleId(rule))
                 || chain.EvidenceTiers.Any(tier => !IsSupportedEvidenceTier(tier)))
                 throw new InvalidDataException("invalid Web Forms event chain");
@@ -541,6 +543,7 @@ public static partial class StaticHtmlEvidenceExplorer
                 || string.IsNullOrWhiteSpace(boundary.Classification) || boundary.SupportingFactIds is null
                 || boundary.SupportingEdgeIds is null || boundary.RuleIds is null || boundary.EvidenceTiers is null
                 || boundary.CoverageLabels is null || boundary.Limitations is null
+                || boundary.TerminalEvidenceIsFact && !boundary.SupportingFactIds.Contains(boundary.TerminalEvidenceId, StringComparer.Ordinal)
                 || boundary.RuleIds.Any(rule => !IsSafeRuleId(rule))
                 || boundary.EvidenceTiers.Any(tier => !IsSupportedEvidenceTier(tier)))
                 throw new InvalidDataException("invalid Web Forms downstream boundary");

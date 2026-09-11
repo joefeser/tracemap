@@ -193,6 +193,14 @@ public sealed class WebFormsModernizationPacketTests
             && chunk.RetrievalHints.Any(hint => hint.RecipeId == "calls-from-handler")
             && chunk.RetrievalHints.Any(hint => hint.RecipeId == "database-evidence-by-handler")
             && chunk.RetrievalHints.Any(hint => hint.RecipeId == "stored-procedure-candidate-context"));
+        Assert.All(first.Packet.EventChains.Where(chain => chain.HandlerSymbol is not null), chain =>
+        {
+            var eventChunk = Assert.Single(docsA.Chunks, chunk => chunk.Title == "Web Forms event-chain evidence" && chunk.SupportingIds.Contains(chain.ChainId));
+            Assert.All(eventChunk.RetrievalHints.Where(hint => hint.Parameters.ContainsKey("handler_symbol")), hint =>
+                Assert.Equal(chain.HandlerSymbol, hint.Parameters["handler_symbol"]));
+            Assert.All(eventChunk.RetrievalHints.Where(hint => hint.Parameters.ContainsKey("method_symbol")), hint =>
+                Assert.Equal(chain.HandlerSymbol, hint.Parameters["method_symbol"]));
+        });
         Assert.Contains(docsA.Chunks, chunk => chunk.ChunkFamily == "gap" && chunk.Gaps.Any(gap => gap.ChunkFamily == "webforms-modernization"));
         Assert.All(docsA.Chunks.SelectMany(chunk => chunk.Gaps).Where(gap => gap.ChunkFamily == "webforms-modernization"), gap =>
         {
@@ -330,6 +338,19 @@ public sealed class WebFormsModernizationPacketTests
             Path.Combine(temp.Path, "docs-inconsistent"),
             WebFormsPacketPaths: [inconsistentPath])));
         Assert.Contains("InputSchemaUnsupported", inconsistent.Message);
+
+        var inconsistentProjectPath = Path.Combine(temp.Path, "webforms-modernization-inconsistent-project.json");
+        await File.WriteAllTextAsync(inconsistentProjectPath, JsonSerializer.Serialize(first.Packet with
+        {
+            Projects = first.Packet.Projects.Select((project, index) => index == 0
+                ? project with { SurfaceCount = project.SurfaceCount + 1 }
+                : project).ToArray()
+        }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+        var inconsistentProject = await Assert.ThrowsAsync<InvalidOperationException>(() => EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
+            index,
+            Path.Combine(temp.Path, "docs-inconsistent-project"),
+            WebFormsPacketPaths: [inconsistentProjectPath])));
+        Assert.Contains("InputSchemaUnsupported", inconsistentProject.Message);
 
         var absolutePath = Path.Combine(temp.Path, "private", "Default.aspx");
         var unsafePacketPath = Path.Combine(temp.Path, "webforms-modernization-unsafe-path.json");
@@ -997,9 +1018,13 @@ public sealed class WebFormsModernizationPacketTests
     }
 
     [Fact]
-    public void Legacy_path_node_identity_remains_joinable_and_its_provenance_is_aggregated()
+    public async Task Legacy_path_node_identity_remains_joinable_and_its_provenance_is_aggregated()
     {
+        using var temp = new TempDirectory();
         var manifest = Manifest("Succeeded") with { AnalysisLevel = "Level1SemanticAnalysis" };
+        var page = Fact(manifest, FactTypes.WebFormsPageDeclared, RuleIds.LegacyWebFormsInventory, "Pages/Orders.aspx", 1,
+            source: "surface:orders", target: "Sample.Orders", contract: "Orders.aspx",
+            ("surfaceIdentity", "surface:orders"), ("directiveKind", "Page"), ("coverageLabel", "bounded-static-webforms-inventory"));
         var binding = Fact(manifest, FactTypes.WebFormsEventBindingDeclared, RuleIds.LegacyWebFormsEventBinding, "Pages/Orders.aspx", 10,
             source: "control:orders", target: "method:orders", contract: "Orders_Click",
             ("surfaceIdentity", "surface:orders"), ("eventSourceIdentity", "control:orders"), ("coverageLabel", "bounded-static-webforms-event"));
@@ -1026,16 +1051,29 @@ public sealed class WebFormsModernizationPacketTests
             rootNode.NodeId, terminalNode.NodeId, [rootNode, terminalNode], [edge],
             [binding.FactId, handler.FactId], [edge.EdgeId], []);
         var snapshot = new WebFormsModernizationPacketReporter.Snapshot(
-            manifest.RepoName, manifest.ScanId, manifest.CommitSha, manifest.AnalysisLevel, manifest.BuildStatus, [binding, handler]);
+            manifest.RepoName, manifest.ScanId, manifest.CommitSha, manifest.AnalysisLevel, manifest.BuildStatus, [page, binding, handler]);
 
         var packet = WebFormsModernizationPacketReporter.Build(snapshot, LegacyFlow(path), new("unused", "unused"));
 
         var boundary = Assert.Single(packet.DownstreamBoundaries);
         Assert.Equal(terminalNode.NodeId, boundary.TerminalEvidenceId);
+        Assert.False(boundary.TerminalEvidenceIsFact);
         Assert.Contains(boundary.PathEvidence, evidence => evidence.EvidenceId == boundary.TerminalEvidenceId);
         Assert.Contains(RuleIds.HttpClientInvocation, boundary.RuleIds);
         Assert.Contains(EvidenceTiers.Tier2Structural, boundary.EvidenceTiers);
         Assert.Contains("unknown", boundary.CoverageLabels);
+
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, manifest, [page, binding, handler]);
+        var packetPath = Path.Combine(temp.Path, "webforms-modernization.json");
+        await File.WriteAllTextAsync(packetPath, JsonSerializer.Serialize(packet, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+        var docs = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
+            index,
+            Path.Combine(temp.Path, "docs"),
+            Families: "webforms-modernization,gap,limitation",
+            WebFormsPacketPaths: [packetPath]));
+        var boundaryChunk = Assert.Single(docs.Chunks, chunk => chunk.Title == "Web Forms downstream-boundary evidence" && chunk.SupportingIds.Contains(boundary.BoundaryId));
+        Assert.DoesNotContain(boundaryChunk.RetrievalHints, hint => hint.RecipeId == "boundary-supporting-facts");
     }
 
     [Fact]
