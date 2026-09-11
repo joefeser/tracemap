@@ -57,6 +57,19 @@ public sealed class PackageDecisionComparisonExternalClaimsTests
         Assert.False(PackageDecisionAdvisoryProfileReader.Read("{{" + envelope + "]}").Accepted);
         Assert.Equal("DecisionInputSchemaUnsupported", PackageDecisionAdvisoryProfileReader.Read("{\"version\":\"advisory-profile.v1\",\"producer\":{\"id\":\"producer\",\"version\":\"1\"},\"claims\":[],\"notes\":\"free text\"}").Gaps.Single().Classification);
 
+        foreach (var duplicateProfile in new[]
+        {
+            "{\"version\":\"advisory-profile.v1\",\"version\":\"advisory-profile.v1\",\"producer\":{\"id\":\"producer\",\"version\":\"1\"},\"claims\":[]}",
+            "{\"version\":\"advisory-profile.v1\",\"producer\":{\"id\":\"producer\",\"id\":\"other\",\"version\":\"1\"},\"claims\":[]}",
+            "{\"version\":\"advisory-profile.v1\",\"producer\":{\"id\":\"producer\",\"version\":\"1\"},\"claims\":[" + Claim("claim-duplicate-predicate", predicate: "{\"kind\":\"exact\",\"version\":\"1.0.0\",\"version\":\"2.0.0\"}") + "]}",
+            "{\"version\":\"advisory-profile.v1\",\"producer\":{\"id\":\"producer\",\"version\":\"1\"},\"claims\":[" + Claim("claim-duplicate-params", parameters: "{\"framework\":\"next-rsc\",\"framework\":\"other\"}") + "]}"
+        })
+        {
+            var duplicateAdmission = PackageDecisionAdvisoryProfileReader.Read(duplicateProfile);
+            Assert.False(duplicateAdmission.Accepted);
+            Assert.Equal("DecisionInputSchemaUnsupported", Assert.Single(duplicateAdmission.Gaps).Classification);
+        }
+
         var rejectedClaims = new[]
         {
             Claim("claim-severity", extras: "\"severity\":\"high\""),

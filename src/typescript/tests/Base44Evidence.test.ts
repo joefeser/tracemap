@@ -1783,6 +1783,51 @@ export async function run() { await base44.entities.Example.create(a18); }
     expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("payload-complexity-limit");
   });
 
+  it("bounds direct object-literal fields and records a coverage gap", () => {
+    const directFields = Array.from({ length: 700 }, (_, index) => `field_${index}: ${index}`).join(",");
+    const sourceText = `base44.entities.Example.create({${directFields}});`;
+    const source = ts.createSourceFile("wide-payload.ts", sourceText, ts.ScriptTarget.Latest, true);
+    let call: ts.CallExpression | undefined;
+    const visit = (node: ts.Node): void => {
+      if (ts.isCallExpression(node) && node.expression.getText(source).endsWith(".create")) call = node;
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+    const manifest: ScanManifest = {
+      scanId: "field-budget",
+      repoName: "fixture",
+      remoteUrl: null,
+      branch: "main",
+      commitSha: "a".repeat(40),
+      scannerVersion: "test",
+      scannedAt: "2026-01-01T00:00:00Z",
+      analysisLevel: "Level3SyntaxAnalysis",
+      buildStatus: "NotRun",
+      solutions: [], projects: [], targetFrameworks: [], knownGaps: [],
+      sourceSnapshotDigest: "b".repeat(64)
+    };
+
+    const [payload] = extractEntityShapeFacts({
+      manifest,
+      node: call!,
+      source,
+      filePath: "wide-payload.ts",
+      sourceText,
+      entityName: "Example",
+      operationName: "create",
+      operationEvidenceId: "operation-1",
+      entitySelectorGap: "",
+      entitySelectorJson: "{}",
+      arrayIntrinsicsPristine: true,
+      sdkIdentityGap: "",
+      sdkIdentityJson: "{}"
+    });
+
+    expect(JSON.parse(payload.properties.fieldsJson)).toHaveLength(512);
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("payload-complexity-limit");
+    expect(payload.properties.completeness).toBe("partial");
+  });
+
   it("derives payload fields from source-proven React Query mutation callsites", async () => {
     const { packet, replayPacket } = await mutationHookFixture(`
 export function Screen(raw) {
