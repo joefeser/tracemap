@@ -13,7 +13,9 @@ $parsePaths = @(
     (Join-Path $scripts 'New-FocusedWebFormsMethodInspection.ps1'),
     (Join-Path $scripts 'Test-FocusedWebFormsDatabaseEvidence.ps1'),
     (Join-Path $scripts 'New-FocusedWebFormsCodePathReview.ps1'),
-    (Join-Path $scripts 'New-FocusedWebFormsCodePathReviewSet.ps1')
+    (Join-Path $scripts 'New-FocusedWebFormsCodePathReviewSet.ps1'),
+    (Join-Path $scripts 'New-FocusedWebFormsApplicationWorkbench.ps1'),
+    (Join-Path $scripts 'webforms-review/Invoke-WitsApplicationReview.ps1')
 )
 foreach ($path in $parsePaths) {
     $tokens = $null
