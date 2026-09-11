@@ -28,6 +28,7 @@ function dotnet {
     if (!(Test-Path -LiteralPath ([string]$args[2]) -PathType Leaf) -or (Split-Path -Leaf ([string]$args[2])) -ne 'inspection.snapshot.json') { $global:LASTEXITCODE = 1; return }
     $privatePath = [string]$args[5]
     if ($args[7] -ne 'index.html') { $global:LASTEXITCODE = 1; return }
+    if ($args[8] -ne '--include-raw-source') { $global:LASTEXITCODE = 1; return }
     [IO.File]::WriteAllText($privatePath, 'private')
     [IO.File]::WriteAllText(($privatePath -replace '\.private\.html$', '.shareable.html'), 'shareable')
     [IO.File]::WriteAllText(($privatePath -replace '\.private\.html$', '.shareable.json'), '{}')
@@ -35,7 +36,7 @@ function dotnet {
 }
 
 try {
-    & $scriptPath -SourceRoot $source -InspectionPath $inspectionPath -OutputRoot $output -TriggerContextLines 50 | Out-Null
+    & $scriptPath -SourceRoot $source -InspectionPath $inspectionPath -OutputRoot $output -TriggerContextLines 50 -IncludeRawSource | Out-Null
     $sets = @(Get-ChildItem -LiteralPath $inspectionDirectory -Directory -Filter 'webforms-code-path-review-set-*')
     if ($sets.Count -ne 1) { throw 'Expected one review-set directory.' }
     $indexPath = Join-Path $sets[0].FullName 'index.md'
