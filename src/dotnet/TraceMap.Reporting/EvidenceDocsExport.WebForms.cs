@@ -28,10 +28,19 @@ public static partial class EvidenceDocsExporter
             try
             {
                 json = await File.ReadAllTextAsync(path, cancellationToken);
+                using var document = JsonDocument.Parse(
+                    json,
+                    new JsonDocumentOptions
+                    {
+                        AllowTrailingCommas = false,
+                        CommentHandling = JsonCommentHandling.Disallow,
+                        MaxDepth = 96
+                    });
+                StaticHtmlEvidenceExplorer.RejectDuplicateJsonProperties(document.RootElement);
                 packet = JsonSerializer.Deserialize<WebFormsModernizationPacket>(json, JsonOptions)
                     ?? throw new JsonException("empty packet");
             }
-            catch (JsonException exception)
+            catch (Exception exception) when (exception is JsonException or InvalidDataException)
             {
                 throw new InvalidOperationException("InputSchemaUnsupported: docs-export requires webforms-modernization-packet.v1 JSON.", exception);
             }
@@ -287,7 +296,14 @@ public static partial class EvidenceDocsExporter
         var sourceRefs = value.Evidence.Select(evidence => ToSourceRef(SourceFor(evidence, sources)))
             .Concat(value.PathEvidence.Select(evidence => ToSourceRef(SourceFor(evidence, sources))))
             .DistinctBy(source => source.SourceId).ToArray();
-        var chunk = CreateWebFormsChunk(packet, "event-chain", "Web Forms event-chain evidence", body, citations, SourceRefsOrPacketSources(sourceRefs, sources), [value.ChainId, .. value.SupportingFactIds, .. value.SupportingEdgeIds], value.RuleIds, value.EvidenceTiers, value.CoverageLabels, value.Limitations);
+        var limitations = value.Limitations
+            .Concat(value.Evidence.SelectMany(evidence => evidence.Limitations))
+            .Concat(value.PathEvidence.SelectMany(evidence => evidence.Limitations))
+            .Concat(value.TraversalObservation?.Limitations ?? [])
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(message => message, StringComparer.Ordinal)
+            .ToArray();
+        var chunk = CreateWebFormsChunk(packet, "event-chain", "Web Forms event-chain evidence", body, citations, SourceRefsOrPacketSources(sourceRefs, sources), [value.ChainId, .. value.SupportingFactIds, .. value.SupportingEdgeIds], value.RuleIds, value.EvidenceTiers, value.CoverageLabels, limitations);
         return string.IsNullOrWhiteSpace(value.HandlerSymbol)
             ? chunk
             : WithRetrievalHints(chunk,
@@ -318,7 +334,15 @@ public static partial class EvidenceDocsExporter
         var sourceRefs = value.Evidence.Select(evidence => ToSourceRef(SourceFor(evidence, sources)))
             .Concat(value.PathEvidence.Select(evidence => ToSourceRef(SourceFor(evidence, sources))))
             .DistinctBy(source => source.SourceId).ToArray();
-        var chunk = CreateWebFormsChunk(packet, "downstream-boundary", "Web Forms downstream-boundary evidence", body, citations, SourceRefsOrPacketSources(sourceRefs, sources), [value.BoundaryId, value.ChainId, .. value.SupportingFactIds, .. value.SupportingEdgeIds], value.RuleIds, value.EvidenceTiers, value.CoverageLabels, value.Limitations);
+        var chainLimitations = packet.EventChains.Single(chain => chain.ChainId == value.ChainId).TraversalObservation?.Limitations ?? [];
+        var limitations = value.Limitations
+            .Concat(value.Evidence.SelectMany(evidence => evidence.Limitations))
+            .Concat(value.PathEvidence.SelectMany(evidence => evidence.Limitations))
+            .Concat(chainLimitations)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(message => message, StringComparer.Ordinal)
+            .ToArray();
+        var chunk = CreateWebFormsChunk(packet, "downstream-boundary", "Web Forms downstream-boundary evidence", body, citations, SourceRefsOrPacketSources(sourceRefs, sources), [value.BoundaryId, value.ChainId, .. value.SupportingFactIds, .. value.SupportingEdgeIds], value.RuleIds, value.EvidenceTiers, value.CoverageLabels, limitations);
         return !value.TerminalEvidenceIsFact
             ? chunk
             : WithRetrievalHints(chunk,
