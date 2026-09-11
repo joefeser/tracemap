@@ -80,6 +80,7 @@ public static class WebFormsAgentEvidenceHandoff
     public const string RuleId = "diagnostic.webforms.agent-evidence-handoff.v1";
     private const int MaximumCaseHandoffBytes = 4 * 1024 * 1024;
     private const long MaximumIndexBytes = 16L * 1024 * 1024 * 1024;
+    internal const long MaximumCorpusManifestBytes = 64L * 1024 * 1024;
     internal const long MaximumCorpusJsonLinesBytes = 2L * 1024 * 1024 * 1024;
     private const int MaximumCorpusLines = 100_000;
     private const int MaximumCorpusLineCharacters = 4 * 1024 * 1024;
@@ -563,7 +564,7 @@ public static class WebFormsAgentEvidenceHandoff
                 "Supply -EvidenceDocsRoot to resolve corpus selectors to exact generated chunk IDs."), empty);
         var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(corpusRoot));
         if (!Directory.Exists(root)) throw new InvalidDataException("AgentHandoffCorpusUnavailable");
-        var manifestPath = BoundedCorpusFile(root, "manifest.json", 16L * 1024 * 1024);
+        var manifestPath = BoundedCorpusFile(root, "manifest.json", MaximumCorpusManifestBytes);
         var recipesPath = BoundedCorpusFile(root, "query-recipes.json", 4L * 1024 * 1024);
         var chunksPath = BoundedCorpusFile(root, "chunks.jsonl", MaximumCorpusJsonLinesBytes);
         var manifestText = File.ReadAllText(manifestPath);
