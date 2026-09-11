@@ -127,6 +127,30 @@ public sealed class PackageDecisionLockfileEvidenceTests
     }
 
     [Fact]
+    public void ReadNuGetLockfiles_rejects_duplicate_properties_before_emitting_evidence()
+    {
+        using var temp = new TempDirectory();
+        var repo = temp.Path;
+        Directory.CreateDirectory(Path.Combine(repo, "src"));
+        const string duplicate = """
+            {
+              "version": 2,
+              "dependencies": { "net8.0": { "First": { "type": "Direct", "resolved": "1.0.0" } } },
+              "dependencies": { "net8.0": { "Second": { "type": "Direct", "resolved": "2.0.0" } } }
+            }
+            """;
+        File.WriteAllText(Path.Combine(repo, "src", "packages.lock.json"), duplicate);
+
+        var result = ProjectFileReader.ReadNuGetLockfiles(
+            repo,
+            [new FileInventoryItem("src/packages.lock.json", "PackagesLock", duplicate.Length)]);
+
+        Assert.Empty(result.Entries);
+        var gap = Assert.Single(result.Gaps);
+        Assert.Equal("packages-lock-parse", gap.Category);
+    }
+
+    [Fact]
     public void Scan_emits_lockfile_package_facts_and_preserves_presence_diagnostic()
     {
         using var temp = new TempDirectory();

@@ -19,7 +19,7 @@
     },
     "scanner": {
       "type": "object",
-      "required": ["version", "scanId", "artifactProfile"],
+      "required": ["version", "scanId"],
       "properties": {
         "version": { "type": "string" },
         "scanId": { "type": "string" },
