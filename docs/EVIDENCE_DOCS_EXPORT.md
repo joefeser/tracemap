@@ -64,9 +64,11 @@ Directory output uses schema `tracemap-evidence-docs.v1`:
 
 ```text
 manifest.json
+query-recipes.json
 chunks.jsonl
 README.md
 index.md
+QUERY_RECIPES.md
 chunks/<family>/index.md
 chunks/<family>/<chunk-id>.md
 ```
@@ -77,6 +79,11 @@ Each JSONL line is one chunk object with `schemaVersion`, `chunkId`,
 source refs, supporting IDs, rule IDs, evidence tiers, coverage labels, gaps,
 limitations, redactions, and links. `bodyMarkdown` is rendered from the same
 structured evidence fields and does not become source evidence by itself.
+
+Chunks also carry additive `retrievalHints`. Each hint names a recipe from
+`query-recipes.json`, supplies bounded parameter values already present in the
+chunk's citations or packet identity, and identifies the supporting evidence.
+Hints do not add a finding, raise an evidence tier, or close a gap.
 
 Each chunk includes deterministic navigation links to its Markdown file, the
 family index, and the top-level docs index. Markdown output renders the same
@@ -149,6 +156,30 @@ fields:
 Displayed IDs are truncated to 24 lowercase hex characters. If distinct full
 identity records collide, docs export emits
 `docs-export.gap.duplicate-stable-identity.v1` rather than choosing a winner.
+
+## Evidence Query Recipes
+
+`query-recipes.json` is a machine-readable closed catalog, and
+`QUERY_RECIPES.md` is its human-readable rendering when Markdown output is
+enabled. The initial catalog covers exact facts, overlapping file spans, exact
+symbols, handler call edges, reverse callers, Web Forms surface facts,
+database-shaped handler evidence, boundary target evidence, and evidence near a
+gap span. A separate stored-procedure candidate-context recipe retrieves
+command construction, command-type, invocation, and argument facts without
+claiming that co-occurrence proves object identity or execution.
+
+Each recipe declares required parameters, supported single/combined index
+kinds, a shared result contract, evidence requirements, and limitations. SQL
+variants are single-statement, parameterized, read-only, bounded by `$limit`,
+and restricted to documented TraceMap-owned evidence tables. Catalog validation
+rejects mutation or DDL tokens, multiple statements, missing parameters,
+unbounded recipes, and unapproved tables.
+
+This internal retrieval SQL is not application SQL. It does not query an
+application database, expose captured SQL text, or prove runtime execution. A
+downstream system can use the recipes to request more cited TraceMap evidence,
+but remains responsible for access controls, orchestration, interpretation, and
+any private planning or conversion workflow.
 
 ## Claim Levels
 
