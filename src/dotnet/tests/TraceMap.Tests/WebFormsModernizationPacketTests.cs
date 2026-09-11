@@ -62,7 +62,7 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Contains("UnsafeValueRejected", unsafeError.Message, StringComparison.Ordinal);
         Assert.Contains("chunk=", unsafeError.Message, StringComparison.Ordinal);
         Assert.Contains("family=webforms-modernization", unsafeError.Message, StringComparison.Ordinal);
-        Assert.Contains("field=$.bodyMarkdown", unsafeError.Message, StringComparison.Ordinal);
+        Assert.Contains("field=$.bodyMarkdown#line=", unsafeError.Message, StringComparison.Ordinal);
         Assert.Contains("valueLength=", unsafeError.Message, StringComparison.Ordinal);
         Assert.Contains("valueSha256=", unsafeError.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("customer-private", unsafeError.Message, StringComparison.OrdinalIgnoreCase);
@@ -91,6 +91,23 @@ public sealed class WebFormsModernizationPacketTests
         Assert.DoesNotContain("InvalidOperationException", serialized, StringComparison.Ordinal);
         Assert.Contains(redacted.Chunks.SelectMany(chunk => chunk.Redactions), item =>
             item.RuleId == "docs-export.redaction.unsafe-limitation.v1" && item.Category == "stack-trace");
+
+        var splitStackTraceTokensPath = Path.Combine(temp.Path, "split-stack-trace-tokens-packet.json");
+        await File.WriteAllTextAsync(splitStackTraceTokensPath, JsonSerializer.Serialize(written.Packet with
+        {
+            OwnerQuestions =
+            [
+                "Review the System.Data boundary.",
+                "Review the Exception handling boundary.",
+                "Review global::Sample.FlightMealExceptionsQuery.Get(global::System.Data.DataSet)."
+            ]
+        }, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+        var splitStackTraceTokens = await EvidenceDocsExporter.ExportAsync(new(
+            index,
+            Path.Combine(temp.Path, "split-stack-trace-tokens-docs"),
+            Families: "webforms-modernization,limitation",
+            WebFormsPacketPaths: [splitStackTraceTokensPath]));
+        Assert.Contains(splitStackTraceTokens.Chunks, chunk => chunk.ChunkFamily == "webforms-modernization");
     }
 
     [Fact]
