@@ -7,7 +7,7 @@ namespace TraceMap.Core;
 public static class BuildEnvironmentDiagnosticExtractor
 {
     private static readonly Regex SafeDiagnosticIdRegex = new(
-        @"\b(?:CS|MSB)[0-9]{4}\b",
+        @"\b(?:CS|MSB)[0-9]{4}\b|\bBC[0-9]{5}\b",
         RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     public const string DiagnosticKindTargetFramework = "target-framework";
