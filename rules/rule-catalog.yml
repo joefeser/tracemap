@@ -3778,11 +3778,11 @@ rules:
       - Compiler diagnostic error counts are aggregate counts only; per-diagnostic evidence is carried by `vb.semantic.workspace.v1` gap rows.
       - The .NET SDK emits design-time compiler arguments without `_MyType="Empty"`, so MSBuildWorkspace loads inject the classic My template whose types do not bind on .NET Core. Errors caused by that injected template point at no source location, are excluded from coverage gaps, and remain visible as `injectedTemplateErrorCount` on the observation fact; a reduced coverage label is never inferred from them alone.
       - Document counts are safe aggregate counts over project-declared compilation inputs; generated and designer documents are counted without treating filename conventions as semantic proof.
-      - Declaration, reference, call, construction, argument, and symbol-relationship evidence requires the later VB extraction slices; this rule claims none of them.
+      - Declaration, reference, call, construction, argument, and symbol-relationship evidence is emitted separately by the `vb.semantic.*` rules; this rule claims only the load/compilation observation.
 
   - id: vb.semantic.workspace.v1
     name: Visual Basic semantic workspace gaps
-    description: Records MSBuild registration, project load, compilation, and compiler diagnostic gaps encountered while loading Visual Basic projects semantically.
+    description: Records MSBuild registration, project load, compilation, compiler diagnostic, per-file semantic-unavailability, and explicit scan-scope gaps encountered while loading Visual Basic projects semantically.
     evidenceTier: Tier4Unknown
     emits:
       - AnalysisGap
@@ -3791,8 +3791,149 @@ rules:
       - Native workspace messages are sanitized to stable categories before shareable artifacts are written; raw local paths, remotes, package sources, config values, credentials, and source-like snippets are omitted.
       - A Visual Basic workspace or compilation gap reduces the aggregate scan coverage label; the scan is never reported as clean or complete while such a gap is present.
       - Compiler diagnostics that point at no source location and reference the classic My template surface are excluded as SDK design-time injection noise; this exclusion is bounded to that template surface and does not suppress source-referencing compiler errors.
-      - Syntax fallback over readable Visual Basic files is delivered by a later slice; until then a failed Visual Basic project load yields explicit gaps and reduced coverage rather than per-file syntax candidates.
+      - Per-file `SemanticAnalysisUnavailable` gaps are emitted by the bounded syntax fallback for Visual Basic files that received no compiler-resolved coverage; they do not claim why semantic evidence is unavailable, and syntax facts that accompany them are governed by the `vb.syntax.*` rules.
       - Exclusion comparison follows detected host path case semantics and macOS Unicode-equivalence semantics without rewriting persisted evidence paths.
+
+  - id: vb.semantic.declarations.v1
+    name: Visual Basic semantic declarations
+    description: Records compiler-resolved Visual Basic type, module, interface, structure, enum, delegate, method, constructor, property, field, and parameter declarations using Roslyn semantic symbols.
+    evidenceTier: Tier1Semantic
+    emits:
+      - TypeDeclared
+      - MethodDeclared
+      - PropertyDeclared
+      - FieldDeclared
+      - ParameterDeclared
+    limitations:
+      - Requires project load and enough references to create a Roslyn Visual Basic compilation; when binding is reduced, absence of these facts is not absence of declarations in source.
+      - Designer and generated documents (filename convention) are not analyzed for semantic facts; checked-in designer content is composition evidence for a later slice, not proof of resolved members.
+      - Event declarations and WithEvents event wiring are deliberately not emitted by this rule; event composition belongs to the Web Forms/events slice and is never promoted to resolved event edges here.
+      - Operator and Declare (P/Invoke) statements are not emitted as method declarations in this slice.
+      - Symbols resolved by a Visual Basic scan carry `visualbasic`-tagged symbol identities; cross-language joins between C#-declared and Visual Basic-declared symbols by identity are not established in this slice.
+      - A declaration proves source structure only; it does not prove compilation success, runtime reachability, or execution.
+
+  - id: vb.semantic.propertyaccess.v1
+    name: Visual Basic semantic property access
+    description: Records compiler-resolved Visual Basic property accesses, including unambiguous default-member indexing such as catalog(0).
+    evidenceTier: Tier1Semantic
+    emits:
+      - PropertyAccessed
+    limitations:
+      - Requires Roslyn semantic binding; unresolved receivers, error-typed receivers, and late-bound accesses produce no fact rather than a guessed target.
+      - Default-member indexing is retained at Tier1Semantic only when Roslyn resolves exactly one default property; ambiguous or unresolved default members are omitted.
+      - A property access proves a reference in source; it does not prove the accessor executes, that the getter or setter is reachable, or that any value flows at runtime.
+
+  - id: vb.semantic.methodinvocation.v1
+    name: Visual Basic semantic method invocation
+    description: Records compiler-resolved Visual Basic sub and function invocations with resolved containing types and receiver symbols.
+    evidenceTier: Tier1Semantic
+    emits:
+      - MethodInvoked
+    limitations:
+      - Requires Roslyn semantic binding; late binding, overload resolution failures, and error-typed receivers produce no fact rather than a guessed target.
+      - An invocation proves a compiler-resolved call site in source; it does not prove the callee executes, is reachable, or completes at runtime.
+      - Unresolved call sites are visible only through `vb.semantic.workspace.v1` compiler-diagnostic gaps, not as per-call-site gap rows.
+
+  - id: vb.semantic.callgraph.v1
+    name: Visual Basic semantic call graph
+    description: Records compiler-resolved Visual Basic call edges from the containing caller symbol to resolved callee methods and constructors, including object-creation constructor edges.
+    evidenceTier: Tier1Semantic
+    emits:
+      - CallEdge
+    limitations:
+      - Edges are compiler-resolved call sites, not proven execution: dynamic dispatch to overrides, delegates, AddHandler/Handles event wiring, RaiseEvent, and interface dispatch beyond the resolved target are not expanded.
+      - Late-bound invocations and unresolved callees produce no edge.
+      - The caller is the lexically containing symbol at the call site; runtime call paths, recursion depth, and branch feasibility are not proven.
+
+  - id: vb.semantic.objectcreation.v1
+    name: Visual Basic semantic object creation
+    description: Records compiler-resolved Visual Basic object creations with created type, resolved constructor, assignment target, and argument count.
+    evidenceTier: Tier1Semantic
+    emits:
+      - ObjectCreated
+    limitations:
+      - Requires Roslyn semantic binding of the created type; error-typed or unresolved creations produce no fact.
+      - An object creation proves a constructor call site in source; it does not prove the constructor executes or the object survives to runtime.
+      - Constructor call edges are carried separately by `vb.semantic.callgraph.v1`; argument flow is carried by `vb.semantic.valueflow.v1`.
+
+  - id: vb.semantic.valueflow.v1
+    name: Visual Basic semantic value flow
+    description: Records compiler-resolved Visual Basic argument-to-parameter relationships at resolved method invocations and object creations, including named, omitted-optional-bound, and params-expanded arguments.
+    evidenceTier: Tier1Semantic
+    emits:
+      - ArgumentPassed
+    limitations:
+      - Parameter binding is compiler-resolved at the call site; it does not prove the callee executes or that values are consumed.
+      - Raw argument expressions are not stored; expression hashes, kinds, resolved argument symbols, and line spans are emitted.
+      - ByRef aliasing, late-bound arguments, and omitted optional arguments that the compiler fills implicitly are bounded by the resolved operation model and may not enumerate every runtime value path.
+
+  - id: vb.semantic.symbolrelationship.v1
+    name: Visual Basic semantic symbol relationships
+    description: Records compiler-resolved Visual Basic direct symbol relationships: inheritance, interface implementation, interface member implementation, and member overrides.
+    evidenceTier: Tier1Semantic
+    emits:
+      - SymbolRelationship
+    limitations:
+      - Relationships are limited to compiler-resolved direct symbols; conditional compilation, partial binding, and error-typed bases produce no relationship rather than a guessed target.
+      - Handles/AddHandler/RemoveHandler event wiring is deliberately excluded; event composition belongs to the Web Forms/events slice.
+      - A relationship proves a declaration shape; it does not prove instantiation, dispatch outcome, or runtime behavior.
+
+  - id: vb.syntax.declarations.v1
+    name: Visual Basic syntax declarations
+    description: Bounded syntax-only declarations over readable Visual Basic files that received no compiler-resolved coverage, plus per-file parse, read, and budget gaps for that fallback.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - TypeDeclared
+      - MethodDeclared
+      - PropertyDeclared
+      - EnumDeclared
+      - AnalysisGap
+    limitations:
+      - Syntax-only names are text evidence; they are never compiler-resolved targets and never join to semantic symbols by identity.
+      - Designer, generated, and auto-generated-header files are skipped; unreadable files and parse errors emit bounded Tier4 gap rows with diagnostic codes and message hashes only, never raw message text.
+      - Emission is bounded by a deterministic per-file fact budget; when the budget is exhausted the remainder is reported by a `SyntaxFallbackBudgetExhausted` gap, and absence of a fact beyond the budget is not absence in source.
+      - Syntax fallback does not claim the file compiles, binds, or runs; partial analysis remains labeled reduced through `vb.semantic.workspace.v1` gaps.
+
+  - id: vb.syntax.memberaccess.v1
+    name: Visual Basic syntax member access
+    description: Bounded syntax-only member access names over Visual Basic files that received no compiler-resolved coverage.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - MemberAccessName
+    limitations:
+      - Member names are raw syntax text; receivers may be unresolved, late-bound, or error-typed, and no compiler resolution is claimed.
+      - Raw expressions are not stored; expression hashes, kinds, and line spans are emitted.
+
+  - id: vb.syntax.invocation.v1
+    name: Visual Basic syntax invocation
+    description: Bounded syntax-only invocation names and receiver text over Visual Basic files that received no compiler-resolved coverage.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - InvocationName
+    limitations:
+      - Invocation names are raw syntax text and are never represented as compiler-resolved targets; array indexing, late binding, and indexers are indistinguishable at this tier.
+      - Raw expressions are not stored; expression hashes, kinds, and line spans are emitted.
+
+  - id: vb.syntax.callgraph.v1
+    name: Visual Basic syntax call graph
+    description: Bounded syntax-only call edges with caller text and callee text over Visual Basic files that received no compiler-resolved coverage.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - CallEdge
+    limitations:
+      - Callees are invocation or creation text, never compiler-resolved targets; edges prove only that call-like syntax exists at a location.
+      - The caller is the lexically containing member derived from syntax; no runtime reachability, dispatch, or execution is claimed.
+      - Object-creation edges use `SyntaxObjectCreation` call kinds and are bounded by the same deterministic per-file budget as other fallback facts.
+
+  - id: vb.syntax.objectcreation.v1
+    name: Visual Basic syntax object creation
+    description: Bounded syntax-only object creation candidates over Visual Basic files that received no compiler-resolved coverage.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - ObjectCreated
+    limitations:
+      - Created types are raw `New ...` syntax text and are never compiler-resolved targets; the type may not resolve or exist.
+      - Creation candidates prove syntax presence only; constructor identity, executed constructor, and runtime allocation are not claimed.
 
   - id: build.environment.target-framework.v1
     name: Build environment target framework diagnostics
