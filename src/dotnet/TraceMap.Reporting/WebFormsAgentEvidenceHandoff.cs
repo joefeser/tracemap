@@ -259,6 +259,32 @@ public static class WebFormsAgentEvidenceHandoff
         {
             throw new InvalidDataException("AgentHandoffProvenanceMismatch");
         }
+        if (!inspection.TryGetProperty("cases", out var inspectionCases) || inspectionCases.ValueKind != JsonValueKind.Array)
+            throw new InvalidDataException("AgentHandoffSchemaMismatch");
+        var inspectionCaseGroups = inspectionCases.EnumerateArray()
+            .GroupBy(value => RequiredBoundedString(value, "caseId"), StringComparer.Ordinal)
+            .ToArray();
+        if (inspectionCaseGroups.Any(group => group.Count() != 1))
+            throw new InvalidDataException("AgentHandoffCaseInspectionMismatch");
+        var inspectionByCase = inspectionCaseGroups.ToDictionary(
+            group => group.Key,
+            group => group.Single().Clone(),
+            StringComparer.Ordinal);
+        if (inspectionByCase.Count != cases.Length || cases.Any(value => !inspectionByCase.ContainsKey(value.Subject.CaseId)))
+            throw new InvalidDataException("AgentHandoffCaseInspectionMismatch");
+        foreach (var handoff in cases)
+        {
+            var expected = BuildCase(
+                inspection,
+                inspectionByCase[handoff.Subject.CaseId],
+                handoff.Subject.CaseId,
+                handoff.Subject.CaseId + ".private.html",
+                inspectionInfo.Name,
+                inspectionSha256,
+                "agent-evidence-handoff.json");
+            if (!string.Equals(JsonSerializer.Serialize(handoff, JsonOptions), JsonSerializer.Serialize(expected, JsonOptions), StringComparison.Ordinal))
+                throw new InvalidDataException("AgentHandoffCaseInspectionMismatch");
+        }
 
         var evidenceStore = ReadEvidenceStore(indexPath, outputRoot, scanId, commitSha);
         var corpus = ReadCorpus(evidenceDocsRoot, outputRoot, scanId, commitSha, cases);
