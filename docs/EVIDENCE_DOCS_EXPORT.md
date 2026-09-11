@@ -89,6 +89,12 @@ tables. Boundary fact lookups are emitted only when the terminal identity is a
 retained fact; projection-only path nodes remain cited without an inapplicable
 fact lookup.
 
+Private focused Web Forms review sets can consume this catalog through their
+`agent-evidence-handoff.json`. When an operator supplies an evidence-docs root,
+the review handoff validates corpus provenance and selects initial chunks only
+through retained supporting IDs or exact retrieval-hint parameters. The handoff
+does not change the corpus, invent queries, or add BRD and modernization logic.
+
 Gap records retain their own source references, commit identity, safe
 repository-relative file path and structured line span when available, plus
 extractor identity/version and supporting IDs. Metadata that is unavailable

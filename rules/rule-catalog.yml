@@ -2211,6 +2211,20 @@ rules:
       - Unique-name definition candidates are navigation aids rather than evidence, and ambiguous or missing definitions remain unresolved.
       - The report preserves upstream rule IDs and evidence tiers but does not upgrade their confidence; missing evidence remains unknown under stated coverage.
 
+  - id: diagnostic.webforms.agent-evidence-handoff.v1
+    name: Private Web Forms agent evidence handoff
+    description: Projects one bounded private Web Forms review case or review set into deterministic navigation metadata, closed TraceMap retrieval hints, optional matching evidence-corpus chunks, and explicit external-evidence questions.
+    evidenceTier: Tier4Unknown
+    emits:
+      - tracemap-agent-evidence-handoff.v1 private case handoff
+      - tracemap-agent-evidence-handoff.v1 private review-set handoff
+    limitations:
+      - Handoffs are navigation projections over retained evidence and never replace facts.ndjson, index.sqlite, the source packet, rule catalog, or human review overlay as a source of truth.
+      - Retrieval hints reference only the closed read-only TraceMap query-recipe catalog and do not prove runtime execution, reachability, ordering, successful binding, completeness, or absence.
+      - Optional index and documentation-corpus locators are private local metadata and require exact scan/commit provenance validation; they are never emitted or linked from anonymous artifacts.
+      - Application-database observations remain structural static evidence. The handoff never contains credentials, connection strings, configuration values, raw application SQL, or database execution instructions.
+      - The handoff does not infer business intent, generate a BRD, select a target architecture, call an LLM, or generate modernization or migration code.
+
   - id: legacy.webforms.inventory.v1
     name: Legacy WebForms file and page inventory
     description: Inventories WebForms markup, code-behind, designer files, directives, static server controls, checked-in configuration registrations, and safe page linkage metadata.

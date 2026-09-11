@@ -71,7 +71,9 @@ Each set contains:
 - `index.html` — browser entry point for every case;
 - `index.md` — editable private verdict/comment queue;
 - `inspection.snapshot.json` — immutable private input used for the set;
+- `agent-evidence-handoff.json` — private set-level evidence discovery, index provenance, and optional corpus navigation;
 - `case-NNN.private.html` — private local review, source-bearing only when `-IncludeRawSource` was explicitly supplied;
+- `case-NNN.handoff.json` — private case evidence, ordered reading targets, closed retrieval hints, and external-evidence questions;
 - `case-NNN.source-NNN.html` — complete private annotated working-tree files, generated only with `-IncludeRawSource`;
 - `case-NNN.shareable.html` — anonymous structural review; and
 - `case-NNN.shareable.json` — anonymous machine-readable graph.
@@ -105,6 +107,38 @@ to private source views, and Git is not required.
 For one report instead of a set, use
 `scripts/New-FocusedWebFormsCodePathReview.ps1`. It defaults to `case-001` and
 accepts the same source-root and trigger-context options.
+
+## Agent evidence handoff
+
+Every private case report includes a collapsed **Agent evidence handoff** section
+and an adjacent `case-NNN.handoff.json`. Review sets also contain
+`agent-evidence-handoff.json`, which inventories the cases and connects their
+retained evidence to the closed read-only recipes from
+`tracemap-evidence-query-recipes.v1`.
+
+The configured `indexPath` is used automatically when available. To make the
+source-of-truth index or an existing docs-export corpus explicit, run:
+
+```powershell
+.\scripts\New-FocusedWebFormsCodePathReviewSet.ps1 `
+  -SourceRoot C:\path\to\authorized-source `
+  -IndexPath C:\path\to\index.sqlite `
+  -EvidenceDocsRoot C:\path\to\evidence-docs
+```
+
+The index is opened read-only and must contain exactly one `scan_manifest` row
+matching the inspection scan and commit. When a docs-export root is supplied,
+its manifest and query catalog must match the same provenance; matching chunks
+are selected only through retained supporting IDs or exact retrieval-hint
+parameters. If either optional artifact is omitted, the handoff records that it
+was not supplied instead of guessing a location.
+
+TraceMap's `index.sqlite` is the source of truth for retained static evidence.
+An application operational database is a separate, authorized external evidence
+source: the handoff may ask for a procedure definition, parameter contract, or
+result-set schema, but it never carries credentials, connection strings, raw
+application SQL, or execution instructions. Anonymous reports contain no
+private handoff content or links.
 
 ## Diagnostic utilities
 
