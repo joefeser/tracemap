@@ -33,6 +33,18 @@ function Get-PathStringComparison([string]$ExistingRoot) {
         if (Test-Path -LiteralPath $probePath) { Remove-Item -LiteralPath $probePath -Force }
     }
 }
+function Assert-NoLinkedOutputAncestor([string]$Root, [string]$Parent) {
+    $relativeParent = [IO.Path]::GetRelativePath($Root, $Parent)
+    if ($relativeParent -eq '.') { return }
+    $cursor = $Root
+    foreach ($segment in @($relativeParent.Split([IO.Path]::DirectorySeparatorChar, [StringSplitOptions]::RemoveEmptyEntries))) {
+        $cursor = Join-Path $cursor $segment
+        if (!(Test-Path -LiteralPath $cursor)) { break }
+        if ((Get-Item -LiteralPath $cursor -Force).Attributes.HasFlag([IO.FileAttributes]::ReparsePoint)) {
+            throw 'ApplicationWorkbenchOutputOutsideRoot'
+        }
+    }
+}
 function Project-Evidence([object]$Evidence) {
     if ($null -eq $Evidence) { return $null }
     return [ordered]@{
@@ -155,6 +167,7 @@ $outputComparison = Get-PathStringComparison $OutputRoot
 if (!$OutputDirectory.StartsWith($outputPrefix, $outputComparison)) { throw 'ApplicationWorkbenchOutputOutsideRoot' }
 if (Test-Path -LiteralPath $OutputDirectory) { throw 'ApplicationWorkbenchOutputExists' }
 $parent = Split-Path -Parent $OutputDirectory
+Assert-NoLinkedOutputAncestor $OutputRoot $parent
 if (!(Test-Path -LiteralPath $parent -PathType Container)) { [IO.Directory]::CreateDirectory($parent) | Out-Null }
 $staging = Join-Path $parent ('.' + (Split-Path -Leaf $OutputDirectory) + '.staging-' + [Guid]::NewGuid().ToString('N'))
 [IO.Directory]::CreateDirectory($staging) | Out-Null
