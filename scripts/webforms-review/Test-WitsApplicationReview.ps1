@@ -13,6 +13,7 @@ $packet = [ordered]@{
 }
 [IO.File]::WriteAllText($packetPath, (($packet | ConvertTo-Json -Depth 12) + "`n"), [Text.UTF8Encoding]::new($false))
 $packetHash = (Get-FileHash $packetPath -Algorithm SHA256).Hash
+function dotnet { $global:LASTEXITCODE = 0 }
 function Expect-Failure([string]$Code, [scriptblock]$Action) { try { & $Action; throw "Expected $Code" } catch { if (!$_.Exception.Message.Contains($Code, [StringComparison]::Ordinal)) { throw } } }
 try {
     $first = Join-Path $temp 'review-one.json'
@@ -37,4 +38,4 @@ try {
     if ((Get-FileHash $packetPath -Algorithm SHA256).Hash -ne $packetHash) { throw 'Application review workflow modified its packet.' }
     Write-Host 'PASS WITS Web Forms application review overlay'
 }
-finally { if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Recurse -Force } }
+finally { Remove-Item Function:\dotnet -ErrorAction SilentlyContinue; if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Recurse -Force } }

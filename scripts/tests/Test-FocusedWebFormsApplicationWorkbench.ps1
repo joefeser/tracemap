@@ -21,6 +21,11 @@ $corpus = Join-Path $temp 'evidence-docs'
 [IO.File]::WriteAllText((Join-Path $corpus 'query-recipes.json'), '{"schemaVersion":"tracemap-evidence-query-recipes.v1"}', [Text.UTF8Encoding]::new($false))
 [IO.File]::WriteAllText((Join-Path $corpus 'chunks.jsonl'), "{`"chunkId`":`"chunk-001`"}`n", [Text.UTF8Encoding]::new($false))
 $chunksHashBefore = (Get-FileHash -LiteralPath (Join-Path $corpus 'chunks.jsonl') -Algorithm SHA256).Hash
+$badCorpus = ''
+function dotnet {
+    if (($args -contains '--validate-application-workbench-inputs') -and ($args -contains $badCorpus)) { $global:LASTEXITCODE = 1 }
+    else { $global:LASTEXITCODE = 0 }
+}
 
 $packetPath = Join-Path $temp 'webforms-modernization.json'
 $evidence = @{ factId = 'fact-surface-1'; ruleId = 'legacy.webforms.surface.v1'; evidenceTier = 'Tier2Structural'; coverageLabel = 'complete'; commitSha = ('a' * 40); filePath = 'Pages/First.aspx'; startLine = 1; endLine = 2; extractorId = 'legacy-webforms'; extractorVersion = '1'; supportingFactIds = @(); supportingEdgeIds = @(); limitations = @() }
@@ -30,7 +35,7 @@ $packet = [ordered]@{
     summary = @{ projectCount = 1; surfaceCount = 2; eventChainCount = 1; downstreamBoundaryCount = 1; identityStateCount = 1; batchDataMovementCount = 1; structuralSliceCandidateCount = 1; gapCount = 1; truncated = $false }
     projects = @(@{ projectId = 'project-one'; surfaceCount = 2; evidence = @(); supportingFactIds = @() })
     surfaces = @(
-        @{ surfaceId = 'surface-two'; surfaceKind = 'page'; projectId = 'project-one'; compositionTargetIds = @(); controlIds = @(); evidence = @{ factId = 'fact-surface-2'; ruleId = 'legacy.webforms.surface.v1'; evidenceTier = 'Tier2Structural'; coverageLabel = 'complete'; commitSha = ('a' * 40); filePath = 'Pages/Second.aspx'; startLine = 1; endLine = 1; extractorId = 'legacy-webforms'; extractorVersion = '1'; supportingFactIds = @(); supportingEdgeIds = @(); limitations = @() }; supportingEvidence = @(); supportingFactIds = @() },
+        @{ surfaceId = 'Surface-One'; surfaceKind = 'page'; projectId = 'project-one'; compositionTargetIds = @(); controlIds = @(); evidence = @{ factId = 'fact-surface-2'; ruleId = 'legacy.webforms.surface.v1'; evidenceTier = 'Tier2Structural'; coverageLabel = 'complete'; commitSha = ('a' * 40); filePath = 'Pages/Second.aspx'; startLine = 1; endLine = 1; extractorId = 'legacy-webforms'; extractorVersion = '1'; supportingFactIds = @(); supportingEdgeIds = @(); limitations = @() }; supportingEvidence = @(); supportingFactIds = @() },
         @{ surfaceId = 'surface-one'; surfaceKind = 'page'; projectId = 'project-one'; compositionTargetIds = @(); controlIds = @('Go'); evidence = $evidence; supportingEvidence = @(); supportingFactIds = @('fact-surface-1') }
     )
     eventChains = @(@{ chainId = 'chain-one'; surfaceId = 'surface-one'; eventSourceId = 'Go.Click'; bindingFactId = 'binding-one'; handlerId = 'handler-one'; handlerFactId = 'fact-handler'; handlerSymbol = 'App.First.Go_Click()'; classification = 'terminal-reached'; legacyPathId = 'path-one'; terminalKind = 'database'; evidence = @($evidence); pathEvidence = @(); supportingFactIds = @('fact-handler'); supportingEdgeIds = @(); ruleIds = @('legacy.webforms.event-flow.v1'); evidenceTiers = @('Tier1Semantic'); coverageLabels = @('complete'); limitations = @(); traversalObservation = @{ stopState = 'supported-terminal-reached' } })
@@ -53,7 +58,7 @@ try {
     if ($index.IndexOf('Pages/First.aspx', [StringComparison]::Ordinal) -gt $index.IndexOf('Pages/Second.aspx', [StringComparison]::Ordinal)) { throw 'Pages were not ordered by retained path.' }
     if (!$index.Contains('43', [StringComparison]::Ordinal) -and !$index.Contains('2 selected surfaces', [StringComparison]::Ordinal)) { throw 'Index did not report surface count.' }
     $first = [IO.File]::ReadAllText((Join-Path $workbench 'page-001.html'))
-    foreach ($expected in @('Go.Click', 'App.First.Go_Click()', 'stored-procedure-candidate', 'HandlerTerminalUnavailable', 'Raw source omitted')) {
+    foreach ($expected in @('Go.Click', 'App.First.Go_Click()', 'stored-procedure-candidate', 'HandlerTerminalUnavailable', 'Tier4Unknown', ('a' * 40), 'legacy-webforms/1', 'identity-one', 'batch-one', 'candidate-one', 'Raw source omitted')) {
         if (!$first.Contains($expected, [StringComparison]::Ordinal)) { throw "Page report missing: $expected" }
     }
     $handoff = [IO.File]::ReadAllText((Join-Path $workbench 'page-001.handoff.json')) | ConvertFrom-Json -Depth 30
@@ -67,17 +72,31 @@ try {
     if (!$sourceReport.Contains('asp:Button', [StringComparison]::Ordinal)) { throw 'Opt-in source excerpt was not rendered.' }
     if ((Get-FileHash -LiteralPath (Join-Path $corpus 'chunks.jsonl') -Algorithm SHA256).Hash -ne $chunksHashBefore) { throw 'Source-mode workbench modified chunks.jsonl.' }
 
+    if ($IsLinux -or $IsMacOS) {
+        $outsideSource = Join-Path $temp 'outside-source.aspx'
+        $outsideSentinel = 'OUTSIDE-SOURCE-MUST-NOT-RENDER'
+        [IO.File]::WriteAllText($outsideSource, $outsideSentinel, [Text.UTF8Encoding]::new($false))
+        Remove-Item -LiteralPath (Join-Path $sourceRoot 'Pages/First.aspx')
+        New-Item -ItemType SymbolicLink -Path (Join-Path $sourceRoot 'Pages/First.aspx') -Target $outsideSource | Out-Null
+        $symlinkWorkbench = Join-Path $outputRoot 'workbench-symlink'
+        & $scriptPath -PacketPath $packetPath -OutputRoot $outputRoot -OutputDirectory $symlinkWorkbench -SourceRoot $sourceRoot -IncludeRawSource | Out-Null
+        $symlinkReport = [IO.File]::ReadAllText((Join-Path $symlinkWorkbench 'page-001.html'))
+        if ($symlinkReport.Contains($outsideSentinel, [StringComparison]::Ordinal) -or !$symlinkReport.Contains('crossed a symlink or junction', [StringComparison]::Ordinal)) { throw 'Source symlink escape was not rejected.' }
+    }
+
     $reviewScript = Join-Path $scripts 'webforms-review/Invoke-WitsApplicationReview.ps1'
     $reviewPath = Join-Path $temp 'application-review.json'
     & $reviewScript -Mode Export -PacketPath $packetPath -ReviewPath $reviewPath | Out-Null
     $review = [IO.File]::ReadAllText($reviewPath) | ConvertFrom-Json -Depth 30
-    $review.decisions[0].verdict = 'needs-review'; $review.decisions[0].migrationDisposition = 'defer'; $review.decisions[0].capabilityLabel = 'Crew meal review'
+    $review.decisions[0].verdict = 'needs-review'; $review.decisions[0].migrationDisposition = 'defer'; $review.decisions[0].capabilityLabel = 'Crew meal review'; $review.decisions[0].correction = @{ category = 'business-intent'; statement = 'Owner correction retained' }
+    $review.decisions[1].verdict = 'expected-ui-only'; $review.decisions[1].migrationDisposition = 'retain'
     [IO.File]::WriteAllText($reviewPath, (($review | ConvertTo-Json -Depth 20) + "`n"), [Text.UTF8Encoding]::new($false))
     $reviewedWorkbench = Join-Path $outputRoot 'workbench-reviewed'
     & $scriptPath -PacketPath $packetPath -OutputRoot $outputRoot -OutputDirectory $reviewedWorkbench -ReviewPath $reviewPath | Out-Null
     $reviewedIndex = [IO.File]::ReadAllText((Join-Path $reviewedWorkbench 'index.html'))
     $reviewedPage = [IO.File]::ReadAllText((Join-Path $reviewedWorkbench 'page-001.html'))
-    if (!$reviewedIndex.Contains('needs-review', [StringComparison]::Ordinal) -or !$reviewedPage.Contains('Crew meal review', [StringComparison]::Ordinal)) { throw 'Validated application review was not projected into HTML.' }
+    $reviewedSecondPage = [IO.File]::ReadAllText((Join-Path $reviewedWorkbench 'page-002.html'))
+    if (!$reviewedIndex.Contains('needs-review', [StringComparison]::Ordinal) -or !$reviewedPage.Contains('Crew meal review', [StringComparison]::Ordinal) -or !$reviewedPage.Contains('Owner correction retained', [StringComparison]::Ordinal) -or !$reviewedSecondPage.Contains('expected-ui-only', [StringComparison]::Ordinal)) { throw 'Validated ordinal application review was not projected into HTML.' }
 
     $badCorpus = Join-Path $temp 'bad-corpus'
     [IO.Directory]::CreateDirectory($badCorpus) | Out-Null
@@ -89,10 +108,11 @@ try {
         throw 'Expected mismatched corpus provenance to fail.'
     }
     catch {
-        if ($_.Exception.Message -ne 'ApplicationWorkbenchCorpusProvenanceMismatch') { throw }
+        if ($_.Exception.Message -ne 'ApplicationWorkbenchInputValidationFailed') { throw }
     }
     Write-Host 'PASS focused Web Forms application workbench'
 }
 finally {
+    Remove-Item Function:\dotnet -ErrorAction SilentlyContinue
     if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Recurse -Force }
 }

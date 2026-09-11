@@ -245,6 +245,17 @@ public sealed class WebFormsModernizationPacketTests
             WebFormsPacketPaths: [second.JsonPath]));
         Assert.Contains(docsA.Manifest.Inputs, input => input.Kind == "webforms-modernization-packet"
             && input.SchemaVersion == WebFormsModernizationPacketReporter.SchemaVersion);
+        Assert.Equal(first.Packet.PacketId, WebFormsModernizationPacketReporter.ReadValidatedPacket(first.JsonPath).PacketId);
+        WebFormsAgentEvidenceHandoff.ValidateEvidenceCorpus(
+            Path.Combine(temp.Path, "docs-a"),
+            first.Packet.Sources[0].ScanId,
+            first.Packet.Sources[0].CommitSha,
+            first.Packet.PacketId);
+        Assert.Throws<InvalidDataException>(() => WebFormsAgentEvidenceHandoff.ValidateEvidenceCorpus(
+            Path.Combine(temp.Path, "docs-a"),
+            first.Packet.Sources[0].ScanId,
+            first.Packet.Sources[0].CommitSha,
+            "packet-not-the-exported-packet"));
         Assert.Contains(docsA.Chunks, chunk => chunk.ChunkFamily == "webforms-modernization" && chunk.Title == "Web Forms evidence packet overview");
         Assert.Equal(first.Packet.Surfaces.Count, docsA.Chunks.Count(chunk => chunk.ChunkFamily == "webforms-modernization" && chunk.Title == "Web Forms surface evidence"));
         Assert.Contains(docsA.Chunks, chunk => chunk.ChunkFamily == "webforms-modernization" && chunk.Title == "Web Forms event-chain evidence");

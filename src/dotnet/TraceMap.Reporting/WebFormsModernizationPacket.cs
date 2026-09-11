@@ -311,6 +311,32 @@ public static class WebFormsModernizationPacketReporter
         "Which reduced build or analysis gaps must be closed before migration planning?"
     ];
 
+    public static WebFormsModernizationPacket ReadValidatedPacket(string path)
+    {
+        var info = new FileInfo(Path.GetFullPath(path));
+        if (!info.Exists || info.Length < 1 || info.Length > 128L * 1024 * 1024)
+            throw new InvalidDataException("ApplicationWorkbenchPacketUnavailable");
+        try
+        {
+            var json = File.ReadAllText(info.FullName);
+            using var document = JsonDocument.Parse(json, new JsonDocumentOptions
+            {
+                AllowTrailingCommas = false,
+                CommentHandling = JsonCommentHandling.Disallow,
+                MaxDepth = 96
+            });
+            StaticHtmlEvidenceExplorer.RejectDuplicateJsonProperties(document.RootElement);
+            var packet = JsonSerializer.Deserialize<WebFormsModernizationPacket>(json, JsonOptions)
+                ?? throw new InvalidDataException("ApplicationWorkbenchPacketSchemaMismatch");
+            StaticHtmlEvidenceExplorer.ValidateWebFormsPacket(packet, expectedCommitSha: null);
+            return packet;
+        }
+        catch (Exception exception) when (exception is JsonException or InvalidDataException or InvalidOperationException or ArgumentException or NullReferenceException)
+        {
+            throw new InvalidDataException("ApplicationWorkbenchPacketSchemaMismatch", exception);
+        }
+    }
+
     public static async Task<WebFormsModernizationResult> WriteAsync(
         WebFormsModernizationOptions options,
         CancellationToken cancellationToken = default)
