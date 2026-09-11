@@ -169,6 +169,18 @@ public sealed class PackageDecisionComparisonExternalClaimsTests
         Assert.All(rejected.Gaps, gap => Assert.Equal("package.decision.correlation.v1", gap.RuleId));
     }
 
+    [Theory]
+    [InlineData("{\"version\":\"package-deployment-reference.v1\",\"version\":\"package-deployment-reference.v1\",\"producer\":{\"id\":\"producer\",\"version\":\"1\"},\"references\":[{\"referenceId\":\"ref-1\",\"referenceKind\":\"build-attachment\",\"ecosystem\":\"npm\",\"packageName\":\"example\",\"artifactVersion\":\"1.0.0\"}]}")]
+    [InlineData("{\"version\":\"package-deployment-reference.v1\",\"producer\":{\"id\":\"producer\",\"id\":\"other\",\"version\":\"1\"},\"references\":[{\"referenceId\":\"ref-1\",\"referenceKind\":\"build-attachment\",\"ecosystem\":\"npm\",\"packageName\":\"example\",\"artifactVersion\":\"1.0.0\"}]}")]
+    [InlineData("{\"version\":\"package-deployment-reference.v1\",\"producer\":{\"id\":\"producer\",\"version\":\"1\"},\"references\":[{\"referenceId\":\"ref-1\",\"referenceId\":\"ref-2\",\"referenceKind\":\"build-attachment\",\"ecosystem\":\"npm\",\"packageName\":\"example\",\"artifactVersion\":\"1.0.0\"}]}")]
+    public void Deployment_reference_reader_rejects_duplicate_properties_recursively(string json)
+    {
+        var admission = PackageDecisionDeploymentReferenceReader.Read(json);
+
+        Assert.False(admission.Accepted);
+        Assert.Equal("DecisionInputSchemaUnsupported", Assert.Single(admission.Gaps).Classification);
+    }
+
     [Fact]
     public void Deployment_reference_reader_deduplicates_and_rejects_conflicting_ids()
     {
