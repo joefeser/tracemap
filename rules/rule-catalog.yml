@@ -2163,6 +2163,20 @@ rules:
       - The summary omits repository paths, source identifiers, route templates, symbols, SQL, configuration values, and source content, but rare counts and rule combinations can still disclose architectural characteristics and require owner review before sharing.
       - A missing or unresolved static link is unknown under stated coverage, never proof that a runtime behavior, dependency, feature, or defect is absent.
 
+  - id: diagnostic.webforms.local-code-path-review.v3
+    name: Private Web Forms local code-path review
+    description: Composes one bounded batch-inspection case into private local HTML, optional explicitly requested annotated working-tree source views, and anonymous structural review artifacts.
+    evidenceTier: Tier4Unknown
+    emits:
+      - private Web Forms code-path review artifacts
+      - anonymous structural Web Forms code-path review artifacts
+    limitations:
+      - The review composes retained static evidence and navigation aids; it does not prove runtime execution, branch feasibility, successful binding, behavior, correctness, or absence of unsupported calls.
+      - Working-tree source may differ from the inspected commit because Git identity equality is not required or established; paths and source are private local output and are excluded from anonymous artifacts.
+      - Raw source and complete annotated source files are emitted only through the explicit include-raw-source option and remain subject to deterministic file-count, source-byte, line-count, rendered-output, path-containment, and transactional publication limits.
+      - Unique-name definition candidates are navigation aids rather than evidence, and ambiguous or missing definitions remain unresolved.
+      - The report preserves upstream rule IDs and evidence tiers but does not upgrade their confidence; missing evidence remains unknown under stated coverage.
+
   - id: legacy.webforms.inventory.v1
     name: Legacy WebForms file and page inventory
     description: Inventories WebForms markup, code-behind, designer files, directives, static server controls, checked-in configuration registrations, and safe page linkage metadata.

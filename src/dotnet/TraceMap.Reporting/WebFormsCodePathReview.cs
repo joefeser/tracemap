@@ -9,6 +9,10 @@ namespace TraceMap.Reporting;
 /// <summary>Builds bounded private and anonymous working-tree review artifacts from a batch inspection.</summary>
 public static class WebFormsCodePathReview
 {
+    private const int MaximumAnnotatedSourceLinesPerFile = 100_000;
+    private const int MaximumAnnotatedSourceLinesPerReport = 150_000;
+    private const long MaximumAnnotatedSourceOutputBytesPerReport = 64L * 1024 * 1024;
+
     private sealed record ReviewLocation(string Role, string FilePath, int StartLine, int EndLine, string? Caller, string? Callee, bool PreferFullSpan = false);
     private sealed record GroupedEdge(string Caller, string Callee, IReadOnlyList<ReviewLocation> Locations, IReadOnlyList<string> RuleIds, IReadOnlyList<string> Tiers);
     private sealed record AnonymousNode(string Id, string Classification);
@@ -88,7 +92,9 @@ public static class WebFormsCodePathReview
             .GroupBy(l => new { l.Role, l.FilePath, l.StartLine, l.EndLine, l.Caller, l.Callee })
             .Select(g => g.First()).OrderBy(l => l.FilePath, StringComparer.Ordinal).ThenBy(l => l.StartLine).ThenBy(l => l.Role, StringComparer.Ordinal)
             .ToList();
-        var sourceFiles = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
+        // Repository-relative paths are evidence identities. Preserve their casing so distinct
+        // files on case-sensitive source volumes can never share cached contents or artifacts.
+        var sourceFiles = new Dictionary<string, string[]>(StringComparer.Ordinal);
         long bytesRead = 0;
         string ResolveSource(string relativePath)
         {
@@ -114,7 +120,7 @@ public static class WebFormsCodePathReview
         // Definition candidates are navigation aids, not evidence. Restrict name lookup
         // to already witnessed C# files and publish only globally unique candidates.
         var evidenceFiles = deduplicated.Select(l => l.FilePath).Where(p => p.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
-            .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.Ordinal).ToArray();
+            .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
         var candidateCount = 0;
         var unresolvedLeaves = selected.TryGetProperty("unresolvedOtherLeaves", out var unresolvedValues)
             ? unresolvedValues.EnumerateArray().Select(v => v.GetString()).ToArray()
@@ -126,7 +132,7 @@ public static class WebFormsCodePathReview
             throw new InvalidDataException("CodePathReviewCandidateWorkLimit");
         var syntaxRoots = evidenceFiles.ToDictionary(relativePath => relativePath,
             relativePath => CSharpSyntaxTree.ParseText(string.Join(Environment.NewLine, ReadSource(relativePath)), path: relativePath).GetCompilationUnitRoot(),
-            StringComparer.OrdinalIgnoreCase);
+            StringComparer.Ordinal);
         foreach (var unresolved in boundedUnresolvedLeaves)
         {
             var open = unresolved!.IndexOf('(');
@@ -210,17 +216,30 @@ public static class WebFormsCodePathReview
             .ToDictionary(item => item.location, item => item.anchor);
         var annotatedSourceFiles = includeRawSource
             ? deduplicated.Select(location => location.FilePath)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Distinct(StringComparer.Ordinal)
                 .Order(StringComparer.Ordinal)
                 .Select((filePath, index) => new
                 {
                     FilePath = filePath,
                     OutputPath = Path.Combine(outputDirectory, $"{outputStem}.source-{index + 1:D3}.html")
                 })
-                .ToDictionary(item => item.FilePath, item => item.OutputPath, StringComparer.OrdinalIgnoreCase)
-            : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                .ToDictionary(item => item.FilePath, item => item.OutputPath, StringComparer.Ordinal)
+            : new Dictionary<string, string>(StringComparer.Ordinal);
         if (annotatedSourceFiles.Values.Any(File.Exists))
             throw new IOException("CodePathReviewOutputExists");
+        var annotatedLineCount = 0L;
+        foreach (var relativePath in annotatedSourceFiles.Keys)
+        {
+            var lines = ReadSource(relativePath);
+            if (lines.Length > MaximumAnnotatedSourceLinesPerFile)
+                throw new InvalidDataException("CodePathReviewSourceLineLimit");
+            annotatedLineCount += lines.Length;
+            if (annotatedLineCount > MaximumAnnotatedSourceLinesPerReport)
+                throw new InvalidDataException("CodePathReviewSourceAggregateLineLimit");
+            if (deduplicated.Any(location => location.FilePath.Equals(relativePath, StringComparison.Ordinal) &&
+                    (location.StartLine > lines.Length || location.EndLine > lines.Length)))
+                throw new InvalidDataException("CodePathReviewSourceSpanInvalid");
+        }
         static string H(string? value) => WebUtility.HtmlEncode(value ?? "unavailable");
         static string BoundedSourceLine(string value) => value.Length <= 500 ? value : value[..500] + " … [line truncated]";
         static string EvidenceConclusion(JsonElement selected)
@@ -347,14 +366,16 @@ public static class WebFormsCodePathReview
         void WriteAnnotatedSource(StreamWriter writer, string relativePath, string privateReportFileName)
         {
             var lines = ReadSource(relativePath);
-            if (lines.Length > 100_000) throw new InvalidDataException("CodePathReviewSourceLineLimit");
             var fileLocations = deduplicated.Where(location =>
-                    location.FilePath.Equals(relativePath, StringComparison.OrdinalIgnoreCase))
+                    location.FilePath.Equals(relativePath, StringComparison.Ordinal))
                 .OrderBy(location => location.StartLine)
                 .ThenBy(location => location.Role, StringComparer.Ordinal)
                 .ToArray();
-            if (fileLocations.Any(location => location.StartLine > lines.Length || location.EndLine > lines.Length))
-                throw new InvalidDataException("CodePathReviewSourceSpanInvalid");
+            var starts = fileLocations.GroupBy(location => location.StartLine)
+                .ToDictionary(group => group.Key, group => group.ToArray());
+            var ends = fileLocations.GroupBy(location => location.EndLine + 1)
+                .ToDictionary(group => group.Key, group => group.ToArray());
+            var active = new HashSet<ReviewLocation>();
 
             writer.WriteLine("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
             writer.WriteLine($"<title>Private annotated source {H(relativePath)}</title><style>{AnnotatedSourceCss}</style></head><body><header>");
@@ -363,8 +384,11 @@ public static class WebFormsCodePathReview
             writer.WriteLine("<p class=\"legend\"><span class=\"key handler\">handler</span><span class=\"key event-binding\">event binding</span><span class=\"key exact-declaration\">declaration</span><span class=\"key retained-call\">retained call</span><span class=\"key definition-candidate\">definition candidate—not evidence</span></p></header><main><pre class=\"source\"><code>");
             for (var lineNumber = 1; lineNumber <= lines.Length; lineNumber++)
             {
-                var covering = fileLocations.Where(location => lineNumber >= location.StartLine && lineNumber <= location.EndLine).ToArray();
-                var classes = covering.Select(location => location.Role switch
+                if (ends.TryGetValue(lineNumber, out var ending))
+                    foreach (var location in ending) active.Remove(location);
+                if (starts.TryGetValue(lineNumber, out var starting))
+                    foreach (var location in starting) active.Add(location);
+                var classes = active.Select(location => location.Role switch
                     {
                         "handler" => "handler",
                         "event-binding" => "event-binding",
@@ -375,8 +399,9 @@ public static class WebFormsCodePathReview
                     .Distinct(StringComparer.Ordinal)
                     .Order(StringComparer.Ordinal);
                 writer.Write($"<span class=\"source-line {H(string.Join(' ', classes))}\" id=\"L{lineNumber}\"><a class=\"line-number\" href=\"#L{lineNumber}\">{lineNumber}</a><span class=\"source-text\">{H(lines[lineNumber - 1])}</span>");
-                foreach (var location in covering.Where(location => location.StartLine == lineNumber))
-                    writer.Write($"<a class=\"evidence-link\" href=\"{H(privateReportFileName)}#{evidenceAnchors[location]}\">{H(location.Role)}</a>");
+                if (starting is not null)
+                    foreach (var location in starting)
+                        writer.Write($"<a class=\"evidence-link\" href=\"{H(privateReportFileName)}#{evidenceAnchors[location]}\">{H(location.Role)}</a>");
                 writer.WriteLine("</span>");
             }
             writer.WriteLine("</code></pre></main><footer>Highlighted spans are retained static evidence, not runtime coverage or execution.</footer></body></html>");
@@ -484,10 +509,15 @@ public static class WebFormsCodePathReview
                 writer.WriteLine("<script>function revealTarget(){const id=decodeURIComponent(location.hash.slice(1));if(!id)return;const target=document.getElementById(id);if(!target)return;let parent=target.closest('details');while(parent){parent.open=true;parent=parent.parentElement?.closest('details');}}addEventListener('hashchange',revealTarget);revealTarget();</script></body></html>");
             }
 
+            var annotatedOutputBytes = 0L;
             foreach (var sourceFile in annotatedSourceFiles.OrderBy(item => item.Key, StringComparer.Ordinal))
             {
-                using var writer = new StreamWriter(new FileStream(temporaryPaths[sourceFile.Value], FileMode.CreateNew, FileAccess.Write, FileShare.None), new UTF8Encoding(false));
-                WriteAnnotatedSource(writer, sourceFile.Key, Path.GetFileName(privatePath));
+                var temporarySourcePath = temporaryPaths[sourceFile.Value];
+                using (var writer = new StreamWriter(new FileStream(temporarySourcePath, FileMode.CreateNew, FileAccess.Write, FileShare.None), new UTF8Encoding(false)))
+                    WriteAnnotatedSource(writer, sourceFile.Key, Path.GetFileName(privatePath));
+                annotatedOutputBytes += new FileInfo(temporarySourcePath).Length;
+                if (annotatedOutputBytes > MaximumAnnotatedSourceOutputBytesPerReport)
+                    throw new InvalidDataException("CodePathReviewSourceAggregateOutputLimit");
             }
 
             using (var file = new FileStream(temporaryPaths[shareableJsonPath], FileMode.CreateNew, FileAccess.Write, FileShare.None))
