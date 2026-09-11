@@ -93,6 +93,82 @@ public sealed class WebFormsModernizationPacketTests
         Assert.DoesNotContain(temp.Path, await File.ReadAllTextAsync(first.JsonPath), StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(temp.Path, markdown, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("private-marker-value", await File.ReadAllTextAsync(first.JsonPath), StringComparison.OrdinalIgnoreCase);
+
+        var docsA = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
+            index,
+            Path.Combine(temp.Path, "docs-a"),
+            Families: "webforms-modernization,gap,limitation",
+            WebFormsPacketPaths: [first.JsonPath]));
+        var docsB = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
+            index,
+            Path.Combine(temp.Path, "docs-b"),
+            Families: "webforms-modernization,gap,limitation",
+            WebFormsPacketPaths: [second.JsonPath]));
+        Assert.Contains(docsA.Manifest.Inputs, input => input.Kind == "webforms-modernization-packet"
+            && input.SchemaVersion == WebFormsModernizationPacketReporter.SchemaVersion);
+        Assert.Contains(docsA.Chunks, chunk => chunk.ChunkFamily == "webforms-modernization" && chunk.Title == "Web Forms evidence packet overview");
+        Assert.Equal(first.Packet.Surfaces.Count, docsA.Chunks.Count(chunk => chunk.ChunkFamily == "webforms-modernization" && chunk.Title == "Web Forms surface evidence"));
+        Assert.Contains(docsA.Chunks, chunk => chunk.ChunkFamily == "webforms-modernization" && chunk.Title == "Web Forms event-chain evidence");
+        Assert.Contains(docsA.Chunks, chunk => chunk.ChunkFamily == "gap" && chunk.Gaps.Any(gap => gap.ChunkFamily == "webforms-modernization"));
+        Assert.All(docsA.Chunks.Where(chunk => chunk.ChunkFamily == "webforms-modernization" && chunk.Title != "Web Forms evidence packet overview"), chunk =>
+        {
+            Assert.NotEmpty(chunk.Citations);
+            Assert.Contains(WebFormsModernizationPacketReporter.PacketRuleId, chunk.RuleIds);
+            Assert.Contains("docs-export.chunk.webforms-modernization.v1", chunk.RuleIds);
+        });
+        Assert.Equal(
+            await File.ReadAllBytesAsync(Path.Combine(temp.Path, "docs-a", "chunks.jsonl")),
+            await File.ReadAllBytesAsync(Path.Combine(temp.Path, "docs-b", "chunks.jsonl")));
+        var docsText = string.Join('\n', Directory.EnumerateFiles(Path.Combine(temp.Path, "docs-a"), "*", SearchOption.AllDirectories).Select(File.ReadAllText));
+        Assert.DoesNotContain(temp.Path, docsText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("private-marker-value", docsText, StringComparison.OrdinalIgnoreCase);
+
+        using var cliOutput = new StringWriter();
+        using var cliError = new StringWriter();
+        var cliExit = await TraceMapCommand.RunAsync(
+            ["docs-export", "--index", index, "--webforms-packet", first.JsonPath, "--families", "webforms-modernization,gap", "--out", Path.Combine(temp.Path, "docs-cli"), "--dry-run"],
+            cliOutput,
+            cliError);
+        Assert.Equal(0, cliExit);
+        Assert.Equal(string.Empty, cliError.ToString());
+        Assert.Contains("TraceMap docs-export dry run:", cliOutput.ToString());
+
+        var reorderedPacket = first.Packet with
+        {
+            Projects = first.Packet.Projects.Reverse().ToArray(),
+            Surfaces = first.Packet.Surfaces.Reverse().ToArray(),
+            EventChains = first.Packet.EventChains.Reverse().ToArray(),
+            DownstreamBoundaries = first.Packet.DownstreamBoundaries.Reverse().ToArray(),
+            IdentityStateInventory = first.Packet.IdentityStateInventory.Reverse().ToArray(),
+            BatchDataMovementInventory = first.Packet.BatchDataMovementInventory.Reverse().ToArray(),
+            StructuralSliceCandidates = first.Packet.StructuralSliceCandidates.Reverse().ToArray(),
+            Gaps = first.Packet.Gaps.Reverse().ToArray(),
+            OwnerQuestions = first.Packet.OwnerQuestions.Reverse().ToArray(),
+            Limitations = first.Packet.Limitations.Reverse().ToArray()
+        };
+        var reorderedPath = Path.Combine(temp.Path, "webforms-modernization-reordered.json");
+        await File.WriteAllTextAsync(reorderedPath, JsonSerializer.Serialize(reorderedPacket, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            WriteIndented = true
+        }));
+        var docsReordered = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
+            index,
+            Path.Combine(temp.Path, "docs-reordered"),
+            Families: "webforms-modernization,gap,limitation",
+            WebFormsPacketPaths: [reorderedPath]));
+        Assert.Equal(docsA.Manifest.ContentHash, docsReordered.Manifest.ContentHash);
+        Assert.Equal(
+            await File.ReadAllBytesAsync(Path.Combine(temp.Path, "docs-a", "chunks.jsonl")),
+            await File.ReadAllBytesAsync(Path.Combine(temp.Path, "docs-reordered", "chunks.jsonl")));
+
+        var incompatiblePath = Path.Combine(temp.Path, "webforms-modernization-incompatible.json");
+        await File.WriteAllTextAsync(incompatiblePath, "{\"schemaVersion\":\"unsupported\"}");
+        var incompatible = await Assert.ThrowsAsync<InvalidOperationException>(() => EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
+            index,
+            Path.Combine(temp.Path, "docs-incompatible"),
+            WebFormsPacketPaths: [incompatiblePath])));
+        Assert.Contains("InputSchemaUnsupported", incompatible.Message);
     }
 
     [Fact]
