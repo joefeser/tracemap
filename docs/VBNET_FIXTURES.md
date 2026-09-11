@@ -175,18 +175,53 @@ git diff --check
 compiles that fixture without adding intentionally failing legacy projects to
 the product solution.
 
-## Commit-pinned open-source smoke candidates
+## Commit-pinned open-source smoke (validated)
 
-Candidates for the real VB.NET smoke test (spec task 9). SHAs are HEAD as
-observed via `git ls-remote` on 2026-09-11 and must be re-verified and
-re-pinned at implementation time; none has been scanned end-to-end yet.
+The VB.NET pinned OSS smoke (spec task 9) is `CommunityVB/Community.VisualBasic`
+(MIT): a community re-implementation of the `Microsoft.VisualBasic` runtime
+written in VB.NET with modern SDK-style projects and cross-platform targets.
+It was selected over the other candidates considered below because it loads
+into MSBuildWorkspace without Windows-only dependencies, is small enough for a
+repeatable smoke, and exercises the full Tier1 VB fact surface.
 
-| Candidate | License | Pin (HEAD @ 2026-09-11) | Suitability and caveats |
+| Label | Repository | Pinned SHA (HEAD as observed 2026-09-11) | Re-verified |
 | --- | --- | --- | --- |
-| `dotnet/roslyn` | MIT | `251b3e508a06508649124493d7f19a8e726654c6` | The VB compiler is self-hosted, so `src/Compilers/VisualBasic/**` is the canonical modern Tier1 VB corpus (every declaration/call family, including syntax-fallback-hostile code). Caveat: the full repository is very large; scope the scan to the VB compiler subtree and expect long scan times. |
-| `CommunityVB/Community.VisualBasic` | MIT | `20d2a51dfc9f342848ad134952ceaa8d79302559` | Community re-implementation of the `Microsoft.VisualBasic` runtime written in VB.NET; moderate size (~1 MB of source), modern SDK-style projects, cross-platform targets. Best candidate for a full-semantic smoke that should load and build without Windows-only dependencies. |
-| `mono/mono-basic` | Mixed: `vbnc` compiler LGPL-2.0; class libraries MIT/X11 style (GitHub reports NOASSERTION) | `bdb5276f7d85100e8e9ddd7e5ba2360a792644a9` | Mono's VB compiler and runtime written in VB; older language level and legacy-ish shapes, useful for fallback/legacy comparison. Caveats: no standard single license file (verify the per-component license before any redistribution; scanning locally is unaffected), and the build is autotools/Mono-era, so expect reduced coverage rather than a clean project load. |
-| `dotnet/docs` | MIT | `c2bef19f060e409b2f71f8d46eee85f5cac94106` | `samples/snippets/visualbasic/**` is a broad corpus of small projectless VB files; good for syntax-fallback and inventory-at-scale checks rather than semantic project loading. Caveat: the whole repository is large; scope to the snippets subtree. |
+| `community-visual-basic` | `https://github.com/CommunityVB/Community.VisualBasic.git` | `20d2a51dfc9f342848ad134952ceaa8d79302559` | yes (`git ls-remote` and pinned checkout, 2026-09-11) |
+
+Recorded validation (macOS arm64, .NET SDK 10.0.302, TraceMap
+`vb-semantic/0.2.0` at the extraction slice):
+
+- Scan completes with `Level1SemanticAnalysisReduced` / `FailedOrPartial`; all
+  six `.vbproj` files load and produce compilations, and every project reports
+  compiler diagnostics (unrestored/out-of-support targets), so the reduced
+  label is honest, not decorative.
+- 71,940 facts total; 6,341 `visualbasic` symbols; 1,087 `vb.semantic` call
+  edges; 518 object creations; 175 argument flows; 98 symbol relationships;
+  92 parameter-forward edges. Tier1 evidence concentrates in
+  `Community.VisualBasic/Community.VisualBasic.vbproj` (6,240 facts) and the
+  test project (2,946 facts).
+- 62,358 `AnalysisGap` rows, all sanitized to category-only messages carrying
+  bounded `BCxxxxx` diagnostic ids; no raw compiler text, local paths, or
+  clone paths appear in any artifact. The shared artifact validator passes.
+- Two consecutive scans with a `git clean -fdx` reset of the clone between
+  them produce byte-identical `facts.ndjson` and identical manifest coverage
+  fields. The reset is required: design-time builds write `obj/` state inside
+  the clone, which changes later design-time loads (and therefore gap counts)
+  if it is not cleaned.
+
+Exact commands live in [`VALIDATION.md`](VALIDATION.md) under the VB.NET
+adapter section. The smoke proves artifact generation and static evidence
+extraction over a real VB.NET repository. It does not prove that the
+repository builds, that any symbol binds at runtime, or that coverage is
+complete.
+
+### Candidates considered and not pinned
+
+| Candidate | License | Pin (HEAD @ 2026-09-11) | Why not pinned |
+| --- | --- | --- | --- |
+| `dotnet/roslyn` | MIT | `251b3e508a06508649124493d7f19a8e726654c6` | The VB compiler subtree is the canonical large Tier1 corpus, but the full repository is very large and slow for a repeatable smoke; kept as a future scale lane. |
+| `mono/mono-basic` | Mixed (`vbnc` LGPL-2.0; class libraries MIT/X11 style; GitHub reports NOASSERTION) | `bdb5276f7d85100e8e9ddd7e5ba2360a792644a9` | Autotools/Mono-era layout with no standard single license file; scanning locally is unaffected but the pin is a poor shared smoke. |
+| `dotnet/docs` | MIT | `c2bef19f060e409b2f71f8d46eee85f5cac94106` | `samples/snippets/visualbasic/**` is projectless snippet material; useful for inventory-at-scale/fallback checks rather than semantic project loading. |
 
 Evaluated and rejected for the Web Forms lane: public VB Web Forms
 corpora are scarce. `riganti/dotvvm-samples-webforms-migration-vbnet`
@@ -199,16 +234,16 @@ validation boundary documented in the spec's implementation state.
 
 ## Limitations
 
-- These fixtures have not been scanned by a VB adapter because #736's
-  extractor work lives on the foundation branch; all "expected" statements
-  here are guidance, not verified adapter output.
-- Build expectations were recorded on macOS arm64 with the .NET 10 SDK. On
-  Windows with .NET Framework targeting packs installed, the legacy and
-  Web Forms fixtures may evaluate further; reduced coverage is a
-  cross-platform expectation, not a universal claim.
 - The legacy fixture intentionally references a vendor assembly that does not
   exist; that is the point. Do not "fix" it by shipping a stub DLL.
 - `.aspx` markup has no automated syntax validation in this branch; it was
   reviewed manually. Markup parsing belongs to #738.
-- OSS pins drift and none of the candidates has been scanned end-to-end;
-  spec task 9 owns the final pin and validation.
+- Build expectations were recorded on macOS arm64 with the .NET 10 SDK. On
+  Windows with .NET Framework targeting packs installed, the legacy and
+  Web Forms fixtures may evaluate further; reduced coverage is a
+  cross-platform expectation, not a universal claim.
+- The pinned OSS smoke scan is reduced because the pinned checkout is scanned
+  without a complete NuGet restore and includes out-of-support target
+  frameworks; its gap population is dominated by sanitized compiler
+  diagnostics (`BC30002`/`BC31091` families). This is the expected posture,
+  not a defect to be tuned away.
