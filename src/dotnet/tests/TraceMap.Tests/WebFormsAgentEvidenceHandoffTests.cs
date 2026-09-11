@@ -281,6 +281,27 @@ public sealed class WebFormsAgentEvidenceHandoffTests
     }
 
     [Fact]
+    public void SetHandoffRejectsCaseThatDoesNotMatchInspection()
+    {
+        WithFixture((root, inspection, handoff) =>
+        {
+            var set = PrepareSet(root, inspection, handoff);
+            var altered = handoff with { Subject = handoff.Subject with { Handler = "Private.Other.Handler()" } };
+            File.WriteAllText(
+                Path.Combine(set, "case-001.handoff.json"),
+                JsonSerializer.Serialize(altered, TestJsonOptions) + "\n",
+                new UTF8Encoding(false));
+            var output = Path.Combine(set, "agent-evidence-handoff.json");
+
+            var error = Assert.Throws<InvalidDataException>(() => WebFormsAgentEvidenceHandoff.WriteSet(
+                Path.Combine(set, "inspection.snapshot.json"), set, output));
+
+            Assert.Equal("AgentHandoffCaseInspectionMismatch", error.Message);
+            Assert.False(File.Exists(output));
+        });
+    }
+
+    [Fact]
     public void SetHandoffRejectsMismatchedIndexWithoutPublishing()
     {
         WithFixture((root, inspection, handoff) =>
@@ -342,7 +363,8 @@ public sealed class WebFormsAgentEvidenceHandoffTests
         }));
         using var document = JsonDocument.Parse(File.ReadAllText(inspection));
         var handoff = WebFormsAgentEvidenceHandoff.BuildCase(document.RootElement, document.RootElement.GetProperty("cases")[0],
-            "case-001", "case-001.private.html", "inspection.snapshot.json", WebFormsAgentEvidenceHandoff.HashFile(inspection));
+            "case-001", "case-001.private.html", "inspection.snapshot.json", WebFormsAgentEvidenceHandoff.HashFile(inspection),
+            "agent-evidence-handoff.json");
         try { test(root, inspection, handoff); }
         finally { Directory.Delete(root, recursive: true); }
 
