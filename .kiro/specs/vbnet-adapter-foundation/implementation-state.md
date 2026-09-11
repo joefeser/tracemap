@@ -37,3 +37,19 @@ public-safe defect reproductions may return to this repository. Private source,
 paths, SQL, configuration, BRD logic, and modernization prompts remain outside
 the public project.
 
+## Fixture preparation (parallel branch)
+
+Branch `glm/issue-736-vbnet-fixtures` (base
+`a8ed2ea28d5a57c5f5e0254348e083205f76d150`) prepared the public fixture corpus
+without touching production code: `samples/vb-modern-sample` (SDK-style,
+builds cross-platform, full-semantic intent), `samples/vb-legacy-sample`
+(old-style .NET Framework 3.5 project, generated/`My Project` shapes,
+conditional compilation, one intentionally unresolved reference, late-bound
+`Option Strict Off` bridge; expected reduced coverage), and
+`samples/vb-webforms-sample` (minimal `.aspx`/code-behind/designer corpus with
+`Handles`/`AddHandler`/`RemoveHandler`/`RaiseEvent`/`WithEvents` for #738, no
+#736 event claims). Expectations, validation commands, and commit-pinned OSS
+smoke candidates are documented in `docs/VBNET_FIXTURES.md`. The foundation
+implementation should consume these fixtures for the task-8 test matrix and
+re-verify the OSS pins during task 9.
+
