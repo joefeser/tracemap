@@ -46,8 +46,13 @@ public sealed class VisualBasicExternalBoundaryTests
             && fact.Properties.GetValueOrDefault("gapKind") == "VisualBasicWcfServiceMappingUnavailable");
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
             && fact.Properties.GetValueOrDefault("gapKind") == "VisualBasicAsmxServiceMappingUnavailable");
-        Assert.DoesNotContain(result.Facts, fact => fact.FactType is FactTypes.WcfServiceReferenceMapping or FactTypes.AsmxServiceReferenceMapping
-            && fact.Evidence.FilePath.EndsWith("Default.aspx.vb", StringComparison.Ordinal));
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WcfServiceReferenceMapping
+            && fact.ContractElement == "Rate");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AsmxServiceReferenceMapping
+            && fact.ContractElement == "RateSoap"
+            && fact.Properties.GetValueOrDefault("surfaceKind") == "asmx-client");
+        Assert.DoesNotContain(result.Facts, fact => (fact.FactType is FactTypes.WcfServiceReferenceMapping or FactTypes.AsmxServiceReferenceMapping)
+            && fact.ContractElement == "Fetch");
 
         var serialized = JsonSerializer.Serialize(result.Facts);
         Assert.DoesNotContain("example.invalid", serialized, StringComparison.OrdinalIgnoreCase);
@@ -55,6 +60,7 @@ public sealed class VisualBasicExternalBoundaryTests
         Assert.DoesNotContain("private-connection", serialized, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("private-section", serialized, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("private-file", serialized, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("private-soap-action", serialized, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -70,6 +76,26 @@ public sealed class VisualBasicExternalBoundaryTests
             && fact.Properties.GetValueOrDefault("gapKind") == "VisualBasicExternalBoundaryTargetUnavailable");
         Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.HttpCallDetected
             && fact.SourceSymbol?.Contains("LateBound", StringComparison.Ordinal) == true);
+    }
+
+    [Fact]
+    public void Unsigned_framework_name_lookalikes_do_not_emit_service_contract_or_mapping_facts()
+    {
+        using var temp = new TempDirectory();
+        var repo = CreateRepository(temp.Path, signServiceAssemblies: false);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.DoesNotContain(result.Facts, fact => (fact.FactType is
+            FactTypes.WcfServiceContractDeclared
+            or FactTypes.WcfOperationContractDeclared
+            or FactTypes.WcfGeneratedClientDeclared
+            or FactTypes.WcfServiceReferenceMapping
+            or FactTypes.AsmxOperationDeclared
+            or FactTypes.AsmxGeneratedClientDeclared
+            or FactTypes.AsmxClientOperationDeclared
+            or FactTypes.AsmxServiceReferenceMapping)
+            && fact.Evidence.FilePath.EndsWith(".vb", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -99,6 +125,10 @@ public sealed class VisualBasicExternalBoundaryTests
         var handlerChains = packet.Packet.EventChains.Where(chain =>
             chain.HandlerSymbol?.Contains("Fetch_Click", StringComparison.OrdinalIgnoreCase) == true).ToArray();
         Assert.NotEmpty(handlerChains);
+        Assert.Contains(handlerChains, chain => chain.TerminalKind == "wcf-operation"
+            && chain.PathEvidence.Any(item => item.RuleId == RuleIds.LegacyWcfMapping));
+        Assert.Contains(handlerChains, chain => chain.TerminalKind == "asmx-client"
+            && chain.PathEvidence.Any(item => item.RuleId == RuleIds.LegacyAsmxMapping));
         var handlerChain = Assert.Single(handlerChains.Where(chain => chain.TerminalKind == "http-client"
             && chain.PathEvidence.Any(item => item.RuleId == RuleIds.HttpClientInvocation)
             && chain.SupportingFactIds.Any(id => httpFactIds.Any(factId => id.EndsWith(factId, StringComparison.Ordinal)))).Take(1));
@@ -122,10 +152,11 @@ public sealed class VisualBasicExternalBoundaryTests
             packet.Packet.PacketId);
     }
 
-    private static string CreateRepository(string root, bool includeLateBound = false)
+    private static string CreateRepository(string root, bool includeLateBound = false, bool signServiceAssemblies = true)
     {
         var repo = Path.Combine(root, "repo");
         Directory.CreateDirectory(repo);
+        File.WriteAllBytes(Path.Combine(repo, "microsoft-public.snk"), typeof(System.Net.Http.HttpClient).Assembly.GetName().GetPublicKey()!);
         WriteSupportProject(repo, "ConfigurationSupport", "System.Configuration.ConfigurationManager", """
             using System.Collections.Specialized;
             namespace System.Configuration;
@@ -143,12 +174,31 @@ public sealed class VisualBasicExternalBoundaryTests
             """);
         WriteSupportProject(repo, "WcfSupport", "System.ServiceModel.Primitives", """
             namespace System.ServiceModel;
+            [System.AttributeUsage(System.AttributeTargets.Interface)]
+            public sealed class ServiceContractAttribute : System.Attribute { }
+            [System.AttributeUsage(System.AttributeTargets.Method)]
+            public sealed class OperationContractAttribute : System.Attribute { }
             public abstract class ClientBase<T> { }
-            """);
+            """, signServiceAssemblies);
         WriteSupportProject(repo, "AsmxSupport", "System.Web.Services", """
-            namespace System.Web.Services.Protocols;
-            public abstract class SoapHttpClientProtocol { }
-            """);
+            namespace System.Web.Services
+            {
+                [System.AttributeUsage(System.AttributeTargets.Method)]
+                public sealed class WebMethodAttribute : System.Attribute { }
+            }
+            namespace System.Web.Services.Protocols
+            {
+                public abstract class SoapHttpClientProtocol { }
+                [System.AttributeUsage(System.AttributeTargets.Method)]
+                public sealed class SoapDocumentMethodAttribute : System.Attribute
+                {
+                    public SoapDocumentMethodAttribute(string action) { Action = action; }
+                    public string Action { get; }
+                }
+                [System.AttributeUsage(System.AttributeTargets.Method)]
+                public sealed class SoapRpcMethodAttribute : System.Attribute { }
+            }
+            """, signServiceAssemblies);
         File.WriteAllText(Path.Combine(repo, "Legacy.vbproj"), $$"""
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
@@ -171,19 +221,37 @@ public sealed class VisualBasicExternalBoundaryTests
             Imports System.Net
             Imports System.Net.Http
 
+            <System.ServiceModel.ServiceContract>
             Public Interface IRatingService
+                <System.ServiceModel.OperationContract>
+                Function Rate(value As Integer) As String
             End Interface
 
             Public Class RatingClient
                 Inherits System.ServiceModel.ClientBase(Of IRatingService)
+                Implements IRatingService
                 Public Sub Fetch()
                 End Sub
+                Public Function Rate(value As Integer) As String Implements IRatingService.Rate
+                    Return value.ToString()
+                End Function
+            End Class
+
+            Public Class RatingSoapService
+                <System.Web.Services.WebMethod>
+                Public Function RateSoap(value As Integer) As String
+                    Return value.ToString()
+                End Function
             End Class
 
             Public Class LegacySoapClient
                 Inherits System.Web.Services.Protocols.SoapHttpClientProtocol
                 Public Sub Fetch()
                 End Sub
+                <System.Web.Services.Protocols.SoapDocumentMethod("private-soap-action")>
+                Public Function RateSoap(value As Integer) As String
+                    Return value.ToString()
+                End Function
             End Class
 
             Public Partial Class SamplePage
@@ -203,8 +271,10 @@ public sealed class VisualBasicExternalBoundaryTests
                     File.WriteAllText("private-file", content)
                     Dim wcf = New RatingClient()
                     wcf.Fetch()
+                    Dim rated = wcf.Rate(42)
                     Dim soap = New LegacySoapClient()
                     soap.Fetch()
+                    Dim soapRated = soap.RateSoap(42)
                 End Sub
 
                 Public Sub LateBound(value As Object)
@@ -216,7 +286,7 @@ public sealed class VisualBasicExternalBoundaryTests
         return repo;
     }
 
-    private static void WriteSupportProject(string repo, string directory, string assemblyName, string source)
+    private static void WriteSupportProject(string repo, string directory, string assemblyName, string source, bool publicSign = false)
     {
         var path = Path.Combine(repo, directory);
         Directory.CreateDirectory(path);
@@ -225,6 +295,7 @@ public sealed class VisualBasicExternalBoundaryTests
               <PropertyGroup>
                 <TargetFramework>net10.0</TargetFramework>
                 <AssemblyName>{{assemblyName}}</AssemblyName>
+                {{(publicSign ? "<SignAssembly>true</SignAssembly><PublicSign>true</PublicSign><AssemblyOriginatorKeyFile>../microsoft-public.snk</AssemblyOriginatorKeyFile>" : string.Empty)}}
               </PropertyGroup>
             </Project>
             """);

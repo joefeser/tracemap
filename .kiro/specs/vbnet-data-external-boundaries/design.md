@@ -42,8 +42,11 @@ to the constructor by spelling or local name.
 `ConfigBinding`; key/member text is hashed. VB `Global.System.IO.*` semantic
 display strings feed the existing batch/data-movement extractor.
 
-The compiler can prove inheritance from WCF `ClientBase(Of T)` and ASMX
-`SoapHttpClientProtocol`, but the existing service mapping extractors are C#
-source projections. Until those extractors gain a narrow VB semantic seam,
-these invocations emit explicit service-mapping coverage gaps and no positive
-service operation fact.
+The Visual Basic semantic lane supplies the existing WCF/ASMX mappers with
+language-neutral declaration facts only when framework type/attribute identity
+includes the expected assembly name and strong-name public-key token. WCF
+client operations additionally require Roslyn to prove the exact interface
+implementation for the `ClientBase(Of T)` contract. ASMX client/service
+operations require recognized framework SOAP/WebMethod attributes. The existing mappers
+then compose the same review-tier mapping facts used for C#; unresolved,
+unsigned-lookalike, missing-metadata, and ambiguous shapes remain gaps.

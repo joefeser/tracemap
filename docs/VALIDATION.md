@@ -1279,9 +1279,11 @@ Expected fixture postures:
   evidence remains available. Event evidence is never an executed call edge.
 
 The external-boundary synthetic matrix additionally proves shared HTTP and
-configuration facts, shared batch/file projection, and explicit WCF/ASMX
-mapping gaps. It does not claim positive VB service proxy mappings; those stay
-outside the current completed slice.
+configuration facts, shared batch/file projection, compiler-proven WCF/ASMX
+proxy mappings, and explicit mapping gaps for unsupported service shapes.
+Trusted service-framework identities require their expected strong-name public
+key token; unsigned assemblies with the same simple name do not produce Tier 1
+service facts.
 
 VB.NET pinned OSS smoke (`community-visual-basic` —
 `CommunityVB/Community.VisualBasic`, MIT, pinned at
@@ -1296,9 +1298,9 @@ The script clones the pin, resets the working tree with `git clean -fdx`
 (required: design-time builds write `obj/` state inside the clone, which
 changes later design-time loads and gap counts if it is not cleaned), scans
 it, and asserts the required artifacts. Recorded expectations at the pin:
-`Level1SemanticAnalysisReduced` / `FailedOrPartial` with 71,940 facts,
-6,341 `visualbasic` symbols, 1,087 `vb.semantic` call edges, 518 object
-creations, 175 argument flows, 98 symbol relationships, and 62,358
+`Level1SemanticAnalysisReduced` / `FailedOrPartial` with 110,726 facts,
+6,314 `visualbasic` symbols, 928 `vb.semantic` call edges, 517 object
+creations, 175 argument flows, 98 symbol relationships, and 75,455
 category-only `AnalysisGap` rows. Reduced coverage is expected at this pin
 (unrestored packages and out-of-support target frameworks); the smoke proves
 artifact generation and static evidence extraction over a real VB.NET

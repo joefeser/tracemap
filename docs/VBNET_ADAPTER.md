@@ -56,9 +56,11 @@ build success, or impact.
 
 | Extractor | Identity/version | Tier | Rules |
 | --- | --- | --- | --- |
-| Visual Basic semantic extractor | `vb-semantic/0.7.0` | Tier1 (facts), Tier2 (project observation), Tier4 (workspace, call-site, event, and data/external-boundary gaps) | `vb.semantic.compilation.v1`, `vb.semantic.workspace.v1`, `vb.semantic.declarations.v1`, `vb.semantic.propertyaccess.v1`, `vb.semantic.methodinvocation.v1`, `vb.semantic.callgraph.v1`, `vb.semantic.objectcreation.v1`, `vb.semantic.valueflow.v1`, `vb.semantic.symbolrelationship.v1`, `vb.semantic.event-wiring.v1`, `vb.semantic.config-binding.v1`, `vb.semantic.external-boundary.v1`, plus shared database and HTTP contracts |
+| Visual Basic semantic extractor | `vb-semantic/0.8.0` | Tier1 (facts), Tier2 (project observation), Tier4 (workspace, call-site, event, and data/external-boundary gaps) | `vb.semantic.compilation.v1`, `vb.semantic.workspace.v1`, `vb.semantic.declarations.v1`, `vb.semantic.propertyaccess.v1`, `vb.semantic.methodinvocation.v1`, `vb.semantic.callgraph.v1`, `vb.semantic.objectcreation.v1`, `vb.semantic.valueflow.v1`, `vb.semantic.symbolrelationship.v1`, `vb.semantic.event-wiring.v1`, `vb.semantic.config-binding.v1`, `vb.semantic.external-boundary.v1`, plus shared database, HTTP, WCF, and ASMX contracts |
 | Visual Basic syntax fallback | `vb-syntax/0.3.1` | Tier3 (facts), Tier4 (parse/read/budget/semantic-unavailable/event gaps) | `vb.syntax.declarations.v1`, `vb.syntax.memberaccess.v1`, `vb.syntax.invocation.v1`, `vb.syntax.callgraph.v1`, `vb.syntax.objectcreation.v1`, `vb.syntax.event-wiring.v1` |
-| Shared Web Forms extractor | `legacy-webforms/0.8.3` | Tier1/Tier2/Tier3 facts and Tier4 gaps | existing `legacy.webforms.*` contracts, now with bounded VB code-behind/designer parsing and shared database-operation terminal projection |
+| Shared Web Forms extractor | `legacy-webforms/0.8.4` | Tier1/Tier2/Tier3 facts and Tier4 gaps | existing `legacy.webforms.*` contracts, now with bounded VB code-behind/designer parsing and shared database/WCF/ASMX terminal projection |
+| Shared WCF extractor | `legacy-wcf/0.3.0` | Tier1 inputs, Tier2/Tier3 mappings, Tier4 gaps | existing `legacy.wcf.*` contracts with compiler-resolved VB client/contract inputs |
+| Shared ASMX extractor | `legacy-asmx/0.2.0` | Tier1 inputs, Tier3 mappings, Tier4 gaps | existing `legacy.asmx.*` contracts with compiler-resolved VB client/service inputs |
 | Shared batch/data-movement extractor | `legacy-batch-data-movement/0.2.0` | Tier1/Tier2/Tier3 facts and Tier4 gaps | `legacy.webforms.batch-data-movement.v1`, including VB `Global.System.IO.*` semantic display strings |
 
 Symbol identities use the canonical .NET normalization shape with
@@ -184,11 +186,14 @@ catalog documents them per rule:
   candidate. Helper-returned commands, reflection, provider-specific APIs
   outside the `DbCommand`/`DbDataAdapter` base families, cross-method command
   state, and runtime ordering remain outside this initial slice.
-- WCF `ClientBase(Of T)` and ASMX `SoapHttpClientProtocol` invocation shapes
-  are recognized only to retain explicit Tier4 coverage gaps. The existing
-  WCF/ASMX mapping extractors do not yet establish VB proxy-to-contract or
-  proxy-to-operation mappings, so this slice deliberately emits no guessed
-  service boundary. HTTP destinations that are dynamic, including a later
+- WCF `ClientBase(Of T)` maps only when the compiler proves the client contract
+  and the client method's exact interface implementation. ASMX maps only when
+  recognized `System.Web.Services` inheritance and WebMethod/SOAP method
+  attributes establish both operation legs. Framework assembly names must also
+  carry the expected strong-name public-key token; unsigned same-name types are
+  rejected. The public-key token is an identity discriminator, not proof of
+  assembly authenticity. Custom wrappers, missing attributes/interfaces, ambiguous matches,
+  and absent metadata remain Tier4 gaps. HTTP destinations that are dynamic, including a later
   `WebRequest.GetResponse` whose construction receiver is not correlated,
   likewise remain gaps while their call/construction evidence is retained.
 - No runtime claims of any kind: facts prove source structure and
