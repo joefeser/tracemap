@@ -74,6 +74,74 @@ public sealed class VisualBasicWebFormsCompositionTests
     }
 
     [Fact]
+    public void Vb_event_extractor_gap_does_not_turn_a_successful_compilation_into_a_failed_build()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Lambda.vbproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework><OptionStrict>On</OptionStrict></PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Lambda.vb"), """
+            Imports System
+            Public Class Source
+                Public Event Changed As EventHandler
+            End Class
+            Public Class Consumer
+                Private source As New Source()
+                Public Sub Wire()
+                    AddHandler source.Changed, Sub(sender, e) Console.WriteLine(sender)
+                End Sub
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        Assert.Equal("Succeeded", result.Manifest.BuildStatus);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.VisualBasicSemanticEventWiring
+            && fact.Properties.GetValueOrDefault("gapKind") == "UnsupportedVisualBasicEventHandlerDelegate");
+    }
+
+    [Fact]
+    public void Vb_semantic_event_rejects_an_invalid_handler_conversion()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Invalid.vbproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework><OptionStrict>On</OptionStrict></PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Invalid.vb"), """
+            Imports System
+            Public Class Source
+                Public Event Changed As EventHandler
+            End Class
+            Public Class Consumer
+                Private source As New Source()
+                Public Sub Wire()
+                    AddHandler source.Changed, AddressOf InvalidHandler
+                End Sub
+                Private Sub InvalidHandler(value As Integer)
+                End Sub
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.VisualBasicEventBindingDeclared
+            && fact.Properties.GetValueOrDefault("handlerName") == "InvalidHandler");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.VisualBasicSemanticEventWiring
+            && fact.Properties.GetValueOrDefault("gapKind") == "UnsupportedVisualBasicEventHandlerDelegate");
+        Assert.Equal("FailedOrPartial", result.Manifest.BuildStatus);
+    }
+
+    [Fact]
     public void Vb_control_subscription_rejects_shadowed_and_external_receivers_but_accepts_page_qualified_control()
     {
         using var temp = new TempDirectory();
@@ -87,17 +155,23 @@ public sealed class VisualBasicWebFormsCompositionTests
         File.WriteAllText(Path.Combine(repo, "Qualified.aspx.vb"), """
             Option Strict Off
             Partial Public Class QualifiedPage
+                Private Shadows Page As Object
                 Private Sub Wire(KnownButton As Object, Page As Object)
                     AddHandler KnownButton.Click, AddressOf Shadowed_Click
                     AddHandler Page.Load, AddressOf PageShadow_Load
                     AddHandler Me.RealButton.Click, AddressOf Me.Real_Click
                     AddHandler RealButton.Click, AddressOf Other.External_Click
                 End Sub
+                Private Sub WireMember()
+                    AddHandler Me.Page.Load, AddressOf MemberPageShadow_Load
+                End Sub
                 Private Sub Shadowed_Click(sender As Object, e As EventArgs)
                 End Sub
                 Private Sub Real_Click(sender As Object, e As EventArgs)
                 End Sub
                 Private Sub PageShadow_Load(sender As Object, e As EventArgs)
+                End Sub
+                Private Sub MemberPageShadow_Load(sender As Object, e As EventArgs)
                 End Sub
             End Class
             """);
@@ -110,7 +184,7 @@ public sealed class VisualBasicWebFormsCompositionTests
             && fact.Properties.GetValueOrDefault("handlerName") == "Real_Click"
             && fact.Properties.GetValueOrDefault("controlId") == "RealButton");
         Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared
-            && fact.Properties.GetValueOrDefault("handlerName") is "Shadowed_Click" or "PageShadow_Load" or "External_Click");
+            && fact.Properties.GetValueOrDefault("handlerName") is "Shadowed_Click" or "PageShadow_Load" or "MemberPageShadow_Load" or "External_Click");
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
             && fact.Properties.GetValueOrDefault("gapKind") == "DynamicWebFormsEventSubscription");
     }

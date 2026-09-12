@@ -15,6 +15,8 @@
 - Existing Web Forms consumers are reused through their shared fact contracts.
 - Compiler-resolved language facts use canonical VB method/event symbol IDs;
   unresolved event sites use the owning event rule and reduce coverage.
+- Event-site gaps remain explicit producer-local evidence but do not change an
+  otherwise successful Roslyn compilation into a failed build status.
 - Shared Web Forms projection is limited to linked markup surfaces and supported
   lifecycle/control receivers. Custom `WithEvents` sources remain language-level
   evidence unless they correspond to one markup control.
@@ -31,11 +33,11 @@ artifact validation, deterministic comparison, privacy guards, and the pinned
 result totals below are the committed review record; no private source, paths,
 or native diagnostics were retained.
 
-- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,904/1,904 passed after
+- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,906/1,906 passed after
   case-insensitive-join, lifecycle-shadow, lambda, qualified-receiver,
   signature, source-hash, and report hardening.
-- Focused VB/fixture/legacy Web Forms tests: 108/108 passed.
-- Focused Web Forms/legacy-flow composition tests: 212/212 passed.
+- Focused VB/fixture/legacy Web Forms tests: 110/110 passed.
+- Focused Web Forms/legacy-flow composition tests: 214/214 passed.
 - `Test-FocusedWebFormsCodePathReviewSet.ps1`: passed, including private and
   anonymous/shareable review generation.
 - `Test-FocusedWebFormsApplicationWorkbench.ps1`: passed with raw-source off,
@@ -71,6 +73,9 @@ or native diagnostics were retained.
   that shadow markup controls or `Page` remain explicit gaps rather than
   name-only joins. Composite delegates remain gaps rather than selecting an
   arbitrary child method.
+- Invalid delegate conversions and containing-type field/property shadows of
+  the lifecycle `Page` receiver likewise remain gaps rather than positive
+  compiler/shared bindings.
 - A declared `.vb` CodeBehind/CodeFile path preserves VB case-insensitive page
   identity for checked-in designer evidence even when that linked code file is
   absent from the scan.
