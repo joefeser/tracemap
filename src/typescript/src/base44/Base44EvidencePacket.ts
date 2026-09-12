@@ -1061,12 +1061,15 @@ function validateUiInputSemanticsContracts(packet: Base44EvidencePacket): void {
       || correlated === Boolean(contract.unresolvedCorrelationReason)) {
       throw new Error(`Base44 UI semantics ${fact.factId} has contradictory correlation state`);
     }
-    if (correlated) {
-      const operation = operations.get(contract.operationEvidenceId);
-      if (!operation || operation.properties.entityName !== contract.submittedEntity
-        || operation.properties.operationName !== contract.operationName) {
-        throw new Error(`Base44 UI semantics ${fact.factId} references an unknown entity operation`);
-      }
+	    if (correlated) {
+	      const operation = operations.get(contract.operationEvidenceId);
+	      if (!operation || operation.properties.entityName !== contract.submittedEntity
+	        || operation.properties.operationName !== contract.operationName
+	        || operation.evidenceTier === EvidenceTiers.Tier4Unknown
+	        || operation.properties.sdkIdentityGap
+	        || operation.properties.entitySelectorGap) {
+	        throw new Error(`Base44 UI semantics ${fact.factId} references an unknown entity operation`);
+	      }
     } else if (!new Set(["multiple-submitted-payload-targets", "no-proven-submitted-payload-correlation"]).has(contract.unresolvedCorrelationReason)) {
       throw new Error(`Base44 UI semantics ${fact.factId} has an invalid unresolved correlation reason`);
     }
