@@ -131,6 +131,11 @@ catalog documents them per rule:
   one supported receiver/control or lifecycle event, and one handler method;
   ambiguous partials, late-bound receivers, unsupported delegates, missing
   designer/framework metadata, and unlinked code remain gaps.
+- VB identifiers used by shared Web Forms joins follow VB's ordinal
+  case-insensitive semantics; C# joins remain case-sensitive. Unqualified
+  `IsPostBack` is rejected when a VB local, parameter, or containing-type member
+  shadows the name, while explicit `Me.IsPostBack`/`MyBase.IsPostBack` remains
+  bounded syntax evidence.
 - Event declarations are emitted. Operator statements and `Declare` (P/Invoke)
   statements are not emitted as declarations in this slice.
 - Late-bound invocations, unresolved or ambiguous default members, overload

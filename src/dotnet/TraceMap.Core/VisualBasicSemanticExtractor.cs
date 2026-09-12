@@ -892,9 +892,11 @@ public static class VisualBasicSemanticExtractor
             var eventSymbol = (operation?.EventReference as IEventReferenceOperation)?.Event
                 ?? model.GetSymbolInfo(statement.EventExpression).Symbol as IEventSymbol
                 ?? ResolveUniqueEventMember(statement.EventExpression, model);
-            var handlerSymbol = ResolveEventHandler(operation?.HandlerValue)
-                ?? ResolveAddressOfTarget(statement.DelegateExpression, model)
-                ?? ResolveUniqueContainingTypeHandler(statement.DelegateExpression, containingMethod);
+            var handlerSymbol = statement.DelegateExpression is LambdaExpressionSyntax
+                ? null
+                : ResolveEventHandler(operation?.HandlerValue)
+                    ?? ResolveAddressOfTarget(statement.DelegateExpression, model)
+                    ?? ResolveUniqueContainingTypeHandler(statement.DelegateExpression, containingMethod);
             var isAttach = operation?.Adds ?? statement.IsKind(SyntaxKind.AddHandlerStatement);
             if (containingMethod is null || eventSymbol is null || handlerSymbol is null)
             {
@@ -1051,7 +1053,9 @@ public static class VisualBasicSemanticExtractor
     {
         return operation switch
         {
+            IAnonymousFunctionOperation => null,
             IDelegateCreationOperation { Target: IMethodReferenceOperation methodReference } => methodReference.Method,
+            IDelegateCreationOperation { Target: IAnonymousFunctionOperation } => null,
             IMethodReferenceOperation methodReference => methodReference.Method,
             IConversionOperation conversion => ResolveEventHandler(conversion.Operand),
             _ => operation?.ChildOperations.Select(ResolveEventHandler).FirstOrDefault(method => method is not null)
