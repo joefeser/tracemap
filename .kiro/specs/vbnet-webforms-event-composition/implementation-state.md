@@ -33,11 +33,11 @@ artifact validation, deterministic comparison, privacy guards, and the pinned
 result totals below are the committed review record; no private source, paths,
 or native diagnostics were retained.
 
-- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,906/1,906 passed after
+- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,909/1,909 passed after
   case-insensitive-join, lifecycle-shadow, lambda, qualified-receiver,
   signature, source-hash, and report hardening.
-- Focused VB/fixture/legacy Web Forms tests: 110/110 passed.
-- Focused Web Forms/legacy-flow composition tests: 214/214 passed.
+- Focused VB/fixture/legacy Web Forms tests: 113/113 passed.
+- Focused Web Forms/legacy-flow composition tests: 217/217 passed.
 - `Test-FocusedWebFormsCodePathReviewSet.ps1`: passed, including private and
   anonymous/shareable review generation.
 - `Test-FocusedWebFormsApplicationWorkbench.ps1`: passed with raw-source off,
@@ -76,6 +76,11 @@ or native diagnostics were retained.
 - Invalid delegate conversions and containing-type field/property shadows of
   the lifecycle `Page` receiver likewise remain gaps rather than positive
   compiler/shared bindings.
+- Compiler-invalid `Handles` signatures/receivers and unsupported delegate
+  variables are producer-local gaps. The shared Web Forms projection correlates
+  those sites by source hash and does not recreate rejected bindings by name.
+- Shadowed lifecycle subscription receivers do not suppress an independently
+  valid `AutoEventWireup` binding.
 - A declared `.vb` CodeBehind/CodeFile path preserves VB case-insensitive page
   identity for checked-in designer evidence even when that linked code file is
   absent from the scan.
@@ -85,3 +90,22 @@ or native diagnostics were retained.
 - Cross-language VB/C# symbol-identity joins remain unestablished.
 - VB client-script registration and broader business-logic interpretation are
   outside this issue.
+
+## Latest exact-head review fixes
+
+- Rejected method-name fallback for delegate variables that happen to shadow a
+  containing-type method; the bounded fallback now applies only to an actual
+  `AddressOf` operand.
+- Rejected compiler-invalid `Handles` clauses for incompatible signatures
+  (`BC31029`) and non-`WithEvents` receivers (`BC30506`) without treating
+  missing legacy framework metadata as proof that an otherwise useful syntax
+  projection is invalid.
+- Prevented the shared Web Forms extractor from recreating compiler-rejected VB
+  event sites, and excluded shadowed subscriptions from explicit lifecycle
+  wireup detection.
+- Extractor identities are now `vb-semantic/0.5.1` and
+  `legacy-webforms/0.8.1`.
+- Validation after these fixes: solution 1,909/1,909; focused VB/fixture/legacy
+  Web Forms 113/113; Web Forms/legacy-flow 217/217; all three VB fixture
+  artifacts valid; modern facts byte-identical; pinned CommunityVB smoke
+  unchanged at 110,726 facts; privacy and diff guards passed.

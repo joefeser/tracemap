@@ -3957,7 +3957,7 @@ rules:
       - VisualBasicEventRaised
       - AnalysisGap
     limitations:
-      - Event bindings and raises are compiler-resolved static source evidence; invalid or composite delegate conversions remain producer-local Tier4 gaps and do not imply compiler/build failure. Static evidence does not prove object lifetime, attachment time, event firing, ordering, branch feasibility, postback behavior, delegate invocation, or runtime reachability.
+      - Event bindings and raises are compiler-resolved static source evidence; invalid Handles clauses and invalid or composite delegate conversions remain producer-local Tier4 gaps and do not imply compiler/build failure. Static evidence does not prove object lifetime, attachment time, event firing, ordering, branch feasibility, postback behavior, delegate invocation, or runtime reachability.
       - RemoveHandler is retained with `isAttach=False` and is never interpreted as a positive binding. Event composition is not emitted as CallEdge evidence.
       - Late-bound or error-typed receivers, ambiguous event members or handler overloads, lambdas and unsupported delegate expressions, unavailable partial classes, and missing framework metadata remain explicit Tier4 gaps rather than guessed targets.
       - A Handles clause whose containing method symbol is unavailable remains a scoped Tier4 gap; it is not silently discarded or upgraded from syntax alone.

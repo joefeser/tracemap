@@ -993,6 +993,10 @@ public static partial class LegacyWebFormsExtractor
             }
 
             var isVisualBasic = IsVisualBasicPath(subscription.FilePath);
+            if (isVisualBasic && HasRejectingVisualBasicEventGap(subscription, evidenceIndex))
+            {
+                continue;
+            }
             var lifecycleReceiver = subscription.ReceiverName is null
                 || IdentifierEquals(subscription.ReceiverName, "this", isVisualBasic)
                 || IdentifierEquals(subscription.ReceiverName, "base", isVisualBasic)
@@ -2370,7 +2374,7 @@ public static partial class LegacyWebFormsExtractor
 
     private static bool EventSubscriptionMatches(WebFormsEventSubscription subscription, string eventMemberName, string handlerName)
     {
-        if (!subscription.IsAttach)
+        if (!subscription.IsAttach || subscription.ReceiverMayBeShadowed)
         {
             return false;
         }
@@ -2390,6 +2394,18 @@ public static partial class LegacyWebFormsExtractor
                 || left.EndsWith("." + eventMemberName, comparison))
             && (right.Equals(handlerName, comparison)
                 || right.EndsWith("." + handlerName, comparison));
+    }
+
+    private static bool HasRejectingVisualBasicEventGap(
+        WebFormsEventSubscription subscription,
+        WebFormsEvidenceIndex evidenceIndex)
+    {
+        return evidenceIndex.FactsForFile(subscription.FilePath).Any(fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.VisualBasicSemanticEventWiring
+            && fact.Evidence.StartLine == subscription.Line
+            && fact.Properties.GetValueOrDefault("siteHash")?.Equals(subscription.SnippetHash, StringComparison.Ordinal) == true
+            && fact.Properties.GetValueOrDefault("gapKind") is "UnsupportedVisualBasicEventHandlerDelegate" or "InvalidVisualBasicHandlesBinding");
     }
 
     private static IEnumerable<CodeFact> WcfMappingsForCalls(IReadOnlyList<CodeFact> wcfMappings, IReadOnlyList<CodeFact> directFacts)
