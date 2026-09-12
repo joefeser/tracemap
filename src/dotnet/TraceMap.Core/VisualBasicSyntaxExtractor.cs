@@ -485,10 +485,11 @@ public static class VisualBasicSyntaxExtractor
 
     private static string SyntaxHandlerName(ExpressionSyntax expression)
     {
-        if (expression is UnaryExpressionSyntax unary && unary.IsKind(SyntaxKind.AddressOfExpression))
+        if (expression is not UnaryExpressionSyntax unary || !unary.IsKind(SyntaxKind.AddressOfExpression))
         {
-            expression = unary.Operand;
+            return string.Empty;
         }
+        expression = unary.Operand;
 
         return expression switch
         {
