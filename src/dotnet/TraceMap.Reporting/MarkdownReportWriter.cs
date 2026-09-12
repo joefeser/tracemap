@@ -271,6 +271,13 @@ public static class MarkdownReportWriter
 
         AddFactSection(
             lines,
+            "Visual Basic Event Evidence",
+            result.Facts.Where(fact => fact.FactType is FactTypes.VisualBasicEventBindingDeclared
+                or FactTypes.VisualBasicEventRaised),
+            fact => $"- `{fact.Properties.GetValueOrDefault("wiringKind") ?? fact.FactType}` `{DisplaySource(fact)}` -> `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
+
+        AddFactSection(
+            lines,
             "WebForms Event Flow",
             result.Facts.Where(fact => fact.FactType == FactTypes.WebFormsEventFlowProjected),
             fact => $"- `{fact.Properties.GetValueOrDefault("flowClassification") ?? "UnknownAnalysisGap"}` `{fact.Properties.GetValueOrDefault("handlerName") ?? DisplayFactName(fact)}` -> `{fact.Properties.GetValueOrDefault("terminalSurfaceKind") ?? "none"}` ({fact.EvidenceTier}, coverage `{fact.Properties.GetValueOrDefault("coverage") ?? "unknown"}`) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
