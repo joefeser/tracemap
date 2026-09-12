@@ -1077,11 +1077,12 @@ function validateUiInputSemanticsContracts(packet: Base44EvidencePacket): void {
     }
     if (!Array.isArray(contract.reasons)) throw new Error(`Base44 UI semantics ${fact.factId} reasons must be an array`);
     for (const item of contract.reasons as Array<Record<string, any>>) {
-      requireClosedKeys(item, ["filePath", "startLine", "endLine", "startOffset", "endOffset", "snippetSha256", "kind", "detail"], `UI semantics reason ${fact.factId}`);
+      requireClosedKeys(item, ["filePath", "startLine", "endLine", "startOffset", "endOffset", "snippetSha256", "ruleId", "kind", "detail"], `UI semantics reason ${fact.factId}`);
       if (item.filePath !== fact.evidence.filePath || !Number.isInteger(item.startLine) || item.startLine < 1
         || !Number.isInteger(item.endLine) || item.endLine < item.startLine
         || !Number.isInteger(item.startOffset) || item.startOffset < 0
         || !Number.isInteger(item.endOffset) || item.endOffset <= item.startOffset
+        || item.ruleId !== RuleIds.Base44UiInputSemantics
         || !/^[0-9a-f]{64}$/u.test(item.snippetSha256) || !reasonKinds.has(item.kind)
         || typeof item.detail !== "string" || !item.detail) {
         throw new Error(`Base44 UI semantics ${fact.factId} has invalid reason evidence`);
