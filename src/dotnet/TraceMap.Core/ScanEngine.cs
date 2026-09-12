@@ -1061,7 +1061,8 @@ public static class ScanEngine
     private static bool IsProducerLocalSemanticGap(SemanticFactCandidate gap) =>
         gap.RuleId == RuleIds.CSharpRazorSemanticModelBindingGap
         || gap.RuleId == RuleIds.CSharpSemanticPropertyMappingGap
-        || gap.RuleId == RuleIds.VisualBasicSemanticEventWiring;
+        || gap.RuleId == RuleIds.VisualBasicSemanticEventWiring
+        || gap.RuleId == RuleIds.VisualBasicSemanticExternalBoundary;
 
     private static string GetBuildStatusReason(
         ScanManifest manifest,
