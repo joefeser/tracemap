@@ -10,7 +10,11 @@ namespace TraceMap.Core;
 
 public static partial class LegacyWcfExtractor
 {
-    public static IReadOnlyList<CodeFact> Extract(string repoPath, ScanManifest manifest, IEnumerable<FileInventoryItem> inventory)
+    public static IReadOnlyList<CodeFact> Extract(
+        string repoPath,
+        ScanManifest manifest,
+        IEnumerable<FileInventoryItem> inventory,
+        IEnumerable<CodeFact>? semanticServiceFacts = null)
     {
         var facts = new List<CodeFact>();
         var files = inventory.OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray();
@@ -34,6 +38,11 @@ public static partial class LegacyWcfExtractor
         {
             ExtractServiceReferenceMetadata(repoPath, manifest, file, facts);
         }
+
+        facts.AddRange((semanticServiceFacts ?? []).Where(fact => fact.FactType is
+            FactTypes.WcfServiceContractDeclared
+            or FactTypes.WcfOperationContractDeclared
+            or FactTypes.WcfGeneratedClientDeclared));
 
         AddMappings(manifest, facts);
         return facts;

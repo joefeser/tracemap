@@ -1223,6 +1223,38 @@ public sealed class LegacyWebFormsExtractorTests
             && fact.Properties.GetValueOrDefault("flowClassification") == "ProbableStaticEventFlow");
     }
 
+    [Theory]
+    [InlineData("ExecuteNonQuery", "sql-persistence")]
+    [InlineData("ExecuteReader", "sql-query")]
+    [InlineData("ExecuteScalar", "sql-query")]
+    public void Scan_preserves_compiler_resolved_database_operation_kind_as_webforms_terminal(
+        string methodName,
+        string expectedTerminalKind)
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        WriteBasicPage(repo, "Save_Click", handlerBody: $"((Microsoft.Data.Sqlite.SqliteCommand)sender).{methodName}();");
+        var sqliteAssembly = typeof(Microsoft.Data.Sqlite.SqliteCommand).Assembly.Location;
+        File.WriteAllText(Path.Combine(repo, "App.csproj"), $"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+              <ItemGroup><Reference Include="Microsoft.Data.Sqlite"><HintPath>{System.Security.SecurityElement.Escape(sqliteAssembly)}</HintPath></Reference></ItemGroup>
+            </Project>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.DatabaseOperationCandidate
+            && fact.RuleId == RuleIds.DatabaseOperationCallPattern
+            && fact.SourceSymbol?.Contains("Save_Click", StringComparison.Ordinal) == true);
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsEventFlowProjected
+            && fact.Properties.GetValueOrDefault("terminalSurfaceKind") == expectedTerminalKind
+            && fact.Properties.GetValueOrDefault("flowClassification") == "StrongStaticEventFlow");
+    }
+
     [Fact]
     public void Scan_does_not_emit_webforms_designer_facts_without_matching_markup()
     {

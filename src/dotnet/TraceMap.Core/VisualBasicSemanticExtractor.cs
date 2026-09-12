@@ -513,6 +513,162 @@ public static class VisualBasicSemanticExtractor
         AddPropertyAccessFacts(projectPath, filePath, root, model, facts);
         AddMethodInvocationFacts(repoPath, projectPath, filePath, root, model, facts, gaps);
         AddObjectCreationFacts(repoPath, projectPath, filePath, root, model, facts, gaps);
+        AddAdoNetBoundaryFacts(projectPath, filePath, root, model, facts, gaps);
+        AddExternalBoundaryFacts(projectPath, filePath, root, model, facts, gaps);
+        AddLegacyServiceDeclarationFacts(projectPath, filePath, root, model, facts);
+    }
+
+    private static void AddLegacyServiceDeclarationFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        foreach (var statement in root.DescendantNodes().OfType<TypeStatementSyntax>())
+        {
+            if (model.GetDeclaredSymbol(statement) is not INamedTypeSymbol type || type.TypeKind == TypeKind.Error)
+            {
+                continue;
+            }
+
+            var typeDisplay = type.ToDisplayString(SymbolFormat);
+            if (HasTrustedAttribute(type, "System.ServiceModel.ServiceContractAttribute", "System.ServiceModel.Primitives", "b03f5f7f11d50a3a")
+                || HasTrustedAttribute(type, "System.ServiceModel.ServiceContractAttribute", "System.ServiceModel", "b77a5c561934e089"))
+            {
+                facts.Add(CreateSemanticFact(FactTypes.WcfServiceContractDeclared, RuleIds.LegacyWcfContract,
+                    projectPath, filePath, statement, sourceSymbol: typeDisplay, targetSymbol: typeDisplay,
+                    contractElement: type.Name,
+                    properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["contractName"] = typeDisplay,
+                        ["coverageLabel"] = "compiler-resolved-vb-wcf-contract",
+                        ["surfaceKind"] = "wcf-contract",
+                        ["typeName"] = type.Name
+                    }));
+            }
+
+            if (TryGetTrustedWcfClientContract(type, out var contract))
+            {
+                facts.Add(CreateSemanticFact(FactTypes.WcfGeneratedClientDeclared, RuleIds.LegacyWcfContract,
+                    projectPath, filePath, statement, sourceSymbol: typeDisplay, targetSymbol: typeDisplay,
+                    properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["clientContractName"] = contract.ToDisplayString(SymbolFormat),
+                        ["clientName"] = type.Name,
+                        ["coverageLabel"] = "compiler-resolved-vb-wcf-client",
+                        ["matchedBy"] = "CompilerResolvedClientBaseContract",
+                        ["surfaceKind"] = "wcf-client",
+                        ["typeName"] = typeDisplay
+                    }));
+            }
+
+            if (DerivesFromTrustedType(type, "System.Web.Services.Protocols.SoapHttpClientProtocol", "System.Web.Services", "b03f5f7f11d50a3a"))
+            {
+                facts.Add(CreateSemanticFact(FactTypes.AsmxGeneratedClientDeclared, RuleIds.LegacyAsmxClient,
+                    projectPath, filePath, statement, sourceSymbol: typeDisplay, targetSymbol: typeDisplay,
+                    properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["clientName"] = type.Name,
+                        ["coverageLabel"] = "compiler-resolved-vb-asmx-client",
+                        ["matchedBy"] = "CompilerResolvedSoapHttpClientProtocol",
+                        ["surfaceKind"] = "asmx-client",
+                        ["typeName"] = typeDisplay
+                    }));
+            }
+
+            if (IsRecognizedAsmxServiceType(type))
+            {
+                facts.Add(CreateSemanticFact(FactTypes.AsmxServiceClassDeclared, RuleIds.LegacyAsmxService,
+                    projectPath, filePath, statement, sourceSymbol: typeDisplay, targetSymbol: typeDisplay,
+                    contractElement: type.Name,
+                    properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["coverageLabel"] = "compiler-resolved-vb-asmx-service",
+                        ["matchedBy"] = "CompilerResolvedWebServiceAttribute",
+                        ["serviceClassName"] = typeDisplay,
+                        ["surfaceKind"] = "asmx-service",
+                        ["typeName"] = type.Name
+                    }));
+            }
+        }
+
+        foreach (var statement in root.DescendantNodes().OfType<MethodBaseSyntax>())
+        {
+            if (GetDeclaredMethodSymbol(statement, model) is not IMethodSymbol method
+                || method.MethodKind is MethodKind.PropertyGet or MethodKind.PropertySet)
+            {
+                continue;
+            }
+
+            var methodDisplay = method.ToDisplayString(SymbolFormat);
+            var containingTypeDisplay = method.ContainingType.ToDisplayString(SymbolFormat);
+            if (HasTrustedAttribute(method, "System.ServiceModel.OperationContractAttribute", "System.ServiceModel.Primitives", "b03f5f7f11d50a3a")
+                || HasTrustedAttribute(method, "System.ServiceModel.OperationContractAttribute", "System.ServiceModel", "b77a5c561934e089"))
+            {
+                facts.Add(CreateSemanticFact(FactTypes.WcfOperationContractDeclared, RuleIds.LegacyWcfContract,
+                    projectPath, filePath, statement, sourceSymbol: containingTypeDisplay, targetSymbol: methodDisplay,
+                    contractElement: method.Name,
+                    properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["contractName"] = containingTypeDisplay,
+                        ["coverageLabel"] = "compiler-resolved-vb-wcf-operation",
+                        ["operationName"] = method.Name,
+                        ["surfaceKind"] = "wcf-operation"
+                    }));
+            }
+
+            if (TryGetTrustedWcfClientContract(method.ContainingType, out var clientContract)
+                && TryGetImplementedContractMethod(method, clientContract, out var contractMethod))
+            {
+                facts.Add(CreateSemanticFact(FactTypes.WcfGeneratedClientDeclared, RuleIds.LegacyWcfContract,
+                    projectPath, filePath, statement, sourceSymbol: containingTypeDisplay, targetSymbol: methodDisplay,
+                    contractElement: contractMethod.Name,
+                    properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["clientContractName"] = contractMethod.ContainingType.ToDisplayString(SymbolFormat),
+                        ["clientName"] = method.ContainingType.Name,
+                        ["coverageLabel"] = "compiler-resolved-vb-wcf-client-operation",
+                        ["matchedBy"] = "CompilerResolvedInterfaceImplementation",
+                        ["operationName"] = contractMethod.Name,
+                        ["surfaceKind"] = "wcf-client",
+                        ["typeName"] = containingTypeDisplay
+                    }));
+            }
+
+            if (IsRecognizedAsmxServiceType(method.ContainingType)
+                && HasTrustedAttribute(method, "System.Web.Services.WebMethodAttribute", "System.Web.Services", "b03f5f7f11d50a3a"))
+            {
+                facts.Add(CreateSemanticFact(FactTypes.AsmxOperationDeclared, RuleIds.LegacyAsmxOperation,
+                    projectPath, filePath, statement, sourceSymbol: containingTypeDisplay, targetSymbol: methodDisplay,
+                    contractElement: method.Name,
+                    properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["coverageLabel"] = "compiler-resolved-vb-asmx-operation",
+                        ["operationName"] = method.Name,
+                        ["serviceClassName"] = containingTypeDisplay,
+                        ["surfaceKind"] = "asmx-operation"
+                    }));
+            }
+
+            if (DerivesFromTrustedType(method.ContainingType, "System.Web.Services.Protocols.SoapHttpClientProtocol", "System.Web.Services", "b03f5f7f11d50a3a")
+                && (HasTrustedAttribute(method, "System.Web.Services.Protocols.SoapDocumentMethodAttribute", "System.Web.Services", "b03f5f7f11d50a3a")
+                    || HasTrustedAttribute(method, "System.Web.Services.Protocols.SoapRpcMethodAttribute", "System.Web.Services", "b03f5f7f11d50a3a")))
+            {
+                facts.Add(CreateSemanticFact(FactTypes.AsmxClientOperationDeclared, RuleIds.LegacyAsmxClient,
+                    projectPath, filePath, statement, sourceSymbol: containingTypeDisplay, targetSymbol: methodDisplay,
+                    contractElement: method.Name,
+                    properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["clientName"] = method.ContainingType.Name,
+                        ["coverageLabel"] = "compiler-resolved-vb-asmx-client-operation",
+                        ["matchedBy"] = "CompilerResolvedSoapMethodAttribute",
+                        ["operationName"] = method.Name,
+                        ["surfaceKind"] = "asmx-client",
+                        ["typeName"] = containingTypeDisplay
+                    }));
+            }
+        }
     }
 
     private static void AddTypeDeclarationFacts(
@@ -619,7 +775,7 @@ public static class VisualBasicSemanticExtractor
                 continue;
             }
 
-            if (model.GetDeclaredSymbol(statement) is not IMethodSymbol method
+            if (GetDeclaredMethodSymbol(statement, model) is not IMethodSymbol method
                 || method.MethodKind is MethodKind.PropertyGet or MethodKind.PropertySet or MethodKind.EventAdd or MethodKind.EventRemove or MethodKind.EventRaise)
             {
                 continue;
@@ -1044,8 +1200,13 @@ public static class VisualBasicSemanticExtractor
     private static IMethodSymbol? GetContainingMethod(SyntaxNode node, SemanticModel model)
     {
         var statement = node.Ancestors().OfType<MethodBlockBaseSyntax>().FirstOrDefault()?.BlockStatement;
+        return statement is null ? null : GetDeclaredMethodSymbol(statement, model);
+    }
+
+    private static IMethodSymbol? GetDeclaredMethodSymbol(MethodBaseSyntax statement, SemanticModel model)
+    {
 #pragma warning disable RS1039 // VB Roslyn returns the declared method for concrete MethodBaseSyntax nodes.
-        return statement is null ? null : model.GetDeclaredSymbol(statement) as IMethodSymbol;
+        return model.GetDeclaredSymbol(statement) as IMethodSymbol;
 #pragma warning restore RS1039
     }
 
@@ -1458,7 +1619,8 @@ public static class VisualBasicSemanticExtractor
                         projectPath,
                         lineSpan.StartLinePosition.Line + 1,
                         lineSpan.EndLinePosition.Line + 1,
-                        siteHash: FactFactory.Hash(invocation.Expression.ToString(), 32)));
+                        siteHash: FactFactory.Hash(invocation.Expression.ToString(), 32),
+                        ruleId: operation is IDynamicInvocationOperation ? RuleIds.VisualBasicSemanticMethodInvocation : null));
                     fallbackFactCount += 2;
                 }
                 else if (!fallbackTruncationReported)
@@ -1780,6 +1942,979 @@ public static class VisualBasicSemanticExtractor
                 ["callerName"] = callerName ?? string.Empty,
                 ["resolution"] = "unresolved-constructor"
             }));
+    }
+
+    private static void AddAdoNetBoundaryFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts,
+        List<SemanticFactCandidate> gaps)
+    {
+        var boundaryGapCount = 0;
+        var boundaryGapBudgetReported = false;
+
+        void AddBoundaryGap(SyntaxNode node, string message, string gapKind, string ruleId)
+        {
+            if (boundaryGapCount < 50)
+            {
+                var lineSpan = node.SyntaxTree.GetLineSpan(node.Span);
+                gaps.Add(CreateGap(
+                    filePath,
+                    message,
+                    gapKind,
+                    projectPath,
+                    lineSpan.StartLinePosition.Line + 1,
+                    lineSpan.EndLinePosition.Line + 1,
+                    siteHash: FactFactory.Hash(node.ToString(), 32),
+                    ruleId: ruleId));
+                boundaryGapCount++;
+            }
+            else if (!boundaryGapBudgetReported)
+            {
+                gaps.Add(CreateGap(
+                    filePath,
+                    "Visual Basic ADO.NET unresolved-target gap evidence reached its deterministic per-document budget; remaining candidate sites were not classified by the database rule.",
+                    "VisualBasicAdoNetGapBudgetExhausted",
+                    projectPath,
+                    ruleId: ruleId));
+                boundaryGapBudgetReported = true;
+            }
+        }
+
+        foreach (var creation in root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
+        {
+            var resolvedType = model.GetTypeInfo(creation).Type as INamedTypeSymbol;
+            if (resolvedType is null || resolvedType.TypeKind == TypeKind.Error)
+            {
+                if (IsPotentialAdoNetCommandCreation(creation))
+                {
+                    AddBoundaryGap(
+                        creation,
+                        "A syntactically plausible Visual Basic command construction had no compiler-resolved type; no database command boundary was claimed.",
+                        "VisualBasicAdoNetCommandTypeUnavailable",
+                        RuleIds.DatabaseSqlText);
+                }
+                continue;
+            }
+            if (!IsAdoNetType(resolvedType, "System.Data.Common.DbCommand"))
+            {
+                continue;
+            }
+            var type = resolvedType;
+
+            var enclosing = model.GetEnclosingSymbol(creation.SpanStart);
+            var commandReceiver = TryGetCreationAssignedSymbol(creation, model);
+            var properties = AddAssemblyProperties(
+                AddSymbolProperties(AddSymbolProperties(
+                    AddSymbolProperties(
+                        new SortedDictionary<string, string>(StringComparer.Ordinal)
+                        {
+                            ["commandTextClassification"] = "unavailable",
+                            ["frameworkFamily"] = GetAdoNetFrameworkFamily(type),
+                            ["limitations"] = "Compiler-resolved command construction only; runtime execution, database identity, command effects, and success are not proven.",
+                            ["typeName"] = type.ToDisplayString(SymbolFormat)
+                        },
+                        "source",
+                        enclosing),
+                        "target",
+                        type),
+                    "commandReceiver",
+                    commandReceiver),
+                enclosing?.ContainingAssembly,
+                type.ContainingAssembly);
+
+            if (TryGetCommandTextArgument(creation, model) is { } commandTextArgument)
+            {
+                var constant = model.GetConstantValue(commandTextArgument.Expression);
+                if (constant.HasValue && constant.Value is string text)
+                {
+                    properties["commandTextClassification"] = "compile-time-constant-hashed";
+                    properties["commandTextHash"] = FactFactory.Hash(text, 64);
+                    properties["commandTextLength"] = text.Length.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                }
+                else
+                {
+                    properties["commandTextClassification"] = "dynamic-or-nonconstant";
+                }
+            }
+
+            facts.Add(CreateSemanticFact(
+                FactTypes.SqlCommandDetected,
+                RuleIds.DatabaseSqlText,
+                projectPath,
+                filePath,
+                creation,
+                sourceSymbol: enclosing?.ToDisplayString(SymbolFormat),
+                targetSymbol: type.ToDisplayString(SymbolFormat),
+                contractElement: type.Name,
+                properties: properties));
+        }
+
+        foreach (var assignment in root.DescendantNodes().OfType<AssignmentStatementSyntax>())
+        {
+            if (!assignment.IsKind(SyntaxKind.SimpleAssignmentStatement)
+                || assignment.Left is not MemberAccessExpressionSyntax memberAccess
+                || model.GetSymbolInfo(memberAccess).Symbol is not IPropertySymbol property
+                || !property.Name.Equals("CommandType", StringComparison.OrdinalIgnoreCase)
+                || !IsAdoNetType(property.ContainingType, "System.Data.Common.DbCommand"))
+            {
+                continue;
+            }
+
+            var receiver = model.GetSymbolInfo(memberAccess.Expression).Symbol;
+            var assigned = model.GetSymbolInfo(assignment.Right).Symbol;
+            var commandType = assigned is IFieldSymbol { ContainingType: { } enumType } field
+                && GetMetadataName(enumType) == "System.Data.CommandType"
+                ? field.Name
+                : "unknown";
+            var enclosing = model.GetEnclosingSymbol(assignment.SpanStart);
+            var properties = AddSymbolProperties(
+                AddSymbolProperties(
+                    AddSymbolProperties(
+                        new SortedDictionary<string, string>(StringComparer.Ordinal)
+                        {
+                            ["commandTypeClassification"] = commandType,
+                            ["configurationKind"] = "command-type-assignment",
+                            ["frameworkFamily"] = GetAdoNetFrameworkFamily(property.ContainingType),
+                            ["limitations"] = "Static assignment evidence only; branch feasibility, later mutation, runtime command type, and execution are not proven.",
+                            ["storedProcedureCandidate"] = commandType == "StoredProcedure" ? "true" : "false"
+                        },
+                        "source",
+                        enclosing),
+                    "target",
+                    property),
+                "commandReceiver",
+                receiver);
+            facts.Add(CreateSemanticFact(
+                FactTypes.SqlCommandDetected,
+                RuleIds.DatabaseSqlText,
+                projectPath,
+                filePath,
+                assignment,
+                sourceSymbol: enclosing?.ToDisplayString(SymbolFormat),
+                targetSymbol: property.ContainingType.ToDisplayString(SymbolFormat),
+                contractElement: "CommandType",
+                properties: properties));
+        }
+
+        foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            var name = GetSafeInvocationName(invocation.Expression);
+            var method = model.GetSymbolInfo(invocation).Symbol as IMethodSymbol;
+            if (method is not null && TryClassifyAdoNetOperation(method, out var operationKind, out var resultKind))
+            {
+                var enclosing = model.GetEnclosingSymbol(invocation.SpanStart);
+                var receiver = invocation.Expression is MemberAccessExpressionSyntax access
+                    ? model.GetSymbolInfo(access.Expression).Symbol
+                    : null;
+                var properties = AddAssemblyProperties(
+                    AddSymbolProperties(
+                        AddSymbolProperties(
+                            AddSymbolProperties(
+                                new SortedDictionary<string, string>(StringComparer.Ordinal)
+                                {
+                                    ["coverageLabel"] = "bounded-static-call",
+                                    ["frameworkFamily"] = GetAdoNetFrameworkFamily(method.ContainingType),
+                                    ["limitations"] = "Compiler-resolved static call candidate only; runtime reachability, database identity, SQL, affected rows, returned data, and success are not proven.",
+                                    ["methodName"] = method.Name,
+                                    ["operationKind"] = operationKind,
+                                    ["resultKind"] = resultKind,
+                                    ["targetIdentityStatus"] = "boundary-only"
+                                },
+                                "source",
+                                enclosing),
+                            "target",
+                            method),
+                        "receiver",
+                        receiver),
+                    enclosing?.ContainingAssembly,
+                    method.ContainingAssembly);
+                facts.Add(CreateSemanticFact(
+                    FactTypes.DatabaseOperationCandidate,
+                    RuleIds.DatabaseOperationCallPattern,
+                    projectPath,
+                    filePath,
+                    invocation,
+                    sourceSymbol: enclosing?.ToDisplayString(SymbolFormat),
+                    targetSymbol: method.ToDisplayString(SymbolFormat),
+                    contractElement: operationKind,
+                    properties: properties));
+                continue;
+            }
+
+            if (method is not null && IsParameterCollectionMutation(method))
+            {
+                var enclosing = model.GetEnclosingSymbol(invocation.SpanStart);
+                var commandReceiver = TryGetParameterCommandReceiver(invocation, model);
+                var properties = AddSymbolProperties(
+                    AddSymbolProperties(
+                        AddSymbolProperties(
+                            new SortedDictionary<string, string>(StringComparer.Ordinal)
+                            {
+                                ["configurationKind"] = "parameter-collection-mutation",
+                                ["frameworkFamily"] = "ado-net",
+                                ["limitations"] = "Compiler-resolved parameter collection mutation only; parameter names and values are not retained, and runtime command association or execution is not proven.",
+                                ["parameterMutationMethod"] = method.Name
+                            },
+                            "source",
+                            enclosing),
+                        "target",
+                        method),
+                    "commandReceiver",
+                    commandReceiver);
+                facts.Add(CreateSemanticFact(
+                    FactTypes.SqlCommandDetected,
+                    RuleIds.DatabaseSqlText,
+                    projectPath,
+                    filePath,
+                    invocation,
+                    sourceSymbol: enclosing?.ToDisplayString(SymbolFormat),
+                    targetSymbol: method.ContainingType.ToDisplayString(SymbolFormat),
+                    contractElement: "Parameters",
+                    properties: properties));
+                continue;
+            }
+
+            if (method is null && IsPotentialAdoNetOperationName(name))
+            {
+                AddBoundaryGap(
+                    invocation,
+                    "A potential Visual Basic ADO.NET operation had no compiler-resolved target; no database boundary was claimed.",
+                    "VisualBasicAdoNetTargetUnavailable",
+                    RuleIds.DatabaseOperationCallPattern);
+            }
+        }
+    }
+
+    private static bool IsPotentialAdoNetCommandCreation(ObjectCreationExpressionSyntax creation)
+    {
+        var typeName = creation.Type.ToString().Trim();
+        var lastSeparator = typeName.LastIndexOf('.');
+        if (lastSeparator >= 0)
+        {
+            typeName = typeName[(lastSeparator + 1)..];
+        }
+        return typeName.EndsWith("Command", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void AddExternalBoundaryFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts,
+        List<SemanticFactCandidate> gaps)
+    {
+        var gapCount = 0;
+        var budgetReported = false;
+        foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            var method = model.GetSymbolInfo(invocation).Symbol as IMethodSymbol;
+            if (method is not null && IsWebRequestCreate(method))
+            {
+                var enclosing = model.GetEnclosingSymbol(invocation.SpanStart);
+                var properties = AddSymbolProperties(
+                    AddSymbolProperties(
+                        new SortedDictionary<string, string>(StringComparer.Ordinal)
+                        {
+                            ["clientKind"] = "WebRequest",
+                            ["coverageLabel"] = "bounded-static-http-client-construction",
+                            ["limitations"] = "Compiler-resolved request construction only; a later response call, runtime destination, request contents, response, and success are not proven.",
+                            ["surfaceKind"] = "http-client",
+                            ["urlKind"] = "unavailable"
+                        }, "source", enclosing), "target", method);
+                if (TryGetHttpUriArgument(invocation, model, out var requestUri))
+                {
+                    var normalized = EndpointRouteNormalizer.Normalize(requestUri);
+                    properties["normalizedPathKey"] = normalized.PathKey;
+                    properties["normalizedPathTemplate"] = normalized.PathTemplate;
+                    properties["urlHash"] = FactFactory.Hash(requestUri, 32);
+                    properties["urlKind"] = "compile-time-constant-path";
+                }
+                else
+                {
+                    AddExternalGap(invocation, "VisualBasicHttpConstructionDestinationUnavailable", "A compiler-resolved WebRequest construction had no compile-time constant destination; later response calls cannot be correlated to a route identity.");
+                }
+                facts.Add(CreateSemanticFact(FactTypes.HttpClientCreated, RuleIds.HttpClientInvocation,
+                    projectPath, filePath, invocation,
+                    sourceSymbol: enclosing?.ToDisplayString(SymbolFormat),
+                    targetSymbol: method.ToDisplayString(SymbolFormat),
+                    contractElement: method.Name,
+                    properties: properties));
+                continue;
+            }
+
+            if (method is not null && TryClassifyHttpOperation(method, out var family, out var httpMethod))
+            {
+                var enclosing = model.GetEnclosingSymbol(invocation.SpanStart);
+                var properties = AddAssemblyProperties(
+                    AddSymbolProperties(
+                        AddSymbolProperties(
+                            new SortedDictionary<string, string>(StringComparer.Ordinal)
+                            {
+                                ["coverageLabel"] = "bounded-static-http-call",
+                                ["httpMethod"] = httpMethod,
+                                ["limitations"] = "Compiler-resolved outbound HTTP API call only; runtime reachability, destination host, request contents, response, and success are not proven.",
+                                ["methodFamily"] = family,
+                                ["methodName"] = method.Name,
+                                ["surfaceKind"] = "http-client",
+                                ["urlKind"] = "unavailable"
+                            },
+                            "source",
+                            enclosing),
+                        "target",
+                        method),
+                    enclosing?.ContainingAssembly,
+                    method.ContainingAssembly);
+                if (TryGetHttpUriArgument(invocation, model, out var uriText))
+                {
+                    var normalized = EndpointRouteNormalizer.Normalize(uriText);
+                    properties["normalizedPathKey"] = normalized.PathKey;
+                    properties["normalizedPathTemplate"] = normalized.PathTemplate;
+                    properties["urlKind"] = "compile-time-constant-path";
+                    properties["urlHash"] = FactFactory.Hash(uriText, 32);
+                }
+                else
+                {
+                    AddExternalGap(invocation, "VisualBasicHttpDestinationUnavailable", "A compiler-resolved Visual Basic HTTP call had no compile-time constant destination; no host or route identity was claimed.");
+                }
+
+                facts.Add(CreateSemanticFact(
+                    FactTypes.HttpCallDetected,
+                    RuleIds.HttpClientInvocation,
+                    projectPath,
+                    filePath,
+                    invocation,
+                    sourceSymbol: enclosing?.ToDisplayString(SymbolFormat),
+                    targetSymbol: method.ToDisplayString(SymbolFormat),
+                    contractElement: method.Name,
+                    properties: properties));
+                continue;
+            }
+
+            if (method is not null && IsConfigurationManagerGetSection(method))
+            {
+                if (TryGetConstantStringArgument(invocation, model, out var key))
+                {
+                    AddConfigBinding(invocation, model, "configuration-manager-section", key, method, facts, projectPath, filePath);
+                }
+                else
+                {
+                    AddExternalGap(invocation, "VisualBasicConfigurationKeyUnavailable", "A compiler-resolved ConfigurationManager section access had no compile-time constant key; no config binding was claimed.");
+                }
+                continue;
+            }
+
+            if (method is not null && TryClassifyLegacyServiceClient(method, out var serviceFamily))
+            {
+                if (!HasDeterministicLegacyServiceOperation(method))
+                {
+                    AddExternalGap(
+                        invocation,
+                        serviceFamily == "wcf"
+                            ? "VisualBasicWcfServiceMappingUnavailable"
+                            : "VisualBasicAsmxServiceMappingUnavailable",
+                        $"A compiler-resolved Visual Basic {serviceFamily.ToUpperInvariant()} client invocation was retained, but an exact proxy-to-contract operation identity was not established; no service operation boundary was claimed.");
+                }
+                continue;
+            }
+
+            if (model.GetOperation(invocation) is IPropertyReferenceOperation propertyReference
+                && TryClassifyConfigurationManagerIndexer(propertyReference, out var configSourceKind))
+            {
+                if (TryGetConstantStringArgument(invocation, model, out var key))
+                {
+                    AddConfigBinding(invocation, model, configSourceKind, key, propertyReference.Property, facts, projectPath, filePath);
+                }
+                else
+                {
+                    AddExternalGap(invocation, "VisualBasicConfigurationKeyUnavailable", "A compiler-resolved ConfigurationManager indexer access had no compile-time constant key; no config binding was claimed.");
+                }
+                continue;
+            }
+
+            if (method is null && IsPotentialExternalOperationName(GetSafeInvocationName(invocation.Expression)))
+            {
+                AddExternalGap(invocation, "VisualBasicExternalBoundaryTargetUnavailable", "A potential Visual Basic external-boundary call had no compiler-resolved target; no HTTP or service boundary was claimed.");
+            }
+        }
+
+        foreach (var access in root.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
+        {
+            if (access.Expression is MemberAccessExpressionSyntax settings
+                && settings.Name.Identifier.ValueText.Equals("Settings", StringComparison.OrdinalIgnoreCase)
+                && settings.Expression is IdentifierNameSyntax myIdentifier
+                && myIdentifier.Identifier.ValueText.Equals("My", StringComparison.OrdinalIgnoreCase)
+                && model.GetSymbolInfo(access).Symbol is IPropertySymbol property)
+            {
+                AddConfigBinding(access, model, "my-settings-member", property.Name, property, facts, projectPath, filePath);
+            }
+        }
+
+        void AddExternalGap(SyntaxNode node, string kind, string message)
+        {
+            if (gapCount < 50)
+            {
+                var span = node.SyntaxTree.GetLineSpan(node.Span);
+                gaps.Add(CreateGap(filePath, message, kind, projectPath,
+                    span.StartLinePosition.Line + 1, span.EndLinePosition.Line + 1,
+                    siteHash: FactFactory.Hash(node.ToString(), 32), ruleId: RuleIds.VisualBasicSemanticExternalBoundary));
+                gapCount++;
+            }
+            else if (!budgetReported)
+            {
+                gaps.Add(CreateGap(filePath,
+                    "Visual Basic external-boundary gaps reached the deterministic per-document budget; remaining candidate sites were not classified.",
+                    "VisualBasicExternalBoundaryGapBudgetExhausted", projectPath,
+                    ruleId: RuleIds.VisualBasicSemanticExternalBoundary));
+                budgetReported = true;
+            }
+        }
+    }
+
+    private static void AddConfigBinding(
+        SyntaxNode node,
+        SemanticModel model,
+        string sourceKind,
+        string key,
+        ISymbol target,
+        List<SemanticFactCandidate> facts,
+        string? projectPath,
+        string filePath)
+    {
+        var enclosing = model.GetEnclosingSymbol(node.SpanStart);
+        var keyHash = FactFactory.Hash(key, 32);
+        var properties = AddSymbolProperties(
+            new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["configKeyHash"] = keyHash,
+                ["configSourceKind"] = sourceKind,
+                ["coverageLabel"] = "bounded-static-config-binding",
+                ["limitations"] = "Compiler-resolved configuration access only; raw keys and values, provider precedence, reload behavior, availability, and runtime use are not proven.",
+                ["surfaceKind"] = "package-config",
+                ["targetAssemblyName"] = target.ContainingAssembly?.Identity.Name ?? string.Empty
+            },
+            "source",
+            enclosing);
+        facts.Add(CreateSemanticFact(
+            FactTypes.ConfigBinding,
+            RuleIds.VisualBasicSemanticConfigBinding,
+            projectPath,
+            filePath,
+            node,
+            sourceSymbol: enclosing?.ToDisplayString(SymbolFormat),
+            targetSymbol: $"config-key:{keyHash}",
+            contractElement: keyHash,
+            properties: properties));
+    }
+
+    private static bool TryClassifyHttpOperation(IMethodSymbol method, out string family, out string httpMethod)
+    {
+        family = string.Empty;
+        httpMethod = "UNKNOWN";
+        var type = GetMetadataName(method.ContainingType.OriginalDefinition);
+        if (type == "System.Net.Http.HttpClient"
+            && IsTrustedAssembly(method.ContainingAssembly, "System.Net.Http", "b03f5f7f11d50a3a"))
+        {
+            family = "HttpClient";
+            httpMethod = method.Name.StartsWith("Get", StringComparison.Ordinal) ? "GET"
+                : method.Name.StartsWith("Post", StringComparison.Ordinal) ? "POST"
+                : method.Name.StartsWith("Put", StringComparison.Ordinal) ? "PUT"
+                : method.Name.StartsWith("Delete", StringComparison.Ordinal) ? "DELETE"
+                : method.Name.StartsWith("Patch", StringComparison.Ordinal) ? "PATCH" : "UNKNOWN";
+            return method.Name is "GetAsync" or "GetStringAsync" or "GetByteArrayAsync" or "GetStreamAsync"
+                or "PostAsync" or "PutAsync" or "DeleteAsync" or "PatchAsync" or "SendAsync" or "Send";
+        }
+
+        if (IsTrustedWebRequestType(method.ContainingType)
+            && method.Name is "GetResponse" or "GetResponseAsync")
+        {
+            family = "WebRequest";
+            return true;
+        }
+
+        if (type == "System.Net.WebClient"
+            && IsRecognizedWebClientAssembly(method.ContainingAssembly)
+            && (method.Name.StartsWith("Download", StringComparison.Ordinal)
+                || method.Name.StartsWith("Upload", StringComparison.Ordinal)
+                || method.Name.StartsWith("OpenRead", StringComparison.Ordinal)
+                || method.Name.StartsWith("OpenWrite", StringComparison.Ordinal)))
+        {
+            family = "WebClient";
+            httpMethod = method.Name.StartsWith("Download", StringComparison.Ordinal) || method.Name.StartsWith("OpenRead", StringComparison.Ordinal)
+                ? "GET" : "UNKNOWN";
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryGetHttpUriArgument(InvocationExpressionSyntax invocation, SemanticModel model, out string value)
+    {
+        foreach (var argument in invocation.ArgumentList.Arguments.OfType<SimpleArgumentSyntax>())
+        {
+            var parameter = (model.GetOperation(argument) as IArgumentOperation)?.Parameter;
+            if (parameter?.Name is not ("requestUri" or "requestUriString" or "address"))
+            {
+                continue;
+            }
+            var constant = model.GetConstantValue(argument.Expression);
+            if (constant.HasValue && constant.Value is string text)
+            {
+                value = text;
+                return true;
+            }
+            if (argument.Expression is ObjectCreationExpressionSyntax uriCreation
+                && model.GetTypeInfo(uriCreation).Type is INamedTypeSymbol uriType
+                && GetMetadataName(uriType.OriginalDefinition) == "System.Uri"
+                && uriCreation.ArgumentList?.Arguments.FirstOrDefault() is SimpleArgumentSyntax uriArgument)
+            {
+                var uriConstant = model.GetConstantValue(uriArgument.Expression);
+                if (uriConstant.HasValue && uriConstant.Value is string uriText)
+                {
+                    value = uriText;
+                    return true;
+                }
+            }
+        }
+        value = string.Empty;
+        return false;
+    }
+
+    private static bool TryGetConstantStringArgument(InvocationExpressionSyntax invocation, SemanticModel model, out string value)
+    {
+        foreach (var argument in invocation.ArgumentList.Arguments.OfType<SimpleArgumentSyntax>())
+        {
+            var constant = model.GetConstantValue(argument.Expression);
+            if (constant.HasValue && constant.Value is string text)
+            {
+                value = text;
+                return true;
+            }
+        }
+        value = string.Empty;
+        return false;
+    }
+
+    private static bool IsConfigurationManagerGetSection(IMethodSymbol method) =>
+        GetMetadataName(method.ContainingType.OriginalDefinition) == "System.Configuration.ConfigurationManager"
+        && IsRecognizedConfigurationAssembly(method.ContainingAssembly)
+        && method.Name == "GetSection";
+
+    private static bool IsWebRequestCreate(IMethodSymbol method) =>
+        GetMetadataName(method.ContainingType.OriginalDefinition) == "System.Net.WebRequest"
+        && IsRecognizedWebRequestAssembly(method.ContainingAssembly)
+        && method.Name is "Create" or "CreateHttp";
+
+    private static bool TryClassifyConfigurationManagerIndexer(IPropertyReferenceOperation operation, out string sourceKind)
+    {
+        sourceKind = string.Empty;
+        foreach (var child in DescendantsAndSelf(operation))
+        {
+            if (child is not IPropertyReferenceOperation property
+                || GetMetadataName(property.Property.ContainingType.OriginalDefinition) != "System.Configuration.ConfigurationManager"
+                || !IsRecognizedConfigurationAssembly(property.Property.ContainingAssembly))
+            {
+                continue;
+            }
+            if (property.Property.Name == "AppSettings")
+            {
+                sourceKind = "configuration-manager-app-settings";
+                return true;
+            }
+            if (property.Property.Name == "ConnectionStrings")
+            {
+                sourceKind = "configuration-manager-connection-strings";
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static bool TryClassifyLegacyServiceClient(IMethodSymbol method, out string serviceFamily)
+    {
+        serviceFamily = string.Empty;
+        for (var type = method.ContainingType; type is not null; type = type.BaseType)
+        {
+            var baseName = GetMetadataName(type.OriginalDefinition);
+            if (baseName == "System.ServiceModel.ClientBase`1" && IsTrustedServiceAssembly(type.ContainingAssembly))
+            {
+                serviceFamily = "wcf";
+                return true;
+            }
+            if (baseName == "System.Web.Services.Protocols.SoapHttpClientProtocol"
+                && IsTrustedAssembly(type.ContainingAssembly, "System.Web.Services", "b03f5f7f11d50a3a"))
+            {
+                serviceFamily = "asmx";
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static bool HasDeterministicLegacyServiceOperation(IMethodSymbol method)
+    {
+        if (TryGetTrustedWcfClientContract(method.ContainingType, out var contract)
+            && TryGetImplementedContractMethod(method, contract, out _))
+        {
+            return true;
+        }
+
+        return DerivesFromTrustedType(method.ContainingType, "System.Web.Services.Protocols.SoapHttpClientProtocol", "System.Web.Services", "b03f5f7f11d50a3a")
+            && (HasTrustedAttribute(method, "System.Web.Services.Protocols.SoapDocumentMethodAttribute", "System.Web.Services", "b03f5f7f11d50a3a")
+                || HasTrustedAttribute(method, "System.Web.Services.Protocols.SoapRpcMethodAttribute", "System.Web.Services", "b03f5f7f11d50a3a"));
+    }
+
+    private static bool IsRecognizedAsmxServiceType(INamedTypeSymbol type) =>
+        HasTrustedAttribute(type, "System.Web.Services.WebServiceAttribute", "System.Web.Services", "b03f5f7f11d50a3a");
+
+    private static bool TryGetTrustedWcfClientContract(INamedTypeSymbol type, out INamedTypeSymbol contract)
+    {
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            if (GetMetadataName(current.OriginalDefinition) == "System.ServiceModel.ClientBase`1"
+                && IsTrustedServiceAssembly(current.ContainingAssembly)
+                && current.TypeArguments.Length == 1
+                && current.TypeArguments[0] is INamedTypeSymbol namedContract
+                && namedContract.TypeKind == TypeKind.Interface)
+            {
+                contract = namedContract;
+                return true;
+            }
+        }
+        contract = null!;
+        return false;
+    }
+
+    private static bool TryGetImplementedContractMethod(
+        IMethodSymbol method,
+        INamedTypeSymbol contract,
+        out IMethodSymbol contractMethod)
+    {
+        var contractTypes = new[] { contract }
+            .Concat(contract.AllInterfaces)
+            .ToArray();
+        var explicitMatches = method.ExplicitInterfaceImplementations
+            .Where(item => contractTypes.Any(type => SymbolEqualityComparer.Default.Equals(type, item.ContainingType)))
+            .ToArray();
+        if (explicitMatches.Length == 1)
+        {
+            contractMethod = explicitMatches[0];
+            return true;
+        }
+        if (explicitMatches.Length > 1)
+        {
+            contractMethod = null!;
+            return false;
+        }
+
+        var implicitMatches = contractTypes
+            .SelectMany(type => type.GetMembers())
+            .OfType<IMethodSymbol>()
+            .Where(candidate => SymbolEqualityComparer.Default.Equals(
+                method.ContainingType.FindImplementationForInterfaceMember(candidate)?.OriginalDefinition,
+                method.OriginalDefinition))
+            .ToArray();
+        if (implicitMatches.Length == 1)
+        {
+            contractMethod = implicitMatches[0];
+            return true;
+        }
+        contractMethod = null!;
+        return false;
+    }
+
+    private static bool DerivesFromTrustedType(INamedTypeSymbol type, string metadataName, string assemblyName, string publicKeyToken)
+    {
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            if (GetMetadataName(current.OriginalDefinition) == metadataName
+                && IsTrustedAssembly(current.ContainingAssembly, assemblyName, publicKeyToken))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static bool HasTrustedAttribute(ISymbol symbol, string metadataName, string assemblyName, string publicKeyToken) =>
+        symbol.GetAttributes().Any(attribute =>
+            attribute.AttributeClass is { } attributeClass
+            && GetMetadataName(attributeClass.OriginalDefinition) == metadataName
+            && IsTrustedAssembly(attributeClass.ContainingAssembly, assemblyName, publicKeyToken));
+
+    private static bool IsTrustedServiceAssembly(IAssemblySymbol assembly) =>
+        IsTrustedAssembly(assembly, "System.ServiceModel.Primitives", "b03f5f7f11d50a3a")
+        || IsTrustedAssembly(assembly, "System.ServiceModel", "b77a5c561934e089");
+
+    private static bool IsTrustedAssembly(IAssemblySymbol assembly, string assemblyName, string publicKeyToken) =>
+        assembly.Identity.Name == assemblyName
+        && Convert.ToHexString(assembly.Identity.PublicKeyToken.ToArray()).Equals(publicKeyToken, StringComparison.OrdinalIgnoreCase);
+
+    internal static bool IsRecognizedConfigurationAssemblyName(string assemblyName) =>
+        assemblyName is "System.Configuration.ConfigurationManager" or "System.Configuration";
+
+    private static bool IsRecognizedConfigurationAssembly(IAssemblySymbol assembly) =>
+        IsRecognizedConfigurationAssemblyIdentity(
+            assembly.Identity.Name,
+            Convert.ToHexString(assembly.Identity.PublicKeyToken.ToArray()));
+
+    internal static bool IsRecognizedConfigurationAssemblyIdentity(string assemblyName, string publicKeyToken) =>
+        (assemblyName == "System.Configuration.ConfigurationManager"
+            && publicKeyToken.Equals("cc7b13ffcd2ddd51", StringComparison.OrdinalIgnoreCase))
+        || (assemblyName == "System.Configuration"
+            && publicKeyToken.Equals("b03f5f7f11d50a3a", StringComparison.OrdinalIgnoreCase));
+
+    internal static bool IsRecognizedAdoNetAssemblyIdentity(string assemblyName, string publicKeyToken) =>
+        (assemblyName == "System.Data.Common"
+            && publicKeyToken.Equals("b03f5f7f11d50a3a", StringComparison.OrdinalIgnoreCase))
+        || (assemblyName == "System.Data"
+            && publicKeyToken.Equals("b77a5c561934e089", StringComparison.OrdinalIgnoreCase));
+
+    internal static bool IsRecognizedWebRequestAssemblyName(string assemblyName) =>
+        assemblyName is "System.Net.Requests" or "System";
+
+    private static bool IsRecognizedWebRequestAssembly(IAssemblySymbol assembly) =>
+        IsRecognizedWebRequestAssemblyIdentity(
+            assembly.Identity.Name,
+            Convert.ToHexString(assembly.Identity.PublicKeyToken.ToArray()));
+
+    internal static bool IsRecognizedWebRequestAssemblyIdentity(string assemblyName, string publicKeyToken) =>
+        (assemblyName == "System.Net.Requests"
+            && publicKeyToken.Equals("b03f5f7f11d50a3a", StringComparison.OrdinalIgnoreCase))
+        || (assemblyName == "System"
+            && publicKeyToken.Equals("b77a5c561934e089", StringComparison.OrdinalIgnoreCase));
+
+    internal static bool IsRecognizedWebClientAssemblyName(string assemblyName) =>
+        assemblyName is "System.Net.WebClient" or "System";
+
+    private static bool IsRecognizedWebClientAssembly(IAssemblySymbol assembly) =>
+        IsRecognizedWebClientAssemblyIdentity(
+            assembly.Identity.Name,
+            Convert.ToHexString(assembly.Identity.PublicKeyToken.ToArray()));
+
+    internal static bool IsRecognizedWebClientAssemblyIdentity(string assemblyName, string publicKeyToken) =>
+        (assemblyName == "System.Net.WebClient"
+            && publicKeyToken.Equals("cc7b13ffcd2ddd51", StringComparison.OrdinalIgnoreCase))
+        || (assemblyName == "System"
+            && publicKeyToken.Equals("b77a5c561934e089", StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsTrustedWebRequestType(ITypeSymbol? type)
+    {
+        for (var current = type as INamedTypeSymbol; current is not null; current = current.BaseType)
+        {
+            if (GetMetadataName(current.OriginalDefinition) == "System.Net.WebRequest"
+                && IsRecognizedWebRequestAssembly(current.ContainingAssembly))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static IEnumerable<IOperation> DescendantsAndSelf(IOperation operation)
+    {
+        yield return operation;
+        foreach (var child in operation.ChildOperations)
+        {
+            foreach (var descendant in DescendantsAndSelf(child))
+            {
+                yield return descendant;
+            }
+        }
+    }
+
+    private static bool IsPotentialExternalOperationName(string name) =>
+        new[] { "GetAsync", "PostAsync", "PutAsync", "DeleteAsync", "SendAsync", "GetResponse", "GetResponseAsync", "DownloadString", "UploadString" }
+            .Contains(name, StringComparer.OrdinalIgnoreCase);
+
+    private static bool TryClassifyAdoNetOperation(IMethodSymbol method, out string operationKind, out string resultKind)
+    {
+        operationKind = string.Empty;
+        resultKind = "none";
+        if (IsAdoNetType(method.ContainingType, "System.Data.Common.DbCommand")
+            && HasCompatibleFrameworkMember(method, "System.Data.Common.DbCommand"))
+        {
+            operationKind = method.Name switch
+            {
+                "ExecuteReader" or "ExecuteReaderAsync" => "select-candidate",
+                "ExecuteScalar" or "ExecuteScalarAsync" => "scalar-candidate",
+                "ExecuteNonQuery" or "ExecuteNonQueryAsync" => "execute-candidate",
+                _ => string.Empty
+            };
+            resultKind = method.Name.StartsWith("ExecuteReader", StringComparison.Ordinal)
+                ? "data-reader"
+                : method.Name.StartsWith("ExecuteScalar", StringComparison.Ordinal)
+                    ? "scalar"
+                    : "row-count-or-none";
+        }
+        else if (IsAdoNetType(method.ContainingType, "System.Data.Common.DbDataAdapter")
+            && HasCompatibleFrameworkMember(method, "System.Data.Common.DbDataAdapter")
+            && method.Name == "Fill")
+        {
+            operationKind = "data-adapter-fill";
+            resultKind = method.Parameters.Any(parameter => IsAdoNetType(parameter.Type, "System.Data.DataTable")
+                    || parameter.Type is IArrayTypeSymbol array && IsAdoNetType(array.ElementType, "System.Data.DataTable"))
+                ? "data-table"
+                : method.Parameters.Any(parameter => IsAdoNetType(parameter.Type, "System.Data.DataSet"))
+                    ? "data-set"
+                    : "data-container-unknown";
+        }
+
+        return operationKind.Length > 0;
+    }
+
+    private static bool HasCompatibleFrameworkMember(IMethodSymbol method, string frameworkType)
+    {
+        for (var current = method.ContainingType; current is not null; current = current.BaseType)
+        {
+            if (GetMetadataName(current.OriginalDefinition) != frameworkType)
+            {
+                continue;
+            }
+            return current.GetMembers(method.Name)
+                .OfType<IMethodSymbol>()
+                .Any(candidate => candidate.Parameters.Length == method.Parameters.Length
+                    && ReturnTypesAlign(candidate.ReturnType, method.ReturnType)
+                    && candidate.Parameters.Zip(method.Parameters).All(pair =>
+                        pair.First.RefKind == pair.Second.RefKind
+                        && ParameterTypesAlign(pair.First.Type, pair.Second.Type)));
+        }
+        return false;
+    }
+
+    private static bool ParameterTypesAlign(ITypeSymbol expected, ITypeSymbol actual)
+    {
+        if (SymbolEqualityComparer.Default.Equals(expected, actual))
+        {
+            return true;
+        }
+        if (expected is not INamedTypeSymbol namedExpected || actual is not INamedTypeSymbol namedActual)
+        {
+            return false;
+        }
+        return GetMetadataName(namedExpected.OriginalDefinition) == GetMetadataName(namedActual.OriginalDefinition)
+            || IsAdoNetType(namedActual, GetMetadataName(namedExpected.OriginalDefinition));
+    }
+
+    private static bool ReturnTypesAlign(ITypeSymbol expected, ITypeSymbol actual)
+    {
+        if (SymbolEqualityComparer.Default.Equals(expected, actual))
+        {
+            return true;
+        }
+        if (expected is not INamedTypeSymbol namedExpected || actual is not INamedTypeSymbol namedActual)
+        {
+            return false;
+        }
+        if (IsAdoNetType(namedActual, GetMetadataName(namedExpected.OriginalDefinition)))
+        {
+            return true;
+        }
+        return GetMetadataName(namedExpected.OriginalDefinition) == "System.Threading.Tasks.Task`1"
+            && GetMetadataName(namedActual.OriginalDefinition) == "System.Threading.Tasks.Task`1"
+            && namedExpected.TypeArguments.Length == 1
+            && namedActual.TypeArguments.Length == 1
+            && ReturnTypesAlign(namedExpected.TypeArguments[0], namedActual.TypeArguments[0]);
+    }
+
+    private static bool IsParameterCollectionMutation(IMethodSymbol method) =>
+        IsAdoNetType(method.ContainingType, "System.Data.Common.DbParameterCollection")
+        && method.Name is "Add" or "AddWithValue" or "AddRange";
+
+    private static ISymbol? TryGetParameterCommandReceiver(InvocationExpressionSyntax invocation, SemanticModel model)
+    {
+        if (invocation.Expression is MemberAccessExpressionSyntax
+            {
+                Expression: MemberAccessExpressionSyntax parametersAccess
+            }
+            && model.GetSymbolInfo(parametersAccess).Symbol is IPropertySymbol property
+            && property.Name.Equals("Parameters", StringComparison.OrdinalIgnoreCase)
+            && IsAdoNetType(property.ContainingType, "System.Data.Common.DbCommand"))
+        {
+            return model.GetSymbolInfo(parametersAccess.Expression).Symbol;
+        }
+
+        return null;
+    }
+
+    private static ISymbol? TryGetCreationAssignedSymbol(ObjectCreationExpressionSyntax creation, SemanticModel model)
+    {
+        VariableDeclaratorSyntax? declarator = creation.Parent switch
+        {
+            AsNewClauseSyntax { Parent: VariableDeclaratorSyntax value } => value,
+            EqualsValueSyntax { Parent: VariableDeclaratorSyntax value } => value,
+            _ => null
+        };
+        if (declarator is not null)
+        {
+            var name = declarator.Names.FirstOrDefault();
+            return name is null ? null : model.GetDeclaredSymbol(name);
+        }
+
+        return creation.Parent is AssignmentStatementSyntax assignment
+            ? model.GetSymbolInfo(assignment.Left).Symbol
+            : null;
+    }
+
+    private static SimpleArgumentSyntax? TryGetCommandTextArgument(ObjectCreationExpressionSyntax creation, SemanticModel model)
+    {
+        if (creation.ArgumentList is null)
+        {
+            return null;
+        }
+
+        foreach (var argument in creation.ArgumentList.Arguments.OfType<SimpleArgumentSyntax>())
+        {
+            var parameter = (model.GetOperation(argument) as IArgumentOperation)?.Parameter;
+            if (parameter?.Name.Equals("commandText", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                return argument;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsPotentialAdoNetOperationName(string name) =>
+        new[] { "Fill", "ExecuteReader", "ExecuteReaderAsync", "ExecuteScalar", "ExecuteScalarAsync", "ExecuteNonQuery", "ExecuteNonQueryAsync" }
+            .Contains(name, StringComparer.OrdinalIgnoreCase);
+
+    private static bool IsAdoNetType(ITypeSymbol? type, string metadataName)
+    {
+        for (var current = type as INamedTypeSymbol; current is not null; current = current.BaseType)
+        {
+            if (GetMetadataName(current.OriginalDefinition) == metadataName
+                && IsRecognizedAdoNetAssemblyIdentity(
+                    current.ContainingAssembly.Identity.Name,
+                    Convert.ToHexString(current.ContainingAssembly.Identity.PublicKeyToken.ToArray())))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string GetAdoNetFrameworkFamily(ITypeSymbol type) =>
+        type is INamedTypeSymbol named
+            && GetMetadataName(named).StartsWith("Npgsql.", StringComparison.Ordinal)
+                ? "npgsql"
+                : "ado-net";
+
+    private static string GetMetadataName(INamedTypeSymbol type)
+    {
+        var names = new Stack<string>();
+        for (INamedTypeSymbol? current = type; current is not null; current = current.ContainingType)
+        {
+            names.Push(current.MetadataName);
+        }
+        var typeName = string.Join("+", names);
+        var ns = type.ContainingNamespace?.ToDisplayString() ?? string.Empty;
+        return ns.Length == 0 ? typeName : $"{ns}.{typeName}";
     }
 
     private static void AddArgumentPassedFacts(
