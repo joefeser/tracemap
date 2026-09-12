@@ -188,6 +188,84 @@ public sealed class VisualBasicWebFormsCompositionTests
     }
 
     [Fact]
+    public void Vb_syntax_fallback_does_not_treat_a_bare_delegate_variable_as_a_method()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Delegate.aspx"), """
+            <%@ Page Language="VB" CodeFile="Delegate.aspx.vb" Inherits="DelegatePage" %>
+            <asp:Button ID="KnownButton" runat="server" />
+            """);
+        File.WriteAllText(Path.Combine(repo, "Delegate.aspx.vb"), """
+            Imports System
+            Partial Public Class DelegatePage
+                Private Sub Wire()
+                    Dim OnChanged As EventHandler = AddressOf Other
+                    AddHandler KnownButton.Click, OnChanged
+                End Sub
+                Private Sub OnChanged(sender As Object, e As EventArgs)
+                End Sub
+                Private Sub Other(sender As Object, e As EventArgs)
+                End Sub
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.VisualBasicEventBindingDeclared
+            && fact.Properties.GetValueOrDefault("wiringKind") == "AddHandler");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared
+            && fact.Properties.GetValueOrDefault("handlerName") == "OnChanged");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.VisualBasicSyntaxEventWiring
+            && fact.Properties.GetValueOrDefault("gapKind") == "UnsupportedVisualBasicEventHandlerDelegate");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "DynamicWebFormsEventSubscription");
+    }
+
+    [Fact]
+    public void Vb_semantic_custom_receiver_is_not_joined_to_a_same_named_markup_control()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Custom.vbproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework><OptionStrict>On</OptionStrict></PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Custom.aspx"), """
+            <%@ Page Language="VB" CodeFile="Custom.aspx.vb" Inherits="CustomPage" %>
+            <asp:Button ID="KnownButton" runat="server" />
+            """);
+        File.WriteAllText(Path.Combine(repo, "Custom.aspx.vb"), """
+            Imports System
+            Public Class CustomSource
+                Public Event Click As EventHandler
+            End Class
+            Partial Public Class CustomPage
+                Private WithEvents KnownButton As New CustomSource()
+                Private Sub Wire()
+                    AddHandler KnownButton.Click, AddressOf OnChanged
+                End Sub
+                Private Sub OnChanged(sender As Object, e As EventArgs)
+                End Sub
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.VisualBasicEventBindingDeclared
+            && fact.Properties.GetValueOrDefault("handlerName") == "OnChanged"
+            && fact.Properties.GetValueOrDefault("receiverTypeName") == "CustomSource");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared
+            && fact.Properties.GetValueOrDefault("handlerName") == "OnChanged");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "MismatchedVisualBasicWebFormsEventSubscriptionReceiver");
+    }
+
+    [Fact]
     public void Vb_semantic_event_rejects_an_invalid_handles_clause()
     {
         using var temp = new TempDirectory();

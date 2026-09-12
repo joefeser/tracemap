@@ -1010,6 +1010,12 @@ public static class VisualBasicSemanticExtractor
         if (receiver is not null)
         {
             AddSymbolProperties(properties, "receiver", receiver);
+            if (GetSymbolType(receiver) is { } receiverType)
+            {
+                properties["receiverTypeName"] = receiverType.Name;
+                properties["receiverTypeDisplayName"] = receiverType.ToDisplayString(SymbolFormat);
+                AddSymbolProperties(properties, "receiverType", receiverType);
+            }
         }
 
         return CreateSemanticFact(
@@ -1024,6 +1030,16 @@ public static class VisualBasicSemanticExtractor
             properties,
             includeSnippetHash: true);
     }
+
+    private static ITypeSymbol? GetSymbolType(ISymbol symbol) => symbol switch
+    {
+        IFieldSymbol field => field.Type,
+        IPropertySymbol property => property.Type,
+        IParameterSymbol parameter => parameter.Type,
+        ILocalSymbol local => local.Type,
+        INamedTypeSymbol type => type,
+        _ => null
+    };
 
     private static IMethodSymbol? GetContainingMethod(SyntaxNode node, SemanticModel model)
     {

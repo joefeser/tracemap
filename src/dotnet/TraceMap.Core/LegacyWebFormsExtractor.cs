@@ -815,10 +815,11 @@ public static partial class LegacyWebFormsExtractor
 
     private static string? VisualBasicHandlerName(VBSyntax.ExpressionSyntax expression)
     {
-        if (expression is VBSyntax.UnaryExpressionSyntax unary && unary.IsKind(VB.SyntaxKind.AddressOfExpression))
+        if (expression is not VBSyntax.UnaryExpressionSyntax unary || !unary.IsKind(VB.SyntaxKind.AddressOfExpression))
         {
-            expression = unary.Operand;
+            return null;
         }
+        expression = unary.Operand;
 
         return expression switch
         {
@@ -1069,6 +1070,11 @@ public static partial class LegacyWebFormsExtractor
             }
 
             var control = controls[0];
+            if (isVisualBasic && !VisualBasicReceiverMatchesControl(subscription, control, page, context, evidenceIndex))
+            {
+                facts.Add(CreateGap(manifest, subscription.FilePath, subscription.Line, "MismatchedVisualBasicWebFormsEventSubscriptionReceiver", "The compiler-resolved Visual Basic event receiver type does not match the linked markup control; TraceMap did not project a name-only Web Forms binding."));
+                continue;
+            }
             var binding = new WebFormsBinding(
                 control.ControlType,
                 control.ControlId,
@@ -2406,6 +2412,54 @@ public static partial class LegacyWebFormsExtractor
             && fact.Evidence.StartLine == subscription.Line
             && fact.Properties.GetValueOrDefault("siteHash")?.Equals(subscription.SnippetHash, StringComparison.Ordinal) == true
             && fact.Properties.GetValueOrDefault("gapKind") is "UnsupportedVisualBasicEventHandlerDelegate" or "InvalidVisualBasicHandlesBinding");
+    }
+
+    private static bool VisualBasicReceiverMatchesControl(
+        WebFormsEventSubscription subscription,
+        WebFormsControl control,
+        WebFormsPage page,
+        WebFormsContext context,
+        WebFormsEvidenceIndex evidenceIndex)
+    {
+        var semanticBinding = evidenceIndex.FactsForFile(subscription.FilePath).FirstOrDefault(fact =>
+            fact.FactType == FactTypes.VisualBasicEventBindingDeclared
+            && fact.RuleId == RuleIds.VisualBasicSemanticEventWiring
+            && fact.Evidence.StartLine == subscription.Line
+            && fact.Evidence.SnippetHash?.Equals(subscription.SnippetHash, StringComparison.Ordinal) == true);
+        var receiverTypeName = semanticBinding?.Properties.GetValueOrDefault("receiverTypeName");
+        if (string.IsNullOrWhiteSpace(receiverTypeName))
+        {
+            return true;
+        }
+
+        var designerTypes = context.Designers
+            .Where(field => field.MarkupFilePath.Equals(page.FilePath, StringComparison.Ordinal)
+                && IdentifierEquals(field.FieldName, control.ControlId, true))
+            .Select(field => field.ControlType)
+            .Where(type => !string.IsNullOrWhiteSpace(type))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (designerTypes.Length == 1)
+        {
+            var receiverTypeDisplayName = semanticBinding!.Properties.GetValueOrDefault("receiverTypeDisplayName") ?? receiverTypeName;
+            return VisualBasicTypeNameMatches(receiverTypeDisplayName, designerTypes[0]);
+        }
+
+        return IdentifierEquals(receiverTypeName, control.ControlType, true);
+    }
+
+    private static bool VisualBasicTypeNameMatches(string left, string right)
+    {
+        static string Normalize(string value) => value.StartsWith("Global.", StringComparison.OrdinalIgnoreCase)
+            ? value["Global.".Length..]
+            : value;
+        left = Normalize(left);
+        right = Normalize(right);
+        return left.Equals(right, StringComparison.OrdinalIgnoreCase)
+            || (!left.Contains('.', StringComparison.Ordinal)
+                && left.Equals(right[(right.LastIndexOf('.') + 1)..], StringComparison.OrdinalIgnoreCase))
+            || (!right.Contains('.', StringComparison.Ordinal)
+                && right.Equals(left[(left.LastIndexOf('.') + 1)..], StringComparison.OrdinalIgnoreCase));
     }
 
     private static IEnumerable<CodeFact> WcfMappingsForCalls(IReadOnlyList<CodeFact> wcfMappings, IReadOnlyList<CodeFact> directFacts)

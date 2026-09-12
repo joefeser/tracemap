@@ -33,11 +33,11 @@ artifact validation, deterministic comparison, privacy guards, and the pinned
 result totals below are the committed review record; no private source, paths,
 or native diagnostics were retained.
 
-- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,909/1,909 passed after
+- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,911/1,911 passed after
   case-insensitive-join, lifecycle-shadow, lambda, qualified-receiver,
   signature, source-hash, and report hardening.
-- Focused VB/fixture/legacy Web Forms tests: 113/113 passed.
-- Focused Web Forms/legacy-flow composition tests: 217/217 passed.
+- Focused VB/fixture/legacy Web Forms tests: 115/115 passed.
+- Focused Web Forms/legacy-flow composition tests: 219/219 passed.
 - `Test-FocusedWebFormsCodePathReviewSet.ps1`: passed, including private and
   anonymous/shareable review generation.
 - `Test-FocusedWebFormsApplicationWorkbench.ps1`: passed with raw-source off,
@@ -103,9 +103,13 @@ or native diagnostics were retained.
 - Prevented the shared Web Forms extractor from recreating compiler-rejected VB
   event sites, and excluded shadowed subscriptions from explicit lifecycle
   wireup detection.
-- Extractor identities are now `vb-semantic/0.5.1` and
-  `legacy-webforms/0.8.1`.
-- Validation after these fixes: solution 1,909/1,909; focused VB/fixture/legacy
-  Web Forms 113/113; Web Forms/legacy-flow 217/217; all three VB fixture
+- Extractor identities were advanced again after the next exact-head review to
+  `vb-semantic/0.5.2`, `vb-syntax/0.3.1`, and `legacy-webforms/0.8.2`.
+- Syntax and shared projection now require an explicit `AddressOf` before a VB
+  delegate expression can supply a handler method name. Compiler-resolved
+  receiver types are compared with linked designer/control types before a
+  same-named receiver becomes shared Web Forms binding evidence.
+- Validation after these fixes: solution 1,911/1,911; focused VB/fixture/legacy
+  Web Forms 115/115; Web Forms/legacy-flow 219/219; all three VB fixture
   artifacts valid; modern facts byte-identical; pinned CommunityVB smoke
   unchanged at 110,726 facts; privacy and diff guards passed.
