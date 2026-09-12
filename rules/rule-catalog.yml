@@ -1492,8 +1492,8 @@ rules:
 
   - id: legacy.wcf.contract.v1
     name: Legacy WCF service contract and generated client evidence
-    description: Extracts service contract, operation contract, and generated service-client declarations from C# syntax and generated-code patterns.
-    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    description: Extracts service contract, operation contract, and generated service-client declarations from C# syntax/generated-code patterns and compiler-resolved Visual Basic framework identities.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
     emits:
       - WcfServiceContractDeclared
       - WcfOperationContractDeclared
@@ -1503,6 +1503,7 @@ rules:
       - Syntax-only contract evidence does not prove WSDL compatibility, generated proxy freshness, service deployment, or runtime invocation.
       - Generated-client detection requires WCF ClientBase-style inheritance and can miss custom proxies or nonstandard generated clients.
       - Missing generated files or unsupported service-reference shapes are analysis gaps, not proof that no service dependency exists.
+      - Visual Basic Tier1 rows require the recognized WCF assembly name and strong-name public-key token. The token is an identity discriminator, not proof of assembly authenticity. Client operations require compiler-proven implementation of the ClientBase contract interface; name-only methods and unsigned lookalikes remain gaps.
 
   - id: legacy.wcf.host.v1
     name: Legacy WCF service host evidence
@@ -1557,6 +1558,7 @@ rules:
       - Metadata-backed normalized mappings require generated client contract, normalized operation name, connected WSDL operation metadata, and service contract evidence; a random repository-level WSDL operation name is not sufficient.
       - Without aligned config endpoint evidence, metadata-backed mappings are capped at Tier3SyntaxOrTextual even when supporting metadata is Tier2Structural.
       - Multiple matching endpoints, hosts, contracts, metadata identities, or distinct logical operations are ambiguity gaps/review-tier evidence; TraceMap does not choose an arbitrary winner.
+      - Compiler-resolved Visual Basic inputs may establish exact client/contract operation identity, but the composed mapping remains Tier3 without aligned endpoint configuration and never proves invocation.
 
   - id: legacy.asmx.host.v1
     name: Legacy ASMX host directive evidence
@@ -1584,7 +1586,7 @@ rules:
 
   - id: legacy.asmx.operation.v1
     name: Legacy ASMX and SOAP operation evidence
-    description: Extracts C# WebMethod declarations and SOAP operation-shape attributes such as SoapDocumentMethod and SoapRpcMethod while keeping public operation and SOAP binding evidence distinct.
+    description: Extracts C# and compiler-resolved Visual Basic WebMethod declarations and SOAP operation-shape attributes such as SoapDocumentMethod and SoapRpcMethod while keeping public operation and SOAP binding evidence distinct.
     evidenceTier: Tier1Semantic, Tier3SyntaxOrTextual, or Tier4Unknown
     emits:
       - AsmxOperationDeclared
@@ -1594,6 +1596,7 @@ rules:
       - Operation rows are static declarations only and do not prove a SOAP request was sent, a method is reachable, a binding is compatible, auth succeeds, endpoint configuration is selected, deployment exists, or runtime impact occurred.
       - SOAP action, namespace, binding, endpoint, config, credential, token, local path, and source-snippet values are hashed or omitted; credential-like values are omitted rather than hashed.
       - Syntax-only rows remain review-tier when compiler symbols cannot disambiguate framework attributes from aliases or project-defined lookalikes.
+      - Visual Basic Tier1 rows require the recognized System.Web.Services strong-name identity; the token is an identity discriminator, not proof of assembly authenticity, and raw SOAP action arguments are not retained.
 
   - id: legacy.asmx.client.v1
     name: Legacy ASMX generated SOAP client evidence
@@ -1607,6 +1610,7 @@ rules:
       - Generated client evidence is static proxy-shape evidence only and does not prove runtime endpoint selection, generated proxy freshness, service reachability, deployment, authentication, authorization, or impact.
       - Dynamic proxy factories, runtime URL assignment, custom base classes, unsupported generated formats, and missing checked-in metadata are gaps or review-tier evidence.
       - Raw endpoint addresses, SOAP actions, config values, namespaces, local paths, source snippets, credentials, and tokens are omitted or hashed according to ASMX redaction rules.
+      - Visual Basic Tier1 client operations require recognized SoapHttpClientProtocol framework identity plus a compiler-resolved SOAP method attribute; name-only wrappers and unsigned lookalikes remain gaps.
 
   - id: legacy.asmx.metadata.v1
     name: Legacy ASMX checked-in SOAP metadata evidence
@@ -1643,6 +1647,7 @@ rules:
       - Mappings are probable static evidence only and do not prove SOAP request execution, endpoint selection, deployment, reachability, authorization, generated proxy freshness, or backend impact.
       - Name-only or metadata-backed mappings without stronger semantic/config evidence remain review-tier and are capped by the weakest required evidence leg.
       - Duplicate operation candidates, missing metadata, dynamic proxy factories, and ambiguous service-reference ownership emit gaps rather than choosing an arbitrary backend.
+      - Compiler-resolved Visual Basic operation identity can supply the client and service declaration legs, but operation-name composition remains Tier3 probable static evidence.
 
   - id: legacy.remoting.api.v1
     name: Legacy .NET Remoting API evidence

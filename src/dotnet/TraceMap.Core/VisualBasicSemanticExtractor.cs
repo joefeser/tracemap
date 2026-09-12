@@ -515,6 +515,144 @@ public static class VisualBasicSemanticExtractor
         AddObjectCreationFacts(repoPath, projectPath, filePath, root, model, facts, gaps);
         AddAdoNetBoundaryFacts(projectPath, filePath, root, model, facts, gaps);
         AddExternalBoundaryFacts(projectPath, filePath, root, model, facts, gaps);
+        AddLegacyServiceDeclarationFacts(projectPath, filePath, root, model, facts);
+    }
+
+    private static void AddLegacyServiceDeclarationFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts)
+    {
+        foreach (var statement in root.DescendantNodes().OfType<TypeStatementSyntax>())
+        {
+            if (model.GetDeclaredSymbol(statement) is not INamedTypeSymbol type || type.TypeKind == TypeKind.Error)
+            {
+                continue;
+            }
+
+            var typeDisplay = type.ToDisplayString(SymbolFormat);
+            if (HasTrustedAttribute(type, "System.ServiceModel.ServiceContractAttribute", "System.ServiceModel.Primitives", "b03f5f7f11d50a3a")
+                || HasTrustedAttribute(type, "System.ServiceModel.ServiceContractAttribute", "System.ServiceModel", "b77a5c561934e089"))
+            {
+                facts.Add(CreateSemanticFact(FactTypes.WcfServiceContractDeclared, RuleIds.LegacyWcfContract,
+                    projectPath, filePath, statement, sourceSymbol: typeDisplay, targetSymbol: typeDisplay,
+                    contractElement: type.Name,
+                    properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["contractName"] = typeDisplay,
+                        ["coverageLabel"] = "compiler-resolved-vb-wcf-contract",
+                        ["surfaceKind"] = "wcf-contract",
+                        ["typeName"] = type.Name
+                    }));
+            }
+
+            if (TryGetTrustedWcfClientContract(type, out var contract))
+            {
+                facts.Add(CreateSemanticFact(FactTypes.WcfGeneratedClientDeclared, RuleIds.LegacyWcfContract,
+                    projectPath, filePath, statement, sourceSymbol: typeDisplay, targetSymbol: typeDisplay,
+                    properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["clientContractName"] = contract.ToDisplayString(SymbolFormat),
+                        ["clientName"] = type.Name,
+                        ["coverageLabel"] = "compiler-resolved-vb-wcf-client",
+                        ["matchedBy"] = "CompilerResolvedClientBaseContract",
+                        ["surfaceKind"] = "wcf-client",
+                        ["typeName"] = typeDisplay
+                    }));
+            }
+
+            if (DerivesFromTrustedType(type, "System.Web.Services.Protocols.SoapHttpClientProtocol", "System.Web.Services", "b03f5f7f11d50a3a"))
+            {
+                facts.Add(CreateSemanticFact(FactTypes.AsmxGeneratedClientDeclared, RuleIds.LegacyAsmxClient,
+                    projectPath, filePath, statement, sourceSymbol: typeDisplay, targetSymbol: typeDisplay,
+                    properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["clientName"] = type.Name,
+                        ["coverageLabel"] = "compiler-resolved-vb-asmx-client",
+                        ["matchedBy"] = "CompilerResolvedSoapHttpClientProtocol",
+                        ["surfaceKind"] = "asmx-client",
+                        ["typeName"] = typeDisplay
+                    }));
+            }
+        }
+
+        foreach (var statement in root.DescendantNodes().OfType<MethodBaseSyntax>())
+        {
+            if (model.GetDeclaredSymbol(statement) is not IMethodSymbol method
+                || method.MethodKind is MethodKind.PropertyGet or MethodKind.PropertySet)
+            {
+                continue;
+            }
+
+            var methodDisplay = method.ToDisplayString(SymbolFormat);
+            var containingTypeDisplay = method.ContainingType.ToDisplayString(SymbolFormat);
+            if (HasTrustedAttribute(method, "System.ServiceModel.OperationContractAttribute", "System.ServiceModel.Primitives", "b03f5f7f11d50a3a")
+                || HasTrustedAttribute(method, "System.ServiceModel.OperationContractAttribute", "System.ServiceModel", "b77a5c561934e089"))
+            {
+                facts.Add(CreateSemanticFact(FactTypes.WcfOperationContractDeclared, RuleIds.LegacyWcfContract,
+                    projectPath, filePath, statement, sourceSymbol: containingTypeDisplay, targetSymbol: methodDisplay,
+                    contractElement: method.Name,
+                    properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["contractName"] = containingTypeDisplay,
+                        ["coverageLabel"] = "compiler-resolved-vb-wcf-operation",
+                        ["operationName"] = method.Name,
+                        ["surfaceKind"] = "wcf-operation"
+                    }));
+            }
+
+            if (TryGetTrustedWcfClientContract(method.ContainingType, out var clientContract)
+                && TryGetImplementedContractMethod(method, clientContract, out var contractMethod))
+            {
+                facts.Add(CreateSemanticFact(FactTypes.WcfGeneratedClientDeclared, RuleIds.LegacyWcfContract,
+                    projectPath, filePath, statement, sourceSymbol: containingTypeDisplay, targetSymbol: methodDisplay,
+                    contractElement: contractMethod.Name,
+                    properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["clientContractName"] = clientContract.ToDisplayString(SymbolFormat),
+                        ["clientName"] = method.ContainingType.Name,
+                        ["coverageLabel"] = "compiler-resolved-vb-wcf-client-operation",
+                        ["matchedBy"] = "CompilerResolvedInterfaceImplementation",
+                        ["operationName"] = contractMethod.Name,
+                        ["surfaceKind"] = "wcf-client",
+                        ["typeName"] = containingTypeDisplay
+                    }));
+            }
+
+            if (HasTrustedAttribute(method, "System.Web.Services.WebMethodAttribute", "System.Web.Services", "b03f5f7f11d50a3a"))
+            {
+                facts.Add(CreateSemanticFact(FactTypes.AsmxOperationDeclared, RuleIds.LegacyAsmxOperation,
+                    projectPath, filePath, statement, sourceSymbol: containingTypeDisplay, targetSymbol: methodDisplay,
+                    contractElement: method.Name,
+                    properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["coverageLabel"] = "compiler-resolved-vb-asmx-operation",
+                        ["operationName"] = method.Name,
+                        ["serviceClassName"] = containingTypeDisplay,
+                        ["surfaceKind"] = "asmx-operation"
+                    }));
+            }
+
+            if (DerivesFromTrustedType(method.ContainingType, "System.Web.Services.Protocols.SoapHttpClientProtocol", "System.Web.Services", "b03f5f7f11d50a3a")
+                && (HasTrustedAttribute(method, "System.Web.Services.Protocols.SoapDocumentMethodAttribute", "System.Web.Services", "b03f5f7f11d50a3a")
+                    || HasTrustedAttribute(method, "System.Web.Services.Protocols.SoapRpcMethodAttribute", "System.Web.Services", "b03f5f7f11d50a3a")))
+            {
+                facts.Add(CreateSemanticFact(FactTypes.AsmxClientOperationDeclared, RuleIds.LegacyAsmxClient,
+                    projectPath, filePath, statement, sourceSymbol: containingTypeDisplay, targetSymbol: methodDisplay,
+                    contractElement: method.Name,
+                    properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["clientName"] = method.ContainingType.Name,
+                        ["coverageLabel"] = "compiler-resolved-vb-asmx-client-operation",
+                        ["matchedBy"] = "CompilerResolvedSoapMethodAttribute",
+                        ["operationName"] = method.Name,
+                        ["surfaceKind"] = "asmx-client",
+                        ["typeName"] = containingTypeDisplay
+                    }));
+            }
+        }
     }
 
     private static void AddTypeDeclarationFacts(
@@ -2112,12 +2250,15 @@ public static class VisualBasicSemanticExtractor
 
             if (method is not null && TryClassifyLegacyServiceClient(method, out var serviceFamily))
             {
-                AddExternalGap(
-                    invocation,
-                    serviceFamily == "wcf"
-                        ? "VisualBasicWcfServiceMappingUnavailable"
-                        : "VisualBasicAsmxServiceMappingUnavailable",
-                    $"A compiler-resolved Visual Basic {serviceFamily.ToUpperInvariant()} client invocation was retained, but the existing service mapping extractor does not establish Visual Basic proxy-to-contract mappings; no service operation boundary was claimed.");
+                if (!HasDeterministicLegacyServiceOperation(method))
+                {
+                    AddExternalGap(
+                        invocation,
+                        serviceFamily == "wcf"
+                            ? "VisualBasicWcfServiceMappingUnavailable"
+                            : "VisualBasicAsmxServiceMappingUnavailable",
+                        $"A compiler-resolved Visual Basic {serviceFamily.ToUpperInvariant()} client invocation was retained, but an exact proxy-to-contract operation identity was not established; no service operation boundary was claimed.");
+                }
                 continue;
             }
 
@@ -2338,13 +2479,13 @@ public static class VisualBasicSemanticExtractor
         for (var type = method.ContainingType; type is not null; type = type.BaseType)
         {
             var baseName = GetMetadataName(type.OriginalDefinition);
-            var assemblyName = type.ContainingAssembly.Identity.Name;
-            if (baseName == "System.ServiceModel.ClientBase`1" && assemblyName == "System.ServiceModel.Primitives")
+            if (baseName == "System.ServiceModel.ClientBase`1" && IsTrustedServiceAssembly(type.ContainingAssembly))
             {
                 serviceFamily = "wcf";
                 return true;
             }
-            if (baseName == "System.Web.Services.Protocols.SoapHttpClientProtocol" && assemblyName == "System.Web.Services")
+            if (baseName == "System.Web.Services.Protocols.SoapHttpClientProtocol"
+                && IsTrustedAssembly(type.ContainingAssembly, "System.Web.Services", "b03f5f7f11d50a3a"))
             {
                 serviceFamily = "asmx";
                 return true;
@@ -2352,6 +2493,83 @@ public static class VisualBasicSemanticExtractor
         }
         return false;
     }
+
+    private static bool HasDeterministicLegacyServiceOperation(IMethodSymbol method)
+    {
+        if (TryGetTrustedWcfClientContract(method.ContainingType, out var contract)
+            && TryGetImplementedContractMethod(method, contract, out _))
+        {
+            return true;
+        }
+
+        return DerivesFromTrustedType(method.ContainingType, "System.Web.Services.Protocols.SoapHttpClientProtocol", "System.Web.Services", "b03f5f7f11d50a3a")
+            && (HasTrustedAttribute(method, "System.Web.Services.Protocols.SoapDocumentMethodAttribute", "System.Web.Services", "b03f5f7f11d50a3a")
+                || HasTrustedAttribute(method, "System.Web.Services.Protocols.SoapRpcMethodAttribute", "System.Web.Services", "b03f5f7f11d50a3a"));
+    }
+
+    private static bool TryGetTrustedWcfClientContract(INamedTypeSymbol type, out INamedTypeSymbol contract)
+    {
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            if (GetMetadataName(current.OriginalDefinition) == "System.ServiceModel.ClientBase`1"
+                && IsTrustedServiceAssembly(current.ContainingAssembly)
+                && current.TypeArguments.Length == 1
+                && current.TypeArguments[0] is INamedTypeSymbol namedContract
+                && namedContract.TypeKind == TypeKind.Interface)
+            {
+                contract = namedContract;
+                return true;
+            }
+        }
+        contract = null!;
+        return false;
+    }
+
+    private static bool TryGetImplementedContractMethod(
+        IMethodSymbol method,
+        INamedTypeSymbol contract,
+        out IMethodSymbol contractMethod)
+    {
+        foreach (var candidate in contract.GetMembers(method.Name).OfType<IMethodSymbol>())
+        {
+            var implementation = method.ContainingType.FindImplementationForInterfaceMember(candidate);
+            if (SymbolEqualityComparer.Default.Equals(implementation?.OriginalDefinition, method.OriginalDefinition)
+                || method.ExplicitInterfaceImplementations.Any(item => SymbolEqualityComparer.Default.Equals(item.OriginalDefinition, candidate.OriginalDefinition)))
+            {
+                contractMethod = candidate;
+                return true;
+            }
+        }
+        contractMethod = null!;
+        return false;
+    }
+
+    private static bool DerivesFromTrustedType(INamedTypeSymbol type, string metadataName, string assemblyName, string publicKeyToken)
+    {
+        for (var current = type; current is not null; current = current.BaseType)
+        {
+            if (GetMetadataName(current.OriginalDefinition) == metadataName
+                && IsTrustedAssembly(current.ContainingAssembly, assemblyName, publicKeyToken))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static bool HasTrustedAttribute(ISymbol symbol, string metadataName, string assemblyName, string publicKeyToken) =>
+        symbol.GetAttributes().Any(attribute =>
+            attribute.AttributeClass is { } attributeClass
+            && GetMetadataName(attributeClass.OriginalDefinition) == metadataName
+            && IsTrustedAssembly(attributeClass.ContainingAssembly, assemblyName, publicKeyToken));
+
+    private static bool IsTrustedServiceAssembly(IAssemblySymbol assembly) =>
+        IsTrustedAssembly(assembly, "System.ServiceModel.Primitives", "b03f5f7f11d50a3a")
+        || IsTrustedAssembly(assembly, "System.ServiceModel", "b77a5c561934e089");
+
+    private static bool IsTrustedAssembly(IAssemblySymbol assembly, string assemblyName, string publicKeyToken) =>
+        assembly.Identity.Name == assemblyName
+        && Convert.ToHexString(assembly.Identity.PublicKeyToken.ToArray()).Equals(publicKeyToken, StringComparison.OrdinalIgnoreCase);
 
     private static IEnumerable<IOperation> DescendantsAndSelf(IOperation operation)
     {

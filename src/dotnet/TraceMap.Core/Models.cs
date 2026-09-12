@@ -581,7 +581,7 @@ public static class ScannerVersions
     public const string CSharpAspNetSyntaxRouteExtractor = "csharp-aspnet-syntax-route/0.1.0";
     public const string CSharpIntegrationSyntaxExtractor = "csharp-integration-syntax/0.3.0";
     public const string CSharpSemanticExtractor = "csharp-semantic/0.21.0";
-    public const string VisualBasicSemanticExtractor = "vb-semantic/0.7.0";
+    public const string VisualBasicSemanticExtractor = "vb-semantic/0.8.0";
     public const string VisualBasicSyntaxExtractor = "vb-syntax/0.3.1";
     public const string CSharpPropertyMappingExtractor = "csharp-property-mapping/0.1.0";
     public const string FrameworkMigrationEvidenceExtractor = "framework-migration/0.1.0";
@@ -596,10 +596,10 @@ public static class ScannerVersions
     public const string PostgresSchemaMigrationExtractor = "postgres-schema-migration/0.5.0";
     public const string SqlProjectRefactorExtractor = "sql-project-refactor/0.1.0";
     public const string MsBuildBinlogExtractor = "msbuild-binlog/0.1.0";
-    public const string LegacyWcfExtractor = "legacy-wcf/0.2.0";
-    public const string LegacyAsmxExtractor = "legacy-asmx/0.1.0";
+    public const string LegacyWcfExtractor = "legacy-wcf/0.3.0";
+    public const string LegacyAsmxExtractor = "legacy-asmx/0.2.0";
     public const string LegacyRemotingExtractor = "legacy-remoting/0.1.0";
-    public const string LegacyWebFormsExtractor = "legacy-webforms/0.8.3";
+    public const string LegacyWebFormsExtractor = "legacy-webforms/0.8.4";
     public const string LegacyWinFormsExtractor = "legacy-winforms/0.1.0";
     public const string LegacyAspNetExtractor = "legacy-aspnet/0.2.0";
     public const string LegacyBatchDataMovementExtractor = "legacy-batch-data-movement/0.2.0";
