@@ -79,6 +79,7 @@ public static class VisualBasicSyntaxExtractor
             var budget = new FactBudget(MaxFactsPerFile);
             facts.Add(CreateSemanticUnavailableGap(manifest, file.RelativePath));
             AddDeclarationFacts(manifest, facts, file.RelativePath, root, budget);
+            AddEventCompositionFacts(manifest, facts, file.RelativePath, root, budget);
             AddMemberAccessFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans, budget);
             AddInvocationFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans, budget);
             AddObjectCreationFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans, budget);
@@ -357,6 +358,177 @@ public static class VisualBasicSyntaxExtractor
         }
     }
 
+    private static void AddEventCompositionFacts(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        string filePath,
+        CompilationUnitSyntax root,
+        FactBudget budget)
+    {
+        foreach (var method in root.DescendantNodes().OfType<MethodStatementSyntax>())
+        {
+            if (method.HandlesClause is null)
+            {
+                continue;
+            }
+
+            foreach (var item in method.HandlesClause.Events)
+            {
+                var eventName = item.EventMember.Identifier.ValueText;
+                var receiverName = SafeEventReceiverName(item.EventContainer);
+                if (!TryAddSyntaxFact(
+                        manifest,
+                        facts,
+                        FactTypes.VisualBasicEventBindingDeclared,
+                        RuleIds.VisualBasicSyntaxEventWiring,
+                        filePath,
+                        item,
+                        $"{receiverName}.{eventName}",
+                        new SortedDictionary<string, string>(StringComparer.Ordinal)
+                        {
+                            ["eventName"] = eventName,
+                            ["handlerName"] = method.Identifier.ValueText,
+                            ["isAttach"] = "True",
+                            ["receiverName"] = receiverName,
+                            ["siteHash"] = FactFactory.Hash(item.ToString(), 32),
+                            ["wiringKind"] = "Handles"
+                        },
+                        budget,
+                        method.Identifier.ValueText,
+                        eventName))
+                {
+                    return;
+                }
+            }
+        }
+
+        foreach (var statement in root.DescendantNodes().OfType<AddRemoveHandlerStatementSyntax>())
+        {
+            var (receiverName, eventName) = SyntaxEventName(statement.EventExpression);
+            var handlerName = SyntaxHandlerName(statement.DelegateExpression);
+            var isAttach = statement.IsKind(SyntaxKind.AddHandlerStatement);
+            if (string.IsNullOrWhiteSpace(eventName) || string.IsNullOrWhiteSpace(handlerName))
+            {
+                if (!AddSyntaxEventGap(manifest, facts, filePath, statement, "UnsupportedVisualBasicEventHandlerDelegate", budget))
+                {
+                    return;
+                }
+                continue;
+            }
+
+            if (!TryAddSyntaxFact(
+                    manifest,
+                    facts,
+                    FactTypes.VisualBasicEventBindingDeclared,
+                    RuleIds.VisualBasicSyntaxEventWiring,
+                    filePath,
+                    statement,
+                    $"{receiverName}.{eventName}",
+                    new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["eventName"] = eventName,
+                        ["handlerName"] = handlerName,
+                        ["isAttach"] = isAttach ? "True" : "False",
+                        ["receiverName"] = receiverName,
+                        ["siteHash"] = FactFactory.Hash(statement.ToString(), 32),
+                        ["wiringKind"] = isAttach ? "AddHandler" : "RemoveHandler"
+                    },
+                    budget,
+                    GetContainingMemberName(statement),
+                    eventName))
+            {
+                return;
+            }
+        }
+
+        foreach (var statement in root.DescendantNodes().OfType<RaiseEventStatementSyntax>())
+        {
+            var eventName = statement.Name.Identifier.ValueText;
+            if (!TryAddSyntaxFact(
+                    manifest,
+                    facts,
+                    FactTypes.VisualBasicEventRaised,
+                    RuleIds.VisualBasicSyntaxEventWiring,
+                    filePath,
+                    statement,
+                    eventName,
+                    new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["argumentCount"] = (statement.ArgumentList?.Arguments.Count ?? 0).ToString(),
+                        ["eventName"] = eventName,
+                        ["siteHash"] = FactFactory.Hash(statement.ToString(), 32),
+                        ["wiringKind"] = "RaiseEvent"
+                    },
+                    budget,
+                    GetContainingMemberName(statement),
+                    eventName))
+            {
+                return;
+            }
+        }
+    }
+
+    private static (string ReceiverName, string EventName) SyntaxEventName(ExpressionSyntax expression) => expression switch
+    {
+        MemberAccessExpressionSyntax member => (SafeEventReceiverName(member.Expression), member.Name.Identifier.ValueText),
+        IdentifierNameSyntax identifier => ("implicit", identifier.Identifier.ValueText),
+        _ => ("unsupported", string.Empty)
+    };
+
+    private static string SyntaxHandlerName(ExpressionSyntax expression)
+    {
+        if (expression is UnaryExpressionSyntax unary && unary.IsKind(SyntaxKind.AddressOfExpression))
+        {
+            expression = unary.Operand;
+        }
+
+        return expression switch
+        {
+            IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+            MemberAccessExpressionSyntax member => member.Name.Identifier.ValueText,
+            _ => string.Empty
+        };
+    }
+
+    private static string SafeEventReceiverName(ExpressionSyntax expression)
+    {
+        var text = expression.ToString();
+        if (text is "Me" or "MyBase" or "MyClass") return text;
+        return text.All(character => char.IsLetterOrDigit(character) || character == '_')
+            && text.Length > 0
+            ? text
+            : $"unsupported-{expression.Kind()}";
+    }
+
+    private static bool AddSyntaxEventGap(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        string filePath,
+        SyntaxNode node,
+        string gapKind,
+        FactBudget budget)
+    {
+        if (!TryReserveFactBudget(manifest, facts, filePath, budget))
+        {
+            return false;
+        }
+        var span = node.SyntaxTree.GetLineSpan(node.Span);
+        facts.Add(FactFactory.Create(
+            manifest,
+            FactTypes.AnalysisGap,
+            RuleIds.VisualBasicSyntaxEventWiring,
+            EvidenceTiers.Tier4Unknown,
+            new EvidenceSpan(filePath, span.StartLinePosition.Line + 1, Math.Max(span.StartLinePosition.Line + 1, span.EndLinePosition.Line + 1), null, "VisualBasicSyntaxExtractor", ScannerVersions.VisualBasicSyntaxExtractor),
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["gapKind"] = gapKind,
+                ["message"] = "A Visual Basic event site used a delegate or receiver shape outside the bounded syntax fallback; TraceMap did not infer a binding.",
+                ["sanitization"] = "category-only",
+                ["siteHash"] = FactFactory.Hash($"{node.Kind()}|{node.SpanStart}", 24)
+            }));
+        return true;
+    }
+
     private static void AddInvocationFacts(
         ScanManifest manifest,
         List<CodeFact> facts,
@@ -494,26 +666,8 @@ public static class VisualBasicSyntaxExtractor
         string? sourceSymbol = null,
         string? contractElement = null)
     {
-        if (!budget.TryReserve())
+        if (!TryReserveFactBudget(manifest, facts, filePath, budget))
         {
-            if (!budget.TruncationReported)
-            {
-                budget.TruncationReported = true;
-                facts.Add(FactFactory.Create(
-                    manifest,
-                    FactTypes.AnalysisGap,
-                    RuleIds.VisualBasicSyntaxDeclarations,
-                    EvidenceTiers.Tier4Unknown,
-                    new EvidenceSpan(filePath, 1, 1, null, "VisualBasicSyntaxExtractor", ScannerVersions.VisualBasicSyntaxExtractor),
-                    properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
-                    {
-                        ["budget"] = budget.MaxFacts.ToString(),
-                        ["gapKind"] = "SyntaxFallbackBudgetExhausted",
-                        ["message"] = $"Visual Basic syntax fallback for this file stopped after {budget.MaxFacts} facts; remaining syntax candidates were not emitted.",
-                        ["sanitization"] = "category-only"
-                    }));
-            }
-
             return false;
         }
 
@@ -535,6 +689,32 @@ public static class VisualBasicSyntaxExtractor
             contractElement: contractElement,
             properties: properties));
         return true;
+    }
+
+    private static bool TryReserveFactBudget(ScanManifest manifest, List<CodeFact> facts, string filePath, FactBudget budget)
+    {
+        if (budget.TryReserve())
+        {
+            return true;
+        }
+        if (!budget.TruncationReported)
+        {
+            budget.TruncationReported = true;
+            facts.Add(FactFactory.Create(
+                manifest,
+                FactTypes.AnalysisGap,
+                RuleIds.VisualBasicSyntaxDeclarations,
+                EvidenceTiers.Tier4Unknown,
+                new EvidenceSpan(filePath, 1, 1, null, "VisualBasicSyntaxExtractor", ScannerVersions.VisualBasicSyntaxExtractor),
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["budget"] = budget.MaxFacts.ToString(),
+                    ["gapKind"] = "SyntaxFallbackBudgetExhausted",
+                    ["message"] = $"Visual Basic syntax fallback for this file stopped after {budget.MaxFacts} facts; remaining syntax candidates were not emitted.",
+                    ["sanitization"] = "category-only"
+                }));
+        }
+        return false;
     }
 
     private static CodeFact CreateSemanticUnavailableGap(ScanManifest manifest, string filePath)

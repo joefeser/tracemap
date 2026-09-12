@@ -1048,6 +1048,11 @@ public static class ScanEngine
             var gapKind = gap.Properties?.GetValueOrDefault("gapKind") ?? gap.ContractElement ?? "UnknownVisualBasicWorkspaceGap";
             return $"Visual Basic semantic coverage reduced: {gapKind}.";
         }
+        if (gap.RuleId == RuleIds.VisualBasicSemanticEventWiring)
+        {
+            var gapKind = gap.Properties?.GetValueOrDefault("gapKind") ?? gap.ContractElement ?? "UnknownVisualBasicEventCompositionGap";
+            return $"Visual Basic event-composition coverage reduced: {gapKind}.";
+        }
         return "Roslyn semantic analysis reported a gap.";
     }
 
