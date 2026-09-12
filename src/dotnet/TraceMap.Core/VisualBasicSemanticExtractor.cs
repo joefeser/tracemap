@@ -883,6 +883,14 @@ public static class VisualBasicSemanticExtractor
                 if (!ReserveEventSite(item)) return;
                 var eventSymbol = model.GetSymbolInfo(item.EventMember).Symbol as IEventSymbol;
                 var receiver = model.GetSymbolInfo(item.EventContainer).Symbol;
+                var hasValidHandlesClause = !model.GetDiagnostics(item.Span)
+                    .Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error
+                        && diagnostic.Id is "BC30506" or "BC31029");
+                if (!hasValidHandlesClause)
+                {
+                    AddEventGap(gaps, projectPath, filePath, item, "InvalidVisualBasicHandlesBinding");
+                    continue;
+                }
                 if (eventSymbol is null || eventSymbol.Type.TypeKind == TypeKind.Error)
                 {
                     AddEventGap(gaps, projectPath, filePath, item, "UnresolvedVisualBasicHandlesEvent");
@@ -1083,10 +1091,11 @@ public static class VisualBasicSemanticExtractor
             return null;
         }
 
-        if (expression is UnaryExpressionSyntax unary && unary.IsKind(SyntaxKind.AddressOfExpression))
+        if (expression is not UnaryExpressionSyntax unary || !unary.IsKind(SyntaxKind.AddressOfExpression))
         {
-            expression = unary.Operand;
+            return null;
         }
+        expression = unary.Operand;
 
         var name = expression switch
         {
@@ -1114,7 +1123,7 @@ public static class VisualBasicSemanticExtractor
             projectPath,
             span.StartLinePosition.Line + 1,
             Math.Max(span.StartLinePosition.Line + 1, span.EndLinePosition.Line + 1),
-            siteHash: FactFactory.Hash($"{node.Kind()}|{node.SpanStart}", 24),
+            siteHash: FactFactory.Hash(node.ToString(), 32),
             ruleId: RuleIds.VisualBasicSemanticEventWiring));
     }
 

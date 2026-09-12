@@ -37,9 +37,9 @@ build success, or impact.
 
 | Extractor | Identity/version | Tier | Rules |
 | --- | --- | --- | --- |
-| Visual Basic semantic extractor | `vb-semantic/0.5.0` | Tier1 (facts), Tier2 (project observation), Tier4 (workspace, call-site, and event gaps) | `vb.semantic.compilation.v1`, `vb.semantic.workspace.v1`, `vb.semantic.declarations.v1`, `vb.semantic.propertyaccess.v1`, `vb.semantic.methodinvocation.v1`, `vb.semantic.callgraph.v1`, `vb.semantic.objectcreation.v1`, `vb.semantic.valueflow.v1`, `vb.semantic.symbolrelationship.v1`, `vb.semantic.event-wiring.v1` |
+| Visual Basic semantic extractor | `vb-semantic/0.5.1` | Tier1 (facts), Tier2 (project observation), Tier4 (workspace, call-site, and event gaps) | `vb.semantic.compilation.v1`, `vb.semantic.workspace.v1`, `vb.semantic.declarations.v1`, `vb.semantic.propertyaccess.v1`, `vb.semantic.methodinvocation.v1`, `vb.semantic.callgraph.v1`, `vb.semantic.objectcreation.v1`, `vb.semantic.valueflow.v1`, `vb.semantic.symbolrelationship.v1`, `vb.semantic.event-wiring.v1` |
 | Visual Basic syntax fallback | `vb-syntax/0.3.0` | Tier3 (facts), Tier4 (parse/read/budget/semantic-unavailable/event gaps) | `vb.syntax.declarations.v1`, `vb.syntax.memberaccess.v1`, `vb.syntax.invocation.v1`, `vb.syntax.callgraph.v1`, `vb.syntax.objectcreation.v1`, `vb.syntax.event-wiring.v1` |
-| Shared Web Forms extractor | `legacy-webforms/0.8.0` | Tier1/Tier2/Tier3 facts and Tier4 gaps | existing `legacy.webforms.*` contracts, now with bounded VB code-behind and designer parsing |
+| Shared Web Forms extractor | `legacy-webforms/0.8.1` | Tier1/Tier2/Tier3 facts and Tier4 gaps | existing `legacy.webforms.*` contracts, now with bounded VB code-behind and designer parsing |
 
 Symbol identities use the canonical .NET normalization shape with
 `visualbasic`-tagged language values (see `VisualBasicSymbolIdentityProvider`).
