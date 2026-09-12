@@ -2336,6 +2336,7 @@ rules:
       - OnClient-prefixed attributes emit ClientWebFormsEventAttribute gaps and never server bindings. Bounded event names with non-identifier values emit NonIdentifierWebFormsEventValue gaps without assuming JavaScript or C# execution; other malformed names retain UnsupportedWebFormsEventAttribute. Raw attribute values are not retained.
       - Duplicate controls or duplicate bindings are preserved as separate evidence rows with deterministic IDs; TraceMap does not collapse them into a single runtime control.
       - Explicit control subscriptions are limited to statically named receivers, representative events, and named handlers on the linked markup surface. Supported VB shapes include Handles and AddHandler; RemoveHandler remains language-level detach evidence and never becomes a positive Web Forms binding. Lambdas, delegate expressions, unknown receivers, ambiguous controls, late binding, and dynamic wiring remain explicit gaps.
+      - VB handler, containing/page type, control receiver, designer-field, supported event, UI-property, and DataBind identifiers are matched with ordinal case-insensitive comparison. C# joins remain ordinal case-sensitive.
 
   - id: legacy.webforms.handler-resolution.v1
     name: Legacy WebForms code-behind handler resolution
@@ -2396,8 +2397,8 @@ rules:
       - WebFormsLifecycleBranchCandidate
       - AnalysisGap
     limitations:
-      - Bare IsPostBack and this.IsPostBack conditions emit IsPostBackBranch with is-postback-syntax context; their logical negations retain NotIsPostBackBranch with not-is-postback-syntax context. One layer of parentheses is accepted at each existing expression boundary. These are syntax candidates, not proof of Page symbol identity, a branch running, lifecycle ordering, state initialization, runtime reachability, or correctness.
-      - Local or parameter shadowing, boolean comparisons, compound conditions, arbitrary receivers, helper-based conditions, and other expressions outside the documented shape remain explicit gaps. Positive branch support does not widen client-script inside-not-is-postback-syntax attribution or claim anything about else-branch execution.
+      - Bare IsPostBack and explicit C# this.IsPostBack or VB Me.IsPostBack/MyBase.IsPostBack conditions emit IsPostBackBranch with is-postback-syntax context; their logical negations retain NotIsPostBackBranch with not-is-postback-syntax context. One layer of parentheses is accepted at each existing expression boundary. These are syntax candidates, not proof of Page symbol identity, a branch running, lifecycle ordering, state initialization, runtime reachability, or correctness.
+      - Local, parameter, or containing-type member shadowing prevents an unqualified IsPostBack condition from becoming lifecycle evidence. Boolean comparisons, compound conditions, arbitrary receivers, helper-based conditions, and other expressions outside the documented shape remain explicit gaps. Positive branch support does not widen client-script inside-not-is-postback-syntax attribution or claim anything about else-branch execution.
 
   - id: legacy.webforms.client-script.v1
     name: Legacy WebForms client-script registration candidates

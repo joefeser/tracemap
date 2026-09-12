@@ -4,7 +4,8 @@
 - Branch: `codex/issue-738-vbnet-webforms`
 - Base: `origin/dev` at `5abd59d79acd074f29e6986d0dd4a31102ac74f1`
 - Status: implementation and validation complete; branch pushed for review
-- Commits: `8a306018` (implementation/tests), `4f64f340` (spec/docs/catalog)
+- Initial series: `8a306018` (implementation/tests), `4f64f340`
+  (spec/docs/catalog), `c5cb4519` (validation bookkeeping)
 
 ## Decisions
 
@@ -23,9 +24,10 @@
 
 ## Validation
 
-- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,897/1,897 passed.
-- Focused VB/fixture/legacy Web Forms tests: 92/92 passed.
-- Focused Web Forms/legacy-flow composition tests: 205/205 passed.
+- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,899/1,899 passed after
+  case-insensitive-join, lifecycle-shadow, and lambda hardening.
+- Focused VB/fixture/legacy Web Forms tests: 94/94 passed.
+- Focused Web Forms/legacy-flow composition tests: 207/207 passed.
 - `Test-FocusedWebFormsCodePathReviewSet.ps1`: passed, including private and
   anonymous/shareable review generation.
 - `Test-FocusedWebFormsApplicationWorkbench.ps1`: passed with raw-source off,
@@ -50,6 +52,10 @@
   dispatch, lifecycle execution, postback state, or reachability.
 - `RemoveHandler` is detach evidence only and never projects as a positive
   shared binding.
+- VB-only joins use ordinal case-insensitive identifier comparison without
+  weakening C# joins. Unqualified shadowed `IsPostBack` conditions remain
+  explicit gaps, and lambda delegates cannot be misread through methods called
+  inside the lambda body.
 - Late-bound/error-typed receivers, unsupported delegate/lambda shapes,
   ambiguous handlers or partials, missing framework metadata, and truncated
   budgets remain explicit gaps rather than guessed joins.

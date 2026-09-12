@@ -27,6 +27,7 @@ public sealed class VisualBasicWebFormsCompositionTests
                 Private WithEvents _source As New Source()
                 Public Sub New()
                     AddHandler _source.Changed, AddressOf OnChanged
+                    AddHandler _source.Changed, Sub(sender, e) OnChanged(sender, e)
                     RemoveHandler _source.Changed, AddressOf OnChanged
                 End Sub
                 Private Sub OnChanged(sender As Object, e As EventArgs) Handles _source.Changed
@@ -49,6 +50,9 @@ public sealed class VisualBasicWebFormsCompositionTests
             fact.FactType == FactTypes.VisualBasicEventRaised
             && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
             && fact.ContractElement == "Changed");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.VisualBasicSemanticEventWiring
+            && fact.Properties.GetValueOrDefault("gapKind") == "UnsupportedVisualBasicEventHandlerDelegate");
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.FieldDeclared
             && fact.ContractElement == "_source"
@@ -189,6 +193,95 @@ public sealed class VisualBasicWebFormsCompositionTests
             && fact.Properties.GetValueOrDefault("handlerName") == "SubmitButton_Click");
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WebFormsHandlerResolved
             && fact.ContractElement == "SubmitButton_Click");
+    }
+
+    [Fact]
+    public void Vb_webforms_joins_identifiers_case_insensitively_without_changing_csharp_rules()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Case.aspx"), """
+            <%@ Page Language="VB" CodeFile="Case.aspx.vb" Inherits="LEGACYSURFACE" %>
+            <asp:Button ID="SubmitButton" runat="server" OnClick="submitbutton_click" />
+            """);
+        File.WriteAllText(Path.Combine(repo, "Case.aspx.vb"), """
+            Partial Public Class LegacySurface
+                Protected Sub SUBMITBUTTON_CLICK(sender As Object, e As EventArgs) Handles submitbutton.click
+                    submitbutton.visible = True
+                    submitbutton.databind()
+                End Sub
+            End Class
+            """);
+        File.WriteAllText(Path.Combine(repo, "Case.aspx.designer.vb"), """
+            Partial Public Class legacysurface
+                Protected WithEvents submitbutton As Button
+            End Class
+            """);
+        File.WriteAllText(Path.Combine(repo, "Strict.aspx"), """
+            <%@ Page Language="C#" CodeFile="Strict.aspx.cs" Inherits="StrictSurface" %>
+            <asp:Button ID="SubmitButton" runat="server" OnClick="submitbutton_click" />
+            """);
+        File.WriteAllText(Path.Combine(repo, "Strict.aspx.cs"), """
+            public partial class StrictSurface {
+                protected void SUBMITBUTTON_CLICK(object sender, System.EventArgs e) { }
+            }
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var vbControl = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WebFormsControlDeclared
+            && fact.Evidence.FilePath == "Case.aspx"
+            && fact.ContractElement == "Button");
+        Assert.False(string.IsNullOrWhiteSpace(vbControl.Properties.GetValueOrDefault("designerFactId")));
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared
+            && fact.Evidence.FilePath == "Case.aspx.vb"
+            && fact.Properties.GetValueOrDefault("controlId") == "SubmitButton"
+            && fact.Properties.GetValueOrDefault("handlerName") == "SUBMITBUTTON_CLICK");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WebFormsHandlerResolved
+            && fact.Properties.GetValueOrDefault("markupFile") == "Case.aspx"
+            && fact.ContractElement == "submitbutton_click");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WebFormsLogicSignalDetected
+            && fact.Properties.GetValueOrDefault("markupFile") is null
+            && fact.ContractElement == "submitbutton_click");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WebFormsHandlerResolved
+            && fact.Properties.GetValueOrDefault("markupFile") == "Strict.aspx");
+    }
+
+    [Fact]
+    public void Vb_unqualified_shadowed_ispostback_is_a_gap_but_explicit_page_receiver_remains_bounded_evidence()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Shadow.aspx"), """
+            <%@ Page Language="VB" CodeFile="Shadow.aspx.vb" Inherits="ShadowPage" %>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Shadow.aspx.vb"), """
+            Partial Public Class ShadowPage
+                Private IsPostBack As Boolean
+                Protected Sub Page_Load(IsPostBack As Boolean, e As EventArgs)
+                    If Not IsPostBack Then
+                    End If
+                End Sub
+                Protected Sub Page_PreRender(sender As Object, e As EventArgs)
+                    If IsPostBack Then
+                    End If
+                End Sub
+                Protected Sub Page_Init(sender As Object, e As EventArgs)
+                    If Not Me.IsPostBack Then
+                    End If
+                End Sub
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        Assert.Equal(2, result.Facts.Count(fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "AmbiguousWebFormsIsPostBackReceiver"));
+        var lifecycle = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WebFormsLifecycleBranchCandidate);
+        Assert.Equal("Page_Init", lifecycle.Properties.GetValueOrDefault("lifecycleMethod"));
+        Assert.Equal("NotIsPostBackBranch", lifecycle.ContractElement);
     }
 
     private static void Commit(string repo)
