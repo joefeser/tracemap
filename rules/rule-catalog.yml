@@ -3905,10 +3905,11 @@ rules:
     evidenceTier: Tier1Semantic
     emits:
       - MethodInvoked
+      - AnalysisGap
     limitations:
       - Requires Roslyn semantic binding; late binding, overload resolution failures, and error-typed receivers produce no Tier1 fact rather than a guessed target.
       - An invocation proves a compiler-resolved call site in source; it does not prove the callee executes, is reachable, or completes at runtime.
-      - Unresolved invocation sites retain bounded Tier3 call-site facts and a `CallSiteSemanticResolutionUnavailable` Tier4 gap; they never become compiler-resolved targets.
+      - Unresolved invocation sites retain bounded Tier3 call-site facts and a `CallSiteSemanticResolutionUnavailable` Tier4 gap; they never become compiler-resolved targets. Compiler-recognized late-bound calls are producer-local uncertainty and do not imply that MSBuild or compilation failed; other unresolved call-site gaps remain workspace coverage reductions.
 
   - id: vb.semantic.callgraph.v1
     name: Visual Basic semantic call graph
