@@ -1281,9 +1281,13 @@ Expected fixture postures:
 The external-boundary synthetic matrix additionally proves shared HTTP and
 configuration facts, shared batch/file projection, compiler-proven WCF/ASMX
 proxy mappings, and explicit mapping gaps for unsupported service shapes.
-Trusted service-framework identities require their expected strong-name public
+Recognized service-framework identities require their expected strong-name public
 key token; unsigned assemblies with the same simple name do not produce Tier 1
-service facts.
+service facts. The matrix also covers renamed and inherited WCF operations,
+ASMX service-context admission, same-name helper rejection, unresolved command
+construction gaps, classic .NET Framework HTTP/configuration assembly names,
+ASMX Web Forms projection, and the shared `sql-query` classification for
+data-adapter Fill.
 
 VB.NET pinned OSS smoke (`community-visual-basic` —
 `CommunityVB/Community.VisualBasic`, MIT, pinned at

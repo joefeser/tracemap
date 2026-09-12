@@ -576,6 +576,21 @@ public static class VisualBasicSemanticExtractor
                         ["typeName"] = typeDisplay
                     }));
             }
+
+            if (IsRecognizedAsmxServiceType(type))
+            {
+                facts.Add(CreateSemanticFact(FactTypes.AsmxServiceClassDeclared, RuleIds.LegacyAsmxService,
+                    projectPath, filePath, statement, sourceSymbol: typeDisplay, targetSymbol: typeDisplay,
+                    contractElement: type.Name,
+                    properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["coverageLabel"] = "compiler-resolved-vb-asmx-service",
+                        ["matchedBy"] = "CompilerResolvedWebServiceAttribute",
+                        ["serviceClassName"] = typeDisplay,
+                        ["surfaceKind"] = "asmx-service",
+                        ["typeName"] = type.Name
+                    }));
+            }
         }
 
         foreach (var statement in root.DescendantNodes().OfType<MethodBaseSyntax>())
@@ -611,7 +626,7 @@ public static class VisualBasicSemanticExtractor
                     contractElement: contractMethod.Name,
                     properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
                     {
-                        ["clientContractName"] = clientContract.ToDisplayString(SymbolFormat),
+                        ["clientContractName"] = contractMethod.ContainingType.ToDisplayString(SymbolFormat),
                         ["clientName"] = method.ContainingType.Name,
                         ["coverageLabel"] = "compiler-resolved-vb-wcf-client-operation",
                         ["matchedBy"] = "CompilerResolvedInterfaceImplementation",
@@ -621,7 +636,8 @@ public static class VisualBasicSemanticExtractor
                     }));
             }
 
-            if (HasTrustedAttribute(method, "System.Web.Services.WebMethodAttribute", "System.Web.Services", "b03f5f7f11d50a3a"))
+            if (IsRecognizedAsmxServiceType(method.ContainingType)
+                && HasTrustedAttribute(method, "System.Web.Services.WebMethodAttribute", "System.Web.Services", "b03f5f7f11d50a3a"))
             {
                 facts.Add(CreateSemanticFact(FactTypes.AsmxOperationDeclared, RuleIds.LegacyAsmxOperation,
                     projectPath, filePath, statement, sourceSymbol: containingTypeDisplay, targetSymbol: methodDisplay,
@@ -1930,13 +1946,57 @@ public static class VisualBasicSemanticExtractor
         List<SemanticFactCandidate> facts,
         List<SemanticFactCandidate> gaps)
     {
+        var boundaryGapCount = 0;
+        var boundaryGapBudgetReported = false;
+
+        void AddBoundaryGap(SyntaxNode node, string message, string gapKind, string ruleId)
+        {
+            if (boundaryGapCount < 50)
+            {
+                var lineSpan = node.SyntaxTree.GetLineSpan(node.Span);
+                gaps.Add(CreateGap(
+                    filePath,
+                    message,
+                    gapKind,
+                    projectPath,
+                    lineSpan.StartLinePosition.Line + 1,
+                    lineSpan.EndLinePosition.Line + 1,
+                    siteHash: FactFactory.Hash(node.ToString(), 32),
+                    ruleId: ruleId));
+                boundaryGapCount++;
+            }
+            else if (!boundaryGapBudgetReported)
+            {
+                gaps.Add(CreateGap(
+                    filePath,
+                    "Visual Basic ADO.NET unresolved-target gap evidence reached its deterministic per-document budget; remaining candidate sites were not classified by the database rule.",
+                    "VisualBasicAdoNetGapBudgetExhausted",
+                    projectPath,
+                    ruleId: ruleId));
+                boundaryGapBudgetReported = true;
+            }
+        }
+
         foreach (var creation in root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
         {
-            if (model.GetTypeInfo(creation).Type is not INamedTypeSymbol type
-                || !IsAdoNetType(type, "System.Data.Common.DbCommand"))
+            var resolvedType = model.GetTypeInfo(creation).Type as INamedTypeSymbol;
+            if (resolvedType is null || resolvedType.TypeKind == TypeKind.Error)
+            {
+                if (IsPotentialAdoNetCommandCreation(creation))
+                {
+                    AddBoundaryGap(
+                        creation,
+                        "A syntactically plausible Visual Basic command construction had no compiler-resolved type; no database command boundary was claimed.",
+                        "VisualBasicAdoNetCommandTypeUnavailable",
+                        RuleIds.DatabaseSqlText);
+                }
+                continue;
+            }
+            if (!IsAdoNetType(resolvedType, "System.Data.Common.DbCommand"))
             {
                 continue;
             }
+            var type = resolvedType;
 
             var enclosing = model.GetEnclosingSymbol(creation.SpanStart);
             var commandReceiver = TryGetCreationAssignedSymbol(creation, model);
@@ -2033,8 +2093,6 @@ public static class VisualBasicSemanticExtractor
                 properties: properties));
         }
 
-        var boundaryGapCount = 0;
-        var boundaryGapBudgetReported = false;
         foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
             var name = GetSafeInvocationName(invocation.Expression);
@@ -2113,31 +2171,26 @@ public static class VisualBasicSemanticExtractor
                 continue;
             }
 
-            if (method is null && IsPotentialAdoNetOperationName(name) && boundaryGapCount < 50)
+            if (method is null && IsPotentialAdoNetOperationName(name))
             {
-                var lineSpan = invocation.SyntaxTree.GetLineSpan(invocation.Span);
-                gaps.Add(CreateGap(
-                    filePath,
+                AddBoundaryGap(
+                    invocation,
                     "A potential Visual Basic ADO.NET operation had no compiler-resolved target; no database boundary was claimed.",
                     "VisualBasicAdoNetTargetUnavailable",
-                    projectPath,
-                    lineSpan.StartLinePosition.Line + 1,
-                    lineSpan.EndLinePosition.Line + 1,
-                    siteHash: FactFactory.Hash(invocation.Expression.ToString(), 32),
-                    ruleId: RuleIds.DatabaseOperationCallPattern));
-                boundaryGapCount++;
-            }
-            else if (method is null && IsPotentialAdoNetOperationName(name) && !boundaryGapBudgetReported)
-            {
-                gaps.Add(CreateGap(
-                    filePath,
-                    "Visual Basic ADO.NET unresolved-target gap evidence reached its deterministic per-document budget; remaining candidate sites were not classified by the database rule.",
-                    "VisualBasicAdoNetGapBudgetExhausted",
-                    projectPath,
-                    ruleId: RuleIds.DatabaseOperationCallPattern));
-                boundaryGapBudgetReported = true;
+                    RuleIds.DatabaseOperationCallPattern);
             }
         }
+    }
+
+    private static bool IsPotentialAdoNetCommandCreation(ObjectCreationExpressionSyntax creation)
+    {
+        var typeName = creation.Type.ToString().Trim();
+        var lastSeparator = typeName.LastIndexOf('.');
+        if (lastSeparator >= 0)
+        {
+            typeName = typeName[(lastSeparator + 1)..];
+        }
+        return typeName.EndsWith("Command", StringComparison.OrdinalIgnoreCase);
     }
 
     private static void AddExternalBoundaryFacts(
@@ -2376,7 +2429,7 @@ public static class VisualBasicSemanticExtractor
         }
 
         if (type == "System.Net.WebClient"
-            && method.ContainingAssembly.Identity.Name == "System.Net.WebClient"
+            && IsRecognizedWebClientAssemblyName(method.ContainingAssembly.Identity.Name)
             && (method.Name.StartsWith("Download", StringComparison.Ordinal)
                 || method.Name.StartsWith("Upload", StringComparison.Ordinal)
                 || method.Name.StartsWith("OpenRead", StringComparison.Ordinal)
@@ -2440,12 +2493,12 @@ public static class VisualBasicSemanticExtractor
 
     private static bool IsConfigurationManagerGetSection(IMethodSymbol method) =>
         GetMetadataName(method.ContainingType.OriginalDefinition) == "System.Configuration.ConfigurationManager"
-        && method.ContainingAssembly.Identity.Name == "System.Configuration.ConfigurationManager"
+        && IsRecognizedConfigurationAssemblyName(method.ContainingAssembly.Identity.Name)
         && method.Name == "GetSection";
 
     private static bool IsWebRequestCreate(IMethodSymbol method) =>
         GetMetadataName(method.ContainingType.OriginalDefinition) == "System.Net.WebRequest"
-        && method.ContainingAssembly.Identity.Name == "System.Net.Requests"
+        && IsRecognizedWebRequestAssemblyName(method.ContainingAssembly.Identity.Name)
         && method.Name is "Create" or "CreateHttp";
 
     private static bool TryClassifyConfigurationManagerIndexer(IPropertyReferenceOperation operation, out string sourceKind)
@@ -2455,7 +2508,7 @@ public static class VisualBasicSemanticExtractor
         {
             if (child is not IPropertyReferenceOperation property
                 || GetMetadataName(property.Property.ContainingType.OriginalDefinition) != "System.Configuration.ConfigurationManager"
-                || property.Property.ContainingAssembly.Identity.Name != "System.Configuration.ConfigurationManager")
+                || !IsRecognizedConfigurationAssemblyName(property.Property.ContainingAssembly.Identity.Name))
             {
                 continue;
             }
@@ -2507,6 +2560,9 @@ public static class VisualBasicSemanticExtractor
                 || HasTrustedAttribute(method, "System.Web.Services.Protocols.SoapRpcMethodAttribute", "System.Web.Services", "b03f5f7f11d50a3a"));
     }
 
+    private static bool IsRecognizedAsmxServiceType(INamedTypeSymbol type) =>
+        HasTrustedAttribute(type, "System.Web.Services.WebServiceAttribute", "System.Web.Services", "b03f5f7f11d50a3a");
+
     private static bool TryGetTrustedWcfClientContract(INamedTypeSymbol type, out INamedTypeSymbol contract)
     {
         for (var current = type; current is not null; current = current.BaseType)
@@ -2530,15 +2586,34 @@ public static class VisualBasicSemanticExtractor
         INamedTypeSymbol contract,
         out IMethodSymbol contractMethod)
     {
-        foreach (var candidate in contract.GetMembers(method.Name).OfType<IMethodSymbol>())
+        var contractTypes = new[] { contract }
+            .Concat(contract.AllInterfaces)
+            .ToArray();
+        var explicitMatches = method.ExplicitInterfaceImplementations
+            .Where(item => contractTypes.Any(type => SymbolEqualityComparer.Default.Equals(type, item.ContainingType)))
+            .ToArray();
+        if (explicitMatches.Length == 1)
         {
-            var implementation = method.ContainingType.FindImplementationForInterfaceMember(candidate);
-            if (SymbolEqualityComparer.Default.Equals(implementation?.OriginalDefinition, method.OriginalDefinition)
-                || method.ExplicitInterfaceImplementations.Any(item => SymbolEqualityComparer.Default.Equals(item.OriginalDefinition, candidate.OriginalDefinition)))
-            {
-                contractMethod = candidate;
-                return true;
-            }
+            contractMethod = explicitMatches[0];
+            return true;
+        }
+        if (explicitMatches.Length > 1)
+        {
+            contractMethod = null!;
+            return false;
+        }
+
+        var implicitMatches = contractTypes
+            .SelectMany(type => type.GetMembers())
+            .OfType<IMethodSymbol>()
+            .Where(candidate => SymbolEqualityComparer.Default.Equals(
+                method.ContainingType.FindImplementationForInterfaceMember(candidate)?.OriginalDefinition,
+                method.OriginalDefinition))
+            .ToArray();
+        if (implicitMatches.Length == 1)
+        {
+            contractMethod = implicitMatches[0];
+            return true;
         }
         contractMethod = null!;
         return false;
@@ -2571,6 +2646,15 @@ public static class VisualBasicSemanticExtractor
         assembly.Identity.Name == assemblyName
         && Convert.ToHexString(assembly.Identity.PublicKeyToken.ToArray()).Equals(publicKeyToken, StringComparison.OrdinalIgnoreCase);
 
+    internal static bool IsRecognizedConfigurationAssemblyName(string assemblyName) =>
+        assemblyName is "System.Configuration.ConfigurationManager" or "System.Configuration";
+
+    internal static bool IsRecognizedWebRequestAssemblyName(string assemblyName) =>
+        assemblyName is "System.Net.Requests" or "System";
+
+    internal static bool IsRecognizedWebClientAssemblyName(string assemblyName) =>
+        assemblyName is "System.Net.WebClient" or "System";
+
     private static IEnumerable<IOperation> DescendantsAndSelf(IOperation operation)
     {
         yield return operation;
@@ -2591,7 +2675,8 @@ public static class VisualBasicSemanticExtractor
     {
         operationKind = string.Empty;
         resultKind = "none";
-        if (IsAdoNetType(method.ContainingType, "System.Data.Common.DbCommand"))
+        if (IsAdoNetType(method.ContainingType, "System.Data.Common.DbCommand")
+            && HasCompatibleFrameworkMember(method, "System.Data.Common.DbCommand"))
         {
             operationKind = method.Name switch
             {
@@ -2607,6 +2692,7 @@ public static class VisualBasicSemanticExtractor
                     : "row-count-or-none";
         }
         else if (IsAdoNetType(method.ContainingType, "System.Data.Common.DbDataAdapter")
+            && HasCompatibleFrameworkMember(method, "System.Data.Common.DbDataAdapter")
             && method.Name == "Fill")
         {
             operationKind = "data-adapter-fill";
@@ -2619,6 +2705,60 @@ public static class VisualBasicSemanticExtractor
         }
 
         return operationKind.Length > 0;
+    }
+
+    private static bool HasCompatibleFrameworkMember(IMethodSymbol method, string frameworkType)
+    {
+        for (var current = method.ContainingType; current is not null; current = current.BaseType)
+        {
+            if (GetMetadataName(current.OriginalDefinition) != frameworkType)
+            {
+                continue;
+            }
+            return current.GetMembers(method.Name)
+                .OfType<IMethodSymbol>()
+                .Any(candidate => candidate.Parameters.Length == method.Parameters.Length
+                    && ReturnTypesAlign(candidate.ReturnType, method.ReturnType)
+                    && candidate.Parameters.Zip(method.Parameters).All(pair =>
+                        pair.First.RefKind == pair.Second.RefKind
+                        && ParameterTypesAlign(pair.First.Type, pair.Second.Type)));
+        }
+        return false;
+    }
+
+    private static bool ParameterTypesAlign(ITypeSymbol expected, ITypeSymbol actual)
+    {
+        if (SymbolEqualityComparer.Default.Equals(expected, actual))
+        {
+            return true;
+        }
+        if (expected is not INamedTypeSymbol namedExpected || actual is not INamedTypeSymbol namedActual)
+        {
+            return false;
+        }
+        return GetMetadataName(namedExpected.OriginalDefinition) == GetMetadataName(namedActual.OriginalDefinition)
+            || IsAdoNetType(namedActual, GetMetadataName(namedExpected.OriginalDefinition));
+    }
+
+    private static bool ReturnTypesAlign(ITypeSymbol expected, ITypeSymbol actual)
+    {
+        if (SymbolEqualityComparer.Default.Equals(expected, actual))
+        {
+            return true;
+        }
+        if (expected is not INamedTypeSymbol namedExpected || actual is not INamedTypeSymbol namedActual)
+        {
+            return false;
+        }
+        if (IsAdoNetType(namedActual, GetMetadataName(namedExpected.OriginalDefinition)))
+        {
+            return true;
+        }
+        return GetMetadataName(namedExpected.OriginalDefinition) == "System.Threading.Tasks.Task`1"
+            && GetMetadataName(namedActual.OriginalDefinition) == "System.Threading.Tasks.Task`1"
+            && namedExpected.TypeArguments.Length == 1
+            && namedActual.TypeArguments.Length == 1
+            && ReturnTypesAlign(namedExpected.TypeArguments[0], namedActual.TypeArguments[0]);
     }
 
     private static bool IsParameterCollectionMutation(IMethodSymbol method) =>
