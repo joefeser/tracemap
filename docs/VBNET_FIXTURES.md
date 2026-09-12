@@ -17,7 +17,7 @@ configuration, or business logic are used.
 | --- | --- | --- | --- |
 | `samples/vb-modern-sample` | SDK-style `.vbproj`, net10.0, `Option Strict On` | Builds with the .NET SDK (verified on macOS arm64, SDK 10.0.302) | Full semantic path (`Tier1Semantic`), no reduced-coverage label expected from the VB side |
 | `samples/vb-legacy-sample` | Old-style `ToolsVersion=3.5` `.vbproj`, `Option Strict Off`, `My Project` folder | Does not build with the modern SDK (expected MSB3644: .NET Framework 3.5 reference assemblies unavailable) | Partial compiler-backed evidence where syntax trees load, bounded call-site fallback for unresolved invocations, explicit `Tier4Unknown` gaps, and a reduced-coverage label |
-| `samples/vb-webforms-sample` | Old-style .NET Framework 4.8 Web Application project with `.aspx`, code-behind, and designer | Does not build with the modern SDK (expected MSB3644: net48 reference assemblies; Web Application targets) | Inventory/classification corpus for #738. #736 makes no claim about event relationships in this fixture |
+| `samples/vb-webforms-sample` | Old-style .NET Framework 4.8 Web Application project with `.aspx`, code-behind, and designer | Does not build with the modern SDK (expected MSB3644: net48 reference assemblies; Web Application targets) | Bounded VB event and shared Web Forms composition corpus for #738 |
 
 ## samples/vb-modern-sample (semantic success fixture)
 
@@ -109,35 +109,33 @@ project compilation is partial. The scan remains labeled reduced coverage, and
 unresolved call sites in otherwise semantic files are represented only by
 bounded syntax-tier evidence, never as compiler-resolved targets.
 
-## samples/vb-webforms-sample (future #738 corpus)
+## samples/vb-webforms-sample (#738 corpus)
 
 Files: `VbWebFormsSample.vbproj`, `Default.aspx`, `Default.aspx.vb`,
 `Default.aspx.designer.vb`, `StatusNotifier.vb`, `Web.config`.
 
-This fixture exists so #738 can plan against a stable corpus. It is
-deliberately minimal and makes no claim that #736 supports Web Forms control
-or event composition:
+This fixture provides a stable, deliberately minimal corpus for bounded #738
+Web Forms control and event composition:
 
 - `.aspx` page with server controls (`Label`, `TextBox`, two `Button`s) and
   `@ Page` directive binding to `VbWebFormsSample._Default`.
 - Code-behind with page lifecycle methods (`Page_Init`, `Page_Load`,
   `Page_PreRender`, `Page_Unload` wired via `Handles Me.*` with
   `AutoEventWireup="false"`) and control-event handling.
-- Event relationships in all five forms reserved for #738: `Handles` on a
+- Event relationships covered by #738 include `Handles` on a
   designer control event (`SaveButton.Click`), `AddHandler` /
   `RemoveHandler` with `AddressOf` (dynamic refresh wiring), `WithEvents`
   fields (designer controls plus a custom notifier), and `RaiseEvent` in
-  `StatusNotifier`. Until #738, these must not be emitted as resolved event
-  edges; at most the foundation adapter may record explicit limitations or
-  gaps.
+  `StatusNotifier`. These are retained as static event facts, never runtime or
+  executed call edges.
 - A generated-shape designer file (`Default.aspx.designer.vb`) declaring
   `Protected WithEvents` control fields, for inventory classification.
 
-Expected evidence categories once #736 lands: inventory classification
-(ordinary, code-behind, designer), syntax-level declaration candidates over
-the `.vb` files, and `Tier4Unknown` gaps for event-relationship composition
-and the unbuildable legacy project. Control-to-handler event edges are a #738
-deliverable, not a #736 one.
+Expected evidence categories: inventory classification (ordinary,
+code-behind, designer), compiler-resolved or bounded syntax event facts,
+shared Web Forms page/control/handler/lifecycle evidence, and `Tier4Unknown`
+gaps for unresolved framework metadata, late binding, ambiguity, and the
+unbuildable legacy project.
 
 ## Validation commands
 

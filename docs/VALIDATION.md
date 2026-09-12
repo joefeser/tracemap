@@ -1224,7 +1224,7 @@ dotnet build src/dotnet/TraceMap.sln
 dotnet test src/dotnet/TraceMap.sln
 
 # Focused VB.NET suites: extraction facts, foundation inventory/loading, the
-# synthetic validation matrix, and fixture syntax checks.
+# synthetic validation matrix, event/Web Forms composition, and fixture syntax checks.
 dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
   --filter 'FullyQualifiedName~VisualBasic|FullyQualifiedName~VbNetFixture'
 
@@ -1265,8 +1265,9 @@ Expected fixture postures:
   duplicates, bounded Tier3 evidence for individual unresolved call sites,
   and category-only gaps carrying bounded `BCxxxxx` ids.
 - `vb-webforms-sample`: `Level1SemanticAnalysisReduced` / `FailedOrPartial`
-  on cross-platform SDKs; handler methods appear as declared evidence only
-  and no event wiring becomes edges.
+  on cross-platform SDKs; bounded VB Handles/AddHandler/RemoveHandler,
+  RaiseEvent, WithEvents designer, linked control/handler, and IsPostBack
+  evidence remains available. Event evidence is never an executed call edge.
 
 VB.NET pinned OSS smoke (`community-visual-basic` —
 `CommunityVB/Community.VisualBasic`, MIT, pinned at
@@ -1292,8 +1293,9 @@ repository, not that the repository builds or that coverage is complete.
 VB.NET evidence is static and bounded: it never proves compilation success,
 runtime reachability, event firing, execution, deployment, or impact.
 Cross-language symbol-identity joins between VB-scan symbols and C#-declared
-symbols are not established, and Web Forms event wiring is not established
-(issue #738).
+symbols are not established. VB/Web Forms event evidence is static and does
+not establish runtime attachment, firing, ordering, postback behavior, or
+execution.
 
 ## What SQL Means Here
 

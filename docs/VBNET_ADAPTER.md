@@ -1,7 +1,8 @@
 # VB.NET Adapter
 
-Status: foundation adapter (issue [#736](https://github.com/joefeser/tracemap/issues/736),
-spec `.kiro/specs/vbnet-adapter-foundation/`). Every claim below is bounded by
+Status: foundation plus bounded event/Web Forms composition (issues
+[#736](https://github.com/joefeser/tracemap/issues/736) and
+[#738](https://github.com/joefeser/tracemap/issues/738)). Every claim below is bounded by
 the cataloged rule limitations in `rules/rule-catalog.yml` (`vb.semantic.*`,
 `vb.syntax.*`). Nothing in this adapter proves runtime reachability, execution,
 build success, or impact.
@@ -27,13 +28,18 @@ build success, or impact.
 - Protects VB sources, projects, and checked-in generated inputs with the
   semantic-input snapshot; mutation inside the scan window fails the scan with
   the typed `SourceSnapshotException`.
+- Retains compiler-resolved and bounded syntax fallback evidence for
+  `Handles`, `AddHandler`, `RemoveHandler`, `RaiseEvent`, and `WithEvents`, and
+  projects supported VB code-behind/control/lifecycle bindings into the shared
+  Web Forms evidence contracts.
 
 ## Extractor identities
 
 | Extractor | Identity/version | Tier | Rules |
 | --- | --- | --- | --- |
-| Visual Basic semantic extractor | `vb-semantic/0.4.0` | Tier1 (facts), Tier2 (project observation), Tier4 (workspace and call-site gaps) | `vb.semantic.compilation.v1`, `vb.semantic.workspace.v1`, `vb.semantic.declarations.v1`, `vb.semantic.propertyaccess.v1`, `vb.semantic.methodinvocation.v1`, `vb.semantic.callgraph.v1`, `vb.semantic.objectcreation.v1`, `vb.semantic.valueflow.v1`, `vb.semantic.symbolrelationship.v1` |
-| Visual Basic syntax fallback | `vb-syntax/0.2.0` | Tier3 (facts), Tier4 (parse/read/budget/semantic-unavailable gaps) | `vb.syntax.declarations.v1`, `vb.syntax.memberaccess.v1`, `vb.syntax.invocation.v1`, `vb.syntax.callgraph.v1`, `vb.syntax.objectcreation.v1` |
+| Visual Basic semantic extractor | `vb-semantic/0.5.0` | Tier1 (facts), Tier2 (project observation), Tier4 (workspace, call-site, and event gaps) | `vb.semantic.compilation.v1`, `vb.semantic.workspace.v1`, `vb.semantic.declarations.v1`, `vb.semantic.propertyaccess.v1`, `vb.semantic.methodinvocation.v1`, `vb.semantic.callgraph.v1`, `vb.semantic.objectcreation.v1`, `vb.semantic.valueflow.v1`, `vb.semantic.symbolrelationship.v1`, `vb.semantic.event-wiring.v1` |
+| Visual Basic syntax fallback | `vb-syntax/0.3.0` | Tier3 (facts), Tier4 (parse/read/budget/semantic-unavailable/event gaps) | `vb.syntax.declarations.v1`, `vb.syntax.memberaccess.v1`, `vb.syntax.invocation.v1`, `vb.syntax.callgraph.v1`, `vb.syntax.objectcreation.v1`, `vb.syntax.event-wiring.v1` |
+| Shared Web Forms extractor | `legacy-webforms/0.8.0` | Tier1/Tier2/Tier3 facts and Tier4 gaps | existing `legacy.webforms.*` contracts, now with bounded VB code-behind and designer parsing |
 
 Symbol identities use the canonical .NET normalization shape with
 `visualbasic`-tagged language values (see `VisualBasicSymbolIdentityProvider`).
@@ -51,6 +57,14 @@ unambiguous default-member indexing such as `catalog(0)`), `MethodInvoked`,
 params-expanded arguments), and `SymbolRelationship` (`InheritsFrom`,
 `ExtendsInterface`, `ImplementsInterface`, `ImplementsInterfaceMember`,
 `Overrides`).
+
+Event composition adds `VisualBasicEventBindingDeclared` for compiler-resolved
+or syntax-only `Handles`, `AddHandler`, and `RemoveHandler` sites and
+`VisualBasicEventRaised` for `RaiseEvent`. `isAttach=False` distinguishes
+detach evidence. These facts are event relationships, not executed call edges.
+Supported linked Web Forms surfaces additionally receive the existing
+`WebFormsEventBindingDeclared`, `WebFormsHandlerResolved`, lifecycle/postback,
+flow, report, packet, review, handoff, and anonymous projection behavior.
 
 Project observation (Tier2): `VisualBasicProjectObserved` records load and
 compilation only, with aggregate document and error-diagnostic counts.
@@ -101,7 +115,7 @@ analysis exactly like their C# counterparts.
 - Legacy `TargetFrameworkVersion` values are reported by the build-environment
   diagnostics lane, same as legacy C# projects.
 
-## Not established by this adapter
+## Important boundaries
 
 These limits are deliberate scope boundaries for the foundation slice, and the
 catalog documents them per rule:
@@ -111,11 +125,12 @@ catalog documents them per rule:
   C#-declared symbols even when both compile into the same solution. Display
   strings, assembly names, and fact-level evidence do cross the language
   boundary; identity joins are future work.
-- Web Forms event wiring is NOT established. `Handles`, `AddHandler`,
-  `RemoveHandler`, `RaiseEvent`, `WithEvents` declarations, and `.aspx`
-  control-event bindings never become resolved event edges in this slice.
-  Handler methods appear only as declared method evidence. Event composition
-  belongs to issue [#738](https://github.com/joefeser/tracemap/issues/738).
+- VB event wiring is static evidence only. Compiler-resolved language facts do
+  not prove attachment lifetime, event firing, delegate invocation, ordering,
+  or execution. Shared Web Forms projection requires a linked markup surface,
+  one supported receiver/control or lifecycle event, and one handler method;
+  ambiguous partials, late-bound receivers, unsupported delegates, missing
+  designer/framework metadata, and unlinked code remain gaps.
 - Event declarations are emitted. Operator statements and `Declare` (P/Invoke)
   statements are not emitted as declarations in this slice.
 - Late-bound invocations, unresolved or ambiguous default members, overload
