@@ -17,5 +17,7 @@ are established. `RemoveHandler` is retained as detach evidence but not treated
 as a runtime binding. Markup `OnX` attributes continue through the existing
 language-neutral path. VB lifecycle/postback syntax is supported conservatively.
 
-Consumers remain unchanged because they already read shared Web Forms facts.
-Rule catalog and validation documentation state all static-analysis bounds.
+Existing modernization/review consumers continue to read shared Web Forms
+facts. The generic Markdown inventory additionally renders the language-level
+VB event rows so non-Web-Forms event evidence is not count-only. Rule catalog
+and validation documentation state all static-analysis bounds.

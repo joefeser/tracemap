@@ -518,7 +518,8 @@ public static partial class LegacyWebFormsExtractor
                         FactFactory.Hash(item.ToString(), 32),
                         item.SpanStart,
                         "Handles",
-                        true));
+                        true,
+                        false));
                 }
             }
 
@@ -536,7 +537,8 @@ public static partial class LegacyWebFormsExtractor
                     FactFactory.Hash(statement.ToString(), 32),
                     statement.SpanStart,
                     statement.IsKind(VB.SyntaxKind.AddHandlerStatement) ? "AddHandler" : "RemoveHandler",
-                    statement.IsKind(VB.SyntaxKind.AddHandlerStatement)));
+                    statement.IsKind(VB.SyntaxKind.AddHandlerStatement),
+                    VisualBasicReceiverIsShadowed(statement, receiver)));
             }
 
             return new WebFormsCodeFile(
@@ -548,6 +550,32 @@ public static partial class LegacyWebFormsExtractor
         {
             return null;
         }
+    }
+
+    private static bool VisualBasicReceiverIsShadowed(
+        VBSyntax.AddRemoveHandlerStatementSyntax statement,
+        string? receiverName)
+    {
+        if (string.IsNullOrWhiteSpace(receiverName)
+            || statement.EventExpression is VBSyntax.MemberAccessExpressionSyntax eventMember
+                && eventMember.Expression is VBSyntax.MemberAccessExpressionSyntax pageMember
+                && (pageMember.Expression.ToString().Equals("Me", StringComparison.OrdinalIgnoreCase)
+                    || pageMember.Expression.ToString().Equals("MyClass", StringComparison.OrdinalIgnoreCase)))
+        {
+            return false;
+        }
+
+        var method = statement.Ancestors().OfType<VBSyntax.MethodBlockBaseSyntax>().FirstOrDefault();
+        if (method?.BlockStatement is not VBSyntax.MethodStatementSyntax methodStatement)
+        {
+            return false;
+        }
+
+        return methodStatement.ParameterList?.Parameters.Any(parameter =>
+                   parameter.Identifier.Identifier.ValueText.Equals(receiverName, StringComparison.OrdinalIgnoreCase)) == true
+            || method.DescendantNodes().OfType<VBSyntax.VariableDeclaratorSyntax>()
+                .SelectMany(declaration => declaration.Names)
+                .Any(name => name.Identifier.ValueText.Equals(receiverName, StringComparison.OrdinalIgnoreCase));
     }
 
     private static IReadOnlyList<WebFormsDesignerField> ParseDesignerFile(string repoPath, string relativePath, string markupFilePath)
@@ -698,8 +726,8 @@ public static partial class LegacyWebFormsExtractor
         var span = tree.GetLineSpan(block.Span);
         var parameters = statement.ParameterList?.Parameters ?? default;
         var hasCommonEventSignature = parameters.Count == 2
-            && parameters[0].AsClause?.ToString().Contains("Object", StringComparison.OrdinalIgnoreCase) == true
-            && parameters[1].AsClause?.ToString().Contains("EventArgs", StringComparison.OrdinalIgnoreCase) == true;
+            && IsVisualBasicParameterType(parameters[0], "Object")
+            && IsVisualBasicParameterType(parameters[1], "EventArgs");
         return new WebFormsMethod(
             tree.FilePath,
             VisualBasicQualifiedTypeName(block),
@@ -708,6 +736,25 @@ public static partial class LegacyWebFormsExtractor
             Math.Max(span.StartLinePosition.Line + 1, span.EndLinePosition.Line + 1),
             hasCommonEventSignature,
             block);
+    }
+
+    private static bool IsVisualBasicParameterType(VBSyntax.ParameterSyntax parameter, string expectedType)
+    {
+        if (parameter.AsClause is not VBSyntax.SimpleAsClauseSyntax simple)
+        {
+            return false;
+        }
+
+        var typeName = string.Concat(simple.Type.ToString().Where(character => !char.IsWhiteSpace(character)));
+        if (typeName.StartsWith("Global.", StringComparison.OrdinalIgnoreCase))
+        {
+            typeName = typeName["Global.".Length..];
+        }
+        if (typeName.StartsWith("System.", StringComparison.OrdinalIgnoreCase))
+        {
+            typeName = typeName["System.".Length..];
+        }
+        return typeName.Equals(expectedType, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string VisualBasicQualifiedTypeName(SyntaxNode node)
@@ -726,6 +773,12 @@ public static partial class LegacyWebFormsExtractor
         var text = expression.ToString();
         if (text.Equals("Me", StringComparison.OrdinalIgnoreCase) || text.Equals("MyClass", StringComparison.OrdinalIgnoreCase)) return "this";
         if (text.Equals("MyBase", StringComparison.OrdinalIgnoreCase)) return "base";
+        if (expression is VBSyntax.MemberAccessExpressionSyntax member
+            && (member.Expression.ToString().Equals("Me", StringComparison.OrdinalIgnoreCase)
+                || member.Expression.ToString().Equals("MyClass", StringComparison.OrdinalIgnoreCase)))
+        {
+            return member.Name.Identifier.ValueText;
+        }
         return SafeIdentifier(text) ?? "unsupported-receiver";
     }
 
@@ -746,7 +799,9 @@ public static partial class LegacyWebFormsExtractor
         return expression switch
         {
             VBSyntax.IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
-            VBSyntax.MemberAccessExpressionSyntax member => member.Name.Identifier.ValueText,
+            VBSyntax.MemberAccessExpressionSyntax member
+                when member.Expression.ToString().Equals("Me", StringComparison.OrdinalIgnoreCase)
+                    || member.Expression.ToString().Equals("MyClass", StringComparison.OrdinalIgnoreCase) => member.Name.Identifier.ValueText,
             _ => null
         };
     }
@@ -980,6 +1035,11 @@ public static partial class LegacyWebFormsExtractor
             }
 
             var control = controls[0];
+            if (isVisualBasic && subscription.ReceiverMayBeShadowed)
+            {
+                facts.Add(CreateGap(manifest, subscription.FilePath, subscription.Line, "AmbiguousVisualBasicWebFormsEventSubscriptionReceiver", "A local or parameter shadows the linked control receiver; TraceMap did not project a name-only Web Forms binding."));
+                continue;
+            }
             var binding = new WebFormsBinding(
                 control.ControlType,
                 control.ControlId,
@@ -1359,7 +1419,10 @@ public static partial class LegacyWebFormsExtractor
         CodeFact pageFact,
         List<CodeFact> facts)
     {
-        if (method.MethodName is not ("Page_Init" or "Page_Load" or "Page_PreRender"))
+        var isVisualBasic = IsVisualBasicMethod(method);
+        if (!(IdentifierEquals(method.MethodName, "Page_Init", isVisualBasic)
+              || IdentifierEquals(method.MethodName, "Page_Load", isVisualBasic)
+              || IdentifierEquals(method.MethodName, "Page_PreRender", isVisualBasic)))
         {
             return;
         }
@@ -2396,7 +2459,8 @@ public static partial class LegacyWebFormsExtractor
                 or "WebFormsAssemblyTypeUnavailable" or "WebFormsAssemblyProjectUnavailable" => RuleIds.LegacyWebFormsComposition,
             "UnsupportedWebFormsEventAttribute" or "ClientWebFormsEventAttribute" or "NonIdentifierWebFormsEventValue" or "DynamicWebFormsEventSubscription"
                 or "UnsupportedWebFormsEventSubscription" or "UnknownWebFormsEventSubscriptionReceiver"
-                or "AmbiguousWebFormsEventSubscriptionReceiver" => RuleIds.LegacyWebFormsEventBinding,
+                or "AmbiguousWebFormsEventSubscriptionReceiver"
+                or "AmbiguousVisualBasicWebFormsEventSubscriptionReceiver" => RuleIds.LegacyWebFormsEventBinding,
             "UnsupportedWebFormsIsPostBackCondition" or "AmbiguousWebFormsIsPostBackReceiver" => RuleIds.LegacyWebFormsLifecycleContext,
             "DynamicWebFormsClientScriptRegistration" or "AmbiguousWebFormsClientScriptRegistrationReceiver" => RuleIds.LegacyWebFormsClientScript,
             "UnresolvedWebFormsPostBackTarget" or "AmbiguousWebFormsPostBackTarget"
@@ -3630,7 +3694,8 @@ public static partial class LegacyWebFormsExtractor
         string SnippetHash,
         int SyntaxSpanStart,
         string WiringKind,
-        bool IsAttach);
+        bool IsAttach,
+        bool ReceiverMayBeShadowed = false);
 
     private sealed record WebFormsMethod(
         string FilePath,

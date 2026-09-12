@@ -376,6 +376,11 @@ public static class VisualBasicSyntaxExtractor
             {
                 var eventName = item.EventMember.Identifier.ValueText;
                 var receiverName = SafeEventReceiverName(item.EventContainer);
+                if (string.IsNullOrWhiteSpace(receiverName))
+                {
+                    if (!AddSyntaxEventGap(manifest, facts, filePath, item, "UnsupportedVisualBasicEventReceiver", budget)) return;
+                    continue;
+                }
                 if (!TryAddSyntaxFact(
                         manifest,
                         facts,
@@ -407,9 +412,12 @@ public static class VisualBasicSyntaxExtractor
             var (receiverName, eventName) = SyntaxEventName(statement.EventExpression);
             var handlerName = SyntaxHandlerName(statement.DelegateExpression);
             var isAttach = statement.IsKind(SyntaxKind.AddHandlerStatement);
-            if (string.IsNullOrWhiteSpace(eventName) || string.IsNullOrWhiteSpace(handlerName))
+            if (string.IsNullOrWhiteSpace(eventName) || string.IsNullOrWhiteSpace(handlerName) || string.IsNullOrWhiteSpace(receiverName))
             {
-                if (!AddSyntaxEventGap(manifest, facts, filePath, statement, "UnsupportedVisualBasicEventHandlerDelegate", budget))
+                var gapKind = string.IsNullOrWhiteSpace(receiverName)
+                    ? "UnsupportedVisualBasicEventReceiver"
+                    : "UnsupportedVisualBasicEventHandlerDelegate";
+                if (!AddSyntaxEventGap(manifest, facts, filePath, statement, gapKind, budget))
                 {
                     return;
                 }
@@ -485,7 +493,9 @@ public static class VisualBasicSyntaxExtractor
         return expression switch
         {
             IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
-            MemberAccessExpressionSyntax member => member.Name.Identifier.ValueText,
+            MemberAccessExpressionSyntax member
+                when member.Expression.ToString().Equals("Me", StringComparison.OrdinalIgnoreCase)
+                    || member.Expression.ToString().Equals("MyClass", StringComparison.OrdinalIgnoreCase) => member.Name.Identifier.ValueText,
             _ => string.Empty
         };
     }
@@ -493,11 +503,19 @@ public static class VisualBasicSyntaxExtractor
     private static string SafeEventReceiverName(ExpressionSyntax expression)
     {
         var text = expression.ToString();
-        if (text is "Me" or "MyBase" or "MyClass") return text;
+        if (text.Equals("Me", StringComparison.OrdinalIgnoreCase)
+            || text.Equals("MyBase", StringComparison.OrdinalIgnoreCase)
+            || text.Equals("MyClass", StringComparison.OrdinalIgnoreCase)) return text;
+        if (expression is MemberAccessExpressionSyntax member
+            && (member.Expression.ToString().Equals("Me", StringComparison.OrdinalIgnoreCase)
+                || member.Expression.ToString().Equals("MyClass", StringComparison.OrdinalIgnoreCase)))
+        {
+            return member.Name.Identifier.ValueText;
+        }
         return text.All(character => char.IsLetterOrDigit(character) || character == '_')
             && text.Length > 0
             ? text
-            : $"unsupported-{expression.Kind()}";
+            : string.Empty;
     }
 
     private static bool AddSyntaxEventGap(
