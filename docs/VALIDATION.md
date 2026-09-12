@@ -2180,3 +2180,17 @@ TraceMap query recipe. Confirm that mismatches fail before root publication and
 anonymous artifacts contain no handoff links, private identities, local paths,
 fact IDs, or source-of-truth locators. Application-database questions must never
 contain credentials, configuration, raw SQL, or execution instructions.
+
+### Web Forms full application workbench
+
+For changes to all-surface packet review, run:
+
+```bash
+pwsh -NoProfile -File scripts/tests/Test-FocusedWebFormsApplicationWorkbench.ps1
+```
+
+Confirm that one deterministic report/handoff pair is generated per selected
+surface, reports return to the root index, raw source remains opt-in and bounded,
+and an explicitly supplied evidence-docs corpus remains byte-unchanged. The
+workbench is navigation over retained evidence, not a scan, BRD, runtime claim,
+or human-review overlay.

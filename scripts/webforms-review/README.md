@@ -5,6 +5,142 @@ focused Web Forms packet into bounded, local source-review pages. The executable
 entry points remain in `scripts/` for compatibility with existing work-machine
 commands.
 
+## Start here: complete work-machine run
+
+The workflow deliberately creates several folders because each is an immutable
+stage with different provenance. Do not delete the evidence-docs corpus after a
+successful export: `chunks.jsonl`, `manifest.json`, and `query-recipes.json` are
+the retrieval layer used by later handoffs and agents.
+
+### 1. Run the initial scan once
+
+From the TraceMap repository root, run the bounded collector. It prompts for the
+private source root, three in-scope folders, and either a solution or explicit
+projects. Generic parameterized form:
+
+```powershell
+.\scripts\Invoke-FocusedWebFormsReview.ps1 `
+  -SourceRoot C:\path\to\authorized-source `
+  -WebFormsFolder Web `
+  -BackendFolder Backend `
+  -ControlsFolder SharedControls `
+  -SolutionRelativePath Application.sln
+```
+
+Keep the newest `C:\work\tracemap-output\focused-webforms-<timestamp>` folder.
+Its `scan\index.sqlite` is the retained source of truth. The adjacent progress
+and summary folders are diagnostics; they do not replace the scan.
+
+### 2. Create the selected-page packet
+
+Create the ignored local configuration once:
+
+```powershell
+Copy-Item .\scripts\Run-FocusedWebFormsPageList.example.json .\scripts\Run-FocusedWebFormsPageList.json
+notepad .\scripts\Run-FocusedWebFormsPageList.json
+.\scripts\Run-AndTriage-FocusedWebFormsPageList.ps1
+```
+
+Set `indexPath` to the scan's `scan\index.sqlite`, `outputRoot` to the parent
+where generated review folders should live, and `forms` to the selected `.aspx`
+paths. Keep the resulting
+`webforms-page-list-<timestamp>\webforms-modernization.json`; it is the complete
+focused packet for all selected pages, not merely the exception list.
+
+### 3. Export the machine-readable evidence docs
+
+Use the scan index and the exact packet from step 2:
+
+```powershell
+dotnet run --project .\src\dotnet\TraceMap.Cli\TraceMap.Cli.csproj -- docs-export `
+  --index C:\work\tracemap-output\focused-webforms-<scan>\scan\index.sqlite `
+  --webforms-packet C:\work\tracemap-output\webforms-page-list-<packet>\webforms-modernization.json `
+  --families webforms-modernization,gap,limitation `
+  --out C:\work\tracemap-output\evidence-docs-<run> `
+  --format markdown,jsonl
+```
+
+Keep the entire `evidence-docs-<run>` folder. In particular, do **not** delete
+`chunks.jsonl`; a large file is expected. The manifest binds the corpus to its
+scan and declares hashes for the generated outputs.
+
+### 4. Generate the full selected-page workbench
+
+This reads the packet and optionally links the corpus read-only. It does not
+rescan source or rewrite the packet/chunks:
+
+```powershell
+.\scripts\New-FocusedWebFormsApplicationWorkbench.ps1 `
+  -PacketPath C:\work\tracemap-output\webforms-page-list-<packet>\webforms-modernization.json `
+  -OutputRoot C:\work\tracemap-output `
+  -EvidenceDocsRoot C:\work\tracemap-output\evidence-docs-<run>
+```
+
+Open the printed `webforms-application-workbench-<timestamp>\index.html`. It
+links one report and one handoff JSON for every selected page. Add
+`-IncludeRawSource -SourceRoot C:\path\to\authorized-source` only on an
+authorized private machine when bounded working-tree excerpts are needed.
+
+To review every selected page, first export an immutable-overlay draft:
+
+```powershell
+.\scripts\webforms-review\Invoke-WitsApplicationReview.ps1 `
+  -Mode Export `
+  -PacketPath C:\work\tracemap-output\webforms-page-list-<packet>\webforms-modernization.json `
+  -ReviewPath C:\work\tracemap-output\webforms-application-review.json
+```
+
+Each page accepts one verdict and one migration disposition. Edit comments and
+capability labels for nuance; do not comma-separate closed values. Validate the
+edited file, then regenerate the workbench with `-ReviewPath` to display the
+decisions:
+
+```powershell
+.\scripts\webforms-review\Invoke-WitsApplicationReview.ps1 `
+  -Mode Validate `
+  -PacketPath C:\work\tracemap-output\webforms-page-list-<packet>\webforms-modernization.json `
+  -ReviewPath C:\work\tracemap-output\webforms-application-review.json
+
+.\scripts\New-FocusedWebFormsApplicationWorkbench.ps1 `
+  -PacketPath C:\work\tracemap-output\webforms-page-list-<packet>\webforms-modernization.json `
+  -OutputRoot C:\work\tracemap-output `
+  -EvidenceDocsRoot C:\work\tracemap-output\evidence-docs-<run> `
+  -ReviewPath C:\work\tracemap-output\webforms-application-review.json
+```
+
+The overlay never writes decisions into the packet, retained index, docs
+manifest, or chunks corpus.
+
+### 5. Generate the exceptional-handler review set when needed
+
+The exception queue is supplemental. It is useful for the handful of unresolved
+handler paths, but it is not the complete application evidence:
+
+```powershell
+.\scripts\New-FocusedWebFormsBatchInspection.ps1
+.\scripts\New-FocusedWebFormsCodePathReviewSet.ps1 `
+  -SourceRoot C:\path\to\authorized-source `
+  -IndexPath C:\work\tracemap-output\focused-webforms-<scan>\scan\index.sqlite `
+  -EvidenceDocsRoot C:\work\tracemap-output\evidence-docs-<run> `
+  -TriggerContextLines 50 `
+  -IncludeRawSource
+```
+
+### Folder and artifact map
+
+| Folder | Keep? | What it is |
+| --- | --- | --- |
+| `focused-webforms-<scan>\scan\` | Yes | Initial retained facts, manifest, logs, and `index.sqlite`; source of truth for queries. |
+| `webforms-page-list-<packet>\` | Yes | Complete selected-page `webforms-modernization.json` and Markdown summary. |
+| `evidence-docs-<run>\` | Yes | Agent/RAG-friendly docs, `chunks.jsonl`, manifest, and closed query recipes. Never delete chunks while handoffs use this corpus. |
+| `webforms-application-workbench-<run>\` | Yes | Root HTML plus one report/handoff pair for every selected page. |
+| `local-inspection-private\webforms-code-path-review-set-*\` | When used | Exceptional-handler HTML, source views, case handoffs, and editable verdict queue. |
+| `tracemap-progress\` and `tracemap-summary\` | Optional after acceptance | Performance, progress, workspace, and accuracy diagnostics; useful for failures and comparisons. |
+
+Never mix an index, packet, corpus, or review overlay from different scan/commit
+provenance. A pull may replace scripts, but it does not replace the ignored
+`Run-FocusedWebFormsPageList.json` or the generated evidence folders.
+
 ## Pick the right starting point
 
 | You have | Start with | Result |
@@ -177,6 +313,7 @@ wrappers and would not improve the generated artifact layout.
 | `New-FocusedWebFormsBatchInspection.ps1` | No | No scan; reads retained index evidence | Build the private case inventory used by review sets. |
 | `New-FocusedWebFormsCodePathReviewSet.ps1` | Yes, bounded local reads; raw serialization is opt-in | No scan | Generate the normal multi-case HTML review set and `index.md` verdict queue. |
 | `New-FocusedWebFormsCodePathReview.ps1` | Yes, bounded local reads; raw serialization is opt-in | No scan | Generate one case during focused investigation. |
+| `New-FocusedWebFormsApplicationWorkbench.ps1` | Optional bounded excerpts; raw serialization is opt-in | No scan | Generate a private root index and one report/handoff pair for every selected page in a completed packet. |
 
 ### Read-only summaries and triage
 
@@ -211,6 +348,8 @@ From the repository root, the focused synthetic checks are:
 pwsh -NoProfile -File .\scripts\Invoke-FocusedWebFormsReview.Tests.ps1
 pwsh -NoProfile -File .\scripts\tests\Test-FocusedWebFormsConfiguration.ps1
 pwsh -NoProfile -File .\scripts\tests\Test-FocusedWebFormsCodePathReviewSet.ps1
+pwsh -NoProfile -File .\scripts\tests\Test-FocusedWebFormsApplicationWorkbench.ps1
+pwsh -NoProfile -File .\scripts\webforms-review\Test-WitsApplicationReview.ps1
 pwsh -NoProfile -File .\scripts\tests\Test-FocusedWebFormsActionableGaps.ps1
 pwsh -NoProfile -File .\scripts\tests\Test-CompletedWebFormsPageTriage.ps1
 ```
