@@ -249,8 +249,7 @@ public static class ScanEngine
         var migrationFallbackReducedCoverage = migrationFallbackGaps.Length > 0;
         var semanticBuildReducedCoverage = semanticResult.GapFacts.Any(gap =>
             gap.RuleId != RuleIds.DatabaseFrameworkMigrationGap
-            && gap.RuleId != RuleIds.CSharpRazorSemanticModelBindingGap
-            && gap.RuleId != RuleIds.CSharpSemanticPropertyMappingGap);
+            && !IsProducerLocalSemanticGap(gap));
         var semanticBuildStatus = semanticResult.Attempted
             ? semanticBuildReducedCoverage ? "FailedOrPartial" : "Succeeded"
             : "NotRun";
@@ -1061,7 +1060,8 @@ public static class ScanEngine
 
     private static bool IsProducerLocalSemanticGap(SemanticFactCandidate gap) =>
         gap.RuleId == RuleIds.CSharpRazorSemanticModelBindingGap
-        || gap.RuleId == RuleIds.CSharpSemanticPropertyMappingGap;
+        || gap.RuleId == RuleIds.CSharpSemanticPropertyMappingGap
+        || gap.RuleId == RuleIds.VisualBasicSemanticEventWiring;
 
     private static string GetBuildStatusReason(
         ScanManifest manifest,

@@ -556,11 +556,7 @@ public static partial class LegacyWebFormsExtractor
         VBSyntax.AddRemoveHandlerStatementSyntax statement,
         string? receiverName)
     {
-        if (string.IsNullOrWhiteSpace(receiverName)
-            || statement.EventExpression is VBSyntax.MemberAccessExpressionSyntax eventMember
-                && eventMember.Expression is VBSyntax.MemberAccessExpressionSyntax pageMember
-                && (pageMember.Expression.ToString().Equals("Me", StringComparison.OrdinalIgnoreCase)
-                    || pageMember.Expression.ToString().Equals("MyClass", StringComparison.OrdinalIgnoreCase)))
+        if (string.IsNullOrWhiteSpace(receiverName))
         {
             return false;
         }
@@ -571,11 +567,39 @@ public static partial class LegacyWebFormsExtractor
             return false;
         }
 
-        return methodStatement.ParameterList?.Parameters.Any(parameter =>
+        var pageQualified = statement.EventExpression is VBSyntax.MemberAccessExpressionSyntax eventMember
+            && eventMember.Expression is VBSyntax.MemberAccessExpressionSyntax pageMember
+            && (pageMember.Expression.ToString().Equals("Me", StringComparison.OrdinalIgnoreCase)
+                || pageMember.Expression.ToString().Equals("MyClass", StringComparison.OrdinalIgnoreCase));
+        if (pageQualified && !receiverName.Equals("Page", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (methodStatement.ParameterList?.Parameters.Any(parameter =>
                    parameter.Identifier.Identifier.ValueText.Equals(receiverName, StringComparison.OrdinalIgnoreCase)) == true
             || method.DescendantNodes().OfType<VBSyntax.VariableDeclaratorSyntax>()
                 .SelectMany(declaration => declaration.Names)
-                .Any(name => name.Identifier.ValueText.Equals(receiverName, StringComparison.OrdinalIgnoreCase));
+                .Any(name => name.Identifier.ValueText.Equals(receiverName, StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        if (!receiverName.Equals("Page", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var containingType = method.Ancestors().OfType<VBSyntax.TypeBlockSyntax>().FirstOrDefault();
+        return containingType is not null && containingType.DescendantNodes()
+            .Where(node => node.Ancestors().OfType<VBSyntax.TypeBlockSyntax>().FirstOrDefault() == containingType)
+            .Any(node => node switch
+            {
+                VBSyntax.FieldDeclarationSyntax field => field.Declarators.SelectMany(declaration => declaration.Names)
+                    .Any(name => name.Identifier.ValueText.Equals(receiverName, StringComparison.OrdinalIgnoreCase)),
+                VBSyntax.PropertyStatementSyntax property => property.Identifier.ValueText.Equals(receiverName, StringComparison.OrdinalIgnoreCase),
+                _ => false
+            });
     }
 
     private static IReadOnlyList<WebFormsDesignerField> ParseDesignerFile(string repoPath, string relativePath, string markupFilePath)

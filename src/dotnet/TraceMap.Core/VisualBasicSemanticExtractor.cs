@@ -898,10 +898,12 @@ public static class VisualBasicSemanticExtractor
             if (!ReserveEventSite(statement)) return;
             var containingMethod = GetContainingMethod(statement, model);
             var operation = model.GetOperation(statement) as IEventAssignmentOperation;
+            var hasValidDelegateConversion = !model.GetDiagnostics(statement.Span)
+                .Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
             var eventSymbol = (operation?.EventReference as IEventReferenceOperation)?.Event
                 ?? model.GetSymbolInfo(statement.EventExpression).Symbol as IEventSymbol
                 ?? ResolveUniqueEventMember(statement.EventExpression, model);
-            var handlerSymbol = statement.DelegateExpression is LambdaExpressionSyntax
+            var handlerSymbol = !hasValidDelegateConversion || statement.DelegateExpression is LambdaExpressionSyntax
                 ? null
                 : ResolveEventHandler(operation?.HandlerValue)
                     ?? ResolveAddressOfTarget(statement.DelegateExpression, model)
