@@ -6,6 +6,7 @@ param(
     [string]$ControlsFolder,
     [string]$SolutionRelativePath,
     [string[]]$ProjectRelativePath = @(),
+    [switch]$Projectless,
     [string]$TraceMapRoot = (Split-Path $PSScriptRoot -Parent),
     [int]$TimeoutSeconds = 7200
 )
@@ -104,10 +105,14 @@ $SourceRoot = Read-RequiredValue $SourceRoot "Private source repository root"
 $WebFormsFolder = Read-RequiredValue $WebFormsFolder "Web Forms folder, relative to the source root"
 $BackendFolder = Read-RequiredValue $BackendFolder "Backend folder, relative to the source root"
 $ControlsFolder = Read-RequiredValue $ControlsFolder "Shared controls folder, relative to the source root"
-if ([string]::IsNullOrWhiteSpace($SolutionRelativePath) -and $ProjectRelativePath.Count -eq 0) {
+if ($Projectless -and
+    (-not [string]::IsNullOrWhiteSpace($SolutionRelativePath) -or $ProjectRelativePath.Count -ne 0)) {
+    throw "PROJECTLESS_SCOPE_CONFLICT"
+}
+if (-not $Projectless -and [string]::IsNullOrWhiteSpace($SolutionRelativePath) -and $ProjectRelativePath.Count -eq 0) {
     $SolutionRelativePath = (Read-Host "Solution path, relative to the source root (blank if unavailable)").Trim()
 }
-if ($ProjectRelativePath.Count -eq 0 -and [string]::IsNullOrWhiteSpace($SolutionRelativePath)) {
+if (-not $Projectless -and $ProjectRelativePath.Count -eq 0 -and [string]::IsNullOrWhiteSpace($SolutionRelativePath)) {
     $projectInput = Read-Host "Comma-separated in-scope project paths, relative to the source root (blank for a projectless scan)"
     if (-not [string]::IsNullOrWhiteSpace($projectInput)) {
         $ProjectRelativePath = @($projectInput.Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ })
@@ -130,10 +135,10 @@ if ($LASTEXITCODE -ne 0 -or [IO.Path]::GetFullPath($gitRoot).TrimEnd('\', '/') -
     throw "SOURCE_ROOT_NOT_GIT_ROOT"
 }
 
-$selectedFolders = @($WebFormsFolder, $BackendFolder, $ControlsFolder)
-if (($selectedFolders | Select-Object -Unique).Count -ne 3) { throw "THREE_FOLDER_SCOPE_INVALID" }
+$selectedFolders = @(@($WebFormsFolder, $BackendFolder, $ControlsFolder) | Select-Object -Unique)
 foreach ($folder in $selectedFolders) {
-    [void](Resolve-RelativeChild $SourceRoot $folder "THREE_FOLDER_SCOPE_UNAVAILABLE" $false)
+    if ($folder -eq '.') { continue }
+    [void](Resolve-RelativeChild $SourceRoot $folder "FOLDER_SCOPE_UNAVAILABLE" $false)
 }
 if (-not [string]::IsNullOrWhiteSpace($SolutionRelativePath)) {
     $solutionPath = Resolve-RelativeChild $SourceRoot $SolutionRelativePath "SOLUTION_SCOPE_UNAVAILABLE" $true
@@ -175,7 +180,10 @@ $progressPath = Join-Path $progressParent "focused-webforms-$stamp.json"
 New-Item -ItemType Directory -Path $outputParent, $progressParent, $summaryParent -Force | Out-Null
 
 $reviewArguments = @("run", "--repo", $SourceRoot, "--out", $outRoot)
-foreach ($folder in $selectedFolders) { $reviewArguments += @("--include", ($folder.TrimEnd('/', '\') + "/**")) }
+foreach ($folder in $selectedFolders) {
+    $includePattern = if ($folder -eq '.') { '**' } else { $folder.TrimEnd('/', '\') + '/**' }
+    $reviewArguments += @("--include", $includePattern)
+}
 if (-not [string]::IsNullOrWhiteSpace($SolutionRelativePath)) {
     # Explicit selection does not bypass inventory scope filtering. Preserve the
     # solution itself while the derived project list bounds semantic loading.

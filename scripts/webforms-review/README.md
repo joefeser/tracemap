@@ -30,6 +30,12 @@ projects. Generic parameterized form:
   -SolutionRelativePath Application.sln
 ```
 
+The three folder parameters may identify the same directory, including `.` for
+a repository-root application. For an old ASP.NET Web Site solution that has no
+`.vbproj` or `.csproj`, omit the solution and project parameters and pass
+`-Projectless`; this intentionally produces reduced coverage rather than
+pretending a semantic compilation was available.
+
 Keep the newest `C:\work\tracemap-output\focused-webforms-<timestamp>` folder.
 Its `scan\index.sqlite` is the retained source of truth. The adjacent progress
 and summary folders are diagnostics; they do not replace the scan.

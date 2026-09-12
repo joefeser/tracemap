@@ -12,16 +12,32 @@ the authorized machine. Only sanitized console summaries and generated
 
 ```powershell
 $SourceRoot = 'C:\path\to\application-repository'
-$WebFormsFolder = 'Web'
-$BackendFolder = 'Backend'
-$ControlsFolder = 'SharedControls'
+$WebFormsFolder = '.'
+$BackendFolder = '.'
+$ControlsFolder = '.'
 $SolutionRelativePath = 'Application.sln'
 $OutputRoot = 'C:\work\tracemap-output'
 ```
 
-The three folders and solution path are relative to `$SourceRoot`. The source
-checkout and TraceMap checkout must both be clean because the retained commit
-and source snapshot are part of the evidence provenance.
+The three folder values are relative to `$SourceRoot`; they may all be `.` when
+the application is stored in one directory. The solution path is also relative
+to `$SourceRoot`. The source checkout and TraceMap checkout must both be clean
+because the retained commit and source snapshot are part of the evidence
+provenance.
+
+Check which legacy project shape is present:
+
+```powershell
+$ProjectFiles = @(Get-ChildItem -LiteralPath $SourceRoot -Recurse -File -Include '*.vbproj','*.csproj')
+$ProjectFiles | Select-Object FullName
+```
+
+If this prints a `.vbproj`, keep `$SolutionRelativePath` and use the normal
+solution command below. If it prints nothing, the `.sln` is likely an old
+ASP.NET Web Site container rather than a buildable Web Application project. Use
+the explicitly projectless command instead; TraceMap will retain syntax and
+structural evidence and label the missing semantic compilation as reduced
+coverage.
 
 ## 2. Build TraceMap and run one full focused scan
 
@@ -35,6 +51,19 @@ dotnet build .\src\dotnet\TraceMap.sln
   -BackendFolder $BackendFolder `
   -ControlsFolder $ControlsFolder `
   -SolutionRelativePath $SolutionRelativePath `
+  -TimeoutSeconds 14400
+```
+
+For an old Web Site solution with no `.vbproj` or `.csproj`, run this variant
+instead. Do not pass the `.sln` in projectless mode:
+
+```powershell
+.\scripts\Invoke-FocusedWebFormsReview.ps1 `
+  -SourceRoot $SourceRoot `
+  -WebFormsFolder $WebFormsFolder `
+  -BackendFolder $BackendFolder `
+  -ControlsFolder $ControlsFolder `
+  -Projectless `
   -TimeoutSeconds 14400
 ```
 
