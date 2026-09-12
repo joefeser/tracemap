@@ -1,8 +1,10 @@
 # VB.NET Adapter
 
-Status: foundation plus bounded event/Web Forms composition (issues
+Status: foundation, bounded event/Web Forms composition, and an initial
+compiler-backed ADO.NET boundary slice (issues
 [#736](https://github.com/joefeser/tracemap/issues/736) and
-[#738](https://github.com/joefeser/tracemap/issues/738)). Every claim below is bounded by
+[#738](https://github.com/joefeser/tracemap/issues/738), plus partial issue
+[#737](https://github.com/joefeser/tracemap/issues/737)). Every claim below is bounded by
 the cataloged rule limitations in `rules/rule-catalog.yml` (`vb.semantic.*`,
 `vb.syntax.*`). Nothing in this adapter proves runtime reachability, execution,
 build success, or impact.
@@ -32,14 +34,20 @@ build success, or impact.
   `Handles`, `AddHandler`, `RemoveHandler`, `RaiseEvent`, and `WithEvents`, and
   projects supported VB code-behind/control/lifecycle bindings into the shared
   Web Forms evidence contracts.
+- Emits shared `SqlCommandDetected` evidence for compiler-resolved `DbCommand`
+  construction, `CommandType` assignment, and parameter collection mutation,
+  plus shared `DatabaseOperationCandidate` evidence for `ExecuteReader`,
+  `ExecuteScalar`, `ExecuteNonQuery`, and `DbDataAdapter.Fill` calls. Existing
+  call-edge and object-creation facts retain the supporting method path and
+  DataSet/DataTable/reader types.
 
 ## Extractor identities
 
 | Extractor | Identity/version | Tier | Rules |
 | --- | --- | --- | --- |
-| Visual Basic semantic extractor | `vb-semantic/0.5.2` | Tier1 (facts), Tier2 (project observation), Tier4 (workspace, call-site, and event gaps) | `vb.semantic.compilation.v1`, `vb.semantic.workspace.v1`, `vb.semantic.declarations.v1`, `vb.semantic.propertyaccess.v1`, `vb.semantic.methodinvocation.v1`, `vb.semantic.callgraph.v1`, `vb.semantic.objectcreation.v1`, `vb.semantic.valueflow.v1`, `vb.semantic.symbolrelationship.v1`, `vb.semantic.event-wiring.v1` |
+| Visual Basic semantic extractor | `vb-semantic/0.6.0` | Tier1 (facts), Tier2 (project observation), Tier4 (workspace, call-site, event, and data-boundary gaps) | `vb.semantic.compilation.v1`, `vb.semantic.workspace.v1`, `vb.semantic.declarations.v1`, `vb.semantic.propertyaccess.v1`, `vb.semantic.methodinvocation.v1`, `vb.semantic.callgraph.v1`, `vb.semantic.objectcreation.v1`, `vb.semantic.valueflow.v1`, `vb.semantic.symbolrelationship.v1`, `vb.semantic.event-wiring.v1`, plus shared `database.sql.text.v1` and `database.operation.call-pattern.v1` contracts |
 | Visual Basic syntax fallback | `vb-syntax/0.3.1` | Tier3 (facts), Tier4 (parse/read/budget/semantic-unavailable/event gaps) | `vb.syntax.declarations.v1`, `vb.syntax.memberaccess.v1`, `vb.syntax.invocation.v1`, `vb.syntax.callgraph.v1`, `vb.syntax.objectcreation.v1`, `vb.syntax.event-wiring.v1` |
-| Shared Web Forms extractor | `legacy-webforms/0.8.2` | Tier1/Tier2/Tier3 facts and Tier4 gaps | existing `legacy.webforms.*` contracts, now with bounded VB code-behind and designer parsing |
+| Shared Web Forms extractor | `legacy-webforms/0.8.3` | Tier1/Tier2/Tier3 facts and Tier4 gaps | existing `legacy.webforms.*` contracts, now with bounded VB code-behind/designer parsing and shared database-operation terminal projection |
 
 Symbol identities use the canonical .NET normalization shape with
 `visualbasic`-tagged language values (see `VisualBasicSymbolIdentityProvider`).
@@ -56,7 +64,14 @@ unambiguous default-member indexing such as `catalog(0)`), `MethodInvoked`,
 `IArgumentOperation`, covering positional, named, ByRef, optional-bound, and
 params-expanded arguments), and `SymbolRelationship` (`InheritsFrom`,
 `ExtendsInterface`, `ImplementsInterface`, `ImplementsInterfaceMember`,
-`Overrides`).
+`Overrides`). The initial ADO.NET slice adds compiler-resolved
+`SqlCommandDetected` facts for command construction/configuration and
+`DatabaseOperationCandidate` facts for supported command/adapter methods.
+Receiver symbol IDs keep two commands in one method distinct. Constant command
+strings retain only a SHA-256 digest and length; raw SQL, procedure names,
+parameter names and values, and connection material are not retained.
+`StoredProcedure` is a safe categorical candidate derived from a resolved
+`CommandType` enum assignment.
 
 Event composition adds `VisualBasicEventBindingDeclared` for compiler-resolved
 or syntax-only `Handles`, `AddHandler`, and `RemoveHandler` sites and
@@ -143,6 +158,11 @@ catalog documents them per rule:
   did not compile never produce a guessed Tier1 target. Unresolved invocation
   and constructor sites retain bounded Tier3 call-site evidence plus a Tier4
   gap; other unsupported shapes remain visible through compiler diagnostics.
+- A name-only late-bound or unresolved `Fill`/`Execute*` call emits a bounded
+  `VisualBasicAdoNetTargetUnavailable` Tier4 gap and never a database-operation
+  candidate. Helper-returned commands, reflection, provider-specific APIs
+  outside the `DbCommand`/`DbDataAdapter` base families, cross-method command
+  state, and runtime ordering remain outside this initial slice.
 - No runtime claims of any kind: facts prove source structure and
   compiler-resolved binding at scan time only, never execution,
   reachability, deployment state, or impact.

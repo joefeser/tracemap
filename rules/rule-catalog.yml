@@ -4260,6 +4260,8 @@ rules:
       - Dapper and command targets use the existing bounded constant SQL-shape projection. One- or two-part unquoted table identities are retained; unsafe, quoted, or multipart identities remain gaps rather than being matched after qualifier loss.
       - Raw SQL, command text, parameter values, and connection material are not retained on operation facts.
       - ADO.NET and Npgsql v0 table projection is limited to inline constant command construction; command variables, helper-returned commands, stored-procedure indirection, repository abstractions, DI dispatch, reflection, and branch feasibility remain reduced coverage.
+      - Visual Basic compiler-backed evidence recognizes DbCommand ExecuteReader/ExecuteScalar/ExecuteNonQuery families and DbDataAdapter Fill. Boundary-only candidates do not identify tables, returned rows, command text, or runtime effects.
+      - Visual Basic late-bound or unresolved Fill/Execute-like calls emit bounded gaps and never become database-operation candidates.
       - Save and transaction boundaries do not identify the tracked changes, affected tables, isolation, scope, commit, rollback, or atomicity.
       - Recognizable calls without semantic binding and candidates without one bounded target emit explicit Tier4 gaps rather than guessed operations.
       - When a C# file has no semantic model, name-only syntax fallback emits Tier4 gaps and does not claim framework or target identity.
@@ -4310,7 +4312,7 @@ rules:
   - id: database.sql.text.v1
     name: SQL text detection
     description: Finds ADO.NET SqlCommand construction, SQL-like files, and SQL-like string literals.
-    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    evidenceTier: Tier1Semantic, Tier2Structural, or Tier3SyntaxOrTextual
     emits:
       - SqlCommandDetected
       - SqlTextUsed
@@ -4320,6 +4322,8 @@ rules:
       - C# syntax fallback may classify any complete SQL-like string literal whose first token is a supported SQL verb, even outside a recognized framework call shape.
       - Dynamic SQL construction emits reduced-coverage boundary evidence instead of complete SQL text.
       - Raw SQL text is not stored by default; hashes and spans are emitted instead.
+      - Visual Basic Tier1 command evidence recognizes compiler-resolved DbCommand construction, CommandType assignment, and parameter-collection mutation. Constant command strings retain only hashes and lengths; procedure names, SQL, parameter names and values, and connection material are omitted.
+      - Separate construction/configuration facts do not prove their runtime ordering, branch feasibility, final command state, execution, or success.
 
   - id: database.sql.shape.v1
     name: Shared SQL shape detection

@@ -2353,6 +2353,7 @@ public static partial class LegacyWebFormsExtractor
     private static bool IsTerminalSurfaceFact(CodeFact fact)
     {
         return fact.FactType is FactTypes.WcfServiceReferenceMapping
+            or FactTypes.DatabaseOperationCandidate
             or FactTypes.SqlTextUsed
             or FactTypes.QueryPatternDetected
             or FactTypes.SqlCommandDetected
@@ -3275,6 +3276,7 @@ public static partial class LegacyWebFormsExtractor
         return fact.FactType switch
         {
             FactTypes.WcfServiceReferenceMapping => "wcf-operation",
+            FactTypes.DatabaseOperationCandidate => "sql-persistence",
             FactTypes.SqlTextUsed or FactTypes.QueryPatternDetected or FactTypes.SqlCommandDetected or FactTypes.DapperCallDetected => "sql-query",
             FactTypes.HttpCallDetected => "http-client",
             _ => "dependency-surface"
