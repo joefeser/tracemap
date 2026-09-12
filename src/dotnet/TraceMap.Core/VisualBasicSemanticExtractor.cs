@@ -1069,7 +1069,8 @@ public static class VisualBasicSemanticExtractor
             IDelegateCreationOperation { Target: IAnonymousFunctionOperation } => null,
             IMethodReferenceOperation methodReference => methodReference.Method,
             IConversionOperation conversion => ResolveEventHandler(conversion.Operand),
-            _ => operation?.ChildOperations.Select(ResolveEventHandler).FirstOrDefault(method => method is not null)
+            IParenthesizedOperation parenthesized => ResolveEventHandler(parenthesized.Operand),
+            _ => null
         };
     }
 
