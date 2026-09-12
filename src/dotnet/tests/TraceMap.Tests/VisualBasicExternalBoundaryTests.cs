@@ -15,7 +15,11 @@ public sealed class VisualBasicExternalBoundaryTests
 
         var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
 
-        Assert.Equal("Succeeded", result.Manifest.BuildStatus);
+        Assert.True(
+            result.Manifest.BuildStatus == "Succeeded",
+            string.Join(Environment.NewLine, result.Facts
+                .Where(fact => fact.FactType == FactTypes.AnalysisGap)
+                .Select(fact => JsonSerializer.Serialize(fact))));
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WebFormsHandlerResolved
             && fact.ContractElement == "Fetch_Click");
 
@@ -126,6 +130,32 @@ public sealed class VisualBasicExternalBoundaryTests
         Assert.True(VisualBasicSemanticExtractor.IsRecognizedWebClientAssemblyName("System.Net.WebClient"));
         Assert.True(VisualBasicSemanticExtractor.IsRecognizedWebClientAssemblyName("System"));
         Assert.False(VisualBasicSemanticExtractor.IsRecognizedWebClientAssemblyName("System.Net.Requests"));
+        Assert.True(VisualBasicSemanticExtractor.IsRecognizedWebRequestAssemblyIdentity("System.Net.Requests", "b03f5f7f11d50a3a"));
+        Assert.True(VisualBasicSemanticExtractor.IsRecognizedWebRequestAssemblyIdentity("System", "b77a5c561934e089"));
+        Assert.False(VisualBasicSemanticExtractor.IsRecognizedWebRequestAssemblyIdentity("System.Net.Requests", string.Empty));
+        Assert.True(VisualBasicSemanticExtractor.IsRecognizedWebClientAssemblyIdentity("System.Net.WebClient", "cc7b13ffcd2ddd51"));
+        Assert.True(VisualBasicSemanticExtractor.IsRecognizedWebClientAssemblyIdentity("System", "b77a5c561934e089"));
+        Assert.False(VisualBasicSemanticExtractor.IsRecognizedWebClientAssemblyIdentity("System.Net.WebClient", string.Empty));
+        Assert.True(VisualBasicSemanticExtractor.IsRecognizedConfigurationAssemblyIdentity("System.Configuration.ConfigurationManager", "cc7b13ffcd2ddd51"));
+        Assert.True(VisualBasicSemanticExtractor.IsRecognizedConfigurationAssemblyIdentity("System.Configuration", "b03f5f7f11d50a3a"));
+        Assert.False(VisualBasicSemanticExtractor.IsRecognizedConfigurationAssemblyIdentity("System.Configuration", string.Empty));
+        Assert.False(VisualBasicSemanticExtractor.IsRecognizedConfigurationAssemblyIdentity("System.Configuration.ConfigurationManager", "b03f5f7f11d50a3a"));
+        Assert.True(VisualBasicSemanticExtractor.IsRecognizedAdoNetAssemblyIdentity("System.Data.Common", "b03f5f7f11d50a3a"));
+        Assert.True(VisualBasicSemanticExtractor.IsRecognizedAdoNetAssemblyIdentity("System.Data", "b77a5c561934e089"));
+        Assert.False(VisualBasicSemanticExtractor.IsRecognizedAdoNetAssemblyIdentity("System.Data.Common", string.Empty));
+        Assert.False(VisualBasicSemanticExtractor.IsRecognizedAdoNetAssemblyIdentity("Untrusted.Data", "b03f5f7f11d50a3a"));
+    }
+
+    [Fact]
+    public void Unsigned_configuration_name_lookalike_does_not_emit_config_bindings()
+    {
+        using var temp = new TempDirectory();
+        var repo = CreateRepository(temp.Path, signConfigurationAssembly: false);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.ConfigBinding
+            && fact.RuleId == RuleIds.VisualBasicSemanticConfigBinding);
     }
 
     [Fact]
@@ -178,11 +208,17 @@ public sealed class VisualBasicExternalBoundaryTests
             packet.Packet.PacketId);
     }
 
-    private static string CreateRepository(string root, bool includeLateBound = false, bool signServiceAssemblies = true)
+    private static string CreateRepository(
+        string root,
+        bool includeLateBound = false,
+        bool signServiceAssemblies = true,
+        bool signConfigurationAssembly = true)
     {
         var repo = Path.Combine(root, "repo");
         Directory.CreateDirectory(repo);
         File.WriteAllBytes(Path.Combine(repo, "microsoft-public.snk"), typeof(System.Net.Http.HttpClient).Assembly.GetName().GetPublicKey()!);
+        File.WriteAllBytes(Path.Combine(repo, "configuration-public.snk"), Convert.FromBase64String(
+            "ACQAAASAAACUAAAABgIAAAAkAABSU0ExAAQAAAEAAQBLhsTLeFSbNLq2GjsYAOI7/rWz7DkAdAQVNqfjy9l/XwTPD4VxVaiSjqop6/0Rz7utO6cO/qe9oyJsao03CkzTA/cUSGtuvCJZhaY4Rx5u9XHMkqRhPAC4+mXWHM7gy+XzYzDJoB9Bg1WfG+8kzCkXxtkT46VBMzodBdm+0is4yw=="));
         WriteSupportProject(repo, "ConfigurationSupport", "System.Configuration.ConfigurationManager", """
             using System.Collections.Specialized;
             namespace System.Configuration;
@@ -197,7 +233,7 @@ public sealed class VisualBasicExternalBoundaryTests
                 public ConnectionStringSettings this[string name] => new();
             }
             public sealed class ConnectionStringSettings { }
-            """);
+            """, signConfigurationAssembly, "../configuration-public.snk");
         WriteSupportProject(repo, "WcfSupport", "System.ServiceModel.Primitives", """
             namespace System.ServiceModel;
             [System.AttributeUsage(System.AttributeTargets.Interface)]
@@ -327,7 +363,13 @@ public sealed class VisualBasicExternalBoundaryTests
         return repo;
     }
 
-    private static void WriteSupportProject(string repo, string directory, string assemblyName, string source, bool publicSign = false)
+    private static void WriteSupportProject(
+        string repo,
+        string directory,
+        string assemblyName,
+        string source,
+        bool publicSign = false,
+        string publicKeyFile = "../microsoft-public.snk")
     {
         var path = Path.Combine(repo, directory);
         Directory.CreateDirectory(path);
@@ -336,7 +378,7 @@ public sealed class VisualBasicExternalBoundaryTests
               <PropertyGroup>
                 <TargetFramework>net10.0</TargetFramework>
                 <AssemblyName>{{assemblyName}}</AssemblyName>
-                {{(publicSign ? "<SignAssembly>true</SignAssembly><PublicSign>true</PublicSign><AssemblyOriginatorKeyFile>../microsoft-public.snk</AssemblyOriginatorKeyFile>" : string.Empty)}}
+                {{(publicSign ? $"<SignAssembly>true</SignAssembly><PublicSign>true</PublicSign><AssemblyOriginatorKeyFile>{publicKeyFile}</AssemblyOriginatorKeyFile>" : string.Empty)}}
               </PropertyGroup>
             </Project>
             """);

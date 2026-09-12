@@ -2415,7 +2415,8 @@ public static class VisualBasicSemanticExtractor
         family = string.Empty;
         httpMethod = "UNKNOWN";
         var type = GetMetadataName(method.ContainingType.OriginalDefinition);
-        if (type == "System.Net.Http.HttpClient" && method.ContainingAssembly.Identity.Name == "System.Net.Http")
+        if (type == "System.Net.Http.HttpClient"
+            && IsTrustedAssembly(method.ContainingAssembly, "System.Net.Http", "b03f5f7f11d50a3a"))
         {
             family = "HttpClient";
             httpMethod = method.Name.StartsWith("Get", StringComparison.Ordinal) ? "GET"
@@ -2427,8 +2428,7 @@ public static class VisualBasicSemanticExtractor
                 or "PostAsync" or "PutAsync" or "DeleteAsync" or "PatchAsync" or "SendAsync" or "Send";
         }
 
-        if (IsAdoNetType(method.ContainingType, "System.Net.WebRequest")
-            && IsRecognizedWebRequestAssemblyName(method.ContainingAssembly.Identity.Name)
+        if (IsTrustedWebRequestType(method.ContainingType)
             && method.Name is "GetResponse" or "GetResponseAsync")
         {
             family = "WebRequest";
@@ -2436,7 +2436,7 @@ public static class VisualBasicSemanticExtractor
         }
 
         if (type == "System.Net.WebClient"
-            && IsRecognizedWebClientAssemblyName(method.ContainingAssembly.Identity.Name)
+            && IsRecognizedWebClientAssembly(method.ContainingAssembly)
             && (method.Name.StartsWith("Download", StringComparison.Ordinal)
                 || method.Name.StartsWith("Upload", StringComparison.Ordinal)
                 || method.Name.StartsWith("OpenRead", StringComparison.Ordinal)
@@ -2500,12 +2500,12 @@ public static class VisualBasicSemanticExtractor
 
     private static bool IsConfigurationManagerGetSection(IMethodSymbol method) =>
         GetMetadataName(method.ContainingType.OriginalDefinition) == "System.Configuration.ConfigurationManager"
-        && IsRecognizedConfigurationAssemblyName(method.ContainingAssembly.Identity.Name)
+        && IsRecognizedConfigurationAssembly(method.ContainingAssembly)
         && method.Name == "GetSection";
 
     private static bool IsWebRequestCreate(IMethodSymbol method) =>
         GetMetadataName(method.ContainingType.OriginalDefinition) == "System.Net.WebRequest"
-        && IsRecognizedWebRequestAssemblyName(method.ContainingAssembly.Identity.Name)
+        && IsRecognizedWebRequestAssembly(method.ContainingAssembly)
         && method.Name is "Create" or "CreateHttp";
 
     private static bool TryClassifyConfigurationManagerIndexer(IPropertyReferenceOperation operation, out string sourceKind)
@@ -2515,7 +2515,7 @@ public static class VisualBasicSemanticExtractor
         {
             if (child is not IPropertyReferenceOperation property
                 || GetMetadataName(property.Property.ContainingType.OriginalDefinition) != "System.Configuration.ConfigurationManager"
-                || !IsRecognizedConfigurationAssemblyName(property.Property.ContainingAssembly.Identity.Name))
+                || !IsRecognizedConfigurationAssembly(property.Property.ContainingAssembly))
             {
                 continue;
             }
@@ -2656,11 +2656,64 @@ public static class VisualBasicSemanticExtractor
     internal static bool IsRecognizedConfigurationAssemblyName(string assemblyName) =>
         assemblyName is "System.Configuration.ConfigurationManager" or "System.Configuration";
 
+    private static bool IsRecognizedConfigurationAssembly(IAssemblySymbol assembly) =>
+        IsRecognizedConfigurationAssemblyIdentity(
+            assembly.Identity.Name,
+            Convert.ToHexString(assembly.Identity.PublicKeyToken.ToArray()));
+
+    internal static bool IsRecognizedConfigurationAssemblyIdentity(string assemblyName, string publicKeyToken) =>
+        (assemblyName == "System.Configuration.ConfigurationManager"
+            && publicKeyToken.Equals("cc7b13ffcd2ddd51", StringComparison.OrdinalIgnoreCase))
+        || (assemblyName == "System.Configuration"
+            && publicKeyToken.Equals("b03f5f7f11d50a3a", StringComparison.OrdinalIgnoreCase));
+
+    internal static bool IsRecognizedAdoNetAssemblyIdentity(string assemblyName, string publicKeyToken) =>
+        (assemblyName == "System.Data.Common"
+            && publicKeyToken.Equals("b03f5f7f11d50a3a", StringComparison.OrdinalIgnoreCase))
+        || (assemblyName == "System.Data"
+            && publicKeyToken.Equals("b77a5c561934e089", StringComparison.OrdinalIgnoreCase));
+
     internal static bool IsRecognizedWebRequestAssemblyName(string assemblyName) =>
         assemblyName is "System.Net.Requests" or "System";
 
+    private static bool IsRecognizedWebRequestAssembly(IAssemblySymbol assembly) =>
+        IsRecognizedWebRequestAssemblyIdentity(
+            assembly.Identity.Name,
+            Convert.ToHexString(assembly.Identity.PublicKeyToken.ToArray()));
+
+    internal static bool IsRecognizedWebRequestAssemblyIdentity(string assemblyName, string publicKeyToken) =>
+        (assemblyName == "System.Net.Requests"
+            && publicKeyToken.Equals("b03f5f7f11d50a3a", StringComparison.OrdinalIgnoreCase))
+        || (assemblyName == "System"
+            && publicKeyToken.Equals("b77a5c561934e089", StringComparison.OrdinalIgnoreCase));
+
     internal static bool IsRecognizedWebClientAssemblyName(string assemblyName) =>
         assemblyName is "System.Net.WebClient" or "System";
+
+    private static bool IsRecognizedWebClientAssembly(IAssemblySymbol assembly) =>
+        IsRecognizedWebClientAssemblyIdentity(
+            assembly.Identity.Name,
+            Convert.ToHexString(assembly.Identity.PublicKeyToken.ToArray()));
+
+    internal static bool IsRecognizedWebClientAssemblyIdentity(string assemblyName, string publicKeyToken) =>
+        (assemblyName == "System.Net.WebClient"
+            && publicKeyToken.Equals("cc7b13ffcd2ddd51", StringComparison.OrdinalIgnoreCase))
+        || (assemblyName == "System"
+            && publicKeyToken.Equals("b77a5c561934e089", StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsTrustedWebRequestType(ITypeSymbol? type)
+    {
+        for (var current = type as INamedTypeSymbol; current is not null; current = current.BaseType)
+        {
+            if (GetMetadataName(current.OriginalDefinition) == "System.Net.WebRequest"
+                && IsRecognizedWebRequestAssembly(current.ContainingAssembly))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     private static IEnumerable<IOperation> DescendantsAndSelf(IOperation operation)
     {
@@ -2834,7 +2887,10 @@ public static class VisualBasicSemanticExtractor
     {
         for (var current = type as INamedTypeSymbol; current is not null; current = current.BaseType)
         {
-            if (GetMetadataName(current.OriginalDefinition) == metadataName)
+            if (GetMetadataName(current.OriginalDefinition) == metadataName
+                && IsRecognizedAdoNetAssemblyIdentity(
+                    current.ContainingAssembly.Identity.Name,
+                    Convert.ToHexString(current.ContainingAssembly.Identity.PublicKeyToken.ToArray())))
             {
                 return true;
             }
