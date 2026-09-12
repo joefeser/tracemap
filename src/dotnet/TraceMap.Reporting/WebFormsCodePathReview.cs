@@ -1,9 +1,13 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using TraceMap.Core;
+
+using CSharpMethodDeclarationSyntax = Microsoft.CodeAnalysis.CSharp.Syntax.MethodDeclarationSyntax;
+using VisualBasicSyntaxTree = Microsoft.CodeAnalysis.VisualBasic.VisualBasicSyntaxTree;
+using VisualBasicMethodBlockSyntax = Microsoft.CodeAnalysis.VisualBasic.Syntax.MethodBlockSyntax;
 
 namespace TraceMap.Reporting;
 
@@ -120,8 +124,8 @@ public static class WebFormsCodePathReview
         }
 
         // Definition candidates are navigation aids, not evidence. Restrict name lookup
-        // to already witnessed C# files and publish only globally unique candidates.
-        var evidenceFiles = deduplicated.Select(l => l.FilePath).Where(p => p.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+        // to already witnessed compiler-language files and publish only globally unique candidates.
+        var evidenceFiles = deduplicated.Select(l => l.FilePath).Where(IsSupportedSourcePath)
             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
         var candidateCount = 0;
         var unresolvedLeaves = selected.TryGetProperty("unresolvedOtherLeaves", out var unresolvedValues)
@@ -133,7 +137,7 @@ public static class WebFormsCodePathReview
         if (boundedUnresolvedLeaves.Length > 512 || (long)boundedUnresolvedLeaves.Length * evidenceFiles.Length > 8_192)
             throw new InvalidDataException("CodePathReviewCandidateWorkLimit");
         var syntaxRoots = evidenceFiles.ToDictionary(relativePath => relativePath,
-            relativePath => CSharpSyntaxTree.ParseText(string.Join(Environment.NewLine, ReadSource(relativePath)), path: relativePath).GetCompilationUnitRoot(),
+            relativePath => ParseSyntaxRoot(relativePath, string.Join(Environment.NewLine, ReadSource(relativePath))),
             StringComparer.Ordinal);
         foreach (var unresolved in boundedUnresolvedLeaves)
         {
@@ -145,7 +149,7 @@ public static class WebFormsCodePathReview
             foreach (var relativePath in evidenceFiles)
             {
                 var syntax = syntaxRoots[relativePath];
-                foreach (var method in syntax.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.ValueText == name))
+                foreach (var method in FindMethodDeclarations(syntax, relativePath, name))
                 {
                     var span = method.GetLocation().GetLineSpan();
                     candidates.Add(new("unique-name-definition-candidate-not-evidence", relativePath,
@@ -255,10 +259,32 @@ public static class WebFormsCodePathReview
 
         static string PublicRuleId(string value) =>
             (value.StartsWith("csharp.semantic.", StringComparison.Ordinal) ||
+             value.StartsWith("vb.semantic.", StringComparison.Ordinal) ||
              value.StartsWith("legacy.webforms.", StringComparison.Ordinal) ||
              value.StartsWith("diagnostic.webforms.", StringComparison.Ordinal)) &&
             System.Text.RegularExpressions.Regex.IsMatch(value, "^[a-z0-9][a-z0-9.-]{0,127}$")
                 ? value : "withheld-unsafe-rule-id";
+
+        static bool IsSupportedSourcePath(string path) =>
+            path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase) ||
+            path.EndsWith(".vb", StringComparison.OrdinalIgnoreCase);
+
+        static SyntaxNode ParseSyntaxRoot(string path, string source) =>
+            path.EndsWith(".vb", StringComparison.OrdinalIgnoreCase)
+                ? VisualBasicSyntaxTree.ParseText(source, path: path).GetRoot()
+                : CSharpSyntaxTree.ParseText(source, path: path).GetRoot();
+
+        static IEnumerable<SyntaxNode> FindMethodDeclarations(SyntaxNode syntax, string path, string name)
+        {
+            if (path.EndsWith(".vb", StringComparison.OrdinalIgnoreCase))
+            {
+                return syntax.DescendantNodes().OfType<VisualBasicMethodBlockSyntax>()
+                    .Where(method => method.SubOrFunctionStatement.Identifier.ValueText.Equals(name, StringComparison.OrdinalIgnoreCase));
+            }
+
+            return syntax.DescendantNodes().OfType<CSharpMethodDeclarationSyntax>()
+                .Where(method => method.Identifier.ValueText.Equals(name, StringComparison.Ordinal));
+        }
 
         static string PublicTier(string value) => value is "Tier1Semantic" or "Tier2Structural" or "Tier3SyntaxOrTextual" or "Tier4Unknown"
             ? value : "withheld-unsafe-evidence-tier";

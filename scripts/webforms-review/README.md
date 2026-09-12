@@ -164,6 +164,10 @@ explicitly.
 - A local checkout of the reviewed application source. Git is optional for the
   source review, and working-tree equality with the recorded commit is not
   inferred.
+- C# and VB.NET code-behind spans are supported. When an unresolved method has
+  one unique definition in the already witnessed source files, the report adds
+  a language-aware navigation candidate. It remains labeled as a candidate,
+  not semantic evidence; VB identifier matching is case-insensitive.
 - A local `scripts/Run-FocusedWebFormsPageList.json`, created from the checked-in
   example as described below.
 
@@ -213,6 +217,11 @@ Each set contains:
 - `case-NNN.source-NNN.html` — complete private annotated working-tree files, generated only with `-IncludeRawSource`;
 - `case-NNN.shareable.html` — anonymous structural review; and
 - `case-NNN.shareable.json` — anonymous machine-readable graph.
+
+For VB.NET cases, private reports preserve retained `vb.semantic.*` rule and
+tier provenance and optional `.vb` annotated-source links. Shareable outputs
+never include VB source text, file paths, symbols, fact IDs, SQL, URLs,
+configuration, or commit identity.
 
 Deleting the original batch inspection does not invalidate an existing completed
 set because the set retains `inspection.snapshot.json`. To create a new set after

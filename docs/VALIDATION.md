@@ -1239,6 +1239,11 @@ dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
 dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
   --filter FullyQualifiedName~VisualBasicExternalBoundaryTests
 
+# VB scan -> Web Forms packet -> batch inspection -> private/anonymous source
+# review, plus language-aware source navigation and privacy assertions.
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter 'FullyQualifiedName~VisualBasicWebFormsCompositionTests|FullyQualifiedName~WebFormsCodePathReviewTests'
+
 # Modern (semantic success), legacy (fallback/reduced), and Web Forms
 # (inventory + reduced) CLI fixture scans.
 dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/vb-modern-sample --out <tmp>/vb-modern
@@ -1318,6 +1323,10 @@ Cross-language symbol-identity joins between VB-scan symbols and C#-declared
 symbols are not established. VB/Web Forms event evidence is static and does
 not establish runtime attachment, firing, ordering, postback behavior, or
 execution.
+Focused review can annotate retained `.vb` spans when raw source is explicitly
+enabled. The supplied source root need not be a Git checkout, and TraceMap does
+not claim that working-tree source equals the recorded scan commit. Anonymous
+HTML/JSON contains structural aliases and safe rule/tier provenance only.
 
 ## What SQL Means Here
 
