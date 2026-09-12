@@ -2870,6 +2870,14 @@ public static partial class LegacyWebFormsExtractor
 
             var signatureStart = sourceSymbol.IndexOf('(', StringComparison.Ordinal);
             var memberEnd = signatureStart >= 0 ? signatureStart : sourceSymbol.Length;
+            if (memberEnd == 0)
+            {
+                // Symbol text that begins with its own signature (for example a
+                // Visual Basic anonymous-method display of "()") has no derivable
+                // member name; it joins only by its full symbol text.
+                return null;
+            }
+
             var separator = sourceSymbol.LastIndexOf('.', memberEnd - 1, memberEnd);
             return separator >= 0 && separator + 1 < memberEnd
                 ? sourceSymbol[(separator + 1)..memberEnd]
