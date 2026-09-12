@@ -1,10 +1,51 @@
 using TraceMap.Core;
 using TraceMap.Reporting;
+using TraceMap.Storage;
 
 namespace TraceMap.Tests;
 
 public sealed class VisualBasicWebFormsCompositionTests
 {
+    [Fact]
+    public async Task Vb_fixture_flows_from_scan_through_private_and_anonymous_code_path_review()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(FindRepoRoot(), "samples", "vb-webforms-sample");
+        var scan = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "scan")));
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
+        var packet = await WebFormsModernizationPacketReporter.WriteAsync(
+            new(index, Path.Combine(temp.Path, "packet")));
+        var inspection = Path.Combine(temp.Path, "inspection.json");
+
+        WebFormsRawEvidenceAudit.Run(
+            index,
+            packet.JsonPath,
+            inspectionPath: inspection,
+            inspectAllHandlers: true);
+
+        using var inspectionJson = System.Text.Json.JsonDocument.Parse(File.ReadAllText(inspection));
+        var selected = Assert.Single(inspectionJson.RootElement.GetProperty("cases").EnumerateArray(),
+            item => item.GetProperty("handler").GetString()?.Contains("SaveButton_Click", StringComparison.OrdinalIgnoreCase) == true);
+        var caseId = selected.GetProperty("caseId").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(caseId));
+        Assert.EndsWith(".vb", selected.GetProperty("handlerLocation").GetProperty("filePath").GetString(), StringComparison.OrdinalIgnoreCase);
+
+        var output = Path.Combine(temp.Path, "review.private.html");
+        WebFormsCodePathReview.Run(inspection, repo, caseId!, output, includeRawSource: true);
+
+        var privateHtml = File.ReadAllText(output);
+        var shareableHtml = File.ReadAllText(Path.Combine(temp.Path, "review.shareable.html"));
+        var shareableJson = File.ReadAllText(Path.Combine(temp.Path, "review.shareable.json"));
+        Assert.Contains("SaveButton_Click", privateHtml, StringComparison.Ordinal);
+        Assert.Contains(Directory.GetFiles(temp.Path, "review.source-*.html"), path =>
+            File.ReadAllText(path).Contains("Private annotated source Default.aspx.vb", StringComparison.Ordinal));
+        Assert.DoesNotContain("SaveButton_Click", shareableHtml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Default.aspx.vb", shareableHtml, StringComparison.Ordinal);
+        Assert.DoesNotContain("SaveButton_Click", shareableJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("Default.aspx.vb", shareableJson, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Semantic_event_sites_emit_resolved_handles_attach_detach_and_raise_evidence()
     {

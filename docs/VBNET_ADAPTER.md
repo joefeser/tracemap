@@ -1,10 +1,11 @@
 # VB.NET Adapter
 
-Status: foundation, bounded event/Web Forms composition, and compiler-backed
-ADO.NET plus HTTP/config/file boundary slices (issues
+Status: foundation, bounded event/Web Forms composition, compiler-backed
+ADO.NET plus HTTP/config/file boundary slices, and focused review/export parity (issues
 [#736](https://github.com/joefeser/tracemap/issues/736) and
-[#738](https://github.com/joefeser/tracemap/issues/738), plus partial issue
-[#737](https://github.com/joefeser/tracemap/issues/737)). Every claim below is bounded by
+[#738](https://github.com/joefeser/tracemap/issues/738),
+[#737](https://github.com/joefeser/tracemap/issues/737), and
+[#750](https://github.com/joefeser/tracemap/issues/750)). Every claim below is bounded by
 the cataloged rule limitations in `rules/rule-catalog.yml` (`vb.semantic.*`,
 `vb.syntax.*`). Nothing in this adapter proves runtime reachability, execution,
 build success, or impact.
@@ -51,6 +52,12 @@ build success, or impact.
   digests are retained; raw keys and values are excluded.
 - Feeds compiler-resolved VB `System.IO.File`/`Directory` calls into the shared
   batch/data-movement projection. No VB-only file contract is introduced.
+- Carries retained `.vb` spans through the existing focused Web Forms review
+  and optional annotated-source output. Bounded unique-name navigation uses
+  Visual Basic syntax and case-insensitive identifier matching, but remains a
+  labeled navigation candidate rather than evidence. Anonymous reports retain
+  safe `vb.semantic.*` rule provenance while withholding source, paths,
+  symbols, fact IDs, configuration, SQL, URLs, and commit identity.
 
 ## Extractor identities
 
@@ -213,6 +220,10 @@ catalog documents them per rule:
 - No runtime claims of any kind: facts prove source structure and
   compiler-resolved binding at scan time only, never execution,
   reachability, deployment state, or impact.
+- Focused source review reads the supplied working tree and does not prove that
+  it matches the scanned commit. Git is optional. Raw source remains opt-in,
+  private, and excluded from anonymous artifacts; unique-name definition
+  candidates are navigation aids only.
 
 ## Validation
 
