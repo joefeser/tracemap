@@ -587,7 +587,7 @@ public sealed class VisualBasicExtractionTests
     }
 
     [Fact]
-    public void Late_bound_call_site_retains_tier3_evidence_and_reduces_coverage()
+    public void Valid_late_bound_call_site_retains_tier3_evidence_without_claiming_toolchain_failure()
     {
         using var temp = new TempDirectory();
         var repo = Path.Combine(temp.Path, "repo");
@@ -607,7 +607,8 @@ public sealed class VisualBasicExtractionTests
         Commit(repo);
 
         var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
-        Assert.Equal("Level1SemanticAnalysisReduced", result.Manifest.AnalysisLevel);
+        Assert.Equal("Succeeded", result.Manifest.BuildStatus);
+        Assert.Equal("Level1SemanticAnalysis", result.Manifest.AnalysisLevel);
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.CallEdge
             && fact.RuleId == RuleIds.VisualBasicSyntaxCallGraph
@@ -615,6 +616,7 @@ public sealed class VisualBasicExtractionTests
             && fact.TargetSymbol == "Execute");
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.VisualBasicSemanticMethodInvocation
             && fact.Properties.GetValueOrDefault("gapKind") == "CallSiteSemanticResolutionUnavailable"
             && fact.Properties.ContainsKey("siteHash"));
     }

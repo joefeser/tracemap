@@ -3274,12 +3274,14 @@ public static partial class LegacyWebFormsExtractor
 
     private static string TerminalSurfaceKind(CodeFact fact)
     {
+        var operationKind = fact.Properties.GetValueOrDefault("operationKind");
         return fact.FactType switch
         {
             FactTypes.WcfServiceReferenceMapping => "wcf-operation",
             FactTypes.AsmxServiceReferenceMapping => "asmx-client",
-            FactTypes.DatabaseOperationCandidate when fact.Properties.GetValueOrDefault("operationKind") == "data-adapter-fill" => "sql-query",
-            FactTypes.DatabaseOperationCandidate => "sql-persistence",
+            FactTypes.DatabaseOperationCandidate when operationKind is "data-adapter-fill" or "select-candidate" or "scalar-candidate" => "sql-query",
+            FactTypes.DatabaseOperationCandidate when operationKind is "insert-candidate" or "update-candidate" or "delete-candidate"
+                or "execute-candidate" or "save-boundary" or "transaction-begin" or "transaction-commit" or "transaction-rollback" => "sql-persistence",
             FactTypes.SqlTextUsed or FactTypes.QueryPatternDetected or FactTypes.SqlCommandDetected or FactTypes.DapperCallDetected => "sql-query",
             FactTypes.HttpCallDetected => "http-client",
             _ => "dependency-surface"

@@ -1059,11 +1059,20 @@ public static class ScanEngine
     private static bool HasToolchainSemanticReduction(SemanticExtractionResult result) =>
         result.GapFacts.Any(gap => !IsProducerLocalSemanticGap(gap));
 
-    private static bool IsProducerLocalSemanticGap(SemanticFactCandidate gap) =>
-        gap.RuleId == RuleIds.CSharpRazorSemanticModelBindingGap
-        || gap.RuleId == RuleIds.CSharpSemanticPropertyMappingGap
-        || gap.RuleId == RuleIds.VisualBasicSemanticEventWiring
-        || gap.RuleId == RuleIds.VisualBasicSemanticExternalBoundary;
+    private static bool IsProducerLocalSemanticGap(SemanticFactCandidate gap)
+    {
+        if (gap.RuleId == RuleIds.CSharpRazorSemanticModelBindingGap
+            || gap.RuleId == RuleIds.CSharpSemanticPropertyMappingGap
+            || gap.RuleId == RuleIds.VisualBasicSemanticEventWiring
+            || gap.RuleId == RuleIds.VisualBasicSemanticExternalBoundary
+            || gap.RuleId == RuleIds.VisualBasicSemanticMethodInvocation)
+        {
+            return true;
+        }
+
+        return gap.RuleId == RuleIds.DatabaseOperationCallPattern
+            && gap.Properties?.GetValueOrDefault("gapKind") == "VisualBasicAdoNetTargetUnavailable";
+    }
 
     private static string GetBuildStatusReason(
         ScanManifest manifest,

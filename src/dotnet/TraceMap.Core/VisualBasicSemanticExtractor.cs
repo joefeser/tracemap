@@ -595,7 +595,7 @@ public static class VisualBasicSemanticExtractor
 
         foreach (var statement in root.DescendantNodes().OfType<MethodBaseSyntax>())
         {
-            if (model.GetDeclaredSymbol(statement) is not IMethodSymbol method
+            if (GetDeclaredMethodSymbol(statement, model) is not IMethodSymbol method
                 || method.MethodKind is MethodKind.PropertyGet or MethodKind.PropertySet)
             {
                 continue;
@@ -775,7 +775,7 @@ public static class VisualBasicSemanticExtractor
                 continue;
             }
 
-            if (model.GetDeclaredSymbol(statement) is not IMethodSymbol method
+            if (GetDeclaredMethodSymbol(statement, model) is not IMethodSymbol method
                 || method.MethodKind is MethodKind.PropertyGet or MethodKind.PropertySet or MethodKind.EventAdd or MethodKind.EventRemove or MethodKind.EventRaise)
             {
                 continue;
@@ -1200,8 +1200,13 @@ public static class VisualBasicSemanticExtractor
     private static IMethodSymbol? GetContainingMethod(SyntaxNode node, SemanticModel model)
     {
         var statement = node.Ancestors().OfType<MethodBlockBaseSyntax>().FirstOrDefault()?.BlockStatement;
+        return statement is null ? null : GetDeclaredMethodSymbol(statement, model);
+    }
+
+    private static IMethodSymbol? GetDeclaredMethodSymbol(MethodBaseSyntax statement, SemanticModel model)
+    {
 #pragma warning disable RS1039 // VB Roslyn returns the declared method for concrete MethodBaseSyntax nodes.
-        return statement is null ? null : model.GetDeclaredSymbol(statement) as IMethodSymbol;
+        return model.GetDeclaredSymbol(statement) as IMethodSymbol;
 #pragma warning restore RS1039
     }
 
@@ -1614,7 +1619,8 @@ public static class VisualBasicSemanticExtractor
                         projectPath,
                         lineSpan.StartLinePosition.Line + 1,
                         lineSpan.EndLinePosition.Line + 1,
-                        siteHash: FactFactory.Hash(invocation.Expression.ToString(), 32)));
+                        siteHash: FactFactory.Hash(invocation.Expression.ToString(), 32),
+                        ruleId: operation is IDynamicInvocationOperation ? RuleIds.VisualBasicSemanticMethodInvocation : null));
                     fallbackFactCount += 2;
                 }
                 else if (!fallbackTruncationReported)
@@ -2422,6 +2428,7 @@ public static class VisualBasicSemanticExtractor
         }
 
         if (IsAdoNetType(method.ContainingType, "System.Net.WebRequest")
+            && IsRecognizedWebRequestAssemblyName(method.ContainingAssembly.Identity.Name)
             && method.Name is "GetResponse" or "GetResponseAsync")
         {
             family = "WebRequest";

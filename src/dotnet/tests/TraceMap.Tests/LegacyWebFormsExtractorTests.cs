@@ -1223,13 +1223,18 @@ public sealed class LegacyWebFormsExtractorTests
             && fact.Properties.GetValueOrDefault("flowClassification") == "ProbableStaticEventFlow");
     }
 
-    [Fact]
-    public void Scan_links_compiler_resolved_database_operation_as_webforms_terminal_without_changing_csharp_binding()
+    [Theory]
+    [InlineData("ExecuteNonQuery", "sql-persistence")]
+    [InlineData("ExecuteReader", "sql-query")]
+    [InlineData("ExecuteScalar", "sql-query")]
+    public void Scan_preserves_compiler_resolved_database_operation_kind_as_webforms_terminal(
+        string methodName,
+        string expectedTerminalKind)
     {
         using var temp = new TempDirectory();
         var repo = Path.Combine(temp.Path, "repo");
         Directory.CreateDirectory(repo);
-        WriteBasicPage(repo, "Save_Click", handlerBody: "((Microsoft.Data.Sqlite.SqliteCommand)sender).ExecuteNonQuery();");
+        WriteBasicPage(repo, "Save_Click", handlerBody: $"((Microsoft.Data.Sqlite.SqliteCommand)sender).{methodName}();");
         var sqliteAssembly = typeof(Microsoft.Data.Sqlite.SqliteCommand).Assembly.Location;
         File.WriteAllText(Path.Combine(repo, "App.csproj"), $"""
             <Project Sdk="Microsoft.NET.Sdk">
@@ -1246,7 +1251,7 @@ public sealed class LegacyWebFormsExtractorTests
             && fact.SourceSymbol?.Contains("Save_Click", StringComparison.Ordinal) == true);
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.WebFormsEventFlowProjected
-            && fact.Properties.GetValueOrDefault("terminalSurfaceKind") == "sql-persistence"
+            && fact.Properties.GetValueOrDefault("terminalSurfaceKind") == expectedTerminalKind
             && fact.Properties.GetValueOrDefault("flowClassification") == "StrongStaticEventFlow");
     }
 

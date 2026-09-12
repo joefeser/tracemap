@@ -88,6 +88,12 @@ public sealed class VisualBasicDataBoundaryTests
         Assert.DoesNotContain(result.Facts, fact =>
             fact.FactType == FactTypes.DatabaseOperationCandidate
             && fact.SourceSymbol?.Contains("LateBound", StringComparison.Ordinal) == true);
+        Assert.True(
+            result.Manifest.BuildStatus == "Succeeded",
+            string.Join(Environment.NewLine, result.Facts
+                .Where(fact => fact.FactType == FactTypes.AnalysisGap)
+                .Select(fact => JsonSerializer.Serialize(fact))));
+        Assert.Equal("Level1SemanticAnalysis", result.Manifest.AnalysisLevel);
     }
 
     [Fact]

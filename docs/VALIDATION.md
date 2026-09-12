@@ -29,6 +29,8 @@ Every language adapter should have:
 
 Run these before opening or updating a PR that changes scanner behavior:
 
+The build must not introduce compiler or analyzer warnings. Resolve warnings before pushing the PR; narrowly suppress a proven tool false positive only at the affected call and protect the intended behavior with a test.
+
 ```bash
 dotnet build src/dotnet/TraceMap.sln
 dotnet test src/dotnet/TraceMap.sln

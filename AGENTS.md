@@ -79,6 +79,7 @@ When semantic analysis fails:
 
 ## Review checklist before finishing a task
 
+- Before opening or updating a PR, resolve known actionable review findings plus compiler and analyzer warnings introduced by the branch. For a proven tool false positive, use the narrowest documented suppression and pin the intended behavior with a test; do not leave warning annotations for reviewers to rediscover.
 - Does `dotnet test` pass?
 - Can the CLI run against at least one sample repo?
 - For language-adapter changes, did we follow `docs/VALIDATION.md` and run or explicitly defer the relevant pinned smoke checks?
