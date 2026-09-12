@@ -25,6 +25,7 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
   const migrationItems = inventory.filter((file) => !file.skipped && file.relativePath.endsWith(".sql") && isMigrationPath(file.relativePath));
   const aliasDiscovery = await buildAliasMaps(sourceItems);
   const frontendPackageAuthority = await loadFrontendPackageAuthority(inventory);
+  facts.push(...await packageAuthorityFacts(manifest, frontendPackageAuthority, inventory));
   for (const item of inventory.filter((file) => !file.skipped)) {
     if (item.relativePath.endsWith(".sql")) {
       continue;
@@ -3548,6 +3549,40 @@ async function loadFrontendPackageAuthority(inventory: readonly FileInventoryIte
   } catch {
     return { gap: "sdk-identity-package-authority-invalid" };
   }
+}
+
+async function packageAuthorityFacts(
+  manifest: ScanManifest,
+  authority: FrontendPackageAuthority,
+  inventory: readonly FileInventoryItem[]
+): Promise<CodeFact[]> {
+  if (!authority.identityEvidence?.length || !authority.version) return [];
+  const byPath = new Map(inventory.filter((item) => !item.skipped).map((item) => [item.relativePath, item]));
+  const output: CodeFact[] = [];
+  for (const item of authority.identityEvidence) {
+    if (item.kind !== "package-manifest" && item.kind !== "package-lock-resolution") continue;
+    const inventoryItem = byPath.get(item.authorityPath);
+    if (!inventoryItem) continue;
+    const text = await fs.readFile(inventoryItem.absolutePath, "utf8");
+    output.push(createFact(
+      manifest,
+      FactTypes.Base44SdkImport,
+      RuleIds.Base44SdkImport,
+      EvidenceTiers.Tier3SyntaxOrTextual,
+      createEvidence(item.authorityPath, 1, Math.max(1, text.split(/\r?\n/u).length), "base44-evidence", ScannerVersions.Base44EvidenceExtractor, hash(text, 64)),
+      {
+        targetSymbol: "@base44/sdk",
+        contractElement: item.kind,
+        properties: {
+          requestedPackage: "@base44/sdk",
+          requestedVersion: authority.version,
+          importKind: item.kind,
+          sourceFileSha256: item.authoritySha256
+        }
+      }
+    ));
+  }
+  return output;
 }
 
 function resolveSdkIdentity(roots: SdkAuthorityRoot[], frontend: FrontendPackageAuthority): SdkIdentityResolution {
