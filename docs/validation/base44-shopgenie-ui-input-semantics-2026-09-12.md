@@ -48,6 +48,35 @@ correlation limitation.
 
 ## Commands
 
+This receipt followed `docs/VALIDATION.md` for a TypeScript/Base44 adapter-only
+change. The applicable pinned matrix was:
+
+- TypeScript adapter contract and unit matrix:
+  `npm run check --prefix src/typescript` — passed, including
+  `Base44UiInputSemantics.test.ts`.
+- Artifact conformance:
+  `python3 scripts/validate-adapter-artifacts.py
+  /private/tmp/tracemap-shopgenie-ui-semantics-e` and
+  `python3 scripts/test_validate_adapter_artifacts.py` — passed.
+- Private-path and diff hygiene:
+  `./scripts/check-private-paths.sh` and `git diff --check` — passed.
+- Deterministic source-bound ShopGenie scan:
+  two scans of the same `origin/main` commit produced byte-identical
+  `base44-evidence.json` and `facts.ndjson` — passed.
+- Host intake compatibility:
+  coordinated in 88mphServer PR #634, which allowlists
+  `base44-evidence/0.15.0` and `base44.ui-input-semantics.v1` and validates
+  the UI descriptor before host consumption.
+
+Deferred checks:
+
+- JVM and Python adapter suites were not run because no JVM/Python scanner,
+  shared index, relationship-query, or cross-language output path changed in
+  this PR.
+- Public OSS smoke was not run because the change is scoped to the Base44
+  TypeScript producer and is covered here by the private ShopGenie
+  source-bound replay plus artifact validation.
+
 ```bash
 npm run check --prefix src/typescript
 dotnet test src/dotnet/TraceMap.sln
@@ -73,6 +102,3 @@ cmp /private/tmp/tracemap-shopgenie-ui-semantics-e/facts.ndjson \
 Results: TypeScript 257/257 passed; .NET 1,928/1,928 passed; artifact validation,
 validator unit tests, private-path guard, diff check, and both deterministic
 comparisons passed.
-
-JVM and Python adapter suites were not run because this change is confined to
-the TypeScript/Base44 producer and its shared artifact contract.

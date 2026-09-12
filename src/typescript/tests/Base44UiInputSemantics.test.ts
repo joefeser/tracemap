@@ -125,6 +125,39 @@ describe("Base44 React UI input semantics", () => {
       valueClass: "decimal"
     });
 
+    const shadowedInput = semantics.find(({ value }) => value.valueBinding === "form.price"
+      && value.controlKind === "input");
+    expect(shadowedInput?.value).toMatchObject({
+      correlationStatus: "partial",
+      submittedEntity: "",
+      submittedField: ""
+    });
+    expect(semantics.some(({ value }) => value.submittedEntity === "ShadowedInput"
+      && value.controlKind !== "submitted-value")).toBe(false);
+
+    const shadowedCast = semantics.find(({ value }) => value.valueBinding === "row.code"
+      && value.controlKind === "input");
+    expect(shadowedCast?.value).toMatchObject({
+      correlationStatus: "partial",
+      submittedEntity: "",
+      submittedField: ""
+    });
+    expect(semantics.some(({ value }) => value.submittedEntity === "ShadowedCast"
+      && value.controlKind !== "submitted-value")).toBe(false);
+
+    const dynamicType = semantics.find(({ value }) => value.valueBinding === "form.dynamicQuantity"
+      && value.controlKind === "input");
+    expect(dynamicType?.value).toMatchObject({
+      correlationStatus: "partial",
+      valueClass: "unknown",
+      submittedEntity: "",
+      submittedField: ""
+    });
+    expect(dynamicType?.value.reasons).toContainEqual(expect.objectContaining({
+      kind: "native-input-type",
+      detail: "type=dynamic-unresolved"
+    }));
+
     expect(semantics.some(({ value }) => value.submittedEntity === "UnknownSdk")).toBe(false);
 
     const forged = structuredClone(packet);
@@ -147,6 +180,12 @@ async function fixtureRepo(): Promise<string> {
   await fs.writeFile(path.join(repo, "src", "Screen.tsx"), `import { base44 } from "@base44/sdk";
 export function Screen({ row, form, shared }) {
   const payload = { amount: parseFloat(row.lexicalCost) };
+  function Number(value) {
+    return "sku-" + value;
+  }
+  function saveShadowed(form) {
+    return base44.entities.ShadowedInput.create({ amount: form.price });
+  }
   async function save() {
     await base44.entities.MaterialItemPriceBreak.create({ price: parseFloat(row.cost) });
     await base44.entities.FeatureFlag.create({ enabled: form.enabled });
@@ -156,6 +195,9 @@ export function Screen({ row, form, shared }) {
     await base44.entities.First.create({ amount: shared.value });
     await base44.entities.Second.create({ amount: shared.value });
     await base44.entities.LexicalPayload.create(payload);
+    await saveShadowed({ price: form.price });
+    await base44.entities.ShadowedCast.create({ code: Number(row.code) });
+    await base44.entities.DynamicInput.create({ quantity: form.dynamicQuantity });
     const reassigned = { amount: row.reassignedCost };
     reassigned.amount = row.otherCost;
     await base44.entities.ReassignedPayload.create(reassigned);
@@ -180,6 +222,9 @@ export function Screen({ row, form, shared }) {
     </select>
     <CurrencyInput name="rate" type="number" inputMode="decimal" step="any" value={form.rate} onChange={() => {}} />
     <Input name="amount" type="number" value={shared.value} onChange={() => {}} />
+    <input name="amount" type="number" value={form.price} onChange={() => {}} />
+    <input name="code" type="number" value={row.code} onChange={() => {}} />
+    <input name="quantity" type={form.dynamicKind} value={form.dynamicQuantity} onChange={() => {}} />
   </form>;
 }
 `);

@@ -28,6 +28,7 @@ interface PayloadBinding {
   operationEvidenceId: string;
   fieldName: string;
   bindingPath: string;
+  bindingRootIdentity: string;
   payloadRoot: string;
   valueClass: ValueClass;
   reasons: ReasonEvidence[];
@@ -41,6 +42,8 @@ interface ControlCandidate {
   componentName: string;
   fieldBinding: string;
   valueBinding: string;
+  valueBindingRootIdentity: string;
+  dynamicTypeUnresolved: boolean;
   valueClass: ValueClass;
   reasons: ReasonEvidence[];
   representativeValues: string[];
@@ -111,7 +114,7 @@ export function extractBase44UiInputFacts(
     }));
 
   for (const control of controls) {
-    const matches = matchPayloadBindings(control, payloadBindings);
+    const matches = control.dynamicTypeUnresolved ? [] : matchPayloadBindings(control, payloadBindings);
     const distinctTargets = new Map(matches.map((match) => [`${match.entityName}\0${match.fieldName}\0${match.operationEvidenceId}`, match]));
     const entityFields = new Set([...distinctTargets.values()].map((match) => `${match.entityName}\0${match.fieldName}`));
     const provenMatches: Array<PayloadBinding | null> = entityFields.size === 1 ? [...distinctTargets.values()] : [null];
@@ -230,29 +233,31 @@ function collectPayloadExpression(expression: ts.Expression, context: PayloadCon
     const declaration = resolveConstDeclaration(value, context.source, context.scope);
     if (declaration?.initializer) {
       if (hasBindingMutationBetween(value.text, declaration, value, context.source, context.scope)) {
-        output.push(payloadBinding(context, "*", value.text, value.text, "unknown", [], value));
+        output.push(payloadBinding(context, "*", value.text, bindingRootIdentity(value, context.source), value.text, "unknown", [], value));
         return;
       }
       collectPayloadExpression(declaration.initializer, { ...context, visited: new Set(context.visited) }, output);
       return;
     }
-    output.push(payloadBinding(context, "*", value.text, value.text, "unknown", [], value));
+    output.push(payloadBinding(context, "*", value.text, bindingRootIdentity(value, context.source), value.text, "unknown", [], value));
   }
 }
 
 function addPayloadBinding(fieldName: string, expression: ts.Expression, evidenceNode: ts.Node, context: PayloadContext, output: PayloadBinding[]): void {
-  const bindingPath = expressionBindingPath(expression);
+  const bindingPath = expressionBindingPath(expression, context.source);
+  const bindingRoot = expressionBindingRootIdentity(expression, context.source);
   const inferred = inferExpressionValueClass(expression, context.source, context.filePath, fieldName);
-  output.push(payloadBinding(context, fieldName, bindingPath, "", inferred.valueClass, inferred.reasons, evidenceNode));
+  output.push(payloadBinding(context, fieldName, bindingPath, bindingRoot, "", inferred.valueClass, inferred.reasons, evidenceNode));
 }
 
-function payloadBinding(context: PayloadContext, fieldName: string, bindingPath: string, payloadRoot: string, valueClass: ValueClass, reasons: ReasonEvidence[], node: ts.Node): PayloadBinding {
+function payloadBinding(context: PayloadContext, fieldName: string, bindingPath: string, bindingRootIdentityValue: string, payloadRoot: string, valueClass: ValueClass, reasons: ReasonEvidence[], node: ts.Node): PayloadBinding {
   return {
     entityName: context.entityName,
     operationName: context.operationName,
     operationEvidenceId: context.operationEvidenceId,
     fieldName,
     bindingPath,
+    bindingRootIdentity: bindingRootIdentityValue,
     payloadRoot,
     valueClass,
     reasons,
@@ -271,10 +276,13 @@ function collectControls(source: ts.SourceFile, filePath: string): ControlCandid
       const relevant = controlKind !== "component" || isWrappedControlComponent(componentName, attributes);
       if (relevant) {
         const fieldBinding = literalAttribute(attributes.get("name")) ?? setterFieldBinding(attributes.get("onChange"), source);
-        const valueBinding = expressionAttributePath(attributes.get("value")) || expressionAttributePath(attributes.get("checked"));
+        const valueBindingExpression = expressionAttribute(attributes.get("value")) ?? expressionAttribute(attributes.get("checked"));
+        const valueBinding = valueBindingExpression ? expressionBindingPath(valueBindingExpression, source) : "";
         const inferred = inferControlValueClass(controlKind, attributes, source, filePath, node, fieldBinding || valueBinding || componentName);
         controls.push({
           node, controlKind, componentName, fieldBinding: fieldBinding ?? "", valueBinding,
+          valueBindingRootIdentity: valueBindingExpression ? expressionBindingRootIdentity(valueBindingExpression, source) : "",
+          dynamicTypeUnresolved: controlKind === "input" && attributes.has("type") && literalAttribute(attributes.get("type")) === null,
           valueClass: inferred.valueClass, reasons: inferred.reasons,
           representativeValues: controlKind === "select" || /select/iu.test(componentName) ? selectOptionValues(node, source) : [],
           validation: validationEvidence(attributes)
@@ -299,18 +307,23 @@ function isWrappedControlComponent(componentName: string, attributes: Map<string
 function matchPayloadBindings(control: ControlCandidate, payloads: PayloadBinding[]): PayloadBinding[] {
   return payloads.flatMap((payload) => {
     if (payload.scope !== control.scope) return [];
-    if (control.valueBinding && payload.bindingPath === control.valueBinding) return [payload];
-    if (payload.payloadRoot && control.valueBinding.startsWith(`${payload.payloadRoot}.`)) {
+    if (control.valueBinding && payload.bindingPath === control.valueBinding
+      && sameBindingRoot(control.valueBindingRootIdentity, payload.bindingRootIdentity)) return [payload];
+    if (payload.payloadRoot && control.valueBinding.startsWith(`${payload.payloadRoot}.`)
+      && sameBindingRoot(control.valueBindingRootIdentity, payload.bindingRootIdentity)) {
       const fieldName = control.valueBinding.slice(payload.payloadRoot.length + 1);
       return payload.fieldName === "*" ? [{ ...payload, fieldName }] : payload.fieldName === fieldName ? [payload] : [];
     }
     return control.fieldBinding && payload.fieldName === control.fieldBinding
-      && (!control.valueBinding || payload.bindingPath === control.valueBinding) ? [payload] : [];
+      && (!control.valueBinding || (payload.bindingPath === control.valueBinding
+        && sameBindingRoot(control.valueBindingRootIdentity, payload.bindingRootIdentity))) ? [payload] : [];
   });
 }
 
 function inferControlValueClass(controlKind: ControlCandidate["controlKind"], attributes: Map<string, ts.JsxAttribute>, source: ts.SourceFile, filePath: string, node: ts.JsxOpeningLikeElement, clue: string): { valueClass: ValueClass; reasons: ReasonEvidence[] } {
-  const type = literalAttribute(attributes.get("type"))?.toLowerCase() ?? "";
+  const typeAttribute = attributes.get("type");
+  const dynamicNativeType = controlKind === "input" && typeAttribute !== undefined && literalAttribute(typeAttribute) === null;
+  const type = dynamicNativeType ? "" : literalAttribute(typeAttribute)?.toLowerCase() ?? "";
   const inputMode = literalAttribute(attributes.get("inputMode"))?.toLowerCase() ?? "";
   const step = literalAttribute(attributes.get("step"))?.toLowerCase() ?? "";
   const componentLeaf = node.tagName.getText(source).split(".").at(-1)?.toLowerCase() ?? "";
@@ -323,7 +336,8 @@ function inferControlValueClass(controlKind: ControlCandidate["controlKind"], at
     : "unknown";
   const reasons: ReasonEvidence[] = [];
   const kind = controlKind === "component" ? "component-prop" : "native-input-type";
-  if (type === "checkbox") valueClass = "boolean";
+  if (dynamicNativeType) valueClass = "unknown";
+  else if (type === "checkbox") valueClass = "boolean";
   else if (type === "date") valueClass = "date-string";
   else if (type === "time") valueClass = "string";
   else if (type === "datetime-local") valueClass = "datetime-string";
@@ -331,11 +345,12 @@ function inferControlValueClass(controlKind: ControlCandidate["controlKind"], at
   else if (inputMode === "numeric") valueClass = "number";
   else if (type === "number") valueClass = step === "any" || isDecimalStep(step) ? "decimal" : "number";
   else if (["text", "email", "password", "search", "tel", "url"].includes(type)) valueClass = "string";
-  if (type || inputMode || step) reasons.push(reason(span(node, source, filePath), kind, [type && `type=${type}`, inputMode && `inputMode=${inputMode}`, step && `step=${step}`].filter(Boolean).join(";")));
+  if (dynamicNativeType) reasons.push(reason(span(node, source, filePath), "native-input-type", "type=dynamic-unresolved"));
+  else if (type || inputMode || step) reasons.push(reason(span(node, source, filePath), kind, [type && `type=${type}`, inputMode && `inputMode=${inputMode}`, step && `step=${step}`].filter(Boolean).join(";")));
   else if (controlKind === "input") reasons.push(reason(span(node, source, filePath), "native-input-type", "type=default-text"));
   else if (controlKind === "select" || controlKind === "textarea") reasons.push(reason(span(node, source, filePath), "native-input-type", `element=${controlKind}`));
   else if (valueClass !== "unknown") reasons.push(reason(span(node, source, filePath), "label-context-clue", `component=${componentLeaf}`));
-  if (valueClass === "unknown") {
+  if (valueClass === "unknown" && !dynamicNativeType) {
     const clueClass = clueValueClass(clue);
     if (clueClass !== "unknown") {
       valueClass = clueClass;
@@ -386,9 +401,9 @@ function literalAttribute(attribute: ts.JsxAttribute | undefined): string | null
   return null;
 }
 
-function expressionAttributePath(attribute: ts.JsxAttribute | undefined): string {
+function expressionAttribute(attribute: ts.JsxAttribute | undefined): ts.Expression | null {
   const expression = attribute?.initializer && ts.isJsxExpression(attribute.initializer) ? attribute.initializer.expression : undefined;
-  return expression ? expressionBindingPath(expression) : "";
+  return expression ?? null;
 }
 
 function setterFieldBinding(attribute: ts.JsxAttribute | undefined, source: ts.SourceFile): string | null {
@@ -453,24 +468,38 @@ function unshadowedGlobalCastName(call: ts.CallExpression, source: ts.SourceFile
   return hasVisibleDeclarationBefore(callee.text, callee, source) ? "" : callee.text;
 }
 
-function expressionBindingPath(expression: ts.Expression): string {
+function expressionBindingPath(expression: ts.Expression, source: ts.SourceFile): string {
   const value = unwrap(expression);
   if (ts.isIdentifier(value)) return value.text;
   if (ts.isPropertyAccessExpression(value)) {
-    const owner = expressionBindingPath(value.expression);
+    const owner = expressionBindingPath(value.expression, source);
     return owner ? `${owner}.${value.name.text}` : "";
   }
   if (ts.isElementAccessExpression(value) && value.argumentExpression && ts.isStringLiteralLike(value.argumentExpression)) {
-    const owner = expressionBindingPath(value.expression);
+    const owner = expressionBindingPath(value.expression, source);
     return owner ? `${owner}.${value.argumentExpression.text}` : "";
   }
-  if (ts.isCallExpression(value) && value.arguments[0] && isBindingTransparentCall(value)) return expressionBindingPath(value.arguments[0]);
+  if (ts.isCallExpression(value) && value.arguments[0] && isBindingTransparentCall(value, source)) return expressionBindingPath(value.arguments[0], source);
   return "";
 }
 
-function isBindingTransparentCall(call: ts.CallExpression): boolean {
+function expressionBindingRootIdentity(expression: ts.Expression, source: ts.SourceFile): string {
+  const value = unwrap(expression);
+  if (ts.isIdentifier(value)) return bindingRootIdentity(value, source);
+  if (ts.isPropertyAccessExpression(value) || ts.isElementAccessExpression(value)) return expressionBindingRootIdentity(value.expression, source);
+  if (ts.isCallExpression(value) && value.arguments[0] && isBindingTransparentCall(value, source)) return expressionBindingRootIdentity(value.arguments[0], source);
+  return "";
+}
+
+function sameBindingRoot(left: string, right: string): boolean {
+  if (left.startsWith("unresolved:") || right.startsWith("unresolved:")) return false;
+  return Boolean(left && right && left === right);
+}
+
+function isBindingTransparentCall(call: ts.CallExpression, source: ts.SourceFile): boolean {
   const callee = unwrap(call.expression);
-  return ts.isIdentifier(callee) && ["parseFloat", "parseInt", "Number", "Boolean", "String"].includes(callee.text);
+  return ts.isIdentifier(callee) && ["parseFloat", "parseInt", "Number", "Boolean", "String"].includes(callee.text)
+    && !hasVisibleDeclarationBefore(callee.text, callee, source);
 }
 
 function resolveConstDeclaration(identifier: ts.Identifier, source: ts.SourceFile, scope: ts.Node): ts.VariableDeclaration | null {
@@ -540,16 +569,27 @@ function lexicalScope(node: ts.Node): ts.Node {
 }
 
 function hasVisibleDeclarationBefore(name: string, identifier: ts.Identifier, source: ts.SourceFile): boolean {
+  return Boolean(resolveVisibleDeclaration(name, identifier, source));
+}
+
+function bindingRootIdentity(identifier: ts.Identifier, source: ts.SourceFile): string {
+  const declaration = resolveVisibleDeclaration(identifier.text, identifier, source);
+  return declaration
+    ? `${identifier.text}:${declaration.getSourceFile().fileName}:${declaration.getStart(source)}:${declaration.getEnd()}`
+    : `unresolved:${identifier.text}`;
+}
+
+function resolveVisibleDeclaration(name: string, identifier: ts.Identifier, source: ts.SourceFile): ts.Node | null {
   const containingScope = lexicalScope(identifier);
-  let found = false;
+  let found: ts.Node | null = null;
   const visit = (node: ts.Node): void => {
-    if (found || node === identifier || node.getStart(source) >= identifier.getStart(source)) return;
-    if (node !== containingScope && ts.isFunctionLike(node) && !isAncestor(node, identifier)) return;
+    if (node === identifier || node.getStart(source) >= identifier.getStart(source)) return;
     const declarationName = declarationIdentifier(node);
     if (declarationName?.text === name && isAncestor(lexicalScope(node), identifier)) {
-      found = true;
+      found = declarationName;
       return;
     }
+    if (node !== containingScope && ts.isFunctionLike(node) && !isAncestor(node, identifier)) return;
     ts.forEachChild(node, visit);
   };
   visit(source);
@@ -559,6 +599,7 @@ function hasVisibleDeclarationBefore(name: string, identifier: ts.Identifier, so
 function declarationIdentifier(node: ts.Node): ts.Identifier | null {
   if ((ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)
     || ts.isImportSpecifier(node) || ts.isImportClause(node)) && node.name && ts.isIdentifier(node.name)) return node.name;
+  if (ts.isBindingElement(node) && ts.isIdentifier(node.name)) return node.name;
   return null;
 }
 
@@ -647,7 +688,7 @@ function mergeSubmittedValueClass(control: ValueClass, submitted: ValueClass): V
 function normalizePayloadBindings(bindings: PayloadBinding[]): PayloadBinding[] {
   const result = new Map<string, PayloadBinding>();
   for (const binding of bindings) {
-    const key = [binding.operationEvidenceId, binding.fieldName, binding.bindingPath, binding.evidence.startOffset, binding.evidence.endOffset].join("\0");
+    const key = [binding.operationEvidenceId, binding.fieldName, binding.bindingPath, binding.bindingRootIdentity, binding.evidence.startOffset, binding.evidence.endOffset].join("\0");
     result.set(key, binding);
   }
   return [...result.values()].sort((left, right) => left.evidence.startOffset - right.evidence.startOffset
