@@ -94,8 +94,29 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
 
 function isUiAuthorityPath(filePath: string): boolean {
   const segments = filePath.toLowerCase().split("/");
-  if (segments.some((segment) => ["docs", "fixtures", "fixture", "__fixtures__", "tests", "test", "__tests__", "mocks", "mock"].includes(segment))) return false;
-  return !/\.(?:test|spec|stories)\.[jt]sx?$/u.test(filePath);
+  const basename = segments.at(-1) ?? "";
+  if (segments.some((segment) => [
+    "docs",
+    "fixtures",
+    "fixture",
+    "__fixtures__",
+    "tests",
+    "test",
+    "__tests__",
+    "mocks",
+    "mock",
+    "stories",
+    "story",
+    "generated",
+    "__generated__",
+  ].includes(segment))) return false;
+  if (/(?:^|[._-])(?:test|spec|stories|story|generated)(?:[._-]|$)/iu.test(basename)) return false;
+  if (/(?:^|[._-])story[A-Z0-9_-]/iu.test(pathBasenamePreserveCase(filePath))) return false;
+  return true;
+}
+
+function pathBasenamePreserveCase(filePath: string): string {
+  return filePath.split("/").at(-1) ?? filePath;
 }
 
 function visit(node: ts.Node, source: ts.SourceFile, filePath: string, text: string, aliases: Map<string, string[]>, factoryAliases: Set<string>, injectedParameters: Map<number, string[]>, base44Context: boolean, manifest: ScanManifest, facts: CodeFact[], sdkIdentity: SdkIdentityResolution, contexts: Map<string, SourceContext>): void {

@@ -17,6 +17,7 @@ interface SourceSpan {
 }
 
 interface ReasonEvidence extends SourceSpan {
+  ruleId: typeof RuleIds.Base44UiInputSemantics;
   kind: "native-input-type" | "component-prop" | "parse-cast-function" | "label-context-clue" | "submit-handler-propagation";
   detail: string;
 }
@@ -162,7 +163,11 @@ function collectPayloadBindings(source: ts.SourceFile, filePath: string, facts: 
   visit(source);
   const bindings: PayloadBinding[] = [];
   for (const fact of facts.filter((candidate) => candidate.factType === FactTypes.Base44EntityOperation
-    && candidate.evidence.filePath === filePath && mutationPayloadIndex.has(candidate.properties.operationName))) {
+    && candidate.evidence.filePath === filePath
+    && candidate.evidenceTier !== EvidenceTiers.Tier4Unknown
+    && !candidate.properties.sdkIdentityGap
+    && !candidate.properties.entitySelectorGap
+    && mutationPayloadIndex.has(candidate.properties.operationName))) {
     const call = calls.get(Number(fact.properties.callsiteStartOffset));
     const argumentIndex = mutationPayloadIndex.get(fact.properties.operationName);
     if (!call || argumentIndex === undefined || !call.arguments[argumentIndex]) continue;
@@ -222,8 +227,12 @@ function collectPayloadExpression(expression: ts.Expression, context: PayloadCon
     return;
   }
   if (ts.isIdentifier(value)) {
-    const declaration = resolveConstDeclaration(value, context.source);
+    const declaration = resolveConstDeclaration(value, context.source, context.scope);
     if (declaration?.initializer) {
+      if (hasBindingMutationBetween(value.text, declaration, value, context.source, context.scope)) {
+        output.push(payloadBinding(context, "*", value.text, value.text, "unknown", [], value));
+        return;
+      }
       collectPayloadExpression(declaration.initializer, { ...context, visited: new Set(context.visited) }, output);
       return;
     }
@@ -315,7 +324,8 @@ function inferControlValueClass(controlKind: ControlCandidate["controlKind"], at
   const reasons: ReasonEvidence[] = [];
   const kind = controlKind === "component" ? "component-prop" : "native-input-type";
   if (type === "checkbox") valueClass = "boolean";
-  else if (type === "date" || type === "time") valueClass = "date-string";
+  else if (type === "date") valueClass = "date-string";
+  else if (type === "time") valueClass = "string";
   else if (type === "datetime-local") valueClass = "datetime-string";
   else if (inputMode === "decimal") valueClass = "decimal";
   else if (inputMode === "numeric") valueClass = "number";
@@ -385,14 +395,25 @@ function setterFieldBinding(attribute: ts.JsxAttribute | undefined, source: ts.S
   const expression = attribute?.initializer && ts.isJsxExpression(attribute.initializer) ? attribute.initializer.expression : undefined;
   if (!expression) return null;
   const names: string[] = [];
-  const visit = (node: ts.Node): void => {
-    if (ts.isPropertyAssignment(node)) {
-      const name = staticPropertyName(node.name);
+  const collectObjectFields = (object: ts.ObjectLiteralExpression): void => {
+    for (const property of object.properties) {
+      if (!ts.isPropertyAssignment(property)) continue;
+      const name = staticPropertyName(property.name);
       if (name) names.push(name);
     }
+  };
+  const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node)) {
-      const second = node.arguments.find((argument) => ts.isStringLiteralLike(argument));
-      if (second && ts.isStringLiteralLike(second)) names.push(second.text);
+      const callee = unwrap(node.expression);
+      const calleeName = ts.isIdentifier(callee)
+        ? callee.text
+        : ts.isPropertyAccessExpression(callee) ? callee.name.text : "";
+      if (/^set[A-Z_]/u.test(calleeName)) {
+        for (const argument of node.arguments) {
+          const value = unwrap(argument);
+          if (ts.isObjectLiteralExpression(value)) collectObjectFields(value);
+        }
+      }
     }
     ts.forEachChild(node, visit);
   };
@@ -429,23 +450,7 @@ function validationEvidence(attributes: Map<string, ts.JsxAttribute>): Record<st
 function unshadowedGlobalCastName(call: ts.CallExpression, source: ts.SourceFile): string {
   const callee = unwrap(call.expression);
   if (!ts.isIdentifier(callee) || !["parseFloat", "parseInt", "Number", "Boolean", "String"].includes(callee.text)) return "";
-  let shadowed = false;
-  const visit = (node: ts.Node): void => {
-    if (node === callee) return;
-    if ((ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)
-      || ts.isImportSpecifier(node) || ts.isImportClause(node)) && node.name && ts.isIdentifier(node.name) && node.name.text === callee.text) {
-      shadowed = true;
-      return;
-    }
-    if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken
-      && ts.isIdentifier(unwrap(node.left)) && (unwrap(node.left) as ts.Identifier).text === callee.text) {
-      shadowed = true;
-      return;
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
-  return shadowed ? "" : callee.text;
+  return hasVisibleDeclarationBefore(callee.text, callee, source) ? "" : callee.text;
 }
 
 function expressionBindingPath(expression: ts.Expression): string {
@@ -459,26 +464,148 @@ function expressionBindingPath(expression: ts.Expression): string {
     const owner = expressionBindingPath(value.expression);
     return owner ? `${owner}.${value.argumentExpression.text}` : "";
   }
-  if (ts.isCallExpression(value) && value.arguments[0]) return expressionBindingPath(value.arguments[0]);
+  if (ts.isCallExpression(value) && value.arguments[0] && isBindingTransparentCall(value)) return expressionBindingPath(value.arguments[0]);
   return "";
 }
 
-function resolveConstDeclaration(identifier: ts.Identifier, source: ts.SourceFile): ts.VariableDeclaration | null {
+function isBindingTransparentCall(call: ts.CallExpression): boolean {
+  const callee = unwrap(call.expression);
+  return ts.isIdentifier(callee) && ["parseFloat", "parseInt", "Number", "Boolean", "String"].includes(callee.text);
+}
+
+function resolveConstDeclaration(identifier: ts.Identifier, source: ts.SourceFile, scope: ts.Node): ts.VariableDeclaration | null {
   let resolved: ts.VariableDeclaration | null = null;
   const visit = (node: ts.Node): void => {
     if (node.getStart(source) >= identifier.getStart(source)) return;
+    if (node !== scope && ts.isFunctionLike(node) && !isAncestor(node, identifier)) return;
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === identifier.text
-      && ts.isVariableDeclarationList(node.parent) && (node.parent.flags & ts.NodeFlags.Const) !== 0) resolved = node;
+      && ts.isVariableDeclarationList(node.parent) && (node.parent.flags & ts.NodeFlags.Const) !== 0
+      && isAncestor(lexicalScope(node), identifier)) resolved = node;
     ts.forEachChild(node, visit);
   };
-  visit(source);
+  visit(scope);
   return resolved;
 }
 
 function componentScope(node: ts.Node): ts.Node {
-  let scope: ts.Node = node.getSourceFile();
-  for (let current: ts.Node | undefined = node.parent; current; current = current.parent) if (ts.isFunctionLike(current)) scope = current;
-  return scope;
+  let fallback: ts.Node = node.getSourceFile();
+  for (let current: ts.Node | undefined = node.parent; current; current = current.parent) {
+    if (!isFunctionLikeDeclaration(current)) continue;
+    fallback = current;
+    if (isComponentLikeFunction(current)) return current;
+  }
+  return fallback;
+}
+
+function isFunctionLikeDeclaration(node: ts.Node): node is ts.FunctionLikeDeclaration {
+  return ts.isFunctionDeclaration(node)
+    || ts.isFunctionExpression(node)
+    || ts.isArrowFunction(node)
+    || ts.isMethodDeclaration(node)
+    || ts.isGetAccessorDeclaration(node)
+    || ts.isSetAccessorDeclaration(node)
+    || ts.isConstructorDeclaration(node);
+}
+
+function isComponentLikeFunction(node: ts.FunctionLikeDeclaration): boolean {
+  const name = functionLikeName(node);
+  if (name && /^[A-Z]/u.test(name)) return true;
+  let returnsJsx = false;
+  const visit = (candidate: ts.Node): void => {
+    if (returnsJsx) return;
+    if (candidate !== node && ts.isFunctionLike(candidate)) return;
+    if (ts.isJsxElement(candidate) || ts.isJsxSelfClosingElement(candidate) || ts.isJsxFragment(candidate)) {
+      returnsJsx = true;
+      return;
+    }
+    ts.forEachChild(candidate, visit);
+  };
+  visit(node);
+  return returnsJsx;
+}
+
+function functionLikeName(node: ts.FunctionLikeDeclaration): string {
+  if (node.name && ts.isIdentifier(node.name)) return node.name.text;
+  const parent = node.parent;
+  if (ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)) return parent.name.text;
+  if (ts.isPropertyAssignment(parent) && ts.isIdentifier(parent.name)) return parent.name.text;
+  return "";
+}
+
+function lexicalScope(node: ts.Node): ts.Node {
+  for (let current: ts.Node | undefined = node.parent; current; current = current.parent) {
+    if (ts.isBlock(current) || ts.isSourceFile(current) || ts.isCaseBlock(current)) return current;
+  }
+  return node.getSourceFile();
+}
+
+function hasVisibleDeclarationBefore(name: string, identifier: ts.Identifier, source: ts.SourceFile): boolean {
+  const containingScope = lexicalScope(identifier);
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (found || node === identifier || node.getStart(source) >= identifier.getStart(source)) return;
+    if (node !== containingScope && ts.isFunctionLike(node) && !isAncestor(node, identifier)) return;
+    const declarationName = declarationIdentifier(node);
+    if (declarationName?.text === name && isAncestor(lexicalScope(node), identifier)) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return found;
+}
+
+function declarationIdentifier(node: ts.Node): ts.Identifier | null {
+  if ((ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)
+    || ts.isImportSpecifier(node) || ts.isImportClause(node)) && node.name && ts.isIdentifier(node.name)) return node.name;
+  return null;
+}
+
+function hasBindingMutationBetween(name: string, declaration: ts.VariableDeclaration, identifier: ts.Identifier, source: ts.SourceFile, scope: ts.Node): boolean {
+  let mutated = false;
+  const declarationEnd = declaration.getEnd();
+  const identifierStart = identifier.getStart(source);
+  const visit = (node: ts.Node): void => {
+    if (mutated) return;
+    const start = node.getStart(source);
+    if (start <= declarationEnd || start >= identifierStart) {
+      ts.forEachChild(node, visit);
+      return;
+    }
+    if (node !== scope && ts.isFunctionLike(node) && !isAncestor(node, identifier)) return;
+    if (ts.isBinaryExpression(node) && isAssignmentOperator(node.operatorToken.kind) && bindingTargetRoot(node.left) === name) {
+      mutated = true;
+      return;
+    }
+    if ((ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node))
+      && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(node.operator)
+      && bindingTargetRoot(node.operand) === name) {
+      mutated = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(scope);
+  return mutated;
+}
+
+function isAssignmentOperator(kind: ts.SyntaxKind): boolean {
+  return kind >= ts.SyntaxKind.FirstAssignment && kind <= ts.SyntaxKind.LastAssignment;
+}
+
+function bindingTargetRoot(expression: ts.Expression): string {
+  const value = unwrap(expression);
+  if (ts.isIdentifier(value)) return value.text;
+  if (ts.isPropertyAccessExpression(value) || ts.isElementAccessExpression(value)) return bindingTargetRoot(value.expression);
+  return "";
+}
+
+function isAncestor(ancestor: ts.Node, descendant: ts.Node): boolean {
+  for (let current: ts.Node | undefined = descendant; current; current = current.parent) {
+    if (current === ancestor) return true;
+  }
+  return false;
 }
 
 function staticPropertyName(name: ts.PropertyName): string | null {
@@ -534,7 +661,7 @@ function normalizeReasons(reasons: ReasonEvidence[]): ReasonEvidence[] {
 }
 
 function reason(sourceSpan: SourceSpan, kind: ReasonEvidence["kind"], detail: string): ReasonEvidence {
-  return { ...sourceSpan, kind, detail };
+  return { ...sourceSpan, ruleId: RuleIds.Base44UiInputSemantics, kind, detail };
 }
 
 function span(node: ts.Node, source: ts.SourceFile, filePath: string): SourceSpan {

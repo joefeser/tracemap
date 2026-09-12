@@ -55,6 +55,12 @@ describe("Base44 React UI input semantics", () => {
     const wrappedDate = semantics.find(({ value }) => value.componentName === "DatePicker");
     expect(wrappedDate?.value).toMatchObject({ valueClass: "date-string", submittedEntity: "Appointment", submittedField: "service_date" });
 
+    const time = semantics.find(({ value }) => value.controlKind === "input" && value.fieldBinding === "start_time");
+    expect(time?.value).toMatchObject({
+      valueClass: "string",
+      validationAuthority: "test-validation-only"
+    });
+
     const select = semantics.find(({ value }) => value.controlKind === "select");
     expect(select?.value).toMatchObject({
       submittedEntity: "WorkOrder",
@@ -93,6 +99,33 @@ describe("Base44 React UI input semantics", () => {
     expect(semantics.some(({ value }) => value.valueBinding === "fake.commentValue")).toBe(false);
     expect(packet.facts.some((fact) => fact.evidence.filePath === "fixtures/ignored.tsx"
       && fact.factType === FactTypes.Base44UiInputSemantics)).toBe(false);
+    expect(packet.facts.some((fact) => fact.evidence.filePath === "src/generated/Widget.generated.tsx"
+      && fact.factType === FactTypes.Base44UiInputSemantics)).toBe(false);
+    expect(packet.facts.some((fact) => fact.evidence.filePath === "src/StoryPanel.tsx"
+      && fact.factType === FactTypes.Base44UiInputSemantics)).toBe(false);
+    expect(semantics.every(({ value }) => value.reasons.every((item: { ruleId: string }) =>
+      item.ruleId === "base44.ui-input-semantics.v1"))).toBe(true);
+
+    const analyticsOnly = semantics.find(({ value }) => value.fieldBinding === "checkout_started");
+    expect(analyticsOnly).toBeUndefined();
+
+    const formatted = semantics.find(({ value }) => value.valueBinding === "formatCurrency(row.cost)");
+    expect(formatted).toBeUndefined();
+
+    expect(semantics.some(({ value }) => value.submittedEntity === "ReassignedPayload")).toBe(false);
+    const reassignedControl = semantics.find(({ value }) => value.valueBinding === "row.reassignedCost");
+    expect(reassignedControl?.value).toMatchObject({
+      correlationStatus: "partial",
+      submittedField: ""
+    });
+
+    const lexical = semantics.find(({ value }) => value.submittedEntity === "LexicalPayload" && value.submittedField === "amount");
+    expect(lexical?.value).toMatchObject({
+      correlationStatus: "proven",
+      valueClass: "decimal"
+    });
+
+    expect(semantics.some(({ value }) => value.submittedEntity === "UnknownSdk")).toBe(false);
 
     const forged = structuredClone(packet);
     const forgedFact = forged.facts.find((fact) => fact.factType === FactTypes.Base44UiInputSemantics)!;
@@ -113,6 +146,7 @@ async function fixtureRepo(): Promise<string> {
   await writeFrontendSdkAuthority(repo);
   await fs.writeFile(path.join(repo, "src", "Screen.tsx"), `import { base44 } from "@base44/sdk";
 export function Screen({ row, form, shared }) {
+  const payload = { amount: parseFloat(row.lexicalCost) };
   async function save() {
     await base44.entities.MaterialItemPriceBreak.create({ price: parseFloat(row.cost) });
     await base44.entities.FeatureFlag.create({ enabled: form.enabled });
@@ -121,10 +155,20 @@ export function Screen({ row, form, shared }) {
     await base44.entities.Invoice.create({ rate: form.rate });
     await base44.entities.First.create({ amount: shared.value });
     await base44.entities.Second.create({ amount: shared.value });
+    await base44.entities.LexicalPayload.create(payload);
+    const reassigned = { amount: row.reassignedCost };
+    reassigned.amount = row.otherCost;
+    await base44.entities.ReassignedPayload.create(reassigned);
+  }
+  function analytics() {
+    window.analytics?.track("checkout_started");
   }
   return <form onSubmit={save}>
     {/* <input name="comment_only" type="number" value={fake.commentValue} /> */}
     <input name="cost" type="number" step="0.01" min="0" required value={row.cost} onChange={() => {}} />
+    <input name="formatted_cost" type="text" value={formatCurrency(row.cost)} onChange={() => {}} />
+    <input name="start_time" type="time" value={form.startTime} onChange={() => {}} />
+    <input name="reassigned_amount" type="number" value={row.reassignedCost} onChange={() => {}} />
     <Input name="cost_text" type="text" inputMode="decimal" value={row.cost} onChange={() => {}} />
     <input name="enabled" type="checkbox" value={form.enabled} onChange={() => {}} />
     <Checkbox name="enabled" checked={form.enabled} onChange={() => {}} />
@@ -139,6 +183,14 @@ export function Screen({ row, form, shared }) {
   </form>;
 }
 `);
+  await fs.writeFile(path.join(repo, "src", "UnresolvedSdk.tsx"), `export function UnresolvedSdk({ row }) {
+  base44.entities.UnknownSdk.create({ price: parseFloat(row.cost) });
+  return <input name="price" type="number" value={row.cost} onChange={() => {}} />;
+}
+`);
+  await fs.mkdir(path.join(repo, "src", "generated"), { recursive: true });
+  await fs.writeFile(path.join(repo, "src", "generated", "Widget.generated.tsx"), `export const generated = <input name="price" type="number" value={row.cost} onChange={() => {}} />;\n`);
+  await fs.writeFile(path.join(repo, "src", "StoryPanel.tsx"), `export const story = <input name="price" type="number" value={row.cost} onChange={() => {}} />;\n`);
   await fs.writeFile(path.join(repo, "packet.jsonc"), `// not executable authority\n{ "ui": "<input type=\\"number\\" step=\\"0.01\\">" }\n`);
   await fs.writeFile(path.join(repo, "fixtures", "ignored.tsx"), `export const ignored = <input type="number" step="any" />;\n`);
   execFileSync("git", ["init", "-q"], { cwd: repo });
