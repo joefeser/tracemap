@@ -11,20 +11,22 @@ This receipt validates `base44-evidence/0.15.0` and
 - accepted source/tree SHA-256:
   `a5a313b180ef0cdfd2e837779f251cc754978fcd474b6a32646c133b058b6e24`
 - detached scan root:
-  `/private/tmp/shopgenie-ui-input-origin-main-20260912-refresh.sXXIFX/source`
+  `/private/tmp/shopgenie-ui-input-origin-main-20260912-refresh2.lvEjrd/source`
 
 ## Results
 
-Two independent scans emitted 6,868 Base44 facts each and were byte-identical:
+Two independent scans emitted 6,865 Base44 facts each and were byte-identical:
 
 - `base44-evidence.json` SHA-256:
-  `e3b73c5cf6c53d19e2d75190a2b9e042880b76ef24e231421b8ab3294bee3e28`
+  `5ec250f94ca48d2cb01e03f4172d23dd4faf9944ef7ba74b4aebe18fbbe37f35`
 - `facts.ndjson` SHA-256:
-  `c777874271a7d974b63f07bbec77a41541c1107f89b570a68d8918551f621fe8`
+  `da38af5d0325923a05f70950793f677542b259620eb4a689a9895a63247cf2ac`
 - refreshed output path:
-  `/private/tmp/tracemap-shopgenie-ui-semantics-refresh-a.uvtxHF`
-- UI semantics facts: 1,235
-- proven payload correlations: 725
+  `/private/tmp/tracemap-shopgenie-ui-semantics-refresh2-a.9uff6V`
+- comparison output path:
+  `/private/tmp/tracemap-shopgenie-ui-semantics-refresh2-b.5PXEDm`
+- UI semantics facts: 1,232
+- proven payload correlations: 722
 - partial controls with explicit unresolved correlation: 493
 - unresolved controls without a field/value binding: 17
 - multi-target correlations silently selected: 0
@@ -38,8 +40,8 @@ classes for `PurchasedPartPriceBreak.cost`,
 `ToolingItemPriceBreak.cost_per_unit`. Quantity/minimum-quantity fields retain
 all observed integer, number, and decimal classes; none is narrowed.
 
-The UI value-class census is: 53 boolean, 14 date-string, 263 decimal, 105
-integer, 157 number, 1 object, 590 string, and 52 unknown facts. Every
+The UI value-class census is: 53 boolean, 14 date-string, 262 decimal, 105
+integer, 155 number, 1 object, 590 string, and 52 unknown facts. Every
 descriptor retains `storageAuthority=widening-only-never-narrowing`.
 
 The 510 uncorrelated controls use
@@ -59,7 +61,7 @@ change. The applicable pinned matrix was:
   `Base44UiInputSemantics.test.ts`.
 - Artifact conformance:
   `python3 scripts/validate-adapter-artifacts.py
-  /private/tmp/tracemap-shopgenie-ui-semantics-refresh-a.uvtxHF` and
+  /private/tmp/tracemap-shopgenie-ui-semantics-refresh2-a.9uff6V` and
   `python3 scripts/test_validate_adapter_artifacts.py` — passed.
 - Private-path and diff hygiene:
   `./scripts/check-private-paths.sh` and `git diff --check` — passed.
@@ -90,24 +92,31 @@ text evidence.
 npm run check --prefix src/typescript
 dotnet test src/dotnet/TraceMap.sln
 python3 scripts/validate-adapter-artifacts.py \
-  /private/tmp/tracemap-shopgenie-ui-semantics-refresh-a.uvtxHF
+  /private/tmp/tracemap-shopgenie-ui-semantics-refresh2-a.9uff6V
 python3 scripts/test_validate_adapter_artifacts.py
 ./scripts/check-private-paths.sh
 git diff --check
 
 node src/typescript/dist/src/cli.js base44-evidence \
-  --repo /private/tmp/shopgenie-ui-input-origin-main-20260912-refresh.sXXIFX/source \
-  --out /private/tmp/tracemap-shopgenie-ui-semantics-refresh-a.uvtxHF \
+  --repo /private/tmp/shopgenie-ui-input-origin-main-20260912-refresh2.lvEjrd/source \
+  --out /private/tmp/tracemap-shopgenie-ui-semantics-refresh2-a.9uff6V \
   --accepted-source-sha256 a5a313b180ef0cdfd2e837779f251cc754978fcd474b6a32646c133b058b6e24 \
   --accepted-tree-sha256 a5a313b180ef0cdfd2e837779f251cc754978fcd474b6a32646c133b058b6e24 \
   --coverage-label shopgenie-origin-main-ui-input-semantics
 
-cmp /private/tmp/tracemap-shopgenie-ui-semantics-refresh-a.uvtxHF/base44-evidence.json \
-  /private/tmp/tracemap-shopgenie-ui-semantics-refresh-b.tjQ61S/base44-evidence.json
-cmp /private/tmp/tracemap-shopgenie-ui-semantics-refresh-a.uvtxHF/facts.ndjson \
-  /private/tmp/tracemap-shopgenie-ui-semantics-refresh-b.tjQ61S/facts.ndjson
+cmp /private/tmp/tracemap-shopgenie-ui-semantics-refresh2-a.9uff6V/base44-evidence.json \
+  /private/tmp/tracemap-shopgenie-ui-semantics-refresh2-b.5PXEDm/base44-evidence.json
+cmp /private/tmp/tracemap-shopgenie-ui-semantics-refresh2-a.9uff6V/facts.ndjson \
+  /private/tmp/tracemap-shopgenie-ui-semantics-refresh2-b.5PXEDm/facts.ndjson
 ```
 
 Results: TypeScript 257/257 passed; .NET 1,928/1,928 passed; artifact validation,
 validator unit tests, private-path guard, diff check, and both deterministic
 comparisons passed.
+
+The refreshed fixture also covers these adversarial safety regressions:
+controls with no submitted value binding remain partial, trailing JSX spreads
+invalidate control proof, trailing payload spreads invalidate overwritten
+payload fields, escaped const payload roots remain unresolved, hoisted local cast
+functions shadow global casts, truthy `required` JSX attributes stay truthy, and
+`src/__mocks__` is excluded from UI source authority.

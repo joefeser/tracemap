@@ -44,6 +44,7 @@ interface ControlCandidate {
   valueBinding: string;
   valueBindingRootIdentity: string;
   dynamicTypeUnresolved: boolean;
+  dynamicAttributesUnresolved: boolean;
   valueClass: ValueClass;
   reasons: ReasonEvidence[];
   representativeValues: string[];
@@ -197,15 +198,20 @@ function collectPayloadExpression(expression: ts.Expression, context: PayloadCon
   if (context.visited.has(value.pos)) return;
   context.visited.add(value.pos);
   if (ts.isObjectLiteralExpression(value)) {
-    for (const property of value.properties) {
+    let laterSpreadMayOverride = false;
+    for (let index = value.properties.length - 1; index >= 0; index -= 1) {
+      const property = value.properties[index];
       if (ts.isPropertyAssignment(property)) {
         const fieldName = staticPropertyName(property.name);
         if (!fieldName) continue;
-        addPayloadBinding(fieldName, property.initializer, property, context, output);
+        if (laterSpreadMayOverride) addUnknownPayloadBinding(fieldName, property, context, output);
+        else addPayloadBinding(fieldName, property.initializer, property, context, output);
       } else if (ts.isShorthandPropertyAssignment(property)) {
-        addPayloadBinding(property.name.text, property.name, property, context, output);
+        if (laterSpreadMayOverride) addUnknownPayloadBinding(property.name.text, property, context, output);
+        else addPayloadBinding(property.name.text, property.name, property, context, output);
       } else if (ts.isSpreadAssignment(property)) {
         collectPayloadExpression(property.expression, { ...context, visited: new Set(context.visited) }, output);
+        laterSpreadMayOverride = true;
       }
     }
     return;
@@ -232,7 +238,7 @@ function collectPayloadExpression(expression: ts.Expression, context: PayloadCon
   if (ts.isIdentifier(value)) {
     const declaration = resolveConstDeclaration(value, context.source, context.scope);
     if (declaration?.initializer) {
-      if (hasBindingMutationBetween(value.text, declaration, value, context.source, context.scope)) {
+      if (hasBindingMutationOrEscapeBetween(value.text, declaration, value, context.source, context.scope)) {
         output.push(payloadBinding(context, "*", value.text, bindingRootIdentity(value, context.source), value.text, "unknown", [], value));
         return;
       }
@@ -248,6 +254,10 @@ function addPayloadBinding(fieldName: string, expression: ts.Expression, evidenc
   const bindingRoot = expressionBindingRootIdentity(expression, context.source);
   const inferred = inferExpressionValueClass(expression, context.source, context.filePath, fieldName);
   output.push(payloadBinding(context, fieldName, bindingPath, bindingRoot, "", inferred.valueClass, inferred.reasons, evidenceNode));
+}
+
+function addUnknownPayloadBinding(fieldName: string, evidenceNode: ts.Node, context: PayloadContext, output: PayloadBinding[]): void {
+  output.push(payloadBinding(context, fieldName, "", "", "", "unknown", [], evidenceNode));
 }
 
 function payloadBinding(context: PayloadContext, fieldName: string, bindingPath: string, bindingRootIdentityValue: string, payloadRoot: string, valueClass: ValueClass, reasons: ReasonEvidence[], node: ts.Node): PayloadBinding {
@@ -275,15 +285,20 @@ function collectControls(source: ts.SourceFile, filePath: string): ControlCandid
       const controlKind = componentName === "input" ? "input" : componentName === "select" ? "select" : componentName === "textarea" ? "textarea" : "component";
       const relevant = controlKind !== "component" || isWrappedControlComponent(componentName, attributes);
       if (relevant) {
-        const fieldBinding = literalAttribute(attributes.get("name")) ?? setterFieldBinding(attributes.get("onChange"), source);
-        const valueBindingExpression = expressionAttribute(attributes.get("value")) ?? expressionAttribute(attributes.get("checked"));
-        const valueBinding = valueBindingExpression ? expressionBindingPath(valueBindingExpression, source) : "";
-        const inferred = inferControlValueClass(controlKind, attributes, source, filePath, node, fieldBinding || valueBinding || componentName);
-        controls.push({
-          node, controlKind, componentName, fieldBinding: fieldBinding ?? "", valueBinding,
-          valueBindingRootIdentity: valueBindingExpression ? expressionBindingRootIdentity(valueBindingExpression, source) : "",
-          dynamicTypeUnresolved: controlKind === "input" && attributes.has("type") && literalAttribute(attributes.get("type")) === null,
-          valueClass: inferred.valueClass, reasons: inferred.reasons,
+	        const fieldBinding = literalAttribute(attributes.get("name")) ?? setterFieldBinding(attributes.get("onChange"), source);
+	        const valueBindingExpression = expressionAttribute(attributes.get("value")) ?? expressionAttribute(attributes.get("checked"));
+	        const valueBinding = valueBindingExpression ? expressionBindingPath(valueBindingExpression, source) : "";
+	        const trailingSpread = hasTrailingRelevantJsxSpread(node);
+	        const inferred = inferControlValueClass(controlKind, attributes, source, filePath, node, fieldBinding || valueBinding || componentName);
+	        controls.push({
+	          node, controlKind, componentName, fieldBinding: fieldBinding ?? "", valueBinding,
+	          valueBindingRootIdentity: valueBindingExpression ? expressionBindingRootIdentity(valueBindingExpression, source) : "",
+	          dynamicTypeUnresolved: controlKind === "input" && attributes.has("type") && literalAttribute(attributes.get("type")) === null,
+	          dynamicAttributesUnresolved: trailingSpread,
+	          valueClass: trailingSpread ? "unknown" : inferred.valueClass,
+	          reasons: trailingSpread
+	            ? normalizeReasons([...inferred.reasons, reason(span(node, source, filePath), controlKind === "component" ? "component-prop" : "native-input-type", "trailing-jsx-spread-unresolved")])
+	            : inferred.reasons,
           representativeValues: controlKind === "select" || /select/iu.test(componentName) ? selectOptionValues(node, source) : [],
           validation: validationEvidence(attributes)
           , scope: componentScope(node)
@@ -305,6 +320,7 @@ function isWrappedControlComponent(componentName: string, attributes: Map<string
 }
 
 function matchPayloadBindings(control: ControlCandidate, payloads: PayloadBinding[]): PayloadBinding[] {
+  if (control.dynamicAttributesUnresolved) return [];
   return payloads.flatMap((payload) => {
     if (payload.scope !== control.scope) return [];
     if (control.valueBinding && payload.bindingPath === control.valueBinding
@@ -314,7 +330,7 @@ function matchPayloadBindings(control: ControlCandidate, payloads: PayloadBindin
       const fieldName = control.valueBinding.slice(payload.payloadRoot.length + 1);
       return payload.fieldName === "*" ? [{ ...payload, fieldName }] : payload.fieldName === fieldName ? [payload] : [];
     }
-    return control.fieldBinding && payload.fieldName === control.fieldBinding
+    return control.fieldBinding && control.valueBinding && payload.fieldName === control.fieldBinding
       && (!control.valueBinding || (payload.bindingPath === control.valueBinding
         && sameBindingRoot(control.valueBindingRootIdentity, payload.bindingRootIdentity))) ? [payload] : [];
   });
@@ -387,6 +403,20 @@ function jsxAttributes(node: ts.JsxOpeningLikeElement): Map<string, ts.JsxAttrib
   return result;
 }
 
+function hasTrailingRelevantJsxSpread(node: ts.JsxOpeningLikeElement): boolean {
+  let sawRelevantAttribute = false;
+  for (const property of node.attributes.properties) {
+    if (ts.isJsxSpreadAttribute(property)) {
+      if (sawRelevantAttribute) return true;
+      continue;
+    }
+    if (ts.isJsxAttribute(property) && ts.isIdentifier(property.name) && relevantProps.has(property.name.text)) {
+      sawRelevantAttribute = true;
+    }
+  }
+  return false;
+}
+
 function literalAttribute(attribute: ts.JsxAttribute | undefined): string | null {
   if (!attribute) return null;
   if (!attribute.initializer) return "true";
@@ -457,7 +487,7 @@ function validationEvidence(attributes: Map<string, ts.JsxAttribute>): Record<st
   const result: Record<string, string | boolean> = {};
   for (const name of validationProps) {
     const value = literalAttribute(attributes.get(name));
-    if (value !== null && value.length <= 256) result[name] = name === "required" ? value === "true" : value;
+    if (value !== null && value.length <= 256) result[name] = name === "required" ? value !== "false" : value;
   }
   return Object.fromEntries(Object.entries(result).sort(([left], [right]) => left.localeCompare(right)));
 }
@@ -581,10 +611,13 @@ function bindingRootIdentity(identifier: ts.Identifier, source: ts.SourceFile): 
 
 function resolveVisibleDeclaration(name: string, identifier: ts.Identifier, source: ts.SourceFile): ts.Node | null {
   const containingScope = lexicalScope(identifier);
+  const identifierStart = identifier.getStart(source);
   let found: ts.Node | null = null;
   const visit = (node: ts.Node): void => {
-    if (node === identifier || node.getStart(source) >= identifier.getStart(source)) return;
+    if (node === identifier) return;
     const declarationName = declarationIdentifier(node);
+    const hoistedFunctionDeclaration = ts.isFunctionDeclaration(node);
+    if (node.getStart(source) >= identifierStart && !hoistedFunctionDeclaration) return;
     if (declarationName?.text === name && isAncestor(lexicalScope(node), identifier)) {
       found = declarationName;
       return;
@@ -603,7 +636,7 @@ function declarationIdentifier(node: ts.Node): ts.Identifier | null {
   return null;
 }
 
-function hasBindingMutationBetween(name: string, declaration: ts.VariableDeclaration, identifier: ts.Identifier, source: ts.SourceFile, scope: ts.Node): boolean {
+function hasBindingMutationOrEscapeBetween(name: string, declaration: ts.VariableDeclaration, identifier: ts.Identifier, source: ts.SourceFile, scope: ts.Node): boolean {
   let mutated = false;
   const declarationEnd = declaration.getEnd();
   const identifierStart = identifier.getStart(source);
@@ -625,10 +658,31 @@ function hasBindingMutationBetween(name: string, declaration: ts.VariableDeclara
       mutated = true;
       return;
     }
+    if ((ts.isCallExpression(node) || ts.isNewExpression(node))
+      && !isAncestor(node, identifier)
+      && Array.from(node.arguments ?? []).some((argument) => containsIdentifier(argument, name))) {
+      mutated = true;
+      return;
+    }
     ts.forEachChild(node, visit);
   };
   visit(scope);
   return mutated;
+}
+
+function containsIdentifier(node: ts.Node, name: string): boolean {
+  let found = false;
+  const visit = (candidate: ts.Node): void => {
+    if (found) return;
+    if (ts.isIdentifier(candidate) && candidate.text === name) {
+      found = true;
+      return;
+    }
+    if (ts.isFunctionLike(candidate)) return;
+    ts.forEachChild(candidate, visit);
+  };
+  visit(node);
+  return found;
 }
 
 function isAssignmentOperator(kind: ts.SyntaxKind): boolean {
