@@ -869,6 +869,7 @@ public static class ScanEngine
         facts.AddRange(VisualBasicSyntaxExtractor.Extract(repoPath, manifest, inventory, semanticallyAnalyzedFiles, protectedSourceSpans));
         progress?.FinishStage(ScanProgressReporter.ScanOperation, ScanProgressStages.SyntaxFallback, "completed");
         cancellationToken.ThrowIfCancellationRequested();
+        var materializedSemanticFacts = CSharpSemanticExtractor.MaterializeFacts(manifest, semanticResult.Facts);
         progress?.StartStage(ScanProgressReporter.ScanOperation, ScanProgressStages.SpecializedExtraction);
         var extractorOrdinal = 0;
         IReadOnlyList<CodeFact> Observe(string extractor, Func<IReadOnlyList<CodeFact>> extract)
@@ -890,10 +891,10 @@ public static class ScanEngine
             () => FilterProtectedEvidence(RazorBindingExtractor.Extract(repoPath, manifest, inventory), protectedLineRanges).ToArray()));
         facts.AddRange(Observe(
             ScanPerformanceExtractors.LegacyWcf,
-            () => FilterProtectedEvidence(LegacyWcfExtractor.Extract(repoPath, manifest, inventory), protectedLineRanges).ToArray()));
+            () => FilterProtectedEvidence(LegacyWcfExtractor.Extract(repoPath, manifest, inventory, materializedSemanticFacts), protectedLineRanges).ToArray()));
         facts.AddRange(Observe(
             ScanPerformanceExtractors.LegacyAsmx,
-            () => FilterProtectedEvidence(LegacyAsmxExtractor.Extract(repoPath, manifest, inventory), protectedLineRanges).ToArray()));
+            () => FilterProtectedEvidence(LegacyAsmxExtractor.Extract(repoPath, manifest, inventory, materializedSemanticFacts), protectedLineRanges).ToArray()));
         facts.AddRange(Observe(
             ScanPerformanceExtractors.LegacyRemoting,
             () => FilterProtectedEvidence(
@@ -920,7 +921,7 @@ public static class ScanEngine
             ScanPerformanceExtractors.Config,
             () => ConfigExtractor.Extract(repoPath, manifest, inventory)));
         facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, semanticResult.GapFacts));
-        facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, semanticResult.Facts));
+        facts.AddRange(materializedSemanticFacts);
         facts.AddRange(Observe(
             ScanPerformanceExtractors.LegacyData,
             () => FilterProtectedEvidence(LegacyDataMetadataExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges).ToArray()));
@@ -1058,10 +1059,20 @@ public static class ScanEngine
     private static bool HasToolchainSemanticReduction(SemanticExtractionResult result) =>
         result.GapFacts.Any(gap => !IsProducerLocalSemanticGap(gap));
 
-    private static bool IsProducerLocalSemanticGap(SemanticFactCandidate gap) =>
-        gap.RuleId == RuleIds.CSharpRazorSemanticModelBindingGap
-        || gap.RuleId == RuleIds.CSharpSemanticPropertyMappingGap
-        || gap.RuleId == RuleIds.VisualBasicSemanticEventWiring;
+    private static bool IsProducerLocalSemanticGap(SemanticFactCandidate gap)
+    {
+        if (gap.RuleId == RuleIds.CSharpRazorSemanticModelBindingGap
+            || gap.RuleId == RuleIds.CSharpSemanticPropertyMappingGap
+            || gap.RuleId == RuleIds.VisualBasicSemanticEventWiring
+            || gap.RuleId == RuleIds.VisualBasicSemanticExternalBoundary
+            || gap.RuleId == RuleIds.VisualBasicSemanticMethodInvocation)
+        {
+            return true;
+        }
+
+        return gap.RuleId == RuleIds.DatabaseOperationCallPattern
+            && gap.Properties?.GetValueOrDefault("gapKind") == "VisualBasicAdoNetTargetUnavailable";
+    }
 
     private static string GetBuildStatusReason(
         ScanManifest manifest,

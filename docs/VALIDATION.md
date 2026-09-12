@@ -29,6 +29,8 @@ Every language adapter should have:
 
 Run these before opening or updating a PR that changes scanner behavior:
 
+The build must not introduce compiler or analyzer warnings. Resolve warnings before pushing the PR; narrowly suppress a proven tool false positive only at the affected call and protect the intended behavior with a test.
+
 ```bash
 dotnet build src/dotnet/TraceMap.sln
 dotnet test src/dotnet/TraceMap.sln
@@ -1228,6 +1230,15 @@ dotnet test src/dotnet/TraceMap.sln
 dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
   --filter 'FullyQualifiedName~VisualBasic|FullyQualifiedName~VbNetFixture'
 
+# Initial compiler-backed ADO.NET command/adapter/Fill/Execute evidence.
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~VisualBasicDataBoundaryTests
+
+# Compiler-backed HTTP/config/file evidence, explicit service gaps, privacy,
+# determinism, and packet/docs/query-recipe/WITS handoff consumption.
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~VisualBasicExternalBoundaryTests
+
 # Modern (semantic success), legacy (fallback/reduced), and Web Forms
 # (inventory + reduced) CLI fixture scans.
 dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/vb-modern-sample --out <tmp>/vb-modern
@@ -1269,6 +1280,17 @@ Expected fixture postures:
   RaiseEvent, WithEvents designer, linked control/handler, and IsPostBack
   evidence remains available. Event evidence is never an executed call edge.
 
+The external-boundary synthetic matrix additionally proves shared HTTP and
+configuration facts, shared batch/file projection, compiler-proven WCF/ASMX
+proxy mappings, and explicit mapping gaps for unsupported service shapes.
+Recognized service-framework identities require their expected strong-name public
+key token; unsigned assemblies with the same simple name do not produce Tier 1
+service facts. The matrix also covers renamed and inherited WCF operations,
+ASMX service-context admission, same-name helper rejection, unresolved command
+construction gaps, classic .NET Framework HTTP/configuration assembly names,
+ASMX Web Forms projection, and the shared `sql-query` classification for
+data-adapter Fill.
+
 VB.NET pinned OSS smoke (`community-visual-basic` —
 `CommunityVB/Community.VisualBasic`, MIT, pinned at
 `20d2a51dfc9f342848ad134952ceaa8d79302559`):
@@ -1282,9 +1304,9 @@ The script clones the pin, resets the working tree with `git clean -fdx`
 (required: design-time builds write `obj/` state inside the clone, which
 changes later design-time loads and gap counts if it is not cleaned), scans
 it, and asserts the required artifacts. Recorded expectations at the pin:
-`Level1SemanticAnalysisReduced` / `FailedOrPartial` with 71,940 facts,
-6,341 `visualbasic` symbols, 1,087 `vb.semantic` call edges, 518 object
-creations, 175 argument flows, 98 symbol relationships, and 62,358
+`Level1SemanticAnalysisReduced` / `FailedOrPartial` with 110,726 facts,
+6,314 `visualbasic` symbols, 928 `vb.semantic` call edges, 517 object
+creations, 175 argument flows, 98 symbol relationships, and 75,455
 category-only `AnalysisGap` rows. Reduced coverage is expected at this pin
 (unrestored packages and out-of-support target frameworks); the smoke proves
 artifact generation and static evidence extraction over a real VB.NET

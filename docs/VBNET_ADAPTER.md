@@ -1,8 +1,10 @@
 # VB.NET Adapter
 
-Status: foundation plus bounded event/Web Forms composition (issues
+Status: foundation, bounded event/Web Forms composition, and compiler-backed
+ADO.NET plus HTTP/config/file boundary slices (issues
 [#736](https://github.com/joefeser/tracemap/issues/736) and
-[#738](https://github.com/joefeser/tracemap/issues/738)). Every claim below is bounded by
+[#738](https://github.com/joefeser/tracemap/issues/738), plus partial issue
+[#737](https://github.com/joefeser/tracemap/issues/737)). Every claim below is bounded by
 the cataloged rule limitations in `rules/rule-catalog.yml` (`vb.semantic.*`,
 `vb.syntax.*`). Nothing in this adapter proves runtime reachability, execution,
 build success, or impact.
@@ -32,14 +34,34 @@ build success, or impact.
   `Handles`, `AddHandler`, `RemoveHandler`, `RaiseEvent`, and `WithEvents`, and
   projects supported VB code-behind/control/lifecycle bindings into the shared
   Web Forms evidence contracts.
+- Emits shared `SqlCommandDetected` evidence for compiler-resolved `DbCommand`
+  construction, `CommandType` assignment, and parameter collection mutation,
+  plus shared `DatabaseOperationCandidate` evidence for `ExecuteReader`,
+  `ExecuteScalar`, `ExecuteNonQuery`, and `DbDataAdapter.Fill` calls. Existing
+  call-edge and object-creation facts retain the supporting method path and
+  DataSet/DataTable/reader types.
+- Emits shared `HttpCallDetected` evidence for compiler-resolved `HttpClient`,
+  `WebRequest`, and `WebClient` operations. Compile-time destinations retain a
+  normalized path plus a digest, never a host or raw URL; dynamic destinations
+  remain explicit gaps. `WebRequest.Create` construction remains visible even
+  when a later `GetResponse` cannot be correlated to a destination.
+- Emits shared `ConfigBinding` evidence for compiler-resolved
+  `ConfigurationManager.GetSection`, `AppSettings(...)`,
+  `ConnectionStrings(...)`, and `My.Settings` member access. Only key/member
+  digests are retained; raw keys and values are excluded.
+- Feeds compiler-resolved VB `System.IO.File`/`Directory` calls into the shared
+  batch/data-movement projection. No VB-only file contract is introduced.
 
 ## Extractor identities
 
 | Extractor | Identity/version | Tier | Rules |
 | --- | --- | --- | --- |
-| Visual Basic semantic extractor | `vb-semantic/0.5.2` | Tier1 (facts), Tier2 (project observation), Tier4 (workspace, call-site, and event gaps) | `vb.semantic.compilation.v1`, `vb.semantic.workspace.v1`, `vb.semantic.declarations.v1`, `vb.semantic.propertyaccess.v1`, `vb.semantic.methodinvocation.v1`, `vb.semantic.callgraph.v1`, `vb.semantic.objectcreation.v1`, `vb.semantic.valueflow.v1`, `vb.semantic.symbolrelationship.v1`, `vb.semantic.event-wiring.v1` |
+| Visual Basic semantic extractor | `vb-semantic/0.8.3` | Tier1 (facts), Tier2 (project observation), Tier4 (workspace, call-site, event, and data/external-boundary gaps) | `vb.semantic.compilation.v1`, `vb.semantic.workspace.v1`, `vb.semantic.declarations.v1`, `vb.semantic.propertyaccess.v1`, `vb.semantic.methodinvocation.v1`, `vb.semantic.callgraph.v1`, `vb.semantic.objectcreation.v1`, `vb.semantic.valueflow.v1`, `vb.semantic.symbolrelationship.v1`, `vb.semantic.event-wiring.v1`, `vb.semantic.config-binding.v1`, `vb.semantic.external-boundary.v1`, plus shared database, HTTP, WCF, and ASMX contracts |
 | Visual Basic syntax fallback | `vb-syntax/0.3.1` | Tier3 (facts), Tier4 (parse/read/budget/semantic-unavailable/event gaps) | `vb.syntax.declarations.v1`, `vb.syntax.memberaccess.v1`, `vb.syntax.invocation.v1`, `vb.syntax.callgraph.v1`, `vb.syntax.objectcreation.v1`, `vb.syntax.event-wiring.v1` |
-| Shared Web Forms extractor | `legacy-webforms/0.8.2` | Tier1/Tier2/Tier3 facts and Tier4 gaps | existing `legacy.webforms.*` contracts, now with bounded VB code-behind and designer parsing |
+| Shared Web Forms extractor | `legacy-webforms/0.8.5` | Tier1/Tier2/Tier3 facts and Tier4 gaps | existing `legacy.webforms.*` contracts, now with bounded VB code-behind/designer parsing and shared database/WCF/ASMX terminal projection |
+| Shared WCF extractor | `legacy-wcf/0.3.0` | Tier1 inputs, Tier2/Tier3 mappings, Tier4 gaps | existing `legacy.wcf.*` contracts with compiler-resolved VB client/contract inputs |
+| Shared ASMX extractor | `legacy-asmx/0.2.0` | Tier1 inputs, Tier3 mappings, Tier4 gaps | existing `legacy.asmx.*` contracts with compiler-resolved VB client/service inputs |
+| Shared batch/data-movement extractor | `legacy-batch-data-movement/0.2.0` | Tier1/Tier2/Tier3 facts and Tier4 gaps | `legacy.webforms.batch-data-movement.v1`, including VB `Global.System.IO.*` semantic display strings |
 
 Symbol identities use the canonical .NET normalization shape with
 `visualbasic`-tagged language values (see `VisualBasicSymbolIdentityProvider`).
@@ -56,7 +78,23 @@ unambiguous default-member indexing such as `catalog(0)`), `MethodInvoked`,
 `IArgumentOperation`, covering positional, named, ByRef, optional-bound, and
 params-expanded arguments), and `SymbolRelationship` (`InheritsFrom`,
 `ExtendsInterface`, `ImplementsInterface`, `ImplementsInterfaceMember`,
-`Overrides`).
+`Overrides`). The initial ADO.NET slice adds compiler-resolved
+`SqlCommandDetected` facts for command construction/configuration and
+`DatabaseOperationCandidate` facts for supported command/adapter methods.
+Receiver symbol IDs keep two commands in one method distinct. Constant command
+strings retain only a SHA-256 digest and length; raw SQL, procedure names,
+parameter names and values, and connection material are not retained.
+`StoredProcedure` is a safe categorical candidate derived from a resolved
+`CommandType` enum assignment.
+
+The external slice reuses `HttpCallDetected`, `HttpClientCreated`, and
+`ConfigBinding`. Constant HTTP destinations retain normalized path shapes and
+hashes only. Configuration keys and members retain hashes only. Compiler-
+resolved `System.IO` invocations are consumed by the shared
+`LegacyBatchDataMovementDeclared` projection. These shared facts flow through
+Web Forms call paths, modernization packets, evidence-doc query recipes,
+source/review inputs, and WITS-compatible handoff corpora without a
+language-specific downstream schema.
 
 Event composition adds `VisualBasicEventBindingDeclared` for compiler-resolved
 or syntax-only `Handles`, `AddHandler`, and `RemoveHandler` sites and
@@ -143,6 +181,35 @@ catalog documents them per rule:
   did not compile never produce a guessed Tier1 target. Unresolved invocation
   and constructor sites retain bounded Tier3 call-site evidence plus a Tier4
   gap; other unsupported shapes remain visible through compiler diagnostics.
+  Compiler-recognized late-bound invocations are producer-local uncertainty
+  and do not by themselves downgrade a successful semantic build.
+- A name-only late-bound or unresolved `Fill`/`Execute*` call emits a bounded
+  `VisualBasicAdoNetTargetUnavailable` Tier4 gap. A syntactically plausible
+  unresolved `*Command` construction emits a bounded
+  `VisualBasicAdoNetCommandTypeUnavailable` gap. Neither becomes positive
+  database evidence. Execute/Fill candidates must align with a supported
+  framework member signature; subclass-defined same-name helper overloads are
+  excluded. Helper-returned commands, reflection, provider-specific APIs
+  outside the `DbCommand`/`DbDataAdapter` base families, cross-method command
+  state, and runtime ordering remain outside this initial slice.
+- ConfigurationManager, WebRequest, and WebClient recognition accepts both
+  their package-era assembly names and their classic .NET Framework assembly
+  names while retaining exact compiler-resolved metadata type and expected
+  strong-name public-key-token checks. ADO.NET base types are bounded the same
+  way to System.Data.Common or classic System.Data; unsigned same-name types
+  never become positive boundary evidence.
+- WCF `ClientBase(Of T)` maps only when the compiler proves the client contract
+  and the client method's exact interface implementation, including renamed
+  implementations and inherited contract interfaces when unambiguous. ASMX
+  service operations require a recognized `WebService` service context; client
+  operations require recognized `System.Web.Services` inheritance and SOAP
+  method attributes. Framework assembly names must also
+  carry the expected strong-name public-key token; unsigned same-name types are
+  rejected. The public-key token is an identity discriminator, not proof of
+  assembly authenticity. Custom wrappers, missing attributes/interfaces,
+  ambiguous matches, and absent metadata remain Tier4 gaps. HTTP destinations that are dynamic, including a later
+  `WebRequest.GetResponse` whose construction receiver is not correlated,
+  likewise remain gaps while their call/construction evidence is retained.
 - No runtime claims of any kind: facts prove source structure and
   compiler-resolved binding at scan time only, never execution,
   reachability, deployment state, or impact.

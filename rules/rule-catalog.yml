@@ -1492,8 +1492,8 @@ rules:
 
   - id: legacy.wcf.contract.v1
     name: Legacy WCF service contract and generated client evidence
-    description: Extracts service contract, operation contract, and generated service-client declarations from C# syntax and generated-code patterns.
-    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    description: Extracts service contract, operation contract, and generated service-client declarations from C# syntax/generated-code patterns and compiler-resolved Visual Basic framework identities.
+    evidenceTier: Tier1Semantic, Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
     emits:
       - WcfServiceContractDeclared
       - WcfOperationContractDeclared
@@ -1503,6 +1503,7 @@ rules:
       - Syntax-only contract evidence does not prove WSDL compatibility, generated proxy freshness, service deployment, or runtime invocation.
       - Generated-client detection requires WCF ClientBase-style inheritance and can miss custom proxies or nonstandard generated clients.
       - Missing generated files or unsupported service-reference shapes are analysis gaps, not proof that no service dependency exists.
+      - Visual Basic Tier1 rows require the recognized WCF assembly name and strong-name public-key token. The token is an identity discriminator, not proof of assembly authenticity. Client operations require compiler-proven implementation of the ClientBase contract interface; name-only methods and unsigned lookalikes remain gaps.
 
   - id: legacy.wcf.host.v1
     name: Legacy WCF service host evidence
@@ -1557,6 +1558,7 @@ rules:
       - Metadata-backed normalized mappings require generated client contract, normalized operation name, connected WSDL operation metadata, and service contract evidence; a random repository-level WSDL operation name is not sufficient.
       - Without aligned config endpoint evidence, metadata-backed mappings are capped at Tier3SyntaxOrTextual even when supporting metadata is Tier2Structural.
       - Multiple matching endpoints, hosts, contracts, metadata identities, or distinct logical operations are ambiguity gaps/review-tier evidence; TraceMap does not choose an arbitrary winner.
+      - Compiler-resolved Visual Basic inputs may establish exact client/contract operation identity, but the composed mapping remains Tier3 without aligned endpoint configuration and never proves invocation.
 
   - id: legacy.asmx.host.v1
     name: Legacy ASMX host directive evidence
@@ -1584,7 +1586,7 @@ rules:
 
   - id: legacy.asmx.operation.v1
     name: Legacy ASMX and SOAP operation evidence
-    description: Extracts C# WebMethod declarations and SOAP operation-shape attributes such as SoapDocumentMethod and SoapRpcMethod while keeping public operation and SOAP binding evidence distinct.
+    description: Extracts C# and compiler-resolved Visual Basic WebMethod declarations and SOAP operation-shape attributes such as SoapDocumentMethod and SoapRpcMethod while keeping public operation and SOAP binding evidence distinct.
     evidenceTier: Tier1Semantic, Tier3SyntaxOrTextual, or Tier4Unknown
     emits:
       - AsmxOperationDeclared
@@ -1594,6 +1596,7 @@ rules:
       - Operation rows are static declarations only and do not prove a SOAP request was sent, a method is reachable, a binding is compatible, auth succeeds, endpoint configuration is selected, deployment exists, or runtime impact occurred.
       - SOAP action, namespace, binding, endpoint, config, credential, token, local path, and source-snippet values are hashed or omitted; credential-like values are omitted rather than hashed.
       - Syntax-only rows remain review-tier when compiler symbols cannot disambiguate framework attributes from aliases or project-defined lookalikes.
+      - Visual Basic Tier1 rows require the recognized System.Web.Services strong-name identity; the token is an identity discriminator, not proof of assembly authenticity, and raw SOAP action arguments are not retained.
 
   - id: legacy.asmx.client.v1
     name: Legacy ASMX generated SOAP client evidence
@@ -1607,6 +1610,7 @@ rules:
       - Generated client evidence is static proxy-shape evidence only and does not prove runtime endpoint selection, generated proxy freshness, service reachability, deployment, authentication, authorization, or impact.
       - Dynamic proxy factories, runtime URL assignment, custom base classes, unsupported generated formats, and missing checked-in metadata are gaps or review-tier evidence.
       - Raw endpoint addresses, SOAP actions, config values, namespaces, local paths, source snippets, credentials, and tokens are omitted or hashed according to ASMX redaction rules.
+      - Visual Basic Tier1 client operations require recognized SoapHttpClientProtocol framework identity plus a compiler-resolved SOAP method attribute; name-only wrappers and unsigned lookalikes remain gaps.
 
   - id: legacy.asmx.metadata.v1
     name: Legacy ASMX checked-in SOAP metadata evidence
@@ -1643,6 +1647,7 @@ rules:
       - Mappings are probable static evidence only and do not prove SOAP request execution, endpoint selection, deployment, reachability, authorization, generated proxy freshness, or backend impact.
       - Name-only or metadata-backed mappings without stronger semantic/config evidence remain review-tier and are capped by the weakest required evidence leg.
       - Duplicate operation candidates, missing metadata, dynamic proxy factories, and ambiguous service-reference ownership emit gaps rather than choosing an arbitrary backend.
+      - Compiler-resolved Visual Basic operation identity can supply the client and service declaration legs, but operation-name composition remains Tier3 probable static evidence.
 
   - id: legacy.remoting.api.v1
     name: Legacy .NET Remoting API evidence
@@ -2462,6 +2467,7 @@ rules:
     limitations:
       - Rows are static candidates only and do not prove that a job is scheduled, runs, succeeds, moves complete data, retries effectively, is idempotent, checkpoints effectively, commits or rolls back successfully, is monitored, or is used in production.
       - Compiler-resolved System.IO, FileSystemWatcher, and SqlBulkCopy calls are preferred; syntax fallback is restricted to explicitly qualified framework calls, declared SqlBulkCopy variables, known scheduled-entry shapes, and CommandType.StoredProcedure execution shapes.
+      - Compiler-resolved System.IO consumption accepts the canonical C# `global::System.IO.*` and Visual Basic `Global.System.IO.*` symbol display forms; this is a language display normalization, not a name-only join.
       - Retry, error-handling, transaction, checkpoint, and telemetry fields record only deterministic declaration shapes in the same member; they do not prove runtime behavior or effectiveness.
       - Related database, message, service, and configuration facts are composed only when source file and member identity prove the association; missing or ambiguous project owners, config references, reduced semantic coverage, and deterministic limits remain explicit gaps.
       - Raw schedules, paths, destinations, SQL, connection material, configuration values, source values, snippets, credentials, local absolute paths, and remotes are omitted or represented only by bounded hashes and categories.
@@ -3899,10 +3905,11 @@ rules:
     evidenceTier: Tier1Semantic
     emits:
       - MethodInvoked
+      - AnalysisGap
     limitations:
       - Requires Roslyn semantic binding; late binding, overload resolution failures, and error-typed receivers produce no Tier1 fact rather than a guessed target.
       - An invocation proves a compiler-resolved call site in source; it does not prove the callee executes, is reachable, or completes at runtime.
-      - Unresolved invocation sites retain bounded Tier3 call-site facts and a `CallSiteSemanticResolutionUnavailable` Tier4 gap; they never become compiler-resolved targets.
+      - Unresolved invocation sites retain bounded Tier3 call-site facts and a `CallSiteSemanticResolutionUnavailable` Tier4 gap; they never become compiler-resolved targets. Compiler-recognized late-bound calls are producer-local uncertainty and do not imply that MSBuild or compilation failed; other unresolved call-site gaps remain workspace coverage reductions.
 
   - id: vb.semantic.callgraph.v1
     name: Visual Basic semantic call graph
@@ -3976,6 +3983,29 @@ rules:
       - Lambda, bare delegate-variable, arbitrarily qualified receiver, malformed, and unsupported shapes emit category-only gaps. AddHandler/RemoveHandler method names require an explicit AddressOf operand; unqualified and Me/MyClass-qualified local member shapes may be retained without gaining symbol identity. Raw delegate/event expressions are hashed or omitted.
       - The shared per-file 2,000-fact budget applies; missing evidence beyond that limit is not evidence of absence.
       - Syntax event evidence does not prove compilation, attachment, removal, firing, ordering, postback behavior, reachability, or execution.
+
+  - id: vb.semantic.config-binding.v1
+    name: Visual Basic semantic configuration binding
+    description: Records compiler-resolved ConfigurationManager section/indexer access and My.Settings member access using the shared ConfigBinding contract.
+    evidenceTier: Tier1Semantic
+    emits:
+      - ConfigBinding
+    limitations:
+      - Configuration keys and member names are retained only as hashes; values, connection material, provider precedence, reload behavior, availability, and runtime use are not reconstructed.
+      - My.Settings recognition requires the explicit VB My.Settings member shape and a compiler-resolved property. Custom wrappers, aliases, reflection, default-member indirection, and dynamically selected keys remain outside this rule.
+      - ConfigurationManager GetSection, AppSettings, and ConnectionStrings evidence accepts the package-era System.Configuration.ConfigurationManager assembly and classic System.Configuration assembly while requiring the expected strong-name public-key token, exact compiler-resolved framework type, and a compile-time constant key; unresolved, unsigned lookalike, or dynamic-key shapes produce no positive config binding.
+
+  - id: vb.semantic.external-boundary.v1
+    name: Visual Basic semantic external-boundary gaps
+    description: Records bounded producer-local gaps for unresolved, late-bound, or dynamically identified Visual Basic HTTP, configuration, and service boundary shapes.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Name-only candidates do not establish an HTTP, configuration, WCF, ASMX, file, or other external boundary and never become positive boundary facts.
+      - Positive WCF mappings require recognized framework identity plus one unambiguous compiler-proven interface implementation; renamed methods and inherited interfaces are supported. Positive ASMX mappings require a recognized WebService service context, recognized client inheritance, and supported framework attributes. Missing identities, attributes, endpoints, metadata, or unambiguous operation alignment remain gaps rather than guessed mappings.
+      - Gaps are capped at 50 sites plus one budget marker per document. Missing facts beyond that budget are not evidence of absence.
+      - These feature-local gaps do not replace compiler/workspace diagnostics and do not independently claim build failure.
 
   - id: vb.syntax.declarations.v1
     name: Visual Basic syntax declarations
@@ -4227,6 +4257,8 @@ rules:
       - Tier1 requires Roslyn symbol binding to known HTTP APIs.
       - Syntax fallback matches common method names and may include unrelated methods with the same name.
       - URL may not be fully resolvable if built dynamically or loaded from runtime configuration.
+      - Visual Basic Tier1 support is bounded to compiler-resolved HttpClient request methods, WebRequest GetResponse methods, and WebClient download/upload/open methods. Static destinations retain normalized paths and hashes, never hosts, query values, request bodies, credentials, headers, or responses.
+      - A resolved API call with a dynamic destination retains the call shape plus a producer-local gap; an unresolved name-only call retains only a gap.
 
   - id: database.ef.v1
     name: Entity Framework style database surface
@@ -4260,6 +4292,8 @@ rules:
       - Dapper and command targets use the existing bounded constant SQL-shape projection. One- or two-part unquoted table identities are retained; unsafe, quoted, or multipart identities remain gaps rather than being matched after qualifier loss.
       - Raw SQL, command text, parameter values, and connection material are not retained on operation facts.
       - ADO.NET and Npgsql v0 table projection is limited to inline constant command construction; command variables, helper-returned commands, stored-procedure indirection, repository abstractions, DI dispatch, reflection, and branch feasibility remain reduced coverage.
+      - Visual Basic compiler-backed evidence recognizes DbCommand ExecuteReader/ExecuteScalar/ExecuteNonQuery families and DbDataAdapter Fill only when the matching base type resolves from the expected strong-named System.Data.Common or classic System.Data assembly. Boundary-only candidates do not identify tables, returned rows, command text, or runtime effects.
+      - Visual Basic late-bound or unresolved Fill/Execute-like calls emit bounded gaps and never become database-operation candidates.
       - Save and transaction boundaries do not identify the tracked changes, affected tables, isolation, scope, commit, rollback, or atomicity.
       - Recognizable calls without semantic binding and candidates without one bounded target emit explicit Tier4 gaps rather than guessed operations.
       - When a C# file has no semantic model, name-only syntax fallback emits Tier4 gaps and does not claim framework or target identity.
@@ -4310,7 +4344,7 @@ rules:
   - id: database.sql.text.v1
     name: SQL text detection
     description: Finds ADO.NET SqlCommand construction, SQL-like files, and SQL-like string literals.
-    evidenceTier: Tier2Structural or Tier3SyntaxOrTextual
+    evidenceTier: Tier1Semantic, Tier2Structural, or Tier3SyntaxOrTextual
     emits:
       - SqlCommandDetected
       - SqlTextUsed
@@ -4320,6 +4354,8 @@ rules:
       - C# syntax fallback may classify any complete SQL-like string literal whose first token is a supported SQL verb, even outside a recognized framework call shape.
       - Dynamic SQL construction emits reduced-coverage boundary evidence instead of complete SQL text.
       - Raw SQL text is not stored by default; hashes and spans are emitted instead.
+      - Visual Basic Tier1 command evidence recognizes compiler-resolved DbCommand construction, CommandType assignment, and parameter-collection mutation. Constant command strings retain only hashes and lengths; procedure names, SQL, parameter names and values, and connection material are omitted.
+      - Separate construction/configuration facts do not prove their runtime ordering, branch feasibility, final command state, execution, or success.
 
   - id: database.sql.shape.v1
     name: Shared SQL shape detection
