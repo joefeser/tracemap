@@ -20,10 +20,10 @@
 
 ## Validation
 
-- Focused `WebFormsCodePathReviewTests`: 9/9 passed.
-- Focused VB Web Forms plus code-path review suites: 30/30 passed.
+- Focused `WebFormsCodePathReviewTests`: 10/10 passed.
+- Focused VB Web Forms plus code-path review suites: 31/31 passed.
 - Synthetic VB scan -> packet -> batch inspection -> private/anonymous review: passed.
-- Full solution: 1,927/1,927 passed with no compiler/analyzer warnings.
+- Full solution after review fixes: 1,928/1,928 passed with no compiler/analyzer warnings.
 - PowerShell review-set, application-workbench, and configuration workflows: passed.
 - `check-private-paths.sh` and `git diff --check`: passed.
 - Pinned OSS scan not rerun: this slice changes only report consumption and HTML/source navigation; it does not change inventory, extraction, facts, coverage, or adapter artifacts. The synthetic VB scan exercises the changed consumer path end to end.
@@ -34,3 +34,10 @@
 - The supplied working tree is not asserted to equal the scanned commit; Git remains optional.
 - Raw source is opt-in/private and never enters shareable artifacts.
 - Runtime behavior, cross-language identity joins, BRD generation, and modernization generation remain out of scope.
+
+## Review fixes
+
+- Anonymous VB rule provenance is bound to the finite call-evidence rule set; unknown well-formed IDs are withheld.
+- Same-span invocation/call-graph witnesses retain every distinct rule and tier while the physical call-site count remains one.
+- Structural-only reports do not read source when there is no unresolved lookup work and raw source is disabled.
+- VB candidate navigation normalizes bracket-escaped identifiers and covers `Declare Sub`/`Declare Function` statements.

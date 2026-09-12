@@ -129,7 +129,7 @@ public sealed class WebFormsCodePathReviewTests
             var output = Path.Combine(directory, "review.private.html");
             var first = WebFormsCodePathReview.Run(inspection, sourceRoot, "case-001", output, includeRawSource: true);
 
-            Assert.Contains(first, line => line.Contains("definitionCandidates=1", StringComparison.Ordinal));
+            Assert.Contains(first, line => line.Contains("definitionCandidates=3", StringComparison.Ordinal));
             var report = File.ReadAllText(output);
             Assert.Contains("Private.VbPage.Handler", report, StringComparison.Ordinal);
             Assert.Contains("unique-name-definition-candidate-not-evidence", report, StringComparison.Ordinal);
@@ -139,11 +139,16 @@ public sealed class WebFormsCodePathReviewTests
             Assert.Contains("Private annotated source source/Page.aspx.vb", annotated, StringComparison.Ordinal);
             Assert.Contains("Private Sub Handler", annotated, StringComparison.Ordinal);
             Assert.Contains("Private Sub UiReset", annotated, StringComparison.Ordinal);
+            Assert.Contains("Private Sub [Stop]", annotated, StringComparison.Ordinal);
+            Assert.Contains("Private Declare Function Imported", annotated, StringComparison.Ordinal);
 
             var shareableHtml = File.ReadAllText(Path.Combine(directory, "review.shareable.html"));
             var shareableJson = File.ReadAllText(Path.Combine(directory, "review.shareable.json"));
             Assert.Contains("vb.semantic.methodinvocation.v1", shareableJson, StringComparison.Ordinal);
-            Assert.DoesNotContain("withheld-unsafe-rule-id", shareableJson, StringComparison.Ordinal);
+            Assert.Contains("vb.semantic.callgraph.v1", shareableJson, StringComparison.Ordinal);
+            Assert.Contains("withheld-unsafe-rule-id", shareableJson, StringComparison.Ordinal);
+            Assert.DoesNotContain("vb.semantic.fabricated.v1", shareableJson, StringComparison.Ordinal);
+            Assert.Contains(">calls x 1</text>", shareableHtml, StringComparison.Ordinal);
             Assert.DoesNotContain("Private", shareableHtml, StringComparison.Ordinal);
             Assert.DoesNotContain("UiReset", shareableHtml, StringComparison.Ordinal);
             Assert.DoesNotContain("Page.aspx.vb", shareableHtml, StringComparison.Ordinal);
@@ -155,6 +160,25 @@ public sealed class WebFormsCodePathReviewTests
             WebFormsCodePathReview.Run(inspection, sourceRoot, "case-001", repeatOutput, includeRawSource: true);
             Assert.Equal(shareableHtml, File.ReadAllText(Path.Combine(directory, "repeat.shareable.html")));
             Assert.Equal(shareableJson, File.ReadAllText(Path.Combine(directory, "repeat.shareable.json")));
+        });
+    }
+
+    [Fact]
+    public void VisualBasicStructuralReviewDoesNotReadSourceWhenNoLookupOrRawSourceIsRequested()
+    {
+        WithVisualBasicFixture((directory, sourceRoot, inspection) =>
+        {
+            var root = JsonNode.Parse(File.ReadAllText(inspection))!;
+            root["cases"]![0]!["unresolvedOtherLeaves"] = new JsonArray();
+            File.WriteAllText(inspection, root.ToJsonString());
+            File.Delete(Path.Combine(sourceRoot, "source", "Page.aspx.vb"));
+
+            var output = Path.Combine(directory, "review.private.html");
+            var lines = WebFormsCodePathReview.Run(inspection, sourceRoot, "case-001", output);
+
+            Assert.Contains("codePathReview=created", lines);
+            Assert.True(File.Exists(output));
+            Assert.True(File.Exists(Path.Combine(directory, "review.shareable.json")));
         });
     }
 
@@ -360,6 +384,11 @@ public sealed class WebFormsCodePathReviewTests
                     Enabled = False
                 End Sub
 
+                Private Sub [Stop]()
+                End Sub
+
+                Private Declare Function Imported Lib "example" () As Integer
+
                 Private Property Enabled As Boolean
             End Class
             """);
@@ -384,14 +413,19 @@ public sealed class WebFormsCodePathReviewTests
                     evidenceConclusion = "ui-control-operations-observed-with-unresolved-leaves",
                     handlerLocation = Witness("handler", "Private.VbPage.Handler(Object, EventArgs)", 2, 4),
                     bindings = new[] { new { bindingLocation = Witness("Private.VbPage.Control", "Private.VbPage.Handler(Object, EventArgs)", 3, 3, "source/Page.aspx", "legacy.webforms.event-binding.v1", "Tier2Structural") } },
-                    unresolvedOtherLeaves = new[] { "Private.VbPage.UIRESET()" },
+                    unresolvedOtherLeaves = new[] { "Private.VbPage.UIRESET()", "Private.VbPage.[Stop]()", "Private.VbPage.Imported()" },
                     methods = new object[]
                     {
                         new
                         {
                             symbol = "Private.VbPage.Handler(Object, EventArgs)",
                             exactDeclarationLocations = Array.Empty<object>(),
-                            outgoingCallSites = new[] { Witness("Private.VbPage.Handler(Object, EventArgs)", "Private.VbPage.UIRESET()", 3, 3) }
+                            outgoingCallSites = new[]
+                            {
+                                Witness("Private.VbPage.Handler(Object, EventArgs)", "Private.VbPage.UIRESET()", 3, 3),
+                                Witness("Private.VbPage.Handler(Object, EventArgs)", "Private.VbPage.UIRESET()", 3, 3, ruleId: "vb.semantic.callgraph.v1"),
+                                Witness("Private.VbPage.Handler(Object, EventArgs)", "Private.VbPage.UIRESET()", 3, 3, ruleId: "vb.semantic.fabricated.v1")
+                            }
                         },
                         new
                         {
