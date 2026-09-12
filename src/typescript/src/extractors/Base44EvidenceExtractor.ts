@@ -8,6 +8,7 @@ import { createEvidence, createFact } from "../facts/FactFactory";
 import { RuleIds, ScannerVersions } from "../facts/RuleIds";
 import { hash } from "../util/Hash";
 import { extractEntityShapeFacts } from "./Base44EntityShapeExtractor";
+import { extractBase44UiInputFacts } from "./Base44UiInputSemanticsExtractor";
 
 const entityOperations = new Set(["list", "filter", "get", "create", "update", "delete", "deleteMany", "bulkCreate", "importEntities", "subscribe", "upsert"]);
 const primitiveRoots = new Set([
@@ -82,8 +83,19 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
     || candidate.factType === FactTypes.Base44CustomerBoundary);
   if (hasBase44Signal) {
     for (const item of migrationItems) facts.push(await sqlFact(manifest, item));
+    for (const item of sourceItems.filter((candidate) => isUiAuthorityPath(candidate.relativePath))) {
+      const context = aliasDiscovery.contexts.get(item.relativePath);
+      if (!context) continue;
+      facts.push(...extractBase44UiInputFacts(manifest, context.source, item.relativePath, context.source.getFullText(), facts));
+    }
   }
   return facts;
+}
+
+function isUiAuthorityPath(filePath: string): boolean {
+  const segments = filePath.toLowerCase().split("/");
+  if (segments.some((segment) => ["docs", "fixtures", "fixture", "__fixtures__", "tests", "test", "__tests__", "mocks", "mock"].includes(segment))) return false;
+  return !/\.(?:test|spec|stories)\.[jt]sx?$/u.test(filePath);
 }
 
 function visit(node: ts.Node, source: ts.SourceFile, filePath: string, text: string, aliases: Map<string, string[]>, factoryAliases: Set<string>, injectedParameters: Map<number, string[]>, base44Context: boolean, manifest: ScanManifest, facts: CodeFact[], sdkIdentity: SdkIdentityResolution, contexts: Map<string, SourceContext>): void {
