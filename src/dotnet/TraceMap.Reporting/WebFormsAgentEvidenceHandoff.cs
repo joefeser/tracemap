@@ -375,6 +375,21 @@ public static class WebFormsAgentEvidenceHandoff
         return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
     }
 
+    public static void ValidateEvidenceCorpus(string corpusRoot, string scanId, string commitSha, string packetId)
+    {
+        _ = ReadCorpus(corpusRoot, Path.GetFullPath(corpusRoot), scanId, commitSha, []);
+        var manifestPath = BoundedCorpusFile(Path.TrimEndingDirectorySeparator(Path.GetFullPath(corpusRoot)), "manifest.json", MaximumCorpusManifestBytes);
+        var manifestText = File.ReadAllText(manifestPath);
+        var manifest = JsonSerializer.Deserialize<EvidenceDocsManifest>(manifestText, JsonOptions)
+            ?? throw new InvalidDataException("AgentHandoffCorpusSchemaMismatch");
+        var packetHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(packetId))).ToLowerInvariant()[..24];
+        if (!manifest.Inputs.Any(input => input.Kind == "webforms-modernization-packet"
+                && input.Identity == $"packet:{packetHash}"
+                && input.SchemaVersion == WebFormsModernizationPacketReporter.SchemaVersion
+                && input.Compatibility == "compatible"))
+            throw new InvalidDataException("AgentHandoffCorpusProvenanceMismatch");
+    }
+
     private static IReadOnlyList<WebFormsHandoffEvidenceReference> ReadEvidence(JsonElement selectedCase)
     {
         var values = new List<WebFormsHandoffEvidenceReference>();
