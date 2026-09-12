@@ -6,4 +6,4 @@
 - [x] 4. Extend the synthetic VB Web Forms fixture and focused/adversarial tests.
 - [x] 5. Update rule catalog, adapter/validation/acceptance documentation, and consumer claims.
 - [x] 6. Run focused/full validation, privacy guards, deterministic scan checks, and document smoke disposition.
-- [ ] 7. Commit and push the reviewable issue branch.
+- [x] 7. Commit and push the reviewable issue branch.
