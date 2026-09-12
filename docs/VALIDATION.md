@@ -1228,6 +1228,10 @@ dotnet test src/dotnet/TraceMap.sln
 dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
   --filter 'FullyQualifiedName~VisualBasic|FullyQualifiedName~VbNetFixture'
 
+# Initial compiler-backed ADO.NET command/adapter/Fill/Execute evidence.
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~VisualBasicDataBoundaryTests
+
 # Modern (semantic success), legacy (fallback/reduced), and Web Forms
 # (inventory + reduced) CLI fixture scans.
 dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/vb-modern-sample --out <tmp>/vb-modern

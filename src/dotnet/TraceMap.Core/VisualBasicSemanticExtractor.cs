@@ -513,6 +513,7 @@ public static class VisualBasicSemanticExtractor
         AddPropertyAccessFacts(projectPath, filePath, root, model, facts);
         AddMethodInvocationFacts(repoPath, projectPath, filePath, root, model, facts, gaps);
         AddObjectCreationFacts(repoPath, projectPath, filePath, root, model, facts, gaps);
+        AddAdoNetBoundaryFacts(projectPath, filePath, root, model, facts, gaps);
     }
 
     private static void AddTypeDeclarationFacts(
@@ -1780,6 +1781,351 @@ public static class VisualBasicSemanticExtractor
                 ["callerName"] = callerName ?? string.Empty,
                 ["resolution"] = "unresolved-constructor"
             }));
+    }
+
+    private static void AddAdoNetBoundaryFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts,
+        List<SemanticFactCandidate> gaps)
+    {
+        foreach (var creation in root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
+        {
+            if (model.GetTypeInfo(creation).Type is not INamedTypeSymbol type
+                || !IsAdoNetType(type, "System.Data.Common.DbCommand"))
+            {
+                continue;
+            }
+
+            var enclosing = model.GetEnclosingSymbol(creation.SpanStart);
+            var commandReceiver = TryGetCreationAssignedSymbol(creation, model);
+            var properties = AddAssemblyProperties(
+                AddSymbolProperties(AddSymbolProperties(
+                    AddSymbolProperties(
+                        new SortedDictionary<string, string>(StringComparer.Ordinal)
+                        {
+                            ["commandTextClassification"] = "unavailable",
+                            ["frameworkFamily"] = GetAdoNetFrameworkFamily(type),
+                            ["limitations"] = "Compiler-resolved command construction only; runtime execution, database identity, command effects, and success are not proven.",
+                            ["typeName"] = type.ToDisplayString(SymbolFormat)
+                        },
+                        "source",
+                        enclosing),
+                        "target",
+                        type),
+                    "commandReceiver",
+                    commandReceiver),
+                enclosing?.ContainingAssembly,
+                type.ContainingAssembly);
+
+            if (TryGetCommandTextArgument(creation, model) is { } commandTextArgument)
+            {
+                var constant = model.GetConstantValue(commandTextArgument.Expression);
+                if (constant.HasValue && constant.Value is string text)
+                {
+                    properties["commandTextClassification"] = "compile-time-constant-hashed";
+                    properties["commandTextHash"] = FactFactory.Hash(text, 64);
+                    properties["commandTextLength"] = text.Length.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                }
+                else
+                {
+                    properties["commandTextClassification"] = "dynamic-or-nonconstant";
+                }
+            }
+
+            facts.Add(CreateSemanticFact(
+                FactTypes.SqlCommandDetected,
+                RuleIds.DatabaseSqlText,
+                projectPath,
+                filePath,
+                creation,
+                sourceSymbol: enclosing?.ToDisplayString(SymbolFormat),
+                targetSymbol: type.ToDisplayString(SymbolFormat),
+                contractElement: type.Name,
+                properties: properties));
+        }
+
+        foreach (var assignment in root.DescendantNodes().OfType<AssignmentStatementSyntax>())
+        {
+            if (!assignment.IsKind(SyntaxKind.SimpleAssignmentStatement)
+                || assignment.Left is not MemberAccessExpressionSyntax memberAccess
+                || model.GetSymbolInfo(memberAccess).Symbol is not IPropertySymbol property
+                || !property.Name.Equals("CommandType", StringComparison.OrdinalIgnoreCase)
+                || !IsAdoNetType(property.ContainingType, "System.Data.Common.DbCommand"))
+            {
+                continue;
+            }
+
+            var receiver = model.GetSymbolInfo(memberAccess.Expression).Symbol;
+            var assigned = model.GetSymbolInfo(assignment.Right).Symbol;
+            var commandType = assigned is IFieldSymbol { ContainingType: { } enumType } field
+                && GetMetadataName(enumType) == "System.Data.CommandType"
+                ? field.Name
+                : "unknown";
+            var enclosing = model.GetEnclosingSymbol(assignment.SpanStart);
+            var properties = AddSymbolProperties(
+                AddSymbolProperties(
+                    AddSymbolProperties(
+                        new SortedDictionary<string, string>(StringComparer.Ordinal)
+                        {
+                            ["commandTypeClassification"] = commandType,
+                            ["configurationKind"] = "command-type-assignment",
+                            ["frameworkFamily"] = GetAdoNetFrameworkFamily(property.ContainingType),
+                            ["limitations"] = "Static assignment evidence only; branch feasibility, later mutation, runtime command type, and execution are not proven.",
+                            ["storedProcedureCandidate"] = commandType == "StoredProcedure" ? "true" : "false"
+                        },
+                        "source",
+                        enclosing),
+                    "target",
+                    property),
+                "commandReceiver",
+                receiver);
+            facts.Add(CreateSemanticFact(
+                FactTypes.SqlCommandDetected,
+                RuleIds.DatabaseSqlText,
+                projectPath,
+                filePath,
+                assignment,
+                sourceSymbol: enclosing?.ToDisplayString(SymbolFormat),
+                targetSymbol: property.ContainingType.ToDisplayString(SymbolFormat),
+                contractElement: "CommandType",
+                properties: properties));
+        }
+
+        var boundaryGapCount = 0;
+        var boundaryGapBudgetReported = false;
+        foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            var name = GetSafeInvocationName(invocation.Expression);
+            var method = model.GetSymbolInfo(invocation).Symbol as IMethodSymbol;
+            if (method is not null && TryClassifyAdoNetOperation(method, out var operationKind, out var resultKind))
+            {
+                var enclosing = model.GetEnclosingSymbol(invocation.SpanStart);
+                var receiver = invocation.Expression is MemberAccessExpressionSyntax access
+                    ? model.GetSymbolInfo(access.Expression).Symbol
+                    : null;
+                var properties = AddAssemblyProperties(
+                    AddSymbolProperties(
+                        AddSymbolProperties(
+                            AddSymbolProperties(
+                                new SortedDictionary<string, string>(StringComparer.Ordinal)
+                                {
+                                    ["coverageLabel"] = "bounded-static-call",
+                                    ["frameworkFamily"] = GetAdoNetFrameworkFamily(method.ContainingType),
+                                    ["limitations"] = "Compiler-resolved static call candidate only; runtime reachability, database identity, SQL, affected rows, returned data, and success are not proven.",
+                                    ["methodName"] = method.Name,
+                                    ["operationKind"] = operationKind,
+                                    ["resultKind"] = resultKind,
+                                    ["targetIdentityStatus"] = "boundary-only"
+                                },
+                                "source",
+                                enclosing),
+                            "target",
+                            method),
+                        "receiver",
+                        receiver),
+                    enclosing?.ContainingAssembly,
+                    method.ContainingAssembly);
+                facts.Add(CreateSemanticFact(
+                    FactTypes.DatabaseOperationCandidate,
+                    RuleIds.DatabaseOperationCallPattern,
+                    projectPath,
+                    filePath,
+                    invocation,
+                    sourceSymbol: enclosing?.ToDisplayString(SymbolFormat),
+                    targetSymbol: method.ToDisplayString(SymbolFormat),
+                    contractElement: operationKind,
+                    properties: properties));
+                continue;
+            }
+
+            if (method is not null && IsParameterCollectionMutation(method))
+            {
+                var enclosing = model.GetEnclosingSymbol(invocation.SpanStart);
+                var commandReceiver = TryGetParameterCommandReceiver(invocation, model);
+                var properties = AddSymbolProperties(
+                    AddSymbolProperties(
+                        AddSymbolProperties(
+                            new SortedDictionary<string, string>(StringComparer.Ordinal)
+                            {
+                                ["configurationKind"] = "parameter-collection-mutation",
+                                ["frameworkFamily"] = "ado-net",
+                                ["limitations"] = "Compiler-resolved parameter collection mutation only; parameter names and values are not retained, and runtime command association or execution is not proven.",
+                                ["parameterMutationMethod"] = method.Name
+                            },
+                            "source",
+                            enclosing),
+                        "target",
+                        method),
+                    "commandReceiver",
+                    commandReceiver);
+                facts.Add(CreateSemanticFact(
+                    FactTypes.SqlCommandDetected,
+                    RuleIds.DatabaseSqlText,
+                    projectPath,
+                    filePath,
+                    invocation,
+                    sourceSymbol: enclosing?.ToDisplayString(SymbolFormat),
+                    targetSymbol: method.ContainingType.ToDisplayString(SymbolFormat),
+                    contractElement: "Parameters",
+                    properties: properties));
+                continue;
+            }
+
+            if (method is null && IsPotentialAdoNetOperationName(name) && boundaryGapCount < 50)
+            {
+                var lineSpan = invocation.SyntaxTree.GetLineSpan(invocation.Span);
+                gaps.Add(CreateGap(
+                    filePath,
+                    "A potential Visual Basic ADO.NET operation had no compiler-resolved target; no database boundary was claimed.",
+                    "VisualBasicAdoNetTargetUnavailable",
+                    projectPath,
+                    lineSpan.StartLinePosition.Line + 1,
+                    lineSpan.EndLinePosition.Line + 1,
+                    siteHash: FactFactory.Hash(invocation.Expression.ToString(), 32),
+                    ruleId: RuleIds.DatabaseOperationCallPattern));
+                boundaryGapCount++;
+            }
+            else if (method is null && IsPotentialAdoNetOperationName(name) && !boundaryGapBudgetReported)
+            {
+                gaps.Add(CreateGap(
+                    filePath,
+                    "Visual Basic ADO.NET unresolved-target gap evidence reached its deterministic per-document budget; remaining candidate sites were not classified by the database rule.",
+                    "VisualBasicAdoNetGapBudgetExhausted",
+                    projectPath,
+                    ruleId: RuleIds.DatabaseOperationCallPattern));
+                boundaryGapBudgetReported = true;
+            }
+        }
+    }
+
+    private static bool TryClassifyAdoNetOperation(IMethodSymbol method, out string operationKind, out string resultKind)
+    {
+        operationKind = string.Empty;
+        resultKind = "none";
+        if (IsAdoNetType(method.ContainingType, "System.Data.Common.DbCommand"))
+        {
+            operationKind = method.Name switch
+            {
+                "ExecuteReader" or "ExecuteReaderAsync" => "select-candidate",
+                "ExecuteScalar" or "ExecuteScalarAsync" => "scalar-candidate",
+                "ExecuteNonQuery" or "ExecuteNonQueryAsync" => "execute-candidate",
+                _ => string.Empty
+            };
+            resultKind = method.Name.StartsWith("ExecuteReader", StringComparison.Ordinal)
+                ? "data-reader"
+                : method.Name.StartsWith("ExecuteScalar", StringComparison.Ordinal)
+                    ? "scalar"
+                    : "row-count-or-none";
+        }
+        else if (IsAdoNetType(method.ContainingType, "System.Data.Common.DbDataAdapter")
+            && method.Name == "Fill")
+        {
+            operationKind = "data-adapter-fill";
+            resultKind = method.Parameters.Any(parameter => IsAdoNetType(parameter.Type, "System.Data.DataTable")
+                    || parameter.Type is IArrayTypeSymbol array && IsAdoNetType(array.ElementType, "System.Data.DataTable"))
+                ? "data-table"
+                : method.Parameters.Any(parameter => IsAdoNetType(parameter.Type, "System.Data.DataSet"))
+                    ? "data-set"
+                    : "data-container-unknown";
+        }
+
+        return operationKind.Length > 0;
+    }
+
+    private static bool IsParameterCollectionMutation(IMethodSymbol method) =>
+        IsAdoNetType(method.ContainingType, "System.Data.Common.DbParameterCollection")
+        && method.Name is "Add" or "AddWithValue" or "AddRange";
+
+    private static ISymbol? TryGetParameterCommandReceiver(InvocationExpressionSyntax invocation, SemanticModel model)
+    {
+        if (invocation.Expression is MemberAccessExpressionSyntax
+            {
+                Expression: MemberAccessExpressionSyntax parametersAccess
+            }
+            && model.GetSymbolInfo(parametersAccess).Symbol is IPropertySymbol property
+            && property.Name.Equals("Parameters", StringComparison.OrdinalIgnoreCase)
+            && IsAdoNetType(property.ContainingType, "System.Data.Common.DbCommand"))
+        {
+            return model.GetSymbolInfo(parametersAccess.Expression).Symbol;
+        }
+
+        return null;
+    }
+
+    private static ISymbol? TryGetCreationAssignedSymbol(ObjectCreationExpressionSyntax creation, SemanticModel model)
+    {
+        VariableDeclaratorSyntax? declarator = creation.Parent switch
+        {
+            AsNewClauseSyntax { Parent: VariableDeclaratorSyntax value } => value,
+            EqualsValueSyntax { Parent: VariableDeclaratorSyntax value } => value,
+            _ => null
+        };
+        if (declarator is not null)
+        {
+            var name = declarator.Names.FirstOrDefault();
+            return name is null ? null : model.GetDeclaredSymbol(name);
+        }
+
+        return creation.Parent is AssignmentStatementSyntax assignment
+            ? model.GetSymbolInfo(assignment.Left).Symbol
+            : null;
+    }
+
+    private static SimpleArgumentSyntax? TryGetCommandTextArgument(ObjectCreationExpressionSyntax creation, SemanticModel model)
+    {
+        if (creation.ArgumentList is null)
+        {
+            return null;
+        }
+
+        foreach (var argument in creation.ArgumentList.Arguments.OfType<SimpleArgumentSyntax>())
+        {
+            var parameter = (model.GetOperation(argument) as IArgumentOperation)?.Parameter;
+            if (parameter?.Name.Equals("commandText", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                return argument;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsPotentialAdoNetOperationName(string name) =>
+        new[] { "Fill", "ExecuteReader", "ExecuteReaderAsync", "ExecuteScalar", "ExecuteScalarAsync", "ExecuteNonQuery", "ExecuteNonQueryAsync" }
+            .Contains(name, StringComparer.OrdinalIgnoreCase);
+
+    private static bool IsAdoNetType(ITypeSymbol? type, string metadataName)
+    {
+        for (var current = type as INamedTypeSymbol; current is not null; current = current.BaseType)
+        {
+            if (GetMetadataName(current.OriginalDefinition) == metadataName)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string GetAdoNetFrameworkFamily(ITypeSymbol type) =>
+        type is INamedTypeSymbol named
+            && GetMetadataName(named).StartsWith("Npgsql.", StringComparison.Ordinal)
+                ? "npgsql"
+                : "ado-net";
+
+    private static string GetMetadataName(INamedTypeSymbol type)
+    {
+        var names = new Stack<string>();
+        for (INamedTypeSymbol? current = type; current is not null; current = current.ContainingType)
+        {
+            names.Push(current.MetadataName);
+        }
+        var typeName = string.Join("+", names);
+        var ns = type.ContainingNamespace?.ToDisplayString() ?? string.Empty;
+        return ns.Length == 0 ? typeName : $"{ns}.{typeName}";
     }
 
     private static void AddArgumentPassedFacts(
