@@ -83,7 +83,8 @@ public static class AnalyzerCapabilityDiagnosticExtractor
         IReadOnlyList<FileInventoryItem> inventory,
         SemanticExtractionResult semanticResult,
         IReadOnlyList<CodeFact> facts,
-        ScanOptions options)
+        ScanOptions options,
+        SemanticExtractionResult? csharpSemanticResult = null)
     {
         var diagnostics = new List<CapabilityCandidate>();
         var buildEnvironmentFacts = facts
@@ -95,26 +96,42 @@ public static class AnalyzerCapabilityDiagnosticExtractor
                 && fact.RuleId != RuleIds.CSharpRazorSemanticModelBindingGap)
             .OrderBy(SupportFactSortKey, StringComparer.Ordinal)
             .ToArray();
+        var csharpAnalysisGaps = analysisGaps
+            .Where(fact => fact.Evidence.ExtractorVersion == ScannerVersions.CSharpSemanticExtractor)
+            .ToArray();
         var buildStatusFacts = facts
             .Where(fact => fact.FactType == FactTypes.BuildStatus)
             .OrderBy(SupportFactSortKey, StringComparer.Ordinal)
             .ToArray();
 
-        var projectScopes = inventory
-            .Where(item => item.Kind is "Project" or "NonCSharpProject")
+        var csharpProjectScopes = inventory
+            .Where(item => item.Kind == "Project")
+            .Select(item => item.RelativePath)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        var dotNetProjectScopes = inventory
+            .Where(item => item.Kind is "Project" or "NonCSharpProject" or "VisualBasicProject")
             .Select(item => item.RelativePath)
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
         var csharpFiles = inventory.Where(item => FileInventory.IsCSharpKind(item.Kind)).ToArray();
-        var hasDotNetScope = projectScopes.Length > 0 || csharpFiles.Length > 0 || buildEnvironmentFacts.Length > 0;
+        var dotNetSourceFiles = inventory
+            .Where(item => FileInventory.IsCSharpKind(item.Kind) || FileInventory.IsVisualBasicKind(item.Kind))
+            .ToArray();
+        var hasCSharpScope = csharpProjectScopes.Length > 0 || csharpFiles.Length > 0;
+        var hasDotNetScope = dotNetProjectScopes.Length > 0 || dotNetSourceFiles.Length > 0 || buildEnvironmentFacts.Length > 0;
 
         if (hasDotNetScope)
         {
-            diagnostics.Add(SemanticCapability(manifest, semanticResult, projectScopes, csharpFiles, buildStatusFacts, analysisGaps));
-            diagnostics.Add(ProjectLoadCapability(manifest, semanticResult, projectScopes, csharpFiles, buildStatusFacts, buildEnvironmentFacts, analysisGaps));
+            if (hasCSharpScope)
+            {
+                diagnostics.Add(SemanticCapability(manifest, csharpSemanticResult ?? semanticResult, csharpProjectScopes, csharpFiles, buildStatusFacts, csharpAnalysisGaps));
+            }
+            diagnostics.Add(ProjectLoadCapability(manifest, semanticResult, dotNetProjectScopes, dotNetSourceFiles, buildStatusFacts, buildEnvironmentFacts, analysisGaps));
             diagnostics.AddRange(ReferenceAssemblyCapabilities(manifest, semanticResult, buildEnvironmentFacts));
-            diagnostics.Add(SyntaxFallbackCapability(manifest, semanticResult, facts, projectScopes, csharpFiles, analysisGaps));
+            diagnostics.Add(SyntaxFallbackCapability(manifest, semanticResult, facts, dotNetProjectScopes, dotNetSourceFiles, analysisGaps));
         }
 
         diagnostics.AddRange(ProjectConfigCapabilities(manifest, buildEnvironmentFacts));
@@ -173,13 +190,13 @@ public static class AnalyzerCapabilityDiagnosticExtractor
         ScanManifest manifest,
         SemanticExtractionResult semanticResult,
         IReadOnlyList<string> projectScopes,
-        IReadOnlyList<FileInventoryItem> csharpFiles,
+        IReadOnlyList<FileInventoryItem> sourceFiles,
         IReadOnlyList<CodeFact> buildStatusFacts,
         IReadOnlyList<CodeFact> analysisGaps)
     {
         var state = semanticResult.Attempted
             ? semanticResult.ReducedCoverage ? States.Reduced : States.Available
-            : projectScopes.Count > 0 || csharpFiles.Count > 0 ? States.Unknown : States.NotApplicable;
+            : projectScopes.Count > 0 || sourceFiles.Count > 0 ? States.Unknown : States.NotApplicable;
         var effect = state switch
         {
             States.Available => Effects.FullSemantic,
@@ -207,7 +224,7 @@ public static class AnalyzerCapabilityDiagnosticExtractor
         ScanManifest manifest,
         SemanticExtractionResult semanticResult,
         IReadOnlyList<string> projectScopes,
-        IReadOnlyList<FileInventoryItem> csharpFiles,
+        IReadOnlyList<FileInventoryItem> sourceFiles,
         IReadOnlyList<CodeFact> buildStatusFacts,
         IReadOnlyList<CodeFact> buildEnvironmentFacts,
         IReadOnlyList<CodeFact> analysisGaps)
@@ -226,7 +243,7 @@ public static class AnalyzerCapabilityDiagnosticExtractor
             .ToArray();
         var state = semanticResult.Attempted
             ? semanticResult.ReducedCoverage && !scopeOnlyReduction ? States.Reduced : States.Available
-            : projectScopes.Count > 0 || csharpFiles.Count > 0 ? States.Unknown : States.NotApplicable;
+            : projectScopes.Count > 0 || sourceFiles.Count > 0 ? States.Unknown : States.NotApplicable;
         var effect = state switch
         {
             States.Available => Effects.FullSemantic,
@@ -288,18 +305,20 @@ public static class AnalyzerCapabilityDiagnosticExtractor
         SemanticExtractionResult semanticResult,
         IReadOnlyList<CodeFact> facts,
         IReadOnlyList<string> projectScopes,
-        IReadOnlyList<FileInventoryItem> csharpFiles,
+        IReadOnlyList<FileInventoryItem> sourceFiles,
         IReadOnlyList<CodeFact> analysisGaps)
     {
         var syntaxSupport = facts
             .Where(fact => fact.RuleId.StartsWith("csharp.syntax.", StringComparison.Ordinal)
-                || fact.Evidence.ExtractorVersion == ScannerVersions.CSharpSyntaxExtractor)
+                || fact.RuleId.StartsWith("vb.syntax.", StringComparison.Ordinal)
+                || fact.Evidence.ExtractorVersion == ScannerVersions.CSharpSyntaxExtractor
+                || fact.Evidence.ExtractorVersion == ScannerVersions.VisualBasicSyntaxExtractor)
             .OrderBy(SupportFactSortKey, StringComparer.Ordinal)
             .Take(MaxSupportingIds)
             .ToArray();
         var state = syntaxSupport.Length > 0
             ? States.Available
-            : csharpFiles.Count == 0 ? States.NotApplicable
+            : sourceFiles.Count == 0 ? States.NotApplicable
             : semanticResult.Attempted && !semanticResult.ReducedCoverage ? States.NotRequested
             : projectScopes.Count == 0 ? States.NotApplicable : States.Unknown;
         var effect = state switch

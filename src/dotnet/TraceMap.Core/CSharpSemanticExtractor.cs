@@ -448,7 +448,7 @@ public static class CSharpSemanticExtractor
             : projects.Select(item => item.RelativePath);
         foreach (var target in targets.OrderBy(path => path, StringComparer.Ordinal))
         {
-            var exitCode = RunDotnetRestore(repoPath, target, out var message);
+            var (exitCode, message) = RunDotnetRestore(repoPath, target);
             if (exitCode != 0)
             {
                 gaps.Add(CreateGap(
@@ -460,7 +460,7 @@ public static class CSharpSemanticExtractor
         }
     }
 
-    private static int RunDotnetRestore(string repoPath, string relativeTargetPath, out string message)
+    internal static (int ExitCode, string Message) RunDotnetRestore(string repoPath, string relativeTargetPath)
     {
         using var process = new Process();
         process.StartInfo = new ProcessStartInfo
@@ -477,8 +477,7 @@ public static class CSharpSemanticExtractor
 
         if (!process.Start())
         {
-            message = "dotnet restore process failed to start.";
-            return -1;
+            return (-1, "dotnet restore process failed to start.");
         }
 
         var outputTask = process.StandardOutput.ReadToEndAsync();
@@ -494,16 +493,15 @@ public static class CSharpSemanticExtractor
                 // Best-effort cleanup only.
             }
 
-            message = "dotnet restore timed out after 10 minutes.";
-            return -1;
+            return (-1, "dotnet restore timed out after 10 minutes.");
         }
 
         Task.WaitAll([outputTask, errorTask], TimeSpan.FromSeconds(1));
         var output = outputTask.IsCompletedSuccessfully ? outputTask.Result : string.Empty;
         var error = errorTask.IsCompletedSuccessfully ? errorTask.Result : string.Empty;
-        message = string.Join(" ", new[] { LastNonEmptyLine(output), LastNonEmptyLine(error) }
+        var message = string.Join(" ", new[] { LastNonEmptyLine(output), LastNonEmptyLine(error) }
             .Where(line => !string.IsNullOrWhiteSpace(line)));
-        return process.ExitCode;
+        return (process.ExitCode, message);
     }
 
     private static string LastNonEmptyLine(string value)
@@ -537,6 +535,7 @@ public static class CSharpSemanticExtractor
             out var excludedPaths);
         explicitlyExcludedSourcePaths.UnionWith(excludedPaths);
         var selectedProjects = solution.Projects
+            .Where(project => string.Equals(project.Language, LanguageNames.CSharp, StringComparison.Ordinal))
             .OrderBy(project => ToRelativePath(repoPath, project.FilePath), StringComparer.Ordinal)
             .Where(project => selectedProjectPaths is null
                 || selectedProjectPaths.Contains(ToRelativePath(repoPath, project.FilePath)))
@@ -679,7 +678,7 @@ public static class CSharpSemanticExtractor
         }
     }
 
-    private static Solution RemoveExplicitlyExcludedSourceDocuments(
+    internal static Solution RemoveExplicitlyExcludedSourceDocuments(
         string repoPath,
         Solution solution,
         IReadOnlyList<string> excludeGlobs,
@@ -5309,7 +5308,7 @@ public static class CSharpSemanticExtractor
     internal static string ToRelativePath(string repoPath, string? path) =>
         ToRelativePathProjection(repoPath, path).Path;
 
-    private static RelativePathProjection ToRelativePathProjection(string repoPath, string? path)
+    internal static RelativePathProjection ToRelativePathProjection(string repoPath, string? path)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
@@ -5355,7 +5354,7 @@ public static class CSharpSemanticExtractor
         return new(CreateSyntheticExternalSourcePath(path), true);
     }
 
-    private readonly record struct RelativePathProjection(string Path, bool IsExternal);
+    internal readonly record struct RelativePathProjection(string Path, bool IsExternal);
 
     private static string CreateSyntheticExternalSourcePath(string path)
     {

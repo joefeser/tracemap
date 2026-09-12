@@ -41,7 +41,7 @@ public static class ProjectFileReader
     public static IReadOnlyList<TargetFrameworkInfo> ReadTargetFrameworks(string repoPath, IEnumerable<FileInventoryItem> inventory)
     {
         var results = new List<TargetFrameworkInfo>();
-        foreach (var project in inventory.Where(item => item.Kind == "Project"))
+        foreach (var project in inventory.Where(item => item.Kind is "Project" or "VisualBasicProject"))
         {
             var fullPath = Path.Combine(repoPath, project.RelativePath);
             foreach (var item in ReadProjectValues(fullPath, "TargetFramework", "TargetFrameworks"))
@@ -62,10 +62,13 @@ public static class ProjectFileReader
     public static IReadOnlyList<PackageReferenceInfo> ReadPackageReferences(string repoPath, IEnumerable<FileInventoryItem> inventory)
     {
         var results = new List<PackageReferenceInfo>();
-        foreach (var project in inventory.Where(item => item.Kind == "Project"))
+        foreach (var project in inventory.Where(item => item.Kind is "Project" or "VisualBasicProject"))
         {
             var fullPath = Path.Combine(repoPath, project.RelativePath);
-            results.AddRange(ReadPackageReferencesFromProject(fullPath, project.RelativePath));
+            results.AddRange(ReadPackageReferencesFromProject(
+                fullPath,
+                project.RelativePath,
+                project.Kind == "VisualBasicProject" ? "vbproj" : "csproj"));
         }
 
         foreach (var packagesConfig in inventory.Where(item => item.Kind == "PackagesConfig"))
@@ -100,7 +103,7 @@ public static class ProjectFileReader
         }
     }
 
-    private static IEnumerable<PackageReferenceInfo> ReadPackageReferencesFromProject(string fullPath, string relativePath)
+    private static IEnumerable<PackageReferenceInfo> ReadPackageReferencesFromProject(string fullPath, string relativePath, string manifestKind)
     {
         if (!TryLoadXml(fullPath, out var document))
         {
@@ -122,7 +125,7 @@ public static class ProjectFileReader
                 packageName,
                 version,
                 GetLine(element),
-                "csproj",
+                manifestKind,
                 "PackageReference",
                 "runtime",
                 null);

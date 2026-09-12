@@ -217,6 +217,7 @@ public static class FactTypes
     public const string DatabaseColumnMapping = nameof(DatabaseColumnMapping);
     public const string ConfigBinding = nameof(ConfigBinding);
     public const string EnumDeclared = nameof(EnumDeclared);
+    public const string EventDeclared = nameof(EventDeclared);
     public const string AttributeUsed = nameof(AttributeUsed);
     public const string MemberAccessName = nameof(MemberAccessName);
     public const string InvocationName = nameof(InvocationName);
@@ -244,6 +245,7 @@ public static class FactTypes
     public const string MsBuildProjectObserved = nameof(MsBuildProjectObserved);
     public const string MsBuildProjectReferenceObserved = nameof(MsBuildProjectReferenceObserved);
     public const string MsBuildDiagnosticObserved = nameof(MsBuildDiagnosticObserved);
+    public const string VisualBasicProjectObserved = nameof(VisualBasicProjectObserved);
     public const string ObjectShapeInferred = nameof(ObjectShapeInferred);
     public const string PropertyAccessed = nameof(PropertyAccessed);
     public const string MethodInvoked = nameof(MethodInvoked);
@@ -389,6 +391,20 @@ public static class RuleIds
     public const string CSharpSemanticFlowBoundary = "csharp.semantic.flowboundary.v1";
     public const string CSharpSemanticRuntimeEvidence = "csharp.semantic.runtimeevidence.v1";
     public const string CSharpSemanticWorkspace = "csharp.semantic.workspace.v1";
+    public const string VisualBasicSemanticCompilation = "vb.semantic.compilation.v1";
+    public const string VisualBasicSemanticWorkspace = "vb.semantic.workspace.v1";
+    public const string VisualBasicSemanticDeclarations = "vb.semantic.declarations.v1";
+    public const string VisualBasicSemanticPropertyAccess = "vb.semantic.propertyaccess.v1";
+    public const string VisualBasicSemanticMethodInvocation = "vb.semantic.methodinvocation.v1";
+    public const string VisualBasicSemanticCallGraph = "vb.semantic.callgraph.v1";
+    public const string VisualBasicSemanticObjectCreation = "vb.semantic.objectcreation.v1";
+    public const string VisualBasicSemanticValueFlow = "vb.semantic.valueflow.v1";
+    public const string VisualBasicSemanticSymbolRelationship = "vb.semantic.symbolrelationship.v1";
+    public const string VisualBasicSyntaxDeclarations = "vb.syntax.declarations.v1";
+    public const string VisualBasicSyntaxMemberAccess = "vb.syntax.memberaccess.v1";
+    public const string VisualBasicSyntaxInvocation = "vb.syntax.invocation.v1";
+    public const string VisualBasicSyntaxCallGraph = "vb.syntax.callgraph.v1";
+    public const string VisualBasicSyntaxObjectCreation = "vb.syntax.objectcreation.v1";
     public const string CSharpRazorSemanticModelBinding = "csharp.razor.semantic-model-binding.v1";
     public const string CSharpRazorSemanticModelBindingGap = "csharp.razor.semantic-model-binding-gap.v1";
     public const string CSharpSemanticPropertyMapping = "csharp.semantic.propertymapping.v1";
@@ -559,6 +575,8 @@ public static class ScannerVersions
     public const string CSharpAspNetSyntaxRouteExtractor = "csharp-aspnet-syntax-route/0.1.0";
     public const string CSharpIntegrationSyntaxExtractor = "csharp-integration-syntax/0.3.0";
     public const string CSharpSemanticExtractor = "csharp-semantic/0.21.0";
+    public const string VisualBasicSemanticExtractor = "vb-semantic/0.4.0";
+    public const string VisualBasicSyntaxExtractor = "vb-syntax/0.2.0";
     public const string CSharpPropertyMappingExtractor = "csharp-property-mapping/0.1.0";
     public const string FrameworkMigrationEvidenceExtractor = "framework-migration/0.1.0";
     public const string FrameworkMigrationSyntaxFallbackExtractor = "framework-migration-syntax-fallback/0.1.0";

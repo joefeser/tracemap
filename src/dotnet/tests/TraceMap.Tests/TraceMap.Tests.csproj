@@ -15,6 +15,7 @@
          Without this test-only runtime asset, hosted runners can load a newer SDK Microsoft.Build.dll
          beside the pinned Microsoft.Build.Framework assembly and fail before extraction begins. -->
     <PackageReference Include="Microsoft.Build" Version="$(TraceMapMicrosoftBuildPackageVersion)" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.VisualBasic" Version="5.3.0" PrivateAssets="all" />
     <!-- Explicit native servicing override until Microsoft.Data.Sqlite raises its SQLitePCLRaw dependency floor. -->
     <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.12" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
@@ -37,6 +38,7 @@
     <ProjectReference Include="..\..\TraceMap.Access.Cli\TraceMap.Access.Cli.csproj" />
     <ProjectReference Include="..\..\TraceMap.SqlValidation\TraceMap.SqlValidation.csproj" />
     <ProjectReference Include="..\..\TraceMap.SqlValidation.Cli\TraceMap.SqlValidation.Cli.csproj" />
+    <ProjectReference Include="..\..\..\..\samples\vb-modern-sample\VbModernSample.vbproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
 </Project>

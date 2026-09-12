@@ -78,6 +78,7 @@ public static class ScanEngine
 
         IReadOnlyDictionary<string, string> semanticInputSnapshot;
         SemanticExtractionResult semanticResult;
+        SemanticExtractionResult csharpSemanticResult;
         bool semanticToolchainReducedCoverage;
         using var semanticReceipt = receiptRecorder?.StartStage("semantic-analysis", "compiler-and-syntax-analysis");
         try
@@ -104,13 +105,26 @@ public static class ScanEngine
             using (var semanticOperation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.SemanticAnalysis, cancellationToken))
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                semanticResult = CSharpSemanticExtractor.Extract(
+                csharpSemanticResult = CSharpSemanticExtractor.Extract(
                     repoPath,
                     inventory,
                     options,
                     fullInventory,
                     cancellationToken,
                     progress);
+                semanticResult = csharpSemanticResult;
+                var visualBasicOptions = options.Restore
+                    && inventory.Any(item => item.Kind == "Project")
+                    ? options with { Restore = false }
+                    : options;
+                var visualBasicSemanticResult = VisualBasicSemanticExtractor.Extract(
+                    repoPath,
+                    inventory,
+                    visualBasicOptions,
+                    fullInventory,
+                    cancellationToken,
+                    progress);
+                semanticResult = SemanticExtractionResultMerge.Merge(semanticResult, visualBasicSemanticResult);
                 semanticToolchainReducedCoverage = HasToolchainSemanticReduction(semanticResult);
                 var semanticStageCoverage = semanticResult.Attempted
                     ? semanticToolchainReducedCoverage ? "semantic-reduced" : "semantic"
@@ -201,7 +215,7 @@ public static class ScanEngine
             .OrderBy(path => path, StringComparer.Ordinal)
             .ToArray();
         var projects = inventory
-            .Where(item => item.Kind is "Project" or "SqlProject")
+            .Where(item => item.Kind is "Project" or "SqlProject" or "VisualBasicProject")
             .Select(item => item.RelativePath)
             .OrderBy(path => path, StringComparer.Ordinal)
             .ToArray();
@@ -310,6 +324,7 @@ public static class ScanEngine
                     knownGaps,
                     repoPath,
                     semanticResult,
+                    csharpSemanticResult,
                     options,
                     binlogFacts,
                     migrationSyntaxFallback,
@@ -426,7 +441,7 @@ public static class ScanEngine
         new Dictionary<string, long>
         {
             ["solutions"] = inventory.Count(item => item.Kind == "Solution"),
-            ["projects"] = inventory.Count(item => item.Kind is "Project" or "SqlProject")
+            ["projects"] = inventory.Count(item => item.Kind is "Project" or "SqlProject" or "VisualBasicProject")
         };
 
     internal static string CreateSourceSnapshotDigest(
@@ -505,7 +520,9 @@ public static class ScanEngine
         CancellationToken cancellationToken = default)
     {
         return inventory
-            .Where(item => FileInventory.IsCSharpKind(item.Kind) || IsSemanticMetadataKind(item.Kind))
+            .Where(item => FileInventory.IsCSharpKind(item.Kind)
+                || FileInventory.IsVisualBasicKind(item.Kind)
+                || IsSemanticMetadataKind(item.Kind))
             .ToDictionary(
                 item => item.RelativePath,
                 item => CreateSourceSnapshotDigest(repoPath, [item], cancellationToken),
@@ -548,7 +565,7 @@ public static class ScanEngine
     }
 
     private static bool IsSemanticMetadataKind(string kind) =>
-        kind is "Solution" or "Project" or "MSBuildProps" or "MSBuildTargets";
+        kind is "Solution" or "Project" or "VisualBasicProject" or "MSBuildProps" or "MSBuildTargets";
 
     private static IReadOnlyList<FileInventoryItem> IncludeSemanticInputs(
         IReadOnlyList<FileInventoryItem> inventory,
@@ -603,6 +620,7 @@ public static class ScanEngine
         IReadOnlyList<string> knownGaps,
         string repoPath,
         SemanticExtractionResult semanticResult,
+        SemanticExtractionResult csharpSemanticResult,
         ScanOptions options,
         IReadOnlyList<CodeFact> binlogFacts,
         FrameworkMigrationEvidenceExtractor.SyntaxProtectionResult migrationSyntaxFallback,
@@ -683,7 +701,7 @@ public static class ScanEngine
                         ["path"] = item.RelativePath
                     }));
             }
-            else if (item.Kind == "Project")
+            else if (item.Kind is "Project" or "VisualBasicProject")
             {
                 facts.Add(FactFactory.Create(
                     manifest,
@@ -764,7 +782,10 @@ public static class ScanEngine
                 RuleIds.ProjectFile,
                 EvidenceTiers.Tier2Structural,
                 new EvidenceSpan(item.ProjectPath, item.Line, item.Line, null, "ProjectFileExtractor", ScannerVersions.ProjectFileExtractor),
-                projectPath: item.ProjectPath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) ? item.ProjectPath : null,
+                projectPath: item.ProjectPath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
+                    || item.ProjectPath.EndsWith(".vbproj", StringComparison.OrdinalIgnoreCase)
+                    ? item.ProjectPath
+                    : null,
                 targetSymbol: item.PackageName,
                 properties: packageProperties));
         }
@@ -846,6 +867,7 @@ public static class ScanEngine
         facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, migrationSyntaxFallback.Gaps));
         progress?.StartStage(ScanProgressReporter.ScanOperation, ScanProgressStages.SyntaxFallback);
         facts.AddRange(CSharpSyntaxExtractor.Extract(repoPath, manifest, inventory, protectedSourceSpans));
+        facts.AddRange(VisualBasicSyntaxExtractor.Extract(repoPath, manifest, inventory, semanticallyAnalyzedFiles, protectedSourceSpans));
         progress?.FinishStage(ScanProgressReporter.ScanOperation, ScanProgressStages.SyntaxFallback, "completed");
         cancellationToken.ThrowIfCancellationRequested();
         progress?.StartStage(ScanProgressReporter.ScanOperation, ScanProgressStages.SpecializedExtraction);
@@ -927,9 +949,14 @@ public static class ScanEngine
             GapFacts = semanticResult.GapFacts.Where(gap => !IsProducerLocalSemanticGap(gap)).ToArray(),
             ReducedCoverage = HasToolchainSemanticReduction(semanticResult)
         };
+        var diagnosticCSharpSemanticResult = csharpSemanticResult with
+        {
+            GapFacts = csharpSemanticResult.GapFacts.Where(gap => !IsProducerLocalSemanticGap(gap)).ToArray(),
+            ReducedCoverage = HasToolchainSemanticReduction(csharpSemanticResult)
+        };
         facts.AddRange(Observe(
             ScanPerformanceExtractors.AnalyzerCapability,
-            () => AnalyzerCapabilityDiagnosticExtractor.Extract(manifest, inventory, diagnosticSemanticResult, facts, options)));
+            () => AnalyzerCapabilityDiagnosticExtractor.Extract(manifest, inventory, diagnosticSemanticResult, facts, options, diagnosticCSharpSemanticResult)));
         progress?.FinishStage(
             ScanProgressReporter.ScanOperation,
             ScanProgressStages.SpecializedExtraction,
@@ -1016,6 +1043,11 @@ public static class ScanEngine
             var gapKind = gap.Properties?.GetValueOrDefault("gapKind") ?? gap.ContractElement ?? "UnknownPropertyMappingGap";
             return $"Direct property-mapping coverage reduced: {gapKind}.";
         }
+        if (gap.RuleId == RuleIds.VisualBasicSemanticWorkspace)
+        {
+            var gapKind = gap.Properties?.GetValueOrDefault("gapKind") ?? gap.ContractElement ?? "UnknownVisualBasicWorkspaceGap";
+            return $"Visual Basic semantic coverage reduced: {gapKind}.";
+        }
         return "Roslyn semantic analysis reported a gap.";
     }
 
@@ -1038,7 +1070,7 @@ public static class ScanEngine
 
         if (manifest.BuildStatus != "FailedOrPartial")
         {
-            return "No C# project was available for MSBuildWorkspace semantic analysis.";
+            return "No C# or Visual Basic project was available for MSBuildWorkspace semantic analysis.";
         }
 
         var hasBinlogGap = binlogFacts.Any(fact =>
@@ -1107,7 +1139,7 @@ public static class ScanEngine
             .Where(item => includeGlobs.Length == 0 || includeGlobs.Any(glob => GlobMatches(item.RelativePath, glob, sourcePathComparer)))
             .Where(item => excludeGlobs.Length == 0 || !excludeGlobs.Any(glob => GlobMatches(item.RelativePath, glob, sourcePathComparer)))
             .Where(item => solutionPaths.Count == 0 || item.Kind != "Solution" || solutionPaths.Contains(item.RelativePath))
-            .Where(item => projectPaths.Count == 0 || item.Kind is not ("Project" or "SqlProject") || projectPaths.Contains(item.RelativePath))
+            .Where(item => projectPaths.Count == 0 || item.Kind is not ("Project" or "SqlProject" or "VisualBasicProject") || projectPaths.Contains(item.RelativePath))
             .Where(item => projectDirectories.Length == 0
                 || includeGlobs.Length > 0
                 || item.Kind is "Solution"

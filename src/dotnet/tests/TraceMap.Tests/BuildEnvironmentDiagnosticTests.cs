@@ -70,6 +70,7 @@ public sealed class BuildEnvironmentDiagnosticTests
         File.WriteAllText(Path.Combine(repo, "src", "LegacyWeb", "Service References", "Orders", "Orders.svcmap"), "<ReferenceGroup />");
         File.WriteAllText(Path.Combine(repo, "src", "LegacyWeb", "Properties", "Resources.resx"), "<root>");
         File.WriteAllText(Path.Combine(repo, "src", "Tools.vbproj"), "<Project><PropertyGroup><TargetFrameworkVersion>v4.8</TargetFrameworkVersion></PropertyGroup></Project>");
+        File.WriteAllText(Path.Combine(repo, "src", "Tools.fsproj"), "<Project><PropertyGroup><TargetFrameworkVersion>v4.8</TargetFrameworkVersion></PropertyGroup></Project>");
         File.WriteAllText(Path.Combine(repo, "Orphan.aspx"), "<%@ Page Language=\"C#\" %>");
         File.WriteAllText(Path.Combine(repo, "Orphan.aspx.cs"), "public partial class Orphan { }");
         File.WriteAllText(Path.Combine(repo, "Orphan.aspx.designer.cs"), "public partial class Orphan { }");
@@ -85,6 +86,9 @@ public sealed class BuildEnvironmentDiagnosticTests
         AssertDiagnostic(diagnostics, "ImportedLegacyTargets", RuleIds.BuildEnvironmentToolset, EvidenceTiers.Tier2Structural);
         AssertDiagnostic(diagnostics, "WebApplicationProjectTargets", RuleIds.BuildEnvironmentProjectFormat, EvidenceTiers.Tier2Structural);
         AssertDiagnostic(diagnostics, "UnknownLegacyProjectFormat", RuleIds.BuildEnvironmentProjectFormat, EvidenceTiers.Tier4Unknown);
+        // A non-SDK .vbproj is now a recognized Visual Basic project, so it is
+        // categorized as non-SDK-style rather than as an unknown project format.
+        AssertDiagnostic(diagnostics, "NonSdkStyleProject", RuleIds.BuildEnvironmentProjectFormat, EvidenceTiers.Tier2Structural);
         AssertDiagnostic(diagnostics, "PackagesConfigPresent", RuleIds.BuildEnvironmentRestore, EvidenceTiers.Tier2Structural);
         AssertDiagnostic(diagnostics, "NuGetConfigPresent", RuleIds.BuildEnvironmentRestore, EvidenceTiers.Tier2Structural);
         AssertDiagnostic(diagnostics, "PackagesLockPresent", RuleIds.BuildEnvironmentRestore, EvidenceTiers.Tier2Structural);
@@ -121,6 +125,25 @@ public sealed class BuildEnvironmentDiagnosticTests
         AssertDiagnostic(diagnostics, "SdkStyleTargetFramework", RuleIds.BuildEnvironmentTargetFramework, EvidenceTiers.Tier2Structural);
         Assert.DoesNotContain(diagnostics, fact => fact.Properties.GetValueOrDefault("diagnosticCode") == "RestoreNotRequested");
         Assert.DoesNotContain(MarkdownReportWriter.Build(result), "RestoreNotRequested");
+    }
+
+    [Fact]
+    public void Visual_basic_generated_companions_satisfy_generated_file_diagnostics()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "My Project"));
+        File.WriteAllText(Path.Combine(repo, "App.vbproj"), "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>");
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), "<%@ Page Language=\"VB\" %>");
+        File.WriteAllText(Path.Combine(repo, "Default.aspx.vb"), "Public Class DefaultPage : End Class");
+        File.WriteAllText(Path.Combine(repo, "Default.aspx.designer.vb"), "Partial Public Class DefaultPage : End Class");
+        File.WriteAllText(Path.Combine(repo, "My Project", "Resources.resx"), "<root />");
+        File.WriteAllText(Path.Combine(repo, "My Project", "Resources.Designer.vb"), "Friend Module Resources : End Module");
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.BuildEnvironmentDiagnostic
+            && fact.Properties.GetValueOrDefault("diagnosticCode") is "GeneratedFileMissing" or "GeneratedFileUnlinked");
     }
 
     [Fact]
