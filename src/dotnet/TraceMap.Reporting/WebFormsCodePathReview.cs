@@ -6,6 +6,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using TraceMap.Core;
 
 using CSharpMethodDeclarationSyntax = Microsoft.CodeAnalysis.CSharp.Syntax.MethodDeclarationSyntax;
+using VisualBasicDeclareStatementSyntax = Microsoft.CodeAnalysis.VisualBasic.Syntax.DeclareStatementSyntax;
 using VisualBasicSyntaxTree = Microsoft.CodeAnalysis.VisualBasic.VisualBasicSyntaxTree;
 using VisualBasicMethodBlockSyntax = Microsoft.CodeAnalysis.VisualBasic.Syntax.MethodBlockSyntax;
 
@@ -17,6 +18,11 @@ public static class WebFormsCodePathReview
     private const int MaximumAnnotatedSourceLinesPerFile = 100_000;
     private const int MaximumAnnotatedSourceLinesPerReport = 150_000;
     private const long MaximumAnnotatedSourceOutputBytesPerReport = 64L * 1024 * 1024;
+    private static readonly HashSet<string> PublicVisualBasicSemanticRuleIds = new(StringComparer.Ordinal)
+    {
+        RuleIds.VisualBasicSemanticCallGraph,
+        RuleIds.VisualBasicSemanticMethodInvocation
+    };
 
     private sealed record ReviewLocation(string Role, string FilePath, int StartLine, int EndLine, string? Caller, string? Callee, bool PreferFullSpan = false);
     private sealed record GroupedEdge(string Caller, string Callee, IReadOnlyList<ReviewLocation> Locations, IReadOnlyList<string> RuleIds, IReadOnlyList<string> Tiers);
@@ -61,7 +67,8 @@ public static class WebFormsCodePathReview
             handler = handlerTarget.GetString();
         if (string.IsNullOrWhiteSpace(handler)) throw new InvalidDataException("CodePathReviewCaseUnavailable");
         var locations = new List<ReviewLocation>();
-        var witnessMetadata = new Dictionary<(string FilePath, int StartLine, int EndLine, string? Caller, string? Callee), (string RuleId, string Tier)>();
+        var witnessMetadata = new Dictionary<(string FilePath, int StartLine, int EndLine, string? Caller, string? Callee),
+            (HashSet<string> RuleIds, HashSet<string> Tiers)>();
 
         static ReviewLocation? ReadLocation(JsonElement value, string role, string? caller = null, string? callee = null, bool full = false)
         {
@@ -78,8 +85,16 @@ public static class WebFormsCodePathReview
             if (location is null) return;
             locations.Add(location);
             if (value.TryGetProperty("ruleId", out var rule) && value.TryGetProperty("tier", out var tier))
-                witnessMetadata[(location.FilePath, location.StartLine, location.EndLine, caller, callee)] =
-                    (rule.GetString() ?? "unavailable", tier.GetString() ?? "unavailable");
+            {
+                var key = (location.FilePath, location.StartLine, location.EndLine, caller, callee);
+                if (!witnessMetadata.TryGetValue(key, out var metadata))
+                {
+                    metadata = (new(StringComparer.Ordinal), new(StringComparer.Ordinal));
+                    witnessMetadata[key] = metadata;
+                }
+                metadata.RuleIds.Add(rule.GetString() ?? "unavailable");
+                metadata.Tiers.Add(tier.GetString() ?? "unavailable");
+            }
         }
 
         Add(selected.GetProperty("handlerLocation"), "handler", full: true);
@@ -133,27 +148,32 @@ public static class WebFormsCodePathReview
             : selected.GetProperty("methods").EnumerateArray()
                 .Where(m => m.TryGetProperty("stopReason", out var reason) && reason.GetString() != "retained-outgoing-calls")
                 .Select(m => m.GetProperty("symbol").GetString()).ToArray();
-        var boundedUnresolvedLeaves = unresolvedLeaves.Where(v => !string.IsNullOrWhiteSpace(v)).ToArray();
+        var boundedUnresolvedLeaves = unresolvedLeaves.Where(v => !string.IsNullOrWhiteSpace(v)).Select(v => v!).ToArray();
         if (boundedUnresolvedLeaves.Length > 512 || (long)boundedUnresolvedLeaves.Length * evidenceFiles.Length > 8_192)
             throw new InvalidDataException("CodePathReviewCandidateWorkLimit");
-        var syntaxRoots = evidenceFiles.ToDictionary(relativePath => relativePath,
-            relativePath => ParseSyntaxRoot(relativePath, string.Join(Environment.NewLine, ReadSource(relativePath))),
-            StringComparer.Ordinal);
-        foreach (var unresolved in boundedUnresolvedLeaves)
+        var lookupLeaves = boundedUnresolvedLeaves.Select(unresolved =>
         {
-            var open = unresolved!.IndexOf('(');
-            if (open < 1) continue;
+            var open = unresolved.IndexOf('(');
+            if (open < 1) return (Symbol: unresolved, Name: (string?)null);
             var dot = unresolved.LastIndexOf('.', open - 1);
-            var name = unresolved[(dot + 1)..open];
+            return (Symbol: unresolved, Name: (string?)unresolved[(dot + 1)..open]);
+        }).Where(item => !string.IsNullOrWhiteSpace(item.Name)).ToArray();
+        var syntaxRoots = lookupLeaves.Length == 0
+            ? new Dictionary<string, SyntaxNode>(StringComparer.Ordinal)
+            : evidenceFiles.ToDictionary(relativePath => relativePath,
+                relativePath => ParseSyntaxRoot(relativePath, string.Join(Environment.NewLine, ReadSource(relativePath))),
+                StringComparer.Ordinal);
+        foreach (var unresolved in lookupLeaves)
+        {
             var candidates = new List<ReviewLocation>();
             foreach (var relativePath in evidenceFiles)
             {
                 var syntax = syntaxRoots[relativePath];
-                foreach (var method in FindMethodDeclarations(syntax, relativePath, name))
+                foreach (var method in FindMethodDeclarations(syntax, relativePath, unresolved.Name!))
                 {
                     var span = method.GetLocation().GetLineSpan();
                     candidates.Add(new("unique-name-definition-candidate-not-evidence", relativePath,
-                        span.StartLinePosition.Line + 1, span.EndLinePosition.Line + 1, null, unresolved, true));
+                        span.StartLinePosition.Line + 1, span.EndLinePosition.Line + 1, null, unresolved.Symbol, true));
                 }
             }
             if (candidates.Count == 1)
@@ -171,9 +191,11 @@ public static class WebFormsCodePathReview
         var groupedEdges = retainedLocations.GroupBy(l => new { Caller = l.Caller!, Callee = l.Callee! })
             .Select(group => new GroupedEdge(group.Key.Caller, group.Key.Callee,
                 group.OrderBy(l => l.FilePath, StringComparer.Ordinal).ThenBy(l => l.StartLine).ToArray(),
-                group.Select(l => witnessMetadata.GetValueOrDefault((l.FilePath, l.StartLine, l.EndLine, l.Caller, l.Callee)).RuleId)
+                group.SelectMany(l => witnessMetadata.TryGetValue((l.FilePath, l.StartLine, l.EndLine, l.Caller, l.Callee), out var metadata)
+                        ? metadata.RuleIds : [])
                     .Where(v => !string.IsNullOrWhiteSpace(v)).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
-                group.Select(l => witnessMetadata.GetValueOrDefault((l.FilePath, l.StartLine, l.EndLine, l.Caller, l.Callee)).Tier)
+                group.SelectMany(l => witnessMetadata.TryGetValue((l.FilePath, l.StartLine, l.EndLine, l.Caller, l.Callee), out var metadata)
+                        ? metadata.Tiers : [])
                     .Where(v => !string.IsNullOrWhiteSpace(v)).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray()))
             .OrderBy(e => e.Caller, StringComparer.Ordinal).ThenBy(e => e.Locations[0].FilePath, StringComparer.Ordinal)
             .ThenBy(e => e.Locations[0].StartLine).ThenBy(e => e.Callee, StringComparer.Ordinal).ToArray();
@@ -259,7 +281,7 @@ public static class WebFormsCodePathReview
 
         static string PublicRuleId(string value) =>
             (value.StartsWith("csharp.semantic.", StringComparison.Ordinal) ||
-             value.StartsWith("vb.semantic.", StringComparison.Ordinal) ||
+             PublicVisualBasicSemanticRuleIds.Contains(value) ||
              value.StartsWith("legacy.webforms.", StringComparison.Ordinal) ||
              value.StartsWith("diagnostic.webforms.", StringComparison.Ordinal)) &&
             System.Text.RegularExpressions.Regex.IsMatch(value, "^[a-z0-9][a-z0-9.-]{0,127}$")
@@ -278,13 +300,22 @@ public static class WebFormsCodePathReview
         {
             if (path.EndsWith(".vb", StringComparison.OrdinalIgnoreCase))
             {
+                var normalizedName = NormalizeVisualBasicIdentifier(name);
                 return syntax.DescendantNodes().OfType<VisualBasicMethodBlockSyntax>()
-                    .Where(method => method.SubOrFunctionStatement.Identifier.ValueText.Equals(name, StringComparison.OrdinalIgnoreCase));
+                    .Where(method => method.SubOrFunctionStatement.Identifier.ValueText.Equals(normalizedName, StringComparison.OrdinalIgnoreCase))
+                    .Cast<SyntaxNode>()
+                    .Concat(syntax.DescendantNodes().OfType<VisualBasicDeclareStatementSyntax>()
+                        .Where(method => method.Identifier.ValueText.Equals(normalizedName, StringComparison.OrdinalIgnoreCase)));
             }
 
             return syntax.DescendantNodes().OfType<CSharpMethodDeclarationSyntax>()
                 .Where(method => method.Identifier.ValueText.Equals(name, StringComparison.Ordinal));
         }
+
+        static string NormalizeVisualBasicIdentifier(string value) =>
+            value.Length >= 2 && value[0] == '[' && value[^1] == ']'
+                ? value[1..^1]
+                : value;
 
         static string PublicTier(string value) => value is "Tier1Semantic" or "Tier2Structural" or "Tier3SyntaxOrTextual" or "Tier4Unknown"
             ? value : "withheld-unsafe-evidence-tier";
