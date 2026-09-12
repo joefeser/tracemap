@@ -863,9 +863,18 @@ public static class VisualBasicSemanticExtractor
 
         foreach (var methodStatement in root.DescendantNodes().OfType<MethodStatementSyntax>())
         {
-            if (methodStatement.HandlesClause is null
-                || model.GetDeclaredSymbol(methodStatement) is not IMethodSymbol handler)
+            if (methodStatement.HandlesClause is null)
             {
+                continue;
+            }
+
+            if (model.GetDeclaredSymbol(methodStatement) is not IMethodSymbol handler)
+            {
+                foreach (var item in methodStatement.HandlesClause.Events)
+                {
+                    if (!ReserveEventSite(item)) return;
+                    AddEventGap(gaps, projectPath, filePath, item, "UnresolvedVisualBasicHandlesHandler");
+                }
                 continue;
             }
 
@@ -956,7 +965,8 @@ public static class VisualBasicSemanticExtractor
                 sourceMethod.ToDisplayString(SymbolFormat),
                 eventSymbol.ToDisplayString(SymbolFormat),
                 eventSymbol.Name,
-                properties));
+                properties,
+                includeSnippetHash: true));
         }
     }
 
@@ -1001,7 +1011,8 @@ public static class VisualBasicSemanticExtractor
             handler.ToDisplayString(SymbolFormat),
             eventSymbol.ToDisplayString(SymbolFormat),
             eventSymbol.Name,
-            properties);
+            properties,
+            includeSnippetHash: true);
     }
 
     private static IMethodSymbol? GetContainingMethod(SyntaxNode node, SemanticModel model)
@@ -2077,13 +2088,14 @@ public static class VisualBasicSemanticExtractor
         string? sourceSymbol = null,
         string? targetSymbol = null,
         string? contractElement = null,
-        IReadOnlyDictionary<string, string>? properties = null)
+        IReadOnlyDictionary<string, string>? properties = null,
+        bool includeSnippetHash = false)
     {
         return new SemanticFactCandidate(
             factType,
             ruleId,
             EvidenceTiers.Tier1Semantic,
-            ToEvidenceSpan(filePath, node),
+            ToEvidenceSpan(filePath, node, includeSnippetHash),
             projectPath,
             sourceSymbol,
             targetSymbol,
@@ -2132,14 +2144,14 @@ public static class VisualBasicSemanticExtractor
         _ => $"unsupported-{expression.Kind()}-{FactFactory.Hash(expression.ToString(), 16)}"
     };
 
-    private static EvidenceSpan ToEvidenceSpan(string filePath, SyntaxNode node)
+    private static EvidenceSpan ToEvidenceSpan(string filePath, SyntaxNode node, bool includeSnippetHash = false)
     {
         var span = node.SyntaxTree.GetLineSpan(node.Span);
         return new EvidenceSpan(
             FileInventory.NormalizeRelativePath(filePath),
             span.StartLinePosition.Line + 1,
             Math.Max(span.StartLinePosition.Line + 1, span.EndLinePosition.Line + 1),
-            null,
+            includeSnippetHash ? FactFactory.Hash(node.ToString(), 32) : null,
             "VisualBasicSemanticExtractor",
             ScannerVersions.VisualBasicSemanticExtractor);
     }

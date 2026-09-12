@@ -24,15 +24,23 @@
 
 ## Validation
 
-- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,899/1,899 passed after
-  case-insensitive-join, lifecycle-shadow, and lambda hardening.
-- Focused VB/fixture/legacy Web Forms tests: 94/94 passed.
-- Focused Web Forms/legacy-flow composition tests: 207/207 passed.
+The applicable Visual Basic adapter procedure in `docs/VALIDATION.md` was
+followed, including the solution/focused suites, all three fixture scans,
+artifact validation, deterministic comparison, privacy guards, and the pinned
+`community-visual-basic` smoke. The commands, immutable pin, and sanitized
+result totals below are the committed review record; no private source, paths,
+or native diagnostics were retained.
+
+- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,903/1,903 passed after
+  case-insensitive-join, lifecycle-shadow, lambda, qualified-receiver,
+  signature, source-hash, and report hardening.
+- Focused VB/fixture/legacy Web Forms tests: 107/107 passed.
+- Focused Web Forms/legacy-flow composition tests: 211/211 passed.
 - `Test-FocusedWebFormsCodePathReviewSet.ps1`: passed, including private and
   anonymous/shareable review generation.
 - `Test-FocusedWebFormsApplicationWorkbench.ps1`: passed with raw-source off,
   explicit raw-source on, symlink safety, and reviewed WITS state validation.
-- Fresh `vb-webforms-sample` scans: 200 facts,
+- Fresh `vb-webforms-sample` scans: 199 facts,
   `Level1SemanticAnalysisReduced`; repeated `facts.ndjson` byte-identical;
   adapter artifact validator passed. Shared flow facts retain exact call-edge
   support where present.
@@ -44,6 +52,8 @@
   because local `tsc` dependencies were absent; after the .NET solution had
   already built and tested, the selected VB smoke was rerun with
   `TRACEMAP_SKIP_BUILD=1` and completed successfully.
+  The selected pinned smoke was rerun after PR-gate hardening with the same
+  totals and posture.
 - `git diff --check` and `scripts/check-private-paths.sh`: passed.
 
 ## Remaining boundaries
@@ -56,6 +66,9 @@
   weakening C# joins. Unqualified shadowed `IsPostBack` conditions remain
   explicit gaps, and lambda delegates cannot be misread through methods called
   inside the lambda body.
+- Page-qualified `Me`/`MyClass` control and handler receivers are supported;
+  arbitrary qualified delegates, complex receivers, and local/parameter names
+  that shadow markup controls remain explicit gaps rather than name-only joins.
 - Late-bound/error-typed receivers, unsupported delegate/lambda shapes,
   ambiguous handlers or partials, missing framework metadata, and truncated
   budgets remain explicit gaps rather than guessed joins.
