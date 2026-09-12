@@ -55,7 +55,10 @@ function Get-InScopeSolutionProjects {
     $projects = [Collections.Generic.List[string]]::new()
     foreach ($row in $projectRows) {
         $listedPath = ([string]$row).Trim()
-        if (-not $listedPath.EndsWith('.csproj', [StringComparison]::OrdinalIgnoreCase)) { continue }
+        $isSupportedProject =
+            $listedPath.EndsWith('.csproj', [StringComparison]::OrdinalIgnoreCase) -or
+            $listedPath.EndsWith('.vbproj', [StringComparison]::OrdinalIgnoreCase)
+        if (-not $isSupportedProject) { continue }
         $candidate = if ([IO.Path]::IsPathRooted($listedPath)) {
             [IO.Path]::GetFullPath($listedPath)
         } else {

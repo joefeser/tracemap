@@ -5,6 +5,9 @@ focused Web Forms packet into bounded, local source-review pages. The executable
 entry points remain in `scripts/` for compatibility with existing work-machine
 commands.
 
+For the first full run against an authorized legacy VB.NET application, follow
+the copy-and-run checklist in [VBNET_BATTLE_TEST.md](VBNET_BATTLE_TEST.md).
+
 ## Start here: complete work-machine run
 
 The workflow deliberately creates several folders because each is an immutable

@@ -72,10 +72,11 @@ try {
     function dotnet {
         $global:LASTEXITCODE = 0
         @(
-            'source/web/web.csproj',
+            'source/web/web.vbproj',
             'source/backend/backend.csproj',
-            'source/controls/controls.csproj',
-            'unrelated/unrelated.csproj'
+            'source/controls/controls.vbproj',
+            'unrelated/unrelated.vbproj',
+            'unrelated/readme.txt'
         )
     }
 
@@ -84,10 +85,10 @@ try {
         $selectionRoot `
         @('source/web', 'source/backend', 'source/controls'))
     Assert-True ($selection.Count -eq 3) "solution selector did not retain exactly the in-scope projects"
-    Assert-True ($selection -contains 'source/web/web.csproj') "Web Forms solution project was not selected"
+    Assert-True ($selection -contains 'source/web/web.vbproj') "VB.NET Web Forms solution project was not selected"
     Assert-True ($selection -contains 'source/backend/backend.csproj') "backend solution project was not selected"
-    Assert-True ($selection -contains 'source/controls/controls.csproj') "controls solution project was not selected"
-    Assert-True ($selection -notcontains 'unrelated/unrelated.csproj') "out-of-scope solution project was selected"
+    Assert-True ($selection -contains 'source/controls/controls.vbproj') "VB.NET controls solution project was not selected"
+    Assert-True ($selection -notcontains 'unrelated/unrelated.vbproj') "out-of-scope solution project was selected"
 
     Assert-ProjectsBelongToSolution `
         -ExplicitProjects @('source\backend\backend.csproj') `
