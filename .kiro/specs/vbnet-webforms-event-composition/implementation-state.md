@@ -31,11 +31,11 @@ artifact validation, deterministic comparison, privacy guards, and the pinned
 result totals below are the committed review record; no private source, paths,
 or native diagnostics were retained.
 
-- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,903/1,903 passed after
+- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,904/1,904 passed after
   case-insensitive-join, lifecycle-shadow, lambda, qualified-receiver,
   signature, source-hash, and report hardening.
-- Focused VB/fixture/legacy Web Forms tests: 107/107 passed.
-- Focused Web Forms/legacy-flow composition tests: 211/211 passed.
+- Focused VB/fixture/legacy Web Forms tests: 108/108 passed.
+- Focused Web Forms/legacy-flow composition tests: 212/212 passed.
 - `Test-FocusedWebFormsCodePathReviewSet.ps1`: passed, including private and
   anonymous/shareable review generation.
 - `Test-FocusedWebFormsApplicationWorkbench.ps1`: passed with raw-source off,
@@ -68,7 +68,12 @@ or native diagnostics were retained.
   inside the lambda body.
 - Page-qualified `Me`/`MyClass` control and handler receivers are supported;
   arbitrary qualified delegates, complex receivers, and local/parameter names
-  that shadow markup controls remain explicit gaps rather than name-only joins.
+  that shadow markup controls or `Page` remain explicit gaps rather than
+  name-only joins. Composite delegates remain gaps rather than selecting an
+  arbitrary child method.
+- A declared `.vb` CodeBehind/CodeFile path preserves VB case-insensitive page
+  identity for checked-in designer evidence even when that linked code file is
+  absent from the scan.
 - Late-bound/error-typed receivers, unsupported delegate/lambda shapes,
   ambiguous handlers or partials, missing framework metadata, and truncated
   budgets remain explicit gaps rather than guessed joins.

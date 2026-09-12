@@ -29,9 +29,14 @@ public sealed class VisualBasicWebFormsCompositionTests
                 Public Sub New()
                     AddHandler _source.Changed, AddressOf OnChanged
                     AddHandler _source.Changed, Sub(sender, e) OnChanged(sender, e)
+                    AddHandler _source.Changed, If(DateTime.Now.Ticks > 0, New EventHandler(AddressOf CompositeA), New EventHandler(AddressOf CompositeB))
                     RemoveHandler _source.Changed, AddressOf OnChanged
                 End Sub
                 Private Sub OnChanged(sender As Object, e As EventArgs) Handles _source.Changed
+                End Sub
+                Private Sub CompositeA(sender As Object, e As EventArgs)
+                End Sub
+                Private Sub CompositeB(sender As Object, e As EventArgs)
                 End Sub
             End Class
             """);
@@ -61,6 +66,7 @@ public sealed class VisualBasicWebFormsCompositionTests
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.VisualBasicSemanticEventWiring
             && fact.Properties.GetValueOrDefault("gapKind") == "UnsupportedVisualBasicEventHandlerDelegate");
+        Assert.DoesNotContain(bindings, fact => fact.Properties.GetValueOrDefault("handlerName") is "CompositeA" or "CompositeB");
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.FieldDeclared
             && fact.ContractElement == "_source"
@@ -81,14 +87,17 @@ public sealed class VisualBasicWebFormsCompositionTests
         File.WriteAllText(Path.Combine(repo, "Qualified.aspx.vb"), """
             Option Strict Off
             Partial Public Class QualifiedPage
-                Private Sub Wire(KnownButton As Object)
+                Private Sub Wire(KnownButton As Object, Page As Object)
                     AddHandler KnownButton.Click, AddressOf Shadowed_Click
+                    AddHandler Page.Load, AddressOf PageShadow_Load
                     AddHandler Me.RealButton.Click, AddressOf Me.Real_Click
                     AddHandler RealButton.Click, AddressOf Other.External_Click
                 End Sub
                 Private Sub Shadowed_Click(sender As Object, e As EventArgs)
                 End Sub
                 Private Sub Real_Click(sender As Object, e As EventArgs)
+                End Sub
+                Private Sub PageShadow_Load(sender As Object, e As EventArgs)
                 End Sub
             End Class
             """);
@@ -101,9 +110,34 @@ public sealed class VisualBasicWebFormsCompositionTests
             && fact.Properties.GetValueOrDefault("handlerName") == "Real_Click"
             && fact.Properties.GetValueOrDefault("controlId") == "RealButton");
         Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared
-            && fact.Properties.GetValueOrDefault("handlerName") is "Shadowed_Click" or "External_Click");
+            && fact.Properties.GetValueOrDefault("handlerName") is "Shadowed_Click" or "PageShadow_Load" or "External_Click");
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
             && fact.Properties.GetValueOrDefault("gapKind") == "DynamicWebFormsEventSubscription");
+    }
+
+    [Fact]
+    public void Missing_vb_code_file_preserves_case_insensitive_designer_identity()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Missing.aspx"), """
+            <%@ Page Language="VB" CodeFile="Missing.aspx.vb" Inherits="MissingPage" %>
+            <asp:Button ID="SubmitButton" runat="server" />
+            """);
+        File.WriteAllText(Path.Combine(repo, "Missing.aspx.designer.vb"), """
+            Partial Public Class missingpage
+                Protected WithEvents submitbutton As Button
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var control = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WebFormsControlDeclared
+            && fact.Evidence.FilePath == "Missing.aspx");
+        Assert.False(string.IsNullOrWhiteSpace(control.Properties.GetValueOrDefault("designerFactId")));
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "MissingWebFormsCodeBehind");
     }
 
     [Fact]

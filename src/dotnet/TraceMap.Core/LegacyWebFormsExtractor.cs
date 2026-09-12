@@ -993,6 +993,12 @@ public static partial class LegacyWebFormsExtractor
                 continue;
             }
 
+            if (isVisualBasic && subscription.ReceiverMayBeShadowed)
+            {
+                facts.Add(CreateGap(manifest, subscription.FilePath, subscription.Line, "AmbiguousVisualBasicWebFormsEventSubscriptionReceiver", "A local or parameter shadows the linked page or control receiver; TraceMap did not project a name-only Web Forms binding."));
+                continue;
+            }
+
             if (lifecycleReceiver)
             {
                 var lifecycleBinding = new WebFormsBinding(
@@ -1035,11 +1041,6 @@ public static partial class LegacyWebFormsExtractor
             }
 
             var control = controls[0];
-            if (isVisualBasic && subscription.ReceiverMayBeShadowed)
-            {
-                facts.Add(CreateGap(manifest, subscription.FilePath, subscription.Line, "AmbiguousVisualBasicWebFormsEventSubscriptionReceiver", "A local or parameter shadows the linked control receiver; TraceMap did not project a name-only Web Forms binding."));
-                continue;
-            }
             var binding = new WebFormsBinding(
                 control.ControlType,
                 control.ControlId,
@@ -2760,7 +2761,8 @@ public static partial class LegacyWebFormsExtractor
     private static bool IsVisualBasicPath(string path) => Path.GetExtension(path).Equals(".vb", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsVisualBasicPage(WebFormsPage page) =>
-        page.LinkedCodePath is not null && IsVisualBasicPath(page.LinkedCodePath);
+        new[] { page.LinkedCodePath, page.CodeBehindPath, page.CodeFilePath }
+            .Any(path => path is not null && IsVisualBasicPath(path));
 
     private static StringComparison IdentifierComparison(bool visualBasic) =>
         visualBasic ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
