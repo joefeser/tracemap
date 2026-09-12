@@ -95,6 +95,19 @@ rules:
       - Dynamic filter, sort, and select constructions remain Tier4Unknown and missing fields are not clean absence outside complete per-callsite coverage.
       - Filter bindings share the payload rule limitations for lexical shadowing, aliases, helper calls, method calls, and inherited conditional spread presence.
 
+  - id: base44.ui-input-semantics.v1
+    name: Base44 React UI input semantics
+    description: Records executable JSX/TSX native and wrapped control value classes, validation hints, representative select values, parse/cast evidence, and conservative links to proven Base44 mutation payload fields.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits: [Base44UiInputSemantics]
+    limitations:
+      - UI declarations are widening and smoke-vector evidence only; they never authorize database NOT NULL, enum, uniqueness, foreign-key, precision, scale, date/timestamp, tenant, or RLS constraints.
+      - Requiredness, ranges, patterns, and option values are test-validation evidence only. Select values are representative and do not prove an exhaustive enum or unknown-value rejection.
+      - Correlation is bounded to exact source-visible value paths within a component scope and already proven Base44 create, update, or bulk-create operations. Cross-module handlers, dynamic props, computed fields, mutable roots, and ambiguous targets remain explicitly unresolved.
+      - Cost, price, rate, and similar names are medium-confidence widening clues only. They do not prove a runtime value, database type, precision, or scale.
+      - Static UI syntax does not prove rendering, handler execution, request success, server validation, persistence, or runtime acceptance.
+      - JSON, JSONC, documentation, comments, test, fixture, story, spec, and mock paths do not establish this evidence.
+
   - id: base44.environment.access.v1
     name: Base44 function environment access
     description: Records environment variable names or explicit dynamic access gaps without values.

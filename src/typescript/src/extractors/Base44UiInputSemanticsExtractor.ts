@@ -1,0 +1,572 @@
+import ts from "typescript";
+import { CodeFact, EvidenceTiers, FactTypes, ScanManifest } from "../facts/Models";
+import { createEvidence, createFact } from "../facts/FactFactory";
+import { RuleIds, ScannerVersions } from "../facts/RuleIds";
+import { hash } from "../util/Hash";
+
+type ValueClass = "string" | "integer" | "decimal" | "number" | "boolean" | "date-string" | "datetime-string" | "array" | "object" | "unknown";
+type Confidence = "high" | "medium" | "low";
+
+interface SourceSpan {
+  filePath: string;
+  startLine: number;
+  endLine: number;
+  startOffset: number;
+  endOffset: number;
+  snippetSha256: string;
+}
+
+interface ReasonEvidence extends SourceSpan {
+  kind: "native-input-type" | "component-prop" | "parse-cast-function" | "label-context-clue" | "submit-handler-propagation";
+  detail: string;
+}
+
+interface PayloadBinding {
+  entityName: string;
+  operationName: string;
+  operationEvidenceId: string;
+  fieldName: string;
+  bindingPath: string;
+  payloadRoot: string;
+  valueClass: ValueClass;
+  reasons: ReasonEvidence[];
+  evidence: SourceSpan;
+  scope: ts.Node;
+}
+
+interface ControlCandidate {
+  node: ts.JsxOpeningLikeElement;
+  controlKind: "input" | "select" | "textarea" | "component";
+  componentName: string;
+  fieldBinding: string;
+  valueBinding: string;
+  valueClass: ValueClass;
+  reasons: ReasonEvidence[];
+  representativeValues: string[];
+  validation: Record<string, string | boolean>;
+  scope: ts.Node;
+}
+
+interface UiSemanticsContract {
+  schemaVersion: "88mph.base44-ui-input-semantics.v1";
+  controlKind: "input" | "select" | "textarea" | "component" | "submitted-value";
+  componentName: string;
+  fieldBinding: string;
+  valueBinding: string;
+  submittedEntity: string;
+  submittedField: string;
+  operationName: string;
+  operationEvidenceId: string;
+  valueClass: ValueClass;
+  reasons: ReasonEvidence[];
+  confidence: Confidence;
+  correlationStatus: "proven" | "partial" | "unresolved";
+  unresolvedCorrelationReason: string;
+  representativeValues: string[];
+  optionAuthority: "representative-only" | "none";
+  validation: Record<string, string | boolean>;
+  validationAuthority: "test-validation-only";
+  storageAuthority: "widening-only-never-narrowing";
+}
+
+const mutationPayloadIndex = new Map<string, number>([["create", 0], ["update", 1], ["bulkCreate", 0]]);
+const validationProps = ["required", "min", "max", "pattern", "maxLength"] as const;
+const relevantProps = new Set(["type", "inputMode", "step", "min", "max", "pattern", "required", "maxLength", "value", "checked", "name", "onChange", "onValueChange"]);
+const decimalClues = /(?:^|[_-])(cost|price|rate|amount|currency|percent|percentage|weight|dimension|duration)(?:$|[_-])/iu;
+const numberClues = /(?:^|[_-])(quantity|qty|count|number)(?:$|[_-])/iu;
+const maxRepresentativeValues = 64;
+
+export function extractBase44UiInputFacts(
+  manifest: ScanManifest,
+  source: ts.SourceFile,
+  filePath: string,
+  sourceText: string,
+  existingFacts: readonly CodeFact[]
+): CodeFact[] {
+  const payloadBindings = collectPayloadBindings(source, filePath, existingFacts);
+  const controls = collectControls(source, filePath);
+  const facts = payloadBindings
+    .filter((binding) => binding.valueClass !== "unknown" || binding.reasons.some((reason) => reason.kind === "label-context-clue"))
+    .map((binding) => uiFact(manifest, source, sourceText, binding.evidence, {
+      schemaVersion: "88mph.base44-ui-input-semantics.v1",
+      controlKind: "submitted-value",
+      componentName: "payload-field",
+      fieldBinding: binding.bindingPath,
+      valueBinding: binding.bindingPath,
+      submittedEntity: binding.entityName,
+      submittedField: binding.fieldName,
+      operationName: binding.operationName,
+      operationEvidenceId: binding.operationEvidenceId,
+      valueClass: binding.valueClass,
+      reasons: normalizeReasons(binding.reasons),
+      confidence: binding.reasons.some((reason) => reason.kind === "parse-cast-function") ? "high" : "medium",
+      correlationStatus: "proven",
+      unresolvedCorrelationReason: "",
+      representativeValues: [],
+      optionAuthority: "none",
+      validation: {},
+      validationAuthority: "test-validation-only",
+      storageAuthority: "widening-only-never-narrowing"
+    }));
+
+  for (const control of controls) {
+    const matches = matchPayloadBindings(control, payloadBindings);
+    const distinctTargets = new Map(matches.map((match) => [`${match.entityName}\0${match.fieldName}\0${match.operationEvidenceId}`, match]));
+    const entityFields = new Set([...distinctTargets.values()].map((match) => `${match.entityName}\0${match.fieldName}`));
+    const provenMatches: Array<PayloadBinding | null> = entityFields.size === 1 ? [...distinctTargets.values()] : [null];
+    const unresolvedCorrelationReason = entityFields.size === 1 ? "" : distinctTargets.size > 1
+      ? "multiple-submitted-payload-targets"
+      : "no-proven-submitted-payload-correlation";
+    for (const proven of provenMatches) {
+      const reasons = normalizeReasons([
+        ...control.reasons,
+        ...(proven ? [reason(proven.evidence, "submit-handler-propagation", `${proven.entityName}.${proven.fieldName}`)] : [])
+      ]);
+      const valueClass = proven?.valueClass && proven.valueClass !== "unknown"
+        ? mergeSubmittedValueClass(control.valueClass, proven.valueClass)
+        : control.valueClass;
+      const evidence = span(control.node, source, filePath);
+      const fieldBinding = control.fieldBinding || control.valueBinding;
+      facts.push(uiFact(manifest, source, sourceText, evidence, {
+        schemaVersion: "88mph.base44-ui-input-semantics.v1",
+        controlKind: control.controlKind,
+        componentName: control.componentName,
+        fieldBinding,
+        valueBinding: control.valueBinding,
+        submittedEntity: proven?.entityName ?? "",
+        submittedField: proven?.fieldName ?? "",
+        operationName: proven?.operationName ?? "",
+        operationEvidenceId: proven?.operationEvidenceId ?? "",
+        valueClass,
+        reasons,
+        confidence: proven ? (valueClass === "unknown" ? "medium" : "high") : "low",
+        correlationStatus: proven ? "proven" : fieldBinding ? "partial" : "unresolved",
+        unresolvedCorrelationReason,
+        representativeValues: control.representativeValues,
+        optionAuthority: control.representativeValues.length > 0 ? "representative-only" : "none",
+        validation: control.validation,
+        validationAuthority: "test-validation-only",
+        storageAuthority: "widening-only-never-narrowing"
+      }));
+    }
+  }
+  return facts;
+}
+
+function collectPayloadBindings(source: ts.SourceFile, filePath: string, facts: readonly CodeFact[]): PayloadBinding[] {
+  const calls = new Map<number, ts.CallExpression>();
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) calls.set(node.getStart(source), node);
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  const bindings: PayloadBinding[] = [];
+  for (const fact of facts.filter((candidate) => candidate.factType === FactTypes.Base44EntityOperation
+    && candidate.evidence.filePath === filePath && mutationPayloadIndex.has(candidate.properties.operationName))) {
+    const call = calls.get(Number(fact.properties.callsiteStartOffset));
+    const argumentIndex = mutationPayloadIndex.get(fact.properties.operationName);
+    if (!call || argumentIndex === undefined || !call.arguments[argumentIndex]) continue;
+    collectPayloadExpression(call.arguments[argumentIndex], {
+      source, filePath, entityName: fact.properties.entityName, operationName: fact.properties.operationName,
+      operationEvidenceId: fact.properties.operationEvidenceId, scope: componentScope(call), visited: new Set()
+    }, bindings);
+  }
+  return normalizePayloadBindings(bindings);
+}
+
+interface PayloadContext {
+  source: ts.SourceFile;
+  filePath: string;
+  entityName: string;
+  operationName: string;
+  operationEvidenceId: string;
+  scope: ts.Node;
+  visited: Set<number>;
+}
+
+function collectPayloadExpression(expression: ts.Expression, context: PayloadContext, output: PayloadBinding[]): void {
+  const value = unwrap(expression);
+  if (context.visited.has(value.pos)) return;
+  context.visited.add(value.pos);
+  if (ts.isObjectLiteralExpression(value)) {
+    for (const property of value.properties) {
+      if (ts.isPropertyAssignment(property)) {
+        const fieldName = staticPropertyName(property.name);
+        if (!fieldName) continue;
+        addPayloadBinding(fieldName, property.initializer, property, context, output);
+      } else if (ts.isShorthandPropertyAssignment(property)) {
+        addPayloadBinding(property.name.text, property.name, property, context, output);
+      } else if (ts.isSpreadAssignment(property)) {
+        collectPayloadExpression(property.expression, { ...context, visited: new Set(context.visited) }, output);
+      }
+    }
+    return;
+  }
+  if (ts.isArrayLiteralExpression(value)) {
+    for (const element of value.elements) if (ts.isExpression(element)) collectPayloadExpression(element, { ...context, visited: new Set(context.visited) }, output);
+    return;
+  }
+  if (ts.isConditionalExpression(value)) {
+    collectPayloadExpression(value.whenTrue, { ...context, visited: new Set(context.visited) }, output);
+    collectPayloadExpression(value.whenFalse, { ...context, visited: new Set(context.visited) }, output);
+    return;
+  }
+  if (ts.isCallExpression(value) && ts.isPropertyAccessExpression(value.expression) && value.expression.name.text === "map") {
+    const callback = value.arguments[0];
+    if (callback && (ts.isArrowFunction(callback) || ts.isFunctionExpression(callback))) {
+      const returned = ts.isBlock(callback.body)
+        ? callback.body.statements.find(ts.isReturnStatement)?.expression
+        : callback.body;
+      if (returned) collectPayloadExpression(returned, { ...context, visited: new Set(context.visited) }, output);
+    }
+    return;
+  }
+  if (ts.isIdentifier(value)) {
+    const declaration = resolveConstDeclaration(value, context.source);
+    if (declaration?.initializer) {
+      collectPayloadExpression(declaration.initializer, { ...context, visited: new Set(context.visited) }, output);
+      return;
+    }
+    output.push(payloadBinding(context, "*", value.text, value.text, "unknown", [], value));
+  }
+}
+
+function addPayloadBinding(fieldName: string, expression: ts.Expression, evidenceNode: ts.Node, context: PayloadContext, output: PayloadBinding[]): void {
+  const bindingPath = expressionBindingPath(expression);
+  const inferred = inferExpressionValueClass(expression, context.source, context.filePath, fieldName);
+  output.push(payloadBinding(context, fieldName, bindingPath, "", inferred.valueClass, inferred.reasons, evidenceNode));
+}
+
+function payloadBinding(context: PayloadContext, fieldName: string, bindingPath: string, payloadRoot: string, valueClass: ValueClass, reasons: ReasonEvidence[], node: ts.Node): PayloadBinding {
+  return {
+    entityName: context.entityName,
+    operationName: context.operationName,
+    operationEvidenceId: context.operationEvidenceId,
+    fieldName,
+    bindingPath,
+    payloadRoot,
+    valueClass,
+    reasons,
+    evidence: span(node, context.source, context.filePath),
+    scope: context.scope
+  };
+}
+
+function collectControls(source: ts.SourceFile, filePath: string): ControlCandidate[] {
+  const controls: ControlCandidate[] = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+      const componentName = node.tagName.getText(source);
+      const attributes = jsxAttributes(node);
+      const controlKind = componentName === "input" ? "input" : componentName === "select" ? "select" : componentName === "textarea" ? "textarea" : "component";
+      const relevant = controlKind !== "component" || isWrappedControlComponent(componentName, attributes);
+      if (relevant) {
+        const fieldBinding = literalAttribute(attributes.get("name")) ?? setterFieldBinding(attributes.get("onChange"), source);
+        const valueBinding = expressionAttributePath(attributes.get("value")) || expressionAttributePath(attributes.get("checked"));
+        const inferred = inferControlValueClass(controlKind, attributes, source, filePath, node, fieldBinding || valueBinding || componentName);
+        controls.push({
+          node, controlKind, componentName, fieldBinding: fieldBinding ?? "", valueBinding,
+          valueClass: inferred.valueClass, reasons: inferred.reasons,
+          representativeValues: controlKind === "select" || /select/iu.test(componentName) ? selectOptionValues(node, source) : [],
+          validation: validationEvidence(attributes)
+          , scope: componentScope(node)
+        });
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return controls;
+}
+
+function isWrappedControlComponent(componentName: string, attributes: Map<string, ts.JsxAttribute>): boolean {
+  const leaf = componentName.split(".").at(-1) ?? componentName;
+  if (!/^[A-Z]/u.test(leaf) || ![...attributes.keys()].some((name) => relevantProps.has(name))) return false;
+  if (/(?:input|select|textarea|checkbox|datepicker|dateinput|field|switch|radio|slider|combobox)$/iu.test(leaf)) return true;
+  const hasBinding = attributes.has("value") || attributes.has("checked") || attributes.has("name");
+  return hasBinding && (attributes.has("onChange") || attributes.has("onValueChange"));
+}
+
+function matchPayloadBindings(control: ControlCandidate, payloads: PayloadBinding[]): PayloadBinding[] {
+  return payloads.flatMap((payload) => {
+    if (payload.scope !== control.scope) return [];
+    if (control.valueBinding && payload.bindingPath === control.valueBinding) return [payload];
+    if (payload.payloadRoot && control.valueBinding.startsWith(`${payload.payloadRoot}.`)) {
+      const fieldName = control.valueBinding.slice(payload.payloadRoot.length + 1);
+      return payload.fieldName === "*" ? [{ ...payload, fieldName }] : payload.fieldName === fieldName ? [payload] : [];
+    }
+    return control.fieldBinding && payload.fieldName === control.fieldBinding
+      && (!control.valueBinding || payload.bindingPath === control.valueBinding) ? [payload] : [];
+  });
+}
+
+function inferControlValueClass(controlKind: ControlCandidate["controlKind"], attributes: Map<string, ts.JsxAttribute>, source: ts.SourceFile, filePath: string, node: ts.JsxOpeningLikeElement, clue: string): { valueClass: ValueClass; reasons: ReasonEvidence[] } {
+  const type = literalAttribute(attributes.get("type"))?.toLowerCase() ?? "";
+  const inputMode = literalAttribute(attributes.get("inputMode"))?.toLowerCase() ?? "";
+  const step = literalAttribute(attributes.get("step"))?.toLowerCase() ?? "";
+  const componentLeaf = node.tagName.getText(source).split(".").at(-1)?.toLowerCase() ?? "";
+  let valueClass: ValueClass = controlKind === "input" || controlKind === "textarea" || controlKind === "select" ? "string"
+    : ["input", "textarea", "select", "combobox", "radio"].includes(componentLeaf) ? "string"
+    : /(?:checkbox|switch)$/u.test(componentLeaf) ? "boolean"
+    : /datetime(?:picker|input)$/u.test(componentLeaf) ? "datetime-string"
+    : /date(?:picker|input)$/u.test(componentLeaf) ? "date-string"
+    : /(?:numberinput|slider)$/u.test(componentLeaf) ? "number"
+    : "unknown";
+  const reasons: ReasonEvidence[] = [];
+  const kind = controlKind === "component" ? "component-prop" : "native-input-type";
+  if (type === "checkbox") valueClass = "boolean";
+  else if (type === "date" || type === "time") valueClass = "date-string";
+  else if (type === "datetime-local") valueClass = "datetime-string";
+  else if (inputMode === "decimal") valueClass = "decimal";
+  else if (inputMode === "numeric") valueClass = "number";
+  else if (type === "number") valueClass = step === "any" || isDecimalStep(step) ? "decimal" : "number";
+  else if (["text", "email", "password", "search", "tel", "url"].includes(type)) valueClass = "string";
+  if (type || inputMode || step) reasons.push(reason(span(node, source, filePath), kind, [type && `type=${type}`, inputMode && `inputMode=${inputMode}`, step && `step=${step}`].filter(Boolean).join(";")));
+  else if (controlKind === "input") reasons.push(reason(span(node, source, filePath), "native-input-type", "type=default-text"));
+  else if (controlKind === "select" || controlKind === "textarea") reasons.push(reason(span(node, source, filePath), "native-input-type", `element=${controlKind}`));
+  else if (valueClass !== "unknown") reasons.push(reason(span(node, source, filePath), "label-context-clue", `component=${componentLeaf}`));
+  if (valueClass === "unknown") {
+    const clueClass = clueValueClass(clue);
+    if (clueClass !== "unknown") {
+      valueClass = clueClass;
+      reasons.push(reason(span(node, source, filePath), "label-context-clue", normalizedClue(clue)));
+    }
+  }
+  return { valueClass, reasons };
+}
+
+function inferExpressionValueClass(expression: ts.Expression, source: ts.SourceFile, filePath: string, fieldName: string): { valueClass: ValueClass; reasons: ReasonEvidence[] } {
+  const value = unwrap(expression);
+  if (ts.isCallExpression(value)) {
+    const name = unshadowedGlobalCastName(value, source);
+    const castClass: ValueClass = name === "parseFloat" ? "decimal" : name === "parseInt" ? "integer" : name === "Number" ? "number"
+      : name === "Boolean" ? "boolean" : name === "String" ? "string" : "unknown";
+    if (castClass !== "unknown") return { valueClass: castClass, reasons: [reason(span(value, source, filePath), "parse-cast-function", name)] };
+  }
+  if (ts.isNumericLiteral(value)) {
+    const valueClass: ValueClass = /[.eE]/u.test(value.getText(source)) ? "decimal" : "integer";
+    return { valueClass, reasons: [reason(span(value, source, filePath), "submit-handler-propagation", "numeric-literal-class")] };
+  }
+  if (value.kind === ts.SyntaxKind.TrueKeyword || value.kind === ts.SyntaxKind.FalseKeyword) return { valueClass: "boolean", reasons: [reason(span(value, source, filePath), "submit-handler-propagation", "boolean-literal-class")] };
+  if (ts.isStringLiteralLike(value) || ts.isTemplateExpression(value)) return { valueClass: "string", reasons: [reason(span(value, source, filePath), "submit-handler-propagation", "string-expression-class")] };
+  if (ts.isArrayLiteralExpression(value)) return { valueClass: "array", reasons: [reason(span(value, source, filePath), "submit-handler-propagation", "array-literal-class")] };
+  if (ts.isObjectLiteralExpression(value)) return { valueClass: "object", reasons: [reason(span(value, source, filePath), "submit-handler-propagation", "object-literal-class")] };
+  const clueClass = clueValueClass(fieldName);
+  return clueClass === "unknown" ? { valueClass: "unknown", reasons: [] }
+    : { valueClass: clueClass, reasons: [reason(span(value, source, filePath), "label-context-clue", normalizedClue(fieldName))] };
+}
+
+function jsxAttributes(node: ts.JsxOpeningLikeElement): Map<string, ts.JsxAttribute> {
+  const result = new Map<string, ts.JsxAttribute>();
+  for (const property of node.attributes.properties) if (ts.isJsxAttribute(property) && ts.isIdentifier(property.name)) result.set(property.name.text, property);
+  return result;
+}
+
+function literalAttribute(attribute: ts.JsxAttribute | undefined): string | null {
+  if (!attribute) return null;
+  if (!attribute.initializer) return "true";
+  if (ts.isStringLiteral(attribute.initializer)) return attribute.initializer.text;
+  if (!ts.isJsxExpression(attribute.initializer)) return null;
+  const expression = attribute.initializer.expression;
+  if (!expression) return null;
+  if (ts.isStringLiteralLike(expression) || ts.isNumericLiteral(expression)) return expression.text;
+  if (expression.kind === ts.SyntaxKind.TrueKeyword) return "true";
+  if (expression.kind === ts.SyntaxKind.FalseKeyword) return "false";
+  if (ts.isPrefixUnaryExpression(expression) && expression.operator === ts.SyntaxKind.MinusToken && ts.isNumericLiteral(expression.operand)) return `-${expression.operand.text}`;
+  return null;
+}
+
+function expressionAttributePath(attribute: ts.JsxAttribute | undefined): string {
+  const expression = attribute?.initializer && ts.isJsxExpression(attribute.initializer) ? attribute.initializer.expression : undefined;
+  return expression ? expressionBindingPath(expression) : "";
+}
+
+function setterFieldBinding(attribute: ts.JsxAttribute | undefined, source: ts.SourceFile): string | null {
+  const expression = attribute?.initializer && ts.isJsxExpression(attribute.initializer) ? attribute.initializer.expression : undefined;
+  if (!expression) return null;
+  const names: string[] = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isPropertyAssignment(node)) {
+      const name = staticPropertyName(node.name);
+      if (name) names.push(name);
+    }
+    if (ts.isCallExpression(node)) {
+      const second = node.arguments.find((argument) => ts.isStringLiteralLike(argument));
+      if (second && ts.isStringLiteralLike(second)) names.push(second.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(expression);
+  const unique = [...new Set(names)];
+  return unique.length === 1 ? unique[0] : null;
+}
+
+function selectOptionValues(node: ts.JsxOpeningLikeElement, source: ts.SourceFile): string[] {
+  const element = node.parent;
+  if (!ts.isJsxElement(element)) return [];
+  const values: string[] = [];
+  const visit = (candidate: ts.Node): void => {
+    if (ts.isJsxOpeningElement(candidate) || ts.isJsxSelfClosingElement(candidate)) {
+      const value = literalAttribute(jsxAttributes(candidate).get("value"));
+      const leaf = candidate.tagName.getText(source).split(".").at(-1)?.toLowerCase() ?? "";
+      if ((leaf === "option" || leaf === "selectitem" || leaf === "selectoption") && value !== null && value.length <= 256) values.push(value);
+    }
+    ts.forEachChild(candidate, visit);
+  };
+  for (const child of element.children) visit(child);
+  return [...new Set(values)].sort().slice(0, maxRepresentativeValues);
+}
+
+function validationEvidence(attributes: Map<string, ts.JsxAttribute>): Record<string, string | boolean> {
+  const result: Record<string, string | boolean> = {};
+  for (const name of validationProps) {
+    const value = literalAttribute(attributes.get(name));
+    if (value !== null && value.length <= 256) result[name] = name === "required" ? value === "true" : value;
+  }
+  return Object.fromEntries(Object.entries(result).sort(([left], [right]) => left.localeCompare(right)));
+}
+
+function unshadowedGlobalCastName(call: ts.CallExpression, source: ts.SourceFile): string {
+  const callee = unwrap(call.expression);
+  if (!ts.isIdentifier(callee) || !["parseFloat", "parseInt", "Number", "Boolean", "String"].includes(callee.text)) return "";
+  let shadowed = false;
+  const visit = (node: ts.Node): void => {
+    if (node === callee) return;
+    if ((ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)
+      || ts.isImportSpecifier(node) || ts.isImportClause(node)) && node.name && ts.isIdentifier(node.name) && node.name.text === callee.text) {
+      shadowed = true;
+      return;
+    }
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken
+      && ts.isIdentifier(unwrap(node.left)) && (unwrap(node.left) as ts.Identifier).text === callee.text) {
+      shadowed = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return shadowed ? "" : callee.text;
+}
+
+function expressionBindingPath(expression: ts.Expression): string {
+  const value = unwrap(expression);
+  if (ts.isIdentifier(value)) return value.text;
+  if (ts.isPropertyAccessExpression(value)) {
+    const owner = expressionBindingPath(value.expression);
+    return owner ? `${owner}.${value.name.text}` : "";
+  }
+  if (ts.isElementAccessExpression(value) && value.argumentExpression && ts.isStringLiteralLike(value.argumentExpression)) {
+    const owner = expressionBindingPath(value.expression);
+    return owner ? `${owner}.${value.argumentExpression.text}` : "";
+  }
+  if (ts.isCallExpression(value) && value.arguments[0]) return expressionBindingPath(value.arguments[0]);
+  return "";
+}
+
+function resolveConstDeclaration(identifier: ts.Identifier, source: ts.SourceFile): ts.VariableDeclaration | null {
+  let resolved: ts.VariableDeclaration | null = null;
+  const visit = (node: ts.Node): void => {
+    if (node.getStart(source) >= identifier.getStart(source)) return;
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === identifier.text
+      && ts.isVariableDeclarationList(node.parent) && (node.parent.flags & ts.NodeFlags.Const) !== 0) resolved = node;
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return resolved;
+}
+
+function componentScope(node: ts.Node): ts.Node {
+  let scope: ts.Node = node.getSourceFile();
+  for (let current: ts.Node | undefined = node.parent; current; current = current.parent) if (ts.isFunctionLike(current)) scope = current;
+  return scope;
+}
+
+function staticPropertyName(name: ts.PropertyName): string | null {
+  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) return name.text;
+  return ts.isComputedPropertyName(name) && ts.isStringLiteralLike(name.expression) ? name.expression.text : null;
+}
+
+function clueValueClass(value: string): ValueClass {
+  const normalized = value.replace(/([a-z])([A-Z])/g, "$1_$2").toLowerCase();
+  if (decimalClues.test(normalized)) return "decimal";
+  if (numberClues.test(normalized)) return "number";
+  return "unknown";
+}
+
+function normalizedClue(value: string): string {
+  const match = value.replace(/([a-z])([A-Z])/g, "$1_$2").toLowerCase().match(decimalClues) ?? value.toLowerCase().match(numberClues);
+  return match?.[1] ?? "numeric-context";
+}
+
+function isDecimalStep(value: string): boolean {
+  return /^\d*\.\d+$/u.test(value) && Number(value) > 0;
+}
+
+function mergeValueClasses(left: ValueClass, right: ValueClass): ValueClass {
+  if (left === "unknown") return right;
+  if (right === "unknown" || left === right) return left;
+  if ([left, right].includes("decimal") && ["integer", "number", "decimal"].includes(left) && ["integer", "number", "decimal"].includes(right)) return "decimal";
+  if (["integer", "number", "decimal"].includes(left) && ["integer", "number", "decimal"].includes(right)) return "number";
+  return "unknown";
+}
+
+function mergeSubmittedValueClass(control: ValueClass, submitted: ValueClass): ValueClass {
+  if (["integer", "number", "decimal"].includes(submitted) && ["integer", "number", "decimal"].includes(control)) {
+    return mergeValueClasses(control, submitted);
+  }
+  return submitted;
+}
+
+function normalizePayloadBindings(bindings: PayloadBinding[]): PayloadBinding[] {
+  const result = new Map<string, PayloadBinding>();
+  for (const binding of bindings) {
+    const key = [binding.operationEvidenceId, binding.fieldName, binding.bindingPath, binding.evidence.startOffset, binding.evidence.endOffset].join("\0");
+    result.set(key, binding);
+  }
+  return [...result.values()].sort((left, right) => left.evidence.startOffset - right.evidence.startOffset
+    || left.entityName.localeCompare(right.entityName) || left.fieldName.localeCompare(right.fieldName));
+}
+
+function normalizeReasons(reasons: ReasonEvidence[]): ReasonEvidence[] {
+  const byKey = new Map(reasons.map((item) => [JSON.stringify(item), item]));
+  return [...byKey.values()].sort((left, right) => left.filePath.localeCompare(right.filePath)
+    || left.startOffset - right.startOffset || left.kind.localeCompare(right.kind) || left.detail.localeCompare(right.detail));
+}
+
+function reason(sourceSpan: SourceSpan, kind: ReasonEvidence["kind"], detail: string): ReasonEvidence {
+  return { ...sourceSpan, kind, detail };
+}
+
+function span(node: ts.Node, source: ts.SourceFile, filePath: string): SourceSpan {
+  return {
+    filePath,
+    startLine: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1,
+    endLine: source.getLineAndCharacterOfPosition(node.getEnd()).line + 1,
+    startOffset: node.getStart(source),
+    endOffset: node.getEnd(),
+    snippetSha256: hash(node.getText(source), 64)
+  };
+}
+
+function uiFact(manifest: ScanManifest, source: ts.SourceFile, sourceText: string, evidence: SourceSpan, contract: UiSemanticsContract): CodeFact {
+  const target = contract.submittedEntity && contract.submittedField
+    ? `${contract.submittedEntity}.${contract.submittedField}`
+    : contract.fieldBinding || `${contract.componentName}@${evidence.startLine}`;
+  return createFact(manifest, FactTypes.Base44UiInputSemantics, RuleIds.Base44UiInputSemantics,
+    EvidenceTiers.Tier3SyntaxOrTextual,
+    createEvidence(evidence.filePath, evidence.startLine, evidence.endLine, "base44-evidence", ScannerVersions.Base44EvidenceExtractor, evidence.snippetSha256), {
+      targetSymbol: contract.submittedEntity || null,
+      contractElement: target,
+      properties: {
+        sourceFileSha256: hash(sourceText, 64),
+        uiSemanticsJson: JSON.stringify(contract)
+      }
+    });
+}
+
+function unwrap(expression: ts.Expression): ts.Expression {
+  let current = expression;
+  while (ts.isParenthesizedExpression(current) || ts.isAsExpression(current) || ts.isTypeAssertionExpression(current)
+    || ts.isNonNullExpression(current) || ts.isSatisfiesExpression(current)) current = current.expression;
+  return current;
+}

@@ -3,6 +3,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { CodeFact, EvidenceTiers, FactTypes, ScanOptions, ScanResult } from "../facts/Models";
+import { RuleIds } from "../facts/RuleIds";
 import { scan } from "../scan/ScanEngine";
 
 export const base44PacketSchemaVersion = "tracemap.base44.static-evidence.v1";
@@ -149,7 +150,8 @@ export async function buildBase44Evidence(options: Base44EvidenceOptions): Promi
     limitations: [
       "Static evidence does not prove bundling, browser execution, route reachability, runtime behavior, IAM or secret access, provider delivery, or migration completion.",
       "Absence is meaningful only within the declared coverage label and known-gap set.",
-      "Dynamic imports, computed names, dynamic URLs, generated files outside inventory, and runtime-created bindings may require runtime evidence."
+      "Dynamic imports, computed names, dynamic URLs, generated files outside inventory, and runtime-created bindings may require runtime evidence.",
+      "UI input semantics are widening and smoke-vector evidence only; validation props, dates, and select options never narrow storage or create database constraints."
     ]
   };
   validateCoverageGaps(packet);
@@ -368,6 +370,7 @@ function validateCoverageGaps(packet: Base44EvidencePacket): void {
   validateEntitySelectorContracts(packet);
   validateEntityCallsiteDispositions(packet);
   validateSdkIdentityContracts(packet);
+  validateUiInputSemanticsContracts(packet);
   if (packet.coverage?.gapSchemaVersion !== base44CoverageGapSchemaVersion) {
     throw new Error(`Unsupported Base44 coverage gap schema: ${packet.coverage?.gapSchemaVersion ?? "missing"}`);
   }
@@ -414,7 +417,7 @@ function validatePayloadShapeContracts(packet: Base44EvidencePacket): void {
       && fact.properties.shapeVersion !== "2") {
       throw new Error(`Base44 payload ${fact.factId} must use shapeVersion 2 for extractor ${fact.evidence.extractorVersion}`);
     }
-    if (fact.evidence.extractorVersion === "base44-evidence/0.14.0" && fact.properties.shapeVersion !== "3") {
+    if (["base44-evidence/0.14.0", "base44-evidence/0.15.0"].includes(fact.evidence.extractorVersion) && fact.properties.shapeVersion !== "3") {
       throw new Error(`Base44 payload ${fact.factId} must use shapeVersion 3 for extractor ${fact.evidence.extractorVersion}`);
     }
     if (!new Set(["2", "3"]).has(fact.properties.shapeVersion)) continue;
@@ -583,7 +586,7 @@ function validateEntitySelectorContracts(packet: Base44EvidencePacket): void {
     FactTypes.Base44EntityPayload,
     FactTypes.Base44EntityQuery
   ]);
-  const facts = packet.facts.filter((fact) => ["base44-evidence/0.12.0", "base44-evidence/0.13.0", "base44-evidence/0.14.0"].includes(fact.evidence.extractorVersion)
+  const facts = packet.facts.filter((fact) => ["base44-evidence/0.12.0", "base44-evidence/0.13.0", "base44-evidence/0.14.0", "base44-evidence/0.15.0"].includes(fact.evidence.extractorVersion)
     && selectorFactTypes.has(fact.factType));
   const operations = new Map(facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation)
     .map((fact) => [fact.properties.operationEvidenceId, fact]));
@@ -682,7 +685,7 @@ function validateEntityCallsiteDispositions(packet: Base44EvidencePacket): void 
       "sourceSnapshotDigest", "externalModuleReferences", "ambiguousDynamicModuleReferences", "operationName",
       "operationEvidenceIds", "primitiveCapabilities", "entitySelector", "sdkIdentity", "sdkIdentityGap", "callsite"],
     `entity callsite disposition ${fact.factId}`);
-    if (fact.evidence.extractorVersion !== "base44-evidence/0.14.0"
+    if (!["base44-evidence/0.14.0", "base44-evidence/0.15.0"].includes(fact.evidence.extractorVersion)
       || disposition.schemaVersion !== "88mph.base44-entity-callsite-disposition.v2"
       || disposition.disposition !== "dormant-unreachable"
       || typeof disposition.callableName !== "string" || !disposition.callableName
@@ -809,7 +812,7 @@ function validateEntityPrimitiveDenominator(
   const primitivesByOperationId = new Map<string, Base44PacketFact[]>();
   const entityPrimitivePattern = /^(?:asServiceRole\.)?entities\.([A-Z][A-Za-z0-9_]*|dynamic)\.([A-Za-z][A-Za-z0-9_]*)$/u;
   const primitives = packet.facts.filter((fact) => fact.factType === FactTypes.Base44SdkPrimitive
-    && fact.evidence.extractorVersion === "base44-evidence/0.14.0"
+    && ["base44-evidence/0.14.0", "base44-evidence/0.15.0"].includes(fact.evidence.extractorVersion)
     && entityPrimitivePattern.test(fact.properties.capability ?? ""));
   for (const primitive of primitives) {
     const match = entityPrimitivePattern.exec(primitive.properties.capability)!;
@@ -843,7 +846,7 @@ function validateEntityPrimitiveDenominator(
   }
 
   for (const operation of packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation
-    && fact.evidence.extractorVersion === "base44-evidence/0.14.0")) {
+    && ["base44-evidence/0.14.0", "base44-evidence/0.15.0"].includes(fact.evidence.extractorVersion))) {
     const callsite = exactEntityFactCallsite(operation);
     const expectedOperationId = entityOperationIdFromCallsite(callsite,
       operation.properties.entityName, operation.properties.operationName);
@@ -923,7 +926,7 @@ function validateSdkIdentityContracts(packet: Base44EvidencePacket): void {
     FactTypes.Base44EntityPayload,
     FactTypes.Base44EntityQuery
   ]);
-  const facts = packet.facts.filter((fact) => ["base44-evidence/0.10.0", "base44-evidence/0.11.0", "base44-evidence/0.12.0", "base44-evidence/0.13.0", "base44-evidence/0.14.0"].includes(fact.evidence.extractorVersion)
+  const facts = packet.facts.filter((fact) => ["base44-evidence/0.10.0", "base44-evidence/0.11.0", "base44-evidence/0.12.0", "base44-evidence/0.13.0", "base44-evidence/0.14.0", "base44-evidence/0.15.0"].includes(fact.evidence.extractorVersion)
     && identityFactTypes.has(fact.factType));
   const operations = new Map(facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation)
     .map((fact) => [fact.properties.operationEvidenceId, fact]));
@@ -1006,6 +1009,89 @@ function validateSdkIdentityJson(fact: Base44PacketFact, identityJson: string, r
       || evidence.find((item) => item.kind === "package-lock-resolution")?.authorityPath !== "package-lock.json"
       || evidence.find((item) => item.kind === "package-manifest")?.authorityPath !== "package.json") {
       throw new Error(`Base44 fact ${fact.factId} has an invalid frontend-package SDK identity`);
+    }
+  }
+}
+
+function validateUiInputSemanticsContracts(packet: Base44EvidencePacket): void {
+  const valueClasses = new Set(["string", "integer", "decimal", "number", "boolean", "date-string", "datetime-string", "array", "object", "unknown"]);
+  const reasonKinds = new Set(["native-input-type", "component-prop", "parse-cast-function", "label-context-clue", "submit-handler-propagation"]);
+  const operations = new Map(packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation)
+    .map((fact) => [fact.properties.operationEvidenceId, fact]));
+  for (const fact of packet.facts.filter((candidate) => candidate.factType === FactTypes.Base44UiInputSemantics)) {
+    if (fact.ruleId !== RuleIds.Base44UiInputSemantics || fact.evidence.extractorVersion !== "base44-evidence/0.15.0"
+      || fact.evidenceTier !== EvidenceTiers.Tier3SyntaxOrTextual) {
+      throw new Error(`Base44 UI semantics ${fact.factId} has invalid producer identity`);
+    }
+    let contract: Record<string, any>;
+    try {
+      contract = JSON.parse(fact.properties.uiSemanticsJson);
+    } catch {
+      throw new Error(`Base44 UI semantics ${fact.factId} has malformed contract JSON`);
+    }
+    requireClosedKeys(contract, ["schemaVersion", "controlKind", "componentName", "fieldBinding", "valueBinding",
+      "submittedEntity", "submittedField", "operationName", "operationEvidenceId", "valueClass", "reasons", "confidence",
+      "correlationStatus", "unresolvedCorrelationReason", "representativeValues", "optionAuthority", "validation",
+      "validationAuthority", "storageAuthority"], `UI semantics ${fact.factId}`);
+    if (contract.schemaVersion !== "88mph.base44-ui-input-semantics.v1"
+      || !["input", "select", "textarea", "component", "submitted-value"].includes(contract.controlKind)
+      || typeof contract.componentName !== "string" || !contract.componentName
+      || typeof contract.fieldBinding !== "string" || typeof contract.valueBinding !== "string"
+      || typeof contract.submittedEntity !== "string" || typeof contract.submittedField !== "string"
+      || typeof contract.operationName !== "string" || typeof contract.operationEvidenceId !== "string"
+      || !valueClasses.has(contract.valueClass) || !["high", "medium", "low"].includes(contract.confidence)
+      || !["proven", "partial", "unresolved"].includes(contract.correlationStatus)
+      || typeof contract.unresolvedCorrelationReason !== "string"
+      || !Array.isArray(contract.representativeValues)
+      || !["representative-only", "none"].includes(contract.optionAuthority)
+      || contract.validationAuthority !== "test-validation-only"
+      || contract.storageAuthority !== "widening-only-never-narrowing") {
+      throw new Error(`Base44 UI semantics ${fact.factId} has invalid contract values`);
+    }
+    const correlated = Boolean(contract.operationEvidenceId);
+    if (correlated !== (contract.correlationStatus === "proven")
+      || correlated !== Boolean(contract.submittedEntity && contract.submittedField && contract.operationName)
+      || correlated === Boolean(contract.unresolvedCorrelationReason)) {
+      throw new Error(`Base44 UI semantics ${fact.factId} has contradictory correlation state`);
+    }
+    if (correlated) {
+      const operation = operations.get(contract.operationEvidenceId);
+      if (!operation || operation.properties.entityName !== contract.submittedEntity
+        || operation.properties.operationName !== contract.operationName) {
+        throw new Error(`Base44 UI semantics ${fact.factId} references an unknown entity operation`);
+      }
+    } else if (!new Set(["multiple-submitted-payload-targets", "no-proven-submitted-payload-correlation"]).has(contract.unresolvedCorrelationReason)) {
+      throw new Error(`Base44 UI semantics ${fact.factId} has an invalid unresolved correlation reason`);
+    }
+    const values = contract.representativeValues as unknown[];
+    if (values.some((value) => typeof value !== "string" || value.length > 256)
+      || values.length > 64 || JSON.stringify(values) !== JSON.stringify([...new Set(values as string[])].sort())
+      || (values.length > 0) !== (contract.optionAuthority === "representative-only")) {
+      throw new Error(`Base44 UI semantics ${fact.factId} has invalid representative values`);
+    }
+    const validation = contract.validation as Record<string, unknown>;
+    if (!validation || typeof validation !== "object" || Array.isArray(validation)
+      || Object.keys(validation).some((key) => !["required", "min", "max", "pattern", "maxLength"].includes(key))
+      || Object.values(validation).some((value) => typeof value !== "string" && typeof value !== "boolean")) {
+      throw new Error(`Base44 UI semantics ${fact.factId} has invalid validation evidence`);
+    }
+    if (!Array.isArray(contract.reasons)) throw new Error(`Base44 UI semantics ${fact.factId} reasons must be an array`);
+    for (const item of contract.reasons as Array<Record<string, any>>) {
+      requireClosedKeys(item, ["filePath", "startLine", "endLine", "startOffset", "endOffset", "snippetSha256", "kind", "detail"], `UI semantics reason ${fact.factId}`);
+      if (item.filePath !== fact.evidence.filePath || !Number.isInteger(item.startLine) || item.startLine < 1
+        || !Number.isInteger(item.endLine) || item.endLine < item.startLine
+        || !Number.isInteger(item.startOffset) || item.startOffset < 0
+        || !Number.isInteger(item.endOffset) || item.endOffset <= item.startOffset
+        || !/^[0-9a-f]{64}$/u.test(item.snippetSha256) || !reasonKinds.has(item.kind)
+        || typeof item.detail !== "string" || !item.detail) {
+        throw new Error(`Base44 UI semantics ${fact.factId} has invalid reason evidence`);
+      }
+    }
+    const sortedReasons = [...contract.reasons].sort((left: any, right: any) => left.filePath.localeCompare(right.filePath)
+      || left.startOffset - right.startOffset || left.kind.localeCompare(right.kind) || left.detail.localeCompare(right.detail));
+    if (JSON.stringify(contract.reasons) !== JSON.stringify(sortedReasons)
+      || new Set(contract.reasons.map((item: unknown) => JSON.stringify(item))).size !== contract.reasons.length) {
+      throw new Error(`Base44 UI semantics ${fact.factId} has non-deterministic reason evidence`);
     }
   }
 }
