@@ -112,8 +112,8 @@ public static partial class LegacyWebFormsExtractor
         }
 
         var allFacts = existingFacts.Concat(facts).ToArray();
-        var wcfMappings = allFacts
-            .Where(fact => fact.FactType == FactTypes.WcfServiceReferenceMapping)
+        var serviceMappings = allFacts
+            .Where(fact => fact.FactType is FactTypes.WcfServiceReferenceMapping or FactTypes.AsmxServiceReferenceMapping)
             .ToArray();
         var candidateDirectFacts = allFacts
             .Where(fact => fact.FactType is not (FactTypes.WebFormsHandlerResolved or FactTypes.WebFormsEventBindingDeclared))
@@ -121,8 +121,8 @@ public static partial class LegacyWebFormsExtractor
         var directEvidenceIndex = WebFormsDirectEvidenceIndex.Create(candidateDirectFacts);
         foreach (var resolution in facts.Where(fact => fact.FactType == FactTypes.WebFormsHandlerResolved).ToArray())
         {
-            facts.Add(CreateFlowFact(manifest, resolution, directEvidenceIndex, wcfMappings));
-            var logicSignal = CreateLogicSignalFact(manifest, resolution, context, directEvidenceIndex, wcfMappings);
+            facts.Add(CreateFlowFact(manifest, resolution, directEvidenceIndex, serviceMappings));
+            var logicSignal = CreateLogicSignalFact(manifest, resolution, context, directEvidenceIndex, serviceMappings);
             if (logicSignal is not null)
             {
                 facts.Add(logicSignal);
@@ -2175,7 +2175,7 @@ public static partial class LegacyWebFormsExtractor
         ScanManifest manifest,
         CodeFact resolution,
         WebFormsDirectEvidenceIndex directEvidenceIndex,
-        IReadOnlyList<CodeFact> wcfMappings)
+        IReadOnlyList<CodeFact> serviceMappings)
     {
         var handlerName = resolution.Properties.GetValueOrDefault("handlerName") ?? resolution.ContractElement ?? string.Empty;
         var handlerSymbol = resolution.Properties.GetValueOrDefault("handlerSymbol") ?? resolution.TargetSymbol ?? handlerName;
@@ -2185,7 +2185,7 @@ public static partial class LegacyWebFormsExtractor
             .ToArray();
         var terminals = directFacts
             .Where(IsTerminalSurfaceFact)
-            .Concat(WcfMappingsForCalls(wcfMappings, directFacts))
+            .Concat(ServiceMappingsForCalls(serviceMappings, directFacts))
             .DistinctBy(fact => fact.FactId)
             .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
             .ToArray();
@@ -2242,7 +2242,7 @@ public static partial class LegacyWebFormsExtractor
         CodeFact resolution,
         WebFormsContext context,
         WebFormsDirectEvidenceIndex directEvidenceIndex,
-        IReadOnlyList<CodeFact> wcfMappings)
+        IReadOnlyList<CodeFact> serviceMappings)
     {
         var handlerName = resolution.Properties.GetValueOrDefault("handlerName") ?? resolution.ContractElement ?? string.Empty;
         var methodPath = resolution.Evidence.FilePath;
@@ -2256,7 +2256,7 @@ public static partial class LegacyWebFormsExtractor
         var directFacts = directEvidenceIndex.Candidates(resolution.Evidence.FilePath, handlerName, resolution.TargetSymbol ?? handlerName)
             .Where(fact => IsDirectHandlerEvidence(fact, resolution))
             .ToArray();
-        var hasBackend = directFacts.Any(IsTerminalSurfaceFact) || WcfMappingsForCalls(wcfMappings, directFacts).Any();
+        var hasBackend = directFacts.Any(IsTerminalSurfaceFact) || ServiceMappingsForCalls(serviceMappings, directFacts).Any();
         var hasLogic = hasBackend;
         var hasUiOnly = false;
         if (method.Declaration is MethodDeclarationSyntax csharpMethod)
@@ -2464,7 +2464,7 @@ public static partial class LegacyWebFormsExtractor
                 && right.Equals(left[(left.LastIndexOf('.') + 1)..], StringComparison.OrdinalIgnoreCase));
     }
 
-    private static IEnumerable<CodeFact> WcfMappingsForCalls(IReadOnlyList<CodeFact> wcfMappings, IReadOnlyList<CodeFact> directFacts)
+    private static IEnumerable<CodeFact> ServiceMappingsForCalls(IReadOnlyList<CodeFact> serviceMappings, IReadOnlyList<CodeFact> directFacts)
     {
         var clientSymbols = directFacts
             .Where(fact => fact.FactType == FactTypes.CallEdge)
@@ -2478,7 +2478,7 @@ public static partial class LegacyWebFormsExtractor
             .Select(value => value!)
             .ToHashSet(StringComparer.Ordinal);
 
-        return wcfMappings.Where(fact => !string.IsNullOrWhiteSpace(fact.SourceSymbol)
+        return serviceMappings.Where(fact => !string.IsNullOrWhiteSpace(fact.SourceSymbol)
             && clientSymbols.Contains(fact.SourceSymbol));
     }
 
@@ -3278,6 +3278,7 @@ public static partial class LegacyWebFormsExtractor
         {
             FactTypes.WcfServiceReferenceMapping => "wcf-operation",
             FactTypes.AsmxServiceReferenceMapping => "asmx-client",
+            FactTypes.DatabaseOperationCandidate when fact.Properties.GetValueOrDefault("operationKind") == "data-adapter-fill" => "sql-query",
             FactTypes.DatabaseOperationCandidate => "sql-persistence",
             FactTypes.SqlTextUsed or FactTypes.QueryPatternDetected or FactTypes.SqlCommandDetected or FactTypes.DapperCallDetected => "sql-query",
             FactTypes.HttpCallDetected => "http-client",

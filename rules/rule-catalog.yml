@@ -3992,7 +3992,7 @@ rules:
     limitations:
       - Configuration keys and member names are retained only as hashes; values, connection material, provider precedence, reload behavior, availability, and runtime use are not reconstructed.
       - My.Settings recognition requires the explicit VB My.Settings member shape and a compiler-resolved property. Custom wrappers, aliases, reflection, default-member indirection, and dynamically selected keys remain outside this rule.
-      - ConfigurationManager GetSection, AppSettings, and ConnectionStrings evidence requires the framework assembly/type identity and a compile-time constant key; unresolved or dynamic keys remain gaps under vb.semantic.external-boundary.v1.
+      - ConfigurationManager GetSection, AppSettings, and ConnectionStrings evidence accepts the package-era System.Configuration.ConfigurationManager assembly and classic System.Configuration assembly while requiring the exact compiler-resolved framework type plus a compile-time constant key; unresolved or dynamic keys remain gaps under vb.semantic.external-boundary.v1.
 
   - id: vb.semantic.external-boundary.v1
     name: Visual Basic semantic external-boundary gaps
@@ -4002,7 +4002,7 @@ rules:
       - AnalysisGap
     limitations:
       - Name-only candidates do not establish an HTTP, configuration, WCF, ASMX, file, or other external boundary and never become positive boundary facts.
-      - Compiler-proven WCF ClientBase and ASMX SoapHttpClientProtocol inheritance currently retains a service-mapping coverage gap because the existing service mappers do not establish Visual Basic proxy-to-contract or proxy-to-operation facts.
+      - Positive WCF mappings require recognized framework identity plus one unambiguous compiler-proven interface implementation; renamed methods and inherited interfaces are supported. Positive ASMX mappings require a recognized WebService service context, recognized client inheritance, and supported framework attributes. Missing identities, attributes, endpoints, metadata, or unambiguous operation alignment remain gaps rather than guessed mappings.
       - Gaps are capped at 50 sites plus one budget marker per document. Missing facts beyond that budget are not evidence of absence.
       - These feature-local gaps do not replace compiler/workspace diagnostics and do not independently claim build failure.
 

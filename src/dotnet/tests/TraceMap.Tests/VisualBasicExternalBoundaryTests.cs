@@ -48,6 +48,10 @@ public sealed class VisualBasicExternalBoundaryTests
             && fact.Properties.GetValueOrDefault("gapKind") == "VisualBasicAsmxServiceMappingUnavailable");
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WcfServiceReferenceMapping
             && fact.ContractElement == "Rate");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AsmxServiceClassDeclared
+            && fact.ContractElement == "RatingSoapService");
+        Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AsmxOperationDeclared
+            && fact.ContractElement == "RateSoap");
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AsmxServiceReferenceMapping
             && fact.ContractElement == "RateSoap"
             && fact.Properties.GetValueOrDefault("surfaceKind") == "asmx-client");
@@ -111,6 +115,20 @@ public sealed class VisualBasicExternalBoundaryTests
     }
 
     [Fact]
+    public void External_boundary_framework_assembly_names_are_bounded()
+    {
+        Assert.True(VisualBasicSemanticExtractor.IsRecognizedConfigurationAssemblyName("System.Configuration.ConfigurationManager"));
+        Assert.True(VisualBasicSemanticExtractor.IsRecognizedConfigurationAssemblyName("System.Configuration"));
+        Assert.False(VisualBasicSemanticExtractor.IsRecognizedConfigurationAssemblyName("System"));
+        Assert.True(VisualBasicSemanticExtractor.IsRecognizedWebRequestAssemblyName("System.Net.Requests"));
+        Assert.True(VisualBasicSemanticExtractor.IsRecognizedWebRequestAssemblyName("System"));
+        Assert.False(VisualBasicSemanticExtractor.IsRecognizedWebRequestAssemblyName("System.Net.WebClient"));
+        Assert.True(VisualBasicSemanticExtractor.IsRecognizedWebClientAssemblyName("System.Net.WebClient"));
+        Assert.True(VisualBasicSemanticExtractor.IsRecognizedWebClientAssemblyName("System"));
+        Assert.False(VisualBasicSemanticExtractor.IsRecognizedWebClientAssemblyName("System.Net.Requests"));
+    }
+
+    [Fact]
     public async Task Vb_external_boundaries_flow_through_packet_docs_recipes_and_handoff_corpus()
     {
         using var temp = new TempDirectory();
@@ -129,6 +147,14 @@ public sealed class VisualBasicExternalBoundaryTests
             && chain.PathEvidence.Any(item => item.RuleId == RuleIds.LegacyWcfMapping));
         Assert.Contains(handlerChains, chain => chain.TerminalKind == "asmx-client"
             && chain.PathEvidence.Any(item => item.RuleId == RuleIds.LegacyAsmxMapping));
+        var asmxMapping = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.AsmxServiceReferenceMapping
+            && fact.ContractElement == "RateSoap");
+        Assert.Contains(scan.Facts, fact => fact.FactType == FactTypes.WebFormsEventFlowProjected
+            && fact.ContractElement == "Fetch_Click"
+            && fact.Properties.GetValueOrDefault("supportingFactIds")?.Contains(asmxMapping.FactId, StringComparison.Ordinal) == true);
+        Assert.Contains(scan.Facts, fact => fact.FactType == FactTypes.WebFormsLogicSignalDetected
+            && fact.ContractElement == "Fetch_Click"
+            && fact.Properties.GetValueOrDefault("staticLogicSignal") == "True");
         var handlerChain = Assert.Single(handlerChains.Where(chain => chain.TerminalKind == "http-client"
             && chain.PathEvidence.Any(item => item.RuleId == RuleIds.HttpClientInvocation)
             && chain.SupportingFactIds.Any(id => httpFactIds.Any(factId => id.EndsWith(factId, StringComparison.Ordinal)))).Take(1));
@@ -183,6 +209,8 @@ public sealed class VisualBasicExternalBoundaryTests
         WriteSupportProject(repo, "AsmxSupport", "System.Web.Services", """
             namespace System.Web.Services
             {
+                [System.AttributeUsage(System.AttributeTargets.Class)]
+                public sealed class WebServiceAttribute : System.Attribute { }
                 [System.AttributeUsage(System.AttributeTargets.Method)]
                 public sealed class WebMethodAttribute : System.Attribute { }
             }
@@ -222,9 +250,14 @@ public sealed class VisualBasicExternalBoundaryTests
             Imports System.Net.Http
 
             <System.ServiceModel.ServiceContract>
-            Public Interface IRatingService
+            Public Interface IBaseRatingService
                 <System.ServiceModel.OperationContract>
                 Function Rate(value As Integer) As String
+            End Interface
+
+            <System.ServiceModel.ServiceContract>
+            Public Interface IRatingService
+                Inherits IBaseRatingService
             End Interface
 
             Public Class RatingClient
@@ -232,15 +265,23 @@ public sealed class VisualBasicExternalBoundaryTests
                 Implements IRatingService
                 Public Sub Fetch()
                 End Sub
-                Public Function Rate(value As Integer) As String Implements IRatingService.Rate
+                Public Function LocalRate(value As Integer) As String Implements IBaseRatingService.Rate
                     Return value.ToString()
                 End Function
             End Class
 
+            <System.Web.Services.WebService>
             Public Class RatingSoapService
                 <System.Web.Services.WebMethod>
                 Public Function RateSoap(value As Integer) As String
                     Return value.ToString()
+                End Function
+            End Class
+
+            Public Class UnrelatedMethods
+                <System.Web.Services.WebMethod>
+                Public Function RateSoap(value As Integer) As String
+                    Return "unrelated"
                 End Function
             End Class
 
@@ -271,7 +312,7 @@ public sealed class VisualBasicExternalBoundaryTests
                     File.WriteAllText("private-file", content)
                     Dim wcf = New RatingClient()
                     wcf.Fetch()
-                    Dim rated = wcf.Rate(42)
+                    Dim rated = wcf.LocalRate(42)
                     Dim soap = New LegacySoapClient()
                     soap.Fetch()
                     Dim soapRated = soap.RateSoap(42)

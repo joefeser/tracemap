@@ -58,10 +58,14 @@ public sealed class VisualBasicDataBoundaryTests
         Assert.Contains(operations, fact => fact.ContractElement == "data-adapter-fill" && fact.Properties["resultKind"] == "data-table");
         Assert.All(operations.Where(fact => fact.ContractElement != "data-adapter-fill"), fact =>
             Assert.Equal(command.Properties["commandReceiverSymbolId"], fact.Properties["receiverSymbolId"]));
+        Assert.DoesNotContain(operations, fact => fact.SourceSymbol?.Contains("RunCustom", StringComparison.Ordinal) == true);
 
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.ObjectCreated && fact.ContractElement == "DataSet");
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.ObjectCreated && fact.ContractElement == "DataTable");
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.CallEdge && fact.ContractElement == "Fill");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WebFormsEventFlowProjected
+            && fact.ContractElement == "Fill_Click"
+            && fact.Properties.GetValueOrDefault("terminalSurfaceKind") == "sql-query");
 
         var allText = JsonSerializer.Serialize(result.Facts);
         Assert.DoesNotContain("select private_secret from private_table", allText, StringComparison.OrdinalIgnoreCase);
@@ -100,7 +104,22 @@ public sealed class VisualBasicDataBoundaryTests
             second.Facts.Select(fact => JsonSerializer.Serialize(fact)));
     }
 
-    private static string CreateAdoRepository(string root, bool includeLateBoundCall)
+    [Fact]
+    public void Unresolved_command_construction_emits_a_gap_without_a_database_claim()
+    {
+        using var temp = new TempDirectory();
+        var repo = CreateAdoRepository(temp.Path, includeLateBoundCall: false, includeMissingCommand: true);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.DatabaseSqlText
+            && fact.Properties.GetValueOrDefault("gapKind") == "VisualBasicAdoNetCommandTypeUnavailable");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.SqlCommandDetected
+            && fact.TargetSymbol?.Contains("MissingSqlCommand", StringComparison.Ordinal) == true);
+    }
+
+    private static string CreateAdoRepository(string root, bool includeLateBoundCall, bool includeMissingCommand = false)
     {
         var repo = Path.Combine(root, "repo");
         Directory.CreateDirectory(repo);
@@ -126,6 +145,9 @@ public sealed class VisualBasicDataBoundaryTests
                 End Sub
             """
             : string.Empty;
+        var missingCommand = includeMissingCommand
+            ? "Dim missing = New MissingSqlCommand()"
+            : string.Empty;
         File.WriteAllText(Path.Combine(repo, "Data.vb"), $$"""
             Imports System.Data
             Imports System.Data.Common
@@ -133,6 +155,19 @@ public sealed class VisualBasicDataBoundaryTests
 
             Public NotInheritable Class TestAdapter
                 Inherits DbDataAdapter
+                Public Overloads Function Fill(value As String) As Integer
+                    Return 0
+                End Function
+            End Class
+
+            Public MustInherit Class CustomCommand
+                Inherits DbCommand
+                Public Overloads Function ExecuteNonQuery(value As String) As Integer
+                    Return 0
+                End Function
+                Public Overloads Function ExecuteReader(value As String) As Object
+                    Return Nothing
+                End Function
             End Class
 
             Public Module DataAccess
@@ -153,10 +188,30 @@ public sealed class VisualBasicDataBoundaryTests
                     adapter.Fill(data)
                     Dim table = New DataTable()
                     adapter.Fill(table)
+                    adapter.Fill("not-a-database-fill")
+                    {{missingCommand}}
+                End Sub
+
+                Public Sub RunCustom(command As CustomCommand)
+                    command.ExecuteNonQuery("not-a-database-execute")
+                    command.ExecuteReader("not-a-database-reader")
                 End Sub
 
             {{lateBound}}
             End Module
+            """);
+        File.WriteAllText(Path.Combine(repo, "Data.aspx"), "<%@ Page Language=\"VB\" CodeBehind=\"Data.aspx.vb\" Inherits=\"DataPage\" %><asp:Button ID=\"Fill\" runat=\"server\" OnClick=\"Fill_Click\" />");
+        File.WriteAllText(Path.Combine(repo, "Data.aspx.vb"), """
+            Imports System
+            Imports System.Data
+
+            Public Partial Class DataPage
+                Protected Sub Fill_Click(sender As Object, e As EventArgs)
+                    Dim adapter = New TestAdapter()
+                    Dim data = New DataSet()
+                    adapter.Fill(data)
+                End Sub
+            End Class
             """);
         Commit(repo);
         return repo;
