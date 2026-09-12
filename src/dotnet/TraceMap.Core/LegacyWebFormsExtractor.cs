@@ -5,6 +5,8 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
+using VB = Microsoft.CodeAnalysis.VisualBasic;
+using VBSyntax = Microsoft.CodeAnalysis.VisualBasic.Syntax;
 
 namespace TraceMap.Core;
 
@@ -20,7 +22,9 @@ public static partial class LegacyWebFormsExtractor
         "OnRowCommand",
         "OnItemCommand",
         "OnLoad",
-        "OnInit"
+        "OnInit",
+        "OnPreRender",
+        "OnUnload"
     };
 
     private static readonly HashSet<string> UiMemberNames = new(StringComparer.Ordinal)
@@ -57,7 +61,7 @@ public static partial class LegacyWebFormsExtractor
         {
             var fact = CreateDesignerFact(manifest, designer);
             facts.Add(fact);
-            designerFactsByPageAndField[SurfaceFieldKey(designer.MarkupFilePath, designer.FieldName)] = fact;
+            designerFactsByPageAndField[SurfaceFieldKey(designer.MarkupFilePath, designer.FieldName, IsVisualBasicPath(designer.FilePath))] = fact;
         }
 
         foreach (var page in context.Pages)
@@ -74,7 +78,7 @@ public static partial class LegacyWebFormsExtractor
             var controlFacts = new List<CodeFact>();
             foreach (var control in page.Controls)
             {
-                var designerFact = designerFactsByPageAndField.GetValueOrDefault(SurfaceFieldKey(page.FilePath, control.ControlId));
+                var designerFact = designerFactsByPageAndField.GetValueOrDefault(SurfaceFieldKey(page.FilePath, control.ControlId, IsVisualBasicPage(page)));
                 var controlFact = CreateControlFact(manifest, page, control, designerFact);
                 facts.Add(controlFact);
                 controlFacts.Add(controlFact);
@@ -85,7 +89,7 @@ public static partial class LegacyWebFormsExtractor
 
             foreach (var binding in page.Bindings)
             {
-                var designerFact = designerFactsByPageAndField.GetValueOrDefault(SurfaceFieldKey(page.FilePath, binding.ControlId));
+                var designerFact = designerFactsByPageAndField.GetValueOrDefault(SurfaceFieldKey(page.FilePath, binding.ControlId, IsVisualBasicPage(page)));
                 var handlerIdentity = binding.BindingKind == WebFormsBindingKind.MarkupEventCandidate
                     ? StructuralHandlerIdentity(page, binding.HandlerName)
                     : ResolveHandlerIdentity(page, binding, context, evidenceIndex);
@@ -148,15 +152,21 @@ public static partial class LegacyWebFormsExtractor
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
             .Select(item => ParseMarkupFile(repoPath, item, inventory, inventoryPathIndex, assemblyRegistrationResolver))
             .ToArray();
+        var linkedVisualBasicPaths = pages
+            .SelectMany(page => new[] { page.LinkedCodePath, page.CodeBehindPath, page.CodeFilePath })
+            .Where(path => path?.EndsWith(".vb", StringComparison.OrdinalIgnoreCase) == true)
+            .Select(path => path!)
+            .ToHashSet(CSharpSemanticExtractor.CreateSourcePathComparer(repoPath));
         var codeFiles = inventory
-            .Where(item => item.Kind is "WebFormsCodeBehind" or "CSharp")
+            .Where(item => item.Kind is "WebFormsCodeBehind" or "CSharp" or "VisualBasicCodeBehind"
+                || (item.Kind == "VisualBasic" && linkedVisualBasicPaths.Contains(item.RelativePath)))
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
             .Select(item => ParseCodeFile(repoPath, item.RelativePath))
             .Where(file => file is not null)
             .Select(file => file!)
             .ToArray();
         var allDesigners = inventory
-            .Where(item => item.Kind == "WebFormsDesigner")
+            .Where(item => item.Kind is "WebFormsDesigner" or "VisualBasicDesigner")
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
             .SelectMany(item => ParseDesignerFile(
                 repoPath,
@@ -165,7 +175,7 @@ public static partial class LegacyWebFormsExtractor
                     ?? MarkupPathForDesigner(item.RelativePath)))
             .ToArray();
         var designers = allDesigners
-            .Where(field => pages.Any(page => PageTypeMatches(page.PageTypeName, field.PageTypeName)))
+            .Where(field => pages.Any(page => PageTypeMatches(page.PageTypeName, field.PageTypeName, IsVisualBasicPath(field.FilePath))))
             .OrderBy(field => field.FilePath, StringComparer.Ordinal)
             .ThenBy(field => field.Line)
             .ThenBy(field => field.FieldName, StringComparer.Ordinal)
@@ -438,6 +448,11 @@ public static partial class LegacyWebFormsExtractor
 
     private static WebFormsCodeFile? ParseCodeFile(string repoPath, string relativePath)
     {
+        if (Path.GetExtension(relativePath).Equals(".vb", StringComparison.OrdinalIgnoreCase))
+        {
+            return ParseVisualBasicCodeFile(repoPath, relativePath);
+        }
+
         try
         {
             var text = File.ReadAllText(Path.Combine(repoPath, relativePath));
@@ -467,8 +482,133 @@ public static partial class LegacyWebFormsExtractor
         }
     }
 
+    private static WebFormsCodeFile? ParseVisualBasicCodeFile(string repoPath, string relativePath)
+    {
+        try
+        {
+            var text = File.ReadAllText(Path.Combine(repoPath, relativePath));
+            var tree = VB.VisualBasicSyntaxTree.ParseText(SourceText.From(text), path: relativePath);
+            var root = (VBSyntax.CompilationUnitSyntax)tree.GetRoot();
+            var methods = root.DescendantNodes()
+                .OfType<VBSyntax.MethodBlockBaseSyntax>()
+                .Select(block => ToVisualBasicMethodInfo(tree, block))
+                .Where(method => method is not null)
+                .Select(method => method!)
+                .OrderBy(method => method.Line)
+                .ThenBy(method => method.MethodName, StringComparer.Ordinal)
+                .ToArray();
+            var subscriptions = new List<WebFormsEventSubscription>();
+            foreach (var method in root.DescendantNodes().OfType<VBSyntax.MethodBlockBaseSyntax>())
+            {
+                if (method.BlockStatement is not VBSyntax.MethodStatementSyntax statement || statement.HandlesClause is null)
+                {
+                    continue;
+                }
+
+                foreach (var item in statement.HandlesClause.Events)
+                {
+                    var span = tree.GetLineSpan(item.Span);
+                    subscriptions.Add(new WebFormsEventSubscription(
+                        relativePath,
+                        VisualBasicQualifiedTypeName(method),
+                        VisualBasicReceiverName(item.EventContainer),
+                        item.EventMember.Identifier.ValueText,
+                        statement.Identifier.ValueText,
+                        span.StartLinePosition.Line + 1,
+                        FactFactory.Hash(item.ToString(), 32),
+                        item.SpanStart,
+                        "Handles",
+                        true,
+                        false));
+                }
+            }
+
+            foreach (var statement in root.DescendantNodes().OfType<VBSyntax.AddRemoveHandlerStatementSyntax>())
+            {
+                var span = tree.GetLineSpan(statement.Span);
+                var (receiver, eventName) = VisualBasicEventName(statement.EventExpression);
+                subscriptions.Add(new WebFormsEventSubscription(
+                    relativePath,
+                    VisualBasicQualifiedTypeName(statement),
+                    receiver,
+                    eventName,
+                    VisualBasicHandlerName(statement.DelegateExpression),
+                    span.StartLinePosition.Line + 1,
+                    FactFactory.Hash(statement.ToString(), 32),
+                    statement.SpanStart,
+                    statement.IsKind(VB.SyntaxKind.AddHandlerStatement) ? "AddHandler" : "RemoveHandler",
+                    statement.IsKind(VB.SyntaxKind.AddHandlerStatement),
+                    VisualBasicReceiverIsShadowed(statement, receiver)));
+            }
+
+            return new WebFormsCodeFile(
+                relativePath,
+                methods,
+                subscriptions.OrderBy(subscription => subscription.Line).ThenBy(subscription => subscription.SyntaxSpanStart).ToArray());
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    private static bool VisualBasicReceiverIsShadowed(
+        VBSyntax.AddRemoveHandlerStatementSyntax statement,
+        string? receiverName)
+    {
+        if (string.IsNullOrWhiteSpace(receiverName))
+        {
+            return false;
+        }
+
+        var method = statement.Ancestors().OfType<VBSyntax.MethodBlockBaseSyntax>().FirstOrDefault();
+        if (method?.BlockStatement is not VBSyntax.MethodStatementSyntax methodStatement)
+        {
+            return false;
+        }
+
+        var pageQualified = statement.EventExpression is VBSyntax.MemberAccessExpressionSyntax eventMember
+            && eventMember.Expression is VBSyntax.MemberAccessExpressionSyntax pageMember
+            && (pageMember.Expression.ToString().Equals("Me", StringComparison.OrdinalIgnoreCase)
+                || pageMember.Expression.ToString().Equals("MyClass", StringComparison.OrdinalIgnoreCase));
+        if (pageQualified && !receiverName.Equals("Page", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (methodStatement.ParameterList?.Parameters.Any(parameter =>
+                   parameter.Identifier.Identifier.ValueText.Equals(receiverName, StringComparison.OrdinalIgnoreCase)) == true
+            || method.DescendantNodes().OfType<VBSyntax.VariableDeclaratorSyntax>()
+                .SelectMany(declaration => declaration.Names)
+                .Any(name => name.Identifier.ValueText.Equals(receiverName, StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        if (!receiverName.Equals("Page", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var containingType = method.Ancestors().OfType<VBSyntax.TypeBlockSyntax>().FirstOrDefault();
+        return containingType is not null && containingType.DescendantNodes()
+            .Where(node => node.Ancestors().OfType<VBSyntax.TypeBlockSyntax>().FirstOrDefault() == containingType)
+            .Any(node => node switch
+            {
+                VBSyntax.FieldDeclarationSyntax field => field.Declarators.SelectMany(declaration => declaration.Names)
+                    .Any(name => name.Identifier.ValueText.Equals(receiverName, StringComparison.OrdinalIgnoreCase)),
+                VBSyntax.PropertyStatementSyntax property => property.Identifier.ValueText.Equals(receiverName, StringComparison.OrdinalIgnoreCase),
+                _ => false
+            });
+    }
+
     private static IReadOnlyList<WebFormsDesignerField> ParseDesignerFile(string repoPath, string relativePath, string markupFilePath)
     {
+        if (Path.GetExtension(relativePath).Equals(".vb", StringComparison.OrdinalIgnoreCase))
+        {
+            return ParseVisualBasicDesignerFile(repoPath, relativePath, markupFilePath);
+        }
+
         try
         {
             var text = File.ReadAllText(Path.Combine(repoPath, relativePath));
@@ -504,6 +644,45 @@ public static partial class LegacyWebFormsExtractor
                 .ThenBy(field => field.Line)
                 .ThenBy(field => field.FieldName, StringComparer.Ordinal)
                 .ToArray();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return [];
+        }
+    }
+
+    private static IReadOnlyList<WebFormsDesignerField> ParseVisualBasicDesignerFile(string repoPath, string relativePath, string markupFilePath)
+    {
+        try
+        {
+            var text = File.ReadAllText(Path.Combine(repoPath, relativePath));
+            var tree = VB.VisualBasicSyntaxTree.ParseText(SourceText.From(text), path: relativePath);
+            var root = (VBSyntax.CompilationUnitSyntax)tree.GetRoot();
+            var fields = new List<WebFormsDesignerField>();
+            foreach (var field in root.DescendantNodes().OfType<VBSyntax.FieldDeclarationSyntax>())
+            {
+                var containingType = VisualBasicQualifiedTypeName(field);
+                foreach (var declarator in field.Declarators)
+                {
+                    var controlType = declarator.AsClause is VBSyntax.SimpleAsClauseSyntax simpleAs
+                        ? simpleAs.Type.ToString()
+                        : string.Empty;
+                    foreach (var name in declarator.Names)
+                    {
+                        var span = tree.GetLineSpan(name.Span);
+                        fields.Add(new WebFormsDesignerField(
+                            relativePath,
+                            markupFilePath,
+                            containingType,
+                            name.Identifier.ValueText,
+                            controlType,
+                            span.StartLinePosition.Line + 1,
+                            Math.Max(span.StartLinePosition.Line + 1, span.EndLinePosition.Line + 1)));
+                    }
+                }
+            }
+
+            return fields.OrderBy(field => field.Line).ThenBy(field => field.FieldName, StringComparer.Ordinal).ToArray();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -556,7 +735,100 @@ public static partial class LegacyWebFormsExtractor
             handlerName,
             span.StartLinePosition.Line + 1,
             FactFactory.Hash(assignment.ToString(), 32),
-            assignment.SpanStart);
+            assignment.SpanStart,
+            "CSharpAddAssignment",
+            true);
+    }
+
+    private static WebFormsMethod? ToVisualBasicMethodInfo(SyntaxTree tree, VBSyntax.MethodBlockBaseSyntax block)
+    {
+        if (block.BlockStatement is not VBSyntax.MethodStatementSyntax statement)
+        {
+            return null;
+        }
+
+        var span = tree.GetLineSpan(block.Span);
+        var parameters = statement.ParameterList?.Parameters ?? default;
+        var hasCommonEventSignature = parameters.Count == 2
+            && IsVisualBasicParameterType(parameters[0], "Object")
+            && IsVisualBasicParameterType(parameters[1], "EventArgs");
+        return new WebFormsMethod(
+            tree.FilePath,
+            VisualBasicQualifiedTypeName(block),
+            statement.Identifier.ValueText,
+            span.StartLinePosition.Line + 1,
+            Math.Max(span.StartLinePosition.Line + 1, span.EndLinePosition.Line + 1),
+            hasCommonEventSignature,
+            block);
+    }
+
+    private static bool IsVisualBasicParameterType(VBSyntax.ParameterSyntax parameter, string expectedType)
+    {
+        if (parameter.AsClause is not VBSyntax.SimpleAsClauseSyntax simple)
+        {
+            return false;
+        }
+
+        var typeName = string.Concat(simple.Type.ToString().Where(character => !char.IsWhiteSpace(character)));
+        if (typeName.StartsWith("Global.", StringComparison.OrdinalIgnoreCase))
+        {
+            typeName = typeName["Global.".Length..];
+        }
+        if (typeName.StartsWith("System.", StringComparison.OrdinalIgnoreCase))
+        {
+            typeName = typeName["System.".Length..];
+        }
+        return typeName.Equals(expectedType, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string VisualBasicQualifiedTypeName(SyntaxNode node)
+    {
+        var typeNames = node.AncestorsAndSelf().OfType<VBSyntax.TypeBlockSyntax>()
+            .Select(type => type.BlockStatement.Identifier.ValueText)
+            .Reverse();
+        var namespaces = node.AncestorsAndSelf().OfType<VBSyntax.NamespaceBlockSyntax>()
+            .Select(ns => ns.NamespaceStatement.Name.ToString())
+            .Reverse();
+        return string.Join(".", namespaces.Concat(typeNames));
+    }
+
+    private static string VisualBasicReceiverName(VBSyntax.ExpressionSyntax expression)
+    {
+        var text = expression.ToString();
+        if (text.Equals("Me", StringComparison.OrdinalIgnoreCase) || text.Equals("MyClass", StringComparison.OrdinalIgnoreCase)) return "this";
+        if (text.Equals("MyBase", StringComparison.OrdinalIgnoreCase)) return "base";
+        if (expression is VBSyntax.MemberAccessExpressionSyntax member
+            && (member.Expression.ToString().Equals("Me", StringComparison.OrdinalIgnoreCase)
+                || member.Expression.ToString().Equals("MyClass", StringComparison.OrdinalIgnoreCase)))
+        {
+            return member.Name.Identifier.ValueText;
+        }
+        return SafeIdentifier(text) ?? "unsupported-receiver";
+    }
+
+    private static (string? Receiver, string EventName) VisualBasicEventName(VBSyntax.ExpressionSyntax expression) => expression switch
+    {
+        VBSyntax.MemberAccessExpressionSyntax member => (VisualBasicReceiverName(member.Expression), member.Name.Identifier.ValueText),
+        VBSyntax.IdentifierNameSyntax identifier => (null, identifier.Identifier.ValueText),
+        _ => ("unsupported-receiver", string.Empty)
+    };
+
+    private static string? VisualBasicHandlerName(VBSyntax.ExpressionSyntax expression)
+    {
+        if (expression is not VBSyntax.UnaryExpressionSyntax unary || !unary.IsKind(VB.SyntaxKind.AddressOfExpression))
+        {
+            return null;
+        }
+        expression = unary.Operand;
+
+        return expression switch
+        {
+            VBSyntax.IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+            VBSyntax.MemberAccessExpressionSyntax member
+                when member.Expression.ToString().Equals("Me", StringComparison.OrdinalIgnoreCase)
+                    || member.Expression.ToString().Equals("MyClass", StringComparison.OrdinalIgnoreCase) => member.Name.Identifier.ValueText,
+            _ => null
+        };
     }
 
     private static string? StaticSubscriptionReceiver(ExpressionSyntax expression)
@@ -587,8 +859,8 @@ public static partial class LegacyWebFormsExtractor
             var unprovenCrossFile = context.CodeFiles
                 .Where(file => page.LinkedCodePath is null || !file.FilePath.Equals(page.LinkedCodePath, StringComparison.Ordinal))
                 .SelectMany(file => file.Methods)
-                .Any(method => method.MethodName.Equals(binding.HandlerName, StringComparison.Ordinal)
-                    && PageTypeMatches(page.PageTypeName, method.PageTypeName));
+                .Any(method => IdentifierEquals(method.MethodName, binding.HandlerName, IsVisualBasicMethod(method))
+                    && PageTypeMatches(page.PageTypeName, method.PageTypeName, IsVisualBasicMethod(method)));
             facts.Add(CreateGap(
                 manifest,
                 binding.FilePath,
@@ -673,8 +945,8 @@ public static partial class LegacyWebFormsExtractor
         var linked = context.CodeFiles
             .Where(file => file.FilePath.Equals(linkedCodePath, StringComparison.Ordinal))
             .SelectMany(file => file.Methods)
-            .Where(method => method.MethodName.Equals(handlerName, StringComparison.Ordinal))
-            .Where(method => PageTypeMatches(page.PageTypeName, method.PageTypeName))
+            .Where(method => IdentifierEquals(method.MethodName, handlerName, IsVisualBasicMethod(method)))
+            .Where(method => PageTypeMatches(page.PageTypeName, method.PageTypeName, IsVisualBasicMethod(method)))
             .OrderBy(method => method.FilePath, StringComparer.Ordinal)
             .ThenBy(method => method.Line)
             .ToArray();
@@ -688,10 +960,10 @@ public static partial class LegacyWebFormsExtractor
         return context.CodeFiles
             .Where(file => !file.FilePath.Equals(linkedCodePath, StringComparison.Ordinal))
             .SelectMany(file => file.Methods)
-            .Where(method => method.MethodName.Equals(handlerName, StringComparison.Ordinal))
-            .Where(method => PageTypeMatches(page.PageTypeName, method.PageTypeName))
+            .Where(method => IdentifierEquals(method.MethodName, handlerName, IsVisualBasicMethod(method)))
+            .Where(method => PageTypeMatches(page.PageTypeName, method.PageTypeName, IsVisualBasicMethod(method)))
             .Where(method => FindSemanticHandlerEvidence(method, evidenceIndex.FactsForFile(method.FilePath), linkedProjectPaths) is { } semantic
-                && SemanticHandlerTypeMatches(page.PageTypeName, semantic.SourceSymbol, method.MethodName))
+                && SemanticHandlerTypeMatches(page.PageTypeName, SemanticHandlerSymbol(semantic), method.MethodName, IsVisualBasicMethod(method)))
             .OrderBy(method => method.FilePath, StringComparer.Ordinal)
             .ThenBy(method => method.Line)
             .ToArray();
@@ -712,13 +984,26 @@ public static partial class LegacyWebFormsExtractor
         var subscriptions = context.CodeFiles
             .Where(file => file.FilePath.Equals(page.LinkedCodePath, StringComparison.Ordinal))
             .SelectMany(file => file.Subscriptions)
-            .Where(subscription => PageTypeMatches(page.PageTypeName, subscription.ContainingTypeName))
+            .Where(subscription => PageTypeMatches(page.PageTypeName, subscription.ContainingTypeName, IsVisualBasicPath(subscription.FilePath)))
             .ToArray();
         foreach (var subscription in subscriptions)
         {
-            var lifecycleReceiver = subscription.ReceiverName is null or "this" or "base" or "Page";
+            if (!subscription.IsAttach)
+            {
+                continue;
+            }
+
+            var isVisualBasic = IsVisualBasicPath(subscription.FilePath);
+            if (isVisualBasic && HasRejectingVisualBasicEventGap(subscription, evidenceIndex))
+            {
+                continue;
+            }
+            var lifecycleReceiver = subscription.ReceiverName is null
+                || IdentifierEquals(subscription.ReceiverName, "this", isVisualBasic)
+                || IdentifierEquals(subscription.ReceiverName, "base", isVisualBasic)
+                || IdentifierEquals(subscription.ReceiverName, "Page", isVisualBasic);
             var eventAttributeName = "On" + subscription.EventName;
-            if (!SupportedEvents.Contains(eventAttributeName))
+            if (!TryCanonicalSupportedEvent(eventAttributeName, isVisualBasic, out eventAttributeName))
             {
                 var hasPlausibleEventHandler = subscription.HandlerName is not null
                     && CandidateMethods(page, subscription.HandlerName, context, evidenceIndex)
@@ -737,6 +1022,12 @@ public static partial class LegacyWebFormsExtractor
                 continue;
             }
 
+            if (isVisualBasic && subscription.ReceiverMayBeShadowed)
+            {
+                facts.Add(CreateGap(manifest, subscription.FilePath, subscription.Line, "AmbiguousVisualBasicWebFormsEventSubscriptionReceiver", "A local or parameter shadows the linked page or control receiver; TraceMap did not project a name-only Web Forms binding."));
+                continue;
+            }
+
             if (lifecycleReceiver)
             {
                 var lifecycleBinding = new WebFormsBinding(
@@ -749,7 +1040,8 @@ public static partial class LegacyWebFormsExtractor
                     null,
                     subscription.SnippetHash,
                     WebFormsBindingKind.ExplicitLifecycleSubscription,
-                    subscription.SyntaxSpanStart);
+                    subscription.SyntaxSpanStart,
+                    subscription.WiringKind);
                 var lifecycleBindingFact = CreateEventBindingFact(
                     manifest,
                     page,
@@ -762,7 +1054,7 @@ public static partial class LegacyWebFormsExtractor
             }
 
             var controls = page.Controls
-                .Where(control => control.ControlId.Equals(subscription.ReceiverName, StringComparison.Ordinal))
+                .Where(control => IdentifierEquals(control.ControlId, subscription.ReceiverName, IsVisualBasicPath(subscription.FilePath)))
                 .OrderBy(control => control.Line)
                 .ToArray();
             if (controls.Length == 0)
@@ -778,6 +1070,11 @@ public static partial class LegacyWebFormsExtractor
             }
 
             var control = controls[0];
+            if (isVisualBasic && !VisualBasicReceiverMatchesControl(subscription, control, page, context, evidenceIndex))
+            {
+                facts.Add(CreateGap(manifest, subscription.FilePath, subscription.Line, "MismatchedVisualBasicWebFormsEventSubscriptionReceiver", "The compiler-resolved Visual Basic event receiver type does not match the linked markup control; TraceMap did not project a name-only Web Forms binding."));
+                continue;
+            }
             var binding = new WebFormsBinding(
                 control.ControlType,
                 control.ControlId,
@@ -788,7 +1085,8 @@ public static partial class LegacyWebFormsExtractor
                 control.Line,
                 subscription.SnippetHash,
                 WebFormsBindingKind.ExplicitControlSubscription,
-                subscription.SyntaxSpanStart);
+                subscription.SyntaxSpanStart,
+                subscription.WiringKind);
             var bindingFact = CreateEventBindingFact(manifest, page, binding, null, ResolveHandlerIdentity(page, binding, context, evidenceIndex));
             facts.Add(bindingFact);
             AddHandlerResolutionFacts(manifest, page, binding, bindingFact, context, evidenceIndex, facts);
@@ -1138,7 +1436,7 @@ public static partial class LegacyWebFormsExtractor
         var methods = context.CodeFiles
             .Where(file => file.FilePath.Equals(page.LinkedCodePath, StringComparison.Ordinal))
             .SelectMany(file => file.Methods)
-            .Where(method => PageTypeMatches(page.PageTypeName, method.PageTypeName))
+            .Where(method => PageTypeMatches(page.PageTypeName, method.PageTypeName, IsVisualBasicMethod(method)))
             .OrderBy(method => method.Line)
             .ThenBy(method => method.MethodName, StringComparer.Ordinal)
             .ToArray();
@@ -1156,12 +1454,21 @@ public static partial class LegacyWebFormsExtractor
         CodeFact pageFact,
         List<CodeFact> facts)
     {
-        if (method.MethodName is not ("Page_Init" or "Page_Load" or "Page_PreRender"))
+        var isVisualBasic = IsVisualBasicMethod(method);
+        if (!(IdentifierEquals(method.MethodName, "Page_Init", isVisualBasic)
+              || IdentifierEquals(method.MethodName, "Page_Load", isVisualBasic)
+              || IdentifierEquals(method.MethodName, "Page_PreRender", isVisualBasic)))
         {
             return;
         }
 
-        foreach (var statement in method.Declaration.DescendantNodes().OfType<IfStatementSyntax>())
+        if (method.Declaration is not MethodDeclarationSyntax csharpMethod)
+        {
+            AddVisualBasicLifecycleContextFacts(manifest, page, method, pageFact, facts);
+            return;
+        }
+
+        foreach (var statement in csharpMethod.DescendantNodes().OfType<IfStatementSyntax>())
         {
             if (!ContainsIsPostBack(statement.Condition))
             {
@@ -1169,7 +1476,7 @@ public static partial class LegacyWebFormsExtractor
             }
 
             var line = statement.SyntaxTree.GetLineSpan(statement.Condition.Span).StartLinePosition.Line + 1;
-            if (HasLocalIsPostBackShadow(method.Declaration))
+            if (HasLocalIsPostBackShadow(csharpMethod))
             {
                 facts.Add(CreateGap(manifest, method.FilePath, line, "AmbiguousWebFormsIsPostBackReceiver", "A local or parameter shadows IsPostBack in this method; TraceMap did not treat the condition as Page lifecycle evidence."));
                 continue;
@@ -1209,6 +1516,130 @@ public static partial class LegacyWebFormsExtractor
         }
     }
 
+    private static void AddVisualBasicLifecycleContextFacts(
+        ScanManifest manifest,
+        WebFormsPage page,
+        WebFormsMethod method,
+        CodeFact pageFact,
+        List<CodeFact> facts)
+    {
+        foreach (var condition in method.Declaration.DescendantNodes()
+            .Select(node => node switch
+            {
+                VBSyntax.MultiLineIfBlockSyntax block => block.IfStatement.Condition,
+                VBSyntax.SingleLineIfStatementSyntax single => single.Condition,
+                _ => null
+            })
+            .Where(condition => condition is not null)
+            .Select(condition => condition!))
+        {
+            if (!TryClassifyVisualBasicPostBackCondition(condition, out var isNegative, out var isUnqualified))
+            {
+                if (condition.ToString().Contains("IsPostBack", StringComparison.OrdinalIgnoreCase))
+                {
+                    var line = condition.SyntaxTree.GetLineSpan(condition.Span).StartLinePosition.Line + 1;
+                    facts.Add(CreateGap(manifest, method.FilePath, line, "UnsupportedWebFormsIsPostBackCondition", "A VB IsPostBack condition is visible but outside the bounded positive or negated shape."));
+                }
+                continue;
+            }
+
+            var span = condition.SyntaxTree.GetLineSpan(condition.Span);
+            var lineNumber = span.StartLinePosition.Line + 1;
+            if (isUnqualified && HasVisualBasicIsPostBackShadow(method.Declaration))
+            {
+                facts.Add(CreateGap(manifest, method.FilePath, lineNumber, "AmbiguousWebFormsIsPostBackReceiver", "A VB local, parameter, or containing-type member shadows unqualified IsPostBack; TraceMap did not treat the condition as Page lifecycle evidence."));
+                continue;
+            }
+            var sourceIdentity = StructuralHandlerIdentity(page, method.MethodName, method.FilePath, method.Line);
+            var branchKind = isNegative ? "not-is-postback" : "is-postback";
+            facts.Add(CreateStaticCompositionFact(
+                manifest,
+                FactTypes.WebFormsLifecycleBranchCandidate,
+                RuleIds.LegacyWebFormsLifecycleContext,
+                EvidenceTiers.Tier3SyntaxOrTextual,
+                method.FilePath,
+                lineNumber,
+                FactFactory.Hash(condition.ToString(), 32),
+                sourceIdentity,
+                $"webforms-lifecycle-branch:{FactFactory.Hash($"{sourceIdentity}|{branchKind}|{lineNumber}", 24)}",
+                isNegative ? "NotIsPostBackBranch" : "IsPostBackBranch",
+                "bounded-static-webforms-lifecycle-context",
+                "VB syntax establishes only a bounded IsPostBack branch candidate; it does not prove lifecycle execution, ordering, or runtime state.",
+                [pageFact.FactId],
+                new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["branchContext"] = $"{branchKind}-syntax",
+                    ["lifecycleMethod"] = method.MethodName,
+                    ["language"] = "Visual Basic"
+                },
+                Math.Max(lineNumber, span.EndLinePosition.Line + 1)));
+        }
+    }
+
+    private static bool TryClassifyVisualBasicPostBackCondition(
+        VBSyntax.ExpressionSyntax expression,
+        out bool isNegative,
+        out bool isUnqualified)
+    {
+        isNegative = false;
+        isUnqualified = false;
+        expression = expression is VBSyntax.ParenthesizedExpressionSyntax parenthesized
+            ? parenthesized.Expression
+            : expression;
+        if (expression is VBSyntax.UnaryExpressionSyntax unary && unary.IsKind(VB.SyntaxKind.NotExpression))
+        {
+            isNegative = true;
+            expression = unary.Operand is VBSyntax.ParenthesizedExpressionSyntax operandParenthesized
+                ? operandParenthesized.Expression
+                : unary.Operand;
+        }
+
+        if (expression is VBSyntax.IdentifierNameSyntax identifier
+            && identifier.Identifier.ValueText.Equals("IsPostBack", StringComparison.OrdinalIgnoreCase))
+        {
+            isUnqualified = true;
+            return true;
+        }
+
+        return expression is VBSyntax.MemberAccessExpressionSyntax
+        {
+            Expression: VBSyntax.MeExpressionSyntax or VBSyntax.MyBaseExpressionSyntax,
+            Name: VBSyntax.IdentifierNameSyntax member
+        } && member.Identifier.ValueText.Equals("IsPostBack", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HasVisualBasicIsPostBackShadow(SyntaxNode methodDeclaration)
+    {
+        static bool IsPostBack(string name) => name.Equals("IsPostBack", StringComparison.OrdinalIgnoreCase);
+
+        if (methodDeclaration is VBSyntax.MethodBlockBaseSyntax method
+            && method.BlockStatement is VBSyntax.MethodStatementSyntax statement
+            && (statement.ParameterList?.Parameters.Any(parameter => IsPostBack(parameter.Identifier.Identifier.ValueText)) ?? false))
+        {
+            return true;
+        }
+
+        if (methodDeclaration.DescendantNodes().OfType<VBSyntax.LocalDeclarationStatementSyntax>()
+            .SelectMany(local => local.Declarators)
+            .SelectMany(declarator => declarator.Names)
+            .Any(name => IsPostBack(name.Identifier.ValueText)))
+        {
+            return true;
+        }
+
+        var containingType = methodDeclaration.Ancestors().OfType<VBSyntax.TypeBlockSyntax>().FirstOrDefault();
+        return containingType is not null && containingType.Members.Any(member => member switch
+        {
+            VBSyntax.FieldDeclarationSyntax field => field.Declarators.SelectMany(declarator => declarator.Names).Any(name => IsPostBack(name.Identifier.ValueText)),
+            VBSyntax.PropertyStatementSyntax property => IsPostBack(property.Identifier.ValueText),
+            VBSyntax.PropertyBlockSyntax property => IsPostBack(property.PropertyStatement.Identifier.ValueText),
+            VBSyntax.MethodStatementSyntax candidate => IsPostBack(candidate.Identifier.ValueText),
+            VBSyntax.MethodBlockBaseSyntax candidate when candidate.BlockStatement is VBSyntax.MethodStatementSyntax candidateStatement => IsPostBack(candidateStatement.Identifier.ValueText),
+            VBSyntax.EventStatementSyntax eventStatement => IsPostBack(eventStatement.Identifier.ValueText),
+            _ => false
+        });
+    }
+
     private static void AddClientScriptFacts(
         ScanManifest manifest,
         WebFormsPage page,
@@ -1218,6 +1649,11 @@ public static partial class LegacyWebFormsExtractor
         IReadOnlyDictionary<string, WebFormsControl[]> controlsById,
         List<CodeFact> facts)
     {
+        if (method.Declaration is not MethodDeclarationSyntax csharpMethod)
+        {
+            return;
+        }
+
         foreach (var invocation in method.Declaration.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
             var methodName = InvocationName(invocation);
@@ -1227,7 +1663,7 @@ public static partial class LegacyWebFormsExtractor
             }
 
             var line = invocation.SyntaxTree.GetLineSpan(invocation.Span).StartLinePosition.Line + 1;
-            if (!HasSupportedClientScriptReceiver(invocation, method.Declaration))
+            if (!HasSupportedClientScriptReceiver(invocation, csharpMethod))
             {
                 facts.Add(CreateGap(manifest, method.FilePath, line, "AmbiguousWebFormsClientScriptRegistrationReceiver", "A client-script-like method name has no supported Page, ClientScript, or ScriptManager receiver; TraceMap did not classify it as a registration."));
                 continue;
@@ -1588,7 +2024,7 @@ public static partial class LegacyWebFormsExtractor
         }
 
         var method = candidates[0];
-        return FindSemanticHandlerEvidence(method, evidenceIndex.FactsForFile(method.FilePath), FindLinkedProjectPaths(page, evidenceIndex))?.Properties.GetValueOrDefault("sourceSymbolId")
+        return SemanticHandlerSymbolId(FindSemanticHandlerEvidence(method, evidenceIndex.FactsForFile(method.FilePath), FindLinkedProjectPaths(page, evidenceIndex)))
             ?? StructuralHandlerIdentity(page, method.MethodName, method.FilePath, method.Line);
     }
 
@@ -1601,7 +2037,7 @@ public static partial class LegacyWebFormsExtractor
     {
         var surfaceIdentity = SurfaceIdentity(page.FilePath);
         var control = page.Controls.FirstOrDefault(candidate =>
-            candidate.ControlId.Equals(binding.ControlId, StringComparison.Ordinal)
+            IdentifierEquals(candidate.ControlId, binding.ControlId, IsVisualBasicPath(binding.FilePath))
             && candidate.ControlType.Equals(binding.ControlType, StringComparison.Ordinal)
             && candidate.Line == binding.ControlLine);
         var sourceIdentity = control is null
@@ -1631,6 +2067,10 @@ public static partial class LegacyWebFormsExtractor
         if (binding.SyntaxSpanStart is not null)
         {
             properties["syntaxSpanStart"] = binding.SyntaxSpanStart.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+        if (!string.IsNullOrWhiteSpace(binding.WiringKind))
+        {
+            properties["wiringKind"] = binding.WiringKind;
         }
 
         return FactFactory.Create(
@@ -1682,11 +2122,11 @@ public static partial class LegacyWebFormsExtractor
             FindLinkedProjectPaths(page, evidenceIndex));
         var tier = semanticEvidence is not null
             ? EvidenceTiers.Tier1Semantic
-            : method.HasCommonEventSignature && PageTypeMatches(page.PageTypeName, method.PageTypeName)
+            : method.HasCommonEventSignature && PageTypeMatches(page.PageTypeName, method.PageTypeName, IsVisualBasicMethod(method))
                 ? EvidenceTiers.Tier2Structural
                 : EvidenceTiers.Tier3SyntaxOrTextual;
-        var handlerSymbol = semanticEvidence?.SourceSymbol ?? $"{method.PageTypeName}.{method.MethodName}";
-        var handlerSymbolId = semanticEvidence?.Properties.GetValueOrDefault("sourceSymbolId")
+        var handlerSymbol = SemanticHandlerSymbol(semanticEvidence) ?? $"{method.PageTypeName}.{method.MethodName}";
+        var handlerSymbolId = SemanticHandlerSymbolId(semanticEvidence)
             ?? StructuralHandlerIdentity(page, method.MethodName, method.FilePath, method.Line);
         var eventSourceIdentity = bindingFact.SourceSymbol ?? SurfaceIdentity(page.FilePath);
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
@@ -1806,7 +2246,7 @@ public static partial class LegacyWebFormsExtractor
     {
         var handlerName = resolution.Properties.GetValueOrDefault("handlerName") ?? resolution.ContractElement ?? string.Empty;
         var methodPath = resolution.Evidence.FilePath;
-        var method = context.CodeFiles.FirstOrDefault(file => file.FilePath.Equals(methodPath, StringComparison.Ordinal))?.Methods.FirstOrDefault(method => method.MethodName.Equals(handlerName, StringComparison.Ordinal)
+        var method = context.CodeFiles.FirstOrDefault(file => file.FilePath.Equals(methodPath, StringComparison.Ordinal))?.Methods.FirstOrDefault(method => IdentifierEquals(method.MethodName, handlerName, IsVisualBasicMethod(method))
             && method.Line == resolution.Evidence.StartLine && method.EndLine == resolution.Evidence.EndLine);
         if (method is null)
         {
@@ -1817,12 +2257,26 @@ public static partial class LegacyWebFormsExtractor
             .Where(fact => IsDirectHandlerEvidence(fact, resolution))
             .ToArray();
         var hasBackend = directFacts.Any(IsTerminalSurfaceFact) || WcfMappingsForCalls(wcfMappings, directFacts).Any();
-        var hasLogic = hasBackend
-            || method.Declaration.DescendantNodes().Any(node => node is IfStatementSyntax or SwitchStatementSyntax or ConditionalExpressionSyntax)
-            || method.Declaration.DescendantNodes().OfType<BinaryExpressionSyntax>().Any(binary => binary.IsKind(SyntaxKind.MultiplyExpression) || binary.IsKind(SyntaxKind.DivideExpression) || binary.IsKind(SyntaxKind.ModuloExpression))
-            || method.Declaration.DescendantNodes().OfType<ObjectCreationExpressionSyntax>().Any(creation => !LooksLikeUiType(creation.Type.ToString()));
-        var hasUiOnly = method.Declaration.DescendantNodes().OfType<AssignmentExpressionSyntax>().Any(IsUiAssignment)
-            || method.Declaration.DescendantNodes().OfType<InvocationExpressionSyntax>().Any(invocation => InvocationName(invocation).Equals("DataBind", StringComparison.Ordinal));
+        var hasLogic = hasBackend;
+        var hasUiOnly = false;
+        if (method.Declaration is MethodDeclarationSyntax csharpMethod)
+        {
+            hasLogic = hasLogic
+                || csharpMethod.DescendantNodes().Any(node => node is IfStatementSyntax or SwitchStatementSyntax or ConditionalExpressionSyntax)
+                || csharpMethod.DescendantNodes().OfType<BinaryExpressionSyntax>().Any(binary => binary.IsKind(SyntaxKind.MultiplyExpression) || binary.IsKind(SyntaxKind.DivideExpression) || binary.IsKind(SyntaxKind.ModuloExpression))
+                || csharpMethod.DescendantNodes().OfType<ObjectCreationExpressionSyntax>().Any(creation => !LooksLikeUiType(creation.Type.ToString()));
+            hasUiOnly = csharpMethod.DescendantNodes().OfType<AssignmentExpressionSyntax>().Any(IsUiAssignment)
+                || csharpMethod.DescendantNodes().OfType<InvocationExpressionSyntax>().Any(invocation => InvocationName(invocation).Equals("DataBind", StringComparison.Ordinal));
+        }
+        else
+        {
+            hasLogic = hasLogic || method.Declaration.DescendantNodes().Any(node => node is VBSyntax.IfStatementSyntax or VBSyntax.SelectBlockSyntax);
+            hasUiOnly = method.Declaration.DescendantNodes().OfType<VBSyntax.AssignmentStatementSyntax>().Any(assignment =>
+                    assignment.Left is VBSyntax.MemberAccessExpressionSyntax member && UiMemberNames.Any(name => name.Equals(member.Name.Identifier.ValueText, StringComparison.OrdinalIgnoreCase)))
+                || method.Declaration.DescendantNodes().OfType<VBSyntax.InvocationExpressionSyntax>().Any(invocation =>
+                    invocation.Expression is VBSyntax.IdentifierNameSyntax identifier && identifier.Identifier.ValueText.Equals("DataBind", StringComparison.OrdinalIgnoreCase)
+                    || invocation.Expression is VBSyntax.MemberAccessExpressionSyntax member && member.Name.Identifier.ValueText.Equals("DataBind", StringComparison.OrdinalIgnoreCase));
+        }
         if (!hasLogic && !hasUiOnly)
         {
             return null;
@@ -1860,6 +2314,7 @@ public static partial class LegacyWebFormsExtractor
         // A member name is only an index hint, never proof of handler ownership.
         var handlerName = resolution.Properties.GetValueOrDefault("handlerName") ?? resolution.ContractElement ?? string.Empty;
         var handlerSymbol = resolution.Properties.GetValueOrDefault("handlerSymbol") ?? string.Empty;
+        var comparison = IdentifierComparison(IsVisualBasicPath(resolution.Evidence.FilePath));
         var sameFile = fact.Evidence.FilePath.Equals(resolution.Evidence.FilePath, StringComparison.Ordinal);
         if (!sameFile || fact.Evidence.StartLine < resolution.Evidence.StartLine
             || fact.Evidence.EndLine > resolution.Evidence.EndLine)
@@ -1877,22 +2332,22 @@ public static partial class LegacyWebFormsExtractor
 
         if (!string.IsNullOrWhiteSpace(fact.SourceSymbol))
         {
-            if (fact.SourceSymbol.Equals(handlerSymbol, StringComparison.Ordinal)
-                || fact.SourceSymbol.Equals(handlerName, StringComparison.Ordinal))
+            if (fact.SourceSymbol.Equals(handlerSymbol, comparison)
+                || fact.SourceSymbol.Equals(handlerName, comparison))
             {
                 return true;
             }
         }
 
-        if (fact.Properties.GetValueOrDefault("callerSymbol")?.Equals(handlerSymbol, StringComparison.Ordinal) ?? false)
+        if (fact.Properties.GetValueOrDefault("callerSymbol")?.Equals(handlerSymbol, comparison) ?? false)
         {
             return true;
         }
 
         return sameFile
-            && ((fact.Properties.GetValueOrDefault("callerName")?.Equals(handlerName, StringComparison.Ordinal) ?? false)
-                || (fact.Properties.GetValueOrDefault("containingMember")?.Equals(handlerName, StringComparison.Ordinal) ?? false)
-                || (fact.Properties.GetValueOrDefault("containingMethod")?.Equals(handlerName, StringComparison.Ordinal) ?? false));
+            && ((fact.Properties.GetValueOrDefault("callerName")?.Equals(handlerName, comparison) ?? false)
+                || (fact.Properties.GetValueOrDefault("containingMember")?.Equals(handlerName, comparison) ?? false)
+                || (fact.Properties.GetValueOrDefault("containingMethod")?.Equals(handlerName, comparison) ?? false));
     }
 
     private static bool IsTerminalSurfaceFact(CodeFact fact)
@@ -1919,22 +2374,92 @@ public static partial class LegacyWebFormsExtractor
         return context.CodeFiles
             .Where(file => page.LinkedCodePath is null || file.FilePath.Equals(page.LinkedCodePath, StringComparison.Ordinal))
             .SelectMany(file => file.Subscriptions)
-            .Where(subscription => PageTypeMatches(page.PageTypeName, subscription.ContainingTypeName))
+            .Where(subscription => PageTypeMatches(page.PageTypeName, subscription.ContainingTypeName, IsVisualBasicPath(subscription.FilePath)))
             .Any(subscription => EventSubscriptionMatches(subscription, eventMemberName, handlerName));
     }
 
     private static bool EventSubscriptionMatches(WebFormsEventSubscription subscription, string eventMemberName, string handlerName)
     {
-        var left = subscription.EventName;
-        var right = subscription.HandlerName;
-        if (right is null || subscription.ReceiverName is not (null or "this" or "base" or "Page"))
+        if (!subscription.IsAttach || subscription.ReceiverMayBeShadowed)
         {
             return false;
         }
-        return (left.Equals(eventMemberName, StringComparison.Ordinal)
-                || left.EndsWith("." + eventMemberName, StringComparison.Ordinal))
-            && (right.Equals(handlerName, StringComparison.Ordinal)
-                || right.EndsWith("." + handlerName, StringComparison.Ordinal));
+
+        var left = subscription.EventName;
+        var right = subscription.HandlerName;
+        var isVisualBasic = IsVisualBasicPath(subscription.FilePath);
+        if (right is null || subscription.ReceiverName is not null
+            && !IdentifierEquals(subscription.ReceiverName, "this", isVisualBasic)
+            && !IdentifierEquals(subscription.ReceiverName, "base", isVisualBasic)
+            && !IdentifierEquals(subscription.ReceiverName, "Page", isVisualBasic))
+        {
+            return false;
+        }
+        var comparison = IdentifierComparison(isVisualBasic);
+        return (left.Equals(eventMemberName, comparison)
+                || left.EndsWith("." + eventMemberName, comparison))
+            && (right.Equals(handlerName, comparison)
+                || right.EndsWith("." + handlerName, comparison));
+    }
+
+    private static bool HasRejectingVisualBasicEventGap(
+        WebFormsEventSubscription subscription,
+        WebFormsEvidenceIndex evidenceIndex)
+    {
+        return evidenceIndex.FactsForFile(subscription.FilePath).Any(fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.VisualBasicSemanticEventWiring
+            && fact.Evidence.StartLine == subscription.Line
+            && fact.Properties.GetValueOrDefault("siteHash")?.Equals(subscription.SnippetHash, StringComparison.Ordinal) == true
+            && fact.Properties.GetValueOrDefault("gapKind") is "UnsupportedVisualBasicEventHandlerDelegate" or "InvalidVisualBasicHandlesBinding");
+    }
+
+    private static bool VisualBasicReceiverMatchesControl(
+        WebFormsEventSubscription subscription,
+        WebFormsControl control,
+        WebFormsPage page,
+        WebFormsContext context,
+        WebFormsEvidenceIndex evidenceIndex)
+    {
+        var semanticBinding = evidenceIndex.FactsForFile(subscription.FilePath).FirstOrDefault(fact =>
+            fact.FactType == FactTypes.VisualBasicEventBindingDeclared
+            && fact.RuleId == RuleIds.VisualBasicSemanticEventWiring
+            && fact.Evidence.StartLine == subscription.Line
+            && fact.Evidence.SnippetHash?.Equals(subscription.SnippetHash, StringComparison.Ordinal) == true);
+        var receiverTypeName = semanticBinding?.Properties.GetValueOrDefault("receiverTypeName");
+        if (string.IsNullOrWhiteSpace(receiverTypeName))
+        {
+            return true;
+        }
+
+        var designerTypes = context.Designers
+            .Where(field => field.MarkupFilePath.Equals(page.FilePath, StringComparison.Ordinal)
+                && IdentifierEquals(field.FieldName, control.ControlId, true))
+            .Select(field => field.ControlType)
+            .Where(type => !string.IsNullOrWhiteSpace(type))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (designerTypes.Length == 1)
+        {
+            var receiverTypeDisplayName = semanticBinding!.Properties.GetValueOrDefault("receiverTypeDisplayName") ?? receiverTypeName;
+            return VisualBasicTypeNameMatches(receiverTypeDisplayName, designerTypes[0]);
+        }
+
+        return IdentifierEquals(receiverTypeName, control.ControlType, true);
+    }
+
+    private static bool VisualBasicTypeNameMatches(string left, string right)
+    {
+        static string Normalize(string value) => value.StartsWith("Global.", StringComparison.OrdinalIgnoreCase)
+            ? value["Global.".Length..]
+            : value;
+        left = Normalize(left);
+        right = Normalize(right);
+        return left.Equals(right, StringComparison.OrdinalIgnoreCase)
+            || (!left.Contains('.', StringComparison.Ordinal)
+                && left.Equals(right[(right.LastIndexOf('.') + 1)..], StringComparison.OrdinalIgnoreCase))
+            || (!right.Contains('.', StringComparison.Ordinal)
+                && right.Equals(left[(left.LastIndexOf('.') + 1)..], StringComparison.OrdinalIgnoreCase));
     }
 
     private static IEnumerable<CodeFact> WcfMappingsForCalls(IReadOnlyList<CodeFact> wcfMappings, IReadOnlyList<CodeFact> directFacts)
@@ -1960,6 +2485,7 @@ public static partial class LegacyWebFormsExtractor
         IReadOnlyList<CodeFact> existingFacts,
         IReadOnlySet<string>? allowedProjectPaths = null)
     {
+        var comparison = IdentifierComparison(IsVisualBasicMethod(method));
         return existingFacts
             .Where(fact => fact.EvidenceTier == EvidenceTiers.Tier1Semantic
                 && fact.Evidence.FilePath.Equals(method.FilePath, StringComparison.Ordinal)
@@ -1967,13 +2493,23 @@ public static partial class LegacyWebFormsExtractor
                     || (!string.IsNullOrWhiteSpace(fact.ProjectPath) && allowedProjectPaths.Contains(fact.ProjectPath)))
                 && fact.Evidence.StartLine >= method.Line
                 && fact.Evidence.StartLine <= method.EndLine
-                && !string.IsNullOrWhiteSpace(fact.SourceSymbol)
-                && !string.IsNullOrWhiteSpace(fact.Properties.GetValueOrDefault("sourceSymbolId"))
-                && (fact.SourceSymbol.EndsWith("." + method.MethodName, StringComparison.Ordinal)
-                    || fact.SourceSymbol.Contains("." + method.MethodName + "(", StringComparison.Ordinal)))
+                && !string.IsNullOrWhiteSpace(SemanticHandlerSymbol(fact))
+                && !string.IsNullOrWhiteSpace(SemanticHandlerSymbolId(fact))
+                && (SemanticHandlerSymbol(fact)!.EndsWith("." + method.MethodName, comparison)
+                    || SemanticHandlerSymbol(fact)!.Contains("." + method.MethodName + "(", comparison)))
             .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
             .FirstOrDefault();
     }
+
+    private static string? SemanticHandlerSymbol(CodeFact? fact) => fact is null
+        ? null
+        : fact.FactType == FactTypes.MethodDeclared ? fact.TargetSymbol : fact.SourceSymbol;
+
+    private static string? SemanticHandlerSymbolId(CodeFact? fact) => fact is null
+        ? null
+        : fact.FactType == FactTypes.MethodDeclared
+            ? fact.Properties.GetValueOrDefault("targetSymbolId")
+            : fact.Properties.GetValueOrDefault("sourceSymbolId");
 
     private static IReadOnlySet<string> FindLinkedProjectPaths(
         WebFormsPage page,
@@ -2018,7 +2554,8 @@ public static partial class LegacyWebFormsExtractor
                 or "WebFormsAssemblyTypeUnavailable" or "WebFormsAssemblyProjectUnavailable" => RuleIds.LegacyWebFormsComposition,
             "UnsupportedWebFormsEventAttribute" or "ClientWebFormsEventAttribute" or "NonIdentifierWebFormsEventValue" or "DynamicWebFormsEventSubscription"
                 or "UnsupportedWebFormsEventSubscription" or "UnknownWebFormsEventSubscriptionReceiver"
-                or "AmbiguousWebFormsEventSubscriptionReceiver" => RuleIds.LegacyWebFormsEventBinding,
+                or "AmbiguousWebFormsEventSubscriptionReceiver"
+                or "AmbiguousVisualBasicWebFormsEventSubscriptionReceiver" => RuleIds.LegacyWebFormsEventBinding,
             "UnsupportedWebFormsIsPostBackCondition" or "AmbiguousWebFormsIsPostBackReceiver" => RuleIds.LegacyWebFormsLifecycleContext,
             "DynamicWebFormsClientScriptRegistration" or "AmbiguousWebFormsClientScriptRegistrationReceiver" => RuleIds.LegacyWebFormsClientScript,
             "UnresolvedWebFormsPostBackTarget" or "AmbiguousWebFormsPostBackTarget"
@@ -2135,7 +2672,8 @@ public static partial class LegacyWebFormsExtractor
 
     private static bool IsInsideNotPostBackTrueBranch(SyntaxNode node, WebFormsMethod method)
     {
-        if (HasLocalIsPostBackShadow(method.Declaration))
+        if (method.Declaration is not MethodDeclarationSyntax csharpMethod
+            || HasLocalIsPostBackShadow(csharpMethod))
         {
             return false;
         }
@@ -2279,7 +2817,7 @@ public static partial class LegacyWebFormsExtractor
         return source.Lines.GetLineFromPosition(position).LineNumber + 1;
     }
 
-    private static bool PageTypeMatches(string pageTypeName, string? methodTypeName)
+    private static bool PageTypeMatches(string pageTypeName, string? methodTypeName, bool visualBasic = false)
     {
         if (string.IsNullOrWhiteSpace(methodTypeName))
         {
@@ -2288,13 +2826,19 @@ public static partial class LegacyWebFormsExtractor
 
         pageTypeName = pageTypeName.StartsWith("global::", StringComparison.Ordinal) ? pageTypeName[8..] : pageTypeName;
         methodTypeName = methodTypeName.StartsWith("global::", StringComparison.Ordinal) ? methodTypeName[8..] : methodTypeName;
+        if (visualBasic)
+        {
+            pageTypeName = pageTypeName.StartsWith("Global.", StringComparison.OrdinalIgnoreCase) ? pageTypeName[7..] : pageTypeName;
+            methodTypeName = methodTypeName.StartsWith("Global.", StringComparison.OrdinalIgnoreCase) ? methodTypeName[7..] : methodTypeName;
+        }
 
-        return methodTypeName.Equals(pageTypeName, StringComparison.Ordinal)
-            || methodTypeName.EndsWith("." + pageTypeName, StringComparison.Ordinal)
-            || pageTypeName.EndsWith("." + methodTypeName, StringComparison.Ordinal);
+        var comparison = IdentifierComparison(visualBasic);
+        return methodTypeName.Equals(pageTypeName, comparison)
+            || methodTypeName.EndsWith("." + pageTypeName, comparison)
+            || pageTypeName.EndsWith("." + methodTypeName, comparison);
     }
 
-    private static bool SemanticHandlerTypeMatches(string pageTypeName, string? sourceSymbol, string methodName)
+    private static bool SemanticHandlerTypeMatches(string pageTypeName, string? sourceSymbol, string methodName, bool visualBasic = false)
     {
         if (string.IsNullOrWhiteSpace(sourceSymbol))
         {
@@ -2302,8 +2846,30 @@ public static partial class LegacyWebFormsExtractor
         }
 
         var marker = "." + methodName + "(";
-        var markerIndex = sourceSymbol.LastIndexOf(marker, StringComparison.Ordinal);
-        return markerIndex > 0 && PageTypeMatches(pageTypeName, sourceSymbol[..markerIndex]);
+        var markerIndex = sourceSymbol.LastIndexOf(marker, IdentifierComparison(visualBasic));
+        return markerIndex > 0 && PageTypeMatches(pageTypeName, sourceSymbol[..markerIndex], visualBasic);
+    }
+
+    private static bool IsVisualBasicMethod(WebFormsMethod method) => method.Declaration is VBSyntax.MethodBlockBaseSyntax;
+
+    private static bool IsVisualBasicPath(string path) => Path.GetExtension(path).Equals(".vb", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsVisualBasicPage(WebFormsPage page) =>
+        new[] { page.LinkedCodePath, page.CodeBehindPath, page.CodeFilePath }
+            .Any(path => path is not null && IsVisualBasicPath(path));
+
+    private static StringComparison IdentifierComparison(bool visualBasic) =>
+        visualBasic ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+
+    private static bool IdentifierEquals(string? left, string? right, bool visualBasic) =>
+        left is not null && right is not null && left.Equals(right, IdentifierComparison(visualBasic));
+
+    private static bool TryCanonicalSupportedEvent(string candidate, bool visualBasic, out string canonical)
+    {
+        canonical = visualBasic
+            ? SupportedEvents.SingleOrDefault(item => item.Equals(candidate, StringComparison.OrdinalIgnoreCase)) ?? string.Empty
+            : SupportedEvents.Contains(candidate) ? candidate : string.Empty;
+        return canonical.Length > 0;
     }
 
     private static string QualifiedClassName(ClassDeclarationSyntax? classDeclaration)
@@ -2334,9 +2900,9 @@ public static partial class LegacyWebFormsExtractor
         return string.Join(".", names);
     }
 
-    private static string SurfaceFieldKey(string markupFilePath, string fieldName)
+    private static string SurfaceFieldKey(string markupFilePath, string fieldName, bool visualBasic = false)
     {
-        return $"{SurfaceIdentity(markupFilePath)}|{fieldName}";
+        return $"{SurfaceIdentity(markupFilePath)}|{(visualBasic ? fieldName.ToUpperInvariant() : fieldName)}";
     }
 
     private static string SurfaceIdentity(string markupFilePath)
@@ -2367,10 +2933,10 @@ public static partial class LegacyWebFormsExtractor
 
     private static string MarkupPathForDesigner(string designerPath)
     {
-        const string suffix = ".designer.cs";
-        return designerPath.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
-            ? designerPath[..^suffix.Length]
-            : designerPath;
+        var suffix = designerPath.EndsWith(".designer.vb", StringComparison.OrdinalIgnoreCase)
+            ? ".designer.vb"
+            : ".designer.cs";
+        return designerPath.EndsWith(suffix, StringComparison.OrdinalIgnoreCase) ? designerPath[..^suffix.Length] : designerPath;
     }
 
     private static IReadOnlyList<WebFormsUserControlRegistration> ParseUserControlRegistrations(
@@ -3195,7 +3761,8 @@ public static partial class LegacyWebFormsExtractor
         int? ControlLine,
         string? SnippetHash,
         WebFormsBindingKind BindingKind,
-        int? SyntaxSpanStart = null);
+        int? SyntaxSpanStart = null,
+        string? WiringKind = null);
 
     private enum WebFormsBindingKind
     {
@@ -3221,7 +3788,10 @@ public static partial class LegacyWebFormsExtractor
         string? HandlerName,
         int Line,
         string SnippetHash,
-        int SyntaxSpanStart);
+        int SyntaxSpanStart,
+        string WiringKind,
+        bool IsAttach,
+        bool ReceiverMayBeShadowed = false);
 
     private sealed record WebFormsMethod(
         string FilePath,
@@ -3230,7 +3800,7 @@ public static partial class LegacyWebFormsExtractor
         int Line,
         int EndLine,
         bool HasCommonEventSignature,
-        MethodDeclarationSyntax Declaration);
+        SyntaxNode Declaration);
 
     private sealed record WebFormsDesignerField(
         string FilePath,

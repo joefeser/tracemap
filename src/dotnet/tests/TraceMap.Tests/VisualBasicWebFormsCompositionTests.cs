@@ -1,0 +1,753 @@
+using TraceMap.Core;
+using TraceMap.Reporting;
+
+namespace TraceMap.Tests;
+
+public sealed class VisualBasicWebFormsCompositionTests
+{
+    [Fact]
+    public void Semantic_event_sites_emit_resolved_handles_attach_detach_and_raise_evidence()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Events.vbproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework><OptionStrict>On</OptionStrict></PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Events.vb"), """
+            Imports System
+            Public Class Source
+                Public Event Changed As EventHandler
+                Public Sub Fire()
+                    RaiseEvent Changed(Me, EventArgs.Empty)
+                End Sub
+            End Class
+            Public Class Consumer
+                Private WithEvents _source As New Source()
+                Public Sub New()
+                    AddHandler _source.Changed, AddressOf OnChanged
+                    AddHandler _source.Changed, Sub(sender, e) OnChanged(sender, e)
+                    AddHandler _source.Changed, If(DateTime.Now.Ticks > 0, New EventHandler(AddressOf CompositeA), New EventHandler(AddressOf CompositeB))
+                    RemoveHandler _source.Changed, AddressOf OnChanged
+                End Sub
+                Private Sub OnChanged(sender As Object, e As EventArgs) Handles _source.Changed
+                End Sub
+                Private Sub CompositeA(sender As Object, e As EventArgs)
+                End Sub
+                Private Sub CompositeB(sender As Object, e As EventArgs)
+                End Sub
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var bindings = result.Facts.Where(fact => fact.FactType == FactTypes.VisualBasicEventBindingDeclared).ToArray();
+        Assert.Contains(bindings, fact => fact.EvidenceTier == EvidenceTiers.Tier1Semantic && fact.Properties["wiringKind"] == "Handles");
+        Assert.Contains(bindings, fact => fact.EvidenceTier == EvidenceTiers.Tier1Semantic && fact.Properties["wiringKind"] == "AddHandler" && fact.Properties["isAttach"] == "True");
+        Assert.Contains(bindings, fact => fact.EvidenceTier == EvidenceTiers.Tier1Semantic && fact.Properties["wiringKind"] == "RemoveHandler" && fact.Properties["isAttach"] == "False");
+        Assert.All(bindings.Where(fact => fact.EvidenceTier == EvidenceTiers.Tier1Semantic), fact =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(fact.Properties["sourceSymbolId"]));
+            Assert.False(string.IsNullOrWhiteSpace(fact.Properties["targetSymbolId"]));
+        });
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.VisualBasicEventRaised
+            && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+            && fact.ContractElement == "Changed");
+        Assert.All(result.Facts.Where(fact => (fact.FactType is FactTypes.VisualBasicEventBindingDeclared or FactTypes.VisualBasicEventRaised)
+                                             && fact.EvidenceTier == EvidenceTiers.Tier1Semantic),
+            fact => Assert.False(string.IsNullOrWhiteSpace(fact.Evidence.SnippetHash)));
+        var report = MarkdownReportWriter.Build(result);
+        Assert.Contains("## Visual Basic Event Evidence", report);
+        Assert.Contains("`AddHandler`", report);
+        Assert.Contains("`RaiseEvent`", report);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.VisualBasicSemanticEventWiring
+            && fact.Properties.GetValueOrDefault("gapKind") == "UnsupportedVisualBasicEventHandlerDelegate");
+        Assert.DoesNotContain(bindings, fact => fact.Properties.GetValueOrDefault("handlerName") is "CompositeA" or "CompositeB");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.FieldDeclared
+            && fact.ContractElement == "_source"
+            && fact.Properties["isWithEvents"] == "True");
+    }
+
+    [Fact]
+    public void Vb_event_extractor_gap_does_not_turn_a_successful_compilation_into_a_failed_build()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Lambda.vbproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework><OptionStrict>On</OptionStrict></PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Lambda.vb"), """
+            Imports System
+            Public Class Source
+                Public Event Changed As EventHandler
+            End Class
+            Public Class Consumer
+                Private source As New Source()
+                Public Sub Wire()
+                    AddHandler source.Changed, Sub(sender, e) Console.WriteLine(sender)
+                End Sub
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        Assert.Equal("Succeeded", result.Manifest.BuildStatus);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.VisualBasicSemanticEventWiring
+            && fact.Properties.GetValueOrDefault("gapKind") == "UnsupportedVisualBasicEventHandlerDelegate");
+    }
+
+    [Fact]
+    public void Vb_semantic_event_rejects_an_invalid_handler_conversion()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Invalid.vbproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework><OptionStrict>On</OptionStrict></PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Invalid.aspx"), """
+            <%@ Page Language="VB" CodeFile="Invalid.vb" Inherits="Consumer" %>
+            <asp:Button ID="source" runat="server" />
+            """);
+        File.WriteAllText(Path.Combine(repo, "Invalid.vb"), """
+            Imports System
+            Public Class Source
+                Public Event Changed As EventHandler
+            End Class
+            Public Class Consumer
+                Private source As New Source()
+                Public Sub Wire()
+                    AddHandler source.Changed, AddressOf InvalidHandler
+                End Sub
+                Private Sub InvalidHandler(value As Integer)
+                End Sub
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.VisualBasicEventBindingDeclared
+            && fact.Properties.GetValueOrDefault("handlerName") == "InvalidHandler");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared
+            && fact.Properties.GetValueOrDefault("handlerName") == "InvalidHandler");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.VisualBasicSemanticEventWiring
+            && fact.Properties.GetValueOrDefault("gapKind") == "UnsupportedVisualBasicEventHandlerDelegate");
+        Assert.Equal("FailedOrPartial", result.Manifest.BuildStatus);
+    }
+
+    [Fact]
+    public void Vb_semantic_event_rejects_a_delegate_variable_that_shadows_a_method()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Delegate.vbproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework><OptionStrict>On</OptionStrict></PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Delegate.vb"), """
+            Imports System
+            Public Class Source
+                Public Event Changed As EventHandler
+            End Class
+            Public Class Consumer
+                Private source As New Source()
+                Public Sub Wire()
+                    Dim OnChanged As EventHandler = AddressOf Other
+                    AddHandler source.Changed, OnChanged
+                End Sub
+                Private Sub OnChanged(sender As Object, e As EventArgs)
+                End Sub
+                Private Sub Other(sender As Object, e As EventArgs)
+                End Sub
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.VisualBasicEventBindingDeclared
+            && fact.Properties.GetValueOrDefault("wiringKind") == "AddHandler"
+            && fact.Properties.GetValueOrDefault("handlerName") == "OnChanged");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.VisualBasicSemanticEventWiring
+            && fact.Properties.GetValueOrDefault("gapKind") == "UnsupportedVisualBasicEventHandlerDelegate");
+        Assert.Equal("Succeeded", result.Manifest.BuildStatus);
+    }
+
+    [Fact]
+    public void Vb_syntax_fallback_does_not_treat_a_bare_delegate_variable_as_a_method()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Delegate.aspx"), """
+            <%@ Page Language="VB" CodeFile="Delegate.aspx.vb" Inherits="DelegatePage" %>
+            <asp:Button ID="KnownButton" runat="server" />
+            """);
+        File.WriteAllText(Path.Combine(repo, "Delegate.aspx.vb"), """
+            Imports System
+            Partial Public Class DelegatePage
+                Private Sub Wire()
+                    Dim OnChanged As EventHandler = AddressOf Other
+                    AddHandler KnownButton.Click, OnChanged
+                End Sub
+                Private Sub OnChanged(sender As Object, e As EventArgs)
+                End Sub
+                Private Sub Other(sender As Object, e As EventArgs)
+                End Sub
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.VisualBasicEventBindingDeclared
+            && fact.Properties.GetValueOrDefault("wiringKind") == "AddHandler");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared
+            && fact.Properties.GetValueOrDefault("handlerName") == "OnChanged");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.VisualBasicSyntaxEventWiring
+            && fact.Properties.GetValueOrDefault("gapKind") == "UnsupportedVisualBasicEventHandlerDelegate");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "DynamicWebFormsEventSubscription");
+    }
+
+    [Fact]
+    public void Vb_semantic_custom_receiver_is_not_joined_to_a_same_named_markup_control()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Custom.vbproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework><OptionStrict>On</OptionStrict></PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Custom.aspx"), """
+            <%@ Page Language="VB" CodeFile="Custom.aspx.vb" Inherits="CustomPage" %>
+            <asp:Button ID="KnownButton" runat="server" />
+            """);
+        File.WriteAllText(Path.Combine(repo, "Custom.aspx.vb"), """
+            Imports System
+            Public Class CustomSource
+                Public Event Click As EventHandler
+            End Class
+            Partial Public Class CustomPage
+                Private WithEvents KnownButton As New CustomSource()
+                Private Sub Wire()
+                    AddHandler KnownButton.Click, AddressOf OnChanged
+                End Sub
+                Private Sub OnChanged(sender As Object, e As EventArgs)
+                End Sub
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.VisualBasicEventBindingDeclared
+            && fact.Properties.GetValueOrDefault("handlerName") == "OnChanged"
+            && fact.Properties.GetValueOrDefault("receiverTypeName") == "CustomSource");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared
+            && fact.Properties.GetValueOrDefault("handlerName") == "OnChanged");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "MismatchedVisualBasicWebFormsEventSubscriptionReceiver");
+    }
+
+    [Fact]
+    public void Vb_semantic_event_rejects_an_invalid_handles_clause()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Handles.vbproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework><OptionStrict>On</OptionStrict></PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Handles.vb"), """
+            Imports System
+            Public Class Source
+                Public Event Changed As EventHandler
+            End Class
+            Public Class Consumer
+                Private WithEvents source As New Source()
+                Private ordinarySource As New Source()
+                Private Sub InvalidHandler(value As Integer) Handles source.Changed
+                End Sub
+                Private Sub InvalidReceiver(sender As Object, e As EventArgs) Handles ordinarySource.Changed
+                End Sub
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.VisualBasicEventBindingDeclared
+            && fact.Properties.GetValueOrDefault("handlerName") is "InvalidHandler" or "InvalidReceiver");
+        Assert.Equal(2, result.Facts.Count(fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.VisualBasicSemanticEventWiring
+            && fact.Properties.GetValueOrDefault("gapKind") == "InvalidVisualBasicHandlesBinding"));
+        Assert.Equal("FailedOrPartial", result.Manifest.BuildStatus);
+    }
+
+    [Fact]
+    public void Vb_shadowed_lifecycle_subscription_does_not_hide_valid_auto_event_wireup()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Shadow.aspx"), """
+            <%@ Page Language="VB" AutoEventWireup="true" CodeFile="Shadow.aspx.vb" Inherits="ShadowPage" %>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Shadow.aspx.vb"), """
+            Imports System
+            Public Class Source
+                Public Event Load As EventHandler
+            End Class
+            Partial Public Class ShadowPage
+                Private Sub Wire(Page As Source)
+                    AddHandler Page.Load, AddressOf Page_Load
+                End Sub
+                Protected Sub Page_Load(sender As Object, e As EventArgs)
+                End Sub
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared
+            && fact.Properties.GetValueOrDefault("handlerName") == "Page_Load"
+            && fact.Properties.GetValueOrDefault("bindingKind") == "AutoEventWireup");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared
+            && fact.Properties.GetValueOrDefault("handlerName") == "Page_Load"
+            && fact.Properties.GetValueOrDefault("bindingKind") == "ExplicitLifecycleSubscription");
+    }
+
+    [Fact]
+    public void Vb_control_subscription_rejects_shadowed_and_external_receivers_but_accepts_page_qualified_control()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Qualified.aspx"), """
+            <%@ Page Language="VB" CodeFile="Qualified.aspx.vb" Inherits="QualifiedPage" %>
+            <asp:Button ID="KnownButton" runat="server" />
+            <asp:Button ID="RealButton" runat="server" />
+            """);
+        File.WriteAllText(Path.Combine(repo, "Qualified.aspx.vb"), """
+            Option Strict Off
+            Partial Public Class QualifiedPage
+                Private Shadows Page As Object
+                Private Sub Wire(KnownButton As Object, Page As Object)
+                    AddHandler KnownButton.Click, AddressOf Shadowed_Click
+                    AddHandler Page.Load, AddressOf PageShadow_Load
+                    AddHandler Me.RealButton.Click, AddressOf Me.Real_Click
+                    AddHandler RealButton.Click, AddressOf Other.External_Click
+                End Sub
+                Private Sub WireMember()
+                    AddHandler Me.Page.Load, AddressOf MemberPageShadow_Load
+                End Sub
+                Private Sub Shadowed_Click(sender As Object, e As EventArgs)
+                End Sub
+                Private Sub Real_Click(sender As Object, e As EventArgs)
+                End Sub
+                Private Sub PageShadow_Load(sender As Object, e As EventArgs)
+                End Sub
+                Private Sub MemberPageShadow_Load(sender As Object, e As EventArgs)
+                End Sub
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "AmbiguousVisualBasicWebFormsEventSubscriptionReceiver");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared
+            && fact.Properties.GetValueOrDefault("handlerName") == "Real_Click"
+            && fact.Properties.GetValueOrDefault("controlId") == "RealButton");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared
+            && fact.Properties.GetValueOrDefault("handlerName") is "Shadowed_Click" or "PageShadow_Load" or "MemberPageShadow_Load" or "External_Click");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "DynamicWebFormsEventSubscription");
+    }
+
+    [Fact]
+    public void Missing_vb_code_file_preserves_case_insensitive_designer_identity()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Missing.aspx"), """
+            <%@ Page Language="VB" CodeFile="Missing.aspx.vb" Inherits="MissingPage" %>
+            <asp:Button ID="SubmitButton" runat="server" />
+            """);
+        File.WriteAllText(Path.Combine(repo, "Missing.aspx.designer.vb"), """
+            Partial Public Class missingpage
+                Protected WithEvents submitbutton As Button
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var control = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WebFormsControlDeclared
+            && fact.Evidence.FilePath == "Missing.aspx");
+        Assert.False(string.IsNullOrWhiteSpace(control.Properties.GetValueOrDefault("designerFactId")));
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "MissingWebFormsCodeBehind");
+    }
+
+    [Fact]
+    public void Vb_lowercase_lifecycle_name_retains_postback_branch()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Lower.aspx"), """
+            <%@ Page Language="VB" CodeFile="Lower.aspx.vb" Inherits="LowerPage" %>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Lower.aspx.vb"), """
+            Partial Public Class LowerPage
+                Protected Sub page_load(sender As Object, e As EventArgs) Handles Me.Load
+                    If Not Me.IsPostBack Then
+                    End If
+                End Sub
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WebFormsLifecycleBranchCandidate
+            && fact.Properties.GetValueOrDefault("lifecycleMethod") == "page_load"
+            && fact.ContractElement == "NotIsPostBackBranch");
+    }
+
+    [Fact]
+    public void Vb_syntax_fallback_rejects_invocation_and_arbitrarily_qualified_event_receivers()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Loose.vb"), """
+            Public Class Loose
+                Public Sub Wire()
+                    AddHandler GetSource().Changed, AddressOf OnChanged
+                    AddHandler Outer.Inner.Changed, AddressOf OnChanged
+                End Sub
+                Private Sub OnChanged()
+                End Sub
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.VisualBasicEventBindingDeclared);
+        Assert.Equal(2, result.Facts.Count(fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "UnsupportedVisualBasicEventReceiver"));
+    }
+
+    [Fact]
+    public void Vb_handler_signature_requires_exact_framework_type_names()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Types.aspx"), """
+            <%@ Page Language="VB" CodeFile="Types.aspx.vb" Inherits="TypesPage" %>
+            <asp:Button ID="KnownButton" runat="server" />
+            """);
+        File.WriteAllText(Path.Combine(repo, "Types.aspx.vb"), """
+            Public Class MyObjectFactory
+            End Class
+            Public Class CustomEventArgsPayload
+            End Class
+            Partial Public Class TypesPage
+                Private Sub Wire()
+                    AddHandler KnownButton.CustomEvent, AddressOf FakeHandler
+                End Sub
+                Private Sub FakeHandler(sender As MyObjectFactory, e As CustomEventArgsPayload)
+                End Sub
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "UnsupportedWebFormsEventSubscription");
+    }
+
+    [Fact]
+    public void Syntax_fallback_keeps_event_shapes_bounded_and_marks_unsupported_delegate()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Loose.vb"), """
+            Public Class Loose
+                Public Event Changed()
+                Public Sub Wire(value As Object)
+                    AddHandler value.Changed, AddressOf OnChanged
+                    AddHandler value.Changed, Sub() value.Run()
+                    RemoveHandler value.Changed, AddressOf OnChanged
+                    RaiseEvent Changed()
+                End Sub
+                Private Sub OnChanged()
+                End Sub
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.VisualBasicEventBindingDeclared
+            && fact.RuleId == RuleIds.VisualBasicSyntaxEventWiring
+            && fact.Properties["wiringKind"] == "AddHandler");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.VisualBasicEventBindingDeclared
+            && fact.Properties["wiringKind"] == "RemoveHandler");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.VisualBasicEventRaised
+            && fact.RuleId == RuleIds.VisualBasicSyntaxEventWiring);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "UnsupportedVisualBasicEventHandlerDelegate");
+    }
+
+    [Fact]
+    public void Vb_webforms_fixture_composes_shared_page_control_handler_lifecycle_and_event_facts()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(FindRepoRoot(), "samples", "vb-webforms-sample");
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WebFormsPageDeclared && fact.ContractElement == "Default.aspx");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WebFormsDesignerControlDeclared && fact.ContractElement == "SaveButton");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared
+            && fact.Properties.GetValueOrDefault("wiringKind") == "Handles"
+            && fact.Properties["eventName"] == "OnClick"
+            && fact.Properties["handlerName"] == "SaveButton_Click");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared
+            && fact.Properties.GetValueOrDefault("wiringKind") == "AddHandler"
+            && fact.Properties["handlerName"] == "RefreshButton_Click");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared
+            && fact.Properties.GetValueOrDefault("wiringKind") == "RemoveHandler");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WebFormsHandlerResolved
+            && fact.ContractElement == "SaveButton_Click"
+            && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+            && fact.Properties.GetValueOrDefault("handlerSymbolId")?.StartsWith("visualbasic method ", StringComparison.Ordinal) == true);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WebFormsEventFlowProjected
+            && fact.ContractElement == "SaveButton_Click"
+            && !string.IsNullOrWhiteSpace(fact.Properties.GetValueOrDefault("supportingEdgeIds")));
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WebFormsLifecycleBranchCandidate
+            && fact.ContractElement == "NotIsPostBackBranch"
+            && fact.Properties["language"] == "Visual Basic");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.VisualBasicEventRaised && fact.ContractElement == "StatusChanged");
+    }
+
+    [Fact]
+    public void Late_bound_vb_webforms_event_is_a_gap_not_a_guessed_shared_binding()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Late.vbproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework><OptionStrict>Off</OptionStrict></PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Late.aspx"), """
+            <%@ Page Language="VB" CodeFile="Late.aspx.vb" Inherits="LatePage" %>
+            <form runat="server"><asp:Button ID="KnownButton" runat="server" OnClick="Markup_Click" /></form>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Late.aspx.vb"), """
+            Option Strict Off
+            Partial Public Class LatePage
+                Private Sub Wire(value As Object)
+                    AddHandler value.Click, AddressOf Late_Click
+                End Sub
+                Private Sub Late_Click(sender As Object, e As EventArgs)
+                End Sub
+                Private Sub Markup_Click(sender As Object, e As EventArgs)
+                End Sub
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.VisualBasicSemanticEventWiring
+            && fact.Properties.GetValueOrDefault("gapKind") == "LateBoundOrUnresolvedVisualBasicEvent");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared
+            && fact.Properties.GetValueOrDefault("handlerName") == "Markup_Click"
+            && fact.Properties.GetValueOrDefault("bindingKind") == "MarkupAttribute");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WebFormsHandlerResolved
+            && fact.ContractElement == "Markup_Click");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared
+            && fact.Properties.GetValueOrDefault("handlerName") == "Late_Click");
+    }
+
+    [Theory]
+    [InlineData("Widget.ascx", "Control")]
+    [InlineData("Shell.master", "Master")]
+    public void Vb_user_control_and_master_directives_join_to_linked_code_behind(string markupName, string directiveName)
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, markupName), $"""
+            <%@ {directiveName} Language="VB" CodeFile="{markupName}.vb" Inherits="LegacySurface" %>
+            <asp:Button ID="SubmitButton" runat="server" OnClick="SubmitButton_Click" />
+            """);
+        File.WriteAllText(Path.Combine(repo, markupName + ".vb"), """
+            Option Strict Off
+            Partial Public Class LegacySurface
+                Protected Sub SubmitButton_Click(sender As Object, e As EventArgs) Handles SubmitButton.Click
+                End Sub
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WebFormsPageDeclared
+            && fact.ContractElement == markupName);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared
+            && fact.Properties.GetValueOrDefault("handlerName") == "SubmitButton_Click");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WebFormsHandlerResolved
+            && fact.ContractElement == "SubmitButton_Click");
+    }
+
+    [Fact]
+    public void Vb_webforms_joins_identifiers_case_insensitively_without_changing_csharp_rules()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Case.aspx"), """
+            <%@ Page Language="VB" CodeFile="Case.aspx.vb" Inherits="LEGACYSURFACE" %>
+            <asp:Button ID="SubmitButton" runat="server" OnClick="submitbutton_click" />
+            """);
+        File.WriteAllText(Path.Combine(repo, "Case.aspx.vb"), """
+            Partial Public Class LegacySurface
+                Protected Sub SUBMITBUTTON_CLICK(sender As Object, e As EventArgs) Handles submitbutton.click
+                    submitbutton.visible = True
+                    submitbutton.databind()
+                End Sub
+            End Class
+            """);
+        File.WriteAllText(Path.Combine(repo, "Case.aspx.designer.vb"), """
+            Partial Public Class legacysurface
+                Protected WithEvents submitbutton As Button
+            End Class
+            """);
+        File.WriteAllText(Path.Combine(repo, "Strict.aspx"), """
+            <%@ Page Language="C#" CodeFile="Strict.aspx.cs" Inherits="StrictSurface" %>
+            <asp:Button ID="SubmitButton" runat="server" OnClick="submitbutton_click" />
+            """);
+        File.WriteAllText(Path.Combine(repo, "Strict.aspx.cs"), """
+            public partial class StrictSurface {
+                protected void SUBMITBUTTON_CLICK(object sender, System.EventArgs e) { }
+            }
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var vbControl = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WebFormsControlDeclared
+            && fact.Evidence.FilePath == "Case.aspx"
+            && fact.ContractElement == "Button");
+        Assert.False(string.IsNullOrWhiteSpace(vbControl.Properties.GetValueOrDefault("designerFactId")));
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared
+            && fact.Evidence.FilePath == "Case.aspx.vb"
+            && fact.Properties.GetValueOrDefault("controlId") == "SubmitButton"
+            && fact.Properties.GetValueOrDefault("handlerName") == "SUBMITBUTTON_CLICK");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WebFormsHandlerResolved
+            && fact.Properties.GetValueOrDefault("markupFile") == "Case.aspx"
+            && fact.ContractElement == "submitbutton_click");
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WebFormsLogicSignalDetected
+            && fact.Properties.GetValueOrDefault("markupFile") is null
+            && fact.ContractElement == "submitbutton_click");
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.WebFormsHandlerResolved
+            && fact.Properties.GetValueOrDefault("markupFile") == "Strict.aspx");
+    }
+
+    [Fact]
+    public void Vb_unqualified_shadowed_ispostback_is_a_gap_but_explicit_page_receiver_remains_bounded_evidence()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Shadow.aspx"), """
+            <%@ Page Language="VB" CodeFile="Shadow.aspx.vb" Inherits="ShadowPage" %>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Shadow.aspx.vb"), """
+            Partial Public Class ShadowPage
+                Private IsPostBack As Boolean
+                Protected Sub Page_Load(IsPostBack As Boolean, e As EventArgs)
+                    If Not IsPostBack Then
+                    End If
+                End Sub
+                Protected Sub Page_PreRender(sender As Object, e As EventArgs)
+                    If IsPostBack Then
+                    End If
+                End Sub
+                Protected Sub Page_Init(sender As Object, e As EventArgs)
+                    If Not Me.IsPostBack Then
+                    End If
+                End Sub
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        Assert.Equal(2, result.Facts.Count(fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "AmbiguousWebFormsIsPostBackReceiver"));
+        var lifecycle = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WebFormsLifecycleBranchCandidate);
+        Assert.Equal("Page_Init", lifecycle.Properties.GetValueOrDefault("lifecycleMethod"));
+        Assert.Equal("NotIsPostBackBranch", lifecycle.ContractElement);
+    }
+
+    private static void Commit(string repo)
+    {
+        RunGit(repo, "init");
+        RunGit(repo, "add", "-A");
+        RunGit(repo, "-c", "user.name=TraceMap", "-c", "user.email=tests@example.invalid", "commit", "-m", "fixture");
+    }
+
+    private static void RunGit(string repo, params string[] arguments)
+    {
+        using var process = new System.Diagnostics.Process
+        {
+            StartInfo = new System.Diagnostics.ProcessStartInfo("git")
+            {
+                WorkingDirectory = repo,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+                UseShellExecute = false
+            }
+        };
+        foreach (var argument in arguments) process.StartInfo.ArgumentList.Add(argument);
+        process.Start();
+        process.WaitForExit(30_000);
+        Assert.Equal(0, process.ExitCode);
+    }
+
+    private static string FindRepoRoot()
+    {
+        var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
+        while (directory is not null)
+        {
+            if (Directory.Exists(Path.Combine(directory.FullName, "samples"))
+                && (Directory.Exists(Path.Combine(directory.FullName, ".git")) || File.Exists(Path.Combine(directory.FullName, ".git"))))
+            {
+                return directory.FullName;
+            }
+            directory = directory.Parent;
+        }
+        throw new DirectoryNotFoundException("Repository root not found.");
+    }
+}

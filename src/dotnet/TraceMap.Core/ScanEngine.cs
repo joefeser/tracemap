@@ -249,8 +249,7 @@ public static class ScanEngine
         var migrationFallbackReducedCoverage = migrationFallbackGaps.Length > 0;
         var semanticBuildReducedCoverage = semanticResult.GapFacts.Any(gap =>
             gap.RuleId != RuleIds.DatabaseFrameworkMigrationGap
-            && gap.RuleId != RuleIds.CSharpRazorSemanticModelBindingGap
-            && gap.RuleId != RuleIds.CSharpSemanticPropertyMappingGap);
+            && !IsProducerLocalSemanticGap(gap));
         var semanticBuildStatus = semanticResult.Attempted
             ? semanticBuildReducedCoverage ? "FailedOrPartial" : "Succeeded"
             : "NotRun";
@@ -1048,6 +1047,11 @@ public static class ScanEngine
             var gapKind = gap.Properties?.GetValueOrDefault("gapKind") ?? gap.ContractElement ?? "UnknownVisualBasicWorkspaceGap";
             return $"Visual Basic semantic coverage reduced: {gapKind}.";
         }
+        if (gap.RuleId == RuleIds.VisualBasicSemanticEventWiring)
+        {
+            var gapKind = gap.Properties?.GetValueOrDefault("gapKind") ?? gap.ContractElement ?? "UnknownVisualBasicEventCompositionGap";
+            return $"Visual Basic event-composition coverage reduced: {gapKind}.";
+        }
         return "Roslyn semantic analysis reported a gap.";
     }
 
@@ -1056,7 +1060,8 @@ public static class ScanEngine
 
     private static bool IsProducerLocalSemanticGap(SemanticFactCandidate gap) =>
         gap.RuleId == RuleIds.CSharpRazorSemanticModelBindingGap
-        || gap.RuleId == RuleIds.CSharpSemanticPropertyMappingGap;
+        || gap.RuleId == RuleIds.CSharpSemanticPropertyMappingGap
+        || gap.RuleId == RuleIds.VisualBasicSemanticEventWiring;
 
     private static string GetBuildStatusReason(
         ScanManifest manifest,

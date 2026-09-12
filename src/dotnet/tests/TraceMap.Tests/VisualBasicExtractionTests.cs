@@ -743,7 +743,7 @@ public sealed class VisualBasicExtractionTests
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null)
         {
-            if (Directory.Exists(Path.Combine(directory.FullName, ".git"))
+            if ((Directory.Exists(Path.Combine(directory.FullName, ".git")) || File.Exists(Path.Combine(directory.FullName, ".git")))
                 && Directory.Exists(Path.Combine(directory.FullName, "samples")))
             {
                 return directory.FullName;

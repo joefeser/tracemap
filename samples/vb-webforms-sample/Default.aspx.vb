@@ -1,9 +1,9 @@
 Option Strict On
 Option Explicit On
 
-' Synthetic Web Forms code-behind for future event-composition work (#738).
-' TraceMap #736 makes no claim that Handles, AddHandler, RemoveHandler,
-' RaiseEvent, or WithEvents relationships are composed into event edges yet.
+' Synthetic Web Forms code-behind for bounded static event-composition evidence.
+' Handles, AddHandler, RemoveHandler, RaiseEvent, and WithEvents remain source
+' evidence only; they do not prove runtime attachment, firing, or execution.
 
 Partial Public Class _Default
     Inherits System.Web.UI.Page

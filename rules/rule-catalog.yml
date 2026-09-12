@@ -2325,7 +2325,7 @@ rules:
 
   - id: legacy.webforms.event-binding.v1
     name: Legacy WebForms static event binding evidence
-    description: Extracts supported static WebForms server-control event attributes, bounded Tier3 event-like OnX candidates, and bounded code-behind control subscriptions such as OnClick, OnCommand, OnLoad, OnInit, and Button.Click += Handler with surface-qualified control identities, handler identities, and line spans.
+    description: Extracts supported static WebForms server-control event attributes, bounded Tier3 event-like OnX candidates, and bounded C# or Visual Basic code-behind control/lifecycle subscriptions with surface-qualified control identities, handler identities, and line spans.
     evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
     emits:
       - WebFormsEventBindingDeclared
@@ -2335,7 +2335,8 @@ rules:
       - Safe OnX attributes outside the representative event allowlist are Tier3 event-like candidates, not proof that the target control exposes that server event; client-side, malformed, dynamic, generated, and unsafe shapes remain gaps rather than guessed handlers.
       - OnClient-prefixed attributes emit ClientWebFormsEventAttribute gaps and never server bindings. Bounded event names with non-identifier values emit NonIdentifierWebFormsEventValue gaps without assuming JavaScript or C# execution; other malformed names retain UnsupportedWebFormsEventAttribute. Raw attribute values are not retained.
       - Duplicate controls or duplicate bindings are preserved as separate evidence rows with deterministic IDs; TraceMap does not collapse them into a single runtime control.
-      - Explicit control subscriptions are limited to statically named receivers, representative events, and named handlers on the linked markup surface; lambdas, delegate expressions, unknown receivers, ambiguous controls, and dynamic wiring remain explicit gaps.
+      - Explicit control subscriptions are limited to statically named receivers, representative events, and named handlers on the linked markup surface. Supported VB shapes include Handles, AddHandler with an explicit AddressOf handler, and page-qualified Me/MyClass control or handler members; RemoveHandler remains language-level detach evidence and never becomes a positive Web Forms binding. When compiler receiver-type evidence is available, it must agree with the linked designer/control type. Bare delegate variables, arbitrarily qualified handlers, locals or parameters shadowing a markup control or Page receiver, mismatched same-named receiver fields, lambdas, composite delegates, unknown receivers, ambiguous controls, late binding, and dynamic wiring remain explicit gaps.
+      - VB handler, containing/page type, control receiver, designer-field, supported event, UI-property, and DataBind identifiers are matched with ordinal case-insensitive comparison. C# joins remain ordinal case-sensitive.
 
   - id: legacy.webforms.handler-resolution.v1
     name: Legacy WebForms code-behind handler resolution
@@ -2348,7 +2349,7 @@ rules:
       - Handler resolution is static evidence and does not prove runtime event execution, page lifecycle order, postback behavior, authorization, deployment, or production usage.
       - Syntax and structural fallback depend on directive/linkage and partial class names; missing builds, generated code, stale files, partial classes, overloads, and event subscriptions can reduce confidence.
       - Ambiguous methods or partial classes are emitted as gaps and TraceMap does not choose an arbitrary winner.
-      - Auto-event-wireup MVP evidence is limited to Page_Load and Page_Init and requires explicit enabled evidence; false, unknown, or contradictory evidence remains Tier4Unknown.
+      - Auto-event-wireup MVP evidence is limited to Page_Load and Page_Init and requires explicit enabled evidence; explicit VB Handles/AddHandler lifecycle wiring does not require AutoEventWireup. False, unknown, or contradictory evidence remains Tier4Unknown.
       - Cross-file partial handler resolution requires semantic type and method evidence at the exact method span; syntax-only cross-file matches remain explicit gaps.
 
   - id: legacy.webforms.designer-control.v1
@@ -2396,8 +2397,8 @@ rules:
       - WebFormsLifecycleBranchCandidate
       - AnalysisGap
     limitations:
-      - Bare IsPostBack and this.IsPostBack conditions emit IsPostBackBranch with is-postback-syntax context; their logical negations retain NotIsPostBackBranch with not-is-postback-syntax context. One layer of parentheses is accepted at each existing expression boundary. These are syntax candidates, not proof of Page symbol identity, a branch running, lifecycle ordering, state initialization, runtime reachability, or correctness.
-      - Local or parameter shadowing, boolean comparisons, compound conditions, arbitrary receivers, helper-based conditions, and other expressions outside the documented shape remain explicit gaps. Positive branch support does not widen client-script inside-not-is-postback-syntax attribution or claim anything about else-branch execution.
+      - Bare IsPostBack and explicit C# this.IsPostBack or VB Me.IsPostBack/MyBase.IsPostBack conditions emit IsPostBackBranch with is-postback-syntax context; their logical negations retain NotIsPostBackBranch with not-is-postback-syntax context. One layer of parentheses is accepted at each existing expression boundary. These are syntax candidates, not proof of Page symbol identity, a branch running, lifecycle ordering, state initialization, runtime reachability, or correctness.
+      - Local, parameter, or containing-type member shadowing prevents an unqualified IsPostBack condition from becoming lifecycle evidence. Boolean comparisons, compound conditions, arbitrary receivers, helper-based conditions, and other expressions outside the documented shape remain explicit gaps. Positive branch support does not widen client-script inside-not-is-postback-syntax attribution or claim anything about else-branch execution.
 
   - id: legacy.webforms.client-script.v1
     name: Legacy WebForms client-script registration candidates
@@ -3875,8 +3876,8 @@ rules:
       - EventDeclared
     limitations:
       - Requires project load and enough references to create a Roslyn Visual Basic compilation; when binding is reduced, absence of these facts is not absence of declarations in source.
-      - Designer and generated documents (filename convention) are not analyzed for semantic facts; checked-in designer content is composition evidence for a later slice, not proof of resolved members.
-      - Event declarations are emitted, but WithEvents, Handles, AddHandler, and RemoveHandler wiring is deliberately excluded; event composition belongs to the Web Forms/events slice and is never promoted to resolved event edges here.
+      - Designer and generated documents (filename convention) are not analyzed for semantic facts; checked-in designer content may support bounded Web Forms composition but is not proof of a current generated runtime control.
+      - Event declarations and WithEvents field/property shapes are declarations only. Compiler-resolved Handles/AddHandler/RemoveHandler/RaiseEvent evidence is governed separately by `vb.semantic.event-wiring.v1`.
       - Operator and Declare (P/Invoke) statements are not emitted as method declarations in this slice.
       - Symbols resolved by a Visual Basic scan carry `visualbasic`-tagged symbol identities; cross-language joins between C#-declared and Visual Basic-declared symbols by identity are not established in this slice.
       - A declaration proves source structure only; it does not prove compilation success, runtime reachability, or execution.
@@ -3910,7 +3911,7 @@ rules:
     emits:
       - CallEdge
     limitations:
-      - Edges are compiler-resolved call sites, not proven execution: dynamic dispatch to overrides, delegates, AddHandler/Handles event wiring, RaiseEvent, and interface dispatch beyond the resolved target are not expanded.
+      - Edges are compiler-resolved call sites, not proven execution: dynamic dispatch to overrides, delegates, and interface dispatch beyond the resolved target are not expanded. Event composition is retained separately and is not represented as an executed CallEdge.
       - Late-bound invocations and unresolved callees produce no Tier1 edge; bounded Tier3 syntax edges and Tier4 call-site gaps may accompany them.
       - The caller is the lexically containing symbol at the call site; runtime call paths, recursion depth, and branch feasibility are not proven.
 
@@ -3944,8 +3945,37 @@ rules:
       - SymbolRelationship
     limitations:
       - Relationships are limited to compiler-resolved direct symbols; conditional compilation, partial binding, and error-typed bases produce no relationship rather than a guessed target.
-      - Handles/AddHandler/RemoveHandler event wiring is deliberately excluded; event composition belongs to the Web Forms/events slice.
+      - Event wiring is retained separately by `vb.semantic.event-wiring.v1`; it is not a type/member override or interface relationship.
       - A relationship proves a declaration shape; it does not prove instantiation, dispatch outcome, or runtime behavior.
+
+  - id: vb.semantic.event-wiring.v1
+    name: Visual Basic semantic event composition
+    description: Records compiler-resolved Handles, AddHandler, RemoveHandler, and RaiseEvent sites with canonical Visual Basic handler/event symbol identities and WithEvents receiver evidence when available.
+    evidenceTier: Tier1Semantic or Tier4Unknown
+    emits:
+      - VisualBasicEventBindingDeclared
+      - VisualBasicEventRaised
+      - AnalysisGap
+    limitations:
+      - Event bindings and raises are compiler-resolved static source evidence; invalid Handles clauses and invalid or composite delegate conversions remain producer-local Tier4 gaps and do not imply compiler/build failure. Static evidence does not prove object lifetime, attachment time, event firing, ordering, branch feasibility, postback behavior, delegate invocation, or runtime reachability.
+      - RemoveHandler is retained with `isAttach=False` and is never interpreted as a positive binding. Event composition is not emitted as CallEdge evidence.
+      - Late-bound or error-typed receivers, ambiguous event members or handler overloads, lambdas and unsupported delegate expressions, unavailable partial classes, and missing framework metadata remain explicit Tier4 gaps rather than guessed targets.
+      - A Handles clause whose containing method symbol is unavailable remains a scoped Tier4 gap; it is not silently discarded or upgraded from syntax alone.
+      - WithEvents may be represented by the VB compiler as a property; TraceMap preserves the declared source shape and canonical symbol kind without claiming storage or lifetime semantics.
+
+  - id: vb.syntax.event-wiring.v1
+    name: Visual Basic syntax event composition fallback
+    description: Records bounded syntax-only Handles, AddHandler, RemoveHandler, and RaiseEvent shapes in Visual Basic files without semantic coverage.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - VisualBasicEventBindingDeclared
+      - VisualBasicEventRaised
+      - AnalysisGap
+    limitations:
+      - Names are local syntax text only and never compiler-resolved event or handler identities. Receivers may be late-bound, stale designer members, or unrelated same-named members.
+      - Lambda, bare delegate-variable, arbitrarily qualified receiver, malformed, and unsupported shapes emit category-only gaps. AddHandler/RemoveHandler method names require an explicit AddressOf operand; unqualified and Me/MyClass-qualified local member shapes may be retained without gaining symbol identity. Raw delegate/event expressions are hashed or omitted.
+      - The shared per-file 2,000-fact budget applies; missing evidence beyond that limit is not evidence of absence.
+      - Syntax event evidence does not prove compilation, attachment, removal, firing, ordering, postback behavior, reachability, or execution.
 
   - id: vb.syntax.declarations.v1
     name: Visual Basic syntax declarations

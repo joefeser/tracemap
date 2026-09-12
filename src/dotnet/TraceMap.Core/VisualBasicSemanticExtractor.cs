@@ -507,6 +507,7 @@ public static class VisualBasicSemanticExtractor
         AddFieldDeclarationFacts(projectPath, filePath, root, model, facts);
         AddParameterDeclarationFacts(projectPath, filePath, root, model, facts);
         AddEventDeclarationFacts(projectPath, filePath, root, model, facts);
+        AddEventCompositionFacts(projectPath, filePath, root, model, facts, gaps);
         AddTypeSymbolRelationshipFacts(projectPath, filePath, root, model, facts);
         AddMemberSymbolRelationshipFacts(projectPath, filePath, root, model, facts);
         AddPropertyAccessFacts(projectPath, filePath, root, model, facts);
@@ -705,8 +706,16 @@ public static class VisualBasicSemanticExtractor
         {
             if (identifier.Parent is not VariableDeclaratorSyntax
                 || identifier.Ancestors().OfType<FieldDeclarationSyntax>().FirstOrDefault() is not { } fieldDeclaration
-                || model.GetDeclaredSymbol(identifier) is not IFieldSymbol field
-                || field.ContainingType.TypeKind == TypeKind.Error)
+                || model.GetDeclaredSymbol(identifier) is not { } declared)
+            {
+                continue;
+            }
+
+            var field = declared as IFieldSymbol;
+            var withEventsProperty = declared as IPropertySymbol;
+            var containingType = declared.ContainingType;
+            var fieldType = field?.Type ?? withEventsProperty?.Type;
+            if (containingType is null || containingType.TypeKind == TypeKind.Error || fieldType is null)
             {
                 continue;
             }
@@ -716,26 +725,27 @@ public static class VisualBasicSemanticExtractor
                 AddSymbolProperties(
                     new SortedDictionary<string, string>(StringComparer.Ordinal)
                     {
-                        ["fieldName"] = field.Name,
-                        ["fieldType"] = field.Type.ToDisplayString(SymbolFormat),
-                        ["containingType"] = field.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty,
-                        ["declaredAccessibility"] = field.DeclaredAccessibility.ToString(),
-                        ["isShared"] = field.IsShared().ToString(),
+                        ["fieldName"] = declared.Name,
+                        ["fieldType"] = fieldType.ToDisplayString(SymbolFormat),
+                        ["containingType"] = containingType.ToDisplayString(SymbolFormat),
+                        ["declaredAccessibility"] = declared.DeclaredAccessibility.ToString(),
+                        ["isShared"] = declared.IsStatic.ToString(),
+                        ["semanticKind"] = declared.Kind.ToString(),
                         ["isWithEvents"] = isWithEvents ? "True" : "False"
                     },
                     "target",
-                    field),
-                field.ContainingAssembly,
-                field.Type.ContainingAssembly);
+                    declared),
+                declared.ContainingAssembly,
+                fieldType.ContainingAssembly);
             facts.Add(CreateSemanticFact(
                 FactTypes.FieldDeclared,
                 RuleIds.VisualBasicSemanticDeclarations,
                 projectPath,
                 filePath,
                 identifier,
-                sourceSymbol: field.ContainingType?.ToDisplayString(SymbolFormat),
-                targetSymbol: field.ToDisplayString(SymbolFormat),
-                contractElement: field.Name,
+                sourceSymbol: containingType.ToDisplayString(SymbolFormat),
+                targetSymbol: declared.ToDisplayString(SymbolFormat),
+                contractElement: declared.Name,
                 properties: properties));
         }
     }
@@ -827,6 +837,310 @@ public static class VisualBasicSemanticExtractor
                 contractElement: eventSymbol.Name,
                 properties: properties));
         }
+    }
+
+    private static void AddEventCompositionFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts,
+        List<SemanticFactCandidate> gaps)
+    {
+        var retainedSites = 0;
+        bool ReserveEventSite(SyntaxNode node)
+        {
+            if (retainedSites++ < MaxCallSiteSyntaxFallbackFactsPerDocument)
+            {
+                return true;
+            }
+            if (retainedSites == MaxCallSiteSyntaxFallbackFactsPerDocument + 1)
+            {
+                AddEventGap(gaps, projectPath, filePath, node, "VisualBasicEventCompositionBudgetExhausted");
+            }
+            return false;
+        }
+
+        foreach (var methodStatement in root.DescendantNodes().OfType<MethodStatementSyntax>())
+        {
+            if (methodStatement.HandlesClause is null)
+            {
+                continue;
+            }
+
+            if (model.GetDeclaredSymbol(methodStatement) is not IMethodSymbol handler)
+            {
+                foreach (var item in methodStatement.HandlesClause.Events)
+                {
+                    if (!ReserveEventSite(item)) return;
+                    AddEventGap(gaps, projectPath, filePath, item, "UnresolvedVisualBasicHandlesHandler");
+                }
+                continue;
+            }
+
+            foreach (var item in methodStatement.HandlesClause.Events)
+            {
+                if (!ReserveEventSite(item)) return;
+                var eventSymbol = model.GetSymbolInfo(item.EventMember).Symbol as IEventSymbol;
+                var receiver = model.GetSymbolInfo(item.EventContainer).Symbol;
+                var hasValidHandlesClause = !model.GetDiagnostics(item.Span)
+                    .Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error
+                        && diagnostic.Id is "BC30506" or "BC31029");
+                if (!hasValidHandlesClause)
+                {
+                    AddEventGap(gaps, projectPath, filePath, item, "InvalidVisualBasicHandlesBinding");
+                    continue;
+                }
+                if (eventSymbol is null || eventSymbol.Type.TypeKind == TypeKind.Error)
+                {
+                    AddEventGap(gaps, projectPath, filePath, item, "UnresolvedVisualBasicHandlesEvent");
+                    continue;
+                }
+
+                facts.Add(CreateEventBindingFact(projectPath, filePath, item, handler, eventSymbol, receiver, "Handles", isAttach: true));
+            }
+        }
+
+        foreach (var statement in root.DescendantNodes().OfType<AddRemoveHandlerStatementSyntax>())
+        {
+            if (!ReserveEventSite(statement)) return;
+            var containingMethod = GetContainingMethod(statement, model);
+            var operation = model.GetOperation(statement) as IEventAssignmentOperation;
+            var hasValidDelegateConversion = !model.GetDiagnostics(statement.Span)
+                .Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+            var eventSymbol = (operation?.EventReference as IEventReferenceOperation)?.Event
+                ?? model.GetSymbolInfo(statement.EventExpression).Symbol as IEventSymbol
+                ?? ResolveUniqueEventMember(statement.EventExpression, model);
+            var handlerSymbol = !hasValidDelegateConversion || statement.DelegateExpression is LambdaExpressionSyntax
+                ? null
+                : ResolveEventHandler(operation?.HandlerValue)
+                    ?? ResolveAddressOfTarget(statement.DelegateExpression, model)
+                    ?? ResolveUniqueContainingTypeHandler(statement.DelegateExpression, containingMethod);
+            var isAttach = operation?.Adds ?? statement.IsKind(SyntaxKind.AddHandlerStatement);
+            if (containingMethod is null || eventSymbol is null || handlerSymbol is null)
+            {
+                AddEventGap(
+                    gaps,
+                    projectPath,
+                    filePath,
+                    statement,
+                    eventSymbol is null ? "LateBoundOrUnresolvedVisualBasicEvent" : "UnsupportedVisualBasicEventHandlerDelegate");
+                continue;
+            }
+
+            var receiver = statement.EventExpression is MemberAccessExpressionSyntax memberAccess
+                ? model.GetSymbolInfo(memberAccess.Expression).Symbol
+                : null;
+            facts.Add(CreateEventBindingFact(
+                projectPath,
+                filePath,
+                statement,
+                handlerSymbol,
+                eventSymbol,
+                receiver,
+                isAttach ? "AddHandler" : "RemoveHandler",
+                isAttach,
+                containingMethod));
+        }
+
+        foreach (var statement in root.DescendantNodes().OfType<RaiseEventStatementSyntax>())
+        {
+            if (!ReserveEventSite(statement)) return;
+            var sourceMethod = GetContainingMethod(statement, model);
+            var eventSymbol = model.GetSymbolInfo(statement.Name).Symbol as IEventSymbol;
+            if (sourceMethod is null || eventSymbol is null)
+            {
+                AddEventGap(gaps, projectPath, filePath, statement, "UnresolvedVisualBasicRaiseEvent");
+                continue;
+            }
+
+            var properties = AddSymbolProperties(
+                AddSymbolProperties(
+                    new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["argumentCount"] = (statement.ArgumentList?.Arguments.Count ?? 0).ToString(),
+                        ["eventName"] = eventSymbol.Name,
+                        ["wiringKind"] = "RaiseEvent"
+                    },
+                    "source",
+                    sourceMethod),
+                "target",
+                eventSymbol);
+            facts.Add(CreateSemanticFact(
+                FactTypes.VisualBasicEventRaised,
+                RuleIds.VisualBasicSemanticEventWiring,
+                projectPath,
+                filePath,
+                statement,
+                sourceMethod.ToDisplayString(SymbolFormat),
+                eventSymbol.ToDisplayString(SymbolFormat),
+                eventSymbol.Name,
+                properties,
+                includeSnippetHash: true));
+        }
+    }
+
+    private static SemanticFactCandidate CreateEventBindingFact(
+        string? projectPath,
+        string filePath,
+        SyntaxNode node,
+        IMethodSymbol handler,
+        IEventSymbol eventSymbol,
+        ISymbol? receiver,
+        string wiringKind,
+        bool isAttach,
+        IMethodSymbol? wiringOwner = null)
+    {
+        var properties = AddSymbolProperties(
+            AddSymbolProperties(
+                new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["eventName"] = eventSymbol.Name,
+                    ["handlerName"] = handler.Name,
+                    ["isAttach"] = isAttach ? "True" : "False",
+                    ["receiverKind"] = receiver?.Kind.ToString() ?? "Implicit",
+                    ["receiverName"] = receiver?.Name ?? string.Empty,
+                    ["wiringKind"] = wiringKind,
+                    ["wiringOwner"] = wiringOwner?.ToDisplayString(SymbolFormat) ?? handler.ToDisplayString(SymbolFormat)
+                },
+                "source",
+                handler),
+            "target",
+            eventSymbol);
+        if (receiver is not null)
+        {
+            AddSymbolProperties(properties, "receiver", receiver);
+            if (GetSymbolType(receiver) is { } receiverType)
+            {
+                properties["receiverTypeName"] = receiverType.Name;
+                properties["receiverTypeDisplayName"] = receiverType.ToDisplayString(SymbolFormat);
+                AddSymbolProperties(properties, "receiverType", receiverType);
+            }
+        }
+
+        return CreateSemanticFact(
+            FactTypes.VisualBasicEventBindingDeclared,
+            RuleIds.VisualBasicSemanticEventWiring,
+            projectPath,
+            filePath,
+            node,
+            handler.ToDisplayString(SymbolFormat),
+            eventSymbol.ToDisplayString(SymbolFormat),
+            eventSymbol.Name,
+            properties,
+            includeSnippetHash: true);
+    }
+
+    private static ITypeSymbol? GetSymbolType(ISymbol symbol) => symbol switch
+    {
+        IFieldSymbol field => field.Type,
+        IPropertySymbol property => property.Type,
+        IParameterSymbol parameter => parameter.Type,
+        ILocalSymbol local => local.Type,
+        INamedTypeSymbol type => type,
+        _ => null
+    };
+
+    private static IMethodSymbol? GetContainingMethod(SyntaxNode node, SemanticModel model)
+    {
+        var statement = node.Ancestors().OfType<MethodBlockBaseSyntax>().FirstOrDefault()?.BlockStatement;
+#pragma warning disable RS1039 // VB Roslyn returns the declared method for concrete MethodBaseSyntax nodes.
+        return statement is null ? null : model.GetDeclaredSymbol(statement) as IMethodSymbol;
+#pragma warning restore RS1039
+    }
+
+    private static IEventSymbol? ResolveUniqueEventMember(ExpressionSyntax expression, SemanticModel model)
+    {
+        if (expression is not MemberAccessExpressionSyntax member)
+        {
+            return null;
+        }
+
+        var receiverType = model.GetTypeInfo(member.Expression).Type;
+        return receiverType?.GetMembers(member.Name.Identifier.ValueText).OfType<IEventSymbol>().SingleOrDefault();
+    }
+
+    private static IMethodSymbol? ResolveAddressOfTarget(ExpressionSyntax expression, SemanticModel model)
+    {
+        var directInfo = model.GetSymbolInfo(expression);
+        if (directInfo.Symbol is IMethodSymbol direct)
+        {
+            return direct;
+        }
+        if (directInfo.CandidateSymbols.OfType<IMethodSymbol>().ToArray() is [var directCandidate])
+        {
+            return directCandidate;
+        }
+
+        if (expression is UnaryExpressionSyntax addressOf
+            && addressOf.IsKind(SyntaxKind.AddressOfExpression))
+        {
+            var operandInfo = model.GetSymbolInfo(addressOf.Operand);
+            if (operandInfo.Symbol is IMethodSymbol operand)
+            {
+                return operand;
+            }
+            return operandInfo.CandidateSymbols.OfType<IMethodSymbol>().SingleOrDefault();
+        }
+
+        return null;
+    }
+
+    private static IMethodSymbol? ResolveEventHandler(IOperation? operation)
+    {
+        return operation switch
+        {
+            IAnonymousFunctionOperation => null,
+            IDelegateCreationOperation { Target: IMethodReferenceOperation methodReference } => methodReference.Method,
+            IDelegateCreationOperation { Target: IAnonymousFunctionOperation } => null,
+            IMethodReferenceOperation methodReference => methodReference.Method,
+            IConversionOperation conversion => ResolveEventHandler(conversion.Operand),
+            IParenthesizedOperation parenthesized => ResolveEventHandler(parenthesized.Operand),
+            _ => null
+        };
+    }
+
+    private static IMethodSymbol? ResolveUniqueContainingTypeHandler(ExpressionSyntax expression, IMethodSymbol? containingMethod)
+    {
+        if (containingMethod?.ContainingType is null)
+        {
+            return null;
+        }
+
+        if (expression is not UnaryExpressionSyntax unary || !unary.IsKind(SyntaxKind.AddressOfExpression))
+        {
+            return null;
+        }
+        expression = unary.Operand;
+
+        var name = expression switch
+        {
+            IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+            MemberAccessExpressionSyntax member => member.Name.Identifier.ValueText,
+            _ => string.Empty
+        };
+        return name.Length == 0
+            ? null
+            : containingMethod.ContainingType.GetMembers(name).OfType<IMethodSymbol>().SingleOrDefault();
+    }
+
+    private static void AddEventGap(
+        List<SemanticFactCandidate> gaps,
+        string? projectPath,
+        string filePath,
+        SyntaxNode node,
+        string gapKind)
+    {
+        var span = node.SyntaxTree.GetLineSpan(node.Span);
+        gaps.Add(CreateGap(
+            filePath,
+            "A Visual Basic event composition site could not be resolved without guessing; only bounded source-location evidence was retained.",
+            gapKind,
+            projectPath,
+            span.StartLinePosition.Line + 1,
+            Math.Max(span.StartLinePosition.Line + 1, span.EndLinePosition.Line + 1),
+            siteHash: FactFactory.Hash(node.ToString(), 32),
+            ruleId: RuleIds.VisualBasicSemanticEventWiring));
     }
 
     private static void AddTypeSymbolRelationshipFacts(
@@ -1802,13 +2116,14 @@ public static class VisualBasicSemanticExtractor
         string? sourceSymbol = null,
         string? targetSymbol = null,
         string? contractElement = null,
-        IReadOnlyDictionary<string, string>? properties = null)
+        IReadOnlyDictionary<string, string>? properties = null,
+        bool includeSnippetHash = false)
     {
         return new SemanticFactCandidate(
             factType,
             ruleId,
             EvidenceTiers.Tier1Semantic,
-            ToEvidenceSpan(filePath, node),
+            ToEvidenceSpan(filePath, node, includeSnippetHash),
             projectPath,
             sourceSymbol,
             targetSymbol,
@@ -1857,14 +2172,14 @@ public static class VisualBasicSemanticExtractor
         _ => $"unsupported-{expression.Kind()}-{FactFactory.Hash(expression.ToString(), 16)}"
     };
 
-    private static EvidenceSpan ToEvidenceSpan(string filePath, SyntaxNode node)
+    private static EvidenceSpan ToEvidenceSpan(string filePath, SyntaxNode node, bool includeSnippetHash = false)
     {
         var span = node.SyntaxTree.GetLineSpan(node.Span);
         return new EvidenceSpan(
             FileInventory.NormalizeRelativePath(filePath),
             span.StartLinePosition.Line + 1,
             Math.Max(span.StartLinePosition.Line + 1, span.EndLinePosition.Line + 1),
-            null,
+            includeSnippetHash ? FactFactory.Hash(node.ToString(), 32) : null,
             "VisualBasicSemanticExtractor",
             ScannerVersions.VisualBasicSemanticExtractor);
     }
@@ -1877,7 +2192,8 @@ public static class VisualBasicSemanticExtractor
         int startLine = 1,
         int endLine = 1,
         string? diagnosticId = null,
-        string? siteHash = null)
+        string? siteHash = null,
+        string? ruleId = null)
     {
         var sanitized = BuildEnvironmentDiagnosticExtractor.SanitizeWorkspaceGap(gapKind, message, diagnosticId);
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
@@ -1902,7 +2218,7 @@ public static class VisualBasicSemanticExtractor
 
         return new SemanticFactCandidate(
             FactTypes.AnalysisGap,
-            RuleIds.VisualBasicSemanticWorkspace,
+            ruleId ?? RuleIds.VisualBasicSemanticWorkspace,
             EvidenceTiers.Tier4Unknown,
             new EvidenceSpan(
                 FileInventory.NormalizeRelativePath(filePath),
