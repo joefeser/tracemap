@@ -28,3 +28,22 @@ Potential ADO operations are recognized textually only to decide whether to emit
 
 Facts are ordered and deduplicated by the existing materialization pipeline. Diagnostics and gaps contain safe categories, not raw compiler messages. Tests assert repeated extraction equality and absence of SQL/connection/parameter sentinel values.
 
+## External boundaries
+
+Compiler-resolved `HttpClient`, `WebRequest`, and `WebClient` calls reuse the
+shared HTTP fact contracts. Constant string and `New Uri(constant)` arguments
+retain a normalized path and digest, never the host or raw URL. Dynamic
+destinations remain explicit bounded gaps. `WebRequest.Create` is retained as
+construction evidence; a later parameterless response call is not joined back
+to the constructor by spelling or local name.
+
+`ConfigurationManager.GetSection`, `AppSettings(...)`,
+`ConnectionStrings(...)`, and compiler-resolved `My.Settings` members reuse
+`ConfigBinding`; key/member text is hashed. VB `Global.System.IO.*` semantic
+display strings feed the existing batch/data-movement extractor.
+
+The compiler can prove inheritance from WCF `ClientBase(Of T)` and ASMX
+`SoapHttpClientProtocol`, but the existing service mapping extractors are C#
+source projections. Until those extractors gain a narrow VB semantic seam,
+these invocations emit explicit service-mapping coverage gaps and no positive
+service operation fact.

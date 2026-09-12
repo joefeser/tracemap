@@ -514,6 +514,7 @@ public static class VisualBasicSemanticExtractor
         AddMethodInvocationFacts(repoPath, projectPath, filePath, root, model, facts, gaps);
         AddObjectCreationFacts(repoPath, projectPath, filePath, root, model, facts, gaps);
         AddAdoNetBoundaryFacts(projectPath, filePath, root, model, facts, gaps);
+        AddExternalBoundaryFacts(projectPath, filePath, root, model, facts, gaps);
     }
 
     private static void AddTypeDeclarationFacts(
@@ -2000,6 +2001,373 @@ public static class VisualBasicSemanticExtractor
             }
         }
     }
+
+    private static void AddExternalBoundaryFacts(
+        string? projectPath,
+        string filePath,
+        SyntaxNode root,
+        SemanticModel model,
+        List<SemanticFactCandidate> facts,
+        List<SemanticFactCandidate> gaps)
+    {
+        var gapCount = 0;
+        var budgetReported = false;
+        foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            var method = model.GetSymbolInfo(invocation).Symbol as IMethodSymbol;
+            if (method is not null && IsWebRequestCreate(method))
+            {
+                var enclosing = model.GetEnclosingSymbol(invocation.SpanStart);
+                var properties = AddSymbolProperties(
+                    AddSymbolProperties(
+                        new SortedDictionary<string, string>(StringComparer.Ordinal)
+                        {
+                            ["clientKind"] = "WebRequest",
+                            ["coverageLabel"] = "bounded-static-http-client-construction",
+                            ["limitations"] = "Compiler-resolved request construction only; a later response call, runtime destination, request contents, response, and success are not proven.",
+                            ["surfaceKind"] = "http-client",
+                            ["urlKind"] = "unavailable"
+                        }, "source", enclosing), "target", method);
+                if (TryGetHttpUriArgument(invocation, model, out var requestUri))
+                {
+                    var normalized = EndpointRouteNormalizer.Normalize(requestUri);
+                    properties["normalizedPathKey"] = normalized.PathKey;
+                    properties["normalizedPathTemplate"] = normalized.PathTemplate;
+                    properties["urlHash"] = FactFactory.Hash(requestUri, 32);
+                    properties["urlKind"] = "compile-time-constant-path";
+                }
+                else
+                {
+                    AddExternalGap(invocation, "VisualBasicHttpConstructionDestinationUnavailable", "A compiler-resolved WebRequest construction had no compile-time constant destination; later response calls cannot be correlated to a route identity.");
+                }
+                facts.Add(CreateSemanticFact(FactTypes.HttpClientCreated, RuleIds.HttpClientInvocation,
+                    projectPath, filePath, invocation,
+                    sourceSymbol: enclosing?.ToDisplayString(SymbolFormat),
+                    targetSymbol: method.ToDisplayString(SymbolFormat),
+                    contractElement: method.Name,
+                    properties: properties));
+                continue;
+            }
+
+            if (method is not null && TryClassifyHttpOperation(method, out var family, out var httpMethod))
+            {
+                var enclosing = model.GetEnclosingSymbol(invocation.SpanStart);
+                var properties = AddAssemblyProperties(
+                    AddSymbolProperties(
+                        AddSymbolProperties(
+                            new SortedDictionary<string, string>(StringComparer.Ordinal)
+                            {
+                                ["coverageLabel"] = "bounded-static-http-call",
+                                ["httpMethod"] = httpMethod,
+                                ["limitations"] = "Compiler-resolved outbound HTTP API call only; runtime reachability, destination host, request contents, response, and success are not proven.",
+                                ["methodFamily"] = family,
+                                ["methodName"] = method.Name,
+                                ["surfaceKind"] = "http-client",
+                                ["urlKind"] = "unavailable"
+                            },
+                            "source",
+                            enclosing),
+                        "target",
+                        method),
+                    enclosing?.ContainingAssembly,
+                    method.ContainingAssembly);
+                if (TryGetHttpUriArgument(invocation, model, out var uriText))
+                {
+                    var normalized = EndpointRouteNormalizer.Normalize(uriText);
+                    properties["normalizedPathKey"] = normalized.PathKey;
+                    properties["normalizedPathTemplate"] = normalized.PathTemplate;
+                    properties["urlKind"] = "compile-time-constant-path";
+                    properties["urlHash"] = FactFactory.Hash(uriText, 32);
+                }
+                else
+                {
+                    AddExternalGap(invocation, "VisualBasicHttpDestinationUnavailable", "A compiler-resolved Visual Basic HTTP call had no compile-time constant destination; no host or route identity was claimed.");
+                }
+
+                facts.Add(CreateSemanticFact(
+                    FactTypes.HttpCallDetected,
+                    RuleIds.HttpClientInvocation,
+                    projectPath,
+                    filePath,
+                    invocation,
+                    sourceSymbol: enclosing?.ToDisplayString(SymbolFormat),
+                    targetSymbol: method.ToDisplayString(SymbolFormat),
+                    contractElement: method.Name,
+                    properties: properties));
+                continue;
+            }
+
+            if (method is not null && IsConfigurationManagerGetSection(method))
+            {
+                if (TryGetConstantStringArgument(invocation, model, out var key))
+                {
+                    AddConfigBinding(invocation, model, "configuration-manager-section", key, method, facts, projectPath, filePath);
+                }
+                else
+                {
+                    AddExternalGap(invocation, "VisualBasicConfigurationKeyUnavailable", "A compiler-resolved ConfigurationManager section access had no compile-time constant key; no config binding was claimed.");
+                }
+                continue;
+            }
+
+            if (method is not null && TryClassifyLegacyServiceClient(method, out var serviceFamily))
+            {
+                AddExternalGap(
+                    invocation,
+                    serviceFamily == "wcf"
+                        ? "VisualBasicWcfServiceMappingUnavailable"
+                        : "VisualBasicAsmxServiceMappingUnavailable",
+                    $"A compiler-resolved Visual Basic {serviceFamily.ToUpperInvariant()} client invocation was retained, but the existing service mapping extractor does not establish Visual Basic proxy-to-contract mappings; no service operation boundary was claimed.");
+                continue;
+            }
+
+            if (model.GetOperation(invocation) is IPropertyReferenceOperation propertyReference
+                && TryClassifyConfigurationManagerIndexer(propertyReference, out var configSourceKind))
+            {
+                if (TryGetConstantStringArgument(invocation, model, out var key))
+                {
+                    AddConfigBinding(invocation, model, configSourceKind, key, propertyReference.Property, facts, projectPath, filePath);
+                }
+                else
+                {
+                    AddExternalGap(invocation, "VisualBasicConfigurationKeyUnavailable", "A compiler-resolved ConfigurationManager indexer access had no compile-time constant key; no config binding was claimed.");
+                }
+                continue;
+            }
+
+            if (method is null && IsPotentialExternalOperationName(GetSafeInvocationName(invocation.Expression)))
+            {
+                AddExternalGap(invocation, "VisualBasicExternalBoundaryTargetUnavailable", "A potential Visual Basic external-boundary call had no compiler-resolved target; no HTTP or service boundary was claimed.");
+            }
+        }
+
+        foreach (var access in root.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
+        {
+            if (access.Expression is MemberAccessExpressionSyntax settings
+                && settings.Name.Identifier.ValueText.Equals("Settings", StringComparison.OrdinalIgnoreCase)
+                && settings.Expression is IdentifierNameSyntax myIdentifier
+                && myIdentifier.Identifier.ValueText.Equals("My", StringComparison.OrdinalIgnoreCase)
+                && model.GetSymbolInfo(access).Symbol is IPropertySymbol property)
+            {
+                AddConfigBinding(access, model, "my-settings-member", property.Name, property, facts, projectPath, filePath);
+            }
+        }
+
+        void AddExternalGap(SyntaxNode node, string kind, string message)
+        {
+            if (gapCount < 50)
+            {
+                var span = node.SyntaxTree.GetLineSpan(node.Span);
+                gaps.Add(CreateGap(filePath, message, kind, projectPath,
+                    span.StartLinePosition.Line + 1, span.EndLinePosition.Line + 1,
+                    siteHash: FactFactory.Hash(node.ToString(), 32), ruleId: RuleIds.VisualBasicSemanticExternalBoundary));
+                gapCount++;
+            }
+            else if (!budgetReported)
+            {
+                gaps.Add(CreateGap(filePath,
+                    "Visual Basic external-boundary gaps reached the deterministic per-document budget; remaining candidate sites were not classified.",
+                    "VisualBasicExternalBoundaryGapBudgetExhausted", projectPath,
+                    ruleId: RuleIds.VisualBasicSemanticExternalBoundary));
+                budgetReported = true;
+            }
+        }
+    }
+
+    private static void AddConfigBinding(
+        SyntaxNode node,
+        SemanticModel model,
+        string sourceKind,
+        string key,
+        ISymbol target,
+        List<SemanticFactCandidate> facts,
+        string? projectPath,
+        string filePath)
+    {
+        var enclosing = model.GetEnclosingSymbol(node.SpanStart);
+        var keyHash = FactFactory.Hash(key, 32);
+        var properties = AddSymbolProperties(
+            new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["configKeyHash"] = keyHash,
+                ["configSourceKind"] = sourceKind,
+                ["coverageLabel"] = "bounded-static-config-binding",
+                ["limitations"] = "Compiler-resolved configuration access only; raw keys and values, provider precedence, reload behavior, availability, and runtime use are not proven.",
+                ["surfaceKind"] = "package-config",
+                ["targetAssemblyName"] = target.ContainingAssembly?.Identity.Name ?? string.Empty
+            },
+            "source",
+            enclosing);
+        facts.Add(CreateSemanticFact(
+            FactTypes.ConfigBinding,
+            RuleIds.VisualBasicSemanticConfigBinding,
+            projectPath,
+            filePath,
+            node,
+            sourceSymbol: enclosing?.ToDisplayString(SymbolFormat),
+            targetSymbol: $"config-key:{keyHash}",
+            contractElement: keyHash,
+            properties: properties));
+    }
+
+    private static bool TryClassifyHttpOperation(IMethodSymbol method, out string family, out string httpMethod)
+    {
+        family = string.Empty;
+        httpMethod = "UNKNOWN";
+        var type = GetMetadataName(method.ContainingType.OriginalDefinition);
+        if (type == "System.Net.Http.HttpClient" && method.ContainingAssembly.Identity.Name == "System.Net.Http")
+        {
+            family = "HttpClient";
+            httpMethod = method.Name.StartsWith("Get", StringComparison.Ordinal) ? "GET"
+                : method.Name.StartsWith("Post", StringComparison.Ordinal) ? "POST"
+                : method.Name.StartsWith("Put", StringComparison.Ordinal) ? "PUT"
+                : method.Name.StartsWith("Delete", StringComparison.Ordinal) ? "DELETE"
+                : method.Name.StartsWith("Patch", StringComparison.Ordinal) ? "PATCH" : "UNKNOWN";
+            return method.Name is "GetAsync" or "GetStringAsync" or "GetByteArrayAsync" or "GetStreamAsync"
+                or "PostAsync" or "PutAsync" or "DeleteAsync" or "PatchAsync" or "SendAsync" or "Send";
+        }
+
+        if (IsAdoNetType(method.ContainingType, "System.Net.WebRequest")
+            && method.Name is "GetResponse" or "GetResponseAsync")
+        {
+            family = "WebRequest";
+            return true;
+        }
+
+        if (type == "System.Net.WebClient"
+            && method.ContainingAssembly.Identity.Name == "System.Net.WebClient"
+            && (method.Name.StartsWith("Download", StringComparison.Ordinal)
+                || method.Name.StartsWith("Upload", StringComparison.Ordinal)
+                || method.Name.StartsWith("OpenRead", StringComparison.Ordinal)
+                || method.Name.StartsWith("OpenWrite", StringComparison.Ordinal)))
+        {
+            family = "WebClient";
+            httpMethod = method.Name.StartsWith("Download", StringComparison.Ordinal) || method.Name.StartsWith("OpenRead", StringComparison.Ordinal)
+                ? "GET" : "UNKNOWN";
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryGetHttpUriArgument(InvocationExpressionSyntax invocation, SemanticModel model, out string value)
+    {
+        foreach (var argument in invocation.ArgumentList.Arguments.OfType<SimpleArgumentSyntax>())
+        {
+            var parameter = (model.GetOperation(argument) as IArgumentOperation)?.Parameter;
+            if (parameter?.Name is not ("requestUri" or "requestUriString" or "address"))
+            {
+                continue;
+            }
+            var constant = model.GetConstantValue(argument.Expression);
+            if (constant.HasValue && constant.Value is string text)
+            {
+                value = text;
+                return true;
+            }
+            if (argument.Expression is ObjectCreationExpressionSyntax uriCreation
+                && model.GetTypeInfo(uriCreation).Type is INamedTypeSymbol uriType
+                && GetMetadataName(uriType.OriginalDefinition) == "System.Uri"
+                && uriCreation.ArgumentList?.Arguments.FirstOrDefault() is SimpleArgumentSyntax uriArgument)
+            {
+                var uriConstant = model.GetConstantValue(uriArgument.Expression);
+                if (uriConstant.HasValue && uriConstant.Value is string uriText)
+                {
+                    value = uriText;
+                    return true;
+                }
+            }
+        }
+        value = string.Empty;
+        return false;
+    }
+
+    private static bool TryGetConstantStringArgument(InvocationExpressionSyntax invocation, SemanticModel model, out string value)
+    {
+        foreach (var argument in invocation.ArgumentList.Arguments.OfType<SimpleArgumentSyntax>())
+        {
+            var constant = model.GetConstantValue(argument.Expression);
+            if (constant.HasValue && constant.Value is string text)
+            {
+                value = text;
+                return true;
+            }
+        }
+        value = string.Empty;
+        return false;
+    }
+
+    private static bool IsConfigurationManagerGetSection(IMethodSymbol method) =>
+        GetMetadataName(method.ContainingType.OriginalDefinition) == "System.Configuration.ConfigurationManager"
+        && method.ContainingAssembly.Identity.Name == "System.Configuration.ConfigurationManager"
+        && method.Name == "GetSection";
+
+    private static bool IsWebRequestCreate(IMethodSymbol method) =>
+        GetMetadataName(method.ContainingType.OriginalDefinition) == "System.Net.WebRequest"
+        && method.ContainingAssembly.Identity.Name == "System.Net.Requests"
+        && method.Name is "Create" or "CreateHttp";
+
+    private static bool TryClassifyConfigurationManagerIndexer(IPropertyReferenceOperation operation, out string sourceKind)
+    {
+        sourceKind = string.Empty;
+        foreach (var child in DescendantsAndSelf(operation))
+        {
+            if (child is not IPropertyReferenceOperation property
+                || GetMetadataName(property.Property.ContainingType.OriginalDefinition) != "System.Configuration.ConfigurationManager"
+                || property.Property.ContainingAssembly.Identity.Name != "System.Configuration.ConfigurationManager")
+            {
+                continue;
+            }
+            if (property.Property.Name == "AppSettings")
+            {
+                sourceKind = "configuration-manager-app-settings";
+                return true;
+            }
+            if (property.Property.Name == "ConnectionStrings")
+            {
+                sourceKind = "configuration-manager-connection-strings";
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static bool TryClassifyLegacyServiceClient(IMethodSymbol method, out string serviceFamily)
+    {
+        serviceFamily = string.Empty;
+        for (var type = method.ContainingType; type is not null; type = type.BaseType)
+        {
+            var baseName = GetMetadataName(type.OriginalDefinition);
+            var assemblyName = type.ContainingAssembly.Identity.Name;
+            if (baseName == "System.ServiceModel.ClientBase`1" && assemblyName == "System.ServiceModel.Primitives")
+            {
+                serviceFamily = "wcf";
+                return true;
+            }
+            if (baseName == "System.Web.Services.Protocols.SoapHttpClientProtocol" && assemblyName == "System.Web.Services")
+            {
+                serviceFamily = "asmx";
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static IEnumerable<IOperation> DescendantsAndSelf(IOperation operation)
+    {
+        yield return operation;
+        foreach (var child in operation.ChildOperations)
+        {
+            foreach (var descendant in DescendantsAndSelf(child))
+            {
+                yield return descendant;
+            }
+        }
+    }
+
+    private static bool IsPotentialExternalOperationName(string name) =>
+        new[] { "GetAsync", "PostAsync", "PutAsync", "DeleteAsync", "SendAsync", "GetResponse", "GetResponseAsync", "DownloadString", "UploadString" }
+            .Contains(name, StringComparer.OrdinalIgnoreCase);
 
     private static bool TryClassifyAdoNetOperation(IMethodSymbol method, out string operationKind, out string resultKind)
     {

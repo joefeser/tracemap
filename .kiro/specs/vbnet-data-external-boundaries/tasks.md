@@ -7,6 +7,9 @@
 - [x] 5. Add synthetic semantic, partial-compilation, privacy, and determinism tests.
 - [x] 6. Update extractor versions, rule catalog, adapter docs, and validation commands.
 - [x] 7. Run focused validation and record results for review.
-- [ ] 8. Add HTTP/file/service/config boundary extraction (later #737 slice).
-- [ ] 9. Validate all downstream Web Forms/database review, query recipe, source view, and WITS consumers (later #737 slice).
+- [ ] 8. Add HTTP/file/service/config boundary extraction.
+  - [x] Reuse shared compiler-backed HTTP, configuration, and file/data-movement contracts with bounded privacy-safe gaps.
+  - [x] Recognize compiler-proven WCF/ASMX client inheritance and emit explicit coverage gaps rather than guessed mappings.
+  - [ ] Establish positive VB WCF/ASMX proxy-to-contract and operation mappings in the existing service contracts.
+- [x] 9. Validate downstream Web Forms packet/call-path, query-recipe/docs export, source/review evidence, and WITS handoff consumers through shared language-neutral facts.
 - [ ] 10. Run or explicitly justify the relevant pinned open-source smoke before issue completion.

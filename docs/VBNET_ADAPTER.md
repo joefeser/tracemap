@@ -1,7 +1,7 @@
 # VB.NET Adapter
 
-Status: foundation, bounded event/Web Forms composition, and an initial
-compiler-backed ADO.NET boundary slice (issues
+Status: foundation, bounded event/Web Forms composition, and compiler-backed
+ADO.NET plus HTTP/config/file boundary slices (issues
 [#736](https://github.com/joefeser/tracemap/issues/736) and
 [#738](https://github.com/joefeser/tracemap/issues/738), plus partial issue
 [#737](https://github.com/joefeser/tracemap/issues/737)). Every claim below is bounded by
@@ -40,14 +40,26 @@ build success, or impact.
   `ExecuteScalar`, `ExecuteNonQuery`, and `DbDataAdapter.Fill` calls. Existing
   call-edge and object-creation facts retain the supporting method path and
   DataSet/DataTable/reader types.
+- Emits shared `HttpCallDetected` evidence for compiler-resolved `HttpClient`,
+  `WebRequest`, and `WebClient` operations. Compile-time destinations retain a
+  normalized path plus a digest, never a host or raw URL; dynamic destinations
+  remain explicit gaps. `WebRequest.Create` construction remains visible even
+  when a later `GetResponse` cannot be correlated to a destination.
+- Emits shared `ConfigBinding` evidence for compiler-resolved
+  `ConfigurationManager.GetSection`, `AppSettings(...)`,
+  `ConnectionStrings(...)`, and `My.Settings` member access. Only key/member
+  digests are retained; raw keys and values are excluded.
+- Feeds compiler-resolved VB `System.IO.File`/`Directory` calls into the shared
+  batch/data-movement projection. No VB-only file contract is introduced.
 
 ## Extractor identities
 
 | Extractor | Identity/version | Tier | Rules |
 | --- | --- | --- | --- |
-| Visual Basic semantic extractor | `vb-semantic/0.6.0` | Tier1 (facts), Tier2 (project observation), Tier4 (workspace, call-site, event, and data-boundary gaps) | `vb.semantic.compilation.v1`, `vb.semantic.workspace.v1`, `vb.semantic.declarations.v1`, `vb.semantic.propertyaccess.v1`, `vb.semantic.methodinvocation.v1`, `vb.semantic.callgraph.v1`, `vb.semantic.objectcreation.v1`, `vb.semantic.valueflow.v1`, `vb.semantic.symbolrelationship.v1`, `vb.semantic.event-wiring.v1`, plus shared `database.sql.text.v1` and `database.operation.call-pattern.v1` contracts |
+| Visual Basic semantic extractor | `vb-semantic/0.7.0` | Tier1 (facts), Tier2 (project observation), Tier4 (workspace, call-site, event, and data/external-boundary gaps) | `vb.semantic.compilation.v1`, `vb.semantic.workspace.v1`, `vb.semantic.declarations.v1`, `vb.semantic.propertyaccess.v1`, `vb.semantic.methodinvocation.v1`, `vb.semantic.callgraph.v1`, `vb.semantic.objectcreation.v1`, `vb.semantic.valueflow.v1`, `vb.semantic.symbolrelationship.v1`, `vb.semantic.event-wiring.v1`, `vb.semantic.config-binding.v1`, `vb.semantic.external-boundary.v1`, plus shared database and HTTP contracts |
 | Visual Basic syntax fallback | `vb-syntax/0.3.1` | Tier3 (facts), Tier4 (parse/read/budget/semantic-unavailable/event gaps) | `vb.syntax.declarations.v1`, `vb.syntax.memberaccess.v1`, `vb.syntax.invocation.v1`, `vb.syntax.callgraph.v1`, `vb.syntax.objectcreation.v1`, `vb.syntax.event-wiring.v1` |
 | Shared Web Forms extractor | `legacy-webforms/0.8.3` | Tier1/Tier2/Tier3 facts and Tier4 gaps | existing `legacy.webforms.*` contracts, now with bounded VB code-behind/designer parsing and shared database-operation terminal projection |
+| Shared batch/data-movement extractor | `legacy-batch-data-movement/0.2.0` | Tier1/Tier2/Tier3 facts and Tier4 gaps | `legacy.webforms.batch-data-movement.v1`, including VB `Global.System.IO.*` semantic display strings |
 
 Symbol identities use the canonical .NET normalization shape with
 `visualbasic`-tagged language values (see `VisualBasicSymbolIdentityProvider`).
@@ -72,6 +84,15 @@ strings retain only a SHA-256 digest and length; raw SQL, procedure names,
 parameter names and values, and connection material are not retained.
 `StoredProcedure` is a safe categorical candidate derived from a resolved
 `CommandType` enum assignment.
+
+The external slice reuses `HttpCallDetected`, `HttpClientCreated`, and
+`ConfigBinding`. Constant HTTP destinations retain normalized path shapes and
+hashes only. Configuration keys and members retain hashes only. Compiler-
+resolved `System.IO` invocations are consumed by the shared
+`LegacyBatchDataMovementDeclared` projection. These shared facts flow through
+Web Forms call paths, modernization packets, evidence-doc query recipes,
+source/review inputs, and WITS-compatible handoff corpora without a
+language-specific downstream schema.
 
 Event composition adds `VisualBasicEventBindingDeclared` for compiler-resolved
 or syntax-only `Handles`, `AddHandler`, and `RemoveHandler` sites and
@@ -163,6 +184,13 @@ catalog documents them per rule:
   candidate. Helper-returned commands, reflection, provider-specific APIs
   outside the `DbCommand`/`DbDataAdapter` base families, cross-method command
   state, and runtime ordering remain outside this initial slice.
+- WCF `ClientBase(Of T)` and ASMX `SoapHttpClientProtocol` invocation shapes
+  are recognized only to retain explicit Tier4 coverage gaps. The existing
+  WCF/ASMX mapping extractors do not yet establish VB proxy-to-contract or
+  proxy-to-operation mappings, so this slice deliberately emits no guessed
+  service boundary. HTTP destinations that are dynamic, including a later
+  `WebRequest.GetResponse` whose construction receiver is not correlated,
+  likewise remain gaps while their call/construction evidence is retained.
 - No runtime claims of any kind: facts prove source structure and
   compiler-resolved binding at scan time only, never execution,
   reachability, deployment state, or impact.

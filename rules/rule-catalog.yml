@@ -2462,6 +2462,7 @@ rules:
     limitations:
       - Rows are static candidates only and do not prove that a job is scheduled, runs, succeeds, moves complete data, retries effectively, is idempotent, checkpoints effectively, commits or rolls back successfully, is monitored, or is used in production.
       - Compiler-resolved System.IO, FileSystemWatcher, and SqlBulkCopy calls are preferred; syntax fallback is restricted to explicitly qualified framework calls, declared SqlBulkCopy variables, known scheduled-entry shapes, and CommandType.StoredProcedure execution shapes.
+      - Compiler-resolved System.IO consumption accepts the canonical C# `global::System.IO.*` and Visual Basic `Global.System.IO.*` symbol display forms; this is a language display normalization, not a name-only join.
       - Retry, error-handling, transaction, checkpoint, and telemetry fields record only deterministic declaration shapes in the same member; they do not prove runtime behavior or effectiveness.
       - Related database, message, service, and configuration facts are composed only when source file and member identity prove the association; missing or ambiguous project owners, config references, reduced semantic coverage, and deterministic limits remain explicit gaps.
       - Raw schedules, paths, destinations, SQL, connection material, configuration values, source values, snippets, credentials, local absolute paths, and remotes are omitted or represented only by bounded hashes and categories.
@@ -3977,6 +3978,29 @@ rules:
       - The shared per-file 2,000-fact budget applies; missing evidence beyond that limit is not evidence of absence.
       - Syntax event evidence does not prove compilation, attachment, removal, firing, ordering, postback behavior, reachability, or execution.
 
+  - id: vb.semantic.config-binding.v1
+    name: Visual Basic semantic configuration binding
+    description: Records compiler-resolved ConfigurationManager section/indexer access and My.Settings member access using the shared ConfigBinding contract.
+    evidenceTier: Tier1Semantic
+    emits:
+      - ConfigBinding
+    limitations:
+      - Configuration keys and member names are retained only as hashes; values, connection material, provider precedence, reload behavior, availability, and runtime use are not reconstructed.
+      - My.Settings recognition requires the explicit VB My.Settings member shape and a compiler-resolved property. Custom wrappers, aliases, reflection, default-member indirection, and dynamically selected keys remain outside this rule.
+      - ConfigurationManager GetSection, AppSettings, and ConnectionStrings evidence requires the framework assembly/type identity and a compile-time constant key; unresolved or dynamic keys remain gaps under vb.semantic.external-boundary.v1.
+
+  - id: vb.semantic.external-boundary.v1
+    name: Visual Basic semantic external-boundary gaps
+    description: Records bounded producer-local gaps for unresolved, late-bound, or dynamically identified Visual Basic HTTP, configuration, and service boundary shapes.
+    evidenceTier: Tier4Unknown
+    emits:
+      - AnalysisGap
+    limitations:
+      - Name-only candidates do not establish an HTTP, configuration, WCF, ASMX, file, or other external boundary and never become positive boundary facts.
+      - Compiler-proven WCF ClientBase and ASMX SoapHttpClientProtocol inheritance currently retains a service-mapping coverage gap because the existing service mappers do not establish Visual Basic proxy-to-contract or proxy-to-operation facts.
+      - Gaps are capped at 50 sites plus one budget marker per document. Missing facts beyond that budget are not evidence of absence.
+      - These feature-local gaps do not replace compiler/workspace diagnostics and do not independently claim build failure.
+
   - id: vb.syntax.declarations.v1
     name: Visual Basic syntax declarations
     description: Bounded syntax-only declarations over readable Visual Basic files that received no compiler-resolved coverage, plus per-file parse, read, and budget gaps for that fallback.
@@ -4227,6 +4251,8 @@ rules:
       - Tier1 requires Roslyn symbol binding to known HTTP APIs.
       - Syntax fallback matches common method names and may include unrelated methods with the same name.
       - URL may not be fully resolvable if built dynamically or loaded from runtime configuration.
+      - Visual Basic Tier1 support is bounded to compiler-resolved HttpClient request methods, WebRequest GetResponse methods, and WebClient download/upload/open methods. Static destinations retain normalized paths and hashes, never hosts, query values, request bodies, credentials, headers, or responses.
+      - A resolved API call with a dynamic destination retains the call shape plus a producer-local gap; an unresolved name-only call retains only a gap.
 
   - id: database.ef.v1
     name: Entity Framework style database surface

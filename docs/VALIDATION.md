@@ -1232,6 +1232,11 @@ dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
 dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
   --filter FullyQualifiedName~VisualBasicDataBoundaryTests
 
+# Compiler-backed HTTP/config/file evidence, explicit service gaps, privacy,
+# determinism, and packet/docs/query-recipe/WITS handoff consumption.
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter FullyQualifiedName~VisualBasicExternalBoundaryTests
+
 # Modern (semantic success), legacy (fallback/reduced), and Web Forms
 # (inventory + reduced) CLI fixture scans.
 dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/vb-modern-sample --out <tmp>/vb-modern
@@ -1272,6 +1277,11 @@ Expected fixture postures:
   on cross-platform SDKs; bounded VB Handles/AddHandler/RemoveHandler,
   RaiseEvent, WithEvents designer, linked control/handler, and IsPostBack
   evidence remains available. Event evidence is never an executed call edge.
+
+The external-boundary synthetic matrix additionally proves shared HTTP and
+configuration facts, shared batch/file projection, and explicit WCF/ASMX
+mapping gaps. It does not claim positive VB service proxy mappings; those stay
+outside the current completed slice.
 
 VB.NET pinned OSS smoke (`community-visual-basic` —
 `CommunityVB/Community.VisualBasic`, MIT, pinned at
