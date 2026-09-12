@@ -122,6 +122,43 @@ public sealed class WebFormsCodePathReviewTests
     }
 
     [Fact]
+    public void VisualBasicWorkingTreeReviewRendersSourceAndKeepsAnonymousOutputStructural()
+    {
+        WithVisualBasicFixture((directory, sourceRoot, inspection) =>
+        {
+            var output = Path.Combine(directory, "review.private.html");
+            var first = WebFormsCodePathReview.Run(inspection, sourceRoot, "case-001", output, includeRawSource: true);
+
+            Assert.Contains(first, line => line.Contains("definitionCandidates=1", StringComparison.Ordinal));
+            var report = File.ReadAllText(output);
+            Assert.Contains("Private.VbPage.Handler", report, StringComparison.Ordinal);
+            Assert.Contains("unique-name-definition-candidate-not-evidence", report, StringComparison.Ordinal);
+            Assert.Contains("review.source-002.html#L2", report, StringComparison.Ordinal);
+
+            var annotated = File.ReadAllText(Path.Combine(directory, "review.source-002.html"));
+            Assert.Contains("Private annotated source source/Page.aspx.vb", annotated, StringComparison.Ordinal);
+            Assert.Contains("Private Sub Handler", annotated, StringComparison.Ordinal);
+            Assert.Contains("Private Sub UiReset", annotated, StringComparison.Ordinal);
+
+            var shareableHtml = File.ReadAllText(Path.Combine(directory, "review.shareable.html"));
+            var shareableJson = File.ReadAllText(Path.Combine(directory, "review.shareable.json"));
+            Assert.Contains("vb.semantic.methodinvocation.v1", shareableJson, StringComparison.Ordinal);
+            Assert.DoesNotContain("withheld-unsafe-rule-id", shareableJson, StringComparison.Ordinal);
+            Assert.DoesNotContain("Private", shareableHtml, StringComparison.Ordinal);
+            Assert.DoesNotContain("UiReset", shareableHtml, StringComparison.Ordinal);
+            Assert.DoesNotContain("Page.aspx.vb", shareableHtml, StringComparison.Ordinal);
+            Assert.DoesNotContain("Private", shareableJson, StringComparison.Ordinal);
+            Assert.DoesNotContain("UiReset", shareableJson, StringComparison.Ordinal);
+            Assert.DoesNotContain("Page.aspx.vb", shareableJson, StringComparison.Ordinal);
+
+            var repeatOutput = Path.Combine(directory, "repeat.private.html");
+            WebFormsCodePathReview.Run(inspection, sourceRoot, "case-001", repeatOutput, includeRawSource: true);
+            Assert.Equal(shareableHtml, File.ReadAllText(Path.Combine(directory, "repeat.shareable.html")));
+            Assert.Equal(shareableJson, File.ReadAllText(Path.Combine(directory, "repeat.shareable.json")));
+        });
+    }
+
+    [Fact]
     public void WorkingTreeReviewRejectsSymlinkEscape()
     {
         if (OperatingSystem.IsWindows()) return;
@@ -305,6 +342,82 @@ public sealed class WebFormsCodePathReviewTests
             endLine,
             ruleId = "csharp.semantic.methodinvocation.v1",
             tier = "Tier1Semantic"
+        };
+    }
+
+    private static void WithVisualBasicFixture(Action<string, string, string> test)
+    {
+        var directory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        var sourceRoot = Path.Combine(directory, "repo");
+        Directory.CreateDirectory(Path.Combine(sourceRoot, "source"));
+        File.WriteAllText(Path.Combine(sourceRoot, "source", "Page.aspx.vb"), """
+            Public Class VbPage
+                Private Sub Handler(sender As Object, e As EventArgs)
+                    UiReset()
+                End Sub
+
+                Private Sub UiReset()
+                    Enabled = False
+                End Sub
+
+                Private Property Enabled As Boolean
+            End Class
+            """);
+        File.WriteAllText(Path.Combine(sourceRoot, "source", "Page.aspx"), """
+            <asp:Page>
+              <asp:Button
+                OnClick="Handler" />
+            </asp:Page>
+            """);
+        var inspection = Path.Combine(directory, "inspection.json");
+        File.WriteAllText(inspection, JsonSerializer.Serialize(new
+        {
+            schemaVersion = "webforms-batch-inspection.v1",
+            scanId = "scan-vb",
+            commitSha = "commit-vb",
+            cases = new[]
+            {
+                new
+                {
+                    caseId = "case-001",
+                    bounded = false,
+                    evidenceConclusion = "ui-control-operations-observed-with-unresolved-leaves",
+                    handlerLocation = Witness("handler", "Private.VbPage.Handler(Object, EventArgs)", 2, 4),
+                    bindings = new[] { new { bindingLocation = Witness("Private.VbPage.Control", "Private.VbPage.Handler(Object, EventArgs)", 3, 3, "source/Page.aspx", "legacy.webforms.event-binding.v1", "Tier2Structural") } },
+                    unresolvedOtherLeaves = new[] { "Private.VbPage.UIRESET()" },
+                    methods = new object[]
+                    {
+                        new
+                        {
+                            symbol = "Private.VbPage.Handler(Object, EventArgs)",
+                            exactDeclarationLocations = Array.Empty<object>(),
+                            outgoingCallSites = new[] { Witness("Private.VbPage.Handler(Object, EventArgs)", "Private.VbPage.UIRESET()", 3, 3) }
+                        },
+                        new
+                        {
+                            symbol = "Private.VbPage.UIRESET()",
+                            exactDeclarationLocations = Array.Empty<object>(),
+                            outgoingCallSites = Array.Empty<object>()
+                        }
+                    }
+                }
+            }
+        }));
+        try { test(directory, sourceRoot, inspection); }
+        finally { Directory.Delete(directory, true); }
+
+        static object Witness(string caller, string callee, int startLine, int endLine,
+            string filePath = "source/Page.aspx.vb", string ruleId = "vb.semantic.methodinvocation.v1", string tier = "Tier1Semantic") => new
+        {
+            factId = Guid.NewGuid().ToString("N"),
+            kind = "MethodInvoked",
+            caller,
+            callee,
+            filePath,
+            startLine,
+            endLine,
+            ruleId,
+            tier
         };
     }
 }
