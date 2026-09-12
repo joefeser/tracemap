@@ -662,8 +662,7 @@ function validateEntitySelectorContracts(packet: Base44EvidencePacket): void {
 }
 
 function validateEntityCallsiteDispositions(packet: Base44EvidencePacket): void {
-  const runtimeSdkImports = packet.facts.filter((fact) => fact.factType === FactTypes.Base44SdkImport
-    && fact.properties.importKind === "runtime");
+  const sdkImportFacts = packet.facts.filter((fact) => fact.factType === FactTypes.Base44SdkImport);
   const operationFacts = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation);
   const operationIdsInPacket = operationFacts.map((fact) => fact.properties.operationEvidenceId);
   if (operationIdsInPacket.some((id) => !/^operation-[0-9a-f]{20}$/u.test(id ?? ""))
@@ -789,7 +788,7 @@ function validateEntityCallsiteDispositions(packet: Base44EvidencePacket): void 
         || fact.properties.sdkIdentityJson !== JSON.stringify(disposition.sdkIdentity)) {
         throw new Error(`Base44 fact ${fact.factId} has contradictory disposition SDK identity`);
       }
-      validateSdkIdentityJson(fact, fact.properties.sdkIdentityJson, runtimeSdkImports);
+      validateSdkIdentityJson(fact, fact.properties.sdkIdentityJson, sdkImportFacts);
     }
     // The disposition's claim is exact source reachability, not entity-name
     // resolution. An unresolved selector remains a Tier-4 primitive gap in the
@@ -930,8 +929,7 @@ function validateSdkIdentityContracts(packet: Base44EvidencePacket): void {
     && identityFactTypes.has(fact.factType));
   const operations = new Map(facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation)
     .map((fact) => [fact.properties.operationEvidenceId, fact]));
-  const runtimeSdkImports = packet.facts.filter((fact) => fact.factType === FactTypes.Base44SdkImport
-    && fact.properties.importKind === "runtime");
+  const sdkImportFacts = packet.facts.filter((fact) => fact.factType === FactTypes.Base44SdkImport);
   for (const fact of facts) {
     const identityJson = fact.properties.sdkIdentityJson;
     const gap = fact.properties.sdkIdentityGap;
@@ -942,7 +940,7 @@ function validateSdkIdentityContracts(packet: Base44EvidencePacket): void {
       }
     } else {
       if (!identityJson) throw new Error(`Base44 fact ${fact.factId} is missing its SDK identity`);
-      validateSdkIdentityJson(fact, identityJson, runtimeSdkImports);
+      validateSdkIdentityJson(fact, identityJson, sdkImportFacts);
       if (fact.factType === FactTypes.Base44EntityOperation && fact.evidenceTier !== (fact.properties.entitySelectorGap
         ? EvidenceTiers.Tier4Unknown : EvidenceTiers.Tier3SyntaxOrTextual)) {
         throw new Error(`Base44 operation ${fact.factId} with an exact SDK identity must retain Tier3SyntaxOrTextual`);
@@ -957,7 +955,7 @@ function validateSdkIdentityContracts(packet: Base44EvidencePacket): void {
   }
 }
 
-function validateSdkIdentityJson(fact: Base44PacketFact, identityJson: string, runtimeSdkImports: Base44PacketFact[]): void {
+function validateSdkIdentityJson(fact: Base44PacketFact, identityJson: string, sdkImportFacts: Base44PacketFact[]): void {
   let identity: Record<string, any>;
   try {
     identity = JSON.parse(identityJson);
@@ -988,10 +986,11 @@ function validateSdkIdentityJson(fact: Base44PacketFact, identityJson: string, r
     throw new Error(`Base44 fact ${fact.factId} has non-deterministic SDK identity evidence`);
   }
   const sourceEvidence = evidence.filter((item) => item.kind === "source-import");
-  if (sourceEvidence.length !== 1 || !runtimeSdkImports.some((sdkImport) => (
+  if (sourceEvidence.length !== 1 || !sdkImportFacts.some((sdkImport) => (
     sdkImport.evidence.filePath === sourceEvidence[0].authorityPath
     && sdkImport.properties.sourceFileSha256 === sourceEvidence[0].authoritySha256
     && sdkImport.properties.requestedPackage === identity.rawSpecifier
+    && sdkImport.properties.importKind === "runtime"
   ))) {
     throw new Error(`Base44 fact ${fact.factId} has SDK identity evidence not bound to an extracted runtime import`);
   }
@@ -1009,6 +1008,14 @@ function validateSdkIdentityJson(fact: Base44PacketFact, identityJson: string, r
       || evidence.find((item) => item.kind === "package-lock-resolution")?.authorityPath !== "package-lock.json"
       || evidence.find((item) => item.kind === "package-manifest")?.authorityPath !== "package.json") {
       throw new Error(`Base44 fact ${fact.factId} has an invalid frontend-package SDK identity`);
+    }
+    for (const item of evidence.filter((candidate) => candidate.kind === "package-manifest" || candidate.kind === "package-lock-resolution")) {
+      if (!sdkImportFacts.some((sdkImport) => sdkImport.evidence.filePath === item.authorityPath
+        && sdkImport.properties.sourceFileSha256 === item.authoritySha256
+        && sdkImport.properties.requestedPackage === "@base44/sdk"
+        && sdkImport.properties.importKind === item.kind)) {
+        throw new Error(`Base44 fact ${fact.factId} has frontend package SDK evidence outside packet authority`);
+      }
     }
   }
 }
