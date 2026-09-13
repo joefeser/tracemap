@@ -1023,6 +1023,7 @@ function validateSdkIdentityJson(fact: Base44PacketFact, identityJson: string, s
 function validateUiInputSemanticsContracts(packet: Base44EvidencePacket): void {
   const valueClasses = new Set(["string", "integer", "decimal", "number", "boolean", "date-string", "datetime-string", "array", "object", "unknown"]);
   const reasonKinds = new Set(["native-input-type", "component-prop", "parse-cast-function", "label-context-clue", "submit-handler-propagation"]);
+  const mutationOperations = new Set(["create", "update", "bulkCreate"]);
   const operations = new Map(packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation)
     .map((fact) => [fact.properties.operationEvidenceId, fact]));
   for (const fact of packet.facts.filter((candidate) => candidate.factType === FactTypes.Base44UiInputSemantics)) {
@@ -1061,15 +1062,16 @@ function validateUiInputSemanticsContracts(packet: Base44EvidencePacket): void {
       || correlated === Boolean(contract.unresolvedCorrelationReason)) {
       throw new Error(`Base44 UI semantics ${fact.factId} has contradictory correlation state`);
     }
-	    if (correlated) {
-	      const operation = operations.get(contract.operationEvidenceId);
-	      if (!operation || operation.properties.entityName !== contract.submittedEntity
-	        || operation.properties.operationName !== contract.operationName
-	        || operation.evidenceTier === EvidenceTiers.Tier4Unknown
-	        || operation.properties.sdkIdentityGap
-	        || operation.properties.entitySelectorGap) {
-	        throw new Error(`Base44 UI semantics ${fact.factId} references an unknown entity operation`);
-	      }
+    if (correlated) {
+      const operation = operations.get(contract.operationEvidenceId);
+      if (!operation || operation.properties.entityName !== contract.submittedEntity
+        || operation.properties.operationName !== contract.operationName
+        || !mutationOperations.has(operation.properties.operationName)
+        || operation.evidenceTier === EvidenceTiers.Tier4Unknown
+        || operation.properties.sdkIdentityGap
+        || operation.properties.entitySelectorGap) {
+        throw new Error(`Base44 UI semantics ${fact.factId} references an unsupported entity operation`);
+      }
     } else if (!new Set(["multiple-submitted-payload-targets", "no-proven-submitted-payload-correlation"]).has(contract.unresolvedCorrelationReason)) {
       throw new Error(`Base44 UI semantics ${fact.factId} has an invalid unresolved correlation reason`);
     }

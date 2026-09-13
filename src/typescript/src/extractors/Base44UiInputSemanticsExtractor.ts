@@ -199,6 +199,7 @@ function collectPayloadExpression(expression: ts.Expression, context: PayloadCon
   context.visited.add(value.pos);
   if (ts.isObjectLiteralExpression(value)) {
     let laterSpreadMayOverride = false;
+    const explicitFieldsToRight = new Set<string>();
     for (let index = value.properties.length - 1; index >= 0; index -= 1) {
       const property = value.properties[index];
       if (ts.isPropertyAssignment(property)) {
@@ -206,11 +207,16 @@ function collectPayloadExpression(expression: ts.Expression, context: PayloadCon
         if (!fieldName) continue;
         if (laterSpreadMayOverride) addUnknownPayloadBinding(fieldName, property, context, output);
         else addPayloadBinding(fieldName, property.initializer, property, context, output);
+        explicitFieldsToRight.add(fieldName);
       } else if (ts.isShorthandPropertyAssignment(property)) {
         if (laterSpreadMayOverride) addUnknownPayloadBinding(property.name.text, property, context, output);
         else addPayloadBinding(property.name.text, property.name, property, context, output);
+        explicitFieldsToRight.add(property.name.text);
       } else if (ts.isSpreadAssignment(property)) {
-        collectPayloadExpression(property.expression, { ...context, visited: new Set(context.visited) }, output);
+        const spreadBindings: PayloadBinding[] = [];
+        collectPayloadExpression(property.expression, { ...context, visited: new Set(context.visited) }, spreadBindings);
+        output.push(...spreadBindings.filter((binding) =>
+          binding.fieldName !== "*" && !explicitFieldsToRight.has(binding.fieldName)));
         laterSpreadMayOverride = true;
       }
     }
@@ -236,7 +242,7 @@ function collectPayloadExpression(expression: ts.Expression, context: PayloadCon
     return;
   }
   if (ts.isIdentifier(value)) {
-    const declaration = resolveConstDeclaration(value, context.source, context.scope);
+    const declaration = resolveVisibleConstDeclaration(value, context.source);
     if (declaration?.initializer) {
       if (hasBindingMutationOrEscapeBetween(value.text, declaration, value, context.source, context.scope)) {
         output.push(payloadBinding(context, "*", value.text, bindingRootIdentity(value, context.source), value.text, "unknown", [], value));
@@ -532,18 +538,18 @@ function isBindingTransparentCall(call: ts.CallExpression, source: ts.SourceFile
     && !hasVisibleDeclarationBefore(callee.text, callee, source);
 }
 
-function resolveConstDeclaration(identifier: ts.Identifier, source: ts.SourceFile, scope: ts.Node): ts.VariableDeclaration | null {
-  let resolved: ts.VariableDeclaration | null = null;
-  const visit = (node: ts.Node): void => {
-    if (node.getStart(source) >= identifier.getStart(source)) return;
-    if (node !== scope && ts.isFunctionLike(node) && !isAncestor(node, identifier)) return;
-    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === identifier.text
-      && ts.isVariableDeclarationList(node.parent) && (node.parent.flags & ts.NodeFlags.Const) !== 0
-      && isAncestor(lexicalScope(node), identifier)) resolved = node;
-    ts.forEachChild(node, visit);
-  };
-  visit(scope);
-  return resolved;
+function resolveVisibleConstDeclaration(identifier: ts.Identifier, source: ts.SourceFile): ts.VariableDeclaration | null {
+  const declarationName = resolveVisibleDeclaration(identifier.text, identifier, source);
+  if (!declarationName || !ts.isIdentifier(declarationName)) return null;
+  const declaration = declarationName.parent;
+  if (!ts.isVariableDeclaration(declaration)
+    || declaration.name !== declarationName
+    || !ts.isVariableDeclarationList(declaration.parent)
+    || (declaration.parent.flags & ts.NodeFlags.Const) === 0
+    || declaration.getStart(source) >= identifier.getStart(source)) {
+    return null;
+  }
+  return declaration;
 }
 
 function componentScope(node: ts.Node): ts.Node {
@@ -616,8 +622,12 @@ function resolveVisibleDeclaration(name: string, identifier: ts.Identifier, sour
   const visit = (node: ts.Node): void => {
     if (node === identifier) return;
     const declarationName = declarationIdentifier(node);
-    const hoistedFunctionDeclaration = ts.isFunctionDeclaration(node);
-    if (node.getStart(source) >= identifierStart && !hoistedFunctionDeclaration) return;
+    const shadowsWholeScope = ts.isFunctionDeclaration(node)
+      || ts.isVariableDeclaration(node)
+      || ts.isClassDeclaration(node)
+      || ts.isImportSpecifier(node)
+      || ts.isImportClause(node);
+    if (node.getStart(source) >= identifierStart && !shadowsWholeScope) return;
     if (declarationName?.text === name && isAncestor(lexicalScope(node), identifier)) {
       found = declarationName;
       return;
@@ -649,6 +659,11 @@ function hasBindingMutationOrEscapeBetween(name: string, declaration: ts.Variabl
     }
     if (node !== scope && ts.isFunctionLike(node) && !isAncestor(node, identifier)) return;
     if (ts.isBinaryExpression(node) && isAssignmentOperator(node.operatorToken.kind) && bindingTargetRoot(node.left) === name) {
+      mutated = true;
+      return;
+    }
+    if (ts.isVariableDeclaration(node) && node.initializer
+      && bindingTargetRoot(node.initializer) === name) {
       mutated = true;
       return;
     }
