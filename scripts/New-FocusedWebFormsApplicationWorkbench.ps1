@@ -83,6 +83,16 @@ function Property-Value([object]$Value, [string]$Name) {
     if ($null -eq $property) { return $null }
     return $property.Value
 }
+function Complete-OptionalProperties([object[]]$Items, [string[]]$Names) {
+    foreach ($item in @(Values $Items)) {
+        if ($null -eq $item) { continue }
+        foreach ($name in $Names) {
+            if ($null -eq $item.PSObject.Properties[$name]) {
+                Add-Member -InputObject $item -MemberType NoteProperty -Name $name -Value $null
+            }
+        }
+    }
+}
 
 function Evidence-List([object[]]$Evidence) {
     if ($Evidence.Count -eq 0) { return '<p class="muted">No retained evidence rows in this packet.</p>' }
@@ -175,6 +185,38 @@ if ($LASTEXITCODE -ne 0) { throw 'ApplicationWorkbenchValidatorBuildFailed' }
 $validatorDll = Join-Path $PSScriptRoot 'diagnostics/RawWebFormsEvidence/bin/Release/net10.0/RawWebFormsEvidence.dll'
 & dotnet $validatorDll '--validate-application-workbench-inputs' $packetFile.FullName $(if ($EvidenceDocsRoot) { [IO.Path]::GetFullPath($EvidenceDocsRoot) } else { '-' })
 if ($LASTEXITCODE -ne 0) { throw 'ApplicationWorkbenchInputValidationFailed' }
+
+# Packet contracts deliberately omit properties that are not established for a
+# particular evidence row. PowerShell strict mode must distinguish a missing
+# optional property from a malformed packet, which the validator already
+# rejected above. Complete only the optional projection fields used below;
+# the authoritative packet snapshot remains byte-for-byte unchanged.
+Complete-OptionalProperties (Values $packet.surfaces) @('projectId','controlIds','supportingEvidence','supportingFactIds')
+Complete-OptionalProperties (Values $packet.eventChains) @(
+    'chainId','surfaceId','eventSourceId','bindingFactId','handlerId','handlerFactId','handlerSymbol',
+    'classification','legacyPathId','terminalKind','traversalObservation','evidence','pathEvidence',
+    'supportingFactIds','supportingEdgeIds','coverageLabels')
+Complete-OptionalProperties (Values $packet.downstreamBoundaries) @(
+    'boundaryId','chainId','surfaceId','handlerId','boundaryCategory','boundaryKind','boundaryTargetId',
+    'terminalEvidenceId','terminalEvidenceIsFact','classification','legacyPathId','evidence','pathEvidence',
+    'supportingFactIds','supportingEdgeIds')
+Complete-OptionalProperties (Values $packet.identityStateInventory) @(
+    'identityStateId','identityKind','classification','surfaceId','safeMetadata','evidence','supportingFactIds')
+Complete-OptionalProperties (Values $packet.batchDataMovementInventory) @(
+    'batchDataMovementId','surfaceKind','mechanism','operationKind','ownerStatus','projectResolution','projectId',
+    'safeMetadata','evidence','supportingFactIds')
+Complete-OptionalProperties (Values $packet.structuralSliceCandidates) @(
+    'candidateId','classification','ruleId','evidenceTier','surfaceIds','evidence','supportingFactIds')
+Complete-OptionalProperties (Values $packet.gaps) @(
+    'gapId','classification','scopeKind','scopeId','ruleId','evidenceTier','coverageLabel','commitSha','filePath',
+    'startLine','endLine','extractorId','extractorVersion','supportingFactIds','limitations')
+foreach ($chain in @(Values $packet.eventChains)) {
+    if ($null -eq $chain.traversalObservation) {
+        $chain.traversalObservation = [pscustomobject]@{ stopState = $null }
+    } else {
+        Complete-OptionalProperties @($chain.traversalObservation) @('stopState')
+    }
+}
 
 $stamp = [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss')
 if (!$OutputDirectory) { $OutputDirectory = Join-Path $OutputRoot "webforms-application-workbench-$stamp" }
