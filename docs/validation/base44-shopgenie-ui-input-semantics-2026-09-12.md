@@ -22,9 +22,9 @@ Two independent scans emitted 6,865 Base44 facts each and were byte-identical:
 - `facts.ndjson` SHA-256:
   `da38af5d0325923a05f70950793f677542b259620eb4a689a9895a63247cf2ac`
 - refreshed output path:
-  `/private/tmp/tracemap-shopgenie-ui-semantics-refresh2-a.9uff6V`
+  `/private/tmp/tracemap-shopgenie-ui-semantics-head-a.dWk84I`
 - comparison output path:
-  `/private/tmp/tracemap-shopgenie-ui-semantics-refresh2-b.5PXEDm`
+  `/private/tmp/tracemap-shopgenie-ui-semantics-head-b.TSk2TK`
 - UI semantics facts: 1,232
 - proven payload correlations: 722
 - partial controls with explicit unresolved correlation: 493
@@ -61,7 +61,7 @@ change. The applicable pinned matrix was:
   `Base44UiInputSemantics.test.ts`.
 - Artifact conformance:
   `python3 scripts/validate-adapter-artifacts.py
-  /private/tmp/tracemap-shopgenie-ui-semantics-refresh2-a.9uff6V` and
+  /private/tmp/tracemap-shopgenie-ui-semantics-head-a.dWk84I` and
   `python3 scripts/test_validate_adapter_artifacts.py` — passed.
 - Private-path and diff hygiene:
   `./scripts/check-private-paths.sh` and `git diff --check` — passed.
@@ -92,22 +92,22 @@ text evidence.
 npm run check --prefix src/typescript
 dotnet test src/dotnet/TraceMap.sln
 python3 scripts/validate-adapter-artifacts.py \
-  /private/tmp/tracemap-shopgenie-ui-semantics-refresh2-a.9uff6V
+  /private/tmp/tracemap-shopgenie-ui-semantics-head-a.dWk84I
 python3 scripts/test_validate_adapter_artifacts.py
 ./scripts/check-private-paths.sh
 git diff --check
 
 node src/typescript/dist/src/cli.js base44-evidence \
   --repo /private/tmp/shopgenie-ui-input-origin-main-20260912-refresh2.lvEjrd/source \
-  --out /private/tmp/tracemap-shopgenie-ui-semantics-refresh2-a.9uff6V \
+  --out /private/tmp/tracemap-shopgenie-ui-semantics-head-a.dWk84I \
   --accepted-source-sha256 a5a313b180ef0cdfd2e837779f251cc754978fcd474b6a32646c133b058b6e24 \
   --accepted-tree-sha256 a5a313b180ef0cdfd2e837779f251cc754978fcd474b6a32646c133b058b6e24 \
   --coverage-label shopgenie-origin-main-ui-input-semantics
 
-cmp /private/tmp/tracemap-shopgenie-ui-semantics-refresh2-a.9uff6V/base44-evidence.json \
-  /private/tmp/tracemap-shopgenie-ui-semantics-refresh2-b.5PXEDm/base44-evidence.json
-cmp /private/tmp/tracemap-shopgenie-ui-semantics-refresh2-a.9uff6V/facts.ndjson \
-  /private/tmp/tracemap-shopgenie-ui-semantics-refresh2-b.5PXEDm/facts.ndjson
+cmp /private/tmp/tracemap-shopgenie-ui-semantics-head-a.dWk84I/base44-evidence.json \
+  /private/tmp/tracemap-shopgenie-ui-semantics-head-b.TSk2TK/base44-evidence.json
+cmp /private/tmp/tracemap-shopgenie-ui-semantics-head-a.dWk84I/facts.ndjson \
+  /private/tmp/tracemap-shopgenie-ui-semantics-head-b.TSk2TK/facts.ndjson
 ```
 
 Results: TypeScript 257/257 passed; .NET 1,928/1,928 passed; artifact validation,
@@ -117,6 +117,10 @@ comparisons passed.
 The refreshed fixture also covers these adversarial safety regressions:
 controls with no submitted value binding remain partial, trailing JSX spreads
 invalidate control proof, trailing payload spreads invalidate overwritten
-payload fields, escaped const payload roots remain unresolved, hoisted local cast
-functions shadow global casts, truthy `required` JSX attributes stay truthy, and
-`src/__mocks__` is excluded from UI source authority.
+payload fields, earlier spread fields overridden by later explicit payload
+properties do not prove stale correlations, escaped and aliased const payload
+roots remain unresolved, nested helper parameters shadow outer payload consts,
+hoisted and later lexical local cast functions shadow global casts, truthy
+`required` JSX attributes stay truthy, packet-level UI correlations cannot point
+at non-mutation entity operations, and `src/__mocks__` is excluded from UI
+source authority.

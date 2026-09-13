@@ -182,39 +182,88 @@ describe("Base44 React UI input semantics", () => {
 	    expect(semantics.some(({ value }) => value.submittedEntity === "TrailingJsxSpread"
 	      && value.controlKind !== "submitted-value")).toBe(false);
 
-	    const trailingPayloadSpread = semantics.find(({ value }) => value.valueBinding === "row.spreadPayloadPrice"
-	      && value.controlKind === "input");
-	    expect(trailingPayloadSpread?.value).toMatchObject({
-	      correlationStatus: "partial",
-	      submittedEntity: "",
+    const trailingPayloadSpread = semantics.find(({ value }) => value.valueBinding === "row.spreadPayloadPrice"
+      && value.controlKind === "input");
+    expect(trailingPayloadSpread?.value).toMatchObject({
+      correlationStatus: "partial",
+      submittedEntity: "",
 	      submittedField: ""
 	    });
-	    expect(semantics.some(({ value }) => value.submittedEntity === "TrailingPayloadSpread"
-	      && value.controlKind !== "submitted-value")).toBe(false);
+    expect(semantics.some(({ value }) => value.submittedEntity === "TrailingPayloadSpread"
+      && value.controlKind !== "submitted-value")).toBe(false);
 
-	    const escapedPayload = semantics.find(({ value }) => value.valueBinding === "row.escapedPrice"
-	      && value.controlKind === "input");
-	    expect(escapedPayload?.value).toMatchObject({
-	      correlationStatus: "partial",
-	      submittedEntity: "",
+    const overriddenSpread = semantics.find(({ value }) => value.valueBinding === "row.overriddenSpreadPrice"
+      && value.controlKind === "input");
+    expect(overriddenSpread?.value).toMatchObject({
+      correlationStatus: "partial",
+      submittedEntity: "",
+      submittedField: ""
+    });
+    expect(semantics.some(({ value }) => value.submittedEntity === "OverriddenSpread"
+      && value.submittedField === "price"
+      && value.valueBinding === "row.overriddenSpreadPrice"
+      && value.controlKind !== "submitted-value")).toBe(false);
+    const explicitOverride = semantics.find(({ value }) => value.valueBinding === "form.overridePrice"
+      && value.controlKind === "input");
+    expect(explicitOverride?.value).toMatchObject({
+      correlationStatus: "proven",
+      submittedEntity: "OverriddenSpread",
+      submittedField: "price"
+    });
+
+    const escapedPayload = semantics.find(({ value }) => value.valueBinding === "row.escapedPrice"
+      && value.controlKind === "input");
+    expect(escapedPayload?.value).toMatchObject({
+      correlationStatus: "partial",
+      submittedEntity: "",
 	      submittedField: ""
 	    });
-	    expect(semantics.some(({ value }) => value.submittedEntity === "EscapedPayload"
-	      && value.controlKind !== "submitted-value")).toBe(false);
+    expect(semantics.some(({ value }) => value.submittedEntity === "EscapedPayload"
+      && value.controlKind !== "submitted-value")).toBe(false);
 
-	    const hoistedCast = semantics.find(({ value }) => value.valueBinding === "row.hoistedCode"
-	      && value.controlKind === "input");
-	    expect(hoistedCast?.value).toMatchObject({
-	      correlationStatus: "partial",
-	      submittedEntity: "",
+    const aliasedPayload = semantics.find(({ value }) => value.valueBinding === "row.aliasedPrice"
+      && value.controlKind === "input");
+    expect(aliasedPayload?.value).toMatchObject({
+      correlationStatus: "partial",
+      submittedEntity: "",
+      submittedField: ""
+    });
+    expect(semantics.some(({ value }) => value.submittedEntity === "AliasedPayload"
+      && value.controlKind !== "submitted-value")).toBe(false);
+
+    const parameterShadowed = semantics.find(({ value }) => value.valueBinding === "row.shadowedPayloadPrice"
+      && value.controlKind === "input");
+    expect(parameterShadowed?.value).toMatchObject({
+      correlationStatus: "partial",
+      submittedEntity: "",
+      submittedField: ""
+    });
+    expect(semantics.some(({ value }) => value.submittedEntity === "ParameterShadow"
+      && value.controlKind !== "submitted-value")).toBe(false);
+
+    const hoistedCast = semantics.find(({ value }) => value.valueBinding === "row.hoistedCode"
+      && value.controlKind === "input");
+    expect(hoistedCast?.value).toMatchObject({
+      correlationStatus: "partial",
+      submittedEntity: "",
 	      submittedField: ""
 	    });
-	    expect(semantics.some(({ value }) => value.submittedEntity === "HoistedCast"
-	      && value.controlKind !== "submitted-value")).toBe(false);
+    expect(semantics.some(({ value }) => value.submittedEntity === "HoistedCast"
+      && value.controlKind !== "submitted-value")).toBe(false);
 
-	    const truthyRequired = semantics.find(({ value }) => value.fieldBinding === "truthy_required"
-	      && value.controlKind === "input");
-	    expect(truthyRequired?.value.validation).toMatchObject({ required: true });
+    const laterLexicalCast = semantics.find(({ value }) => value.valueBinding === "row.laterLexicalCode"
+      && value.controlKind === "input");
+    expect(laterLexicalCast?.value).toMatchObject({
+      correlationStatus: "partial",
+      submittedEntity: "",
+      submittedField: ""
+    });
+    expect(semantics.some(({ value }) => value.submittedEntity === "LaterLexicalCast"
+      && value.controlKind !== "submitted-value")).toBe(false);
+
+    const truthyRequired = semantics.find(({ value }) => value.fieldBinding === "truthy_required"
+      && value.controlKind === "input");
+    expect(truthyRequired?.value.validation).toMatchObject({ required: true });
 
 	    expect(semantics.some(({ value }) => value.submittedEntity === "UnknownSdk")).toBe(false);
 	    expect(packet.facts.some((fact) => fact.evidence.filePath === "src/__mocks__/Mocked.tsx"
@@ -244,11 +293,28 @@ describe("Base44 React UI input semantics", () => {
 	    tier4Contract.operationEvidenceId = tier4Operation.properties.operationEvidenceId;
 	    tier4Fact.properties.uiSemanticsJson = JSON.stringify(tier4Contract);
 	    const tier4Path = path.join(out, "forged-tier4-operation.json");
-	    await fs.writeFile(tier4Path, `${JSON.stringify(tier4Forged, null, 2)}\n`);
-	    await expect(diffBase44Evidence(path.join(out, "base44-evidence.json"), tier4Path,
-	      path.join(out, "forged-tier4-operation-diff.json"))).rejects.toThrow(/unknown entity operation|invalid exact operation identity/u);
-	  });
-	});
+    await fs.writeFile(tier4Path, `${JSON.stringify(tier4Forged, null, 2)}\n`);
+    await expect(diffBase44Evidence(path.join(out, "base44-evidence.json"), tier4Path,
+      path.join(out, "forged-tier4-operation-diff.json"))).rejects.toThrow(/unsupported entity operation|invalid exact operation identity/u);
+
+    const readForged = structuredClone(packet);
+    const readFact = readForged.facts.find((fact) => fact.factType === FactTypes.Base44UiInputSemantics)!;
+    const readContract = JSON.parse(readFact.properties.uiSemanticsJson);
+    const readOperation = structuredClone(readForged.facts.find((fact) => fact.factType === FactTypes.Base44EntityOperation
+      && fact.properties.entityName === readContract.submittedEntity)!);
+    readOperation.factId = "fact-forged-read-operation";
+    readOperation.properties.operationName = "filter";
+    readOperation.properties.operationEvidenceId = "operation-eeeeeeeeeeeeeeeeeeee";
+    readForged.facts.push(readOperation);
+    readContract.operationName = "filter";
+    readContract.operationEvidenceId = readOperation.properties.operationEvidenceId;
+    readFact.properties.uiSemanticsJson = JSON.stringify(readContract);
+    const readPath = path.join(out, "forged-read-operation.json");
+    await fs.writeFile(readPath, `${JSON.stringify(readForged, null, 2)}\n`);
+    await expect(diffBase44Evidence(path.join(out, "base44-evidence.json"), readPath,
+      path.join(out, "forged-read-operation-diff.json"))).rejects.toThrow(/unsupported entity operation|invalid exact operation identity/u);
+  });
+});
 
 async function fixtureRepo(): Promise<string> {
   const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-ui-semantics-fixture-"));
@@ -261,16 +327,24 @@ export function Screen({ row, form, shared }) {
   function Number(value) {
     return "sku-" + value;
   }
-	  function saveShadowed(form) {
-	    return base44.entities.ShadowedInput.create({ amount: form.price });
-	  }
-	  async function saveHoistedCast() {
-	    await base44.entities.HoistedCast.create({ code: Number(row.hoistedCode) });
-	    function Number(value) {
-	      return "hoisted-" + value;
-	    }
-	  }
-	  async function save() {
+  function saveShadowed(form) {
+    return base44.entities.ShadowedInput.create({ amount: form.price });
+  }
+  const shadowedPayload = { price: row.shadowedPayloadPrice };
+  function saveParameterShadow(shadowedPayload) {
+    return base44.entities.ParameterShadow.create(shadowedPayload);
+  }
+  async function saveHoistedCast() {
+    await base44.entities.HoistedCast.create({ code: Number(row.hoistedCode) });
+    function Number(value) {
+      return "hoisted-" + value;
+    }
+  }
+  async function saveLaterLexicalCast() {
+    await base44.entities.LaterLexicalCast.create({ code: Number(row.laterLexicalCode) });
+    const Number = (value) => "local-" + value;
+  }
+  async function save() {
 	    await base44.entities.MaterialItemPriceBreak.create({ price: parseFloat(row.cost) });
 	    await base44.entities.FeatureFlag.create({ enabled: form.enabled });
     await base44.entities.Appointment.create({ service_date: form.serviceDate });
@@ -283,13 +357,21 @@ export function Screen({ row, form, shared }) {
 	    await base44.entities.ShadowedCast.create({ code: Number(row.code) });
 	    await base44.entities.DynamicInput.create({ quantity: form.dynamicQuantity });
 	    await base44.entities.NoValueControl.create({ price: unrelated.value });
-	    await base44.entities.TrailingJsxSpread.create({ price: form.spreadPrice });
-	    await base44.entities.TrailingPayloadSpread.create({ price: row.spreadPayloadPrice, ...overrides });
-	    const escaped = { price: row.escapedPrice };
-	    mutate(escaped);
-	    await base44.entities.EscapedPayload.create(escaped);
-	    await saveHoistedCast();
-	    const reassigned = { amount: row.reassignedCost };
+    await base44.entities.TrailingJsxSpread.create({ price: form.spreadPrice });
+    await base44.entities.TrailingPayloadSpread.create({ price: row.spreadPayloadPrice, ...overrides });
+    const spreadBase = { price: row.overriddenSpreadPrice, note: row.overriddenSpreadNote };
+    await base44.entities.OverriddenSpread.create({ ...spreadBase, price: form.overridePrice });
+    const escaped = { price: row.escapedPrice };
+    mutate(escaped);
+    await base44.entities.EscapedPayload.create(escaped);
+    const aliased = { price: row.aliasedPrice };
+    const alias = aliased;
+    alias.price = form.aliasOverridePrice;
+    await base44.entities.AliasedPayload.create(aliased);
+    await saveParameterShadow({ price: form.parameterShadowPrice });
+    await saveHoistedCast();
+    await saveLaterLexicalCast();
+    const reassigned = { amount: row.reassignedCost };
 	    reassigned.amount = row.otherCost;
 	    await base44.entities.ReassignedPayload.create(reassigned);
   }
@@ -318,10 +400,15 @@ export function Screen({ row, form, shared }) {
 	    <input name="quantity" type={form.dynamicKind} value={form.dynamicQuantity} onChange={() => {}} />
 	    <input name="price" type="number" onChange={() => {}} />
 	    <input name="price" type="number" value={form.spreadPrice} {...props} />
-	    <input name="price" type="number" value={row.spreadPayloadPrice} onChange={() => {}} />
-	    <input name="price" type="number" value={row.escapedPrice} onChange={() => {}} />
-	    <input name="code" type="number" value={row.hoistedCode} onChange={() => {}} />
-	    <input name="truthy_required" type="text" required="required" value={form.truthyRequired} onChange={() => {}} />
+    <input name="price" type="number" value={row.spreadPayloadPrice} onChange={() => {}} />
+    <input name="price" type="number" value={row.overriddenSpreadPrice} onChange={() => {}} />
+    <input name="price" type="number" value={form.overridePrice} onChange={() => {}} />
+    <input name="price" type="number" value={row.escapedPrice} onChange={() => {}} />
+    <input name="price" type="number" value={row.aliasedPrice} onChange={() => {}} />
+    <input name="price" type="number" value={row.shadowedPayloadPrice} onChange={() => {}} />
+    <input name="code" type="number" value={row.hoistedCode} onChange={() => {}} />
+    <input name="code" type="number" value={row.laterLexicalCode} onChange={() => {}} />
+    <input name="truthy_required" type="text" required="required" value={form.truthyRequired} onChange={() => {}} />
 	  </form>;
 	}
 	`);
