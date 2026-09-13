@@ -70,23 +70,110 @@ public static class VisualBasicSyntaxExtractor
                 continue;
             }
 
-            var tree = VisualBasicSyntaxTree.ParseText(SourceText.From(source), path: file.RelativePath);
-            AddParseDiagnostics(manifest, facts, tree, file.RelativePath);
-            var root = tree.GetCompilationUnitRoot();
+            CompilationUnitSyntax root;
+            try
+            {
+                var tree = VisualBasicSyntaxTree.ParseText(SourceText.From(source), path: file.RelativePath);
+                AddParseDiagnostics(manifest, facts, tree, file.RelativePath);
+                root = tree.GetCompilationUnitRoot();
+            }
+            catch (Exception ex) when (IsRecoverablePhaseFailure(ex))
+            {
+                AddPhaseFailureGap(manifest, facts, file.RelativePath, RuleIds.VisualBasicSyntaxDeclarations, "parse", ex);
+                continue;
+            }
+
             var fileProtectedSpans = protectedSourceSpans?
                 .Where(span => span.FilePath.Equals(file.RelativePath, StringComparison.Ordinal))
                 .ToArray() ?? [];
             var budget = new FactBudget(MaxFactsPerFile);
             facts.Add(CreateSemanticUnavailableGap(manifest, file.RelativePath));
-            AddDeclarationFacts(manifest, facts, file.RelativePath, root, budget);
-            AddEventCompositionFacts(manifest, facts, file.RelativePath, root, budget);
-            AddMemberAccessFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans, budget);
-            AddInvocationFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans, budget);
-            AddObjectCreationFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans, budget);
+            TryRunPhase(manifest, facts, file.RelativePath, RuleIds.VisualBasicSyntaxDeclarations, "declarations",
+                () => AddDeclarationFacts(manifest, facts, file.RelativePath, root, budget));
+            TryRunPhase(manifest, facts, file.RelativePath, RuleIds.VisualBasicSyntaxEventWiring, "event-composition",
+                () => AddEventCompositionFacts(manifest, facts, file.RelativePath, root, budget));
+            TryRunPhase(manifest, facts, file.RelativePath, RuleIds.VisualBasicSyntaxMemberAccess, "member-access",
+                () => AddMemberAccessFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans, budget));
+            TryRunPhase(manifest, facts, file.RelativePath, RuleIds.VisualBasicSyntaxInvocation, "invocations",
+                () => AddInvocationFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans, budget));
+            TryRunPhase(manifest, facts, file.RelativePath, RuleIds.VisualBasicSyntaxObjectCreation, "object-creations",
+                () => AddObjectCreationFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans, budget));
         }
 
         return facts;
     }
+
+    internal static bool TryRunPhase(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        string filePath,
+        string ruleId,
+        string phase,
+        Action action)
+    {
+        try
+        {
+            action();
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (IsRecoverablePhaseFailure(ex))
+        {
+            AddPhaseFailureGap(manifest, facts, filePath, ruleId, phase, ex);
+            return false;
+        }
+    }
+
+    private static void AddPhaseFailureGap(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        string filePath,
+        string ruleId,
+        string phase,
+        Exception exception)
+    {
+        facts.Add(FactFactory.Create(
+            manifest,
+            FactTypes.AnalysisGap,
+            ruleId,
+            EvidenceTiers.Tier4Unknown,
+            new EvidenceSpan(
+                FileInventory.NormalizeRelativePath(filePath),
+                1,
+                1,
+                null,
+                "VisualBasicSyntaxExtractor",
+                ScannerVersions.VisualBasicSyntaxExtractor),
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["coverageEffect"] = "reduces-syntax-coverage-for-file",
+                ["failureCategory"] = ClassifyPhaseFailure(exception),
+                ["failureTypeHash"] = FactFactory.Hash(exception.GetType().FullName ?? exception.GetType().Name, 24),
+                ["gapKind"] = "VisualBasicSyntaxFallbackPhaseFailed",
+                ["message"] = "One bounded Visual Basic syntax fallback phase failed for this file; other files and phases continued without inferring the missing evidence.",
+                ["phase"] = phase,
+                ["sanitization"] = "category-only"
+            }));
+    }
+
+    private static string ClassifyPhaseFailure(Exception exception) => exception switch
+    {
+        IndexOutOfRangeException or ArgumentOutOfRangeException => "range-failure",
+        ArgumentException => "argument-failure",
+        InvalidOperationException => "invalid-operation",
+        NullReferenceException => "null-reference",
+        IOException or UnauthorizedAccessException => "file-access-failure",
+        _ => "unexpected-failure"
+    };
+
+    private static bool IsRecoverablePhaseFailure(Exception exception) =>
+        exception is not OperationCanceledException
+            and not OutOfMemoryException
+            and not StackOverflowException
+            and not AccessViolationException;
 
     private static void AddDeclarationFacts(
         ScanManifest manifest,

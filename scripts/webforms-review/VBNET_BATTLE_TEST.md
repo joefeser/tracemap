@@ -82,6 +82,22 @@ Test-Path $IndexPath
 `Test-Path` must print `True`. A reduced or partial scan is still useful; do not
 reinterpret it as complete coverage.
 
+If the scan reports a retained VB fallback phase gap, inspect it locally with:
+
+```powershell
+Get-Content (Join-Path $ScanRoot 'scan\facts.ndjson') |
+  ForEach-Object { $_ | ConvertFrom-Json } |
+  Where-Object { $_.properties.gapKind -eq 'VisualBasicSyntaxFallbackPhaseFailed' } |
+  Select-Object @{n='file';e={$_.evidence.filePath}}, `
+                @{n='phase';e={$_.properties.phase}}, `
+                @{n='category';e={$_.properties.failureCategory}}, `
+                @{n='typeHash';e={$_.properties.failureTypeHash}}
+```
+
+The file path is private. The phase, category, and type hash are sanitized and
+are sufficient to distinguish repeated failure shapes without retaining the
+exception message or source text.
+
 ## 3. Generate a packet for every ASPX page
 
 This discovers `.aspx` files under the selected Web Forms folder and writes the

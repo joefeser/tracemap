@@ -182,6 +182,73 @@ public sealed class VisualBasicExtractionTests
     // ---------- Task 6: bounded per-file syntax fallback ----------
 
     [Fact]
+    public void Vb_syntax_phase_failure_becomes_a_sanitized_file_gap()
+    {
+        var manifest = new ScanManifest(
+            "scan-vb-phase-failure",
+            "synthetic-vb",
+            null,
+            "test",
+            "0123456789abcdef",
+            ScannerVersions.TraceMap,
+            DateTimeOffset.UnixEpoch,
+            "Level3SyntaxAnalysis",
+            "NotRun",
+            [],
+            [],
+            [],
+            []);
+        var facts = new List<CodeFact>();
+
+        var completed = VisualBasicSyntaxExtractor.TryRunPhase(
+            manifest,
+            facts,
+            "Legacy/Default.aspx.vb",
+            RuleIds.VisualBasicSyntaxInvocation,
+            "invocations",
+            () => throw new ArgumentOutOfRangeException("private-value"));
+
+        Assert.False(completed);
+        var gap = Assert.Single(facts);
+        Assert.Equal(FactTypes.AnalysisGap, gap.FactType);
+        Assert.Equal(RuleIds.VisualBasicSyntaxInvocation, gap.RuleId);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
+        Assert.Equal("Legacy/Default.aspx.vb", gap.Evidence.FilePath);
+        Assert.Equal("VisualBasicSyntaxFallbackPhaseFailed", gap.Properties["gapKind"]);
+        Assert.Equal("invocations", gap.Properties["phase"]);
+        Assert.Equal("range-failure", gap.Properties["failureCategory"]);
+        Assert.Equal("category-only", gap.Properties["sanitization"]);
+        Assert.DoesNotContain("private-value", string.Join('|', gap.Properties.Values), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Vb_syntax_phase_does_not_swallow_cancellation()
+    {
+        var manifest = new ScanManifest(
+            "scan-vb-cancellation",
+            "synthetic-vb",
+            null,
+            "test",
+            "0123456789abcdef",
+            ScannerVersions.TraceMap,
+            DateTimeOffset.UnixEpoch,
+            "Level3SyntaxAnalysis",
+            "NotRun",
+            [],
+            [],
+            [],
+            []);
+
+        Assert.Throws<OperationCanceledException>(() => VisualBasicSyntaxExtractor.TryRunPhase(
+            manifest,
+            [],
+            "Legacy/Default.aspx.vb",
+            RuleIds.VisualBasicSyntaxDeclarations,
+            "declarations",
+            () => throw new OperationCanceledException()));
+    }
+
+    [Fact]
     public void Orphan_vb_files_without_a_project_fall_back_to_bounded_syntax_facts()
     {
         using var temp = new TempDirectory();

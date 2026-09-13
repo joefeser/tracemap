@@ -4023,7 +4023,7 @@ rules:
   - id: vb.syntax.declarations.v1
     name: Visual Basic syntax declarations
     description: Bounded syntax-only declarations over readable Visual Basic files that received no compiler-resolved coverage, plus per-file parse, read, and budget gaps for that fallback.
-    evidenceTier: Tier3SyntaxOrTextual
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - TypeDeclared
       - MethodDeclared
@@ -4035,6 +4035,7 @@ rules:
       - AnalysisGap
     limitations:
       - Syntax-only names are text evidence; they are never compiler-resolved targets and never join to semantic symbols by identity.
+      - A parser or bounded extraction-phase failure is retained as a category-only Tier4 gap at line 1 for the affected file. Other files and phases continue, but missing phase evidence is not evidence of absence and the gap does not establish root cause.
       - Designer, generated, and auto-generated-header files are skipped; unreadable files and parse errors emit bounded Tier4 gap rows with diagnostic codes and message hashes only, never raw message text.
       - Emission is bounded by a deterministic per-file fact budget; when the budget is exhausted the remainder is reported by a `SyntaxFallbackBudgetExhausted` gap, and absence of a fact beyond the budget is not absence in source.
       - Syntax fallback does not claim the file compiles, binds, or runs; partial analysis remains labeled reduced through `vb.semantic.workspace.v1` gaps.
