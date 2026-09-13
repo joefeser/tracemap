@@ -2361,6 +2361,7 @@ rules:
     description: Resolves markup event handlers to linked code-behind partial methods by semantic source-symbol evidence when available, otherwise by scoped structural or syntax fallback.
     evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
     emits:
+      - WebFormsClientHttpHandlerDeclared
       - WebFormsHandlerResolved
       - AnalysisGap
     limitations:
@@ -2456,6 +2457,19 @@ rules:
       - The HTTP method defaults to GET only when the request object omits literal type/method syntax, matching the bounded jQuery shape; callback names, literal content/data types, and verification-token presence are syntax observations, not proof of request or callback execution.
       - Repository handler resolution uses a unique normalized `.ashx` path suffix, falling back to a unique handler filename. It does not prove deployment virtual-directory mapping, routing, handler registration, authentication, authorization, successful responses, or runtime reachability.
       - Raw URLs, request data, headers, callback bodies, token values, and response values are not retained. Evidence stores safe endpoint/file metadata, route and snippet hashes, and exact source spans.
+
+  - id: legacy.webforms.client-http-handler-resolution.v1
+    name: Legacy Web Forms client HTTP handler resolution
+    description: Joins a uniquely resolved inline jQuery `.ashx` request through its WebHandler Class directive to one retained `ProcessRequest` source declaration for bounded downstream traversal.
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier4Unknown
+    emits:
+      - WebFormsHandlerResolved
+      - AnalysisGap
+    limitations:
+      - Resolution requires one literal request target, one repository `.ashx` file, a supported WebHandler Class directive, and one matching `ProcessRequest` declaration from an explicit CodeFile/CodeBehind path or a uniquely matching retained type declaration.
+      - Semantic method evidence produces Tier1; an exact directive/type/source/method structural join produces Tier2. Neither proves virtual-directory mapping, handler registration, request dispatch, authentication, authorization, handler construction, or runtime execution.
+      - Missing and ambiguous handler source or `ProcessRequest` declarations are emitted as Tier4 gaps. They are not proof that a runtime handler is absent.
+      - Downstream paths remain bounded by retained call-edge and terminal evidence and inherit the legacy-flow traversal limitations.
 
   - id: legacy.webforms.server-behavior.v1
     name: Legacy Web Forms projectless Visual Basic server behavior candidates

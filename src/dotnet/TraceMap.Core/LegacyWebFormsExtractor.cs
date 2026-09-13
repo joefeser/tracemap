@@ -128,6 +128,8 @@ public static partial class LegacyWebFormsExtractor
             AddAutoWireupFacts(manifest, page, context, evidenceIndex, facts);
         }
 
+        AddClientHttpHandlerResolutionFacts(repoPath, manifest, inventory, context, existingFacts, facts);
+
         var allFacts = existingFacts.Concat(facts).ToArray();
         var serviceMappings = allFacts
             .Where(fact => fact.FactType is FactTypes.WcfServiceReferenceMapping or FactTypes.AsmxServiceReferenceMapping)
@@ -2221,6 +2223,9 @@ public static partial class LegacyWebFormsExtractor
                 ["endpointName"] = endpointName.Length is > 0 and <= 128 ? endpointName : "unavailable",
                 ["endpointPathHash"] = FactFactory.Hash(endpointPath, 32),
                 ["httpMethod"] = httpMethod,
+                ["eventName"] = $"HTTP {httpMethod}",
+                ["eventSourceIdentity"] = identity,
+                ["handlerName"] = "ProcessRequest",
                 ["requestVerificationTokenCandidate"] = requestText.Contains("__RequestVerificationToken", StringComparison.Ordinal) ? "true" : "false",
                 ["surfaceIdentity"] = SurfaceIdentity(page.FilePath),
                 ["targetResolution"] = targetResolution
@@ -2251,6 +2256,193 @@ public static partial class LegacyWebFormsExtractor
                 properties,
                 endLine));
         }
+    }
+
+    private static void AddClientHttpHandlerResolutionFacts(
+        string repoPath,
+        ScanManifest manifest,
+        IReadOnlyList<FileInventoryItem> inventory,
+        WebFormsContext context,
+        IReadOnlyList<CodeFact> existingFacts,
+        List<CodeFact> facts)
+    {
+        var inventoryPaths = inventory.Select(item => FileInventory.NormalizeRelativePath(item.RelativePath))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var request in facts.Where(fact => fact.FactType == FactTypes.WebFormsClientHttpRequestCandidate)
+                     .Where(fact => fact.Properties.GetValueOrDefault("targetResolution") == "unique-repository-handler-file")
+                     .OrderBy(fact => fact.FactId, StringComparer.Ordinal).ToArray())
+        {
+            var handlerFile = request.Properties.GetValueOrDefault("endpointDeclarationFile");
+            if (string.IsNullOrWhiteSpace(handlerFile))
+            {
+                continue;
+            }
+
+            string text;
+            try
+            {
+                text = File.ReadAllText(Path.Combine(repoPath, handlerFile));
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                facts.Add(CreateClientHttpHandlerGap(manifest, request, handlerFile, 1,
+                    "UnreadableClientHttpHandlerFile", "The uniquely matched .ashx handler file could not be read."));
+                continue;
+            }
+
+            var directive = WebHandlerDirectiveRegex().Match(text);
+            var line = directive.Success ? LineAt(SourceText.From(text), directive.Index) : 1;
+            var attributes = directive.Success
+                ? ParseAttributes(directive.Groups["attrs"].Value)
+                : new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var handlerType = SafeIdentifier(attributes.GetValueOrDefault("Class"));
+            if (!directive.Success || handlerType is null)
+            {
+                facts.Add(CreateClientHttpHandlerGap(manifest, request, handlerFile, line,
+                    "ClientHttpHandlerDirectiveUnavailable", "The matched .ashx file has no supported WebHandler Class declaration."));
+                continue;
+            }
+
+            var directiveProperties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["coverageLabel"] = "bounded-structural-webforms-client-http-handler",
+                ["handlerSurfaceFile"] = handlerFile,
+                ["handlerTypeName"] = handlerType,
+                ["ruleLimitations"] = "The WebHandler directive is static declaration evidence only and does not prove deployment mapping, request dispatch, handler construction, or execution.",
+                ["supportingFactIds"] = request.FactId,
+                ["surfaceIdentity"] = request.Properties.GetValueOrDefault("surfaceIdentity") ?? request.SourceSymbol ?? string.Empty
+            };
+            var directiveFact = FactFactory.Create(
+                manifest,
+                FactTypes.WebFormsClientHttpHandlerDeclared,
+                RuleIds.LegacyWebFormsClientHttpHandlerResolution,
+                EvidenceTiers.Tier2Structural,
+                new EvidenceSpan(handlerFile, line, line, FactFactory.Hash(directive.Value, 32), "LegacyWebFormsExtractor", ScannerVersions.LegacyWebFormsExtractor),
+                sourceSymbol: request.TargetSymbol,
+                targetSymbol: handlerType,
+                contractElement: Path.GetFileName(handlerFile),
+                properties: directiveProperties);
+            facts.Add(directiveFact);
+
+            var sourcePaths = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+            var webRoot = FindWebApplicationRoot(handlerFile, inventory);
+            foreach (var attributeName in new[] { "CodeBehind", "CodeFile" })
+            {
+                var resolved = ResolveMarkupReferencePath(handlerFile, webRoot, attributes.GetValueOrDefault(attributeName));
+                if (resolved is not null && inventoryPaths.Contains(resolved))
+                {
+                    sourcePaths.Add(resolved);
+                }
+            }
+            foreach (var declaration in existingFacts.Where(fact => fact.FactType == FactTypes.TypeDeclared)
+                         .Where(fact => PageTypeMatches(handlerType, WebFormsDeclarationQualifiedName(fact),
+                             attributes.GetValueOrDefault("Language")?.Equals("VB", StringComparison.OrdinalIgnoreCase) == true)))
+            {
+                if (inventoryPaths.Contains(declaration.Evidence.FilePath))
+                {
+                    sourcePaths.Add(declaration.Evidence.FilePath);
+                }
+            }
+
+            var methods = sourcePaths
+                .Select(path => context.CodeFiles.FirstOrDefault(file => file.FilePath.Equals(path, StringComparison.OrdinalIgnoreCase))
+                    ?? ParseCodeFile(repoPath, path))
+                .Where(file => file is not null)
+                .SelectMany(file => file!.Methods)
+                .Where(method => IdentifierEquals(method.MethodName, "ProcessRequest", IsVisualBasicMethod(method))
+                    && PageTypeMatches(handlerType, method.PageTypeName, IsVisualBasicMethod(method)))
+                .GroupBy(method => $"{method.FilePath}|{method.Line}|{method.EndLine}", StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First())
+                .OrderBy(method => method.FilePath, StringComparer.Ordinal)
+                .ThenBy(method => method.Line)
+                .ToArray();
+            if (methods.Length != 1)
+            {
+                facts.Add(CreateClientHttpHandlerGap(manifest, request, handlerFile, line,
+                    methods.Length == 0 ? "ClientHttpProcessRequestUnavailable" : "AmbiguousClientHttpProcessRequest",
+                    methods.Length == 0
+                        ? "No unique source declaration for the .ashx ProcessRequest entry point was retained."
+                        : "Multiple ProcessRequest declarations matched the .ashx handler type."));
+                continue;
+            }
+
+            var method = methods[0];
+            var semantic = FindSemanticHandlerEvidence(method, existingFacts);
+            var tier = semantic is null ? EvidenceTiers.Tier2Structural : EvidenceTiers.Tier1Semantic;
+            var handlerSymbol = SemanticHandlerSymbol(semantic) ?? StructuralHandlerCallSymbol(method);
+            var handlerSymbolId = SemanticHandlerSymbolId(semantic)
+                ?? $"webforms-http-handler:{FactFactory.Hash($"{handlerFile}|{method.FilePath}|{method.Line}|{handlerSymbol}", 24)}";
+            var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["bindingFactId"] = request.FactId,
+                ["clientHttpRequestFactId"] = request.FactId,
+                ["controlId"] = request.Properties.GetValueOrDefault("endpointName") ?? "ashx-handler",
+                ["coverageLabel"] = semantic is null ? "bounded-structural-webforms-client-http-handler" : "bounded-semantic-webforms-client-http-handler",
+                ["eventName"] = request.Properties.GetValueOrDefault("eventName") ?? "HTTP",
+                ["eventSourceIdentity"] = request.Properties.GetValueOrDefault("eventSourceIdentity") ?? request.TargetSymbol ?? request.FactId,
+                ["handlerName"] = "ProcessRequest",
+                ["handlerSurfaceFile"] = handlerFile,
+                ["handlerSymbol"] = handlerSymbol,
+                ["handlerSymbolId"] = handlerSymbolId,
+                ["linkedCodePath"] = method.FilePath,
+                ["markupFile"] = request.Evidence.FilePath,
+                ["pageTypeName"] = handlerType,
+                ["resolutionKind"] = semantic is null ? "StructuralWebHandlerProcessRequest" : "SemanticWebHandlerProcessRequest",
+                ["ruleLimitations"] = "A literal AJAX route, WebHandler directive, and unique ProcessRequest source declaration form a static join only; deployment mapping, runtime request dispatch, authentication, authorization, handler execution, and downstream execution are not proven.",
+                ["sourceSymbolId"] = handlerSymbolId,
+                ["supportingFactIds"] = string.Join(",", new[] { request.FactId, directiveFact.FactId }.OrderBy(value => value, StringComparer.Ordinal)),
+                ["surfaceIdentity"] = request.Properties.GetValueOrDefault("surfaceIdentity") ?? request.SourceSymbol ?? string.Empty
+            };
+            facts.Add(FactFactory.Create(
+                manifest,
+                FactTypes.WebFormsHandlerResolved,
+                RuleIds.LegacyWebFormsClientHttpHandlerResolution,
+                tier,
+                new EvidenceSpan(method.FilePath, method.Line, method.EndLine, null, "LegacyWebFormsExtractor", ScannerVersions.LegacyWebFormsExtractor),
+                sourceSymbol: properties["eventSourceIdentity"],
+                targetSymbol: handlerSymbolId,
+                contractElement: "ProcessRequest",
+                properties: properties));
+        }
+    }
+
+    private static CodeFact CreateClientHttpHandlerGap(
+        ScanManifest manifest,
+        CodeFact request,
+        string handlerFile,
+        int line,
+        string gapKind,
+        string message) =>
+        FactFactory.Create(
+            manifest,
+            FactTypes.AnalysisGap,
+            RuleIds.LegacyWebFormsClientHttpHandlerResolution,
+            EvidenceTiers.Tier4Unknown,
+            new EvidenceSpan(handlerFile, line, line, null, "LegacyWebFormsExtractor", ScannerVersions.LegacyWebFormsExtractor),
+            sourceSymbol: request.TargetSymbol,
+            targetSymbol: request.FactId,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["coverageLabel"] = "reduced-static-webforms-client-http-handler",
+                ["gapKind"] = gapKind,
+                ["message"] = message,
+                ["ruleLimitations"] = "Missing or ambiguous static handler evidence is an analysis gap and is not proof that the request has no runtime handler.",
+                ["supportingFactIds"] = request.FactId,
+                ["surfaceIdentity"] = request.Properties.GetValueOrDefault("surfaceIdentity") ?? request.SourceSymbol ?? string.Empty
+            });
+
+    private static string StructuralHandlerCallSymbol(WebFormsMethod method)
+    {
+        if (method.Declaration is VBSyntax.MethodBlockBaseSyntax
+            {
+                BlockStatement: VBSyntax.MethodStatementSyntax statement
+            })
+        {
+            return $"{method.PageTypeName}.{method.MethodName}/{statement.ParameterList?.Parameters.Count ?? 0}";
+        }
+
+        // The C# syntax fallback identifies the containing caller by member name.
+        return method.MethodName;
     }
 
     private static string? ClassifyClientContentType(string value)
@@ -4098,6 +4290,9 @@ public static partial class LegacyWebFormsExtractor
 
     [GeneratedRegex(@"<%@\s*(?<kind>Page|Control|Master)\b(?<attrs>.*?)%>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex DirectiveRegex();
+
+    [GeneratedRegex(@"<%@\s*WebHandler\b(?<attrs>.*?)%>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    private static partial Regex WebHandlerDirectiveRegex();
 
     [GeneratedRegex(@"<%@\s*Register\b(?<attrs>.*?)%>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex RegisterDirectiveRegex();

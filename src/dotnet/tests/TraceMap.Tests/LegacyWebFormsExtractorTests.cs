@@ -1788,7 +1788,7 @@ public sealed class LegacyWebFormsExtractorTests
         Assert.All(events.Concat(mutations).Append(constraint), fact =>
         {
             Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, fact.EvidenceTier);
-            Assert.Equal("legacy-webforms/0.11.0", fact.Evidence.ExtractorVersion);
+            Assert.Equal("legacy-webforms/0.12.0", fact.Evidence.ExtractorVersion);
             Assert.DoesNotContain("Saving", JsonSerializer.Serialize(fact), StringComparison.Ordinal);
         });
     }
@@ -1818,7 +1818,17 @@ public sealed class LegacyWebFormsExtractorTests
             </script>
             """);
         File.WriteAllText(Path.Combine(repo, "Edit.aspx.vb"), "Partial Public Class Edit\nEnd Class\n");
-        File.WriteAllText(Path.Combine(repo, "api", "SetActive.ashx"), "<%@ WebHandler Language=\"VB\" Class=\"SetActive\" %>");
+        File.WriteAllText(Path.Combine(repo, "api", "SetActive.ashx"), "<%@ WebHandler Language=\"VB\" Class=\"SetActive\" CodeFile=\"SetActive.ashx.vb\" %>");
+        File.WriteAllText(Path.Combine(repo, "api", "SetActive.ashx.vb"), """
+            Public Class SetActive
+                Public Sub ProcessRequest(context As Object)
+                    SaveState()
+                End Sub
+
+                Private Sub SaveState()
+                End Sub
+            End Class
+            """);
 
         var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
         var click = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WebFormsClientEventBindingCandidate);
@@ -1845,8 +1855,28 @@ public sealed class LegacyWebFormsExtractorTests
         {
             Assert.Equal(RuleIds.LegacyWebFormsInlineClientHttpRequest, request.RuleId);
             Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, request.EvidenceTier);
-            Assert.Equal("legacy-webforms/0.11.0", request.Evidence.ExtractorVersion);
+            Assert.Equal("legacy-webforms/0.12.0", request.Evidence.ExtractorVersion);
         });
+        var handler = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsHandlerResolved
+            && fact.RuleId == RuleIds.LegacyWebFormsClientHttpHandlerResolution);
+        var handlerDirective = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsClientHttpHandlerDeclared
+            && fact.RuleId == RuleIds.LegacyWebFormsClientHttpHandlerResolution);
+        Assert.Equal("api/SetActive.ashx", handlerDirective.Evidence.FilePath);
+        Assert.Equal("SetActive", handlerDirective.Properties.GetValueOrDefault("handlerTypeName"));
+        Assert.Equal(requests[0].FactId, handler.Properties.GetValueOrDefault("bindingFactId"));
+        Assert.Contains(handlerDirective.FactId, handler.Properties.GetValueOrDefault("supportingFactIds"), StringComparison.Ordinal);
+        Assert.Equal("api/SetActive.ashx", handler.Properties.GetValueOrDefault("handlerSurfaceFile"));
+        Assert.Equal("api/SetActive.ashx.vb", handler.Properties.GetValueOrDefault("linkedCodePath"));
+        Assert.Equal("ProcessRequest", handler.Properties.GetValueOrDefault("handlerName"));
+        Assert.Equal("StructuralWebHandlerProcessRequest", handler.Properties.GetValueOrDefault("resolutionKind"));
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsEventFlowProjected
+            && fact.Properties.GetValueOrDefault("supportingFactIds")?.Contains(handler.FactId, StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyWebFormsClientHttpHandlerResolution);
         var serialized = JsonSerializer.Serialize(requests);
         Assert.DoesNotContain("/virtual/app", serialized, StringComparison.Ordinal);
         Assert.DoesNotContain("'POS'", serialized, StringComparison.Ordinal);
@@ -1886,6 +1916,39 @@ public sealed class LegacyWebFormsExtractorTests
         var serialized = JsonSerializer.Serialize(reference);
         Assert.DoesNotContain("EmployeeInfo", serialized, StringComparison.Ordinal);
         Assert.DoesNotContain("DisplayName", serialized, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Inline_jquery_ajax_retains_gap_when_unique_ashx_has_no_process_request_source()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "api"));
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), """
+            <%@ Page Language="VB" CodeFile="Default.aspx.vb" Inherits="DefaultPage" %>
+            <script>$.ajax({ url: '/api/Broken.ashx' });</script>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx.vb"), "Public Class DefaultPage\nEnd Class\n");
+        File.WriteAllText(Path.Combine(repo, "api", "Broken.ashx"),
+            "<%@ WebHandler Language=\"VB\" Class=\"BrokenHandler\" CodeFile=\"Broken.ashx.vb\" %>");
+        File.WriteAllText(Path.Combine(repo, "api", "Broken.ashx.vb"),
+            "Public Class BrokenHandler\nEnd Class\n");
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        var request = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WebFormsClientHttpRequestCandidate);
+        Assert.Equal("unique-repository-handler-file", request.Properties.GetValueOrDefault("targetResolution"));
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsClientHttpHandlerDeclared
+            && fact.Evidence.FilePath == "api/Broken.ashx");
+        var gap = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.LegacyWebFormsClientHttpHandlerResolution
+            && fact.Properties.GetValueOrDefault("gapKind") == "ClientHttpProcessRequestUnavailable");
+        Assert.Contains(request.FactId, gap.Properties.GetValueOrDefault("supportingFactIds"), StringComparison.Ordinal);
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsHandlerResolved
+            && fact.RuleId == RuleIds.LegacyWebFormsClientHttpHandlerResolution);
     }
 
     private static void WriteBasicPage(string repo, string handlerName, string handlerBody)

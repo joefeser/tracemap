@@ -307,6 +307,7 @@ public static class FactTypes
     public const string WebFormsClientUiMutationCandidate = nameof(WebFormsClientUiMutationCandidate);
     public const string WebFormsClientValidationConstraintCandidate = nameof(WebFormsClientValidationConstraintCandidate);
     public const string WebFormsClientHttpRequestCandidate = nameof(WebFormsClientHttpRequestCandidate);
+    public const string WebFormsClientHttpHandlerDeclared = nameof(WebFormsClientHttpHandlerDeclared);
     public const string WebFormsServerNavigationCandidate = nameof(WebFormsServerNavigationCandidate);
     public const string WebFormsRequestLifecycleCandidate = nameof(WebFormsRequestLifecycleCandidate);
     public const string WebFormsServerControlStateMutationCandidate = nameof(WebFormsServerControlStateMutationCandidate);
@@ -499,6 +500,7 @@ public static class RuleIds
     public const string LegacyWebFormsClientScript = "legacy.webforms.client-script.v1";
     public const string LegacyWebFormsInlineClientBehavior = "legacy.webforms.inline-client-behavior.v1";
     public const string LegacyWebFormsInlineClientHttpRequest = "legacy.webforms.inline-client-http-request.v1";
+    public const string LegacyWebFormsClientHttpHandlerResolution = "legacy.webforms.client-http-handler-resolution.v1";
     public const string LegacyWebFormsServerBehavior = "legacy.webforms.server-behavior.v1";
     public const string LegacyWebFormsInlineServerExpression = "legacy.webforms.inline-server-expression.v1";
     public const string LegacyWebFormsPostBackTarget = "legacy.webforms.postback-target.v1";
@@ -611,7 +613,7 @@ public static class ScannerVersions
     public const string LegacyWcfExtractor = "legacy-wcf/0.3.0";
     public const string LegacyAsmxExtractor = "legacy-asmx/0.2.0";
     public const string LegacyRemotingExtractor = "legacy-remoting/0.1.0";
-    public const string LegacyWebFormsExtractor = "legacy-webforms/0.11.0";
+    public const string LegacyWebFormsExtractor = "legacy-webforms/0.12.0";
     public const string LegacyWinFormsExtractor = "legacy-winforms/0.1.0";
     public const string LegacyAspNetExtractor = "legacy-aspnet/0.2.0";
     public const string LegacyBatchDataMovementExtractor = "legacy-batch-data-movement/0.2.0";

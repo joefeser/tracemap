@@ -51,7 +51,19 @@ public sealed class WebFormsModernizationPacketTests
                 End Class
             End Namespace
             """);
-        File.WriteAllText(Path.Combine(repo, "api", "SaveAudit.ashx"), "<%@ WebHandler Language=\"VB\" Class=\"SaveAudit\" %>");
+        File.WriteAllText(Path.Combine(repo, "api", "SaveAudit.ashx"), "<%@ WebHandler Language=\"VB\" Class=\"SaveAudit\" CodeFile=\"SaveAudit.ashx.vb\" %>");
+        File.WriteAllText(Path.Combine(repo, "api", "SaveAudit.ashx.vb"), """
+            Public Class SaveAudit
+                Public Sub ProcessRequest(context As Object)
+                    AuditStore.Save()
+                End Sub
+            End Class
+
+            Public Class AuditStore
+                Public Shared Sub Save()
+                End Sub
+            End Class
+            """);
         var scan = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "scan")));
         const string commitSha = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
         var manifest = scan.Manifest with { CommitSha = commitSha };
@@ -79,6 +91,13 @@ public sealed class WebFormsModernizationPacketTests
             && item.SafeMetadata.GetValueOrDefault("endpointName") == "SaveAudit.ashx"
             && item.SafeMetadata.GetValueOrDefault("endpointDeclarationFile") == "api/SaveAudit.ashx"
             && item.TargetResolution == "unique-repository-handler-file");
+        var httpChain = Assert.Single(written.Packet.EventChains, chain =>
+            chain.EventSourceId.StartsWith("webforms-client-http:", StringComparison.Ordinal)
+            && chain.HandlerSymbol?.Contains("ProcessRequest", StringComparison.Ordinal) == true
+            && chain.Evidence.Any(evidence => evidence.FilePath == "api/SaveAudit.ashx.vb"));
+        Assert.True(httpChain.TraversalObservation?.HandlerOwnedCallEvidenceCount > 0);
+        Assert.True(httpChain.TraversalObservation?.DownstreamEdgeCount > 0,
+            JsonSerializer.Serialize(httpChain.TraversalObservation));
         Assert.Equal(4, written.Packet.Summary.ServerBehaviorCount);
         Assert.Equal(4, written.Packet.ServerBehaviorInventory.Count);
         Assert.Contains(written.Packet.ServerBehaviorInventory, item =>

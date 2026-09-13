@@ -437,7 +437,7 @@ public static class WebFormsModernizationPacketReporter
     {
         var retainedBindingIds = facts
             .Where(HasRequiredProvenance)
-            .Where(fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared)
+            .Where(fact => fact.FactType is FactTypes.WebFormsEventBindingDeclared or FactTypes.WebFormsClientHttpRequestCandidate)
             .Where(fact => selectedSurfaceIds is null
                 || selectedSurfaceIds.Contains(fact.Properties.GetValueOrDefault("surfaceIdentity") ?? ""))
             .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
@@ -600,7 +600,7 @@ public static class WebFormsModernizationPacketReporter
             .GroupBy(fact => fact.Properties["bindingFactId"], StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.OrderBy(fact => fact.FactId, StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
         var flowFacts = facts.Where(fact => fact.FactType == FactTypes.WebFormsEventFlowProjected).ToArray();
-        var bindings = facts.Where(fact => fact.FactType == FactTypes.WebFormsEventBindingDeclared)
+        var bindings = facts.Where(fact => fact.FactType is FactTypes.WebFormsEventBindingDeclared or FactTypes.WebFormsClientHttpRequestCandidate)
             .Where(fact => selectedSurfaceIds is null
                 || selectedSurfaceIds.Contains(fact.Properties.GetValueOrDefault("surfaceIdentity") ?? ""))
             .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)

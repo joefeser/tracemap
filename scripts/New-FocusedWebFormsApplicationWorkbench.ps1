@@ -320,11 +320,17 @@ try {
             (Property-Value $_.safeMetadata 'serverHandlerName') -and
             (Property-Value $_.safeMetadata 'serverHandlerName') -notin @('not-applicable','unavailable')
         }).Count
+        $httpRequestCount = @($clientBehavior | Where-Object { $_.behaviorKind -eq 'client-http-request' }).Count
+        $linkedHttpRequestCount = @($clientBehavior | Where-Object {
+            if ($_.behaviorKind -ne 'client-http-request') { return $false }
+            $requestFactId = [string]$_.evidence.factId
+            return @($chains | Where-Object { [string]$_.bindingFactId -eq $requestFactId }).Count -gt 0
+        }).Count
         $navigationCount = @($serverBehavior | Where-Object { $_.behaviorKind -eq 'navigation' }).Count
         $lifecycleCount = @($serverBehavior | Where-Object { $_.behaviorKind -eq 'request-lifecycle' }).Count
         $serverMutationCount = @($serverBehavior | Where-Object { $_.behaviorKind -eq 'control-state-mutation' }).Count
         $inlineReferenceCount = @($serverBehavior | Where-Object { $_.behaviorKind -eq 'inline-server-reference' }).Count
-        $behaviorSummary = "Retained evidence records $($chains.Count) event chain(s), $($clientBehavior.Count) inline client behavior(s), and $($serverBehavior.Count) server behavior(s). $linkedClientEventCount of $clientEventCount client event binding(s) correlate to one retained server handler. Server evidence includes $navigationCount navigation candidate(s), $lifecycleCount request-lifecycle candidate(s), $serverMutationCount control-state mutation(s), and $inlineReferenceCount inline server-expression reference(s)."
+        $behaviorSummary = "Retained evidence records $($chains.Count) event chain(s), $($clientBehavior.Count) inline client behavior(s), and $($serverBehavior.Count) server behavior(s). $linkedClientEventCount of $clientEventCount client event binding(s) correlate to one retained server handler. $linkedHttpRequestCount of $httpRequestCount inline HTTP request(s) join through a handler declaration to one retained entry method. Server evidence includes $navigationCount navigation candidate(s), $lifecycleCount request-lifecycle candidate(s), $serverMutationCount control-state mutation(s), and $inlineReferenceCount inline server-expression reference(s)."
         $retrievalHints = [Collections.Generic.List[object]]::new()
         $retrievalHints.Add([ordered]@{ recipeId = 'webforms-surface-facts'; parameters = [ordered]@{ surface_id = [string]$surface.surfaceId; limit = 500 } })
         foreach ($handler in $handlers) { $retrievalHints.Add([ordered]@{ recipeId = 'calls-from-handler'; parameters = [ordered]@{ handler_symbol = $handler; limit = 500 } }) }
@@ -376,8 +382,8 @@ try {
         [IO.File]::WriteAllText($handoffPath, (($handoff | ConvertTo-Json -Depth 30) + "`n"), [Text.UTF8Encoding]::new($false))
 
         $chainRows = foreach ($chain in $chains) {
-            $bindingLocation = @(Values $chain.evidence | Where-Object { $_.ruleId -eq 'legacy.webforms.event-binding.v1' } | Sort-Object filePath, startLine | Select-Object -First 1)
-            $handlerLocation = @(Values $chain.evidence | Where-Object { $_.ruleId -eq 'legacy.webforms.handler-resolution.v1' } | Sort-Object filePath, startLine | Select-Object -First 1)
+            $bindingLocation = @(Values $chain.evidence | Where-Object { $_.ruleId -in @('legacy.webforms.event-binding.v1','legacy.webforms.inline-client-http-request.v1') } | Sort-Object filePath, startLine | Select-Object -First 1)
+            $handlerLocation = @(Values $chain.evidence | Where-Object { $_.ruleId -in @('legacy.webforms.handler-resolution.v1','legacy.webforms.client-http-handler-resolution.v1') } | Sort-Object filePath, startLine | Select-Object -First 1)
             $bindingSpan = if ($bindingLocation.Count) { "$($bindingLocation[0].filePath):L$($bindingLocation[0].startLine)-$($bindingLocation[0].endLine)" } else { 'span unavailable' }
             $handlerSpan = if ($handlerLocation.Count) { "$($handlerLocation[0].filePath):L$($handlerLocation[0].startLine)-$($handlerLocation[0].endLine)" } else { 'span unavailable' }
             '<tr><td><code>{0}</code></td><td>{1}<br><small>{2}</small></td><td><code>{3}</code><br><small>{4}</small></td><td><code>{5}</code></td><td>{6}</td></tr>' -f (ConvertTo-HtmlText $chain.chainId), (ConvertTo-HtmlText $chain.eventSourceId), (ConvertTo-HtmlText $bindingSpan), (ConvertTo-HtmlText $(if ($chain.handlerSymbol) { $chain.handlerSymbol } else { $chain.handlerId })), (ConvertTo-HtmlText $handlerSpan), (ConvertTo-HtmlText $chain.classification), (ConvertTo-HtmlText $(if ($chain.terminalKind) { $chain.terminalKind } else { $chain.traversalObservation.stopState }))

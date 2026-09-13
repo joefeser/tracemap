@@ -254,3 +254,11 @@ anywhere in the scanned project; the only second textual occurrence was in an
 excluded copy. Treat that selector as `no-static-target-declared`, which predicts
 an empty jQuery selection and silent binding no-op for the retained static DOM,
 but does not claim runtime dead code because dynamic injection remains unproven.
+
+The next slice joins each uniquely resolved AJAX `.ashx` request through its
+`WebHandler Class` directive to one retained `ProcessRequest` source declaration.
+That handler becomes a bounded legacy-flow root, allowing the application
+workbench to display retained calls and downstream boundaries from the HTTP
+entry point. Missing directives, source declarations, or unique entry methods
+remain explicit Tier4 gaps; deployment routing and runtime execution are not
+claimed.
