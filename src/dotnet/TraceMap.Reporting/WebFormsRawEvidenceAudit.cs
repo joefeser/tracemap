@@ -113,6 +113,11 @@ public static partial class WebFormsRawEvidenceAudit
         output.Add(startingMethodName is null ? "selection=report-handlers" : "selection=unique-method-hint;not-page-or-event-selection");
         if (seeds.Count == 0)
         {
+            if (inspectAllHandlers)
+            {
+                WriteBatchInspection(db, transaction, root, scan!, commit!, reportPath, inspectionPath!, handlers!, [], [], [], maxRows, maxTextBytes, output);
+                return output;
+            }
             if (inspectionPath is not null) throw new InvalidDataException("RawAuditInspectionUnavailable");
             return output;
         }

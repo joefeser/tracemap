@@ -182,6 +182,12 @@ complete selected-page view and is private because raw source was requested.
 
 ## 6. Generate the supplemental exception review set
 
+This exact-semantic review is supplemental. In projectless mode it may report
+`not-applicable;reason=no-semantic-handler-cases`; that is a successful bounded
+result, not a failure of the primary application workbench. The subsequent
+review-set command will also exit cleanly and will not reuse an older
+inspection.
+
 ```powershell
 .\scripts\New-FocusedWebFormsBatchInspection.ps1
 

@@ -158,6 +158,7 @@ public static partial class WebFormsRawEvidenceAudit
                 scanId = scan,
                 commitSha = commit,
                 sourceReport = Path.GetFullPath(reportPath),
+                availability = cases.Length == 0 ? "no-semantic-handler-cases" : "available",
                 selectedChainCount = chains.Length,
                 selectedHandlerCount = cases.Length,
                 scope = "All selected report handlers; independent bounded exact semantic call closure, not report leaf reconstruction or runtime execution.",
@@ -177,6 +178,7 @@ public static partial class WebFormsRawEvidenceAudit
             writer.WriteLine("# Local review of all terminal-free handlers\n");
             writer.WriteLine("PRIVATE: keep this report and its JSON on the work machine.\n");
             writer.WriteLine($"Selected chains: {chains.Length}; distinct handlers: {cases.Length}; scan: {Safe(scan)}; commit: {Safe(commit)}.\n");
+            if (cases.Length == 0) writer.WriteLine("No compiler-resolved handler cases were available for this supplemental exact-semantic review. The primary application workbench remains valid; this is not proof that the application has no handlers or behavior.\n");
             writer.WriteLine("For each case, the evidence conclusion distinguishes exact allowlisted UI/control endpoints from other unresolved leaves. Open unresolved leaves only when a stronger manual conclusion is needed. Locations identify call sites; use Go To Definition in Visual Studio to inspect the callee. This report lists retained static calls; it does not establish execution, source completeness, or absence of backend behavior.\n");
             writer.WriteLine("Share only case IDs and your result category: ui-only, database-call-present, source-call-missing, definition-unavailable, checkout-mismatch, or uncertain. Add only a generic description of a missing operation.\n");
             foreach (var item in cases)
@@ -209,8 +211,9 @@ public static partial class WebFormsRawEvidenceAudit
             }
         }
         output.Add($"batchInspection=created|chains={chains.Length}|handlers={cases.Length}|boundedHandlers={cases.Count(c => c.bounded)}");
+        if (cases.Length == 0) output.Add("batchReview=not-applicable;reason=no-semantic-handler-cases;primary-workbench-remains-valid");
         foreach (var item in cases)
             output.Add($"case={item.caseId}|bounded={item.bounded.ToString().ToLowerInvariant()}|symbols={item.visitedSymbolCount}|directCallSites={callsByCaller[item.handler].Select(w => (w.Callee, w.FilePath, w.StartLine, w.EndLine)).Distinct().Count()}|stoppingSymbols={item.stoppingSymbols.Length}|uiControlEndpoints={item.uiControlEndpoints.Length}|unresolvedOtherLeaves={item.unresolvedOtherLeaves.Length}|evidence={item.evidenceConclusion}|review=unreviewed");
-        output.Add("batchReview=read-private-markdown;share-only-case-ids-and-result-categories");
+        if (cases.Length > 0) output.Add("batchReview=read-private-markdown;share-only-case-ids-and-result-categories");
     }
 }

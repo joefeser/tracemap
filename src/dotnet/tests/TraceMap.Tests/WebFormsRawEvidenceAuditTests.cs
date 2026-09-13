@@ -7,6 +7,30 @@ namespace TraceMap.Tests;
 public sealed class WebFormsRawEvidenceAuditTests
 {
     [Fact]
+    public void BatchInspectionWritesNonApplicableSnapshotWhenNoSemanticHandlerCasesExist()
+    {
+        WithFixture((db, report) =>
+        {
+            File.WriteAllText(report, JsonSerializer.Serialize(new
+            {
+                schemaVersion = "webforms-modernization-packet.v1",
+                sources = new[] { new { scanId = "scan-one", commitSha = "commit-one" } },
+                eventChains = Array.Empty<object>()
+            }));
+            var path = Path.Combine(Path.GetDirectoryName(report)!, "empty-batch.json");
+
+            var lines = WebFormsRawEvidenceAudit.Run(db, report, inspectionPath: path, inspectAllHandlers: true);
+
+            Assert.Contains("batchInspection=created|chains=0|handlers=0|boundedHandlers=0", lines);
+            Assert.Contains("batchReview=not-applicable;reason=no-semantic-handler-cases;primary-workbench-remains-valid", lines);
+            using var json = JsonDocument.Parse(File.ReadAllText(path));
+            Assert.Equal("no-semantic-handler-cases", json.RootElement.GetProperty("availability").GetString());
+            Assert.Empty(json.RootElement.GetProperty("cases").EnumerateArray());
+            Assert.Contains("primary application workbench remains valid", File.ReadAllText(Path.ChangeExtension(path, ".md")), StringComparison.OrdinalIgnoreCase);
+        });
+    }
+
+    [Fact]
     public void BatchInspectionDistinguishesUiEndpointsWithoutOtherUnresolvedLeaves()
     {
         WithFixture((db, report) =>
