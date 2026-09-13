@@ -249,6 +249,44 @@ public sealed class VisualBasicExtractionTests
     }
 
     [Fact]
+    public void Projectless_vb_with_block_and_event_receiver_do_not_abort_syntax_phases()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "LegacyPage.aspx.vb"), """
+            Public Class LegacyPage
+                Public Event Load As EventHandler
+
+                Public Sub Configure(value As Object)
+                    With value
+                        .Text = .Name
+                        .Refresh()
+                    End With
+                End Sub
+
+                Private Sub LegacyPage_Load(sender As Object, e As EventArgs) Handles Me.Load
+                End Sub
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.Properties.GetValueOrDefault("gapKind") == "VisualBasicSyntaxFallbackPhaseFailed");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.MemberAccessName
+            && fact.RuleId == RuleIds.VisualBasicSyntaxMemberAccess
+            && fact.Properties.GetValueOrDefault("expressionKind") == "ImplicitWithReceiver"
+            && fact.SourceSymbol == "implicit-with");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.VisualBasicEventBindingDeclared
+            && fact.RuleId == RuleIds.VisualBasicSyntaxEventWiring
+            && fact.Properties.GetValueOrDefault("receiverName") == "Me");
+    }
+
+    [Fact]
     public void Orphan_vb_files_without_a_project_fall_back_to_bounded_syntax_facts()
     {
         using var temp = new TempDirectory();

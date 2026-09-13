@@ -422,6 +422,9 @@ public static class VisualBasicSyntaxExtractor
             {
                 memberName = memberAccess.Name.ToString();
             }
+            var expressionText = memberAccess.Expression?.ToString() ?? string.Empty;
+            var expressionKind = memberAccess.Expression?.Kind().ToString() ?? "ImplicitWithReceiver";
+            var sourceSymbol = GetSafeExpressionName(memberAccess.Expression) ?? "implicit-with";
 
             if (!TryAddSyntaxFact(
                     manifest,
@@ -433,12 +436,12 @@ public static class VisualBasicSyntaxExtractor
                     targetSymbol: memberName,
                     new SortedDictionary<string, string>(StringComparer.Ordinal)
                     {
-                        ["expressionHash"] = FactFactory.Hash(memberAccess.Expression.ToString(), 32),
-                        ["expressionKind"] = memberAccess.Expression.Kind().ToString(),
+                        ["expressionHash"] = FactFactory.Hash(expressionText, 32),
+                        ["expressionKind"] = expressionKind,
                         ["memberName"] = memberName
                     },
                     budget,
-                    sourceSymbol: GetSafeExpressionName(memberAccess.Expression)))
+                    sourceSymbol: sourceSymbol))
             {
                 return;
             }
@@ -588,8 +591,12 @@ public static class VisualBasicSyntaxExtractor
         };
     }
 
-    private static string SafeEventReceiverName(ExpressionSyntax expression)
+    private static string SafeEventReceiverName(ExpressionSyntax? expression)
     {
+        if (expression is null)
+        {
+            return string.Empty;
+        }
         var text = expression.ToString();
         if (text.Equals("Me", StringComparison.OrdinalIgnoreCase)
             || text.Equals("MyBase", StringComparison.OrdinalIgnoreCase)
@@ -905,7 +912,7 @@ public static class VisualBasicSyntaxExtractor
         };
     }
 
-    private static string? GetSafeExpressionName(ExpressionSyntax expression)
+    private static string? GetSafeExpressionName(ExpressionSyntax? expression)
     {
         return expression switch
         {
