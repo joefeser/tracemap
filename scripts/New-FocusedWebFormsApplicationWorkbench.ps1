@@ -202,9 +202,17 @@ try {
         $chains = @(Values $packet.eventChains | Where-Object { Same $_.surfaceId $surface.surfaceId } | Sort-Object chainId)
         $chainIds = @($chains | ForEach-Object { [string]$_.chainId })
         $boundaries = @(Values $packet.downstreamBoundaries | Where-Object { Same $_.surfaceId $surface.surfaceId } | Sort-Object boundaryId)
-        $identity = @(Values $packet.identityStateInventory | Where-Object { $null -ne $_.surfaceId -and (Same $_.surfaceId $surface.surfaceId) } | Sort-Object identityStateId)
-        $projectBatchCount = @(Values $packet.batchDataMovementInventory | Where-Object { $null -ne $_.projectId -and (Same $_.projectId $surface.projectId) }).Count
-        $candidates = @(Values $packet.structuralSliceCandidates | Where-Object { @($_.surfaceIds | Where-Object { Same $_ $surface.surfaceId }).Count -gt 0 } | Sort-Object candidateId)
+        $identity = @(Values $packet.identityStateInventory | Where-Object {
+            $surfaceId = Property-Value $_ 'surfaceId'
+            $null -ne $surfaceId -and (Same $surfaceId $surface.surfaceId)
+        } | Sort-Object identityStateId)
+        $projectBatchCount = @(Values $packet.batchDataMovementInventory | Where-Object {
+            $projectId = Property-Value $_ 'projectId'
+            $null -ne $projectId -and (Same $projectId $surface.projectId)
+        }).Count
+        $candidates = @(Values $packet.structuralSliceCandidates | Where-Object {
+            @((Values (Property-Value $_ 'surfaceIds')) | Where-Object { Same $_ $surface.surfaceId }).Count -gt 0
+        } | Sort-Object candidateId)
         $pageIdentity = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
         foreach ($value in @($surface.surfaceId, $surface.evidence.factId) + @(Values $surface.supportingFactIds) + @(Values $surface.controlIds)) { if ($value) { [void]$pageIdentity.Add([string]$value) } }
         foreach ($chain in $chains) { foreach ($value in @($chain.chainId, $chain.bindingFactId, $chain.handlerId, $chain.handlerFactId, $chain.legacyPathId) + @(Values $chain.supportingFactIds) + @(Values $chain.supportingEdgeIds)) { if ($value) { [void]$pageIdentity.Add([string]$value) } } }
@@ -230,7 +238,10 @@ try {
                 if ($value) { [void]$pageIdentity.Add([string]$value) }
             }
         }
-        $gaps = @(Values $packet.gaps | Where-Object { $null -ne $_.scopeId -and $pageIdentity.Contains([string]$_.scopeId) } | Sort-Object gapId)
+        $gaps = @(Values $packet.gaps | Where-Object {
+            $scopeId = Property-Value $_ 'scopeId'
+            $null -ne $scopeId -and $pageIdentity.Contains([string]$scopeId)
+        } | Sort-Object gapId)
         foreach ($gap in $gaps) { [void]$associatedGapIds.Add([string]$gap.gapId) }
         $handlers = @($chains | ForEach-Object { if ($_.handlerSymbol) { [string]$_.handlerSymbol } elseif ($_.handlerId) { [string]$_.handlerId } } | Where-Object { $_ } | Sort-Object -Unique)
         $coverage = @($chains | ForEach-Object { Values $_.coverageLabels } | Sort-Object -Unique)
@@ -317,15 +328,21 @@ try {
         $applicationPages.Add([ordered]@{ pageId = $pageId; surfaceId = [string]$surface.surfaceId; filePath = [string]$surface.evidence.filePath; report = "$pageId.html"; handoff = "$pageId.handoff.json"; counts = $handoff.counts })
     }
 
-    $applicationGaps = @(Values $packet.gaps | Where-Object { !$associatedGapIds.Contains([string]$_.gapId) } | Sort-Object gapId)
-    $unassociatedIdentity = @(Values $packet.identityStateInventory | Where-Object { $null -eq $_.surfaceId } | Sort-Object identityStateId)
+    $applicationGaps = @(Values $packet.gaps | Where-Object { !$associatedGapIds.Contains([string](Property-Value $_ 'gapId')) } | Sort-Object gapId)
+    $unassociatedIdentity = @(Values $packet.identityStateInventory | Where-Object { $null -eq (Property-Value $_ 'surfaceId') } | Sort-Object identityStateId)
     $surfaceProjectIds = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     foreach ($surface in $ordered) { if ($surface.projectId) { [void]$surfaceProjectIds.Add([string]$surface.projectId) } }
-    $applicationBatch = @(Values $packet.batchDataMovementInventory | Where-Object { $null -ne $_.projectId -and $surfaceProjectIds.Contains([string]$_.projectId) } | Sort-Object projectId, batchDataMovementId)
-    $unassociatedBatch = @(Values $packet.batchDataMovementInventory | Where-Object { $null -eq $_.projectId -or !$surfaceProjectIds.Contains([string]$_.projectId) } | Sort-Object batchDataMovementId)
+    $applicationBatch = @(Values $packet.batchDataMovementInventory | Where-Object {
+        $projectId = Property-Value $_ 'projectId'
+        $null -ne $projectId -and $surfaceProjectIds.Contains([string]$projectId)
+    } | Sort-Object projectId, batchDataMovementId)
+    $unassociatedBatch = @(Values $packet.batchDataMovementInventory | Where-Object {
+        $projectId = Property-Value $_ 'projectId'
+        $null -eq $projectId -or !$surfaceProjectIds.Contains([string]$projectId)
+    } | Sort-Object batchDataMovementId)
     $surfaceIds = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     foreach ($surface in $ordered) { [void]$surfaceIds.Add([string]$surface.surfaceId) }
-    $unassociatedCandidates = @(Values $packet.structuralSliceCandidates | Where-Object { @((Values $_.surfaceIds) | Where-Object { $surfaceIds.Contains([string]$_) }).Count -eq 0 } | Sort-Object candidateId)
+    $unassociatedCandidates = @(Values $packet.structuralSliceCandidates | Where-Object { @((Values (Property-Value $_ 'surfaceIds')) | Where-Object { $surfaceIds.Contains([string]$_) }).Count -eq 0 } | Sort-Object candidateId)
     $applicationStatus = if ([string]$packet.coverage -like 'reduced-*' -or $packet.summary.truncated -or @(Values $packet.gaps).Count -gt 0) { 'partial' } else { 'complete' }
     $appHandoff = [ordered]@{
         schemaVersion = 'webforms-application-handoff.v1'; ruleId = 'diagnostic.webforms.application-handoff.v1'; claimLevel = 'local-only'

@@ -42,7 +42,7 @@ $packet = [ordered]@{
     downstreamBoundaries = @(@{ boundaryId = 'boundary-one'; chainId = 'chain-one'; surfaceId = 'surface-one'; handlerId = 'handler-one'; boundaryCategory = 'database'; boundaryKind = 'stored-procedure-candidate'; boundaryTargetId = 'target-one'; terminalEvidenceId = 'fact-db'; classification = 'retained'; legacyPathId = 'path-one'; evidence = @($evidence); pathEvidence = @(); supportingFactIds = @('fact-db'); supportingEdgeIds = @(); ruleIds = @('legacy.boundary.v1'); evidenceTiers = @('Tier2Structural'); coverageLabels = @('complete'); limitations = @() })
     identityStateInventory = @(
         @{ identityStateId = 'identity-one'; identityKind = 'session'; classification = 'observed'; surfaceId = 'surface-one'; safeMetadata = @{}; evidence = $evidence; supportingFactIds = @(); limitations = @() },
-        @{ identityStateId = 'identity-unassociated'; identityKind = 'principal'; classification = 'observed'; surfaceId = $null; safeMetadata = @{}; evidence = $evidence; supportingFactIds = @(); limitations = @() }
+        @{ identityStateId = 'identity-unassociated'; identityKind = 'principal'; classification = 'observed'; safeMetadata = @{}; evidence = $evidence; supportingFactIds = @(); limitations = @() }
     )
     batchDataMovementInventory = @(
         @{ batchDataMovementId = 'batch-one'; surfaceKind = 'file-data-movement'; mechanism = 'system-io'; operationKind = 'read'; ownerStatus = 'member-declared'; projectResolution = 'resolved'; projectId = 'project-one'; safeMetadata = @{}; evidence = $evidence; supportingFactIds = @(); limitations = @() },
