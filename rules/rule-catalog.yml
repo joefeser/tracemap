@@ -2430,6 +2430,20 @@ rules:
       - Registration-call syntax does not prove successful registration, rendered output, script execution, browser behavior, branch execution, or runtime reachability.
       - Dynamic payloads, ambiguous, shadowed, or custom same-named receivers, unsupported positional or named argument shapes, wrapper methods, reflection, generated scripts, and unsupported registration APIs remain gaps; raw script bodies are not retained.
 
+  - id: legacy.webforms.inline-client-behavior.v1
+    name: Legacy WebForms inline jQuery behavior candidates
+    description: Emits bounded textual candidates for supported inline jQuery event bindings, UI mutations, numeric maximum-length constraints, generated ASP.NET client-ID dependencies, and exact same-surface server-control correlation.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - WebFormsClientEventBindingCandidate
+      - WebFormsClientUiMutationCandidate
+      - WebFormsClientValidationConstraintCandidate
+    limitations:
+      - Supported input is limited to inline script blocks and literal jQuery selectors using exact IDs, ID suffixes, or CSS classes, with click, keyup, change, input, or submit callback shapes. External files, delegated events, aliases, computed selectors, plugins, minified syntax, and arbitrary JavaScript remain outside coverage.
+      - Mutation candidates cover only show, hide, class addition/removal, disabled property changes, value attributes, and text setters. Argument expressions are not evaluated and a retained candidate does not prove DOM selection, browser execution, event firing, validation enforcement, postback, or server-handler execution.
+      - Same-surface server correlation requires one literal selector target matching one inventoried server-control ID. ASP.NET-generated client-ID suffix matching is a structural candidate and does not prove the rendered client ID.
+      - Raw script bodies and mutation argument values are not retained; evidence uses paths, exact line spans, bounded safe selector targets, and snippet hashes.
+
   - id: legacy.webforms.postback-target.v1
     name: Legacy WebForms postback target candidates
     description: Emits bounded syntax candidates for literal __doPostBack targets in markup and literal registered client-script payloads, with same-surface control correlation where exact.

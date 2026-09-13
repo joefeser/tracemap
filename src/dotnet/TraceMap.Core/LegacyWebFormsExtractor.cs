@@ -101,6 +101,8 @@ public static partial class LegacyWebFormsExtractor
                 }
             }
 
+            AddInlineClientBehaviorFacts(repoPath, manifest, page, pageFact, controlFacts, facts);
+
             AddExplicitControlSubscriptionFacts(manifest, page, context, evidenceIndex, facts);
 
             foreach (var gap in page.Gaps)
@@ -1833,6 +1835,266 @@ public static partial class LegacyWebFormsExtractor
             properties: properties);
     }
 
+    private static void AddInlineClientBehaviorFacts(
+        string repoPath,
+        ScanManifest manifest,
+        WebFormsPage page,
+        CodeFact pageFact,
+        IReadOnlyList<CodeFact> controlFacts,
+        List<CodeFact> facts)
+    {
+        string markup;
+        try
+        {
+            markup = File.ReadAllText(Path.Combine(repoPath, page.FilePath));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return;
+        }
+
+        var source = SourceText.From(markup);
+        foreach (Match script in InlineScriptBlockRegex().Matches(MaskServerComments(markup)))
+        {
+            var attributes = ParseAttributes(script.Groups["attrs"].Value);
+            if (attributes.ContainsKey("src"))
+            {
+                continue;
+            }
+
+            var body = script.Groups["body"];
+            foreach (Match binding in JQueryClientEventBindingRegex().Matches(body.Value))
+            {
+                var selector = binding.Groups["selector"].Value.Trim();
+                var eventName = (binding.Groups["onEvent"].Success
+                    ? binding.Groups["onEvent"].Value
+                    : binding.Groups["shortcutEvent"].Value).ToLowerInvariant();
+                var selectorInfo = ClassifyClientSelector(selector, page.Controls);
+                var absoluteStart = body.Index + binding.Index;
+                var openBrace = body.Index + binding.Index + binding.Length - 1;
+                var closeBrace = FindJavascriptBlockEnd(markup, openBrace);
+                var absoluteEnd = closeBrace >= openBrace ? closeBrace : absoluteStart + binding.Length - 1;
+                var line = LineAt(source, absoluteStart);
+                var endLine = LineAt(source, absoluteEnd);
+                var identity = $"webforms-client-event:{FactFactory.Hash($"{SurfaceIdentity(page.FilePath)}|{selector}|{eventName}|{line}", 24)}";
+                var matchingControlFact = selectorInfo.ControlId is null
+                    ? null
+                    : controlFacts.SingleOrDefault(fact => fact.Properties.GetValueOrDefault("controlId") == selectorInfo.ControlId);
+                var matchingServerBinding = eventName == "click" && selectorInfo.ControlId is not null
+                    ? page.Bindings.FirstOrDefault(candidate =>
+                        candidate.ControlId.Equals(selectorInfo.ControlId, StringComparison.OrdinalIgnoreCase)
+                        && candidate.EventName.Equals("OnClick", StringComparison.OrdinalIgnoreCase))
+                    : null;
+                var supportingFactIds = new List<string?> { pageFact.FactId, matchingControlFact?.FactId };
+                if (matchingServerBinding is not null)
+                {
+                    supportingFactIds.Add(facts.FirstOrDefault(fact =>
+                        fact.FactType == FactTypes.WebFormsEventBindingDeclared
+                        && fact.Properties.GetValueOrDefault("surfaceIdentity") == SurfaceIdentity(page.FilePath)
+                        && fact.Properties.GetValueOrDefault("controlId") == matchingServerBinding.ControlId
+                        && fact.Properties.GetValueOrDefault("eventName") == matchingServerBinding.EventName)?.FactId);
+                }
+
+                var bindingProperties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["behaviorKind"] = "client-event-binding",
+                    ["clientEventName"] = eventName,
+                    ["selectorHash"] = FactFactory.Hash(selector, 32),
+                    ["selectorKind"] = selectorInfo.Kind,
+                    ["selectorTarget"] = selectorInfo.Target ?? "unavailable",
+                    ["targetResolution"] = selectorInfo.ControlId is null ? "unresolved" : "same-surface-control",
+                    ["generatedClientIdDependency"] = selectorInfo.GeneratedClientIdDependency.ToString().ToLowerInvariant(),
+                    ["surfaceIdentity"] = SurfaceIdentity(page.FilePath)
+                };
+                AddOptional(bindingProperties, "controlId", selectorInfo.ControlId);
+                AddOptional(bindingProperties, "serverEventName", matchingServerBinding?.EventName);
+                AddOptional(bindingProperties, "serverHandlerName", matchingServerBinding?.HandlerName);
+                facts.Add(CreateStaticCompositionFact(
+                    manifest,
+                    FactTypes.WebFormsClientEventBindingCandidate,
+                    RuleIds.LegacyWebFormsInlineClientBehavior,
+                    EvidenceTiers.Tier3SyntaxOrTextual,
+                    page.FilePath,
+                    line,
+                    FactFactory.Hash(binding.Value, 32),
+                    SurfaceIdentity(page.FilePath),
+                    identity,
+                    eventName,
+                    "bounded-static-webforms-inline-client-behavior",
+                    "A supported inline jQuery event-binding shape is textual evidence only; it does not prove DOM selection, browser execution, event firing, postback, or server-handler execution.",
+                    supportingFactIds,
+                    bindingProperties,
+                    endLine));
+
+                var callbackStart = openBrace + 1;
+                var callbackLength = Math.Max(0, absoluteEnd - callbackStart);
+                if (callbackLength == 0)
+                {
+                    continue;
+                }
+                var callback = markup.Substring(callbackStart, callbackLength);
+                foreach (Match statement in JQueryStatementRegex().Matches(callback))
+                {
+                    var methods = JQueryMutationMethodRegex().Matches(statement.Value)
+                        .Select(match => ClassifyClientMutation(match.Groups["method"].Value, statement.Value))
+                        .Where(value => value is not null)
+                        .Select(value => value!)
+                        .Distinct(StringComparer.Ordinal)
+                        .OrderBy(value => value, StringComparer.Ordinal)
+                        .ToArray();
+                    if (methods.Length == 0)
+                    {
+                        continue;
+                    }
+                    var mutationSelector = statement.Groups["this"].Success ? "this" : statement.Groups["selector"].Value.Trim();
+                    var mutationInfo = mutationSelector == "this"
+                        ? new ClientSelector("event-source", "this", selectorInfo.ControlId, false)
+                        : ClassifyClientSelector(mutationSelector, page.Controls);
+                    var mutationStart = callbackStart + statement.Index;
+                    var mutationLine = LineAt(source, mutationStart);
+                    var mutationEndLine = LineAt(source, mutationStart + statement.Length - 1);
+                    var mutationIdentity = $"webforms-client-mutation:{FactFactory.Hash($"{identity}|{mutationSelector}|{string.Join(',', methods)}|{mutationLine}", 24)}";
+                    var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["behaviorKind"] = "ui-mutation",
+                        ["clientEventId"] = identity,
+                        ["mutationKinds"] = string.Join(",", methods),
+                        ["selectorHash"] = FactFactory.Hash(mutationSelector, 32),
+                        ["selectorKind"] = mutationInfo.Kind,
+                        ["selectorTarget"] = mutationInfo.Target ?? "unavailable",
+                        ["targetResolution"] = mutationInfo.ControlId is null ? "unresolved" : mutationSelector == "this" ? "event-source-control" : "same-surface-control",
+                        ["surfaceIdentity"] = SurfaceIdentity(page.FilePath)
+                    };
+                    AddOptional(properties, "controlId", mutationInfo.ControlId);
+                    facts.Add(CreateStaticCompositionFact(
+                        manifest,
+                        FactTypes.WebFormsClientUiMutationCandidate,
+                        RuleIds.LegacyWebFormsInlineClientBehavior,
+                        EvidenceTiers.Tier3SyntaxOrTextual,
+                        page.FilePath,
+                        mutationLine,
+                        FactFactory.Hash(statement.Value, 32),
+                        identity,
+                        mutationIdentity,
+                        string.Join(",", methods),
+                        "bounded-static-webforms-inline-client-behavior",
+                        "A supported jQuery mutation call is textual evidence only; argument expressions are not evaluated and runtime DOM effects are not proven.",
+                        [pageFact.FactId, matchingControlFact?.FactId],
+                        properties,
+                        mutationEndLine));
+                }
+
+                foreach (Match constraint in ClientMaximumLengthRegex().Matches(callback))
+                {
+                    var constraintStart = callbackStart + constraint.Index;
+                    var constraintLine = LineAt(source, constraintStart);
+                    var constraintIdentity = $"webforms-client-constraint:{FactFactory.Hash($"{identity}|maximum-length|{constraint.Groups["value"].Value}|{constraintLine}", 24)}";
+                    facts.Add(CreateStaticCompositionFact(
+                        manifest,
+                        FactTypes.WebFormsClientValidationConstraintCandidate,
+                        RuleIds.LegacyWebFormsInlineClientBehavior,
+                        EvidenceTiers.Tier3SyntaxOrTextual,
+                        page.FilePath,
+                        constraintLine,
+                        FactFactory.Hash(constraint.Value, 32),
+                        identity,
+                        constraintIdentity,
+                        "maximum-length",
+                        "bounded-static-webforms-inline-client-behavior",
+                        "A numeric maximum-length variable inside a supported client event callback is a validation/display candidate only; enforcement, user visibility, and business intent are not proven.",
+                        [pageFact.FactId, matchingControlFact?.FactId],
+                        new SortedDictionary<string, string>(StringComparer.Ordinal)
+                        {
+                            ["behaviorKind"] = "validation-constraint",
+                            ["clientEventId"] = identity,
+                            ["constraintKind"] = "maximum-length",
+                            ["constraintValue"] = constraint.Groups["value"].Value,
+                            ["controlId"] = selectorInfo.ControlId ?? "unresolved",
+                            ["selectorKind"] = selectorInfo.Kind,
+                            ["selectorTarget"] = selectorInfo.Target ?? "unavailable",
+                            ["targetResolution"] = selectorInfo.ControlId is null ? "unresolved" : "same-surface-control",
+                            ["surfaceIdentity"] = SurfaceIdentity(page.FilePath)
+                        }));
+                }
+            }
+        }
+    }
+
+    private static ClientSelector ClassifyClientSelector(string selector, IReadOnlyList<WebFormsControl> controls)
+    {
+        string kind;
+        string? target;
+        if (selector.StartsWith('#') && ClientSelectorTokenRegex().IsMatch(selector[1..]))
+        {
+            kind = "exact-id";
+            target = selector[1..];
+        }
+        else
+        {
+            var suffix = ClientIdSuffixSelectorRegex().Match(selector);
+            if (suffix.Success)
+            {
+                kind = "id-suffix";
+                target = suffix.Groups["target"].Value;
+            }
+            else if (selector.StartsWith('.') && ClientSelectorTokenRegex().IsMatch(selector[1..]))
+            {
+                kind = "css-class";
+                target = selector[1..];
+            }
+            else
+            {
+                return new ClientSelector("unsupported", null, null, false);
+            }
+        }
+
+        var matches = controls.Where(control =>
+                target.Equals(control.ControlId, StringComparison.OrdinalIgnoreCase)
+                || kind == "exact-id" && target.EndsWith("_" + control.ControlId, StringComparison.OrdinalIgnoreCase))
+            .Select(control => control.ControlId)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var controlId = matches.Length == 1 ? matches[0] : null;
+        var generated = kind == "exact-id" && controlId is not null && !target.Equals(controlId, StringComparison.OrdinalIgnoreCase);
+        return new ClientSelector(kind, target, controlId, generated);
+    }
+
+    private static int FindJavascriptBlockEnd(string text, int openBrace)
+    {
+        var depth = 0;
+        var quote = '\0';
+        var escaped = false;
+        for (var index = openBrace; index < text.Length; index++)
+        {
+            var current = text[index];
+            if (quote != '\0')
+            {
+                if (escaped) { escaped = false; continue; }
+                if (current == '\\') { escaped = true; continue; }
+                if (current == quote) quote = '\0';
+                continue;
+            }
+            if (current is '\'' or '"' or '`') { quote = current; continue; }
+            if (current == '{') depth++;
+            else if (current == '}' && --depth == 0) return index;
+        }
+        return -1;
+    }
+
+    private static string? ClassifyClientMutation(string method, string statement) => method.ToLowerInvariant() switch
+    {
+        "show" => "show",
+        "hide" => "hide",
+        "addclass" => "class-add",
+        "removeclass" => "class-remove",
+        "text" => "text-set",
+        "attr" when Regex.IsMatch(statement, "\\.attr\\s*\\(\\s*['\"]value['\"]", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) => "value-set",
+        "attr" when Regex.IsMatch(statement, "\\.attr\\s*\\(\\s*['\"]disabled['\"]", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) => "disabled-attribute-set",
+        "prop" when Regex.IsMatch(statement, "\\.prop\\s*\\(\\s*['\"]disabled['\"]\\s*,\\s*true", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) => "disable",
+        "prop" when Regex.IsMatch(statement, "\\.prop\\s*\\(\\s*['\"]disabled['\"]\\s*,\\s*false", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant) => "enable",
+        _ => null
+    };
+
     private static ExpressionSyntax? ClientScriptPayloadExpression(InvocationExpressionSyntax invocation, string methodName)
     {
         var arguments = invocation.ArgumentList.Arguments;
@@ -3379,6 +3641,27 @@ public static partial class LegacyWebFormsExtractor
     [GeneratedRegex(@"(?<![A-Za-z0-9_$.])__doPostBack\s*\(", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
     private static partial Regex PostBackInvocationRegex();
 
+    [GeneratedRegex("""<script\b(?<attrs>[^>]*)>(?<body>.*?)</script\s*>""", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    private static partial Regex InlineScriptBlockRegex();
+
+    [GeneratedRegex("""\$\(\s*(?<quote>["'])(?<selector>[^"'\r\n]{1,256})\k<quote>\s*\)\s*\.(?:(?:on)\s*\(\s*(?<eventQuote>["'])(?<onEvent>click|keyup|change|input|submit)\k<eventQuote>\s*,|(?<shortcutEvent>click|keyup|change|input|submit)\s*\()\s*function\s*\(\s*(?:[A-Za-z_$][A-Za-z0-9_$]*)?\s*\)\s*\{""", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    private static partial Regex JQueryClientEventBindingRegex();
+
+    [GeneratedRegex("""\$\(\s*(?:(?<this>this)|(?<quote>["'])(?<selector>[^"'\r\n]{1,256})\k<quote>)\s*\)(?<calls>[^;\r\n]{0,1024});""", RegexOptions.IgnoreCase)]
+    private static partial Regex JQueryStatementRegex();
+
+    [GeneratedRegex(@"\.(?<method>show|hide|addClass|removeClass|prop|attr|text)\s*\(", RegexOptions.IgnoreCase)]
+    private static partial Regex JQueryMutationMethodRegex();
+
+    [GeneratedRegex(@"\b(?:var|let|const)\s+max(?:imum)?length\s*=\s*(?<value>[1-9][0-9]{0,5})\s*;", RegexOptions.IgnoreCase)]
+    private static partial Regex ClientMaximumLengthRegex();
+
+    [GeneratedRegex(@"^[A-Za-z_][A-Za-z0-9_:\-]{0,127}$")]
+    private static partial Regex ClientSelectorTokenRegex();
+
+    [GeneratedRegex("""^\[\s*id\s*\$=\s*(?:["'])?(?<target>[A-Za-z_][A-Za-z0-9_:\-]{0,127})(?:["'])?\s*\]$""", RegexOptions.IgnoreCase)]
+    private static partial Regex ClientIdSuffixSelectorRegex();
+
     private sealed class WebFormsEvidenceIndex(
         IReadOnlyDictionary<string, IReadOnlyList<CodeFact>> factsByFile,
         IReadOnlyDictionary<string, IReadOnlySet<string>> projectPathsByFile)
@@ -3812,6 +4095,12 @@ public static partial class LegacyWebFormsExtractor
         int EndLine,
         bool HasCommonEventSignature,
         SyntaxNode Declaration);
+
+    private sealed record ClientSelector(
+        string Kind,
+        string? Target,
+        string? ControlId,
+        bool GeneratedClientIdDependency);
 
     private sealed record WebFormsDesignerField(
         string FilePath,

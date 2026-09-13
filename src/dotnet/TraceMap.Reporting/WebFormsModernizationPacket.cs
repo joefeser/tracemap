@@ -48,7 +48,10 @@ public sealed record WebFormsModernizationPacket(
     IReadOnlyList<WebFormsModernizationGap> Gaps,
     IReadOnlyList<string> OwnerQuestions,
     IReadOnlyList<string> Limitations,
-    WebFormsModernizationSurfaceSelection? SurfaceSelection = null);
+    WebFormsModernizationSurfaceSelection? SurfaceSelection = null)
+{
+    public IReadOnlyList<WebFormsModernizationClientBehavior> ClientBehaviorInventory { get; init; } = [];
+}
 
 public sealed record WebFormsModernizationSurfaceSelection(
     string RuleId,
@@ -83,7 +86,22 @@ public sealed record WebFormsModernizationSummary(
     int BatchDataMovementCount,
     int StructuralSliceCandidateCount,
     int GapCount,
-    bool Truncated);
+    bool Truncated)
+{
+    public int ClientBehaviorCount { get; init; }
+}
+
+public sealed record WebFormsModernizationClientBehavior(
+    string ClientBehaviorId,
+    string BehaviorKind,
+    string SurfaceId,
+    string SelectorKind,
+    string? SelectorTarget,
+    string TargetResolution,
+    IReadOnlyDictionary<string, string> SafeMetadata,
+    WebFormsModernizationEvidence Evidence,
+    IReadOnlyList<string> SupportingFactIds,
+    IReadOnlyList<string> Limitations);
 
 public sealed record WebFormsModernizationProject(
     string ProjectId,
@@ -840,6 +858,38 @@ public static class WebFormsModernizationPacketReporter
         }).OrderBy(item => item.BatchDataMovementId, StringComparer.Ordinal).ToArray();
         foreach (var batchGap in facts.Where(fact => fact.FactType == FactTypes.AnalysisGap && fact.RuleId == RuleIds.LegacyWebFormsBatchDataMovement))
             AddFactGap(gaps, options.MaxGaps, snapshot, batchGap);
+        var retainedSurfaceIds = surfaces.Select(surface => surface.SurfaceId).ToHashSet(StringComparer.Ordinal);
+        var clientBehavior = facts
+            .Where(fact => fact.FactType is FactTypes.WebFormsClientEventBindingCandidate
+                or FactTypes.WebFormsClientUiMutationCandidate
+                or FactTypes.WebFormsClientValidationConstraintCandidate)
+            .Where(fact => retainedSurfaceIds.Contains(fact.Properties.GetValueOrDefault("surfaceIdentity") ?? fact.SourceSymbol ?? ""))
+            .Select(fact => new WebFormsModernizationClientBehavior(
+                HashId("client-behavior", [fact.FactId]),
+                SafeKind(fact.Properties.GetValueOrDefault("behaviorKind"), "unknown"),
+                fact.Properties.GetValueOrDefault("surfaceIdentity") ?? fact.SourceSymbol!,
+                SafeKind(fact.Properties.GetValueOrDefault("selectorKind"), "not-applicable"),
+                SafeIdentity(fact.Properties.GetValueOrDefault("selectorTarget")),
+                SafeKind(fact.Properties.GetValueOrDefault("targetResolution"), "not-applicable"),
+                new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["clientEventName"] = SafeKind(fact.Properties.GetValueOrDefault("clientEventName"), "not-applicable"),
+                    ["constraintKind"] = SafeKind(fact.Properties.GetValueOrDefault("constraintKind"), "not-applicable"),
+                    ["constraintValue"] = SafeKind(fact.Properties.GetValueOrDefault("constraintValue"), "not-applicable"),
+                    ["controlId"] = SafeKind(fact.Properties.GetValueOrDefault("controlId"), "unresolved"),
+                    ["generatedClientIdDependency"] = SafeKind(fact.Properties.GetValueOrDefault("generatedClientIdDependency"), "false"),
+                    ["mutationKinds"] = SafeKind(fact.Properties.GetValueOrDefault("mutationKinds"), "not-applicable"),
+                    ["serverEventName"] = SafeKind(fact.Properties.GetValueOrDefault("serverEventName"), "not-applicable"),
+                    ["serverHandlerName"] = SafeKind(fact.Properties.GetValueOrDefault("serverHandlerName"), "not-applicable")
+                },
+                Evidence(fact, gaps, options.MaxGaps, snapshot),
+                SplitIds(fact.Properties.GetValueOrDefault("supportingFactIds")),
+                Limitations(fact)))
+            .OrderBy(item => item.Evidence.FilePath, StringComparer.Ordinal)
+            .ThenBy(item => item.Evidence.StartLine)
+            .ThenBy(item => item.BehaviorKind, StringComparer.Ordinal)
+            .ThenBy(item => item.ClientBehaviorId, StringComparer.Ordinal)
+            .ToArray();
         if (gaps.Any(gap => gap.Classification == "WebFormsModernizationGapLimitReached")) truncated = true;
         if (inputLimited)
         {
@@ -876,6 +926,7 @@ public static class WebFormsModernizationPacketReporter
         packetIdentity.AddRange(identityState.Select(state => $"identity:{state.IdentityStateId}"));
         packetIdentity.AddRange(batchDataMovement.Select(item => $"batch:{item.BatchDataMovementId}"));
         packetIdentity.AddRange(candidates.Select(candidate => $"candidate:{candidate.CandidateId}"));
+        packetIdentity.AddRange(clientBehavior.Select(item => $"client-behavior:{item.ClientBehaviorId}"));
         packetIdentity.AddRange(uniqueGaps.Select(gap => $"gap:{gap.GapId}"));
         packetIdentity.AddRange(surfaceSelection?.Items
             .OrderBy(item => item.RequestId, StringComparer.Ordinal)
@@ -890,7 +941,10 @@ public static class WebFormsModernizationPacketReporter
             ClaimLevel,
             coverage,
             [source],
-            new(projects.Length, surfaces.Length, chains.Count, boundaries.Count, identityState.Length, batchDataMovement.Length, candidates.Count, uniqueGaps.Length, truncated),
+            new(projects.Length, surfaces.Length, chains.Count, boundaries.Count, identityState.Length, batchDataMovement.Length, candidates.Count, uniqueGaps.Length, truncated)
+            {
+                ClientBehaviorCount = clientBehavior.Length
+            },
             projects,
             surfaces,
             chains.OrderBy(chain => chain.ChainId, StringComparer.Ordinal).ToArray(),
@@ -901,7 +955,10 @@ public static class WebFormsModernizationPacketReporter
             uniqueGaps,
             Questions,
             PacketLimitations,
-            surfaceSelection);
+            surfaceSelection)
+        {
+            ClientBehaviorInventory = clientBehavior
+        };
     }
 
     private static IReadOnlyList<WebFormsModernizationSliceCandidate> BuildCandidates(
@@ -1275,7 +1332,7 @@ public static class WebFormsModernizationPacketReporter
         b.AppendLine($"- Coverage: `{packet.Coverage}`");
         b.AppendLine($"- Repository: `{packet.Sources.Single().RepositoryId}`");
         b.AppendLine($"- Commit: `{packet.Sources.Single().CommitSha}`");
-        b.AppendLine($"- Surfaces: `{packet.Summary.SurfaceCount}`; event chains: `{packet.Summary.EventChainCount}`; downstream boundaries: `{packet.Summary.DownstreamBoundaryCount}`; identity/state declarations: `{packet.Summary.IdentityStateCount}`; batch/data-movement declarations: `{packet.Summary.BatchDataMovementCount}`; structural candidates: `{packet.Summary.StructuralSliceCandidateCount}`; gaps: `{packet.Summary.GapCount}`; truncated: `{packet.Summary.Truncated}`.").AppendLine();
+        b.AppendLine($"- Surfaces: `{packet.Summary.SurfaceCount}`; event chains: `{packet.Summary.EventChainCount}`; inline client behaviors: `{packet.Summary.ClientBehaviorCount}`; downstream boundaries: `{packet.Summary.DownstreamBoundaryCount}`; identity/state declarations: `{packet.Summary.IdentityStateCount}`; batch/data-movement declarations: `{packet.Summary.BatchDataMovementCount}`; structural candidates: `{packet.Summary.StructuralSliceCandidateCount}`; gaps: `{packet.Summary.GapCount}`; truncated: `{packet.Summary.Truncated}`.").AppendLine();
         if (packet.SurfaceSelection is not null)
         {
             b.AppendLine("## Requested page coverage").AppendLine();
@@ -1327,6 +1384,10 @@ public static class WebFormsModernizationPacketReporter
         if (packet.BatchDataMovementInventory.Count == 0) b.AppendLine("- No supported batch/data-movement declaration was inventoried; this is not proof of absence.");
         foreach (var item in packet.BatchDataMovementInventory)
             b.AppendLine($"- `{item.BatchDataMovementId}` — `{item.SurfaceKind}` / `{item.Mechanism}` / `{item.OperationKind}`; owner `{item.OwnerStatus}`; project `{item.ProjectId ?? item.ProjectResolution}`; fact `{item.Evidence.FactId}`; rule `{item.Evidence.RuleId}`; tier `{item.Evidence.EvidenceTier}`; coverage `{item.Evidence.CoverageLabel}`; span `{item.Evidence.FilePath}:{item.Evidence.StartLine}-{item.Evidence.EndLine}`.");
+        b.AppendLine().AppendLine("## Inline client behavior inventory").AppendLine();
+        if (packet.ClientBehaviorInventory.Count == 0) b.AppendLine("- No supported inline client behavior was inventoried; this is not proof of absence.");
+        foreach (var item in packet.ClientBehaviorInventory)
+            b.AppendLine($"- `{item.ClientBehaviorId}` — `{item.BehaviorKind}` on surface `{item.SurfaceId}`; selector `{item.SelectorKind}/{item.SelectorTarget ?? "unavailable"}`; target `{item.TargetResolution}`; fact `{item.Evidence.FactId}`; rule `{item.Evidence.RuleId}`; tier `{item.Evidence.EvidenceTier}`; span `{item.Evidence.FilePath}:{item.Evidence.StartLine}-{item.Evidence.EndLine}`.");
         b.AppendLine().AppendLine("## Structural slice candidates").AppendLine();
         foreach (var candidate in packet.StructuralSliceCandidates)
             b.AppendLine($"- `{candidate.CandidateId}` — classification `{candidate.Classification}`, owner naming required `{candidate.OwnerNamingRequired}`, surfaces {string.Join(", ", candidate.SurfaceIds.Select(id => $"`{id}`"))}.");

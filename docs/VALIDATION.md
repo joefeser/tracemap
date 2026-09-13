@@ -2227,3 +2227,10 @@ surface, reports return to the root index, raw source remains opt-in and bounded
 and an explicitly supplied evidence-docs corpus remains byte-unchanged. The
 workbench is navigation over retained evidence, not a scan, BRD, runtime claim,
 or human-review overlay.
+
+For inline Web Forms client behavior, also confirm that supported jQuery event
+bindings, mutations, and numeric maximum-length constraints retain Tier3 rule
+IDs and exact markup spans through the modernization packet, docs export, and
+page handoff. Trigger rows must render their retained binding and handler spans,
+and source excerpts must remain readable without inheriting inline-code block
+background styling.

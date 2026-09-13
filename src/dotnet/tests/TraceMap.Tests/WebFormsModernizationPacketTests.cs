@@ -11,6 +11,62 @@ namespace TraceMap.Tests;
 
 public sealed class WebFormsModernizationPacketTests
 {
+    [Fact]
+    public async Task Packet_and_docs_retain_inline_client_behavior_inventory()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "OrderEditor.aspx"), """
+            <%@ Page Language="VB" CodeFile="OrderEditor.aspx.vb" Inherits="OrderEditor" %>
+            <asp:Button runat="server" ID="SaveOrder" OnClick="SaveOrder_Click" />
+            <asp:TextBox runat="server" ID="OrderNameText" />
+            <script>
+            $("#ctl00_ContentPlaceHolder1_SaveOrder").on('click', function () {
+              $(this).attr('value', 'Saving...');
+            });
+            $("[id$=OrderNameText]").keyup(function () {
+              var maxlength = 50;
+              $("#rchars").text(maxlength - $(this).val().length);
+            });
+            </script>
+            """);
+        File.WriteAllText(Path.Combine(repo, "OrderEditor.aspx.vb"), """
+            Partial Public Class OrderEditor
+                Protected Sub SaveOrder_Click(sender As Object, e As EventArgs)
+                End Sub
+            End Class
+            """);
+        var scan = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "scan")));
+        const string commitSha = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        var manifest = scan.Manifest with { CommitSha = commitSha };
+        var facts = scan.Facts.Select(fact => fact with { CommitSha = commitSha }).ToArray();
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, manifest, facts);
+
+        var written = await WebFormsModernizationPacketReporter.WriteAsync(new(index, Path.Combine(temp.Path, "packet")));
+        Assert.Equal(5, written.Packet.Summary.ClientBehaviorCount);
+        Assert.Equal(5, written.Packet.ClientBehaviorInventory.Count);
+        Assert.Contains(written.Packet.ClientBehaviorInventory, item =>
+            item.BehaviorKind == "client-event-binding"
+            && item.SafeMetadata.GetValueOrDefault("serverHandlerName") == "SaveOrder_Click"
+            && item.SafeMetadata.GetValueOrDefault("generatedClientIdDependency") == "true");
+        Assert.Contains(written.Packet.ClientBehaviorInventory, item =>
+            item.BehaviorKind == "validation-constraint"
+            && item.SafeMetadata.GetValueOrDefault("constraintValue") == "50");
+
+        var docs = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
+            index,
+            Path.Combine(temp.Path, "docs"),
+            Families: "webforms-modernization,gap,limitation",
+            WebFormsPacketPaths: [written.JsonPath]));
+        var clientBehaviorChunks = docs.Chunks.Where(chunk =>
+            chunk.Title == "Web Forms inline client behavior evidence").ToArray();
+        Assert.Equal(5, clientBehaviorChunks.Length);
+        Assert.Contains(clientBehaviorChunks, chunk =>
+            chunk.BodyMarkdown.Contains("SaveOrder_Click", StringComparison.Ordinal));
+    }
+
     [Theory]
     [InlineData("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]
     [InlineData("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB")]

@@ -192,6 +192,7 @@ if ($LASTEXITCODE -ne 0) { throw 'ApplicationWorkbenchInputValidationFailed' }
 # rejected above. Complete only the optional projection fields used below;
 # the authoritative packet snapshot remains byte-for-byte unchanged.
 Complete-OptionalProperties (Values $packet.surfaces) @('projectId','controlIds','supportingEvidence','supportingFactIds')
+Complete-OptionalProperties @($packet) @('clientBehaviorInventory')
 Complete-OptionalProperties (Values $packet.eventChains) @(
     'chainId','surfaceId','eventSourceId','bindingFactId','handlerId','handlerFactId','handlerSymbol',
     'classification','legacyPathId','terminalKind','traversalObservation','evidence','pathEvidence',
@@ -207,6 +208,9 @@ Complete-OptionalProperties (Values $packet.batchDataMovementInventory) @(
     'safeMetadata','evidence','supportingFactIds')
 Complete-OptionalProperties (Values $packet.structuralSliceCandidates) @(
     'candidateId','classification','ruleId','evidenceTier','surfaceIds','evidence','supportingFactIds')
+Complete-OptionalProperties (Values $packet.clientBehaviorInventory) @(
+    'clientBehaviorId','behaviorKind','surfaceId','selectorKind','selectorTarget','targetResolution',
+    'safeMetadata','evidence','supportingFactIds','limitations')
 Complete-OptionalProperties (Values $packet.gaps) @(
     'gapId','classification','scopeKind','scopeId','ruleId','evidenceTier','coverageLabel','commitSha','filePath',
     'startLine','endLine','extractorId','extractorVersion','supportingFactIds','limitations')
@@ -241,7 +245,10 @@ try {
     foreach ($surface in $ordered) {
         $ordinal++
         $pageId = New-StableAlias 'page' $ordinal
-        $chains = @(Values $packet.eventChains | Where-Object { Same $_.surfaceId $surface.surfaceId } | Sort-Object chainId)
+        $chains = @(Values $packet.eventChains | Where-Object { Same $_.surfaceId $surface.surfaceId } | Sort-Object `
+            @{ Expression = { [string](@(Values $_.evidence | Sort-Object filePath, startLine | Select-Object -First 1).filePath) } }, `
+            @{ Expression = { [int](@(Values $_.evidence | Sort-Object filePath, startLine | Select-Object -First 1).startLine) } }, `
+            @{ Expression = { [string]$_.handlerSymbol } }, chainId)
         $chainIds = @($chains | ForEach-Object { [string]$_.chainId })
         $boundaries = @(Values $packet.downstreamBoundaries | Where-Object { Same $_.surfaceId $surface.surfaceId } | Sort-Object boundaryId)
         $identity = @(Values $packet.identityStateInventory | Where-Object {
@@ -255,11 +262,14 @@ try {
         $candidates = @(Values $packet.structuralSliceCandidates | Where-Object {
             @((Values (Property-Value $_ 'surfaceIds')) | Where-Object { Same $_ $surface.surfaceId }).Count -gt 0
         } | Sort-Object candidateId)
+        $clientBehavior = @(Values $packet.clientBehaviorInventory | Where-Object {
+            Same $_.surfaceId $surface.surfaceId
+        } | Sort-Object @{ Expression = { [string]$_.evidence.filePath } }, @{ Expression = { [int]$_.evidence.startLine } }, behaviorKind, clientBehaviorId)
         $pageIdentity = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
         foreach ($value in @($surface.surfaceId, $surface.evidence.factId) + @(Values $surface.supportingFactIds) + @(Values $surface.controlIds)) { if ($value) { [void]$pageIdentity.Add([string]$value) } }
         foreach ($chain in $chains) { foreach ($value in @($chain.chainId, $chain.bindingFactId, $chain.handlerId, $chain.handlerFactId, $chain.legacyPathId) + @(Values $chain.supportingFactIds) + @(Values $chain.supportingEdgeIds)) { if ($value) { [void]$pageIdentity.Add([string]$value) } } }
-        foreach ($item in @($boundaries + $identity + $candidates)) {
-            foreach ($property in @('boundaryId','identityStateId','batchDataMovementId','candidateId','terminalEvidenceId')) {
+        foreach ($item in @($boundaries + $identity + $candidates + $clientBehavior)) {
+            foreach ($property in @('boundaryId','identityStateId','batchDataMovementId','candidateId','clientBehaviorId','terminalEvidenceId')) {
                 $propertyValue = Property-Value $item $property
                 if ($propertyValue) { [void]$pageIdentity.Add([string]$propertyValue) }
             }
@@ -267,8 +277,8 @@ try {
                 if ($value) { [void]$pageIdentity.Add([string]$value) }
             }
         }
-        $evidence = @($surface.evidence) + @(Values $surface.supportingEvidence) + @($chains | ForEach-Object { Values $_.evidence }) + @($boundaries | ForEach-Object { Values $_.evidence }) + @($identity | ForEach-Object { $_.evidence }) + @($candidates | ForEach-Object { Values $_.evidence })
-        $evidence = @($evidence | Where-Object { $null -ne $_ } | Sort-Object factId, filePath, startLine -Unique)
+        $evidence = @($surface.evidence) + @(Values $surface.supportingEvidence) + @($chains | ForEach-Object { Values $_.evidence }) + @($boundaries | ForEach-Object { Values $_.evidence }) + @($identity | ForEach-Object { $_.evidence }) + @($candidates | ForEach-Object { Values $_.evidence }) + @($clientBehavior | ForEach-Object { $_.evidence })
+        $evidence = @($evidence | Where-Object { $null -ne $_ } | Sort-Object filePath, startLine, endLine, ruleId, factId -Unique)
         $pathEvidence = @($chains | ForEach-Object { Values $_.pathEvidence }) + @($boundaries | ForEach-Object { Values $_.pathEvidence })
         $pathEvidence = @($pathEvidence | Where-Object { $null -ne $_ } | Sort-Object evidenceId, filePath, startLine -Unique)
         foreach ($item in @($evidence + $pathEvidence)) {
@@ -283,7 +293,7 @@ try {
         $gaps = @(Values $packet.gaps | Where-Object {
             $scopeId = Property-Value $_ 'scopeId'
             $null -ne $scopeId -and $pageIdentity.Contains([string]$scopeId)
-        } | Sort-Object gapId)
+        } | Sort-Object filePath, startLine, classification, gapId)
         foreach ($gap in $gaps) { [void]$associatedGapIds.Add([string]$gap.gapId) }
         $handlers = @($chains | ForEach-Object { if ($_.handlerSymbol) { [string]$_.handlerSymbol } elseif ($_.handlerId) { [string]$_.handlerId } } | Where-Object { $_ } | Sort-Object -Unique)
         $coverage = @($chains | ForEach-Object { Values $_.coverageLabels } | Sort-Object -Unique)
@@ -302,7 +312,7 @@ try {
             packet = [ordered]@{ packetId = [string]$packet.packetId; scanId = [string]$sources[0].scanId; commitSha = [string]$sources[0].commitSha }
             subject = [ordered]@{ surfaceId = [string]$surface.surfaceId; surfaceKind = [string]$surface.surfaceKind; projectId = [string]$surface.projectId; filePath = [string]$surface.evidence.filePath }
             analysis = [ordered]@{ status = $analysisStatus; coverage = [string]$packet.coverage; packetTruncated = [bool]$packet.summary.truncated }
-            counts = [ordered]@{ controls = @(Values $surface.controlIds).Count; eventChains = $chains.Count; boundaries = $boundaries.Count; identityState = $identity.Count; projectDataMovement = $projectBatchCount; structuralCandidates = $candidates.Count; gaps = $gaps.Count }
+            counts = [ordered]@{ controls = @(Values $surface.controlIds).Count; eventChains = $chains.Count; clientBehaviors = $clientBehavior.Count; boundaries = $boundaries.Count; identityState = $identity.Count; projectDataMovement = $projectBatchCount; structuralCandidates = $candidates.Count; gaps = $gaps.Count }
             eventChains = @($chains | ForEach-Object { [ordered]@{
                 chainId = [string]$_.chainId; eventSourceId = [string]$_.eventSourceId; bindingFactId = [string]$_.bindingFactId
                 handlerId = [string]$_.handlerId; handlerFactId = [string]$_.handlerFactId; handlerSymbol = $_.handlerSymbol
@@ -322,6 +332,7 @@ try {
                 supportingFactIds = @(Values $_.supportingFactIds); supportingEdgeIds = @(Values $_.supportingEdgeIds)
             } })
             inventories = [ordered]@{
+                clientBehavior = @($clientBehavior | ForEach-Object { [ordered]@{ id = [string]$_.clientBehaviorId; kind = [string]$_.behaviorKind; selectorKind = [string]$_.selectorKind; selectorTarget = $_.selectorTarget; targetResolution = [string]$_.targetResolution; safeMetadata = $_.safeMetadata; evidenceFactId = [string]$_.evidence.factId; supportingFactIds = @(Values $_.supportingFactIds) } })
                 identityState = @($identity | ForEach-Object { [ordered]@{ id = [string]$_.identityStateId; kind = [string]$_.identityKind; classification = [string]$_.classification; safeMetadata = $_.safeMetadata; evidenceFactId = [string]$_.evidence.factId; supportingFactIds = @(Values $_.supportingFactIds) } })
                 structuralCandidates = @($candidates | ForEach-Object { [ordered]@{ id = [string]$_.candidateId; classification = [string]$_.classification; ruleId = [string]$_.ruleId; evidenceTier = [string]$_.evidenceTier; surfaceIds = @(Values $_.surfaceIds); supportingFactIds = @(Values $_.supportingFactIds) } })
             }
@@ -339,21 +350,27 @@ try {
         [IO.File]::WriteAllText($handoffPath, (($handoff | ConvertTo-Json -Depth 30) + "`n"), [Text.UTF8Encoding]::new($false))
 
         $chainRows = foreach ($chain in $chains) {
-            '<tr><td><code>{0}</code></td><td>{1}</td><td><code>{2}</code></td><td><code>{3}</code></td><td>{4}</td></tr>' -f (ConvertTo-HtmlText $chain.chainId), (ConvertTo-HtmlText $chain.eventSourceId), (ConvertTo-HtmlText $(if ($chain.handlerSymbol) { $chain.handlerSymbol } else { $chain.handlerId })), (ConvertTo-HtmlText $chain.classification), (ConvertTo-HtmlText $(if ($chain.terminalKind) { $chain.terminalKind } else { $chain.traversalObservation.stopState }))
+            $bindingLocation = @(Values $chain.evidence | Where-Object { $_.ruleId -eq 'legacy.webforms.event-binding.v1' } | Sort-Object filePath, startLine | Select-Object -First 1)
+            $handlerLocation = @(Values $chain.evidence | Where-Object { $_.ruleId -eq 'legacy.webforms.handler-resolution.v1' } | Sort-Object filePath, startLine | Select-Object -First 1)
+            $bindingSpan = if ($bindingLocation.Count) { "$($bindingLocation[0].filePath):L$($bindingLocation[0].startLine)-$($bindingLocation[0].endLine)" } else { 'span unavailable' }
+            $handlerSpan = if ($handlerLocation.Count) { "$($handlerLocation[0].filePath):L$($handlerLocation[0].startLine)-$($handlerLocation[0].endLine)" } else { 'span unavailable' }
+            '<tr><td><code>{0}</code></td><td>{1}<br><small>{2}</small></td><td><code>{3}</code><br><small>{4}</small></td><td><code>{5}</code></td><td>{6}</td></tr>' -f (ConvertTo-HtmlText $chain.chainId), (ConvertTo-HtmlText $chain.eventSourceId), (ConvertTo-HtmlText $bindingSpan), (ConvertTo-HtmlText $(if ($chain.handlerSymbol) { $chain.handlerSymbol } else { $chain.handlerId })), (ConvertTo-HtmlText $handlerSpan), (ConvertTo-HtmlText $chain.classification), (ConvertTo-HtmlText $(if ($chain.terminalKind) { $chain.terminalKind } else { $chain.traversalObservation.stopState }))
         }
         $boundaryRows = foreach ($boundary in $boundaries) { '<tr><td><code>{0}</code></td><td>{1}</td><td>{2}</td><td><code>{3}</code></td></tr>' -f (ConvertTo-HtmlText $boundary.boundaryId), (ConvertTo-HtmlText $boundary.boundaryCategory), (ConvertTo-HtmlText $boundary.boundaryKind), (ConvertTo-HtmlText $boundary.boundaryTargetId) }
         $gapRows = foreach ($gap in $gaps) { '<li><code>{0}</code> <code>{1}</code> <code>{2}</code> — {3}; {4}:L{5}-{6}; commit <code>{7}</code>; extractor <code>{8}/{9}</code>; support <code>{10}</code></li>' -f (ConvertTo-HtmlText $gap.gapId), (ConvertTo-HtmlText $gap.ruleId), (ConvertTo-HtmlText $gap.evidenceTier), (ConvertTo-HtmlText $gap.classification), (ConvertTo-HtmlText $gap.filePath), (ConvertTo-HtmlText $gap.startLine), (ConvertTo-HtmlText $gap.endLine), (ConvertTo-HtmlText $gap.commitSha), (ConvertTo-HtmlText $gap.extractorId), (ConvertTo-HtmlText $gap.extractorVersion), (ConvertTo-HtmlText ((Values $gap.supportingFactIds) -join ', ')) }
         $identityRows = foreach ($item in $identity) { '<tr><td><code>{0}</code></td><td>{1}</td><td>{2}</td><td><code>{3}</code></td><td><code>{4}</code></td></tr>' -f (ConvertTo-HtmlText $item.identityStateId), (ConvertTo-HtmlText $item.identityKind), (ConvertTo-HtmlText $item.classification), (ConvertTo-HtmlText (($item.safeMetadata | ConvertTo-Json -Compress))), (ConvertTo-HtmlText $item.evidence.factId) }
         $candidateRows = foreach ($item in $candidates) { '<tr><td><code>{0}</code></td><td>{1}</td><td><code>{2}</code></td><td><code>{3}</code></td></tr>' -f (ConvertTo-HtmlText $item.candidateId), (ConvertTo-HtmlText $item.classification), (ConvertTo-HtmlText $item.ruleId), (ConvertTo-HtmlText ((Values $item.supportingFactIds) -join ', ')) }
+        $clientBehaviorRows = foreach ($item in $clientBehavior) { '<tr><td>{0}</td><td><code>{1}</code></td><td><code>{2}</code></td><td>{3}</td><td>{4}:L{5}-{6}</td></tr>' -f (ConvertTo-HtmlText $item.behaviorKind), (ConvertTo-HtmlText $item.selectorKind), (ConvertTo-HtmlText $item.selectorTarget), (ConvertTo-HtmlText (($item.safeMetadata | ConvertTo-Json -Compress))), (ConvertTo-HtmlText $item.evidence.filePath), (ConvertTo-HtmlText $item.evidence.startLine), (ConvertTo-HtmlText $item.evidence.endLine) }
         $correctionHtml = if ($null -ne $decision.correction) { '<p><strong>Correction ({0}):</strong> {1}</p>' -f (ConvertTo-HtmlText $decision.correction.category), (ConvertTo-HtmlText $decision.correction.statement) } else { '' }
         $sourceHtml = if ($IncludeRawSource) { Source-Excerpt $surface.evidence $SourceRoot $SourceContextLines } else { '<p class="muted">Raw source omitted. Regenerate with <code>-IncludeRawSource -SourceRoot &lt;authorized-root&gt;</code> for a bounded private excerpt.</p>' }
         $html = @"
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>$(ConvertTo-HtmlText $pageId) Web Forms review</title><style>:root{font-family:system-ui,sans-serif;color:#172033;background:#f5f7fb}main{max-width:1200px;margin:auto;padding:24px}.private,.warning{padding:12px;border-left:5px solid #c62828;background:#fff1f0}.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}.card,details{background:white;border:1px solid #dbe2ee;border-radius:8px;padding:14px;margin:14px 0}.summary .card{margin:0}table{width:100%;border-collapse:collapse}th,td{padding:9px;border:1px solid #dbe2ee;text-align:left;vertical-align:top}th{background:#eaf1ff}code{background:#edf1f7;padding:.1rem .3rem;border-radius:4px;overflow-wrap:anywhere}pre{overflow:auto;background:#172033;color:#f8fafc;padding:14px;border-radius:6px}.muted{color:#566070}.button{display:inline-block;padding:7px 10px;background:#eaf1ff;border:1px solid #bed0ee;border-radius:6px;text-decoration:none}</style></head><body><main>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>$(ConvertTo-HtmlText $pageId) Web Forms review</title><style>:root{font-family:system-ui,sans-serif;color:#172033;background:#f5f7fb}main{max-width:1200px;margin:auto;padding:24px}.private,.warning{padding:12px;border-left:5px solid #c62828;background:#fff1f0}.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}.card,details{background:white;border:1px solid #dbe2ee;border-radius:8px;padding:14px;margin:14px 0}.summary .card{margin:0}table{width:100%;border-collapse:collapse}th,td{padding:9px;border:1px solid #dbe2ee;text-align:left;vertical-align:top}th{background:#eaf1ff}code{background:#edf1f7;padding:.1rem .3rem;border-radius:4px;overflow-wrap:anywhere}pre{overflow:auto;background:#172033;color:#f8fafc;padding:14px;border-radius:6px}pre code{background:transparent;padding:0;color:inherit;white-space:pre}.muted{color:#566070}.button{display:inline-block;padding:7px 10px;background:#eaf1ff;border:1px solid #bed0ee;border-radius:6px;text-decoration:none}</style></head><body><main>
 <p><a class="button" href="index.html">Return to application index</a></p><h1>$(ConvertTo-HtmlText $surface.evidence.filePath)</h1><p class="private">PRIVATE local evidence review. Human conclusions are review metadata, not scanner facts.</p>
-<section class="summary"><div class="card"><strong>Controls</strong><br>$(@(Values $surface.controlIds).Count)</div><div class="card"><strong>Event chains</strong><br>$($chains.Count)</div><div class="card"><strong>Boundaries</strong><br>$($boundaries.Count)</div><div class="card"><strong>Gaps</strong><br>$($gaps.Count)</div></section>
+<section class="summary"><div class="card"><strong>Controls</strong><br>$(@(Values $surface.controlIds).Count)</div><div class="card"><strong>Event chains</strong><br>$($chains.Count)</div><div class="card"><strong>Client behaviors</strong><br>$($clientBehavior.Count)</div><div class="card"><strong>Boundaries</strong><br>$($boundaries.Count)</div><div class="card"><strong>Gaps</strong><br>$($gaps.Count)</div></section>
 <section class="card"><h2>Review status</h2><p><strong>Verdict:</strong> $(ConvertTo-HtmlText $decision.verdict) · <strong>Disposition:</strong> $(ConvertTo-HtmlText $decision.migrationDisposition)</p><p><strong>Capability:</strong> $(ConvertTo-HtmlText $decision.capabilityLabel)</p><p>$(ConvertTo-HtmlText $decision.comment)</p>$correctionHtml<p>Human review is a separate validated overlay, never scanner evidence.</p></section>
 <section class="card"><h2>Surface</h2><p><code>$(ConvertTo-HtmlText $surface.surfaceId)</code> · $(ConvertTo-HtmlText $surface.surfaceKind) · project <code>$(ConvertTo-HtmlText $surface.projectId)</code></p><p><strong>Coverage:</strong> $(ConvertTo-HtmlText ($coverage -join ', '))</p><p><strong>Controls:</strong> $(ConvertTo-HtmlText ((Values $surface.controlIds) -join ', '))</p></section>
 <section class="card"><h2>Trigger and retained call paths</h2><table><thead><tr><th>Chain</th><th>Event source</th><th>Handler</th><th>Classification</th><th>Terminal/stop</th></tr></thead><tbody>$($chainRows -join '')</tbody></table></section>
+<details open><summary><strong>Inline client behavior ($($clientBehavior.Count))</strong></summary><table><thead><tr><th>Kind</th><th>Selector</th><th>Target</th><th>Safe metadata</th><th>Evidence span</th></tr></thead><tbody>$($clientBehaviorRows -join '')</tbody></table><p class="muted">Static candidates only; browser execution, DOM selection, postback, and server-handler execution are not proven.</p></details>
 <details><summary><strong>Downstream boundaries ($($boundaries.Count))</strong></summary><table><thead><tr><th>ID</th><th>Category</th><th>Kind</th><th>Target</th></tr></thead><tbody>$($boundaryRows -join '')</tbody></table></details>
 <details><summary><strong>Identity/state ($($identity.Count))</strong></summary><table><thead><tr><th>ID</th><th>Kind</th><th>Classification</th><th>Safe metadata</th><th>Evidence</th></tr></thead><tbody>$($identityRows -join '')</tbody></table></details>
 <details><summary><strong>Project-scoped data movement ($projectBatchCount)</strong></summary><p>Stored once in the application handoff and application index because project association does not prove page association.</p></details>

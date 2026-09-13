@@ -29,16 +29,19 @@ function dotnet {
 
 $packetPath = Join-Path $temp 'webforms-modernization.json'
 $evidence = @{ factId = 'fact-surface-1'; ruleId = 'legacy.webforms.surface.v1'; evidenceTier = 'Tier2Structural'; coverageLabel = 'complete'; commitSha = ('a' * 40); filePath = 'Pages/First.aspx'; startLine = 1; endLine = 2; extractorId = 'legacy-webforms'; extractorVersion = '1'; supportingFactIds = @(); supportingEdgeIds = @(); limitations = @() }
+$bindingEvidence = @{ factId = 'binding-one'; ruleId = 'legacy.webforms.event-binding.v1'; evidenceTier = 'Tier2Structural'; coverageLabel = 'complete'; commitSha = ('a' * 40); filePath = 'Pages/First.aspx'; startLine = 2; endLine = 2; extractorId = 'legacy-webforms'; extractorVersion = '1'; supportingFactIds = @(); supportingEdgeIds = @(); limitations = @() }
+$handlerEvidence = @{ factId = 'fact-handler'; ruleId = 'legacy.webforms.handler-resolution.v1'; evidenceTier = 'Tier1Semantic'; coverageLabel = 'complete'; commitSha = ('a' * 40); filePath = 'Pages/First.aspx.cs'; startLine = 10; endLine = 14; extractorId = 'legacy-webforms'; extractorVersion = '1'; supportingFactIds = @(); supportingEdgeIds = @(); limitations = @() }
+$clientEvidence = @{ factId = 'fact-client-one'; ruleId = 'legacy.webforms.inline-client-behavior.v1'; evidenceTier = 'Tier3SyntaxOrTextual'; coverageLabel = 'complete'; commitSha = ('a' * 40); filePath = 'Pages/First.aspx'; startLine = 20; endLine = 24; extractorId = 'legacy-webforms'; extractorVersion = '1'; supportingFactIds = @(); supportingEdgeIds = @(); limitations = @('static client behavior only') }
 $packet = [ordered]@{
     schemaVersion = 'webforms-modernization-packet.v1'; packetId = 'packet-one'; ruleId = 'legacy.webforms.modernization-packet.v1'; claimLevel = 'local-only'; coverage = 'reduced'
     sources = @(@{ sourceId = 'source-one'; repositoryId = 'repo-one'; scanId = 'scan-one'; commitSha = ('a' * 40); analysisLevel = 'semantic'; buildStatus = 'succeeded' })
-    summary = @{ projectCount = 1; surfaceCount = 2; eventChainCount = 1; downstreamBoundaryCount = 1; identityStateCount = 1; batchDataMovementCount = 1; structuralSliceCandidateCount = 1; gapCount = 1; truncated = $false }
+    summary = @{ projectCount = 1; surfaceCount = 2; eventChainCount = 1; downstreamBoundaryCount = 1; identityStateCount = 1; batchDataMovementCount = 1; structuralSliceCandidateCount = 1; clientBehaviorCount = 1; gapCount = 1; truncated = $false }
     projects = @(@{ projectId = 'project-one'; surfaceCount = 2; evidence = @(); supportingFactIds = @() })
     surfaces = @(
         @{ surfaceId = 'Surface-One'; surfaceKind = 'page'; projectId = 'project-one'; compositionTargetIds = @(); controlIds = @(); evidence = @{ factId = 'fact-surface-2'; ruleId = 'legacy.webforms.surface.v1'; evidenceTier = 'Tier2Structural'; coverageLabel = 'complete'; commitSha = ('a' * 40); filePath = 'Pages/Second.aspx'; startLine = 1; endLine = 1; extractorId = 'legacy-webforms'; extractorVersion = '1'; supportingFactIds = @(); supportingEdgeIds = @(); limitations = @() }; supportingEvidence = @(); supportingFactIds = @() },
         @{ surfaceId = 'surface-one'; surfaceKind = 'page'; projectId = 'project-one'; compositionTargetIds = @(); controlIds = @('Go'); evidence = $evidence; supportingEvidence = @(); supportingFactIds = @('fact-surface-1') }
     )
-    eventChains = @(@{ chainId = 'chain-one'; surfaceId = 'surface-one'; eventSourceId = 'Go.Click'; bindingFactId = 'binding-one'; handlerId = 'handler-one'; handlerFactId = 'fact-handler'; handlerSymbol = 'App.First.Go_Click()'; classification = 'terminal-reached'; terminalKind = 'database'; evidence = @($evidence); pathEvidence = @(); supportingFactIds = @('fact-handler'); supportingEdgeIds = @(); ruleIds = @('legacy.webforms.event-flow.v1'); evidenceTiers = @('Tier1Semantic'); coverageLabels = @('complete'); limitations = @() })
+    eventChains = @(@{ chainId = 'chain-one'; surfaceId = 'surface-one'; eventSourceId = 'Go.Click'; bindingFactId = 'binding-one'; handlerId = 'handler-one'; handlerFactId = 'fact-handler'; handlerSymbol = 'App.First.Go_Click()'; classification = 'terminal-reached'; terminalKind = 'database'; evidence = @($handlerEvidence, $bindingEvidence); pathEvidence = @(); supportingFactIds = @('fact-handler'); supportingEdgeIds = @(); ruleIds = @('legacy.webforms.event-flow.v1'); evidenceTiers = @('Tier1Semantic'); coverageLabels = @('complete'); limitations = @() })
     downstreamBoundaries = @(@{ boundaryId = 'boundary-one'; chainId = 'chain-one'; surfaceId = 'surface-one'; handlerId = 'handler-one'; boundaryCategory = 'database'; boundaryKind = 'stored-procedure-candidate'; boundaryTargetId = 'target-one'; terminalEvidenceId = 'fact-db'; classification = 'retained'; evidence = @($evidence); pathEvidence = @(); supportingFactIds = @('fact-db'); supportingEdgeIds = @(); ruleIds = @('legacy.boundary.v1'); evidenceTiers = @('Tier2Structural'); coverageLabels = @('complete'); limitations = @() })
     identityStateInventory = @(
         @{ identityStateId = 'identity-one'; identityKind = 'session'; classification = 'observed'; surfaceId = 'surface-one'; safeMetadata = @{}; evidence = $evidence; supportingFactIds = @(); limitations = @() },
@@ -49,6 +52,7 @@ $packet = [ordered]@{
         @{ batchDataMovementId = 'batch-unassociated'; surfaceKind = 'database-operation'; mechanism = 'ado-net'; operationKind = 'read'; ownerStatus = 'member-declared'; projectResolution = 'unmatched'; projectId = 'project-missing'; safeMetadata = @{}; evidence = $evidence; supportingFactIds = @(); limitations = @() }
     )
     structuralSliceCandidates = @(@{ candidateId = 'candidate-one'; classification = 'structural'; ruleId = 'legacy.slice.v1'; evidenceTier = 'Tier2Structural'; ownerNamingRequired = $true; surfaceIds = @('surface-one'); evidence = @($evidence); supportingFactIds = @(); coverageLabels = @('complete'); limitations = @() })
+    clientBehaviorInventory = @(@{ clientBehaviorId = 'client-one'; behaviorKind = 'client-event-binding'; surfaceId = 'surface-one'; selectorKind = 'generated-client-id'; selectorTarget = 'Go'; targetResolution = 'surface-control'; safeMetadata = @{ clientEventName = 'click'; controlId = 'Go'; generatedClientIdDependency = 'true'; serverHandlerName = 'App.First.Go_Click()' }; evidence = $clientEvidence; supportingFactIds = @('binding-one'); limitations = @('static client behavior only') })
     gaps = @(@{ gapId = 'gap-one'; classification = 'HandlerTerminalUnavailable'; scopeKind = 'event-chain'; scopeId = 'chain-one'; ruleId = 'legacy.gap.v1'; evidenceTier = 'Tier4Unknown'; coverageLabel = 'reduced'; commitSha = ('a' * 40); filePath = 'Pages/First.aspx'; startLine = 2; endLine = 2; extractorId = 'legacy-webforms'; extractorVersion = '1'; supportingFactIds = @(); limitations = @('missing evidence is not absence') })
     ownerQuestions = @(); limitations = @()
 }
@@ -64,12 +68,13 @@ try {
     if ($index.IndexOf('Pages/First.aspx', [StringComparison]::Ordinal) -gt $index.IndexOf('Pages/Second.aspx', [StringComparison]::Ordinal)) { throw 'Pages were not ordered by retained path.' }
     if (!$index.Contains('43', [StringComparison]::Ordinal) -and !$index.Contains('2 selected surfaces', [StringComparison]::Ordinal)) { throw 'Index did not report surface count.' }
     $first = [IO.File]::ReadAllText((Join-Path $workbench 'page-001.html'))
-    foreach ($expected in @('Go.Click', 'App.First.Go_Click()', 'stored-procedure-candidate', 'HandlerTerminalUnavailable', 'Tier4Unknown', ('a' * 40), 'legacy-webforms/1', 'identity-one', 'candidate-one', 'Raw source omitted')) {
+    foreach ($expected in @('Go.Click', 'App.First.Go_Click()', 'Pages/First.aspx:L2-2', 'Pages/First.aspx.cs:L10-14', 'Inline client behavior (1)', 'generated-client-id', 'Pages/First.aspx:L20-24', 'stored-procedure-candidate', 'HandlerTerminalUnavailable', 'Tier4Unknown', ('a' * 40), 'legacy-webforms/1', 'identity-one', 'candidate-one', 'Raw source omitted')) {
         if (!$first.Contains($expected, [StringComparison]::Ordinal)) { throw "Page report missing: $expected" }
     }
     $handoff = [IO.File]::ReadAllText((Join-Path $workbench 'page-001.handoff.json')) | ConvertFrom-Json -Depth 30
-    if ($handoff.subject.filePath -ne 'Pages/First.aspx' -or $handoff.counts.eventChains -ne 1 -or $handoff.evidenceDocs.status -ne 'supplied-read-only') { throw 'Page handoff projection was incomplete.' }
-    if ($handoff.eventChains[0].chainId -ne 'chain-one' -or $handoff.eventChains[0].evidence[0].factId -ne 'fact-surface-1' -or
+    if ($handoff.subject.filePath -ne 'Pages/First.aspx' -or $handoff.counts.eventChains -ne 1 -or $handoff.counts.clientBehaviors -ne 1 -or $handoff.evidenceDocs.status -ne 'supplied-read-only') { throw 'Page handoff projection was incomplete.' }
+    if ($handoff.inventories.clientBehavior[0].id -ne 'client-one' -or $handoff.inventories.clientBehavior[0].evidenceFactId -ne 'fact-client-one') { throw 'Page handoff omitted inline client behavior evidence.' }
+    if ($handoff.eventChains[0].chainId -ne 'chain-one' -or @($handoff.eventChains[0].evidence.factId | Where-Object { $_ -in @('binding-one', 'fact-handler') }).Count -ne 2 -or
         $handoff.downstreamBoundaries[0].boundaryId -ne 'boundary-one' -or $handoff.downstreamBoundaries[0].terminalEvidenceId -ne 'fact-db') { throw 'Page handoff omitted bounded chain or boundary evidence.' }
     if ($handoff.inventories.PSObject.Properties.Name -contains 'projectDataMovement') { throw 'Project-scoped data movement was duplicated into the page handoff.' }
     if (@($handoff.retrievalHints).Count -ne 2 -or @($handoff.retrievalHints | Where-Object { !$_.recipeId }).Count -ne 0) { throw 'Retrieval hints were not serialized as a flat recipe list.' }
@@ -90,6 +95,7 @@ try {
     & $scriptPath -PacketPath $packetPath -OutputRoot $outputRoot -OutputDirectory $sourceWorkbench -SourceRoot $sourceRoot -IncludeRawSource -SourceContextLines 1 | Out-Null
     $sourceReport = [IO.File]::ReadAllText((Join-Path $sourceWorkbench 'page-001.html'))
     if (!$sourceReport.Contains('asp:Button', [StringComparison]::Ordinal)) { throw 'Opt-in source excerpt was not rendered.' }
+    if (!$sourceReport.Contains('pre code{background:transparent', [StringComparison]::Ordinal)) { throw 'Source excerpt inherited inline-code block styling.' }
     if ((Get-FileHash -LiteralPath (Join-Path $corpus 'chunks.jsonl') -Algorithm SHA256).Hash -ne $chunksHashBefore) { throw 'Source-mode workbench modified chunks.jsonl.' }
 
     if ($IsLinux -or $IsMacOS) {

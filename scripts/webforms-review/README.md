@@ -90,6 +90,19 @@ links one report and one handoff JSON for every selected page. Add
 `-IncludeRawSource -SourceRoot C:\path\to\authorized-source` only on an
 authorized private machine when bounded working-tree excerpts are needed.
 
+When the scan observes supported inline jQuery shapes, each page report also
+lists client event bindings, UI-mutation candidates, and numeric maximum-length
+constraints with exact markup spans. Literal ID and ID-suffix selectors are
+correlated to controls declared on the same surface; generated ASP.NET client
+IDs are labeled explicitly. These Tier3 records are static candidates only:
+they do not prove DOM selection, browser execution, postback, or server-handler
+execution. Re-run the scan after upgrading TraceMap; regenerating a workbench
+from an older packet cannot add evidence that the older scan did not emit.
+
+Trigger rows show separate binding and handler source spans when the retained
+chain cites them. A missing span remains an evidence gap rather than being
+guessed from a similarly named method.
+
 To review every selected page, first export an immutable-overlay draft:
 
 ```powershell

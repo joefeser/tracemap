@@ -1726,6 +1726,67 @@ public sealed class LegacyWebFormsExtractorTests
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WebFormsPostBackTargetCandidate && fact.Properties.GetValueOrDefault("sourceKind") == "client-script-literal");
     }
 
+    [Fact]
+    public void Inline_jquery_behavior_retains_events_mutations_constraints_and_server_control_correlation()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "OrderEditor.aspx"), """
+            <%@ Page Language="VB" CodeFile="OrderEditor.aspx.vb" Inherits="OrderEditor" %>
+            <asp:Button runat="server" ID="SaveOrder" OnClick="SaveOrder_Click" />
+            <asp:Button runat="server" ID="CancelEdit" />
+            <asp:TextBox runat="server" ID="OrderNameText" />
+            <script type="text/javascript">
+              jQuery(document).ready(function ($) {
+                $("#ctl00_ContentPlaceHolder1_SaveOrder").on('click', function () {
+                  $(".loader").addClass("on");
+                  $("#ctl00_ContentPlaceHolder1_ErrorMessage").hide();
+                    $("#ctl00_ContentPlaceHolder1_CancelEdit").prop('disabled', true);
+                  $(this).removeClass('modern-gold').addClass('light-gray text-red').attr('value', 'Saving...');
+                });
+                $("[id$=OrderNameText]").keyup(function () {
+                  var maxlength = 50;
+                  var textlen = maxlength - $(this).val().length;
+                  $("#rchars").text(textlen + " characters remaining");
+                });
+              });
+            </script>
+            """);
+        File.WriteAllText(Path.Combine(repo, "OrderEditor.aspx.vb"), """
+            Partial Public Class OrderEditor
+                Protected Sub SaveOrder_Click(sender As Object, e As EventArgs)
+                End Sub
+            End Class
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var events = result.Facts.Where(fact => fact.FactType == FactTypes.WebFormsClientEventBindingCandidate).ToArray();
+        var mutations = result.Facts.Where(fact => fact.FactType == FactTypes.WebFormsClientUiMutationCandidate).ToArray();
+        var constraint = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WebFormsClientValidationConstraintCandidate);
+
+        Assert.Equal(2, events.Length);
+        var click = Assert.Single(events, fact => fact.Properties.GetValueOrDefault("clientEventName") == "click");
+        Assert.Equal("SaveOrder", click.Properties.GetValueOrDefault("controlId"));
+        Assert.Equal("OnClick", click.Properties.GetValueOrDefault("serverEventName"));
+        Assert.Equal("SaveOrder_Click", click.Properties.GetValueOrDefault("serverHandlerName"));
+        Assert.Equal("true", click.Properties.GetValueOrDefault("generatedClientIdDependency"));
+        Assert.True(click.Evidence.EndLine > click.Evidence.StartLine);
+        Assert.Contains(mutations, fact => fact.Properties.GetValueOrDefault("mutationKinds") == "class-add");
+        Assert.Contains(mutations, fact => fact.Properties.GetValueOrDefault("mutationKinds") == "disable");
+        Assert.Contains(mutations, fact => fact.Properties.GetValueOrDefault("mutationKinds") == "class-add,class-remove,value-set");
+        Assert.Contains(mutations, fact => fact.Properties.GetValueOrDefault("mutationKinds") == "text-set");
+        Assert.Equal("maximum-length", constraint.Properties.GetValueOrDefault("constraintKind"));
+        Assert.Equal("50", constraint.Properties.GetValueOrDefault("constraintValue"));
+        Assert.Equal(RuleIds.LegacyWebFormsInlineClientBehavior, constraint.RuleId);
+        Assert.All(events.Concat(mutations).Append(constraint), fact =>
+        {
+            Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, fact.EvidenceTier);
+            Assert.Equal("legacy-webforms/0.9.0", fact.Evidence.ExtractorVersion);
+            Assert.DoesNotContain("Saving", JsonSerializer.Serialize(fact), StringComparison.Ordinal);
+        });
+    }
+
     private static void WriteBasicPage(string repo, string handlerName, string handlerBody)
     {
         WritePage(repo, "Default.aspx", "Default.aspx.cs", "Sample.Default", handlerName);
