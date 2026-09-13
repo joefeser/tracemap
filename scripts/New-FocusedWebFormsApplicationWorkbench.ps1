@@ -305,6 +305,26 @@ try {
         if ($coverage.Count -eq 0) { $coverage = @([string]$surface.evidence.coverageLabel) }
         $decision = if ($reviewBySurface.ContainsKey([string]$surface.surfaceId)) { $reviewBySurface[[string]$surface.surfaceId] } else { [pscustomobject]@{ verdict = 'unreviewed'; migrationDisposition = 'unassigned'; capabilityLabel = $null; comment = $null; correction = $null } }
         $analysisStatus = if ([string]$packet.coverage -like 'reduced-*' -or $packet.summary.truncated -or $gaps.Count -gt 0) { 'partial' } else { 'complete' }
+        $boundaryStatus = if ($boundaries.Count -gt 0) {
+            "$($boundaries.Count) detected"
+        } elseif ($chains.Count -eq 0) {
+            'not applicable; no retained event chains'
+        } elseif ($analysisStatus -eq 'partial') {
+            'not established under partial retained coverage'
+        } else {
+            'none detected within retained bounded call coverage'
+        }
+        $clientEventCount = @($clientBehavior | Where-Object { $_.behaviorKind -eq 'client-event-binding' }).Count
+        $linkedClientEventCount = @($clientBehavior | Where-Object {
+            $_.behaviorKind -eq 'client-event-binding' -and
+            (Property-Value $_.safeMetadata 'serverHandlerName') -and
+            (Property-Value $_.safeMetadata 'serverHandlerName') -notin @('not-applicable','unavailable')
+        }).Count
+        $navigationCount = @($serverBehavior | Where-Object { $_.behaviorKind -eq 'navigation' }).Count
+        $lifecycleCount = @($serverBehavior | Where-Object { $_.behaviorKind -eq 'request-lifecycle' }).Count
+        $serverMutationCount = @($serverBehavior | Where-Object { $_.behaviorKind -eq 'control-state-mutation' }).Count
+        $inlineReferenceCount = @($serverBehavior | Where-Object { $_.behaviorKind -eq 'inline-server-reference' }).Count
+        $behaviorSummary = "Retained evidence records $($chains.Count) event chain(s), $($clientBehavior.Count) inline client behavior(s), and $($serverBehavior.Count) server behavior(s). $linkedClientEventCount of $clientEventCount client event binding(s) correlate to one retained server handler. Server evidence includes $navigationCount navigation candidate(s), $lifecycleCount request-lifecycle candidate(s), $serverMutationCount control-state mutation(s), and $inlineReferenceCount inline server-expression reference(s)."
         $retrievalHints = [Collections.Generic.List[object]]::new()
         $retrievalHints.Add([ordered]@{ recipeId = 'webforms-surface-facts'; parameters = [ordered]@{ surface_id = [string]$surface.surfaceId; limit = 500 } })
         foreach ($handler in $handlers) { $retrievalHints.Add([ordered]@{ recipeId = 'calls-from-handler'; parameters = [ordered]@{ handler_symbol = $handler; limit = 500 } }) }
@@ -316,7 +336,7 @@ try {
             pageId = $pageId
             packet = [ordered]@{ packetId = [string]$packet.packetId; scanId = [string]$sources[0].scanId; commitSha = [string]$sources[0].commitSha }
             subject = [ordered]@{ surfaceId = [string]$surface.surfaceId; surfaceKind = [string]$surface.surfaceKind; projectId = [string]$surface.projectId; filePath = [string]$surface.evidence.filePath }
-            analysis = [ordered]@{ status = $analysisStatus; coverage = [string]$packet.coverage; packetTruncated = [bool]$packet.summary.truncated }
+            analysis = [ordered]@{ status = $analysisStatus; coverage = [string]$packet.coverage; packetTruncated = [bool]$packet.summary.truncated; boundaryStatus = $boundaryStatus }
             counts = [ordered]@{ controls = @(Values $surface.controlIds).Count; eventChains = $chains.Count; clientBehaviors = $clientBehavior.Count; serverBehaviors = $serverBehavior.Count; boundaries = $boundaries.Count; identityState = $identity.Count; projectDataMovement = $projectBatchCount; structuralCandidates = $candidates.Count; gaps = $gaps.Count }
             eventChains = @($chains | ForEach-Object { [ordered]@{
                 chainId = [string]$_.chainId; eventSourceId = [string]$_.eventSourceId; bindingFactId = [string]$_.bindingFactId
@@ -373,17 +393,22 @@ try {
             '<tr><td>{0}</td><td>{1}</td><td><code>{2}</code><br><small>{3}</small></td><td><code>{4}</code><br><small>{5}</small></td><td><code>{6}</code></td><td>{7}:L{8}-{9}</td></tr>' -f (ConvertTo-HtmlText $item.behaviorKind), (ConvertTo-HtmlText $eventOrMutation), (ConvertTo-HtmlText $item.selectorTarget), (ConvertTo-HtmlText $item.selectorKind), (ConvertTo-HtmlText $control), (ConvertTo-HtmlText $item.targetResolution), (ConvertTo-HtmlText $serverHandler), (ConvertTo-HtmlText $item.evidence.filePath), (ConvertTo-HtmlText $item.evidence.startLine), (ConvertTo-HtmlText $item.evidence.endLine)
         }
         $serverBehaviorRows = foreach ($item in $serverBehavior) {
-            $subject = if ($item.safeMetadata.controlId -and $item.safeMetadata.controlId -ne 'not-applicable') { "$($item.safeMetadata.controlId).$($item.safeMetadata.stateMember)" } elseif ($item.safeMetadata.navigationKind -and $item.safeMetadata.navigationKind -ne 'not-applicable') { $item.safeMetadata.navigationKind } else { $item.safeMetadata.lifecycleOperation }
+            $referencedType = Property-Value $item.safeMetadata 'referencedTypeName'
+            $declarationFile = Property-Value $item.safeMetadata 'declarationFile'
+            $expressionKind = Property-Value $item.safeMetadata 'expressionKind'
+            $subject = if ($referencedType -and $referencedType -ne 'not-applicable') { $referencedType } elseif ($item.safeMetadata.controlId -and $item.safeMetadata.controlId -ne 'not-applicable') { "$($item.safeMetadata.controlId).$($item.safeMetadata.stateMember)" } elseif ($item.safeMetadata.navigationKind -and $item.safeMetadata.navigationKind -ne 'not-applicable') { $item.safeMetadata.navigationKind } else { $item.safeMetadata.lifecycleOperation }
             $context = if ($item.safeMetadata.branchContext -and $item.safeMetadata.branchContext -ne 'unconditional') { $item.safeMetadata.branchContext } else { 'unconditional' }
-            $detail = if ($item.safeMetadata.endResponse -and $item.safeMetadata.endResponse -ne 'not-applicable') { "endResponse=$($item.safeMetadata.endResponse)" } else { $item.targetResolution }
-            '<tr><td>{0}</td><td><code>{1}</code></td><td><code>{2}</code></td><td>{3}</td><td>{4}</td><td>{5}:L{6}-{7}</td></tr>' -f (ConvertTo-HtmlText $item.behaviorKind), (ConvertTo-HtmlText $item.safeMetadata.handlerName), (ConvertTo-HtmlText $subject), (ConvertTo-HtmlText $context), (ConvertTo-HtmlText $detail), (ConvertTo-HtmlText $item.evidence.filePath), (ConvertTo-HtmlText $item.evidence.startLine), (ConvertTo-HtmlText $item.evidence.endLine)
+            $detail = if ($referencedType -and $referencedType -ne 'not-applicable') { "$($item.targetResolution); $expressionKind; $declarationFile" } elseif ($item.safeMetadata.endResponse -and $item.safeMetadata.endResponse -ne 'not-applicable') { "$($item.targetResolution); endResponse=$($item.safeMetadata.endResponse)" } else { $item.targetResolution }
+            $handler = if ($item.safeMetadata.handlerName -and $item.safeMetadata.handlerName -ne 'unavailable') { $item.safeMetadata.handlerName } elseif ($referencedType -and $referencedType -ne 'not-applicable') { 'markup expression' } else { 'unavailable' }
+            '<tr><td>{0}</td><td><code>{1}</code></td><td><code>{2}</code></td><td>{3}</td><td>{4}</td><td>{5}:L{6}-{7}</td></tr>' -f (ConvertTo-HtmlText $item.behaviorKind), (ConvertTo-HtmlText $handler), (ConvertTo-HtmlText $subject), (ConvertTo-HtmlText $context), (ConvertTo-HtmlText $detail), (ConvertTo-HtmlText $item.evidence.filePath), (ConvertTo-HtmlText $item.evidence.startLine), (ConvertTo-HtmlText $item.evidence.endLine)
         }
         $correctionHtml = if ($null -ne $decision.correction) { '<p><strong>Correction ({0}):</strong> {1}</p>' -f (ConvertTo-HtmlText $decision.correction.category), (ConvertTo-HtmlText $decision.correction.statement) } else { '' }
         $sourceHtml = if ($IncludeRawSource) { Source-Excerpt $surface.evidence $SourceRoot $SourceContextLines } else { '<p class="muted">Raw source omitted. Regenerate with <code>-IncludeRawSource -SourceRoot &lt;authorized-root&gt;</code> for a bounded private excerpt.</p>' }
         $html = @"
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>$(ConvertTo-HtmlText $pageId) Web Forms review</title><style>:root{font-family:system-ui,sans-serif;color:#172033;background:#f5f7fb}main{max-width:1200px;margin:auto;padding:24px}.private,.warning{padding:12px;border-left:5px solid #c62828;background:#fff1f0}.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}.card,details{background:white;border:1px solid #dbe2ee;border-radius:8px;padding:14px;margin:14px 0}.summary .card{margin:0}table{width:100%;border-collapse:collapse}th,td{padding:9px;border:1px solid #dbe2ee;text-align:left;vertical-align:top}th{background:#eaf1ff}code{background:#edf1f7;padding:.1rem .3rem;border-radius:4px;overflow-wrap:anywhere}pre{overflow:auto;background:#172033;color:#f8fafc;padding:14px;border-radius:6px}pre code{background:transparent;padding:0;color:inherit;white-space:pre}.muted{color:#566070}.button{display:inline-block;padding:7px 10px;background:#eaf1ff;border:1px solid #bed0ee;border-radius:6px;text-decoration:none}</style></head><body><main>
 <p><a class="button" href="index.html">Return to application index</a></p><h1>$(ConvertTo-HtmlText $surface.evidence.filePath)</h1><p class="private">PRIVATE local evidence review. Human conclusions are review metadata, not scanner facts.</p>
-<section class="summary"><div class="card"><strong>Controls</strong><br>$(@(Values $surface.controlIds).Count)</div><div class="card"><strong>Event chains</strong><br>$($chains.Count)</div><div class="card"><strong>Client behaviors</strong><br>$($clientBehavior.Count)</div><div class="card"><strong>Server behaviors</strong><br>$($serverBehavior.Count)</div><div class="card"><strong>Boundaries</strong><br>$($boundaries.Count)</div><div class="card"><strong>Gaps</strong><br>$($gaps.Count)</div></section>
+<section class="summary"><div class="card"><strong>Controls</strong><br>$(@(Values $surface.controlIds).Count)</div><div class="card"><strong>Event chains</strong><br>$($chains.Count)</div><div class="card"><strong>Client behaviors</strong><br>$($clientBehavior.Count)</div><div class="card"><strong>Server behaviors</strong><br>$($serverBehavior.Count)</div><div class="card"><strong>Boundaries</strong><br>$($boundaries.Count)<br><small>$(ConvertTo-HtmlText $boundaryStatus)</small></div><div class="card"><strong>Gaps</strong><br>$($gaps.Count)</div></section>
+<section class="card"><h2>Evidence-backed behavior summary</h2><p>$(ConvertTo-HtmlText $behaviorSummary)</p><p><strong>Boundary status:</strong> $(ConvertTo-HtmlText $boundaryStatus).</p><p class="muted">Counts and correlations summarize retained static facts; they do not assert runtime behavior or business intent.</p></section>
 <section class="card"><h2>Review status</h2><p><strong>Verdict:</strong> $(ConvertTo-HtmlText $decision.verdict) · <strong>Disposition:</strong> $(ConvertTo-HtmlText $decision.migrationDisposition)</p><p><strong>Capability:</strong> $(ConvertTo-HtmlText $decision.capabilityLabel)</p><p>$(ConvertTo-HtmlText $decision.comment)</p>$correctionHtml<p>Human review is a separate validated overlay, never scanner evidence.</p></section>
 <section class="card"><h2>Surface</h2><p><code>$(ConvertTo-HtmlText $surface.surfaceId)</code> · $(ConvertTo-HtmlText $surface.surfaceKind) · project <code>$(ConvertTo-HtmlText $surface.projectId)</code></p><p><strong>Coverage:</strong> $(ConvertTo-HtmlText ($coverage -join ', '))</p><p><strong>Controls:</strong> $(ConvertTo-HtmlText ((Values $surface.controlIds) -join ', '))</p></section>
 <section class="card"><h2>Trigger and retained call paths</h2><table><thead><tr><th>Chain</th><th>Event source</th><th>Handler</th><th>Classification</th><th>Terminal/stop</th></tr></thead><tbody>$($chainRows -join '')</tbody></table></section>

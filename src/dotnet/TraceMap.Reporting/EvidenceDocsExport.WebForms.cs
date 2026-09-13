@@ -421,6 +421,10 @@ public static partial class EvidenceDocsExporter
             | Navigation | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("navigationKind", "not-applicable"))}` |
             | End response | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("endResponse", "not-applicable"))}` |
             | Lifecycle operation | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("lifecycleOperation", "not-applicable"))}` |
+            | Expression kind | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("expressionKind", "not-applicable"))}` |
+            | Referenced type | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("referencedTypeName", "not-applicable"))}` |
+            | Declaration file | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("declarationFile", "not-applicable"))}` |
+            | Declaration path kind | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("declarationPathKind", "not-applicable"))}` |
             | Target resolution | `{EscapeInline(value.TargetResolution)}` |
             | File span | `{EscapeInline(FormatSpan(value.Evidence))}` |
             """;

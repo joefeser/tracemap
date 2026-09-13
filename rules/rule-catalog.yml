@@ -2432,7 +2432,7 @@ rules:
 
   - id: legacy.webforms.inline-client-behavior.v1
     name: Legacy WebForms inline jQuery behavior candidates
-    description: Emits bounded textual candidates for supported inline jQuery event bindings, UI mutations, numeric maximum-length constraints, generated ASP.NET client-ID dependencies, and exact same-surface server-control correlation.
+    description: Emits bounded textual candidates for supported inline jQuery event bindings, UI mutations, numeric maximum-length constraints, generated ASP.NET client-ID dependencies, exact same-surface server-control correlation, and a unique retained server event/handler correlation when one supported static binding is present.
     evidenceTier: Tier3SyntaxOrTextual
     emits:
       - WebFormsClientEventBindingCandidate
@@ -2441,7 +2441,7 @@ rules:
     limitations:
       - Supported input is limited to inline script blocks and literal jQuery selectors using exact IDs, ID suffixes, ID contains selectors, or CSS classes, with click, keyup, change, input, or submit callback shapes. External files, delegated events, aliases, computed selectors, plugins, minified syntax, and arbitrary JavaScript remain outside coverage.
       - Mutation candidates cover only show, hide, class addition/removal, disabled property changes, value attributes, and text setters. Argument expressions are not evaluated and a retained candidate does not prove DOM selection, browser execution, event firing, validation enforcement, postback, or server-handler execution.
-      - Same-surface server correlation requires one literal selector target matching one inventoried server-control ID. ASP.NET-generated client-ID suffix or contains matching is a structural candidate and does not prove the rendered client ID.
+      - Same-surface server correlation requires one literal selector target matching one inventoried server-control ID. A server handler is retained only when a supported client event maps to exactly one retained binding and handler, including markup, VB Handles, or AddHandler evidence. ASP.NET-generated client-ID suffix or contains matching is a structural candidate and does not prove the rendered client ID, postback, or handler execution.
       - Numeric maximum-length declarations are retained only inside the callback or within 4096 characters before it in the same inline script when the callback references that exact variable name; this bounded textual association does not prove data flow or enforcement.
       - Raw script bodies and mutation argument values are not retained; evidence uses paths, exact line spans, bounded safe selector targets, and snippet hashes.
 
@@ -2459,6 +2459,18 @@ rules:
       - CompleteRequest admission requires a member-access receiver ending in ApplicationInstance. It is a request-lifecycle syntax candidate and does not prove framework receiver identity, pipeline behavior, request termination, method return, redirect completion, or runtime ordering.
       - Server-control state mutation candidates cover a bounded property allowlist and correlate only a unique same-surface markup control ID. Assignments retain the property name, exact span, value-expression digest, and nearest supported If, ElseIf, Else, or single-line If context; they do not prove branch feasibility, rendered state, event execution, or business intent.
       - Multiple controls may legitimately bind to one handler. Trigger bindings remain separate while identical handler behavior is emitted once with all retained handler-resolution facts as support.
+
+  - id: legacy.webforms.inline-server-expression.v1
+    name: Legacy Web Forms inline server-expression reference candidates
+    description: Emits bounded syntax candidates when a qualified identifier inside an inline render or data-binding expression has one exact longest-prefix repository type declaration, including projectless App_Code declarations.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - WebFormsInlineServerExpressionReferenceCandidate
+    limitations:
+      - Supported expressions are limited to `<%=` render expressions and `<%#` data-binding expressions containing a qualified identifier chain. Code blocks, directives, helper indirection, imports, aliases, generics, indexers, invocations with complex syntax, and dynamic expressions remain outside this bounded join.
+      - Resolution requires exactly one repository declaration site for the longest qualified type-name prefix. Visual Basic-linked pages compare identifiers case-insensitively; unresolved or ambiguous references do not emit a positive candidate.
+      - A retained candidate proves only the markup span and unique repository declaration. It does not prove ASP.NET dynamic compilation, member binding, expression execution, rendered output, or runtime reachability.
+      - Raw expression text and member names after the matched type are not retained; only bounded safe type/path metadata, segment counts, hashes, and exact evidence spans are emitted.
 
   - id: legacy.webforms.postback-target.v1
     name: Legacy WebForms postback target candidates

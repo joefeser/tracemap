@@ -217,3 +217,31 @@ case artifacts that may be reviewed outside the authorized machine.
 The initial run is diagnostic. Do not manually label missing evidence as absent
 runtime behavior, and do not delete the retained scan or corpus while follow-up
 queries use them.
+
+## September 13, 2026 discovery notes
+
+The first 20-page projectless Web Site review established these concrete mixed
+Web Forms shapes:
+
+- A page can combine ASPX markup, VB code-behind, dynamically compiled
+  `App_Code` declarations, and inline jQuery in one repository. Folder switches
+  are workflow scope only and must not define relationship semantics.
+- One observed inline Save click shows a loader, hides an error, disables a
+  Cancel control, and changes Save presentation before the normal Web Forms
+  postback. A keyup callback maintains a 50-character remaining count.
+- The same page contains inline ASP.NET expressions that reference types under
+  `App_Code/Controls`. Positive resolution must require one exact repository
+  declaration and must remain static syntax evidence.
+- Two radio controls legitimately bind to the same checked-change handler. The
+  two trigger chains remain distinct while the handler's control-state behavior
+  is inventoried once.
+- Observed VB server behavior includes `Response.Redirect(..., False)` followed
+  by `CompleteRequest()`, Page_Load control initialization, and conditional
+  control visibility/text/checked-state changes.
+
+The follow-up implementation joins supported jQuery client events through a
+unique retained Web Forms binding to its VB handler, joins bounded inline server
+expressions to a unique repository or `App_Code` type declaration, adds a
+fact-count-based behavior summary, and distinguishes zero boundaries caused by
+no retained chains, partial coverage, and a completed bounded search. These are
+review aids, not runtime or migration-correctness claims.

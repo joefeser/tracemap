@@ -16,11 +16,12 @@ public sealed class WebFormsModernizationPacketTests
     {
         using var temp = new TempDirectory();
         var repo = Path.Combine(temp.Path, "repo");
-        Directory.CreateDirectory(repo);
+        Directory.CreateDirectory(Path.Combine(repo, "App_Code", "Controls"));
         File.WriteAllText(Path.Combine(repo, "OrderEditor.aspx"), """
             <%@ Page Language="VB" CodeFile="OrderEditor.aspx.vb" Inherits="OrderEditor" %>
             <asp:Button runat="server" ID="SaveOrder" OnClick="SaveOrder_Click" />
             <asp:TextBox runat="server" ID="OrderNameText" />
+            <span><%= Sample.Controls.OrderPolicy.DisplayName %></span>
             <script>
             $("#ctl00_ContentPlaceHolder1_SaveOrder").on('click', function () {
               $(this).attr('value', 'Saving...');
@@ -41,6 +42,12 @@ public sealed class WebFormsModernizationPacketTests
                     End If
                 End Sub
             End Class
+            """);
+        File.WriteAllText(Path.Combine(repo, "App_Code", "Controls", "OrderPolicy.vb"), """
+            Namespace Sample.Controls
+                Public Class OrderPolicy
+                End Class
+            End Namespace
             """);
         var scan = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "scan")));
         const string commitSha = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
@@ -63,8 +70,8 @@ public sealed class WebFormsModernizationPacketTests
             item.BehaviorKind == "client-event-binding"
             && item.SelectorKind == "id-contains"
             && item.SafeMetadata.GetValueOrDefault("controlId") == "OrderNameText");
-        Assert.Equal(3, written.Packet.Summary.ServerBehaviorCount);
-        Assert.Equal(3, written.Packet.ServerBehaviorInventory.Count);
+        Assert.Equal(4, written.Packet.Summary.ServerBehaviorCount);
+        Assert.Equal(4, written.Packet.ServerBehaviorInventory.Count);
         Assert.Contains(written.Packet.ServerBehaviorInventory, item =>
             item.BehaviorKind == "navigation"
             && item.SafeMetadata.GetValueOrDefault("endResponse") == "false");
@@ -75,6 +82,10 @@ public sealed class WebFormsModernizationPacketTests
             item.BehaviorKind == "control-state-mutation"
             && item.SafeMetadata.GetValueOrDefault("controlId") == "SaveOrder"
             && item.SafeMetadata.GetValueOrDefault("branchContext") == "if");
+        Assert.Contains(written.Packet.ServerBehaviorInventory, item =>
+            item.BehaviorKind == "inline-server-reference"
+            && item.SafeMetadata.GetValueOrDefault("referencedTypeName") == "Sample.Controls.OrderPolicy"
+            && item.SafeMetadata.GetValueOrDefault("declarationPathKind") == "app-code");
 
         var docs = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
             index,
@@ -88,9 +99,12 @@ public sealed class WebFormsModernizationPacketTests
             chunk.BodyMarkdown.Contains("SaveOrder_Click", StringComparison.Ordinal));
         var serverBehaviorChunks = docs.Chunks.Where(chunk =>
             chunk.Title == "Web Forms server behavior evidence").ToArray();
-        Assert.Equal(3, serverBehaviorChunks.Length);
+        Assert.Equal(4, serverBehaviorChunks.Length);
         Assert.Contains(serverBehaviorChunks, chunk =>
             chunk.BodyMarkdown.Contains("complete-request", StringComparison.Ordinal));
+        Assert.Contains(serverBehaviorChunks, chunk =>
+            chunk.BodyMarkdown.Contains("Sample.Controls.OrderPolicy", StringComparison.Ordinal)
+            && chunk.BodyMarkdown.Contains("App_Code/Controls/OrderPolicy.vb", StringComparison.Ordinal));
     }
 
     [Theory]

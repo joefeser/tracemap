@@ -115,9 +115,10 @@ public static partial class LegacyWebFormsExtractor
                 }
             }
 
-            AddInlineClientBehaviorFacts(repoPath, manifest, page, pageFact, controlFacts, facts);
-
             AddExplicitControlSubscriptionFacts(manifest, page, context, evidenceIndex, facts);
+
+            AddInlineClientBehaviorFacts(repoPath, manifest, page, pageFact, controlFacts, facts);
+            AddInlineServerExpressionFacts(repoPath, manifest, page, pageFact, existingFacts, facts);
 
             foreach (var gap in page.Gaps)
             {
@@ -1900,19 +1901,26 @@ public static partial class LegacyWebFormsExtractor
                 var matchingControlFact = selectorInfo.ControlId is null
                     ? null
                     : controlFacts.SingleOrDefault(fact => fact.Properties.GetValueOrDefault("controlId") == selectorInfo.ControlId);
-                var matchingServerBinding = eventName == "click" && selectorInfo.ControlId is not null
-                    ? page.Bindings.FirstOrDefault(candidate =>
-                        candidate.ControlId.Equals(selectorInfo.ControlId, StringComparison.OrdinalIgnoreCase)
-                        && candidate.EventName.Equals("OnClick", StringComparison.OrdinalIgnoreCase))
-                    : null;
+                var expectedServerEvents = ExpectedServerEvents(eventName, selectorInfo.ControlId, page.Controls);
+                var matchingServerBindings = selectorInfo.ControlId is null
+                    ? []
+                    : facts.Where(fact =>
+                            fact.FactType == FactTypes.WebFormsEventBindingDeclared
+                            && fact.Properties.GetValueOrDefault("surfaceIdentity") == SurfaceIdentity(page.FilePath)
+                            && fact.Properties.GetValueOrDefault("controlId")?.Equals(selectorInfo.ControlId, StringComparison.OrdinalIgnoreCase) == true
+                            && expectedServerEvents.Contains(fact.Properties.GetValueOrDefault("eventName") ?? string.Empty, StringComparer.OrdinalIgnoreCase))
+                        .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
+                        .ToArray();
+                var matchingServerBinding = matchingServerBindings.Length == 1 ? matchingServerBindings[0] : null;
+                var matchingHandler = matchingServerBinding is null
+                    ? null
+                    : facts.SingleOrDefault(fact => fact.FactType == FactTypes.WebFormsHandlerResolved
+                        && fact.Properties.GetValueOrDefault("bindingFactId") == matchingServerBinding.FactId);
                 var supportingFactIds = new List<string?> { pageFact.FactId, matchingControlFact?.FactId };
                 if (matchingServerBinding is not null)
                 {
-                    supportingFactIds.Add(facts.FirstOrDefault(fact =>
-                        fact.FactType == FactTypes.WebFormsEventBindingDeclared
-                        && fact.Properties.GetValueOrDefault("surfaceIdentity") == SurfaceIdentity(page.FilePath)
-                        && fact.Properties.GetValueOrDefault("controlId") == matchingServerBinding.ControlId
-                        && fact.Properties.GetValueOrDefault("eventName") == matchingServerBinding.EventName)?.FactId);
+                    supportingFactIds.Add(matchingServerBinding.FactId);
+                    supportingFactIds.Add(matchingHandler?.FactId);
                 }
 
                 var bindingProperties = new SortedDictionary<string, string>(StringComparer.Ordinal)
@@ -1923,12 +1931,13 @@ public static partial class LegacyWebFormsExtractor
                     ["selectorKind"] = selectorInfo.Kind,
                     ["selectorTarget"] = selectorInfo.Target ?? "unavailable",
                     ["targetResolution"] = selectorInfo.ControlId is null ? "unresolved" : "same-surface-control",
+                    ["serverBindingResolution"] = matchingServerBindings.Length == 0 ? "unavailable" : matchingServerBindings.Length == 1 ? "unique-static-binding" : "ambiguous-static-binding",
                     ["generatedClientIdDependency"] = selectorInfo.GeneratedClientIdDependency.ToString().ToLowerInvariant(),
                     ["surfaceIdentity"] = SurfaceIdentity(page.FilePath)
                 };
                 AddOptional(bindingProperties, "controlId", selectorInfo.ControlId);
-                AddOptional(bindingProperties, "serverEventName", matchingServerBinding?.EventName);
-                AddOptional(bindingProperties, "serverHandlerName", matchingServerBinding?.HandlerName);
+                AddOptional(bindingProperties, "serverEventName", matchingServerBinding?.Properties.GetValueOrDefault("eventName"));
+                AddOptional(bindingProperties, "serverHandlerName", matchingHandler?.Properties.GetValueOrDefault("handlerName") ?? matchingServerBinding?.Properties.GetValueOrDefault("handlerName"));
                 facts.Add(CreateStaticCompositionFact(
                     manifest,
                     FactTypes.WebFormsClientEventBindingCandidate,
@@ -2087,6 +2096,156 @@ public static partial class LegacyWebFormsExtractor
         var generated = controlId is not null && (kind is "id-suffix" or "id-contains"
             || kind == "exact-id" && !target.Equals(controlId, StringComparison.OrdinalIgnoreCase));
         return new ClientSelector(kind, target, controlId, generated);
+    }
+
+    private static IReadOnlyList<string> ExpectedServerEvents(
+        string clientEventName,
+        string? controlId,
+        IReadOnlyList<WebFormsControl> controls)
+    {
+        if (clientEventName.Equals("click", StringComparison.OrdinalIgnoreCase))
+        {
+            return ["OnClick"];
+        }
+        if (!clientEventName.Equals("change", StringComparison.OrdinalIgnoreCase) || controlId is null)
+        {
+            return [];
+        }
+        var controlType = controls.SingleOrDefault(control => control.ControlId.Equals(controlId, StringComparison.OrdinalIgnoreCase))?.ControlType ?? string.Empty;
+        if (controlType.Contains("RadioButton", StringComparison.OrdinalIgnoreCase)
+            || controlType.Contains("CheckBox", StringComparison.OrdinalIgnoreCase))
+        {
+            return ["OnCheckedChanged"];
+        }
+        if (controlType.Contains("List", StringComparison.OrdinalIgnoreCase))
+        {
+            return ["OnSelectedIndexChanged"];
+        }
+        if (controlType.Contains("TextBox", StringComparison.OrdinalIgnoreCase))
+        {
+            return ["OnTextChanged"];
+        }
+        return [];
+    }
+
+    private static void AddInlineServerExpressionFacts(
+        string repoPath,
+        ScanManifest manifest,
+        WebFormsPage page,
+        CodeFact pageFact,
+        IReadOnlyList<CodeFact> existingFacts,
+        List<CodeFact> facts)
+    {
+        string markup;
+        try
+        {
+            markup = File.ReadAllText(Path.Combine(repoPath, page.FilePath));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return;
+        }
+
+        var declarationFacts = existingFacts
+            .Where(fact => fact.FactType == FactTypes.TypeDeclared)
+            .Select(fact => (Fact: fact, QualifiedName: WebFormsDeclarationQualifiedName(fact)))
+            .Where(item => !string.IsNullOrWhiteSpace(item.QualifiedName))
+            .ToArray();
+        if (declarationFacts.Length == 0)
+        {
+            return;
+        }
+
+        var source = SourceText.From(markup);
+        var caseInsensitive = page.LinkedCodePath?.EndsWith(".vb", StringComparison.OrdinalIgnoreCase) == true;
+        var comparison = caseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        foreach (Match expression in InlineServerExpressionRegex().Matches(MaskServerComments(markup)))
+        {
+            var expressionBody = expression.Groups["body"];
+            foreach (Match reference in QualifiedIdentifierReferenceRegex().Matches(expressionBody.Value))
+            {
+                var matching = declarationFacts
+                    .Where(item => reference.Value.Equals(item.QualifiedName, comparison)
+                        || reference.Value.StartsWith(item.QualifiedName + ".", comparison))
+                    .OrderByDescending(item => item.QualifiedName!.Length)
+                    .ThenBy(item => item.Fact.FactId, StringComparer.Ordinal)
+                    .ToArray();
+                if (matching.Length == 0)
+                {
+                    continue;
+                }
+                var longestName = matching[0].QualifiedName!;
+                var longest = matching.Where(item => item.QualifiedName!.Equals(longestName, comparison)).ToArray();
+                var declarationSites = longest
+                    .GroupBy(item => $"{item.Fact.Evidence.FilePath}|{item.Fact.Evidence.StartLine}|{item.QualifiedName}", caseInsensitive ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)
+                    .ToArray();
+                if (declarationSites.Length != 1)
+                {
+                    continue;
+                }
+                var declaration = declarationSites[0]
+                    .OrderBy(item => item.Fact.EvidenceTier == EvidenceTiers.Tier1Semantic ? 0 : 1)
+                    .ThenBy(item => item.Fact.FactId, StringComparer.Ordinal)
+                    .First().Fact;
+                var absoluteStart = expressionBody.Index + reference.Index;
+                var line = LineAt(source, absoluteStart);
+                var endLine = LineAt(source, absoluteStart + reference.Length - 1);
+                var memberSuffix = reference.Value.Length > longestName.Length ? reference.Value[(longestName.Length + 1)..] : string.Empty;
+                var declarationPath = FileInventory.NormalizeRelativePath(declaration.Evidence.FilePath);
+                var pathKind = declarationPath.StartsWith("App_Code/", StringComparison.OrdinalIgnoreCase)
+                    || declarationPath.Contains("/App_Code/", StringComparison.OrdinalIgnoreCase)
+                        ? "app-code"
+                        : "repository-source";
+                var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["behaviorKind"] = "inline-server-reference",
+                    ["coverageLabel"] = "reduced-static-webforms-inline-server-expression",
+                    ["declarationFile"] = declarationPath,
+                    ["declarationPathKind"] = pathKind,
+                    ["expressionKind"] = expression.Groups["marker"].Value == "#" ? "data-binding-expression" : "render-expression",
+                    ["memberPathHash"] = FactFactory.Hash(memberSuffix, 32),
+                    ["memberPathSegmentCount"] = string.IsNullOrEmpty(memberSuffix) ? "0" : memberSuffix.Split('.').Length.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    ["referencedTypeName"] = longestName,
+                    ["referenceHash"] = FactFactory.Hash(reference.Value, 32),
+                    ["surfaceIdentity"] = SurfaceIdentity(page.FilePath),
+                    ["targetResolution"] = "unique-repository-declaration"
+                };
+                facts.Add(CreateStaticCompositionFact(
+                    manifest,
+                    FactTypes.WebFormsInlineServerExpressionReferenceCandidate,
+                    RuleIds.LegacyWebFormsInlineServerExpression,
+                    EvidenceTiers.Tier3SyntaxOrTextual,
+                    page.FilePath,
+                    line,
+                    FactFactory.Hash(expression.Value, 32),
+                    SurfaceIdentity(page.FilePath),
+                    declaration.TargetSymbol ?? longestName,
+                    longestName,
+                    "reduced-static-webforms-inline-server-expression",
+                    "A bounded inline server-expression reference joined to one repository declaration is syntax evidence only; it does not prove ASP.NET dynamic compilation, member binding, expression execution, rendered output, or runtime reachability.",
+                    [pageFact.FactId, declaration.FactId],
+                    properties,
+                    endLine));
+            }
+        }
+    }
+
+    private static string? WebFormsDeclarationQualifiedName(CodeFact fact)
+    {
+        var qualifiedName = fact.Properties.GetValueOrDefault("qualifiedName") ?? fact.TargetSymbol;
+        var name = fact.Properties.GetValueOrDefault("name");
+        if (string.IsNullOrWhiteSpace(qualifiedName) || string.IsNullOrWhiteSpace(name))
+        {
+            return qualifiedName;
+        }
+
+        // The projectless VB syntax declaration shape can repeat the declared type
+        // because its enclosing TypeBlock also reports the same statement. Normalize
+        // only that exact terminal duplication for bounded markup-reference matching.
+        var duplicatedSuffix = $".{name}.{name}";
+        return qualifiedName.EndsWith(duplicatedSuffix, StringComparison.OrdinalIgnoreCase)
+            ? qualifiedName[..^(name.Length + 1)]
+            : qualifiedName;
     }
 
     private static int FindJavascriptBlockEnd(string text, int openBrace)
@@ -3844,6 +4003,12 @@ public static partial class LegacyWebFormsExtractor
 
     [GeneratedRegex(@"^[A-Za-z_][A-Za-z0-9_:\-]{0,127}$")]
     private static partial Regex ClientSelectorTokenRegex();
+
+    [GeneratedRegex(@"<%(?<marker>=|#)\s*(?<body>.*?)%>", RegexOptions.Singleline)]
+    private static partial Regex InlineServerExpressionRegex();
+
+    [GeneratedRegex(@"\b[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+\b")]
+    private static partial Regex QualifiedIdentifierReferenceRegex();
 
     [GeneratedRegex("""^\[\s*id\s*(?<operator>[*$])=\s*(?:["'])?(?<target>[A-Za-z_][A-Za-z0-9_:\-]{0,127})(?:["'])?\s*\]$""", RegexOptions.IgnoreCase)]
     private static partial Regex ClientGeneratedIdSelectorRegex();

@@ -1734,7 +1734,7 @@ public sealed class LegacyWebFormsExtractorTests
         Directory.CreateDirectory(repo);
         File.WriteAllText(Path.Combine(repo, "OrderEditor.aspx"), """
             <%@ Page Language="VB" CodeFile="OrderEditor.aspx.vb" Inherits="OrderEditor" %>
-            <asp:Button runat="server" ID="SaveOrder" OnClick="SaveOrder_Click" />
+            <asp:Button runat="server" ID="SaveOrder" />
             <asp:Button runat="server" ID="CancelEdit" />
             <asp:TextBox runat="server" ID="OrderNameText" />
             <script type="text/javascript">
@@ -1755,7 +1755,7 @@ public sealed class LegacyWebFormsExtractorTests
             """);
         File.WriteAllText(Path.Combine(repo, "OrderEditor.aspx.vb"), """
             Partial Public Class OrderEditor
-                Protected Sub SaveOrder_Click(sender As Object, e As EventArgs)
+                Protected Sub SaveOrder_Click(sender As Object, e As EventArgs) Handles SaveOrder.Click
                 End Sub
             End Class
             """);
@@ -1770,6 +1770,7 @@ public sealed class LegacyWebFormsExtractorTests
         Assert.Equal("SaveOrder", click.Properties.GetValueOrDefault("controlId"));
         Assert.Equal("OnClick", click.Properties.GetValueOrDefault("serverEventName"));
         Assert.Equal("SaveOrder_Click", click.Properties.GetValueOrDefault("serverHandlerName"));
+        Assert.Equal("unique-static-binding", click.Properties.GetValueOrDefault("serverBindingResolution"));
         Assert.Equal("true", click.Properties.GetValueOrDefault("generatedClientIdDependency"));
         Assert.True(click.Evidence.EndLine > click.Evidence.StartLine);
         var keyup = Assert.Single(events, fact => fact.Properties.GetValueOrDefault("clientEventName") == "keyup");
@@ -1787,9 +1788,44 @@ public sealed class LegacyWebFormsExtractorTests
         Assert.All(events.Concat(mutations).Append(constraint), fact =>
         {
             Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, fact.EvidenceTier);
-            Assert.Equal("legacy-webforms/0.9.1", fact.Evidence.ExtractorVersion);
+            Assert.Equal("legacy-webforms/0.10.0", fact.Evidence.ExtractorVersion);
             Assert.DoesNotContain("Saving", JsonSerializer.Serialize(fact), StringComparison.Ordinal);
         });
+    }
+
+    [Fact]
+    public void Inline_server_expression_joins_one_repository_type_declaration_without_retaining_raw_member_text()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "App_Code", "Controls"));
+        File.WriteAllText(Path.Combine(repo, "BidGroup.aspx"), """
+            <%@ Page Language="VB" CodeFile="BidGroup.aspx.vb" Inherits="BidGroup" %>
+            <span><%= UAWebApp.Controls.BidLinesController.EmployeeInfo.DisplayName %></span>
+            """);
+        File.WriteAllText(Path.Combine(repo, "BidGroup.aspx.vb"), """
+            Partial Public Class BidGroup
+            End Class
+            """);
+        File.WriteAllText(Path.Combine(repo, "App_Code", "Controls", "BidLinesController.vb"), """
+            Namespace UAWebApp.Controls
+                Public Class BidLinesController
+                End Class
+            End Namespace
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var reference = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WebFormsInlineServerExpressionReferenceCandidate);
+        Assert.Equal(RuleIds.LegacyWebFormsInlineServerExpression, reference.RuleId);
+        Assert.Equal("UAWebApp.Controls.BidLinesController", reference.Properties.GetValueOrDefault("referencedTypeName"));
+        Assert.Equal("unique-repository-declaration", reference.Properties.GetValueOrDefault("targetResolution"));
+        Assert.Equal("app-code", reference.Properties.GetValueOrDefault("declarationPathKind"));
+        Assert.Equal("App_Code/Controls/BidLinesController.vb", reference.Properties.GetValueOrDefault("declarationFile"));
+        Assert.Equal("2", reference.Properties.GetValueOrDefault("memberPathSegmentCount"));
+        Assert.Equal(2, reference.Evidence.StartLine);
+        var serialized = JsonSerializer.Serialize(reference);
+        Assert.DoesNotContain("EmployeeInfo", serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain("DisplayName", serialized, StringComparison.Ordinal);
     }
 
     private static void WriteBasicPage(string repo, string handlerName, string handlerBody)

@@ -905,7 +905,8 @@ public static class WebFormsModernizationPacketReporter
         var serverBehavior = facts
             .Where(fact => fact.FactType is FactTypes.WebFormsServerNavigationCandidate
                 or FactTypes.WebFormsRequestLifecycleCandidate
-                or FactTypes.WebFormsServerControlStateMutationCandidate)
+                or FactTypes.WebFormsServerControlStateMutationCandidate
+                or FactTypes.WebFormsInlineServerExpressionReferenceCandidate)
             .Where(fact => retainedSurfaceIds.Contains(fact.Properties.GetValueOrDefault("surfaceIdentity") ?? fact.SourceSymbol ?? ""))
             .Select(fact => new WebFormsModernizationServerBehavior(
                 HashId("server-behavior", [fact.FactId]),
@@ -917,10 +918,14 @@ public static class WebFormsModernizationPacketReporter
                     ["branchContext"] = SafeKind(fact.Properties.GetValueOrDefault("branchContext"), "unconditional"),
                     ["conditionHash"] = SafeKind(fact.Properties.GetValueOrDefault("conditionHash"), "not-applicable"),
                     ["controlId"] = SafeKind(fact.Properties.GetValueOrDefault("controlId"), "not-applicable"),
+                    ["declarationFile"] = SafeKind(fact.Properties.GetValueOrDefault("declarationFile"), "not-applicable"),
+                    ["declarationPathKind"] = SafeKind(fact.Properties.GetValueOrDefault("declarationPathKind"), "not-applicable"),
                     ["endResponse"] = SafeKind(fact.Properties.GetValueOrDefault("endResponse"), "not-applicable"),
                     ["handlerName"] = SafeKind(fact.Properties.GetValueOrDefault("handlerName"), "unavailable"),
                     ["lifecycleOperation"] = SafeKind(fact.Properties.GetValueOrDefault("lifecycleOperation"), "not-applicable"),
                     ["navigationKind"] = SafeKind(fact.Properties.GetValueOrDefault("navigationKind"), "not-applicable"),
+                    ["expressionKind"] = SafeKind(fact.Properties.GetValueOrDefault("expressionKind"), "not-applicable"),
+                    ["referencedTypeName"] = SafeKind(fact.Properties.GetValueOrDefault("referencedTypeName"), "not-applicable"),
                     ["stateMember"] = SafeKind(fact.Properties.GetValueOrDefault("stateMember"), "not-applicable"),
                     ["targetValueHash"] = SafeKind(fact.Properties.GetValueOrDefault("targetValueHash"), "not-applicable"),
                     ["targetValueLength"] = SafeKind(fact.Properties.GetValueOrDefault("targetValueLength"), "not-applicable")
