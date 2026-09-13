@@ -306,6 +306,9 @@ public static class FactTypes
     public const string WebFormsClientEventBindingCandidate = nameof(WebFormsClientEventBindingCandidate);
     public const string WebFormsClientUiMutationCandidate = nameof(WebFormsClientUiMutationCandidate);
     public const string WebFormsClientValidationConstraintCandidate = nameof(WebFormsClientValidationConstraintCandidate);
+    public const string WebFormsServerNavigationCandidate = nameof(WebFormsServerNavigationCandidate);
+    public const string WebFormsRequestLifecycleCandidate = nameof(WebFormsRequestLifecycleCandidate);
+    public const string WebFormsServerControlStateMutationCandidate = nameof(WebFormsServerControlStateMutationCandidate);
     public const string WebFormsPostBackTargetCandidate = nameof(WebFormsPostBackTargetCandidate);
     public const string WebFormsDataBindingCandidate = nameof(WebFormsDataBindingCandidate);
     public const string WinFormsSurfaceDeclared = nameof(WinFormsSurfaceDeclared);
@@ -493,6 +496,7 @@ public static class RuleIds
     public const string LegacyWebFormsLifecycleContext = "legacy.webforms.lifecycle-context.v1";
     public const string LegacyWebFormsClientScript = "legacy.webforms.client-script.v1";
     public const string LegacyWebFormsInlineClientBehavior = "legacy.webforms.inline-client-behavior.v1";
+    public const string LegacyWebFormsServerBehavior = "legacy.webforms.server-behavior.v1";
     public const string LegacyWebFormsPostBackTarget = "legacy.webforms.postback-target.v1";
     public const string LegacyWebFormsDataBinding = "legacy.webforms.data-binding.v1";
     public const string LegacyWebFormsModernizationPacket = "legacy.webforms.modernization-packet.v1";
@@ -603,7 +607,7 @@ public static class ScannerVersions
     public const string LegacyWcfExtractor = "legacy-wcf/0.3.0";
     public const string LegacyAsmxExtractor = "legacy-asmx/0.2.0";
     public const string LegacyRemotingExtractor = "legacy-remoting/0.1.0";
-    public const string LegacyWebFormsExtractor = "legacy-webforms/0.9.0";
+    public const string LegacyWebFormsExtractor = "legacy-webforms/0.9.1";
     public const string LegacyWinFormsExtractor = "legacy-winforms/0.1.0";
     public const string LegacyAspNetExtractor = "legacy-aspnet/0.2.0";
     public const string LegacyBatchDataMovementExtractor = "legacy-batch-data-movement/0.2.0";

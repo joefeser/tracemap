@@ -2445,6 +2445,21 @@ rules:
       - Numeric maximum-length declarations are retained only inside the callback or within 4096 characters before it in the same inline script when the callback references that exact variable name; this bounded textual association does not prove data flow or enforcement.
       - Raw script bodies and mutation argument values are not retained; evidence uses paths, exact line spans, bounded safe selector targets, and snippet hashes.
 
+  - id: legacy.webforms.server-behavior.v1
+    name: Legacy Web Forms projectless Visual Basic server behavior candidates
+    description: Emits bounded syntax candidates for Response.Redirect calls, CompleteRequest lifecycle calls, and supported same-surface server-control property assignments inside retained Visual Basic Web Forms handlers.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - WebFormsServerNavigationCandidate
+      - WebFormsRequestLifecycleCandidate
+      - WebFormsServerControlStateMutationCandidate
+    limitations:
+      - Admission requires a retained Visual Basic handler uniquely associated with a Web Forms surface. Compiler identity is not inferred for projectless Web Site code.
+      - Navigation candidates require a syntactic Response.Redirect receiver. Static string targets are represented only by a digest and length; dynamic or unsupported targets remain classified without preserving raw expressions. The optional endResponse Boolean is retained only for literal True or False.
+      - CompleteRequest admission requires a member-access receiver ending in ApplicationInstance. It is a request-lifecycle syntax candidate and does not prove framework receiver identity, pipeline behavior, request termination, method return, redirect completion, or runtime ordering.
+      - Server-control state mutation candidates cover a bounded property allowlist and correlate only a unique same-surface markup control ID. Assignments retain the property name, exact span, value-expression digest, and nearest supported If, ElseIf, Else, or single-line If context; they do not prove branch feasibility, rendered state, event execution, or business intent.
+      - Multiple controls may legitimately bind to one handler. Trigger bindings remain separate while identical handler behavior is emitted once with all retained handler-resolution facts as support.
+
   - id: legacy.webforms.postback-target.v1
     name: Legacy WebForms postback target candidates
     description: Emits bounded syntax candidates for literal __doPostBack targets in markup and literal registered client-script payloads, with same-surface control correlation where exact.

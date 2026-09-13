@@ -34,6 +34,11 @@ public sealed class WebFormsModernizationPacketTests
         File.WriteAllText(Path.Combine(repo, "OrderEditor.aspx.vb"), """
             Partial Public Class OrderEditor
                 Protected Sub SaveOrder_Click(sender As Object, e As EventArgs)
+                    If CanSave Then
+                        SaveOrder.Text = CurrentText
+                        Response.Redirect("Next.aspx", False)
+                        Context.ApplicationInstance.CompleteRequest()
+                    End If
                 End Sub
             End Class
             """);
@@ -58,6 +63,18 @@ public sealed class WebFormsModernizationPacketTests
             item.BehaviorKind == "client-event-binding"
             && item.SelectorKind == "id-contains"
             && item.SafeMetadata.GetValueOrDefault("controlId") == "OrderNameText");
+        Assert.Equal(3, written.Packet.Summary.ServerBehaviorCount);
+        Assert.Equal(3, written.Packet.ServerBehaviorInventory.Count);
+        Assert.Contains(written.Packet.ServerBehaviorInventory, item =>
+            item.BehaviorKind == "navigation"
+            && item.SafeMetadata.GetValueOrDefault("endResponse") == "false");
+        Assert.Contains(written.Packet.ServerBehaviorInventory, item =>
+            item.BehaviorKind == "request-lifecycle"
+            && item.SafeMetadata.GetValueOrDefault("lifecycleOperation") == "complete-request");
+        Assert.Contains(written.Packet.ServerBehaviorInventory, item =>
+            item.BehaviorKind == "control-state-mutation"
+            && item.SafeMetadata.GetValueOrDefault("controlId") == "SaveOrder"
+            && item.SafeMetadata.GetValueOrDefault("branchContext") == "if");
 
         var docs = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
             index,
@@ -69,6 +86,11 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Equal(5, clientBehaviorChunks.Length);
         Assert.Contains(clientBehaviorChunks, chunk =>
             chunk.BodyMarkdown.Contains("SaveOrder_Click", StringComparison.Ordinal));
+        var serverBehaviorChunks = docs.Chunks.Where(chunk =>
+            chunk.Title == "Web Forms server behavior evidence").ToArray();
+        Assert.Equal(3, serverBehaviorChunks.Length);
+        Assert.Contains(serverBehaviorChunks, chunk =>
+            chunk.BodyMarkdown.Contains("complete-request", StringComparison.Ordinal));
     }
 
     [Theory]

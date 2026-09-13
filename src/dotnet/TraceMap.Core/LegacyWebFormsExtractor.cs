@@ -37,6 +37,20 @@ public static partial class LegacyWebFormsExtractor
         "DataSource"
     };
 
+    private static readonly HashSet<string> ServerControlStateMemberNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Checked",
+        "CssClass",
+        "DataSource",
+        "Enabled",
+        "ReadOnly",
+        "Selected",
+        "SelectedIndex",
+        "Text",
+        "Value",
+        "Visible"
+    };
+
     private static readonly HashSet<string> ClientScriptRegistrationMethods = new(StringComparer.Ordinal)
     {
         "RegisterStartupScript",
@@ -121,7 +135,8 @@ public static partial class LegacyWebFormsExtractor
             .Where(fact => fact.FactType is not (FactTypes.WebFormsHandlerResolved or FactTypes.WebFormsEventBindingDeclared))
             .ToArray();
         var directEvidenceIndex = WebFormsDirectEvidenceIndex.Create(candidateDirectFacts);
-        foreach (var resolution in facts.Where(fact => fact.FactType == FactTypes.WebFormsHandlerResolved).ToArray())
+        var resolutions = facts.Where(fact => fact.FactType == FactTypes.WebFormsHandlerResolved).ToArray();
+        foreach (var resolution in resolutions)
         {
             facts.Add(CreateFlowFact(manifest, resolution, directEvidenceIndex, serviceMappings));
             var logicSignal = CreateLogicSignalFact(manifest, resolution, context, directEvidenceIndex, serviceMappings);
@@ -129,6 +144,11 @@ public static partial class LegacyWebFormsExtractor
             {
                 facts.Add(logicSignal);
             }
+        }
+        foreach (var resolutionGroup in resolutions
+            .GroupBy(resolution => string.Join("|", resolution.Properties.GetValueOrDefault("surfaceIdentity"), resolution.Evidence.FilePath, resolution.Evidence.StartLine, resolution.Evidence.EndLine, resolution.Properties.GetValueOrDefault("handlerName")), StringComparer.Ordinal))
+        {
+            facts.AddRange(CreateServerBehaviorFacts(manifest, resolutionGroup.ToArray(), context));
         }
 
         return facts
@@ -2578,6 +2598,162 @@ public static partial class LegacyWebFormsExtractor
                 ["uiBoilerplateSignal"] = hasUiOnly.ToString(),
                 ["ruleLimitations"] = "Logic signals are deterministic static heuristics, not proof of business logic or code quality."
             });
+    }
+
+    private static IReadOnlyList<CodeFact> CreateServerBehaviorFacts(
+        ScanManifest manifest,
+        IReadOnlyList<CodeFact> resolutions,
+        WebFormsContext context)
+    {
+        var resolution = resolutions.OrderBy(fact => fact.FactId, StringComparer.Ordinal).First();
+        var handlerName = resolution.Properties.GetValueOrDefault("handlerName") ?? resolution.ContractElement ?? string.Empty;
+        var markupFile = resolution.Properties.GetValueOrDefault("markupFile") ?? string.Empty;
+        var page = context.Pages.FirstOrDefault(candidate => candidate.FilePath.Equals(markupFile, StringComparison.Ordinal));
+        var method = context.CodeFiles.FirstOrDefault(file => file.FilePath.Equals(resolution.Evidence.FilePath, StringComparison.Ordinal))?.Methods
+            .FirstOrDefault(candidate => IdentifierEquals(candidate.MethodName, handlerName, IsVisualBasicMethod(candidate))
+                && candidate.Line == resolution.Evidence.StartLine && candidate.EndLine == resolution.Evidence.EndLine);
+        if (page is null || method?.Declaration is not VBSyntax.MethodBlockBaseSyntax visualBasicMethod)
+        {
+            return [];
+        }
+
+        var facts = new List<CodeFact>();
+        var surfaceIdentity = SurfaceIdentity(page.FilePath);
+        var supportingFactIds = string.Join(",", resolutions.Select(fact => fact.FactId).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal));
+        foreach (var invocation in visualBasicMethod.DescendantNodes().OfType<VBSyntax.InvocationExpressionSyntax>())
+        {
+            var invocationName = invocation.Expression switch
+            {
+                VBSyntax.IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+                VBSyntax.MemberAccessExpressionSyntax member => member.Name.Identifier.ValueText,
+                _ => string.Empty
+            };
+            if (invocationName.Equals("Redirect", StringComparison.OrdinalIgnoreCase)
+                && invocation.Expression is VBSyntax.MemberAccessExpressionSyntax redirectMember
+                && redirectMember.Expression.ToString().EndsWith("Response", StringComparison.OrdinalIgnoreCase))
+            {
+                var arguments = invocation.ArgumentList?.Arguments.OfType<VBSyntax.SimpleArgumentSyntax>().ToArray() ?? [];
+                var targetExpression = arguments.FirstOrDefault()?.Expression;
+                var literalTarget = targetExpression is VBSyntax.LiteralExpressionSyntax literal && literal.IsKind(VB.SyntaxKind.StringLiteralExpression)
+                    ? literal.Token.ValueText
+                    : null;
+                var properties = ServerBehaviorProperties(surfaceIdentity, page, handlerName, supportingFactIds, "navigation");
+                properties["navigationKind"] = "response-redirect";
+                properties["targetResolution"] = literalTarget is null ? "dynamic-or-unsupported" : "static-string-literal";
+                if (targetExpression is not null)
+                {
+                    properties["targetExpressionHash"] = FactFactory.Hash(targetExpression.ToString(), 32);
+                }
+                if (literalTarget is not null)
+                {
+                    properties["targetValueHash"] = FactFactory.Hash(literalTarget, 32);
+                    properties["targetValueLength"] = literalTarget.Length.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                }
+                properties["endResponse"] = arguments.Length > 1 && arguments[1].Expression.IsKind(VB.SyntaxKind.FalseLiteralExpression)
+                    ? "false"
+                    : arguments.Length > 1 && arguments[1].Expression.IsKind(VB.SyntaxKind.TrueLiteralExpression) ? "true" : "unknown";
+                facts.Add(CreateServerBehaviorFact(manifest, FactTypes.WebFormsServerNavigationCandidate, invocation, method.FilePath, surfaceIdentity, handlerName, properties));
+            }
+            else if (invocationName.Equals("CompleteRequest", StringComparison.OrdinalIgnoreCase)
+                && invocation.Expression is VBSyntax.MemberAccessExpressionSyntax completeRequestMember
+                && completeRequestMember.Expression.ToString().EndsWith("ApplicationInstance", StringComparison.OrdinalIgnoreCase))
+            {
+                var properties = ServerBehaviorProperties(surfaceIdentity, page, handlerName, supportingFactIds, "request-lifecycle");
+                properties["lifecycleOperation"] = "complete-request";
+                facts.Add(CreateServerBehaviorFact(manifest, FactTypes.WebFormsRequestLifecycleCandidate, invocation, method.FilePath, surfaceIdentity, handlerName, properties));
+            }
+        }
+
+        foreach (var assignment in visualBasicMethod.DescendantNodes().OfType<VBSyntax.AssignmentStatementSyntax>())
+        {
+            if (assignment.Left is not VBSyntax.MemberAccessExpressionSyntax member
+                || !ServerControlStateMemberNames.Contains(member.Name.Identifier.ValueText))
+            {
+                continue;
+            }
+            var receiver = VisualBasicReceiverName(member.Expression);
+            var controls = page.Controls.Where(control => control.ControlId.Equals(receiver, StringComparison.OrdinalIgnoreCase)).ToArray();
+            var targetResolution = controls.Length == 1 ? "same-surface-control" : controls.Length == 0 ? "unresolved" : "ambiguous";
+            var targetIdentity = controls.Length == 1 ? ControlIdentity(surfaceIdentity, controls[0]) : null;
+            var properties = ServerBehaviorProperties(surfaceIdentity, page, handlerName, supportingFactIds, "control-state-mutation");
+            properties["controlId"] = SafeIdentifier(receiver) ?? "unresolved";
+            properties["stateMember"] = member.Name.Identifier.ValueText.ToLowerInvariant();
+            properties["targetResolution"] = targetResolution;
+            properties["valueExpressionHash"] = FactFactory.Hash(assignment.Right.ToString(), 32);
+            AddVisualBasicBranchContext(properties, assignment);
+            facts.Add(CreateServerBehaviorFact(manifest, FactTypes.WebFormsServerControlStateMutationCandidate, assignment, method.FilePath, surfaceIdentity, targetIdentity ?? handlerName, properties));
+        }
+        return facts;
+    }
+
+    private static SortedDictionary<string, string> ServerBehaviorProperties(
+        string surfaceIdentity,
+        WebFormsPage page,
+        string handlerName,
+        string supportingFactIds,
+        string behaviorKind) => new(StringComparer.Ordinal)
+    {
+        ["behaviorKind"] = behaviorKind,
+        ["coverageLabel"] = "reduced-static-webforms-server-behavior",
+        ["handlerName"] = handlerName,
+        ["markupFile"] = page.FilePath,
+        ["pageTypeName"] = page.PageTypeName,
+        ["ruleLimitations"] = "Projectless VB server behavior is syntax evidence only and does not prove framework receiver identity, branch feasibility, event execution, navigation, request termination, rendered control state, or runtime ordering.",
+        ["supportingFactIds"] = supportingFactIds,
+        ["surfaceIdentity"] = surfaceIdentity
+    };
+
+    private static CodeFact CreateServerBehaviorFact(
+        ScanManifest manifest,
+        string factType,
+        SyntaxNode node,
+        string filePath,
+        string sourceSymbol,
+        string targetSymbol,
+        SortedDictionary<string, string> properties)
+    {
+        var span = node.SyntaxTree.GetLineSpan(node.Span);
+        return FactFactory.Create(
+            manifest,
+            factType,
+            RuleIds.LegacyWebFormsServerBehavior,
+            EvidenceTiers.Tier3SyntaxOrTextual,
+            new EvidenceSpan(filePath, span.StartLinePosition.Line + 1, Math.Max(span.StartLinePosition.Line + 1, span.EndLinePosition.Line + 1), FactFactory.Hash(node.ToString(), 32), "LegacyWebFormsExtractor", ScannerVersions.LegacyWebFormsExtractor),
+            sourceSymbol: sourceSymbol,
+            targetSymbol: targetSymbol,
+            contractElement: properties.GetValueOrDefault("stateMember") ?? properties.GetValueOrDefault("navigationKind") ?? properties.GetValueOrDefault("lifecycleOperation"),
+            properties: properties);
+    }
+
+    private static void AddVisualBasicBranchContext(SortedDictionary<string, string> properties, SyntaxNode node)
+    {
+        var elseIf = node.Ancestors().OfType<VBSyntax.ElseIfBlockSyntax>().FirstOrDefault();
+        if (elseIf is not null)
+        {
+            properties["branchContext"] = "else-if";
+            properties["conditionHash"] = FactFactory.Hash(elseIf.ElseIfStatement.Condition.ToString(), 32);
+            return;
+        }
+        if (node.Ancestors().OfType<VBSyntax.ElseBlockSyntax>().Any())
+        {
+            properties["branchContext"] = "else";
+            return;
+        }
+        var multiLineIf = node.Ancestors().OfType<VBSyntax.MultiLineIfBlockSyntax>().FirstOrDefault();
+        if (multiLineIf is not null)
+        {
+            properties["branchContext"] = "if";
+            properties["conditionHash"] = FactFactory.Hash(multiLineIf.IfStatement.Condition.ToString(), 32);
+            return;
+        }
+        var singleLineIf = node.Ancestors().OfType<VBSyntax.SingleLineIfStatementSyntax>().FirstOrDefault();
+        if (singleLineIf is not null)
+        {
+            properties["branchContext"] = "single-line-if";
+            properties["conditionHash"] = FactFactory.Hash(singleLineIf.Condition.ToString(), 32);
+            return;
+        }
+        properties["branchContext"] = "unconditional";
     }
 
     private static bool IsDirectHandlerEvidence(CodeFact fact, CodeFact resolution)

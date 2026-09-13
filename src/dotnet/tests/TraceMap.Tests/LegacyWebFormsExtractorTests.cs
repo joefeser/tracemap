@@ -1787,7 +1787,7 @@ public sealed class LegacyWebFormsExtractorTests
         Assert.All(events.Concat(mutations).Append(constraint), fact =>
         {
             Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, fact.EvidenceTier);
-            Assert.Equal("legacy-webforms/0.9.0", fact.Evidence.ExtractorVersion);
+            Assert.Equal("legacy-webforms/0.9.1", fact.Evidence.ExtractorVersion);
             Assert.DoesNotContain("Saving", JsonSerializer.Serialize(fact), StringComparison.Ordinal);
         });
     }

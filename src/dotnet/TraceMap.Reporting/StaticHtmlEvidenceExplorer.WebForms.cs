@@ -435,7 +435,7 @@ public static partial class StaticHtmlEvidenceExplorer
             || packet.Projects is null || packet.Surfaces is null || packet.EventChains is null
             || packet.DownstreamBoundaries is null || packet.IdentityStateInventory is null
             || packet.BatchDataMovementInventory is null
-            || packet.StructuralSliceCandidates is null || packet.ClientBehaviorInventory is null || packet.Gaps is null
+            || packet.StructuralSliceCandidates is null || packet.ClientBehaviorInventory is null || packet.ServerBehaviorInventory is null || packet.Gaps is null
             || packet.OwnerQuestions is null || packet.Limitations is null
             || packet.SurfaceSelection is { } selection
                 && (selection.RuleId != WebFormsModernizationPacketReporter.PacketRuleId
@@ -456,7 +456,7 @@ public static partial class StaticHtmlEvidenceExplorer
                 packet.Projects.Count, packet.Surfaces.Count, packet.EventChains.Count,
                 packet.DownstreamBoundaries.Count, packet.IdentityStateInventory.Count,
                 packet.BatchDataMovementInventory.Count,
-                packet.StructuralSliceCandidates.Count, packet.ClientBehaviorInventory.Count, packet.Gaps.Count,
+                packet.StructuralSliceCandidates.Count, packet.ClientBehaviorInventory.Count, packet.ServerBehaviorInventory.Count, packet.Gaps.Count,
                 packet.OwnerQuestions.Count, packet.Limitations.Count
             }.Any(count => count > MaxWebFormsRowsPerCollection)
             || packet.Summary.ProjectCount != packet.Projects.Count
@@ -467,6 +467,7 @@ public static partial class StaticHtmlEvidenceExplorer
             || packet.Summary.BatchDataMovementCount != packet.BatchDataMovementInventory.Count
             || packet.Summary.StructuralSliceCandidateCount != packet.StructuralSliceCandidates.Count
             || packet.Summary.ClientBehaviorCount != packet.ClientBehaviorInventory.Count
+            || packet.Summary.ServerBehaviorCount != packet.ServerBehaviorInventory.Count
             || packet.Summary.GapCount != packet.Gaps.Count)
         {
             throw new InvalidDataException("unsupported Web Forms packet");
@@ -483,6 +484,7 @@ public static partial class StaticHtmlEvidenceExplorer
             || packet.BatchDataMovementInventory.Select(item => item.BatchDataMovementId).Distinct(StringComparer.Ordinal).Count() != packet.BatchDataMovementInventory.Count
             || packet.StructuralSliceCandidates.Select(candidate => candidate.CandidateId).Distinct(StringComparer.Ordinal).Count() != packet.StructuralSliceCandidates.Count
             || packet.ClientBehaviorInventory.Select(item => item.ClientBehaviorId).Distinct(StringComparer.Ordinal).Count() != packet.ClientBehaviorInventory.Count
+            || packet.ServerBehaviorInventory.Select(item => item.ServerBehaviorId).Distinct(StringComparer.Ordinal).Count() != packet.ServerBehaviorInventory.Count
             || packet.Gaps.Select(gap => gap.GapId).Distinct(StringComparer.Ordinal).Count() != packet.Gaps.Count
             || packet.Surfaces.Any(surface => !projectIds.Contains(surface.ProjectId))
             || packet.Projects.Any(project => project.SurfaceCount != packet.Surfaces.Count(surface => surface.ProjectId == project.ProjectId))
@@ -490,6 +492,7 @@ public static partial class StaticHtmlEvidenceExplorer
             || packet.DownstreamBoundaries.Any(boundary => !surfaceIds.Contains(boundary.SurfaceId) || !chainIds.Contains(boundary.ChainId))
             || packet.IdentityStateInventory.Any(state => state.SurfaceId is not null && !surfaceIds.Contains(state.SurfaceId))
             || packet.ClientBehaviorInventory.Any(item => !surfaceIds.Contains(item.SurfaceId))
+            || packet.ServerBehaviorInventory.Any(item => !surfaceIds.Contains(item.SurfaceId))
             || packet.SurfaceSelection?.Items.Any(item => item.Status == "matched"
                 && item.SurfaceIds.Any(id => !surfaceIds.Contains(id))
                 && !packet.Summary.Truncated) == true
@@ -596,6 +599,16 @@ public static partial class StaticHtmlEvidenceExplorer
                 || string.IsNullOrWhiteSpace(item.TargetResolution) || item.SafeMetadata is null
                 || item.Evidence is null || item.SupportingFactIds is null || item.Limitations is null)
                 throw new InvalidDataException("invalid Web Forms client behavior");
+            ValidateWebFormsEvidence(item.Evidence, sourceCommitSha);
+            evidenceCount++;
+        }
+        foreach (var item in packet.ServerBehaviorInventory)
+        {
+            if (string.IsNullOrWhiteSpace(item.ServerBehaviorId) || string.IsNullOrWhiteSpace(item.BehaviorKind)
+                || string.IsNullOrWhiteSpace(item.SurfaceId) || string.IsNullOrWhiteSpace(item.TargetResolution)
+                || item.SafeMetadata is null || item.Evidence is null || item.SupportingFactIds is null
+                || item.Limitations is null)
+                throw new InvalidDataException("invalid Web Forms server behavior");
             ValidateWebFormsEvidence(item.Evidence, sourceCommitSha);
             evidenceCount++;
         }
