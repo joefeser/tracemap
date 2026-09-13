@@ -8,6 +8,7 @@ import { createEvidence, createFact } from "../facts/FactFactory";
 import { RuleIds, ScannerVersions } from "../facts/RuleIds";
 import { hash } from "../util/Hash";
 import { extractEntityShapeFacts } from "./Base44EntityShapeExtractor";
+import { extractBase44UiInputFacts } from "./Base44UiInputSemanticsExtractor";
 
 const entityOperations = new Set(["list", "filter", "get", "create", "update", "delete", "deleteMany", "bulkCreate", "importEntities", "subscribe", "upsert"]);
 const primitiveRoots = new Set([
@@ -24,6 +25,7 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
   const migrationItems = inventory.filter((file) => !file.skipped && file.relativePath.endsWith(".sql") && isMigrationPath(file.relativePath));
   const aliasDiscovery = await buildAliasMaps(sourceItems);
   const frontendPackageAuthority = await loadFrontendPackageAuthority(inventory);
+  facts.push(...await packageAuthorityFacts(manifest, frontendPackageAuthority, inventory));
   for (const item of inventory.filter((file) => !file.skipped)) {
     if (item.relativePath.endsWith(".sql")) {
       continue;
@@ -82,8 +84,41 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
     || candidate.factType === FactTypes.Base44CustomerBoundary);
   if (hasBase44Signal) {
     for (const item of migrationItems) facts.push(await sqlFact(manifest, item));
+    for (const item of sourceItems.filter((candidate) => isUiAuthorityPath(candidate.relativePath))) {
+      const context = aliasDiscovery.contexts.get(item.relativePath);
+      if (!context) continue;
+      facts.push(...extractBase44UiInputFacts(manifest, context.source, item.relativePath, context.source.getFullText(), facts));
+    }
   }
   return facts;
+}
+
+function isUiAuthorityPath(filePath: string): boolean {
+  const segments = filePath.toLowerCase().split("/");
+  const basename = segments.at(-1) ?? "";
+  if (segments.some((segment) => [
+    "docs",
+    "fixtures",
+    "fixture",
+    "__fixtures__",
+    "tests",
+    "test",
+	    "__tests__",
+	    "mocks",
+	    "__mocks__",
+	    "mock",
+    "stories",
+    "story",
+    "generated",
+    "__generated__",
+  ].includes(segment))) return false;
+  if (/(?:^|[._-])(?:test|spec|stories|story|generated)(?:[._-]|$)/iu.test(basename)) return false;
+  if (/(?:^|[._-])story[A-Z0-9_-]/iu.test(pathBasenamePreserveCase(filePath))) return false;
+  return true;
+}
+
+function pathBasenamePreserveCase(filePath: string): string {
+  return filePath.split("/").at(-1) ?? filePath;
 }
 
 function visit(node: ts.Node, source: ts.SourceFile, filePath: string, text: string, aliases: Map<string, string[]>, factoryAliases: Set<string>, injectedParameters: Map<number, string[]>, base44Context: boolean, manifest: ScanManifest, facts: CodeFact[], sdkIdentity: SdkIdentityResolution, contexts: Map<string, SourceContext>): void {
@@ -3515,6 +3550,40 @@ async function loadFrontendPackageAuthority(inventory: readonly FileInventoryIte
   } catch {
     return { gap: "sdk-identity-package-authority-invalid" };
   }
+}
+
+async function packageAuthorityFacts(
+  manifest: ScanManifest,
+  authority: FrontendPackageAuthority,
+  inventory: readonly FileInventoryItem[]
+): Promise<CodeFact[]> {
+  if (!authority.identityEvidence?.length || !authority.version) return [];
+  const byPath = new Map(inventory.filter((item) => !item.skipped).map((item) => [item.relativePath, item]));
+  const output: CodeFact[] = [];
+  for (const item of authority.identityEvidence) {
+    if (item.kind !== "package-manifest" && item.kind !== "package-lock-resolution") continue;
+    const inventoryItem = byPath.get(item.authorityPath);
+    if (!inventoryItem) continue;
+    const text = await fs.readFile(inventoryItem.absolutePath, "utf8");
+    output.push(createFact(
+      manifest,
+      FactTypes.Base44SdkImport,
+      RuleIds.Base44SdkImport,
+      EvidenceTiers.Tier3SyntaxOrTextual,
+      createEvidence(item.authorityPath, 1, Math.max(1, text.split(/\r?\n/u).length), "base44-evidence", ScannerVersions.Base44EvidenceExtractor, hash(text, 64)),
+      {
+        targetSymbol: "@base44/sdk",
+        contractElement: item.kind,
+        properties: {
+          requestedPackage: "@base44/sdk",
+          requestedVersion: authority.version,
+          importKind: item.kind,
+          sourceFileSha256: item.authoritySha256
+        }
+      }
+    ));
+  }
+  return output;
 }
 
 function resolveSdkIdentity(roots: SdkAuthorityRoot[], frontend: FrontendPackageAuthority): SdkIdentityResolution {
