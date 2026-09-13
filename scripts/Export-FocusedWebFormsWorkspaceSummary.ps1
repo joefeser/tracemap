@@ -12,7 +12,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $culture = [Globalization.CultureInfo]::InvariantCulture
 $safeToken = '^[A-Za-z][A-Za-z0-9._-]{0,99}$'
-$safeDiagnosticId = '^(?:CS|MSB)[0-9]{4}$'
+$safeDiagnosticId = '^(?:CS[0-9]{4}|MSB[0-9]{4}|BC[0-9]{5})$'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $isWindowsPlatform = [IO.Path]::DirectorySeparatorChar -eq '\'
 
@@ -34,7 +34,8 @@ function Get-ScopeRole {
     if ([string]::IsNullOrWhiteSpace($FilePath)) { return 'unknown' }
     $normalized = Normalize-RelativePath $FilePath
     foreach ($scope in @($script:scopes | Sort-Object { $_.Prefix.Length } -Descending)) {
-        if ($normalized.Equals($scope.Prefix, [StringComparison]::OrdinalIgnoreCase) -or
+        if ([string]::IsNullOrEmpty($scope.Prefix) -or
+            $normalized.Equals($scope.Prefix, [StringComparison]::OrdinalIgnoreCase) -or
             $normalized.StartsWith($scope.Prefix + '/', [StringComparison]::OrdinalIgnoreCase)) {
             return $scope.Role
         }
@@ -52,16 +53,31 @@ function Test-WithinPath {
 
 try {
     if ($TraceMapHead -notmatch '^[0-9a-fA-F]{40}$') { throw 'TraceMapHeadInvalid' }
-    $folders = @($WebFormsFolder, $BackendFolder, $ControlsFolder) | ForEach-Object { Normalize-RelativePath $_ }
-    if (@($folders | Select-Object -Unique).Count -ne 3 -or
-        @($folders | Where-Object { [string]::IsNullOrWhiteSpace($_) -or [IO.Path]::IsPathRooted($_) -or $_ -match '(^|/)\.\.($|/)' }).Count -ne 0) {
+    $folderInputs = @($WebFormsFolder, $BackendFolder, $ControlsFolder)
+    if (@($folderInputs | Where-Object {
+        [string]::IsNullOrWhiteSpace($_) -or
+        [IO.Path]::IsPathRooted($_) -or
+        (Normalize-RelativePath $_) -match '(^|/)\.\.($|/)'
+    }).Count -ne 0) {
         throw 'WorkspaceScopeInvalid'
     }
-    $script:scopes = @(
+    $folders = @($folderInputs | ForEach-Object {
+        $normalized = Normalize-RelativePath $_
+        if ($normalized -eq '.') { '' } else { $normalized }
+    })
+    $scopeCandidates = @(
         [pscustomobject]@{ Role = 'webforms'; Prefix = $folders[0] },
         [pscustomobject]@{ Role = 'backend'; Prefix = $folders[1] },
         [pscustomobject]@{ Role = 'controls'; Prefix = $folders[2] }
     )
+    $script:scopes = @($scopeCandidates |
+        Group-Object { $_.Prefix.ToLowerInvariant() } |
+        ForEach-Object {
+            [pscustomobject]@{
+                Role = if ($_.Count -eq 1) { $_.Group[0].Role } else { 'application' }
+                Prefix = $_.Group[0].Prefix
+            }
+        })
 
     $reviewRoot = [IO.Path]::GetFullPath($ReviewOutputPath)
     if (-not (Test-Path -LiteralPath $reviewRoot -PathType Container)) { throw 'RetainedOutputUnavailable' }
@@ -103,7 +119,7 @@ try {
             }
         }
         $ruleId = [string](Get-OptionalProperty $fact 'ruleId')
-        if ($factType -eq 'AnalysisGap' -and $ruleId -eq 'csharp.semantic.workspace.v1' -and
+        if ($factType -eq 'AnalysisGap' -and $ruleId -in @('csharp.semantic.workspace.v1', 'vb.semantic.workspace.v1') -and
             [string](Get-OptionalProperty $properties 'gapKind') -eq 'CompilationDiagnostic') {
             $code = [string](Get-OptionalProperty $properties 'diagnosticCode')
             $guidance = [string](Get-OptionalProperty $properties 'guidanceCode')
