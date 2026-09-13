@@ -1745,8 +1745,8 @@ public sealed class LegacyWebFormsExtractorTests
                     $("#ctl00_ContentPlaceHolder1_CancelEdit").prop('disabled', true);
                   $(this).removeClass('modern-gold').addClass('light-gray text-red').attr('value', 'Saving...');
                 });
-                $("[id$=OrderNameText]").keyup(function () {
-                  var maxlength = 50;
+                var maxlength = 50;
+                $("[id*=OrderNameText]").keyup(function () {
                   var textlen = maxlength - $(this).val().length;
                   $("#rchars").text(textlen + " characters remaining");
                 });
@@ -1772,12 +1772,17 @@ public sealed class LegacyWebFormsExtractorTests
         Assert.Equal("SaveOrder_Click", click.Properties.GetValueOrDefault("serverHandlerName"));
         Assert.Equal("true", click.Properties.GetValueOrDefault("generatedClientIdDependency"));
         Assert.True(click.Evidence.EndLine > click.Evidence.StartLine);
+        var keyup = Assert.Single(events, fact => fact.Properties.GetValueOrDefault("clientEventName") == "keyup");
+        Assert.Equal("id-contains", keyup.Properties.GetValueOrDefault("selectorKind"));
+        Assert.Equal("OrderNameText", keyup.Properties.GetValueOrDefault("controlId"));
+        Assert.Equal("true", keyup.Properties.GetValueOrDefault("generatedClientIdDependency"));
         Assert.Contains(mutations, fact => fact.Properties.GetValueOrDefault("mutationKinds") == "class-add");
         Assert.Contains(mutations, fact => fact.Properties.GetValueOrDefault("mutationKinds") == "disable");
         Assert.Contains(mutations, fact => fact.Properties.GetValueOrDefault("mutationKinds") == "class-add,class-remove,value-set");
         Assert.Contains(mutations, fact => fact.Properties.GetValueOrDefault("mutationKinds") == "text-set");
         Assert.Equal("maximum-length", constraint.Properties.GetValueOrDefault("constraintKind"));
         Assert.Equal("50", constraint.Properties.GetValueOrDefault("constraintValue"));
+        Assert.True(constraint.Evidence.StartLine < keyup.Evidence.StartLine);
         Assert.Equal(RuleIds.LegacyWebFormsInlineClientBehavior, constraint.RuleId);
         Assert.All(events.Concat(mutations).Append(constraint), fact =>
         {

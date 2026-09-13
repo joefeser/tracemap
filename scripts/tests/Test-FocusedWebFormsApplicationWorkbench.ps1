@@ -65,6 +65,7 @@ try {
         if (!(Test-Path -LiteralPath (Join-Path $workbench $expected) -PathType Leaf)) { throw "Missing workbench file: $expected" }
     }
     $index = [IO.File]::ReadAllText((Join-Path $workbench 'index.html'))
+    if (!$index.Contains('<th>Client behaviors</th>', [StringComparison]::Ordinal)) { throw 'Application index omitted client-behavior counts.' }
     if ($index.IndexOf('Pages/First.aspx', [StringComparison]::Ordinal) -gt $index.IndexOf('Pages/Second.aspx', [StringComparison]::Ordinal)) { throw 'Pages were not ordered by retained path.' }
     if (!$index.Contains('43', [StringComparison]::Ordinal) -and !$index.Contains('2 selected surfaces', [StringComparison]::Ordinal)) { throw 'Index did not report surface count.' }
     $first = [IO.File]::ReadAllText((Join-Path $workbench 'page-001.html'))

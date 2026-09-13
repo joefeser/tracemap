@@ -92,7 +92,7 @@ authorized private machine when bounded working-tree excerpts are needed.
 
 When the scan observes supported inline jQuery shapes, each page report also
 lists client event bindings, UI-mutation candidates, and numeric maximum-length
-constraints with exact markup spans. Literal ID and ID-suffix selectors are
+constraints with exact markup spans. Literal ID, ID-suffix, and ID-contains selectors are
 correlated to controls declared on the same surface; generated ASP.NET client
 IDs are labeled explicitly. These Tier3 records are static candidates only:
 they do not prove DOM selection, browser execution, postback, or server-handler

@@ -25,8 +25,8 @@ public sealed class WebFormsModernizationPacketTests
             $("#ctl00_ContentPlaceHolder1_SaveOrder").on('click', function () {
               $(this).attr('value', 'Saving...');
             });
-            $("[id$=OrderNameText]").keyup(function () {
-              var maxlength = 50;
+            var maxlength = 50;
+            $("[id*=OrderNameText]").keyup(function () {
               $("#rchars").text(maxlength - $(this).val().length);
             });
             </script>
@@ -54,6 +54,10 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Contains(written.Packet.ClientBehaviorInventory, item =>
             item.BehaviorKind == "validation-constraint"
             && item.SafeMetadata.GetValueOrDefault("constraintValue") == "50");
+        Assert.Contains(written.Packet.ClientBehaviorInventory, item =>
+            item.BehaviorKind == "client-event-binding"
+            && item.SelectorKind == "id-contains"
+            && item.SafeMetadata.GetValueOrDefault("controlId") == "OrderNameText");
 
         var docs = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
             index,

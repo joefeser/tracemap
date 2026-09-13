@@ -1984,9 +1984,18 @@ public static partial class LegacyWebFormsExtractor
                         mutationEndLine));
                 }
 
-                foreach (Match constraint in ClientMaximumLengthRegex().Matches(callback))
+                foreach (Match constraint in ClientMaximumLengthRegex().Matches(body.Value))
                 {
-                    var constraintStart = callbackStart + constraint.Index;
+                    var constraintStart = body.Index + constraint.Index;
+                    var constraintName = constraint.Groups["name"].Value;
+                    var insideCallback = constraintStart >= callbackStart && constraintStart < absoluteEnd;
+                    var boundedPrecedingDeclaration = constraint.Index < binding.Index
+                        && binding.Index - (constraint.Index + constraint.Length) <= 4096
+                        && Regex.IsMatch(callback, $@"\b{Regex.Escape(constraintName)}\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(250));
+                    if (!insideCallback && !boundedPrecedingDeclaration)
+                    {
+                        continue;
+                    }
                     var constraintLine = LineAt(source, constraintStart);
                     var constraintIdentity = $"webforms-client-constraint:{FactFactory.Hash($"{identity}|maximum-length|{constraint.Groups["value"].Value}|{constraintLine}", 24)}";
                     facts.Add(CreateStaticCompositionFact(
@@ -2001,7 +2010,7 @@ public static partial class LegacyWebFormsExtractor
                         constraintIdentity,
                         "maximum-length",
                         "bounded-static-webforms-inline-client-behavior",
-                        "A numeric maximum-length variable inside a supported client event callback is a validation/display candidate only; enforcement, user visibility, and business intent are not proven.",
+                        "A numeric maximum-length variable declared inside a supported callback or in a bounded preceding script scope and referenced by that callback is a validation/display candidate only; enforcement, user visibility, and business intent are not proven.",
                         [pageFact.FactId, matchingControlFact?.FactId],
                         new SortedDictionary<string, string>(StringComparer.Ordinal)
                         {
@@ -2031,11 +2040,11 @@ public static partial class LegacyWebFormsExtractor
         }
         else
         {
-            var suffix = ClientIdSuffixSelectorRegex().Match(selector);
-            if (suffix.Success)
+            var generatedId = ClientGeneratedIdSelectorRegex().Match(selector);
+            if (generatedId.Success)
             {
-                kind = "id-suffix";
-                target = suffix.Groups["target"].Value;
+                kind = generatedId.Groups["operator"].Value == "$" ? "id-suffix" : "id-contains";
+                target = generatedId.Groups["target"].Value;
             }
             else if (selector.StartsWith('.') && ClientSelectorTokenRegex().IsMatch(selector[1..]))
             {
@@ -2055,7 +2064,8 @@ public static partial class LegacyWebFormsExtractor
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
         var controlId = matches.Length == 1 ? matches[0] : null;
-        var generated = kind == "exact-id" && controlId is not null && !target.Equals(controlId, StringComparison.OrdinalIgnoreCase);
+        var generated = controlId is not null && (kind is "id-suffix" or "id-contains"
+            || kind == "exact-id" && !target.Equals(controlId, StringComparison.OrdinalIgnoreCase));
         return new ClientSelector(kind, target, controlId, generated);
     }
 
@@ -3653,14 +3663,14 @@ public static partial class LegacyWebFormsExtractor
     [GeneratedRegex(@"\.(?<method>show|hide|addClass|removeClass|prop|attr|text)\s*\(", RegexOptions.IgnoreCase)]
     private static partial Regex JQueryMutationMethodRegex();
 
-    [GeneratedRegex(@"\b(?:var|let|const)\s+max(?:imum)?length\s*=\s*(?<value>[1-9][0-9]{0,5})\s*;", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"\b(?:var|let|const)\s+(?<name>max(?:imum)?length)\s*=\s*(?<value>[1-9][0-9]{0,5})\s*;", RegexOptions.IgnoreCase)]
     private static partial Regex ClientMaximumLengthRegex();
 
     [GeneratedRegex(@"^[A-Za-z_][A-Za-z0-9_:\-]{0,127}$")]
     private static partial Regex ClientSelectorTokenRegex();
 
-    [GeneratedRegex("""^\[\s*id\s*\$=\s*(?:["'])?(?<target>[A-Za-z_][A-Za-z0-9_:\-]{0,127})(?:["'])?\s*\]$""", RegexOptions.IgnoreCase)]
-    private static partial Regex ClientIdSuffixSelectorRegex();
+    [GeneratedRegex("""^\[\s*id\s*(?<operator>[*$])=\s*(?:["'])?(?<target>[A-Za-z_][A-Za-z0-9_:\-]{0,127})(?:["'])?\s*\]$""", RegexOptions.IgnoreCase)]
+    private static partial Regex ClientGeneratedIdSelectorRegex();
 
     private sealed class WebFormsEvidenceIndex(
         IReadOnlyDictionary<string, IReadOnlyList<CodeFact>> factsByFile,
