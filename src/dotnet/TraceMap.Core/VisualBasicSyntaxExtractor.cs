@@ -417,10 +417,10 @@ public static class VisualBasicSyntaxExtractor
                 continue;
             }
 
-            var memberName = memberAccess.Name.Identifier.ValueText;
+            var memberName = memberAccess.Name?.Identifier.ValueText ?? string.Empty;
             if (string.IsNullOrWhiteSpace(memberName))
             {
-                memberName = memberAccess.Name.ToString();
+                memberName = memberAccess.Name?.ToString() ?? string.Empty;
             }
             var expressionText = memberAccess.Expression?.ToString() ?? string.Empty;
             var expressionKind = memberAccess.Expression?.Kind().ToString() ?? "ImplicitWithReceiver";
@@ -464,9 +464,9 @@ public static class VisualBasicSyntaxExtractor
 
             foreach (var item in method.HandlesClause.Events)
             {
-                var eventName = item.EventMember.Identifier.ValueText;
+                var eventName = item.EventMember?.Identifier.ValueText ?? string.Empty;
                 var receiverName = SafeEventReceiverName(item.EventContainer);
-                if (string.IsNullOrWhiteSpace(receiverName))
+                if (string.IsNullOrWhiteSpace(receiverName) || string.IsNullOrWhiteSpace(eventName))
                 {
                     if (!AddSyntaxEventGap(manifest, facts, filePath, item, "UnsupportedVisualBasicEventReceiver", budget)) return;
                     continue;
@@ -541,7 +541,12 @@ public static class VisualBasicSyntaxExtractor
 
         foreach (var statement in root.DescendantNodes().OfType<RaiseEventStatementSyntax>())
         {
-            var eventName = statement.Name.Identifier.ValueText;
+            var eventName = statement.Name?.Identifier.ValueText ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(eventName))
+            {
+                if (!AddSyntaxEventGap(manifest, facts, filePath, statement, "UnsupportedVisualBasicEventName", budget)) return;
+                continue;
+            }
             if (!TryAddSyntaxFact(
                     manifest,
                     facts,
@@ -566,14 +571,14 @@ public static class VisualBasicSyntaxExtractor
         }
     }
 
-    private static (string ReceiverName, string EventName) SyntaxEventName(ExpressionSyntax expression) => expression switch
+    private static (string ReceiverName, string EventName) SyntaxEventName(ExpressionSyntax? expression) => expression switch
     {
-        MemberAccessExpressionSyntax member => (SafeEventReceiverName(member.Expression), member.Name.Identifier.ValueText),
+        MemberAccessExpressionSyntax member => (SafeEventReceiverName(member.Expression), member.Name?.Identifier.ValueText ?? string.Empty),
         IdentifierNameSyntax identifier => ("implicit", identifier.Identifier.ValueText),
         _ => ("unsupported", string.Empty)
     };
 
-    private static string SyntaxHandlerName(ExpressionSyntax expression)
+    private static string SyntaxHandlerName(ExpressionSyntax? expression)
     {
         if (expression is not UnaryExpressionSyntax unary || !unary.IsKind(SyntaxKind.AddressOfExpression))
         {
@@ -585,8 +590,9 @@ public static class VisualBasicSyntaxExtractor
         {
             IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
             MemberAccessExpressionSyntax member
-                when member.Expression.ToString().Equals("Me", StringComparison.OrdinalIgnoreCase)
-                    || member.Expression.ToString().Equals("MyClass", StringComparison.OrdinalIgnoreCase) => member.Name.Identifier.ValueText,
+                when member.Name is not null
+                    && (member.Expression?.ToString().Equals("Me", StringComparison.OrdinalIgnoreCase) == true
+                        || member.Expression?.ToString().Equals("MyClass", StringComparison.OrdinalIgnoreCase) == true) => member.Name.Identifier.ValueText,
             _ => string.Empty
         };
     }
@@ -601,9 +607,9 @@ public static class VisualBasicSyntaxExtractor
         if (text.Equals("Me", StringComparison.OrdinalIgnoreCase)
             || text.Equals("MyBase", StringComparison.OrdinalIgnoreCase)
             || text.Equals("MyClass", StringComparison.OrdinalIgnoreCase)) return text;
-        if (expression is MemberAccessExpressionSyntax member
-            && (member.Expression.ToString().Equals("Me", StringComparison.OrdinalIgnoreCase)
-                || member.Expression.ToString().Equals("MyClass", StringComparison.OrdinalIgnoreCase)))
+        if (expression is MemberAccessExpressionSyntax { Name: not null } member
+            && (member.Expression?.ToString().Equals("Me", StringComparison.OrdinalIgnoreCase) == true
+                || member.Expression?.ToString().Equals("MyClass", StringComparison.OrdinalIgnoreCase) == true))
         {
             return member.Name.Identifier.ValueText;
         }
@@ -919,7 +925,7 @@ public static class VisualBasicSyntaxExtractor
             IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
             MeExpressionSyntax => "Me",
             MyBaseExpressionSyntax => "MyBase",
-            MemberAccessExpressionSyntax memberAccess
+            MemberAccessExpressionSyntax { Name: not null } memberAccess
                 when GetSafeExpressionName(memberAccess.Expression) is { Length: > 0 } receiver =>
                 $"{receiver}.{memberAccess.Name.Identifier.ValueText}",
             InvocationExpressionSyntax invocation => GetInvocationName(invocation.Expression),

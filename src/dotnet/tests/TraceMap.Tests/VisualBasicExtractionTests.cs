@@ -262,6 +262,7 @@ public sealed class VisualBasicExtractionTests
                     With value
                         .Text = .Name
                         .Refresh()
+                        AddHandler .Changed, AddressOf .OnChanged
                     End With
                 End Sub
 
@@ -284,6 +285,10 @@ public sealed class VisualBasicExtractionTests
             fact.FactType == FactTypes.VisualBasicEventBindingDeclared
             && fact.RuleId == RuleIds.VisualBasicSyntaxEventWiring
             && fact.Properties.GetValueOrDefault("receiverName") == "Me");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.VisualBasicSyntaxEventWiring
+            && fact.Properties.GetValueOrDefault("gapKind") == "UnsupportedVisualBasicEventReceiver");
     }
 
     [Fact]

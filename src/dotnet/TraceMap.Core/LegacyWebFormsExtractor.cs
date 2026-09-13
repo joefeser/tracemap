@@ -792,28 +792,32 @@ public static partial class LegacyWebFormsExtractor
         return string.Join(".", namespaces.Concat(typeNames));
     }
 
-    private static string VisualBasicReceiverName(VBSyntax.ExpressionSyntax expression)
+    private static string VisualBasicReceiverName(VBSyntax.ExpressionSyntax? expression)
     {
+        if (expression is null)
+        {
+            return "unsupported-receiver";
+        }
         var text = expression.ToString();
         if (text.Equals("Me", StringComparison.OrdinalIgnoreCase) || text.Equals("MyClass", StringComparison.OrdinalIgnoreCase)) return "this";
         if (text.Equals("MyBase", StringComparison.OrdinalIgnoreCase)) return "base";
-        if (expression is VBSyntax.MemberAccessExpressionSyntax member
-            && (member.Expression.ToString().Equals("Me", StringComparison.OrdinalIgnoreCase)
-                || member.Expression.ToString().Equals("MyClass", StringComparison.OrdinalIgnoreCase)))
+        if (expression is VBSyntax.MemberAccessExpressionSyntax { Name: not null } member
+            && (member.Expression?.ToString().Equals("Me", StringComparison.OrdinalIgnoreCase) == true
+                || member.Expression?.ToString().Equals("MyClass", StringComparison.OrdinalIgnoreCase) == true))
         {
             return member.Name.Identifier.ValueText;
         }
         return SafeIdentifier(text) ?? "unsupported-receiver";
     }
 
-    private static (string? Receiver, string EventName) VisualBasicEventName(VBSyntax.ExpressionSyntax expression) => expression switch
+    private static (string? Receiver, string EventName) VisualBasicEventName(VBSyntax.ExpressionSyntax? expression) => expression switch
     {
-        VBSyntax.MemberAccessExpressionSyntax member => (VisualBasicReceiverName(member.Expression), member.Name.Identifier.ValueText),
+        VBSyntax.MemberAccessExpressionSyntax member => (VisualBasicReceiverName(member.Expression), member.Name?.Identifier.ValueText ?? string.Empty),
         VBSyntax.IdentifierNameSyntax identifier => (null, identifier.Identifier.ValueText),
         _ => ("unsupported-receiver", string.Empty)
     };
 
-    private static string? VisualBasicHandlerName(VBSyntax.ExpressionSyntax expression)
+    private static string? VisualBasicHandlerName(VBSyntax.ExpressionSyntax? expression)
     {
         if (expression is not VBSyntax.UnaryExpressionSyntax unary || !unary.IsKind(VB.SyntaxKind.AddressOfExpression))
         {
@@ -824,9 +828,9 @@ public static partial class LegacyWebFormsExtractor
         return expression switch
         {
             VBSyntax.IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
-            VBSyntax.MemberAccessExpressionSyntax member
-                when member.Expression.ToString().Equals("Me", StringComparison.OrdinalIgnoreCase)
-                    || member.Expression.ToString().Equals("MyClass", StringComparison.OrdinalIgnoreCase) => member.Name.Identifier.ValueText,
+            VBSyntax.MemberAccessExpressionSyntax { Name: not null } member
+                when member.Expression?.ToString().Equals("Me", StringComparison.OrdinalIgnoreCase) == true
+                    || member.Expression?.ToString().Equals("MyClass", StringComparison.OrdinalIgnoreCase) == true => member.Name.Identifier.ValueText,
             _ => null
         };
     }
