@@ -82,6 +82,17 @@ Test-Path $IndexPath
 `Test-Path` must print `True`. A reduced or partial scan is still useful; do not
 reinterpret it as complete coverage.
 
+If the scan completed but a later summary step failed, pull the fix and resume
+the latest retained scan without rerunning extraction:
+
+```powershell
+.\scripts\Resume-FocusedWebFormsReview.ps1
+```
+
+The resume command requires retained `scan/facts.ndjson` and
+`scan/scan-manifest.json`. It writes fresh summaries only; it does not modify or
+delete the retained scan.
+
 If the scan reports a retained VB fallback phase gap, inspect it locally with:
 
 ```powershell
