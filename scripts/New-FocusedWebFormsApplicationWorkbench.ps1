@@ -324,7 +324,10 @@ try {
         $linkedHttpRequestCount = @($clientBehavior | Where-Object {
             if ($_.behaviorKind -ne 'client-http-request') { return $false }
             $requestFactId = [string]$_.evidence.factId
-            return @($chains | Where-Object { [string]$_.bindingFactId -eq $requestFactId }).Count -gt 0
+            return @($chains | Where-Object {
+                [string]$_.bindingFactId -eq $requestFactId -and
+                (Property-Value $_ 'handlerFactId')
+            }).Count -gt 0
         }).Count
         $navigationCount = @($serverBehavior | Where-Object { $_.behaviorKind -eq 'navigation' }).Count
         $lifecycleCount = @($serverBehavior | Where-Object { $_.behaviorKind -eq 'request-lifecycle' }).Count
