@@ -17,6 +17,7 @@ public sealed class WebFormsModernizationPacketTests
         using var temp = new TempDirectory();
         var repo = Path.Combine(temp.Path, "repo");
         Directory.CreateDirectory(Path.Combine(repo, "App_Code", "Controls"));
+        Directory.CreateDirectory(Path.Combine(repo, "api"));
         File.WriteAllText(Path.Combine(repo, "OrderEditor.aspx"), """
             <%@ Page Language="VB" CodeFile="OrderEditor.aspx.vb" Inherits="OrderEditor" %>
             <asp:Button runat="server" ID="SaveOrder" OnClick="SaveOrder_Click" />
@@ -25,6 +26,7 @@ public sealed class WebFormsModernizationPacketTests
             <script>
             $("#ctl00_ContentPlaceHolder1_SaveOrder").on('click', function () {
               $(this).attr('value', 'Saving...');
+              $.ajax({ type: 'POST', url: '/app/api/SaveAudit.ashx', complete: function (result) { } });
             });
             var maxlength = 50;
             $("[id*=OrderNameText]").keyup(function () {
@@ -49,6 +51,7 @@ public sealed class WebFormsModernizationPacketTests
                 End Class
             End Namespace
             """);
+        File.WriteAllText(Path.Combine(repo, "api", "SaveAudit.ashx"), "<%@ WebHandler Language=\"VB\" Class=\"SaveAudit\" %>");
         var scan = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "scan")));
         const string commitSha = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
         var manifest = scan.Manifest with { CommitSha = commitSha };
@@ -57,8 +60,8 @@ public sealed class WebFormsModernizationPacketTests
         SqliteIndexWriter.Write(index, manifest, facts);
 
         var written = await WebFormsModernizationPacketReporter.WriteAsync(new(index, Path.Combine(temp.Path, "packet")));
-        Assert.Equal(5, written.Packet.Summary.ClientBehaviorCount);
-        Assert.Equal(5, written.Packet.ClientBehaviorInventory.Count);
+        Assert.Equal(6, written.Packet.Summary.ClientBehaviorCount);
+        Assert.Equal(6, written.Packet.ClientBehaviorInventory.Count);
         Assert.Contains(written.Packet.ClientBehaviorInventory, item =>
             item.BehaviorKind == "client-event-binding"
             && item.SafeMetadata.GetValueOrDefault("serverHandlerName") == "SaveOrder_Click"
@@ -70,6 +73,12 @@ public sealed class WebFormsModernizationPacketTests
             item.BehaviorKind == "client-event-binding"
             && item.SelectorKind == "id-contains"
             && item.SafeMetadata.GetValueOrDefault("controlId") == "OrderNameText");
+        Assert.Contains(written.Packet.ClientBehaviorInventory, item =>
+            item.BehaviorKind == "client-http-request"
+            && item.SafeMetadata.GetValueOrDefault("httpMethod") == "POST"
+            && item.SafeMetadata.GetValueOrDefault("endpointName") == "SaveAudit.ashx"
+            && item.SafeMetadata.GetValueOrDefault("endpointDeclarationFile") == "api/SaveAudit.ashx"
+            && item.TargetResolution == "unique-repository-handler-file");
         Assert.Equal(4, written.Packet.Summary.ServerBehaviorCount);
         Assert.Equal(4, written.Packet.ServerBehaviorInventory.Count);
         Assert.Contains(written.Packet.ServerBehaviorInventory, item =>
@@ -94,9 +103,12 @@ public sealed class WebFormsModernizationPacketTests
             WebFormsPacketPaths: [written.JsonPath]));
         var clientBehaviorChunks = docs.Chunks.Where(chunk =>
             chunk.Title == "Web Forms inline client behavior evidence").ToArray();
-        Assert.Equal(5, clientBehaviorChunks.Length);
+        Assert.Equal(6, clientBehaviorChunks.Length);
         Assert.Contains(clientBehaviorChunks, chunk =>
             chunk.BodyMarkdown.Contains("SaveOrder_Click", StringComparison.Ordinal));
+        Assert.Contains(clientBehaviorChunks, chunk =>
+            chunk.BodyMarkdown.Contains("SaveAudit.ashx", StringComparison.Ordinal)
+            && chunk.BodyMarkdown.Contains("POST", StringComparison.Ordinal));
         var serverBehaviorChunks = docs.Chunks.Where(chunk =>
             chunk.Title == "Web Forms server behavior evidence").ToArray();
         Assert.Equal(4, serverBehaviorChunks.Length);

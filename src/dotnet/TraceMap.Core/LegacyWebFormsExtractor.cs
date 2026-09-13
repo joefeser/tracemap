@@ -117,7 +117,7 @@ public static partial class LegacyWebFormsExtractor
 
             AddExplicitControlSubscriptionFacts(manifest, page, context, evidenceIndex, facts);
 
-            AddInlineClientBehaviorFacts(repoPath, manifest, page, pageFact, controlFacts, facts);
+            AddInlineClientBehaviorFacts(repoPath, manifest, inventory, page, pageFact, controlFacts, facts);
             AddInlineServerExpressionFacts(repoPath, manifest, page, pageFact, existingFacts, facts);
 
             foreach (var gap in page.Gaps)
@@ -1859,6 +1859,7 @@ public static partial class LegacyWebFormsExtractor
     private static void AddInlineClientBehaviorFacts(
         string repoPath,
         ScanManifest manifest,
+        IReadOnlyList<FileInventoryItem> inventory,
         WebFormsPage page,
         CodeFact pageFact,
         IReadOnlyList<CodeFact> controlFacts,
@@ -1884,6 +1885,7 @@ public static partial class LegacyWebFormsExtractor
             }
 
             var body = script.Groups["body"];
+            var clientEvents = new List<ClientEventContext>();
             foreach (Match binding in JQueryClientEventBindingRegex().Matches(body.Value))
             {
                 var selector = binding.Groups["selector"].Value.Trim();
@@ -1930,7 +1932,8 @@ public static partial class LegacyWebFormsExtractor
                     ["selectorHash"] = FactFactory.Hash(selector, 32),
                     ["selectorKind"] = selectorInfo.Kind,
                     ["selectorTarget"] = selectorInfo.Target ?? "unavailable",
-                    ["targetResolution"] = selectorInfo.ControlId is null ? "unresolved" : "same-surface-control",
+                    ["targetResolution"] = selectorInfo.Resolution,
+                    ["staticTargetCount"] = selectorInfo.StaticTargetCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     ["serverBindingResolution"] = matchingServerBindings.Length == 0 ? "unavailable" : matchingServerBindings.Length == 1 ? "unique-static-binding" : "ambiguous-static-binding",
                     ["generatedClientIdDependency"] = selectorInfo.GeneratedClientIdDependency.ToString().ToLowerInvariant(),
                     ["surfaceIdentity"] = SurfaceIdentity(page.FilePath)
@@ -1938,7 +1941,7 @@ public static partial class LegacyWebFormsExtractor
                 AddOptional(bindingProperties, "controlId", selectorInfo.ControlId);
                 AddOptional(bindingProperties, "serverEventName", matchingServerBinding?.Properties.GetValueOrDefault("eventName"));
                 AddOptional(bindingProperties, "serverHandlerName", matchingHandler?.Properties.GetValueOrDefault("handlerName") ?? matchingServerBinding?.Properties.GetValueOrDefault("handlerName"));
-                facts.Add(CreateStaticCompositionFact(
+                var bindingFact = CreateStaticCompositionFact(
                     manifest,
                     FactTypes.WebFormsClientEventBindingCandidate,
                     RuleIds.LegacyWebFormsInlineClientBehavior,
@@ -1953,7 +1956,9 @@ public static partial class LegacyWebFormsExtractor
                     "A supported inline jQuery event-binding shape is textual evidence only; it does not prove DOM selection, browser execution, event firing, postback, or server-handler execution.",
                     supportingFactIds,
                     bindingProperties,
-                    endLine));
+                    endLine);
+                facts.Add(bindingFact);
+                clientEvents.Add(new ClientEventContext(identity, bindingFact.FactId, selectorInfo, eventName, openBrace, absoluteEnd));
 
                 var callbackStart = openBrace + 1;
                 var callbackLength = Math.Max(0, absoluteEnd - callbackStart);
@@ -1977,7 +1982,7 @@ public static partial class LegacyWebFormsExtractor
                     }
                     var mutationSelector = statement.Groups["this"].Success ? "this" : statement.Groups["selector"].Value.Trim();
                     var mutationInfo = mutationSelector == "this"
-                        ? new ClientSelector("event-source", "this", selectorInfo.ControlId, false)
+                        ? new ClientSelector("event-source", "this", selectorInfo.ControlId, false, selectorInfo.ControlId is null ? "dynamic-selector-unresolved" : "event-source-control", selectorInfo.ControlId is null ? 0 : 1)
                         : ClassifyClientSelector(mutationSelector, page.Controls);
                     var mutationStart = callbackStart + statement.Index;
                     var mutationLine = LineAt(source, mutationStart);
@@ -1991,7 +1996,7 @@ public static partial class LegacyWebFormsExtractor
                         ["selectorHash"] = FactFactory.Hash(mutationSelector, 32),
                         ["selectorKind"] = mutationInfo.Kind,
                         ["selectorTarget"] = mutationInfo.Target ?? "unavailable",
-                        ["targetResolution"] = mutationInfo.ControlId is null ? "unresolved" : mutationSelector == "this" ? "event-source-control" : "same-surface-control",
+                        ["targetResolution"] = mutationInfo.Resolution,
                         ["surfaceIdentity"] = SurfaceIdentity(page.FilePath)
                     };
                     AddOptional(properties, "controlId", mutationInfo.ControlId);
@@ -2050,11 +2055,13 @@ public static partial class LegacyWebFormsExtractor
                             ["controlId"] = selectorInfo.ControlId ?? "unresolved",
                             ["selectorKind"] = selectorInfo.Kind,
                             ["selectorTarget"] = selectorInfo.Target ?? "unavailable",
-                            ["targetResolution"] = selectorInfo.ControlId is null ? "unresolved" : "same-surface-control",
+                            ["targetResolution"] = selectorInfo.Resolution,
                             ["surfaceIdentity"] = SurfaceIdentity(page.FilePath)
                         }));
                 }
             }
+
+            AddInlineClientHttpRequestFacts(manifest, inventory, page, pageFact, markup, source, body, clientEvents, facts);
         }
     }
 
@@ -2082,7 +2089,7 @@ public static partial class LegacyWebFormsExtractor
             }
             else
             {
-                return new ClientSelector("unsupported", null, null, false);
+                return new ClientSelector("unsupported", null, null, false, "dynamic-selector-unresolved", 0);
             }
         }
 
@@ -2093,9 +2100,19 @@ public static partial class LegacyWebFormsExtractor
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
         var controlId = matches.Length == 1 ? matches[0] : null;
-        var generated = controlId is not null && (kind is "id-suffix" or "id-contains"
-            || kind == "exact-id" && !target.Equals(controlId, StringComparison.OrdinalIgnoreCase));
-        return new ClientSelector(kind, target, controlId, generated);
+        var generatedIdShape = kind is "id-suffix" or "id-contains"
+            || kind == "exact-id" && (controlId is not null && !target.Equals(controlId, StringComparison.OrdinalIgnoreCase)
+                || GeneratedWebFormsClientIdRegex().IsMatch(target));
+        var resolution = matches.Length == 1
+            ? "unique-static-target"
+            : matches.Length > 1
+                ? "multiple-templated-targets"
+                : kind == "css-class"
+                    ? "client-dom-selector"
+                    : kind == "exact-id"
+                        ? "no-static-target-declared"
+                        : "dynamic-selector-unresolved";
+        return new ClientSelector(kind, target, controlId, generatedIdShape, resolution, matches.Length);
     }
 
     private static IReadOnlyList<string> ExpectedServerEvents(
@@ -2127,6 +2144,132 @@ public static partial class LegacyWebFormsExtractor
         }
         return [];
     }
+
+    private static void AddInlineClientHttpRequestFacts(
+        ScanManifest manifest,
+        IReadOnlyList<FileInventoryItem> inventory,
+        WebFormsPage page,
+        CodeFact pageFact,
+        string markup,
+        SourceText source,
+        Group body,
+        IReadOnlyList<ClientEventContext> clientEvents,
+        List<CodeFact> facts)
+    {
+        var handlerFiles = inventory
+            .Select(item => FileInventory.NormalizeRelativePath(item.RelativePath))
+            .Where(path => path.EndsWith(".ashx", StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+        foreach (Match ajax in JQueryAjaxStartRegex().Matches(body.Value))
+        {
+            var absoluteStart = body.Index + ajax.Index;
+            var openBrace = body.Index + ajax.Index + ajax.Length - 1;
+            var closeBrace = FindJavascriptBlockEnd(markup, openBrace);
+            if (closeBrace < openBrace)
+            {
+                continue;
+            }
+            var requestText = markup.Substring(openBrace, closeBrace - openBrace + 1);
+            var url = JavascriptLiteralProperty(requestText, "url");
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                continue;
+            }
+            var methodValue = JavascriptLiteralProperty(requestText, "type") ?? JavascriptLiteralProperty(requestText, "method");
+            var httpMethod = methodValue?.ToUpperInvariant() ?? "GET";
+            var endpointPath = url.Split(['?', '#'], 2)[0].Replace('\\', '/').Trim();
+            var endpointName = Path.GetFileName(endpointPath);
+            var candidates = handlerFiles
+                .Where(path => endpointPath.Equals(path, StringComparison.OrdinalIgnoreCase)
+                    || endpointPath.EndsWith("/" + path, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            if (candidates.Length == 0 && !string.IsNullOrWhiteSpace(endpointName))
+            {
+                var fileNameMatches = handlerFiles.Where(path => Path.GetFileName(path).Equals(endpointName, StringComparison.OrdinalIgnoreCase)).ToArray();
+                if (fileNameMatches.Length == 1)
+                {
+                    candidates = fileNameMatches;
+                }
+            }
+            var targetResolution = candidates.Length == 1
+                ? "unique-repository-handler-file"
+                : candidates.Length > 1
+                    ? "ambiguous-repository-handler-file"
+                    : "no-static-handler-file-declared";
+            var enclosingEvent = clientEvents
+                .Where(item => absoluteStart > item.OpenBrace && closeBrace <= item.CloseBrace)
+                .OrderBy(item => item.CloseBrace - item.OpenBrace)
+                .FirstOrDefault();
+            var callbacks = JavascriptCallbackPropertyRegex().Matches(requestText)
+                .Select(match => match.Groups["kind"].Value.ToLowerInvariant())
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray();
+            var contentType = JavascriptLiteralProperty(requestText, "contentType") ?? string.Empty;
+            var dataType = JavascriptLiteralProperty(requestText, "dataType") ?? string.Empty;
+            var line = LineAt(source, absoluteStart);
+            var endLine = LineAt(source, closeBrace);
+            var identity = $"webforms-client-http:{FactFactory.Hash($"{SurfaceIdentity(page.FilePath)}|{url}|{httpMethod}|{line}", 24)}";
+            var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["behaviorKind"] = "client-http-request",
+                ["callbackKinds"] = callbacks.Length == 0 ? "none-observed" : string.Join(",", callbacks),
+                ["coverageLabel"] = "bounded-static-webforms-inline-client-http",
+                ["endpointKind"] = endpointName.EndsWith(".ashx", StringComparison.OrdinalIgnoreCase) ? "ashx" : "literal-url",
+                ["endpointName"] = endpointName.Length is > 0 and <= 128 ? endpointName : "unavailable",
+                ["endpointPathHash"] = FactFactory.Hash(endpointPath, 32),
+                ["httpMethod"] = httpMethod,
+                ["requestVerificationTokenCandidate"] = requestText.Contains("__RequestVerificationToken", StringComparison.Ordinal) ? "true" : "false",
+                ["surfaceIdentity"] = SurfaceIdentity(page.FilePath),
+                ["targetResolution"] = targetResolution
+            };
+            AddOptional(properties, "contentTypeKind", ClassifyClientContentType(contentType));
+            AddOptional(properties, "dataType", SafeClientLiteral(dataType));
+            AddOptional(properties, "endpointDeclarationFile", candidates.Length == 1 ? candidates[0] : null);
+            AddOptional(properties, "clientEventId", enclosingEvent?.Identity);
+            AddOptional(properties, "clientEventName", enclosingEvent?.EventName);
+            AddOptional(properties, "selectorKind", enclosingEvent?.Selector.Kind);
+            AddOptional(properties, "selectorTarget", enclosingEvent?.Selector.Target);
+            AddOptional(properties, "selectorResolution", enclosingEvent?.Selector.Resolution);
+            AddOptional(properties, "controlId", enclosingEvent?.Selector.ControlId);
+            facts.Add(CreateStaticCompositionFact(
+                manifest,
+                FactTypes.WebFormsClientHttpRequestCandidate,
+                RuleIds.LegacyWebFormsInlineClientHttpRequest,
+                EvidenceTiers.Tier3SyntaxOrTextual,
+                page.FilePath,
+                line,
+                FactFactory.Hash(requestText, 32),
+                enclosingEvent?.Identity ?? SurfaceIdentity(page.FilePath),
+                identity,
+                endpointName.Length is > 0 and <= 128 ? endpointName : "client-http-request",
+                "bounded-static-webforms-inline-client-http",
+                "A literal inline jQuery AJAX request is static textual evidence only; it does not prove DOM event association, request execution, routing, handler execution, authentication, authorization, response success, callback execution, or runtime reachability.",
+                [pageFact.FactId, enclosingEvent?.FactId],
+                properties,
+                endLine));
+        }
+    }
+
+    private static string? ClassifyClientContentType(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        if (value.Contains("application/json", StringComparison.OrdinalIgnoreCase)) return "json";
+        if (value.Contains("application/x-www-form-urlencoded", StringComparison.OrdinalIgnoreCase)) return "form-urlencoded";
+        return "other-literal";
+    }
+
+    private static string? SafeClientLiteral(string value) =>
+        value.Length is > 0 and <= 32 && value.All(character => char.IsLetterOrDigit(character) || character is '-' or '_')
+            ? value.ToLowerInvariant()
+            : null;
+
+    private static string? JavascriptLiteralProperty(string text, string propertyName) =>
+        JavascriptLiteralPropertyRegex().Matches(text)
+            .FirstOrDefault(match => match.Groups["name"].Value.Equals(propertyName, StringComparison.OrdinalIgnoreCase))?
+            .Groups["value"].Value;
 
     private static void AddInlineServerExpressionFacts(
         string repoPath,
@@ -4010,6 +4153,18 @@ public static partial class LegacyWebFormsExtractor
     [GeneratedRegex(@"\b[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)+\b")]
     private static partial Regex QualifiedIdentifierReferenceRegex();
 
+    [GeneratedRegex(@"\$\s*\.\s*ajax\s*\(\s*\{", RegexOptions.IgnoreCase)]
+    private static partial Regex JQueryAjaxStartRegex();
+
+    [GeneratedRegex("""(?<name>type|method|url|contentType|dataType)\s*:\s*(?<quote>["'])(?<value>[^"'\r\n]{0,512})\k<quote>""", RegexOptions.IgnoreCase)]
+    private static partial Regex JavascriptLiteralPropertyRegex();
+
+    [GeneratedRegex(@"\b(?<kind>success|error|fail|complete)\s*:\s*function\b", RegexOptions.IgnoreCase)]
+    private static partial Regex JavascriptCallbackPropertyRegex();
+
+    [GeneratedRegex(@"^(?:ctl[0-9]+_)+|ContentPlaceHolder", RegexOptions.IgnoreCase)]
+    private static partial Regex GeneratedWebFormsClientIdRegex();
+
     [GeneratedRegex("""^\[\s*id\s*(?<operator>[*$])=\s*(?:["'])?(?<target>[A-Za-z_][A-Za-z0-9_:\-]{0,127})(?:["'])?\s*\]$""", RegexOptions.IgnoreCase)]
     private static partial Regex ClientGeneratedIdSelectorRegex();
 
@@ -4451,7 +4606,17 @@ public static partial class LegacyWebFormsExtractor
         string Kind,
         string? Target,
         string? ControlId,
-        bool GeneratedClientIdDependency);
+        bool GeneratedClientIdDependency,
+        string Resolution,
+        int StaticTargetCount);
+
+    private sealed record ClientEventContext(
+        string Identity,
+        string FactId,
+        ClientSelector Selector,
+        string EventName,
+        int OpenBrace,
+        int CloseBrace);
 
     private sealed record WebFormsDesignerField(
         string FilePath,

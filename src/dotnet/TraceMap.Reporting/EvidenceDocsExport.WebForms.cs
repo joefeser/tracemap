@@ -393,6 +393,12 @@ public static partial class EvidenceDocsExporter
             | UI mutations | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("mutationKinds", "not-applicable"))}` |
             | Constraint | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("constraintKind", "not-applicable"))} {EscapeInline(value.SafeMetadata.GetValueOrDefault("constraintValue", ""))}` |
             | Server handler | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("serverHandlerName", "not-applicable"))}` |
+            | HTTP method | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("httpMethod", "not-applicable"))}` |
+            | Endpoint kind | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("endpointKind", "not-applicable"))}` |
+            | Endpoint name | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("endpointName", "not-applicable"))}` |
+            | Endpoint declaration | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("endpointDeclarationFile", "not-applicable"))}` |
+            | Callbacks | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("callbackKinds", "not-applicable"))}` |
+            | Verification token candidate | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("requestVerificationTokenCandidate", "false"))}` |
             | File span | `{EscapeInline(FormatSpan(value.Evidence))}` |
             """;
         var chunk = CreateWebFormsChunk(packet, "client-behavior", "Web Forms inline client behavior evidence", body,

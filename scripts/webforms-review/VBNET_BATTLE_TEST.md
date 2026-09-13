@@ -245,3 +245,12 @@ expressions to a unique repository or `App_Code` type declaration, adds a
 fact-count-based behavior summary, and distinguishes zero boundaries caused by
 no retained chains, partial coverage, and a completed bounded search. These are
 review aids, not runtime or migration-correctness claims.
+
+The next observed surface contained literal jQuery `$.ajax` POST requests to
+repository `.ashx` endpoints, request-verification-token forwarding, and
+success/error/complete callbacks. It also contained a hard-coded generated-ID
+selector for `SaveBidGroup` with no control, HTML element, or handler declaration
+anywhere in the scanned project; the only second textual occurrence was in an
+excluded copy. Treat that selector as `no-static-target-declared`, which predicts
+an empty jQuery selection and silent binding no-op for the retained static DOM,
+but does not claim runtime dead code because dynamic injection remains unproven.

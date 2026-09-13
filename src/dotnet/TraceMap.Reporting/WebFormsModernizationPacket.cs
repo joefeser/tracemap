@@ -874,7 +874,8 @@ public static class WebFormsModernizationPacketReporter
         var clientBehavior = facts
             .Where(fact => fact.FactType is FactTypes.WebFormsClientEventBindingCandidate
                 or FactTypes.WebFormsClientUiMutationCandidate
-                or FactTypes.WebFormsClientValidationConstraintCandidate)
+                or FactTypes.WebFormsClientValidationConstraintCandidate
+                or FactTypes.WebFormsClientHttpRequestCandidate)
             .Where(fact => retainedSurfaceIds.Contains(fact.Properties.GetValueOrDefault("surfaceIdentity") ?? fact.SourceSymbol ?? ""))
             .Select(fact => new WebFormsModernizationClientBehavior(
                 HashId("client-behavior", [fact.FactId]),
@@ -890,9 +891,19 @@ public static class WebFormsModernizationPacketReporter
                     ["constraintValue"] = SafeKind(fact.Properties.GetValueOrDefault("constraintValue"), "not-applicable"),
                     ["controlId"] = SafeKind(fact.Properties.GetValueOrDefault("controlId"), "unresolved"),
                     ["generatedClientIdDependency"] = SafeKind(fact.Properties.GetValueOrDefault("generatedClientIdDependency"), "false"),
+                    ["staticTargetCount"] = SafeKind(fact.Properties.GetValueOrDefault("staticTargetCount"), "not-applicable"),
                     ["mutationKinds"] = SafeKind(fact.Properties.GetValueOrDefault("mutationKinds"), "not-applicable"),
                     ["serverEventName"] = SafeKind(fact.Properties.GetValueOrDefault("serverEventName"), "not-applicable"),
-                    ["serverHandlerName"] = SafeKind(fact.Properties.GetValueOrDefault("serverHandlerName"), "not-applicable")
+                    ["serverHandlerName"] = SafeKind(fact.Properties.GetValueOrDefault("serverHandlerName"), "not-applicable"),
+                    ["httpMethod"] = SafeKind(fact.Properties.GetValueOrDefault("httpMethod"), "not-applicable"),
+                    ["endpointKind"] = SafeKind(fact.Properties.GetValueOrDefault("endpointKind"), "not-applicable"),
+                    ["endpointName"] = SafeKind(fact.Properties.GetValueOrDefault("endpointName"), "not-applicable"),
+                    ["endpointDeclarationFile"] = SafeKind(fact.Properties.GetValueOrDefault("endpointDeclarationFile"), "not-applicable"),
+                    ["callbackKinds"] = SafeKind(fact.Properties.GetValueOrDefault("callbackKinds"), "not-applicable"),
+                    ["requestVerificationTokenCandidate"] = SafeKind(fact.Properties.GetValueOrDefault("requestVerificationTokenCandidate"), "false"),
+                    ["contentTypeKind"] = SafeKind(fact.Properties.GetValueOrDefault("contentTypeKind"), "not-applicable"),
+                    ["dataType"] = SafeKind(fact.Properties.GetValueOrDefault("dataType"), "not-applicable"),
+                    ["selectorResolution"] = SafeKind(fact.Properties.GetValueOrDefault("selectorResolution"), "not-applicable")
                 },
                 Evidence(fact, gaps, options.MaxGaps, snapshot),
                 SplitIds(fact.Properties.GetValueOrDefault("supportingFactIds")),

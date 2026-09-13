@@ -2445,6 +2445,18 @@ rules:
       - Numeric maximum-length declarations are retained only inside the callback or within 4096 characters before it in the same inline script when the callback references that exact variable name; this bounded textual association does not prove data flow or enforcement.
       - Raw script bodies and mutation argument values are not retained; evidence uses paths, exact line spans, bounded safe selector targets, and snippet hashes.
 
+  - id: legacy.webforms.inline-client-http-request.v1
+    name: Legacy Web Forms inline jQuery HTTP request candidates
+    description: Emits bounded textual candidates for inline literal `$.ajax` request objects and resolves literal `.ashx` routes to one repository handler file when a unique suffix or filename match exists.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - WebFormsClientHttpRequestCandidate
+    limitations:
+      - Admission requires an inline script `$.ajax` call with a literal URL. Computed URLs, aliases, wrapper libraries, fetch, XMLHttpRequest, external scripts, and malformed or unbalanced objects remain outside coverage.
+      - The HTTP method defaults to GET only when the request object omits literal type/method syntax, matching the bounded jQuery shape; callback names, literal content/data types, and verification-token presence are syntax observations, not proof of request or callback execution.
+      - Repository handler resolution uses a unique normalized `.ashx` path suffix, falling back to a unique handler filename. It does not prove deployment virtual-directory mapping, routing, handler registration, authentication, authorization, successful responses, or runtime reachability.
+      - Raw URLs, request data, headers, callback bodies, token values, and response values are not retained. Evidence stores safe endpoint/file metadata, route and snippet hashes, and exact source spans.
+
   - id: legacy.webforms.server-behavior.v1
     name: Legacy Web Forms projectless Visual Basic server behavior candidates
     description: Emits bounded syntax candidates for Response.Redirect calls, CompleteRequest lifecycle calls, and supported same-surface server-control property assignments inside retained Visual Basic Web Forms handlers.

@@ -1788,9 +1788,69 @@ public sealed class LegacyWebFormsExtractorTests
         Assert.All(events.Concat(mutations).Append(constraint), fact =>
         {
             Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, fact.EvidenceTier);
-            Assert.Equal("legacy-webforms/0.10.0", fact.Evidence.ExtractorVersion);
+            Assert.Equal("legacy-webforms/0.11.0", fact.Evidence.ExtractorVersion);
             Assert.DoesNotContain("Saving", JsonSerializer.Serialize(fact), StringComparison.Ordinal);
         });
+    }
+
+    [Fact]
+    public void Inline_jquery_ajax_retains_safe_http_evidence_and_selector_target_cardinality()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "api"));
+        File.WriteAllText(Path.Combine(repo, "Edit.aspx"), """
+            <%@ Page Language="VB" CodeFile="Edit.aspx.vb" Inherits="Edit" %>
+            <script>
+            $("#ctl00_ContentPlaceHolder1_SaveMissing").on('click', function () {
+              $.ajax({
+                type: 'POST',
+                url: '/virtual/app/api/SetActive.ashx',
+                headers: { RequestVerificationToken: $('input[name="__RequestVerificationToken"]').val() },
+                data: $.param({ tc: 'POS', f: auth }),
+                complete: function (result) { $('.loader').removeClass('on'); },
+                error: function (result) { }
+              });
+            });
+            function retainExpanded() {
+              $.ajax({ url: '/virtual/app/api/Missing.ashx', dataType: 'text', success: function (data) { } });
+            }
+            </script>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Edit.aspx.vb"), "Partial Public Class Edit\nEnd Class\n");
+        File.WriteAllText(Path.Combine(repo, "api", "SetActive.ashx"), "<%@ WebHandler Language=\"VB\" Class=\"SetActive\" %>");
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var click = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WebFormsClientEventBindingCandidate);
+        Assert.Equal("no-static-target-declared", click.Properties.GetValueOrDefault("targetResolution"));
+        Assert.Equal("0", click.Properties.GetValueOrDefault("staticTargetCount"));
+        Assert.Equal("true", click.Properties.GetValueOrDefault("generatedClientIdDependency"));
+
+        var requests = result.Facts.Where(fact => fact.FactType == FactTypes.WebFormsClientHttpRequestCandidate)
+            .OrderBy(fact => fact.Evidence.StartLine).ToArray();
+        Assert.Equal(2, requests.Length);
+        Assert.Equal("POST", requests[0].Properties.GetValueOrDefault("httpMethod"));
+        Assert.Equal("SetActive.ashx", requests[0].Properties.GetValueOrDefault("endpointName"));
+        Assert.Equal("unique-repository-handler-file", requests[0].Properties.GetValueOrDefault("targetResolution"));
+        Assert.Equal("api/SetActive.ashx", requests[0].Properties.GetValueOrDefault("endpointDeclarationFile"));
+        Assert.Equal("complete,error", requests[0].Properties.GetValueOrDefault("callbackKinds"));
+        Assert.Equal("true", requests[0].Properties.GetValueOrDefault("requestVerificationTokenCandidate"));
+        Assert.False(string.IsNullOrWhiteSpace(requests[0].Properties.GetValueOrDefault("clientEventId")));
+        Assert.Contains(click.FactId, requests[0].Properties.GetValueOrDefault("supportingFactIds"), StringComparison.Ordinal);
+        Assert.Equal("GET", requests[1].Properties.GetValueOrDefault("httpMethod"));
+        Assert.Equal("no-static-handler-file-declared", requests[1].Properties.GetValueOrDefault("targetResolution"));
+        Assert.Equal("success", requests[1].Properties.GetValueOrDefault("callbackKinds"));
+        Assert.Equal("text", requests[1].Properties.GetValueOrDefault("dataType"));
+        Assert.All(requests, request =>
+        {
+            Assert.Equal(RuleIds.LegacyWebFormsInlineClientHttpRequest, request.RuleId);
+            Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, request.EvidenceTier);
+            Assert.Equal("legacy-webforms/0.11.0", request.Evidence.ExtractorVersion);
+        });
+        var serialized = JsonSerializer.Serialize(requests);
+        Assert.DoesNotContain("/virtual/app", serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain("'POS'", serialized, StringComparison.Ordinal);
+        Assert.DoesNotContain("__RequestVerificationToken", serialized, StringComparison.Ordinal);
     }
 
     [Fact]
