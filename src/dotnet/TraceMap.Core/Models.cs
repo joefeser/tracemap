@@ -610,7 +610,7 @@ public static class ScannerVersions
     public const string PostgresSchemaMigrationExtractor = "postgres-schema-migration/0.5.0";
     public const string SqlProjectRefactorExtractor = "sql-project-refactor/0.1.0";
     public const string MsBuildBinlogExtractor = "msbuild-binlog/0.1.0";
-    public const string LegacyWcfExtractor = "legacy-wcf/0.3.0";
+    public const string LegacyWcfExtractor = "legacy-wcf/0.3.1";
     public const string LegacyAsmxExtractor = "legacy-asmx/0.2.0";
     public const string LegacyRemotingExtractor = "legacy-remoting/0.1.0";
     public const string LegacyWebFormsExtractor = "legacy-webforms/0.13.1";

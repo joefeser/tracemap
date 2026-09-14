@@ -937,6 +937,11 @@ python3 scripts/legacy_codebase_validation.py \
 
 The summary must stay label-only. Do not commit local sample paths, raw scan outputs, raw WSDL/DISCO/XSD contents, endpoint addresses, SOAP actions, namespace URIs, config values, secrets, or generated smoke outputs. WCF metadata facts are static checked-in design-time evidence; they do not prove runtime reachability, deployment, service version compatibility, authorization, binding compatibility, or branch feasibility.
 
+The checked-in Web Forms packet regression also covers the C# composition
+shape `inline AJAX -> ASHX handler -> local helper -> generated WCF client
+operation`. It must end at `wcf-operation` and must not infer remote service or
+database behavior.
+
 ## Legacy WebForms Event Flow Smoke
 
 When changing WebForms markup, code-behind, designer, handler-resolution, or event-flow extraction, run:

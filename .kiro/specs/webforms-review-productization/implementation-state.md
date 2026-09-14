@@ -79,6 +79,10 @@ not recorded here.
   callee equality and bounded technology/boundary shape signals while omitting
   paths, symbols, URLs, spans, source/scan/commit identity, raw evidence IDs,
   human comments, and the private handoff fingerprint.
+- Compiler-resolved C# calls through local helpers now join generated WCF
+  client operations by canonical call-target identity. Web Forms traversal
+  stops at the external `wcf-operation` boundary and does not claim behavior
+  inside the remote service or any downstream database.
 
 ## Validation checkpoint
 
@@ -92,6 +96,9 @@ not recorded here.
   and excludes an unrelated fourth root.
 - Focused C# semantic, syntax, and Web Forms packet tests pin explicit call
   coverage labels and pass.
+- A synthetic public regression pins `AJAX -> ASHX -> local helper -> generated
+  WCF proxy` composition, the external WCF terminal, and the absence of an
+  inferred database boundary.
 - The application-workbench regression pins per-page shareable provenance,
   shared endpoint/handler equality, normalized-site structure, ZIP contents,
   structural signals, and a denylist of private fixture identities.

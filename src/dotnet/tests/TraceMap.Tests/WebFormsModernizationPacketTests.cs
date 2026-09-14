@@ -12,6 +12,101 @@ namespace TraceMap.Tests;
 public sealed class WebFormsModernizationPacketTests
 {
     [Fact]
+    public async Task Packet_composes_client_http_handler_through_local_helper_to_external_wcf_boundary()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        Directory.CreateDirectory(Path.Combine(repo, "api"));
+        File.WriteAllText(Path.Combine(repo, "App.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), """
+            <%@ Page Language="C#" %>
+            <script>
+            $.ajax({ type: 'POST', url: '/api/Send.ashx' });
+            </script>
+            """);
+        File.WriteAllText(Path.Combine(repo, "api", "Send.ashx"), """
+            <%@ WebHandler Language="C#" Class="Sample.SendHandler" CodeBehind="Send.ashx.cs" %>
+            """);
+        File.WriteAllText(Path.Combine(repo, "api", "Send.ashx.cs"), """
+            namespace Sample;
+            public sealed class SendHandler
+            {
+                public void ProcessRequest(object context)
+                {
+                    Gateway.Send();
+                }
+            }
+            """);
+        File.WriteAllText(Path.Combine(repo, "Gateway.cs"), """
+            namespace Sample;
+            public static class Gateway
+            {
+                public static string Send()
+                {
+                    var client = new External.ExternalClient();
+                    return client.Send("request");
+                }
+            }
+            """);
+        File.WriteAllText(Path.Combine(repo, "Reference.cs"), """
+            using System.ServiceModel;
+            namespace External;
+
+            [ServiceContract]
+            public interface IExternal
+            {
+                [OperationContract]
+                string Send(string request);
+            }
+
+            public sealed class ExternalClient : ClientBase<IExternal>, IExternal
+            {
+                public string Send(string request) => Channel.Send(request);
+            }
+            """);
+        File.WriteAllText(Path.Combine(repo, "WcfStubs.cs"), """
+            using System;
+            namespace System.ServiceModel;
+            [AttributeUsage(AttributeTargets.Interface)]
+            public sealed class ServiceContractAttribute : Attribute { }
+            [AttributeUsage(AttributeTargets.Method)]
+            public sealed class OperationContractAttribute : Attribute { }
+            public abstract class ClientBase<T> where T : class
+            {
+                protected T Channel => default!;
+            }
+            """);
+
+        var scan = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "scan")));
+        Assert.Equal("Succeeded", scan.Manifest.BuildStatus);
+        var wcfMapping = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.WcfServiceReferenceMapping);
+        Assert.StartsWith("global::External.ExternalClient.Send(", wcfMapping.SourceSymbol, StringComparison.Ordinal);
+        Assert.Equal("compiler-resolved-call-target", wcfMapping.Properties.GetValueOrDefault("sourceIdentityKind"));
+        const string commitSha = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        var manifest = scan.Manifest with { CommitSha = commitSha };
+        var facts = scan.Facts.Select(fact => fact with { CommitSha = commitSha }).ToArray();
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, manifest, facts);
+
+        var written = await WebFormsModernizationPacketReporter.WriteAsync(new(index, Path.Combine(temp.Path, "packet")));
+
+        var chain = Assert.Single(written.Packet.EventChains, item => item.HandlerSymbol?.Contains("ProcessRequest", StringComparison.Ordinal) == true);
+        Assert.Equal("wcf-operation", chain.TerminalKind);
+        Assert.True(chain.TraversalObservation?.TerminalPathCount > 0);
+        var boundary = Assert.Single(written.Packet.DownstreamBoundaries, item => item.ChainId == chain.ChainId);
+        Assert.Equal("wcf-operation", boundary.BoundaryKind);
+        Assert.Contains(RuleIds.LegacyWcfMapping, boundary.RuleIds);
+        Assert.DoesNotContain(written.Packet.DownstreamBoundaries, item => item.ChainId == chain.ChainId && item.BoundaryCategory == "database");
+    }
+
+    [Fact]
     public async Task Packet_and_docs_retain_inline_client_behavior_inventory()
     {
         using var temp = new TempDirectory();

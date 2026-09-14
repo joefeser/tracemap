@@ -402,6 +402,14 @@ label, commit SHA, repository-relative file span, extractor ID/version,
 supporting IDs, and limitations. Missing required provenance fails closed as a
 gap or removes the unsupported path conclusion.
 
+For a compiler-resolved C# call to a generated WCF client operation, bounded
+static traversal may cross local helper methods and retain a
+`wcf-operation` downstream boundary. That operation is an external terminal:
+TraceMap does not traverse into the remote service or claim its implementation,
+database access, deployment, availability, or runtime dispatch. When the other
+service is scanned separately, its evidence remains a separate source until an
+explicit contract-aware composition joins the two.
+
 The current scanner inventories compiler-resolved and explicitly qualified
 supported file-operation declarations, but it does not prove indirect wrappers,
 aliases under reduced semantic coverage, runtime paths, or dynamic locations.
