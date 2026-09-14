@@ -18,6 +18,10 @@ notepad (Join-Path $ReviewRoot 'config\webforms-review.json')
 .\scripts\Invoke-FocusedWebFormsPipeline.ps1 -ReviewRoot $ReviewRoot
 ```
 
+Use forward slashes for paths inside the JSON config, for example
+`C:/source/vb-application`. A single backslash can be parsed as a JSON escape or
+make the JSON invalid; the pipeline now rejects it with corrective guidance.
+
 Use project-selection mode `discover` for a repository with many unrelated
 solutions: it searches for `.csproj` and `.vbproj` files only beneath the three
 configured folders. Use `projectless` when there are no applicable project

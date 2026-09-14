@@ -20,12 +20,25 @@ try {
         if (!(Test-Path -LiteralPath $required)) { throw "Setup omitted: $required" }
     }
 
-    $raw = [IO.File]::ReadAllText($configPath) | ConvertFrom-Json -Depth 10
+    $generatedConfigText = [IO.File]::ReadAllText($configPath)
+    $raw = $generatedConfigText | ConvertFrom-Json -Depth 10
     $seven = @('sourceRoot','webFormsFolder','backendFolder','controlsFolder','projectSelection','outputRoot','pageSelection')
     if (@($seven | Where-Object { $_ -notin $raw.PSObject.Properties.Name }).Count -ne 0) { throw 'Setup omitted one of seven operational settings.' }
     if ($raw.projectSelection.mode -ne 'solution' -or $raw.pageSelection.mode -ne 'all') { throw 'Setup defaults were not solution plus all-pages.' }
 
     . $helperPath
+
+    foreach ($unsafePath in @('C:\work\source', 'C:\temp\source')) {
+        $unsafeConfigText = $generatedConfigText.Replace('C:/path/to/authorized-source', $unsafePath)
+        [IO.File]::WriteAllText($configPath, $unsafeConfigText, [Text.UTF8Encoding]::new($false))
+        $failure = $null
+        try { Read-FocusedWebFormsPipelineConfig $configPath | Out-Null } catch { $failure = $_.Exception.Message }
+        if ($failure -ne 'WEBFORMS_PIPELINE_CONFIG_UNESCAPED_BACKSLASH;use-forward-slashes-in-paths-example=C:/work/review') {
+            throw "Unescaped Windows path did not receive actionable preflight guidance: $unsafePath"
+        }
+    }
+    [IO.File]::WriteAllText($configPath, $generatedConfigText, [Text.UTF8Encoding]::new($false))
+
     $parsed = Read-FocusedWebFormsPipelineConfig $configPath
     if ($parsed.PageMode -ne 'all' -or $parsed.ProjectMode -ne 'solution' -or $parsed.OutputRoot -ne $reviewRoot) { throw 'Generated config did not round-trip.' }
 

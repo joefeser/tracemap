@@ -2255,8 +2255,11 @@ pwsh -NoProfile -File scripts/tests/Test-FocusedWebFormsApplicationWorkbench.ps1
 Confirm the generated config has exactly seven operational settings; explicit
 solution, project, discovery, and projectless modes remain distinct; discovery
 does not escape the three configured roots; and all-page mode does not create a
-surface list. A clean end-to-end fixture must publish scan, packet,
-evidence-docs, and workbench folders under one review root. Immediately rerun
+surface list. Confirm an unescaped Windows path fails before JSON parsing with
+forward-slash guidance, including a path containing `\t` that the JSON parser
+could otherwise silently interpret as a tab. A clean end-to-end fixture must
+publish scan, packet, evidence-docs, and workbench folders under one review
+root. Immediately rerun
 the unchanged command and confirm every completed stage reports `state=reused`
 under the same run ID. Changing the config, source commit, TraceMap commit,
 pipeline generator, or any retained artifact must fail resume validation.

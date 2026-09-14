@@ -10,8 +10,18 @@ function Read-FocusedWebFormsPipelineConfig {
         throw 'WEBFORMS_PIPELINE_CONFIG_LIMIT'
     }
     try {
-        $config = [IO.File]::ReadAllText($file.FullName, [Text.UTF8Encoding]::new($false, $true)) | ConvertFrom-Json -Depth 20
+        $configText = [IO.File]::ReadAllText($file.FullName, [Text.UTF8Encoding]::new($false, $true))
     }
+    catch { throw 'WEBFORMS_PIPELINE_CONFIG_INVALID_JSON' }
+
+    # A single Windows path separator can either make JSON invalid (for example,
+    # \w) or silently become an escape character (for example, \t). Reject odd
+    # runs before parsing so both cases receive the same actionable failure.
+    if ([regex]::IsMatch($configText, '(?<!\\)(?:\\\\)*\\(?!\\)')) {
+        throw 'WEBFORMS_PIPELINE_CONFIG_UNESCAPED_BACKSLASH;use-forward-slashes-in-paths-example=C:/work/review'
+    }
+
+    try { $config = $configText | ConvertFrom-Json -Depth 20 }
     catch { throw 'WEBFORMS_PIPELINE_CONFIG_INVALID_JSON' }
 
     $expected = @('schemaVersion','sourceRoot','webFormsFolder','backendFolder','controlsFolder','projectSelection','outputRoot','pageSelection')
@@ -93,4 +103,3 @@ function Property-Value([object]$Value, [string]$Name) {
     if ($null -eq $property) { return $null }
     return $property.Value
 }
-

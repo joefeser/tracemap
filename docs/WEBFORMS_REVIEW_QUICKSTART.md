@@ -40,6 +40,11 @@ The config has seven operational settings: source root, Web Forms folder,
 backend folder, controls folder, project selection, output root, and page
 selection. Leave `outputRoot` equal to `$ReviewRoot`.
 
+Use forward slashes in JSON paths, including on Windows: `C:/source/application`.
+A path such as `C:\source\application` contains unescaped JSON backslashes and
+is rejected before parsing with corrective guidance. A doubled backslash is
+valid JSON, but forward slashes are easier to read and edit safely.
+
 Project selection modes:
 
 - `solution`: one explicit `.sln`; only projects beneath the three configured

@@ -59,7 +59,9 @@ run is accepted. Do not mix artifacts from different review roots.
 
 Project selection modes are `solution`, `projects`, `discover`, and
 `projectless`. `discover` searches for `.csproj` and `.vbproj` only beneath the
-three configured folders. Page selection modes are `all` and `selected`.
+three configured folders. Page selection modes are `all` and `selected`. Use
+forward slashes in every JSON path, for example `C:/source/application`; a
+single Windows backslash is an unsafe JSON escape and is rejected.
 "@
 [IO.File]::WriteAllText($readmePath, $readme, [Text.UTF8Encoding]::new($false))
 
@@ -67,4 +69,3 @@ Write-Host "webformsReviewSetup=completed"
 Write-Host "reviewRoot=$root"
 Write-Host "configPath=$configPath"
 Write-Host 'nextAction=edit-config-then-run-pipeline'
-

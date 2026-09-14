@@ -58,11 +58,16 @@ not recorded here.
   discovery under the three configured roots, and explicit projectless mode.
 - Wrong folders identify the requested value and source root. Wrong solution
   and project paths include bounded in-scope candidates.
+- Config loading rejects unescaped Windows backslashes before JSON parsing,
+  including sequences such as `\t` that JSON would otherwise accept and alter.
+  The failure directs operators to the unambiguous `C:/...` form.
 
 ## Validation checkpoint
 
 - Focused setup/config, launcher, and application-workbench PowerShell suites
   pass.
+- Setup/config tests pin actionable failures for both invalid and silently
+  parseable single-backslash Windows paths.
 - One-project C#, mixed multi-project C#/VB.NET, discover, projectless, all-page,
   and selected-page config contracts are pinned.
 - Folder discovery retains C# and VB.NET project files beneath the three roots
