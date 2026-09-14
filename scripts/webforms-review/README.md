@@ -1,12 +1,18 @@
 # Focused Web Forms review workflow
 
+For the shortest C# or VB.NET operator path, start with the [Web Forms review
+quickstart](../../docs/WEBFORMS_REVIEW_QUICKSTART.md). This file is the full
+reference for optional review overlays, exceptional-handler inspection,
+diagnostics, limits, and recovery.
+
 This folder documents the supported operator path for turning an existing
 focused Web Forms packet into bounded, local source-review pages. The executable
 entry points remain in `scripts/` for compatibility with existing work-machine
 commands.
 
-For the first full run against an authorized legacy VB.NET application, follow
-the copy-and-run checklist in [VBNET_BATTLE_TEST.md](VBNET_BATTLE_TEST.md).
+For the pinned legacy VB.NET validation sequence, use
+[VBNET_BATTLE_TEST.md](VBNET_BATTLE_TEST.md) as a battle-test appendix rather
+than the general onboarding path.
 
 ## Start here: complete work-machine run
 
