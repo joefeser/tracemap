@@ -998,6 +998,15 @@ behind compatibility wrappers. The guide separates the normal two-command batch
 and review-set path from optional diagnostic tools, inventories every set artifact,
 and repeats the private/shareable and static-evidence boundaries.
 
+On `codex/vb-webforms-battle-test`, handler-resolution gaps now retain the event
+binding fact that caused them. The modernization packet joins that evidence back
+to an unavailable event chain and emits one closed diagnostic state: resolved,
+missing linked method, ambiguous linked method, unproven cross-file, or
+unclassified unavailable. The private workbench associates gaps by retained
+support as well as scope ID, and the anonymous page-path export preserves only
+the closed state. This fixes pages that previously reported unavailable handlers
+and zero gaps even though the scanner had emitted the resolution evidence.
+
 ### Post-fairness field result and actionable summary
 
 The work-machine rerun retained 466 event chains and 361 downstream boundaries.

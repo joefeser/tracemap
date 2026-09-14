@@ -978,10 +978,14 @@ public sealed class LegacyWebFormsExtractorTests
 
         var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
 
-        Assert.Contains(result.Facts, fact =>
+        var ambiguousGap = Assert.Single(result.Facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.LegacyWebFormsHandlerResolution
             && fact.Properties.GetValueOrDefault("gapKind") == "AmbiguousWebFormsHandler");
+        var ambiguousBinding = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsEventBindingDeclared
+            && fact.ContractElement == "Save_Click");
+        Assert.Contains(ambiguousBinding.FactId, ambiguousGap.Properties.GetValueOrDefault("supportingFactIds")!.Split(','), StringComparer.Ordinal);
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
             && fact.Properties.GetValueOrDefault("gapKind") == "AutoEventWireupUnavailable");
@@ -1788,7 +1792,7 @@ public sealed class LegacyWebFormsExtractorTests
         Assert.All(events.Concat(mutations).Append(constraint), fact =>
         {
             Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, fact.EvidenceTier);
-            Assert.Equal("legacy-webforms/0.13.1", fact.Evidence.ExtractorVersion);
+            Assert.Equal("legacy-webforms/0.13.2", fact.Evidence.ExtractorVersion);
             Assert.DoesNotContain("Saving", JsonSerializer.Serialize(fact), StringComparison.Ordinal);
         });
     }
@@ -1858,7 +1862,7 @@ public sealed class LegacyWebFormsExtractorTests
         {
             Assert.Equal(RuleIds.LegacyWebFormsInlineClientHttpRequest, request.RuleId);
             Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, request.EvidenceTier);
-            Assert.Equal("legacy-webforms/0.13.1", request.Evidence.ExtractorVersion);
+            Assert.Equal("legacy-webforms/0.13.2", request.Evidence.ExtractorVersion);
         });
         var handler = Assert.Single(result.Facts, fact =>
             fact.FactType == FactTypes.WebFormsHandlerResolved

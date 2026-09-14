@@ -448,6 +448,10 @@ public sealed class WebFormsModernizationPacketTests
         });
         Assert.Contains(first.Packet.Gaps, gap => gap.Classification == "NoBackendEvidence");
         Assert.Contains(first.Packet.Gaps, gap => gap.Classification == "MissingWebFormsHandler");
+        var missingChain = Assert.Single(first.Packet.EventChains, chain => chain.HandlerFactId is null);
+        Assert.Equal("missing-linked-method", missingChain.HandlerResolution);
+        var missingGap = Assert.Single(first.Packet.Gaps, gap => gap.Classification == "MissingWebFormsHandler");
+        Assert.Contains(missingGap.SupportingFactIds, id => missingChain.SupportingFactIds.Contains(id, StringComparer.Ordinal));
         Assert.Contains(first.Packet.Gaps, gap => gap.Classification == "DynamicWebFormsEventSubscription");
         Assert.Contains(first.Packet.StructuralSliceCandidates, candidate => candidate.SurfaceIds.Count > 1);
         var areaPage = first.Packet.Surfaces.Single(surface => surface.Evidence.FilePath == "AreaA/Default.aspx");

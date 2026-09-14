@@ -897,13 +897,14 @@ public static partial class LegacyWebFormsExtractor
                 unprovenCrossFile ? "UnprovenCrossFileWebFormsHandler" : "MissingWebFormsHandler",
                 unprovenCrossFile
                     ? $"A cross-file partial method named `{binding.HandlerName}` is visible, but semantic type and method identity could not be proven."
-                    : $"No linked code-behind method matched handler `{binding.HandlerName}`."));
+                    : $"No linked code-behind method matched handler `{binding.HandlerName}`.",
+                [bindingFact.FactId]));
             return;
         }
 
         if (candidates.Length > 1)
         {
-            facts.Add(CreateGap(manifest, binding.FilePath, binding.Line, "AmbiguousWebFormsHandler", $"Multiple linked code-behind methods matched handler `{binding.HandlerName}`; TraceMap did not choose one."));
+            facts.Add(CreateGap(manifest, binding.FilePath, binding.Line, "AmbiguousWebFormsHandler", $"Multiple linked code-behind methods matched handler `{binding.HandlerName}`; TraceMap did not choose one.", [bindingFact.FactId]));
             return;
         }
 
@@ -3617,21 +3618,31 @@ public static partial class LegacyWebFormsExtractor
         return evidenceIndex.ProjectPathsForFile(page.LinkedCodePath);
     }
 
-    private static CodeFact CreateGap(ScanManifest manifest, string filePath, int line, string gapKind, string message)
+    private static CodeFact CreateGap(
+        ScanManifest manifest,
+        string filePath,
+        int line,
+        string gapKind,
+        string message,
+        IReadOnlyList<string>? supportingFactIds = null)
     {
+        var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["coverageLabel"] = "reduced-static-webforms-evidence",
+            ["gapKind"] = gapKind,
+            ["message"] = message,
+            ["ruleLimitations"] = "WebForms gaps preserve reduced static evidence and are not proof of absence."
+        };
+        if (supportingFactIds is { Count: > 0 })
+            properties["supportingFactIds"] = string.Join(",", supportingFactIds.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal));
+
         return FactFactory.Create(
             manifest,
             FactTypes.AnalysisGap,
             RuleIdForGapKind(gapKind),
             EvidenceTiers.Tier4Unknown,
             new EvidenceSpan(filePath, line, line, null, "LegacyWebFormsExtractor", ScannerVersions.LegacyWebFormsExtractor),
-            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["coverageLabel"] = "reduced-static-webforms-evidence",
-                ["gapKind"] = gapKind,
-                ["message"] = message,
-                ["ruleLimitations"] = "WebForms gaps preserve reduced static evidence and are not proof of absence."
-            });
+            properties: properties);
     }
 
     private static string RuleIdForGapKind(string gapKind)

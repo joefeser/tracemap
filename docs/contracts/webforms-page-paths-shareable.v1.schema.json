@@ -61,12 +61,13 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["chainAlias", "originKind", "endpointAlias", "handlerState", "handlerAlias", "classification", "terminalKind", "traversalStopState", "retainedCallFactCount", "reportedCallFactCount", "callEvidenceTruncated", "retainedCallSiteAliases"],
+            "required": ["chainAlias", "originKind", "endpointAlias", "handlerState", "handlerResolution", "handlerAlias", "classification", "terminalKind", "traversalStopState", "retainedCallFactCount", "reportedCallFactCount", "callEvidenceTruncated", "retainedCallSiteAliases"],
             "properties": {
               "chainAlias": { "$ref": "#/$defs/chainAlias" },
               "originKind": { "enum": ["client-http", "server-event-or-lifecycle"] },
               "endpointAlias": { "$ref": "#/$defs/endpointAlias" },
               "handlerState": { "enum": ["resolved-static-handler", "handler-unavailable"] },
+              "handlerResolution": { "enum": ["resolved-static-handler", "missing-linked-method", "ambiguous-linked-method", "unproven-cross-file", "unavailable-unclassified"] },
               "handlerAlias": { "$ref": "#/$defs/handlerAlias" },
               "classification": { "enum": ["terminal-reached", "NoBackendEvidence", "handler-unavailable", "UnknownAnalysisGap", "NeedsReviewStaticPath", "AnalysisGap", "ReducedCoverage", "other"] },
               "terminalKind": { "enum": ["database", "service", "http-client", "wcf-operation", "file", "message-queue", "message-topic", "package-config", "none-observed"] },

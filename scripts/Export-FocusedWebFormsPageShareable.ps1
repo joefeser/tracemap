@@ -169,6 +169,7 @@ $chainRows = @($chains | ForEach-Object {
         originKind = $origin
         endpointAlias = Alias-OrUnavailable $endpointAliases $endpointKey
         handlerState = if ($handlerKey) { 'resolved-static-handler' } else { 'handler-unavailable' }
+        handlerResolution = Closed-Value ([string](Property-Value $chain 'handlerResolution')) @('resolved-static-handler','missing-linked-method','ambiguous-linked-method','unproven-cross-file','unavailable-unclassified') 'unavailable-unclassified'
         handlerAlias = Alias-OrUnavailable $handlerAliases $handlerKey
         classification = Closed-Value ([string]$chain.classification) @('terminal-reached','NoBackendEvidence','handler-unavailable','UnknownAnalysisGap','NeedsReviewStaticPath','AnalysisGap','ReducedCoverage')
         terminalKind = Closed-Value ([string]$chain.terminalKind) @('database','service','http-client','wcf-operation','file','message-queue','message-topic','package-config') 'none-observed'

@@ -161,6 +161,7 @@ public sealed record WebFormsModernizationEventChain(
     WebFormsModernizationTraversalObservation? TraversalObservation = null)
 {
     public string? HandlerSymbol { get; init; }
+    public string HandlerResolution { get; init; } = "unavailable-unclassified";
     public IReadOnlyList<WebFormsModernizationCallEvidence> CallEvidence { get; init; } = [];
     public int CallEvidenceTotalCount { get; init; }
     public bool CallEvidenceTruncated { get; init; }
@@ -636,6 +637,12 @@ public static class WebFormsModernizationPacketReporter
             .Where(fact => !string.IsNullOrWhiteSpace(fact.Properties.GetValueOrDefault("bindingFactId")))
             .GroupBy(fact => fact.Properties["bindingFactId"], StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.OrderBy(fact => fact.FactId, StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
+        var handlerResolutionGapsByBinding = facts
+            .Where(fact => fact.FactType == FactTypes.AnalysisGap)
+            .Where(fact => fact.Properties.GetValueOrDefault("gapKind") is "MissingWebFormsHandler" or "AmbiguousWebFormsHandler" or "UnprovenCrossFileWebFormsHandler")
+            .SelectMany(fact => SplitIds(fact.Properties.GetValueOrDefault("supportingFactIds")).Select(bindingFactId => (bindingFactId, fact)))
+            .GroupBy(item => item.bindingFactId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Select(item => item.fact).DistinctBy(fact => fact.FactId).OrderBy(fact => fact.FactId, StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
         var flowFacts = facts.Where(fact => fact.FactType == FactTypes.WebFormsEventFlowProjected).ToArray();
         var bindings = facts.Where(fact => fact.FactType is FactTypes.WebFormsEventBindingDeclared or FactTypes.WebFormsClientHttpRequestCandidate)
             .Where(fact => selectedSurfaceIds is null
@@ -657,6 +664,9 @@ public static class WebFormsModernizationPacketReporter
             }
             var handlers = handlersByBinding.GetValueOrDefault(binding.FactId) ?? [];
             var handler = handlers.Length == 1 ? handlers[0] : null;
+            var handlerResolutionGaps = handler is null
+                ? handlerResolutionGapsByBinding.GetValueOrDefault(binding.FactId) ?? []
+                : [];
             var flowFact = handler is null ? null : flowFacts.FirstOrDefault(fact => SplitIds(fact.Properties.GetValueOrDefault("supportingFactIds")).Contains(handler.FactId, StringComparer.Ordinal));
             var handlerSymbols = handler is null
                 ? new HashSet<string>(StringComparer.Ordinal)
@@ -758,11 +768,11 @@ public static class WebFormsModernizationPacketReporter
                     terminalKind,
                     support.Select(fact => Evidence(fact, gaps, options.MaxGaps, snapshot)).ToArray(),
                     pathProvenanceAvailable ? pathEvidence : [],
-                    support.Select(fact => fact.FactId).Concat(supportedLegacyPath?.SupportingFactIds ?? []).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                    support.Select(fact => fact.FactId).Concat(handlerResolutionGaps.Select(fact => fact.FactId)).Concat(supportedLegacyPath?.SupportingFactIds ?? []).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
                     supportedLegacyPath?.SupportingEdgeIds.OrderBy(value => value, StringComparer.Ordinal).ToArray() ?? [],
-                    support.Select(fact => fact.RuleId).Concat(supportedLegacyPath?.Edges.Select(edge => edge.RuleId) ?? []).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
-                    support.Select(fact => fact.EvidenceTier).Concat(supportedLegacyPath?.Edges.Select(edge => edge.EvidenceTier) ?? []).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
-                    support.Select(fact => fact.Properties.GetValueOrDefault("coverageLabel") ?? UnknownCoverage).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                    support.Select(fact => fact.RuleId).Concat(handlerResolutionGaps.Select(fact => fact.RuleId)).Concat(supportedLegacyPath?.Edges.Select(edge => edge.RuleId) ?? []).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                    support.Select(fact => fact.EvidenceTier).Concat(handlerResolutionGaps.Select(fact => fact.EvidenceTier)).Concat(supportedLegacyPath?.Edges.Select(edge => edge.EvidenceTier) ?? []).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                    support.Concat(handlerResolutionGaps).Select(fact => fact.Properties.GetValueOrDefault("coverageLabel") ?? UnknownCoverage).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
                     inputLimited
                         ? ["Input admission was truncated; no downstream path or absence conclusion was derived from the incomplete input."]
                         : terminalKind is null && handler is not null
@@ -771,6 +781,7 @@ public static class WebFormsModernizationPacketReporter
                     traversalObservation)
                 {
                     HandlerSymbol = handler?.Properties.GetValueOrDefault("handlerSymbol"),
+                    HandlerResolution = handler is not null ? "resolved-static-handler" : HandlerResolution(handlerResolutionGaps),
                     CallEvidence = callEvidence,
                     CallEvidenceTotalCount = Math.Max(handlerOwnedCallEvidenceCount, handlerCallFacts.Length),
                     CallEvidenceTruncated = Math.Max(handlerOwnedCallEvidenceCount, handlerCallFacts.Length) > callEvidence.Length
@@ -1832,6 +1843,15 @@ public static class WebFormsModernizationPacketReporter
         fact.Properties.GetValueOrDefault("callKind")?.StartsWith("Semantic", StringComparison.Ordinal) == true
             ? "compiler-resolved"
             : "syntax-only";
+
+    private static string HandlerResolution(IReadOnlyList<CodeFact> gaps)
+    {
+        var kinds = gaps.Select(fact => fact.Properties.GetValueOrDefault("gapKind")).ToHashSet(StringComparer.Ordinal);
+        if (kinds.Contains("AmbiguousWebFormsHandler")) return "ambiguous-linked-method";
+        if (kinds.Contains("UnprovenCrossFileWebFormsHandler")) return "unproven-cross-file";
+        if (kinds.Contains("MissingWebFormsHandler")) return "missing-linked-method";
+        return "unavailable-unclassified";
+    }
 
     private static string CallTechnologyFamily(CodeFact fact)
     {

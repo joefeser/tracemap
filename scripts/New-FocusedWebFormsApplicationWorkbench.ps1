@@ -237,7 +237,7 @@ if ($LASTEXITCODE -ne 0) { throw 'ApplicationWorkbenchInputValidationFailed' }
 Complete-OptionalProperties (Values $packet.surfaces) @('projectId','controlIds','controls','supportingEvidence','supportingFactIds')
 Complete-OptionalProperties @($packet) @('clientBehaviorInventory','serverBehaviorInventory')
 Complete-OptionalProperties (Values $packet.eventChains) @(
-    'chainId','surfaceId','eventSourceId','bindingFactId','handlerId','handlerFactId','handlerSymbol',
+    'chainId','surfaceId','eventSourceId','bindingFactId','handlerId','handlerFactId','handlerSymbol','handlerResolution',
     'classification','legacyPathId','terminalKind','traversalObservation','evidence','pathEvidence',
     'supportingFactIds','supportingEdgeIds','coverageLabels','callEvidence','callEvidenceTotalCount','callEvidenceTruncated')
 Complete-OptionalProperties (Values $packet.downstreamBoundaries) @(
@@ -341,7 +341,8 @@ try {
         }
         $gaps = @(Values $packet.gaps | Where-Object {
             $scopeId = Property-Value $_ 'scopeId'
-            $null -ne $scopeId -and $pageIdentity.Contains([string]$scopeId)
+            ($null -ne $scopeId -and $pageIdentity.Contains([string]$scopeId)) -or
+            (@(Values (Property-Value $_ 'supportingFactIds') | Where-Object { $pageIdentity.Contains([string]$_) }).Count -gt 0)
         } | Sort-Object filePath, startLine, classification, gapId)
         $gapCategories = @($gaps | Group-Object {
             $classification = [string](Property-Value $_ 'classification')
@@ -453,6 +454,7 @@ try {
             eventChains = @($chains | ForEach-Object { [ordered]@{
                 chainId = [string]$_.chainId; eventSourceId = [string]$_.eventSourceId; bindingFactId = [string]$_.bindingFactId
                 handlerId = [string]$_.handlerId; handlerFactId = [string]$_.handlerFactId; handlerSymbol = $_.handlerSymbol
+                handlerResolution = [string](Property-Value $_ 'handlerResolution')
                 classification = [string]$_.classification; legacyPathId = $_.legacyPathId; terminalKind = $_.terminalKind
                 traversalStopState = $_.traversalObservation.stopState
                 evidence = @((Values $_.evidence) | ForEach-Object { Project-Evidence $_ })
@@ -513,7 +515,9 @@ try {
             $ceilingNote = if ($chain.callEvidenceTruncated) { ' Explicit packet truncation is reported.' } elseif ($callTotal -ge 256) { ' The 256-fact retention ceiling was reached; additional evidence may be unavailable.' } else { '' }
             $callNote = if ($chain.callEvidenceTruncated -or $callTotal -ge 256 -or $callSites.Count -gt $displayedCalls.Count) { "<small>$($displayedCalls.Count) shown of $($callSites.Count) normalized call sites from $callTotal retained fact projections.$ceilingNote</small>" } else { '' }
             $callHtml = if ($calls.Count -gt 0) { '<details class="calls"><summary>{0} sites / {1} retained facts</summary><ul>{2}</ul>{3}</details>' -f $callSites.Count, $callTotal, ($callItems -join ''), $callNote } else { '<span class="muted">none retained</span>' }
-            '<tr><td><code>{0}</code></td><td>{1}<br><small>{2}</small></td><td><code>{3}</code><br><small>{4}</small></td><td>{5}</td><td><code>{6}</code></td><td>{7}</td></tr>' -f (ConvertTo-HtmlText $chain.chainId), (ConvertTo-HtmlText $chain.eventSourceId), (ConvertTo-HtmlText $bindingSpan), (ConvertTo-HtmlText $(if ($chain.handlerSymbol) { $chain.handlerSymbol } else { $chain.handlerId })), (ConvertTo-HtmlText $handlerSpan), $callHtml, (ConvertTo-HtmlText $chain.classification), (ConvertTo-HtmlText $(if ($chain.terminalKind) { $chain.terminalKind } else { $chain.traversalObservation.stopState }))
+            $handlerResolution = [string](Property-Value $chain 'handlerResolution')
+            if (!$handlerResolution) { $handlerResolution = if ($chain.handlerFactId) { 'resolved-static-handler' } else { 'unavailable-unclassified' } }
+            '<tr><td><code>{0}</code></td><td>{1}<br><small>{2}</small></td><td><code>{3}</code><br><small>{4}; {8}</small></td><td>{5}</td><td><code>{6}</code></td><td>{7}</td></tr>' -f (ConvertTo-HtmlText $chain.chainId), (ConvertTo-HtmlText $chain.eventSourceId), (ConvertTo-HtmlText $bindingSpan), (ConvertTo-HtmlText $(if ($chain.handlerSymbol) { $chain.handlerSymbol } else { $chain.handlerId })), (ConvertTo-HtmlText $handlerSpan), $callHtml, (ConvertTo-HtmlText $chain.classification), (ConvertTo-HtmlText $(if ($chain.terminalKind) { $chain.terminalKind } else { $chain.traversalObservation.stopState })), (ConvertTo-HtmlText $handlerResolution)
         }
         $boundaryRows = foreach ($boundary in $boundaries) { '<tr><td><code>{0}</code></td><td>{1}</td><td>{2}</td><td><code>{3}</code></td></tr>' -f (ConvertTo-HtmlText $boundary.boundaryId), (ConvertTo-HtmlText $boundary.boundaryCategory), (ConvertTo-HtmlText $boundary.boundaryKind), (ConvertTo-HtmlText $boundary.boundaryTargetId) }
         $gapRows = foreach ($gap in $gaps) { '<li><code>{0}</code> <code>{1}</code> <code>{2}</code> — {3}; {4}:L{5}-{6}; commit <code>{7}</code>; extractor <code>{8}/{9}</code>; support <code>{10}</code></li>' -f (ConvertTo-HtmlText $gap.gapId), (ConvertTo-HtmlText $gap.ruleId), (ConvertTo-HtmlText $gap.evidenceTier), (ConvertTo-HtmlText $gap.classification), (ConvertTo-HtmlText $gap.filePath), (ConvertTo-HtmlText $gap.startLine), (ConvertTo-HtmlText $gap.endLine), (ConvertTo-HtmlText $gap.commitSha), (ConvertTo-HtmlText $gap.extractorId), (ConvertTo-HtmlText $gap.extractorVersion), (ConvertTo-HtmlText ((Values $gap.supportingFactIds) -join ', ')) }
