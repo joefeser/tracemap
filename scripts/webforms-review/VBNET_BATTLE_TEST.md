@@ -277,4 +277,6 @@ supported-terminal, no-observed-downstream, and truncated chain outcomes instead
 of presenting them as one unexplained gap count. Each chain can also expand its
 bounded retained call rows with safe callee names and exact evidence spans; call
 arguments and source snippets remain omitted unless the existing private raw-
-source option is explicitly enabled.
+source option is explicitly enabled. Page and application summaries distinguish
+chain-associated call projections from unique retained call facts so multiple
+event paths into one handler do not look like distinct extracted calls.
