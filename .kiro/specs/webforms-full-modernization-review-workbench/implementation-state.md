@@ -24,3 +24,12 @@
   through resume and summary scripts, deduplicate overlaps, and retain coverage
   provenance per project-owned versus projectless file. Do not fall back to an
   unbounded repository-wide project search.
+- Pre-flight usability follow-up: `Invoke-FocusedWebFormsReview.ps1` currently
+  collapses a mistyped or missing `SolutionRelativePath` into the opaque
+  `SOLUTION_SCOPE_UNAVAILABLE` exception at `Resolve-RelativeChild`. Before any
+  scan starts, distinguish blank input, rooted/traversal input, wrong extension,
+  not-found path, non-file path, and path outside the source root. Report the
+  supplied repository-relative value and show a bounded, deterministic list of
+  `.sln` candidates discovered only beneath the configured Web Forms, backend,
+  and controls roots. Keep categorical error codes stable and do not disclose
+  unrelated absolute paths.
