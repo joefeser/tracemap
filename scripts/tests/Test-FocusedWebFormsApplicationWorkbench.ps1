@@ -2,6 +2,7 @@ $ErrorActionPreference = 'Stop'
 $scripts = Split-Path -Parent $PSScriptRoot
 $scriptPath = Join-Path $scripts 'New-FocusedWebFormsApplicationWorkbench.ps1'
 $exportScript = Join-Path $scripts 'Export-FocusedWebFormsPageShareable.ps1'
+$standaloneScript = Join-Path $scripts 'New-FocusedWebFormsStandaloneReview.ps1'
 $shareableSchemaPath = Join-Path (Split-Path -Parent $scripts) 'docs/contracts/webforms-page-paths-shareable.v1.schema.json'
 $tokens = $null
 $parseErrors = $null
@@ -11,6 +12,10 @@ $tokens = $null
 $parseErrors = $null
 [Management.Automation.Language.Parser]::ParseFile($exportScript, [ref]$tokens, [ref]$parseErrors) | Out-Null
 if ($parseErrors.Count -ne 0) { throw 'Page shareable exporter script syntax is invalid.' }
+$tokens = $null
+$parseErrors = $null
+[Management.Automation.Language.Parser]::ParseFile($standaloneScript, [ref]$tokens, [ref]$parseErrors) | Out-Null
+if ($parseErrors.Count -ne 0) { throw 'Standalone review script syntax is invalid.' }
 $shareableSchema = [IO.File]::ReadAllText($shareableSchemaPath) | ConvertFrom-Json -Depth 30
 if ($shareableSchema.properties.schemaVersion.const -ne 'webforms-page-paths-shareable.v1' -or $shareableSchema.properties.privacy.const -ne 'anonymous-structure-only') { throw 'Page shareable schema does not pin its version and privacy profile.' }
 
@@ -190,6 +195,22 @@ try {
     $expanded = Join-Path $temp 'expanded-page-shareable'
     Expand-Archive -LiteralPath $shareableZip -DestinationPath $expanded
     if (@(Get-ChildItem -LiteralPath $expanded -File).Count -ne 1 -or !(Test-Path -LiteralPath (Join-Path $expanded 'page-001.paths.shareable.json') -PathType Leaf)) { throw 'Page shareable ZIP did not contain exactly the anonymous JSON artifact.' }
+
+    $standaloneOutput = @(& $standaloneScript -PacketPath $packetPath -OutputRoot $outputRoot -PageId 'page-001')
+    $standaloneRootLine = @($standaloneOutput | Where-Object { $_ -like 'standaloneReviewRoot=*' })
+    if ($standaloneRootLine.Count -ne 1) { throw 'Standalone review did not report exactly one review root.' }
+    $standaloneRoot = $standaloneRootLine[0].Substring('standaloneReviewRoot='.Length)
+    $standaloneReceiptPath = Join-Path $standaloneRoot 'run-receipt.json'
+    $standaloneZip = Join-Path $standaloneRoot 'workbench/page-001.paths.shareable.zip'
+    if (!(Test-Path -LiteralPath $standaloneReceiptPath -PathType Leaf) -or !(Test-Path -LiteralPath $standaloneZip -PathType Leaf)) { throw 'Standalone review omitted its receipt or requested anonymous page export.' }
+    $standaloneReceipt = [IO.File]::ReadAllText($standaloneReceiptPath) | ConvertFrom-Json -Depth 20
+    if ($standaloneReceipt.ruleId -ne 'diagnostic.webforms.standalone-review-receipt.v1' -or
+        $standaloneReceipt.run.state -ne 'completed' -or
+        $standaloneReceipt.provenance.inputSha256 -ne (Get-FileHash -LiteralPath $packetPath -Algorithm SHA256).Hash.ToLowerInvariant()) {
+        throw 'Standalone review receipt did not preserve packet provenance.'
+    }
+    if (@($standaloneOutput | Where-Object { $_ -eq "zipPath=$standaloneZip" }).Count -ne 1) { throw 'Standalone review export did not identify the ZIP created from its new workbench.' }
+
     if (!$index.Contains('batch-one', [StringComparison]::Ordinal)) { throw 'Application index omitted project-scoped data movement.' }
     foreach ($unassociated in @($applicationHandoff.unassociatedIdentityState[0], $applicationHandoff.unassociatedBatchDataMovement[0])) {
         if (!$unassociated.evidence.factId -or !$unassociated.evidence.ruleId -or !$unassociated.evidence.evidenceTier -or !$unassociated.evidence.filePath -or !$unassociated.evidence.commitSha -or !$unassociated.evidence.extractorId -or !$unassociated.evidence.extractorVersion) { throw 'Unassociated inventory evidence provenance was incomplete.' }

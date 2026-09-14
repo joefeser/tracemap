@@ -64,6 +64,24 @@ After editing the config, run one command:
 .\scripts\Invoke-FocusedWebFormsPipeline.ps1 -ReviewRoot $ReviewRoot
 ```
 
+### Refresh reports from an existing index
+
+After a report-only TraceMap change, regenerate the configured page-list packet
+without rescanning, then create a new immutable receipted workbench from that
+exact packet. The second command may also export one anonymous page packet from
+the new workbench:
+
+```powershell
+.\scripts\Run-FocusedWebFormsPageList.ps1
+.\scripts\New-FocusedWebFormsStandaloneReview.ps1 -PageId page-008
+```
+
+The standalone review is written under the configured output root as
+`webforms-standalone-review-<timestamp>-<suffix>/workbench`. It does not mutate
+or silently invalidate a completed pipeline workbench. The console prints the
+new review root, packet path, and optional ZIP path. Page aliases are determined
+by the newly generated workbench; confirm the retained route before sharing.
+
 After the pipeline completes, print the receipt-validated alias-only totals
 with one short command:
 

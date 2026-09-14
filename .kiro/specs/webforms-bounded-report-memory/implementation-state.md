@@ -13,6 +13,13 @@ absence conclusions remain `UnknownAnalysisGap`. Regression coverage pins both
 the positive-path retention and the fail-closed no-path case. No private source
 names or snippets are included in the fixture.
 
+The existing page-list runner intentionally publishes a standalone packet and
+does not mutate a completed pipeline workbench. Added a separate standalone
+review wrapper that selects the newest page-list packet, creates a new immutable
+`workbench/` plus compatible hash receipt, and can immediately invoke the
+anonymous page exporter against that exact workbench. This prevents a report-only
+rerun from accidentally exporting an older receipted pipeline packet.
+
 ## Handler-rooted HTML and anonymous review packet (2026-09-10)
 
 The one-case source review now renders private HTML organized as trigger,
