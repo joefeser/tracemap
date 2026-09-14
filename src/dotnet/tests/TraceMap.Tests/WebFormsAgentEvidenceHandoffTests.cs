@@ -224,6 +224,34 @@ public sealed class WebFormsAgentEvidenceHandoffTests
     }
 
     [Fact]
+    public void SetHandoffAcceptsExporterValidChunksWithMoreThan2048SupportingIds()
+    {
+        WithFixture((root, inspection, handoff) =>
+        {
+            var set = PrepareSet(root, inspection, handoff);
+            var index = Path.Combine(root, "index.sqlite");
+            CreateIndex(index, "scan-one", CommitSha);
+            var corpus = Path.Combine(root, "docs");
+            EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(index, corpus, Format: "jsonl")).GetAwaiter().GetResult();
+            var chunksPath = Path.Combine(corpus, "chunks.jsonl");
+            var lines = File.ReadAllLines(chunksPath);
+            var chunk = JsonNode.Parse(lines[0])!.AsObject();
+            var supportingIds = chunk["supportingIds"]!.AsArray();
+            for (var indexValue = supportingIds.Count; indexValue <= 2048; indexValue++)
+                supportingIds.Add($"fact-scale-{indexValue:D4}");
+            lines[0] = chunk.ToJsonString();
+            File.WriteAllText(chunksPath, string.Join('\n', lines) + "\n", new UTF8Encoding(false));
+            RewriteManifest(corpus, manifest => UpdateOutputDigest(manifest, corpus, "chunks.jsonl"));
+            var output = Path.Combine(set, "agent-evidence-handoff.json");
+
+            WebFormsAgentEvidenceHandoff.WriteSet(
+                Path.Combine(set, "inspection.snapshot.json"), set, output, index, corpus);
+
+            Assert.True(File.Exists(output));
+        });
+    }
+
+    [Fact]
     public void SetHandoffRejectsCrossProductCorpusProvenance()
     {
         WithFixture((root, inspection, handoff) =>

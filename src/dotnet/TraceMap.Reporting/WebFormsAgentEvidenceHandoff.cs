@@ -664,7 +664,6 @@ public static class WebFormsAgentEvidenceHandoff
             }
             if (!SafeChunkTokenPattern.IsMatch(chunk.ChunkId) || !SafeChunkTokenPattern.IsMatch(chunk.ChunkFamily) || !SafeChunkTokenPattern.IsMatch(chunk.ChunkType))
                 throw new InvalidDataException("AgentHandoffCorpusSchemaMismatch");
-            if (chunk.SupportingIds.Count > 2048) throw new InvalidDataException("AgentHandoffCorpusLimit");
             var chunkSupports = chunk.SupportingIds.ToHashSet(StringComparer.Ordinal);
             var chunkHints = chunk.RetrievalHints.Select(HintIdentity).ToHashSet(StringComparer.Ordinal);
             var belongsToSnapshot = chunk.SourceRefs.Any(source => string.Equals(source.ScanId, scanId, StringComparison.Ordinal)

@@ -28,6 +28,10 @@ Pull request: #735
   and one of the four supported evidence tiers before the store is validated.
 - Explicit application-database evidence questions without database execution instructions.
 - Anonymous artifacts remain disconnected from private handoffs.
+- Large-repository validation accepts exporter-valid chunks with more than 2,048
+  supporting IDs. Corpus safety remains bounded by the documented manifest,
+  JSONL-file, line-count, and per-line size limits instead of a producer/consumer
+  item-count mismatch.
 
 ## Validation
 
@@ -46,6 +50,8 @@ Pull request: #735
   Full post-review solution validation passed 1,832 tests. The PowerShell
   review-set smoke test also covers optional configured-index degradation and
   explicit missing-index rejection.
+- Large-corpus compatibility regression: 25 handoff tests passed; full solution
+  validation passed 1,939 tests with 0 failures.
 
 ## Boundaries
 
