@@ -1007,6 +1007,12 @@ support as well as scope ID, and the anonymous page-path export preserves only
 the closed state. This fixes pages that previously reported unavailable handlers
 and zero gaps even though the scanner had emitted the resolution evidence.
 
+The anonymous page-path exporter now assigns chain aliases in the deterministic
+source-evidence order already established by the private workbench. It no longer
+sorts presentation order by opaque fact-derived chain hashes, which caused noisy
+whole-page diffs whenever an extractor version changed. The order remains static
+evidence order and explicitly does not claim runtime execution sequence.
+
 ### Post-fairness field result and actionable summary
 
 The work-machine rerun retained 466 event chains and 361 downstream boundaries.

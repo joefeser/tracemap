@@ -43,6 +43,16 @@ function New-AliasMap([object[]]$Values, [string]$Prefix) {
     }
     return $map
 }
+function New-OrderedAliasMap([object[]]$Values, [string]$Prefix) {
+    $map = [Collections.Generic.Dictionary[string,string]]::new([StringComparer]::Ordinal)
+    $ordinal = 1
+    foreach ($value in @($Values | ForEach-Object { [string]$_ } | Where-Object { $_ })) {
+        if ($map.ContainsKey($value)) { continue }
+        $map[$value] = '{0}-{1:d3}' -f $Prefix, $ordinal
+        $ordinal++
+    }
+    return $map
+}
 function Alias-OrUnavailable([Collections.Generic.Dictionary[string,string]]$Map, [string]$Key) {
     if ($Key -and $Map.ContainsKey($Key)) { return $Map[$Key] }
     return 'unavailable'
@@ -114,7 +124,10 @@ if ($page.provenance.generatorSha256 -ne $application.provenance.generatorSha256
     throw 'WEBFORMS_PAGE_SHAREABLE_PROVENANCE_MISMATCH'
 }
 
-$chains = @(Values $page.eventChains | Sort-Object chainId)
+# The workbench has already ordered chains by retained source evidence. Preserve
+# that order here: opaque fact-derived chain IDs can all change after an extractor
+# version bump and are therefore a poor cross-run presentation sort key.
+$chains = @(Values $page.eventChains)
 $calls = @($chains | ForEach-Object { Values $_.callEvidence })
 $handlerKeys = @($chains | ForEach-Object {
     $key = [string](Property-Value $_ 'handlerFactId')
@@ -123,7 +136,7 @@ $handlerKeys = @($chains | ForEach-Object {
     $key
 })
 $handlerAliases = New-AliasMap $handlerKeys 'handler'
-$chainAliases = New-AliasMap @($chains | ForEach-Object { $_.chainId }) 'chain'
+$chainAliases = New-OrderedAliasMap @($chains | ForEach-Object { $_.chainId }) 'chain'
 $siteAliases = New-AliasMap @($calls | ForEach-Object { Call-Site-Key $_ }) 'call-site'
 $calleeAliases = New-AliasMap @($calls | ForEach-Object { Callee-Key $_ }) 'callee'
 $fileAliases = New-AliasMap @($calls | ForEach-Object { [string]$_.evidence.filePath }) 'source-file'
@@ -227,6 +240,7 @@ $projection = [ordered]@{
     callSites = $siteRows
     limitations = @(
         'Aliases preserve equality only within this artifact and disclose no original identity.',
+        'Chain aliases follow deterministic retained source-evidence order; they are not runtime execution order.',
         'Retained call sites are static evidence grouped by source location; their order is not runtime execution order.',
         'Structural signals are bounded name/type-shape classifiers and do not prove WCF, database, file, HTTP, or SQL execution.',
         'Absence of a structural signal is not evidence that the behavior is absent.'
