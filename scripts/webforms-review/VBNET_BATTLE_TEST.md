@@ -25,11 +25,26 @@ to `$SourceRoot`. The source checkout and TraceMap checkout must both be clean
 because the retained commit and source snapshot are part of the evidence
 provenance.
 
-Check which legacy project shape is present:
+Check which legacy project shape is present. Search only the three configured
+scope folders; do not crawl unrelated projects elsewhere under `$SourceRoot`:
 
 ```powershell
-$ProjectFiles = @(Get-ChildItem -LiteralPath $SourceRoot -Recurse -File -Include '*.vbproj','*.csproj')
-$ProjectFiles | Select-Object FullName
+$ScopeFolders = @($WebFormsFolder, $BackendFolder, $ControlsFolder) |
+  Sort-Object -Unique
+
+$ProjectFiles = @(
+  foreach ($Folder in $ScopeFolders) {
+    Get-ChildItem -LiteralPath (Join-Path $SourceRoot $Folder) -Recurse -File |
+      Where-Object Extension -In '.vbproj', '.csproj'
+  }
+) | Sort-Object FullName -Unique
+
+$ProjectRelativePath = @(
+  $ProjectFiles | ForEach-Object {
+    [IO.Path]::GetRelativePath($SourceRoot, $_.FullName).Replace('\', '/')
+  }
+)
+$ProjectRelativePath
 ```
 
 If this prints a `.vbproj`, keep `$SolutionRelativePath` and use the normal
@@ -38,6 +53,21 @@ ASP.NET Web Site container rather than a buildable Web Application project. Use
 the explicitly projectless command instead; TraceMap will retain syntax and
 structural evidence and label the missing semantic compilation as reduced
 coverage.
+
+For a repository with many unrelated solutions, pass the scoped
+`$ProjectRelativePath` array directly instead of selecting one solution. Files
+inside the three configured folders that are not owned by those projects remain
+available to syntax and structural extraction:
+
+```powershell
+.\scripts\Invoke-FocusedWebFormsReview.ps1 `
+  -SourceRoot $SourceRoot `
+  -WebFormsFolder $WebFormsFolder `
+  -BackendFolder $BackendFolder `
+  -ControlsFolder $ControlsFolder `
+  -ProjectRelativePath $ProjectRelativePath `
+  -TimeoutSeconds 14400
+```
 
 ## 2. Build TraceMap and run one full focused scan
 
