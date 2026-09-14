@@ -207,9 +207,9 @@ report.
 | `--max-gaps` | 1000 | Maximum structured gaps, including a limit gap. |
 | `--max-depth` | 8 | Maximum legacy static-flow traversal depth. |
 | `--max-paths` | 1000 | Maximum legacy static-flow paths considered. |
-| `--max-input-facts` | 250000 | Maximum retained snapshot plus graph fact rows, after conservative syntax-witness compaction. |
-| `--max-input-edges` | 250000 | Ceiling for loaded dependency rows and, separately, derived graph edges. |
-| `--max-input-text-bytes` | 134217728 | Retained UTF-8 input text admission budget (128 MiB), shared by snapshot/facts/edges. |
+| `--max-input-facts` | 250000 | Per-stage maximum retained fact rows, after conservative syntax-witness compaction. |
+| `--max-input-edges` | 250000 | Per-stage ceiling for loaded dependency rows and derived graph edges. |
+| `--max-input-text-bytes` | 134217728 | Per-stage retained UTF-8 input text admission budget (128 MiB). |
 
 ### Large indexes and OOM recovery
 
@@ -221,14 +221,22 @@ Repository-wide symbols remain visible to reconciliation and dispatch so this
 optimization cannot turn hidden competing symbols into a false unique match.
 The scan index is opened read-only and is not filtered or rewritten on disk.
 
-The input limits are separate from output/traversal limits. A row is checked
-before allocating its managed strings/JSON; a single retained row is limited to
-1 MiB of UTF-8 text. Derived graph nodes are capped at twice `--max-input-facts`.
-If admission or graph construction exceeds a limit, the packet emits
+The input limits are separate from output/traversal limits. Snapshot admission
+and selected-handler graph composition each receive an independent bounded
+budget, so reading a large repository inventory cannot consume the graph's
+entire allowance before traversal begins. A row is checked before allocating
+its managed strings/JSON; a single retained row is limited to 1 MiB of UTF-8
+text. Derived graph nodes are capped at twice `--max-input-facts`.
+
+If graph construction exceeds a limit, the packet emits
 `WebFormsModernizationInputLimitReached`, is reduced/truncated, and does **not**
-classify paths from an incomplete graph. Retained markup/configuration inventory
-remains available. Event chains use `UnknownAnalysisGap` instead of a fabricated
-`NoBackendEvidence`. One admission gap survives even with `--max-gaps 1`.
+classify paths from the incomplete graph. If only the broader snapshot is
+limited, a path whose complete supporting nodes, edges, provenance, and terminal
+were retained by the independently bounded graph may still be reported as
+positive evidence. Missing-path and absence conclusions remain unavailable:
+those chains use `UnknownAnalysisGap` instead of a fabricated
+`NoBackendEvidence`. Retained markup/configuration inventory remains available.
+One admission gap survives even with `--max-gaps 1`.
 Limits count serialized input text/rows, not a hard process RSS quota. Raising
 limits can increase memory pressure. The general `paths`/`relate` commands do
 not inherit this packet-specific reader.

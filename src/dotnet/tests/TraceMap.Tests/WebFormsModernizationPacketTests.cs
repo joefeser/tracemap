@@ -1429,9 +1429,69 @@ public sealed class WebFormsModernizationPacketTests
             SupportingEdgeIds = []
         };
         Assert.Throws<InvalidDataException>(() => StaticHtmlEvidenceExplorer.ValidateWebFormsPacket(
-            singlePacket with { DownstreamBoundaries = singlePacket.DownstreamBoundaries.Select(boundary =>
-                boundary.BoundaryId == retainedBoundary.BoundaryId ? unsupportedBoundary : boundary).ToArray() },
+            singlePacket with
+            {
+                DownstreamBoundaries = singlePacket.DownstreamBoundaries.Select(boundary =>
+                boundary.BoundaryId == retainedBoundary.BoundaryId ? unsupportedBoundary : boundary).ToArray()
+            },
             expectedCommitSha: null));
+    }
+
+    [Fact]
+    public void Partial_snapshot_retains_supported_positive_paths_but_not_absence_conclusions()
+    {
+        var manifest = Manifest("Succeeded") with { AnalysisLevel = "Level1SemanticAnalysis" };
+        var page = Page("surface:orders", "Pages/Orders.aspx", manifest);
+        var firstBinding = Fact(manifest, FactTypes.WebFormsEventBindingDeclared, RuleIds.LegacyWebFormsEventBinding, "Pages/Orders.aspx", 10,
+            source: "control:first", target: "method:first", contract: "First_Click",
+            ("surfaceIdentity", "surface:orders"), ("eventSourceIdentity", "control:first"), ("coverageLabel", "bounded-static-webforms-event"));
+        var secondBinding = Fact(manifest, FactTypes.WebFormsEventBindingDeclared, RuleIds.LegacyWebFormsEventBinding, "Pages/Orders.aspx", 11,
+            source: "control:second", target: "method:second", contract: "Second_Click",
+            ("surfaceIdentity", "surface:orders"), ("eventSourceIdentity", "control:second"), ("coverageLabel", "bounded-static-webforms-event"));
+        var firstHandler = Fact(manifest, FactTypes.WebFormsHandlerResolved, RuleIds.LegacyWebFormsHandlerResolution, "Pages/Orders.aspx.cs", 20,
+            source: "control:first", target: "method:first", contract: "First_Click",
+            ("bindingFactId", firstBinding.FactId), ("handlerSymbolId", "method:first"), ("coverageLabel", "bounded-static-webforms-handler"));
+        var secondHandler = Fact(manifest, FactTypes.WebFormsHandlerResolved, RuleIds.LegacyWebFormsHandlerResolution, "Pages/Orders.aspx.cs", 30,
+            source: "control:second", target: "method:second", contract: "Second_Click",
+            ("bindingFactId", secondBinding.FactId), ("handlerSymbolId", "method:second"), ("coverageLabel", "bounded-static-webforms-handler"));
+        var root = PathNode("root:first", "symbol", "method:first", manifest, symbolId: "method:first");
+        var terminal = PathNode(
+            "database:first", "surface", "database-operation", manifest,
+            ruleId: RuleIds.CSharpSemanticMethodInvocation,
+            evidenceTier: EvidenceTiers.Tier1Semantic,
+            filePath: "Data/OrdersQuery.cs",
+            startLine: 40,
+            endLine: 40,
+            surfaceKind: "database-operation");
+        var edge = new CombinedPathEdge(
+            "edge:first", "call", root.NodeId, terminal.NodeId,
+            CombinedDependencyPathClassifications.ProbableStaticPath,
+            RuleIds.CSharpSemanticCallGraph,
+            EvidenceTiers.Tier1Semantic,
+            [firstHandler.FactId], [], "Pages/Orders.aspx.cs", 20, 20);
+        var path = new CombinedPath(
+            "path:first", CombinedDependencyPathClassifications.ProbableStaticPath, "Medium", 1,
+            root.NodeId, terminal.NodeId, [root, terminal], [edge],
+            [firstBinding.FactId, firstHandler.FactId], [edge.EdgeId], []);
+        var snapshot = new WebFormsModernizationPacketReporter.Snapshot(
+            manifest.RepoName, manifest.ScanId, manifest.CommitSha, manifest.AnalysisLevel, manifest.BuildStatus,
+            [page, firstBinding, secondBinding, firstHandler, secondHandler], "fact limit reached");
+
+        var packet = WebFormsModernizationPacketReporter.Build(snapshot, LegacyFlow(path), new("unused", "unused"));
+
+        var supported = Assert.Single(packet.EventChains, chain => chain.BindingFactId == firstBinding.FactId);
+        Assert.Equal(CombinedDependencyPathClassifications.ProbableStaticPath, supported.Classification);
+        Assert.Equal("database-operation", supported.TerminalKind);
+        Assert.Contains(supported.Limitations, limitation => limitation.Contains("positive downstream path", StringComparison.Ordinal));
+        Assert.Single(packet.DownstreamBoundaries, boundary => boundary.ChainId == supported.ChainId);
+
+        var incomplete = Assert.Single(packet.EventChains, chain => chain.BindingFactId == secondBinding.FactId);
+        Assert.Equal("UnknownAnalysisGap", incomplete.Classification);
+        Assert.Null(incomplete.TerminalKind);
+        Assert.Null(incomplete.TraversalObservation);
+        Assert.DoesNotContain(packet.DownstreamBoundaries, boundary => boundary.ChainId == incomplete.ChainId);
+        Assert.True(packet.Summary.Truncated);
+        Assert.Contains(packet.Gaps, gap => gap.Classification == "WebFormsModernizationInputLimitReached");
     }
 
     [Fact]

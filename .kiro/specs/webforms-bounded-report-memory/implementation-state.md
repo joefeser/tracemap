@@ -1,5 +1,18 @@
 # Implementation state
 
+## Independent snapshot and handler-graph admission (2026-09-14)
+
+Large private indexes exposed a budget-ordering defect: the packet snapshot and
+selected-handler graph shared one mutable input budget, so snapshot admission
+could consume the allowance before graph composition began. The two stages now
+have independent fact, edge, and text budgets. A graph that is itself limited
+still fails closed and publishes no path classifications. When only the broader
+snapshot is partial, a fully provenance-supported positive graph path and its
+terminal boundary may be retained; missing-path, no-downstream, and other
+absence conclusions remain `UnknownAnalysisGap`. Regression coverage pins both
+the positive-path retention and the fail-closed no-path case. No private source
+names or snippets are included in the fixture.
+
 ## Handler-rooted HTML and anonymous review packet (2026-09-10)
 
 The one-case source review now renders private HTML organized as trigger,

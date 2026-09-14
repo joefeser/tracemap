@@ -432,8 +432,8 @@ public static class WebFormsModernizationPacketReporter
         CancellationToken cancellationToken = default)
     {
         Validate(options);
-        var budget = new ReportInputBudget(options.MaxInputFacts, options.MaxInputEdges, options.MaxInputTextBytes);
-        var snapshot = await ReadSnapshotAsync(options.IndexPath, budget, cancellationToken);
+        var snapshotBudget = new ReportInputBudget(options.MaxInputFacts, options.MaxInputEdges, options.MaxInputTextBytes);
+        var snapshot = await ReadSnapshotAsync(options.IndexPath, snapshotBudget, cancellationToken);
         var surfaceSelection = options.SurfaceListPath is null
             ? null
             : await ResolveSurfaceSelectionAsync(snapshot.Facts, options.SurfaceListPath, snapshot.InputLimit is not null, cancellationToken);
@@ -442,6 +442,10 @@ public static class WebFormsModernizationPacketReporter
             .SelectMany(item => item.SurfaceIds)
             .ToHashSet(StringComparer.Ordinal);
         var startingFactIds = SelectStartingHandlerFactIds(snapshot.Facts, options.MaxEventChains, selectedSurfaceIds);
+        // Snapshot admission and graph composition are separate bounded reads. Sharing the
+        // mutable budget lets a large snapshot consume the graph's entire allowance before
+        // a selected handler can be traversed.
+        var graphBudget = new ReportInputBudget(options.MaxInputFacts, options.MaxInputEdges, options.MaxInputTextBytes);
         var legacyFlowBuild = await CombinedDependencyPathReporter.BuildBoundedSingleIndexReportWithTraversalAsync(new(
             options.IndexPath,
             Path.Combine(Path.GetTempPath(), "tracemap-webforms-modernization-unused"),
@@ -453,7 +457,7 @@ public static class WebFormsModernizationPacketReporter
             StartingNodeLimit = Math.Max(1, startingFactIds.Count),
             StartingFactIds = startingFactIds,
             MaxTraversalWork = options.MaxTraversalWork
-        }, budget, cancellationToken);
+        }, graphBudget, cancellationToken);
         return Build(snapshot, legacyFlowBuild.Report, options, surfaceSelection, legacyFlowBuild.TraversalByStartingFactId);
     }
 
@@ -554,8 +558,11 @@ public static class WebFormsModernizationPacketReporter
         IReadOnlyDictionary<string, CombinedDependencyPathReporter.CombinedDependencyTraversalObservation>? traversalByStartingFactId = null)
     {
         var gaps = new List<WebFormsModernizationGap>();
-        var inputLimit = snapshot.InputLimit ?? legacyFlow.Gaps.FirstOrDefault(gap => gap.GapKind == "GraphInputLimitReached")?.Reason;
-        var inputLimited = inputLimit is not null;
+        var graphInputLimit = legacyFlow.Gaps.FirstOrDefault(gap => gap.GapKind == "GraphInputLimitReached")?.Reason;
+        var snapshotInputLimited = snapshot.InputLimit is not null;
+        var graphInputLimited = graphInputLimit is not null;
+        var inputLimit = snapshot.InputLimit ?? graphInputLimit;
+        var inputLimited = snapshotInputLimited || graphInputLimited;
         var sourceAnalysisReduced = IsReducedAnalysisLevel(snapshot.AnalysisLevel);
         if (sourceAnalysisReduced)
             AddGeneratedGap(gaps, options.MaxGaps, snapshot, "SourceAnalysisCoverageReduced", "scan", snapshot.ScanId, []);
@@ -679,7 +686,7 @@ public static class WebFormsModernizationPacketReporter
                     .Where(value => !string.IsNullOrWhiteSpace(value))
                     .Select(value => value!)
                     .ToHashSet(StringComparer.Ordinal);
-            var legacyPaths = legacyFlow.Paths.Where(path => !inputLimited && (path.SupportingFactIds.Contains(binding.FactId, StringComparer.Ordinal)
+            var legacyPaths = legacyFlow.Paths.Where(path => !graphInputLimited && (path.SupportingFactIds.Contains(binding.FactId, StringComparer.Ordinal)
                 || (handler is not null && (path.SupportingFactIds.Contains(handler.FactId, StringComparer.Ordinal)
                     || (path.Nodes.FirstOrDefault()?.SymbolId is { } rootSymbol && handlerSymbols.Contains(rootSymbol))))))
                 .OrderBy(path => path.PathId, StringComparer.Ordinal).ToArray();
@@ -714,11 +721,13 @@ public static class WebFormsModernizationPacketReporter
                 var retainedPathEvidenceIds = pathEvidence.Select(evidence => evidence.EvidenceId).ToHashSet(StringComparer.Ordinal);
                 var pathProvenanceAvailable = legacyPath is null || requiredPathEvidenceIds.All(retainedPathEvidenceIds.Contains);
                 var supportedLegacyPath = pathProvenanceAvailable ? legacyPath : null;
-                var classification = inputLimited ? "UnknownAnalysisGap" : handler is null
-                    ? "handler-unavailable"
+                var classification = handler is null
+                    ? snapshotInputLimited ? "UnknownAnalysisGap" : "handler-unavailable"
                     : supportedLegacyPath is not null ? supportedLegacyPath.Classification
+                    : inputLimited ? "UnknownAnalysisGap"
                     : flowFact?.Properties.GetValueOrDefault("flowClassification") ?? "NoBackendEvidence";
-                var terminalKind = inputLimited ? null : supportedLegacyPath?.Nodes.LastOrDefault()?.SurfaceKind ?? EmptyToNull(flowFact?.Properties.GetValueOrDefault("terminalSurfaceKind"));
+                var terminalKind = supportedLegacyPath?.Nodes.LastOrDefault()?.SurfaceKind
+                    ?? (inputLimited ? null : EmptyToNull(flowFact?.Properties.GetValueOrDefault("terminalSurfaceKind")));
                 var handlerOwnedCallEvidenceCount = flowFact is null
                     ? 0
                     : SplitIds(flowFact.Properties.GetValueOrDefault("supportingEdgeIds")).Count;
@@ -749,7 +758,7 @@ public static class WebFormsModernizationPacketReporter
                         AssemblyName = SafeIdentity(fact.Properties.GetValueOrDefault("calleeAssemblyName"))
                     })
                     .ToArray();
-                var traversalObservation = handler is null || inputLimited
+                var traversalObservation = handler is null || graphInputLimited || (snapshotInputLimited && supportedLegacyPath is null)
                     ? null
                     : ToTraversalObservation(
                         traversalByStartingFactId?.GetValueOrDefault("single:" + handler.FactId),
@@ -773,7 +782,9 @@ public static class WebFormsModernizationPacketReporter
                     support.Select(fact => fact.RuleId).Concat(handlerResolutionGaps.Select(fact => fact.RuleId)).Concat(supportedLegacyPath?.Edges.Select(edge => edge.RuleId) ?? []).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
                     support.Select(fact => fact.EvidenceTier).Concat(handlerResolutionGaps.Select(fact => fact.EvidenceTier)).Concat(supportedLegacyPath?.Edges.Select(edge => edge.EvidenceTier) ?? []).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
                     support.Concat(handlerResolutionGaps).Select(fact => fact.Properties.GetValueOrDefault("coverageLabel") ?? UnknownCoverage).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
-                    inputLimited
+                    inputLimited && supportedLegacyPath is not null
+                        ? ["A fully evidenced positive downstream path was retained under partial input; incomplete input prevents completeness or absence conclusions."]
+                        : inputLimited
                         ? ["Input admission was truncated; no downstream path or absence conclusion was derived from the incomplete input."]
                         : terminalKind is null && handler is not null
                         ? ["No backend or terminal evidence was composed for this handler in the bounded static snapshot; this is not proof of absence."]
