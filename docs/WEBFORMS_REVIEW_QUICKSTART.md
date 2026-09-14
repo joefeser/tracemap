@@ -85,6 +85,17 @@ The standalone command reads only `outputRoot` from the local configuration;
 it does not require `indexPath` or the page list because it consumes an already
 generated packet.
 
+Page aliases are report-local. To export the corresponding page from the newest
+standalone workbench using its alias from the original pipeline workbench, run:
+
+```powershell
+.\scripts\Export-LatestFocusedWebFormsPageShareable.ps1 -ReviewRoot $ReviewRoot -PriorPageId page-008
+```
+
+The wrapper validates both receipts, matches the private route locally, prints
+only the old and new aliases, and delegates to the anonymous exporter. It does
+not print or copy the private route.
+
 `-ReviewRoot` derives the retained index as `scan/index.sqlite` and publishes the
 new page-list packet beneath the same review root. It overrides a stale local
 `indexPath` without modifying the ignored configuration file; the configured

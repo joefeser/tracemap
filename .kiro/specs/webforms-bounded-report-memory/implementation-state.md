@@ -24,6 +24,10 @@ reader deliberately consumes only `outputRoot`; requiring the page-list runner's
 The page-list runner also accepts `-ReviewRoot`, deriving `scan/index.sqlite` and
 the packet output location from the completed pipeline root while retaining the
 configured form list. This avoids copying or retyping a stale absolute index path.
+Because page aliases are report-local ordinals, a dedicated export wrapper now
+validates the original and newest standalone receipts, matches the retained
+private route locally, and exports the corresponding new alias without printing
+or copying the route. This replaces a manual PowerShell folder-selection pipeline.
 
 ## Handler-rooted HTML and anonymous review packet (2026-09-10)
 

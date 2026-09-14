@@ -2,6 +2,7 @@ $ErrorActionPreference = 'Stop'
 $scripts = Split-Path -Parent $PSScriptRoot
 $scriptPath = Join-Path $scripts 'New-FocusedWebFormsApplicationWorkbench.ps1'
 $exportScript = Join-Path $scripts 'Export-FocusedWebFormsPageShareable.ps1'
+$latestExportScript = Join-Path $scripts 'Export-LatestFocusedWebFormsPageShareable.ps1'
 $standaloneScript = Join-Path $scripts 'New-FocusedWebFormsStandaloneReview.ps1'
 $shareableSchemaPath = Join-Path (Split-Path -Parent $scripts) 'docs/contracts/webforms-page-paths-shareable.v1.schema.json'
 $tokens = $null
@@ -16,6 +17,10 @@ $tokens = $null
 $parseErrors = $null
 [Management.Automation.Language.Parser]::ParseFile($standaloneScript, [ref]$tokens, [ref]$parseErrors) | Out-Null
 if ($parseErrors.Count -ne 0) { throw 'Standalone review script syntax is invalid.' }
+$tokens = $null
+$parseErrors = $null
+[Management.Automation.Language.Parser]::ParseFile($latestExportScript, [ref]$tokens, [ref]$parseErrors) | Out-Null
+if ($parseErrors.Count -ne 0) { throw 'Latest standalone page exporter script syntax is invalid.' }
 $shareableSchema = [IO.File]::ReadAllText($shareableSchemaPath) | ConvertFrom-Json -Depth 30
 if ($shareableSchema.properties.schemaVersion.const -ne 'webforms-page-paths-shareable.v1' -or $shareableSchema.properties.privacy.const -ne 'anonymous-structure-only') { throw 'Page shareable schema does not pin its version and privacy profile.' }
 
@@ -212,6 +217,12 @@ try {
         throw 'Standalone review receipt did not preserve packet provenance.'
     }
     if (@($standaloneOutput | Where-Object { $_ -eq "zipPath=$standaloneZip" }).Count -ne 1) { throw 'Standalone review export did not identify the ZIP created from its new workbench.' }
+    $latestExportOutput = @(& $latestExportScript -ReviewRoot $outputRoot -PriorPageId 'page-001')
+    if (@($latestExportOutput | Where-Object { $_ -eq 'priorPageId=page-001' }).Count -ne 1 -or
+        @($latestExportOutput | Where-Object { $_ -eq 'latestPageId=page-001' }).Count -ne 1 -or
+        @($latestExportOutput | Where-Object { $_ -eq "zipPath=$standaloneZip" }).Count -ne 1) {
+        throw 'Latest standalone page exporter did not map and export the receipted page.'
+    }
 
     if (!$index.Contains('batch-one', [StringComparison]::Ordinal)) { throw 'Application index omitted project-scoped data movement.' }
     foreach ($unassociated in @($applicationHandoff.unassociatedIdentityState[0], $applicationHandoff.unassociatedBatchDataMovement[0])) {
