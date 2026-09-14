@@ -8,3 +8,4 @@
 - [x] 6. Commit and push the branch.
 - [x] 7. Add explicit coverage labels to VB syntax call edges exposed by the
   projectless join and validate the real-world anonymous aggregate.
+- [x] 8. Confirm the final receipt-validated anonymous application rerun.

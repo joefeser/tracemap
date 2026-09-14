@@ -38,3 +38,11 @@ repository identity was retained.
 Follow-up validation: focused VB/projectless tests passed 25/25; the public
 fixture retained all five calls with no `EvidenceCoverageLabelUnavailable`
 gap; the full .NET solution passed 1,941/1,941; privacy and diff guards passed.
+
+Final external validation used the receipt-validated alias-only summary helper
+against the same 23-page projectless VB application. It retained 331 call
+projections, 229 unique call facts, and 193 normalized source sites. The 123
+spurious coverage-label gaps were absent; the remaining 52 terminal-free gaps
+split exactly into 9 `BoundedTraversalTruncated`, 32
+`DownstreamWithoutSupportedTerminal`, and 11 `NoBackendEvidence` rows. Both
+sanitized generator and input provenance hashes were present and validated.
