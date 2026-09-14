@@ -33,3 +33,20 @@
   `.sln` candidates discovered only beneath the configured Web Forms, backend,
   and controls roots. Keep categorical error codes stable and do not disclose
   unrelated absolute paths.
+- Unified-runner follow-up: generate one run ID once and place scan, packet,
+  evidence-docs, application workbench, and optional supplemental review beneath
+  one run root. Downstream/optional phases should accept that run root as their
+  single locator instead of requiring operators to reconstruct `IndexPath`,
+  `PacketPath`, and `EvidenceDocsRoot` from independently timestamped folders.
+- Persist the six workstation inputs (`SourceRoot`, `WebFormsFolder`,
+  `BackendFolder`, `ControlsFolder`, `SolutionRelativePath`, and `OutputRoot`) in
+  a private local configuration file at the run root so a resume can read them
+  back. Support the explicit-project alternative as a `ProjectRelativePath`
+  array and the future multi-root folder arrays. Keep reusable operator inputs
+  separate from the immutable run manifest, never treat paths as portable or
+  public metadata, and store no credentials or source contents in the config.
+- The run manifest must link every phase to the same scan ID and source/TraceMap
+  commit provenance, record phase status and relative artifact paths, and reject
+  mixed-run inputs. Add completion/failure markers, retained/regenerable/optional
+  size classifications, a latest-successful locator, and dry-run-first cleanup
+  that cannot delete artifacts still referenced by a retained handoff.
