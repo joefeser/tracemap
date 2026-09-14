@@ -30,7 +30,9 @@ human-readable projection of the same packet. Both are local-only artifacts.
 The packet can contain:
 
 - declared `.aspx`, `.ascx`, and `.master` surfaces;
-- server controls and declared master/user-control composition;
+- server controls and declared master/user-control composition, including a
+  bounded private control display projection containing the declared markup ID,
+  control type, stable control identity, and supporting fact ID;
 - supported markup and named code subscriptions;
 - statically resolved handler identities;
 - existing bounded static paths to supported terminal surfaces;

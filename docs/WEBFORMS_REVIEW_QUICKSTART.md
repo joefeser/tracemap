@@ -106,6 +106,18 @@ projections, unresolved handlers, incomplete chains, and coverage gaps. A
 ceiling means additional static evidence may be unavailable; it does not prove
 that a method contains exactly the ceiling count.
 
+`Handler unavailable` means an event source was retained but the packet did not
+contain a usable handler fact and source span from which to continue the chain.
+It is an evidence limitation, not proof that the application has no handler or
+that the control is broken. `Recorded gap facts` is a separate count of explicit
+gap records associated with the page.
+
+New packets retain a bounded private control display projection: markup control
+ID, control type, stable control identity, and supporting fact ID. The private
+application index displays the full retained route and all retained control
+names/types beneath each aliased page row. Shareable outlier artifacts continue
+to contain aliases and counts only.
+
 ## Private and shareable outputs
 
 The application workbench and page handoffs are private. They can contain paths,
@@ -128,4 +140,3 @@ supplemental. They do not replace the packet, evidence corpus, or full
 application workbench. Use the [full focused review
 reference](../scripts/webforms-review/README.md) for those steps, detailed
 artifact contracts, limits, and recovery procedures.
-

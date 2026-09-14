@@ -121,6 +121,12 @@ public sealed record WebFormsModernizationProject(
     IReadOnlyList<WebFormsModernizationEvidence> Evidence,
     IReadOnlyList<string> SupportingFactIds);
 
+public sealed record WebFormsModernizationControlSummary(
+    string ControlIdentity,
+    string DeclaredId,
+    string ControlType,
+    string SupportingFactId);
+
 public sealed record WebFormsModernizationSurface(
     string SurfaceId,
     string SurfaceKind,
@@ -129,7 +135,10 @@ public sealed record WebFormsModernizationSurface(
     IReadOnlyList<string> ControlIds,
     WebFormsModernizationEvidence Evidence,
     IReadOnlyList<WebFormsModernizationEvidence> SupportingEvidence,
-    IReadOnlyList<string> SupportingFactIds);
+    IReadOnlyList<string> SupportingFactIds)
+{
+    public IReadOnlyList<WebFormsModernizationControlSummary> Controls { get; init; } = [];
+}
 
 public sealed record WebFormsModernizationEventChain(
     string ChainId,
@@ -598,7 +607,18 @@ public static class WebFormsModernizationPacketReporter
                 controls.Select(fact => SafeIdentity(fact.Properties.GetValueOrDefault("controlIdentity"))).Where(value => value is not null).Cast<string>().Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
                 Evidence(page, gaps, options.MaxGaps, snapshot),
                 supportingCompositions.Concat(controls).OrderBy(fact => fact.FactId, StringComparer.Ordinal).Select(fact => Evidence(fact, gaps, options.MaxGaps, snapshot)).ToArray(),
-                supportingCompositions.Select(fact => fact.FactId).Append(page.FactId).Concat(controls.Select(fact => fact.FactId)).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray());
+                supportingCompositions.Select(fact => fact.FactId).Append(page.FactId).Concat(controls.Select(fact => fact.FactId)).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray())
+            {
+                Controls = controls.Select(fact => new WebFormsModernizationControlSummary(
+                        SafeIdentity(fact.Properties.GetValueOrDefault("controlIdentity")) ?? "unresolved",
+                        SafeKind(fact.Properties.GetValueOrDefault("controlId"), "unavailable"),
+                        SafeKind(fact.Properties.GetValueOrDefault("controlType"), "unknown"),
+                        fact.FactId))
+                    .OrderBy(control => control.DeclaredId, StringComparer.Ordinal)
+                    .ThenBy(control => control.ControlType, StringComparer.Ordinal)
+                    .ThenBy(control => control.ControlIdentity, StringComparer.Ordinal)
+                    .ToArray()
+            };
         }).OrderBy(surface => surface.SurfaceId, StringComparer.Ordinal).ToArray();
 
         var projects = surfaces.GroupBy(surface => surface.ProjectId, StringComparer.Ordinal)

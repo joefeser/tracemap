@@ -72,6 +72,13 @@ public sealed class WebFormsModernizationPacketTests
         SqliteIndexWriter.Write(index, manifest, facts);
 
         var written = await WebFormsModernizationPacketReporter.WriteAsync(new(index, Path.Combine(temp.Path, "packet")));
+        var page = Assert.Single(written.Packet.Surfaces, surface => surface.Evidence.FilePath == "OrderEditor.aspx");
+        Assert.Contains(page.Controls, control =>
+            control.DeclaredId == "SaveOrder"
+            && control.ControlType == "Button"
+            && control.ControlIdentity.StartsWith("webforms-control:", StringComparison.Ordinal)
+            && !string.IsNullOrWhiteSpace(control.SupportingFactId));
+        Assert.Contains(page.Controls, control => control.DeclaredId == "OrderNameText" && control.ControlType == "TextBox");
         Assert.Equal(6, written.Packet.Summary.ClientBehaviorCount);
         Assert.Equal(6, written.Packet.ClientBehaviorInventory.Count);
         Assert.Contains(written.Packet.ClientBehaviorInventory, item =>
@@ -462,6 +469,7 @@ public sealed class WebFormsModernizationPacketTests
             {
                 CompositionTargetIds = item.CompositionTargetIds.Reverse().ToArray(),
                 ControlIds = item.ControlIds.Reverse().ToArray(),
+                Controls = item.Controls.Reverse().ToArray(),
                 Evidence = ReverseEvidence(item.Evidence),
                 SupportingEvidence = item.SupportingEvidence.Reverse().Select(ReverseEvidence).ToArray(),
                 SupportingFactIds = item.SupportingFactIds.Reverse().ToArray()

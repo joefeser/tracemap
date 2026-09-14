@@ -11,6 +11,9 @@ Public claim level: hidden
   evidence handoffs.
 - Explicit `P / F / S` call accounting, normalized source sites, evidence
   ceilings, omissions, gaps, and incomplete-chain states.
+- Private application-index rows expose the full retained route and bounded
+  control ID/type projection beneath each alias; shareable outlier artifacts
+  remain alias/count only.
 - Compiler-backed technology-family projections with syntax fallback retained
   separately.
 - C# and VB.NET code-behind support, plus projectless reduced-coverage handling.
@@ -47,4 +50,3 @@ Implement and test `Initialize-FocusedWebFormsReview.ps1` and the persisted
 config contract. The config must support three folder roots, multiple projects
 per root, an explicit solution or projectless mode, actionable preflight errors,
 and a single run receipt shared by subsequent stages.
-
