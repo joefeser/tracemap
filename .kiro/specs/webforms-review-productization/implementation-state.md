@@ -69,6 +69,10 @@ not recorded here.
   promotes an otherwise complete scan that failed only at the former 2 GiB
   receipt limit, preserves the prior TraceMap commit and generator hash in the
   migration record, and continues downstream stages without rescanning.
+- C# call-edge producers now label compiler-resolved evidence
+  `bounded-semantic-callgraph` and syntax fallback `syntax-only`. This prevents
+  otherwise valid retained calls from being misreported as
+  `EvidenceCoverageLabelUnavailable` packet gaps.
 
 ## Validation checkpoint
 
@@ -80,6 +84,8 @@ not recorded here.
   and selected-page config contracts are pinned.
 - Folder discovery retains C# and VB.NET project files beneath the three roots
   and excludes an unrelated fourth root.
+- Focused C# semantic, syntax, and Web Forms packet tests pin explicit call
+  coverage labels and pass.
 - A clean projectless VB.NET Web Forms fixture completed scan, packet,
   evidence-docs, and workbench publication. A second invocation reused all five
   stages under the original run ID after verifying receipt provenance and

@@ -140,7 +140,11 @@ public sealed class CSharpSemanticExtractorTests
             && fact.SourceSymbol is not null
             && fact.SourceSymbol.Contains("ProfileReporter.Count", StringComparison.Ordinal)
             && fact.TargetSymbol is not null
-            && fact.TargetSymbol.Contains("string.Trim", StringComparison.Ordinal));
+            && fact.TargetSymbol.Contains("string.Trim", StringComparison.Ordinal)
+            && fact.Properties.GetValueOrDefault("coverageLabel") == "bounded-semantic-callgraph");
+        Assert.All(
+            result.Facts.Where(fact => fact.RuleId == RuleIds.CSharpSemanticCallGraph),
+            fact => Assert.Equal("bounded-semantic-callgraph", fact.Properties.GetValueOrDefault("coverageLabel")));
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.ObjectCreated
             && fact.RuleId == RuleIds.CSharpSemanticObjectCreation

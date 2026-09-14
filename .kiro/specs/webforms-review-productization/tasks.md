@@ -15,6 +15,8 @@
 - [x] Validate projectless, one-project, multi-project, C#, and VB.NET fixtures.
 - [x] Recover a completed scan that exceeded the original 2 GiB receipt-hash
   limit without rescanning or losing original/current tool provenance.
+- [x] Give C# semantic and syntax call facts explicit coverage labels so valid
+  retained calls do not become packet provenance gaps.
 - [ ] Consolidate the 450-line focused review reference after compatibility
   wrappers and recovery paths are pinned by tests.
 
