@@ -451,10 +451,26 @@ semantic certainty.
 
 ### `NoBackendEvidence`
 
-The handler was retained, but the bounded snapshot did not prove a supported
-terminal path. It does not mean the handler has no backend behavior. Possible
-causes include unsupported frameworks, dynamic dispatch, reflection, missing
-dependencies, reduced semantic loading, or traversal bounds.
+The handler was retained, but the completed bounded traversal retained neither
+a downstream edge nor a supported terminal path. It does not mean the handler
+has no backend behavior. Possible causes include UI-only work, unsupported
+frameworks, dynamic dispatch, reflection, missing dependencies, or reduced
+semantic loading.
+
+### `DownstreamWithoutSupportedTerminal`
+
+The handler retained at least one downstream edge, but the bounded traversal
+did not reach a supported terminal. Inspect `callEvidence` and
+`traversalObservation` before deciding whether the leaf is an unsupported
+framework surface, application helper, dynamic boundary, or an expected
+non-terminal call. This classification does not prove runtime reachability.
+
+### `BoundedTraversalTruncated`
+
+The handler traversal stopped at a configured depth, frontier, path, cycle, or
+work bound before a supported terminal was retained. Inspect
+`traversalObservation.truncationReasons`; do not interpret the missing terminal
+as absence.
 
 ### `handler-unavailable`
 

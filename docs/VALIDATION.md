@@ -1003,6 +1003,18 @@ publish local-only packet output or treat structural candidates as named
 business capabilities, migration estimates, parity, target architecture, or
 release approval.
 
+For projectless VB Web Forms correlation changes, also run:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter ProjectlessVisualBasicWebFormsDiagnosticsTests
+```
+
+The public fixture intentionally contains no `.vbproj` or solution. Confirm
+direct calls are retained by exact handler identity and containing span, the
+UI-only handler remains call-free, and terminal-free gaps distinguish observed
+downstream edges, bounded traversal truncation, and no retained backend edge.
+
 When changing Web Forms batch/data-movement extraction or packet composition,
 run the focused `LegacyBatchDataMovementExtractorTests` and
 `WebFormsModernizationPacketTests`. Confirm scheduled entry points, Windows

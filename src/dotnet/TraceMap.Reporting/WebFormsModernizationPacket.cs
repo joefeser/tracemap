@@ -745,7 +745,7 @@ public static class WebFormsModernizationPacketReporter
                         traversalByStartingFactId?.GetValueOrDefault("single:" + handler.FactId),
                         handlerOwnedCallEvidenceCount);
                 if (!inputLimited && handler is not null && terminalKind is null)
-                    AddGeneratedGap(gaps, options.MaxGaps, snapshot, "NoBackendEvidence", "event-chain", binding.FactId, support.Select(fact => fact.FactId));
+                    AddGeneratedGap(gaps, options.MaxGaps, snapshot, TerminalFreeGapClassification(traversalObservation), "event-chain", binding.FactId, support.Select(fact => fact.FactId));
                 var chain = new WebFormsModernizationEventChain(
                     HashId("chain", [binding.FactId, handler?.FactId ?? "handler-unavailable", supportedLegacyPath?.PathId ?? "no-path"]),
                     binding.Properties.GetValueOrDefault("surfaceIdentity") ?? "surface-unavailable",
@@ -1318,6 +1318,14 @@ public static class WebFormsModernizationPacketReporter
         }
         gaps.Add(CreateGeneratedGap(snapshot, classification, scopeKind, scopeId, supporting));
     }
+
+    private static string TerminalFreeGapClassification(WebFormsModernizationTraversalObservation? observation) =>
+        observation?.StopState switch
+        {
+            "bounded-traversal-truncated" => "BoundedTraversalTruncated",
+            "observed-downstream-without-supported-terminal" => "DownstreamWithoutSupportedTerminal",
+            _ => "NoBackendEvidence"
+        };
 
     private static WebFormsModernizationGap CreateGeneratedGap(
         Snapshot snapshot,

@@ -117,6 +117,13 @@ and syntax evidence is collapsed only in the normalized view, and chains at the
 traversal. A ceiling signal means more evidence may be unavailable; it does not prove
 that the handler contains exactly 256 calls.
 
+Terminal-free gap categories are deliberately distinct:
+`NoBackendEvidence` means the completed bounded traversal retained no downstream
+edge, `DownstreamWithoutSupportedTerminal` means calls or other downstream edges
+were retained but no supported terminal was reached, and
+`BoundedTraversalTruncated` means a configured traversal bound stopped the
+inspection. None proves absence or runtime behavior.
+
 Private page and application handoff JSON retain the exact generator-script SHA-256
 and input-packet SHA-256. The alias-only outlier JSON retains the same generator
 SHA-256 but hashes only its sanitized alias/count input projection, avoiding a

@@ -3398,7 +3398,9 @@ public static partial class LegacyWebFormsExtractor
         if (!string.IsNullOrWhiteSpace(fact.SourceSymbol))
         {
             if (fact.SourceSymbol.Equals(handlerSymbol, comparison)
-                || fact.SourceSymbol.Equals(handlerName, comparison))
+                || fact.SourceSymbol.Equals(handlerName, comparison)
+                || IsVisualBasicPath(resolution.Evidence.FilePath)
+                    && VisualBasicSyntaxHandlerIdentityEquals(fact.SourceSymbol, handlerSymbol, handlerName))
             {
                 return true;
             }
@@ -3409,10 +3411,35 @@ public static partial class LegacyWebFormsExtractor
             return true;
         }
 
+        var callerName = fact.Properties.GetValueOrDefault("callerName");
         return sameFile
-            && ((fact.Properties.GetValueOrDefault("callerName")?.Equals(handlerName, comparison) ?? false)
+            && ((callerName?.Equals(handlerName, comparison) ?? false)
+                || IsVisualBasicPath(resolution.Evidence.FilePath)
+                    && VisualBasicSyntaxHandlerIdentityEquals(callerName, handlerSymbol, handlerName)
                 || (fact.Properties.GetValueOrDefault("containingMember")?.Equals(handlerName, comparison) ?? false)
                 || (fact.Properties.GetValueOrDefault("containingMethod")?.Equals(handlerName, comparison) ?? false));
+    }
+
+    private static bool VisualBasicSyntaxHandlerIdentityEquals(string? candidate, string handlerSymbol, string handlerName)
+    {
+        if (string.IsNullOrWhiteSpace(candidate))
+        {
+            return false;
+        }
+
+        var normalized = RemoveVisualBasicParameterCountSuffix(candidate);
+        return normalized.Equals(handlerSymbol, StringComparison.OrdinalIgnoreCase)
+            || normalized.Equals(handlerName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string RemoveVisualBasicParameterCountSuffix(string value)
+    {
+        var separator = value.LastIndexOf('/');
+        return separator > 0
+            && separator + 1 < value.Length
+            && value.AsSpan(separator + 1).IndexOfAnyExceptInRange('0', '9') < 0
+                ? value[..separator]
+                : value;
     }
 
     private static bool IsTerminalSurfaceFact(CodeFact fact)
@@ -4548,6 +4575,7 @@ public static partial class LegacyWebFormsExtractor
                 return null;
             }
 
+            sourceSymbol = RemoveVisualBasicParameterCountSuffix(sourceSymbol);
             var signatureStart = sourceSymbol.IndexOf('(', StringComparison.Ordinal);
             var memberEnd = signatureStart >= 0 ? signatureStart : sourceSymbol.Length;
             if (memberEnd == 0)

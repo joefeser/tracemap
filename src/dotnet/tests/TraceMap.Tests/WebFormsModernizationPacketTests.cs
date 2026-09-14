@@ -734,6 +734,8 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Equal("supported-terminal-reached", fill.TraversalObservation?.StopState);
         Assert.Equal("sql-query", fill.TerminalKind);
         Assert.Contains(fill.SupportingFactIds, id => id.EndsWith(frameworkFill.FactId, StringComparison.Ordinal));
+        Assert.Contains(packet.Gaps, gap => gap.Classification == "NoBackendEvidence");
+        Assert.Contains(packet.Gaps, gap => gap.Classification == "DownstreamWithoutSupportedTerminal");
         Assert.All(packet.EventChains, chain =>
         {
             Assert.Equal(RuleIds.LegacyFlowStaticTraversal, chain.TraversalObservation?.RuleId);
@@ -805,6 +807,7 @@ public sealed class WebFormsModernizationPacketTests
         var bounded = await WebFormsModernizationPacketReporter.WriteAsync(new(index, Path.Combine(temp.Path, "bounded"), MaxDepth: 3));
         Assert.True(bounded.Packet.Summary.Truncated);
         Assert.Contains(bounded.Packet.Gaps, gap => gap.Classification == "TruncatedByLimit" && gap.TruncationReason == "depth");
+        Assert.Contains(bounded.Packet.Gaps, gap => gap.Classification == "BoundedTraversalTruncated");
         Assert.Contains(bounded.Packet.EventChains, chain => chain.TraversalObservation?.TruncationReasons.Contains("depth", StringComparer.Ordinal) == true);
         Assert.All(bounded.Packet.EventChains.Where(chain => chain.TraversalObservation?.Truncated == true),
             chain => Assert.NotEmpty(chain.TraversalObservation!.TruncationReasons));
