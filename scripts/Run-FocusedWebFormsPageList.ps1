@@ -1,5 +1,6 @@
 param(
     [switch]$CompareDepths,
+    [string]$ReviewRoot = '',
     [string]$OutputRootOverride = '',
     [string]$ConfigPath = ''
 )
@@ -12,6 +13,11 @@ $IndexPath = $config.IndexPath
 $OutputRoot = $config.OutputRoot
 $pagePaths = @($config.Forms)
 
+if ($ReviewRoot) {
+    $reviewRootPath = [IO.Path]::GetFullPath($ReviewRoot)
+    $IndexPath = Join-Path $reviewRootPath 'scan/index.sqlite'
+    $OutputRoot = $reviewRootPath
+}
 if ($OutputRootOverride) { $OutputRoot = $OutputRootOverride }
 if ($CompareDepths) { throw 'Deeper comparison runs are disabled. Use Summarize-CompletedWebFormsDepths.ps1.' }
 

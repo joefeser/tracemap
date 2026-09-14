@@ -21,6 +21,9 @@ anonymous page exporter against that exact workbench. This prevents a report-onl
 rerun from accidentally exporting an older receipted pipeline packet. Its config
 reader deliberately consumes only `outputRoot`; requiring the page-list runner's
 `indexPath` and form array at this post-packet stage was an unnecessary coupling.
+The page-list runner also accepts `-ReviewRoot`, deriving `scan/index.sqlite` and
+the packet output location from the completed pipeline root while retaining the
+configured form list. This avoids copying or retyping a stale absolute index path.
 
 ## Handler-rooted HTML and anonymous review packet (2026-09-10)
 

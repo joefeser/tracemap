@@ -406,7 +406,7 @@ wrappers and would not improve the generated artifact layout.
 | --- | --- | --- | --- |
 | `Invoke-FocusedWebFormsReview.ps1` | Yes | Yes, one bounded focused scan | Initial restricted-workstation collection. |
 | `Invoke-FocusedWebFormsPageListReport.ps1` | No | Existing-index report traversal only | Parameterized page-list packet generation. |
-| `Run-FocusedWebFormsPageList.ps1` | No | Existing-index report traversal only | Runner backed by the ignored local JSON configuration. |
+| `Run-FocusedWebFormsPageList.ps1` | No | Existing-index report traversal only | Runner backed by the ignored local JSON configuration; `-ReviewRoot` derives its retained `scan/index.sqlite`. |
 | `Run-AndTriage-FocusedWebFormsPageList.ps1` | No | Existing-index report traversal only | Run the configured packet and triage only its exact new artifact. |
 | `New-FocusedWebFormsStandaloneReview.ps1` | No | Existing packet only | Create a new immutable receipted workbench and optionally export one anonymous page from that exact packet. |
 | `New-FocusedWebFormsBatchInspection.ps1` | No | No scan; reads retained index evidence | Build the private case inventory used by review sets. |

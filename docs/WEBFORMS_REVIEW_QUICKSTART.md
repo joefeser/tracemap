@@ -72,8 +72,8 @@ exact packet. The second command may also export one anonymous page packet from
 the new workbench:
 
 ```powershell
-.\scripts\Run-FocusedWebFormsPageList.ps1
-.\scripts\New-FocusedWebFormsStandaloneReview.ps1 -PageId page-008
+.\scripts\Run-FocusedWebFormsPageList.ps1 -ReviewRoot $ReviewRoot
+.\scripts\New-FocusedWebFormsStandaloneReview.ps1 -OutputRoot $ReviewRoot -PageId page-008
 ```
 
 The standalone review is written under the configured output root as
@@ -84,6 +84,11 @@ by the newly generated workbench; confirm the retained route before sharing.
 The standalone command reads only `outputRoot` from the local configuration;
 it does not require `indexPath` or the page list because it consumes an already
 generated packet.
+
+`-ReviewRoot` derives the retained index as `scan/index.sqlite` and publishes the
+new page-list packet beneath the same review root. It overrides a stale local
+`indexPath` without modifying the ignored configuration file; the configured
+form list is still used.
 
 After the pipeline completes, print the receipt-validated alias-only totals
 with one short command:
