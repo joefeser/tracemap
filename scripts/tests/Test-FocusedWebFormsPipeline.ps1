@@ -2,9 +2,10 @@ $ErrorActionPreference = 'Stop'
 $scripts = Split-Path -Parent $PSScriptRoot
 $setupPath = Join-Path $scripts 'Initialize-FocusedWebFormsReview.ps1'
 $pipelinePath = Join-Path $scripts 'Invoke-FocusedWebFormsPipeline.ps1'
+$summaryPath = Join-Path $scripts 'Show-FocusedWebFormsOutlierSummary.ps1'
 $helperPath = Join-Path $scripts 'webforms-review/FocusedWebFormsPipelineConfig.ps1'
 
-foreach ($path in @($setupPath, $pipelinePath, $helperPath)) {
+foreach ($path in @($setupPath, $pipelinePath, $summaryPath, $helperPath)) {
     $tokens = $null
     $errors = $null
     [Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors) | Out-Null

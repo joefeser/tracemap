@@ -52,6 +52,12 @@ whole. Edit `config/webforms-review.json`, then run from the TraceMap checkout:
 .\scripts\Invoke-FocusedWebFormsPipeline.ps1 -ReviewRoot '$($root.Replace("'", "''"))'
 ```
 
+After completion, print the receipt-validated alias-only totals:
+
+```powershell
+.\scripts\Show-FocusedWebFormsOutlierSummary.ps1 -ReviewRoot '$($root.Replace("'", "''"))'
+```
+
 Keep `config/`, `run-receipt.json`, `scan/`, `packet/`, `evidence-docs/`, and
 `workbench/`. The receipt binds their exact paths and hashes. `logs/` contains
 diagnostic progress and summaries and may be archived or deleted only after the

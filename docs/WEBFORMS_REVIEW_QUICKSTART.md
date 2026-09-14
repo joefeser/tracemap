@@ -64,6 +64,18 @@ After editing the config, run one command:
 .\scripts\Invoke-FocusedWebFormsPipeline.ps1 -ReviewRoot $ReviewRoot
 ```
 
+After the pipeline completes, print the receipt-validated alias-only totals
+with one short command:
+
+```powershell
+.\scripts\Show-FocusedWebFormsOutlierSummary.ps1 -ReviewRoot $ReviewRoot
+```
+
+The summary verifies the completed run receipt and the recorded outlier-file
+size and SHA-256 before reading it. It prints page, call, and gap totals; gap
+classifications; and the generator/input hashes. It never selects a folder by
+timestamp and does not print private page identities.
+
 The pipeline uses one run ID and writes exact paths and hashes to
 `run-receipt.json`. Rerunning the same command validates and reuses completed
 stages. It never selects an artifact by “newest timestamp.” A changed config,
