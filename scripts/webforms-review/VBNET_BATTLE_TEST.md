@@ -244,7 +244,7 @@ inspection.
   -SourceRoot $SourceRoot `
   -IndexPath $IndexPath `
   -EvidenceDocsRoot $EvidenceDocsRoot `
-  -TriggerContextLines 50 `
+  -TriggerContextLines 10 `
   -IncludeRawSource
 ```
 

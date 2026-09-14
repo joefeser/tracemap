@@ -165,7 +165,7 @@ handler paths, but it is not the complete application evidence:
   -SourceRoot C:\path\to\authorized-source `
   -IndexPath C:\work\tracemap-output\focused-webforms-<scan>\scan\index.sqlite `
   -EvidenceDocsRoot C:\work\tracemap-output\evidence-docs-<run> `
-  -TriggerContextLines 50 `
+  -TriggerContextLines 10 `
   -IncludeRawSource
 ```
 
@@ -237,7 +237,7 @@ Then run:
 
 ```powershell
 .\scripts\New-FocusedWebFormsBatchInspection.ps1
-.\scripts\New-FocusedWebFormsCodePathReviewSet.ps1 -SourceRoot C:\path\to\authorized-source -TriggerContextLines 50 -IncludeRawSource
+.\scripts\New-FocusedWebFormsCodePathReviewSet.ps1 -SourceRoot C:\path\to\authorized-source -TriggerContextLines 10 -IncludeRawSource
 ```
 
 The first command reads existing scan evidence and creates a private batch
