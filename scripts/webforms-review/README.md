@@ -106,6 +106,12 @@ and syntax evidence is collapsed only in the normalized view, and chains at the
 traversal. A ceiling signal means more evidence may be unavailable; it does not prove
 that the handler contains exactly 256 calls.
 
+Private page and application handoff JSON retain the exact generator-script SHA-256
+and input-packet SHA-256. The alias-only outlier JSON retains the same generator
+SHA-256 but hashes only its sanitized alias/count input projection, avoiding a
+fingerprint of the private packet or source repository. Each provenance block names
+the byte/canonicalization rule used to reproduce its digest.
+
 Current packets also carry compiler-resolved declaring type and assembly metadata for
 retained call facts. The workbench derives bounded `application`, `framework`,
 `telerik`, `third-party`, or `unresolved` technology-family labels from that semantic

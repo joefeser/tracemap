@@ -19,6 +19,10 @@ function ConvertTo-HtmlText([object]$Value) { [Net.WebUtility]::HtmlEncode([stri
 function Values([object]$Value) { if ($null -eq $Value) { @() } else { @($Value) } }
 function New-StableAlias([string]$Prefix, [int]$Number) { '{0}-{1:d3}' -f $Prefix, $Number }
 function Same([object]$Left, [object]$Right) { [string]::Equals([string]$Left, [string]$Right, [StringComparison]::Ordinal) }
+function Get-TextSha256([string]$Value) {
+    $bytes = [Text.UTF8Encoding]::new($false).GetBytes($Value)
+    return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
+}
 function Get-PathStringComparison([string]$ExistingRoot) {
     if ($IsWindows) { return [StringComparison]::OrdinalIgnoreCase }
     $probeName = '.tracemap-case-probe-' + [Guid]::NewGuid().ToString('N') + '-a'
@@ -194,6 +198,8 @@ if (!$PacketPath) {
 if (!(Test-Path -LiteralPath $PacketPath -PathType Leaf)) { throw 'ApplicationWorkbenchPacketUnavailable' }
 $packetFile = Get-Item -LiteralPath $PacketPath
 if ($packetFile.Length -le 0 -or $packetFile.Length -gt 128MB) { throw 'ApplicationWorkbenchPacketLimit' }
+$generatorSha256 = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
+$packetSha256 = (Get-FileHash -LiteralPath $packetFile.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
 $packet = [IO.File]::ReadAllText($packetFile.FullName) | ConvertFrom-Json -Depth 100
 if ($packet.schemaVersion -ne 'webforms-modernization-packet.v1') { throw 'ApplicationWorkbenchPacketSchemaMismatch' }
 $sources = @(Values $packet.sources)
@@ -416,6 +422,7 @@ try {
             schemaVersion = 'webforms-application-page-handoff.v1'
             ruleId = 'diagnostic.webforms.application-page-handoff.v1'
             claimLevel = 'local-only'
+            provenance = [ordered]@{ generator = 'scripts/New-FocusedWebFormsApplicationWorkbench.ps1'; generatorSha256 = $generatorSha256; generatorCanonicalization = 'raw-file-bytes'; inputKind = 'webforms-modernization-packet.v1'; inputSha256 = $packetSha256; inputCanonicalization = 'raw-file-bytes' }
             pageId = $pageId
             packet = [ordered]@{ packetId = [string]$packet.packetId; scanId = [string]$sources[0].scanId; commitSha = [string]$sources[0].commitSha }
             subject = [ordered]@{ surfaceId = [string]$surface.surfaceId; surfaceKind = [string]$surface.surfaceKind; projectId = [string]$surface.projectId; filePath = [string]$surface.evidence.filePath }
@@ -619,10 +626,12 @@ try {
             reviewSignals = @($signals)
         })
     }
+    $shareableProjectionSha256 = Get-TextSha256 (ConvertTo-Json -InputObject @($outlierPages) -Depth 12 -Compress)
     $outlierArtifact = [ordered]@{
         schemaVersion = 'webforms-application-outliers.v1'
         ruleId = 'diagnostic.webforms.application-outlier-ranking.v1'
         privacy = 'anonymous-counts-only'
+        provenance = [ordered]@{ generator = 'scripts/New-FocusedWebFormsApplicationWorkbench.ps1'; generatorSha256 = $generatorSha256; generatorCanonicalization = 'raw-file-bytes'; inputKind = 'alias-only-page-count-projection'; inputSha256 = $shareableProjectionSha256; inputCanonicalization = 'powershell-json-compact-depth-12-utf8-v1' }
         pageCount = $outlierPages.Count
         ordering = @('call-evidence-ceiling desc','truncated-traversal desc','handler-unavailable desc','other-incomplete desc','gaps desc','normalized-call-sites desc','projection-reuse desc','page-id asc')
         pages = @($outlierPages)
@@ -645,11 +654,12 @@ try {
         Outlier-Table 'Retained calls without an observed boundary' @($outlierPages | Where-Object { $_.counts.normalizedCallSites -gt 0 -and $_.counts.boundaries -eq 0 } | Sort-Object @{ Expression = { $_.counts.normalizedCallSites }; Descending = $true }, pageId)
     )
     $outlierHtml = @"
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Alias-only Web Forms outlier review</title><style>:root{font-family:system-ui,sans-serif;color:#172033;background:#f5f7fb}main{max-width:1650px;margin:auto;padding:24px}.shareable{padding:12px;border-left:5px solid #287a36;background:#effaf1}table{width:100%;border-collapse:collapse;background:white}th,td{padding:9px;border:1px solid #dbe2ee;text-align:left;vertical-align:top}th{background:#eaf1ff}code{background:#edf1f7;padding:.1rem .3rem;border-radius:4px}details{background:white;border:1px solid #dbe2ee;border-radius:8px;padding:14px;margin:14px 0}</style></head><body><main><h1>Alias-only Web Forms outlier review</h1><p class="shareable">Anonymous count projection for $($outlierPages.Count) pages. It contains page aliases and retained counts only; paths, symbols, repository identifiers, packet identifiers, scan identifiers, and commit SHAs are omitted.</p><p>The inspection order is deterministic: call-evidence ceiling, truncated traversal, unavailable handlers, other incomplete chains, gaps, normalized call sites, projection reuse, then page alias. A chain at the 256-fact ceiling may have additional unavailable evidence even when explicit omission is zero. Normalized sites collapse retained syntax and semantic facts only when their site identities match. This is not a business-priority or migration-effort score.</p>$($outlierSections -join '')<p>Static evidence does not prove runtime execution, business intent, migration effort, or absence under partial coverage.</p></main></body></html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Alias-only Web Forms outlier review</title><style>:root{font-family:system-ui,sans-serif;color:#172033;background:#f5f7fb}main{max-width:1650px;margin:auto;padding:24px}.shareable{padding:12px;border-left:5px solid #287a36;background:#effaf1}table{width:100%;border-collapse:collapse;background:white}th,td{padding:9px;border:1px solid #dbe2ee;text-align:left;vertical-align:top}th{background:#eaf1ff}code{background:#edf1f7;padding:.1rem .3rem;border-radius:4px}details{background:white;border:1px solid #dbe2ee;border-radius:8px;padding:14px;margin:14px 0}</style></head><body><main><h1>Alias-only Web Forms outlier review</h1><p class="shareable">Anonymous count projection for $($outlierPages.Count) pages. It contains page aliases and retained counts only; paths, symbols, repository identifiers, packet identifiers, scan identifiers, and commit SHAs are omitted.</p><p>The inspection order is deterministic: call-evidence ceiling, truncated traversal, unavailable handlers, other incomplete chains, gaps, normalized call sites, projection reuse, then page alias. A chain at the 256-fact ceiling may have additional unavailable evidence even when explicit omission is zero. Normalized sites collapse retained syntax and semantic facts only when their site identities match. This is not a business-priority or migration-effort score.</p><p>Exact generator and privacy-projected input SHA-256 values are retained in the adjacent JSON.</p>$($outlierSections -join '')<p>Static evidence does not prove runtime execution, business intent, migration effort, or absence under partial coverage.</p></main></body></html>
 "@
     [IO.File]::WriteAllText((Join-Path $staging 'application-outliers.shareable.html'), $outlierHtml, [Text.UTF8Encoding]::new($false))
     $appHandoff = [ordered]@{
         schemaVersion = 'webforms-application-handoff.v1'; ruleId = 'diagnostic.webforms.application-handoff.v1'; claimLevel = 'local-only'
+        provenance = [ordered]@{ generator = 'scripts/New-FocusedWebFormsApplicationWorkbench.ps1'; generatorSha256 = $generatorSha256; generatorCanonicalization = 'raw-file-bytes'; inputKind = 'webforms-modernization-packet.v1'; inputSha256 = $packetSha256; inputCanonicalization = 'raw-file-bytes' }
         packet = [ordered]@{ packetId = [string]$packet.packetId; scanId = [string]$sources[0].scanId; commitSha = [string]$sources[0].commitSha; snapshot = 'webforms-modernization.snapshot.json' }
         analysis = [ordered]@{ status = $applicationStatus; coverage = [string]$packet.coverage; packetTruncated = [bool]$packet.summary.truncated; totalGapCount = @(Values $packet.gaps).Count }
         pageCount = $applicationPages.Count; pages = @($applicationPages)

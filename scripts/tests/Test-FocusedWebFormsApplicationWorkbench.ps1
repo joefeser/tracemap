@@ -108,6 +108,9 @@ try {
     $second = [IO.File]::ReadAllText((Join-Path $workbench 'page-002.html'))
     if (!$second.Contains('not applicable; no retained event chains', [StringComparison]::Ordinal)) { throw 'Zero-boundary state did not distinguish a page without retained event chains.' }
     $handoff = [IO.File]::ReadAllText((Join-Path $workbench 'page-001.handoff.json')) | ConvertFrom-Json -Depth 30
+    $expectedGeneratorSha = (Get-FileHash -LiteralPath $scriptPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $expectedPacketSha = (Get-FileHash -LiteralPath $packetPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($handoff.provenance.generatorSha256 -ne $expectedGeneratorSha -or $handoff.provenance.inputSha256 -ne $expectedPacketSha) { throw 'Page handoff omitted exact generator or packet provenance.' }
     if ($handoff.subject.filePath -ne 'Pages/First.aspx' -or $handoff.counts.eventChains -ne 5 -or $handoff.counts.clientBehaviors -ne 3 -or $handoff.counts.serverBehaviors -ne 2 -or $handoff.analysis.boundaryStatus -ne '1 detected' -or $handoff.evidenceDocs.status -ne 'supplied-read-only') { throw 'Page handoff projection was incomplete.' }
     if ($handoff.counts.retainedCalls -ne 3 -or $handoff.counts.chainAssociatedRetainedCalls -ne 3 -or $handoff.counts.reportedCallProjections -ne 257 -or $handoff.counts.omittedCallProjections -ne 254 -or $handoff.counts.uniqueRetainedCallFacts -ne 2 -or $handoff.counts.normalizedCallSites -ne 1 -or $handoff.counts.callEvidenceCeilingChains -ne 1 -or $handoff.chainOutcomes.unresolvedHandlers -ne 1 -or $handoff.chainOutcomes.downstreamWithoutSupportedTerminal -ne 2 -or $handoff.chainOutcomes.otherIncomplete -ne 1) { throw 'Page handoff omitted chain-outcome or retained-call counts.' }
     if ($handoff.inventories.clientBehavior[0].id -ne 'client-one' -or $handoff.inventories.clientBehavior[0].evidenceFactId -ne 'fact-client-one') { throw 'Page handoff omitted inline client behavior evidence.' }
@@ -122,12 +125,16 @@ try {
     if ($handoff.inventories.PSObject.Properties.Name -contains 'projectDataMovement') { throw 'Project-scoped data movement was duplicated into the page handoff.' }
     if (@($handoff.retrievalHints).Count -ne 3 -or @($handoff.retrievalHints | Where-Object { !$_.recipeId }).Count -ne 0) { throw 'Retrieval hints were not serialized as a flat recipe list.' }
     $applicationHandoff = [IO.File]::ReadAllText((Join-Path $workbench 'application-handoff.json')) | ConvertFrom-Json -Depth 30
+    if ($applicationHandoff.provenance.generatorSha256 -ne $expectedGeneratorSha -or $applicationHandoff.provenance.inputSha256 -ne $expectedPacketSha) { throw 'Application handoff omitted exact generator or packet provenance.' }
     if (@($applicationHandoff.projectDataMovement).Count -ne 1 -or $applicationHandoff.projectDataMovement[0].id -ne 'batch-one' -or
         $applicationHandoff.projectDataMovement[0].evidence.factId -ne 'fact-surface-1') { throw 'Application handoff omitted project-scoped data movement evidence.' }
     if ($applicationHandoff.outlierReview.json -ne 'application-outliers.shareable.json' -or $applicationHandoff.pages[0].chainOutcomes.otherIncomplete -ne 1 -or $applicationHandoff.pages[0].gapCategories[0].classification -ne 'HandlerTerminalUnavailable') { throw 'Application handoff omitted outlier-review navigation or page breakdowns.' }
     $outlierJsonText = [IO.File]::ReadAllText((Join-Path $workbench 'application-outliers.shareable.json'))
     $outlierHtml = [IO.File]::ReadAllText((Join-Path $workbench 'application-outliers.shareable.html'))
     $outliers = $outlierJsonText | ConvertFrom-Json -Depth 20
+    $projectedPagesJson = ConvertTo-Json -InputObject @($outliers.pages) -Depth 12 -Compress
+    $expectedProjectionSha = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.UTF8Encoding]::new($false).GetBytes($projectedPagesJson))).ToLowerInvariant()
+    if ($outliers.provenance.generatorSha256 -ne $expectedGeneratorSha -or $outliers.provenance.inputSha256 -ne $expectedProjectionSha -or $outliers.provenance.inputKind -ne 'alias-only-page-count-projection' -or $outliers.provenance.generatorCanonicalization -ne 'raw-file-bytes' -or $outliers.provenance.inputCanonicalization -ne 'powershell-json-compact-depth-12-utf8-v1') { throw 'Alias-only outlier projection omitted exact privacy-safe provenance.' }
     if ($outliers.schemaVersion -ne 'webforms-application-outliers.v1' -or $outliers.ruleId -ne 'diagnostic.webforms.application-outlier-ranking.v1' -or $outliers.pages[0].pageId -ne 'page-001' -or $outliers.pages[0].chainOutcomes.otherIncomplete -ne 1 -or $outliers.pages[0].counts.projectionReuse -ne 1 -or $outliers.pages[0].counts.normalizedCallSites -ne 1 -or $outliers.pages[0].counts.callEvidenceCeilingChains -ne 1) { throw 'Alias-only outlier projection was incomplete or unstable.' }
     foreach ($expected in @('Alias-only Web Forms outlier review', 'Highest normalized source call-site counts', 'Call-evidence retention ceiling reached', 'Most other incomplete chains', 'Retained calls without an observed boundary')) {
         if (!$outlierHtml.Contains($expected, [StringComparison]::Ordinal)) { throw "Alias-only outlier HTML missing: $expected" }
