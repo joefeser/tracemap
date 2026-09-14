@@ -5,6 +5,11 @@ quickstart](../../docs/WEBFORMS_REVIEW_QUICKSTART.md). This file is the full
 reference for optional review overlays, exceptional-handler inspection,
 diagnostics, limits, and recovery.
 
+New clean runs should use `Initialize-FocusedWebFormsReview.ps1` followed by
+`Invoke-FocusedWebFormsPipeline.ps1`. They keep the scan, packet, evidence
+corpus, workbench, logs, config, and hashed run receipt under one review root.
+The individual commands below remain supported for stage-specific recovery.
+
 This folder documents the supported operator path for turning an existing
 focused Web Forms packet into bounded, local source-review pages. The executable
 entry points remain in `scripts/` for compatibility with existing work-machine

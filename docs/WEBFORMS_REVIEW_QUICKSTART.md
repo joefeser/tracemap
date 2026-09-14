@@ -26,68 +26,72 @@ Solution and project discovery must remain inside those three roots, except for
 an explicitly named solution file. A projectless Web Site is a supported
 reduced-coverage input; it is not a failed scan.
 
-## Run the four retained stages
+## Create one review root and run the pipeline
 
-### 1. Scan the bounded source
-
-From the TraceMap repository root:
+From the TraceMap repository root, create an empty private review root:
 
 ```powershell
-.\scripts\Invoke-FocusedWebFormsReview.ps1 `
-  -SourceRoot C:\path\to\authorized-source `
-  -WebFormsFolder Web `
-  -BackendFolder Backend `
-  -ControlsFolder SharedControls `
-  -SolutionRelativePath Application.sln
+$ReviewRoot = 'C:\work\webforms-review'
+.\scripts\Initialize-FocusedWebFormsReview.ps1 -ReviewRoot $ReviewRoot
+notepad (Join-Path $ReviewRoot 'config\webforms-review.json')
 ```
 
-For a projectless Web Site, omit the solution/project parameters and add
-`-Projectless`. If the solution name or path is wrong, stop and correct it; do
-not treat `SOLUTION_SCOPE_UNAVAILABLE` as a clean or complete result.
+The config has seven operational settings: source root, Web Forms folder,
+backend folder, controls folder, project selection, output root, and page
+selection. Leave `outputRoot` equal to `$ReviewRoot`.
 
-Keep the resulting `focused-webforms-<scan>\scan` folder. Its `index.sqlite`,
-manifest, facts, report, and analyzer log are the retained source of truth.
+Project selection modes:
 
-### 2. Build one selected-page packet
+- `solution`: one explicit `.sln`; only projects beneath the three configured
+  folders are admitted;
+- `projects`: an explicit JSON array of `.csproj`/`.vbproj` paths beneath those
+  folders;
+- `discover`: find all `.csproj`/`.vbproj` files beneath only those folders; and
+- `projectless`: retain syntax/structural Web Site evidence without pretending
+  semantic compilation was available.
 
-Create the ignored workstation configuration once:
+Page selection mode `all` retains every discovered Web Forms surface up to the
+documented 1,000-surface bound. Mode `selected` uses the explicit `forms` array.
+
+After editing the config, run one command:
 
 ```powershell
-Copy-Item .\scripts\Run-FocusedWebFormsPageList.example.json .\scripts\Run-FocusedWebFormsPageList.json
-notepad .\scripts\Run-FocusedWebFormsPageList.json
-.\scripts\Run-AndTriage-FocusedWebFormsPageList.ps1
+.\scripts\Invoke-FocusedWebFormsPipeline.ps1 -ReviewRoot $ReviewRoot
 ```
 
-Set `indexPath`, `outputRoot`, and `forms`. Keep the exact printed
-`webforms-modernization.json` path; do not guess which timestamped folder is
-newest.
+The pipeline uses one run ID and writes exact paths and hashes to
+`run-receipt.json`. Rerunning the same command validates and reuses completed
+stages. It never selects an artifact by “newest timestamp.” A changed config,
+source commit, TraceMap commit, generator, or completed artifact fails resume
+validation rather than silently mixing runs.
 
-### 3. Export the evidence corpus
+Wrong solution and project paths report the requested value and up to ten
+bounded candidates. Project candidates are searched only beneath the three
+configured folders.
 
-```powershell
-dotnet run --project .\src\dotnet\TraceMap.Cli\TraceMap.Cli.csproj -- docs-export `
-  --index C:\work\tracemap-output\focused-webforms-<scan>\scan\index.sqlite `
-  --webforms-packet C:\work\tracemap-output\webforms-page-list-<packet>\webforms-modernization.json `
-  --families webforms-modernization,gap,limitation `
-  --out C:\work\tracemap-output\evidence-docs-<run> `
-  --format markdown,jsonl
-```
+## One-root artifact map
 
-Keep `manifest.json`, `query-recipes.json`, and `chunks.jsonl` together. A large
-`chunks.jsonl` is expected. The manifest binds the corpus to its inputs and
-records generated-output hashes.
+| Path | Retention | Purpose |
+| --- | --- | --- |
+| `config/` | Keep | Editable seven-setting input and optional selected-page list. |
+| `run-receipt.json` | Keep | Run identity, commits, generator/config hashes, exact stage paths, artifact hashes, and state. |
+| `scan/` | Keep | Required scan manifest, facts, index, report, and analyzer log. |
+| `packet/` | Keep | Complete Web Forms modernization JSON and Markdown packet. |
+| `evidence-docs/` | Keep | Manifest, closed query recipes, `chunks.jsonl`, and rendered evidence docs. |
+| `workbench/` | Keep | Private application/page review and explicitly named shareable outlier files. |
+| `logs/` | Diagnostic | Progress, local-review receipt, and bounded summaries. Archive or delete only after accepting the retained run. |
 
-### 4. Generate the application workbench
+Do not delete individual required folders, mix them with another review root,
+or copy the whole root outside the authorized environment. Only files explicitly
+named `*.shareable.html` or `*.shareable.json` are intended for identity-free
+exchange, and they should still be inspected before sending.
 
-```powershell
-.\scripts\New-FocusedWebFormsApplicationWorkbench.ps1 `
-  -PacketPath C:\work\tracemap-output\webforms-page-list-<packet>\webforms-modernization.json `
-  -OutputRoot C:\work\tracemap-output `
-  -EvidenceDocsRoot C:\work\tracemap-output\evidence-docs-<run>
-```
+## Manual compatibility workflow
 
-Use `-IncludeRawSource -SourceRoot ...` only on an authorized private machine.
-Open the exact `applicationWorkbenchIndex` printed by the command.
+The older individual scripts remain supported for diagnostics and recovery.
+Use the [full focused review reference](../scripts/webforms-review/README.md)
+when a particular stage must be run manually. The single pipeline is the
+default for a new clean run.
 
 ## Read the call accounting correctly
 

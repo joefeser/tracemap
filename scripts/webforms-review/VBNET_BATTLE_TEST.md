@@ -1,14 +1,40 @@
 # VB.NET Web Forms battle test
 
-This is the copy-and-run path for testing TraceMap against an authorized legacy
-VB.NET Web Forms application. Run every command from the TraceMap repository
-root in PowerShell 7. Replace only the values in the first block.
+This is the validation appendix for testing TraceMap against an authorized
+legacy VB.NET Web Forms application. For a new clean run, use the one-root
+pipeline below. The older individual-stage commands remain later in this file
+for diagnostics and historical validation only.
 
 Keep all scan, packet, corpus, workbench, and source-bearing review outputs on
 the authorized machine. Only sanitized console summaries and generated
 `*.shareable.html` / `*.shareable.json` files are intended to leave it.
 
-## 1. Set the application-specific values
+## Preferred clean-slate run
+
+```powershell
+$ReviewRoot = 'C:\work\webforms-review'
+.\scripts\Initialize-FocusedWebFormsReview.ps1 -ReviewRoot $ReviewRoot
+notepad (Join-Path $ReviewRoot 'config\webforms-review.json')
+.\scripts\Invoke-FocusedWebFormsPipeline.ps1 -ReviewRoot $ReviewRoot
+```
+
+Use project-selection mode `discover` for a repository with many unrelated
+solutions: it searches for `.csproj` and `.vbproj` files only beneath the three
+configured folders. Use `projectless` when there are no applicable project
+files. Mode `all` in `pageSelection` automatically selects every retained Web
+Forms surface; no 476-line forms array is required.
+
+The completed root contains `config`, `scan`, `packet`, `evidence-docs`,
+`workbench`, `logs`, and `run-receipt.json`. The receipt is the authoritative
+map between stages. Rerun the same pipeline command to validate and reuse
+completed stages.
+
+## Manual diagnostic sequence
+
+The remaining steps are retained for isolated-stage troubleshooting. Do not
+use them for a normal clean-slate run.
+
+### 1. Set the application-specific values
 
 ```powershell
 $SourceRoot = 'C:\path\to\application-repository'

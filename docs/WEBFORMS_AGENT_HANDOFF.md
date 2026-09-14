@@ -10,23 +10,27 @@ Use the private application workbench only inside the authorized environment.
 For an identity-free discussion, provide only the alias-only outlier JSON and
 its matching shareable HTML.
 
-Set the exact paths printed by the generating commands:
+For the one-root pipeline, set the review root and use its fixed stage paths:
 
 ```powershell
-$PacketPath = 'C:\work\tracemap-output\webforms-page-list-<packet>\webforms-modernization.json'
-$EvidenceDocsRoot = 'C:\work\tracemap-output\evidence-docs-<run>'
-$WorkbenchRoot = 'C:\work\tracemap-output\webforms-application-workbench-<run>'
+$ReviewRoot = 'C:\work\webforms-review'
+$PacketPath = Join-Path $ReviewRoot 'packet\webforms-modernization.json'
+$EvidenceDocsRoot = Join-Path $ReviewRoot 'evidence-docs'
+$WorkbenchRoot = Join-Path $ReviewRoot 'workbench'
+$RunReceipt = Join-Path $ReviewRoot 'run-receipt.json'
 $PromptPath = (Resolve-Path '.\prompts\review-webforms-modernization-evidence.md').Path
 
-Get-Item $PacketPath,
+Get-Item $RunReceipt,
+  $PacketPath,
   (Join-Path $EvidenceDocsRoot 'manifest.json'),
   (Join-Path $EvidenceDocsRoot 'query-recipes.json'),
   (Join-Path $EvidenceDocsRoot 'chunks.jsonl'),
   (Join-Path $WorkbenchRoot 'application-handoff.json')
 ```
 
-Stop if any path is missing or if packet/corpus/workbench provenance does not
-identify the same retained scan. Do not select folders by timestamp guessing.
+Stop if any path is missing, if `run-receipt.json` is not completed, or if
+packet/corpus/workbench provenance does not identify the same retained scan.
+Do not select folders by timestamp guessing.
 
 ## Start a read-only Claude Code review
 
@@ -62,4 +66,3 @@ The prompt asks for:
 
 The output is planning material. It is not runtime proof, a migration estimate,
 an approval, or a TraceMap artifact.
-
