@@ -33,6 +33,25 @@ The completed root contains `config`, `scan`, `packet`, `evidence-docs`,
 map between stages. Rerun the same pipeline command to validate and reuse
 completed stages.
 
+### Project-mode recovery
+
+If `solution` reports `SOLUTION_SCOPE_HAS_NO_IN_SCOPE_PROJECTS`, either correct
+the three folder boundaries or try `discover`. If `discover` reports
+`PROJECT_DISCOVERY_EMPTY`, change `projectSelection` to:
+
+```json
+{
+  "mode": "projectless",
+  "solutionRelativePath": "",
+  "projectRelativePaths": []
+}
+```
+
+After changing a config that already produced a failed pre-scan receipt, remove
+only `run-receipt.json` and rerun the pipeline. This is safe only when `scan/`,
+`packet/`, `evidence-docs/`, and `workbench/` were never created. If a retained
+stage completed, restore the original config or start a new empty review root.
+
 ## Manual diagnostic sequence
 
 The remaining steps are retained for isolated-stage troubleshooting. Do not

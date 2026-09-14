@@ -35,6 +35,7 @@ Assert-True ($content.Contains('Solution path, relative to the source root', [St
 Assert-True ($content.Contains('if (-not $Projectless -and -not $DiscoverProjects -and [string]::IsNullOrWhiteSpace($SolutionRelativePath) -and $ProjectRelativePath.Count -eq 0)', [StringComparison]::Ordinal)) "project-only, discovery, and projectless invocation must not prompt for a solution"
 Assert-True ($content.Contains('[switch]$Projectless', [StringComparison]::Ordinal)) "explicit projectless mode is missing"
 Assert-True ($content.Contains('[switch]$DiscoverProjects', [StringComparison]::Ordinal)) "folder-scoped project discovery mode is missing"
+Assert-True ($content.Contains('PROJECT_DISCOVERY_EMPTY;searchedFolders=$searchedFolderText;use-projectless=true', [StringComparison]::Ordinal)) "empty discovery must identify the searched folders and projectless recovery"
 Assert-True ($content.Contains('PROJECTLESS_SCOPE_CONFLICT', [StringComparison]::Ordinal)) "projectless mode must reject solution or project inputs"
 Assert-True ($content.Contains("if (`$folder -eq '.') { '**' }", [StringComparison]::Ordinal)) "repository-root folder scope is not normalized to a valid include glob"
 Assert-True (-not $content.Contains('THREE_FOLDER_SCOPE_INVALID', [StringComparison]::Ordinal)) "single-folder scope must not be rejected"

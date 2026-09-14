@@ -74,6 +74,32 @@ Wrong solution and project paths report the requested value and up to ten
 bounded candidates. Project candidates are searched only beneath the three
 configured folders.
 
+## First-run recovery
+
+The project modes are a deliberate progression, not interchangeable labels:
+
+- `SOLUTION_SCOPE_HAS_NO_IN_SCOPE_PROJECTS` means the solution was readable,
+  but none of its C# or VB.NET projects were beneath the three configured
+  folders. Correct the solution/folder relationship or try `discover`.
+- `PROJECT_DISCOVERY_EMPTY` means no `.csproj` or `.vbproj` was found beneath
+  those folders. Use `projectless`; this retains reduced syntax and structural
+  evidence for an old Web Site without claiming semantic compilation.
+- `WEBFORMS_PIPELINE_RESUME_PROVENANCE_MISMATCH` after editing a failed
+  first-run config means the receipt still identifies the previous config.
+
+When the failure occurred before the `scan` stage completed and no `scan/`,
+`packet/`, `evidence-docs/`, or `workbench/` directory exists, remove only the
+failed receipt and rerun:
+
+```powershell
+Remove-Item (Join-Path $ReviewRoot 'run-receipt.json')
+.\scripts\Invoke-FocusedWebFormsPipeline.ps1 -ReviewRoot $ReviewRoot
+```
+
+Do not remove the receipt from a run with completed retained stages. Restore
+the original config to resume it, or initialize a different empty review root
+for the changed config.
+
 ## One-root artifact map
 
 | Path | Retention | Purpose |

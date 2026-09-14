@@ -61,6 +61,10 @@ not recorded here.
 - Config loading rejects unescaped Windows backslashes before JSON parsing,
   including sequences such as `\t` that JSON would otherwise accept and alter.
   The failure directs operators to the unambiguous `C:/...` form.
+- First-run recovery guidance distinguishes an empty solution intersection from
+  empty bounded discovery, routes Web Site checkouts to explicit projectless
+  mode, and limits failed-receipt removal to runs with no completed retained
+  stage.
 
 ## Validation checkpoint
 

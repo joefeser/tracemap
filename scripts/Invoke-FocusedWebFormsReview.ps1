@@ -223,7 +223,8 @@ if (-not [string]::IsNullOrWhiteSpace($SolutionRelativePath)) {
 if ($DiscoverProjects) {
     $ProjectRelativePath = @(Get-InScopeFolderProjects -SourceRoot $SourceRoot -SelectedFolders $selectedFolders)
     if ($ProjectRelativePath.Count -eq 0) {
-        throw 'PROJECT_DISCOVERY_EMPTY;use-projectless=true'
+        $searchedFolderText = $selectedFolders -join ','
+        throw "PROJECT_DISCOVERY_EMPTY;searchedFolders=$searchedFolderText;use-projectless=true"
     }
 }
 foreach ($project in $ProjectRelativePath) {

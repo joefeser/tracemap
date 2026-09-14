@@ -62,6 +62,13 @@ Project selection modes are `solution`, `projects`, `discover`, and
 three configured folders. Page selection modes are `all` and `selected`. Use
 forward slashes in every JSON path, for example `C:/source/application`; a
 single Windows backslash is an unsafe JSON escape and is rejected.
+
+First-run recovery: if `solution` has no in-scope projects, correct the folder
+boundaries or try `discover`. If discovery is empty, use `projectless`. After
+editing a config that produced only a failed pre-scan receipt, remove only
+`run-receipt.json` and rerun. Never remove a receipt when a retained scan,
+packet, evidence-docs, or workbench stage completed; restore the original config
+or start a new empty review root instead.
 "@
 [IO.File]::WriteAllText($readmePath, $readme, [Text.UTF8Encoding]::new($false))
 
