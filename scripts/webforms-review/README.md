@@ -88,7 +88,10 @@ rescan source or rewrite the packet/chunks:
 Open the printed `webforms-application-workbench-<timestamp>\index.html`. It
 links one report and one handoff JSON for every selected page. Add
 `-IncludeRawSource -SourceRoot C:\path\to\authorized-source` only on an
-authorized private machine when bounded working-tree excerpts are needed.
+authorized private machine when bounded working-tree excerpts are needed. The
+index uses a compact triage table; expand a row's Diagnostics control for its
+retained file, full chain outcomes, boundary and gap counts, review state, and
+handoff link.
 
 The workbench also emits `application-outliers.shareable.html` and
 `application-outliers.shareable.json`. They contain page aliases, bounded counts,

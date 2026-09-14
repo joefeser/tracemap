@@ -335,4 +335,7 @@ merge indistinguishable same-name calls on one retained line when column-level s
 identity is unavailable. Compiler-resolved call facts may expose declaring type,
 assembly, and a bounded technology-family classification; syntax-only calls remain
 `unresolved`. Chains at the 256-fact call-evidence ceiling are reported separately
-from traversal truncation and do not establish that exactly 256 calls exist.
+from traversal truncation and do not establish that exactly 256 calls exist. The
+application index presents a compact triage row for each page; its Diagnostics control
+retains the file, full chain-outcome breakdown, boundary and gap counts, review state,
+and evidence-handoff link.

@@ -86,10 +86,18 @@ try {
         if (!(Test-Path -LiteralPath (Join-Path $workbench $expected) -PathType Leaf)) { throw "Missing workbench file: $expected" }
     }
     $index = [IO.File]::ReadAllText((Join-Path $workbench 'index.html'))
-    if (!$index.Contains('<th>Client behaviors</th>', [StringComparison]::Ordinal)) { throw 'Application index omitted client-behavior counts.' }
-    if (!$index.Contains('<th>Server behaviors</th>', [StringComparison]::Ordinal)) { throw 'Application index omitted server-behavior counts.' }
-    foreach ($heading in @('<th>Retained projections / unique facts / normalized sites</th>','<th>Call evidence ceiling</th>','<th>Handler unavailable</th>','<th>Downstream / no terminal</th>','<th>No downstream</th>','<th>Traversal truncated</th>','<th>Other incomplete</th>','<th>Evidence gaps</th>')) {
-        if (!$index.Contains($heading, [StringComparison]::Ordinal)) { throw "Application index omitted chain-outcome heading: $heading" }
+    foreach ($heading in @('<th>Page</th>','<th>Activity</th>','<th>Calls P/F/S</th>','<th>Retained flags</th>','<th>Review</th>','<th>Diagnostics</th>')) {
+        if (!$index.Contains($heading, [StringComparison]::Ordinal)) { throw "Application index omitted compact heading: $heading" }
+    }
+    foreach ($removedHeading in @('<th>Retained file</th>','<th>Client behaviors</th>','<th>Server behaviors</th>','<th>Evidence gaps</th>')) {
+        if ($index.Contains($removedHeading, [StringComparison]::Ordinal)) { throw "Application index retained wide diagnostic heading: $removedHeading" }
+    }
+    foreach ($detail in @('<dt>Retained file</dt>','<dt>Kind</dt>','<dt>Calls</dt>','<dt>Call evidence ceiling</dt>','<dt>Handler unavailable</dt>','<dt>Downstream / no terminal</dt>','<dt>No downstream</dt>','<dt>Traversal truncated</dt>','<dt>Other incomplete</dt>','<dt>Boundaries</dt>','<dt>Evidence gaps</dt>','<dt>Review</dt>','<dt>Evidence handoff</dt>')) {
+        if (!$index.Contains($detail, [StringComparison]::Ordinal)) { throw "Application index omitted expandable diagnostic: $detail" }
+    }
+    if (!$index.Contains('P = chain-associated projections; F = unique retained facts; S = normalized source sites', [StringComparison]::Ordinal)) { throw 'Application index omitted compact call-accounting legend.' }
+    foreach ($flag in @('ceiling 1','omitted 254','handler 1','no terminal 2','incomplete 1','gaps 1','boundaries 1')) {
+        if (!$index.Contains($flag, [StringComparison]::Ordinal)) { throw "Application index omitted retained triage flag: $flag" }
     }
     if ($index.IndexOf('Pages/First.aspx', [StringComparison]::Ordinal) -gt $index.IndexOf('Pages/Second.aspx', [StringComparison]::Ordinal)) { throw 'Pages were not ordered by retained path.' }
     if (!$index.Contains('43', [StringComparison]::Ordinal) -and !$index.Contains('2 selected surfaces', [StringComparison]::Ordinal)) { throw 'Index did not report surface count.' }
