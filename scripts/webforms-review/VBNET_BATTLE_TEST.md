@@ -262,3 +262,12 @@ workbench to display retained calls and downstream boundaries from the HTTP
 entry point. Missing directives, source declarations, or unique entry methods
 remain explicit Tier4 gaps; deployment routing and runtime execution are not
 claimed.
+
+The retained application also uses the ASP.NET Web Site single-file handler
+form: a `.ashx` file contains its `WebHandler` directive, imports, handler class,
+and VB `ProcessRequest` body without `CodeFile` or `CodeBehind`. This form must
+resolve directly from the `.ashx` source. Calls within that entry method are
+bounded syntax evidence so reviewers can follow anti-forgery, shared controller
+method calls, data loading, serialization, and response-writing candidates
+without claiming receiver identity, branch execution, or runtime request
+success. Property reads and writes remain outside this inline-handler call slice.

@@ -2460,14 +2460,17 @@ rules:
 
   - id: legacy.webforms.client-http-handler-resolution.v1
     name: Legacy Web Forms client HTTP handler resolution
-    description: Joins a uniquely resolved inline jQuery `.ashx` request through its WebHandler Class directive to one retained `ProcessRequest` source declaration for bounded downstream traversal.
-    evidenceTier: Tier1Semantic or Tier2Structural or Tier4Unknown
+    description: Joins a uniquely resolved inline jQuery `.ashx` request through its WebHandler Class directive to one retained external or single-file inline `ProcessRequest` declaration for bounded downstream traversal.
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
     emits:
+      - WebFormsClientHttpHandlerDeclared
       - WebFormsHandlerResolved
+      - CallEdge
       - AnalysisGap
     limitations:
-      - Resolution requires one literal request target, one repository `.ashx` file, a supported WebHandler Class directive, and one matching `ProcessRequest` declaration from an explicit CodeFile/CodeBehind path or a uniquely matching retained type declaration.
+      - Resolution requires one literal request target, one repository `.ashx` file, a supported WebHandler Class directive, and one matching `ProcessRequest` declaration from inline VB/C# source, an explicit CodeFile/CodeBehind path, or a uniquely matching retained type declaration.
       - Semantic method evidence produces Tier1; an exact directive/type/source/method structural join produces Tier2. Neither proves virtual-directory mapping, handler registration, request dispatch, authentication, authorization, handler construction, or runtime execution.
+      - Calls inside a single-file inline `ProcessRequest` are bounded to 256 syntax invocations and emit Tier3 call edges. They do not prove overload resolution, receiver type, dynamic dispatch, branch feasibility, runtime request handling, or callee execution.
       - Missing and ambiguous handler source or `ProcessRequest` declarations are emitted as Tier4 gaps. They are not proof that a runtime handler is absent.
       - Downstream paths remain bounded by retained call-edge and terminal evidence and inherit the legacy-flow traversal limitations.
 

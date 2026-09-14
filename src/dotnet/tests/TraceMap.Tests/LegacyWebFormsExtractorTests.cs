@@ -1788,7 +1788,7 @@ public sealed class LegacyWebFormsExtractorTests
         Assert.All(events.Concat(mutations).Append(constraint), fact =>
         {
             Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, fact.EvidenceTier);
-            Assert.Equal("legacy-webforms/0.12.0", fact.Evidence.ExtractorVersion);
+            Assert.Equal("legacy-webforms/0.13.0", fact.Evidence.ExtractorVersion);
             Assert.DoesNotContain("Saving", JsonSerializer.Serialize(fact), StringComparison.Ordinal);
         });
     }
@@ -1818,11 +1818,14 @@ public sealed class LegacyWebFormsExtractorTests
             </script>
             """);
         File.WriteAllText(Path.Combine(repo, "Edit.aspx.vb"), "Partial Public Class Edit\nEnd Class\n");
-        File.WriteAllText(Path.Combine(repo, "api", "SetActive.ashx"), "<%@ WebHandler Language=\"VB\" Class=\"SetActive\" CodeFile=\"SetActive.ashx.vb\" %>");
-        File.WriteAllText(Path.Combine(repo, "api", "SetActive.ashx.vb"), """
-            Public Class SetActive
-                Public Sub ProcessRequest(context As Object)
+        File.WriteAllText(Path.Combine(repo, "api", "SetActive.ashx"), """
+            <%@ WebHandler Language="VB" Class="SetActive" %>
+            Imports System.Web
+
+            Public Class SetActive : Implements IHttpHandler, System.Web.SessionState.IReadOnlySessionState
+                Public Sub ProcessRequest(context As HttpContext) Implements IHttpHandler.ProcessRequest
                     SaveState()
+                    context.Response.Write("retained result")
                 End Sub
 
                 Private Sub SaveState()
@@ -1855,7 +1858,7 @@ public sealed class LegacyWebFormsExtractorTests
         {
             Assert.Equal(RuleIds.LegacyWebFormsInlineClientHttpRequest, request.RuleId);
             Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, request.EvidenceTier);
-            Assert.Equal("legacy-webforms/0.12.0", request.Evidence.ExtractorVersion);
+            Assert.Equal("legacy-webforms/0.13.0", request.Evidence.ExtractorVersion);
         });
         var handler = Assert.Single(result.Facts, fact =>
             fact.FactType == FactTypes.WebFormsHandlerResolved
@@ -1868,12 +1871,26 @@ public sealed class LegacyWebFormsExtractorTests
         Assert.Equal(requests[0].FactId, handler.Properties.GetValueOrDefault("bindingFactId"));
         Assert.Contains(handlerDirective.FactId, handler.Properties.GetValueOrDefault("supportingFactIds"), StringComparison.Ordinal);
         Assert.Equal("api/SetActive.ashx", handler.Properties.GetValueOrDefault("handlerSurfaceFile"));
-        Assert.Equal("api/SetActive.ashx.vb", handler.Properties.GetValueOrDefault("linkedCodePath"));
+        Assert.Equal("api/SetActive.ashx", handler.Properties.GetValueOrDefault("linkedCodePath"));
         Assert.Equal("ProcessRequest", handler.Properties.GetValueOrDefault("handlerName"));
         Assert.Equal("StructuralWebHandlerProcessRequest", handler.Properties.GetValueOrDefault("resolutionKind"));
-        Assert.Contains(result.Facts, fact =>
+        var flow = Assert.Single(result.Facts, fact =>
             fact.FactType == FactTypes.WebFormsEventFlowProjected
             && fact.Properties.GetValueOrDefault("supportingFactIds")?.Contains(handler.FactId, StringComparison.Ordinal) == true);
+        var inlineCalls = result.Facts.Where(fact =>
+            fact.FactType == FactTypes.CallEdge
+            && fact.RuleId == RuleIds.LegacyWebFormsClientHttpHandlerResolution).ToArray();
+        Assert.Contains(inlineCalls, fact => fact.TargetSymbol == "SaveState");
+        Assert.Contains(inlineCalls, fact => fact.TargetSymbol == "Write");
+        Assert.All(inlineCalls, fact =>
+        {
+            Assert.Equal("api/SetActive.ashx", fact.Evidence.FilePath);
+            Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, fact.EvidenceTier);
+            Assert.Equal("InlineWebHandlerSyntaxInvocation", fact.Properties.GetValueOrDefault("callKind"));
+            Assert.DoesNotContain("retained result", JsonSerializer.Serialize(fact), StringComparison.Ordinal);
+        });
+        Assert.All(inlineCalls, fact =>
+            Assert.Contains(fact.FactId, flow.Properties.GetValueOrDefault("supportingEdgeIds"), StringComparison.Ordinal));
         Assert.DoesNotContain(result.Facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.LegacyWebFormsClientHttpHandlerResolution);

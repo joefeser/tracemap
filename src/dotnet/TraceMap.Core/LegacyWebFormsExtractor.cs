@@ -2344,11 +2344,19 @@ public static partial class LegacyWebFormsExtractor
                 }
             }
 
-            var methods = sourcePaths
+            var codeFiles = sourcePaths
                 .Select(path => context.CodeFiles.FirstOrDefault(file => file.FilePath.Equals(path, StringComparison.OrdinalIgnoreCase))
                     ?? ParseCodeFile(repoPath, path))
                 .Where(file => file is not null)
-                .SelectMany(file => file!.Methods)
+                .Select(file => file!)
+                .ToList();
+            var inlineHandlerCode = ParseInlineWebHandlerCodeFile(handlerFile, text, attributes.GetValueOrDefault("Language"), directive);
+            if (inlineHandlerCode is not null)
+            {
+                codeFiles.Add(inlineHandlerCode);
+            }
+            var methods = codeFiles
+                .SelectMany(file => file.Methods)
                 .Where(method => IdentifierEquals(method.MethodName, "ProcessRequest", IsVisualBasicMethod(method))
                     && PageTypeMatches(handlerType, method.PageTypeName, IsVisualBasicMethod(method)))
                 .GroupBy(method => $"{method.FilePath}|{method.Line}|{method.EndLine}", StringComparer.OrdinalIgnoreCase)
@@ -2393,7 +2401,7 @@ public static partial class LegacyWebFormsExtractor
                 ["supportingFactIds"] = string.Join(",", new[] { request.FactId, directiveFact.FactId }.OrderBy(value => value, StringComparer.Ordinal)),
                 ["surfaceIdentity"] = request.Properties.GetValueOrDefault("surfaceIdentity") ?? request.SourceSymbol ?? string.Empty
             };
-            facts.Add(FactFactory.Create(
+            var resolutionFact = FactFactory.Create(
                 manifest,
                 FactTypes.WebFormsHandlerResolved,
                 RuleIds.LegacyWebFormsClientHttpHandlerResolution,
@@ -2402,9 +2410,120 @@ public static partial class LegacyWebFormsExtractor
                 sourceSymbol: properties["eventSourceIdentity"],
                 targetSymbol: handlerSymbolId,
                 contractElement: "ProcessRequest",
-                properties: properties));
+                properties: properties);
+            facts.Add(resolutionFact);
+            if (method.FilePath.Equals(handlerFile, StringComparison.OrdinalIgnoreCase))
+            {
+                AddInlineWebHandlerCallFacts(manifest, method, handlerSymbol, resolutionFact, facts);
+            }
         }
     }
+
+    private static WebFormsCodeFile? ParseInlineWebHandlerCodeFile(
+        string handlerFile,
+        string text,
+        string? language,
+        Match directive)
+    {
+        var chars = text.ToCharArray();
+        for (var index = directive.Index; index < directive.Index + directive.Length; index++)
+        {
+            if (chars[index] is not ('\r' or '\n')) chars[index] = ' ';
+        }
+        var source = SourceText.From(new string(chars));
+        if (language?.Equals("VB", StringComparison.OrdinalIgnoreCase) == true
+            || language?.Equals("VisualBasic", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            var tree = VB.VisualBasicSyntaxTree.ParseText(source, path: handlerFile);
+            var root = (VBSyntax.CompilationUnitSyntax)tree.GetRoot();
+            var methods = root.DescendantNodes().OfType<VBSyntax.MethodBlockBaseSyntax>()
+                .Select(block => ToVisualBasicMethodInfo(tree, block))
+                .Where(method => method is not null)
+                .Select(method => method!)
+                .OrderBy(method => method.Line)
+                .ThenBy(method => method.MethodName, StringComparer.Ordinal)
+                .ToArray();
+            return methods.Length == 0 ? null : new WebFormsCodeFile(handlerFile, methods, []);
+        }
+
+        if (language?.Equals("C#", StringComparison.OrdinalIgnoreCase) == true
+            || language?.Equals("CSharp", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            var tree = CSharpSyntaxTree.ParseText(source, path: handlerFile);
+            var root = tree.GetCompilationUnitRoot();
+            var methods = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
+                .Select(method => ToMethodInfo(tree, method))
+                .OrderBy(method => method.Line)
+                .ThenBy(method => method.MethodName, StringComparer.Ordinal)
+                .ToArray();
+            return methods.Length == 0 ? null : new WebFormsCodeFile(handlerFile, methods, []);
+        }
+
+        return null;
+    }
+
+    private static void AddInlineWebHandlerCallFacts(
+        ScanManifest manifest,
+        WebFormsMethod method,
+        string handlerSymbol,
+        CodeFact resolution,
+        List<CodeFact> facts)
+    {
+        const int maxCalls = 256;
+        var visualBasicCalls = method.Declaration.DescendantNodes()
+            .OfType<VBSyntax.InvocationExpressionSyntax>()
+            .Select(invocation => (Node: (SyntaxNode)invocation, Name: VisualBasicInvocationName(invocation.Expression)));
+        var csharpCalls = method.Declaration.DescendantNodes()
+            .OfType<InvocationExpressionSyntax>()
+            .Select(invocation => (Node: (SyntaxNode)invocation, Name: (string?)InvocationName(invocation)));
+        var calls = visualBasicCalls
+            .Concat(csharpCalls)
+            .Where(item => !string.IsNullOrWhiteSpace(item.Name))
+            .OrderBy(item => item.Node.SpanStart)
+            .ThenBy(item => item.Name, StringComparer.Ordinal)
+            .ToArray();
+        foreach (var call in calls.Take(maxCalls))
+        {
+            var span = call.Node.SyntaxTree.GetLineSpan(call.Node.Span);
+            facts.Add(FactFactory.Create(
+                manifest,
+                FactTypes.CallEdge,
+                RuleIds.LegacyWebFormsClientHttpHandlerResolution,
+                EvidenceTiers.Tier3SyntaxOrTextual,
+                new EvidenceSpan(
+                    method.FilePath,
+                    span.StartLinePosition.Line + 1,
+                    Math.Max(span.StartLinePosition.Line + 1, span.EndLinePosition.Line + 1),
+                    FactFactory.Hash(call.Node.ToString(), 32),
+                    "LegacyWebFormsExtractor",
+                    ScannerVersions.LegacyWebFormsExtractor),
+                sourceSymbol: handlerSymbol,
+                targetSymbol: call.Name,
+                contractElement: call.Name,
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["callKind"] = "InlineWebHandlerSyntaxInvocation",
+                    ["calleeName"] = call.Name!,
+                    ["callerName"] = handlerSymbol,
+                    ["coverageLabel"] = "reduced-static-webforms-client-http-handler-call",
+                    ["ruleLimitations"] = "Inline .ashx call evidence is syntax-only and does not prove overload resolution, receiver type, dynamic dispatch, branch feasibility, runtime request handling, or callee execution.",
+                    ["supportingFactIds"] = resolution.FactId
+                }));
+        }
+        if (calls.Length > maxCalls)
+        {
+            facts.Add(CreateClientHttpHandlerGap(manifest, resolution, method.FilePath, method.Line,
+                "ClientHttpInlineHandlerCallLimitReached", "Inline .ashx ProcessRequest call extraction reached its bounded per-handler limit."));
+        }
+    }
+
+    private static string? VisualBasicInvocationName(VBSyntax.ExpressionSyntax expression) => expression switch
+    {
+        VBSyntax.IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+        VBSyntax.GenericNameSyntax generic => generic.Identifier.ValueText,
+        VBSyntax.MemberAccessExpressionSyntax member => member.Name.Identifier.ValueText,
+        _ => null
+    };
 
     private static CodeFact CreateClientHttpHandlerGap(
         ScanManifest manifest,
