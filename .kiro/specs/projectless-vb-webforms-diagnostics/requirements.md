@@ -9,3 +9,5 @@
    or no backend evidence observed.
 4. Keep classifications evidence-relative and document that they do not prove
    runtime execution or absence.
+5. Every retained VB syntax call edge must carry an explicit coverage label so
+   packet admission does not create one provenance gap per valid call.

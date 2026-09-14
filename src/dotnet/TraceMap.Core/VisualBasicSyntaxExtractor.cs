@@ -699,7 +699,8 @@ public static class VisualBasicSyntaxExtractor
                     {
                         ["callKind"] = "SyntaxInvocation",
                         ["calleeName"] = invocationName,
-                        ["callerName"] = containingMember ?? string.Empty
+                        ["callerName"] = containingMember ?? string.Empty,
+                        ["coverageLabel"] = "syntax-only"
                     },
                     budget,
                     sourceSymbol: containingMember))
@@ -762,7 +763,8 @@ public static class VisualBasicSyntaxExtractor
                         ["callKind"] = "SyntaxObjectCreation",
                         ["calleeContainingType"] = typeName,
                         ["calleeName"] = typeName,
-                        ["callerName"] = containingMember ?? string.Empty
+                        ["callerName"] = containingMember ?? string.Empty,
+                        ["coverageLabel"] = "syntax-only"
                     },
                     budget,
                     sourceSymbol: containingMember))

@@ -6,3 +6,5 @@
 - [x] 4. Update packet documentation and fixture inventory.
 - [x] 5. Run focused and full validation, then record exact results.
 - [x] 6. Commit and push the branch.
+- [x] 7. Add explicit coverage labels to VB syntax call edges exposed by the
+  projectless join and validate the real-world anonymous aggregate.

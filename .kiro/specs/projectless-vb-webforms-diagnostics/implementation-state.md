@@ -24,3 +24,17 @@ cannot be reconstructed safely from projectless static evidence.
   handler retained zero calls. Generated terminal-free gaps split into two
   `DownstreamWithoutSupportedTerminal` and one `NoBackendEvidence` rows.
 - `scripts/check-private-paths.sh` and `git diff --check`: passed.
+
+## Anonymous stress rerun
+
+An alias-only 23-page rerun retained 123 additional calls after `72b7470c`:
+projections increased from 208 to 331, unique facts from 106 to 229, and
+normalized sites from 70 to 193. The same 123 newly admitted VB syntax call
+facts exposed a producer provenance omission: each lacked `coverageLabel`,
+creating 123 `EvidenceCoverageLabelUnavailable` packet gaps. The follow-up
+adds the explicit `syntax-only` label at the VB syntax producer. No page or
+repository identity was retained.
+
+Follow-up validation: focused VB/projectless tests passed 25/25; the public
+fixture retained all five calls with no `EvidenceCoverageLabelUnavailable`
+gap; the full .NET solution passed 1,941/1,941; privacy and diff guards passed.

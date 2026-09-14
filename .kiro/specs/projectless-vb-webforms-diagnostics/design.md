@@ -11,3 +11,7 @@ Keep `eventChains[].classification` compatible. Refine only generated packet
 gap classifications by mapping the already-retained traversal stop state to a
 specific diagnostic. Every generated gap remains tied to the packet rule,
 commit SHA, and supporting fact IDs.
+
+VB syntax invocation and object-creation call edges carry `coverageLabel` =
+`syntax-only`. This is producer-owned provenance, not a semantic-resolution
+claim.

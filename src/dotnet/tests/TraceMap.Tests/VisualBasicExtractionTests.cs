@@ -324,7 +324,8 @@ public sealed class VisualBasicExtractionTests
             fact.FactType == FactTypes.CallEdge
             && fact.RuleId == RuleIds.VisualBasicSyntaxCallGraph
             && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
-            && fact.Properties["callKind"] == "SyntaxInvocation");
+            && fact.Properties["callKind"] == "SyntaxInvocation"
+            && fact.Properties["coverageLabel"] == "syntax-only");
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.ObjectCreated
             && fact.RuleId == RuleIds.VisualBasicSyntaxObjectCreation
@@ -340,6 +341,10 @@ public sealed class VisualBasicExtractionTests
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.ObjectCreated
             && fact.Properties["assignedTo"] == "factory");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.CallEdge
+            && fact.Properties.GetValueOrDefault("callKind") == "SyntaxObjectCreation"
+            && fact.Properties.GetValueOrDefault("coverageLabel") == "syntax-only");
 
         // Explicit per-file Tier4 gap plus the scan-level no-project gap; the
         // manifest records sanitized categorical gap messages.

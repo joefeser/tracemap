@@ -41,6 +41,7 @@ public sealed class ProjectlessVisualBasicWebFormsDiagnosticsTests
 
         Assert.Equal(2, packet.Gaps.Count(gap => gap.Classification == "DownstreamWithoutSupportedTerminal"));
         Assert.Single(packet.Gaps, gap => gap.Classification == "NoBackendEvidence");
+        Assert.DoesNotContain(packet.Gaps, gap => gap.Classification == "EvidenceCoverageLabelUnavailable");
     }
 
     private static string FindRepoRoot()
