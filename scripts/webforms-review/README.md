@@ -117,6 +117,23 @@ and syntax evidence is collapsed only in the normalized view, and chains at the
 traversal. A ceiling signal means more evidence may be unavailable; it does not prove
 that the handler contains exactly 256 calls.
 
+After a completed one-root run, export one anonymous page-path artifact with:
+
+```powershell
+.\scripts\Export-FocusedWebFormsPageShareable.ps1 `
+  -ReviewRoot $ReviewRoot `
+  -PageId page-043
+```
+
+Share only `workbench\page-043.paths.shareable.zip`. The contained JSON replaces
+routes, files, controls, handlers, methods, types, assemblies, URLs, source
+spans, and evidence identities with local aliases while preserving equality
+relationships between chains, endpoints, handlers, normalized call sites, and
+callees. Bounded structural signals can flag WCF-proxy shape, database APIs,
+connection lifecycle, dynamic text construction, Telerik, file, and HTTP calls.
+They are static candidates and do not prove execution. The published input hash
+covers the sanitized projection, not the private page handoff.
+
 Terminal-free gap categories are deliberately distinct:
 `NoBackendEvidence` means the completed bounded traversal retained no downstream
 edge, `DownstreamWithoutSupportedTerminal` means calls or other downstream edges

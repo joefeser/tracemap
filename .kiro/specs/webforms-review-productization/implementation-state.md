@@ -73,6 +73,12 @@ not recorded here.
   `bounded-semantic-callgraph` and syntax fallback `syntax-only`. This prevents
   otherwise valid retained calls from being misreported as
   `EvidenceCoverageLabelUnavailable` packet gaps.
+- `Export-FocusedWebFormsPageShareable.ps1` validates the completed workbench
+  receipt, resolves one page alias, and emits one explicitly named shareable
+  JSON/ZIP pair. The projection keeps anonymous chain/endpoint/handler/site/
+  callee equality and bounded technology/boundary shape signals while omitting
+  paths, symbols, URLs, spans, source/scan/commit identity, raw evidence IDs,
+  human comments, and the private handoff fingerprint.
 
 ## Validation checkpoint
 
@@ -86,6 +92,9 @@ not recorded here.
   and excludes an unrelated fourth root.
 - Focused C# semantic, syntax, and Web Forms packet tests pin explicit call
   coverage labels and pass.
+- The application-workbench regression pins per-page shareable provenance,
+  shared endpoint/handler equality, normalized-site structure, ZIP contents,
+  structural signals, and a denylist of private fixture identities.
 - An external selected-page C# validation retained identical call accounting
   before and after the producer-label correction: 43 pages, 3,999
   chain-associated projections, 3,798 unique call facts, and 1,943 normalized

@@ -17,6 +17,9 @@
   limit without rescanning or losing original/current tool provenance.
 - [x] Give C# semantic and syntax call facts explicit coverage labels so valid
   retained calls do not become packet provenance gaps.
+- [x] Add a receipt-validated per-page shareable path exporter that preserves
+  anonymous graph equality and categorical boundary signals without private
+  identities or private-input fingerprints.
 - [ ] Consolidate the 450-line focused review reference after compatibility
   wrappers and recovery paths are pinned by tests.
 

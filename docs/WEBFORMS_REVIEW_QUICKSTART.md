@@ -76,6 +76,24 @@ size and SHA-256 before reading it. It prints page, call, and gap totals; gap
 classifications; and the generator/input hashes. It never selects a folder by
 timestamp and does not print private page identities.
 
+To share the anonymous path shape for one page without disclosing its route,
+files, controls, handlers, methods, types, assemblies, URLs, source spans, scan
+identity, or commit identity, run:
+
+```powershell
+.\scripts\Export-FocusedWebFormsPageShareable.ps1 -ReviewRoot $ReviewRoot -PageId page-043
+```
+
+Send only the resulting `workbench\page-043.paths.shareable.zip`. Its JSON
+preserves chain-to-handler, shared-endpoint, normalized-call-site, and
+callee-alias equality plus bounded categorical structural signals. Those
+signals help distinguish candidates such as WCF proxy shape, database command
+execution, connection lifecycle, dynamic text construction, Telerik, file,
+and HTTP calls without exposing the names that triggered them. They remain
+static shape candidates, not proof of runtime execution or business intent.
+The artifact hashes the exact exporter and its sanitized projection; it does
+not publish a fingerprint of the private page handoff.
+
 The pipeline uses one run ID and writes exact paths and hashes to
 `run-receipt.json`. Rerunning the same command validates and reuses completed
 stages. It never selects an artifact by “newest timestamp.” A changed config,
@@ -182,6 +200,10 @@ Only outputs explicitly named `*.shareable.html` or `*.shareable.json` are
 designed for identity-free exchange. Inspect them before sending. Shareable
 provenance hashes the sanitized alias/count projection rather than the private
 packet, avoiding a private packet fingerprint.
+
+The per-page exporter also creates an explicitly named `*.shareable.zip`
+containing only its adjacent anonymous JSON. Do not send the private
+`page-NNN.handoff.json` file.
 
 Every newly derived machine-readable artifact must record:
 
