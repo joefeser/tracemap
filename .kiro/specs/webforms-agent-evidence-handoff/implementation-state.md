@@ -32,6 +32,9 @@ Pull request: #735
   supporting IDs. Corpus safety remains bounded by the documented manifest,
   JSONL-file, line-count, and per-line size limits instead of a producer/consumer
   item-count mismatch.
+- Exporter-valid aggregate chunks may exceed 4 MiB in large repositories. The
+  streamed consumer now retains a bounded 128 MiB per-line ceiling, alongside
+  the 2 GiB file and 100,000-line ceilings.
 
 ## Validation
 
@@ -50,8 +53,8 @@ Pull request: #735
   Full post-review solution validation passed 1,832 tests. The PowerShell
   review-set smoke test also covers optional configured-index degradation and
   explicit missing-index rejection.
-- Large-corpus compatibility regression: 25 handoff tests passed; full solution
-  validation passed 1,939 tests with 0 failures.
+- Large-corpus compatibility regressions: 26 handoff tests passed; full solution
+  validation passed 1,940 tests with 0 failures.
 
 ## Boundaries
 

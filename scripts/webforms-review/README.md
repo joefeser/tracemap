@@ -298,7 +298,7 @@ matching the inspection scan and commit. When a docs-export root is supplied,
 its manifest and query catalog must match the same provenance; matching chunks
 are selected only through retained supporting IDs or exact retrieval-hint
 parameters. Manifests are bounded at 64 MiB, and large `chunks.jsonl` corpora
-are streamed and bounded at 2 GiB, 100,000 lines, and 4 MiB per line.
+are streamed and bounded at 2 GiB, 100,000 lines, and 128 MiB per line.
 Supporting-ID lists produced within those bounds are accepted without a
 separate item-count cap. Missing or empty corpus files and corpus-size limit
 failures retain distinct safe diagnostic codes. If either optional artifact is

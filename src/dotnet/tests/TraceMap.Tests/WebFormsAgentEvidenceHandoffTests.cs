@@ -15,10 +15,11 @@ public sealed class WebFormsAgentEvidenceHandoffTests
     private const string CommitSha = "1111111111111111111111111111111111111111";
 
     [Fact]
-    public void Corpus_json_lines_limit_supports_large_streamed_exports()
+    public void Corpus_bounds_support_large_streamed_exports()
     {
         Assert.Equal(64L * 1024 * 1024, WebFormsAgentEvidenceHandoff.MaximumCorpusManifestBytes);
         Assert.Equal(2L * 1024 * 1024 * 1024, WebFormsAgentEvidenceHandoff.MaximumCorpusJsonLinesBytes);
+        Assert.Equal(128 * 1024 * 1024, WebFormsAgentEvidenceHandoff.MaximumCorpusLineCharacters);
     }
 
     [Fact]
@@ -239,6 +240,32 @@ public sealed class WebFormsAgentEvidenceHandoffTests
             var supportingIds = chunk["supportingIds"]!.AsArray();
             for (var indexValue = supportingIds.Count; indexValue <= 2048; indexValue++)
                 supportingIds.Add($"fact-scale-{indexValue:D4}");
+            lines[0] = chunk.ToJsonString();
+            File.WriteAllText(chunksPath, string.Join('\n', lines) + "\n", new UTF8Encoding(false));
+            RewriteManifest(corpus, manifest => UpdateOutputDigest(manifest, corpus, "chunks.jsonl"));
+            var output = Path.Combine(set, "agent-evidence-handoff.json");
+
+            WebFormsAgentEvidenceHandoff.WriteSet(
+                Path.Combine(set, "inspection.snapshot.json"), set, output, index, corpus);
+
+            Assert.True(File.Exists(output));
+        });
+    }
+
+    [Fact]
+    public void SetHandoffAcceptsExporterValidChunkLinesLargerThan4MiB()
+    {
+        WithFixture((root, inspection, handoff) =>
+        {
+            var set = PrepareSet(root, inspection, handoff);
+            var index = Path.Combine(root, "index.sqlite");
+            CreateIndex(index, "scan-one", CommitSha);
+            var corpus = Path.Combine(root, "docs");
+            EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(index, corpus, Format: "jsonl")).GetAwaiter().GetResult();
+            var chunksPath = Path.Combine(corpus, "chunks.jsonl");
+            var lines = File.ReadAllLines(chunksPath);
+            var chunk = JsonNode.Parse(lines[0])!.AsObject();
+            chunk["bodyMarkdown"] = new string('x', (4 * 1024 * 1024) + 1);
             lines[0] = chunk.ToJsonString();
             File.WriteAllText(chunksPath, string.Join('\n', lines) + "\n", new UTF8Encoding(false));
             RewriteManifest(corpus, manifest => UpdateOutputDigest(manifest, corpus, "chunks.jsonl"));
