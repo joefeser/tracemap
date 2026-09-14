@@ -50,3 +50,23 @@
   mixed-run inputs. Add completion/failure markers, retained/regenerable/optional
   size classifications, a latest-successful locator, and dry-run-first cleanup
   that cannot delete artifacts still referenced by a retained handoff.
+- Implement the unified runner as an additive workflow slice; do not replace or
+  change the behavior of the currently proven focused-review commands until the
+  new path has equivalent tests and a successful real-repository validation.
+  `New-FocusedWebFormsRun.ps1` should generate one timestamped run root,
+  `review-config.json`, an initial `run-manifest.json`, and concise next-step
+  instructions. An explicit `-OpenConfig` switch may open the generated config.
+- Use a versioned private JSON configuration rather than shell environment
+  variables. The proposed fields are `schemaVersion`, `sourceRoot`,
+  `webFormsFolders`, `backendFolders`, `controlsFolders`, `projectMode`,
+  `solutionRelativePath`, `projectRelativePaths`, and optional
+  `timeoutSeconds`. Derive `OutputRoot` from the run-root location rather than
+  duplicating it in the config. Require exactly one project mode: `solution`,
+  `projects`, or `projectless`; `projects` still permits syntax/structural
+  extraction of in-scope files with no project owner.
+- Add a small setup README beside the initializer. It must explain each field,
+  multi-root arrays, project-mode exclusivity, scoped project discovery, private
+  path handling, the edit/validate/run sequence, resume behavior, artifact
+  retention, and the rule against mixing outputs from different runs. The
+  orchestrator should validate before build/scan, freeze the resolved config and
+  its hash into the manifest, and reject resume after configuration drift.
