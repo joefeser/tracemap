@@ -152,7 +152,17 @@ public sealed record WebFormsModernizationEventChain(
     WebFormsModernizationTraversalObservation? TraversalObservation = null)
 {
     public string? HandlerSymbol { get; init; }
+    public IReadOnlyList<WebFormsModernizationCallEvidence> CallEvidence { get; init; } = [];
+    public int CallEvidenceTotalCount { get; init; }
+    public bool CallEvidenceTruncated { get; init; }
 }
+
+public sealed record WebFormsModernizationCallEvidence(
+    string CallEvidenceId,
+    string CalleeName,
+    string CallKind,
+    WebFormsModernizationEvidence Evidence,
+    IReadOnlyList<string> Limitations);
 
 public sealed record WebFormsModernizationTraversalObservation(
     string RuleId,
@@ -675,6 +685,26 @@ public static class WebFormsModernizationPacketReporter
                 var handlerOwnedCallEvidenceCount = flowFact is null
                     ? 0
                     : SplitIds(flowFact.Properties.GetValueOrDefault("supportingEdgeIds")).Count;
+                const int callEvidenceLimit = 256;
+                var handlerCallFacts = flowFact is null
+                    ? []
+                    : SplitIds(flowFact.Properties.GetValueOrDefault("supportingEdgeIds"))
+                        .Where(factsById.ContainsKey)
+                        .Select(id => factsById[id])
+                        .Where(fact => fact.FactType == FactTypes.CallEdge)
+                        .DistinctBy(fact => fact.FactId)
+                        .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+                        .ThenBy(fact => fact.Evidence.StartLine)
+                        .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
+                        .ToArray();
+                var callEvidence = handlerCallFacts.Take(callEvidenceLimit)
+                    .Select(fact => new WebFormsModernizationCallEvidence(
+                        fact.FactId,
+                        SafeIdentity(fact.Properties.GetValueOrDefault("calleeName") ?? fact.TargetSymbol) ?? "callee-unavailable",
+                        SafeKind(fact.Properties.GetValueOrDefault("callKind"), "call"),
+                        Evidence(fact, gaps, options.MaxGaps, snapshot),
+                        Limitations(fact)))
+                    .ToArray();
                 var traversalObservation = handler is null || inputLimited
                     ? null
                     : ToTraversalObservation(
@@ -706,7 +736,10 @@ public static class WebFormsModernizationPacketReporter
                         : ["The chain is static evidence and does not prove runtime event firing or terminal execution."],
                     traversalObservation)
                 {
-                    HandlerSymbol = handler?.Properties.GetValueOrDefault("handlerSymbol")
+                    HandlerSymbol = handler?.Properties.GetValueOrDefault("handlerSymbol"),
+                    CallEvidence = callEvidence,
+                    CallEvidenceTotalCount = Math.Max(handlerOwnedCallEvidenceCount, handlerCallFacts.Length),
+                    CallEvidenceTruncated = Math.Max(handlerOwnedCallEvidenceCount, handlerCallFacts.Length) > callEvidence.Length
                 };
                 chains.Add(chain);
                 if (terminalKind is not null)
@@ -1352,13 +1385,42 @@ public static class WebFormsModernizationPacketReporter
                 {
                     try { budget.Retain(reader.GetInt64(18)); }
                     catch (ReportInputLimitException exception) { inputLimit = "snapshot-" + exception.Limit; break; }
-                    var properties = JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(17)) ?? [];
-                    facts.Add(new(
-                    reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
-                    reader.IsDBNull(4) ? null : reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetString(7),
-                    reader.IsDBNull(8) ? null : reader.GetString(8), reader.IsDBNull(9) ? null : reader.GetString(9), reader.IsDBNull(10) ? null : reader.GetString(10),
-                    new(reader.GetString(11), reader.GetInt32(12), reader.GetInt32(13), reader.IsDBNull(14) ? null : reader.GetString(14), reader.GetString(15), reader.GetString(16)),
-                        new SortedDictionary<string, string>(properties, StringComparer.Ordinal)));
+                    facts.Add(ReadFactRow(reader));
+                }
+            }
+            if (inputLimit is null)
+            {
+                var retainedIds = facts.Select(fact => fact.FactId).ToHashSet(StringComparer.Ordinal);
+                var referencedCallIds = facts
+                    .Where(fact => fact.FactType == FactTypes.WebFormsEventFlowProjected)
+                    .SelectMany(fact => SplitIds(fact.Properties.GetValueOrDefault("supportingEdgeIds")))
+                    .Where(id => !retainedIds.Contains(id))
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(id => id, StringComparer.Ordinal)
+                    .ToArray();
+                foreach (var batch in referencedCallIds.Chunk(400))
+                {
+                    await using var command = connection.CreateCommand();
+                    var parameters = batch.Select((_, index) => "$call" + index).ToArray();
+                    command.CommandText = $$"""
+                    select fact_id, scan_id, repo, commit_sha, project_path, fact_type, rule_id, evidence_tier,
+                           source_symbol, target_symbol, contract_element, file_path, start_line, end_line,
+                           snippet_hash, extractor_id, extractor_version, properties_json,
+                           {{CombinedDependencyPathReporter.TextByteCountSql("fact_id", "scan_id", "repo", "commit_sha", "project_path", "fact_type", "rule_id", "evidence_tier", "source_symbol", "target_symbol", "contract_element", "file_path", "snippet_hash", "extractor_id", "extractor_version", "properties_json")}}
+                    from facts where fact_type = $callEdgeType and fact_id in ({{string.Join(",", parameters)}}) order by fact_id;
+                    """;
+                    command.Parameters.AddWithValue("$callEdgeType", FactTypes.CallEdge);
+                    for (var index = 0; index < batch.Length; index++)
+                        command.Parameters.AddWithValue(parameters[index], batch[index]);
+                    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+                    while (await reader.ReadAsync(cancellationToken))
+                    {
+                        try { budget.Retain(reader.GetInt64(18)); }
+                        catch (ReportInputLimitException exception) { inputLimit = "snapshot-" + exception.Limit; break; }
+                        var fact = ReadFactRow(reader);
+                        if (retainedIds.Add(fact.FactId)) facts.Add(fact);
+                    }
+                    if (inputLimit is not null) break;
                 }
             }
             if (facts.Any(fact => fact.ScanId != scanId || fact.Repo != repository || fact.CommitSha != commit))
@@ -1373,6 +1435,17 @@ public static class WebFormsModernizationPacketReporter
         {
             throw new InvalidDataException("WebFormsModernizationIndexUnsupported", exception);
         }
+    }
+
+    private static CodeFact ReadFactRow(SqliteDataReader reader)
+    {
+        var properties = JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(17)) ?? [];
+        return new(
+            reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
+            reader.IsDBNull(4) ? null : reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetString(7),
+            reader.IsDBNull(8) ? null : reader.GetString(8), reader.IsDBNull(9) ? null : reader.GetString(9), reader.IsDBNull(10) ? null : reader.GetString(10),
+            new(reader.GetString(11), reader.GetInt32(12), reader.GetInt32(13), reader.IsDBNull(14) ? null : reader.GetString(14), reader.GetString(15), reader.GetString(16)),
+            new SortedDictionary<string, string>(properties, StringComparer.Ordinal));
     }
 
     private static async Task<bool> TableExistsAsync(SqliteConnection connection, string tableName, CancellationToken cancellationToken)

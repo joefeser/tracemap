@@ -98,6 +98,11 @@ public sealed class WebFormsModernizationPacketTests
         Assert.True(httpChain.TraversalObservation?.HandlerOwnedCallEvidenceCount > 0);
         Assert.True(httpChain.TraversalObservation?.DownstreamEdgeCount > 0,
             JsonSerializer.Serialize(httpChain.TraversalObservation));
+        var httpCall = Assert.Single(httpChain.CallEvidence, call => call.CalleeName == "Save");
+        Assert.Equal("api/SaveAudit.ashx.vb", httpCall.Evidence.FilePath);
+        Assert.Equal("SyntaxInvocation", httpCall.CallKind);
+        Assert.Equal(httpChain.CallEvidence.Count, httpChain.CallEvidenceTotalCount);
+        Assert.False(httpChain.CallEvidenceTruncated);
         Assert.Equal(4, written.Packet.Summary.ServerBehaviorCount);
         Assert.Equal(4, written.Packet.ServerBehaviorInventory.Count);
         Assert.Contains(written.Packet.ServerBehaviorInventory, item =>
