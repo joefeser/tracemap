@@ -35,6 +35,25 @@ try {
     $parsed = Read-FocusedWebFormsPipelineConfig $configPath
     if ($parsed.ProjectMode -ne 'discover' -or $parsed.Forms.Count -ne 2) { throw 'Discovery/selected config did not round-trip.' }
 
+    $raw.projectSelection = [ordered]@{ mode = 'projects'; solutionRelativePath = ''; projectRelativePaths = @('Web/One.csproj') }
+    [IO.File]::WriteAllText($configPath, (($raw | ConvertTo-Json -Depth 10) + "`n"), [Text.UTF8Encoding]::new($false))
+    $parsed = Read-FocusedWebFormsPipelineConfig $configPath
+    if ($parsed.ProjectMode -ne 'projects' -or $parsed.ProjectRelativePaths.Count -ne 1 -or
+        $parsed.ProjectRelativePaths[0] -ne 'Web/One.csproj') { throw 'One-project C# config did not round-trip.' }
+
+    $raw.projectSelection.projectRelativePaths = @('Web/One.csproj','Backend/Two.vbproj')
+    [IO.File]::WriteAllText($configPath, (($raw | ConvertTo-Json -Depth 10) + "`n"), [Text.UTF8Encoding]::new($false))
+    $parsed = Read-FocusedWebFormsPipelineConfig $configPath
+    if ($parsed.ProjectRelativePaths.Count -ne 2 -or
+        $parsed.ProjectRelativePaths -notcontains 'Web/One.csproj' -or
+        $parsed.ProjectRelativePaths -notcontains 'Backend/Two.vbproj') { throw 'Mixed multi-project config did not round-trip.' }
+
+    $raw.projectSelection = [ordered]@{ mode = 'projectless'; solutionRelativePath = ''; projectRelativePaths = @() }
+    $raw.pageSelection = [ordered]@{ mode = 'all'; forms = @() }
+    [IO.File]::WriteAllText($configPath, (($raw | ConvertTo-Json -Depth 10) + "`n"), [Text.UTF8Encoding]::new($false))
+    $parsed = Read-FocusedWebFormsPipelineConfig $configPath
+    if ($parsed.ProjectMode -ne 'projectless' -or $parsed.PageMode -ne 'all') { throw 'Projectless all-pages config did not round-trip.' }
+
     $pipeline = [IO.File]::ReadAllText($pipelinePath)
     foreach ($required in @(
         'focused-webforms-review-run-receipt.v1',
@@ -70,4 +89,3 @@ finally {
 }
 
 Write-Host 'PASS focused Web Forms pipeline setup/config contract'
-

@@ -1,6 +1,6 @@
 # Web Forms Review Productization Implementation State
 
-Status: planned-with-documentation-front-door
+Status: clean-run-pipeline-implemented
 Readiness: public-and-work-first
 Branch: codex/vb-webforms-battle-test
 Public claim level: hidden
@@ -44,9 +44,36 @@ not recorded here.
 - External ticket creation begins with an alias-only dry run and explicit
   approval pipeline.
 
-## Next implementation slice
+## Implemented clean-run workflow
 
-Implement and test `Initialize-FocusedWebFormsReview.ps1` and the persisted
-config contract. The config must support three folder roots, multiple projects
-per root, an explicit solution or projectless mode, actionable preflight errors,
-and a single run receipt shared by subsequent stages.
+- `Initialize-FocusedWebFormsReview.ps1` creates one empty review root, a
+  seven-setting config, logs directory, and local retention README.
+- `Invoke-FocusedWebFormsPipeline.ps1` runs build, scan, all/selected-page
+  packet composition, evidence-docs export, and application workbench creation.
+- `run-receipt.json` binds the run to the config hash, pipeline generator hash,
+  source commit, TraceMap commit, exact artifact paths, sizes, and hashes.
+- Resume validates every completed artifact and reuses only an identical run;
+  it does not select folders by timestamp.
+- Project selection supports explicit solution, explicit projects, bounded
+  discovery under the three configured roots, and explicit projectless mode.
+- Wrong folders identify the requested value and source root. Wrong solution
+  and project paths include bounded in-scope candidates.
+
+## Validation checkpoint
+
+- Focused setup/config, launcher, and application-workbench PowerShell suites
+  pass.
+- One-project C#, mixed multi-project C#/VB.NET, discover, projectless, all-page,
+  and selected-page config contracts are pinned.
+- Folder discovery retains C# and VB.NET project files beneath the three roots
+  and excludes an unrelated fourth root.
+- A clean projectless VB.NET Web Forms fixture completed scan, packet,
+  evidence-docs, and workbench publication. A second invocation reused all five
+  stages under the original run ID after verifying receipt provenance and
+  artifact hashes.
+
+## Remaining follow-up
+
+Consolidate the long manual compatibility reference only after its diagnostic
+and recovery entry points have equivalent behavioral tests. Ticket automation
+and licensing remain deliberately separate private follow-up work.

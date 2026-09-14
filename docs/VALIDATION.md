@@ -2240,3 +2240,29 @@ IDs and exact markup spans through the modernization packet, docs export, and
 page handoff. Trigger rows must render their retained binding and handler spans,
 and source excerpts must remain readable without inheriting inline-code block
 background styling.
+
+### Web Forms one-root review pipeline
+
+For changes to clean-run setup, persisted configuration, bounded project
+selection, resume behavior, or the one-root artifact layout, run:
+
+```bash
+pwsh -NoProfile -File scripts/Invoke-FocusedWebFormsReview.Tests.ps1
+pwsh -NoProfile -File scripts/tests/Test-FocusedWebFormsPipeline.ps1
+pwsh -NoProfile -File scripts/tests/Test-FocusedWebFormsApplicationWorkbench.ps1
+```
+
+Confirm the generated config has exactly seven operational settings; explicit
+solution, project, discovery, and projectless modes remain distinct; discovery
+does not escape the three configured roots; and all-page mode does not create a
+surface list. A clean end-to-end fixture must publish scan, packet,
+evidence-docs, and workbench folders under one review root. Immediately rerun
+the unchanged command and confirm every completed stage reports `state=reused`
+under the same run ID. Changing the config, source commit, TraceMap commit,
+pipeline generator, or any retained artifact must fail resume validation.
+
+Inspect `run-receipt.json` and confirm it records the config and generator
+SHA-256 values, source and TraceMap commits, and the exact relative path, byte
+count, and SHA-256 for every retained stage artifact. Public/shareable
+regression checks must continue to reject private paths, symbols, source, scan
+identity, commit identity, and private-input fingerprints.

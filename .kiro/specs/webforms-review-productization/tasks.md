@@ -5,11 +5,14 @@
 - [x] Add a language-neutral public quickstart.
 - [x] Add public evidence-led use cases and prompt patterns.
 - [x] Add a work-machine Claude Code handoff prompt and commands.
-- [ ] Add a single setup/config command with seven bounded settings.
-- [ ] Add a single resumable pipeline command and run receipt.
-- [ ] Add typed solution/path preflight errors and bounded candidate hints.
-- [ ] Constrain multi-project discovery to the three configured roots.
-- [ ] Validate projectless, one-project, multi-project, C#, and VB.NET fixtures.
+- [x] Add a single setup/config command with seven bounded settings.
+- [x] Add a single resumable pipeline command and run receipt.
+- [x] Add typed solution/path preflight errors and bounded candidate hints.
+- [x] Constrain multi-project discovery to the three configured roots.
+- [x] Make all-pages mode explicit and keep selected-page mode bounded.
+- [x] Keep scan, packet, evidence docs, workbench, logs, config, and receipt in
+  one review root with clear retention guidance.
+- [x] Validate projectless, one-project, multi-project, C#, and VB.NET fixtures.
 - [ ] Consolidate the 450-line focused review reference after compatibility
   wrappers and recovery paths are pinned by tests.
 
@@ -22,9 +25,8 @@
 
 ## Release checks
 
-- [ ] Run focused PowerShell tests for each script slice.
-- [ ] Run the relevant .NET tests and pinned validation workflow.
-- [ ] Confirm every new machine-readable artifact records generator/input hashes.
-- [ ] Confirm public artifacts contain no private paths, symbols, source, scan
+- [x] Run focused PowerShell tests for each script slice.
+- [x] Run the relevant .NET tests and pinned validation workflow.
+- [x] Confirm every new machine-readable artifact records generator/input hashes.
+- [x] Confirm public artifacts contain no private paths, symbols, source, scan
   identity, commit identity, or private-input fingerprints.
-
