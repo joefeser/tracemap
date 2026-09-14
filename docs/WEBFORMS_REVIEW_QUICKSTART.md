@@ -81,6 +81,9 @@ The standalone review is written under the configured output root as
 or silently invalidate a completed pipeline workbench. The console prints the
 new review root, packet path, and optional ZIP path. Page aliases are determined
 by the newly generated workbench; confirm the retained route before sharing.
+The standalone command reads only `outputRoot` from the local configuration;
+it does not require `indexPath` or the page list because it consumes an already
+generated packet.
 
 After the pipeline completes, print the receipt-validated alias-only totals
 with one short command:

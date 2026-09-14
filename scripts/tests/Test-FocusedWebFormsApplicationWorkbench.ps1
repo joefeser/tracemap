@@ -196,7 +196,9 @@ try {
     Expand-Archive -LiteralPath $shareableZip -DestinationPath $expanded
     if (@(Get-ChildItem -LiteralPath $expanded -File).Count -ne 1 -or !(Test-Path -LiteralPath (Join-Path $expanded 'page-001.paths.shareable.json') -PathType Leaf)) { throw 'Page shareable ZIP did not contain exactly the anonymous JSON artifact.' }
 
-    $standaloneOutput = @(& $standaloneScript -PacketPath $packetPath -OutputRoot $outputRoot -PageId 'page-001')
+    $standaloneConfig = Join-Path $temp 'standalone-review.json'
+    [IO.File]::WriteAllText($standaloneConfig, (([ordered]@{ outputRoot = $outputRoot } | ConvertTo-Json) + "`n"), [Text.UTF8Encoding]::new($false))
+    $standaloneOutput = @(& $standaloneScript -PacketPath $packetPath -ConfigPath $standaloneConfig -PageId 'page-001')
     $standaloneRootLine = @($standaloneOutput | Where-Object { $_ -like 'standaloneReviewRoot=*' })
     if ($standaloneRootLine.Count -ne 1) { throw 'Standalone review did not report exactly one review root.' }
     $standaloneRoot = $standaloneRootLine[0].Substring('standaloneReviewRoot='.Length)

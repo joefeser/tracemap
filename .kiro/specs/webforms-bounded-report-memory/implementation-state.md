@@ -18,7 +18,9 @@ does not mutate a completed pipeline workbench. Added a separate standalone
 review wrapper that selects the newest page-list packet, creates a new immutable
 `workbench/` plus compatible hash receipt, and can immediately invoke the
 anonymous page exporter against that exact workbench. This prevents a report-only
-rerun from accidentally exporting an older receipted pipeline packet.
+rerun from accidentally exporting an older receipted pipeline packet. Its config
+reader deliberately consumes only `outputRoot`; requiring the page-list runner's
+`indexPath` and form array at this post-packet stage was an unnecessary coupling.
 
 ## Handler-rooted HTML and anonymous review packet (2026-09-10)
 

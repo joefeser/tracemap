@@ -13,8 +13,18 @@ if ($PSVersionTable.PSVersion.Major -lt 7) { throw 'WEBFORMS_STANDALONE_REVIEW_P
 
 if (!$ConfigPath) { $ConfigPath = Join-Path $PSScriptRoot 'Run-FocusedWebFormsPageList.json' }
 if (!$OutputRoot) {
-    . (Join-Path $PSScriptRoot 'webforms-review/FocusedWebFormsConfig.ps1')
-    $OutputRoot = (Read-FocusedWebFormsConfig -ConfigPath $ConfigPath).OutputRoot
+    if (!(Test-Path -LiteralPath $ConfigPath -PathType Leaf)) { throw 'WEBFORMS_STANDALONE_REVIEW_CONFIG_UNAVAILABLE' }
+    $configFile = Get-Item -LiteralPath $ConfigPath
+    if ($configFile.Length -le 0 -or $configFile.Length -gt 1MB) { throw 'WEBFORMS_STANDALONE_REVIEW_CONFIG_LIMIT' }
+    try { $config = [IO.File]::ReadAllText($configFile.FullName) | ConvertFrom-Json -Depth 10 }
+    catch { throw 'WEBFORMS_STANDALONE_REVIEW_CONFIG_INVALID_JSON' }
+    $outputRootProperty = $config.PSObject.Properties['outputRoot']
+    if ($null -eq $outputRootProperty -or
+        $outputRootProperty.Value -isnot [string] -or
+        [string]::IsNullOrWhiteSpace([string]$outputRootProperty.Value)) {
+        throw 'WEBFORMS_STANDALONE_REVIEW_OUTPUT_ROOT_REQUIRED'
+    }
+    $OutputRoot = ([string]$outputRootProperty.Value).Trim()
 }
 $OutputRoot = [IO.Path]::GetFullPath($OutputRoot)
 if (!(Test-Path -LiteralPath $OutputRoot -PathType Container)) { throw 'WEBFORMS_STANDALONE_REVIEW_OUTPUT_ROOT_UNAVAILABLE' }
