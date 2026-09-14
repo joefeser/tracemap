@@ -86,6 +86,13 @@ not recorded here.
   and excludes an unrelated fourth root.
 - Focused C# semantic, syntax, and Web Forms packet tests pin explicit call
   coverage labels and pass.
+- An external selected-page C# validation retained identical call accounting
+  before and after the producer-label correction: 43 pages, 3,999
+  chain-associated projections, 3,798 unique call facts, and 1,943 normalized
+  source sites. `EvidenceCoverageLabelUnavailable` fell from 3,798 to zero and
+  the alias-only summary reported zero remaining packet gaps. No source paths,
+  symbols, repository identity, or private input fingerprints were retained in
+  this checkpoint.
 - A clean projectless VB.NET Web Forms fixture completed scan, packet,
   evidence-docs, and workbench publication. A second invocation reused all five
   stages under the original run ID after verifying receipt provenance and
