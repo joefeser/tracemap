@@ -1,7 +1,8 @@
 # Implementation state
 
 - Branch: `codex/vb-webforms-battle-test`
-- Status: implementation and validation complete; commit/push pending
+- Status: implementation and validation complete; branch pushed
+- Implementation commit: `72b7470c`
 - Private input: anonymous aggregate counts only; no private source, route, or
   file identity is retained in this spec or fixture.
 
