@@ -109,10 +109,7 @@ public static partial class LegacyWebFormsExtractor
                     : ResolveHandlerIdentity(page, binding, context, evidenceIndex);
                 var bindingFact = CreateEventBindingFact(manifest, page, binding, designerFact, handlerIdentity);
                 facts.Add(bindingFact);
-                if (binding.BindingKind != WebFormsBindingKind.MarkupEventCandidate)
-                {
-                    AddHandlerResolutionFacts(manifest, page, binding, bindingFact, context, evidenceIndex, facts);
-                }
+                AddHandlerResolutionFacts(manifest, page, binding, bindingFact, context, evidenceIndex, facts);
             }
 
             AddExplicitControlSubscriptionFacts(manifest, page, context, evidenceIndex, facts);
@@ -3042,7 +3039,9 @@ public static partial class LegacyWebFormsExtractor
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
             ["bindingFactId"] = bindingFact.FactId,
-            ["coverageLabel"] = tier == EvidenceTiers.Tier1Semantic ? "bounded-static-webforms-handler" : "reduced-static-webforms-handler",
+            ["coverageLabel"] = binding.BindingKind == WebFormsBindingKind.MarkupEventCandidate
+                ? "reduced-static-webforms-event-candidate-handler"
+                : tier == EvidenceTiers.Tier1Semantic ? "bounded-static-webforms-handler" : "reduced-static-webforms-handler",
             ["controlId"] = binding.ControlId,
             ["eventName"] = binding.EventName,
             ["eventSourceIdentity"] = eventSourceIdentity,
@@ -3053,7 +3052,9 @@ public static partial class LegacyWebFormsExtractor
             ["markupFile"] = page.FilePath,
             ["pageTypeName"] = page.PageTypeName,
             ["resolutionKind"] = semanticEvidence is not null ? "SemanticSourceSymbol" : tier == EvidenceTiers.Tier2Structural ? "StructuralLinkedPartialMethod" : "SyntaxLinkedMethod",
-            ["ruleLimitations"] = "Handler resolution is static evidence and does not prove runtime event execution.",
+            ["ruleLimitations"] = binding.BindingKind == WebFormsBindingKind.MarkupEventCandidate
+                ? "The linked method is statically resolved, but the unfamiliar On-prefixed server attribute remains an event candidate; this does not prove framework event semantics, binding, or runtime execution."
+                : "Handler resolution is static evidence and does not prove runtime event execution.",
             ["sourceSymbolId"] = handlerSymbolId,
             ["supportingFactIds"] = bindingFact.FactId,
             ["surfaceIdentity"] = SurfaceIdentity(page.FilePath)

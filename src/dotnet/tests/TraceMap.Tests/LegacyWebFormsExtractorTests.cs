@@ -767,7 +767,7 @@ public sealed class LegacyWebFormsExtractorTests
     }
 
     [Fact]
-    public void Scan_emits_bounded_static_on_event_candidates_but_not_client_side_properties()
+    public void Scan_resolves_linked_methods_for_bounded_static_on_event_candidates_but_not_client_side_properties()
     {
         using var temp = new TempDirectory();
         var repo = Path.Combine(temp.Path, "repo");
@@ -798,9 +798,11 @@ public sealed class LegacyWebFormsExtractorTests
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
             && fact.Properties.GetValueOrDefault("gapKind") == "ClientWebFormsEventAttribute");
-        Assert.DoesNotContain(result.Facts, fact =>
+        Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.WebFormsHandlerResolved
-            && fact.ContractElement == "Grid_RowDataBound");
+            && fact.ContractElement == "Grid_RowDataBound"
+            && fact.Properties.GetValueOrDefault("coverageLabel") == "reduced-static-webforms-event-candidate-handler"
+            && fact.Properties.GetValueOrDefault("ruleLimitations")!.Contains("remains an event candidate", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -1792,7 +1794,7 @@ public sealed class LegacyWebFormsExtractorTests
         Assert.All(events.Concat(mutations).Append(constraint), fact =>
         {
             Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, fact.EvidenceTier);
-            Assert.Equal("legacy-webforms/0.13.2", fact.Evidence.ExtractorVersion);
+            Assert.Equal("legacy-webforms/0.13.3", fact.Evidence.ExtractorVersion);
             Assert.DoesNotContain("Saving", JsonSerializer.Serialize(fact), StringComparison.Ordinal);
         });
     }
@@ -1862,7 +1864,7 @@ public sealed class LegacyWebFormsExtractorTests
         {
             Assert.Equal(RuleIds.LegacyWebFormsInlineClientHttpRequest, request.RuleId);
             Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, request.EvidenceTier);
-            Assert.Equal("legacy-webforms/0.13.2", request.Evidence.ExtractorVersion);
+            Assert.Equal("legacy-webforms/0.13.3", request.Evidence.ExtractorVersion);
         });
         var handler = Assert.Single(result.Facts, fact =>
             fact.FactType == FactTypes.WebFormsHandlerResolved

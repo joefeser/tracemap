@@ -1013,6 +1013,16 @@ sorts presentation order by opaque fact-derived chain hashes, which caused noisy
 whole-page diffs whenever an extractor version changed. The order remains static
 evidence order and explicitly does not claim runtime execution sequence.
 
+Field validation isolated six apparently unavailable handlers to unfamiliar
+framework-specific grid event attributes. The extractor already retained these
+identifier-valued `On...` attributes as Tier 3 server-event candidates but
+intentionally skipped the otherwise independent linked-method resolution step.
+`legacy-webforms/0.13.3` now resolves an exact method in the linked page class
+for these candidates while preserving reduced candidate coverage and an explicit
+limitation that the unfamiliar attribute's framework event semantics, binding,
+and runtime execution remain unproven. Client-prefixed attributes and dynamic or
+non-identifier values remain excluded.
+
 ### Post-fairness field result and actionable summary
 
 The work-machine rerun retained 466 event chains and 361 downstream boundaries.
