@@ -209,6 +209,12 @@ agent retrieval layer, not a disposable intermediate file.
 
 Open the printed `webforms-application-workbench-*\index.html`. This is the
 complete selected-page view and is private because raw source was requested.
+The same folder contains `application-outliers.shareable.html` and
+`application-outliers.shareable.json`. These alias-only projections rank bounded
+review signals and omit retained paths, symbols, repository identifiers, packet
+identifiers, scan identifiers, and commit SHAs. Use the private index to resolve a
+`page-NNN` alias locally; the ordering is an inspection aid, not a migration-effort
+or business-priority conclusion.
 
 ## 6. Generate the supplemental exception review set
 

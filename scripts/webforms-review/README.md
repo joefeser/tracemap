@@ -90,6 +90,14 @@ links one report and one handoff JSON for every selected page. Add
 `-IncludeRawSource -SourceRoot C:\path\to\authorized-source` only on an
 authorized private machine when bounded working-tree excerpts are needed.
 
+The workbench also emits `application-outliers.shareable.html` and
+`application-outliers.shareable.json`. They contain page aliases, bounded counts,
+generic gap classifications, and deterministic review signals only. Retained
+paths, symbols, repository identifiers, packet identifiers, scan identifiers,
+and commit SHAs are omitted. The private index resolves each alias locally.
+Outlier ordering is a review-navigation aid, not runtime evidence, business
+priority, or predicted migration effort.
+
 When the scan observes supported inline jQuery shapes, each page report also
 lists client event bindings, UI-mutation candidates, and numeric maximum-length
 constraints with exact markup spans. Literal ID, ID-suffix, and ID-contains selectors are

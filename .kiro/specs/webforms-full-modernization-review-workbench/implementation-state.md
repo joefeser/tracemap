@@ -70,3 +70,18 @@
   retention, and the rule against mixing outputs from different runs. The
   orchestrator should validate before build/scan, freeze the resolved config and
   its hash into the manifest, and reject resume after configuration drift.
+- Large-application battle testing exposed resolved event chains without a
+  supported terminal/stop bucket that were described in prose but absent from
+  page cards and the application index. The workbench now surfaces
+  `otherIncomplete` explicitly and groups each page's retained gaps by generic
+  classification.
+- The workbench emits alias-only `application-outliers.shareable.html` and
+  `application-outliers.shareable.json` projections. They provide deterministic
+  inspection ordering and top-count views without retained paths, symbols,
+  repository/packet/scan identifiers, or commit SHAs. Their ordering is
+  navigation metadata, not runtime evidence, business priority, or predicted
+  migration effort.
+- Validation: the focused application-workbench and configuration tests pass;
+  the alias-only regression rejects fixture paths, symbols, surface/packet/scan
+  IDs, and commit SHA disclosure. Full solution validation passes 1,940 tests
+  with 0 failures, and `git diff --check` passes.
