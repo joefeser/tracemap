@@ -177,10 +177,15 @@ $sourceStatusExit = $LASTEXITCODE
 if ($sourceStatusExit -ne 0) { throw "SOURCE_STATUS_UNAVAILABLE" }
 if ($sourceStatus.Count -ne 0) { throw "SOURCE_WORKTREE_DIRTY" }
 
-$gitRoot = (git -C $SourceRoot rev-parse --show-toplevel).Trim()
-if ($LASTEXITCODE -ne 0 -or [IO.Path]::GetFullPath($gitRoot).TrimEnd('\', '/') -ne $SourceRoot) {
+$gitPrefix = @(git -C $SourceRoot rev-parse --show-prefix)
+if ($LASTEXITCODE -ne 0 -or ($gitPrefix -join '').Length -ne 0) {
     throw "SOURCE_ROOT_NOT_GIT_ROOT"
 }
+$gitRoot = (git -C $SourceRoot rev-parse --show-toplevel).Trim()
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($gitRoot)) {
+    throw "SOURCE_ROOT_NOT_GIT_ROOT"
+}
+$SourceRoot = [IO.Path]::GetFullPath($gitRoot).TrimEnd('\', '/')
 
 $selectedFolders = @(@($WebFormsFolder, $BackendFolder, $ControlsFolder) | Select-Object -Unique)
 foreach ($folder in $selectedFolders) {

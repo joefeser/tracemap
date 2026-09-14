@@ -51,6 +51,7 @@ Assert-True ($content.Contains("-SearchFolders `$selectedFolders", [StringCompar
 Assert-True ($content.Contains('SOLUTION_SCOPE_INVALID', [StringComparison]::Ordinal)) "solution extension is not validated"
 Assert-True ($content.Contains("[IO.Path]::GetExtension(`$solutionPath) -ne '.sln'", [StringComparison]::Ordinal)) "unsupported solution formats must fail closed"
 Assert-True (-not $content.Contains("'.slnx'", [StringComparison]::Ordinal)) "slnx must not be accepted before scanner inventory support exists"
+Assert-True ($content.Contains('rev-parse --show-prefix', [StringComparison]::Ordinal)) "source-root validation must use Git-relative identity instead of alias-sensitive path equality"
 
 $selectionFunction = @($scriptAst.FindAll({
     param($node)
