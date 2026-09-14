@@ -12,7 +12,7 @@ if ($PSVersionTable.PSVersion.Major -lt 7) { throw 'WEBFORMS_PIPELINE_POWERSHELL
 . (Join-Path $PSScriptRoot 'webforms-review/FocusedWebFormsPipelineConfig.ps1')
 
 function Get-BoundedFileHash {
-    param([string]$Path, [long]$MaximumBytes = 2147483648)
+    param([string]$Path, [long]$MaximumBytes = 17179869184)
     if (!(Test-Path -LiteralPath $Path -PathType Leaf)) { throw "WEBFORMS_PIPELINE_ARTIFACT_UNAVAILABLE;path=$Path" }
     $file = Get-Item -LiteralPath $Path
     if ($file.Length -lt 0 -or $file.Length -gt $MaximumBytes) { throw "WEBFORMS_PIPELINE_ARTIFACT_LIMIT;path=$Path" }
@@ -87,13 +87,52 @@ if ($LASTEXITCODE -ne 0 -or $sourceCommit -notmatch '^[0-9a-f]{40}$') { throw 'W
 $traceCommit = ([string](git -C $traceRoot rev-parse HEAD)).Trim().ToLowerInvariant()
 if ($LASTEXITCODE -ne 0 -or $traceCommit -notmatch '^[0-9a-f]{40}$') { throw 'WEBFORMS_PIPELINE_TRACEMAP_COMMIT_UNAVAILABLE' }
 
+$recoverExistingOversizeScan = $false
 if (Test-Path -LiteralPath $receiptPath -PathType Leaf) {
     $receipt = [IO.File]::ReadAllText($receiptPath) | ConvertFrom-Json -Depth 20
     if ($receipt.schemaVersion -ne 'focused-webforms-review-run-receipt.v1' -or
         $receipt.provenance.configSha256 -ne $configHash.Sha256 -or
+        $receipt.source.commitSha -ne $sourceCommit) {
+        throw 'WEBFORMS_PIPELINE_RESUME_PROVENANCE_MISMATCH'
+    }
+
+    $toolProvenanceChanged =
         $receipt.provenance.generatorSha256 -ne $generatorHash.Sha256 -or
-        $receipt.source.commitSha -ne $sourceCommit -or
-        $receipt.traceMap.commitSha -ne $traceCommit) {
+        $receipt.traceMap.commitSha -ne $traceCommit
+    $scanFailure = [string]$receipt.stages.scan.failure
+    $oversizeScanFailure =
+        $receipt.run.state -eq 'failed' -and
+        $receipt.stages.build.state -eq 'completed' -and
+        $receipt.stages.scan.state -eq 'failed' -and
+        $receipt.stages.packet.state -eq 'pending' -and
+        $receipt.stages.evidenceDocs.state -eq 'pending' -and
+        $receipt.stages.workbench.state -eq 'pending' -and
+        $scanFailure.StartsWith('WEBFORMS_PIPELINE_ARTIFACT_LIMIT;path=', [StringComparison]::Ordinal) -and
+        [IO.Path]::GetFileName($scanFailure.Substring($scanFailure.IndexOf('path=', [StringComparison]::Ordinal) + 5)).Equals('facts.ndjson', [StringComparison]::OrdinalIgnoreCase)
+
+    if ($toolProvenanceChanged -and $oversizeScanFailure) {
+        $priorTraceCommit = [string]$receipt.traceMap.commitSha
+        git -C $traceRoot merge-base --is-ancestor $priorTraceCommit $traceCommit
+        if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_PIPELINE_RESUME_PROVENANCE_MISMATCH' }
+        $migration = [pscustomobject][ordered]@{
+            reason = 'oversize-scan-artifact-limit-recovery'
+            migratedUtc = [DateTime]::UtcNow.ToString('O')
+            priorTraceMapCommitSha = $priorTraceCommit
+            priorGeneratorSha256 = [string]$receipt.provenance.generatorSha256
+            recoveryTraceMapCommitSha = $traceCommit
+            recoveryGeneratorSha256 = $generatorHash.Sha256
+        }
+        if ($null -eq $receipt.provenance.PSObject.Properties['migrations']) {
+            $receipt.provenance | Add-Member -NotePropertyName migrations -NotePropertyValue @()
+        }
+        $receipt.provenance.migrations = @($receipt.provenance.migrations) + @($migration)
+        $receipt.provenance.generatorSha256 = $generatorHash.Sha256
+        $receipt.traceMap.commitSha = $traceCommit
+        $recoverExistingOversizeScan = $true
+        Write-RunReceipt $receiptPath $receipt
+        Write-Host 'pipelineRecovery=oversize-scan-artifact-limit;state=validated'
+    }
+    elseif ($toolProvenanceChanged) {
         throw 'WEBFORMS_PIPELINE_RESUME_PROVENANCE_MISMATCH'
     }
     Write-Host "pipelineRun=$($receipt.run.runId);state=resuming"
@@ -151,7 +190,28 @@ try {
 
     $scanPath = Join-Path $root 'scan'
     $localReviewResult = Join-Path $root 'logs/local-review-result.json'
-    if (!(Assert-CompletedStage $root $receipt.stages.scan 'scan')) {
+    if ($recoverExistingOversizeScan) {
+        $scanManifestPath = Join-Path $scanPath 'scan-manifest.json'
+        $scanArtifacts = @(
+            $scanManifestPath,
+            (Join-Path $scanPath 'facts.ndjson'),
+            (Join-Path $scanPath 'index.sqlite'),
+            (Join-Path $scanPath 'report.md'),
+            (Join-Path $scanPath 'logs/analyzer.log'),
+            $localReviewResult
+        )
+        foreach ($path in $scanArtifacts) {
+            if (!(Test-Path -LiteralPath $path -PathType Leaf)) { throw "WEBFORMS_PIPELINE_RECOVERY_ARTIFACT_UNAVAILABLE;path=$path" }
+        }
+        $scanManifest = [IO.File]::ReadAllText($scanManifestPath) | ConvertFrom-Json -Depth 20
+        if ([string]$scanManifest.commitSha -ne $sourceCommit) { throw 'WEBFORMS_PIPELINE_RECOVERY_SOURCE_COMMIT_MISMATCH' }
+        Set-StageState $receipt 'scan' 'completed' (New-ArtifactReceipt $root $scanArtifacts)
+        $receipt.run.state = 'running'
+        $receipt.run.failure = ''
+        Write-RunReceipt $receiptPath $receipt
+        Write-Host 'pipelineStage=scan;state=recovered;reason=prior-artifact-limit'
+    }
+    elseif (!(Assert-CompletedStage $root $receipt.stages.scan 'scan')) {
         $activeStage = 'scan'
         Set-StageState $receipt $activeStage 'running'
         Write-RunReceipt $receiptPath $receipt

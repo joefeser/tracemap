@@ -13,6 +13,8 @@
 - [x] Keep scan, packet, evidence docs, workbench, logs, config, and receipt in
   one review root with clear retention guidance.
 - [x] Validate projectless, one-project, multi-project, C#, and VB.NET fixtures.
+- [x] Recover a completed scan that exceeded the original 2 GiB receipt-hash
+  limit without rescanning or losing original/current tool provenance.
 - [ ] Consolidate the 450-line focused review reference after compatibility
   wrappers and recovery paths are pinned by tests.
 

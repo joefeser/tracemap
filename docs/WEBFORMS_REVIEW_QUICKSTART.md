@@ -112,6 +112,14 @@ Do not remove the receipt from a run with completed retained stages. Restore
 the original config to resume it, or initialize a different empty review root
 for the changed config.
 
+`WEBFORMS_PIPELINE_ARTIFACT_LIMIT` for `scan/facts.ndjson` after the scan
+completed was a pipeline-receipt limit, not a scanner failure. Update TraceMap
+and rerun the same pipeline command against the same review root. The guarded
+recovery verifies the unchanged config and source commit, requires the prior
+TraceMap commit to be an ancestor, records both tool revisions and generator
+hashes, hashes retained scan artifacts up to 16 GiB, and continues at packet
+generation without rescanning. Do not delete `scan/` or `run-receipt.json`.
+
 ## One-root artifact map
 
 | Path | Retention | Purpose |

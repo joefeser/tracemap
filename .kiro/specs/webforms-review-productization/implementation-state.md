@@ -65,6 +65,10 @@ not recorded here.
   empty bounded discovery, routes Web Site checkouts to explicit projectless
   mode, and limits failed-receipt removal to runs with no completed retained
   stage.
+- Retained artifact hashing is bounded at 16 GiB. A narrowly guarded migration
+  promotes an otherwise complete scan that failed only at the former 2 GiB
+  receipt limit, preserves the prior TraceMap commit and generator hash in the
+  migration record, and continues downstream stages without rescanning.
 
 ## Validation checkpoint
 
