@@ -162,7 +162,14 @@ public sealed record WebFormsModernizationCallEvidence(
     string CalleeName,
     string CallKind,
     WebFormsModernizationEvidence Evidence,
-    IReadOnlyList<string> Limitations);
+    IReadOnlyList<string> Limitations)
+{
+    public string CallSiteId { get; init; } = string.Empty;
+    public string Resolution { get; init; } = "unresolved";
+    public string TechnologyFamily { get; init; } = "unresolved";
+    public string? DeclaringType { get; init; }
+    public string? AssemblyName { get; init; }
+}
 
 public sealed record WebFormsModernizationTraversalObservation(
     string RuleId,
@@ -703,7 +710,14 @@ public static class WebFormsModernizationPacketReporter
                         SafeIdentity(fact.Properties.GetValueOrDefault("calleeName") ?? fact.TargetSymbol) ?? "callee-unavailable",
                         SafeKind(fact.Properties.GetValueOrDefault("callKind"), "call"),
                         Evidence(fact, gaps, options.MaxGaps, snapshot),
-                        Limitations(fact)))
+                        Limitations(fact))
+                    {
+                        CallSiteId = CallSiteId(fact),
+                        Resolution = CallResolution(fact),
+                        TechnologyFamily = CallTechnologyFamily(fact),
+                        DeclaringType = SafeIdentity(fact.Properties.GetValueOrDefault("calleeContainingType")),
+                        AssemblyName = SafeIdentity(fact.Properties.GetValueOrDefault("calleeAssemblyName"))
+                    })
                     .ToArray();
                 var traversalObservation = handler is null || inputLimited
                     ? null
@@ -1778,6 +1792,39 @@ public static class WebFormsModernizationPacketReporter
         return concreteDisplay is not null
             && string.Equals(projection.ShapeHash, FactFactory.Hash(concreteDisplay, 32), StringComparison.Ordinal);
     }
+    private static string CallSiteId(CodeFact fact)
+    {
+        var siteEvidence = string.IsNullOrWhiteSpace(fact.Evidence.SnippetHash)
+            ? fact.Properties.GetValueOrDefault("calleeName") ?? fact.ContractElement ?? "callee-unavailable"
+            : fact.Evidence.SnippetHash!;
+        return HashId("call-site", [SafeFilePath(fact.Evidence.FilePath), fact.Evidence.StartLine.ToString(System.Globalization.CultureInfo.InvariantCulture), fact.Evidence.EndLine.ToString(System.Globalization.CultureInfo.InvariantCulture), siteEvidence]);
+    }
+
+    private static string CallResolution(CodeFact fact) =>
+        fact.Properties.GetValueOrDefault("callKind")?.StartsWith("Semantic", StringComparison.Ordinal) == true
+            ? "compiler-resolved"
+            : "syntax-only";
+
+    private static string CallTechnologyFamily(CodeFact fact)
+    {
+        if (CallResolution(fact) != "compiler-resolved") return "unresolved";
+        var type = fact.Properties.GetValueOrDefault("calleeContainingType") ?? string.Empty;
+        var assembly = fact.Properties.GetValueOrDefault("calleeAssemblyName") ?? string.Empty;
+        var callerAssembly = fact.Properties.GetValueOrDefault("callerAssemblyName") ?? string.Empty;
+        if (type.StartsWith("Telerik.", StringComparison.OrdinalIgnoreCase)
+            || assembly.StartsWith("Telerik", StringComparison.OrdinalIgnoreCase)) return "telerik";
+        if (!string.IsNullOrWhiteSpace(assembly)
+            && !string.IsNullOrWhiteSpace(callerAssembly)
+            && assembly.Equals(callerAssembly, StringComparison.OrdinalIgnoreCase)) return "application";
+        if (assembly.Equals("mscorlib", StringComparison.OrdinalIgnoreCase)
+            || assembly.Equals("netstandard", StringComparison.OrdinalIgnoreCase)
+            || assembly.Equals("System", StringComparison.OrdinalIgnoreCase)
+            || assembly.StartsWith("System.", StringComparison.OrdinalIgnoreCase)
+            || assembly.Equals("Microsoft", StringComparison.OrdinalIgnoreCase)
+            || assembly.StartsWith("Microsoft.", StringComparison.OrdinalIgnoreCase)) return "framework";
+        return string.IsNullOrWhiteSpace(assembly) ? "unresolved" : "third-party";
+    }
+
     private static string? SafeIdentity(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Length <= 256 ? value : HashId("identity", [value]);
     private static string SafeKind(string? value, string fallback) => string.IsNullOrWhiteSpace(value) || value.Length > 96 ? fallback : value;
     private static string BoundaryCategory(string surfaceKind, CombinedPathNode? terminalNode) => surfaceKind switch

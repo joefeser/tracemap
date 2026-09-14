@@ -101,6 +101,9 @@ public sealed class WebFormsModernizationPacketTests
         var httpCall = Assert.Single(httpChain.CallEvidence, call => call.CalleeName == "Save");
         Assert.Equal("api/SaveAudit.ashx.vb", httpCall.Evidence.FilePath);
         Assert.Equal("SyntaxInvocation", httpCall.CallKind);
+        Assert.Equal("syntax-only", httpCall.Resolution);
+        Assert.Equal("unresolved", httpCall.TechnologyFamily);
+        Assert.False(string.IsNullOrWhiteSpace(httpCall.CallSiteId));
         Assert.Equal(httpChain.CallEvidence.Count, httpChain.CallEvidenceTotalCount);
         Assert.False(httpChain.CallEvidenceTruncated);
         Assert.Equal(4, written.Packet.Summary.ServerBehaviorCount);
@@ -635,7 +638,14 @@ public sealed class WebFormsModernizationPacketTests
             ("supportingEdgeIds", unjoinedSyntaxCall.FactId), ("flowClassification", "UnknownAnalysisGap"),
             ("coverageLabel", "reduced-static-webforms-flow"));
         var downstreamCall = Fact(manifest, FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, "Pages/Traversal.aspx.cs", 30,
-            source: "method:downstream", target: "method:leaf", contract: "Leaf", ("coverageLabel", "bounded-static-call"));
+            source: "method:downstream", target: "method:leaf", contract: "Leaf", ("coverageLabel", "bounded-static-call"),
+            ("calleeName", "Leaf"), ("callKind", "SemanticMethodInvocation"),
+            ("calleeContainingType", "Telerik.Web.UI.SampleControl"), ("callerAssemblyName", "Sample.Web"), ("calleeAssemblyName", "Telerik.Web.UI"));
+        var downstreamFlow = Fact(manifest, FactTypes.WebFormsEventFlowProjected, RuleIds.LegacyWebFormsEventFlow, "Pages/Traversal.aspx.cs", 22,
+            source: "method:downstream", target: "flow-terminal-unavailable", contract: "Downstream_Click",
+            ("supportingFactIds", $"{handlers[2].FactId},{downstreamCall.FactId}"),
+            ("supportingEdgeIds", downstreamCall.FactId), ("flowClassification", "UnknownAnalysisGap"),
+            ("coverageLabel", "reduced-static-webforms-flow"));
         var leafInvocationWithoutCall = Fact(manifest, FactTypes.MethodInvoked, RuleIds.CSharpSemanticMethodInvocation, "Pages/Traversal.aspx.cs", 32,
             source: "method:leaf", target: "method:missing-call-edge", contract: "MissingCallEdge", ("coverageLabel", "bounded-static-call"));
         var leafDeclaration = Fact(manifest, FactTypes.MethodDeclared, RuleIds.CSharpSyntaxDeclarations, "Pages/Traversal.aspx.cs", 29,
@@ -666,7 +676,7 @@ public sealed class WebFormsModernizationPacketTests
                 ["coverageLabel"] = "bounded-static-call"
             });
         var index = Path.Combine(temp.Path, "index.sqlite");
-        SqliteIndexWriter.Write(index, manifest, [page, .. bindings, .. handlers, unjoinedSyntaxCall, unrelatedSameNameCall, unjoinedFlow, downstreamCall, leafInvocationWithoutCall, leafDeclaration, leafBodyEvidence, terminalCall, query, fillCall, frameworkFill]);
+        SqliteIndexWriter.Write(index, manifest, [page, .. bindings, .. handlers, unjoinedSyntaxCall, unrelatedSameNameCall, unjoinedFlow, downstreamCall, downstreamFlow, leafInvocationWithoutCall, leafDeclaration, leafBodyEvidence, terminalCall, query, fillCall, frameworkFill]);
 
         var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(index, Path.Combine(temp.Path, "output")));
 
@@ -681,6 +691,10 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Equal("joined-downstream-edge-observed", unjoined.TraversalObservation?.CallEvidenceState);
         Assert.Equal(1, unjoined.TraversalObservation?.HandlerOwnedCallEvidenceCount);
         Assert.Equal(1, unjoined.TraversalObservation?.DownstreamEdgeCount);
+        var unjoinedCall = Assert.Single(unjoined.CallEvidence);
+        Assert.Equal("syntax-only", unjoinedCall.Resolution);
+        Assert.Equal("unresolved", unjoinedCall.TechnologyFamily);
+        Assert.False(string.IsNullOrWhiteSpace(unjoinedCall.CallSiteId));
         Assert.Contains("SymbolCandidate", unjoined.TraversalObservation?.LeafNodeKinds ?? []);
         Assert.Contains(EvidenceTiers.Tier2Structural, unjoined.TraversalObservation?.LeafEvidenceTiers ?? []);
         Assert.Contains("nonsemantic-projection-isolated-by-evidence-tier", unjoined.TraversalObservation?.LeafReconciliationStates ?? []);
@@ -693,6 +707,12 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Contains("Symbol", downstream.TraversalObservation?.LeafNodeKinds ?? []);
         Assert.Contains("calls", downstream.TraversalObservation?.TraversedEdgeKinds ?? []);
         Assert.Contains(RuleIds.CSharpSemanticCallGraph, downstream.TraversalObservation?.TraversedRuleIds ?? []);
+        var downstreamCallEvidence = Assert.Single(downstream.CallEvidence, call => call.CalleeName == "Leaf");
+        Assert.Equal("compiler-resolved", downstreamCallEvidence.Resolution);
+        Assert.Equal("telerik", downstreamCallEvidence.TechnologyFamily);
+        Assert.Equal("Telerik.Web.UI.SampleControl", downstreamCallEvidence.DeclaringType);
+        Assert.Equal("Telerik.Web.UI", downstreamCallEvidence.AssemblyName);
+        Assert.False(string.IsNullOrWhiteSpace(downstreamCallEvidence.CallSiteId));
         Assert.Contains(EvidenceTiers.Tier2Structural, downstream.TraversalObservation?.LeafEvidenceTiers ?? []);
         Assert.Contains("canonical-symbol-no-reconciliation-needed", downstream.TraversalObservation?.LeafReconciliationStates ?? []);
         Assert.Contains("method-invocation-source-retained-without-call-fact", downstream.TraversalObservation?.LeafCallEvidenceStates ?? []);

@@ -2226,7 +2226,13 @@ Confirm that one deterministic report/handoff pair is generated per selected
 surface, reports return to the root index, raw source remains opt-in and bounded,
 and an explicitly supplied evidence-docs corpus remains byte-unchanged. The
 workbench is navigation over retained evidence, not a scan, BRD, runtime claim,
-or human-review overlay.
+or human-review overlay. Confirm that call projections, unique call facts, and
+normalized source call sites remain distinct; matching syntax/semantic evidence
+collapses only in the normalized view; compiler-resolved declaring type, assembly,
+and technology-family metadata survives into the private handoff; and reaching the
+256-fact call-evidence ceiling is visible separately from traversal truncation.
+Ceiling detection is a bounded-coverage warning and must not be rendered as proof of
+an exact source-call count.
 
 For inline Web Forms client behavior, also confirm that supported jQuery event
 bindings, mutations, and numeric maximum-length constraints retain Tier3 rule

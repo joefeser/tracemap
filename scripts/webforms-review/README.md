@@ -96,7 +96,20 @@ generic gap classifications, and deterministic review signals only. Retained
 paths, symbols, repository identifiers, packet identifiers, scan identifiers,
 and commit SHAs are omitted. The private index resolves each alias locally.
 Outlier ordering is a review-navigation aid, not runtime evidence, business
-priority, or predicted migration effort.
+priority, or predicted migration effort. Call metrics distinguish retained
+projections, unique call facts, and normalized source call sites. Matching semantic
+and syntax evidence is collapsed only in the normalized view, and chains at the
+256-fact call-evidence ceiling are identified separately from truncated graph
+traversal. A ceiling signal means more evidence may be unavailable; it does not prove
+that the handler contains exactly 256 calls.
+
+Current packets also carry compiler-resolved declaring type and assembly metadata for
+retained call facts. The workbench derives bounded `application`, `framework`,
+`telerik`, `third-party`, or `unresolved` technology-family labels from that semantic
+metadata and prefers the semantic row when a matching syntax fallback exists. These
+labels identify static compiler evidence, not runtime receiver type or dispatch.
+Older packets remain readable but require packet regeneration from the existing index
+to gain the new semantic metadata; no source rescan is required.
 
 When the scan observes supported inline jQuery shapes, each page report also
 lists client event bindings, UI-mutation candidates, and numeric maximum-length
