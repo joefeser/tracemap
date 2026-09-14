@@ -190,7 +190,13 @@ $SourceRoot = [IO.Path]::GetFullPath($gitRoot).TrimEnd('\', '/')
 $selectedFolders = @(@($WebFormsFolder, $BackendFolder, $ControlsFolder) | Select-Object -Unique)
 foreach ($folder in $selectedFolders) {
     if ($folder -eq '.') { continue }
-    [void](Resolve-RelativeChild $SourceRoot $folder "FOLDER_SCOPE_UNAVAILABLE" $false)
+    try {
+        [void](Resolve-RelativeChild $SourceRoot $folder "FOLDER_SCOPE_UNAVAILABLE" $false)
+    }
+    catch {
+        if ($_.Exception.Message -ne 'FOLDER_SCOPE_UNAVAILABLE') { throw }
+        throw "FOLDER_SCOPE_UNAVAILABLE;requested=$folder;sourceRoot=$SourceRoot"
+    }
 }
 if (-not [string]::IsNullOrWhiteSpace($SolutionRelativePath)) {
     try {
