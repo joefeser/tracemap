@@ -43,6 +43,20 @@ Use the WITS overlay to record reviewer verdicts, migration dispositions,
 capability labels, and comments without mutating scanner evidence. Decisions
 remain a separately validated overlay.
 
+### External-owner boundary questions
+
+When a retained path reaches a service or HTTP boundary owned elsewhere, use
+the local evidence to formulate a contract and ownership request. Do not claim
+to know the remote implementation, and do not treat the missing remote call
+graph as a local extractor failure.
+
+### UI-only handler review
+
+Handlers that reset controls, clear data sources, change selected indexes, or
+toggle visibility may correctly have no database/service terminal. Ask a human
+to classify the retained UI behavior; do not force every handler to end at a
+backend boundary.
+
 ## Bad uses
 
 Do not ask an agent to:
@@ -71,7 +85,10 @@ requests include:
   extractor work separately from application remediation.”
 - “Draft a conversion discovery checklist. Do not estimate effort until the
   listed runtime, data-contract, state, and ownership questions are answered.”
+- “For handlers without supported terminals, distinguish retained UI-only
+  state changes from unresolved call support. Preserve unknowns.”
+- “For external service boundaries, draft the smallest contract request for
+  the owning team without inventing behavior behind the endpoint.”
 
 For a ready-to-paste work-machine prompt and commands, see [Web Forms agent
 handoff](WEBFORMS_AGENT_HANDOFF.md).
-

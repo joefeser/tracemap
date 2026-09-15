@@ -423,6 +423,7 @@ wrappers and would not improve the generated artifact layout.
 | `Run-AndTriage-FocusedWebFormsPageList.ps1` | No | Existing-index report traversal only | Run the configured packet and triage only its exact new artifact. |
 | `Test-FocusedWebFormsReviewConfig.ps1` | No | No | Validate JSONC, paths, modes, and one-root layout before scanning. |
 | `Show-FocusedWebFormsReviewStatus.ps1` | No | No | Print fixed retained artifact paths and refresh counts for one review root. |
+| `Start-FocusedWebFormsClaudeReview.ps1` | No | No | Validate receipted evidence and launch the bounded downstream prompt in Claude Code plan mode. |
 | `New-FocusedWebFormsStandaloneReview.ps1` | No | Existing packet only | Create a new immutable receipted workbench and optionally export one anonymous page from that exact packet. |
 | `Export-LatestFocusedWebFormsPageShareable.ps1` | No | No analysis | Map a prior page alias to the newest standalone workbench locally and export the corresponding anonymous page. |
 | `New-FocusedWebFormsBatchInspection.ps1` | No | No scan; reads retained index evidence | Build the private case inventory used by review sets. |

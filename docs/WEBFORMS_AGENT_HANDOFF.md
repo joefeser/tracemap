@@ -34,7 +34,17 @@ Do not select folders by timestamp guessing.
 
 ## Start a read-only Claude Code review
 
-From the TraceMap checkout:
+The supported copy/paste path from the TraceMap checkout is one command:
+
+```powershell
+.\scripts\Start-FocusedWebFormsClaudeReview.ps1 -ReviewRoot $ReviewRoot
+```
+
+The wrapper validates the completed receipt and required inputs, grants only
+the packet, evidence-doc, and workbench directories, loads the checked-in
+prompt, and starts Claude Code in plan mode. It does not grant source access.
+
+The equivalent expanded command is:
 
 ```powershell
 claude --permission-mode plan `
@@ -45,9 +55,9 @@ claude --permission-mode plan `
 ```
 
 `--add-dir` grants Claude Code access to the three evidence directories, while
-plan mode keeps the first pass focused on analysis. These flags are documented
-in Anthropic's Claude Code CLI reference; confirm them with `claude --help` on
-the work machine if its installed version differs.
+plan mode keeps the first pass focused on analysis. See Anthropic's
+[Claude Code CLI reference](https://docs.anthropic.com/en/docs/claude-code/cli-usage)
+and confirm the installed version with `claude --help` when necessary.
 
 Do not add the application source directory on the first pass. If the evidence
 review produces a precise source question, start a separately authorized
@@ -66,3 +76,6 @@ The prompt asks for:
 
 The output is planning material. It is not runtime proof, a migration estimate,
 an approval, or a TraceMap artifact.
+
+Move conclusions through the separate [private review and approval
+workflow](WEBFORMS_PRIVATE_REVIEW_WORKFLOW.md) before creating work items.

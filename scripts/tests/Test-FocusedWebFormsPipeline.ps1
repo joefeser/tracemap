@@ -6,8 +6,9 @@ $summaryPath = Join-Path $scripts 'Show-FocusedWebFormsOutlierSummary.ps1'
 $helperPath = Join-Path $scripts 'webforms-review/FocusedWebFormsPipelineConfig.ps1'
 $preflightPath = Join-Path $scripts 'Test-FocusedWebFormsReviewConfig.ps1'
 $statusPath = Join-Path $scripts 'Show-FocusedWebFormsReviewStatus.ps1'
+$claudePath = Join-Path $scripts 'Start-FocusedWebFormsClaudeReview.ps1'
 
-foreach ($path in @($setupPath, $pipelinePath, $summaryPath, $helperPath, $preflightPath, $statusPath)) {
+foreach ($path in @($setupPath, $pipelinePath, $summaryPath, $helperPath, $preflightPath, $statusPath, $claudePath)) {
     $tokens = $null
     $errors = $null
     [Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors) | Out-Null
