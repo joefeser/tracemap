@@ -1165,6 +1165,49 @@ public sealed class WebFormsModernizationPacketTests
     }
 
     [Fact]
+    public async Task Semantic_call_facts_preserve_paths_when_normalized_call_edges_are_missing()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("Succeeded") with { AnalysisLevel = "Level1SemanticAnalysis" };
+        var surface = "surface:resume";
+        var binding = Fact(manifest, FactTypes.WebFormsEventBindingDeclared, RuleIds.LegacyWebFormsEventBinding, "Pages/Resume.aspx", 5,
+            source: "control:run", target: "method:handler", contract: "Run_Click",
+            ("surfaceIdentity", surface), ("eventSourceIdentity", "control:run"), ("coverageLabel", "bounded-static-webforms-event"));
+        var handler = Fact(manifest, FactTypes.WebFormsHandlerResolved, RuleIds.LegacyWebFormsHandlerResolution, "Pages/Resume.aspx.cs", 12,
+            source: "control:run", target: "method:handler", contract: "Run_Click",
+            ("surfaceIdentity", surface), ("bindingFactId", binding.FactId), ("handlerSymbolId", "method:handler"),
+            ("handlerSymbol", "method:handler"), ("coverageLabel", "bounded-static-webforms-handler"));
+        var call = Fact(manifest, FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, "Pages/Resume.aspx.cs", 14,
+            source: "method:handler", target: "method:query", contract: "Query",
+            ("coverageLabel", "bounded-static-call")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier1Semantic
+        };
+        var query = Fact(manifest, FactTypes.DatabaseOperationCandidate, RuleIds.DatabaseOperationCallPattern, "Data/Query.cs", 30,
+            source: "method:query", target: "query-target", contract: "fill",
+            ("operationKind", "fill"), ("coverageLabel", "bounded-static-query"));
+        var page = Page(surface, "Pages/Resume.aspx", manifest);
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, manifest, [page, binding, handler, call, query]);
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={index};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "delete from call_edges where fact_id=$id";
+            command.Parameters.AddWithValue("$id", call.FactId);
+            Assert.Equal(1, command.ExecuteNonQuery());
+        }
+
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(index, Path.Combine(temp.Path, "output")));
+
+        var chain = Assert.Single(packet.EventChains);
+        Assert.Equal("sql-persistence", chain.TerminalKind);
+        Assert.Contains(packet.DownstreamBoundaries, boundary => boundary.ChainId == chain.ChainId
+            && boundary.BoundaryCategory == "database");
+        Assert.Contains(chain.SupportingEdgeIds, id => id.EndsWith(call.FactId, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Identity_inventory_is_bounded_joinable_private_and_preserves_identity_gaps()
     {
         using var temp = new TempDirectory();

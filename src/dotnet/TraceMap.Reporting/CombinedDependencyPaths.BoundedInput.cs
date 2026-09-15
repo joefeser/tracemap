@@ -265,6 +265,11 @@ public static partial class CombinedDependencyPathReporter
         var traversalQueries = new List<string>();
         if (await TableExistsAsync(connection, "call_edges", cancellationToken))
             traversalQueries.Add("select callee_symbol as target_symbol from call_edges where caller_symbol in (select value from json_each($symbols))");
+        // Retained Tier-1 CallEdge facts are authoritative evidence even when a
+        // resumable or externally assembled index is missing the normalized
+        // call_edges projection. UNION grouping below removes ordinary-table
+        // duplicates without changing traversal order or bounds.
+        traversalQueries.Add("select target_symbol from facts where fact_type='CallEdge' and evidence_tier='Tier1Semantic' and source_symbol in (select value from json_each($symbols))");
         if (await TableExistsAsync(connection, "object_creations", cancellationToken))
             traversalQueries.Add("select created_type as target_symbol from object_creations where caller_symbol in (select value from json_each($symbols))");
         if (await TableExistsAsync(connection, "parameter_forward_edges", cancellationToken))

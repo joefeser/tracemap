@@ -919,6 +919,38 @@ public static partial class CombinedDependencyPathReporter
                 edge.EdgeKind));
         }
 
+        // A resumable or externally assembled index can retain the authoritative
+        // Tier-1 CallEdge fact while its normalized call_edges projection is
+        // absent. Preserve the exact compiler-resolved graph edge in that case.
+        // The identity matches the normalized edge identity, so ordinary indexes
+        // deduplicate here and retain their existing behavior.
+        foreach (var fact in read.Facts
+            .Where(fact => fact.FactType == FactTypes.CallEdge
+                && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+                && !string.IsNullOrWhiteSpace(fact.SourceSymbol)
+                && !string.IsNullOrWhiteSpace(fact.TargetSymbol))
+            .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
+        {
+            var from = graph.GetOrAddSymbolNode(fact.SourceIndexId, fact.SourceLabel, fact.SourceSymbol!, fact.FilePath,
+                fact.StartLine, fact.EndLine, fact.RuleId, fact.EvidenceTier);
+            var to = graph.GetOrAddSymbolNode(fact.SourceIndexId, fact.SourceLabel, fact.TargetSymbol!, fact.FilePath,
+                fact.StartLine, fact.EndLine, fact.RuleId, fact.EvidenceTier);
+            graph.AddEdge(new GraphEdge(
+                $"edge:{fact.CombinedFactId}:calls",
+                "calls",
+                from.NodeId,
+                to.NodeId,
+                "EvidenceEdge",
+                fact.RuleId,
+                fact.EvidenceTier,
+                [],
+                [fact.CombinedFactId],
+                SafePath(fact.FilePath),
+                fact.StartLine,
+                fact.EndLine,
+                "calls"));
+        }
+
         var remotingFacts = read.Facts
             .Where(IsRemotingFact)
             .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal)
