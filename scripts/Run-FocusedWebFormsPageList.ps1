@@ -7,17 +7,11 @@ param(
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'webforms-review/FocusedWebFormsConfig.ps1')
-if (!$ConfigPath) { $ConfigPath = Join-Path $PSScriptRoot 'Run-FocusedWebFormsPageList.json' }
-$config = Read-FocusedWebFormsConfig -ConfigPath $ConfigPath
+$config = Resolve-FocusedWebFormsPageListInputs -ReviewRoot $ReviewRoot -ConfigPath $ConfigPath -ScriptsRoot $PSScriptRoot
 $IndexPath = $config.IndexPath
 $OutputRoot = $config.OutputRoot
 $pagePaths = @($config.Forms)
 
-if ($ReviewRoot) {
-    $reviewRootPath = [IO.Path]::GetFullPath($ReviewRoot)
-    $IndexPath = Join-Path $reviewRootPath 'scan/index.sqlite'
-    $OutputRoot = $reviewRootPath
-}
 if ($OutputRootOverride) { $OutputRoot = $OutputRootOverride }
 if ($CompareDepths) { throw 'Deeper comparison runs are disabled. Use Summarize-CompletedWebFormsDepths.ps1.' }
 

@@ -96,10 +96,10 @@ The wrapper validates both receipts, matches the private route locally, prints
 only the old and new aliases, and delegates to the anonymous exporter. It does
 not print or copy the private route.
 
-`-ReviewRoot` derives the retained index as `scan/index.sqlite` and publishes the
-new page-list packet beneath the same review root. It overrides a stale local
-`indexPath` without modifying the ignored configuration file; the configured
-form list is still used.
+`-ReviewRoot` derives the retained index as `scan/index.sqlite`, reads the page
+selection from that root's `config/webforms-review.json`, and publishes the new
+page-list packet beneath the same review root. It does not consult the ignored
+legacy workstation configuration unless `-ConfigPath` is explicitly supplied.
 
 After the pipeline completes, print the receipt-validated alias-only totals
 with one short command:

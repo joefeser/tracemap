@@ -407,7 +407,7 @@ wrappers and would not improve the generated artifact layout.
 | --- | --- | --- | --- |
 | `Invoke-FocusedWebFormsReview.ps1` | Yes | Yes, one bounded focused scan | Initial restricted-workstation collection. |
 | `Invoke-FocusedWebFormsPageListReport.ps1` | No | Existing-index report traversal only | Parameterized page-list packet generation. |
-| `Run-FocusedWebFormsPageList.ps1` | No | Existing-index report traversal only | Runner backed by the ignored local JSON configuration; `-ReviewRoot` derives its retained `scan/index.sqlite`. |
+| `Run-FocusedWebFormsPageList.ps1` | No | Existing-index report traversal only | `-ReviewRoot` derives its retained index and page selection from the review-root configuration; an explicit `-ConfigPath` retains the legacy workstation-config workflow. |
 | `Run-AndTriage-FocusedWebFormsPageList.ps1` | No | Existing-index report traversal only | Run the configured packet and triage only its exact new artifact. |
 | `New-FocusedWebFormsStandaloneReview.ps1` | No | Existing packet only | Create a new immutable receipted workbench and optionally export one anonymous page from that exact packet. |
 | `Export-LatestFocusedWebFormsPageShareable.ps1` | No | No analysis | Map a prior page alias to the newest standalone workbench locally and export the corresponding anonymous page. |
