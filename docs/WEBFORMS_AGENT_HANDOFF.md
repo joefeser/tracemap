@@ -59,6 +59,20 @@ plan mode keeps the first pass focused on analysis. See Anthropic's
 [Claude Code CLI reference](https://docs.anthropic.com/en/docs/claude-code/cli-usage)
 and confirm the installed version with `claude --help` when necessary.
 
+### Corporate BAT/Python launchers
+
+If work policy requires a BAT or Python wrapper for Bedrock, proxy, or SSO,
+first run the ready-to-paste
+[corporate launcher inspection prompt](../prompts/guided-corporate-claude-launcher-setup.md)
+inside that environment. It returns a sanitized forwarding contract without
+publishing launcher code or configuration. Do not point the handoff script at a
+corporate launcher until repeated arguments, plan mode, multiline prompt
+transport, and the policy boundary have been verified.
+
+The current wrapper intentionally invokes the normal `claude` command. A future
+launcher-path parameter should be added only after the corporate wrapper's
+argument contract is known and tested.
+
 Do not add the application source directory on the first pass. If the evidence
 review produces a precise source question, start a separately authorized
 follow-up with the minimum required source scope.
