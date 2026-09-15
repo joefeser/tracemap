@@ -108,11 +108,13 @@ index uses a compact triage table; expand a row's Diagnostics control for its
 retained file, full chain outcomes, boundary and gap counts, review state, and
 handoff link.
 
-The workbench also emits `application-outliers.shareable.html` and
-`application-outliers.shareable.json`. They contain page aliases, bounded counts,
+The workbench also emits a private `application-outliers.html` where each page
+alias links to its detailed report and displays its source-relative path. The
+separate `application-outliers.shareable.html` and
+`application-outliers.shareable.json` contain page aliases, bounded counts,
 generic gap classifications, and deterministic review signals only. Retained
 paths, symbols, repository identifiers, packet identifiers, scan identifiers,
-and commit SHAs are omitted. The private index resolves each alias locally.
+and commit SHAs are omitted from both shareable artifacts.
 Outlier ordering is a review-navigation aid, not runtime evidence, business
 priority, or predicted migration effort. Call metrics distinguish retained
 projections, unique call facts, and normalized source call sites. Matching semantic

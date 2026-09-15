@@ -108,7 +108,7 @@ $packet = [ordered]@{
 try {
     $workbench = Join-Path $outputRoot 'workbench'
     & $scriptPath -PacketPath $packetPath -OutputRoot $outputRoot -OutputDirectory $workbench -EvidenceDocsRoot $corpus | Out-Null
-    foreach ($expected in @('index.html', 'application-handoff.json', 'application-outliers.shareable.html', 'application-outliers.shareable.json', 'webforms-modernization.snapshot.json', 'page-001.html', 'page-001.handoff.json', 'page-002.html', 'page-002.handoff.json')) {
+    foreach ($expected in @('index.html', 'application-handoff.json', 'application-outliers.html', 'application-outliers.shareable.html', 'application-outliers.shareable.json', 'webforms-modernization.snapshot.json', 'page-001.html', 'page-001.handoff.json', 'page-002.html', 'page-002.handoff.json')) {
         if (!(Test-Path -LiteralPath (Join-Path $workbench $expected) -PathType Leaf)) { throw "Missing workbench file: $expected" }
     }
     $index = [IO.File]::ReadAllText((Join-Path $workbench 'index.html'))
@@ -160,12 +160,17 @@ try {
     if ($applicationHandoff.provenance.generatorSha256 -ne $expectedGeneratorSha -or $applicationHandoff.provenance.inputSha256 -ne $expectedPacketSha) { throw 'Application handoff omitted exact generator or packet provenance.' }
     if (@($applicationHandoff.projectDataMovement).Count -ne 1 -or $applicationHandoff.projectDataMovement[0].id -ne 'batch-one' -or
         $applicationHandoff.projectDataMovement[0].evidence.factId -ne 'fact-surface-1') { throw 'Application handoff omitted project-scoped data movement evidence.' }
-    if ($applicationHandoff.outlierReview.json -ne 'application-outliers.shareable.json' -or $applicationHandoff.pages[0].chainOutcomes.otherIncomplete -ne 1 -or $applicationHandoff.pages[0].gapCategories[0].classification -ne 'HandlerTerminalUnavailable') { throw 'Application handoff omitted outlier-review navigation or page breakdowns.' }
+    if ($applicationHandoff.outlierReview.privateHtml -ne 'application-outliers.html' -or $applicationHandoff.outlierReview.json -ne 'application-outliers.shareable.json' -or $applicationHandoff.pages[0].chainOutcomes.otherIncomplete -ne 1 -or $applicationHandoff.pages[0].gapCategories[0].classification -ne 'HandlerTerminalUnavailable') { throw 'Application handoff omitted outlier-review navigation or page breakdowns.' }
     if (@($applicationHandoff.analysis.coverageReductionReasons | Where-Object { $_ -eq 'source-analysis-reduced' }).Count -ne 1 -or @($applicationHandoff.analysis.packetTruncationReasons | Where-Object { $_ -eq 'legacy-flow:TruncatedByLimit:depth' }).Count -ne 1) { throw 'Application handoff conflated coverage reduction and truncation reasons.' }
     if (@($applicationHandoff.nextEvidenceSummary | Where-Object { $_.kind -eq 'semantic-call-resolution' -and $_.targets -contains 'Save' }).Count -ne 1) { throw 'Application handoff omitted aggregated next-evidence guidance.' }
     if (@($applicationHandoff.controlRegistrationGaps | Where-Object { $_.safeMetadata.registrationAssembly -eq 'Vendor.Controls' -and $_.safeMetadata.registrationState -eq 'assembly-unavailable' }).Count -ne 1) { throw 'Application handoff omitted safe control-registration metadata.' }
     $outlierJsonText = [IO.File]::ReadAllText((Join-Path $workbench 'application-outliers.shareable.json'))
     $outlierHtml = [IO.File]::ReadAllText((Join-Path $workbench 'application-outliers.shareable.html'))
+    $privateOutlierHtml = [IO.File]::ReadAllText((Join-Path $workbench 'application-outliers.html'))
+    foreach ($expected in @('Private Web Forms outlier review','href="page-001.html"','title="Pages/First.aspx"','Pages/First.aspx','Return to application workbench')) {
+        if (!$privateOutlierHtml.Contains($expected, [StringComparison]::Ordinal)) { throw "Private outlier HTML missing navigation or source identity: $expected" }
+    }
+    if (!$index.Contains('href="application-outliers.html">Private outlier review</a>', [StringComparison]::Ordinal)) { throw 'Private application index omitted private outlier navigation.' }
     $outliers = $outlierJsonText | ConvertFrom-Json -Depth 20
     $projectedPagesJson = ConvertTo-Json -InputObject @($outliers.pages) -Depth 12 -Compress
     $expectedProjectionSha = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.UTF8Encoding]::new($false).GetBytes($projectedPagesJson))).ToLowerInvariant()
