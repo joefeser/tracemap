@@ -14,7 +14,7 @@ the authorized machine. Only sanitized console summaries and generated
 ```powershell
 $ReviewRoot = 'C:\work\webforms-review'
 .\scripts\Initialize-FocusedWebFormsReview.ps1 -ReviewRoot $ReviewRoot
-notepad (Join-Path $ReviewRoot 'config\webforms-review.json')
+notepad (Join-Path $ReviewRoot 'config\webforms-review.jsonc')
 .\scripts\Invoke-FocusedWebFormsPipeline.ps1 -ReviewRoot $ReviewRoot
 ```
 

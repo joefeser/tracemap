@@ -16,6 +16,8 @@ $parsePaths = @(
     (Join-Path $scripts 'New-FocusedWebFormsCodePathReviewSet.ps1'),
     (Join-Path $scripts 'New-FocusedWebFormsApplicationWorkbench.ps1'),
     (Join-Path $scripts 'Export-FocusedWebFormsPageShareable.ps1'),
+    (Join-Path $scripts 'Test-FocusedWebFormsReviewConfig.ps1'),
+    (Join-Path $scripts 'Show-FocusedWebFormsReviewStatus.ps1'),
     (Join-Path $scripts 'webforms-review/Invoke-WitsApplicationReview.ps1')
 )
 foreach ($path in $parsePaths) {

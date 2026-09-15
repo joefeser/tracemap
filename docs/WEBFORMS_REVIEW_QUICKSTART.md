@@ -33,12 +33,18 @@ From the TraceMap repository root, create an empty private review root:
 ```powershell
 $ReviewRoot = 'C:\work\webforms-review'
 .\scripts\Initialize-FocusedWebFormsReview.ps1 -ReviewRoot $ReviewRoot
-notepad (Join-Path $ReviewRoot 'config\webforms-review.json')
+notepad (Join-Path $ReviewRoot 'config\webforms-review.jsonc')
 ```
 
 The config has seven operational settings: source root, Web Forms folder,
 backend folder, controls folder, project selection, output root, and page
 selection. Leave `outputRoot` equal to `$ReviewRoot`.
+
+The generated JSONC comments explain those settings in place. Existing review
+roots that contain only `config/webforms-review.json` remain supported. Do not
+keep both names in one root. Comments are supported; trailing commas are
+deliberately rejected so configuration hashing and cross-tool parsing remain
+unsurprising.
 
 Use forward slashes in JSON paths, including on Windows: `C:/source/application`.
 A path such as `C:\source\application` contains unescaped JSON backslashes and
@@ -55,14 +61,27 @@ Project selection modes:
 - `projectless`: retain syntax/structural Web Site evidence without pretending
   semantic compilation was available.
 
+`webFormsFolder`, `backendFolder`, and `controlsFolder` each name one directory,
+but each directory may contain any number of nested projects. They are not
+semicolon lists or arrays. When four physical folders cannot be covered by
+three honest roots, choose the narrowest common parent for one field; do not
+invent a project or flatten the source tree. In `projects` mode,
+`projectRelativePaths` is the array of explicit `.csproj`/`.vbproj` paths.
+
 Page selection mode `all` retains every discovered Web Forms surface up to the
 documented 1,000-surface bound. Mode `selected` uses the explicit `forms` array.
 
-After editing the config, run one command:
+After editing the config, run the preflight and then the pipeline:
 
 ```powershell
+.\scripts\Test-FocusedWebFormsReviewConfig.ps1 -ReviewRoot $ReviewRoot
 .\scripts\Invoke-FocusedWebFormsPipeline.ps1 -ReviewRoot $ReviewRoot
 ```
+
+The preflight checks the config shape, mode conflicts, source/folder paths,
+solution or explicit project paths, selected page paths, one-root output rule,
+and TraceMap checkout before a scan starts. Failures print `errorCode`,
+`errorDetail`, and `nextAction` instead of leaving only a PowerShell line dump.
 
 ### Refresh reports from an existing index
 
@@ -97,16 +116,23 @@ only the old and new aliases, and delegates to the anonymous exporter. It does
 not print or copy the private route.
 
 `-ReviewRoot` derives the retained index as `scan/index.sqlite`, reads the page
-selection from that root's `config/webforms-review.json`, and publishes the new
-page-list packet beneath the same review root. It does not consult the ignored
-legacy workstation configuration unless `-ConfigPath` is explicitly supplied.
+selection from that root's `config/webforms-review.jsonc` (or legacy `.json`),
+and publishes the new page-list packet beneath the same review root. It does
+not consult the ignored legacy workstation configuration unless `-ConfigPath`
+is explicitly supplied.
 
 After the pipeline completes, print the receipt-validated alias-only totals
 with one short command:
 
 ```powershell
 .\scripts\Show-FocusedWebFormsOutlierSummary.ps1 -ReviewRoot $ReviewRoot
+.\scripts\Show-FocusedWebFormsReviewStatus.ps1 -ReviewRoot $ReviewRoot
 ```
+
+The status command prints the fixed config, scan, packet, evidence-doc, and
+workbench locations plus counts of immutable report-refresh folders. Timestamped
+refreshes remain beneath the same review root; they are not additional scans
+and should not be selected by guessing a folder.
 
 To diagnose one page's bounded traversal without creating another report
 folder or printing its private route, summarize the newest receipted standalone
@@ -204,7 +230,7 @@ generation without rescanning. Do not delete `scan/` or `run-receipt.json`.
 
 | Path | Retention | Purpose |
 | --- | --- | --- |
-| `config/` | Keep | Editable seven-setting input and optional selected-page list. |
+| `config/` | Keep | Commented `webforms-review.jsonc` (or one legacy `.json`) and optional selected-page list. |
 | `run-receipt.json` | Keep | Run identity, commits, generator/config hashes, exact stage paths, artifact hashes, and state. |
 | `scan/` | Keep | Required scan manifest, facts, index, report, and analyzer log. |
 | `packet/` | Keep | Complete Web Forms modernization JSON and Markdown packet. |

@@ -5,10 +5,14 @@ quickstart](../../docs/WEBFORMS_REVIEW_QUICKSTART.md). This file is the full
 reference for optional review overlays, exceptional-handler inspection,
 diagnostics, limits, and recovery.
 
-New clean runs should use `Initialize-FocusedWebFormsReview.ps1` followed by
+New clean runs should use `Initialize-FocusedWebFormsReview.ps1`, validate the
+commented JSONC with `Test-FocusedWebFormsReviewConfig.ps1`, then run
 `Invoke-FocusedWebFormsPipeline.ps1`. They keep the scan, packet, evidence
 corpus, workbench, logs, config, and hashed run receipt under one review root.
-The individual commands below remain supported for stage-specific recovery.
+Use `Show-FocusedWebFormsReviewStatus.ps1` to print those fixed locations. The
+individual commands below remain supported for stage-specific recovery.
+They are compatibility and diagnostic entry points, not competing onboarding
+flows; do not chain them for a new run when the one-root pipeline applies.
 
 This folder documents the supported operator path for turning an existing
 focused Web Forms packet into bounded, local source-review pages. The executable
@@ -417,6 +421,8 @@ wrappers and would not improve the generated artifact layout.
 | `Invoke-FocusedWebFormsPageListReport.ps1` | No | Existing-index report traversal only | Parameterized page-list packet generation. |
 | `Run-FocusedWebFormsPageList.ps1` | No | Existing-index report traversal only | `-ReviewRoot` derives its retained index and page selection from the review-root configuration; an explicit `-ConfigPath` retains the legacy workstation-config workflow. |
 | `Run-AndTriage-FocusedWebFormsPageList.ps1` | No | Existing-index report traversal only | Run the configured packet and triage only its exact new artifact. |
+| `Test-FocusedWebFormsReviewConfig.ps1` | No | No | Validate JSONC, paths, modes, and one-root layout before scanning. |
+| `Show-FocusedWebFormsReviewStatus.ps1` | No | No | Print fixed retained artifact paths and refresh counts for one review root. |
 | `New-FocusedWebFormsStandaloneReview.ps1` | No | Existing packet only | Create a new immutable receipted workbench and optionally export one anonymous page from that exact packet. |
 | `Export-LatestFocusedWebFormsPageShareable.ps1` | No | No analysis | Map a prior page alias to the newest standalone workbench locally and export the corresponding anonymous page. |
 | `New-FocusedWebFormsBatchInspection.ps1` | No | No scan; reads retained index evidence | Build the private case inventory used by review sets. |

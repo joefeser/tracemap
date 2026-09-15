@@ -69,10 +69,16 @@ function Set-StageState {
 
 $root = [IO.Path]::GetFullPath($ReviewRoot).TrimEnd('\', '/')
 $traceRoot = [IO.Path]::GetFullPath($TraceMapRoot).TrimEnd('\', '/')
-$configPath = Join-Path $root 'config/webforms-review.json'
 $receiptPath = Join-Path $root 'run-receipt.json'
 if (!(Test-Path -LiteralPath $root -PathType Container)) { throw 'WEBFORMS_PIPELINE_REVIEW_ROOT_UNAVAILABLE' }
-$config = Read-FocusedWebFormsPipelineConfig -ConfigPath $configPath
+try {
+    $configPath = Resolve-FocusedWebFormsPipelineConfigPath -ReviewRoot $root
+    $config = Read-FocusedWebFormsPipelineConfig -ConfigPath $configPath
+}
+catch {
+    Write-FocusedWebFormsFailure -Failure $_.Exception.Message
+    throw
+}
 $configuredRoot = [IO.Path]::GetFullPath($config.OutputRoot).TrimEnd('\', '/')
 if (!$configuredRoot.Equals($root, [StringComparison]::OrdinalIgnoreCase)) {
     throw 'WEBFORMS_PIPELINE_OUTPUT_ROOT_MUST_EQUAL_REVIEW_ROOT'
@@ -155,7 +161,7 @@ else {
         run = [pscustomobject][ordered]@{ runId = $runId; startedUtc = $started.ToString('O'); updatedUtc = $started.ToString('O'); state = 'running'; failure = '' }
         source = [pscustomobject][ordered]@{ root = $sourceRoot; commitSha = $sourceCommit }
         traceMap = [pscustomobject][ordered]@{ root = $traceRoot; commitSha = $traceCommit }
-        layout = [pscustomobject][ordered]@{ config = 'config/webforms-review.json'; scan = 'scan'; packet = 'packet'; evidenceDocs = 'evidence-docs'; workbench = 'workbench'; logs = 'logs' }
+        layout = [pscustomobject][ordered]@{ config = [IO.Path]::GetRelativePath($root, $configPath).Replace('\', '/'); scan = 'scan'; packet = 'packet'; evidenceDocs = 'evidence-docs'; workbench = 'workbench'; logs = 'logs' }
         selection = [pscustomobject][ordered]@{ projectMode = $config.ProjectMode; pageMode = $config.PageMode }
         stages = [pscustomobject][ordered]@{
             build = [pscustomobject][ordered]@{ state = 'pending'; completedUtc = $null; failure = ''; artifacts = @() }
@@ -332,5 +338,6 @@ catch {
     $receipt.run.failure = $_.Exception.Message
     if ($activeStage) { Set-StageState $receipt $activeStage 'failed' @() $_.Exception.Message }
     Write-RunReceipt $receiptPath $receipt
+    Write-FocusedWebFormsFailure -Failure $_.Exception.Message
     throw
 }

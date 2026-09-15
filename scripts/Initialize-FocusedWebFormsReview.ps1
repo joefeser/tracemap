@@ -21,34 +21,50 @@ $logsDirectory = Join-Path $root 'logs'
 [IO.Directory]::CreateDirectory($configDirectory) | Out-Null
 [IO.Directory]::CreateDirectory($logsDirectory) | Out-Null
 
-$configPath = Join-Path $configDirectory 'webforms-review.json'
-$config = [ordered]@{
-    schemaVersion = 'focused-webforms-review-config.v1'
-    sourceRoot = 'C:/path/to/authorized-source'
-    webFormsFolder = 'Web'
-    backendFolder = 'Backend'
-    controlsFolder = 'SharedControls'
-    projectSelection = [ordered]@{
-        mode = 'solution'
-        solutionRelativePath = 'Application.sln'
-        projectRelativePaths = @()
-    }
-    outputRoot = $root.Replace('\', '/')
-    pageSelection = [ordered]@{
-        mode = 'all'
-        forms = @()
-    }
+$configPath = Join-Path $configDirectory 'webforms-review.jsonc'
+$jsonRoot = $root.Replace('\', '/')
+$config = @"
+{
+  "schemaVersion": "focused-webforms-review-config.v1",
+
+  // Absolute root of the authorized, committed source checkout.
+  "sourceRoot": "C:/path/to/authorized-source",
+
+  // Relative folder scopes. Each folder may contain any number of projects.
+  // Use "." when the repository root itself is the correct scope.
+  "webFormsFolder": "Web",
+  "backendFolder": "Backend",
+  "controlsFolder": "SharedControls",
+
+  // Modes: solution, projects, discover, or projectless.
+  // projectRelativePaths is used only by projects mode.
+  "projectSelection": {
+    "mode": "solution",
+    "solutionRelativePath": "Application.sln",
+    "projectRelativePaths": []
+  },
+
+  // Must remain exactly equal to this review root.
+  "outputRoot": "$jsonRoot",
+
+  // Modes: all, or selected with one or more .aspx routes in forms.
+  "pageSelection": {
+    "mode": "all",
+    "forms": []
+  }
 }
-[IO.File]::WriteAllText($configPath, (($config | ConvertTo-Json -Depth 8) + "`n"), [Text.UTF8Encoding]::new($false))
+"@
+[IO.File]::WriteAllText($configPath, ($config + "`n"), [Text.UTF8Encoding]::new($false))
 
 $readmePath = Join-Path $root 'README.md'
 $readme = @"
 # Focused Web Forms review run
 
 This folder is private, local working state. Do not commit or share it as a
-whole. Edit `config/webforms-review.json`, then run from the TraceMap checkout:
+whole. Edit `config/webforms-review.jsonc`, then run from the TraceMap checkout:
 
 ```powershell
+.\scripts\Test-FocusedWebFormsReviewConfig.ps1 -ReviewRoot '$($root.Replace("'", "''"))'
 .\scripts\Invoke-FocusedWebFormsPipeline.ps1 -ReviewRoot '$($root.Replace("'", "''"))'
 ```
 

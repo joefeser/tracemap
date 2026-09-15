@@ -4,8 +4,10 @@ $setupPath = Join-Path $scripts 'Initialize-FocusedWebFormsReview.ps1'
 $pipelinePath = Join-Path $scripts 'Invoke-FocusedWebFormsPipeline.ps1'
 $summaryPath = Join-Path $scripts 'Show-FocusedWebFormsOutlierSummary.ps1'
 $helperPath = Join-Path $scripts 'webforms-review/FocusedWebFormsPipelineConfig.ps1'
+$preflightPath = Join-Path $scripts 'Test-FocusedWebFormsReviewConfig.ps1'
+$statusPath = Join-Path $scripts 'Show-FocusedWebFormsReviewStatus.ps1'
 
-foreach ($path in @($setupPath, $pipelinePath, $summaryPath, $helperPath)) {
+foreach ($path in @($setupPath, $pipelinePath, $summaryPath, $helperPath, $preflightPath, $statusPath)) {
     $tokens = $null
     $errors = $null
     [Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors) | Out-Null
@@ -16,18 +18,18 @@ $temp = Join-Path ([IO.Path]::GetTempPath()) ('tracemap-webforms-pipeline-' + [G
 try {
     $reviewRoot = Join-Path $temp 'review'
     & $setupPath -ReviewRoot $reviewRoot | Out-Null
-    $configPath = Join-Path $reviewRoot 'config/webforms-review.json'
+    $configPath = Join-Path $reviewRoot 'config/webforms-review.jsonc'
     foreach ($required in @($configPath, (Join-Path $reviewRoot 'README.md'), (Join-Path $reviewRoot 'logs')) ) {
         if (!(Test-Path -LiteralPath $required)) { throw "Setup omitted: $required" }
     }
 
     $generatedConfigText = [IO.File]::ReadAllText($configPath)
-    $raw = $generatedConfigText | ConvertFrom-Json -Depth 10
+    if (!$generatedConfigText.Contains('// Relative folder scopes.', [StringComparison]::Ordinal)) { throw 'Generated JSONC omitted field guidance.' }
+    . $helperPath
+    $raw = (Remove-FocusedWebFormsJsonComments -Text $generatedConfigText) | ConvertFrom-Json -Depth 10
     $seven = @('sourceRoot','webFormsFolder','backendFolder','controlsFolder','projectSelection','outputRoot','pageSelection')
     if (@($seven | Where-Object { $_ -notin $raw.PSObject.Properties.Name }).Count -ne 0) { throw 'Setup omitted one of seven operational settings.' }
     if ($raw.projectSelection.mode -ne 'solution' -or $raw.pageSelection.mode -ne 'all') { throw 'Setup defaults were not solution plus all-pages.' }
-
-    . $helperPath
 
     foreach ($unsafePath in @('C:\work\source', 'C:\temp\source')) {
         $unsafeConfigText = $generatedConfigText.Replace('C:/path/to/authorized-source', $unsafePath)
@@ -37,6 +39,31 @@ try {
         if ($failure -ne 'WEBFORMS_PIPELINE_CONFIG_UNESCAPED_BACKSLASH;use-forward-slashes-in-paths-example=C:/work/review') {
             throw "Unescaped Windows path did not receive actionable preflight guidance: $unsafePath"
         }
+    }
+    [IO.File]::WriteAllText($configPath, $generatedConfigText, [Text.UTF8Encoding]::new($false))
+
+    $preflightConfig = (Remove-FocusedWebFormsJsonComments -Text $generatedConfigText) | ConvertFrom-Json -Depth 10
+    $preflightConfig.sourceRoot = (Split-Path -Parent $scripts)
+    $preflightConfig.webFormsFolder = 'scripts'
+    $preflightConfig.backendFolder = 'docs'
+    $preflightConfig.controlsFolder = 'prompts'
+    $preflightConfig.projectSelection = [ordered]@{ mode = 'solution'; solutionRelativePath = 'src/dotnet/TraceMap.sln'; projectRelativePaths = @() }
+    [IO.File]::WriteAllText($configPath, (($preflightConfig | ConvertTo-Json -Depth 10) + "`n"), [Text.UTF8Encoding]::new($false))
+    function global:git {
+        if ($args -contains '--show-toplevel') { $global:LASTEXITCODE = 0; return (Split-Path -Parent $scripts) }
+        if ($args -contains 'status') { $global:LASTEXITCODE = 0; return }
+        $global:LASTEXITCODE = 0
+    }
+    try {
+        $preflightOutput = @(& $preflightPath -ReviewRoot $reviewRoot -TraceMapRoot (Split-Path -Parent $scripts) 6>&1 | ForEach-Object { $_.ToString() })
+    }
+    finally { Remove-Item Function:\global:git -ErrorAction SilentlyContinue }
+    if ($preflightOutput -notcontains 'webformsPreflight=valid' -or $preflightOutput -notcontains 'nextAction=run-focused-webforms-pipeline') {
+        throw 'Valid review config did not pass the operator preflight.'
+    }
+    $statusOutput = @(& $statusPath -ReviewRoot $reviewRoot)
+    if ($statusOutput -notcontains 'webformsReviewStatus=valid' -or $statusOutput -notcontains 'runState=unavailable') {
+        throw 'Review status did not describe an initialized pre-run root.'
     }
     [IO.File]::WriteAllText($configPath, $generatedConfigText, [Text.UTF8Encoding]::new($false))
 
@@ -67,6 +94,20 @@ try {
     [IO.File]::WriteAllText($configPath, (($raw | ConvertTo-Json -Depth 10) + "`n"), [Text.UTF8Encoding]::new($false))
     $parsed = Read-FocusedWebFormsPipelineConfig $configPath
     if ($parsed.ProjectMode -ne 'projectless' -or $parsed.PageMode -ne 'all') { throw 'Projectless all-pages config did not round-trip.' }
+
+    $jsonCopy = Join-Path $reviewRoot 'config/webforms-review.json'
+    [IO.File]::WriteAllText($jsonCopy, (($raw | ConvertTo-Json -Depth 10) + "`n"), [Text.UTF8Encoding]::new($false))
+    $failure = $null
+    try { Resolve-FocusedWebFormsPipelineConfigPath -ReviewRoot $reviewRoot | Out-Null } catch { $failure = $_.Exception.Message }
+    if (!$failure.StartsWith('WEBFORMS_PIPELINE_CONFIG_CONFLICT', [StringComparison]::Ordinal)) { throw 'Dual JSON/JSONC config was not rejected.' }
+    Remove-Item -LiteralPath $jsonCopy
+
+    $trailingComma = $generatedConfigText.Replace('"forms": []', '"forms": [],')
+    [IO.File]::WriteAllText($configPath, $trailingComma, [Text.UTF8Encoding]::new($false))
+    $failure = $null
+    try { Read-FocusedWebFormsPipelineConfig $configPath | Out-Null } catch { $failure = $_.Exception.Message }
+    if (!$failure.StartsWith('WEBFORMS_PIPELINE_CONFIG_TRAILING_COMMA', [StringComparison]::Ordinal)) { throw 'JSONC trailing comma was not diagnosed.' }
+    [IO.File]::WriteAllText($configPath, $generatedConfigText, [Text.UTF8Encoding]::new($false))
 
     $pipeline = [IO.File]::ReadAllText($pipelinePath)
     foreach ($required in @(

@@ -89,7 +89,8 @@ function Resolve-FocusedWebFormsPageListInputs {
     if ($ReviewRoot -and !$ConfigPath) {
         . (Join-Path $PSScriptRoot 'FocusedWebFormsPipelineConfig.ps1')
         $root = [IO.Path]::GetFullPath($ReviewRoot).TrimEnd('\', '/')
-        $pipelineConfig = Read-FocusedWebFormsPipelineConfig -ConfigPath (Join-Path $root 'config/webforms-review.json')
+        $pipelineConfigPath = Resolve-FocusedWebFormsPipelineConfigPath -ReviewRoot $root
+        $pipelineConfig = Read-FocusedWebFormsPipelineConfig -ConfigPath $pipelineConfigPath
         $configuredRoot = [IO.Path]::GetFullPath($pipelineConfig.OutputRoot).TrimEnd('\', '/')
         if (!$configuredRoot.Equals($root, [StringComparison]::OrdinalIgnoreCase)) {
             throw 'WEBFORMS_PAGE_LIST_OUTPUT_ROOT_MISMATCH'
