@@ -66,8 +66,12 @@ Write-Output "reviewRoot=$root"
 Write-Output 'permissionMode=plan'
 Write-Output 'sourceAccess=not-granted'
 if ($ClaudeLauncherPath) {
-    if (!(Test-Path -LiteralPath $ClaudeLauncherPath -PathType Leaf)) { throw 'WEBFORMS_CLAUDE_LAUNCHER_UNAVAILABLE' }
-    $launcher = (Resolve-Path -LiteralPath $ClaudeLauncherPath).Path
+    $launcherInput = $ClaudeLauncherPath.Trim()
+    if ($IsWindows -and $launcherInput -match '^[A-Za-z]:/') {
+        $launcherInput = $launcherInput.Replace('/', '\')
+    }
+    if (!(Test-Path -LiteralPath $launcherInput -PathType Leaf)) { throw 'WEBFORMS_CLAUDE_LAUNCHER_UNAVAILABLE;use-resolve-path-with-a-native-windows-path' }
+    $launcher = (Resolve-Path -LiteralPath $launcherInput).Path
     Write-Output 'promptTransport=stdin'
     Write-Output 'claudeMode=print'
     $prompt | & $launcher @claudeArguments --print

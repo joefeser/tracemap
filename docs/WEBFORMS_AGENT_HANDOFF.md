@@ -74,7 +74,7 @@ For a verified transparent launcher, pass its local path:
 ```powershell
 .\scripts\Start-FocusedWebFormsClaudeReview.ps1 `
   -ReviewRoot $ReviewRoot `
-  -ClaudeLauncherPath 'C:/path/to/approved-corporate-launcher.bat'
+  -ClaudeLauncherPath 'C:\path\to\approved-corporate-launcher.bat'
 ```
 
 The launcher path is never stored in an artifact. In this mode, the script
@@ -82,6 +82,9 @@ preserves the repeated evidence-directory arguments and plan mode, adds
 `--print`, and pipes the multiline checked-in prompt through stdin to avoid BAT
 quoting and Windows command-line-length hazards. The default invocation remains
 the normal interactive `claude` command when `-ClaudeLauncherPath` is omitted.
+Use forward slashes inside `webforms-review.jsonc`; use a native backslash path
+for this PowerShell launcher parameter. The script also normalizes a drive path
+that was supplied with forward slashes before checking it.
 
 Do not add the application source directory on the first pass. If the evidence
 review produces a precise source question, start a separately authorized
