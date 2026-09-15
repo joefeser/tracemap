@@ -91,6 +91,8 @@ public sealed record WebFormsModernizationSummary(
 {
     public int ClientBehaviorCount { get; init; }
     public int ServerBehaviorCount { get; init; }
+    public IReadOnlyList<string> TruncationReasons { get; init; } = [];
+    public IReadOnlyList<string> CoverageReductionReasons { get; init; } = [];
 }
 
 public sealed record WebFormsModernizationClientBehavior(
@@ -1076,6 +1078,8 @@ public static class WebFormsModernizationPacketReporter
         var coverage = snapshot.BuildStatus == "Succeeded" && !sourceAnalysisReduced && !truncated && uniqueGaps.Length == 0 && !hasReducedInput
             ? "bounded-static-webforms-modernization"
             : "reduced-static-webforms-modernization";
+        var truncationReasons = PacketTruncationReasons(inputLimit, legacyFlow, uniqueGaps, truncated);
+        var coverageReductionReasons = PacketCoverageReductionReasons(snapshot, sourceAnalysisReduced, hasReducedInput, uniqueGaps, truncated);
         var source = new WebFormsModernizationSource(
             HashId("source", [snapshot.Repository, snapshot.ScanId, snapshot.CommitSha]),
             HashId("repository", [snapshot.Repository]),
@@ -1092,6 +1096,8 @@ public static class WebFormsModernizationPacketReporter
             coverage,
             $"truncated:{truncated.ToString().ToLowerInvariant()}"
         };
+        packetIdentity.AddRange(truncationReasons.Select(reason => $"truncation-reason:{reason}"));
+        packetIdentity.AddRange(coverageReductionReasons.Select(reason => $"coverage-reduction-reason:{reason}"));
         packetIdentity.AddRange(projects.Select(project => $"project:{project.ProjectId}:{project.SurfaceCount}"));
         packetIdentity.AddRange(surfaces.Select(surface => $"surface:{surface.SurfaceId}"));
         packetIdentity.AddRange(chains.OrderBy(chain => chain.ChainId, StringComparer.Ordinal).Select(chain => $"chain:{chain.ChainId}"));
@@ -1118,7 +1124,9 @@ public static class WebFormsModernizationPacketReporter
             new(projects.Length, surfaces.Length, chains.Count, boundaries.Count, identityState.Length, batchDataMovement.Length, candidates.Count, uniqueGaps.Length, truncated)
             {
                 ClientBehaviorCount = clientBehavior.Length,
-                ServerBehaviorCount = serverBehavior.Length
+                ServerBehaviorCount = serverBehavior.Length,
+                TruncationReasons = truncationReasons,
+                CoverageReductionReasons = coverageReductionReasons
             },
             projects,
             surfaces,
@@ -1445,7 +1453,7 @@ public static class WebFormsModernizationPacketReporter
             null,
             null,
             "WebFormsModernizationPacketReporter",
-            "webforms-modernization-packet/1.1.0",
+            "webforms-modernization-packet/1.2.0",
             supporting,
             ["The packet failed closed because required evidence was unavailable or bounded by a deterministic limit."]);
     }
@@ -2024,6 +2032,40 @@ public static class WebFormsModernizationPacketReporter
         if (values.Contains(EvidenceTiers.Tier3SyntaxOrTextual, StringComparer.Ordinal)) return EvidenceTiers.Tier3SyntaxOrTextual;
         if (values.Contains(EvidenceTiers.Tier2Structural, StringComparer.Ordinal)) return EvidenceTiers.Tier2Structural;
         return EvidenceTiers.Tier1Semantic;
+    }
+
+    private static IReadOnlyList<string> PacketTruncationReasons(
+        string? inputLimit,
+        CombinedDependencyPathReport legacyFlow,
+        IReadOnlyList<WebFormsModernizationGap> gaps,
+        bool truncated)
+    {
+        if (!truncated) return [];
+        var reasons = new SortedSet<string>(StringComparer.Ordinal);
+        if (!string.IsNullOrWhiteSpace(inputLimit)) reasons.Add($"input-limit:{inputLimit}");
+        foreach (var gap in legacyFlow.Gaps.Where(gap => gap.GapKind is "TruncatedByLimit" or "GraphInputLimitReached"))
+            reasons.Add($"legacy-flow:{gap.GapKind}:{gap.Reason ?? "unspecified"}");
+        foreach (var gap in gaps.Where(gap => gap.Classification.EndsWith("LimitReached", StringComparison.Ordinal)
+            || gap.Classification is "TruncatedByLimit" or "BoundedTraversalTruncated"))
+            reasons.Add($"packet-gap:{gap.Classification}:{gap.TruncationReason ?? "unspecified"}");
+        if (reasons.Count == 0) reasons.Add("bounded-output-truncated:reason-unavailable");
+        return reasons.ToArray();
+    }
+
+    private static IReadOnlyList<string> PacketCoverageReductionReasons(
+        Snapshot snapshot,
+        bool sourceAnalysisReduced,
+        bool hasReducedInput,
+        IReadOnlyList<WebFormsModernizationGap> gaps,
+        bool truncated)
+    {
+        var reasons = new SortedSet<string>(StringComparer.Ordinal);
+        if (!string.Equals(snapshot.BuildStatus, "Succeeded", StringComparison.Ordinal)) reasons.Add("build-not-succeeded");
+        if (sourceAnalysisReduced) reasons.Add("source-analysis-reduced");
+        if (hasReducedInput) reasons.Add("reduced-or-unknown-fact-coverage");
+        if (gaps.Count > 0) reasons.Add("explicit-evidence-gaps-retained");
+        if (truncated) reasons.Add("bounded-output-truncated");
+        return reasons.ToArray();
     }
     private static string HashId(string kind, IEnumerable<string> values)
     {

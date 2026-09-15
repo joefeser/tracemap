@@ -258,13 +258,14 @@ Complete-OptionalProperties (Values $packet.serverBehaviorInventory) @(
     'serverBehaviorId','behaviorKind','surfaceId','targetResolution','safeMetadata','evidence','supportingFactIds','limitations')
 Complete-OptionalProperties (Values $packet.gaps) @(
     'gapId','classification','scopeKind','scopeId','ruleId','evidenceTier','coverageLabel','commitSha','filePath',
-    'startLine','endLine','extractorId','extractorVersion','supportingFactIds','limitations')
+    'startLine','endLine','extractorId','extractorVersion','supportingFactIds','limitations','safeMetadata','truncationReason')
 foreach ($chain in @(Values $packet.eventChains)) {
+    Complete-OptionalProperties @($chain) @('nextEvidenceKind','unresolvedCallTargets','nextEvidenceInputs')
     Complete-OptionalProperties (Values $chain.callEvidence) @('callSiteId','resolution','technologyFamily','declaringType','assemblyName')
     if ($null -eq $chain.traversalObservation) {
-        $chain.traversalObservation = [pscustomobject]@{ stopState = $null }
+        $chain.traversalObservation = [pscustomobject]@{ stopState = $null; truncationReasons = @() }
     } else {
-        Complete-OptionalProperties @($chain.traversalObservation) @('stopState')
+        Complete-OptionalProperties @($chain.traversalObservation) @('stopState','truncationReasons')
     }
 }
 
@@ -415,6 +416,21 @@ try {
             $_.traversalObservation.stopState -notlike '*truncated*' -and
             (Property-Value $_.traversalObservation 'truncated') -ne $true
         }).Count
+        $pageTraversalTruncationReasons = @($chains | Where-Object {
+            $_.traversalObservation.stopState -like '*truncated*' -or (Property-Value $_.traversalObservation 'truncated') -eq $true
+        } | ForEach-Object { Values (Property-Value $_.traversalObservation 'truncationReasons') } | Where-Object { $_ } | Sort-Object -Unique)
+        if ($truncatedChainCount -gt 0 -and $pageTraversalTruncationReasons.Count -eq 0) { $pageTraversalTruncationReasons = @('reason-unavailable') }
+        $nextEvidenceSummary = @($chains | Where-Object {
+            $kind = [string](Property-Value $_ 'nextEvidenceKind')
+            $kind -and $kind -ne 'none'
+        } | Group-Object { [string](Property-Value $_ 'nextEvidenceKind') } | Sort-Object Name | ForEach-Object {
+            [ordered]@{
+                kind = [string]$_.Name
+                chainCount = [int]$_.Count
+                targets = @($_.Group | ForEach-Object { Values (Property-Value $_ 'unresolvedCallTargets') } | Where-Object { $_ } | Sort-Object -Unique)
+                requiredInputs = @($_.Group | ForEach-Object { Values (Property-Value $_ 'nextEvidenceInputs') } | Where-Object { $_ } | Sort-Object -Unique)
+            }
+        })
         $chainAssociatedCalls = @($chains | ForEach-Object { Values $_.callEvidence })
         $chainAssociatedCallCount = $chainAssociatedCalls.Count
         $reportedCallProjectionCount = @($chains | ForEach-Object {
@@ -447,7 +463,17 @@ try {
             pageId = $pageId
             packet = [ordered]@{ packetId = [string]$packet.packetId; scanId = [string]$sources[0].scanId; commitSha = [string]$sources[0].commitSha }
             subject = [ordered]@{ surfaceId = [string]$surface.surfaceId; surfaceKind = [string]$surface.surfaceKind; projectId = [string]$surface.projectId; filePath = [string]$surface.evidence.filePath }
-            analysis = [ordered]@{ status = $analysisStatus; coverage = [string]$packet.coverage; packetTruncated = [bool]$packet.summary.truncated; boundaryStatus = $boundaryStatus }
+            analysis = [ordered]@{
+                status = $analysisStatus
+                coverage = [string]$packet.coverage
+                coverageReductionReasons = @(Values (Property-Value $packet.summary 'coverageReductionReasons'))
+                packetTruncated = [bool]$packet.summary.truncated
+                packetTruncationScope = 'application-packet'
+                packetTruncationReasons = @(Values (Property-Value $packet.summary 'truncationReasons'))
+                pageTraversalTruncated = ($truncatedChainCount -gt 0)
+                pageTraversalTruncationReasons = @($pageTraversalTruncationReasons)
+                boundaryStatus = $boundaryStatus
+            }
             counts = [ordered]@{ controls = @(Values $surface.controlIds).Count; eventChains = $chains.Count; clientBehaviors = $clientBehavior.Count; serverBehaviors = $serverBehavior.Count; boundaries = $boundaries.Count; identityState = $identity.Count; projectDataMovement = $projectBatchCount; structuralCandidates = $candidates.Count; gaps = $gaps.Count; retainedCalls = $chainAssociatedCallCount; chainAssociatedRetainedCalls = $chainAssociatedCallCount; reportedCallProjections = [int]$reportedCallProjectionCount; omittedCallProjections = $callEvidenceOmittedCount; uniqueRetainedCallFacts = $uniqueRetainedCallCount; normalizedCallSites = $uniqueCallSiteCount; callEvidenceCeilingChains = $callEvidenceCeilingChainCount }
             callTechnologyFamilies = @($technologyFamilies)
             chainOutcomes = [ordered]@{ unresolvedHandlers = $unresolvedHandlerCount; downstreamWithoutSupportedTerminal = $downstreamWithoutTerminalCount; noObservedDownstream = $noDownstreamCount; truncated = $truncatedChainCount; otherIncomplete = $otherIncompleteCount }
@@ -457,6 +483,10 @@ try {
                 handlerResolution = [string](Property-Value $_ 'handlerResolution')
                 classification = [string]$_.classification; legacyPathId = $_.legacyPathId; terminalKind = $_.terminalKind
                 traversalStopState = $_.traversalObservation.stopState
+                traversalTruncationReasons = @(Values (Property-Value $_.traversalObservation 'truncationReasons'))
+                nextEvidenceKind = [string](Property-Value $_ 'nextEvidenceKind')
+                unresolvedCallTargets = @(Values (Property-Value $_ 'unresolvedCallTargets'))
+                nextEvidenceInputs = @(Values (Property-Value $_ 'nextEvidenceInputs'))
                 evidence = @((Values $_.evidence) | ForEach-Object { Project-Evidence $_ })
                 pathEvidence = @((Values $_.pathEvidence) | ForEach-Object { Project-PathEvidence $_ })
                 supportingFactIds = @(Values $_.supportingFactIds); supportingEdgeIds = @(Values $_.supportingEdgeIds)
@@ -479,7 +509,8 @@ try {
                 identityState = @($identity | ForEach-Object { [ordered]@{ id = [string]$_.identityStateId; kind = [string]$_.identityKind; classification = [string]$_.classification; safeMetadata = $_.safeMetadata; evidenceFactId = [string]$_.evidence.factId; supportingFactIds = @(Values $_.supportingFactIds) } })
                 structuralCandidates = @($candidates | ForEach-Object { [ordered]@{ id = [string]$_.candidateId; classification = [string]$_.classification; ruleId = [string]$_.ruleId; evidenceTier = [string]$_.evidenceTier; surfaceIds = @(Values $_.surfaceIds); supportingFactIds = @(Values $_.supportingFactIds) } })
             }
-            gaps = @($gaps | ForEach-Object { [ordered]@{ gapId = [string]$_.gapId; classification = [string]$_.classification; scopeKind = [string]$_.scopeKind; scopeId = $_.scopeId; ruleId = [string]$_.ruleId; evidenceTier = [string]$_.evidenceTier; coverageLabel = [string]$_.coverageLabel; commitSha = [string]$_.commitSha; filePath = $_.filePath; startLine = $_.startLine; endLine = $_.endLine; extractorId = $_.extractorId; extractorVersion = $_.extractorVersion; supportingFactIds = @(Values $_.supportingFactIds); limitations = @(Values $_.limitations) } })
+            gaps = @($gaps | ForEach-Object { [ordered]@{ gapId = [string]$_.gapId; classification = [string]$_.classification; scopeKind = [string]$_.scopeKind; scopeId = $_.scopeId; ruleId = [string]$_.ruleId; evidenceTier = [string]$_.evidenceTier; coverageLabel = [string]$_.coverageLabel; commitSha = [string]$_.commitSha; filePath = $_.filePath; startLine = $_.startLine; endLine = $_.endLine; extractorId = $_.extractorId; extractorVersion = $_.extractorVersion; safeMetadata = if ($null -eq $_.safeMetadata) { [ordered]@{} } else { $_.safeMetadata }; truncationReason = $_.truncationReason; supportingFactIds = @(Values $_.supportingFactIds); limitations = @(Values $_.limitations) } })
+            nextEvidenceSummary = @($nextEvidenceSummary)
             supportingIds = @(
                 @($evidence | ForEach-Object { [string]$_.factId; Values $_.supportingFactIds; Values $_.supportingEdgeIds })
                 @($pathEvidence | ForEach-Object { [string]$_.evidenceId; Values $_.supportingFactIds })
@@ -569,7 +600,7 @@ try {
 "@
         [IO.File]::WriteAllText((Join-Path $staging "$pageId.html"), $html, [Text.UTF8Encoding]::new($false))
         $pageRows.Add([pscustomobject]@{ PageId = $pageId; Path = [string]$surface.evidence.filePath; ControlDisplay = $controlDisplayText; SurfaceKind = [string]$surface.surfaceKind; Controls = @(Values $surface.controlIds).Count; Chains = $chains.Count; ClientBehaviors = $clientBehavior.Count; ServerBehaviors = $serverBehavior.Count; Boundaries = $boundaries.Count; CallProjections = $chainAssociatedCallCount; ReportedCallProjections = [int]$reportedCallProjectionCount; CallEvidenceOmitted = $callEvidenceOmittedCount; CallEvidenceCeilingChains = $callEvidenceCeilingChainCount; UniqueCallFacts = $uniqueRetainedCallCount; UniqueCallSites = $uniqueCallSiteCount; HandlerUnavailable = $unresolvedHandlerCount; NoTerminal = $downstreamWithoutTerminalCount; NoDownstream = $noDownstreamCount; Truncated = $truncatedChainCount; OtherIncomplete = $otherIncompleteCount; Gaps = $gaps.Count; GapCategories = @($gapCategories); Coverage = ($coverage -join ', '); Verdict = [string]$decision.verdict; Disposition = [string]$decision.migrationDisposition })
-        $applicationPages.Add([ordered]@{ pageId = $pageId; surfaceId = [string]$surface.surfaceId; filePath = [string]$surface.evidence.filePath; report = "$pageId.html"; handoff = "$pageId.handoff.json"; counts = $handoff.counts; chainOutcomes = $handoff.chainOutcomes; gapCategories = @($gapCategories) })
+        $applicationPages.Add([ordered]@{ pageId = $pageId; surfaceId = [string]$surface.surfaceId; filePath = [string]$surface.evidence.filePath; report = "$pageId.html"; handoff = "$pageId.handoff.json"; counts = $handoff.counts; chainOutcomes = $handoff.chainOutcomes; pageTraversalTruncated = $handoff.analysis.pageTraversalTruncated; pageTraversalTruncationReasons = @($handoff.analysis.pageTraversalTruncationReasons); nextEvidenceSummary = @($nextEvidenceSummary); gapCategories = @($gapCategories) })
     }
 
     $applicationGaps = @(Values $packet.gaps | Where-Object { !$associatedGapIds.Contains([string](Property-Value $_ 'gapId')) } | Sort-Object gapId)
@@ -588,6 +619,27 @@ try {
     foreach ($surface in $ordered) { [void]$surfaceIds.Add([string]$surface.surfaceId) }
     $unassociatedCandidates = @(Values $packet.structuralSliceCandidates | Where-Object { @((Values (Property-Value $_ 'surfaceIds')) | Where-Object { $surfaceIds.Contains([string]$_) }).Count -eq 0 } | Sort-Object candidateId)
     $applicationStatus = if ([string]$packet.coverage -like 'reduced-*' -or $packet.summary.truncated -or @(Values $packet.gaps).Count -gt 0) { 'partial' } else { 'complete' }
+    $applicationNextEvidenceSummary = @($packet.eventChains | Where-Object {
+        $kind = [string](Property-Value $_ 'nextEvidenceKind')
+        $kind -and $kind -ne 'none'
+    } | Group-Object { [string](Property-Value $_ 'nextEvidenceKind') } | Sort-Object Name | ForEach-Object {
+        [ordered]@{
+            kind = [string]$_.Name
+            chainCount = [int]$_.Count
+            targets = @($_.Group | ForEach-Object { Values (Property-Value $_ 'unresolvedCallTargets') } | Where-Object { $_ } | Sort-Object -Unique)
+            requiredInputs = @($_.Group | ForEach-Object { Values (Property-Value $_ 'nextEvidenceInputs') } | Where-Object { $_ } | Sort-Object -Unique)
+        }
+    })
+    $controlRegistrationGaps = @(Values $packet.gaps | Where-Object {
+        ([string]$_.classification) -in @('UnresolvedWebFormsControlRegistration','UnsupportedWebFormsUserControlRegistration')
+    } | Sort-Object classification, gapId | ForEach-Object {
+        [ordered]@{
+            gapId = [string]$_.gapId
+            classification = [string]$_.classification
+            safeMetadata = if ($null -eq $_.safeMetadata) { [ordered]@{} } else { $_.safeMetadata }
+            supportingFactIds = @(Values $_.supportingFactIds)
+        }
+    })
     $rankedRows = @($pageRows | Sort-Object `
         @{ Expression = { [int]$_.CallEvidenceCeilingChains }; Descending = $true }, `
         @{ Expression = { [int]$_.Truncated }; Descending = $true }, `
@@ -685,10 +737,20 @@ try {
         schemaVersion = 'webforms-application-handoff.v1'; ruleId = 'diagnostic.webforms.application-handoff.v1'; claimLevel = 'local-only'
         provenance = [ordered]@{ generator = 'scripts/New-FocusedWebFormsApplicationWorkbench.ps1'; generatorSha256 = $generatorSha256; generatorCanonicalization = 'raw-file-bytes'; inputKind = 'webforms-modernization-packet.v1'; inputSha256 = $packetSha256; inputCanonicalization = 'raw-file-bytes' }
         packet = [ordered]@{ packetId = [string]$packet.packetId; scanId = [string]$sources[0].scanId; commitSha = [string]$sources[0].commitSha; snapshot = 'webforms-modernization.snapshot.json' }
-        analysis = [ordered]@{ status = $applicationStatus; coverage = [string]$packet.coverage; packetTruncated = [bool]$packet.summary.truncated; totalGapCount = @(Values $packet.gaps).Count }
+        analysis = [ordered]@{
+            status = $applicationStatus
+            coverage = [string]$packet.coverage
+            coverageReductionReasons = @(Values (Property-Value $packet.summary 'coverageReductionReasons'))
+            packetTruncated = [bool]$packet.summary.truncated
+            packetTruncationScope = 'application-packet'
+            packetTruncationReasons = @(Values (Property-Value $packet.summary 'truncationReasons'))
+            totalGapCount = @(Values $packet.gaps).Count
+        }
         pageCount = $applicationPages.Count; pages = @($applicationPages)
+        nextEvidenceSummary = @($applicationNextEvidenceSummary)
+        controlRegistrationGaps = @($controlRegistrationGaps)
         outlierReview = [ordered]@{ ruleId = 'diagnostic.webforms.application-outlier-ranking.v1'; html = 'application-outliers.shareable.html'; json = 'application-outliers.shareable.json' }
-        applicationGaps = @($applicationGaps | ForEach-Object { [ordered]@{ gapId = [string]$_.gapId; classification = [string]$_.classification; scopeKind = [string]$_.scopeKind; scopeId = $_.scopeId; ruleId = [string]$_.ruleId; evidenceTier = [string]$_.evidenceTier; coverageLabel = [string]$_.coverageLabel; commitSha = [string]$_.commitSha; filePath = $_.filePath; startLine = $_.startLine; endLine = $_.endLine; extractorId = $_.extractorId; extractorVersion = $_.extractorVersion; supportingFactIds = @(Values $_.supportingFactIds); limitations = @(Values $_.limitations) } })
+        applicationGaps = @($applicationGaps | ForEach-Object { [ordered]@{ gapId = [string]$_.gapId; classification = [string]$_.classification; scopeKind = [string]$_.scopeKind; scopeId = $_.scopeId; ruleId = [string]$_.ruleId; evidenceTier = [string]$_.evidenceTier; coverageLabel = [string]$_.coverageLabel; commitSha = [string]$_.commitSha; filePath = $_.filePath; startLine = $_.startLine; endLine = $_.endLine; extractorId = $_.extractorId; extractorVersion = $_.extractorVersion; safeMetadata = if ($null -eq $_.safeMetadata) { [ordered]@{} } else { $_.safeMetadata }; truncationReason = $_.truncationReason; supportingFactIds = @(Values $_.supportingFactIds); limitations = @(Values $_.limitations) } })
         unassociatedIdentityState = @($unassociatedIdentity | ForEach-Object { [ordered]@{ id = [string]$_.identityStateId; kind = [string]$_.identityKind; classification = [string]$_.classification; safeMetadata = $_.safeMetadata; evidenceFactId = [string]$_.evidence.factId; evidence = Project-Evidence $_.evidence; supportingFactIds = @(Values $_.supportingFactIds) } })
         projectDataMovement = @($applicationBatch | ForEach-Object { [ordered]@{ id = [string]$_.batchDataMovementId; projectId = [string]$_.projectId; surfaceKind = [string]$_.surfaceKind; mechanism = [string]$_.mechanism; operationKind = [string]$_.operationKind; ownerStatus = [string]$_.ownerStatus; projectResolution = [string]$_.projectResolution; safeMetadata = $_.safeMetadata; evidenceFactId = [string]$_.evidence.factId; evidence = Project-Evidence $_.evidence; supportingFactIds = @(Values $_.supportingFactIds) } })
         unassociatedBatchDataMovement = @($unassociatedBatch | ForEach-Object { [ordered]@{ id = [string]$_.batchDataMovementId; surfaceKind = [string]$_.surfaceKind; mechanism = [string]$_.mechanism; operationKind = [string]$_.operationKind; projectId = $_.projectId; safeMetadata = $_.safeMetadata; evidenceFactId = [string]$_.evidence.factId; evidence = Project-Evidence $_.evidence; supportingFactIds = @(Values $_.supportingFactIds) } })

@@ -89,6 +89,18 @@ Use forward slashes inside `webforms-review.jsonc`; use a native backslash path
 for this PowerShell launcher parameter. The script also normalizes a drive path
 that was supplied with forward slashes before checking it.
 
+The workbench keeps coverage and truncation as separate claims. Application
+analysis exposes `coverageReductionReasons` and `packetTruncationReasons`;
+page analysis labels the application-wide flag with
+`packetTruncationScope: application-packet` and reports page-local traversal
+limits separately through `pageTraversalTruncated` and
+`pageTraversalTruncationReasons`. The handoff also aggregates exact
+`nextEvidenceSummary` entries from unresolved chains and publishes safe control
+registration metadata in `controlRegistrationGaps`. Reviewers should use those
+fields instead of inferring that reduced source analysis caused a size limit,
+or recommending a generic assembly change without a retained control prefix,
+type, namespace, assembly, or resolution state.
+
 Do not add the application source directory on the first pass. If the evidence
 review produces a precise source question, start a separately authorized
 follow-up with the minimum required source scope:

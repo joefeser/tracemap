@@ -8,7 +8,9 @@ external systems, or infer private identities.
 ## Read in this order
 
 1. Locate the supplied `application-handoff.json` and read its provenance,
-   coverage, limitations, call accounting, and page inventory.
+   coverage, limitations, call accounting, page inventory,
+   `analysis.coverageReductionReasons`, `analysis.packetTruncationReasons`,
+   `nextEvidenceSummary`, and `controlRegistrationGaps`.
 2. Read the supplied evidence-docs `manifest.json` and `query-recipes.json`.
    Confirm that their scan and input provenance is compatible with the
    application handoff. Report any mismatch and stop.
@@ -36,6 +38,10 @@ external systems, or infer private identities.
   name alone.
 - Separate systemic extractor/coverage gaps from page-specific application
   questions.
+- Coverage reduction and packet truncation are different states. Never claim
+  that reduced source analysis caused truncation unless an explicit retained
+  truncation reason says so. A page's `packetTruncated` value describes the
+  application packet; use `pageTraversalTruncated` for that page's chains.
 - Never convert an evidence gap into a negative conclusion.
 - Describe `.ashx` artifacts as HTTP handlers unless retained contract evidence
   establishes a stronger API classification.
@@ -43,6 +49,12 @@ external systems, or infer private identities.
   types, assemblies, source-availability states, or traversal bounds retained
   in the packet. Do not replace a precise frontier with generic advice to add
   assemblies or source.
+- Use each retained `nextEvidenceKind`, target, required input, and truncation
+  reason before proposing a rerun. Do not recommend increasing a generic
+  traversal limit when the retained reason or bound is unavailable.
+- For unresolved control registrations, report the retained safe prefix, type,
+  assembly, namespace, and registration state. If a field is unavailable, say
+  that explicitly; do not invent a library identity or generic assembly fix.
 
 ## Deliverable
 

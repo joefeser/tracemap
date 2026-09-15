@@ -910,6 +910,9 @@ public sealed class WebFormsModernizationPacketTests
         Assert.DoesNotContain(chain.PathEvidence, evidence => evidence.FilePath?.StartsWith("Other/", StringComparison.Ordinal) == true);
         var bounded = await WebFormsModernizationPacketReporter.WriteAsync(new(index, Path.Combine(temp.Path, "bounded"), MaxDepth: 3));
         Assert.True(bounded.Packet.Summary.Truncated);
+        Assert.Contains("bounded-output-truncated", bounded.Packet.Summary.CoverageReductionReasons);
+        Assert.Contains(bounded.Packet.Summary.TruncationReasons,
+            reason => reason.StartsWith("packet-gap:TruncatedByLimit:depth", StringComparison.Ordinal));
         Assert.Contains(bounded.Packet.Gaps, gap => gap.Classification == "TruncatedByLimit" && gap.TruncationReason == "depth");
         Assert.Contains(bounded.Packet.Gaps, gap => gap.Classification == "BoundedTraversalTruncated");
         Assert.Contains(bounded.Packet.EventChains, chain => chain.TraversalObservation?.TruncationReasons.Contains("depth", StringComparer.Ordinal) == true);
@@ -1588,6 +1591,9 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Null(incomplete.TraversalObservation);
         Assert.DoesNotContain(packet.DownstreamBoundaries, boundary => boundary.ChainId == incomplete.ChainId);
         Assert.True(packet.Summary.Truncated);
+        Assert.Contains("bounded-output-truncated", packet.Summary.CoverageReductionReasons);
+        Assert.Contains(packet.Summary.TruncationReasons,
+            reason => reason.StartsWith("input-limit:fact limit reached", StringComparison.Ordinal));
         Assert.Contains(packet.Gaps, gap => gap.Classification == "WebFormsModernizationInputLimitReached");
     }
 
@@ -2037,6 +2043,9 @@ public sealed class WebFormsModernizationPacketTests
             reducedIndex,
             Path.Combine(temp.Path, "reduced-output")));
         Assert.Equal("reduced-static-webforms-modernization", reduced.Coverage);
+        Assert.False(reduced.Summary.Truncated);
+        Assert.Empty(reduced.Summary.TruncationReasons);
+        Assert.Contains("source-analysis-reduced", reduced.Summary.CoverageReductionReasons);
         Assert.Contains(reduced.Gaps, gap => gap.Classification == "SourceAnalysisCoverageReduced"
             && gap.ScopeId == reduced.Sources.Single().ScanId);
 
