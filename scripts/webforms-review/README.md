@@ -415,6 +415,15 @@ restricted-workstation workflow do not break. This directory is their
 documentation namespace; moving the entry points would require compatibility
 wrappers and would not improve the generated artifact layout.
 
+The Claude handoff does not require the private review or conversation files to
+live in the TraceMap repository. `Start-FocusedWebFormsClaudeReview.ps1`
+defaults the stable conversation directory to `<ReviewRoot>/claude-workspace`
+and accepts `-ConversationRoot` for any other location. It records a session
+UUID under the review root plus session-scoped numbered prompt/response turns under the
+conversation root. Invoke
+`Continue-FocusedWebFormsClaudeReview.ps1` by full path from any working
+directory to resume that exact session without replacing the earlier turn.
+
 ### Supported operator path
 
 | Script | Reads source? | Starts analysis? | Intended use |
@@ -426,6 +435,7 @@ wrappers and would not improve the generated artifact layout.
 | `Test-FocusedWebFormsReviewConfig.ps1` | No | No | Validate JSONC, paths, modes, and one-root layout before scanning. |
 | `Show-FocusedWebFormsReviewStatus.ps1` | No | No | Print fixed retained artifact paths and refresh counts for one review root. |
 | `Start-FocusedWebFormsClaudeReview.ps1` | No | No | Validate receipted evidence and launch the bounded downstream prompt in Claude Code plan mode. |
+| `Continue-FocusedWebFormsClaudeReview.ps1` | No | No | Resume the exact retained Claude session from its private conversation root and save a numbered follow-up turn. |
 | `Start-FocusedWebFormsClaudeSourceReview.ps1` | Explicitly selected files only | No | After separate authorization, stage 1–12 explicit source files temporarily and launch a source-assisted review without granting the full source tree. |
 | `New-FocusedWebFormsStandaloneReview.ps1` | No | Existing packet only | Create a new immutable receipted workbench and optionally export one anonymous page from that exact packet. |
 | `Export-LatestFocusedWebFormsPageShareable.ps1` | No | No analysis | Map a prior page alias to the newest standalone workbench locally and export the corresponding anonymous page. |

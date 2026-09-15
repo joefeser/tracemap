@@ -43,6 +43,13 @@ The supported copy/paste path from the TraceMap checkout is one command:
 The wrapper validates the completed receipt and required inputs, grants only
 the packet, evidence-doc, and workbench directories, loads the checked-in
 prompt, and starts Claude Code in plan mode. It does not grant source access.
+The review root may be anywhere on the workstation and does not need to be a
+Git repository. By default, Claude runs from a stable private conversation
+directory at `<ReviewRoot>\claude-workspace`; pass `-ConversationRoot` to put
+that directory anywhere else. The wrapper stores session metadata under the
+review root and session-scoped numbered prompt/response files under the conversation root so
+later questions can resume the same review without depending on the TraceMap
+checkout as the working directory.
 
 The equivalent expanded command is:
 
@@ -56,8 +63,31 @@ claude --permission-mode plan `
 
 `--add-dir` grants Claude Code access to the three evidence directories, while
 plan mode keeps the first pass focused on analysis. See Anthropic's
-[Claude Code CLI reference](https://docs.anthropic.com/en/docs/claude-code/cli-usage)
+[Claude Code CLI reference](https://code.claude.com/docs/en/cli-usage)
 and confirm the installed version with `claude --help` when necessary.
+
+## Continue the same Claude session
+
+After the first review completes, ask follow-up questions with the continuation
+wrapper. The script can be called by its full path from any directory:
+
+```powershell
+& 'C:\path\to\tracemap\scripts\Continue-FocusedWebFormsClaudeReview.ps1' `
+  -ReviewRoot $ReviewRoot `
+  -ClaudeLauncherPath $ClaudeLauncherPath `
+  -Question 'Explain the highest-value remaining unknown.'
+```
+
+For a longer question, save it anywhere and replace `-Question` with
+`-PromptPath C:\path\to\question.md`. The wrapper resumes the exact recorded
+session from its original conversation directory, revalidates the receipted
+evidence, preserves the same three bounded evidence grants, and saves a new
+numbered prompt and response. It does not overwrite the initial assessment.
+
+Backing up the review root and conversation root preserves TraceMap's session
+metadata and saved turns. Claude's native JSONL conversation history remains
+machine-local in Claude's configuration directory, so copying only the session
+UUID to another machine does not make that native session portable.
 
 ### Corporate BAT/Python launchers
 
