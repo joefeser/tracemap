@@ -120,6 +120,8 @@ public static partial class WebFormsRawEvidenceAudit
                 caseId = $"case-{index + 1:D3}",
                 handler = rootSymbol,
                 handlerFactId = entry.HandlerFactId,
+                chainIds = entry.HandlerChains.Select(chain => chain.TryGetProperty("chainId", out var value) ? value.GetString() : null)
+                    .Where(value => value is not null).ToArray(),
                 handlerLocation = byId.GetValueOrDefault(entry.HandlerFactId),
                 bindings = entry.HandlerChains.Select(c => new
                 {

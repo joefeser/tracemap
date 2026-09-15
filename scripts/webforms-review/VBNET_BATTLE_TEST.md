@@ -59,6 +59,8 @@ standalone review, use this local-only dump. It maps the page alias from the
 prior receipted workbench to the current alias, reads the existing index without
 rescanning, and records generator, helper, page-handoff, packet, scan, and commit
 provenance. Do not share the resulting directory or screenshots of it.
+The command also emits `page-graph.shareable.zip`; that alias-only ZIP is the
+artifact intended for sharing during joint diagnosis.
 
 ```powershell
 .\scripts\New-FocusedWebFormsPageGraphDump.ps1 -ReviewRoot $ReviewRoot -PriorPageId page-008

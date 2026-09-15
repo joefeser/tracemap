@@ -15,6 +15,23 @@ function Read-BoundedJson([string]$Path, [long]$MaximumBytes, [string]$ErrorCode
     try { return [IO.File]::ReadAllText($file.FullName) | ConvertFrom-Json -Depth 40 }
     catch { throw $ErrorCode }
 }
+function Text-Sha256([string]$Value) {
+    return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.UTF8Encoding]::new($false).GetBytes($Value))).ToLowerInvariant()
+}
+function New-AliasMap([object[]]$Values, [string]$Prefix) {
+    $map = [Collections.Generic.Dictionary[string,string]]::new([StringComparer]::Ordinal)
+    $ordinal = 1
+    foreach ($value in @($Values | ForEach-Object { [string]$_ } | Where-Object { $_ } | Sort-Object -Unique)) {
+        $map[$value] = '{0}-{1:d4}' -f $Prefix, $ordinal
+        $ordinal++
+    }
+    return $map
+}
+function Alias([Collections.Generic.Dictionary[string,string]]$Map, [object]$Value) {
+    $key = [string]$Value
+    if ($key -and $Map.ContainsKey($key)) { return $Map[$key] }
+    return 'unavailable'
+}
 
 function Get-ReceiptedApplication([string]$Root) {
     $receipt = Read-BoundedJson (Join-Path $Root 'run-receipt.json') 16MB 'WEBFORMS_PAGE_GRAPH_DUMP_RECEIPT_UNAVAILABLE'
@@ -71,7 +88,7 @@ $stamp = [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss')
 $outputRoot = Join-Path $latest[0].FullName "private-diagnostics/page-graph-$stamp-$([Guid]::NewGuid().ToString('N').Substring(0, 8))"
 [IO.Directory]::CreateDirectory($outputRoot) | Out-Null
 $inputPath = Join-Path $outputRoot 'page-graph-input.private.json'
-$outputPath = Join-Path $outputRoot 'page-graph.private.json'
+    $outputPath = Join-Path $outputRoot 'page-graph.private.json'
 
 try {
     $chains = @($page.eventChains | ForEach-Object {
@@ -105,7 +122,93 @@ try {
     foreach ($required in @($outputPath, $markdownPath)) {
         if (!(Test-Path -LiteralPath $required -PathType Leaf)) { throw 'WEBFORMS_PAGE_GRAPH_DUMP_INCOMPLETE' }
     }
-    $artifacts = @($inputPath, $outputPath, $markdownPath) | ForEach-Object {
+    $private = Read-BoundedJson $outputPath 128MB 'WEBFORMS_PAGE_GRAPH_DUMP_PRIVATE_OUTPUT_INVALID'
+    $facts = @($private.retainedFacts)
+    $symbolMap = New-AliasMap @($facts | ForEach-Object { $_.caller; $_.callee }) 'symbol'
+    $fileMap = New-AliasMap @($facts | ForEach-Object { $_.filePath }) 'source-file'
+    $factMap = New-AliasMap @($facts | ForEach-Object { $_.factId }) 'fact'
+    $chainMap = [Collections.Generic.Dictionary[string,string]]::new([StringComparer]::Ordinal)
+    $chainOrdinal = 1
+    foreach ($chain in $chains) {
+        if ($chain.chainId -and !$chainMap.ContainsKey([string]$chain.chainId)) {
+            $chainMap[[string]$chain.chainId] = 'chain-{0:d3}' -f $chainOrdinal
+            $chainOrdinal++
+        }
+    }
+    $projection = [ordered]@{
+        pageAlias = $pageId
+        resolvedHandlerCount = @($chains | Where-Object { $_.handlerFactId }).Count
+        retainedFactCount = [int]$private.retainedFactCount
+        retainedFactKinds = @($private.retainedFactKinds)
+        facts = @($facts | ForEach-Object {
+            [ordered]@{
+                factAlias = Alias $factMap $_.factId
+                factType = [string]$_.kind
+                sourceSymbolAlias = Alias $symbolMap $_.caller
+                targetSymbolAlias = Alias $symbolMap $_.callee
+                sourceFileAlias = Alias $fileMap $_.filePath
+                sourceSpanAvailable = [bool]($_.startLine -gt 0 -and $_.endLine -ge $_.startLine)
+                ruleId = [string]$_.ruleId
+                evidenceTier = [string]$_.tier
+            }
+        })
+        cases = @($private.cases | ForEach-Object {
+            $case = $_
+            [ordered]@{
+                caseId = [string]$case.caseId
+                chainAliases = @($case.chainIds | ForEach-Object { Alias $chainMap $_ })
+                handlerAlias = Alias $symbolMap $case.handler
+                handlerFactAlias = Alias $factMap $case.handlerFactId
+                bounded = [bool]$case.bounded
+                visitedSymbolCount = [int]$case.visitedSymbolCount
+                stoppingSymbolAliases = @($case.stoppingSymbols | ForEach-Object { Alias $symbolMap $_ })
+                evidenceConclusion = [string]$case.evidenceConclusion
+                methods = @($case.methods | ForEach-Object {
+                    [ordered]@{
+                        symbolAlias = Alias $symbolMap $_.symbol
+                        loaded = [bool]$_.loaded
+                        stopReason = [string]$_.stopReason
+                        outgoingCalls = @($_.outgoingCallSites | ForEach-Object {
+                            [ordered]@{
+                                factAlias = Alias $factMap $_.factId
+                                targetSymbolAlias = Alias $symbolMap $_.callee
+                                sourceFileAlias = Alias $fileMap $_.filePath
+                                sourceSpanAvailable = [bool]($_.startLine -gt 0 -and $_.endLine -ge $_.startLine)
+                                ruleId = [string]$_.ruleId
+                                evidenceTier = [string]$_.tier
+                            }
+                        })
+                    }
+                })
+            }
+        })
+    }
+    $projectionJson = ConvertTo-Json -InputObject $projection -Depth 20 -Compress
+    $shareable = [ordered]@{
+        schemaVersion = 'webforms-page-graph-shareable.v1'
+        ruleId = 'diagnostic.webforms.anonymous-page-graph.v1'
+        privacy = 'anonymous-structure-only'
+        provenance = [ordered]@{
+            generatorSha256 = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            inputKind = 'alias-only-page-graph-projection'
+            inputSha256 = Text-Sha256 $projectionJson
+            inputCanonicalization = 'powershell-json-compact-depth-20-utf8-v1'
+        }
+        limitations = @('Static evidence does not prove runtime execution.', 'Aliases and case IDs are local to this projection.', 'Raw source, routes, symbols, original evidence IDs, scan identity, commit identity, and arbitrary fact properties are omitted.')
+        projection = $projection
+    }
+    $shareablePath = Join-Path $outputRoot 'page-graph.shareable.json'
+    $shareableZip = Join-Path $outputRoot 'page-graph.shareable.zip'
+    $shareableText = ($shareable | ConvertTo-Json -Depth 24) + "`n"
+    foreach ($privateValue in @($priorPath, $page.subject.filePath, $page.subject.surfaceId, $page.packet.scanId, $page.packet.commitSha) + @($facts | ForEach-Object { $_.factId; $_.caller; $_.callee; $_.filePath })) {
+        if ($privateValue -and $shareableText.Contains([string]$privateValue, [StringComparison]::OrdinalIgnoreCase)) {
+            throw 'WEBFORMS_PAGE_GRAPH_DUMP_SHAREABLE_LEAK'
+        }
+    }
+    [IO.File]::WriteAllText($shareablePath, $shareableText, [Text.UTF8Encoding]::new($false))
+    Compress-Archive -LiteralPath $shareablePath -DestinationPath $shareableZip -CompressionLevel Optimal
+
+    $artifacts = @($inputPath, $outputPath, $markdownPath, $shareablePath, $shareableZip) | ForEach-Object {
         $item = Get-Item -LiteralPath $_
         [ordered]@{ path = $item.Name; bytes = [long]$item.Length; sha256 = (Get-FileHash -LiteralPath $item.FullName -Algorithm SHA256).Hash.ToLowerInvariant(); canonicalization = 'raw-file-bytes' }
     }
@@ -133,6 +236,7 @@ try {
     Write-Output "currentPageId=$pageId"
     Write-Output "resolvedHandlers=$($receipt.selection.resolvedHandlerCount)"
     Write-Output "privateReport=$markdownPath"
+    Write-Output "shareableZip=$shareableZip"
     Write-Output "receipt=$receiptPath"
 }
 catch {
