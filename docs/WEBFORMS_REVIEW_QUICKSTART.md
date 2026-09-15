@@ -120,6 +120,19 @@ The output contains aliases, packet hashes, counts, and closed traversal-state
 categories only. It validates the standalone packet snapshot against the
 workbench input hash before reading it.
 
+To create a private all-handler closure plus an anonymous graph ZIP for the
+same receipted page, run:
+
+```powershell
+.\scripts\New-FocusedWebFormsPageGraphDump.ps1 -ReviewRoot $ReviewRoot -PriorPageId page-008
+```
+
+Share only the reported `page-graph.shareable.zip`. Each distinct handler case
+reports retained terminal-evidence families (`database`, `http`, or
+`callback-or-async`), the terminal fact count, and whether unresolved leaves
+remain. These are joined retained static facts, not proof of execution or of
+the absence of another terminal.
+
 The summary verifies the completed run receipt and the recorded outlier-file
 size and SHA-256 before reading it. It prints page, call, and gap totals; gap
 classifications; and the generator/input hashes. It never selects a folder by

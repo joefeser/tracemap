@@ -165,6 +165,13 @@ try {
                 bounded = [bool]$case.bounded
                 visitedSymbolCount = [int]$case.visitedSymbolCount
                 stoppingSymbolAliases = @($case.stoppingSymbols | ForEach-Object { Alias $symbolMap $_ })
+                uiControlEndpointCount = @($case.uiControlEndpoints).Count
+                unresolvedLeafCount = @($case.unresolvedOtherLeaves).Count
+                terminalEvidence = [ordered]@{
+                    conclusion = [string]$case.terminalEvidenceConclusion
+                    factCount = @($case.terminalEvidence).Count
+                    families = @($case.terminalEvidenceFamilies)
+                }
                 evidenceConclusion = [string]$case.evidenceConclusion
                 methods = @($case.methods | ForEach-Object {
                     [ordered]@{
@@ -226,7 +233,10 @@ try {
         Assert-ShareableValue $case.caseId '^case-[0-9]{3}$'
         Assert-ShareableValue $case.handlerAlias '^(symbol-[0-9]{4}|unavailable)$'
         Assert-ShareableValue $case.handlerFactAlias '^(fact-[0-9]{4}|unavailable)$'
-        Assert-ShareableValue $case.evidenceConclusion '^(no-supported-backend-terminal-observed|ui-control-operations-observed-no-other-unresolved-leaves|ui-control-operations-observed-with-unresolved-leaves)$'
+        Assert-ShareableValue $case.evidenceConclusion '^(no-supported-backend-terminal-observed|ui-control-operations-observed-no-other-unresolved-leaves|ui-control-operations-observed-with-unresolved-leaves|retained-terminal-evidence-observed-no-other-unresolved-leaves|retained-terminal-evidence-observed-with-unresolved-leaves)$'
+        Assert-ShareableValue $case.terminalEvidence.conclusion '^(no-supported-terminal-evidence-observed|database-evidence-observed|http-evidence-observed|callback-or-async-evidence-observed|multiple-terminal-evidence-families-observed)$'
+        if ([int]$case.uiControlEndpointCount -lt 0 -or [int]$case.unresolvedLeafCount -lt 0 -or [int]$case.terminalEvidence.factCount -lt 0) { throw 'WEBFORMS_PAGE_GRAPH_SHAREABLE_INVALID' }
+        foreach ($family in @($case.terminalEvidence.families)) { Assert-ShareableValue $family '^(database|http|callback-or-async)$' }
         foreach ($chainAlias in @($case.chainAliases)) { Assert-ShareableValue $chainAlias '^(chain-[0-9]{3}|unavailable)$' }
         foreach ($symbolAlias in @($case.stoppingSymbolAliases)) { Assert-ShareableValue $symbolAlias '^(symbol-[0-9]{4}|unavailable)$' }
         foreach ($method in @($case.methods)) {

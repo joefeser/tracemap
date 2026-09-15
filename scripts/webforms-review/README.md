@@ -141,6 +141,14 @@ were retained but no supported terminal was reached, and
 `BoundedTraversalTruncated` means a configured traversal bound stopped the
 inspection. None proves absence or runtime behavior.
 
+`New-FocusedWebFormsPageGraphDump.ps1` independently closes every resolved
+handler on one receipted page. Its anonymous graph projection separates event
+chain fan-out from distinct handler cases and reports per-case retained
+terminal-evidence families (`database`, `http`, or `callback-or-async`), counts,
+and unresolved-leaf state. Terminal evidence is joined only when its source
+symbol belongs to that handler closure; it remains static evidence rather than
+an execution claim.
+
 Private page and application handoff JSON retain the exact generator-script SHA-256
 and input-packet SHA-256. The alias-only outlier JSON retains the same generator
 SHA-256 but hashes only its sanitized alias/count input projection, avoiding a

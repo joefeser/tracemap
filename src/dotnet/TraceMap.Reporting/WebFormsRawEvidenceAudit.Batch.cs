@@ -18,6 +18,15 @@ public static partial class WebFormsRawEvidenceAudit
         "global::System.Web.UI.WebControls.BaseDataBoundControl.DataBind()" or
         "global::Telerik.Web.UI.RadGrid.DataBind()";
 
+    private static string? RetainedTerminalEvidenceFamily(BatchWitness witness) => witness.Kind switch
+    {
+        FactTypes.DatabaseOperationCandidate or FactTypes.DbChangeSaved or FactTypes.DapperCallDetected or
+            FactTypes.SqlCommandDetected or FactTypes.SqlTextUsed or FactTypes.QueryPatternDetected => "database",
+        FactTypes.HttpCallDetected => "http",
+        FactTypes.CallbackBoundary or FactTypes.AsyncBoundary => "callback-or-async",
+        _ => null
+    };
+
     private static void WriteBatchInspection(SqliteConnection db, SqliteTransaction transaction,
         JsonElement root, string scan, string commit, string reportPath, string outputPath,
         string?[] handlers, AuditState[] states, Dictionary<string, SortedSet<string>> edges,
@@ -110,7 +119,22 @@ public static partial class WebFormsRawEvidenceAudit
                 .Order(StringComparer.Ordinal).ToArray();
             var uiControlEndpoints = stops.Where(IsKnownUiControlEndpoint).ToArray();
             var unresolvedOtherLeaves = stops.Where(s => !IsKnownUiControlEndpoint(s)).ToArray();
-            var evidenceConclusion = uiControlEndpoints.Length == 0
+            var terminalEvidence = witnesses.Where(w => !string.IsNullOrWhiteSpace(w.Caller) && state.Visited.Contains(w.Caller!) &&
+                    RetainedTerminalEvidenceFamily(w) is not null)
+                .OrderBy(w => w.FactId, StringComparer.Ordinal).ToArray();
+            var terminalEvidenceFamilies = terminalEvidence.Select(RetainedTerminalEvidenceFamily).Where(value => value is not null)
+                .Select(value => value!).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+            var terminalEvidenceConclusion = terminalEvidenceFamilies.Length switch
+            {
+                0 => "no-supported-terminal-evidence-observed",
+                1 => $"{terminalEvidenceFamilies[0]}-evidence-observed",
+                _ => "multiple-terminal-evidence-families-observed"
+            };
+            var evidenceConclusion = terminalEvidence.Length > 0
+                ? unresolvedOtherLeaves.Length == 0
+                    ? "retained-terminal-evidence-observed-no-other-unresolved-leaves"
+                    : "retained-terminal-evidence-observed-with-unresolved-leaves"
+                : uiControlEndpoints.Length == 0
                 ? "no-supported-backend-terminal-observed"
                 : unresolvedOtherLeaves.Length == 0
                     ? "ui-control-operations-observed-no-other-unresolved-leaves"
@@ -144,8 +168,13 @@ public static partial class WebFormsRawEvidenceAudit
                 stoppingSymbols = stops,
                 uiControlEndpoints,
                 unresolvedOtherLeaves,
+                terminalEvidence,
+                terminalEvidenceFamilies,
+                terminalEvidenceConclusion,
                 evidenceConclusion,
-                backendTerminalConclusion = "no-supported-backend-terminal-observed",
+                backendTerminalConclusion = terminalEvidenceFamilies.Any(value => value is "database" or "http")
+                    ? "retained-backend-evidence-observed"
+                    : "no-supported-backend-terminal-observed",
                 reviewResult = "unreviewed"
             };
         }).ToArray();
@@ -201,7 +230,7 @@ public static partial class WebFormsRawEvidenceAudit
                 foreach (var binding in item.bindings) writer.WriteLine($"Binding: {Location(binding.bindingLocation)}\n");
                 writer.WriteLine($"Traversal limit reached: {item.bounded}; visited symbols: {item.visitedSymbolCount}. Case IDs are local to this report.\n");
                 writer.WriteLine($"Evidence conclusion: **{item.evidenceConclusion}**\n");
-                writer.WriteLine($"Observed UI/control endpoints: {item.uiControlEndpoints.Length}; other unresolved leaves: {item.unresolvedOtherLeaves.Length}; supported backend terminal: not observed.\n");
+                writer.WriteLine($"Observed UI/control endpoints: {item.uiControlEndpoints.Length}; other unresolved leaves: {item.unresolvedOtherLeaves.Length}; retained terminal evidence: {item.terminalEvidence.Length} ({string.Join(", ", item.terminalEvidenceFamilies)}); terminal conclusion: {item.terminalEvidenceConclusion}.\n");
                 writer.WriteLine("Manual result: **unreviewed**\n");
                 writer.WriteLine("### Direct handler calls\n");
                 foreach (var call in callsByCaller[item.handler].GroupBy(w => new { w.Callee, w.FilePath, w.StartLine, w.EndLine }))
@@ -226,7 +255,7 @@ public static partial class WebFormsRawEvidenceAudit
         output.Add($"batchInspection=created|chains={chains.Length}|handlers={cases.Length}|boundedHandlers={cases.Count(c => c.bounded)}");
         if (cases.Length == 0) output.Add("batchReview=not-applicable;reason=no-semantic-handler-cases;primary-workbench-remains-valid");
         foreach (var item in cases)
-            output.Add($"case={item.caseId}|bounded={item.bounded.ToString().ToLowerInvariant()}|symbols={item.visitedSymbolCount}|directCallSites={callsByCaller[item.handler].Select(w => (w.Callee, w.FilePath, w.StartLine, w.EndLine)).Distinct().Count()}|stoppingSymbols={item.stoppingSymbols.Length}|uiControlEndpoints={item.uiControlEndpoints.Length}|unresolvedOtherLeaves={item.unresolvedOtherLeaves.Length}|evidence={item.evidenceConclusion}|review=unreviewed");
+            output.Add($"case={item.caseId}|bounded={item.bounded.ToString().ToLowerInvariant()}|symbols={item.visitedSymbolCount}|directCallSites={callsByCaller[item.handler].Select(w => (w.Callee, w.FilePath, w.StartLine, w.EndLine)).Distinct().Count()}|stoppingSymbols={item.stoppingSymbols.Length}|uiControlEndpoints={item.uiControlEndpoints.Length}|unresolvedOtherLeaves={item.unresolvedOtherLeaves.Length}|terminalEvidence={item.terminalEvidence.Length}|terminalFamilies={string.Join(",", item.terminalEvidenceFamilies)}|terminalConclusion={item.terminalEvidenceConclusion}|evidence={item.evidenceConclusion}|review=unreviewed");
         if (cases.Length > 0) output.Add("batchReview=read-private-markdown;share-only-case-ids-and-result-categories");
     }
 }
