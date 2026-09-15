@@ -108,6 +108,18 @@ with one short command:
 .\scripts\Show-FocusedWebFormsOutlierSummary.ps1 -ReviewRoot $ReviewRoot
 ```
 
+To diagnose one page's bounded traversal without creating another report
+folder or printing its private route, summarize the newest receipted standalone
+review using the page alias from the original pipeline workbench:
+
+```powershell
+.\scripts\Show-FocusedWebFormsPageTraversalSummary.ps1 -ReviewRoot $ReviewRoot -PriorPageId page-008
+```
+
+The output contains aliases, packet hashes, counts, and closed traversal-state
+categories only. It validates the standalone packet snapshot against the
+workbench input hash before reading it.
+
 The summary verifies the completed run receipt and the recorded outlier-file
 size and SHA-256 before reading it. It prints page, call, and gap totals; gap
 classifications; and the generator/input hashes. It never selects a folder by
