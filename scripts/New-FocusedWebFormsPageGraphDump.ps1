@@ -32,6 +32,9 @@ function Alias([Collections.Generic.Dictionary[string,string]]$Map, [object]$Val
     if ($key -and $Map.ContainsKey($key)) { return $Map[$key] }
     return 'unavailable'
 }
+function Assert-ShareableValue([object]$Value, [string]$Pattern) {
+    if ([string]$Value -notmatch $Pattern) { throw 'WEBFORMS_PAGE_GRAPH_DUMP_SHAREABLE_SCHEMA_INVALID' }
+}
 
 function Get-ReceiptedApplication([string]$Root) {
     $receipt = Read-BoundedJson (Join-Path $Root 'run-receipt.json') 16MB 'WEBFORMS_PAGE_GRAPH_DUMP_RECEIPT_UNAVAILABLE'
@@ -199,8 +202,47 @@ try {
     }
     $shareablePath = Join-Path $outputRoot 'page-graph.shareable.json'
     $shareableZip = Join-Path $outputRoot 'page-graph.shareable.zip'
+
+    # Validate the closed projection rather than searching the serialized JSON
+    # for every original substring. Short retained values such as "call",
+    # "source", or "unavailable" can legitimately occur in schema prose and
+    # caused false-positive leak failures even though no private field was
+    # projected.
+    Assert-ShareableValue $projection.pageAlias '^page-[0-9]{3,4}$'
+    foreach ($kind in @($projection.retainedFactKinds)) {
+        Assert-ShareableValue $kind.factType '^[A-Za-z][A-Za-z0-9]{0,95}$'
+        if ([int]$kind.count -lt 0) { throw 'WEBFORMS_PAGE_GRAPH_DUMP_SHAREABLE_SCHEMA_INVALID' }
+    }
+    foreach ($fact in @($projection.facts)) {
+        Assert-ShareableValue $fact.factAlias '^fact-[0-9]{4}$'
+        Assert-ShareableValue $fact.factType '^[A-Za-z][A-Za-z0-9]{0,95}$'
+        Assert-ShareableValue $fact.sourceSymbolAlias '^(symbol-[0-9]{4}|unavailable)$'
+        Assert-ShareableValue $fact.targetSymbolAlias '^(symbol-[0-9]{4}|unavailable)$'
+        Assert-ShareableValue $fact.sourceFileAlias '^(source-file-[0-9]{4}|unavailable)$'
+        Assert-ShareableValue $fact.ruleId '^[a-z0-9][a-z0-9.-]{0,127}\.v[0-9]+$'
+        Assert-ShareableValue $fact.evidenceTier '^Tier[1-4][A-Za-z]+$'
+    }
+    foreach ($case in @($projection.cases)) {
+        Assert-ShareableValue $case.caseId '^case-[0-9]{3}$'
+        Assert-ShareableValue $case.handlerAlias '^(symbol-[0-9]{4}|unavailable)$'
+        Assert-ShareableValue $case.handlerFactAlias '^(fact-[0-9]{4}|unavailable)$'
+        Assert-ShareableValue $case.evidenceConclusion '^(no-supported-backend-terminal-observed|ui-control-operations-observed-no-other-unresolved-leaves|ui-control-operations-observed-with-unresolved-leaves)$'
+        foreach ($chainAlias in @($case.chainAliases)) { Assert-ShareableValue $chainAlias '^(chain-[0-9]{3}|unavailable)$' }
+        foreach ($symbolAlias in @($case.stoppingSymbolAliases)) { Assert-ShareableValue $symbolAlias '^(symbol-[0-9]{4}|unavailable)$' }
+        foreach ($method in @($case.methods)) {
+            Assert-ShareableValue $method.symbolAlias '^(symbol-[0-9]{4}|unavailable)$'
+            Assert-ShareableValue $method.stopReason '^(not-loaded-within-audit-bounds|no-retained-exact-semantic-outgoing-call|retained-outgoing-calls)$'
+            foreach ($call in @($method.outgoingCalls)) {
+                Assert-ShareableValue $call.factAlias '^(fact-[0-9]{4}|unavailable)$'
+                Assert-ShareableValue $call.targetSymbolAlias '^(symbol-[0-9]{4}|unavailable)$'
+                Assert-ShareableValue $call.sourceFileAlias '^(source-file-[0-9]{4}|unavailable)$'
+                Assert-ShareableValue $call.ruleId '^[a-z0-9][a-z0-9.-]{0,127}\.v[0-9]+$'
+                Assert-ShareableValue $call.evidenceTier '^Tier[1-4][A-Za-z]+$'
+            }
+        }
+    }
     $shareableText = ($shareable | ConvertTo-Json -Depth 24) + "`n"
-    foreach ($privateValue in @($priorPath, $page.subject.filePath, $page.subject.surfaceId, $page.packet.scanId, $page.packet.commitSha) + @($facts | ForEach-Object { $_.factId; $_.caller; $_.callee; $_.filePath })) {
+    foreach ($privateValue in @($priorPath, $page.subject.filePath, $page.packet.scanId, $page.packet.commitSha)) {
         if ($privateValue -and $shareableText.Contains([string]$privateValue, [StringComparison]::OrdinalIgnoreCase)) {
             throw 'WEBFORMS_PAGE_GRAPH_DUMP_SHAREABLE_LEAK'
         }
