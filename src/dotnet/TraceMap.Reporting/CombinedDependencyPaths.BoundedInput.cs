@@ -113,7 +113,13 @@ public static partial class CombinedDependencyPathReporter
             ), input as (
                 select fact_id, scan_id, repo, commit_sha, fact_type, rule_id, evidence_tier,
                        source_symbol, target_symbol, contract_element, file_path, start_line, end_line,
-                       case when symbol_only then '{}' else properties_json end as properties_json,
+                       case when fact_type = '{{FactTypes.CallEdge}}' and json_valid(properties_json) then
+                           json_object(
+                               'calleeName', coalesce(cast(json_extract(properties_json, '$.calleeName') as text), ''),
+                               'targetSymbolId', coalesce(cast(json_extract(properties_json, '$.targetSymbolId') as text), ''),
+                               'targetContainingSymbolId', coalesce(cast(json_extract(properties_json, '$.targetContainingSymbolId') as text), ''))
+                            when symbol_only then '{}'
+                            else properties_json end as properties_json,
                        {{(hasExtractorVersion ? "extractor_version" : "null")}} as version, symbol_only
                 from projected
             )

@@ -1218,6 +1218,45 @@ public sealed class WebFormsModernizationPacketTests
     }
 
     [Fact]
+    public async Task Bounded_graph_compacts_unused_call_properties_without_losing_terminal_paths()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("Succeeded") with { AnalysisLevel = "Level1SemanticAnalysis" };
+        var binding = Fact(manifest, FactTypes.WebFormsEventBindingDeclared, RuleIds.LegacyWebFormsEventBinding, "Pages/Compact.aspx", 5,
+            source: "control:run", target: "method:handler", contract: "Run_Click",
+            ("surfaceIdentity", "surface:compact"), ("eventSourceIdentity", "control:run"),
+            ("coverageLabel", "bounded-static-webforms-event"));
+        var handler = Fact(manifest, FactTypes.WebFormsHandlerResolved, RuleIds.LegacyWebFormsHandlerResolution, "Pages/Compact.aspx.cs", 12,
+            source: "control:run", target: "method:handler", contract: "Run_Click",
+            ("surfaceIdentity", "surface:compact"), ("bindingFactId", binding.FactId),
+            ("handlerSymbolId", "method:handler"), ("handlerSymbol", "method:handler"),
+            ("coverageLabel", "bounded-static-webforms-handler"));
+        var call = Fact(manifest, FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, "Pages/Compact.aspx.cs", 14,
+            source: "method:handler", target: "method:query", contract: "Query",
+            ("calleeName", "Query"), ("unusedPayload", new string('x', 64 * 1024)),
+            ("coverageLabel", "bounded-static-call")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier1Semantic
+        };
+        var query = Fact(manifest, FactTypes.DatabaseOperationCandidate, RuleIds.DatabaseOperationCallPattern, "Data/Query.cs", 30,
+            source: "method:query", target: "query-target", contract: "fill",
+            ("operationKind", "fill"), ("coverageLabel", "bounded-static-query"));
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, manifest, [Page("surface:compact", "Pages/Compact.aspx", manifest), binding, handler, call, query]);
+
+        var report = await CombinedDependencyPathReporter.BuildBoundedSingleIndexReportAsync(
+            new(index, Path.Combine(temp.Path, "unused"), View: LegacyFlowReportConstants.View, IncludeLegacyRoots: true)
+            {
+                StartingNodeLimit = 1,
+                StartingFactIds = new HashSet<string>(["single:" + handler.FactId], StringComparer.Ordinal)
+            },
+            new ReportInputBudget(100, 100, 32 * 1024));
+
+        Assert.False(report.Summary.Truncated);
+        Assert.Contains(report.Paths, path => path.Nodes.LastOrDefault()?.SurfaceKind == "sql-persistence");
+    }
+
+    [Fact]
     public async Task Identity_inventory_is_bounded_joinable_private_and_preserves_identity_gaps()
     {
         using var temp = new TempDirectory();
