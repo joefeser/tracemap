@@ -37,4 +37,5 @@ downstream planning material, never TraceMap scanner evidence.
 to inspect an approved BAT/Python launcher locally and return only a sanitized
 argument-forwarding contract. It does not ask for launcher source, corporate
 configuration, or secrets. Use its result before adding a launcher override to
-the TraceMap PowerShell handoff.
+the TraceMap PowerShell handoff. A verified launcher can then be supplied with
+`Start-FocusedWebFormsClaudeReview.ps1 -ClaudeLauncherPath`.

@@ -69,9 +69,19 @@ publishing launcher code or configuration. Do not point the handoff script at a
 corporate launcher until repeated arguments, plan mode, multiline prompt
 transport, and the policy boundary have been verified.
 
-The current wrapper intentionally invokes the normal `claude` command. A future
-launcher-path parameter should be added only after the corporate wrapper's
-argument contract is known and tested.
+For a verified transparent launcher, pass its local path:
+
+```powershell
+.\scripts\Start-FocusedWebFormsClaudeReview.ps1 `
+  -ReviewRoot $ReviewRoot `
+  -ClaudeLauncherPath 'C:/path/to/approved-corporate-launcher.bat'
+```
+
+The launcher path is never stored in an artifact. In this mode, the script
+preserves the repeated evidence-directory arguments and plan mode, adds
+`--print`, and pipes the multiline checked-in prompt through stdin to avoid BAT
+quoting and Windows command-line-length hazards. The default invocation remains
+the normal interactive `claude` command when `-ClaudeLauncherPath` is omitted.
 
 Do not add the application source directory on the first pass. If the evidence
 review produces a precise source question, start a separately authorized

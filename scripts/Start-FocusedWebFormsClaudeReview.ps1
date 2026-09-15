@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$ReviewRoot,
-    [string]$TraceMapRoot = (Split-Path $PSScriptRoot -Parent)
+    [string]$TraceMapRoot = (Split-Path $PSScriptRoot -Parent),
+    [string]$ClaudeLauncherPath = ''
 )
 
 Set-StrictMode -Version Latest
@@ -53,16 +54,28 @@ Assert-ReceiptedArtifact $receipt 'evidenceDocs' $root 'evidence-docs/query-reci
 Assert-ReceiptedArtifact $receipt 'evidenceDocs' $root 'evidence-docs/chunks.jsonl'
 Assert-ReceiptedArtifact $receipt 'workbench' $root 'workbench/application-handoff.json'
 if (!(Test-Path -LiteralPath $promptPath -PathType Leaf)) { throw "WEBFORMS_CLAUDE_INPUT_UNAVAILABLE;path=$promptPath" }
-if ($null -eq (Get-Command claude -ErrorAction SilentlyContinue)) { throw 'WEBFORMS_CLAUDE_CLI_UNAVAILABLE' }
-
 $prompt = [IO.File]::ReadAllText($promptPath, [Text.UTF8Encoding]::new($false, $true))
+$claudeArguments = @(
+    '--permission-mode', 'plan',
+    '--add-dir', $evidenceDocsRoot,
+    '--add-dir', $workbenchRoot,
+    '--add-dir', (Split-Path $packetPath -Parent)
+)
 Write-Output 'webformsClaudeHandoff=validated'
 Write-Output "reviewRoot=$root"
 Write-Output 'permissionMode=plan'
 Write-Output 'sourceAccess=not-granted'
-& claude --permission-mode plan `
-    --add-dir $evidenceDocsRoot `
-    --add-dir $workbenchRoot `
-    --add-dir (Split-Path $packetPath -Parent) `
-    $prompt
+if ($ClaudeLauncherPath) {
+    if (!(Test-Path -LiteralPath $ClaudeLauncherPath -PathType Leaf)) { throw 'WEBFORMS_CLAUDE_LAUNCHER_UNAVAILABLE' }
+    $launcher = (Resolve-Path -LiteralPath $ClaudeLauncherPath).Path
+    Write-Output 'promptTransport=stdin'
+    Write-Output 'claudeMode=print'
+    $prompt | & $launcher @claudeArguments --print
+}
+else {
+    if ($null -eq (Get-Command claude -ErrorAction SilentlyContinue)) { throw 'WEBFORMS_CLAUDE_CLI_UNAVAILABLE' }
+    Write-Output 'promptTransport=argument'
+    Write-Output 'claudeMode=interactive'
+    & claude @claudeArguments $prompt
+}
 if ($LASTEXITCODE -ne 0) { throw "WEBFORMS_CLAUDE_CLI_FAILED;exitCode=$LASTEXITCODE" }

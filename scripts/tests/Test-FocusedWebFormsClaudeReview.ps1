@@ -46,6 +46,33 @@ try {
         throw 'Claude handoff did not retain plan mode and three bounded evidence directories.'
     }
 
+    $launcherPath = Join-Path $temp 'corporate-launcher.ps1'
+    $launcherArgumentsPath = Join-Path $temp 'launcher-arguments.json'
+    $launcherPromptPath = Join-Path $temp 'launcher-prompt.txt'
+    $launcher = @'
+[IO.File]::WriteAllText($env:TRACEMAP_TEST_LAUNCHER_ARGUMENTS, ($args | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllText($env:TRACEMAP_TEST_LAUNCHER_PROMPT, (@($input) -join "`n"), [Text.UTF8Encoding]::new($false))
+$global:LASTEXITCODE = 0
+'@
+    [IO.File]::WriteAllText($launcherPath, $launcher, [Text.UTF8Encoding]::new($false))
+    $env:TRACEMAP_TEST_LAUNCHER_ARGUMENTS = $launcherArgumentsPath
+    $env:TRACEMAP_TEST_LAUNCHER_PROMPT = $launcherPromptPath
+    $launcherOutput = @(& $entry -ReviewRoot $temp -TraceMapRoot $repo -ClaudeLauncherPath $launcherPath)
+    if ($launcherOutput -notcontains 'promptTransport=stdin' -or $launcherOutput -notcontains 'claudeMode=print') {
+        throw 'Corporate launcher handoff did not report stdin print mode.'
+    }
+    $launcherArguments = @([IO.File]::ReadAllText($launcherArgumentsPath) | ConvertFrom-Json)
+    if ($launcherArguments -notcontains '--print' -or
+        $launcherArguments -notcontains '--permission-mode' -or
+        $launcherArguments -notcontains 'plan' -or
+        @($launcherArguments | Where-Object { $_ -eq '--add-dir' }).Count -ne 3) {
+        throw 'Corporate launcher did not receive the bounded Claude arguments.'
+    }
+    $launcherPrompt = [IO.File]::ReadAllText($launcherPromptPath)
+    if (!$launcherPrompt.Contains('# Review Web Forms modernization evidence', [StringComparison]::Ordinal)) {
+        throw 'Corporate launcher did not receive the multiline prompt through stdin.'
+    }
+
     [IO.File]::AppendAllText((Join-Path $temp 'workbench/application-handoff.json'), 'changed')
     $failure = $null
     try { & $entry -ReviewRoot $temp -TraceMapRoot $repo | Out-Null } catch { $failure = $_.Exception.Message }
@@ -57,5 +84,7 @@ try {
 finally {
     Remove-Item Function:\global:claude -ErrorAction SilentlyContinue
     Remove-Variable capturedClaudeArguments -Scope Global -ErrorAction SilentlyContinue
+    Remove-Item Env:\TRACEMAP_TEST_LAUNCHER_ARGUMENTS -ErrorAction SilentlyContinue
+    Remove-Item Env:\TRACEMAP_TEST_LAUNCHER_PROMPT -ErrorAction SilentlyContinue
     if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Recurse -Force }
 }
