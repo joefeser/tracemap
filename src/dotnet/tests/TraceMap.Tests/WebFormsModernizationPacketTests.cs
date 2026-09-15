@@ -1183,12 +1183,22 @@ public sealed class WebFormsModernizationPacketTests
         {
             EvidenceTier = EvidenceTiers.Tier1Semantic
         };
+        var supportingCallIds = Enumerable.Range(0, 10_001)
+            .Select(index => $"retained-call-{index:D5}")
+            .Append(call.FactId)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var flow = Fact(manifest, FactTypes.WebFormsEventFlowProjected, RuleIds.LegacyWebFormsEventFlow, "Pages/Resume.aspx.cs", 12,
+            source: "method:handler", target: "method:handler", contract: "Run_Click",
+            ("surfaceIdentity", surface), ("supportingFactIds", handler.FactId),
+            ("supportingEdgeIds", string.Join(',', supportingCallIds)),
+            ("coverageLabel", "bounded-static-webforms-flow"));
         var query = Fact(manifest, FactTypes.DatabaseOperationCandidate, RuleIds.DatabaseOperationCallPattern, "Data/Query.cs", 30,
             source: "method:query", target: "query-target", contract: "fill",
             ("operationKind", "fill"), ("coverageLabel", "bounded-static-query"));
         var page = Page(surface, "Pages/Resume.aspx", manifest);
         var index = Path.Combine(temp.Path, "index.sqlite");
-        SqliteIndexWriter.Write(index, manifest, [page, binding, handler, call, query]);
+        SqliteIndexWriter.Write(index, manifest, [page, binding, handler, flow, call, query]);
         using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={index};Pooling=False"))
         {
             connection.Open();

@@ -1114,7 +1114,7 @@ public static partial class CombinedDependencyPathReporter
             "extractor_version",
             cancellationToken);
         var selectedSymbols = budget is not null && selectedFactIds is not null
-            ? await ReadSelectedSymbolClosureAsync(connection, selectedFactIds, maxDepth, maxFrontier, cancellationToken)
+            ? await ReadSelectedSymbolClosureAsync(connection, selectedFactIds, maxDepth, maxFrontier, budget.MaxFacts, cancellationToken)
             : null;
         var originalSelectedFactIds = selectedFactIds?.Select(id => id.StartsWith("single:", StringComparison.Ordinal)
             ? id["single:".Length..]

@@ -223,6 +223,7 @@ public static partial class CombinedDependencyPathReporter
         IReadOnlySet<string> selectedFactIds,
         int maxDepth,
         int maxFrontier,
+        int maxSupportingFactIds,
         CancellationToken cancellationToken)
     {
         if (selectedFactIds.Count == 0) return new HashSet<string>(StringComparer.Ordinal);
@@ -259,7 +260,8 @@ public static partial class CombinedDependencyPathReporter
                 }
             }
         }
-        symbols.UnionWith(await ReadHandlerOwnedCallSymbolsAsync(connection, originalIds, maxFrontier, cancellationToken));
+        symbols.UnionWith(await ReadHandlerOwnedCallSymbolsAsync(
+            connection, originalIds, maxFrontier, maxSupportingFactIds, cancellationToken));
         if (symbols.Count > maxFrontier) throw new ReportInputLimitException("graph-frontier");
 
         var traversalQueries = new List<string>();
@@ -325,6 +327,7 @@ public static partial class CombinedDependencyPathReporter
         SqliteConnection connection,
         IReadOnlyList<string> selectedHandlerFactIds,
         int maxTargets,
+        int maxSupportingFactIds,
         CancellationToken cancellationToken)
     {
         var supportingEdgeIds = new SortedSet<string>(StringComparer.Ordinal);
@@ -356,7 +359,12 @@ public static partial class CombinedDependencyPathReporter
                 foreach (var id in SplitList(properties.GetValueOrDefault("supportingEdgeIds")))
                 {
                     supportingEdgeIds.Add(id);
-                    if (supportingEdgeIds.Count > maxTargets) throw new ReportInputLimitException("handler-call-support-frontier");
+                    // Supporting fact identities are an intermediate admission
+                    // set, not graph-frontier symbols. Bound them by the fact
+                    // budget; the distinct target symbols derived below remain
+                    // independently bounded by maxTargets.
+                    if (supportingEdgeIds.Count > maxSupportingFactIds)
+                        throw new ReportInputLimitException("handler-call-support-facts");
                 }
             }
         }
