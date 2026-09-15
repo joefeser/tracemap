@@ -36,21 +36,24 @@ try {
     Write-Json $packetPath ([ordered]@{
         schemaVersion = 'webforms-modernization-packet.v1'
         summary = [ordered]@{ truncated = $false }
-        eventChains = @([ordered]@{
-            surfaceId = 'surface-fixture'
-            traversalObservation = [ordered]@{
-                stopState = 'observed-downstream-without-supported-terminal'
-                reachedNodeCount = 4
-                traversedEdgeCount = 3
-                downstreamEdgeCount = 2
-                terminalPathCount = 0
-                truncated = $false
-                callEvidenceState = 'joined-downstream-edge-observed'
-                leafReconciliationStates = @('exact-symbol')
-                leafCallEvidenceStates = @('retained-call-edge')
-                truncationReasons = @()
-            }
-        })
+        eventChains = @(
+            [ordered]@{
+                surfaceId = 'surface-fixture'
+                traversalObservation = [ordered]@{
+                    stopState = 'observed-downstream-without-supported-terminal'
+                    reachedNodeCount = 4
+                    traversedEdgeCount = 3
+                    downstreamEdgeCount = 2
+                    terminalPathCount = 0
+                    truncated = $false
+                    callEvidenceState = 'joined-downstream-edge-observed'
+                    leafReconciliationStates = @('exact-symbol')
+                    leafCallEvidenceStates = @('retained-call-edge')
+                    truncationReasons = @()
+                }
+            },
+            [ordered]@{ surfaceId = 'surface-fixture' }
+        )
         downstreamBoundaries = @()
     })
     $packetHash = (Get-FileHash -LiteralPath $packetPath -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -58,7 +61,7 @@ try {
 
     $output = @(& $subject -ReviewRoot $prior -PriorPageId page-001 -StandaloneReviewRoot $current)
     foreach ($expected in @(
-        'pageTraversalSummary=valid', 'chains=1', 'boundaries=0', 'observations=1',
+        'pageTraversalSummary=valid', 'chains=2', 'boundaries=0', 'observations=1',
         'reachedNodes=4', 'traversedEdges=3', 'downstreamEdges=2', 'terminalPaths=0',
         'stopState.observed-downstream-without-supported-terminal=1',
         'callEvidenceState.joined-downstream-edge-observed=1')) {

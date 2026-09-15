@@ -47,6 +47,13 @@ function Sum-Property([object[]]$Items, [string]$Name) {
     return [long]$sum
 }
 
+function Property-Value([object]$Value, [string]$Name) {
+    if ($null -eq $Value) { return $null }
+    $property = $Value.PSObject.Properties[$Name]
+    if ($null -eq $property) { return $null }
+    return $property.Value
+}
+
 function Write-Groups([string]$Prefix, [object[]]$Values) {
     foreach ($group in @($Values | ForEach-Object { [string]$_ } | Where-Object { $_ -match '^[A-Za-z0-9.-]{1,128}$' } | Group-Object | Sort-Object Name)) {
         Write-Output "$Prefix.$($group.Name)=$($group.Count)"
@@ -82,7 +89,7 @@ $packet = Read-BoundedJson $snapshotPath 512MB 'WEBFORMS_PAGE_TRAVERSAL_SUMMARY_
 $surfaceId = [string]$currentPage[0].surfaceId
 $chains = @($packet.eventChains | Where-Object { [string]$_.surfaceId -eq $surfaceId })
 $boundaries = @($packet.downstreamBoundaries | Where-Object { [string]$_.surfaceId -eq $surfaceId })
-$observations = @($chains | ForEach-Object { $_.traversalObservation } | Where-Object { $null -ne $_ })
+$observations = @($chains | ForEach-Object { Property-Value $_ 'traversalObservation' } | Where-Object { $null -ne $_ })
 
 Write-Output 'pageTraversalSummary=valid'
 Write-Output "priorPageId=$PriorPageId"
@@ -97,10 +104,9 @@ Write-Output "reachedNodes=$(Sum-Property $observations 'reachedNodeCount')"
 Write-Output "traversedEdges=$(Sum-Property $observations 'traversedEdgeCount')"
 Write-Output "downstreamEdges=$(Sum-Property $observations 'downstreamEdgeCount')"
 Write-Output "terminalPaths=$(Sum-Property $observations 'terminalPathCount')"
-Write-Output "truncatedObservations=$(@($observations | Where-Object { [bool]$_.truncated }).Count)"
-Write-Groups 'stopState' @($observations | ForEach-Object { $_.stopState })
-Write-Groups 'callEvidenceState' @($observations | ForEach-Object { $_.callEvidenceState })
-Write-Groups 'leafReconciliation' @($observations | ForEach-Object { @($_.leafReconciliationStates) })
-Write-Groups 'leafCallEvidence' @($observations | ForEach-Object { @($_.leafCallEvidenceStates) })
-Write-Groups 'truncationReason' @($observations | ForEach-Object { @($_.truncationReasons) })
-
+Write-Output "truncatedObservations=$(@($observations | Where-Object { [bool](Property-Value $_ 'truncated') }).Count)"
+Write-Groups 'stopState' @($observations | ForEach-Object { Property-Value $_ 'stopState' })
+Write-Groups 'callEvidenceState' @($observations | ForEach-Object { Property-Value $_ 'callEvidenceState' })
+Write-Groups 'leafReconciliation' @($observations | ForEach-Object { @(Property-Value $_ 'leafReconciliationStates') })
+Write-Groups 'leafCallEvidence' @($observations | ForEach-Object { @(Property-Value $_ 'leafCallEvidenceStates') })
+Write-Groups 'truncationReason' @($observations | ForEach-Object { @(Property-Value $_ 'truncationReasons') })
