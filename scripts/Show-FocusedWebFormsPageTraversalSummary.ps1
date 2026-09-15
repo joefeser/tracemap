@@ -90,6 +90,9 @@ $surfaceId = [string]$currentPage[0].surfaceId
 $chains = @($packet.eventChains | Where-Object { [string]$_.surfaceId -eq $surfaceId })
 $boundaries = @($packet.downstreamBoundaries | Where-Object { [string]$_.surfaceId -eq $surfaceId })
 $observations = @($chains | ForEach-Object { Property-Value $_ 'traversalObservation' } | Where-Object { $null -ne $_ })
+$inputLimits = @($packet.gaps | Where-Object {
+    [string](Property-Value $_ 'classification') -eq 'WebFormsModernizationInputLimitReached'
+} | ForEach-Object { Property-Value $_ 'scopeId' })
 
 Write-Output 'pageTraversalSummary=valid'
 Write-Output "priorPageId=$PriorPageId"
@@ -105,6 +108,7 @@ Write-Output "traversedEdges=$(Sum-Property $observations 'traversedEdgeCount')"
 Write-Output "downstreamEdges=$(Sum-Property $observations 'downstreamEdgeCount')"
 Write-Output "terminalPaths=$(Sum-Property $observations 'terminalPathCount')"
 Write-Output "truncatedObservations=$(@($observations | Where-Object { [bool](Property-Value $_ 'truncated') }).Count)"
+Write-Groups 'inputLimit' $inputLimits
 Write-Groups 'stopState' @($observations | ForEach-Object { Property-Value $_ 'stopState' })
 Write-Groups 'callEvidenceState' @($observations | ForEach-Object { Property-Value $_ 'callEvidenceState' })
 Write-Groups 'leafReconciliation' @($observations | ForEach-Object { @(Property-Value $_ 'leafReconciliationStates') })

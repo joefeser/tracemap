@@ -35,7 +35,7 @@ try {
     $packetPath = Join-Path $current 'workbench/webforms-modernization.snapshot.json'
     Write-Json $packetPath ([ordered]@{
         schemaVersion = 'webforms-modernization-packet.v1'
-        summary = [ordered]@{ truncated = $false }
+        summary = [ordered]@{ truncated = $true }
         eventChains = @(
             [ordered]@{
                 surfaceId = 'surface-fixture'
@@ -55,6 +55,7 @@ try {
             [ordered]@{ surfaceId = 'surface-fixture' }
         )
         downstreamBoundaries = @()
+        gaps = @([ordered]@{ classification = 'WebFormsModernizationInputLimitReached'; scopeId = 'graph-frontier' })
     })
     $packetHash = (Get-FileHash -LiteralPath $packetPath -Algorithm SHA256).Hash.ToLowerInvariant()
     Write-Application $current $packetHash
@@ -63,6 +64,7 @@ try {
     foreach ($expected in @(
         'pageTraversalSummary=valid', 'chains=2', 'boundaries=0', 'observations=1',
         'reachedNodes=4', 'traversedEdges=3', 'downstreamEdges=2', 'terminalPaths=0',
+        'inputLimit.graph-frontier=1',
         'stopState.observed-downstream-without-supported-terminal=1',
         'callEvidenceState.joined-downstream-edge-observed=1')) {
         if ($expected -notin $output) { throw "Traversal summary omitted: $expected" }
