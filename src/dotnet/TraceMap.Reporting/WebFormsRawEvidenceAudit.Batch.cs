@@ -21,16 +21,18 @@ public static partial class WebFormsRawEvidenceAudit
     private static void WriteBatchInspection(SqliteConnection db, SqliteTransaction transaction,
         JsonElement root, string scan, string commit, string reportPath, string outputPath,
         string?[] handlers, AuditState[] states, Dictionary<string, SortedSet<string>> edges,
-        HashSet<string> loaded, int remainingRows, long remainingTextBytes, List<string> output)
+        HashSet<string> loaded, int remainingRows, long remainingTextBytes, List<string> output,
+        bool includeEveryResolvedHandler)
     {
         // Read the shared closure once. Keep locations and evidence IDs for every
         // selected call site; do not repeat a database query per handler or leaf.
         var symbols = states.SelectMany(s => s.Visited).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
         var chains = root.GetProperty("eventChains").EnumerateArray()
             .Where(c => c.TryGetProperty("handlerFactId", out var h) && handlers.Contains(h.GetString(), StringComparer.Ordinal)
-                && c.TryGetProperty("traversalObservation", out var o) && o.ValueKind == JsonValueKind.Object
-                && o.GetProperty("stopState").GetString() == "observed-downstream-without-supported-terminal"
-                && (!c.TryGetProperty("terminalKind", out var t) || t.ValueKind == JsonValueKind.Null || t.GetString() == ""))
+                && (includeEveryResolvedHandler ||
+                    (c.TryGetProperty("traversalObservation", out var o) && o.ValueKind == JsonValueKind.Object
+                     && o.GetProperty("stopState").GetString() == "observed-downstream-without-supported-terminal"
+                     && (!c.TryGetProperty("terminalKind", out var t) || t.ValueKind == JsonValueKind.Null || t.GetString() == ""))))
             .ToArray();
         var selectedIds = handlers.Concat(chains.Select(c => c.GetProperty("bindingFactId").GetString()))
             .Where(id => !string.IsNullOrWhiteSpace(id)).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
@@ -46,8 +48,7 @@ public static partial class WebFormsRawEvidenceAudit
                        start_line, end_line, rule_id, evidence_tier
                 from facts where scan_id=$scan and commit_sha=$commit and
                 (fact_id in (select value from json_each($ids))
-                 or (fact_type in ('CallEdge','MethodInvoked') and evidence_tier='Tier1Semantic'
-                     and source_symbol in (select value from json_each($symbols)))
+                 or source_symbol in (select value from json_each($symbols))
                  or (fact_type='MethodDeclared' and target_symbol in (select value from json_each($symbols))))
                 order by file_path, start_line, end_line, target_symbol, fact_id limit $limit
                 """;
@@ -74,7 +75,8 @@ public static partial class WebFormsRawEvidenceAudit
         }
 
         var byId = witnesses.ToDictionary(w => w.FactId, StringComparer.Ordinal);
-        var calls = witnesses.Where(w => w.Kind is "CallEdge" or "MethodInvoked" && !string.IsNullOrWhiteSpace(w.Caller) && !string.IsNullOrWhiteSpace(w.Callee)).ToArray();
+        var calls = witnesses.Where(w => (w.Kind is "CallEdge" or "MethodInvoked") && w.Tier == "Tier1Semantic"
+            && !string.IsNullOrWhiteSpace(w.Caller) && !string.IsNullOrWhiteSpace(w.Callee)).ToArray();
         var callsByCaller = calls.ToLookup(w => w.Caller!, StringComparer.Ordinal);
         var declarations = witnesses.Where(w => w.Kind == "MethodDeclared" && w.Callee is not null).ToLookup(w => w.Callee!, StringComparer.Ordinal);
         var orderedCases = states.Select((state, index) =>
@@ -155,14 +157,22 @@ public static partial class WebFormsRawEvidenceAudit
                 schemaVersion = "webforms-batch-inspection.v1",
                 ruleId = RuleIds.DiagnosticWebFormsRawExactCallEvidence,
                 privacy = "LOCAL ONLY: private paths and symbols; do not share this file or photographs of its contents.",
+                generatorSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(typeof(WebFormsRawEvidenceAudit).Assembly.Location))).ToLowerInvariant(),
+                sourceReportSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(reportPath))).ToLowerInvariant(),
                 scanId = scan,
                 commitSha = commit,
                 sourceReport = Path.GetFullPath(reportPath),
                 availability = cases.Length == 0 ? "no-semantic-handler-cases" : "available",
                 selectedChainCount = chains.Length,
                 selectedHandlerCount = cases.Length,
-                scope = "All selected report handlers; independent bounded exact semantic call closure, not report leaf reconstruction or runtime execution.",
+                scope = includeEveryResolvedHandler
+                    ? "Every resolved handler on the selected page; independent bounded exact semantic call closure, not report leaf reconstruction or runtime execution."
+                    : "All selected report handlers; independent bounded exact semantic call closure, not report leaf reconstruction or runtime execution.",
                 limitations = "Missing calls or exact declarations do not prove absent source. Review every direct handler call, including UI branches. Locations identify retained evidence; use Go To Definition locally. Command values and database execution are not inferred.",
+                retainedFactCount = witnesses.Count,
+                retainedFactKinds = witnesses.GroupBy(w => w.Kind, StringComparer.Ordinal).OrderBy(group => group.Key, StringComparer.Ordinal)
+                    .Select(group => new { factType = group.Key, count = group.Count() }).ToArray(),
+                retainedFacts = witnesses,
                 cases
             }, jsonOptions);
 
@@ -180,6 +190,7 @@ public static partial class WebFormsRawEvidenceAudit
             writer.WriteLine($"Selected chains: {chains.Length}; distinct handlers: {cases.Length}; scan: {Safe(scan)}; commit: {Safe(commit)}.\n");
             if (cases.Length == 0) writer.WriteLine("No compiler-resolved handler cases were available for this supplemental exact-semantic review. The primary application workbench remains valid; this is not proof that the application has no handlers or behavior.\n");
             writer.WriteLine("For each case, the evidence conclusion distinguishes exact allowlisted UI/control endpoints from other unresolved leaves. Open unresolved leaves only when a stronger manual conclusion is needed. Locations identify call sites; use Go To Definition in Visual Studio to inspect the callee. This report lists retained static calls; it does not establish execution, source completeness, or absence of backend behavior.\n");
+            writer.WriteLine($"Retained page-closure facts: {witnesses.Count}. The JSON includes their fact IDs, kinds, symbols, locations, rules, and tiers. Raw source and arbitrary fact properties are intentionally omitted.\n");
             writer.WriteLine("Share only case IDs and your result category: ui-only, database-call-present, source-call-missing, definition-unavailable, checkout-mismatch, or uncertain. Add only a generic description of a missing operation.\n");
             foreach (var item in cases)
             {

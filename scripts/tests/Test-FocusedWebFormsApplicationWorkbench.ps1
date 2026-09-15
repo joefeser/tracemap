@@ -4,6 +4,7 @@ $scriptPath = Join-Path $scripts 'New-FocusedWebFormsApplicationWorkbench.ps1'
 $exportScript = Join-Path $scripts 'Export-FocusedWebFormsPageShareable.ps1'
 $latestExportScript = Join-Path $scripts 'Export-LatestFocusedWebFormsPageShareable.ps1'
 $standaloneScript = Join-Path $scripts 'New-FocusedWebFormsStandaloneReview.ps1'
+$pageGraphScript = Join-Path $scripts 'New-FocusedWebFormsPageGraphDump.ps1'
 $shareableSchemaPath = Join-Path (Split-Path -Parent $scripts) 'docs/contracts/webforms-page-paths-shareable.v1.schema.json'
 $tokens = $null
 $parseErrors = $null
@@ -21,6 +22,10 @@ $tokens = $null
 $parseErrors = $null
 [Management.Automation.Language.Parser]::ParseFile($latestExportScript, [ref]$tokens, [ref]$parseErrors) | Out-Null
 if ($parseErrors.Count -ne 0) { throw 'Latest standalone page exporter script syntax is invalid.' }
+$tokens = $null
+$parseErrors = $null
+[Management.Automation.Language.Parser]::ParseFile($pageGraphScript, [ref]$tokens, [ref]$parseErrors) | Out-Null
+if ($parseErrors.Count -ne 0) { throw 'Page graph dump script syntax is invalid.' }
 $shareableSchema = [IO.File]::ReadAllText($shareableSchemaPath) | ConvertFrom-Json -Depth 30
 if ($shareableSchema.properties.schemaVersion.const -ne 'webforms-page-paths-shareable.v1' -or $shareableSchema.properties.privacy.const -ne 'anonymous-structure-only') { throw 'Page shareable schema does not pin its version and privacy profile.' }
 

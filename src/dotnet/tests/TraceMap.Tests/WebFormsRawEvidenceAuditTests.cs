@@ -7,6 +7,50 @@ namespace TraceMap.Tests;
 public sealed class WebFormsRawEvidenceAuditTests
 {
     [Fact]
+    public void PageGraphDumpIncludesEveryResolvedHandlerAndHashesItsGeneratorAndInput()
+    {
+        WithFixture((db, report) =>
+        {
+            using (var connection = new SqliteConnection($"Data Source={db};Pooling=False"))
+            {
+                connection.Open();
+                using var command = connection.CreateCommand();
+                command.CommandText = """
+                    insert into facts(fact_id,fact_type,target_symbol,file_path)
+                    values('terminal-handler','WebFormsHandlerResolved','Private.TerminalHandler()','B.aspx');
+                    insert into facts(fact_id,fact_type,source_symbol,target_symbol,file_path,start_line)
+                    values('terminal-call','CallEdge','Private.TerminalHandler()','System.Data.Common.DbDataAdapter.Fill(System.Data.DataSet)','B.cs',12);
+                    """;
+                command.ExecuteNonQuery();
+            }
+            File.WriteAllText(report, JsonSerializer.Serialize(new
+            {
+                schemaVersion = "webforms-modernization-packet.v1",
+                sources = new[] { new { scanId = "scan-one", commitSha = "commit-one" } },
+                eventChains = new object[]
+                {
+                    new { handlerFactId = "handler", bindingFactId = "handler", surfaceId = "surface", terminalKind = "", traversalObservation = new { stopState = "other-or-unavailable" } },
+                    new { handlerFactId = "terminal-handler", bindingFactId = "terminal-handler", surfaceId = "surface", terminalKind = "database", traversalObservation = new { stopState = "terminal-reached" } }
+                }
+            }));
+            var path = Path.Combine(Path.GetDirectoryName(report)!, "page-graph.json");
+
+            var lines = WebFormsRawEvidenceAudit.Run(db, report, inspectionPath: path,
+                inspectAllHandlers: true, includeEveryResolvedHandler: true);
+
+            Assert.Contains("selection=every-resolved-page-handler", lines);
+            Assert.Contains("batchInspection=created|chains=2|handlers=2|boundedHandlers=0", lines);
+            using var document = JsonDocument.Parse(File.ReadAllText(path));
+            var root = document.RootElement;
+            Assert.Equal(64, root.GetProperty("generatorSha256").GetString()!.Length);
+            Assert.Equal(64, root.GetProperty("sourceReportSha256").GetString()!.Length);
+            Assert.Equal(2, root.GetProperty("cases").GetArrayLength());
+            Assert.Contains(root.GetProperty("cases").EnumerateArray(), item =>
+                item.GetProperty("handler").GetString() == "Private.TerminalHandler()");
+        });
+    }
+
+    [Fact]
     public void BatchInspectionWritesNonApplicableSnapshotWhenNoSemanticHandlerCasesExist()
     {
         WithFixture((db, report) =>

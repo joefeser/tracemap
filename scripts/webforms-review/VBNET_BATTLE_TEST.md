@@ -54,6 +54,16 @@ stage completed, restore the original config or start a new empty review root.
 
 ## Manual diagnostic sequence
 
+To inspect every resolved handler on one page after generating the latest
+standalone review, use this local-only dump. It maps the page alias from the
+prior receipted workbench to the current alias, reads the existing index without
+rescanning, and records generator, helper, page-handoff, packet, scan, and commit
+provenance. Do not share the resulting directory or screenshots of it.
+
+```powershell
+.\scripts\New-FocusedWebFormsPageGraphDump.ps1 -ReviewRoot $ReviewRoot -PriorPageId page-008
+```
+
 The remaining steps are retained for isolated-stage troubleshooting. Do not
 use them for a normal clean-slate run.
 

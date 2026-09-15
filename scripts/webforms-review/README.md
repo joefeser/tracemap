@@ -385,6 +385,7 @@ workflow:
 | Script | Purpose |
 | --- | --- |
 | `Test-FocusedWebFormsRawEvidence.ps1` | Read-only exact semantic call audit over the retained index. |
+| `New-FocusedWebFormsPageGraphDump.ps1` | Private page dump of every resolved handler's bounded exact semantic call closure, with provenance hashes. |
 | `New-FocusedWebFormsLocalInspection.ps1` | Create the earlier single-handler private inspection. |
 | `New-FocusedWebFormsMethodInspection.ps1` | Start a private inspection from one unique method hint. |
 | `Test-FocusedWebFormsDatabaseEvidence.ps1` | Audit exact framework `DataAdapter.Fill` caller evidence. |
