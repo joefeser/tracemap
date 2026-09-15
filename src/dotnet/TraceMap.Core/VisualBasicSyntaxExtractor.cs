@@ -402,6 +402,118 @@ public static class VisualBasicSyntaxExtractor
         }
     }
 
+    private static bool TryAddExplicitDataAdapterFillFact(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        string filePath,
+        CompilationUnitSyntax root,
+        InvocationExpressionSyntax invocation,
+        string invocationName,
+        string? containingMember,
+        FactBudget budget)
+    {
+        if (!invocationName.Equals("Fill", StringComparison.OrdinalIgnoreCase)
+            || GetInvocationReceiverName(invocation.Expression) is not { Length: > 0 } receiverName
+            || !TryResolveExplicitDataAdapterType(root, invocation, receiverName, out var receiverType))
+        {
+            return true;
+        }
+
+        return TryAddSyntaxFact(
+            manifest,
+            facts,
+            FactTypes.DatabaseOperationCandidate,
+            RuleIds.VisualBasicSyntaxDatabaseOperation,
+            filePath,
+            invocation,
+            targetSymbol: $"{receiverType}.Fill",
+            new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["coverageLabel"] = "reduced-syntax-vb-database-operation",
+                ["operationKind"] = "data-adapter-fill",
+                ["receiverName"] = receiverName,
+                ["receiverType"] = receiverType,
+                ["resolutionKind"] = "ExplicitSyntaxType",
+                ["resultKind"] = SyntaxFillResultKind(invocation),
+                ["ruleLimitations"] = "The receiver has an explicit data-adapter type in Visual Basic syntax, but compiler identity, provider binding, query text, connection identity, successful execution, and runtime reachability are not established.",
+                ["sqlSourceKind"] = "vb-syntax-explicit-data-adapter-fill"
+            },
+            budget,
+            sourceSymbol: containingMember,
+            contractElement: "data-adapter-fill");
+    }
+
+    private static bool TryResolveExplicitDataAdapterType(
+        CompilationUnitSyntax root,
+        InvocationExpressionSyntax invocation,
+        string receiverName,
+        out string receiverType)
+    {
+        receiverType = string.Empty;
+        var simpleReceiver = receiverName.Split('.').Last();
+        var containingMethod = invocation.Ancestors().OfType<MethodBlockBaseSyntax>().FirstOrDefault();
+        var containingType = invocation.Ancestors().OfType<TypeBlockSyntax>().FirstOrDefault();
+        var candidates = root.DescendantNodes().OfType<VariableDeclaratorSyntax>()
+            .Where(declaration => declaration.Names.Any(name => name.Identifier.ValueText.Equals(simpleReceiver, StringComparison.OrdinalIgnoreCase)))
+            .Where(declaration =>
+            {
+                var declarationMethod = declaration.Ancestors().OfType<MethodBlockBaseSyntax>().FirstOrDefault();
+                var declarationType = declaration.Ancestors().OfType<TypeBlockSyntax>().FirstOrDefault();
+                return containingMethod is null
+                    ? declarationMethod is null && declarationType == containingType
+                    : declarationMethod == containingMethod
+                        || declarationMethod is null && declarationType == containingType;
+            })
+            .Select(ExplicitVariableType)
+            .Where(type => type is not null && IsKnownDataAdapterType(type))
+            .Select(type => type!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(type => type, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (candidates.Length != 1)
+        {
+            return false;
+        }
+
+        receiverType = candidates[0];
+        return true;
+    }
+
+    private static string? ExplicitVariableType(VariableDeclaratorSyntax declaration)
+    {
+        if (declaration.AsClause is SimpleAsClauseSyntax simple)
+        {
+            return simple.Type.ToString().Trim();
+        }
+
+        if (declaration.AsClause is AsNewClauseSyntax { NewExpression: ObjectCreationExpressionSyntax asNewCreation })
+        {
+            return asNewCreation.Type.ToString().Trim();
+        }
+
+        return declaration.Initializer?.Value is ObjectCreationExpressionSyntax creation
+            ? creation.Type.ToString().Trim()
+            : null;
+    }
+
+    private static bool IsKnownDataAdapterType(string typeName)
+    {
+        var simple = typeName.Split('.').Last();
+        return simple.Equals("DbDataAdapter", StringComparison.OrdinalIgnoreCase)
+            || simple.Equals("SqlDataAdapter", StringComparison.OrdinalIgnoreCase)
+            || simple.Equals("OleDbDataAdapter", StringComparison.OrdinalIgnoreCase)
+            || simple.Equals("OdbcDataAdapter", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string SyntaxFillResultKind(InvocationExpressionSyntax invocation)
+    {
+        var first = invocation.ArgumentList?.Arguments.OfType<SimpleArgumentSyntax>().FirstOrDefault()?.Expression;
+        var typeName = first is ObjectCreationExpressionSyntax creation ? creation.Type.ToString().Split('.').Last() : null;
+        return typeName?.Equals("DataSet", StringComparison.OrdinalIgnoreCase) == true ? "data-set"
+            : typeName?.Equals("DataTable", StringComparison.OrdinalIgnoreCase) == true ? "data-table"
+            : "unknown";
+    }
+
     private static void AddMemberAccessFacts(
         ScanManifest manifest,
         List<CodeFact> facts,
@@ -704,6 +816,19 @@ public static class VisualBasicSyntaxExtractor
                     },
                     budget,
                     sourceSymbol: containingMember))
+            {
+                return;
+            }
+
+            if (!TryAddExplicitDataAdapterFillFact(
+                    manifest,
+                    facts,
+                    filePath,
+                    root,
+                    invocation,
+                    invocationName,
+                    containingMember,
+                    budget))
             {
                 return;
             }

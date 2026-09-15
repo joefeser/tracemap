@@ -298,6 +298,9 @@ public static partial class EvidenceDocsExporter
             | Traversal stop state | `{EscapeInline(traversal?.StopState ?? "unavailable")}` |
             | Traversed edges | `{traversal?.TraversedEdgeCount ?? 0}` |
             | Truncated | `{(traversal?.Truncated ?? false).ToString().ToLowerInvariant()}` |
+            | Next evidence kind | `{EscapeInline(value.NextEvidenceKind)}` |
+            | Unresolved call targets | `{EscapeInline(string.Join(", ", value.UnresolvedCallTargets))}` |
+            | Required inputs | `{EscapeInline(string.Join(", ", value.NextEvidenceInputs))}` |
             """;
         var sourceRefs = value.Evidence.Select(evidence => ToSourceRef(SourceFor(evidence, sources)))
             .Concat(value.PathEvidence.Select(evidence => ToSourceRef(SourceFor(evidence, sources))))
@@ -535,6 +538,7 @@ public static partial class EvidenceDocsExporter
             | Rule ID | `{EscapeInline(value.RuleId)}` |
             | Evidence tier | `{EscapeInline(value.EvidenceTier)}` |
             | Coverage | `{EscapeInline(value.CoverageLabel)}` |
+            | Safe metadata | `{EscapeInline(string.Join(", ", value.SafeMetadata.Select(item => $"{item.Key}={item.Value}")))}` |
 
             This gap preserves bounded uncertainty and does not prove evidence or behavior is absent.
             """;

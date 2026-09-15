@@ -760,10 +760,13 @@ public sealed class LegacyWebFormsExtractorTests
             fact.FactType == FactTypes.WebFormsCompositionDeclared
             && fact.Evidence.FilePath == "Public/Default.aspx"
             && fact.Properties.GetValueOrDefault("relationshipKind") == "UsesRegisteredUserControl");
-        Assert.Contains(result.Facts, fact =>
+        var unresolved = Assert.Single(result.Facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
             && fact.Evidence.FilePath == "Public/Default.aspx"
             && fact.Properties.GetValueOrDefault("gapKind") == "UnresolvedWebFormsControlRegistration");
+        Assert.Equal("uc", unresolved.Properties.GetValueOrDefault("controlPrefix"));
+        Assert.Equal("Widget", unresolved.Properties.GetValueOrDefault("controlType"));
+        Assert.Equal("register-directive-unavailable", unresolved.Properties.GetValueOrDefault("registrationState"));
     }
 
     [Fact]
@@ -1794,7 +1797,7 @@ public sealed class LegacyWebFormsExtractorTests
         Assert.All(events.Concat(mutations).Append(constraint), fact =>
         {
             Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, fact.EvidenceTier);
-            Assert.Equal("legacy-webforms/0.13.3", fact.Evidence.ExtractorVersion);
+            Assert.Equal("legacy-webforms/0.13.4", fact.Evidence.ExtractorVersion);
             Assert.DoesNotContain("Saving", JsonSerializer.Serialize(fact), StringComparison.Ordinal);
         });
     }
@@ -1864,7 +1867,7 @@ public sealed class LegacyWebFormsExtractorTests
         {
             Assert.Equal(RuleIds.LegacyWebFormsInlineClientHttpRequest, request.RuleId);
             Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, request.EvidenceTier);
-            Assert.Equal("legacy-webforms/0.13.3", request.Evidence.ExtractorVersion);
+            Assert.Equal("legacy-webforms/0.13.4", request.Evidence.ExtractorVersion);
         });
         var handler = Assert.Single(result.Facts, fact =>
             fact.FactType == FactTypes.WebFormsHandlerResolved

@@ -420,6 +420,7 @@ public static class RuleIds
     public const string VisualBasicSyntaxCallGraph = "vb.syntax.callgraph.v1";
     public const string VisualBasicSyntaxObjectCreation = "vb.syntax.objectcreation.v1";
     public const string VisualBasicSyntaxEventWiring = "vb.syntax.event-wiring.v1";
+    public const string VisualBasicSyntaxDatabaseOperation = "vb.syntax.database-operation.v1";
     public const string CSharpRazorSemanticModelBinding = "csharp.razor.semantic-model-binding.v1";
     public const string CSharpRazorSemanticModelBindingGap = "csharp.razor.semantic-model-binding-gap.v1";
     public const string CSharpSemanticPropertyMapping = "csharp.semantic.propertymapping.v1";
@@ -596,7 +597,7 @@ public static class ScannerVersions
     public const string CSharpIntegrationSyntaxExtractor = "csharp-integration-syntax/0.3.0";
     public const string CSharpSemanticExtractor = "csharp-semantic/0.21.1";
     public const string VisualBasicSemanticExtractor = "vb-semantic/0.8.3";
-    public const string VisualBasicSyntaxExtractor = "vb-syntax/0.3.5";
+    public const string VisualBasicSyntaxExtractor = "vb-syntax/0.3.6";
     public const string CSharpPropertyMappingExtractor = "csharp-property-mapping/0.1.0";
     public const string FrameworkMigrationEvidenceExtractor = "framework-migration/0.1.0";
     public const string FrameworkMigrationSyntaxFallbackExtractor = "framework-migration-syntax-fallback/0.1.0";
@@ -613,7 +614,7 @@ public static class ScannerVersions
     public const string LegacyWcfExtractor = "legacy-wcf/0.3.1";
     public const string LegacyAsmxExtractor = "legacy-asmx/0.2.0";
     public const string LegacyRemotingExtractor = "legacy-remoting/0.1.0";
-    public const string LegacyWebFormsExtractor = "legacy-webforms/0.13.3";
+    public const string LegacyWebFormsExtractor = "legacy-webforms/0.13.4";
     public const string LegacyWinFormsExtractor = "legacy-winforms/0.1.0";
     public const string LegacyAspNetExtractor = "legacy-aspnet/0.2.0";
     public const string LegacyBatchDataMovementExtractor = "legacy-batch-data-movement/0.2.0";

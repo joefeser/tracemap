@@ -165,6 +165,9 @@ public sealed record WebFormsModernizationEventChain(
     public IReadOnlyList<WebFormsModernizationCallEvidence> CallEvidence { get; init; } = [];
     public int CallEvidenceTotalCount { get; init; }
     public bool CallEvidenceTruncated { get; init; }
+    public string NextEvidenceKind { get; init; } = "none";
+    public IReadOnlyList<string> UnresolvedCallTargets { get; init; } = [];
+    public IReadOnlyList<string> NextEvidenceInputs { get; init; } = [];
 }
 
 public sealed record WebFormsModernizationCallEvidence(
@@ -315,7 +318,10 @@ public sealed record WebFormsModernizationGap(
     IReadOnlyList<string> SupportingFactIds,
     IReadOnlyList<string> Limitations,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    string? TruncationReason = null);
+    string? TruncationReason = null)
+{
+    public IReadOnlyDictionary<string, string> SafeMetadata { get; init; } = new SortedDictionary<string, string>(StringComparer.Ordinal);
+}
 
 public static class WebFormsModernizationPacketReporter
 {
@@ -763,6 +769,7 @@ public static class WebFormsModernizationPacketReporter
                     : ToTraversalObservation(
                         traversalByStartingFactId?.GetValueOrDefault("single:" + handler.FactId),
                         handlerOwnedCallEvidenceCount);
+                var nextEvidence = NextEvidence(terminalKind, handler, traversalObservation, callEvidence);
                 if (!inputLimited && handler is not null && terminalKind is null)
                     AddGeneratedGap(gaps, options.MaxGaps, snapshot, TerminalFreeGapClassification(traversalObservation), "event-chain", binding.FactId, support.Select(fact => fact.FactId));
                 var chain = new WebFormsModernizationEventChain(
@@ -795,7 +802,10 @@ public static class WebFormsModernizationPacketReporter
                     HandlerResolution = handler is not null ? "resolved-static-handler" : HandlerResolution(handlerResolutionGaps),
                     CallEvidence = callEvidence,
                     CallEvidenceTotalCount = Math.Max(handlerOwnedCallEvidenceCount, handlerCallFacts.Length),
-                    CallEvidenceTruncated = Math.Max(handlerOwnedCallEvidenceCount, handlerCallFacts.Length) > callEvidence.Length
+                    CallEvidenceTruncated = Math.Max(handlerOwnedCallEvidenceCount, handlerCallFacts.Length) > callEvidence.Length,
+                    NextEvidenceKind = nextEvidence.Kind,
+                    UnresolvedCallTargets = nextEvidence.Targets,
+                    NextEvidenceInputs = nextEvidence.Inputs
                 };
                 chains.Add(chain);
                 if (terminalKind is not null)
@@ -823,11 +833,26 @@ public static class WebFormsModernizationPacketReporter
                             ?? EmptyToNull(flowFact?.Properties.GetValueOrDefault("terminalSurfaceNameHash"))
                             ?? EmptyToNull(flowFact?.TargetSymbol)
                             ?? terminalEvidenceId;
-                        var boundaryRuleIds = chain.RuleIds.Concat(chain.PathEvidence.Select(evidence => evidence.RuleId))
+                        var boundarySupportFacts = flowFact is null
+                            ? []
+                            : SplitIds(flowFact.Properties.GetValueOrDefault("supportingFactIds"))
+                                .Where(factsById.ContainsKey)
+                                .Select(id => factsById[id])
+                                .DistinctBy(fact => fact.FactId)
+                                .OrderBy(fact => fact.FactId, StringComparer.Ordinal)
+                                .ToArray();
+                        var boundaryEvidence = chain.Evidence
+                            .Concat(boundarySupportFacts.Select(fact => Evidence(fact, gaps, options.MaxGaps, snapshot)))
+                            .DistinctBy(evidence => evidence.FactId)
+                            .OrderBy(evidence => evidence.FactId, StringComparer.Ordinal)
+                            .ToArray();
+                        var boundarySupportingFactIds = chain.SupportingFactIds.Concat(boundarySupportFacts.Select(fact => fact.FactId))
                             .Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
-                        var boundaryEvidenceTiers = chain.EvidenceTiers.Concat(chain.PathEvidence.Select(evidence => evidence.EvidenceTier))
+                        var boundaryRuleIds = chain.RuleIds.Concat(chain.PathEvidence.Select(evidence => evidence.RuleId)).Concat(boundarySupportFacts.Select(fact => fact.RuleId))
                             .Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
-                        var boundaryCoverageLabels = chain.CoverageLabels.Concat(chain.PathEvidence.Select(evidence => evidence.CoverageLabel))
+                        var boundaryEvidenceTiers = chain.EvidenceTiers.Concat(chain.PathEvidence.Select(evidence => evidence.EvidenceTier)).Concat(boundarySupportFacts.Select(fact => fact.EvidenceTier))
+                            .Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+                        var boundaryCoverageLabels = chain.CoverageLabels.Concat(chain.PathEvidence.Select(evidence => evidence.CoverageLabel)).Concat(boundarySupportFacts.Select(fact => fact.Properties.GetValueOrDefault("coverageLabel") ?? UnknownCoverage))
                             .Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
                         var boundary = new WebFormsModernizationDownstreamBoundary(
                             HashId("boundary", [chain.ChainId, terminalKind, terminalEvidenceId]),
@@ -840,9 +865,9 @@ public static class WebFormsModernizationPacketReporter
                             terminalEvidenceId,
                             chain.Classification,
                             chain.LegacyPathId,
-                            chain.Evidence,
+                            boundaryEvidence,
                             chain.PathEvidence,
-                            chain.SupportingFactIds,
+                            boundarySupportingFactIds,
                             chain.SupportingEdgeIds,
                             boundaryRuleIds,
                             boundaryEvidenceTiers,
@@ -1294,7 +1319,12 @@ public static class WebFormsModernizationPacketReporter
             evidence.ExtractorVersion,
             SplitIds(fact.Properties.GetValueOrDefault("supportingFactIds")).Append(fact.FactId)
                 .Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
-            evidence.Limitations));
+            evidence.Limitations)
+        {
+            SafeMetadata = new SortedDictionary<string, string>(new[] { "controlPrefix", "controlType", "registrationAssembly", "registrationNamespace", "registrationState" }
+                .Where(fact.Properties.ContainsKey)
+                .ToDictionary(key => key, key => SafeIdentity(fact.Properties[key]) ?? "unavailable", StringComparer.Ordinal), StringComparer.Ordinal)
+        });
     }
 
     private static void AddPathGap(List<WebFormsModernizationGap> gaps, int maxGaps, Snapshot snapshot, CombinedPathGap gap)
@@ -1349,6 +1379,51 @@ public static class WebFormsModernizationPacketReporter
             _ => "NoBackendEvidence"
         };
 
+    private static WebFormsNextEvidence NextEvidence(
+        string? terminalKind,
+        CodeFact? handler,
+        WebFormsModernizationTraversalObservation? traversal,
+        IReadOnlyList<WebFormsModernizationCallEvidence> calls)
+    {
+        if (terminalKind is not null)
+        {
+            return new("none", [], []);
+        }
+
+        var targets = calls
+            .Where(call => call.Resolution != "compiler-resolved" || call.TechnologyFamily == "unresolved")
+            .Select(call => call.CalleeName)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .Take(32)
+            .ToArray();
+        if (handler is null)
+        {
+            return new("handler-source-or-binding", targets, ["linked-code-behind-or-inherited-handler-declaration"]);
+        }
+        if (traversal?.Truncated == true)
+        {
+            return new(
+                "traversal-bound",
+                targets,
+                traversal.TruncationReasons.Select(reason => $"increase-or-inspect-{reason}-bound").OrderBy(value => value, StringComparer.Ordinal).ToArray());
+        }
+        if (targets.Length > 0)
+        {
+            return new("semantic-call-resolution", targets, ["project-or-assembly-input-containing-the-listed-call-targets"]);
+        }
+        if (traversal?.LeafSourceAvailabilityStates.Contains("no-exact-declaration-or-body-evidence-retained", StringComparer.Ordinal) == true)
+        {
+            return new("declaration-source", [], ["exact-declaration-or-body-source-for-the-retained-leaf"]);
+        }
+        if (traversal?.LeafCallEvidenceStates.Contains("method-invocation-source-retained-without-call-fact", StringComparer.Ordinal) == true)
+        {
+            return new("downstream-call-edge", [], ["call-edge-evidence-for-the-retained-leaf-invocation"]);
+        }
+        return new("terminal-classification", [], ["supported-terminal-evidence-or-a-specific-unresolved-frontier"]);
+    }
+
     private static WebFormsModernizationGap CreateGeneratedGap(
         Snapshot snapshot,
         string classification,
@@ -1370,7 +1445,7 @@ public static class WebFormsModernizationPacketReporter
             null,
             null,
             "WebFormsModernizationPacketReporter",
-            "webforms-modernization-packet/1.0.0",
+            "webforms-modernization-packet/1.1.0",
             supporting,
             ["The packet failed closed because required evidence was unavailable or bounded by a deterministic limit."]);
     }
@@ -1455,25 +1530,25 @@ public static class WebFormsModernizationPacketReporter
             if (inputLimit is null)
             {
                 var retainedIds = facts.Select(fact => fact.FactId).ToHashSet(StringComparer.Ordinal);
-                var referencedCallIds = facts
+                var referencedFactIds = facts
                     .Where(fact => fact.FactType == FactTypes.WebFormsEventFlowProjected)
-                    .SelectMany(fact => SplitIds(fact.Properties.GetValueOrDefault("supportingEdgeIds")))
+                    .SelectMany(fact => SplitIds(fact.Properties.GetValueOrDefault("supportingFactIds"))
+                        .Concat(SplitIds(fact.Properties.GetValueOrDefault("supportingEdgeIds"))))
                     .Where(id => !retainedIds.Contains(id))
                     .Distinct(StringComparer.Ordinal)
                     .OrderBy(id => id, StringComparer.Ordinal)
                     .ToArray();
-                foreach (var batch in referencedCallIds.Chunk(400))
+                foreach (var batch in referencedFactIds.Chunk(400))
                 {
                     await using var command = connection.CreateCommand();
-                    var parameters = batch.Select((_, index) => "$call" + index).ToArray();
+                    var parameters = batch.Select((_, index) => "$fact" + index).ToArray();
                     command.CommandText = $$"""
                     select fact_id, scan_id, repo, commit_sha, project_path, fact_type, rule_id, evidence_tier,
                            source_symbol, target_symbol, contract_element, file_path, start_line, end_line,
                            snippet_hash, extractor_id, extractor_version, properties_json,
                            {{CombinedDependencyPathReporter.TextByteCountSql("fact_id", "scan_id", "repo", "commit_sha", "project_path", "fact_type", "rule_id", "evidence_tier", "source_symbol", "target_symbol", "contract_element", "file_path", "snippet_hash", "extractor_id", "extractor_version", "properties_json")}}
-                    from facts where fact_type = $callEdgeType and fact_id in ({{string.Join(",", parameters)}}) order by fact_id;
+                    from facts where fact_id in ({{string.Join(",", parameters)}}) order by fact_id;
                     """;
-                    command.Parameters.AddWithValue("$callEdgeType", FactTypes.CallEdge);
                     for (var index = 0; index < batch.Length; index++)
                         command.Parameters.AddWithValue(parameters[index], batch[index]);
                     await using var reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -1565,7 +1640,7 @@ public static class WebFormsModernizationPacketReporter
             var traversal = chain.TraversalObservation is null
                 ? "traversal observation unavailable"
                 : $"traversal `{chain.TraversalObservation.StopState}` (reached nodes {chain.TraversalObservation.ReachedNodeCount}, traversed edges {chain.TraversalObservation.TraversedEdgeCount}, downstream edges {chain.TraversalObservation.DownstreamEdgeCount}, truncation reasons {truncationReasons}); call evidence `{chain.TraversalObservation.CallEvidenceState}` (handler-owned call edges {chain.TraversalObservation.HandlerOwnedCallEvidenceCount}); terminal-free shapes (leaf node kinds {MarkdownValues(chain.TraversalObservation.LeafNodeKinds)}, leaf surface kinds {MarkdownValues(chain.TraversalObservation.LeafSurfaceKinds)}, leaf rules {MarkdownValues(chain.TraversalObservation.LeafRuleIds)}, leaf tiers {MarkdownValues(chain.TraversalObservation.LeafEvidenceTiers)}, leaf reconciliation states {MarkdownValues(chain.TraversalObservation.LeafReconciliationStates)}, leaf call evidence states {MarkdownValues(chain.TraversalObservation.LeafCallEvidenceStates)}, leaf source availability states {MarkdownValues(chain.TraversalObservation.LeafSourceAvailabilityStates)}, frontier node kinds {MarkdownValues(chain.TraversalObservation.FrontierNodeKinds)}, frontier surface kinds {MarkdownValues(chain.TraversalObservation.FrontierSurfaceKinds)}, frontier rules {MarkdownValues(chain.TraversalObservation.FrontierRuleIds)}, traversed edge kinds {MarkdownValues(chain.TraversalObservation.TraversedEdgeKinds)}, traversed rules {MarkdownValues(chain.TraversalObservation.TraversedRuleIds)}, shape sets truncated `{chain.TraversalObservation.DiagnosticShapesTruncated}`)";
-            b.AppendLine($"- `{chain.ChainId}` — `{chain.EventSourceId}` -> `{chain.HandlerId ?? "handler-unavailable"}` -> `{chain.TerminalKind ?? "terminal-unavailable"}`; classification `{chain.Classification}`; {traversal}; supporting facts {string.Join(", ", chain.SupportingFactIds.Select(id => $"`{id}`"))}.");
+            b.AppendLine($"- `{chain.ChainId}` — `{chain.EventSourceId}` -> `{chain.HandlerId ?? "handler-unavailable"}` -> `{chain.TerminalKind ?? "terminal-unavailable"}`; classification `{chain.Classification}`; {traversal}; next evidence `{chain.NextEvidenceKind}` (targets {MarkdownValues(chain.UnresolvedCallTargets)}, inputs {MarkdownValues(chain.NextEvidenceInputs)}); supporting facts {string.Join(", ", chain.SupportingFactIds.Select(id => $"`{id}`"))}.");
         }
         b.AppendLine().AppendLine("## Downstream boundaries").AppendLine();
         if (packet.DownstreamBoundaries.Count == 0) b.AppendLine("- No supported downstream boundary was composed; this is not proof of absence.");
@@ -1597,7 +1672,7 @@ public static class WebFormsModernizationPacketReporter
         b.AppendLine().AppendLine("## Gaps").AppendLine();
         if (packet.Gaps.Count == 0) b.AppendLine("- No packet gaps were emitted within the bounded inputs; this is not a completeness claim.");
         foreach (var gap in packet.Gaps)
-            b.AppendLine($"- `{gap.GapId}` — `{gap.Classification}`, rule `{gap.RuleId}`, tier `{gap.EvidenceTier}`, coverage `{gap.CoverageLabel}`, supporting facts {string.Join(", ", gap.SupportingFactIds.Select(id => $"`{id}`"))}.");
+            b.AppendLine($"- `{gap.GapId}` — `{gap.Classification}`, rule `{gap.RuleId}`, tier `{gap.EvidenceTier}`, coverage `{gap.CoverageLabel}`, metadata {MarkdownValues(gap.SafeMetadata.Select(item => $"{item.Key}={item.Value}").ToArray())}, supporting facts {string.Join(", ", gap.SupportingFactIds.Select(id => $"`{id}`"))}.");
         b.AppendLine().AppendLine("## Owner questions").AppendLine();
         foreach (var question in packet.OwnerQuestions) b.AppendLine($"- {question}");
         b.AppendLine().AppendLine("## Limitations and non-claims").AppendLine();
@@ -1885,6 +1960,8 @@ public static class WebFormsModernizationPacketReporter
     }
 
     private static string? SafeIdentity(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Length <= 256 ? value : HashId("identity", [value]);
+
+    private sealed record WebFormsNextEvidence(string Kind, IReadOnlyList<string> Targets, IReadOnlyList<string> Inputs);
     private static string SafeKind(string? value, string fallback) => string.IsNullOrWhiteSpace(value) || value.Length > 96 ? fallback : value;
     private static string BoundaryCategory(string surfaceKind, CombinedPathNode? terminalNode) => surfaceKind switch
     {

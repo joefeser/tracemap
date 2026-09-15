@@ -4156,6 +4156,18 @@ rules:
       - Creation candidates prove syntax presence only; constructor identity, executed constructor, and runtime allocation are not claimed.
       - In an otherwise semantically analyzed file, this rule is used only when the created type is known but its constructor is unresolved, and a `CallSiteSemanticResolutionUnavailable` Tier4 gap accompanies it.
 
+  - id: vb.syntax.database-operation.v1
+    name: Visual Basic syntax database operation
+    description: Bounded syntax-only database-operation candidates where a Visual Basic `Fill` invocation has a receiver declared with an explicit supported ADO.NET data-adapter type.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - DatabaseOperationCandidate
+    limitations:
+      - The receiver type is explicit source syntax, not a compiler-resolved type; aliases, shadowing, inheritance, provider identity, and successful binding are not established.
+      - Only `DbDataAdapter`, `SqlDataAdapter`, `OleDbDataAdapter`, and `OdbcDataAdapter` receiver declarations are recognized; name-only `Fill` calls and custom adapter types are not classified.
+      - The fact does not retain or infer SQL text, connection identity, table identity, runtime reachability, branch feasibility, or successful execution.
+      - Emission is bounded by the Visual Basic syntax fallback per-file fact budget and remains reduced syntax coverage.
+
   - id: build.environment.target-framework.v1
     name: Build environment target framework diagnostics
     description: Records static target framework declarations that may explain required reference assemblies or SDK families for semantic analysis.

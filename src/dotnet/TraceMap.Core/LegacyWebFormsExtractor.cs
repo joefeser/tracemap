@@ -119,7 +119,7 @@ public static partial class LegacyWebFormsExtractor
 
             foreach (var gap in page.Gaps)
             {
-                facts.Add(CreateGap(manifest, gap.FilePath ?? page.FilePath, gap.Line, gap.GapKind, gap.Message));
+                facts.Add(CreateGap(manifest, gap.FilePath ?? page.FilePath, gap.Line, gap.GapKind, gap.Message, metadata: gap.Metadata));
             }
 
             AddAutoWireupFacts(manifest, page, context, evidenceIndex, facts);
@@ -424,7 +424,19 @@ public static partial class LegacyWebFormsExtractor
                         assemblyRegistrationPresent
                             ? "A namespace/assembly registration could not be matched to one scoped syntax-visible type and project assembly; the categorical gap identifies the failed evidence boundary."
                             : "A prefixed server control has no supported static Register directive in this markup file.",
-                        line));
+                        line,
+                        Metadata: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                        {
+                            ["controlPrefix"] = controlPrefix,
+                            ["controlType"] = controlType,
+                            ["registrationAssembly"] = assemblyRegistrations.Select(item => item.AssemblyName).Where(value => value is not null).Distinct(StringComparer.Ordinal).Count() == 1
+                                ? assemblyRegistrations.Select(item => item.AssemblyName).First(value => value is not null)!
+                                : string.Empty,
+                            ["registrationNamespace"] = assemblyRegistrations.Select(item => item.NamespaceName).Where(value => value is not null).Distinct(StringComparer.Ordinal).Count() == 1
+                                ? assemblyRegistrations.Select(item => item.NamespaceName).First(value => value is not null)!
+                                : string.Empty,
+                            ["registrationState"] = assemblyRegistrationPresent ? assemblyGapKind : "register-directive-unavailable"
+                        }));
                 }
                 foreach (var (name, value) in attrs.OrderBy(pair => pair.Key, StringComparer.Ordinal))
                 {
@@ -3625,7 +3637,8 @@ public static partial class LegacyWebFormsExtractor
         int line,
         string gapKind,
         string message,
-        IReadOnlyList<string>? supportingFactIds = null)
+        IReadOnlyList<string>? supportingFactIds = null,
+        IReadOnlyDictionary<string, string>? metadata = null)
     {
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
@@ -3636,6 +3649,10 @@ public static partial class LegacyWebFormsExtractor
         };
         if (supportingFactIds is { Count: > 0 })
             properties["supportingFactIds"] = string.Join(",", supportingFactIds.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal));
+        foreach (var item in metadata ?? new Dictionary<string, string>())
+        {
+            if (!string.IsNullOrWhiteSpace(item.Value)) properties[item.Key] = item.Value;
+        }
 
         return FactFactory.Create(
             manifest,
@@ -4927,7 +4944,12 @@ public static partial class LegacyWebFormsExtractor
         ExplicitControlSubscription
     }
 
-    private sealed record WebFormsGap(string GapKind, string Message, int Line, string? FilePath = null);
+    private sealed record WebFormsGap(
+        string GapKind,
+        string Message,
+        int Line,
+        string? FilePath = null,
+        IReadOnlyDictionary<string, string>? Metadata = null);
 
     private sealed record WebFormsCodeFile(
         string FilePath,

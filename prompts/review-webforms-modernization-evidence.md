@@ -37,6 +37,12 @@ external systems, or infer private identities.
 - Separate systemic extractor/coverage gaps from page-specific application
   questions.
 - Never convert an evidence gap into a negative conclusion.
+- Describe `.ashx` artifacts as HTTP handlers unless retained contract evidence
+  establishes a stronger API classification.
+- When requesting more evidence, name the unresolved call targets, declaring
+  types, assemblies, source-availability states, or traversal bounds retained
+  in the packet. Do not replace a precise frontier with generic advice to add
+  assemblies or source.
 
 ## Deliverable
 
@@ -64,5 +70,6 @@ Produce a bounded Markdown assessment with these sections:
 Do not provide a total migration estimate, declare conversion feasible or
 safe, create tickets, recommend production changes, or claim that static paths
 executed at runtime. End with the smallest additional evidence request that
-would materially change the assessment.
-
+would materially change the assessment. The final stdout response must contain
+the complete eight-section Markdown assessment; do not return only a summary,
+plan-file path, or pointer to another artifact.

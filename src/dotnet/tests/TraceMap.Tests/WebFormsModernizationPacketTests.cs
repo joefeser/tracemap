@@ -801,6 +801,9 @@ public sealed class WebFormsModernizationPacketTests
         var unjoinedCall = Assert.Single(unjoined.CallEvidence);
         Assert.Equal("syntax-only", unjoinedCall.Resolution);
         Assert.Equal("unresolved", unjoinedCall.TechnologyFamily);
+        Assert.Equal("semantic-call-resolution", unjoined.NextEvidenceKind);
+        Assert.Contains(unjoinedCall.CalleeName, unjoined.UnresolvedCallTargets);
+        Assert.Contains("project-or-assembly-input-containing-the-listed-call-targets", unjoined.NextEvidenceInputs);
         Assert.False(string.IsNullOrWhiteSpace(unjoinedCall.CallSiteId));
         Assert.Contains("SymbolCandidate", unjoined.TraversalObservation?.LeafNodeKinds ?? []);
         Assert.Contains(EvidenceTiers.Tier2Structural, unjoined.TraversalObservation?.LeafEvidenceTiers ?? []);
@@ -825,6 +828,7 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Contains("method-invocation-source-retained-without-call-fact", downstream.TraversalObservation?.LeafCallEvidenceStates ?? []);
         Assert.Contains("exact-method-declaration-and-body-evidence-retained", downstream.TraversalObservation?.LeafSourceAvailabilityStates ?? []);
         Assert.False(downstream.TraversalObservation?.DiagnosticShapesTruncated);
+        Assert.Equal("downstream-call-edge", downstream.NextEvidenceKind);
         var terminal = packet.EventChains.Single(chain => chain.HandlerFactId == handlers[3].FactId);
         Assert.Equal("supported-terminal-reached", terminal.TraversalObservation?.StopState);
         Assert.True(terminal.TraversalObservation?.TerminalPathCount > 0);
@@ -832,6 +836,7 @@ public sealed class WebFormsModernizationPacketTests
         var fill = packet.EventChains.Single(chain => chain.HandlerFactId == handlers[4].FactId);
         Assert.Equal("supported-terminal-reached", fill.TraversalObservation?.StopState);
         Assert.Equal("sql-query", fill.TerminalKind);
+        Assert.Equal("none", fill.NextEvidenceKind);
         Assert.Contains(fill.SupportingFactIds, id => id.EndsWith(frameworkFill.FactId, StringComparison.Ordinal));
         Assert.Contains(packet.Gaps, gap => gap.Classification == "NoBackendEvidence");
         Assert.Contains(packet.Gaps, gap => gap.Classification == "DownstreamWithoutSupportedTerminal");

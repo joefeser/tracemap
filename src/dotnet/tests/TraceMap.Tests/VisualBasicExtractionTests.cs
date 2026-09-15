@@ -366,6 +366,49 @@ public sealed class VisualBasicExtractionTests
     }
 
     [Fact]
+    public void Projectless_vb_explicit_data_adapter_fill_is_a_reduced_database_candidate()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Query.vb"), """
+            Imports System.Data
+            Imports System.Data.SqlClient
+
+            Public Class Query
+                Public Function Load() As DataSet
+                    Dim adapter As SqlDataAdapter = New SqlDataAdapter()
+                    Dim result As New DataSet()
+                    adapter.Fill(result)
+                    Return result
+                End Function
+
+                Public Sub DoNotGuess(custom As WidgetAdapter)
+                    custom.Fill(New DataSet())
+                End Sub
+
+                Public Sub DoNotBorrowTypeFromAnotherMethod(adapter As Object)
+                    adapter.Fill(New DataSet())
+                End Sub
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var operation = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.DatabaseOperationCandidate
+            && fact.RuleId == RuleIds.VisualBasicSyntaxDatabaseOperation);
+        Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, operation.EvidenceTier);
+        Assert.Equal("data-adapter-fill", operation.Properties["operationKind"]);
+        Assert.Equal("SqlDataAdapter", operation.Properties["receiverType"]);
+        Assert.Equal("reduced-syntax-vb-database-operation", operation.Properties["coverageLabel"]);
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.DatabaseOperationCandidate
+            && fact.Properties.GetValueOrDefault("receiverName") is "custom" or "adapter"
+            && fact.Evidence.StartLine > 12);
+    }
+
+    [Fact]
     public void Failed_vb_project_load_falls_back_to_syntax_facts_with_reduced_coverage()
     {
         using var temp = new TempDirectory();

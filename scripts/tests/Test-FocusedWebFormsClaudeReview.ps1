@@ -49,9 +49,10 @@ try {
     $launcherPath = Join-Path $temp 'corporate-launcher.ps1'
     $launcherArgumentsPath = Join-Path $temp 'launcher-arguments.json'
     $launcherPromptPath = Join-Path $temp 'launcher-prompt.txt'
-    $launcher = @'
+$launcher = @'
 [IO.File]::WriteAllText($env:TRACEMAP_TEST_LAUNCHER_ARGUMENTS, ($args | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))
 [IO.File]::WriteAllText($env:TRACEMAP_TEST_LAUNCHER_PROMPT, (@($input) -join "`n"), [Text.UTF8Encoding]::new($false))
+Write-Output '# Complete evidence assessment'
 $global:LASTEXITCODE = 0
 '@
     [IO.File]::WriteAllText($launcherPath, $launcher, [Text.UTF8Encoding]::new($false))
@@ -71,6 +72,12 @@ $global:LASTEXITCODE = 0
     $launcherPrompt = [IO.File]::ReadAllText($launcherPromptPath)
     if (!$launcherPrompt.Contains('# Review Web Forms modernization evidence', [StringComparison]::Ordinal)) {
         throw 'Corporate launcher did not receive the multiline prompt through stdin.'
+    }
+    $assessmentPath = Join-Path $temp 'agent-reviews/claude-evidence-review.md'
+    $assessmentExists = Test-Path -LiteralPath $assessmentPath -PathType Leaf
+    $assessmentRetained = $assessmentExists -and [IO.File]::ReadAllText($assessmentPath).Contains('# Complete evidence assessment', [StringComparison]::Ordinal)
+    if (!$assessmentRetained -or $launcherOutput -notcontains 'claudeAssessment=agent-reviews/claude-evidence-review.md') {
+        throw 'Corporate launcher did not retain its completed assessment under the review root.'
     }
 
     [IO.File]::AppendAllText((Join-Path $temp 'workbench/application-handoff.json'), 'changed')

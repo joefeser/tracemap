@@ -82,13 +82,32 @@ preserves the repeated evidence-directory arguments and plan mode, adds
 `--print`, and pipes the multiline checked-in prompt through stdin to avoid BAT
 quoting and Windows command-line-length hazards. The default invocation remains
 the normal interactive `claude` command when `-ClaudeLauncherPath` is omitted.
+The complete stdout assessment is retained at
+`agent-reviews/claude-evidence-review.md` under the review root; a missing or
+empty response fails closed instead of reporting a successful handoff.
 Use forward slashes inside `webforms-review.jsonc`; use a native backslash path
 for this PowerShell launcher parameter. The script also normalizes a drive path
 that was supplied with forward slashes before checking it.
 
 Do not add the application source directory on the first pass. If the evidence
 review produces a precise source question, start a separately authorized
-follow-up with the minimum required source scope.
+follow-up with the minimum required source scope:
+
+```powershell
+.\scripts\Start-FocusedWebFormsClaudeSourceReview.ps1 `
+  -ReviewRoot $ReviewRoot `
+  -SourceRoot $SourceRoot `
+  -SourceRelativePath @('Pages/Selected.aspx', 'Pages/Selected.aspx.vb') `
+  -ClaudeLauncherPath 'C:\path\to\approved-corporate-launcher.bat'
+```
+
+This separate command accepts 1–12 explicit relative files under one source
+root, permits only Web Forms markup and C#/VB source extensions, caps each file
+at 2 MiB and the selection at 8 MiB, stages aliased copies in a temporary
+directory, and deletes that directory after Claude exits. It never grants the
+whole source root. Its complete response is retained at
+`agent-reviews/claude-selected-source-review.md`. Source-assisted conclusions
+remain separate from compiler-resolved TraceMap evidence.
 
 ## Expected answer
 
