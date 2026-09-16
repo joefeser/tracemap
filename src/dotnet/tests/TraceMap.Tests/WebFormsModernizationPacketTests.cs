@@ -849,6 +849,102 @@ public sealed class WebFormsModernizationPacketTests
     }
 
     [Fact]
+    public async Task Projectless_vb_local_receiver_bridge_reaches_unique_semantic_backend_terminal()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("FailedOrPartial") with { AnalysisLevel = "Level1SemanticAnalysisReduced" };
+        const string surface = "webforms-surface:vb-projectless";
+        const string handlerSymbol = "Sample.Feedback.Submit_Click(Object, System.EventArgs)";
+        const string backendMethod = "BusinessLayer.BusinessObject.InsertFeedback(String)";
+        var page = Fact(manifest, FactTypes.WebFormsPageDeclared, RuleIds.LegacyWebFormsInventory, "WebApplication/Feedback.aspx", 1,
+            source: surface, target: "Sample.Feedback", contract: "Feedback.aspx",
+            ("surfaceIdentity", surface), ("directiveKind", "Page"), ("coverageLabel", "bounded-static-webforms-inventory"));
+        var binding = Fact(manifest, FactTypes.WebFormsEventBindingDeclared, RuleIds.LegacyWebFormsEventBinding, "WebApplication/Feedback.aspx", 8,
+            source: "control:submit", target: "handler:submit", contract: "Submit_Click",
+            ("surfaceIdentity", surface), ("eventSourceIdentity", "control:submit"), ("eventName", "OnClick"),
+            ("controlId", "submit"), ("handlerName", "Submit_Click"), ("markupFile", "WebApplication/Feedback.aspx"),
+            ("coverageLabel", "bounded-static-webforms-event"));
+        var handler = Fact(manifest, FactTypes.WebFormsHandlerResolved, RuleIds.LegacyWebFormsHandlerResolution, "WebApplication/Feedback.aspx.vb", 20,
+            source: "control:submit", target: "handler:submit", contract: "Submit_Click",
+            ("surfaceIdentity", surface), ("bindingFactId", binding.FactId), ("handlerSymbolId", "handler:submit"),
+            ("handlerSymbol", handlerSymbol), ("handlerName", "Submit_Click"), ("controlId", "submit"),
+            ("eventName", "OnClick"), ("markupFile", "WebApplication/Feedback.aspx"),
+            ("coverageLabel", "reduced-static-webforms-handler"));
+        var creation = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph, "WebApplication/Feedback.aspx.vb", 22,
+            source: "Submit_Click", target: "BusinessObject", contract: "BusinessObject",
+            ("assignedTo", "bl"), ("callKind", "SyntaxObjectCreation"), ("calleeContainingType", "BusinessObject"),
+            ("calleeName", "BusinessObject"), ("callerName", "Submit_Click"), ("coverageLabel", "syntax-only"));
+        var invocation = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph, "WebApplication/Feedback.aspx.vb", 23,
+            source: "Submit_Click", target: "InsertFeedback", contract: "InsertFeedback",
+            ("argumentCount", "1"), ("callKind", "SyntaxInvocation"), ("calleeName", "InsertFeedback"),
+            ("callerName", "Submit_Click"), ("coverageLabel", "syntax-only"), ("receiverName", "bl"));
+        var declaration = FactFactory.Create(
+            manifest,
+            FactTypes.MethodDeclared,
+            RuleIds.VisualBasicSemanticDeclarations,
+            EvidenceTiers.Tier1Semantic,
+            new("BusinessLayer/BusinessObject.vb", 10, 10, null, "SyntheticFixture", ScannerVersions.VisualBasicSemanticExtractor),
+            sourceSymbol: "BusinessLayer.BusinessObject",
+            targetSymbol: backendMethod,
+            contractElement: "InsertFeedback",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["containingType"] = "BusinessLayer.BusinessObject",
+                ["methodName"] = "InsertFeedback",
+                ["parameterCount"] = "1"
+            });
+        var downstream = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSemanticCallGraph, "BusinessLayer/BusinessObject.vb", 12,
+            source: backendMethod, target: "BusinessLayer.FeedbackQuery.Insert(String)", contract: "Insert",
+            ("callKind", "SemanticMethodInvocation"), ("coverageLabel", "bounded-static-call"));
+        var terminal = Fact(manifest, FactTypes.QueryPatternDetected, RuleIds.CSharpSyntaxQueryPattern, "BusinessLayer/FeedbackQuery.vb", 30,
+            source: "BusinessLayer.FeedbackQuery.Insert(String)", target: "feedback-query-shape", contract: "query",
+            ("operationName", "INSERT"), ("tableName", "feedback"), ("columnNames", "comment"),
+            ("sqlSourceKind", "literal-string"), ("queryShapeHash", "feedback-shape-hash"),
+            ("coverageLabel", "bounded-static-query"));
+        var flow = Fact(manifest, FactTypes.WebFormsEventFlowProjected, RuleIds.LegacyWebFormsEventFlow, "WebApplication/Feedback.aspx.vb", 20,
+            source: handlerSymbol, target: "flow-terminal-unavailable", contract: "Submit_Click",
+            ("supportingFactIds", $"{handler.FactId},{creation.FactId},{invocation.FactId}"),
+            ("supportingEdgeIds", $"{creation.FactId},{invocation.FactId}"), ("flowClassification", "UnknownAnalysisGap"),
+            ("coverageLabel", "reduced-static-webforms-flow"));
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, manifest, [page, binding, handler, creation, invocation, declaration, downstream, terminal, flow]);
+
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(index, Path.Combine(temp.Path, "output")));
+
+        var chain = Assert.Single(packet.EventChains);
+        Assert.Equal("sql-query", chain.TerminalKind);
+        Assert.True(chain.TraversalObservation?.TerminalPathCount > 0);
+        Assert.Contains("projectless-vb-receiver-bridge", chain.TraversalObservation?.TraversedEdgeKinds ?? []);
+        Assert.Contains("combined.paths.projectless-vb-receiver-bridge.v1", chain.TraversalObservation?.TraversedRuleIds ?? []);
+
+        var competingDeclaration = FactFactory.Create(
+            manifest,
+            FactTypes.MethodDeclared,
+            RuleIds.VisualBasicSemanticDeclarations,
+            EvidenceTiers.Tier1Semantic,
+            new("AlternateBusinessLayer/BusinessObject.vb", 10, 10, null, "SyntheticFixture", ScannerVersions.VisualBasicSemanticExtractor),
+            sourceSymbol: "AlternateBusinessLayer.BusinessObject",
+            targetSymbol: "AlternateBusinessLayer.BusinessObject.InsertFeedback(String)",
+            contractElement: "InsertFeedback",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["containingType"] = "AlternateBusinessLayer.BusinessObject",
+                ["methodName"] = "InsertFeedback",
+                ["parameterCount"] = "1"
+            });
+        var ambiguousIndex = Path.Combine(temp.Path, "ambiguous-index.sqlite");
+        SqliteIndexWriter.Write(ambiguousIndex, manifest,
+            [page, binding, handler, creation, invocation, declaration, competingDeclaration, downstream, terminal, flow]);
+
+        var ambiguousPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(ambiguousIndex, Path.Combine(temp.Path, "ambiguous-output")));
+
+        var ambiguousChain = Assert.Single(ambiguousPacket.EventChains);
+        Assert.Null(ambiguousChain.TerminalKind);
+        Assert.DoesNotContain("projectless-vb-receiver-bridge", ambiguousChain.TraversalObservation?.TraversedEdgeKinds ?? []);
+    }
+
+    [Fact]
     public async Task Handler_owned_canonical_call_support_seeds_exact_closure_and_continues_to_a_terminal()
     {
         using var temp = new TempDirectory();

@@ -809,10 +809,12 @@ public static class VisualBasicSyntaxExtractor
                     targetSymbol: invocationName,
                     new SortedDictionary<string, string>(StringComparer.Ordinal)
                     {
+                        ["argumentCount"] = (invocation.ArgumentList?.Arguments.Count ?? 0).ToString(),
                         ["callKind"] = "SyntaxInvocation",
                         ["calleeName"] = invocationName,
                         ["callerName"] = containingMember ?? string.Empty,
-                        ["coverageLabel"] = "syntax-only"
+                        ["coverageLabel"] = "syntax-only",
+                        ["receiverName"] = GetInvocationReceiverName(invocation.Expression) ?? string.Empty
                     },
                     budget,
                     sourceSymbol: containingMember))

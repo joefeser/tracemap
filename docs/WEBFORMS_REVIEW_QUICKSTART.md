@@ -68,6 +68,13 @@ three honest roots, choose the narrowest common parent for one field; do not
 invent a project or flatten the source tree. In `projects` mode,
 `projectRelativePaths` is the array of explicit `.csproj`/`.vbproj` paths.
 
+For a mixed legacy layout where the Web Forms Web Site is projectless but a
+sibling business or data layer has a real project, set `sourceRoot` to their
+common parent and use `projects` mode for the compiled sibling. The loose Web
+Site files still receive syntax fallback; the selected sibling project receives
+semantic analysis. Do not use `projectless` mode for this layout because that
+would intentionally omit semantic project loading.
+
 Page selection mode `all` retains every discovered Web Forms surface up to the
 documented 1,000-surface bound. Mode `selected` uses the explicit `forms` array.
 

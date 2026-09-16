@@ -47,6 +47,37 @@ the three folder boundaries or try `discover`. If `discover` reports
 }
 ```
 
+An old projectless Web Site can still call a compiled sibling VB project. When
+the authorized source tree has this shape, keep the Web Site under syntax
+fallback and explicitly load the sibling project for semantic evidence:
+
+```text
+sourceRoot/
+├── WebApplication/
+│   └── Application.sln
+└── BusinessLayer/
+    └── BusinessLayer.vbproj
+```
+
+Use `sourceRoot` as the common parent, make one of the three folder scopes cover
+`BusinessLayer`, and select the real project directly:
+
+```json
+{
+  "mode": "projects",
+  "solutionRelativePath": "",
+  "projectRelativePaths": ["BusinessLayer/BusinessLayer.vbproj"]
+}
+```
+
+TraceMap will not invent a project for `WebApplication`. Its loose `.vb` files
+remain Tier3 syntax evidence. For the bounded pattern `Dim bl As New
+BusinessObject` followed by `bl.InsertFeedback(value)`, the path reporter may
+join that call to one Tier1 method declaration from the loaded sibling project
+only when receiver type, method name, and argument count identify exactly one
+candidate. The resulting hop is Tier2 review evidence, not compiler resolution;
+missing or ambiguous candidates remain explicit gaps.
+
 After changing a config that already produced a failed pre-scan receipt, remove
 only `run-receipt.json` and rerun the pipeline. This is safe only when `scan/`,
 `packet/`, `evidence-docs/`, and `workbench/` were never created. If a retained

@@ -25,7 +25,8 @@ public sealed class VisualBasicExtractionTests
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.MethodDeclared
             && fact.RuleId == RuleIds.VisualBasicSemanticDeclarations
-            && fact.ContractElement == "Fulfill");
+            && fact.ContractElement == "Fulfill"
+            && fact.Properties["parameterCount"] == "1");
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.PropertyDeclared
             && fact.ContractElement == "CustomerCode"
@@ -325,6 +326,8 @@ public sealed class VisualBasicExtractionTests
             && fact.RuleId == RuleIds.VisualBasicSyntaxCallGraph
             && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
             && fact.Properties["callKind"] == "SyntaxInvocation"
+            && fact.Properties["receiverName"] == "factory"
+            && fact.Properties["argumentCount"] == "0"
             && fact.Properties["coverageLabel"] == "syntax-only");
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.ObjectCreated

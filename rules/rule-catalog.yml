@@ -3235,6 +3235,21 @@ rules:
       - Ambiguous same-name candidates must remain gaps or review evidence rather than arbitrary strong links.
       - Reconciliation does not prove runtime dispatch, dependency injection binding, reflection targets, branch feasibility, serializer behavior, or SQL execution.
 
+  - id: combined.paths.projectless-vb-receiver-bridge.v1
+    name: Projectless Visual Basic local-receiver bridge
+    description: Derives an in-memory review-tier path edge from a handler-owned syntax-only VB invocation to a unique semantic VB method declaration when a single preceding local object creation identifies the receiver type and the method name and argument count also match.
+    evidenceTier: Tier2Structural
+    emits:
+      - projectless-vb-receiver-bridge path edge
+      - ProjectlessVisualBasicReceiverCreationAmbiguous gap
+      - ProjectlessVisualBasicReceiverTargetUnavailable gap
+      - ProjectlessVisualBasicReceiverTargetAmbiguous gap
+    limitations:
+      - The bridge is source-index-local and applies only to handler-owned syntax projections with a directly retained local receiver creation in the same file and member.
+      - The bridge does not perform compiler binding for the projectless caller and does not infer field, property, factory, dependency-injection, late-bound, reflection, or reassigned receiver targets.
+      - Type matching uses a case-insensitive simple VB type name plus method name and exact argument and parameter counts; zero or multiple matching semantic declarations remain explicit gaps.
+      - A bridge is static review evidence only and does not prove runtime dispatch, branch feasibility, database execution, or successful binding.
+
   - id: combined.paths.query-gap.v1
     name: Combined dependency path query gap
     description: Emits query-level path gaps such as selector misses, no matching terminal surfaces, and coverage-relative no-path outcomes.
