@@ -89,6 +89,42 @@ metadata and saved turns. Claude's native JSONL conversation history remains
 machine-local in Claude's configuration directory, so copying only the session
 UUID to another machine does not make that native session portable.
 
+### Why the resume picker can be empty
+
+The corporate launcher uses Claude's non-interactive `--print` mode. Claude
+persists those sessions, but intentionally omits them from the picker shown by
+`claude --resume` with no identifier. Resume them by exact UUID instead. The
+behavior is documented in Claude's
+[session guide](https://code.claude.com/docs/en/sessions). The start wrapper
+records that UUID, so it is not necessary to search the user profile:
+
+```powershell
+$Session = Get-Content `
+  (Join-Path $ReviewRoot 'agent-reviews\claude-session.json') `
+  -Raw | ConvertFrom-Json
+
+$Session.sessionId
+$Session.conversationRoot
+```
+
+`Continue-FocusedWebFormsClaudeReview.ps1` reads those values and invokes
+`--resume <sessionId>` from the original conversation directory. The UUID
+should also match the native JSONL filename beneath Claude's user-level
+`projects` directory. For a session created before TraceMap retained the UUID,
+the following diagnostic lists recent native transcripts:
+
+```powershell
+Get-ChildItem "$env:USERPROFILE\.claude\projects" `
+  -Recurse -File -Filter '*.jsonl' |
+  Sort-Object LastWriteTime -Descending |
+  Select-Object -First 10 LastWriteTime, BaseName, FullName
+```
+
+`BaseName` is normally the session UUID, but timestamp sorting can select an
+unrelated Claude run. Prefer the retained `claude-session.json` for every new
+review. Persistence also requires that neither the launcher nor the environment
+sets `--no-session-persistence` or `CLAUDE_CODE_SKIP_PROMPT_HISTORY`.
+
 ### Corporate BAT/Python launchers
 
 If work policy requires a BAT or Python wrapper for Bedrock, proxy, or SSO,

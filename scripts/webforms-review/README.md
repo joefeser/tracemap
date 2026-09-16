@@ -419,8 +419,8 @@ The Claude handoff does not require the private review or conversation files to
 live in the TraceMap repository. `Start-FocusedWebFormsClaudeReview.ps1`
 defaults the stable conversation directory to `<ReviewRoot>/claude-workspace`
 and accepts `-ConversationRoot` for any other location. It records a session
-UUID under the review root plus session-scoped numbered prompt/response turns under the
-conversation root. Invoke
+UUID under the review root plus session-scoped numbered prompt/response turns
+under the conversation root. Invoke
 `Continue-FocusedWebFormsClaudeReview.ps1` by full path from any working
 directory to resume that exact session without replacing the earlier turn.
 
@@ -428,17 +428,23 @@ directory to resume that exact session without replacing the earlier turn.
 
 | Script | Reads source? | Starts analysis? | Intended use |
 | --- | --- | --- | --- |
+| `Initialize-FocusedWebFormsReview.ps1` | No | No | Create an empty one-root review layout and commented JSONC configuration. |
+| `Invoke-FocusedWebFormsPipeline.ps1` | Yes | Yes, one bounded focused scan | Preferred one-root workflow: validate configuration, scan, create the packet and evidence corpus, publish the workbench, and receipt every stage. |
 | `Invoke-FocusedWebFormsReview.ps1` | Yes | Yes, one bounded focused scan | Initial restricted-workstation collection. |
 | `Invoke-FocusedWebFormsPageListReport.ps1` | No | Existing-index report traversal only | Parameterized page-list packet generation. |
 | `Run-FocusedWebFormsPageList.ps1` | No | Existing-index report traversal only | `-ReviewRoot` derives its retained index and page selection from the review-root configuration; an explicit `-ConfigPath` retains the legacy workstation-config workflow. |
 | `Run-AndTriage-FocusedWebFormsPageList.ps1` | No | Existing-index report traversal only | Run the configured packet and triage only its exact new artifact. |
 | `Test-FocusedWebFormsReviewConfig.ps1` | No | No | Validate JSONC, paths, modes, and one-root layout before scanning. |
 | `Show-FocusedWebFormsReviewStatus.ps1` | No | No | Print fixed retained artifact paths and refresh counts for one review root. |
+| `Show-FocusedWebFormsOutlierSummary.ps1` | No | No | Print receipt-validated alias-only application totals and gap buckets. |
 | `Start-FocusedWebFormsClaudeReview.ps1` | No | No | Validate receipted evidence and launch the bounded downstream prompt in Claude Code plan mode. |
 | `Continue-FocusedWebFormsClaudeReview.ps1` | No | No | Resume the exact retained Claude session from its private conversation root and save a numbered follow-up turn. |
 | `Start-FocusedWebFormsClaudeSourceReview.ps1` | Explicitly selected files only | No | After separate authorization, stage 1–12 explicit source files temporarily and launch a source-assisted review without granting the full source tree. |
 | `New-FocusedWebFormsStandaloneReview.ps1` | No | Existing packet only | Create a new immutable receipted workbench and optionally export one anonymous page from that exact packet. |
+| `Export-FocusedWebFormsPageShareable.ps1` | No | No analysis | Export one alias-only page-path ZIP from the receipted pipeline workbench. |
 | `Export-LatestFocusedWebFormsPageShareable.ps1` | No | No analysis | Map a prior page alias to the newest standalone workbench locally and export the corresponding anonymous page. |
+| `Show-FocusedWebFormsPageTraversalSummary.ps1` | No | No | Map a prior page alias to a receipted standalone review and print bounded traversal counts and states. |
+| `New-FocusedWebFormsPageGraphDump.ps1` | No | No scan; reads retained index evidence | Create a private all-handler graph dump and its separately sanitized anonymous graph ZIP. |
 | `New-FocusedWebFormsBatchInspection.ps1` | No | No scan; reads retained index evidence | Build the private case inventory used by review sets. |
 | `New-FocusedWebFormsCodePathReviewSet.ps1` | Yes, bounded local reads; raw serialization is opt-in | No scan | Generate the normal multi-case HTML review set and `index.md` verdict queue. |
 | `New-FocusedWebFormsCodePathReview.ps1` | Yes, bounded local reads; raw serialization is opt-in | No scan | Generate one case during focused investigation. |
@@ -455,12 +461,17 @@ directory to resume that exact session without replacing the earlier turn.
 | `Summarize-CompletedWebFormsDepths.ps1` | Small bounded comparison of already completed depth 8/10 artifacts. |
 | `Compare-CompletedWebFormsPageTriage.ps1` | Provenance-gated comparison of completed depth reports. |
 | `Compare-FocusedWebFormsDepth.ps1` | Compatibility reader for an explicit depth 8/10/12 set; it never launches deeper runs. |
+| `Resume-FocusedWebFormsReview.ps1` | Legacy retained-scan summary recovery used by the VB battle-test appendix; the one-root pipeline is preferred for new runs. |
 
 ### Collection summaries and narrow diagnostics
 
-| Script family | Purpose |
+| Script | Purpose |
 | --- | --- |
-| `Export-FocusedWebForms*Summary.ps1` | Create sanitized progress, performance, evidence, workspace, and accuracy readbacks from a focused collection. |
+| `Export-FocusedWebFormsProgressSummary.ps1` | Create a sanitized stage-progress readback from a focused collection receipt. |
+| `Export-FocusedWebFormsPerformanceSummary.ps1` | Create a sanitized extractor-timing readback from a focused collection performance receipt. |
+| `Export-FocusedWebFormsEvidenceSummary.ps1` | Create a sanitized evidence and gap-extractor readback from retained scan artifacts. |
+| `Export-FocusedWebFormsWorkspaceSummary.ps1` | Create a sanitized workspace/build-coverage readback for the configured source scopes. |
+| `Export-FocusedWebFormsAccuracySummary.ps1` | Create a sanitized extractor accuracy and coverage readback for the configured source scopes. |
 | `Test-FocusedWebFormsRawEvidence.ps1` | Shared bounded diagnostic engine for exact retained witnesses and private inspections. |
 | `New-FocusedWebFormsLocalInspection.ps1` | Earlier single-handler private JSON inspection. |
 | `New-FocusedWebFormsMethodInspection.ps1` | Private method-hint inspection across retained abstraction layers. |
@@ -476,6 +487,7 @@ From the repository root, the focused synthetic checks are:
 ```powershell
 pwsh -NoProfile -File .\scripts\Invoke-FocusedWebFormsReview.Tests.ps1
 pwsh -NoProfile -File .\scripts\tests\Test-FocusedWebFormsConfiguration.ps1
+pwsh -NoProfile -File .\scripts\tests\Test-FocusedWebFormsDocumentation.ps1
 pwsh -NoProfile -File .\scripts\tests\Test-FocusedWebFormsCodePathReviewSet.ps1
 pwsh -NoProfile -File .\scripts\tests\Test-FocusedWebFormsApplicationWorkbench.ps1
 pwsh -NoProfile -File .\scripts\webforms-review\Test-WitsApplicationReview.ps1

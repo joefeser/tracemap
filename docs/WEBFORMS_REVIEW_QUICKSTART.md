@@ -134,6 +134,12 @@ workbench locations plus counts of immutable report-refresh folders. Timestamped
 refreshes remain beneath the same review root; they are not additional scans
 and should not be selected by guessing a folder.
 
+To pass the completed receipted evidence to a resumable Claude review without
+granting application source access, continue with the
+[Web Forms agent handoff](WEBFORMS_AGENT_HANDOFF.md). The handoff records an
+exact session UUID because non-interactive print-mode sessions do not appear in
+Claude's session picker.
+
 To diagnose one page's bounded traversal without creating another report
 folder or printing its private route, summarize the newest receipted standalone
 review using the page alias from the original pipeline workbench:
