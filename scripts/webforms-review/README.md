@@ -472,6 +472,7 @@ directory to resume that exact session without replacing the earlier turn.
 | `Export-FocusedWebFormsEvidenceSummary.ps1` | Create a sanitized evidence and gap-extractor readback from retained scan artifacts. |
 | `Export-FocusedWebFormsWorkspaceSummary.ps1` | Create a sanitized workspace/build-coverage readback for the configured source scopes. |
 | `Export-FocusedWebFormsAccuracySummary.ps1` | Create a sanitized extractor accuracy and coverage readback for the configured source scopes. |
+| `Debug-FocusedWebFormsPageCallSites.ps1` | Print private per-chain call counts and retained call-site IDs, source spans, kinds, and resolutions for one workbench page. |
 | `Test-FocusedWebFormsRawEvidence.ps1` | Shared bounded diagnostic engine for exact retained witnesses and private inspections. |
 | `New-FocusedWebFormsLocalInspection.ps1` | Earlier single-handler private JSON inspection. |
 | `New-FocusedWebFormsMethodInspection.ps1` | Private method-hint inspection across retained abstraction layers. |
@@ -488,6 +489,7 @@ From the repository root, the focused synthetic checks are:
 pwsh -NoProfile -File .\scripts\Invoke-FocusedWebFormsReview.Tests.ps1
 pwsh -NoProfile -File .\scripts\tests\Test-FocusedWebFormsConfiguration.ps1
 pwsh -NoProfile -File .\scripts\tests\Test-FocusedWebFormsDocumentation.ps1
+pwsh -NoProfile -File .\scripts\tests\Test-FocusedWebFormsPageCallSitesDebug.ps1
 pwsh -NoProfile -File .\scripts\tests\Test-FocusedWebFormsCodePathReviewSet.ps1
 pwsh -NoProfile -File .\scripts\tests\Test-FocusedWebFormsApplicationWorkbench.ps1
 pwsh -NoProfile -File .\scripts\webforms-review\Test-WitsApplicationReview.ps1
