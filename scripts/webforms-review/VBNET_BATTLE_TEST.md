@@ -105,7 +105,9 @@ validates both scan receipts and current Git commits, preserves both source
 commit SHAs, combines the indexes, and creates the final packet, evidence docs,
 workbench, and standard `run-receipt.json`. The bounded VB receiver bridge may
 then join Web Site syntax evidence to one unique semantic method in the other
-index. Start a new empty merged output root for every merge attempt.
+index. If an earlier full-mode input failed after completing its scan, the
+merge may reuse that scan only when its receipted index byte count and SHA-256
+still match. Start a new empty merged output root for every merge attempt.
 
 After changing a config that already produced a failed pre-scan receipt, remove
 only `run-receipt.json` and rerun the pipeline. This is safe only when `scan/`,

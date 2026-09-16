@@ -91,7 +91,10 @@ selection. The backend config uses its own repository as `sourceRoot` and
 `projects` selection with the `.vbproj` path relative to that root. The merge
 validates both scan receipts and Git commits, then generates the final packet,
 evidence docs, workbench, and normal receipt from the combined index. Never use
-the non-Git parent as a fake common source root.
+the non-Git parent as a fake common source root. A prior full-mode run that
+failed after its scan stage may also be used as an input: the merge accepts it
+only when the scan stage is receipted as complete and the retained index still
+matches its recorded byte count and SHA-256.
 
 Page selection mode `all` retains every discovered Web Forms surface up to the
 documented 1,000-surface bound. Mode `selected` uses the explicit `forms` array.

@@ -50,7 +50,7 @@ function Read-ScanInput {
     $receiptHash = Get-BoundedFileHash $receiptPath 16MB
     $receipt = [IO.File]::ReadAllText($receiptPath) | ConvertFrom-Json -Depth 20
     if ($receipt.schemaVersion -ne 'focused-webforms-review-run-receipt.v1' -or
-        $receipt.run.state -ne 'completed' -or
+        $receipt.run.state -notin @('completed', 'failed') -or
         $receipt.stages.scan.state -ne 'completed') {
         throw "WEBFORMS_MERGE_SCAN_RECEIPT_INVALID;label=$Label"
     }
