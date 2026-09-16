@@ -85,6 +85,66 @@ public static partial class CombinedDependencyPathReporter
         }
     }
 
+    internal static async Task<CombinedDependencyPathBuildResult> BuildBoundedCombinedIndexReportWithTraversalAsync(
+        CombinedDependencyPathOptions options,
+        ReportInputBudget budget,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateOptions(options);
+        await using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = options.IndexPath,
+            Mode = SqliteOpenMode.ReadOnly,
+            Cache = SqliteCacheMode.Private,
+            Pooling = false
+        }.ToString()))
+        {
+            await connection.OpenAsync(cancellationToken);
+            if (!await TableExistsAsync(connection, "index_sources", cancellationToken)
+                || !await TableExistsAsync(connection, "combined_facts", cancellationToken))
+            {
+                throw new InvalidDataException("WebFormsModernizationCombinedIndexUnsupported");
+            }
+
+            await AssertCombinedInputLimitAsync(connection, "combined_facts", budget.MaxFacts, "graph-facts", cancellationToken);
+            if (await ViewExistsAsync(connection, "combined_dependency_edges", cancellationToken))
+            {
+                await AssertCombinedInputLimitAsync(connection, "combined_dependency_edges", budget.MaxEdges, "graph-edges", cancellationToken);
+            }
+            await using var bytes = connection.CreateCommand();
+            bytes.CommandText = "select coalesce(sum(length(cast(payload_json as blob))), 0) from combined_facts;";
+            if (Convert.ToInt64(await bytes.ExecuteScalarAsync(cancellationToken)) > budget.MaxTextBytes)
+            {
+                throw new ReportInputLimitException("graph-text-bytes");
+            }
+        }
+
+        var sourcePair = ParseSourcePair(options.SourcePair);
+        var (read, graph) = await BuildGraphAsync(
+            options.IndexPath,
+            sourcePair,
+            options.IncludeLegacyRoots || IsLegacyView(options.View),
+            allowSingleIndex: false,
+            cancellationToken,
+            budget);
+        return BuildReportWithTraversalObservations(options, read, graph, sourcePair);
+    }
+
+    private static async Task AssertCombinedInputLimitAsync(
+        SqliteConnection connection,
+        string objectName,
+        int maximum,
+        string limit,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"select count(*) from {objectName};";
+        if (Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken)) > maximum)
+        {
+            throw new ReportInputLimitException(limit);
+        }
+    }
+
     internal static string TextByteCountSql(params string[] columns) =>
         string.Join(" + ", columns.Select(column => $"coalesce(length(cast({column} as blob)), 0)"));
 

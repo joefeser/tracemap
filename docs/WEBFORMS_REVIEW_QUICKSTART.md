@@ -69,11 +69,29 @@ invent a project or flatten the source tree. In `projects` mode,
 `projectRelativePaths` is the array of explicit `.csproj`/`.vbproj` paths.
 
 For a mixed legacy layout where the Web Forms Web Site is projectless but a
-sibling business or data layer has a real project, set `sourceRoot` to their
-common parent and use `projects` mode for the compiled sibling. The loose Web
-Site files still receive syntax fallback; the selected sibling project receives
-semantic analysis. Do not use `projectless` mode for this layout because that
-would intentionally omit semantic project loading.
+sibling business or data layer has a real project in the same Git repository,
+set `sourceRoot` to their common repository root and use `projects` mode for the
+compiled sibling. The loose Web Site files still receive syntax fallback; the
+selected sibling project receives semantic analysis.
+
+When those folders are separate Git repositories under a non-Git parent, use
+two configs and preserve their provenance independently:
+
+```powershell
+.\scripts\Invoke-FocusedWebFormsPipeline.ps1 -ReviewRoot $WebReviewRoot -ScanOnly
+.\scripts\Invoke-FocusedWebFormsPipeline.ps1 -ReviewRoot $BackendReviewRoot -ScanOnly
+.\scripts\Merge-FocusedWebFormsReview.ps1 `
+  -WebReviewRoot $WebReviewRoot `
+  -BackendReviewRoot $BackendReviewRoot `
+  -OutputRoot $MergedReviewRoot
+```
+
+The Web Site config uses its repository as `sourceRoot` and `projectless`
+selection. The backend config uses its own repository as `sourceRoot` and
+`projects` selection with the `.vbproj` path relative to that root. The merge
+validates both scan receipts and Git commits, then generates the final packet,
+evidence docs, workbench, and normal receipt from the combined index. Never use
+the non-Git parent as a fake common source root.
 
 Page selection mode `all` retains every discovered Web Forms surface up to the
 documented 1,000-surface bound. Mode `selected` uses the explicit `forms` array.

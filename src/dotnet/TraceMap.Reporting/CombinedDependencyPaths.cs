@@ -410,7 +410,8 @@ public static partial class CombinedDependencyPathReporter
         (string Client, string Server)? sourcePair,
         bool includeLegacyRoots,
         bool allowSingleIndex,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        ReportInputBudget? budget = null)
     {
         var connectionString = new SqliteConnectionStringBuilder
         {
@@ -423,7 +424,7 @@ public static partial class CombinedDependencyPathReporter
         var read = await ReadPathIndexAsync(connection, indexPath, allowSingleIndex, cancellationToken);
         var endpointFindings = CombinedDependencyReporter.MatchEndpoints(read.Sources, read.Facts);
         var surfaces = CombinedDependencyReporter.BuildSurfaces(read.Facts, read.Sources);
-        var graph = BuildGraph(read, endpointFindings, surfaces, sourcePair, includeLegacyRoots);
+        var graph = BuildGraph(read, endpointFindings, surfaces, sourcePair, includeLegacyRoots, budget);
         return (read, graph);
     }
 
@@ -2570,8 +2571,7 @@ public static partial class CombinedDependencyPathReporter
             }
 
             var targets = declarations
-                .Where(declaration => declaration.SourceIndexId == call.SourceIndexId
-                    && string.Equals(SimpleVisualBasicTypeName(CombinedDependencyReporter.FirstValue(declaration.Properties, "containingType")), createdType, StringComparison.OrdinalIgnoreCase)
+                .Where(declaration => string.Equals(SimpleVisualBasicTypeName(CombinedDependencyReporter.FirstValue(declaration.Properties, "containingType")), createdType, StringComparison.OrdinalIgnoreCase)
                     && string.Equals(CombinedDependencyReporter.FirstValue(declaration.Properties, "methodName"), methodName, StringComparison.OrdinalIgnoreCase)
                     && int.TryParse(CombinedDependencyReporter.FirstValue(declaration.Properties, "parameterCount"), out var parameterCount)
                     && parameterCount == argumentCount)

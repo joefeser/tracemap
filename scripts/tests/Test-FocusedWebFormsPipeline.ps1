@@ -2,13 +2,14 @@ $ErrorActionPreference = 'Stop'
 $scripts = Split-Path -Parent $PSScriptRoot
 $setupPath = Join-Path $scripts 'Initialize-FocusedWebFormsReview.ps1'
 $pipelinePath = Join-Path $scripts 'Invoke-FocusedWebFormsPipeline.ps1'
+$mergePath = Join-Path $scripts 'Merge-FocusedWebFormsReview.ps1'
 $summaryPath = Join-Path $scripts 'Show-FocusedWebFormsOutlierSummary.ps1'
 $helperPath = Join-Path $scripts 'webforms-review/FocusedWebFormsPipelineConfig.ps1'
 $preflightPath = Join-Path $scripts 'Test-FocusedWebFormsReviewConfig.ps1'
 $statusPath = Join-Path $scripts 'Show-FocusedWebFormsReviewStatus.ps1'
 $claudePath = Join-Path $scripts 'Start-FocusedWebFormsClaudeReview.ps1'
 
-foreach ($path in @($setupPath, $pipelinePath, $summaryPath, $helperPath, $preflightPath, $statusPath, $claudePath)) {
+foreach ($path in @($setupPath, $pipelinePath, $mergePath, $summaryPath, $helperPath, $preflightPath, $statusPath, $claudePath)) {
     $tokens = $null
     $errors = $null
     [Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors) | Out-Null
@@ -121,6 +122,8 @@ try {
         'pipelineStage=scan;state=recovered;reason=prior-artifact-limit',
         '17179869184',
         "pipelineStage=scan;state=completed",
+        "webformsPipeline=scan-only-completed",
+        "runMode = `$runMode",
         "pipelineStage=packet;state=completed",
         "pipelineStage=evidenceDocs;state=completed",
         "pipelineStage=workbench;state=completed",
@@ -135,6 +138,19 @@ try {
         if (!$pipeline.Contains($required, [StringComparison]::Ordinal)) { throw "Pipeline contract omitted: $required" }
     }
     if ($pipeline.Contains('Sort-Object LastWriteTime', [StringComparison]::Ordinal)) { throw 'Pipeline must not guess artifacts by timestamp.' }
+
+    $merge = [IO.File]::ReadAllText($mergePath)
+    foreach ($required in @(
+        'WEBFORMS_MERGE_SCAN_INDEX_MISMATCH',
+        'WEBFORMS_MERGE_SOURCE_COMMIT_MISMATCH',
+        'two-focused-webforms-scan-receipts',
+        'dotnet `$cliDll combine',
+        'dotnet `$cliDll webforms-modernization',
+        'New-FocusedWebFormsApplicationWorkbench.ps1',
+        'webformsPipeline=merged-completed'
+    )) {
+        if (!$merge.Contains($required.Replace('`$', '$'), [StringComparison]::Ordinal)) { throw "Merge pipeline contract omitted: $required" }
+    }
 
     $secondRoot = Join-Path $temp 'nonempty'
     [IO.Directory]::CreateDirectory($secondRoot) | Out-Null

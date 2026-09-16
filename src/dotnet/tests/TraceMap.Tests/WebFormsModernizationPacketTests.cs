@@ -917,6 +917,59 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Contains("projectless-vb-receiver-bridge", chain.TraversalObservation?.TraversedEdgeKinds ?? []);
         Assert.Contains("combined.paths.projectless-vb-receiver-bridge.v1", chain.TraversalObservation?.TraversedRuleIds ?? []);
 
+        var webIndex = Path.Combine(temp.Path, "web-index.sqlite");
+        SqliteIndexWriter.Write(webIndex, manifest, [page, binding, handler, creation, invocation, flow]);
+        var backendManifest = manifest with
+        {
+            ScanId = "scan-backend",
+            RepoName = "business-layer",
+            CommitSha = "2222222222222222222222222222222222222222"
+        };
+        var backendDeclaration = FactFactory.Create(
+            backendManifest,
+            FactTypes.MethodDeclared,
+            RuleIds.VisualBasicSemanticDeclarations,
+            EvidenceTiers.Tier1Semantic,
+            new("BusinessLayer/BusinessObject.vb", 10, 10, null, "SyntheticFixture", ScannerVersions.VisualBasicSemanticExtractor),
+            sourceSymbol: "BusinessLayer.BusinessObject",
+            targetSymbol: backendMethod,
+            contractElement: "InsertFeedback",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["containingType"] = "BusinessLayer.BusinessObject",
+                ["methodName"] = "InsertFeedback",
+                ["parameterCount"] = "1"
+            });
+        var backendDownstream = Fact(backendManifest, FactTypes.CallEdge, RuleIds.VisualBasicSemanticCallGraph, "BusinessLayer/BusinessObject.vb", 12,
+            source: backendMethod, target: "BusinessLayer.FeedbackQuery.Insert(String)", contract: "Insert",
+            ("callKind", "SemanticMethodInvocation"), ("coverageLabel", "bounded-static-call"));
+        var backendTerminal = Fact(backendManifest, FactTypes.QueryPatternDetected, RuleIds.CSharpSyntaxQueryPattern, "BusinessLayer/FeedbackQuery.vb", 30,
+            source: "BusinessLayer.FeedbackQuery.Insert(String)", target: "feedback-query-shape", contract: "query",
+            ("operationName", "INSERT"), ("tableName", "feedback"), ("columnNames", "comment"),
+            ("sqlSourceKind", "literal-string"), ("queryShapeHash", "feedback-shape-hash"),
+            ("coverageLabel", "bounded-static-query"));
+        var backendIndex = Path.Combine(temp.Path, "backend-index.sqlite");
+        SqliteIndexWriter.Write(backendIndex, backendManifest, [backendDeclaration, backendDownstream, backendTerminal]);
+        var combinedIndex = Path.Combine(temp.Path, "combined-index.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([webIndex, backendIndex], combinedIndex, ["web", "backend"]));
+
+        var combinedWritten = await WebFormsModernizationPacketReporter.WriteAsync(
+            new(combinedIndex, Path.Combine(temp.Path, "combined-output")));
+        var combinedPacket = combinedWritten.Packet;
+
+        var combinedChain = Assert.Single(combinedPacket.EventChains);
+        Assert.Equal("sql-query", combinedChain.TerminalKind);
+        Assert.Contains("projectless-vb-receiver-bridge", combinedChain.TraversalObservation?.TraversedEdgeKinds ?? []);
+        Assert.Equal(2, combinedPacket.Sources.Count);
+        Assert.Equal(manifest.CommitSha, combinedPacket.Sources[0].CommitSha);
+        Assert.Contains(combinedPacket.Sources, source => source.CommitSha == backendManifest.CommitSha);
+        var combinedDocs = await EvidenceDocsExporter.ExportAsync(new(
+            combinedIndex,
+            Path.Combine(temp.Path, "combined-docs"),
+            Families: "webforms-modernization,gap,limitation",
+            WebFormsPacketPaths: [combinedWritten.JsonPath]));
+        Assert.Contains(combinedDocs.Chunks, chunk => chunk.ChunkFamily == "webforms-modernization");
+
         var competingDeclaration = FactFactory.Create(
             manifest,
             FactTypes.MethodDeclared,

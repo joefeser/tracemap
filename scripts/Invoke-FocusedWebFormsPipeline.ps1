@@ -2,7 +2,8 @@
 param(
     [Parameter(Mandatory = $true)][string]$ReviewRoot,
     [string]$TraceMapRoot = (Split-Path $PSScriptRoot -Parent),
-    [ValidateRange(30, 86400)][int]$TimeoutSeconds = 14400
+    [ValidateRange(30, 86400)][int]$TimeoutSeconds = 14400,
+    [switch]$ScanOnly
 )
 
 Set-StrictMode -Version Latest
@@ -92,13 +93,17 @@ $sourceCommit = ([string](git -C $sourceRoot rev-parse HEAD)).Trim().ToLowerInva
 if ($LASTEXITCODE -ne 0 -or $sourceCommit -notmatch '^[0-9a-f]{40}$') { throw 'WEBFORMS_PIPELINE_SOURCE_COMMIT_UNAVAILABLE' }
 $traceCommit = ([string](git -C $traceRoot rev-parse HEAD)).Trim().ToLowerInvariant()
 if ($LASTEXITCODE -ne 0 -or $traceCommit -notmatch '^[0-9a-f]{40}$') { throw 'WEBFORMS_PIPELINE_TRACEMAP_COMMIT_UNAVAILABLE' }
+$runMode = if ($ScanOnly) { 'scan-only' } else { 'full' }
 
 $recoverExistingOversizeScan = $false
 if (Test-Path -LiteralPath $receiptPath -PathType Leaf) {
     $receipt = [IO.File]::ReadAllText($receiptPath) | ConvertFrom-Json -Depth 20
+    $receiptRunModeProperty = $receipt.selection.PSObject.Properties['runMode']
+    $receiptRunMode = if ($null -eq $receiptRunModeProperty) { 'full' } else { [string]$receiptRunModeProperty.Value }
     if ($receipt.schemaVersion -ne 'focused-webforms-review-run-receipt.v1' -or
         $receipt.provenance.configSha256 -ne $configHash.Sha256 -or
-        $receipt.source.commitSha -ne $sourceCommit) {
+        $receipt.source.commitSha -ne $sourceCommit -or
+        $receiptRunMode -ne $runMode) {
         throw 'WEBFORMS_PIPELINE_RESUME_PROVENANCE_MISMATCH'
     }
 
@@ -162,7 +167,7 @@ else {
         source = [pscustomobject][ordered]@{ root = $sourceRoot; commitSha = $sourceCommit }
         traceMap = [pscustomobject][ordered]@{ root = $traceRoot; commitSha = $traceCommit }
         layout = [pscustomobject][ordered]@{ config = [IO.Path]::GetRelativePath($root, $configPath).Replace('\', '/'); scan = 'scan'; packet = 'packet'; evidenceDocs = 'evidence-docs'; workbench = 'workbench'; logs = 'logs' }
-        selection = [pscustomobject][ordered]@{ projectMode = $config.ProjectMode; pageMode = $config.PageMode }
+        selection = [pscustomobject][ordered]@{ projectMode = $config.ProjectMode; pageMode = $config.PageMode; runMode = $runMode }
         stages = [pscustomobject][ordered]@{
             build = [pscustomobject][ordered]@{ state = 'pending'; completedUtc = $null; failure = ''; artifacts = @() }
             scan = [pscustomobject][ordered]@{ state = 'pending'; completedUtc = $null; failure = ''; artifacts = @() }
@@ -171,7 +176,7 @@ else {
             workbench = [pscustomobject][ordered]@{ state = 'pending'; completedUtc = $null; failure = ''; artifacts = @() }
         }
         retention = [pscustomobject][ordered]@{
-            required = @('config','run-receipt.json','scan','packet','evidence-docs','workbench')
+            required = if ($ScanOnly) { @('config','run-receipt.json','scan') } else { @('config','run-receipt.json','scan','packet','evidence-docs','workbench') }
             diagnostic = @('logs')
             shareableOnlyWhenExplicitlyNamed = @('*.shareable.html','*.shareable.json')
         }
@@ -264,6 +269,16 @@ try {
         Set-StageState $receipt 'scan' 'completed' (New-ArtifactReceipt $root $scanArtifacts)
         Write-RunReceipt $receiptPath $receipt
         Write-Host 'pipelineStage=scan;state=completed'
+    }
+
+    if ($ScanOnly) {
+        $receipt.run.state = 'completed'
+        $receipt.run.failure = ''
+        Write-RunReceipt $receiptPath $receipt
+        Write-Host "webformsPipeline=scan-only-completed;runId=$($receipt.run.runId)"
+        Write-Host "scanIndex=$(Join-Path $scanPath 'index.sqlite')"
+        Write-Host "runReceipt=$receiptPath"
+        return
     }
 
     $cliDll = Join-Path $traceRoot 'src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll'

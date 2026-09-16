@@ -152,7 +152,7 @@ public static partial class StaticHtmlEvidenceExplorer
             var packet = JsonSerializer.Deserialize<WebFormsModernizationPacket>(snapshot.Content, JsonOptions)
                 ?? throw new InvalidDataException("empty packet");
             ValidateWebFormsPacket(packet, expectedCommitSha);
-            var source = packet.Sources.Single();
+            var source = packet.Sources[0];
             var coverage = SafeCoverageLabel(packet.Coverage);
             var limitationRows = new Dictionary<string, ExplorerLimitation>(StringComparer.Ordinal);
             var evidenceRows = new Dictionary<string, ExplorerEvidenceRow>(StringComparer.Ordinal);
@@ -422,14 +422,15 @@ public static partial class StaticHtmlEvidenceExplorer
             || packet.RuleId != WebFormsModernizationPacketReporter.PacketRuleId
             || packet.ClaimLevel != "local-only"
             || packet.Coverage is not ("bounded-static-webforms-modernization" or "reduced-static-webforms-modernization")
-            || packet.Sources?.Count != 1
+            || packet.Sources is not { Count: > 0 and <= 64 }
             || packet.Summary is null
-            || !IsUsableCommitSha(packet.Sources[0].CommitSha)
-            || !IsWebFormsHashedId(packet.Sources[0].SourceId, "source-")
-            || !IsWebFormsHashedId(packet.Sources[0].RepositoryId, "repository-")
-            || string.IsNullOrWhiteSpace(packet.Sources[0].ScanId)
-            || string.IsNullOrWhiteSpace(packet.Sources[0].AnalysisLevel)
-            || string.IsNullOrWhiteSpace(packet.Sources[0].BuildStatus)
+            || packet.Sources.Any(source => !IsUsableCommitSha(source.CommitSha)
+                || !IsWebFormsHashedId(source.SourceId, "source-")
+                || !IsWebFormsHashedId(source.RepositoryId, "repository-")
+                || string.IsNullOrWhiteSpace(source.ScanId)
+                || string.IsNullOrWhiteSpace(source.AnalysisLevel)
+                || string.IsNullOrWhiteSpace(source.BuildStatus))
+            || packet.Sources.Select(source => source.SourceId).Distinct(StringComparer.Ordinal).Count() != packet.Sources.Count
             || !IsWebFormsHashedId(packet.PacketId, "packet-")
             || (expectedCommitSha is not null && !packet.Sources[0].CommitSha.Equals(expectedCommitSha, StringComparison.OrdinalIgnoreCase))
             || packet.Projects is null || packet.Surfaces is null || packet.EventChains is null
@@ -501,14 +502,14 @@ public static partial class StaticHtmlEvidenceExplorer
             throw new InvalidDataException("inconsistent Web Forms packet identity graph");
         }
 
-        var sourceCommitSha = packet.Sources[0].CommitSha;
+        var sourceCommitShas = packet.Sources.Select(source => source.CommitSha).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var evidenceCount = 0;
         void ValidateEvidenceCollection(IReadOnlyList<WebFormsModernizationEvidence>? rows)
         {
             if (rows is null) throw new InvalidDataException("missing Web Forms evidence collection");
             foreach (var row in rows)
             {
-                ValidateWebFormsEvidence(row, sourceCommitSha);
+                ValidateWebFormsEvidence(row, sourceCommitShas);
                 evidenceCount++;
             }
         }
@@ -525,7 +526,7 @@ public static partial class StaticHtmlEvidenceExplorer
                 || string.IsNullOrWhiteSpace(surface.ProjectId) || surface.CompositionTargetIds is null
                 || surface.ControlIds is null || surface.Evidence is null || surface.SupportingFactIds is null)
                 throw new InvalidDataException("invalid Web Forms surface");
-            ValidateWebFormsEvidence(surface.Evidence, sourceCommitSha);
+            ValidateWebFormsEvidence(surface.Evidence, sourceCommitShas);
             evidenceCount++;
             ValidateEvidenceCollection(surface.SupportingEvidence);
         }
@@ -541,7 +542,7 @@ public static partial class StaticHtmlEvidenceExplorer
                 || chain.EvidenceTiers.Any(tier => !IsSupportedEvidenceTier(tier)))
                 throw new InvalidDataException("invalid Web Forms event chain");
             ValidateEvidenceCollection(chain.Evidence);
-            ValidateWebFormsPathEvidence(chain.PathEvidence, sourceCommitSha, ref evidenceCount);
+            ValidateWebFormsPathEvidence(chain.PathEvidence, sourceCommitShas, ref evidenceCount);
         }
         foreach (var boundary in packet.DownstreamBoundaries)
         {
@@ -561,7 +562,7 @@ public static partial class StaticHtmlEvidenceExplorer
                 || boundary.EvidenceTiers.Any(tier => !IsSupportedEvidenceTier(tier)))
                 throw new InvalidDataException("invalid Web Forms downstream boundary");
             ValidateEvidenceCollection(boundary.Evidence);
-            ValidateWebFormsPathEvidence(boundary.PathEvidence, sourceCommitSha, ref evidenceCount);
+            ValidateWebFormsPathEvidence(boundary.PathEvidence, sourceCommitShas, ref evidenceCount);
         }
         foreach (var state in packet.IdentityStateInventory)
         {
@@ -569,7 +570,7 @@ public static partial class StaticHtmlEvidenceExplorer
                 || string.IsNullOrWhiteSpace(state.Classification) || state.SafeMetadata is null
                 || state.Evidence is null || state.SupportingFactIds is null || state.Limitations is null)
                 throw new InvalidDataException("invalid Web Forms identity state");
-            ValidateWebFormsEvidence(state.Evidence, sourceCommitSha);
+            ValidateWebFormsEvidence(state.Evidence, sourceCommitShas);
             evidenceCount++;
         }
         foreach (var item in packet.BatchDataMovementInventory)
@@ -580,7 +581,7 @@ public static partial class StaticHtmlEvidenceExplorer
                 || item.SafeMetadata is null || item.Evidence is null || item.SupportingFactIds is null
                 || item.Limitations is null)
                 throw new InvalidDataException("invalid Web Forms batch/data-movement row");
-            ValidateWebFormsEvidence(item.Evidence, sourceCommitSha);
+            ValidateWebFormsEvidence(item.Evidence, sourceCommitShas);
             evidenceCount++;
         }
         foreach (var candidate in packet.StructuralSliceCandidates)
@@ -599,7 +600,7 @@ public static partial class StaticHtmlEvidenceExplorer
                 || string.IsNullOrWhiteSpace(item.TargetResolution) || item.SafeMetadata is null
                 || item.Evidence is null || item.SupportingFactIds is null || item.Limitations is null)
                 throw new InvalidDataException("invalid Web Forms client behavior");
-            ValidateWebFormsEvidence(item.Evidence, sourceCommitSha);
+            ValidateWebFormsEvidence(item.Evidence, sourceCommitShas);
             evidenceCount++;
         }
         foreach (var item in packet.ServerBehaviorInventory)
@@ -609,23 +610,23 @@ public static partial class StaticHtmlEvidenceExplorer
                 || item.SafeMetadata is null || item.Evidence is null || item.SupportingFactIds is null
                 || item.Limitations is null)
                 throw new InvalidDataException("invalid Web Forms server behavior");
-            ValidateWebFormsEvidence(item.Evidence, sourceCommitSha);
+            ValidateWebFormsEvidence(item.Evidence, sourceCommitShas);
             evidenceCount++;
         }
         foreach (var gap in packet.Gaps)
         {
-            ValidateWebFormsGap(gap, sourceCommitSha);
+            ValidateWebFormsGap(gap, sourceCommitShas);
             evidenceCount++;
         }
         if (evidenceCount > MaxWebFormsEvidenceRows)
             throw new InvalidDataException("Web Forms packet evidence limit exceeded");
     }
 
-    private static void ValidateWebFormsEvidence(WebFormsModernizationEvidence evidence, string commitSha)
+    private static void ValidateWebFormsEvidence(WebFormsModernizationEvidence evidence, IReadOnlySet<string> commitShas)
     {
         if (string.IsNullOrWhiteSpace(evidence.FactId) || !IsSafeRuleId(evidence.RuleId)
             || !IsSupportedEvidenceTier(evidence.EvidenceTier) || !IsSafeWebFormsLabel(evidence.CoverageLabel)
-            || !evidence.CommitSha.Equals(commitSha, StringComparison.OrdinalIgnoreCase)
+            || !commitShas.Contains(evidence.CommitSha)
             || string.IsNullOrWhiteSpace(evidence.FilePath) || evidence.StartLine < 1 || evidence.EndLine < evidence.StartLine
             || string.IsNullOrWhiteSpace(evidence.ExtractorId) || string.IsNullOrWhiteSpace(evidence.ExtractorVersion)
             || evidence.SupportingFactIds is null || evidence.SupportingEdgeIds is null || evidence.Limitations is null)
@@ -634,7 +635,7 @@ public static partial class StaticHtmlEvidenceExplorer
 
     private static void ValidateWebFormsPathEvidence(
         IReadOnlyList<WebFormsModernizationPathEvidence>? rows,
-        string commitSha,
+        IReadOnlySet<string> commitShas,
         ref int evidenceCount)
     {
         if (rows is null) throw new InvalidDataException("missing Web Forms path evidence");
@@ -644,7 +645,7 @@ public static partial class StaticHtmlEvidenceExplorer
             if (string.IsNullOrWhiteSpace(evidence.EvidenceId) || string.IsNullOrWhiteSpace(evidence.EvidenceKind)
                 || !IsSafeRuleId(evidence.RuleId) || !IsSupportedEvidenceTier(evidence.EvidenceTier)
                 || !IsSafeWebFormsLabel(evidence.CoverageLabel)
-                || !evidence.CommitSha.Equals(commitSha, StringComparison.OrdinalIgnoreCase)
+                || !commitShas.Contains(evidence.CommitSha)
                 || hasPath != (evidence.StartLine.HasValue && evidence.EndLine.HasValue)
                 || (hasPath && (evidence.StartLine!.Value < 1 || evidence.EndLine!.Value < evidence.StartLine.Value))
                 || string.IsNullOrWhiteSpace(evidence.ExtractorId) || string.IsNullOrWhiteSpace(evidence.ExtractorVersion)
@@ -654,13 +655,13 @@ public static partial class StaticHtmlEvidenceExplorer
         }
     }
 
-    private static void ValidateWebFormsGap(WebFormsModernizationGap gap, string commitSha)
+    private static void ValidateWebFormsGap(WebFormsModernizationGap gap, IReadOnlySet<string> commitShas)
     {
         var hasPath = !string.IsNullOrWhiteSpace(gap.FilePath);
         if (string.IsNullOrWhiteSpace(gap.GapId) || string.IsNullOrWhiteSpace(gap.Classification)
             || string.IsNullOrWhiteSpace(gap.ScopeKind) || !IsSafeRuleId(gap.RuleId)
             || !IsSupportedEvidenceTier(gap.EvidenceTier) || !IsSafeWebFormsLabel(gap.CoverageLabel)
-            || !gap.CommitSha.Equals(commitSha, StringComparison.OrdinalIgnoreCase)
+            || !commitShas.Contains(gap.CommitSha)
             || hasPath != gap.StartLine.HasValue
             || (!hasPath && gap.EndLine.HasValue)
             || (hasPath && (gap.StartLine!.Value < 1 || (gap.EndLine.HasValue && gap.EndLine.Value < gap.StartLine.Value)))

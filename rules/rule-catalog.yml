@@ -3245,7 +3245,7 @@ rules:
       - ProjectlessVisualBasicReceiverTargetUnavailable gap
       - ProjectlessVisualBasicReceiverTargetAmbiguous gap
     limitations:
-      - The bridge is source-index-local and applies only to handler-owned syntax projections with a directly retained local receiver creation in the same file and member.
+      - The receiver creation and invocation must be source-index-local; the unique semantic declaration may come from that source or another explicitly combined TraceMap index.
       - The bridge does not perform compiler binding for the projectless caller and does not infer field, property, factory, dependency-injection, late-bound, reflection, or reassigned receiver targets.
       - Type matching uses a case-insensitive simple VB type name plus method name and exact argument and parameter counts; zero or multiple matching semantic declarations remain explicit gaps.
       - A bridge is static review evidence only and does not prove runtime dispatch, branch feasibility, database execution, or successful binding.

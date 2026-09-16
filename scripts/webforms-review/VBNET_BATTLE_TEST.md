@@ -47,8 +47,8 @@ the three folder boundaries or try `discover`. If `discover` reports
 }
 ```
 
-An old projectless Web Site can still call a compiled sibling VB project. When
-the authorized source tree has this shape, keep the Web Site under syntax
+An old projectless Web Site can still call a compiled sibling VB project. If
+both folders belong to one Git repository, keep the Web Site under syntax
 fallback and explicitly load the sibling project for semantic evidence:
 
 ```text
@@ -77,6 +77,35 @@ join that call to one Tier1 method declaration from the loaded sibling project
 only when receiver type, method name, and argument count identify exactly one
 candidate. The resulting hop is Tier2 review evidence, not compiler resolution;
 missing or ambiguous candidates remain explicit gaps.
+
+If the Web Site and business layer are separate Git repositories, do not point
+`sourceRoot` at their non-Git parent directory and do not invent an umbrella
+repository. Create two review roots with two configs, run each through the
+scan-only mode, and merge their receipted indexes:
+
+```powershell
+$WebReviewRoot = 'C:\work\webforms-web-scan'
+$BackendReviewRoot = 'C:\work\webforms-backend-scan'
+$MergedReviewRoot = 'C:\work\webforms-merged-review'
+
+.\scripts\Initialize-FocusedWebFormsReview.ps1 -ReviewRoot $WebReviewRoot
+.\scripts\Initialize-FocusedWebFormsReview.ps1 -ReviewRoot $BackendReviewRoot
+# Edit each config. sourceRoot must be that config's own Git repository.
+.\scripts\Invoke-FocusedWebFormsPipeline.ps1 -ReviewRoot $WebReviewRoot -ScanOnly
+.\scripts\Invoke-FocusedWebFormsPipeline.ps1 -ReviewRoot $BackendReviewRoot -ScanOnly
+.\scripts\Merge-FocusedWebFormsReview.ps1 `
+  -WebReviewRoot $WebReviewRoot `
+  -BackendReviewRoot $BackendReviewRoot `
+  -OutputRoot $MergedReviewRoot
+```
+
+Use `projectless` for the Web Site config. In the business-layer config use
+`projects` and name its `.vbproj` relative to that repository's root. The merge
+validates both scan receipts and current Git commits, preserves both source
+commit SHAs, combines the indexes, and creates the final packet, evidence docs,
+workbench, and standard `run-receipt.json`. The bounded VB receiver bridge may
+then join Web Site syntax evidence to one unique semantic method in the other
+index. Start a new empty merged output root for every merge attempt.
 
 After changing a config that already produced a failed pre-scan receipt, remove
 only `run-receipt.json` and rerun the pipeline. This is safe only when `scan/`,

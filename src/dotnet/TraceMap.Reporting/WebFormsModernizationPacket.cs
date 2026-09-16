@@ -358,7 +358,7 @@ public static class WebFormsModernizationPacketReporter
     private static readonly HashSet<string> BatchProjectResolutions = new(StringComparer.Ordinal) { "ambiguous", "resolved", "unavailable" };
     private static readonly IReadOnlyList<string> PacketLimitations =
     [
-        "This packet composes deterministic static evidence from one TraceMap snapshot; it does not prove runtime reachability, execution, event firing, postback behavior, validation, authorization, persistence, or production use.",
+        "This packet composes deterministic static evidence from one TraceMap snapshot or multiple explicitly combined snapshots; it does not prove runtime reachability, execution, event firing, postback behavior, validation, authorization, persistence, or production use.",
         "Structural candidates group only declared static surface composition; they do not name business capabilities or prove workflow completeness, parity, migration scope, effort, cloud readiness, target architecture, test completeness, security approval, release approval, or safety to change.",
         "A chain ending at a handler or without a terminal is useful reduced evidence, never proof that no backend behavior exists.",
         "Supported compiler-resolved and explicitly qualified file-operation declarations are inventoried as batch/data-movement candidates; indirect wrappers, aliases under reduced semantic coverage, runtime paths, and dynamic locations remain outside coverage, so absence is not proof that code does not read or write files.",
@@ -449,12 +449,12 @@ public static class WebFormsModernizationPacketReporter
             .Where(item => item.Status == "matched")
             .SelectMany(item => item.SurfaceIds)
             .ToHashSet(StringComparer.Ordinal);
-        var startingFactIds = SelectStartingHandlerFactIds(snapshot.Facts, options.MaxEventChains, selectedSurfaceIds);
+        var startingFactIds = SelectStartingHandlerFactIds(snapshot, options.MaxEventChains, selectedSurfaceIds);
         // Snapshot admission and graph composition are separate bounded reads. Sharing the
         // mutable budget lets a large snapshot consume the graph's entire allowance before
         // a selected handler can be traversed.
         var graphBudget = new ReportInputBudget(options.MaxInputFacts, options.MaxInputEdges, options.MaxInputTextBytes);
-        var legacyFlowBuild = await CombinedDependencyPathReporter.BuildBoundedSingleIndexReportWithTraversalAsync(new(
+        var graphOptions = new CombinedDependencyPathOptions(
             options.IndexPath,
             Path.Combine(Path.GetTempPath(), "tracemap-webforms-modernization-unused"),
             View: LegacyFlowReportConstants.View,
@@ -465,15 +465,19 @@ public static class WebFormsModernizationPacketReporter
             StartingNodeLimit = Math.Max(1, startingFactIds.Count),
             StartingFactIds = startingFactIds,
             MaxTraversalWork = options.MaxTraversalWork
-        }, graphBudget, cancellationToken);
+        };
+        var legacyFlowBuild = snapshot.IsCombined
+            ? await CombinedDependencyPathReporter.BuildBoundedCombinedIndexReportWithTraversalAsync(graphOptions, graphBudget, cancellationToken)
+            : await CombinedDependencyPathReporter.BuildBoundedSingleIndexReportWithTraversalAsync(graphOptions, graphBudget, cancellationToken);
         return Build(snapshot, legacyFlowBuild.Report, options, surfaceSelection, legacyFlowBuild.TraversalByStartingFactId);
     }
 
     private static IReadOnlySet<string> SelectStartingHandlerFactIds(
-        IReadOnlyList<CodeFact> facts,
+        Snapshot snapshot,
         int maxEventChains,
         IReadOnlySet<string>? selectedSurfaceIds = null)
     {
+        var facts = snapshot.Facts;
         var retainedBindingIds = facts
             .Where(HasRequiredProvenance)
             .Where(fact => fact.FactType is FactTypes.WebFormsEventBindingDeclared or FactTypes.WebFormsClientHttpRequestCandidate)
@@ -492,9 +496,14 @@ public static class WebFormsModernizationPacketReporter
             .Where(fact => retainedBindingIds.Contains(fact.Properties.GetValueOrDefault("bindingFactId") ?? ""))
             .GroupBy(fact => fact.Properties["bindingFactId"], StringComparer.Ordinal)
             .Where(group => group.Count() == 1)
-            .Select(group => "single:" + group.Single().FactId)
+            .Select(group => GraphFactId(snapshot, group.Single().FactId))
             .ToHashSet(StringComparer.Ordinal);
     }
+
+    private static string GraphFactId(Snapshot snapshot, string factId) =>
+        snapshot.GraphFactIds.TryGetValue(factId, out var combinedFactId)
+            ? combinedFactId
+            : "single:" + factId;
 
     private static WebFormsModernizationTraversalObservation ToTraversalObservation(
         CombinedDependencyPathReporter.CombinedDependencyTraversalObservation? observation,
@@ -769,7 +778,7 @@ public static class WebFormsModernizationPacketReporter
                 var traversalObservation = handler is null || graphInputLimited || (snapshotInputLimited && supportedLegacyPath is null)
                     ? null
                     : ToTraversalObservation(
-                        traversalByStartingFactId?.GetValueOrDefault("single:" + handler.FactId),
+                        traversalByStartingFactId?.GetValueOrDefault(GraphFactId(snapshot, handler.FactId)),
                         handlerOwnedCallEvidenceCount);
                 var nextEvidence = NextEvidence(terminalKind, handler, traversalObservation, callEvidence);
                 if (!inputLimited && handler is not null && terminalKind is null)
@@ -1080,22 +1089,25 @@ public static class WebFormsModernizationPacketReporter
             : "reduced-static-webforms-modernization";
         var truncationReasons = PacketTruncationReasons(inputLimit, legacyFlow, uniqueGaps, truncated);
         var coverageReductionReasons = PacketCoverageReductionReasons(snapshot, sourceAnalysisReduced, hasReducedInput, uniqueGaps, truncated);
-        var source = new WebFormsModernizationSource(
-            HashId("source", [snapshot.Repository, snapshot.ScanId, snapshot.CommitSha]),
-            HashId("repository", [snapshot.Repository]),
-            snapshot.ScanId,
-            snapshot.CommitSha,
-            snapshot.AnalysisLevel,
-            snapshot.BuildStatus);
+        var sources = snapshot.Sources.Count > 0
+            ? snapshot.Sources
+            : [new WebFormsModernizationSource(
+                HashId("source", [snapshot.Repository, snapshot.ScanId, snapshot.CommitSha]),
+                HashId("repository", [snapshot.Repository]),
+                snapshot.ScanId,
+                snapshot.CommitSha,
+                snapshot.AnalysisLevel,
+                snapshot.BuildStatus)];
         var packetIdentity = new List<string>
         {
             SchemaVersion,
-            source.SourceId,
             snapshot.ScanId,
             snapshot.CommitSha,
             coverage,
             $"truncated:{truncated.ToString().ToLowerInvariant()}"
         };
+        packetIdentity.AddRange(sources.OrderBy(source => source.SourceId, StringComparer.Ordinal)
+            .Select(source => $"source:{source.SourceId}:{source.CommitSha}"));
         packetIdentity.AddRange(truncationReasons.Select(reason => $"truncation-reason:{reason}"));
         packetIdentity.AddRange(coverageReductionReasons.Select(reason => $"coverage-reduction-reason:{reason}"));
         packetIdentity.AddRange(projects.Select(project => $"project:{project.ProjectId}:{project.SurfaceCount}"));
@@ -1120,7 +1132,7 @@ public static class WebFormsModernizationPacketReporter
             PacketRuleId,
             ClaimLevel,
             coverage,
-            [source],
+            sources,
             new(projects.Length, surfaces.Length, chains.Count, boundaries.Count, identityState.Length, batchDataMovement.Length, candidates.Count, uniqueGaps.Length, truncated)
             {
                 ClientBehaviorCount = clientBehavior.Length,
@@ -1475,6 +1487,11 @@ public static class WebFormsModernizationPacketReporter
                 queryOnly.CommandText = "pragma query_only = on; pragma temp_store=file; pragma cache_size=-8192;";
                 await queryOnly.ExecuteNonQueryAsync(cancellationToken);
             }
+            if (await TableExistsAsync(connection, "index_sources", cancellationToken)
+                && await TableExistsAsync(connection, "combined_facts", cancellationToken))
+            {
+                return await ReadCombinedSnapshotAsync(connection, budget, cancellationToken);
+            }
             if (!await TableExistsAsync(connection, "scan_manifest", cancellationToken)
                 || !await TableExistsAsync(connection, "facts", cancellationToken)
                 || await TableExistsAsync(connection, "index_sources", cancellationToken))
@@ -1584,6 +1601,153 @@ public static class WebFormsModernizationPacketReporter
         }
     }
 
+    private static async Task<Snapshot> ReadCombinedSnapshotAsync(
+        SqliteConnection connection,
+        ReportInputBudget budget,
+        CancellationToken cancellationToken)
+    {
+        var sourceRows = new List<(string SourceIndexId, string Label, string Repo, string ScanId, string CommitSha, string AnalysisLevel, string BuildStatus)>();
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+                select source_index_id, label, repo_name, scan_id, commit_sha, analysis_level, build_status
+                from index_sources order by label collate binary, source_index_id collate binary;
+                """;
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var commit = reader.GetString(4);
+                if (!IsCommitSha(commit))
+                {
+                    throw new InvalidDataException("WebFormsModernizationCommitIdentityUnavailable");
+                }
+                sourceRows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), commit, reader.GetString(5), reader.GetString(6)));
+            }
+        }
+        if (sourceRows.Count < 2)
+        {
+            throw new InvalidDataException("WebFormsModernizationCombinedSourcesUnavailable");
+        }
+
+        var webSourceIds = new List<string>();
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+                select source_index_id
+                from combined_facts
+                where fact_type = $fact_type
+                group by source_index_id
+                order by source_index_id collate binary;
+                """;
+            command.Parameters.AddWithValue("$fact_type", FactTypes.WebFormsPageDeclared);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken)) webSourceIds.Add(reader.GetString(0));
+        }
+        if (webSourceIds.Count != 1)
+        {
+            throw new InvalidDataException(webSourceIds.Count == 0
+                ? "WebFormsModernizationPrimarySourceUnavailable"
+                : "WebFormsModernizationPrimarySourceAmbiguous");
+        }
+
+        var primary = sourceRows.Single(source => source.SourceIndexId == webSourceIds[0]);
+        var facts = new List<CodeFact>();
+        var graphFactIds = new Dictionary<string, string>(StringComparer.Ordinal);
+        string? inputLimit = null;
+        await using (var command = connection.CreateCommand())
+        {
+            command.CommandText = CombinedWebFormsFactQuery("source_index_id = $source and (rule_id like 'legacy.webforms.%' or rule_id = $identity_rule)");
+            command.Parameters.AddWithValue("$source", primary.SourceIndexId);
+            command.Parameters.AddWithValue("$identity_rule", RuleIds.LegacyAspNetIdentityState);
+            await ReadCombinedFactsAsync(command, facts, graphFactIds, budget, cancellationToken, limit => inputLimit = limit);
+        }
+        if (inputLimit is null)
+        {
+            var retainedIds = facts.Select(fact => fact.FactId).ToHashSet(StringComparer.Ordinal);
+            var referencedIds = facts
+                .Where(fact => fact.FactType == FactTypes.WebFormsEventFlowProjected)
+                .SelectMany(fact => SplitIds(fact.Properties.GetValueOrDefault("supportingFactIds"))
+                    .Concat(SplitIds(fact.Properties.GetValueOrDefault("supportingEdgeIds"))))
+                .Where(id => !retainedIds.Contains(id))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(id => id, StringComparer.Ordinal)
+                .ToArray();
+            foreach (var batch in referencedIds.Chunk(400))
+            {
+                await using var command = connection.CreateCommand();
+                command.CommandText = CombinedWebFormsFactQuery("source_index_id = $source and original_fact_id in (select value from json_each($fact_ids))");
+                command.Parameters.AddWithValue("$source", primary.SourceIndexId);
+                command.Parameters.AddWithValue("$fact_ids", JsonSerializer.Serialize(batch));
+                await ReadCombinedFactsAsync(command, facts, graphFactIds, budget, cancellationToken, limit => inputLimit = limit);
+                if (inputLimit is not null) break;
+            }
+        }
+
+        if (facts.Any(fact => fact.ScanId != primary.ScanId || fact.Repo != primary.Repo || fact.CommitSha != primary.CommitSha))
+        {
+            throw new InvalidDataException("WebFormsModernizationSourceIdentityMismatch");
+        }
+        var orderedSources = sourceRows
+            .OrderByDescending(source => source.SourceIndexId == primary.SourceIndexId)
+            .ThenBy(source => source.Label, StringComparer.Ordinal)
+            .ThenBy(source => source.SourceIndexId, StringComparer.Ordinal);
+        var sources = orderedSources.Select(source => new WebFormsModernizationSource(
+            HashId("source", [source.Repo, source.ScanId, source.CommitSha]),
+            HashId("repository", [source.Repo]),
+            source.ScanId,
+            source.CommitSha,
+            source.AnalysisLevel,
+            source.BuildStatus)).ToArray();
+        var combinedAnalysis = sourceRows.Any(source => IsReducedAnalysisLevel(source.AnalysisLevel))
+            ? "CombinedSemanticAnalysisReduced"
+            : primary.AnalysisLevel;
+        var combinedBuild = sourceRows.All(source => string.Equals(source.BuildStatus, "Succeeded", StringComparison.Ordinal))
+            ? "Succeeded"
+            : "FailedOrPartial";
+        return new Snapshot(primary.Repo, primary.ScanId, primary.CommitSha, combinedAnalysis, combinedBuild, facts, inputLimit)
+        {
+            Sources = sources,
+            GraphFactIds = graphFactIds,
+            IsCombined = true
+        };
+    }
+
+    private static string CombinedWebFormsFactQuery(string predicate) => $$"""
+        select combined_fact_id, original_fact_id, scan_id, repo, commit_sha, project_path, fact_type, rule_id, evidence_tier,
+               source_symbol, target_symbol, contract_element, file_path, start_line, end_line,
+               snippet_hash, extractor_id, extractor_version, properties_json,
+               {{CombinedDependencyPathReporter.TextByteCountSql("combined_fact_id", "original_fact_id", "scan_id", "repo", "commit_sha", "project_path", "fact_type", "rule_id", "evidence_tier", "source_symbol", "target_symbol", "contract_element", "file_path", "snippet_hash", "extractor_id", "extractor_version", "properties_json")}}
+        from combined_facts where {{predicate}} order by original_fact_id collate binary;
+        """;
+
+    private static async Task ReadCombinedFactsAsync(
+        SqliteCommand command,
+        List<CodeFact> facts,
+        Dictionary<string, string> graphFactIds,
+        ReportInputBudget budget,
+        CancellationToken cancellationToken,
+        Action<string> limitReached)
+    {
+        var retained = facts.Select(fact => fact.FactId).ToHashSet(StringComparer.Ordinal);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            try { budget.Retain(reader.GetInt64(19)); }
+            catch (ReportInputLimitException exception) { limitReached("snapshot-" + exception.Limit); break; }
+            var originalFactId = reader.GetString(1);
+            graphFactIds[originalFactId] = reader.GetString(0);
+            if (!retained.Add(originalFactId)) continue;
+            var properties = JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(18)) ?? [];
+            facts.Add(new CodeFact(
+                originalFactId, reader.GetString(2), reader.GetString(3), reader.GetString(4),
+                reader.IsDBNull(5) ? null : reader.GetString(5), reader.GetString(6), reader.GetString(7), reader.GetString(8),
+                reader.IsDBNull(9) ? null : reader.GetString(9), reader.IsDBNull(10) ? null : reader.GetString(10), reader.IsDBNull(11) ? null : reader.GetString(11),
+                new EvidenceSpan(reader.GetString(12), reader.GetInt32(13), reader.GetInt32(14), reader.IsDBNull(15) ? null : reader.GetString(15),
+                    reader.IsDBNull(16) ? "unknown" : reader.GetString(16), reader.IsDBNull(17) ? "unknown" : reader.GetString(17)),
+                new SortedDictionary<string, string>(properties, StringComparer.Ordinal)));
+        }
+    }
+
     private static CodeFact ReadFactRow(SqliteDataReader reader)
     {
         var properties = JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(17)) ?? [];
@@ -1612,8 +1776,9 @@ public static class WebFormsModernizationPacketReporter
         b.AppendLine($"- Rule: `{packet.RuleId}`");
         b.AppendLine($"- Claim level: `{packet.ClaimLevel}`");
         b.AppendLine($"- Coverage: `{packet.Coverage}`");
-        b.AppendLine($"- Repository: `{packet.Sources.Single().RepositoryId}`");
-        b.AppendLine($"- Commit: `{packet.Sources.Single().CommitSha}`");
+        b.AppendLine($"- Sources: `{packet.Sources.Count}`");
+        foreach (var source in packet.Sources)
+            b.AppendLine($"- Source: repository `{source.RepositoryId}`, scan `{source.ScanId}`, commit `{source.CommitSha}`, analysis `{source.AnalysisLevel}`, build `{source.BuildStatus}`");
         b.AppendLine($"- Surfaces: `{packet.Summary.SurfaceCount}`; event chains: `{packet.Summary.EventChainCount}`; inline client behaviors: `{packet.Summary.ClientBehaviorCount}`; server behaviors: `{packet.Summary.ServerBehaviorCount}`; downstream boundaries: `{packet.Summary.DownstreamBoundaryCount}`; identity/state declarations: `{packet.Summary.IdentityStateCount}`; batch/data-movement declarations: `{packet.Summary.BatchDataMovementCount}`; structural candidates: `{packet.Summary.StructuralSliceCandidateCount}`; gaps: `{packet.Summary.GapCount}`; truncated: `{packet.Summary.Truncated}`.").AppendLine();
         if (packet.SurfaceSelection is not null)
         {
@@ -2080,7 +2245,12 @@ public static class WebFormsModernizationPacketReporter
         string AnalysisLevel,
         string BuildStatus,
         IReadOnlyList<CodeFact> Facts,
-        string? InputLimit = null);
+        string? InputLimit = null)
+    {
+        public IReadOnlyList<WebFormsModernizationSource> Sources { get; init; } = [];
+        public IReadOnlyDictionary<string, string> GraphFactIds { get; init; } = new Dictionary<string, string>(StringComparer.Ordinal);
+        public bool IsCombined { get; init; }
+    }
 }
 
 internal sealed class SurfaceListByteLimitStream(Stream inner, long maximumBytes) : Stream
