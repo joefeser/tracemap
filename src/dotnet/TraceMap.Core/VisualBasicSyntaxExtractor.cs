@@ -13,7 +13,7 @@ namespace TraceMap.Core;
 // diagnostics, and a deterministic per-file fact budget.
 public static class VisualBasicSyntaxExtractor
 {
-    private const int MaxFactsPerFile = 2000;
+    private const int MaxFactsPerFile = 5000;
     private const int MaxParseDiagnosticGapsPerFile = 20;
 
     public static IReadOnlyList<CodeFact> Extract(
@@ -210,6 +210,16 @@ public static class VisualBasicSyntaxExtractor
                 .Concat(containingTypeNames)
                 .Append(declared.name)
                 .Where(item => !string.IsNullOrWhiteSpace(item)));
+            var baseTypes = statement.Parent is TypeBlockSyntax typeBlock
+                ? typeBlock.ChildNodes()
+                    .OfType<InheritsStatementSyntax>()
+                    .SelectMany(inherits => inherits.Types)
+                    .Select(type => type.ToString().Trim())
+                    .Where(type => type.Length > 0)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(type => type, StringComparer.OrdinalIgnoreCase)
+                    .ToArray()
+                : [];
             if (!TryAddSyntaxFact(
                     manifest,
                     facts,
@@ -223,7 +233,8 @@ public static class VisualBasicSyntaxExtractor
                         ["kind"] = declared.kind,
                         ["name"] = declared.name,
                         ["namespace"] = namespaceName,
-                        ["qualifiedName"] = qualifiedName
+                        ["qualifiedName"] = qualifiedName,
+                        ["baseTypes"] = string.Join(";", baseTypes)
                     },
                     budget))
             {
@@ -345,23 +356,33 @@ public static class VisualBasicSyntaxExtractor
         foreach (var field in root.DescendantNodes().OfType<FieldDeclarationSyntax>())
         {
             var containingType = field.Ancestors().OfType<TypeBlockSyntax>().FirstOrDefault()?.BlockStatement.Identifier.ValueText ?? string.Empty;
-            foreach (var name in field.Declarators.SelectMany(declarator => declarator.Names))
+            foreach (var declarator in field.Declarators)
             {
-                var fieldName = name.Identifier.ValueText;
-                if (!TryAddSyntaxFact(manifest, facts, FactTypes.FieldDeclared, RuleIds.VisualBasicSyntaxDeclarations,
-                        filePath, name,
-                        string.IsNullOrWhiteSpace(containingType) ? fieldName : $"{containingType}.{fieldName}",
-                        new SortedDictionary<string, string>(StringComparer.Ordinal)
-                        {
-                            ["containingType"] = containingType,
-                            ["fieldName"] = fieldName,
-                            ["isWithEvents"] = field.Modifiers.Any(SyntaxKind.WithEventsKeyword) ? "True" : "False"
-                        },
-                        budget,
-                        sourceSymbol: containingType,
-                        contractElement: fieldName))
+                var fieldType = declarator.AsClause switch
                 {
-                    return;
+                    SimpleAsClauseSyntax simple => simple.Type.ToString().Trim(),
+                    AsNewClauseSyntax { NewExpression: ObjectCreationExpressionSyntax creation } => creation.Type.ToString().Trim(),
+                    _ => string.Empty
+                };
+                foreach (var name in declarator.Names)
+                {
+                    var fieldName = name.Identifier.ValueText;
+                    if (!TryAddSyntaxFact(manifest, facts, FactTypes.FieldDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+                            filePath, name,
+                            string.IsNullOrWhiteSpace(containingType) ? fieldName : $"{containingType}.{fieldName}",
+                            new SortedDictionary<string, string>(StringComparer.Ordinal)
+                            {
+                                ["containingType"] = containingType,
+                                ["fieldName"] = fieldName,
+                                ["fieldType"] = fieldType,
+                                ["isWithEvents"] = field.Modifiers.Any(SyntaxKind.WithEventsKeyword) ? "True" : "False"
+                            },
+                            budget,
+                            sourceSymbol: containingType,
+                            contractElement: fieldName))
+                    {
+                        return;
+                    }
                 }
             }
         }
@@ -772,9 +793,11 @@ public static class VisualBasicSyntaxExtractor
         IReadOnlyList<ProtectedSourceSpan> protectedSpans,
         FactBudget budget)
     {
-        var scopes = root.DescendantNodes()
+        var candidates = root.DescendantNodes()
             .Where(node => node is InvocationExpressionSyntax or ObjectCreationExpressionSyntax)
             .Where(node => !OverlapsProtected(node, protectedSpans))
+            .ToArray();
+        var scopes = candidates
             .GroupBy(GetCallEvidenceScopeKey, StringComparer.Ordinal)
             .Select(group => new Queue<SyntaxNode>(group
                 .OrderBy(node => node.SpanStart)
@@ -796,7 +819,7 @@ public static class VisualBasicSyntaxExtractor
                 remaining--;
                 var retained = node switch
                 {
-                    InvocationExpressionSyntax invocation => AddInvocationFacts(
+                    InvocationExpressionSyntax invocation => AddInvocationCallFacts(
                         manifest, facts, filePath, root, invocation, budget),
                     ObjectCreationExpressionSyntax creation => AddObjectCreationFacts(
                         manifest, facts, filePath, creation, budget),
@@ -806,6 +829,17 @@ public static class VisualBasicSyntaxExtractor
                 {
                     return;
                 }
+            }
+        }
+
+        // InvocationName is a navigation witness, while CallEdge is the path
+        // evidence consumed by reducers. Admit these auxiliary witnesses only
+        // after every bounded call candidate had a chance at one primary edge.
+        foreach (var invocation in candidates.OfType<InvocationExpressionSyntax>().OrderBy(node => node.SpanStart))
+        {
+            if (!AddInvocationNameFact(manifest, facts, filePath, invocation, budget))
+            {
+                return;
             }
         }
     }
@@ -829,7 +863,7 @@ public static class VisualBasicSyntaxExtractor
             : $"initializer:{string.Join('.', containingTypes)}";
     }
 
-    private static bool AddInvocationFacts(
+    private static bool AddInvocationCallFacts(
         ScanManifest manifest,
         List<CodeFact> facts,
         string filePath,
@@ -839,26 +873,6 @@ public static class VisualBasicSyntaxExtractor
     {
         var invocationName = GetInvocationName(invocation.Expression);
         var containingMember = GetContainingMemberName(invocation);
-        if (!TryAddSyntaxFact(
-                    manifest,
-                    facts,
-                    FactTypes.InvocationName,
-                    RuleIds.VisualBasicSyntaxInvocation,
-                    filePath,
-                    invocation,
-                    targetSymbol: invocationName,
-                    new SortedDictionary<string, string>(StringComparer.Ordinal)
-                    {
-                        ["expressionHash"] = FactFactory.Hash(invocation.Expression.ToString(), 32),
-                        ["expressionKind"] = invocation.Expression.Kind().ToString(),
-                        ["invocationName"] = invocationName,
-                        ["receiverName"] = GetInvocationReceiverName(invocation.Expression) ?? string.Empty
-                    },
-                    budget))
-        {
-            return false;
-        }
-
         // The callee is invocation text only: never a compiler-resolved
         // target and never a symbol-ID join.
         if (!TryAddSyntaxFact(
@@ -893,6 +907,32 @@ public static class VisualBasicSyntaxExtractor
                     invocationName,
                     containingMember,
                     budget);
+    }
+
+    private static bool AddInvocationNameFact(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        string filePath,
+        InvocationExpressionSyntax invocation,
+        FactBudget budget)
+    {
+        var invocationName = GetInvocationName(invocation.Expression);
+        return TryAddSyntaxFact(
+            manifest,
+            facts,
+            FactTypes.InvocationName,
+            RuleIds.VisualBasicSyntaxInvocation,
+            filePath,
+            invocation,
+            targetSymbol: invocationName,
+            new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["expressionHash"] = FactFactory.Hash(invocation.Expression.ToString(), 32),
+                ["expressionKind"] = invocation.Expression.Kind().ToString(),
+                ["invocationName"] = invocationName,
+                ["receiverName"] = GetInvocationReceiverName(invocation.Expression) ?? string.Empty
+            },
+            budget);
     }
 
     private static bool AddObjectCreationFacts(

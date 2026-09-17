@@ -2536,6 +2536,12 @@ public static partial class CombinedDependencyPathReporter
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "containingType"))
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "fieldName")))
             .ToArray();
+        var syntaxTypeDeclarations = facts
+            .Where(fact => fact.FactType == FactTypes.TypeDeclared
+                && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+                && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+                && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "name", "qualifiedName")))
+            .ToArray();
         var receiverBodyFacts = facts
             .Where(fact => IsVisualBasicReceiverBodyFact(fact)
                 && VisualBasicQualifiedMemberKey(fact.SourceSymbol) is not null)
@@ -2602,34 +2608,43 @@ public static partial class CombinedDependencyPathReporter
                     .OrderBy(creation => creation.StartLine)
                     .ThenBy(creation => creation.CombinedFactId, StringComparer.Ordinal)
                     .ToArray();
-            if (receiverCreations.Length == 0)
+            var declaredFieldReceivers = receiverCreations.Length == 0
+                ? FindVisualBasicDeclaredFieldReceivers(call, receiverName, syntaxTypeDeclarations, fieldDeclarations)
+                : [];
+            if (receiverCreations.Length == 0 && declaredFieldReceivers.Length == 0)
             {
                 AddProjectlessVisualBasicReceiverBridgeGap(
                     graph,
                     call,
                     "ProjectlessVisualBasicReceiverCreationUnavailable",
-                    "No retained syntax or semantic VB object creation uniquely associates the invocation receiver with a created type in the same member or a declared field on the containing type.",
-                    "receiver-creation-unavailable",
+                    "No retained syntax or semantic VB object creation, or uniquely declared typed field on the caller type or its retained base-type chain, associates the invocation receiver with a type.",
+                    "receiver-provenance-unavailable",
                     0,
                     [call.CombinedFactId]);
                 continue;
             }
 
-            if (receiverCreations.Length != 1)
+            if (receiverCreations.Length > 1 || declaredFieldReceivers.Length > 1)
             {
                 AddProjectlessVisualBasicReceiverBridgeGap(
                     graph,
                     call,
                     "ProjectlessVisualBasicReceiverCreationAmbiguous",
-                    "Multiple retained object creations assign the syntax-only invocation receiver in the selected member or containing-type field scope; TraceMap did not choose a target.",
-                    "receiver-creation-ambiguous",
-                    receiverCreations.Length,
-                    receiverCreations.Select(fact => fact.CombinedFactId).Append(call.CombinedFactId));
+                    "Multiple retained object creations or declared typed fields can own the syntax-only invocation receiver; TraceMap did not choose a target.",
+                    "receiver-provenance-ambiguous",
+                    receiverCreations.Length + declaredFieldReceivers.Length,
+                    receiverCreations.Select(fact => fact.CombinedFactId)
+                        .Concat(declaredFieldReceivers.SelectMany(candidate => candidate.Evidence.Select(fact => fact.CombinedFactId)))
+                        .Append(call.CombinedFactId));
                 continue;
             }
 
-            var creation = receiverCreations[0];
-            var createdType = SimpleVisualBasicTypeName(CombinedDependencyReporter.FirstValue(creation.Properties, "calleeContainingType", "calleeName"));
+            var receiverEvidence = receiverCreations.Length == 1
+                ? new VisualBasicReceiverProvenance(
+                    SimpleVisualBasicTypeName(CombinedDependencyReporter.FirstValue(receiverCreations[0].Properties, "calleeContainingType", "calleeName")),
+                    [receiverCreations[0]])
+                : declaredFieldReceivers[0];
+            var createdType = receiverEvidence.TypeName;
             var methodName = CombinedDependencyReporter.FirstValue(call.Properties, "calleeName")!;
             if (string.IsNullOrWhiteSpace(createdType))
             {
@@ -2652,7 +2667,8 @@ public static partial class CombinedDependencyPathReporter
                     "A syntax-only invocation receiver matched multiple semantic VB method declarations by type, method name, and argument count; TraceMap did not choose a target.",
                     "semantic-target-ambiguous",
                     semanticTargets.Length,
-                    semanticTargets.Select(fact => fact.CombinedFactId).Append(creation.CombinedFactId).Append(call.CombinedFactId));
+                    semanticTargets.Select(fact => fact.CombinedFactId)
+                        .Concat(receiverEvidence.Evidence.Select(fact => fact.CombinedFactId)).Append(call.CombinedFactId));
                 continue;
             }
 
@@ -2711,7 +2727,8 @@ public static partial class CombinedDependencyPathReporter
                             : "A syntax-only invocation receiver matched multiple syntax declarations with exact arity-bearing body evidence; TraceMap did not choose a target.",
                         syntaxTargets.Length == 0 ? "target-unavailable" : "syntax-target-ambiguous",
                         syntaxTargets.Length,
-                        syntaxTargets.Select(candidate => candidate.Declaration.CombinedFactId).Append(creation.CombinedFactId).Append(call.CombinedFactId));
+                        syntaxTargets.Select(candidate => candidate.Declaration.CombinedFactId)
+                            .Concat(receiverEvidence.Evidence.Select(fact => fact.CombinedFactId)).Append(call.CombinedFactId));
                     continue;
                 }
 
@@ -2728,7 +2745,8 @@ public static partial class CombinedDependencyPathReporter
                 "EvidenceEdge",
                 ProjectlessVisualBasicReceiverBridgeRuleId,
                 bridgeEvidenceTier,
-                new[] { call.CombinedFactId, creation.CombinedFactId, target.CombinedFactId }
+                new[] { call.CombinedFactId, target.CombinedFactId }
+                    .Concat(receiverEvidence.Evidence.Select(fact => fact.CombinedFactId))
                     .Concat(targetBodyEvidenceIds)
                     .OrderBy(value => value, StringComparer.Ordinal)
                     .ToArray(),
@@ -2808,6 +2826,105 @@ public static partial class CombinedDependencyPathReporter
             && string.Equals(CombinedDependencyReporter.FirstValue(field.Properties, "fieldName"), receiverName, StringComparison.OrdinalIgnoreCase)
             && string.Equals(SimpleVisualBasicTypeName(CombinedDependencyReporter.FirstValue(field.Properties, "containingType")), caller.Value.Type, StringComparison.OrdinalIgnoreCase));
     }
+
+    private sealed record VisualBasicReceiverProvenance(
+        string TypeName,
+        IReadOnlyList<CombinedFactRow> Evidence);
+
+    private static VisualBasicReceiverProvenance[] FindVisualBasicDeclaredFieldReceivers(
+        CombinedFactRow call,
+        string receiverName,
+        IReadOnlyList<CombinedFactRow> typeDeclarations,
+        IReadOnlyList<CombinedFactRow> fieldDeclarations)
+    {
+        var caller = VisualBasicQualifiedMemberKey(call.SourceSymbol
+            ?? CombinedDependencyReporter.FirstValue(call.Properties, "callerName"));
+        if (caller is null)
+        {
+            return [];
+        }
+
+        var roots = typeDeclarations
+            .Where(declaration => declaration.SourceIndexId == call.SourceIndexId
+                && string.Equals(
+                    SimpleVisualBasicTypeName(CombinedDependencyReporter.FirstValue(declaration.Properties, "name", "qualifiedName")),
+                    caller.Value.Type,
+                    StringComparison.OrdinalIgnoreCase))
+            .OrderBy(declaration => declaration.CombinedFactId, StringComparer.Ordinal)
+            .ToArray();
+        if (roots.Length != 1)
+        {
+            return [];
+        }
+
+        var results = new List<VisualBasicReceiverProvenance>();
+        var queue = new Queue<(CombinedFactRow Declaration, CombinedFactRow[] Path)>();
+        queue.Enqueue((roots[0], [roots[0]]));
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        while (queue.Count > 0 && visited.Count < 16)
+        {
+            var (declaration, path) = queue.Dequeue();
+            var ownerName = SimpleVisualBasicTypeName(
+                CombinedDependencyReporter.FirstValue(declaration.Properties, "name", "qualifiedName"));
+            if (!visited.Add($"{declaration.SourceIndexId}\0{ownerName}"))
+            {
+                continue;
+            }
+
+            AddFieldCandidates(ownerName, path);
+            foreach (var baseName in SplitVisualBasicBaseTypes(
+                CombinedDependencyReporter.FirstValue(declaration.Properties, "baseTypes")))
+            {
+                // The derived declaration itself proves the immediate base
+                // relationship. This still permits a field match when the base
+                // type's own declaration was retained in another source index.
+                AddFieldCandidates(baseName, path);
+                var baseDeclarations = typeDeclarations
+                    .Where(candidate => string.Equals(
+                        SimpleVisualBasicTypeName(CombinedDependencyReporter.FirstValue(candidate.Properties, "name", "qualifiedName")),
+                        baseName,
+                        StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(candidate => candidate.CombinedFactId, StringComparer.Ordinal)
+                    .ToArray();
+                if (baseDeclarations.Length == 1)
+                {
+                    queue.Enqueue((baseDeclarations[0], path.Append(baseDeclarations[0]).ToArray()));
+                }
+            }
+        }
+
+        return results
+            .GroupBy(candidate => $"{candidate.TypeName}\0{candidate.Evidence[^1].CombinedFactId}", StringComparer.OrdinalIgnoreCase)
+            .Select(group => group
+                .OrderByDescending(candidate => candidate.Evidence.Count)
+                .ThenBy(candidate => string.Join("\0", candidate.Evidence.Select(fact => fact.CombinedFactId)), StringComparer.Ordinal)
+                .First())
+            .OrderBy(candidate => candidate.Evidence[^1].CombinedFactId, StringComparer.Ordinal)
+            .ToArray();
+
+        void AddFieldCandidates(string ownerName, IReadOnlyList<CombinedFactRow> path)
+        {
+            foreach (var field in fieldDeclarations.Where(field =>
+                string.Equals(SimpleVisualBasicTypeName(CombinedDependencyReporter.FirstValue(field.Properties, "containingType")), ownerName, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(CombinedDependencyReporter.FirstValue(field.Properties, "fieldName"), receiverName, StringComparison.OrdinalIgnoreCase)))
+            {
+                var fieldType = SimpleVisualBasicTypeName(CombinedDependencyReporter.FirstValue(field.Properties, "fieldType", "declaredType"));
+                if (!string.IsNullOrWhiteSpace(fieldType))
+                {
+                    results.Add(new VisualBasicReceiverProvenance(fieldType, path.Append(field).ToArray()));
+                }
+            }
+        }
+    }
+
+    private static string[] SplitVisualBasicBaseTypes(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? []
+            : value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(SimpleVisualBasicTypeName)
+                .Where(type => !string.IsNullOrWhiteSpace(type))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
 
     private static (string Name, int Arity)? VisualBasicMemberKey(string? value)
     {
@@ -3795,7 +3912,7 @@ public static partial class CombinedDependencyPathReporter
 
         if (edges.Any(edge => edge.EdgeKind == "projectless-vb-receiver-bridge"))
         {
-            notes.Add(new CombinedPathNote("ProjectlessVisualBasicReceiverBridge", "This review-tier hop joins a syntax-only VB invocation using one directly retained receiver creation plus method identity. Receiver creation may be local to the method or tied to a declared field on its containing type; a same-method creation takes precedence when both scopes contain the receiver name. It may continue from a reached syntax method through another independently supported receiver call. It prefers one semantic type/name/arity declaration; under reduced semantic coverage it requires one syntax type/name declaration and an exact arity-bearing member-body symbol. The resulting target hop is not compiler-resolved call evidence or proof of runtime execution."));
+            notes.Add(new CombinedPathNote("ProjectlessVisualBasicReceiverBridge", "This review-tier hop joins a syntax-only VB invocation using one uniquely retained receiver provenance plus method identity. Provenance may be a local object creation, a containing-type field initializer, or one typed field reached through a unique retained syntax-only base-type chain; local creation takes precedence. It may continue from a reached syntax method through another independently supported receiver call. It prefers one semantic type/name/arity declaration; under reduced semantic coverage it requires one syntax type/name declaration and an exact arity-bearing member-body symbol. Ambiguous receiver, inheritance, field, or target evidence fails closed. The resulting target hop is not compiler-resolved call evidence or proof of runtime execution."));
         }
 
         if (edges.Any(edge => edge.EdgeKind is "remoting-evidence" or "remoting-channel-link"))

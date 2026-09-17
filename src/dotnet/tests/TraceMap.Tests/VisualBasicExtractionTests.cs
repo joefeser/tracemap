@@ -384,7 +384,7 @@ public sealed class VisualBasicExtractionTests
 
                 Public Sub Noise(noisy As Object)
             """);
-        for (var index = 0; index < 2_100; index++)
+        for (var index = 0; index < 5_100; index++)
         {
             source.AppendLine($"        noisy.Method{index}()");
         }
@@ -393,9 +393,15 @@ public sealed class VisualBasicExtractionTests
             End Class
 
             Public Class DataAccess
+                Inherits SQLBaseDA
+
                 Public Sub InsertFeedBack(comment As String, userId As Integer)
                     command.Execute()
                 End Sub
+            End Class
+
+            Public Class SQLBaseDA
+                Protected SQLDA As SqlDataAccess
             End Class
             """);
         File.WriteAllText(Path.Combine(repo, "DataAccess.vb"), source.ToString());
@@ -419,13 +425,25 @@ public sealed class VisualBasicExtractionTests
             fact.FactType == FactTypes.FieldDeclared
             && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
             && fact.Properties.GetValueOrDefault("containingType") == "BusinessLogic"
-            && fact.Properties.GetValueOrDefault("fieldName") == "dal");
+            && fact.Properties.GetValueOrDefault("fieldName") == "dal"
+            && fact.Properties.GetValueOrDefault("fieldType") == "DataAccess");
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.CallEdge
             && fact.RuleId == RuleIds.VisualBasicSyntaxCallGraph
             && fact.SourceSymbol == "DataAccess.InsertFeedBack/2"
             && fact.TargetSymbol == "Execute"
             && fact.Properties.GetValueOrDefault("receiverName") == "command");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.TypeDeclared
+            && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+            && fact.Properties.GetValueOrDefault("name") == "DataAccess"
+            && fact.Properties.GetValueOrDefault("baseTypes") == "SQLBaseDA");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.FieldDeclared
+            && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+            && fact.Properties.GetValueOrDefault("containingType") == "SQLBaseDA"
+            && fact.Properties.GetValueOrDefault("fieldName") == "SQLDA"
+            && fact.Properties.GetValueOrDefault("fieldType") == "SqlDataAccess");
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
             && fact.Properties.GetValueOrDefault("gapKind") == "SyntaxFallbackBudgetExhausted");

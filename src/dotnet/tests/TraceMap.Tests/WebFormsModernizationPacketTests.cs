@@ -1130,6 +1130,75 @@ public sealed class WebFormsModernizationPacketTests
         Assert.True(recursiveChain.PathEvidence.Count(evidence =>
             evidence.RuleId == "combined.paths.projectless-vb-receiver-bridge.v1") >= 2);
 
+        var inheritedDataAccessType = Fact(manifest, FactTypes.TypeDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "WebApplication/App_Code/DataAccess.vb", 35, source: null, target: "DataAccess", contract: null,
+            ("baseTypes", "SQLBaseDA"), ("kind", "class"), ("name", "DataAccess"),
+            ("namespace", ""), ("qualifiedName", "DataAccess")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var inheritedSqlCall = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph,
+            "WebApplication/App_Code/DataAccess.vb", 42, source: "DataAccess.InsertFeedback/1", target: "ExecProc_Scalar", contract: "ExecProc_Scalar",
+            ("argumentCount", "2"), ("callKind", "SyntaxInvocation"), ("calleeName", "ExecProc_Scalar"),
+            ("callerName", "DataAccess.InsertFeedback/1"), ("coverageLabel", "syntax-only"), ("receiverName", "SQLDA")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var inheritedWebIndex = Path.Combine(temp.Path, "inherited-web-index.sqlite");
+        SqliteIndexWriter.Write(inheritedWebIndex, manifest,
+            [page, binding, handler, creation, invocation, flow, businessDeclaration, dataAccessDeclaration, businessField,
+                businessCreation, businessInvocation, inheritedDataAccessType, inheritedSqlCall]);
+
+        var sqlBaseType = Fact(recursiveBackendManifest, FactTypes.TypeDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "Common/DataAccess.vb", 100, source: null, target: "SQLBaseDA", contract: null,
+            ("baseTypes", ""), ("kind", "class"), ("name", "SQLBaseDA"),
+            ("namespace", ""), ("qualifiedName", "SQLBaseDA")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var inheritedSqlField = Fact(recursiveBackendManifest, FactTypes.FieldDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "Common/DataAccess.vb", 102, source: "SQLBaseDA", target: "SQLBaseDA.SQLDA", contract: "SQLDA",
+            ("containingType", "SQLBaseDA"), ("fieldName", "SQLDA"), ("fieldType", "SqlDataAccess"), ("isWithEvents", "False")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var inheritedSqlDeclaration = Fact(recursiveBackendManifest, FactTypes.MethodDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "Common/DataAccess.vb", 220, source: null, target: "ExecProc_Scalar", contract: null,
+            ("containingType", "SqlDataAccess"), ("name", "ExecProc_Scalar")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var inheritedSqlBody = Fact(recursiveBackendManifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph,
+            "Common/DataAccess.vb", 225, source: "SqlDataAccess.ExecProc_Scalar/2", target: "ExecuteScalar", contract: "ExecuteScalar",
+            ("argumentCount", "0"), ("callKind", "SyntaxInvocation"), ("calleeName", "ExecuteScalar"),
+            ("callerName", "SqlDataAccess.ExecProc_Scalar/2"), ("coverageLabel", "syntax-only"), ("receiverName", "command")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var inheritedSqlTerminal = Fact(recursiveBackendManifest, FactTypes.QueryPatternDetected, RuleIds.CSharpSyntaxQueryPattern,
+            "Common/DataAccess.vb", 225, source: "SqlDataAccess.ExecProc_Scalar/2", target: "stored-procedure-shape", contract: "query",
+            ("operationName", "EXECUTE"), ("tableName", "feedback"), ("columnNames", ""),
+            ("sqlSourceKind", "stored-procedure-name"), ("queryShapeHash", "inherited-sql-shape-hash"),
+            ("coverageLabel", "bounded-static-query"));
+        var inheritedBackendIndex = Path.Combine(temp.Path, "inherited-backend-index.sqlite");
+        SqliteIndexWriter.Write(inheritedBackendIndex, recursiveBackendManifest,
+            [sqlBaseType, inheritedSqlField, inheritedSqlDeclaration, inheritedSqlBody, inheritedSqlTerminal]);
+        var inheritedCombinedIndex = Path.Combine(temp.Path, "inherited-combined-index.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [inheritedWebIndex, inheritedBackendIndex], inheritedCombinedIndex, ["web", "backend"]));
+        var inheritedPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(inheritedCombinedIndex, Path.Combine(temp.Path, "inherited-output")));
+        var inheritedChain = Assert.Single(inheritedPacket.EventChains);
+        Assert.True(inheritedChain.TraversalObservation?.TerminalPathCount > 0,
+            System.Text.Json.JsonSerializer.Serialize(new
+            {
+                inheritedChain.TraversalObservation,
+                inheritedChain.PathEvidence,
+                inheritedPacket.Gaps
+            }));
+        Assert.True(inheritedChain.PathEvidence.Count(evidence =>
+            evidence.RuleId == "combined.paths.projectless-vb-receiver-bridge.v1") >= 3);
+
         var semanticBodyDownstream = Fact(backendManifest, FactTypes.ObjectCreated, RuleIds.VisualBasicSemanticObjectCreation,
             "BusinessLayer/BusinessObject.vb", 12,
             source: "BusinessLayer.BusinessObject.InsertFeedback(String)", target: "FeedbackQuery", contract: "FeedbackQuery",
