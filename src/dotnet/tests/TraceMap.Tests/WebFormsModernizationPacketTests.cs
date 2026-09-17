@@ -963,6 +963,12 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Equal(2, combinedPacket.Sources.Count);
         Assert.Equal(manifest.CommitSha, combinedPacket.Sources[0].CommitSha);
         Assert.Contains(combinedPacket.Sources, source => source.CommitSha == backendManifest.CommitSha);
+        var receiverAudit = WebFormsVisualBasicReceiverBridgeAudit.Run(
+            combinedIndex, combinedWritten.JsonPath, surface);
+        Assert.Contains("receiverBridgeAudit=valid", receiverAudit);
+        Assert.Contains("syntaxReceiverInvocations=1", receiverAudit);
+        Assert.Contains("receiverCreations=1", receiverAudit);
+        Assert.Contains("receiverBridgeStatus.ready=1", receiverAudit);
 
         var mixedInvocation = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph, "WebApplication/Feedback.aspx.vb", 23,
             source: "Feedback.Submit_Click/2", target: "InsertFeedback", contract: "InsertFeedback",

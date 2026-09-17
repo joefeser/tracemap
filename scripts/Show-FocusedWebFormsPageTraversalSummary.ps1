@@ -128,3 +128,13 @@ Write-Groups 'frontierSurface' @($observations | ForEach-Object { @(Property-Val
 Write-Groups 'frontierRule' @($observations | ForEach-Object { @(Property-Value $_ 'frontierRuleIds') })
 Write-Groups 'truncationReason' @($observations | ForEach-Object { @(Property-Value $_ 'truncationReasons') })
 Write-Output "diagnosticShapesTruncated=$(@($observations | Where-Object { [bool](Property-Value $_ 'diagnosticShapesTruncated') }).Count)"
+
+$combinedIndex = Join-Path $root 'combined/index.sqlite'
+if (Test-Path -LiteralPath $combinedIndex -PathType Leaf) {
+    $project = Join-Path $PSScriptRoot 'diagnostics/RawWebFormsEvidence/RawWebFormsEvidence.csproj'
+    dotnet build $project -c Release --nologo -v quiet | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_PAGE_TRAVERSAL_RECEIVER_AUDIT_BUILD_FAILED' }
+    $dll = Join-Path $PSScriptRoot 'diagnostics/RawWebFormsEvidence/bin/Release/net10.0/RawWebFormsEvidence.dll'
+    dotnet $dll --vb-receiver-bridge-audit $combinedIndex $snapshotPath $surfaceId
+    if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_PAGE_TRAVERSAL_RECEIVER_AUDIT_FAILED' }
+}
