@@ -92,16 +92,16 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
         }
         if (declarations.Count > 10_000) throw new InvalidDataException("ReceiverBridgeAuditInputLimit");
 
-        var bodySymbols = new List<(string SourceId, string Symbol)>();
+        var bodySymbols = new List<(string SourceId, string Symbol, string FilePath, int Line)>();
         using (var command = db.CreateCommand())
         {
             command.Transaction = transaction;
-            command.CommandText = "select distinct source_index_id, source_symbol from combined_facts "
+            command.CommandText = "select source_index_id, source_symbol, file_path, start_line from combined_facts "
                 + "where source_symbol is not null and trim(source_symbol)<>'' and ("
                 + "(fact_type='CallEdge' and (rule_id=$syntax_call_rule or (rule_id=$semantic_call_rule and evidence_tier=$semantic_tier))) "
                 + "or (fact_type='MethodInvoked' and rule_id=$semantic_invocation_rule and evidence_tier=$semantic_tier) "
                 + "or (fact_type='ObjectCreated' and (rule_id=$syntax_creation_rule or (rule_id=$semantic_creation_rule and evidence_tier=$semantic_tier)))) "
-                + "order by source_index_id, source_symbol limit 10001;";
+                + "order by source_index_id, source_symbol, file_path, start_line, combined_fact_id limit 10001;";
             command.Parameters.AddWithValue("$syntax_call_rule", RuleIds.VisualBasicSyntaxCallGraph);
             command.Parameters.AddWithValue("$semantic_call_rule", RuleIds.VisualBasicSemanticCallGraph);
             command.Parameters.AddWithValue("$semantic_invocation_rule", RuleIds.VisualBasicSemanticMethodInvocation);
@@ -109,7 +109,7 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
             command.Parameters.AddWithValue("$semantic_creation_rule", RuleIds.VisualBasicSemanticObjectCreation);
             command.Parameters.AddWithValue("$semantic_tier", EvidenceTiers.Tier1Semantic);
             using var reader = command.ExecuteReader();
-            while (reader.Read()) bodySymbols.Add((reader.GetString(0), reader.GetString(1)));
+            while (reader.Read()) bodySymbols.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetInt32(3)));
         }
         if (bodySymbols.Count > 10_000) throw new InvalidDataException("ReceiverBridgeAuditInputLimit");
 
@@ -182,7 +182,7 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
         var output = new List<string> { "receiverBridgeAudit=valid", $"supportingCallFacts={facts.Count}",
             $"syntaxReceiverInvocations={calls.Length}", $"receiverCreations={creations.Length}",
             $"semanticMethodCandidates={semanticDeclarations}", $"syntaxMethodCandidates={syntaxDeclarations}",
-            $"receiverBodySymbols={bodySymbols.Count}" };
+            $"receiverBodySymbols={bodySymbols.Select(body => $"{body.SourceId}\0{body.Symbol}").Distinct(StringComparer.OrdinalIgnoreCase).Count()}" };
         output.AddRange(results.OrderBy(pair => pair.Key, StringComparer.Ordinal)
             .Select(pair => $"receiverBridgeStatus.{pair.Key}={pair.Value}"));
         if (includePrivateIdentities)
@@ -211,9 +211,21 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
                         && body.Symbol.Contains(name, StringComparison.OrdinalIgnoreCase))
                     .Select(body => body.Symbol).Distinct(StringComparer.OrdinalIgnoreCase)
                     .Order(StringComparer.OrdinalIgnoreCase).Take(20).ToArray();
+                var declarationSites = declarations
+                    .Where(declaration => string.Equals(Value(declaration, "methodName") ?? Value(declaration, "name"), name, StringComparison.OrdinalIgnoreCase))
+                    .Select(declaration => $"{Value(declaration, "containingType") ?? "unavailable"}@{declaration.FilePath}:{declaration.Line}")
+                    .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).Take(20).ToArray();
+                var sameFileBodies = declarations
+                    .Where(declaration => string.Equals(Value(declaration, "methodName") ?? Value(declaration, "name"), name, StringComparison.OrdinalIgnoreCase))
+                    .SelectMany(declaration => bodySymbols.Where(body => body.SourceId == declaration.SourceId
+                            && body.FilePath.Equals(declaration.FilePath, StringComparison.OrdinalIgnoreCase))
+                        .Select(body => $"{body.Symbol}@{body.Line}"))
+                    .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).Take(30).ToArray();
                 output.Add($"receiverBridgePrivate.call-{privateIndex:D2}.line={call.Line};callee={name};arity={arity};receiverType={type}");
                 output.Add($"receiverBridgePrivate.call-{privateIndex:D2}.declarationTypes={string.Join('|', declarationTypes)}");
+                output.Add($"receiverBridgePrivate.call-{privateIndex:D2}.declarationSites={string.Join('|', declarationSites)}");
                 output.Add($"receiverBridgePrivate.call-{privateIndex:D2}.nearbyBodySymbols={string.Join('|', nearbyBodies)}");
+                output.Add($"receiverBridgePrivate.call-{privateIndex:D2}.sameFileBodySymbols={string.Join('|', sameFileBodies)}");
             }
             output.Add($"receiverBridgePrivate.calls={privateIndex}");
         }
