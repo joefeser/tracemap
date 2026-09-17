@@ -2511,8 +2511,7 @@ public static partial class CombinedDependencyPathReporter
 
         var creations = facts
             .Where(fact => fact.FactType == FactTypes.CallEdge
-                && fact.RuleId == RuleIds.VisualBasicSyntaxCallGraph
-                && string.Equals(CombinedDependencyReporter.FirstValue(fact.Properties, "callKind"), "SyntaxObjectCreation", StringComparison.Ordinal)
+                && IsSupportedVisualBasicReceiverCreation(fact)
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "assignedTo"))
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "calleeContainingType", "calleeName")))
             .ToArray();
@@ -2528,9 +2527,28 @@ public static partial class CombinedDependencyPathReporter
         foreach (var call in syntaxCalls)
         {
             var projectionNode = ToHandlerCallProjectionNode(call);
-            if (!graph.Nodes.ContainsKey(projectionNode.NodeId)
-                || !int.TryParse(CombinedDependencyReporter.FirstValue(call.Properties, "argumentCount"), out var argumentCount))
+            if (!graph.Nodes.ContainsKey(projectionNode.NodeId))
             {
+                AddProjectlessVisualBasicReceiverBridgeGap(
+                    graph,
+                    call,
+                    "ProjectlessVisualBasicReceiverProjectionUnavailable",
+                    "The syntax-only VB invocation was retained, but its handler-call projection node was outside the bounded graph input.",
+                    "handler-call-projection-unavailable",
+                    0,
+                    [call.CombinedFactId]);
+                continue;
+            }
+            if (!int.TryParse(CombinedDependencyReporter.FirstValue(call.Properties, "argumentCount"), out var argumentCount))
+            {
+                AddProjectlessVisualBasicReceiverBridgeGap(
+                    graph,
+                    call,
+                    "ProjectlessVisualBasicReceiverArgumentCountUnavailable",
+                    "The syntax-only VB invocation did not retain a usable argument count, so no type/name/arity bridge was attempted.",
+                    "argument-count-unavailable",
+                    0,
+                    [call.CombinedFactId]);
                 continue;
             }
 
@@ -2538,7 +2556,7 @@ public static partial class CombinedDependencyPathReporter
             var receiverCreations = creations
                 .Where(creation => creation.SourceIndexId == call.SourceIndexId
                     && string.Equals(creation.FilePath, call.FilePath, StringComparison.OrdinalIgnoreCase)
-                    && string.Equals(creation.SourceSymbol, call.SourceSymbol, StringComparison.OrdinalIgnoreCase)
+                    && SameVisualBasicContainingMember(creation.SourceSymbol, creation.Properties, call.SourceSymbol, call.Properties)
                     && creation.StartLine <= call.StartLine
                     && string.Equals(CombinedDependencyReporter.FirstValue(creation.Properties, "assignedTo"), receiverName, StringComparison.OrdinalIgnoreCase))
                 .OrderBy(creation => creation.StartLine)
@@ -2546,6 +2564,14 @@ public static partial class CombinedDependencyPathReporter
                 .ToArray();
             if (receiverCreations.Length == 0)
             {
+                AddProjectlessVisualBasicReceiverBridgeGap(
+                    graph,
+                    call,
+                    "ProjectlessVisualBasicReceiverCreationUnavailable",
+                    "No retained syntax or semantic VB object creation uniquely associates the local invocation receiver with a created type in the same member.",
+                    "receiver-creation-unavailable",
+                    0,
+                    [call.CombinedFactId]);
                 continue;
             }
 
@@ -2620,6 +2646,65 @@ public static partial class CombinedDependencyPathReporter
                 call.StartLine,
                 call.EndLine));
         }
+    }
+
+    private static bool IsSupportedVisualBasicReceiverCreation(CombinedFactRow fact)
+    {
+        var callKind = CombinedDependencyReporter.FirstValue(fact.Properties, "callKind");
+        return fact.RuleId == RuleIds.VisualBasicSyntaxCallGraph
+                && string.Equals(callKind, "SyntaxObjectCreation", StringComparison.Ordinal)
+            || fact.RuleId == RuleIds.VisualBasicSemanticCallGraph
+                && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+                && string.Equals(callKind, "SemanticObjectCreation", StringComparison.Ordinal);
+    }
+
+    private static bool SameVisualBasicContainingMember(
+        string? leftSymbol,
+        IReadOnlyDictionary<string, string> leftProperties,
+        string? rightSymbol,
+        IReadOnlyDictionary<string, string> rightProperties)
+    {
+        if (!string.IsNullOrWhiteSpace(leftSymbol)
+            && string.Equals(leftSymbol.Trim(), rightSymbol?.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var left = VisualBasicMemberKey(leftSymbol ?? CombinedDependencyReporter.FirstValue(leftProperties, "callerName"));
+        var right = VisualBasicMemberKey(rightSymbol ?? CombinedDependencyReporter.FirstValue(rightProperties, "callerName"));
+        return left is not null && right is not null
+            && left.Value.Arity == right.Value.Arity
+            && string.Equals(left.Value.Name, right.Value.Name, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static (string Name, int Arity)? VisualBasicMemberKey(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var text = value.Trim();
+        var slash = text.LastIndexOf('/');
+        if (slash > 0 && int.TryParse(text[(slash + 1)..], out var slashArity))
+        {
+            var slashName = text[..slash];
+            var dot = slashName.LastIndexOf('.');
+            return (dot >= 0 ? slashName[(dot + 1)..] : slashName, slashArity);
+        }
+
+        var open = text.IndexOf('(');
+        if (open <= 0 || !text.EndsWith(')')) return null;
+        var member = text[..open];
+        var memberDot = member.LastIndexOf('.');
+        var name = memberDot >= 0 ? member[(memberDot + 1)..] : member;
+        var parameters = text[(open + 1)..^1];
+        if (parameters.Length == 0) return (name, 0);
+        var depth = 0;
+        var arity = 1;
+        foreach (var character in parameters)
+        {
+            if (character == '(') depth++;
+            else if (character == ')' && depth > 0) depth--;
+            else if (character == ',' && depth == 0) arity++;
+        }
+        return (name, arity);
     }
 
     private static void AddProjectlessVisualBasicReceiverBridgeGap(
@@ -3569,7 +3654,7 @@ public static partial class CombinedDependencyPathReporter
 
         if (edges.Any(edge => edge.EdgeKind == "projectless-vb-receiver-bridge"))
         {
-            notes.Add(new CombinedPathNote("ProjectlessVisualBasicReceiverBridge", "This review-tier hop joins a syntax-only VB invocation to one semantic method declaration using a directly retained local receiver creation, method name, and argument count; it is not compiler-resolved call evidence or proof of runtime execution."));
+            notes.Add(new CombinedPathNote("ProjectlessVisualBasicReceiverBridge", "This review-tier hop joins a syntax-only VB invocation to one semantic method declaration using one directly retained syntax or compiler-resolved local receiver creation plus method name and argument count; the resulting target hop is not compiler-resolved call evidence or proof of runtime execution."));
         }
 
         if (edges.Any(edge => edge.EdgeKind is "remoting-evidence" or "remoting-channel-link"))

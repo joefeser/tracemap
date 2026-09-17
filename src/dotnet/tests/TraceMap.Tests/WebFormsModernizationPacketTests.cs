@@ -963,6 +963,44 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Equal(2, combinedPacket.Sources.Count);
         Assert.Equal(manifest.CommitSha, combinedPacket.Sources[0].CommitSha);
         Assert.Contains(combinedPacket.Sources, source => source.CommitSha == backendManifest.CommitSha);
+
+        var mixedInvocation = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph, "WebApplication/Feedback.aspx.vb", 23,
+            source: "Feedback.Submit_Click/2", target: "InsertFeedback", contract: "InsertFeedback",
+            ("argumentCount", "1"), ("callKind", "SyntaxInvocation"), ("calleeName", "InsertFeedback"),
+            ("callerName", "Feedback.Submit_Click/2"), ("coverageLabel", "syntax-only"), ("receiverName", "bl"));
+        var semanticCreation = FactFactory.Create(
+            manifest,
+            FactTypes.CallEdge,
+            RuleIds.VisualBasicSemanticCallGraph,
+            EvidenceTiers.Tier1Semantic,
+            new("WebApplication/Feedback.aspx.vb", 22, 22, null, "SyntheticFixture", ScannerVersions.VisualBasicSemanticExtractor),
+            sourceSymbol: handlerSymbol,
+            targetSymbol: "BusinessLayer.BusinessObject.New()",
+            contractElement: "BusinessObject",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["assignedTo"] = "bl",
+                ["callKind"] = "SemanticObjectCreation",
+                ["calleeContainingType"] = "BusinessLayer.BusinessObject",
+                ["calleeName"] = "BusinessObject",
+                ["callerName"] = handlerSymbol,
+                ["coverageLabel"] = "bounded-static-call"
+            });
+        var mixedFlow = Fact(manifest, FactTypes.WebFormsEventFlowProjected, RuleIds.LegacyWebFormsEventFlow, "WebApplication/Feedback.aspx.vb", 20,
+            source: handlerSymbol, target: "flow-terminal-unavailable", contract: "Submit_Click",
+            ("supportingFactIds", $"{handler.FactId},{semanticCreation.FactId},{mixedInvocation.FactId}"),
+            ("supportingEdgeIds", $"{semanticCreation.FactId},{mixedInvocation.FactId}"), ("flowClassification", "UnknownAnalysisGap"),
+            ("coverageLabel", "reduced-static-webforms-flow"));
+        var mixedWebIndex = Path.Combine(temp.Path, "mixed-web-index.sqlite");
+        SqliteIndexWriter.Write(mixedWebIndex, manifest, [page, binding, handler, semanticCreation, mixedInvocation, mixedFlow]);
+        var mixedCombinedIndex = Path.Combine(temp.Path, "mixed-combined-index.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([mixedWebIndex, backendIndex], mixedCombinedIndex, ["web", "backend"]));
+        var mixedPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(mixedCombinedIndex, Path.Combine(temp.Path, "mixed-combined-output")));
+        var mixedChain = Assert.Single(mixedPacket.EventChains);
+        Assert.Equal("sql-query", mixedChain.TerminalKind);
+        Assert.Contains("projectless-vb-receiver-bridge", mixedChain.TraversalObservation?.TraversedEdgeKinds ?? []);
+
         var combinedDocs = await EvidenceDocsExporter.ExportAsync(new(
             combinedIndex,
             Path.Combine(temp.Path, "combined-docs"),

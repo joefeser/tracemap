@@ -277,8 +277,9 @@ public static partial class CombinedDependencyPathReporter
 
         // A projectless VB handler call can name only a local receiver and a
         // method. Admit semantic VB declarations only for method names present
-        // in those retained calls; the graph rule still requires one local
-        // receiver creation plus a unique type/name/arity match.
+        // in those retained calls; the graph rule still requires one retained
+        // syntax or compiler-resolved local receiver creation plus a unique
+        // type/name/arity match.
         var bridgeMethodNames = rows
             .Where(row => row.FactType == FactTypes.CallEdge
                 && row.RuleId == RuleIds.VisualBasicSyntaxCallGraph
@@ -510,15 +511,16 @@ public static partial class CombinedDependencyPathReporter
             }
         }
 
-        var syntaxCalls = new List<(string SourceSymbol, string FilePath, int StartLine, IReadOnlyDictionary<string, string> Properties)>();
+        var syntaxCalls = new List<(string SourceSymbol, string FilePath, int StartLine, string RuleId, string EvidenceTier, IReadOnlyDictionary<string, string> Properties)>();
         await using (var command = connection.CreateCommand())
         {
-            command.CommandText = "select source_symbol, file_path, start_line, properties_json from facts "
-                + "where fact_type = 'CallEdge' and rule_id = $rule_id "
+            command.CommandText = "select source_symbol, file_path, start_line, rule_id, evidence_tier, properties_json from facts "
+                + "where fact_type = 'CallEdge' and rule_id in ($syntax_rule_id, $semantic_rule_id) "
                 + "and fact_id in (select value from json_each($edge_ids)) "
                 + "and length(cast(properties_json as blob)) <= $max_row_bytes and json_valid(properties_json) "
                 + "order by file_path collate binary, start_line, fact_id collate binary;";
-            command.Parameters.AddWithValue("$rule_id", RuleIds.VisualBasicSyntaxCallGraph);
+            command.Parameters.AddWithValue("$syntax_rule_id", RuleIds.VisualBasicSyntaxCallGraph);
+            command.Parameters.AddWithValue("$semantic_rule_id", RuleIds.VisualBasicSemanticCallGraph);
             command.Parameters.AddWithValue("$edge_ids", JsonSerializer.Serialize(supportingEdgeIds));
             command.Parameters.AddWithValue("$max_row_bytes", ReportInputBudget.MaxRowTextBytes);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -528,7 +530,9 @@ public static partial class CombinedDependencyPathReporter
                     reader.IsDBNull(0) ? string.Empty : reader.GetString(0),
                     reader.GetString(1),
                     reader.GetInt32(2),
-                    ParseProperties(reader.GetString(3))));
+                    reader.GetString(3),
+                    reader.GetString(4),
+                    ParseProperties(reader.GetString(5))));
             }
         }
 
@@ -541,8 +545,11 @@ public static partial class CombinedDependencyPathReporter
             {
                 var receiver = call.Properties.GetValueOrDefault("receiverName")!;
                 var creations = syntaxCalls
-                    .Where(creation => string.Equals(creation.Properties.GetValueOrDefault("callKind"), "SyntaxObjectCreation", StringComparison.Ordinal)
-                        && string.Equals(creation.SourceSymbol, call.SourceSymbol, StringComparison.OrdinalIgnoreCase)
+                    .Where(creation => IsSupportedVisualBasicReceiverCreation(
+                            creation.RuleId,
+                            creation.EvidenceTier,
+                            creation.Properties.GetValueOrDefault("callKind"))
+                        && SameVisualBasicContainingMember(creation.SourceSymbol, creation.Properties, call.SourceSymbol, call.Properties)
                         && string.Equals(creation.FilePath, call.FilePath, StringComparison.OrdinalIgnoreCase)
                         && creation.StartLine <= call.StartLine
                         && string.Equals(creation.Properties.GetValueOrDefault("assignedTo"), receiver, StringComparison.OrdinalIgnoreCase))
@@ -613,6 +620,13 @@ public static partial class CombinedDependencyPathReporter
         }
 
         return symbols;
+
+        static bool IsSupportedVisualBasicReceiverCreation(string? ruleId, string? evidenceTier, string? callKind) =>
+            ruleId == RuleIds.VisualBasicSyntaxCallGraph
+                && string.Equals(callKind, "SyntaxObjectCreation", StringComparison.Ordinal)
+            || ruleId == RuleIds.VisualBasicSemanticCallGraph
+                && evidenceTier == EvidenceTiers.Tier1Semantic
+                && string.Equals(callKind, "SemanticObjectCreation", StringComparison.Ordinal);
     }
 
     private static CombinedFactRow ReadProjectedFact(SqliteDataReader reader, CombinedReportSource source) => new(
