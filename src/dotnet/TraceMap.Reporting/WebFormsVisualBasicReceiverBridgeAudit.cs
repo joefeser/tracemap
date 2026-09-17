@@ -92,26 +92,21 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
         }
         if (declarations.Count > 10_000) throw new InvalidDataException("ReceiverBridgeAuditInputLimit");
 
-        var candidateBodySymbols = calls
-            .Where(call => int.TryParse(Value(call, "argumentCount"), out _) && !string.IsNullOrWhiteSpace(Value(call, "calleeName")))
-            .SelectMany(call => creations.Where(creation => creation.SourceId == call.SourceId
-                    && creation.FilePath.Equals(call.FilePath, StringComparison.OrdinalIgnoreCase)
-                    && creation.Line <= call.Line && SameMember(creation, call)
-                    && string.Equals(Value(creation, "assignedTo"), Value(call, "receiverName"), StringComparison.OrdinalIgnoreCase))
-                .Select(creation => $"{SimpleType(Value(creation, "calleeContainingType") ?? Value(creation, "calleeName"))}.{Value(call, "calleeName")}/{Value(call, "argumentCount")}"))
-            .Where(value => !value.StartsWith(".", StringComparison.Ordinal))
-            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        var bodySymbols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var bodySymbols = new List<(string SourceId, string Symbol)>();
         using (var command = db.CreateCommand())
         {
             command.Transaction = transaction;
             command.CommandText = "select distinct source_index_id, source_symbol from combined_facts "
-                + "where fact_type='CallEdge' and rule_id=$rule and source_symbol collate nocase in (select value from json_each($symbols));";
-            command.Parameters.AddWithValue("$rule", RuleIds.VisualBasicSyntaxCallGraph);
-            command.Parameters.AddWithValue("$symbols", JsonSerializer.Serialize(candidateBodySymbols));
+                + "where fact_type='CallEdge' and source_symbol is not null and trim(source_symbol)<>'' "
+                + "and (rule_id=$syntax_rule or (rule_id=$semantic_rule and evidence_tier=$semantic_tier)) "
+                + "order by source_index_id, source_symbol limit 10001;";
+            command.Parameters.AddWithValue("$syntax_rule", RuleIds.VisualBasicSyntaxCallGraph);
+            command.Parameters.AddWithValue("$semantic_rule", RuleIds.VisualBasicSemanticCallGraph);
+            command.Parameters.AddWithValue("$semantic_tier", EvidenceTiers.Tier1Semantic);
             using var reader = command.ExecuteReader();
-            while (reader.Read()) bodySymbols.Add($"{reader.GetString(0)}\0{reader.GetString(1)}");
+            while (reader.Read()) bodySymbols.Add((reader.GetString(0), reader.GetString(1)));
         }
+        if (bodySymbols.Count > 10_000) throw new InvalidDataException("ReceiverBridgeAuditInputLimit");
 
         var results = new Dictionary<string, int>(StringComparer.Ordinal);
         void Hit(string value) => results[value] = results.GetValueOrDefault(value) + 1;
@@ -138,11 +133,14 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
                 Hit(targets.Length == 1 ? "ready-semantic" : "semantic-target-ambiguous");
                 continue;
             }
-            var expectedSymbol = $"{type}.{Value(call, "calleeName")}/{arity}";
             var syntaxTargets = declarations.Where(declaration => declaration.RuleId == RuleIds.VisualBasicSyntaxDeclarations
                     && SimpleType(Value(declaration, "containingType")).Equals(type, StringComparison.OrdinalIgnoreCase)
                     && string.Equals(Value(declaration, "methodName") ?? Value(declaration, "name"), Value(call, "calleeName"), StringComparison.OrdinalIgnoreCase)
-                    && bodySymbols.Contains($"{declaration.SourceId}\0{expectedSymbol}"))
+                    && bodySymbols.Any(body => body.SourceId == declaration.SourceId
+                        && QualifiedMemberKey(body.Symbol) is { } member
+                        && member.Type.Equals(type, StringComparison.OrdinalIgnoreCase)
+                        && member.Name.Equals(Value(call, "calleeName"), StringComparison.OrdinalIgnoreCase)
+                        && member.Arity == arity))
                 .ToArray();
             Hit(syntaxTargets.Length switch { 0 => "target-unavailable", 1 => "ready-syntax", _ => "syntax-target-ambiguous" });
         }
@@ -152,7 +150,7 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
         var output = new List<string> { "receiverBridgeAudit=valid", $"supportingCallFacts={facts.Count}",
             $"syntaxReceiverInvocations={calls.Length}", $"receiverCreations={creations.Length}",
             $"semanticMethodCandidates={semanticDeclarations}", $"syntaxMethodCandidates={syntaxDeclarations}",
-            $"syntaxBodySymbols={bodySymbols.Count}" };
+            $"receiverBodySymbols={bodySymbols.Count}" };
         output.AddRange(results.OrderBy(pair => pair.Key, StringComparer.Ordinal)
             .Select(pair => $"receiverBridgeStatus.{pair.Key}={pair.Value}"));
         return output;
@@ -174,16 +172,29 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
     }
     private static (string Name, int Arity)? MemberKey(string? value)
     {
+        var qualified = QualifiedMemberKey(value);
+        return qualified is null ? null : (qualified.Value.Name, qualified.Value.Arity);
+    }
+    private static (string Type, string Name, int Arity)? QualifiedMemberKey(string? value)
+    {
         if (string.IsNullOrWhiteSpace(value)) return null;
-        var text = value.Trim();
+        var text = value.Trim().Replace("Global::", string.Empty, StringComparison.OrdinalIgnoreCase);
         var slash = text.LastIndexOf('/');
-        if (slash > 0 && int.TryParse(text[(slash + 1)..], out var slashArity)) return (text[..slash].Split('.').Last(), slashArity);
+        if (slash > 0 && int.TryParse(text[(slash + 1)..], out var slashArity))
+        {
+            var member = text[..slash];
+            var dot = member.LastIndexOf('.');
+            return dot <= 0 ? null : (SimpleType(member[..dot]), member[(dot + 1)..], slashArity);
+        }
         var open = text.IndexOf('(');
         if (open <= 0 || !text.EndsWith(')')) return null;
+        var qualifiedMember = text[..open];
+        var memberDot = qualifiedMember.LastIndexOf('.');
+        if (memberDot <= 0) return null;
         var parameters = text[(open + 1)..^1];
         var depth = 0; var arity = parameters.Length == 0 ? 0 : 1;
         foreach (var character in parameters) { if (character == '(') depth++; else if (character == ')' && depth > 0) depth--; else if (character == ',' && depth == 0) arity++; }
-        return (text[..open].Split('.').Last(), arity);
+        return (SimpleType(qualifiedMember[..memberDot]), qualifiedMember[(memberDot + 1)..], arity);
     }
     private static string SimpleType(string? value) => string.IsNullOrWhiteSpace(value) ? string.Empty
         : value.Trim().Replace("Global::", string.Empty, StringComparison.OrdinalIgnoreCase).Split('.').Last();

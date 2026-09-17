@@ -1041,6 +1041,28 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Contains("syntaxMethodCandidates=1", syntaxReceiverAudit);
         Assert.Contains("receiverBridgeStatus.ready-syntax=1", syntaxReceiverAudit);
 
+        var semanticBodyDownstream = Fact(backendManifest, FactTypes.CallEdge, RuleIds.VisualBasicSemanticCallGraph,
+            "BusinessLayer/BusinessObject.vb", 12,
+            source: "BusinessLayer.BusinessObject.InsertFeedback(String)", target: "FeedbackQuery.Insert/1", contract: "Insert",
+            ("argumentCount", "1"), ("callKind", "SemanticMethodInvocation"), ("calleeName", "Insert"),
+            ("callerName", "BusinessLayer.BusinessObject.InsertFeedback(String)"), ("coverageLabel", "bounded-static-call")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier1Semantic
+        };
+        var semanticBodyBackendIndex = Path.Combine(temp.Path, "semantic-body-backend-index.sqlite");
+        SqliteIndexWriter.Write(semanticBodyBackendIndex, backendManifest, [syntaxDeclaration, semanticBodyDownstream, syntaxTerminal]);
+        var semanticBodyCombinedIndex = Path.Combine(temp.Path, "semantic-body-combined-index.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([webIndex, semanticBodyBackendIndex], semanticBodyCombinedIndex, ["web", "backend"]));
+        var semanticBodyWritten = await WebFormsModernizationPacketReporter.WriteAsync(
+            new(semanticBodyCombinedIndex, Path.Combine(temp.Path, "semantic-body-combined-output")));
+        var semanticBodyPacket = semanticBodyWritten.Packet;
+        var semanticBodyChain = Assert.Single(semanticBodyPacket.EventChains);
+        Assert.Equal("sql-query", semanticBodyChain.TerminalKind);
+        Assert.Contains("projectless-vb-receiver-bridge", semanticBodyChain.TraversalObservation?.TraversedEdgeKinds ?? []);
+        var semanticBodyAudit = WebFormsVisualBasicReceiverBridgeAudit.Run(
+            semanticBodyCombinedIndex, semanticBodyWritten.JsonPath, surface);
+        Assert.Contains("receiverBridgeStatus.ready-syntax=1", semanticBodyAudit);
+
         var combinedDocs = await EvidenceDocsExporter.ExportAsync(new(
             combinedIndex,
             Path.Combine(temp.Path, "combined-docs"),

@@ -2530,12 +2530,14 @@ public static partial class CombinedDependencyPathReporter
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "containingType"))
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "methodName", "name")))
             .ToArray();
-        var syntaxBodyFacts = facts
+        var receiverBodyFacts = facts
             .Where(fact => fact.FactType == FactTypes.CallEdge
-                && fact.RuleId == RuleIds.VisualBasicSyntaxCallGraph
-                && !string.IsNullOrWhiteSpace(fact.SourceSymbol))
-            .GroupBy(fact => $"{fact.SourceIndexId}\0{fact.SourceSymbol}", StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(group => group.Key, group => group.OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal).ToArray(), StringComparer.OrdinalIgnoreCase);
+                && (fact.RuleId == RuleIds.VisualBasicSyntaxCallGraph
+                    || fact.RuleId == RuleIds.VisualBasicSemanticCallGraph && fact.EvidenceTier == EvidenceTiers.Tier1Semantic)
+                && VisualBasicQualifiedMemberKey(fact.SourceSymbol) is not null)
+            .Select(fact => new { Fact = fact, Member = VisualBasicQualifiedMemberKey(fact.SourceSymbol)!.Value })
+            .GroupBy(item => $"{item.Fact.SourceIndexId}\0{item.Member.Type}\0{item.Member.Name}\0{item.Member.Arity}", StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.Select(item => item.Fact).OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal).ToArray(), StringComparer.OrdinalIgnoreCase);
 
         foreach (var call in syntaxCalls)
         {
@@ -2655,13 +2657,20 @@ public static partial class CombinedDependencyPathReporter
                     .Select(declaration => new
                     {
                         Declaration = declaration,
-                        NodeId = SymbolNodeId(declaration.SourceIndexId, $"{createdType}.{methodName}/{argumentCount}"),
-                        BodyFacts = syntaxBodyFacts.GetValueOrDefault($"{declaration.SourceIndexId}\0{createdType}.{methodName}/{argumentCount}", [])
+                        BodyFacts = receiverBodyFacts.GetValueOrDefault($"{declaration.SourceIndexId}\0{createdType}\0{methodName}\0{argumentCount}", [])
                     })
                     // The declaration itself does not retain overload arity in older
                     // syntax artifacts. Require the exact arity-bearing member node
                     // emitted by call-shaped body evidence before joining it.
-                    .Where(candidate => candidate.BodyFacts.Length > 0 && graph.Nodes.ContainsKey(candidate.NodeId))
+                    .Select(candidate => new
+                    {
+                        candidate.Declaration,
+                        candidate.BodyFacts,
+                        BodySymbols = candidate.BodyFacts.Select(fact => fact.SourceSymbol!)
+                            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray()
+                    })
+                    .Where(candidate => candidate.BodySymbols.Length == 1
+                        && graph.Nodes.ContainsKey(SymbolNodeId(candidate.Declaration.SourceIndexId, candidate.BodySymbols[0])))
                     .OrderBy(candidate => candidate.Declaration.CombinedFactId, StringComparer.Ordinal)
                     .ToArray();
                 if (syntaxTargets.Length != 1)
@@ -2682,7 +2691,7 @@ public static partial class CombinedDependencyPathReporter
                 }
 
                 target = syntaxTargets[0].Declaration;
-                targetNode = graph.Nodes[syntaxTargets[0].NodeId];
+                targetNode = graph.Nodes[SymbolNodeId(target.SourceIndexId, syntaxTargets[0].BodySymbols[0])];
                 bridgeEvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual;
                 targetBodyEvidenceIds = syntaxTargets[0].BodyFacts.Select(fact => fact.CombinedFactId).ToArray();
             }
@@ -2736,23 +2745,32 @@ public static partial class CombinedDependencyPathReporter
 
     private static (string Name, int Arity)? VisualBasicMemberKey(string? value)
     {
+        var qualified = VisualBasicQualifiedMemberKey(value);
+        return qualified is null ? null : (qualified.Value.Name, qualified.Value.Arity);
+    }
+
+    private static (string Type, string Name, int Arity)? VisualBasicQualifiedMemberKey(string? value)
+    {
         if (string.IsNullOrWhiteSpace(value)) return null;
-        var text = value.Trim();
+        var text = value.Trim().Replace("Global::", string.Empty, StringComparison.OrdinalIgnoreCase);
         var slash = text.LastIndexOf('/');
         if (slash > 0 && int.TryParse(text[(slash + 1)..], out var slashArity))
         {
             var slashName = text[..slash];
             var dot = slashName.LastIndexOf('.');
-            return (dot >= 0 ? slashName[(dot + 1)..] : slashName, slashArity);
+            if (dot <= 0) return null;
+            return (SimpleVisualBasicTypeName(slashName[..dot]), slashName[(dot + 1)..], slashArity);
         }
 
         var open = text.IndexOf('(');
         if (open <= 0 || !text.EndsWith(')')) return null;
         var member = text[..open];
         var memberDot = member.LastIndexOf('.');
-        var name = memberDot >= 0 ? member[(memberDot + 1)..] : member;
+        if (memberDot <= 0) return null;
+        var type = SimpleVisualBasicTypeName(member[..memberDot]);
+        var name = member[(memberDot + 1)..];
         var parameters = text[(open + 1)..^1];
-        if (parameters.Length == 0) return (name, 0);
+        if (parameters.Length == 0) return (type, name, 0);
         var depth = 0;
         var arity = 1;
         foreach (var character in parameters)
@@ -2761,7 +2779,7 @@ public static partial class CombinedDependencyPathReporter
             else if (character == ')' && depth > 0) depth--;
             else if (character == ',' && depth == 0) arity++;
         }
-        return (name, arity);
+        return (type, name, arity);
     }
 
     private static void AddProjectlessVisualBasicReceiverBridgeGap(
