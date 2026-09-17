@@ -376,8 +376,9 @@ public sealed class VisualBasicExtractionTests
         Directory.CreateDirectory(repo);
         var source = new System.Text.StringBuilder("""
             Public Class BusinessLogic
+                Private dal As New DataAccess()
+
                 Public Sub InsertFeedBack(comment As String, userId As Integer)
-                    Dim dal As New DataAccess()
                     dal.InsertFeedBack(comment, userId)
                 End Sub
 
@@ -385,7 +386,7 @@ public sealed class VisualBasicExtractionTests
             """);
         for (var index = 0; index < 2_100; index++)
         {
-            source.AppendLine($"        noisy.Property{index} = Nothing");
+            source.AppendLine($"        noisy.Method{index}()");
         }
         source.AppendLine("""
                 End Sub
@@ -413,6 +414,11 @@ public sealed class VisualBasicExtractionTests
             && fact.RuleId == RuleIds.VisualBasicSyntaxObjectCreation
             && fact.TargetSymbol == "DataAccess"
             && fact.Properties.GetValueOrDefault("assignedTo") == "dal");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.FieldDeclared
+            && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+            && fact.Properties.GetValueOrDefault("containingType") == "BusinessLogic"
+            && fact.Properties.GetValueOrDefault("fieldName") == "dal");
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
             && fact.Properties.GetValueOrDefault("gapKind") == "SyntaxFallbackBudgetExhausted");

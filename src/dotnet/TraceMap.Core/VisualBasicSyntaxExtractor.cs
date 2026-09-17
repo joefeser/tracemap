@@ -94,13 +94,11 @@ public static class VisualBasicSyntaxExtractor
                 () => AddEventCompositionFacts(manifest, facts, file.RelativePath, root, budget));
             // Call-path evidence is more useful than isolated member names when
             // a large legacy file reaches the shared per-file fallback budget.
-            // Keep declarations and event wiring first, then retain invocations
-            // and receiver creations before the potentially high-volume member
-            // access projection consumes the remaining budget.
-            TryRunPhase(manifest, facts, file.RelativePath, RuleIds.VisualBasicSyntaxInvocation, "invocations",
-                () => AddInvocationFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans, budget));
-            TryRunPhase(manifest, facts, file.RelativePath, RuleIds.VisualBasicSyntaxObjectCreation, "object-creations",
-                () => AddObjectCreationFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans, budget));
+            // Retain invocations and receiver creations together in source order
+            // so a high-volume invocation phase cannot starve earlier field or
+            // local initializers that provide receiver provenance.
+            TryRunPhase(manifest, facts, file.RelativePath, RuleIds.VisualBasicSyntaxCallGraph, "calls-and-object-creations",
+                () => AddCallAndObjectCreationFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans, budget));
             TryRunPhase(manifest, facts, file.RelativePath, RuleIds.VisualBasicSyntaxMemberAccess, "member-access",
                 () => AddMemberAccessFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans, budget));
         }
@@ -765,7 +763,7 @@ public static class VisualBasicSyntaxExtractor
         return true;
     }
 
-    private static void AddInvocationFacts(
+    private static void AddCallAndObjectCreationFacts(
         ScanManifest manifest,
         List<CodeFact> facts,
         string filePath,
@@ -773,16 +771,42 @@ public static class VisualBasicSyntaxExtractor
         IReadOnlyList<ProtectedSourceSpan> protectedSpans,
         FactBudget budget)
     {
-        foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        foreach (var node in root.DescendantNodes()
+            .Where(node => node is InvocationExpressionSyntax or ObjectCreationExpressionSyntax)
+            .OrderBy(node => node.SpanStart)
+            .ThenBy(node => node is ObjectCreationExpressionSyntax ? 0 : 1))
         {
-            if (OverlapsProtected(invocation, protectedSpans))
+            if (OverlapsProtected(node, protectedSpans))
             {
                 continue;
             }
 
-            var invocationName = GetInvocationName(invocation.Expression);
-            var containingMember = GetContainingMemberName(invocation);
-            if (!TryAddSyntaxFact(
+            var retained = node switch
+            {
+                InvocationExpressionSyntax invocation => AddInvocationFacts(
+                    manifest, facts, filePath, root, invocation, budget),
+                ObjectCreationExpressionSyntax creation => AddObjectCreationFacts(
+                    manifest, facts, filePath, creation, budget),
+                _ => true
+            };
+            if (!retained)
+            {
+                return;
+            }
+        }
+    }
+
+    private static bool AddInvocationFacts(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        string filePath,
+        CompilationUnitSyntax root,
+        InvocationExpressionSyntax invocation,
+        FactBudget budget)
+    {
+        var invocationName = GetInvocationName(invocation.Expression);
+        var containingMember = GetContainingMemberName(invocation);
+        if (!TryAddSyntaxFact(
                     manifest,
                     facts,
                     FactTypes.InvocationName,
@@ -798,13 +822,13 @@ public static class VisualBasicSyntaxExtractor
                         ["receiverName"] = GetInvocationReceiverName(invocation.Expression) ?? string.Empty
                     },
                     budget))
-            {
-                return;
-            }
+        {
+            return false;
+        }
 
-            // The callee is invocation text only: never a compiler-resolved
-            // target and never a symbol-ID join.
-            if (!TryAddSyntaxFact(
+        // The callee is invocation text only: never a compiler-resolved
+        // target and never a symbol-ID join.
+        if (!TryAddSyntaxFact(
                     manifest,
                     facts,
                     FactTypes.CallEdge,
@@ -823,11 +847,11 @@ public static class VisualBasicSyntaxExtractor
                     },
                     budget,
                     sourceSymbol: containingMember))
-            {
-                return;
-            }
+        {
+            return false;
+        }
 
-            if (!TryAddExplicitDataAdapterFillFact(
+        return TryAddExplicitDataAdapterFillFact(
                     manifest,
                     facts,
                     filePath,
@@ -835,31 +859,19 @@ public static class VisualBasicSyntaxExtractor
                     invocation,
                     invocationName,
                     containingMember,
-                    budget))
-            {
-                return;
-            }
-        }
+                    budget);
     }
 
-    private static void AddObjectCreationFacts(
+    private static bool AddObjectCreationFacts(
         ScanManifest manifest,
         List<CodeFact> facts,
         string filePath,
-        CompilationUnitSyntax root,
-        IReadOnlyList<ProtectedSourceSpan> protectedSpans,
+        ObjectCreationExpressionSyntax creation,
         FactBudget budget)
     {
-        foreach (var creation in root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
-        {
-            if (OverlapsProtected(creation, protectedSpans))
-            {
-                continue;
-            }
-
-            var typeName = creation.Type.ToString();
-            var containingMember = GetContainingMemberName(creation);
-            if (!TryAddSyntaxFact(
+        var typeName = creation.Type.ToString();
+        var containingMember = GetContainingMemberName(creation);
+        if (!TryAddSyntaxFact(
                     manifest,
                     facts,
                     FactTypes.ObjectCreated,
@@ -877,11 +889,11 @@ public static class VisualBasicSyntaxExtractor
                     },
                     budget,
                     sourceSymbol: containingMember))
-            {
-                return;
-            }
+        {
+            return false;
+        }
 
-            if (!TryAddSyntaxFact(
+        return TryAddSyntaxFact(
                     manifest,
                     facts,
                     FactTypes.CallEdge,
@@ -899,11 +911,7 @@ public static class VisualBasicSyntaxExtractor
                         ["coverageLabel"] = "syntax-only"
                     },
                     budget,
-                    sourceSymbol: containingMember))
-            {
-                return;
-            }
-        }
+                    sourceSymbol: containingMember);
     }
 
     private static bool TryAddSyntaxFact(
