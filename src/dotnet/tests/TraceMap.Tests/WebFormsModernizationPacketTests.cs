@@ -1072,10 +1072,16 @@ public sealed class WebFormsModernizationPacketTests
         {
             EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
         };
+        var businessField = Fact(manifest, FactTypes.FieldDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "WebApplication/App_Code/DataAccess.vb", 12, source: "BusinessObject", target: "BusinessObject.dal", contract: "dal",
+            ("containingType", "BusinessObject"), ("fieldName", "dal")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
         var businessCreation = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph,
-            "WebApplication/App_Code/DataAccess.vb", 12, source: "BusinessObject.InsertFeedback/1", target: "DataAccess", contract: "DataAccess",
+            "WebApplication/App_Code/DataAccess.vb", 12, source: null, target: "DataAccess", contract: "DataAccess",
             ("assignedTo", "dal"), ("callKind", "SyntaxObjectCreation"), ("calleeContainingType", "DataAccess"),
-            ("calleeName", "DataAccess"), ("callerName", "BusinessObject.InsertFeedback/1"), ("coverageLabel", "syntax-only")) with
+            ("calleeName", "DataAccess"), ("callerName", ""), ("coverageLabel", "syntax-only")) with
         {
             EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
         };
@@ -1100,7 +1106,7 @@ public sealed class WebFormsModernizationPacketTests
             ("coverageLabel", "bounded-static-query"));
         var recursiveIndex = Path.Combine(temp.Path, "recursive-index.sqlite");
         SqliteIndexWriter.Write(recursiveIndex, manifest,
-            [page, binding, handler, creation, invocation, flow, businessDeclaration, dataAccessDeclaration,
+            [page, binding, handler, creation, invocation, flow, businessDeclaration, dataAccessDeclaration, businessField,
                 businessCreation, businessInvocation, dataAccessBody, recursiveTerminal]);
         var recursiveBackendManifest = manifest with
         {
