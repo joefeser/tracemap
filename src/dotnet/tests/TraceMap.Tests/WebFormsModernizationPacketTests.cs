@@ -1133,12 +1133,19 @@ public sealed class WebFormsModernizationPacketTests
         var inheritedDataAccessType = Fact(manifest, FactTypes.TypeDeclared, RuleIds.VisualBasicSyntaxDeclarations,
             "WebApplication/App_Code/DataAccess.vb", 35, source: null, target: "DataAccess", contract: null,
             ("baseTypes", "UnitedFramework.DataAccess.SQLBaseDA"), ("kind", "class"), ("name", "DataAccess"),
-            ("namespace", "BusinessLogic.DataAccess"), ("qualifiedName", "BusinessLogic.DataAccess.DataAccess")) with
+            ("namespace", "BusinessLogic"), ("qualifiedName", "BusinessLogic.DataAccess")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var qualifiedDataAccessDeclaration = Fact(manifest, FactTypes.MethodDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "WebApplication/App_Code/DataAccess.vb", 40, source: null, target: "InsertFeedback", contract: null,
+            ("containingType", "DataAccess"), ("qualifiedContainingType", "BusinessLogic.DataAccess"),
+            ("name", "InsertFeedback"), ("parameterCount", "1"), ("parameterTypes", "String")) with
         {
             EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
         };
         var inheritedSqlCall = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph,
-            "WebApplication/App_Code/DataAccess.vb", 42, source: "DataAccess.InsertFeedback/1", target: "ExecProc_Scalar", contract: "ExecProc_Scalar",
+            "WebApplication/App_Code/DataAccess.vb", 42, source: "BusinessLogic.DataAccess.InsertFeedback/1", target: "ExecProc_Scalar", contract: "ExecProc_Scalar",
             ("argumentCount", "2"), ("callKind", "SyntaxInvocation"), ("calleeName", "ExecProc_Scalar"),
             ("callerName", "DataAccess.InsertFeedback/1"), ("coverageLabel", "syntax-only"), ("receiverName", "SQLDA")) with
         {
@@ -1146,25 +1153,27 @@ public sealed class WebFormsModernizationPacketTests
         };
         var inheritedWebIndex = Path.Combine(temp.Path, "inherited-web-index.sqlite");
         SqliteIndexWriter.Write(inheritedWebIndex, manifest,
-            [page, binding, handler, creation, invocation, flow, businessDeclaration, dataAccessDeclaration, businessField,
+            [page, binding, handler, creation, invocation, flow, businessDeclaration, qualifiedDataAccessDeclaration, businessField,
                 businessCreation, businessInvocation, inheritedDataAccessType, inheritedSqlCall]);
 
         var sqlBaseType = Fact(recursiveBackendManifest, FactTypes.TypeDeclared, RuleIds.VisualBasicSyntaxDeclarations,
             "Common/DataAccess.vb", 100, source: null, target: "SQLBaseDA", contract: null,
             ("baseTypes", ""), ("kind", "class"), ("name", "SQLBaseDA"),
-            ("namespace", ""), ("qualifiedName", "SQLBaseDA")) with
+            ("namespace", "UnitedFramework.DataAccess"), ("qualifiedName", "UnitedFramework.DataAccess.SQLBaseDA")) with
         {
             EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
         };
         var inheritedSqlField = Fact(recursiveBackendManifest, FactTypes.FieldDeclared, RuleIds.VisualBasicSyntaxDeclarations,
             "Common/DataAccess.vb", 102, source: "SQLBaseDA", target: "SQLBaseDA.SQLDA", contract: "SQLDA",
-            ("containingType", "SQLBaseDA"), ("fieldName", "SQLDA"), ("fieldType", "SqlDataAccess"), ("isWithEvents", "False")) with
+            ("containingType", "SQLBaseDA"), ("qualifiedContainingType", "UnitedFramework.DataAccess.SQLBaseDA"),
+            ("fieldName", "SQLDA"), ("fieldType", "SqlDataAccess"), ("isWithEvents", "False")) with
         {
             EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
         };
         var inheritedSqlDeclaration = Fact(recursiveBackendManifest, FactTypes.MethodDeclared, RuleIds.VisualBasicSyntaxDeclarations,
             "Common/DataAccess.vb", 220, source: null, target: "ExecProc_Scalar", contract: null,
-            ("containingType", "SqlDataAccess"), ("name", "ExecProc_Scalar"), ("parameterCount", "2")) with
+            ("containingType", "SqlDataAccess"), ("qualifiedContainingType", "UnitedFramework.DataAccess.SqlDataAccess"),
+            ("name", "ExecProc_Scalar"), ("parameterCount", "2"), ("parameterTypes", "String;ArrayList")) with
         {
             EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
         };
@@ -1181,14 +1190,14 @@ public sealed class WebFormsModernizationPacketTests
             EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
         };
         var inheritedSqlBody = Fact(recursiveBackendManifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph,
-            "Common/DataAccess.vb", 225, source: "SqlDataAccess.ExecProc_Scalar/2", target: "ExecuteScalar", contract: "ExecuteScalar",
+            "Common/DataAccess.vb", 225, source: "UnitedFramework.DataAccess.SqlDataAccess.ExecProc_Scalar/2", target: "ExecuteScalar", contract: "ExecuteScalar",
             ("argumentCount", "0"), ("callKind", "SyntaxInvocation"), ("calleeName", "ExecuteScalar"),
             ("callerName", "SqlDataAccess.ExecProc_Scalar/2"), ("coverageLabel", "syntax-only"), ("receiverName", "command")) with
         {
             EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
         };
         var inheritedSqlTerminal = Fact(recursiveBackendManifest, FactTypes.DatabaseOperationCandidate, RuleIds.VisualBasicSyntaxDatabaseOperation,
-            "Common/DataAccess.vb", 225, source: "SqlDataAccess.ExecProc_Scalar/2", target: "SqlCommand.ExecuteScalar", contract: "scalar-candidate",
+            "Common/DataAccess.vb", 225, source: "UnitedFramework.DataAccess.SqlDataAccess.ExecProc_Scalar/2", target: "SqlCommand.ExecuteScalar", contract: "scalar-candidate",
             ("coverageLabel", "reduced-syntax-vb-database-operation"), ("operationKind", "scalar-candidate"),
             ("receiverName", "command"), ("receiverType", "SqlCommand"), ("resolutionKind", "ExplicitSyntaxType"),
             ("resultKind", "scalar"), ("sqlSourceKind", "vb-syntax-explicit-database-command")) with

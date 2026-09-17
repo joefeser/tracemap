@@ -250,6 +250,10 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
                 privateGapIndex++;
                 var call = graphGapCalls[gap.CombinedFactId!];
                 output.Add($"receiverBridgePrivate.graphGap-{privateGapIndex:D2}.kind={gap.GapKind};file={gap.FilePath};line={gap.StartLine};source={call.SourceSymbol};callee={Value(call, "calleeName") ?? "unavailable"};receiver={Value(call, "receiverName") ?? "unavailable"};arity={Value(call, "argumentCount") ?? "unavailable"};reason={gap.Reason};candidates={gap.CandidateCount ?? 0}");
+                if (gap.Reason == "receiver-provenance-unavailable")
+                {
+                    output.Add($"receiverBridgePrivate.graphGap-{privateGapIndex:D2}.provenance={ReadReceiverProvenanceFacts(db, transaction, call)}");
+                }
             }
             output.Add($"receiverBridgePrivate.graphGaps={graphReceiverGaps.Length}");
             output.Add($"receiverBridgePrivate.relevantGraphGaps={privateGapIndex}");
@@ -308,6 +312,58 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
         }
         return output;
     }
+
+    private static string ReadReceiverProvenanceFacts(
+        SqliteConnection db,
+        SqliteTransaction transaction,
+        Fact call)
+    {
+        var caller = QualifiedMemberKey(call.SourceSymbol);
+        var receiver = Value(call, "receiverName");
+        if (caller is null || string.IsNullOrWhiteSpace(receiver)) return "caller-or-receiver-unavailable";
+
+        var roots = new List<string>();
+        using (var command = db.CreateCommand())
+        {
+            command.Transaction = transaction;
+            command.CommandText = "select coalesce((select label from index_sources where index_sources.source_index_id=combined_facts.source_index_id), source_index_id), properties_json "
+                + "from combined_facts where fact_type='TypeDeclared' and rule_id=$rule and evidence_tier=$tier "
+                + "and json_valid(properties_json) and lower(coalesce(cast(json_extract(properties_json,'$.name') as text),''))=$name "
+                + "order by combined_fact_id limit 21;";
+            command.Parameters.AddWithValue("$rule", RuleIds.VisualBasicSyntaxDeclarations);
+            command.Parameters.AddWithValue("$tier", EvidenceTiers.Tier3SyntaxOrTextual);
+            command.Parameters.AddWithValue("$name", SimpleType(caller.Value.Type).ToLowerInvariant());
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                var properties = JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(1)) ?? [];
+                roots.Add($"source={reader.GetString(0)},qualified={Value(properties, "qualifiedName") ?? Value(properties, "name") ?? "unavailable"},bases={Value(properties, "baseTypes") ?? "unavailable"}");
+            }
+        }
+
+        var fields = new List<string>();
+        using (var command = db.CreateCommand())
+        {
+            command.Transaction = transaction;
+            command.CommandText = "select coalesce((select label from index_sources where index_sources.source_index_id=combined_facts.source_index_id), source_index_id), properties_json "
+                + "from combined_facts where fact_type='FieldDeclared' and rule_id=$rule "
+                + "and json_valid(properties_json) and lower(coalesce(cast(json_extract(properties_json,'$.fieldName') as text),''))=$receiver "
+                + "order by combined_fact_id limit 21;";
+            command.Parameters.AddWithValue("$rule", RuleIds.VisualBasicSyntaxDeclarations);
+            command.Parameters.AddWithValue("$receiver", receiver.ToLowerInvariant());
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                var properties = JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(1)) ?? [];
+                fields.Add($"source={reader.GetString(0)},owner={Value(properties, "qualifiedContainingType") ?? Value(properties, "containingType") ?? "unavailable"},type={Value(properties, "fieldType") ?? Value(properties, "declaredType") ?? "unavailable"}");
+            }
+        }
+
+        return $"callerType={caller.Value.Type};roots={string.Join('|', roots)};fields={string.Join('|', fields)}";
+    }
+
+    private static string? Value(IReadOnlyDictionary<string, string> properties, string key) =>
+        properties.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value) ? value : null;
 
     private static void AddPrivateExecProcDownstreamLeaves(
         List<string> output,
