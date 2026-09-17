@@ -64,7 +64,7 @@ build success, or impact.
 | Extractor | Identity/version | Tier | Rules |
 | --- | --- | --- | --- |
 | Visual Basic semantic extractor | `vb-semantic/0.8.3` | Tier1 (facts), Tier2 (project observation), Tier4 (workspace, call-site, event, and data/external-boundary gaps) | `vb.semantic.compilation.v1`, `vb.semantic.workspace.v1`, `vb.semantic.declarations.v1`, `vb.semantic.propertyaccess.v1`, `vb.semantic.methodinvocation.v1`, `vb.semantic.callgraph.v1`, `vb.semantic.objectcreation.v1`, `vb.semantic.valueflow.v1`, `vb.semantic.symbolrelationship.v1`, `vb.semantic.event-wiring.v1`, `vb.semantic.config-binding.v1`, `vb.semantic.external-boundary.v1`, plus shared database, HTTP, WCF, and ASMX contracts |
-| Visual Basic syntax fallback | `vb-syntax/0.3.6` | Tier3 (facts), Tier4 (parse/read/budget/semantic-unavailable/event/phase-failure gaps) | `vb.syntax.declarations.v1`, `vb.syntax.memberaccess.v1`, `vb.syntax.invocation.v1`, `vb.syntax.callgraph.v1`, `vb.syntax.objectcreation.v1`, `vb.syntax.event-wiring.v1`, `vb.syntax.database-operation.v1`; syntax call edges carry the explicit `syntax-only` coverage label, and explicit supported ADO.NET data-adapter `Fill` receivers produce reduced syntax-only database-operation candidates without retaining SQL text |
+| Visual Basic syntax fallback | `vb-syntax/0.3.8` | Tier3 (facts), Tier4 (parse/read/budget/semantic-unavailable/event/phase-failure gaps) | `vb.syntax.declarations.v1`, `vb.syntax.memberaccess.v1`, `vb.syntax.invocation.v1`, `vb.syntax.callgraph.v1`, `vb.syntax.objectcreation.v1`, `vb.syntax.event-wiring.v1`, `vb.syntax.database-operation.v1`; syntax call edges carry the explicit `syntax-only` coverage label, and explicit supported ADO.NET data-adapter `Fill` receivers produce reduced syntax-only database-operation candidates without retaining SQL text |
 | Shared Web Forms extractor | `legacy-webforms/0.13.4` | Tier1/Tier2/Tier3 facts and Tier4 gaps | existing `legacy.webforms.*` contracts, now with bounded VB code-behind/designer parsing, projectless VB syntax-call ownership normalized by exact parameter-count-suffixed handler identity and containing span, inline client-behavior candidates joined to unique retained VB `Handles`/`AddHandler` bindings, explicit selector target cardinality, literal jQuery AJAX candidates joined through unique `.ashx` directives to external or single-file inline `ProcessRequest` declarations and retained downstream paths, projectless VB server navigation/request-lifecycle/control-state candidates, unique inline server-expression joins to repository and `App_Code` declarations, shared database/WCF/ASMX terminal projection, and safe control prefix/type/registration-state metadata on unresolved registration gaps |
 | Shared WCF extractor | `legacy-wcf/0.3.1` | Tier1 inputs, Tier2/Tier3 mappings, Tier4 gaps | existing `legacy.wcf.*` contracts with compiler-resolved VB client/contract inputs and compiler-resolved C# call-target identity for generated proxy operations |
 | Shared ASMX extractor | `legacy-asmx/0.2.0` | Tier1 inputs, Tier3 mappings, Tier4 gaps | existing `legacy.asmx.*` contracts with compiler-resolved VB client/service inputs |
@@ -126,7 +126,9 @@ Syntax fallback (Tier3): `TypeDeclared`, `MethodDeclared`, `PropertyDeclared`,
 candidates that are never compiler-resolved targets and never join to semantic
 symbols by identity. Emission is bounded by a deterministic per-file budget
 (2,000 facts) and bounded parse-diagnostic gaps (20 per file, diagnostic id and
-message hash only).
+message hash only). Within that shared budget, declaration and event evidence
+is retained first, followed by invocation and object-creation evidence; the
+potentially high-volume member-access projection uses the remaining budget.
 
 ## Fallback boundary
 

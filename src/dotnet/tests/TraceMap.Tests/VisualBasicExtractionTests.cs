@@ -369,6 +369,56 @@ public sealed class VisualBasicExtractionTests
     }
 
     [Fact]
+    public void Large_projectless_vb_files_retain_calls_and_receiver_creations_before_member_access_budget_exhaustion()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        var source = new System.Text.StringBuilder("""
+            Public Class BusinessLogic
+                Public Sub InsertFeedBack(comment As String, userId As Integer)
+                    Dim dal As New DataAccess()
+                    dal.InsertFeedBack(comment, userId)
+                End Sub
+
+                Public Sub Noise(noisy As Object)
+            """);
+        for (var index = 0; index < 2_100; index++)
+        {
+            source.AppendLine($"        noisy.Property{index} = Nothing");
+        }
+        source.AppendLine("""
+                End Sub
+            End Class
+
+            Public Class DataAccess
+                Public Sub InsertFeedBack(comment As String, userId As Integer)
+                End Sub
+            End Class
+            """);
+        File.WriteAllText(Path.Combine(repo, "DataAccess.vb"), source.ToString());
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.CallEdge
+            && fact.RuleId == RuleIds.VisualBasicSyntaxCallGraph
+            && fact.SourceSymbol == "BusinessLogic.InsertFeedBack/2"
+            && fact.TargetSymbol == "InsertFeedBack"
+            && fact.Properties.GetValueOrDefault("receiverName") == "dal"
+            && fact.Properties.GetValueOrDefault("argumentCount") == "2");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.ObjectCreated
+            && fact.RuleId == RuleIds.VisualBasicSyntaxObjectCreation
+            && fact.TargetSymbol == "DataAccess"
+            && fact.Properties.GetValueOrDefault("assignedTo") == "dal");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "SyntaxFallbackBudgetExhausted");
+    }
+
+    [Fact]
     public void Projectless_vb_explicit_data_adapter_fill_is_a_reduced_database_candidate()
     {
         using var temp = new TempDirectory();

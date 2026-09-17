@@ -92,12 +92,17 @@ public static class VisualBasicSyntaxExtractor
                 () => AddDeclarationFacts(manifest, facts, file.RelativePath, root, budget));
             TryRunPhase(manifest, facts, file.RelativePath, RuleIds.VisualBasicSyntaxEventWiring, "event-composition",
                 () => AddEventCompositionFacts(manifest, facts, file.RelativePath, root, budget));
-            TryRunPhase(manifest, facts, file.RelativePath, RuleIds.VisualBasicSyntaxMemberAccess, "member-access",
-                () => AddMemberAccessFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans, budget));
+            // Call-path evidence is more useful than isolated member names when
+            // a large legacy file reaches the shared per-file fallback budget.
+            // Keep declarations and event wiring first, then retain invocations
+            // and receiver creations before the potentially high-volume member
+            // access projection consumes the remaining budget.
             TryRunPhase(manifest, facts, file.RelativePath, RuleIds.VisualBasicSyntaxInvocation, "invocations",
                 () => AddInvocationFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans, budget));
             TryRunPhase(manifest, facts, file.RelativePath, RuleIds.VisualBasicSyntaxObjectCreation, "object-creations",
                 () => AddObjectCreationFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans, budget));
+            TryRunPhase(manifest, facts, file.RelativePath, RuleIds.VisualBasicSyntaxMemberAccess, "member-access",
+                () => AddMemberAccessFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans, budget));
         }
 
         return facts;
