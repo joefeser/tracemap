@@ -65,7 +65,10 @@ try {
             [ordered]@{ surfaceId = 'surface-fixture' }
         )
         downstreamBoundaries = @()
-        gaps = @([ordered]@{ classification = 'WebFormsModernizationInputLimitReached'; scopeId = 'graph-frontier' })
+        gaps = @(
+            [ordered]@{ classification = 'WebFormsModernizationInputLimitReached'; scopeId = 'graph-frontier' },
+            [ordered]@{ classification = 'ProjectlessVisualBasicReceiverTargetUnavailable'; scopeId = 'private-node-id' }
+        )
     })
     $packetHash = (Get-FileHash -LiteralPath $packetPath -Algorithm SHA256).Hash.ToLowerInvariant()
     Write-Application $current $packetHash
@@ -75,6 +78,7 @@ try {
         'pageTraversalSummary=valid', 'chains=2', 'boundaries=0', 'observations=1',
         'reachedNodes=4', 'traversedEdges=3', 'downstreamEdges=2', 'terminalPaths=0',
         'inputLimit.graph-frontier=1',
+        'receiverBridgeGap.ProjectlessVisualBasicReceiverTargetUnavailable=1',
         'stopState.observed-downstream-without-supported-terminal=1',
         'callEvidenceState.joined-downstream-edge-observed=1',
         'traversedEdge.projectless-vb-receiver-bridge=1',

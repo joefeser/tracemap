@@ -93,6 +93,9 @@ $observations = @($chains | ForEach-Object { Property-Value $_ 'traversalObserva
 $inputLimits = @($packet.gaps | Where-Object {
     [string](Property-Value $_ 'classification') -eq 'WebFormsModernizationInputLimitReached'
 } | ForEach-Object { Property-Value $_ 'scopeId' })
+$receiverBridgeGaps = @($packet.gaps | Where-Object {
+    [string](Property-Value $_ 'classification') -match '^ProjectlessVisualBasicReceiver[A-Za-z]+$'
+} | ForEach-Object { Property-Value $_ 'classification' })
 
 Write-Output 'pageTraversalSummary=valid'
 Write-Output "priorPageId=$PriorPageId"
@@ -109,6 +112,7 @@ Write-Output "downstreamEdges=$(Sum-Property $observations 'downstreamEdgeCount'
 Write-Output "terminalPaths=$(Sum-Property $observations 'terminalPathCount')"
 Write-Output "truncatedObservations=$(@($observations | Where-Object { [bool](Property-Value $_ 'truncated') }).Count)"
 Write-Groups 'inputLimit' $inputLimits
+Write-Groups 'receiverBridgeGap' $receiverBridgeGaps
 Write-Groups 'stopState' @($observations | ForEach-Object { Property-Value $_ 'stopState' })
 Write-Groups 'callEvidenceState' @($observations | ForEach-Object { Property-Value $_ 'callEvidenceState' })
 Write-Groups 'traversedEdge' @($observations | ForEach-Object { @(Property-Value $_ 'traversedEdgeKinds') })
