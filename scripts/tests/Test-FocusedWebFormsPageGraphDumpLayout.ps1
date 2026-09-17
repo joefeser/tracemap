@@ -30,13 +30,13 @@ try {
 
     try {
         & $subject -ReviewRoot $temp -PriorPageId page-001 | Out-Null
-        throw 'Page graph dump unexpectedly accepted a missing standalone review.'
+        throw 'Page graph dump unexpectedly accepted a combined index.'
     }
     catch {
-        if ($_.Exception.Message -ne 'WEBFORMS_PAGE_GRAPH_DUMP_STANDALONE_REVIEW_UNAVAILABLE') { throw }
+        if ($_.Exception.Message -ne 'WEBFORMS_PAGE_GRAPH_DUMP_COMBINED_INDEX_UNSUPPORTED_USE_TRAVERSAL_SUMMARY') { throw }
     }
 
-    Write-Host 'PASS focused Web Forms page graph receipt layout'
+    Write-Host 'PASS focused Web Forms page graph combined-index guard'
 }
 finally {
     if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Recurse -Force }

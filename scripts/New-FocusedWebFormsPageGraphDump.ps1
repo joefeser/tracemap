@@ -69,6 +69,7 @@ $scanProperty = if ($null -ne $layoutProperty -and $null -ne $layoutProperty.Val
 } else { $null }
 $scanDirectory = if ($null -ne $scanProperty -and [string]$scanProperty.Value) { [string]$scanProperty.Value } else { 'scan' }
 if ($scanDirectory -notmatch '^[A-Za-z0-9._-]+$') { throw 'WEBFORMS_PAGE_GRAPH_DUMP_INDEX_LAYOUT_INVALID' }
+if ($scanDirectory -eq 'combined') { throw 'WEBFORMS_PAGE_GRAPH_DUMP_COMBINED_INDEX_UNSUPPORTED_USE_TRAVERSAL_SUMMARY' }
 $indexPath = Join-Path $root "$scanDirectory/index.sqlite"
 if (!(Test-Path -LiteralPath $indexPath -PathType Leaf)) { throw 'WEBFORMS_PAGE_GRAPH_DUMP_INDEX_UNAVAILABLE' }
 

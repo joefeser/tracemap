@@ -111,6 +111,16 @@ Write-Output "truncatedObservations=$(@($observations | Where-Object { [bool](Pr
 Write-Groups 'inputLimit' $inputLimits
 Write-Groups 'stopState' @($observations | ForEach-Object { Property-Value $_ 'stopState' })
 Write-Groups 'callEvidenceState' @($observations | ForEach-Object { Property-Value $_ 'callEvidenceState' })
+Write-Groups 'traversedEdge' @($observations | ForEach-Object { @(Property-Value $_ 'traversedEdgeKinds') })
+Write-Groups 'traversedRule' @($observations | ForEach-Object { @(Property-Value $_ 'traversedRuleIds') })
+Write-Groups 'leafNode' @($observations | ForEach-Object { @(Property-Value $_ 'leafNodeKinds') })
+Write-Groups 'leafSurface' @($observations | ForEach-Object { @(Property-Value $_ 'leafSurfaceKinds') })
+Write-Groups 'leafRule' @($observations | ForEach-Object { @(Property-Value $_ 'leafRuleIds') })
 Write-Groups 'leafReconciliation' @($observations | ForEach-Object { @(Property-Value $_ 'leafReconciliationStates') })
 Write-Groups 'leafCallEvidence' @($observations | ForEach-Object { @(Property-Value $_ 'leafCallEvidenceStates') })
+Write-Groups 'leafSourceAvailability' @($observations | ForEach-Object { @(Property-Value $_ 'leafSourceAvailabilityStates') })
+Write-Groups 'frontierNode' @($observations | ForEach-Object { @(Property-Value $_ 'frontierNodeKinds') })
+Write-Groups 'frontierSurface' @($observations | ForEach-Object { @(Property-Value $_ 'frontierSurfaceKinds') })
+Write-Groups 'frontierRule' @($observations | ForEach-Object { @(Property-Value $_ 'frontierRuleIds') })
 Write-Groups 'truncationReason' @($observations | ForEach-Object { @(Property-Value $_ 'truncationReasons') })
+Write-Output "diagnosticShapesTruncated=$(@($observations | Where-Object { [bool](Property-Value $_ 'diagnosticShapesTruncated') }).Count)"

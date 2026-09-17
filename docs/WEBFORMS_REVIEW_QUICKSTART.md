@@ -187,15 +187,19 @@ same receipted page, run:
 .\scripts\New-FocusedWebFormsPageGraphDump.ps1 -ReviewRoot $ReviewRoot -PriorPageId page-008
 ```
 
-For a merged review, diagnose the current merged page directly. The script reads
-the receipted `combined/index.sqlite` location instead of assuming `scan/index.sqlite`:
+The raw graph dump is intentionally limited to a single-source `scan/index.sqlite`.
+For a merged review, inspect the already-retained combined traversal diagnostics:
 
 ```powershell
-.\scripts\New-FocusedWebFormsPageGraphDump.ps1 `
+.\scripts\Show-FocusedWebFormsPageTraversalSummary.ps1 `
   -ReviewRoot $MergedReviewRoot `
   -PriorPageId page-011 `
   -StandaloneReviewRoot $MergedReviewRoot
 ```
+
+The summary reports traversed edge kinds and rules, leaf and frontier shapes,
+source availability, and deterministic truncation reasons without disclosing
+private paths or symbols.
 
 Share only the reported `page-graph.shareable.zip`. Each distinct handler case
 reports retained terminal-evidence families (`database`, `http`, or

@@ -47,9 +47,19 @@ try {
                     terminalPathCount = 0
                     truncated = $false
                     callEvidenceState = 'joined-downstream-edge-observed'
+                    traversedEdgeKinds = @('projectless-vb-receiver-bridge')
+                    traversedRuleIds = @('combined.paths.projectless-vb-receiver-bridge.v1')
+                    leafNodeKinds = @('Symbol')
+                    leafSurfaceKinds = @('database')
+                    leafRuleIds = @('vb.semantic.callgraph.v1')
                     leafReconciliationStates = @('exact-symbol')
                     leafCallEvidenceStates = @('retained-call-edge')
+                    leafSourceAvailabilityStates = @('exact-declaration-or-body-evidence-retained')
+                    frontierNodeKinds = @('SymbolCandidate')
+                    frontierSurfaceKinds = @('database')
+                    frontierRuleIds = @('vb.syntax.callgraph.v1')
                     truncationReasons = @()
+                    diagnosticShapesTruncated = $true
                 }
             },
             [ordered]@{ surfaceId = 'surface-fixture' }
@@ -66,7 +76,13 @@ try {
         'reachedNodes=4', 'traversedEdges=3', 'downstreamEdges=2', 'terminalPaths=0',
         'inputLimit.graph-frontier=1',
         'stopState.observed-downstream-without-supported-terminal=1',
-        'callEvidenceState.joined-downstream-edge-observed=1')) {
+        'callEvidenceState.joined-downstream-edge-observed=1',
+        'traversedEdge.projectless-vb-receiver-bridge=1',
+        'traversedRule.combined.paths.projectless-vb-receiver-bridge.v1=1',
+        'leafNode.Symbol=1', 'leafSurface.database=1', 'leafRule.vb.semantic.callgraph.v1=1',
+        'leafSourceAvailability.exact-declaration-or-body-evidence-retained=1',
+        'frontierNode.SymbolCandidate=1', 'frontierSurface.database=1', 'frontierRule.vb.syntax.callgraph.v1=1',
+        'diagnosticShapesTruncated=1')) {
         if ($expected -notin $output) { throw "Traversal summary omitted: $expected" }
     }
     if (@($output | Where-Object { $_ -match 'Fixture|surface-fixture' }).Count -gt 0) {
