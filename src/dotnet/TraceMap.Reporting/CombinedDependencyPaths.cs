@@ -2531,9 +2531,7 @@ public static partial class CombinedDependencyPathReporter
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "methodName", "name")))
             .ToArray();
         var receiverBodyFacts = facts
-            .Where(fact => fact.FactType == FactTypes.CallEdge
-                && (fact.RuleId == RuleIds.VisualBasicSyntaxCallGraph
-                    || fact.RuleId == RuleIds.VisualBasicSemanticCallGraph && fact.EvidenceTier == EvidenceTiers.Tier1Semantic)
+            .Where(fact => IsVisualBasicReceiverBodyFact(fact)
                 && VisualBasicQualifiedMemberKey(fact.SourceSymbol) is not null)
             .Select(fact => new { Fact = fact, Member = VisualBasicQualifiedMemberKey(fact.SourceSymbol)!.Value })
             .GroupBy(item => $"{item.Fact.SourceIndexId}\0{item.Member.Type}\0{item.Member.Name}\0{item.Member.Arity}", StringComparer.OrdinalIgnoreCase)
@@ -2723,6 +2721,17 @@ public static partial class CombinedDependencyPathReporter
                 && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
                 && string.Equals(callKind, "SemanticObjectCreation", StringComparison.Ordinal);
     }
+
+    private static bool IsVisualBasicReceiverBodyFact(CombinedFactRow fact) =>
+        fact.FactType == FactTypes.CallEdge
+            && (fact.RuleId == RuleIds.VisualBasicSyntaxCallGraph
+                || fact.RuleId == RuleIds.VisualBasicSemanticCallGraph && fact.EvidenceTier == EvidenceTiers.Tier1Semantic)
+        || fact.FactType == FactTypes.MethodInvoked
+            && fact.RuleId == RuleIds.VisualBasicSemanticMethodInvocation
+            && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+        || fact.FactType == FactTypes.ObjectCreated
+            && (fact.RuleId == RuleIds.VisualBasicSyntaxObjectCreation
+                || fact.RuleId == RuleIds.VisualBasicSemanticObjectCreation && fact.EvidenceTier == EvidenceTiers.Tier1Semantic);
 
     private static bool SameVisualBasicContainingMember(
         string? leftSymbol,

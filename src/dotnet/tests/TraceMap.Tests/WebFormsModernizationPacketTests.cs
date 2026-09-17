@@ -1047,16 +1047,17 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Contains("syntaxMethodCandidates=1", syntaxReceiverAudit);
         Assert.Contains("receiverBridgeStatus.ready-syntax=1", syntaxReceiverAudit);
 
-        var semanticBodyDownstream = Fact(backendManifest, FactTypes.CallEdge, RuleIds.VisualBasicSemanticCallGraph,
+        var semanticBodyDownstream = Fact(backendManifest, FactTypes.ObjectCreated, RuleIds.VisualBasicSemanticObjectCreation,
             "BusinessLayer/BusinessObject.vb", 12,
-            source: "BusinessLayer.BusinessObject.InsertFeedback(String)", target: "FeedbackQuery.Insert/1", contract: "Insert",
-            ("argumentCount", "1"), ("callKind", "SemanticMethodInvocation"), ("calleeName", "Insert"),
-            ("callerName", "BusinessLayer.BusinessObject.InsertFeedback(String)"), ("coverageLabel", "bounded-static-call")) with
+            source: "BusinessLayer.BusinessObject.InsertFeedback(String)", target: "FeedbackQuery", contract: "FeedbackQuery",
+            ("argumentCount", "0"), ("createdType", "FeedbackQuery"), ("createdTypeName", "FeedbackQuery"),
+            ("creationKind", "SemanticObjectCreation"), ("coverageLabel", "bounded-static-call")) with
         {
             EvidenceTier = EvidenceTiers.Tier1Semantic
         };
+        var semanticBodyTerminal = syntaxTerminal with { SourceSymbol = "FeedbackQuery" };
         var semanticBodyBackendIndex = Path.Combine(temp.Path, "semantic-body-backend-index.sqlite");
-        SqliteIndexWriter.Write(semanticBodyBackendIndex, backendManifest, [syntaxDeclaration, semanticBodyDownstream, syntaxTerminal]);
+        SqliteIndexWriter.Write(semanticBodyBackendIndex, backendManifest, [syntaxDeclaration, semanticBodyDownstream, semanticBodyTerminal]);
         var semanticBodyCombinedIndex = Path.Combine(temp.Path, "semantic-body-combined-index.sqlite");
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([webIndex, semanticBodyBackendIndex], semanticBodyCombinedIndex, ["web", "backend"]));
         var semanticBodyWritten = await WebFormsModernizationPacketReporter.WriteAsync(

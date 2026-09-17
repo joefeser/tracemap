@@ -97,11 +97,16 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
         {
             command.Transaction = transaction;
             command.CommandText = "select distinct source_index_id, source_symbol from combined_facts "
-                + "where fact_type='CallEdge' and source_symbol is not null and trim(source_symbol)<>'' "
-                + "and (rule_id=$syntax_rule or (rule_id=$semantic_rule and evidence_tier=$semantic_tier)) "
+                + "where source_symbol is not null and trim(source_symbol)<>'' and ("
+                + "(fact_type='CallEdge' and (rule_id=$syntax_call_rule or (rule_id=$semantic_call_rule and evidence_tier=$semantic_tier))) "
+                + "or (fact_type='MethodInvoked' and rule_id=$semantic_invocation_rule and evidence_tier=$semantic_tier) "
+                + "or (fact_type='ObjectCreated' and (rule_id=$syntax_creation_rule or (rule_id=$semantic_creation_rule and evidence_tier=$semantic_tier)))) "
                 + "order by source_index_id, source_symbol limit 10001;";
-            command.Parameters.AddWithValue("$syntax_rule", RuleIds.VisualBasicSyntaxCallGraph);
-            command.Parameters.AddWithValue("$semantic_rule", RuleIds.VisualBasicSemanticCallGraph);
+            command.Parameters.AddWithValue("$syntax_call_rule", RuleIds.VisualBasicSyntaxCallGraph);
+            command.Parameters.AddWithValue("$semantic_call_rule", RuleIds.VisualBasicSemanticCallGraph);
+            command.Parameters.AddWithValue("$semantic_invocation_rule", RuleIds.VisualBasicSemanticMethodInvocation);
+            command.Parameters.AddWithValue("$syntax_creation_rule", RuleIds.VisualBasicSyntaxObjectCreation);
+            command.Parameters.AddWithValue("$semantic_creation_rule", RuleIds.VisualBasicSemanticObjectCreation);
             command.Parameters.AddWithValue("$semantic_tier", EvidenceTiers.Tier1Semantic);
             using var reader = command.ExecuteReader();
             while (reader.Read()) bodySymbols.Add((reader.GetString(0), reader.GetString(1)));
