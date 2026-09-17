@@ -67,7 +67,8 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
             .ToArray();
         var creations = facts.Where(IsCreation).ToArray();
         var methodNames = calls.Select(call => Value(call, "calleeName"))
-            .Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            .Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value!)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         var declarations = new List<Fact>();
         using (var command = db.CreateCommand())
         {
@@ -187,15 +188,63 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
 
         var semanticDeclarations = declarations.Count(fact => fact.RuleId == RuleIds.VisualBasicSemanticDeclarations);
         var syntaxDeclarations = declarations.Count(fact => fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations);
+        var graphReceiverGaps = CombinedDependencyPathReporter.BuildGraphInventoryAsync(indexPath)
+            .GetAwaiter().GetResult().Gaps
+            .Where(gap => gap.RuleId == "combined.paths.projectless-vb-receiver-bridge.v1")
+            .ToArray();
+        var graphGapCalls = new Dictionary<string, Fact>(StringComparer.Ordinal);
+        var graphGapFactIds = graphReceiverGaps
+            .Select(gap => gap.CombinedFactId)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Select(id => id!)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (graphGapFactIds.Length > 0)
+        {
+            using var command = db.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = "select source_index_id, coalesce((select label from index_sources where index_sources.source_index_id=combined_facts.source_index_id), source_index_id), "
+                + "project_path, combined_fact_id, source_symbol, file_path, start_line, rule_id, evidence_tier, properties_json "
+                + "from combined_facts where combined_fact_id in (select value from json_each($ids)) order by combined_fact_id limit 10001;";
+            command.Parameters.AddWithValue("$ids", JsonSerializer.Serialize(graphGapFactIds));
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                var fact = ReadFact(reader);
+                graphGapCalls[fact.Id] = fact;
+            }
+            if (graphGapCalls.Count > 10_000) throw new InvalidDataException("ReceiverBridgeAuditInputLimit");
+        }
         var output = new List<string> { "receiverBridgeAudit=valid", $"supportingCallFacts={facts.Count}",
             $"syntaxReceiverInvocations={calls.Length}", $"receiverCreations={creations.Length}",
             $"semanticMethodCandidates={semanticDeclarations}", $"syntaxMethodCandidates={syntaxDeclarations}",
             $"receiverBodySymbols={bodySymbols.Select(body => $"{body.SourceId}\0{body.Symbol}").Distinct(StringComparer.OrdinalIgnoreCase).Count()}" };
         output.AddRange(results.OrderBy(pair => pair.Key, StringComparer.Ordinal)
             .Select(pair => $"receiverBridgeStatus.{pair.Key}={pair.Value}"));
+        output.AddRange(graphReceiverGaps
+            .GroupBy(gap => gap.GapKind, StringComparer.Ordinal)
+            .OrderBy(group => group.Key, StringComparer.Ordinal)
+            .Select(group => $"receiverBridgeGraphGap.{group.Key}={group.Count()}"));
         if (includePrivateIdentities)
         {
             output.Add("receiverBridgePrivate=enabled");
+            var privateGapIndex = 0;
+            foreach (var gap in graphReceiverGaps
+                .Where(gap => gap.CombinedFactId is not null
+                    && graphGapCalls.TryGetValue(gap.CombinedFactId, out var call)
+                    && !string.IsNullOrWhiteSpace(call.SourceSymbol)
+                    && methodNames.Any(name => call.SourceSymbol.Contains(name, StringComparison.OrdinalIgnoreCase)))
+                .OrderBy(gap => gap.FilePath, StringComparer.Ordinal)
+                .ThenBy(gap => gap.StartLine)
+                .ThenBy(gap => gap.GapKind, StringComparer.Ordinal)
+                .Take(100))
+            {
+                privateGapIndex++;
+                var call = graphGapCalls[gap.CombinedFactId!];
+                output.Add($"receiverBridgePrivate.graphGap-{privateGapIndex:D2}.kind={gap.GapKind};file={gap.FilePath};line={gap.StartLine};source={call.SourceSymbol};callee={Value(call, "calleeName") ?? "unavailable"};receiver={Value(call, "receiverName") ?? "unavailable"};arity={Value(call, "argumentCount") ?? "unavailable"};reason={gap.Reason};candidates={gap.CandidateCount ?? 0}");
+            }
+            output.Add($"receiverBridgePrivate.graphGaps={graphReceiverGaps.Length}");
+            output.Add($"receiverBridgePrivate.relevantGraphGaps={privateGapIndex}");
             var privateIndex = 0;
             var callStatusIndex = 0;
             foreach (var call in calls)
