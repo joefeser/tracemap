@@ -969,6 +969,15 @@ public sealed class WebFormsModernizationPacketTests
             Families: "webforms-modernization,gap,limitation",
             WebFormsPacketPaths: [combinedWritten.JsonPath]));
         Assert.Contains(combinedDocs.Chunks, chunk => chunk.ChunkFamily == "webforms-modernization");
+        using var combinedCliOutput = new StringWriter();
+        using var combinedCliError = new StringWriter();
+        var combinedCliExit = await TraceMapCommand.RunAsync(
+            ["webforms-modernization", "--index", combinedIndex, "--out", Path.Combine(temp.Path, "combined-cli-output")],
+            combinedCliOutput,
+            combinedCliError);
+        Assert.Equal(0, combinedCliExit);
+        Assert.Equal(string.Empty, combinedCliError.ToString());
+        Assert.Contains("Sources: 2", combinedCliOutput.ToString(), StringComparison.Ordinal);
 
         var competingDeclaration = FactFactory.Create(
             manifest,
