@@ -64,7 +64,10 @@ $serverEvidence = @{ factId = 'fact-server-one'; ruleId = 'legacy.webforms.serve
 $inlineServerEvidence = @{ factId = 'fact-inline-server-one'; ruleId = 'legacy.webforms.inline-server-expression.v1'; evidenceTier = 'Tier3SyntaxOrTextual'; coverageLabel = 'reduced-static-webforms-inline-server-expression'; commitSha = ('a' * 40); filePath = 'Pages/First.aspx'; startLine = 40; endLine = 40; extractorId = 'legacy-webforms'; extractorVersion = '1'; supportingFactIds = @('fact-policy'); supportingEdgeIds = @(); limitations = @('static inline server reference only') }
 $packet = [ordered]@{
     schemaVersion = 'webforms-modernization-packet.v1'; packetId = 'packet-one'; ruleId = 'legacy.webforms.modernization-packet.v1'; claimLevel = 'local-only'; coverage = 'reduced'
-    sources = @(@{ sourceId = 'source-one'; repositoryId = 'repo-one'; scanId = 'scan-one'; commitSha = ('a' * 40); analysisLevel = 'semantic'; buildStatus = 'succeeded' })
+    sources = @(
+        @{ sourceId = 'source-one'; repositoryId = 'repo-one'; scanId = 'scan-one'; commitSha = ('a' * 40); analysisLevel = 'semantic'; buildStatus = 'succeeded' },
+        @{ sourceId = 'source-two'; repositoryId = 'repo-two'; scanId = 'scan-two'; commitSha = ('b' * 40); analysisLevel = 'semantic'; buildStatus = 'succeeded' }
+    )
     summary = @{ projectCount = 1; surfaceCount = 2; eventChainCount = 5; downstreamBoundaryCount = 1; identityStateCount = 1; batchDataMovementCount = 1; structuralSliceCandidateCount = 1; clientBehaviorCount = 3; serverBehaviorCount = 2; gapCount = 2; truncated = $true; truncationReasons = @('legacy-flow:TruncatedByLimit:depth'); coverageReductionReasons = @('source-analysis-reduced','bounded-output-truncated') }
     projects = @(@{ projectId = 'project-one'; surfaceCount = 2; evidence = @(); supportingFactIds = @() })
     surfaces = @(

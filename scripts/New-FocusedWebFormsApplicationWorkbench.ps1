@@ -223,7 +223,15 @@ $packetSha256 = (Get-FileHash -LiteralPath $packetFile.FullName -Algorithm SHA25
 $packet = [IO.File]::ReadAllText($packetFile.FullName) | ConvertFrom-Json -Depth 100
 if ($packet.schemaVersion -ne 'webforms-modernization-packet.v1') { throw 'ApplicationWorkbenchPacketSchemaMismatch' }
 $sources = @(Values $packet.sources)
-if ($sources.Count -ne 1 -or !$sources[0].scanId -or !$sources[0].commitSha) { throw 'ApplicationWorkbenchPacketProvenanceMismatch' }
+if ($sources.Count -lt 1 -or $sources.Count -gt 64) { throw 'ApplicationWorkbenchPacketProvenanceMismatch' }
+$sourceKeys = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+foreach ($source in $sources) {
+    $scanId = [string](Property-Value $source 'scanId')
+    $commitSha = [string](Property-Value $source 'commitSha')
+    if ([string]::IsNullOrWhiteSpace($scanId) -or $commitSha -notmatch '^[0-9a-fA-F]{40}$' -or !$sourceKeys.Add("$scanId|$($commitSha.ToLowerInvariant())")) {
+        throw 'ApplicationWorkbenchPacketProvenanceMismatch'
+    }
+}
 $surfaces = @(Values $packet.surfaces)
 if ($surfaces.Count -lt 1 -or $surfaces.Count -gt 1000) { throw 'ApplicationWorkbenchSurfaceLimit' }
 if ($IncludeRawSource -and (!$SourceRoot -or !(Test-Path -LiteralPath $SourceRoot -PathType Container))) { throw 'ApplicationWorkbenchSourceRootUnavailable' }
