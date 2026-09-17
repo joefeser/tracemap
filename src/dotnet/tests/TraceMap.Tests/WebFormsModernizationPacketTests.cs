@@ -990,9 +990,9 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Contains("receiverBridgePrivate.callStatuses=1", privateReceiverAudit);
 
         var mixedInvocation = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph, "WebApplication/Feedback.aspx.vb", 23,
-            source: "Feedback.Submit_Click/2", target: "InsertFeedback", contract: "InsertFeedback",
+            source: "Sample.Feedback.Submit_Click/2", target: "InsertFeedback", contract: "InsertFeedback",
             ("argumentCount", "1"), ("callKind", "SyntaxInvocation"), ("calleeName", "InsertFeedback"),
-            ("callerName", "Feedback.Submit_Click/2"), ("coverageLabel", "syntax-only"), ("receiverName", "bl"));
+            ("callerName", "Sample.Feedback.Submit_Click/2"), ("coverageLabel", "syntax-only"), ("receiverName", "bl"));
         var semanticCreation = FactFactory.Create(
             manifest,
             FactTypes.CallEdge,
@@ -1197,7 +1197,7 @@ public sealed class WebFormsModernizationPacketTests
         };
         var inheritedBackendIndex = Path.Combine(temp.Path, "inherited-backend-index.sqlite");
         SqliteIndexWriter.Write(inheritedBackendIndex, recursiveBackendManifest,
-            [sqlBaseType, inheritedSqlField, inheritedSqlDeclaration, inheritedSqlOverload, inheritedSqlSameArityOverload,
+            [sqlBaseType, inheritedSqlField, inheritedSqlDeclaration, inheritedSqlOverload,
                 inheritedSqlBody, inheritedSqlTerminal]);
         var inheritedCombinedIndex = Path.Combine(temp.Path, "inherited-combined-index.sqlite");
         await CombinedIndexBuilder.CombineAsync(new CombineOptions(
@@ -1215,6 +1215,18 @@ public sealed class WebFormsModernizationPacketTests
         Assert.True(inheritedChain.PathEvidence.Count(evidence =>
             evidence.RuleId == "combined.paths.projectless-vb-receiver-bridge.v1") >= 3);
 
+        var ambiguousOverloadBackendIndex = Path.Combine(temp.Path, "ambiguous-overload-backend-index.sqlite");
+        SqliteIndexWriter.Write(ambiguousOverloadBackendIndex, recursiveBackendManifest,
+            [sqlBaseType, inheritedSqlField, inheritedSqlDeclaration, inheritedSqlOverload, inheritedSqlSameArityOverload,
+                inheritedSqlBody, inheritedSqlTerminal]);
+        var ambiguousOverloadCombinedIndex = Path.Combine(temp.Path, "ambiguous-overload-combined-index.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [inheritedWebIndex, ambiguousOverloadBackendIndex], ambiguousOverloadCombinedIndex, ["web", "backend"]));
+        var ambiguousOverloadPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(ambiguousOverloadCombinedIndex, Path.Combine(temp.Path, "ambiguous-overload-output")));
+        var ambiguousOverloadChain = Assert.Single(ambiguousOverloadPacket.EventChains);
+        Assert.Null(ambiguousOverloadChain.TerminalKind);
+
         var semanticBodyDownstream = Fact(backendManifest, FactTypes.ObjectCreated, RuleIds.VisualBasicSemanticObjectCreation,
             "BusinessLayer/BusinessObject.vb", 12,
             source: "BusinessLayer.BusinessObject.InsertFeedback(String)", target: "FeedbackQuery", contract: "FeedbackQuery",
@@ -1223,9 +1235,16 @@ public sealed class WebFormsModernizationPacketTests
         {
             EvidenceTier = EvidenceTiers.Tier1Semantic
         };
+        var semanticBodyDeclaration = Fact(backendManifest, FactTypes.MethodDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "BusinessLayer/BusinessObject.vb", 10, source: null, target: "InsertFeedback", contract: null,
+            ("containingType", "BusinessObject"), ("qualifiedContainingType", "BusinessLayer.BusinessObject"),
+            ("name", "InsertFeedback"), ("parameterCount", "1"), ("parameterTypes", "String")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
         var semanticBodyTerminal = syntaxTerminal with { SourceSymbol = "FeedbackQuery" };
         var semanticBodyBackendIndex = Path.Combine(temp.Path, "semantic-body-backend-index.sqlite");
-        SqliteIndexWriter.Write(semanticBodyBackendIndex, backendManifest, [syntaxDeclaration, semanticBodyDownstream, semanticBodyTerminal]);
+        SqliteIndexWriter.Write(semanticBodyBackendIndex, backendManifest, [semanticBodyDeclaration, semanticBodyDownstream, semanticBodyTerminal]);
         var semanticBodyCombinedIndex = Path.Combine(temp.Path, "semantic-body-combined-index.sqlite");
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([webIndex, semanticBodyBackendIndex], semanticBodyCombinedIndex, ["web", "backend"]));
         var semanticBodyWritten = await WebFormsModernizationPacketReporter.WriteAsync(

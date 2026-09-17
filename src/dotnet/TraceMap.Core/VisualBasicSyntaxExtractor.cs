@@ -306,6 +306,8 @@ public static class VisualBasicSyntaxExtractor
             var containingType = statement.Ancestors()
                 .OfType<TypeBlockSyntax>()
                 .FirstOrDefault()?.BlockStatement.Identifier.ValueText ?? string.Empty;
+            var qualifiedContainingType = GetSyntacticContainingType(statement);
+            var parameterTypes = MethodParameterTypes(statement).ToArray();
             var parameterCount = statement switch
             {
                 MethodStatementSyntax methodStatement => methodStatement.ParameterList?.Parameters.Count ?? 0,
@@ -324,8 +326,12 @@ public static class VisualBasicSyntaxExtractor
                     new SortedDictionary<string, string>(StringComparer.Ordinal)
                     {
                         ["containingType"] = containingType,
+                        ["memberIdentity"] = $"{qualifiedContainingType}.{methodName}({string.Join(",", parameterTypes)})",
+                        ["qualifiedMemberName"] = $"{qualifiedContainingType}.{methodName}",
+                        ["qualifiedContainingType"] = qualifiedContainingType,
                         ["name"] = methodName,
-                        ["parameterCount"] = parameterCount.ToString()
+                        ["parameterCount"] = parameterCount.ToString(),
+                        ["parameterTypes"] = string.Join(";", parameterTypes)
                     },
                     budget))
             {
@@ -364,6 +370,7 @@ public static class VisualBasicSyntaxExtractor
         foreach (var field in root.DescendantNodes().OfType<FieldDeclarationSyntax>())
         {
             var containingType = field.Ancestors().OfType<TypeBlockSyntax>().FirstOrDefault()?.BlockStatement.Identifier.ValueText ?? string.Empty;
+            var qualifiedContainingType = GetSyntacticContainingType(field);
             foreach (var declarator in field.Declarators)
             {
                 var fieldType = declarator.AsClause switch
@@ -381,6 +388,7 @@ public static class VisualBasicSyntaxExtractor
                             new SortedDictionary<string, string>(StringComparer.Ordinal)
                             {
                                 ["containingType"] = containingType,
+                                ["qualifiedContainingType"] = qualifiedContainingType,
                                 ["fieldName"] = fieldName,
                                 ["fieldType"] = fieldType,
                                 ["isWithEvents"] = field.Modifiers.Any(SyntaxKind.WithEventsKeyword) ? "True" : "False"
@@ -1196,6 +1204,34 @@ public static class VisualBasicSyntaxExtractor
             .Where(item => !string.IsNullOrWhiteSpace(item)));
     }
 
+    private static string GetSyntacticContainingType(SyntaxNode declaration)
+    {
+        var namespaceName = GetSyntacticNamespace(declaration);
+        var typeNames = declaration.Ancestors()
+            .OfType<TypeBlockSyntax>()
+            .Select(type => type.BlockStatement.Identifier.ValueText)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Reverse();
+        return string.Join(".", new[] { namespaceName }.Concat(typeNames)
+            .Where(value => !string.IsNullOrWhiteSpace(value)));
+    }
+
+    private static IEnumerable<string> MethodParameterTypes(MethodBaseSyntax statement)
+    {
+        var parameters = statement switch
+        {
+            MethodStatementSyntax method => method.ParameterList?.Parameters,
+            SubNewStatementSyntax constructor => constructor.ParameterList?.Parameters,
+            OperatorStatementSyntax operation => operation.ParameterList?.Parameters,
+            _ => null
+        };
+        return parameters?.Select(parameter => parameter.AsClause switch
+        {
+            SimpleAsClauseSyntax simple => simple.Type.ToString().Trim(),
+            _ => "unavailable"
+        }) ?? [];
+    }
+
     private static string GetInvocationName(ExpressionSyntax expression)
     {
         return expression switch
@@ -1252,14 +1288,8 @@ public static class VisualBasicSyntaxExtractor
 
     private static string QualifyContainingMember(SyntaxNode member, string memberName, int parameterCount)
     {
-        var typeNames = member
-            .Ancestors()
-            .OfType<TypeBlockSyntax>()
-            .Select(type => type.BlockStatement.Identifier.ValueText)
-            .Where(name => !string.IsNullOrWhiteSpace(name))
-            .Reverse()
-            .ToArray();
-        var typePrefix = typeNames.Length == 0 ? "global" : string.Join(".", typeNames);
+        var containingType = GetSyntacticContainingType(member);
+        var typePrefix = containingType.Length == 0 ? "global" : containingType;
         return $"{typePrefix}.{memberName}/{parameterCount}";
     }
 

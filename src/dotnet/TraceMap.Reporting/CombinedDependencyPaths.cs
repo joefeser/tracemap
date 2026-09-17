@@ -2641,7 +2641,7 @@ public static partial class CombinedDependencyPathReporter
 
             var receiverEvidence = receiverCreations.Length == 1
                 ? new VisualBasicReceiverProvenance(
-                    SimpleVisualBasicTypeName(CombinedDependencyReporter.FirstValue(receiverCreations[0].Properties, "calleeContainingType", "calleeName")),
+                    NormalizeVisualBasicTypeName(CombinedDependencyReporter.FirstValue(receiverCreations[0].Properties, "calleeContainingType", "calleeName")),
                     [receiverCreations[0]])
                 : declaredFieldReceivers[0];
             var createdType = receiverEvidence.TypeName;
@@ -2651,13 +2651,33 @@ public static partial class CombinedDependencyPathReporter
                 continue;
             }
 
-            var semanticTargets = declarations
-                .Where(declaration => string.Equals(SimpleVisualBasicTypeName(CombinedDependencyReporter.FirstValue(declaration.Properties, "containingType")), createdType, StringComparison.OrdinalIgnoreCase)
+            var semanticCandidates = declarations
+                .Where(declaration => VisualBasicTypeMatches(VisualBasicContainingType(declaration), createdType)
                     && string.Equals(CombinedDependencyReporter.FirstValue(declaration.Properties, "methodName"), methodName, StringComparison.OrdinalIgnoreCase)
                     && int.TryParse(CombinedDependencyReporter.FirstValue(declaration.Properties, "parameterCount"), out var parameterCount)
                     && parameterCount == argumentCount)
                 .OrderBy(declaration => declaration.CombinedFactId, StringComparer.Ordinal)
                 .ToArray();
+            var semanticReceiverIdentity = ResolveUniqueVisualBasicReceiverTypeIdentity(semanticCandidates, createdType);
+            var semanticTargets = semanticReceiverIdentity is null
+                ? []
+                : semanticCandidates.Where(declaration =>
+                    declaration.SourceIndexId == semanticReceiverIdentity.Value.SourceIndexId
+                    && string.Equals(VisualBasicContainingType(declaration), semanticReceiverIdentity.Value.TypeName, StringComparison.OrdinalIgnoreCase))
+                    .ToArray();
+            if (semanticCandidates.Length > 0 && semanticReceiverIdentity is null)
+            {
+                AddProjectlessVisualBasicReceiverBridgeGap(
+                    graph,
+                    call,
+                    "ProjectlessVisualBasicReceiverTargetAmbiguous",
+                    "A syntax-only invocation receiver discovered multiple semantic VB type identities by simple name. Simple names cannot authorize a member join, so TraceMap did not choose a target.",
+                    "semantic-type-identity-ambiguous",
+                    semanticCandidates.Length,
+                    semanticCandidates.Select(fact => fact.CombinedFactId)
+                        .Concat(receiverEvidence.Evidence.Select(fact => fact.CombinedFactId)).Append(call.CombinedFactId));
+                continue;
+            }
             if (semanticTargets.Length > 1)
             {
                 AddProjectlessVisualBasicReceiverBridgeGap(
@@ -2692,15 +2712,23 @@ public static partial class CombinedDependencyPathReporter
             }
             else
             {
-                var syntaxTargets = syntaxDeclarations
-                    .Where(declaration => string.Equals(SimpleVisualBasicTypeName(CombinedDependencyReporter.FirstValue(declaration.Properties, "containingType")), createdType, StringComparison.OrdinalIgnoreCase)
+                var syntaxCandidates = syntaxDeclarations
+                    .Where(declaration => VisualBasicTypeMatches(VisualBasicContainingType(declaration), createdType)
                         && string.Equals(CombinedDependencyReporter.FirstValue(declaration.Properties, "methodName", "name"), methodName, StringComparison.OrdinalIgnoreCase)
                         && (!int.TryParse(CombinedDependencyReporter.FirstValue(declaration.Properties, "parameterCount"), out var declarationParameterCount)
                             || declarationParameterCount == argumentCount))
+                    .OrderBy(declaration => declaration.CombinedFactId, StringComparer.Ordinal)
+                    .ToArray();
+                var syntaxReceiverIdentity = ResolveUniqueVisualBasicReceiverTypeIdentity(syntaxCandidates, createdType);
+                var syntaxTargets = (syntaxReceiverIdentity is null
+                        ? []
+                        : syntaxCandidates.Where(declaration =>
+                            declaration.SourceIndexId == syntaxReceiverIdentity.Value.SourceIndexId
+                            && string.Equals(VisualBasicContainingType(declaration), syntaxReceiverIdentity.Value.TypeName, StringComparison.OrdinalIgnoreCase)))
                     .Select(declaration => new
                     {
                         Declaration = declaration,
-                        BodyFacts = receiverBodyFacts.GetValueOrDefault($"{declaration.SourceIndexId}\0{createdType}\0{methodName}\0{argumentCount}", [])
+                        BodyFacts = receiverBodyFacts.GetValueOrDefault($"{declaration.SourceIndexId}\0{VisualBasicContainingType(declaration)}\0{methodName}\0{argumentCount}", [])
                     })
                     // The declaration itself does not retain overload arity in older
                     // syntax artifacts. Require the exact arity-bearing member node
@@ -2716,11 +2744,24 @@ public static partial class CombinedDependencyPathReporter
                         && graph.Nodes.ContainsKey(SymbolNodeId(candidate.Declaration.SourceIndexId, candidate.BodySymbols[0])))
                     .OrderBy(candidate => candidate.Declaration.CombinedFactId, StringComparer.Ordinal)
                     .ToArray();
+                if (syntaxCandidates.Length > 0 && syntaxReceiverIdentity is null)
+                {
+                    AddProjectlessVisualBasicReceiverBridgeGap(
+                        graph,
+                        call,
+                        "ProjectlessVisualBasicReceiverTargetAmbiguous",
+                        "A syntax-only invocation receiver discovered multiple syntax VB type identities by simple name. Simple names cannot authorize a member join, so TraceMap did not choose a target.",
+                        "syntax-type-identity-ambiguous",
+                        syntaxCandidates.Length,
+                        syntaxCandidates.Select(fact => fact.CombinedFactId)
+                            .Concat(receiverEvidence.Evidence.Select(fact => fact.CombinedFactId)).Append(call.CombinedFactId));
+                    continue;
+                }
                 var syntaxDestinations = syntaxTargets
-                    .GroupBy(candidate => SymbolNodeId(candidate.Declaration.SourceIndexId, candidate.BodySymbols[0]), StringComparer.Ordinal)
+                    .GroupBy(candidate => VisualBasicSyntaxMemberIdentity(candidate.Declaration), StringComparer.OrdinalIgnoreCase)
                     .Select(group => new
                     {
-                        NodeId = group.Key,
+                        NodeId = SymbolNodeId(group.First().Declaration.SourceIndexId, group.First().BodySymbols[0]),
                         Candidates = group.ToArray()
                     })
                     .OrderBy(destination => destination.NodeId, StringComparer.Ordinal)
@@ -2806,8 +2847,19 @@ public static partial class CombinedDependencyPathReporter
             return true;
         }
 
-        var left = VisualBasicMemberKey(leftSymbol ?? CombinedDependencyReporter.FirstValue(leftProperties, "callerName"));
-        var right = VisualBasicMemberKey(rightSymbol ?? CombinedDependencyReporter.FirstValue(rightProperties, "callerName"));
+        var leftValue = leftSymbol ?? CombinedDependencyReporter.FirstValue(leftProperties, "callerName");
+        var rightValue = rightSymbol ?? CombinedDependencyReporter.FirstValue(rightProperties, "callerName");
+        var leftQualified = VisualBasicQualifiedMemberKey(leftValue);
+        var rightQualified = VisualBasicQualifiedMemberKey(rightValue);
+        if (leftQualified is not null && rightQualified is not null)
+        {
+            return leftQualified.Value.Arity == rightQualified.Value.Arity
+                && string.Equals(leftQualified.Value.Type, rightQualified.Value.Type, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(leftQualified.Value.Name, rightQualified.Value.Name, StringComparison.OrdinalIgnoreCase);
+        }
+
+        var left = VisualBasicMemberKey(leftValue);
+        var right = VisualBasicMemberKey(rightValue);
         return left is not null && right is not null
             && left.Value.Arity == right.Value.Arity
             && string.Equals(left.Value.Name, right.Value.Name, StringComparison.OrdinalIgnoreCase);
@@ -2840,7 +2892,7 @@ public static partial class CombinedDependencyPathReporter
             && field.StartLine <= creation.StartLine
             && field.EndLine >= creation.EndLine
             && string.Equals(CombinedDependencyReporter.FirstValue(field.Properties, "fieldName"), receiverName, StringComparison.OrdinalIgnoreCase)
-            && string.Equals(SimpleVisualBasicTypeName(CombinedDependencyReporter.FirstValue(field.Properties, "containingType")), caller.Value.Type, StringComparison.OrdinalIgnoreCase));
+            && VisualBasicTypeMatches(VisualBasicContainingType(field), caller.Value.Type));
     }
 
     private sealed record VisualBasicReceiverProvenance(
@@ -2862,10 +2914,7 @@ public static partial class CombinedDependencyPathReporter
 
         var roots = typeDeclarations
             .Where(declaration => declaration.SourceIndexId == call.SourceIndexId
-                && string.Equals(
-                    SimpleVisualBasicTypeName(CombinedDependencyReporter.FirstValue(declaration.Properties, "name", "qualifiedName")),
-                    caller.Value.Type,
-                    StringComparison.OrdinalIgnoreCase))
+                && VisualBasicTypeMatches(VisualBasicTypeDeclarationName(declaration), caller.Value.Type))
             .OrderBy(declaration => declaration.CombinedFactId, StringComparer.Ordinal)
             .ToArray();
         if (roots.Length != 1)
@@ -2880,8 +2929,7 @@ public static partial class CombinedDependencyPathReporter
         while (queue.Count > 0 && visited.Count < 16)
         {
             var (declaration, path) = queue.Dequeue();
-            var ownerName = SimpleVisualBasicTypeName(
-                CombinedDependencyReporter.FirstValue(declaration.Properties, "name", "qualifiedName"));
+            var ownerName = VisualBasicTypeDeclarationName(declaration);
             if (!visited.Add($"{declaration.SourceIndexId}\0{ownerName}"))
             {
                 continue;
@@ -2896,10 +2944,7 @@ public static partial class CombinedDependencyPathReporter
                 // type's own declaration was retained in another source index.
                 AddFieldCandidates(baseName, path);
                 var baseDeclarations = typeDeclarations
-                    .Where(candidate => string.Equals(
-                        SimpleVisualBasicTypeName(CombinedDependencyReporter.FirstValue(candidate.Properties, "name", "qualifiedName")),
-                        baseName,
-                        StringComparison.OrdinalIgnoreCase))
+                    .Where(candidate => VisualBasicTypeMatches(VisualBasicTypeDeclarationName(candidate), baseName))
                     .OrderBy(candidate => candidate.CombinedFactId, StringComparer.Ordinal)
                     .ToArray();
                 if (baseDeclarations.Length == 1)
@@ -2921,10 +2966,10 @@ public static partial class CombinedDependencyPathReporter
         void AddFieldCandidates(string ownerName, IReadOnlyList<CombinedFactRow> path)
         {
             foreach (var field in fieldDeclarations.Where(field =>
-                string.Equals(SimpleVisualBasicTypeName(CombinedDependencyReporter.FirstValue(field.Properties, "containingType")), ownerName, StringComparison.OrdinalIgnoreCase)
+                VisualBasicTypeMatches(VisualBasicContainingType(field), ownerName)
                 && string.Equals(CombinedDependencyReporter.FirstValue(field.Properties, "fieldName"), receiverName, StringComparison.OrdinalIgnoreCase)))
             {
-                var fieldType = SimpleVisualBasicTypeName(CombinedDependencyReporter.FirstValue(field.Properties, "fieldType", "declaredType"));
+                var fieldType = NormalizeVisualBasicTypeName(CombinedDependencyReporter.FirstValue(field.Properties, "fieldType", "declaredType"));
                 if (!string.IsNullOrWhiteSpace(fieldType))
                 {
                     results.Add(new VisualBasicReceiverProvenance(fieldType, path.Append(field).ToArray()));
@@ -2958,7 +3003,7 @@ public static partial class CombinedDependencyPathReporter
             var slashName = text[..slash];
             var dot = slashName.LastIndexOf('.');
             if (dot <= 0) return null;
-            return (SimpleVisualBasicTypeName(slashName[..dot]), slashName[(dot + 1)..], slashArity);
+            return (NormalizeVisualBasicTypeName(slashName[..dot]), slashName[(dot + 1)..], slashArity);
         }
 
         var open = text.IndexOf('(');
@@ -2966,7 +3011,7 @@ public static partial class CombinedDependencyPathReporter
         var member = text[..open];
         var memberDot = member.LastIndexOf('.');
         if (memberDot <= 0) return null;
-        var type = SimpleVisualBasicTypeName(member[..memberDot]);
+        var type = NormalizeVisualBasicTypeName(member[..memberDot]);
         var name = member[(memberDot + 1)..];
         var parameters = text[(open + 1)..^1];
         if (parameters.Length == 0) return (type, name, 0);
@@ -3037,6 +3082,61 @@ public static partial class CombinedDependencyPathReporter
 
         var separator = Math.Max(normalized.LastIndexOf('.'), normalized.LastIndexOf('+'));
         return separator >= 0 ? normalized[(separator + 1)..] : normalized;
+    }
+
+    private static string NormalizeVisualBasicTypeName(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return string.Empty;
+        var normalized = value.Trim();
+        if (normalized.StartsWith("Global::", StringComparison.OrdinalIgnoreCase)) normalized = normalized[8..];
+        else if (normalized.StartsWith("Global.", StringComparison.OrdinalIgnoreCase)) normalized = normalized[7..];
+        var generic = normalized.IndexOf("(Of ", StringComparison.OrdinalIgnoreCase);
+        return generic >= 0 ? normalized[..generic] : normalized;
+    }
+
+    private static string VisualBasicContainingType(CombinedFactRow fact) =>
+        NormalizeVisualBasicTypeName(CombinedDependencyReporter.FirstValue(
+            fact.Properties, "qualifiedContainingType", "containingType"));
+
+    private static string VisualBasicTypeDeclarationName(CombinedFactRow fact) =>
+        NormalizeVisualBasicTypeName(CombinedDependencyReporter.FirstValue(
+            fact.Properties, "qualifiedName", "name"));
+
+    private static bool VisualBasicTypeMatches(string declaredType, string candidateType)
+    {
+        var declared = NormalizeVisualBasicTypeName(declaredType);
+        var candidate = NormalizeVisualBasicTypeName(candidateType);
+        if (string.Equals(declared, candidate, StringComparison.OrdinalIgnoreCase)) return true;
+        if (declared.Length == 0 || candidate.Length == 0) return false;
+        if (candidate.Contains('.') || candidate.Contains('+')) return false;
+        return string.Equals(SimpleVisualBasicTypeName(declared), candidate, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static (string SourceIndexId, string TypeName)? ResolveUniqueVisualBasicReceiverTypeIdentity(
+        IReadOnlyList<CombinedFactRow> candidates,
+        string discoveredType)
+    {
+        var normalizedDiscoveredType = NormalizeVisualBasicTypeName(discoveredType);
+        var identities = candidates
+            .Select(candidate => (candidate.SourceIndexId, TypeName: VisualBasicContainingType(candidate)))
+            .Where(identity => identity.TypeName.Length > 0
+                && (!normalizedDiscoveredType.Contains('.') && !normalizedDiscoveredType.Contains('+')
+                    || string.Equals(identity.TypeName, normalizedDiscoveredType, StringComparison.OrdinalIgnoreCase)))
+            .GroupBy(identity => $"{identity.SourceIndexId}\0{identity.TypeName}", StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .ToArray();
+        return identities.Length == 1 ? identities[0] : null;
+    }
+
+    private static string VisualBasicSyntaxMemberIdentity(CombinedFactRow declaration)
+    {
+        var parameterTypes = CombinedDependencyReporter.FirstValue(declaration.Properties, "parameterTypes") ?? string.Empty;
+        return string.Join("\0",
+            declaration.SourceIndexId,
+            VisualBasicContainingType(declaration),
+            CombinedDependencyReporter.FirstValue(declaration.Properties, "methodName", "name") ?? string.Empty,
+            parameterTypes.Length > 0 ? parameterTypes : $"legacy-declaration:{declaration.CombinedFactId}",
+            CombinedDependencyReporter.FirstValue(declaration.Properties, "parameterCount") ?? string.Empty);
     }
 
     private static void AddDispatchCandidateEdges(

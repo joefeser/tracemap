@@ -456,6 +456,53 @@ public sealed class VisualBasicExtractionTests
     }
 
     [Fact]
+    public void Projectless_vb_declarations_retain_namespace_type_and_parameter_identity()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Workers.vb"), """
+            Namespace Alpha
+                Public Class Worker
+                    Public Sub Save(value As String)
+                    End Sub
+                End Class
+            End Namespace
+
+            Namespace Beta
+                Public Class Worker
+                    Public Sub Save(value As Integer)
+                    End Sub
+                End Class
+            End Namespace
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var declarations = result.Facts
+            .Where(fact => fact.FactType == FactTypes.MethodDeclared
+                && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+                && fact.TargetSymbol == "Save")
+            .OrderBy(fact => fact.SourceSymbol, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(2, declarations.Length);
+        Assert.Collection(declarations,
+            declaration =>
+            {
+                Assert.Equal("Alpha.Worker", declaration.Properties["qualifiedContainingType"]);
+                Assert.Equal("String", declaration.Properties["parameterTypes"]);
+                Assert.Equal("Alpha.Worker.Save(String)", declaration.Properties["memberIdentity"]);
+            },
+            declaration =>
+            {
+                Assert.Equal("Beta.Worker", declaration.Properties["qualifiedContainingType"]);
+                Assert.Equal("Integer", declaration.Properties["parameterTypes"]);
+                Assert.Equal("Beta.Worker.Save(Integer)", declaration.Properties["memberIdentity"]);
+            });
+    }
+
+    [Fact]
     public void Projectless_vb_explicit_data_adapter_fill_is_a_reduced_database_candidate()
     {
         using var temp = new TempDirectory();
