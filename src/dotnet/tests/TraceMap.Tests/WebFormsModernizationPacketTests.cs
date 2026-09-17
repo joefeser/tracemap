@@ -971,6 +971,8 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Contains("receiverBridgeStatus.ready-semantic=1", receiverAudit);
         var privateReceiverAudit = WebFormsVisualBasicReceiverBridgeAudit.Run(
             combinedIndex, combinedWritten.JsonPath, surface, includePrivateIdentities: true);
+        Assert.Contains("receiverBridgePrivate=enabled", privateReceiverAudit);
+        Assert.Contains("receiverBridgePrivate.calls=1", privateReceiverAudit);
         Assert.Contains(privateReceiverAudit, line => line.Contains("callee=InsertFeedback", StringComparison.Ordinal));
         Assert.Contains(privateReceiverAudit, line => line.Contains("receiverType=BusinessObject", StringComparison.Ordinal));
 

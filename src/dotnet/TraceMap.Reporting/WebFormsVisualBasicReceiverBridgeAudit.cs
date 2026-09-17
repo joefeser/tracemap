@@ -182,6 +182,7 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
             .Select(pair => $"receiverBridgeStatus.{pair.Key}={pair.Value}"));
         if (includePrivateIdentities)
         {
+            output.Add("receiverBridgePrivate=enabled");
             var privateIndex = 0;
             foreach (var call in calls)
             {
@@ -209,6 +210,7 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
                 output.Add($"receiverBridgePrivate.call-{privateIndex:D2}.declarationTypes={string.Join('|', declarationTypes)}");
                 output.Add($"receiverBridgePrivate.call-{privateIndex:D2}.nearbyBodySymbols={string.Join('|', nearbyBodies)}");
             }
+            output.Add($"receiverBridgePrivate.calls={privateIndex}");
         }
         return output;
     }
