@@ -106,6 +106,8 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
                 + "(fact_type='CallEdge' and (rule_id=$syntax_call_rule or (rule_id=$semantic_call_rule and evidence_tier=$semantic_tier))) "
                 + "or (fact_type='MethodInvoked' and rule_id=$semantic_invocation_rule and evidence_tier=$semantic_tier) "
                 + "or (fact_type='ObjectCreated' and (rule_id=$syntax_creation_rule or (rule_id=$semantic_creation_rule and evidence_tier=$semantic_tier)))) "
+                + "and exists (select 1 from json_each($method_names) names "
+                + "where instr(lower(source_symbol), lower(cast(names.value as text))) > 0) "
                 + "order by source_index_id, source_symbol, file_path, start_line, combined_fact_id limit 10001;";
             command.Parameters.AddWithValue("$syntax_call_rule", RuleIds.VisualBasicSyntaxCallGraph);
             command.Parameters.AddWithValue("$semantic_call_rule", RuleIds.VisualBasicSemanticCallGraph);
@@ -113,6 +115,7 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
             command.Parameters.AddWithValue("$syntax_creation_rule", RuleIds.VisualBasicSyntaxObjectCreation);
             command.Parameters.AddWithValue("$semantic_creation_rule", RuleIds.VisualBasicSemanticObjectCreation);
             command.Parameters.AddWithValue("$semantic_tier", EvidenceTiers.Tier1Semantic);
+            command.Parameters.AddWithValue("$method_names", JsonSerializer.Serialize(methodNames));
             using var reader = command.ExecuteReader();
             while (reader.Read()) bodySymbols.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetInt32(3)));
         }
