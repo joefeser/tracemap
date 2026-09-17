@@ -110,6 +110,10 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
 
         var results = new Dictionary<string, int>(StringComparer.Ordinal);
         void Hit(string value) => results[value] = results.GetValueOrDefault(value) + 1;
+        void Add(string value, int count)
+        {
+            if (count > 0) results[value] = results.GetValueOrDefault(value) + count;
+        }
         foreach (var call in calls)
         {
             if (!int.TryParse(Value(call, "argumentCount"), out var arity) || string.IsNullOrWhiteSpace(Value(call, "calleeName")))
@@ -133,15 +137,38 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
                 Hit(targets.Length == 1 ? "ready-semantic" : "semantic-target-ambiguous");
                 continue;
             }
-            var syntaxTargets = declarations.Where(declaration => declaration.RuleId == RuleIds.VisualBasicSyntaxDeclarations
-                    && SimpleType(Value(declaration, "containingType")).Equals(type, StringComparison.OrdinalIgnoreCase)
-                    && string.Equals(Value(declaration, "methodName") ?? Value(declaration, "name"), Value(call, "calleeName"), StringComparison.OrdinalIgnoreCase)
-                    && bodySymbols.Any(body => body.SourceId == declaration.SourceId
-                        && QualifiedMemberKey(body.Symbol) is { } member
-                        && member.Type.Equals(type, StringComparison.OrdinalIgnoreCase)
-                        && member.Name.Equals(Value(call, "calleeName"), StringComparison.OrdinalIgnoreCase)
-                        && member.Arity == arity))
+            var callName = Value(call, "calleeName")!;
+            var syntaxNameTargets = declarations.Where(declaration => declaration.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+                    && string.Equals(Value(declaration, "methodName") ?? Value(declaration, "name"), callName, StringComparison.OrdinalIgnoreCase))
                 .ToArray();
+            var syntaxTypeTargets = syntaxNameTargets.Where(declaration =>
+                    SimpleType(Value(declaration, "containingType")).Equals(type, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            var bodyMembers = bodySymbols
+                .Select(body => new { body.SourceId, Member = QualifiedMemberKey(body.Symbol) })
+                .Where(body => body.Member is not null)
+                .Select(body => new { body.SourceId, Member = body.Member!.Value })
+                .ToArray();
+            var bodyNameArity = bodyMembers.Where(body => body.Member.Name.Equals(callName, StringComparison.OrdinalIgnoreCase)
+                    && body.Member.Arity == arity).ToArray();
+            var bodyTypeName = bodyMembers.Where(body => body.Member.Type.Equals(type, StringComparison.OrdinalIgnoreCase)
+                    && body.Member.Name.Equals(callName, StringComparison.OrdinalIgnoreCase)).ToArray();
+            var bodyExact = bodyNameArity.Where(body => body.Member.Type.Equals(type, StringComparison.OrdinalIgnoreCase)).ToArray();
+            Add("candidate.syntax-name", syntaxNameTargets.Length);
+            Add("candidate.syntax-type-name", syntaxTypeTargets.Length);
+            Add("candidate.body-name-arity", bodyNameArity.Length);
+            Add("candidate.body-type-name", bodyTypeName.Length);
+            Add("candidate.body-exact", bodyExact.Length);
+            var syntaxTargets = syntaxTypeTargets.Where(declaration => bodyExact.Any(body => body.SourceId == declaration.SourceId)).ToArray();
+            if (syntaxTargets.Length == 0)
+            {
+                if (syntaxTypeTargets.Length == 0 && syntaxNameTargets.Length > 0) Hit("syntax-declaration-type-mismatch");
+                else if (bodyExact.Length == 0 && bodyNameArity.Length > 0) Hit("body-type-mismatch");
+                else if (bodyExact.Length == 0 && bodyTypeName.Length > 0) Hit("body-arity-mismatch");
+                else if (bodyExact.Length == 0) Hit("body-member-unavailable");
+                else Hit("declaration-body-source-mismatch");
+                continue;
+            }
             Hit(syntaxTargets.Length switch { 0 => "target-unavailable", 1 => "ready-syntax", _ => "syntax-target-ambiguous" });
         }
 
