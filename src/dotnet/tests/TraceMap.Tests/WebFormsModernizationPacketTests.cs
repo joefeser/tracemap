@@ -1060,6 +1060,70 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Contains("syntaxMethodCandidates=1", syntaxReceiverAudit);
         Assert.Contains("receiverBridgeStatus.ready-syntax=1", syntaxReceiverAudit);
 
+        var businessDeclaration = Fact(manifest, FactTypes.MethodDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "WebApplication/App_Code/DataAccess.vb", 10, source: null, target: "InsertFeedback", contract: null,
+            ("containingType", "BusinessObject"), ("name", "InsertFeedback")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var dataAccessDeclaration = Fact(manifest, FactTypes.MethodDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "WebApplication/App_Code/DataAccess.vb", 40, source: null, target: "InsertFeedback", contract: null,
+            ("containingType", "DataAccess"), ("name", "InsertFeedback")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var businessCreation = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph,
+            "WebApplication/App_Code/DataAccess.vb", 12, source: "BusinessObject.InsertFeedback/1", target: "DataAccess", contract: "DataAccess",
+            ("assignedTo", "dal"), ("callKind", "SyntaxObjectCreation"), ("calleeContainingType", "DataAccess"),
+            ("calleeName", "DataAccess"), ("callerName", "BusinessObject.InsertFeedback/1"), ("coverageLabel", "syntax-only")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var businessInvocation = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph,
+            "WebApplication/App_Code/DataAccess.vb", 13, source: "BusinessObject.InsertFeedback/1", target: "InsertFeedback", contract: "InsertFeedback",
+            ("argumentCount", "1"), ("callKind", "SyntaxInvocation"), ("calleeName", "InsertFeedback"),
+            ("callerName", "BusinessObject.InsertFeedback/1"), ("coverageLabel", "syntax-only"), ("receiverName", "dal")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var dataAccessBody = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph,
+            "WebApplication/App_Code/DataAccess.vb", 42, source: "DataAccess.InsertFeedback/1", target: "ExecuteNonQuery", contract: "ExecuteNonQuery",
+            ("argumentCount", "0"), ("callKind", "SyntaxInvocation"), ("calleeName", "ExecuteNonQuery"),
+            ("callerName", "DataAccess.InsertFeedback/1"), ("coverageLabel", "syntax-only"), ("receiverName", "command")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var recursiveTerminal = Fact(manifest, FactTypes.QueryPatternDetected, RuleIds.CSharpSyntaxQueryPattern,
+            "WebApplication/App_Code/DataAccess.vb", 43, source: "DataAccess.InsertFeedback/1", target: "feedback-query-shape", contract: "query",
+            ("operationName", "INSERT"), ("tableName", "feedback"), ("columnNames", "comment"),
+            ("sqlSourceKind", "literal-string"), ("queryShapeHash", "recursive-feedback-shape-hash"),
+            ("coverageLabel", "bounded-static-query"));
+        var recursiveIndex = Path.Combine(temp.Path, "recursive-index.sqlite");
+        SqliteIndexWriter.Write(recursiveIndex, manifest,
+            [page, binding, handler, creation, invocation, flow, businessDeclaration, dataAccessDeclaration,
+                businessCreation, businessInvocation, dataAccessBody, recursiveTerminal]);
+        var recursiveBackendManifest = manifest with
+        {
+            ScanId = "scan-recursive-backend",
+            RepoName = "recursive-backend",
+            CommitSha = "3333333333333333333333333333333333333333"
+        };
+        var unrelatedBackendType = Fact(recursiveBackendManifest, FactTypes.TypeDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "Backend/Unrelated.vb", 1, source: null, target: "Unrelated", contract: null,
+            ("kind", "class"), ("name", "Unrelated")) with { EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual };
+        var recursiveBackendIndex = Path.Combine(temp.Path, "recursive-backend-index.sqlite");
+        SqliteIndexWriter.Write(recursiveBackendIndex, recursiveBackendManifest, [unrelatedBackendType]);
+        var recursiveCombinedIndex = Path.Combine(temp.Path, "recursive-combined-index.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [recursiveIndex, recursiveBackendIndex], recursiveCombinedIndex, ["web", "backend"]));
+        var recursivePacket = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(recursiveCombinedIndex, Path.Combine(temp.Path, "recursive-output")));
+        var recursiveChain = Assert.Single(recursivePacket.EventChains);
+        Assert.Equal("sql-query", recursiveChain.TerminalKind);
+        Assert.True(recursiveChain.TraversalObservation?.TerminalPathCount > 0);
+        Assert.True(recursiveChain.PathEvidence.Count(evidence =>
+            evidence.RuleId == "combined.paths.projectless-vb-receiver-bridge.v1") >= 2);
+
         var semanticBodyDownstream = Fact(backendManifest, FactTypes.ObjectCreated, RuleIds.VisualBasicSemanticObjectCreation,
             "BusinessLayer/BusinessObject.vb", 12,
             source: "BusinessLayer.BusinessObject.InsertFeedback(String)", target: "FeedbackQuery", contract: "FeedbackQuery",

@@ -2540,14 +2540,28 @@ public static partial class CombinedDependencyPathReporter
         foreach (var call in syntaxCalls)
         {
             var projectionNode = ToHandlerCallProjectionNode(call);
-            if (!graph.Nodes.ContainsKey(projectionNode.NodeId))
+            GraphNode bridgeSource;
+            if (graph.Nodes.TryGetValue(projectionNode.NodeId, out var retainedProjection))
+            {
+                bridgeSource = retainedProjection;
+            }
+            else if (!string.IsNullOrWhiteSpace(call.SourceSymbol)
+                && graph.Nodes.TryGetValue(SymbolNodeId(call.SourceIndexId, call.SourceSymbol), out var retainedCaller))
+            {
+                // Once a projectless receiver bridge reaches a syntax method,
+                // continue through receiver calls in that method from its
+                // canonical source node. Those downstream calls are not owned
+                // directly by the original Web Forms handler projection.
+                bridgeSource = retainedCaller;
+            }
+            else
             {
                 AddProjectlessVisualBasicReceiverBridgeGap(
                     graph,
                     call,
-                    "ProjectlessVisualBasicReceiverProjectionUnavailable",
-                    "The syntax-only VB invocation was retained, but its handler-call projection node was outside the bounded graph input.",
-                    "handler-call-projection-unavailable",
+                    "ProjectlessVisualBasicReceiverSourceUnavailable",
+                    "The syntax-only VB invocation was retained, but neither its handler-call projection nor its canonical caller node was available in the bounded graph input.",
+                    "call-source-unavailable",
                     0,
                     [call.CombinedFactId]);
                 continue;
@@ -2696,7 +2710,7 @@ public static partial class CombinedDependencyPathReporter
             graph.AddEdge(new GraphEdge(
                 $"projectless-vb-receiver-bridge:{call.CombinedFactId}:{target.CombinedFactId}",
                 "projectless-vb-receiver-bridge",
-                projectionNode.NodeId,
+                bridgeSource.NodeId,
                 targetNode.NodeId,
                 "EvidenceEdge",
                 ProjectlessVisualBasicReceiverBridgeRuleId,
@@ -3738,7 +3752,7 @@ public static partial class CombinedDependencyPathReporter
 
         if (edges.Any(edge => edge.EdgeKind == "projectless-vb-receiver-bridge"))
         {
-            notes.Add(new CombinedPathNote("ProjectlessVisualBasicReceiverBridge", "This review-tier hop joins a syntax-only VB invocation using one directly retained local receiver creation plus method identity. It prefers one semantic type/name/arity declaration; under reduced semantic coverage it requires one syntax type/name declaration and an exact arity-bearing member-body symbol. The resulting target hop is not compiler-resolved call evidence or proof of runtime execution."));
+            notes.Add(new CombinedPathNote("ProjectlessVisualBasicReceiverBridge", "This review-tier hop joins a syntax-only VB invocation using one directly retained local receiver creation plus method identity. It may continue from a reached syntax method through another independently supported local receiver call. It prefers one semantic type/name/arity declaration; under reduced semantic coverage it requires one syntax type/name declaration and an exact arity-bearing member-body symbol. The resulting target hop is not compiler-resolved call evidence or proof of runtime execution."));
         }
 
         if (edges.Any(edge => edge.EdgeKind is "remoting-evidence" or "remoting-channel-link"))
