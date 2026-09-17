@@ -499,6 +499,57 @@ public sealed class VisualBasicExtractionTests
     }
 
     [Fact]
+    public void Projectless_vb_explicit_provider_commands_are_reduced_database_candidates()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "DataAccess.vb"), """
+            Public Class ProviderDataAccess
+                Public Sub Run()
+                    Dim odbc As OdbcCommand = New OdbcCommand()
+                    Dim db2 As IBM.Data.DB2.DB2Command = New IBM.Data.DB2.DB2Command()
+                    Dim oracle As OracleCommand = New OracleCommand()
+                    Dim sqlite As SQLiteCommand = New SQLiteCommand()
+                    Dim sql As SqlCommand = New SqlCommand()
+                    Dim custom As WidgetCommand = New WidgetCommand()
+                    Dim a = odbc.ExecuteScalar()
+                    Dim b = db2.ExecuteReader()
+                    oracle.ExecuteNonQuery()
+                    Dim c = sqlite.ExecuteScalar()
+                    Dim d = sql.ExecuteReader()
+                    custom.ExecuteScalar()
+                End Sub
+
+                Public Sub DoNotBorrowTypeFromAnotherMethod(sql As Object)
+                    sql.ExecuteScalar()
+                End Sub
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var operations = result.Facts.Where(fact =>
+            fact.FactType == FactTypes.DatabaseOperationCandidate
+            && fact.RuleId == RuleIds.VisualBasicSyntaxDatabaseOperation).ToArray();
+        Assert.Equal(5, operations.Length);
+        Assert.All(operations, operation =>
+        {
+            Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, operation.EvidenceTier);
+            Assert.Equal("ExplicitSyntaxType", operation.Properties["resolutionKind"]);
+            Assert.Equal("reduced-syntax-vb-database-operation", operation.Properties["coverageLabel"]);
+        });
+        Assert.Contains(operations, operation => operation.Properties["receiverType"] == "OdbcCommand"
+            && operation.Properties["operationKind"] == "scalar-candidate");
+        Assert.Contains(operations, operation => operation.Properties["receiverType"] == "IBM.Data.DB2.DB2Command"
+            && operation.Properties["operationKind"] == "select-candidate");
+        Assert.Contains(operations, operation => operation.Properties["receiverType"] == "OracleCommand"
+            && operation.Properties["operationKind"] == "execute-candidate");
+        Assert.DoesNotContain(operations, operation => operation.Properties["receiverName"] == "custom");
+        Assert.Single(operations, operation => operation.Properties["receiverName"] == "sql");
+    }
+
+    [Fact]
     public void Failed_vb_project_load_falls_back_to_syntax_facts_with_reduced_coverage()
     {
         using var temp = new TempDirectory();

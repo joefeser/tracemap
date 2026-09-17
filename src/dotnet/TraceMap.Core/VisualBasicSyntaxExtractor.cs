@@ -476,10 +476,68 @@ public static class VisualBasicSyntaxExtractor
             contractElement: "data-adapter-fill");
     }
 
+    private static bool TryAddExplicitDatabaseCommandOperationFact(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        string filePath,
+        CompilationUnitSyntax root,
+        InvocationExpressionSyntax invocation,
+        string invocationName,
+        string? containingMember,
+        FactBudget budget)
+    {
+        var operation = invocationName.ToLowerInvariant() switch
+        {
+            "executescalar" or "executescalarasync" => (Kind: "scalar-candidate", Result: "scalar"),
+            "executereader" or "executereaderasync" => (Kind: "select-candidate", Result: "data-reader"),
+            "executenonquery" or "executenonqueryasync" => (Kind: "execute-candidate", Result: "row-count"),
+            _ => default
+        };
+        if (operation == default
+            || GetInvocationReceiverName(invocation.Expression) is not { Length: > 0 } receiverName
+            || !TryResolveExplicitReceiverType(root, invocation, receiverName, IsKnownDatabaseCommandType, out var receiverType))
+        {
+            return true;
+        }
+
+        return TryAddSyntaxFact(
+            manifest,
+            facts,
+            FactTypes.DatabaseOperationCandidate,
+            RuleIds.VisualBasicSyntaxDatabaseOperation,
+            filePath,
+            invocation,
+            targetSymbol: $"{receiverType}.{invocationName}",
+            new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["coverageLabel"] = "reduced-syntax-vb-database-operation",
+                ["operationKind"] = operation.Kind,
+                ["receiverName"] = receiverName,
+                ["receiverType"] = receiverType,
+                ["resolutionKind"] = "ExplicitSyntaxType",
+                ["resultKind"] = operation.Result,
+                ["ruleLimitations"] = "The invocation receiver has an explicit supported ADO.NET command type in Visual Basic syntax, but compiler identity, provider binding, command text, connection identity, successful execution, and runtime reachability are not established.",
+                ["sqlSourceKind"] = "vb-syntax-explicit-database-command"
+            },
+            budget,
+            sourceSymbol: containingMember,
+            contractElement: operation.Kind);
+    }
+
     private static bool TryResolveExplicitDataAdapterType(
         CompilationUnitSyntax root,
         InvocationExpressionSyntax invocation,
         string receiverName,
+        out string receiverType)
+    {
+        return TryResolveExplicitReceiverType(root, invocation, receiverName, IsKnownDataAdapterType, out receiverType);
+    }
+
+    private static bool TryResolveExplicitReceiverType(
+        CompilationUnitSyntax root,
+        InvocationExpressionSyntax invocation,
+        string receiverName,
+        Func<string, bool> supportedType,
         out string receiverType)
     {
         receiverType = string.Empty;
@@ -498,7 +556,7 @@ public static class VisualBasicSyntaxExtractor
                         || declarationMethod is null && declarationType == containingType;
             })
             .Select(ExplicitVariableType)
-            .Where(type => type is not null && IsKnownDataAdapterType(type))
+            .Where(type => type is not null && supportedType(type))
             .Select(type => type!)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(type => type, StringComparer.OrdinalIgnoreCase)
@@ -536,6 +594,23 @@ public static class VisualBasicSyntaxExtractor
             || simple.Equals("SqlDataAdapter", StringComparison.OrdinalIgnoreCase)
             || simple.Equals("OleDbDataAdapter", StringComparison.OrdinalIgnoreCase)
             || simple.Equals("OdbcDataAdapter", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsKnownDatabaseCommandType(string typeName)
+    {
+        var simple = typeName.Split('.').Last();
+        return simple.Equals("DbCommand", StringComparison.OrdinalIgnoreCase)
+            || simple.Equals("IDbCommand", StringComparison.OrdinalIgnoreCase)
+            || simple.Equals("SqlCommand", StringComparison.OrdinalIgnoreCase)
+            || simple.Equals("OleDbCommand", StringComparison.OrdinalIgnoreCase)
+            || simple.Equals("OdbcCommand", StringComparison.OrdinalIgnoreCase)
+            || simple.Equals("OracleCommand", StringComparison.OrdinalIgnoreCase)
+            || simple.Equals("OracleDbCommand", StringComparison.OrdinalIgnoreCase)
+            || simple.Equals("SQLiteCommand", StringComparison.OrdinalIgnoreCase)
+            || simple.Equals("SqliteCommand", StringComparison.OrdinalIgnoreCase)
+            || simple.Equals("DB2Command", StringComparison.OrdinalIgnoreCase)
+            || simple.Equals("NpgsqlCommand", StringComparison.OrdinalIgnoreCase)
+            || simple.Equals("MySqlCommand", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string SyntaxFillResultKind(InvocationExpressionSyntax invocation)
@@ -906,15 +981,14 @@ public static class VisualBasicSyntaxExtractor
             return false;
         }
 
+        if (!TryAddExplicitDatabaseCommandOperationFact(
+                manifest, facts, filePath, root, invocation, invocationName, containingMember, budget))
+        {
+            return false;
+        }
+
         return TryAddExplicitDataAdapterFillFact(
-                    manifest,
-                    facts,
-                    filePath,
-                    root,
-                    invocation,
-                    invocationName,
-                    containingMember,
-                    budget);
+            manifest, facts, filePath, root, invocation, invocationName, containingMember, budget);
     }
 
     private static bool AddInvocationNameFact(

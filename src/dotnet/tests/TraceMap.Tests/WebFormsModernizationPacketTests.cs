@@ -1187,11 +1187,14 @@ public sealed class WebFormsModernizationPacketTests
         {
             EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
         };
-        var inheritedSqlTerminal = Fact(recursiveBackendManifest, FactTypes.QueryPatternDetected, RuleIds.CSharpSyntaxQueryPattern,
-            "Common/DataAccess.vb", 225, source: "SqlDataAccess.ExecProc_Scalar/2", target: "stored-procedure-shape", contract: "query",
-            ("operationName", "EXECUTE"), ("tableName", "feedback"), ("columnNames", ""),
-            ("sqlSourceKind", "stored-procedure-name"), ("queryShapeHash", "inherited-sql-shape-hash"),
-            ("coverageLabel", "bounded-static-query"));
+        var inheritedSqlTerminal = Fact(recursiveBackendManifest, FactTypes.DatabaseOperationCandidate, RuleIds.VisualBasicSyntaxDatabaseOperation,
+            "Common/DataAccess.vb", 225, source: "SqlDataAccess.ExecProc_Scalar/2", target: "SqlCommand.ExecuteScalar", contract: "scalar-candidate",
+            ("coverageLabel", "reduced-syntax-vb-database-operation"), ("operationKind", "scalar-candidate"),
+            ("receiverName", "command"), ("receiverType", "SqlCommand"), ("resolutionKind", "ExplicitSyntaxType"),
+            ("resultKind", "scalar"), ("sqlSourceKind", "vb-syntax-explicit-database-command")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
         var inheritedBackendIndex = Path.Combine(temp.Path, "inherited-backend-index.sqlite");
         SqliteIndexWriter.Write(inheritedBackendIndex, recursiveBackendManifest,
             [sqlBaseType, inheritedSqlField, inheritedSqlDeclaration, inheritedSqlOverload, inheritedSqlSameArityOverload,
