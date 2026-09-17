@@ -194,8 +194,9 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
 
         var semanticDeclarations = declarations.Count(fact => fact.RuleId == RuleIds.VisualBasicSemanticDeclarations);
         var syntaxDeclarations = declarations.Count(fact => fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations);
-        var graphReceiverGaps = CombinedDependencyPathReporter.BuildGraphInventoryAsync(indexPath)
-            .GetAwaiter().GetResult().Gaps
+        var graphInventory = CombinedDependencyPathReporter.BuildGraphInventoryAsync(indexPath)
+            .GetAwaiter().GetResult();
+        var graphReceiverGaps = graphInventory.Gaps
             .Where(gap => gap.RuleId == "combined.paths.projectless-vb-receiver-bridge.v1")
             .ToArray();
         var graphGapCalls = new Dictionary<string, Fact>(StringComparer.Ordinal);
@@ -234,6 +235,7 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
         if (includePrivateIdentities)
         {
             output.Add("receiverBridgePrivate=enabled");
+            AddPrivateExecProcDownstreamLeaves(output, graphInventory);
             var privateGapIndex = 0;
             foreach (var gap in graphReceiverGaps
                 .Where(gap => gap.CombinedFactId is not null
@@ -305,6 +307,55 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
             output.Add($"receiverBridgePrivate.callStatuses={callStatusIndex}");
         }
         return output;
+    }
+
+    private static void AddPrivateExecProcDownstreamLeaves(
+        List<string> output,
+        CombinedPathGraphInventory inventory)
+    {
+        var nodes = inventory.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
+        var outgoing = inventory.Edges
+            .GroupBy(edge => edge.FromNodeId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.OrderBy(edge => edge.EdgeId, StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
+        var starts = inventory.Nodes
+            .Where(node => (node.SymbolId ?? node.DisplayName).Contains("ExecProc_Scalar/2", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(node => node.NodeId, StringComparer.Ordinal)
+            .ToArray();
+        var queue = new Queue<(string NodeId, int Depth)>();
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var start in starts)
+        {
+            queue.Enqueue((start.NodeId, 0));
+            visited.Add(start.NodeId);
+        }
+        var leaves = new List<CombinedPathNode>();
+        while (queue.Count > 0 && visited.Count <= 2_000)
+        {
+            var current = queue.Dequeue();
+            if (current.Depth >= 12 || !outgoing.TryGetValue(current.NodeId, out var edges) || edges.Length == 0)
+            {
+                if (nodes.TryGetValue(current.NodeId, out var leaf)) leaves.Add(leaf);
+                continue;
+            }
+            foreach (var edge in edges)
+            {
+                if (visited.Add(edge.ToNodeId)) queue.Enqueue((edge.ToNodeId, current.Depth + 1));
+            }
+        }
+        output.Add($"receiverBridgePrivate.execProcStarts={starts.Length}");
+        output.Add($"receiverBridgePrivate.execProcReachableNodes={visited.Count}");
+        var index = 0;
+        foreach (var leaf in leaves
+            .DistinctBy(node => node.NodeId, StringComparer.Ordinal)
+            .OrderBy(node => node.FilePath, StringComparer.Ordinal)
+            .ThenBy(node => node.StartLine ?? 0)
+            .ThenBy(node => node.DisplayName, StringComparer.Ordinal)
+            .Take(20))
+        {
+            index++;
+            output.Add($"receiverBridgePrivate.execProcLeaf-{index:D2}.name={leaf.DisplayName};kind={leaf.NodeKind};surface={leaf.SurfaceKind ?? "none"};file={leaf.FilePath ?? "unavailable"};line={leaf.StartLine ?? 0};rule={leaf.RuleId ?? "unavailable"};tier={leaf.EvidenceTier ?? "unavailable"}");
+        }
+        output.Add($"receiverBridgePrivate.execProcLeaves={index}");
     }
 
     private static IReadOnlyList<string> ReadReceiverTypeMethods(SqliteConnection db, SqliteTransaction transaction, string receiverType)
