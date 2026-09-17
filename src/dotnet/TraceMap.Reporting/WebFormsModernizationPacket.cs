@@ -605,6 +605,15 @@ public static class WebFormsModernizationPacketReporter
         }
         var pageFacts = facts.Where(fact => fact.FactType == FactTypes.WebFormsPageDeclared)
             .Where(fact => selectedSurfaceIds is null || selectedSurfaceIds.Contains(SurfaceIdentity(fact)))
+            .GroupBy(SurfaceIdentity, StringComparer.Ordinal)
+            .Select(group => group
+                .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+                .ThenBy(fact => fact.Evidence.StartLine)
+                .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
+                .First())
+            .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ThenBy(fact => fact.Evidence.StartLine)
+            .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
             .ToArray();
         var retainedPages = pageFacts.Take(options.MaxSurfaces).ToArray();
         if (retainedPages.Length < pageFacts.Length)
@@ -927,7 +936,10 @@ public static class WebFormsModernizationPacketReporter
         var controlSurface = surfaces.SelectMany(surface => surface.ControlIds.Select(controlId => (controlId, surface.SurfaceId)))
             .GroupBy(item => item.controlId, StringComparer.Ordinal)
             .Where(group => group.Select(item => item.SurfaceId).Distinct(StringComparer.Ordinal).Count() == 1)
-            .ToDictionary(group => group.Key, group => group.Single().SurfaceId, StringComparer.Ordinal);
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(item => item.SurfaceId).Distinct(StringComparer.Ordinal).Single(),
+                StringComparer.Ordinal);
         var identityState = retainedIdentityFacts.Select(fact =>
         {
             var surfaceId = fact.SourceSymbol is not null && surfaceByIdentity.ContainsKey(fact.SourceSymbol)
@@ -1172,7 +1184,10 @@ public static class WebFormsModernizationPacketReporter
             .SelectMany(surface => surface.ControlIds.Select(controlId => (controlId, surface.SurfaceId)))
             .GroupBy(item => item.controlId, StringComparer.Ordinal)
             .Where(group => group.Select(item => item.SurfaceId).Distinct(StringComparer.Ordinal).Count() == 1)
-            .ToDictionary(group => group.Key, group => group.Single().SurfaceId, StringComparer.Ordinal);
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(item => item.SurfaceId).Distinct(StringComparer.Ordinal).Single(),
+                StringComparer.Ordinal);
         var adjacency = surfaces.ToDictionary(surface => surface.SurfaceId, _ => new SortedSet<string>(StringComparer.Ordinal), StringComparer.Ordinal);
         foreach (var fact in compositionFacts)
         {

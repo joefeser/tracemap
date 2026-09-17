@@ -2145,6 +2145,30 @@ public sealed class WebFormsModernizationPacketTests
             ("surfaceIdentity", surface), ("directiveKind", "Page"), ("coverageLabel", "bounded-static-webforms-inventory"));
 
     [Fact]
+    public async Task Duplicate_page_evidence_for_one_surface_is_collapsed_before_control_ownership_projection()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("FailedOrPartial") with { AnalysisLevel = "Level1SemanticAnalysisReduced" };
+        const string surface = "webforms-surface:duplicate-page";
+        var firstPage = Page(surface, "Pages/Duplicate.aspx", manifest);
+        var secondPage = Fact(manifest, FactTypes.WebFormsPageDeclared, RuleIds.LegacyWebFormsInventory, "Pages/Duplicate.aspx", 2,
+            source: surface, target: "Sample.Duplicate", contract: "Duplicate.aspx",
+            ("surfaceIdentity", surface), ("directiveKind", "Page"), ("coverageLabel", "bounded-static-webforms-inventory"));
+        var control = Fact(manifest, FactTypes.WebFormsControlDeclared, RuleIds.LegacyWebFormsInventory, "Pages/Duplicate.aspx", 5,
+            source: surface, target: "control:save", contract: "Save",
+            ("surfaceIdentity", surface), ("controlIdentity", "control:save"), ("controlId", "Save"),
+            ("controlType", "asp:Button"), ("coverageLabel", "bounded-static-webforms-control"));
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, manifest, [firstPage, secondPage, control]);
+
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(index, Path.Combine(temp.Path, "output")));
+
+        var retained = Assert.Single(packet.Surfaces);
+        Assert.Equal(surface, retained.SurfaceId);
+        Assert.Contains("control:save", retained.ControlIds);
+    }
+
+    [Fact]
     public async Task Combined_and_multi_manifest_indexes_fail_closed_with_stable_errors()
     {
         using var temp = new TempDirectory();
