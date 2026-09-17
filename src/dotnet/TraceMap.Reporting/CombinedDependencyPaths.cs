@@ -2716,28 +2716,42 @@ public static partial class CombinedDependencyPathReporter
                         && graph.Nodes.ContainsKey(SymbolNodeId(candidate.Declaration.SourceIndexId, candidate.BodySymbols[0])))
                     .OrderBy(candidate => candidate.Declaration.CombinedFactId, StringComparer.Ordinal)
                     .ToArray();
-                if (syntaxTargets.Length != 1)
+                var syntaxDestinations = syntaxTargets
+                    .GroupBy(candidate => SymbolNodeId(candidate.Declaration.SourceIndexId, candidate.BodySymbols[0]), StringComparer.Ordinal)
+                    .Select(group => new
+                    {
+                        NodeId = group.Key,
+                        Candidates = group.ToArray()
+                    })
+                    .OrderBy(destination => destination.NodeId, StringComparer.Ordinal)
+                    .ToArray();
+                if (syntaxDestinations.Length != 1)
                 {
                     AddProjectlessVisualBasicReceiverBridgeGap(
                         graph,
                         call,
-                        syntaxTargets.Length == 0
+                        syntaxDestinations.Length == 0
                             ? "ProjectlessVisualBasicReceiverTargetUnavailable"
                             : "ProjectlessVisualBasicReceiverTargetAmbiguous",
-                        syntaxTargets.Length == 0
+                        syntaxDestinations.Length == 0
                             ? "A syntax-only invocation receiver has one retained local object creation, but neither a unique semantic declaration nor a unique syntax declaration with exact arity-bearing body evidence matched its type and method."
-                            : "A syntax-only invocation receiver matched multiple syntax declarations with exact arity-bearing body evidence; TraceMap did not choose a target.",
-                        syntaxTargets.Length == 0 ? "target-unavailable" : "syntax-target-ambiguous",
-                        syntaxTargets.Length,
+                            : "A syntax-only invocation receiver matched multiple distinct syntax method destinations with exact arity-bearing body evidence; TraceMap did not choose a target.",
+                        syntaxDestinations.Length == 0 ? "target-unavailable" : "syntax-target-ambiguous",
+                        syntaxDestinations.Length,
                         syntaxTargets.Select(candidate => candidate.Declaration.CombinedFactId)
                             .Concat(receiverEvidence.Evidence.Select(fact => fact.CombinedFactId)).Append(call.CombinedFactId));
                     continue;
                 }
 
-                target = syntaxTargets[0].Declaration;
-                targetNode = graph.Nodes[SymbolNodeId(target.SourceIndexId, syntaxTargets[0].BodySymbols[0])];
+                var syntaxDestination = syntaxDestinations[0];
+                target = syntaxDestination.Candidates[0].Declaration;
+                targetNode = graph.Nodes[syntaxDestination.NodeId];
                 bridgeEvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual;
-                targetBodyEvidenceIds = syntaxTargets[0].BodyFacts.Select(fact => fact.CombinedFactId).ToArray();
+                targetBodyEvidenceIds = syntaxDestination.Candidates
+                    .SelectMany(candidate => candidate.BodyFacts.Select(fact => fact.CombinedFactId)
+                        .Append(candidate.Declaration.CombinedFactId))
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray();
             }
             graph.AddEdge(new GraphEdge(
                 $"projectless-vb-receiver-bridge:{call.CombinedFactId}:{target.CombinedFactId}",

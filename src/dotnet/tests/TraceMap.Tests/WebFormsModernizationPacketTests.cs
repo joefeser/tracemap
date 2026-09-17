@@ -1174,6 +1174,12 @@ public sealed class WebFormsModernizationPacketTests
         {
             EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
         };
+        var inheritedSqlSameArityOverload = Fact(recursiveBackendManifest, FactTypes.MethodDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "Common/DataAccess.vb", 215, source: null, target: "ExecProc_Scalar", contract: null,
+            ("containingType", "SqlDataAccess"), ("name", "ExecProc_Scalar"), ("parameterCount", "2")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
         var inheritedSqlBody = Fact(recursiveBackendManifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph,
             "Common/DataAccess.vb", 225, source: "SqlDataAccess.ExecProc_Scalar/2", target: "ExecuteScalar", contract: "ExecuteScalar",
             ("argumentCount", "0"), ("callKind", "SyntaxInvocation"), ("calleeName", "ExecuteScalar"),
@@ -1188,7 +1194,8 @@ public sealed class WebFormsModernizationPacketTests
             ("coverageLabel", "bounded-static-query"));
         var inheritedBackendIndex = Path.Combine(temp.Path, "inherited-backend-index.sqlite");
         SqliteIndexWriter.Write(inheritedBackendIndex, recursiveBackendManifest,
-            [sqlBaseType, inheritedSqlField, inheritedSqlDeclaration, inheritedSqlOverload, inheritedSqlBody, inheritedSqlTerminal]);
+            [sqlBaseType, inheritedSqlField, inheritedSqlDeclaration, inheritedSqlOverload, inheritedSqlSameArityOverload,
+                inheritedSqlBody, inheritedSqlTerminal]);
         var inheritedCombinedIndex = Path.Combine(temp.Path, "inherited-combined-index.sqlite");
         await CombinedIndexBuilder.CombineAsync(new CombineOptions(
             [inheritedWebIndex, inheritedBackendIndex], inheritedCombinedIndex, ["web", "backend"]));

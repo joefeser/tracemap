@@ -183,7 +183,13 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
                 else Hit("declaration-body-source-mismatch");
                 continue;
             }
-            Hit(syntaxTargets.Length switch { 0 => "target-unavailable", 1 => "ready-syntax", _ => "syntax-target-ambiguous" });
+            var syntaxDestinations = syntaxTargets
+                .SelectMany(declaration => bodyExact
+                    .Where(body => body.SourceId == declaration.SourceId)
+                    .Select(body => $"{body.SourceId}\0{body.Member.Type}\0{body.Member.Name}\0{body.Member.Arity}"))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count();
+            Hit(syntaxDestinations switch { 0 => "target-unavailable", 1 => "ready-syntax", _ => "syntax-target-ambiguous" });
         }
 
         var semanticDeclarations = declarations.Count(fact => fact.RuleId == RuleIds.VisualBasicSemanticDeclarations);
