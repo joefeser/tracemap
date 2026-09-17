@@ -9,7 +9,7 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
     private sealed record Fact(string SourceId, string Id, string? SourceSymbol, string FilePath, int Line,
         string RuleId, string Tier, IReadOnlyDictionary<string, string> Properties);
 
-    public static IReadOnlyList<string> Run(string indexPath, string packetPath, string surfaceId)
+    public static IReadOnlyList<string> Run(string indexPath, string packetPath, string surfaceId, bool includePrivateIdentities = false)
     {
         if (new FileInfo(packetPath).Length is <= 0 or > 512 * 1024 * 1024)
             throw new InvalidDataException("ReceiverBridgeAuditInputLimit");
@@ -180,6 +180,36 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
             $"receiverBodySymbols={bodySymbols.Count}" };
         output.AddRange(results.OrderBy(pair => pair.Key, StringComparer.Ordinal)
             .Select(pair => $"receiverBridgeStatus.{pair.Key}={pair.Value}"));
+        if (includePrivateIdentities)
+        {
+            var privateIndex = 0;
+            foreach (var call in calls)
+            {
+                var matches = creations.Where(creation => creation.SourceId == call.SourceId
+                    && creation.FilePath.Equals(call.FilePath, StringComparison.OrdinalIgnoreCase)
+                    && creation.Line <= call.Line && SameMember(creation, call)
+                    && string.Equals(Value(creation, "assignedTo"), Value(call, "receiverName"), StringComparison.OrdinalIgnoreCase)).ToArray();
+                if (matches.Length != 1 || !int.TryParse(Value(call, "argumentCount"), out var arity)) continue;
+                privateIndex++;
+                var name = Value(call, "calleeName") ?? "unavailable";
+                var type = SimpleType(Value(matches[0], "calleeContainingType") ?? Value(matches[0], "calleeName"));
+                var declarationTypes = declarations
+                    .Where(declaration => string.Equals(Value(declaration, "methodName") ?? Value(declaration, "name"), name, StringComparison.OrdinalIgnoreCase))
+                    .Select(declaration => Value(declaration, "containingType") ?? "unavailable")
+                    .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).Take(20).ToArray();
+                var declarationSources = declarations
+                    .Where(declaration => string.Equals(Value(declaration, "methodName") ?? Value(declaration, "name"), name, StringComparison.OrdinalIgnoreCase))
+                    .Select(declaration => declaration.SourceId).ToHashSet(StringComparer.Ordinal);
+                var nearbyBodies = bodySymbols
+                    .Where(body => declarationSources.Contains(body.SourceId)
+                        && body.Symbol.Contains(name, StringComparison.OrdinalIgnoreCase))
+                    .Select(body => body.Symbol).Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Order(StringComparer.OrdinalIgnoreCase).Take(20).ToArray();
+                output.Add($"receiverBridgePrivate.call-{privateIndex:D2}.line={call.Line};callee={name};arity={arity};receiverType={type}");
+                output.Add($"receiverBridgePrivate.call-{privateIndex:D2}.declarationTypes={string.Join('|', declarationTypes)}");
+                output.Add($"receiverBridgePrivate.call-{privateIndex:D2}.nearbyBodySymbols={string.Join('|', nearbyBodies)}");
+            }
+        }
         return output;
     }
 

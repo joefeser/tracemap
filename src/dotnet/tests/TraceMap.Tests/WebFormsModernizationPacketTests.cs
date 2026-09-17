@@ -969,6 +969,10 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Contains("syntaxReceiverInvocations=1", receiverAudit);
         Assert.Contains("receiverCreations=1", receiverAudit);
         Assert.Contains("receiverBridgeStatus.ready-semantic=1", receiverAudit);
+        var privateReceiverAudit = WebFormsVisualBasicReceiverBridgeAudit.Run(
+            combinedIndex, combinedWritten.JsonPath, surface, includePrivateIdentities: true);
+        Assert.Contains(privateReceiverAudit, line => line.Contains("callee=InsertFeedback", StringComparison.Ordinal));
+        Assert.Contains(privateReceiverAudit, line => line.Contains("receiverType=BusinessObject", StringComparison.Ordinal));
 
         var mixedInvocation = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph, "WebApplication/Feedback.aspx.vb", 23,
             source: "Feedback.Submit_Click/2", target: "InsertFeedback", contract: "InsertFeedback",

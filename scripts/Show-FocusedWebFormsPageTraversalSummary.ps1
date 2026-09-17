@@ -2,7 +2,8 @@
 param(
     [Parameter(Mandatory = $true)][string]$ReviewRoot,
     [Parameter(Mandatory = $true)][ValidatePattern('^page-[0-9]{3,4}$')][string]$PriorPageId,
-    [string]$StandaloneReviewRoot = ''
+    [string]$StandaloneReviewRoot = '',
+    [switch]$IncludePrivateReceiverIdentities
 )
 
 Set-StrictMode -Version Latest
@@ -135,6 +136,8 @@ if (Test-Path -LiteralPath $combinedIndex -PathType Leaf) {
     dotnet build $project -c Release --nologo -v quiet | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_PAGE_TRAVERSAL_RECEIVER_AUDIT_BUILD_FAILED' }
     $dll = Join-Path $PSScriptRoot 'diagnostics/RawWebFormsEvidence/bin/Release/net10.0/RawWebFormsEvidence.dll'
-    dotnet $dll --vb-receiver-bridge-audit $combinedIndex $snapshotPath $surfaceId
+    $auditArguments = @('--vb-receiver-bridge-audit', $combinedIndex, $snapshotPath, $surfaceId)
+    if ($IncludePrivateReceiverIdentities) { $auditArguments += '--include-private-identities' }
+    dotnet $dll @auditArguments
     if ($LASTEXITCODE -ne 0) { throw 'WEBFORMS_PAGE_TRAVERSAL_RECEIVER_AUDIT_FAILED' }
 }
