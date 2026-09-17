@@ -201,6 +201,13 @@ The summary reports traversed edge kinds and rules, leaf and frontier shapes,
 source availability, and deterministic truncation reasons without disclosing
 private paths or symbols.
 
+For a local-only mixed projectless/compiled VB receiver investigation, add
+`-IncludePrivateReceiverIdentities`. This explicitly opted-in output includes
+the receiver call identity plus the source label, project path, rule, tier, and
+retained methods for each matching receiver type. Keep that output private; it
+is intended to distinguish a missing compiled-project fact from an ambiguous
+bridge and is not part of the shareable artifact.
+
 Share only the reported `page-graph.shareable.zip`. Each distinct handler case
 reports retained terminal-evidence families (`database`, `http`, or
 `callback-or-async`), the terminal fact count, and whether unresolved leaves

@@ -443,7 +443,7 @@ directory to resume that exact session without replacing the earlier turn.
 | `New-FocusedWebFormsStandaloneReview.ps1` | No | Existing packet only | Create a new immutable receipted workbench and optionally export one anonymous page from that exact packet. |
 | `Export-FocusedWebFormsPageShareable.ps1` | No | No analysis | Export one alias-only page-path ZIP from the receipted pipeline workbench. |
 | `Export-LatestFocusedWebFormsPageShareable.ps1` | No | No analysis | Map a prior page alias to the newest standalone workbench locally and export the corresponding anonymous page. |
-| `Show-FocusedWebFormsPageTraversalSummary.ps1` | No | No | Map a prior page alias to a receipted standalone review and print bounded traversal counts and states. |
+| `Show-FocusedWebFormsPageTraversalSummary.ps1` | Optional private identities with explicit switch | No | Map a prior page alias to a receipted standalone review and print bounded traversal counts and states; `-IncludePrivateReceiverIdentities` also identifies retained mixed VB receiver projects and methods for local diagnosis. |
 | `New-FocusedWebFormsPageGraphDump.ps1` | No | No scan; reads retained index evidence | Create a private all-handler graph dump and its separately sanitized anonymous graph ZIP. |
 | `New-FocusedWebFormsBatchInspection.ps1` | No | No scan; reads retained index evidence | Build the private case inventory used by review sets. |
 | `New-FocusedWebFormsCodePathReviewSet.ps1` | Yes, bounded local reads; raw serialization is opt-in | No scan | Generate the normal multi-case HTML review set and `index.md` verdict queue. |

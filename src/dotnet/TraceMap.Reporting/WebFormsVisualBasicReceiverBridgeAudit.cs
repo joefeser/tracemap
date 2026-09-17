@@ -6,8 +6,9 @@ namespace TraceMap.Reporting;
 
 public static class WebFormsVisualBasicReceiverBridgeAudit
 {
-    private sealed record Fact(string SourceId, string Id, string? SourceSymbol, string FilePath, int Line,
-        string RuleId, string Tier, IReadOnlyDictionary<string, string> Properties);
+    private sealed record Fact(string SourceId, string SourceLabel, string? ProjectPath, string Id,
+        string? SourceSymbol, string FilePath, int Line, string RuleId, string Tier,
+        IReadOnlyDictionary<string, string> Properties);
 
     public static IReadOnlyList<string> Run(string indexPath, string packetPath, string surfaceId, bool includePrivateIdentities = false)
     {
@@ -42,7 +43,9 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
         {
             command.Transaction = transaction;
             command.CommandText = """
-                select source_index_id, original_fact_id, source_symbol, file_path, start_line,
+                select source_index_id,
+                       coalesce((select label from index_sources where index_sources.source_index_id=combined_facts.source_index_id), source_index_id),
+                       project_path, original_fact_id, source_symbol, file_path, start_line,
                        rule_id, evidence_tier, properties_json
                 from combined_facts
                 where scan_id=$scan and commit_sha=$commit and fact_type='CallEdge'
@@ -70,7 +73,9 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
         {
             command.Transaction = transaction;
             command.CommandText = """
-                select source_index_id, combined_fact_id, source_symbol, file_path, start_line,
+                select source_index_id,
+                       coalesce((select label from index_sources where index_sources.source_index_id=combined_facts.source_index_id), source_index_id),
+                       project_path, combined_fact_id, source_symbol, file_path, start_line,
                        rule_id, evidence_tier, properties_json
                 from combined_facts
                 where fact_type='MethodDeclared'
@@ -213,7 +218,7 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
                     .Order(StringComparer.OrdinalIgnoreCase).Take(20).ToArray();
                 var declarationSites = declarations
                     .Where(declaration => string.Equals(Value(declaration, "methodName") ?? Value(declaration, "name"), name, StringComparison.OrdinalIgnoreCase))
-                    .Select(declaration => $"{Value(declaration, "containingType") ?? "unavailable"}@{declaration.FilePath}:{declaration.Line}")
+                    .Select(declaration => $"source={declaration.SourceLabel};project={declaration.ProjectPath ?? "unavailable"};type={Value(declaration, "containingType") ?? "unavailable"};site={declaration.FilePath}:{declaration.Line};rule={declaration.RuleId};tier={declaration.Tier}")
                     .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).Take(20).ToArray();
                 var sameFileBodies = declarations
                     .Where(declaration => string.Equals(Value(declaration, "methodName") ?? Value(declaration, "name"), name, StringComparison.OrdinalIgnoreCase))
@@ -224,6 +229,7 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
                 output.Add($"receiverBridgePrivate.call-{privateIndex:D2}.line={call.Line};callee={name};arity={arity};receiverType={type}");
                 output.Add($"receiverBridgePrivate.call-{privateIndex:D2}.declarationTypes={string.Join('|', declarationTypes)}");
                 output.Add($"receiverBridgePrivate.call-{privateIndex:D2}.declarationSites={string.Join('|', declarationSites)}");
+                output.Add($"receiverBridgePrivate.call-{privateIndex:D2}.receiverTypeMethods={string.Join('|', ReadReceiverTypeMethods(db, transaction, type))}");
                 output.Add($"receiverBridgePrivate.call-{privateIndex:D2}.nearbyBodySymbols={string.Join('|', nearbyBodies)}");
                 output.Add($"receiverBridgePrivate.call-{privateIndex:D2}.sameFileBodySymbols={string.Join('|', sameFileBodies)}");
             }
@@ -232,9 +238,34 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
         return output;
     }
 
+    private static IReadOnlyList<string> ReadReceiverTypeMethods(SqliteConnection db, SqliteTransaction transaction, string receiverType)
+    {
+        using var command = db.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = "select coalesce(s.label, f.source_index_id), f.project_path, f.file_path, f.start_line, f.rule_id, f.evidence_tier, "
+            + "coalesce(cast(json_extract(f.properties_json,'$.containingType') as text),''), "
+            + "coalesce(cast(json_extract(f.properties_json,'$.methodName') as text),cast(json_extract(f.properties_json,'$.name') as text),''), "
+            + "coalesce(cast(json_extract(f.properties_json,'$.parameterCount') as text),'unavailable') "
+            + "from combined_facts f left join index_sources s on s.source_index_id=f.source_index_id "
+            + "where f.fact_type='MethodDeclared' and json_valid(f.properties_json) and ("
+            + "lower(coalesce(cast(json_extract(f.properties_json,'$.containingType') as text),''))=lower($type) or "
+            + "lower(coalesce(cast(json_extract(f.properties_json,'$.containingType') as text),'')) like '%.'||lower($type)) "
+            + "order by s.label, f.project_path, f.file_path, f.start_line, f.combined_fact_id limit 101;";
+        command.Parameters.AddWithValue("$type", receiverType);
+        var values = new List<string>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            if (values.Count == 100) throw new InvalidDataException("ReceiverBridgeAuditInputLimit");
+            values.Add($"source={reader.GetString(0)};project={(reader.IsDBNull(1) ? "unavailable" : reader.GetString(1))};member={reader.GetString(6)}.{reader.GetString(7)}/{reader.GetString(8)};site={reader.GetString(2)}:{reader.GetInt32(3)};rule={reader.GetString(4)};tier={reader.GetString(5)}");
+        }
+        return values;
+    }
+
     private static Fact ReadFact(SqliteDataReader reader) => new(reader.GetString(0), reader.GetString(1),
-        reader.IsDBNull(2) ? null : reader.GetString(2), reader.GetString(3), reader.GetInt32(4), reader.GetString(5), reader.GetString(6),
-        JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(7)) ?? []);
+        reader.IsDBNull(2) ? null : reader.GetString(2), reader.GetString(3), reader.IsDBNull(4) ? null : reader.GetString(4),
+        reader.GetString(5), reader.GetInt32(6), reader.GetString(7), reader.GetString(8),
+        JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(9)) ?? []);
     private static string? Value(Fact fact, string key) => fact.Properties.GetValueOrDefault(key);
     private static bool IsCreation(Fact fact) =>
         fact.RuleId == RuleIds.VisualBasicSyntaxCallGraph && Value(fact, "callKind") == "SyntaxObjectCreation"
