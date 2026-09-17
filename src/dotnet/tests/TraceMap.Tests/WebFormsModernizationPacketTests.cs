@@ -981,6 +981,13 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Contains(privateReceiverAudit, line => line.StartsWith("receiverBridgePrivate.call-01.receiverTypeMethods=", StringComparison.Ordinal)
             && line.Contains("member=BusinessLayer.BusinessObject.InsertFeedback/1", StringComparison.Ordinal)
             && line.Contains($"tier={EvidenceTiers.Tier1Semantic}", StringComparison.Ordinal));
+        Assert.Contains(privateReceiverAudit, line => line.StartsWith("receiverBridgePrivate.callStatus-01.", StringComparison.Ordinal)
+            && line.Contains("source=Submit_Click", StringComparison.Ordinal)
+            && line.Contains("callee=InsertFeedback", StringComparison.Ordinal)
+            && line.Contains("receiver=bl", StringComparison.Ordinal)
+            && line.Contains("matchingCreations=1", StringComparison.Ordinal)
+            && line.Contains("assignedTo=bl,type=BusinessObject", StringComparison.Ordinal));
+        Assert.Contains("receiverBridgePrivate.callStatuses=1", privateReceiverAudit);
 
         var mixedInvocation = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph, "WebApplication/Feedback.aspx.vb", 23,
             source: "Feedback.Submit_Click/2", target: "InsertFeedback", contract: "InsertFeedback",

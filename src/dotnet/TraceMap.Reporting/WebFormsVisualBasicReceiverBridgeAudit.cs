@@ -197,12 +197,22 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
         {
             output.Add("receiverBridgePrivate=enabled");
             var privateIndex = 0;
+            var callStatusIndex = 0;
             foreach (var call in calls)
             {
                 var matches = creations.Where(creation => creation.SourceId == call.SourceId
                     && creation.FilePath.Equals(call.FilePath, StringComparison.OrdinalIgnoreCase)
                     && creation.Line <= call.Line && SameMember(creation, call)
                     && string.Equals(Value(creation, "assignedTo"), Value(call, "receiverName"), StringComparison.OrdinalIgnoreCase)).ToArray();
+                var sameMemberCreations = creations.Where(creation => creation.SourceId == call.SourceId
+                        && creation.FilePath.Equals(call.FilePath, StringComparison.OrdinalIgnoreCase)
+                        && creation.Line <= call.Line && SameMember(creation, call))
+                    .OrderBy(creation => creation.Line).ThenBy(creation => creation.Id, StringComparer.Ordinal)
+                    .Take(20)
+                    .Select(creation => $"line={creation.Line},assignedTo={Value(creation, "assignedTo") ?? "unavailable"},type={SimpleType(Value(creation, "calleeContainingType") ?? Value(creation, "calleeName"))}")
+                    .ToArray();
+                callStatusIndex++;
+                output.Add($"receiverBridgePrivate.callStatus-{callStatusIndex:D2}.line={call.Line};source={call.SourceSymbol ?? "unavailable"};callee={Value(call, "calleeName") ?? "unavailable"};arity={Value(call, "argumentCount") ?? "unavailable"};receiver={Value(call, "receiverName") ?? "unavailable"};matchingCreations={matches.Length};sameMemberCreations={string.Join('|', sameMemberCreations)}");
                 if (matches.Length != 1 || !int.TryParse(Value(call, "argumentCount"), out var arity)) continue;
                 privateIndex++;
                 var name = Value(call, "calleeName") ?? "unavailable";
@@ -237,6 +247,7 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
                 output.Add($"receiverBridgePrivate.call-{privateIndex:D2}.sameFileBodySymbols={string.Join('|', sameFileBodies)}");
             }
             output.Add($"receiverBridgePrivate.calls={privateIndex}");
+            output.Add($"receiverBridgePrivate.callStatuses={callStatusIndex}");
         }
         return output;
     }
