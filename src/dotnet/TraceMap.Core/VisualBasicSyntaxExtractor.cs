@@ -94,9 +94,10 @@ public static class VisualBasicSyntaxExtractor
                 () => AddEventCompositionFacts(manifest, facts, file.RelativePath, root, budget));
             // Call-path evidence is more useful than isolated member names when
             // a large legacy file reaches the shared per-file fallback budget.
-            // Retain invocations and receiver creations together in source order
-            // so a high-volume invocation phase cannot starve earlier field or
-            // local initializers that provide receiver provenance.
+            // Retain invocations and receiver creations together with bounded,
+            // deterministic round-robin admission across containing members.
+            // This prevents one high-volume method from starving receiver
+            // provenance or body evidence in later methods in the same file.
             TryRunPhase(manifest, facts, file.RelativePath, RuleIds.VisualBasicSyntaxCallGraph, "calls-and-object-creations",
                 () => AddCallAndObjectCreationFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans, budget));
             TryRunPhase(manifest, facts, file.RelativePath, RuleIds.VisualBasicSyntaxMemberAccess, "member-access",
@@ -771,29 +772,61 @@ public static class VisualBasicSyntaxExtractor
         IReadOnlyList<ProtectedSourceSpan> protectedSpans,
         FactBudget budget)
     {
-        foreach (var node in root.DescendantNodes()
+        var scopes = root.DescendantNodes()
             .Where(node => node is InvocationExpressionSyntax or ObjectCreationExpressionSyntax)
-            .OrderBy(node => node.SpanStart)
-            .ThenBy(node => node is ObjectCreationExpressionSyntax ? 0 : 1))
-        {
-            if (OverlapsProtected(node, protectedSpans))
-            {
-                continue;
-            }
+            .Where(node => !OverlapsProtected(node, protectedSpans))
+            .GroupBy(GetCallEvidenceScopeKey, StringComparer.Ordinal)
+            .Select(group => new Queue<SyntaxNode>(group
+                .OrderBy(node => node.SpanStart)
+                .ThenBy(node => node is ObjectCreationExpressionSyntax ? 0 : 1)))
+            .OrderBy(queue => queue.Peek().SpanStart)
+            .ToArray();
 
-            var retained = node switch
+        var remaining = scopes.Sum(queue => queue.Count);
+        while (remaining > 0)
+        {
+            foreach (var scope in scopes)
             {
-                InvocationExpressionSyntax invocation => AddInvocationFacts(
-                    manifest, facts, filePath, root, invocation, budget),
-                ObjectCreationExpressionSyntax creation => AddObjectCreationFacts(
-                    manifest, facts, filePath, creation, budget),
-                _ => true
-            };
-            if (!retained)
-            {
-                return;
+                if (scope.Count == 0)
+                {
+                    continue;
+                }
+
+                var node = scope.Dequeue();
+                remaining--;
+                var retained = node switch
+                {
+                    InvocationExpressionSyntax invocation => AddInvocationFacts(
+                        manifest, facts, filePath, root, invocation, budget),
+                    ObjectCreationExpressionSyntax creation => AddObjectCreationFacts(
+                        manifest, facts, filePath, creation, budget),
+                    _ => true
+                };
+                if (!retained)
+                {
+                    return;
+                }
             }
         }
+    }
+
+    private static string GetCallEvidenceScopeKey(SyntaxNode node)
+    {
+        var member = GetContainingMemberName(node);
+        if (!string.IsNullOrWhiteSpace(member))
+        {
+            return $"member:{member}";
+        }
+
+        var containingTypes = node.Ancestors()
+            .OfType<TypeBlockSyntax>()
+            .Select(type => type.BlockStatement.Identifier.ValueText)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Reverse()
+            .ToArray();
+        return containingTypes.Length == 0
+            ? "initializer:global"
+            : $"initializer:{string.Join('.', containingTypes)}";
     }
 
     private static bool AddInvocationFacts(

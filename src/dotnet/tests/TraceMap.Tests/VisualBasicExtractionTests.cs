@@ -394,6 +394,7 @@ public sealed class VisualBasicExtractionTests
 
             Public Class DataAccess
                 Public Sub InsertFeedBack(comment As String, userId As Integer)
+                    command.Execute()
                 End Sub
             End Class
             """);
@@ -419,6 +420,12 @@ public sealed class VisualBasicExtractionTests
             && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
             && fact.Properties.GetValueOrDefault("containingType") == "BusinessLogic"
             && fact.Properties.GetValueOrDefault("fieldName") == "dal");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.CallEdge
+            && fact.RuleId == RuleIds.VisualBasicSyntaxCallGraph
+            && fact.SourceSymbol == "DataAccess.InsertFeedBack/2"
+            && fact.TargetSymbol == "Execute"
+            && fact.Properties.GetValueOrDefault("receiverName") == "command");
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.AnalysisGap
             && fact.Properties.GetValueOrDefault("gapKind") == "SyntaxFallbackBudgetExhausted");
