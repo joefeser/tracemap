@@ -2694,7 +2694,9 @@ public static partial class CombinedDependencyPathReporter
             {
                 var syntaxTargets = syntaxDeclarations
                     .Where(declaration => string.Equals(SimpleVisualBasicTypeName(CombinedDependencyReporter.FirstValue(declaration.Properties, "containingType")), createdType, StringComparison.OrdinalIgnoreCase)
-                        && string.Equals(CombinedDependencyReporter.FirstValue(declaration.Properties, "methodName", "name"), methodName, StringComparison.OrdinalIgnoreCase))
+                        && string.Equals(CombinedDependencyReporter.FirstValue(declaration.Properties, "methodName", "name"), methodName, StringComparison.OrdinalIgnoreCase)
+                        && (!int.TryParse(CombinedDependencyReporter.FirstValue(declaration.Properties, "parameterCount"), out var declarationParameterCount)
+                            || declarationParameterCount == argumentCount))
                     .Select(declaration => new
                     {
                         Declaration = declaration,

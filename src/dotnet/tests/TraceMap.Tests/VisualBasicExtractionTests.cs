@@ -434,6 +434,12 @@ public sealed class VisualBasicExtractionTests
             && fact.TargetSymbol == "Execute"
             && fact.Properties.GetValueOrDefault("receiverName") == "command");
         Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.MethodDeclared
+            && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+            && fact.Properties.GetValueOrDefault("containingType") == "DataAccess"
+            && fact.Properties.GetValueOrDefault("name") == "InsertFeedBack"
+            && fact.Properties.GetValueOrDefault("parameterCount") == "2");
+        Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.TypeDeclared
             && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
             && fact.Properties.GetValueOrDefault("name") == "DataAccess"

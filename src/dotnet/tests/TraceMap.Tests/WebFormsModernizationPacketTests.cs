@@ -1132,8 +1132,8 @@ public sealed class WebFormsModernizationPacketTests
 
         var inheritedDataAccessType = Fact(manifest, FactTypes.TypeDeclared, RuleIds.VisualBasicSyntaxDeclarations,
             "WebApplication/App_Code/DataAccess.vb", 35, source: null, target: "DataAccess", contract: null,
-            ("baseTypes", "SQLBaseDA"), ("kind", "class"), ("name", "DataAccess"),
-            ("namespace", ""), ("qualifiedName", "DataAccess")) with
+            ("baseTypes", "UnitedFramework.DataAccess.SQLBaseDA"), ("kind", "class"), ("name", "DataAccess"),
+            ("namespace", "BusinessLogic.DataAccess"), ("qualifiedName", "BusinessLogic.DataAccess.DataAccess")) with
         {
             EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
         };
@@ -1164,7 +1164,13 @@ public sealed class WebFormsModernizationPacketTests
         };
         var inheritedSqlDeclaration = Fact(recursiveBackendManifest, FactTypes.MethodDeclared, RuleIds.VisualBasicSyntaxDeclarations,
             "Common/DataAccess.vb", 220, source: null, target: "ExecProc_Scalar", contract: null,
-            ("containingType", "SqlDataAccess"), ("name", "ExecProc_Scalar")) with
+            ("containingType", "SqlDataAccess"), ("name", "ExecProc_Scalar"), ("parameterCount", "2")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var inheritedSqlOverload = Fact(recursiveBackendManifest, FactTypes.MethodDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "Common/DataAccess.vb", 210, source: null, target: "ExecProc_Scalar", contract: null,
+            ("containingType", "SqlDataAccess"), ("name", "ExecProc_Scalar"), ("parameterCount", "1")) with
         {
             EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
         };
@@ -1182,7 +1188,7 @@ public sealed class WebFormsModernizationPacketTests
             ("coverageLabel", "bounded-static-query"));
         var inheritedBackendIndex = Path.Combine(temp.Path, "inherited-backend-index.sqlite");
         SqliteIndexWriter.Write(inheritedBackendIndex, recursiveBackendManifest,
-            [sqlBaseType, inheritedSqlField, inheritedSqlDeclaration, inheritedSqlBody, inheritedSqlTerminal]);
+            [sqlBaseType, inheritedSqlField, inheritedSqlDeclaration, inheritedSqlOverload, inheritedSqlBody, inheritedSqlTerminal]);
         var inheritedCombinedIndex = Path.Combine(temp.Path, "inherited-combined-index.sqlite");
         await CombinedIndexBuilder.CombineAsync(new CombineOptions(
             [inheritedWebIndex, inheritedBackendIndex], inheritedCombinedIndex, ["web", "backend"]));

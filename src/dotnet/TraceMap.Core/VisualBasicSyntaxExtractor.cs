@@ -306,6 +306,13 @@ public static class VisualBasicSyntaxExtractor
             var containingType = statement.Ancestors()
                 .OfType<TypeBlockSyntax>()
                 .FirstOrDefault()?.BlockStatement.Identifier.ValueText ?? string.Empty;
+            var parameterCount = statement switch
+            {
+                MethodStatementSyntax methodStatement => methodStatement.ParameterList?.Parameters.Count ?? 0,
+                SubNewStatementSyntax constructor => constructor.ParameterList?.Parameters.Count ?? 0,
+                OperatorStatementSyntax operatorStatement => operatorStatement.ParameterList?.Parameters.Count ?? 0,
+                _ => 0
+            };
             if (!TryAddSyntaxFact(
                     manifest,
                     facts,
@@ -317,7 +324,8 @@ public static class VisualBasicSyntaxExtractor
                     new SortedDictionary<string, string>(StringComparer.Ordinal)
                     {
                         ["containingType"] = containingType,
-                        ["name"] = methodName
+                        ["name"] = methodName,
+                        ["parameterCount"] = parameterCount.ToString()
                     },
                     budget))
             {
