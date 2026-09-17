@@ -73,19 +73,45 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
                 select source_index_id, combined_fact_id, source_symbol, file_path, start_line,
                        rule_id, evidence_tier, properties_json
                 from combined_facts
-                where fact_type='MethodDeclared' and rule_id=$rule and evidence_tier=$tier
+                where fact_type='MethodDeclared'
+                  and ((rule_id=$semantic_rule and evidence_tier=$semantic_tier)
+                       or (rule_id=$syntax_rule and evidence_tier=$syntax_tier))
                   and json_valid(properties_json)
-                  and cast(json_extract(properties_json,'$.methodName') as text) collate nocase
+                  and coalesce(cast(json_extract(properties_json,'$.methodName') as text),
+                               cast(json_extract(properties_json,'$.name') as text)) collate nocase
                       in (select value from json_each($names))
                 order by combined_fact_id limit 10001;
                 """;
-            command.Parameters.AddWithValue("$rule", RuleIds.VisualBasicSemanticDeclarations);
-            command.Parameters.AddWithValue("$tier", EvidenceTiers.Tier1Semantic);
+            command.Parameters.AddWithValue("$semantic_rule", RuleIds.VisualBasicSemanticDeclarations);
+            command.Parameters.AddWithValue("$semantic_tier", EvidenceTiers.Tier1Semantic);
+            command.Parameters.AddWithValue("$syntax_rule", RuleIds.VisualBasicSyntaxDeclarations);
+            command.Parameters.AddWithValue("$syntax_tier", EvidenceTiers.Tier3SyntaxOrTextual);
             command.Parameters.AddWithValue("$names", JsonSerializer.Serialize(methodNames));
             using var reader = command.ExecuteReader();
             while (reader.Read()) declarations.Add(ReadFact(reader));
         }
         if (declarations.Count > 10_000) throw new InvalidDataException("ReceiverBridgeAuditInputLimit");
+
+        var candidateBodySymbols = calls
+            .Where(call => int.TryParse(Value(call, "argumentCount"), out _) && !string.IsNullOrWhiteSpace(Value(call, "calleeName")))
+            .SelectMany(call => creations.Where(creation => creation.SourceId == call.SourceId
+                    && creation.FilePath.Equals(call.FilePath, StringComparison.OrdinalIgnoreCase)
+                    && creation.Line <= call.Line && SameMember(creation, call)
+                    && string.Equals(Value(creation, "assignedTo"), Value(call, "receiverName"), StringComparison.OrdinalIgnoreCase))
+                .Select(creation => $"{SimpleType(Value(creation, "calleeContainingType") ?? Value(creation, "calleeName"))}.{Value(call, "calleeName")}/{Value(call, "argumentCount")}"))
+            .Where(value => !value.StartsWith(".", StringComparison.Ordinal))
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var bodySymbols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        using (var command = db.CreateCommand())
+        {
+            command.Transaction = transaction;
+            command.CommandText = "select distinct source_index_id, source_symbol from combined_facts "
+                + "where fact_type='CallEdge' and rule_id=$rule and source_symbol collate nocase in (select value from json_each($symbols));";
+            command.Parameters.AddWithValue("$rule", RuleIds.VisualBasicSyntaxCallGraph);
+            command.Parameters.AddWithValue("$symbols", JsonSerializer.Serialize(candidateBodySymbols));
+            using var reader = command.ExecuteReader();
+            while (reader.Read()) bodySymbols.Add($"{reader.GetString(0)}\0{reader.GetString(1)}");
+        }
 
         var results = new Dictionary<string, int>(StringComparer.Ordinal);
         void Hit(string value) => results[value] = results.GetValueOrDefault(value) + 1;
@@ -103,16 +129,30 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
             if (matches.Length != 1) { Hit("receiver-creation-ambiguous"); continue; }
             var type = SimpleType(Value(matches[0], "calleeContainingType") ?? Value(matches[0], "calleeName"));
             if (string.IsNullOrWhiteSpace(type)) { Hit("receiver-type-unavailable"); continue; }
-            var targets = declarations.Where(declaration =>
+            var targets = declarations.Where(declaration => declaration.RuleId == RuleIds.VisualBasicSemanticDeclarations &&
                 SimpleType(Value(declaration, "containingType")).Equals(type, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(Value(declaration, "methodName"), Value(call, "calleeName"), StringComparison.OrdinalIgnoreCase)
                 && int.TryParse(Value(declaration, "parameterCount"), out var count) && count == arity).ToArray();
-            Hit(targets.Length switch { 0 => "semantic-target-unavailable", 1 => "ready", _ => "semantic-target-ambiguous" });
+            if (targets.Length != 0)
+            {
+                Hit(targets.Length == 1 ? "ready-semantic" : "semantic-target-ambiguous");
+                continue;
+            }
+            var expectedSymbol = $"{type}.{Value(call, "calleeName")}/{arity}";
+            var syntaxTargets = declarations.Where(declaration => declaration.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+                    && SimpleType(Value(declaration, "containingType")).Equals(type, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(Value(declaration, "methodName") ?? Value(declaration, "name"), Value(call, "calleeName"), StringComparison.OrdinalIgnoreCase)
+                    && bodySymbols.Contains($"{declaration.SourceId}\0{expectedSymbol}"))
+                .ToArray();
+            Hit(syntaxTargets.Length switch { 0 => "target-unavailable", 1 => "ready-syntax", _ => "syntax-target-ambiguous" });
         }
 
+        var semanticDeclarations = declarations.Count(fact => fact.RuleId == RuleIds.VisualBasicSemanticDeclarations);
+        var syntaxDeclarations = declarations.Count(fact => fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations);
         var output = new List<string> { "receiverBridgeAudit=valid", $"supportingCallFacts={facts.Count}",
             $"syntaxReceiverInvocations={calls.Length}", $"receiverCreations={creations.Length}",
-            $"semanticMethodCandidates={declarations.Count}" };
+            $"semanticMethodCandidates={semanticDeclarations}", $"syntaxMethodCandidates={syntaxDeclarations}",
+            $"syntaxBodySymbols={bodySymbols.Count}" };
         output.AddRange(results.OrderBy(pair => pair.Key, StringComparer.Ordinal)
             .Select(pair => $"receiverBridgeStatus.{pair.Key}={pair.Value}"));
         return output;

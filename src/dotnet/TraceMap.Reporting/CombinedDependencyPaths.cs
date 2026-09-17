@@ -2523,6 +2523,19 @@ public static partial class CombinedDependencyPathReporter
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "containingType"))
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "methodName")))
             .ToArray();
+        var syntaxDeclarations = facts
+            .Where(fact => fact.FactType == FactTypes.MethodDeclared
+                && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+                && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+                && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "containingType"))
+                && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "methodName", "name")))
+            .ToArray();
+        var syntaxBodyFacts = facts
+            .Where(fact => fact.FactType == FactTypes.CallEdge
+                && fact.RuleId == RuleIds.VisualBasicSyntaxCallGraph
+                && !string.IsNullOrWhiteSpace(fact.SourceSymbol))
+            .GroupBy(fact => $"{fact.SourceIndexId}\0{fact.SourceSymbol}", StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal).ToArray(), StringComparer.OrdinalIgnoreCase);
 
         foreach (var call in syntaxCalls)
         {
@@ -2596,40 +2609,83 @@ public static partial class CombinedDependencyPathReporter
                 continue;
             }
 
-            var targets = declarations
+            var semanticTargets = declarations
                 .Where(declaration => string.Equals(SimpleVisualBasicTypeName(CombinedDependencyReporter.FirstValue(declaration.Properties, "containingType")), createdType, StringComparison.OrdinalIgnoreCase)
                     && string.Equals(CombinedDependencyReporter.FirstValue(declaration.Properties, "methodName"), methodName, StringComparison.OrdinalIgnoreCase)
                     && int.TryParse(CombinedDependencyReporter.FirstValue(declaration.Properties, "parameterCount"), out var parameterCount)
                     && parameterCount == argumentCount)
                 .OrderBy(declaration => declaration.CombinedFactId, StringComparer.Ordinal)
                 .ToArray();
-            if (targets.Length != 1)
+            if (semanticTargets.Length > 1)
             {
                 AddProjectlessVisualBasicReceiverBridgeGap(
                     graph,
                     call,
-                    targets.Length == 0
-                        ? "ProjectlessVisualBasicReceiverTargetUnavailable"
-                        : "ProjectlessVisualBasicReceiverTargetAmbiguous",
-                    targets.Length == 0
-                        ? "A syntax-only invocation receiver has one retained local object creation, but no unique semantic VB method declaration matched its type, method name, and argument count."
-                        : "A syntax-only invocation receiver matched multiple semantic VB method declarations by type, method name, and argument count; TraceMap did not choose a target.",
-                    targets.Length == 0 ? "semantic-target-unavailable" : "semantic-target-ambiguous",
-                    targets.Length,
-                    targets.Select(fact => fact.CombinedFactId).Append(creation.CombinedFactId).Append(call.CombinedFactId));
+                    "ProjectlessVisualBasicReceiverTargetAmbiguous",
+                    "A syntax-only invocation receiver matched multiple semantic VB method declarations by type, method name, and argument count; TraceMap did not choose a target.",
+                    "semantic-target-ambiguous",
+                    semanticTargets.Length,
+                    semanticTargets.Select(fact => fact.CombinedFactId).Append(creation.CombinedFactId).Append(call.CombinedFactId));
                 continue;
             }
 
-            var target = targets[0];
-            var targetNode = graph.GetOrAddSymbolNode(
-                target.SourceIndexId,
-                target.SourceLabel,
-                target.TargetSymbol!,
-                target.FilePath,
-                target.StartLine,
-                target.EndLine,
-                target.RuleId,
-                target.EvidenceTier);
+            CombinedFactRow target;
+            GraphNode targetNode;
+            string bridgeEvidenceTier;
+            IReadOnlyList<string> targetBodyEvidenceIds = [];
+            if (semanticTargets.Length == 1)
+            {
+                target = semanticTargets[0];
+                targetNode = graph.GetOrAddSymbolNode(
+                    target.SourceIndexId,
+                    target.SourceLabel,
+                    target.TargetSymbol!,
+                    target.FilePath,
+                    target.StartLine,
+                    target.EndLine,
+                    target.RuleId,
+                    target.EvidenceTier);
+                bridgeEvidenceTier = EvidenceTiers.Tier2Structural;
+            }
+            else
+            {
+                var syntaxTargets = syntaxDeclarations
+                    .Where(declaration => string.Equals(SimpleVisualBasicTypeName(CombinedDependencyReporter.FirstValue(declaration.Properties, "containingType")), createdType, StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(CombinedDependencyReporter.FirstValue(declaration.Properties, "methodName", "name"), methodName, StringComparison.OrdinalIgnoreCase))
+                    .Select(declaration => new
+                    {
+                        Declaration = declaration,
+                        NodeId = SymbolNodeId(declaration.SourceIndexId, $"{createdType}.{methodName}/{argumentCount}"),
+                        BodyFacts = syntaxBodyFacts.GetValueOrDefault($"{declaration.SourceIndexId}\0{createdType}.{methodName}/{argumentCount}", [])
+                    })
+                    // The declaration itself does not retain overload arity in older
+                    // syntax artifacts. Require the exact arity-bearing member node
+                    // emitted by call-shaped body evidence before joining it.
+                    .Where(candidate => candidate.BodyFacts.Length > 0 && graph.Nodes.ContainsKey(candidate.NodeId))
+                    .OrderBy(candidate => candidate.Declaration.CombinedFactId, StringComparer.Ordinal)
+                    .ToArray();
+                if (syntaxTargets.Length != 1)
+                {
+                    AddProjectlessVisualBasicReceiverBridgeGap(
+                        graph,
+                        call,
+                        syntaxTargets.Length == 0
+                            ? "ProjectlessVisualBasicReceiverTargetUnavailable"
+                            : "ProjectlessVisualBasicReceiverTargetAmbiguous",
+                        syntaxTargets.Length == 0
+                            ? "A syntax-only invocation receiver has one retained local object creation, but neither a unique semantic declaration nor a unique syntax declaration with exact arity-bearing body evidence matched its type and method."
+                            : "A syntax-only invocation receiver matched multiple syntax declarations with exact arity-bearing body evidence; TraceMap did not choose a target.",
+                        syntaxTargets.Length == 0 ? "target-unavailable" : "syntax-target-ambiguous",
+                        syntaxTargets.Length,
+                        syntaxTargets.Select(candidate => candidate.Declaration.CombinedFactId).Append(creation.CombinedFactId).Append(call.CombinedFactId));
+                    continue;
+                }
+
+                target = syntaxTargets[0].Declaration;
+                targetNode = graph.Nodes[syntaxTargets[0].NodeId];
+                bridgeEvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual;
+                targetBodyEvidenceIds = syntaxTargets[0].BodyFacts.Select(fact => fact.CombinedFactId).ToArray();
+            }
             graph.AddEdge(new GraphEdge(
                 $"projectless-vb-receiver-bridge:{call.CombinedFactId}:{target.CombinedFactId}",
                 "projectless-vb-receiver-bridge",
@@ -2637,8 +2693,9 @@ public static partial class CombinedDependencyPathReporter
                 targetNode.NodeId,
                 "EvidenceEdge",
                 ProjectlessVisualBasicReceiverBridgeRuleId,
-                EvidenceTiers.Tier2Structural,
+                bridgeEvidenceTier,
                 new[] { call.CombinedFactId, creation.CombinedFactId, target.CombinedFactId }
+                    .Concat(targetBodyEvidenceIds)
                     .OrderBy(value => value, StringComparer.Ordinal)
                     .ToArray(),
                 [],
@@ -3654,7 +3711,7 @@ public static partial class CombinedDependencyPathReporter
 
         if (edges.Any(edge => edge.EdgeKind == "projectless-vb-receiver-bridge"))
         {
-            notes.Add(new CombinedPathNote("ProjectlessVisualBasicReceiverBridge", "This review-tier hop joins a syntax-only VB invocation to one semantic method declaration using one directly retained syntax or compiler-resolved local receiver creation plus method name and argument count; the resulting target hop is not compiler-resolved call evidence or proof of runtime execution."));
+            notes.Add(new CombinedPathNote("ProjectlessVisualBasicReceiverBridge", "This review-tier hop joins a syntax-only VB invocation using one directly retained local receiver creation plus method identity. It prefers one semantic type/name/arity declaration; under reduced semantic coverage it requires one syntax type/name declaration and an exact arity-bearing member-body symbol. The resulting target hop is not compiler-resolved call evidence or proof of runtime execution."));
         }
 
         if (edges.Any(edge => edge.EdgeKind is "remoting-evidence" or "remoting-channel-link"))

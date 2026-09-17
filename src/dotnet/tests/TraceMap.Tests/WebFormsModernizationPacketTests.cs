@@ -968,7 +968,7 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Contains("receiverBridgeAudit=valid", receiverAudit);
         Assert.Contains("syntaxReceiverInvocations=1", receiverAudit);
         Assert.Contains("receiverCreations=1", receiverAudit);
-        Assert.Contains("receiverBridgeStatus.ready=1", receiverAudit);
+        Assert.Contains("receiverBridgeStatus.ready-semantic=1", receiverAudit);
 
         var mixedInvocation = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph, "WebApplication/Feedback.aspx.vb", 23,
             source: "Feedback.Submit_Click/2", target: "InsertFeedback", contract: "InsertFeedback",
@@ -1006,6 +1006,40 @@ public sealed class WebFormsModernizationPacketTests
         var mixedChain = Assert.Single(mixedPacket.EventChains);
         Assert.Equal("sql-query", mixedChain.TerminalKind);
         Assert.Contains("projectless-vb-receiver-bridge", mixedChain.TraversalObservation?.TraversedEdgeKinds ?? []);
+
+        var syntaxDeclaration = Fact(backendManifest, FactTypes.MethodDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "BusinessLayer/BusinessObject.vb", 10, source: null, target: "InsertFeedback", contract: null,
+            ("containingType", "BusinessObject"), ("name", "InsertFeedback")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var syntaxDownstream = Fact(backendManifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph,
+            "BusinessLayer/BusinessObject.vb", 12, source: "BusinessObject.InsertFeedback/1", target: "FeedbackQuery.Insert/1", contract: "Insert",
+            ("argumentCount", "1"), ("callKind", "SyntaxInvocation"), ("calleeName", "Insert"),
+            ("callerName", "BusinessObject.InsertFeedback/1"), ("coverageLabel", "syntax-only"), ("receiverName", "query")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var syntaxTerminal = Fact(backendManifest, FactTypes.QueryPatternDetected, RuleIds.CSharpSyntaxQueryPattern,
+            "BusinessLayer/FeedbackQuery.vb", 30, source: "FeedbackQuery.Insert/1", target: "feedback-query-shape", contract: "query",
+            ("operationName", "INSERT"), ("tableName", "feedback"), ("columnNames", "comment"),
+            ("sqlSourceKind", "literal-string"), ("queryShapeHash", "feedback-shape-hash"),
+            ("coverageLabel", "bounded-static-query"));
+        var syntaxBackendIndex = Path.Combine(temp.Path, "syntax-backend-index.sqlite");
+        SqliteIndexWriter.Write(syntaxBackendIndex, backendManifest, [syntaxDeclaration, syntaxDownstream, syntaxTerminal]);
+        var syntaxCombinedIndex = Path.Combine(temp.Path, "syntax-combined-index.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([webIndex, syntaxBackendIndex], syntaxCombinedIndex, ["web", "backend"]));
+        var syntaxWritten = await WebFormsModernizationPacketReporter.WriteAsync(
+            new(syntaxCombinedIndex, Path.Combine(temp.Path, "syntax-combined-output")));
+        var syntaxPacket = syntaxWritten.Packet;
+        var syntaxChain = Assert.Single(syntaxPacket.EventChains);
+        Assert.Equal("sql-query", syntaxChain.TerminalKind);
+        Assert.Contains("projectless-vb-receiver-bridge", syntaxChain.TraversalObservation?.TraversedEdgeKinds ?? []);
+        var syntaxReceiverAudit = WebFormsVisualBasicReceiverBridgeAudit.Run(
+            syntaxCombinedIndex, syntaxWritten.JsonPath, surface);
+        Assert.Contains("semanticMethodCandidates=0", syntaxReceiverAudit);
+        Assert.Contains("syntaxMethodCandidates=1", syntaxReceiverAudit);
+        Assert.Contains("receiverBridgeStatus.ready-syntax=1", syntaxReceiverAudit);
 
         var combinedDocs = await EvidenceDocsExporter.ExportAsync(new(
             combinedIndex,
