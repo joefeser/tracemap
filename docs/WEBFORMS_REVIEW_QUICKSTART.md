@@ -187,6 +187,16 @@ same receipted page, run:
 .\scripts\New-FocusedWebFormsPageGraphDump.ps1 -ReviewRoot $ReviewRoot -PriorPageId page-008
 ```
 
+For a merged review, diagnose the current merged page directly. The script reads
+the receipted `combined/index.sqlite` location instead of assuming `scan/index.sqlite`:
+
+```powershell
+.\scripts\New-FocusedWebFormsPageGraphDump.ps1 `
+  -ReviewRoot $MergedReviewRoot `
+  -PriorPageId page-011 `
+  -StandaloneReviewRoot $MergedReviewRoot
+```
+
 Share only the reported `page-graph.shareable.zip`. Each distinct handler case
 reports retained terminal-evidence families (`database`, `http`, or
 `callback-or-async`), the terminal fact count, and whether unresolved leaves

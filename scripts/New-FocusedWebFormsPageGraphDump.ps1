@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$ReviewRoot,
-    [Parameter(Mandatory = $true)][ValidatePattern('^page-[0-9]{3,4}$')][string]$PriorPageId
+    [Parameter(Mandatory = $true)][ValidatePattern('^page-[0-9]{3,4}$')][string]$PriorPageId,
+    [string]$StandaloneReviewRoot = ''
 )
 
 Set-StrictMode -Version Latest
@@ -56,21 +57,33 @@ function Get-ReceiptedApplication([string]$Root) {
     }
     $application = Read-BoundedJson $path 128MB 'WEBFORMS_PAGE_GRAPH_DUMP_APPLICATION_UNAVAILABLE'
     if ($application.schemaVersion -ne 'webforms-application-handoff.v1') { throw 'WEBFORMS_PAGE_GRAPH_DUMP_APPLICATION_INVALID' }
-    return [pscustomobject]@{ Application = $application; Path = $path }
+    return [pscustomobject]@{ Application = $application; Path = $path; Receipt = $receipt }
 }
 
 $root = [IO.Path]::GetFullPath($ReviewRoot).TrimEnd('\', '/')
 if (!(Test-Path -LiteralPath $root -PathType Container)) { throw 'WEBFORMS_PAGE_GRAPH_DUMP_REVIEW_ROOT_UNAVAILABLE' }
-$indexPath = Join-Path $root 'scan/index.sqlite'
+$prior = Get-ReceiptedApplication $root
+$layoutProperty = $prior.Receipt.PSObject.Properties['layout']
+$scanProperty = if ($null -ne $layoutProperty -and $null -ne $layoutProperty.Value) {
+    $layoutProperty.Value.PSObject.Properties['scan']
+} else { $null }
+$scanDirectory = if ($null -ne $scanProperty -and [string]$scanProperty.Value) { [string]$scanProperty.Value } else { 'scan' }
+if ($scanDirectory -notmatch '^[A-Za-z0-9._-]+$') { throw 'WEBFORMS_PAGE_GRAPH_DUMP_INDEX_LAYOUT_INVALID' }
+$indexPath = Join-Path $root "$scanDirectory/index.sqlite"
 if (!(Test-Path -LiteralPath $indexPath -PathType Leaf)) { throw 'WEBFORMS_PAGE_GRAPH_DUMP_INDEX_UNAVAILABLE' }
 
-$latest = @(Get-ChildItem -LiteralPath $root -Directory -Filter 'webforms-standalone-review-*' |
-    Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'run-receipt.json') -PathType Leaf } |
-    Sort-Object LastWriteTimeUtc, FullName -Descending | Select-Object -First 1)
-if ($latest.Count -ne 1) { throw 'WEBFORMS_PAGE_GRAPH_DUMP_STANDALONE_REVIEW_UNAVAILABLE' }
+if ($StandaloneReviewRoot) {
+    $currentRoot = [IO.Path]::GetFullPath($StandaloneReviewRoot).TrimEnd('\', '/')
+}
+else {
+    $latest = @(Get-ChildItem -LiteralPath $root -Directory -Filter 'webforms-standalone-review-*' |
+        Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'run-receipt.json') -PathType Leaf } |
+        Sort-Object LastWriteTimeUtc, FullName -Descending | Select-Object -First 1)
+    if ($latest.Count -ne 1) { throw 'WEBFORMS_PAGE_GRAPH_DUMP_STANDALONE_REVIEW_UNAVAILABLE' }
+    $currentRoot = $latest[0].FullName
+}
 
-$prior = Get-ReceiptedApplication $root
-$current = Get-ReceiptedApplication $latest[0].FullName
+$current = Get-ReceiptedApplication $currentRoot
 $priorPages = @($prior.Application.pages | Where-Object { $_.pageId -eq $PriorPageId })
 if ($priorPages.Count -ne 1) { throw 'WEBFORMS_PAGE_GRAPH_DUMP_PRIOR_PAGE_UNAVAILABLE' }
 $priorPath = [string]$priorPages[0].filePath
@@ -79,7 +92,7 @@ $currentPages = @($current.Application.pages | Where-Object {
 })
 if ($currentPages.Count -ne 1) { throw 'WEBFORMS_PAGE_GRAPH_DUMP_ROUTE_MATCH_UNAVAILABLE' }
 $pageId = [string]$currentPages[0].pageId
-$pagePath = Join-Path $latest[0].FullName "workbench/$pageId.handoff.json"
+$pagePath = Join-Path $currentRoot "workbench/$pageId.handoff.json"
 $page = Read-BoundedJson $pagePath 128MB 'WEBFORMS_PAGE_GRAPH_DUMP_PAGE_UNAVAILABLE'
 if ($page.schemaVersion -ne 'webforms-application-page-handoff.v1' -or $page.claimLevel -ne 'local-only' -or
     $page.pageId -ne $pageId -or $page.provenance.inputSha256 -ne $current.Application.provenance.inputSha256 -or
@@ -88,7 +101,7 @@ if ($page.schemaVersion -ne 'webforms-application-page-handoff.v1' -or $page.cla
 }
 
 $stamp = [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss')
-$outputRoot = Join-Path $latest[0].FullName "private-diagnostics/page-graph-$stamp-$([Guid]::NewGuid().ToString('N').Substring(0, 8))"
+$outputRoot = Join-Path $currentRoot "private-diagnostics/page-graph-$stamp-$([Guid]::NewGuid().ToString('N').Substring(0, 8))"
 [IO.Directory]::CreateDirectory($outputRoot) | Out-Null
 $inputPath = Join-Path $outputRoot 'page-graph-input.private.json'
     $outputPath = Join-Path $outputRoot 'page-graph.private.json'
