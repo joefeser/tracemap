@@ -1332,6 +1332,12 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Contains(inheritedPrivateAudit, line => line.StartsWith(
             "receiverBridgePrivate.execProcReachableNodes=", StringComparison.Ordinal)
             && !line.EndsWith("=0", StringComparison.Ordinal));
+        Assert.Contains(inheritedPrivateAudit, line => line.StartsWith(
+            "receiverBridgePrivate.execProcStart-01.name=", StringComparison.Ordinal)
+            && line.Contains(";sqlSurfaces=1", StringComparison.Ordinal));
+        Assert.Contains(inheritedPrivateAudit, line => line.StartsWith(
+            "receiverBridgePrivate.execProcStart-01.sqlSurface-01.", StringComparison.Ordinal)
+            && line.Contains("surface=sql-query", StringComparison.Ordinal));
 
         var ambiguousOverloadBackendIndex = Path.Combine(temp.Path, "ambiguous-overload-backend-index.sqlite");
         SqliteIndexWriter.Write(ambiguousOverloadBackendIndex, recursiveBackendManifest,
