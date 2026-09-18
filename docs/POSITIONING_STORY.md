@@ -120,6 +120,10 @@ outcome on top, honest limits underneath — in that order.
 
 ## Open source vs. paid (open-core)
 
+The authoritative classification rules live in
+[OPEN_CORE_BOUNDARY.md](OPEN_CORE_BOUNDARY.md). This section is positioning
+guidance and must remain consistent with that boundary.
+
 - **Stay fully open (Apache-2.0): the entire core** — scanner, reducer, all
   language adapters, rule catalog, CLI, output formats. The thesis is
   auditability and no lock-in; closing any of it kills the differentiator. The
