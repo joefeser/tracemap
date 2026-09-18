@@ -1185,7 +1185,8 @@ public sealed class WebFormsModernizationPacketTests
         };
         var inheritedSqlSameArityOverload = Fact(recursiveBackendManifest, FactTypes.MethodDeclared, RuleIds.VisualBasicSyntaxDeclarations,
             "Common/DataAccess.vb", 215, source: null, target: "ExecProc_Scalar", contract: null,
-            ("containingType", "SqlDataAccess"), ("name", "ExecProc_Scalar"), ("parameterCount", "2")) with
+            ("containingType", "SqlDataAccess"), ("qualifiedContainingType", "UnitedFramework.DataAccess.SqlDataAccess"),
+            ("name", "ExecProc_Scalar"), ("parameterCount", "2"), ("parameterTypes", "String;SqlDataAccessParam()")) with
         {
             EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
         };
@@ -1235,6 +1236,32 @@ public sealed class WebFormsModernizationPacketTests
             new(ambiguousOverloadCombinedIndex, Path.Combine(temp.Path, "ambiguous-overload-output")));
         var ambiguousOverloadChain = Assert.Single(ambiguousOverloadPacket.EventChains);
         Assert.Null(ambiguousOverloadChain.TerminalKind);
+
+        var typedInheritedSqlCall = inheritedSqlCall with
+        {
+            Properties = new SortedDictionary<string, string>(
+                inheritedSqlCall.Properties.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+                StringComparer.Ordinal)
+            {
+                ["argumentTypes"] = "String;ArrayList",
+                ["argumentTypeResolution"] = "explicit-caller-syntax"
+            }
+        };
+        var typedInheritedWebIndex = Path.Combine(temp.Path, "typed-inherited-web-index.sqlite");
+        SqliteIndexWriter.Write(typedInheritedWebIndex, manifest,
+            [page, binding, handler, creation, invocation, flow, businessDeclaration, qualifiedDataAccessDeclaration, businessField,
+                businessCreation, businessInvocation, inheritedDataAccessType, typedInheritedSqlCall]);
+        var typedOverloadBackendIndex = Path.Combine(temp.Path, "typed-overload-backend-index.sqlite");
+        SqliteIndexWriter.Write(typedOverloadBackendIndex, recursiveBackendManifest,
+            [sqlBaseType, inheritedSqlField, inheritedSqlDeclaration, inheritedSqlSameArityOverload,
+                inheritedSqlBody, inheritedSqlTerminal]);
+        var typedOverloadCombinedIndex = Path.Combine(temp.Path, "typed-overload-combined-index.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [typedInheritedWebIndex, typedOverloadBackendIndex], typedOverloadCombinedIndex, ["web", "backend"]));
+        var typedOverloadPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(typedOverloadCombinedIndex, Path.Combine(temp.Path, "typed-overload-output")));
+        var typedOverloadChain = Assert.Single(typedOverloadPacket.EventChains);
+        Assert.Equal("sql-query", typedOverloadChain.TerminalKind);
 
         var semanticBodyDownstream = Fact(backendManifest, FactTypes.ObjectCreated, RuleIds.VisualBasicSemanticObjectCreation,
             "BusinessLayer/BusinessObject.vb", 12,

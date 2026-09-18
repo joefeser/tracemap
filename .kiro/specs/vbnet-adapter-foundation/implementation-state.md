@@ -257,6 +257,21 @@ caller-text regression over the full scan pipeline.
   validated output; value sentinels suppressed (test-enforced).
 - `git diff --check` clean; `scripts/check-private-paths.sh` passes.
 
+## Private projectless Web Forms battle-test follow-up (2026-09-18)
+
+- Corrected syntax type declarations that duplicated their own type segment
+  (`Namespace.Type.Type`) and bumped the fallback identity to `vb-syntax/0.3.15`.
+- The regenerated private two-repository scan then advanced inherited `SQLDA`
+  provenance from unavailable to one `SqlDataAccess` receiver, but correctly
+  stopped at two `ExecProc_Scalar` overloads with the same argument count.
+- `vb-syntax/0.3.16` retains ordered argument types only when every positional
+  argument is backed by one explicit caller parameter/local declaration or an
+  explicit object creation. The projectless receiver bridge may use an exact
+  ordered text match to eliminate different-signature overloads. Named,
+  computed, unknown, conflicting, or partially resolved arguments still fail
+  closed. Focused extraction and packet regressions cover both the successful
+  typed overload and the untyped same-arity ambiguity.
+
 ## Remaining work / follow-ups
 
 - Required post-debug validation track: build the checked-in C#, VB.NET, and F#

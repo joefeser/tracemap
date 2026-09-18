@@ -78,6 +78,13 @@ only when receiver type, method name, and argument count identify exactly one
 candidate. The resulting hop is Tier2 review evidence, not compiler resolution;
 missing or ambiguous candidates remain explicit gaps.
 
+For a syntax-only target with same-arity overloads, argument count is not
+enough. When every positional call argument has one explicit caller-side
+syntax type, the call edge retains the ordered text-only argument types and the
+bridge may eliminate declarations whose retained parameter types do not match
+exactly. Named, computed, unknown, conflicting, or partially resolved arguments
+still fail closed rather than selecting an overload.
+
 If the Web Site and business layer are separate Git repositories, do not point
 `sourceRoot` at their non-Git parent directory and do not invent an umbrella
 repository. Create two review roots with two configs, run each through the

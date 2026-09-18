@@ -512,6 +512,44 @@ public sealed class VisualBasicExtractionTests
     }
 
     [Fact]
+    public void Projectless_vb_invocation_retains_only_fully_explicit_argument_types()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "DataAccess.vb"), """
+            Imports System.Collections
+
+            Public Class DataAccess
+                Public Function Save(commandText As String, parameters As ArrayList) As Object
+                    Dim localParameters As ArrayList = parameters
+                    SQLDA.ExecProc_Scalar(commandText, localParameters)
+                    SQLDA.ExecProc_Scalar(BuildCommand(), localParameters)
+                    SQLDA.ExecProc_Scalar(parameters:=localParameters, commandText:=commandText)
+                    Return Nothing
+                End Function
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var calls = result.Facts
+            .Where(fact => fact.FactType == FactTypes.CallEdge
+                && fact.RuleId == RuleIds.VisualBasicSyntaxCallGraph
+                && fact.TargetSymbol == "ExecProc_Scalar")
+            .OrderBy(fact => fact.Evidence.StartLine)
+            .ToArray();
+
+        Assert.Equal(3, calls.Length);
+        Assert.Equal("String;ArrayList", calls[0].Properties["argumentTypes"]);
+        Assert.Equal("explicit-caller-syntax", calls[0].Properties["argumentTypeResolution"]);
+        Assert.DoesNotContain("argumentTypes", calls[1].Properties.Keys);
+        Assert.DoesNotContain("argumentTypeResolution", calls[1].Properties.Keys);
+        Assert.DoesNotContain("argumentTypes", calls[2].Properties.Keys);
+        Assert.DoesNotContain("argumentTypeResolution", calls[2].Properties.Keys);
+    }
+
+    [Fact]
     public void Projectless_vb_explicit_data_adapter_fill_is_a_reduced_database_candidate()
     {
         using var temp = new TempDirectory();

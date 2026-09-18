@@ -968,6 +968,21 @@ public static class VisualBasicSyntaxExtractor
     {
         var invocationName = GetInvocationName(invocation.Expression);
         var containingMember = GetContainingMemberName(invocation);
+        var argumentTypes = TryGetExplicitInvocationArgumentTypes(invocation);
+        var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["argumentCount"] = (invocation.ArgumentList?.Arguments.Count ?? 0).ToString(),
+            ["callKind"] = "SyntaxInvocation",
+            ["calleeName"] = invocationName,
+            ["callerName"] = containingMember ?? string.Empty,
+            ["coverageLabel"] = "syntax-only",
+            ["receiverName"] = GetInvocationReceiverName(invocation.Expression) ?? string.Empty
+        };
+        if (argumentTypes is not null)
+        {
+            properties["argumentTypes"] = string.Join(";", argumentTypes);
+            properties["argumentTypeResolution"] = "explicit-caller-syntax";
+        }
         // The callee is invocation text only: never a compiler-resolved
         // target and never a symbol-ID join.
         if (!TryAddSyntaxFact(
@@ -978,15 +993,7 @@ public static class VisualBasicSyntaxExtractor
                     filePath,
                     invocation,
                     targetSymbol: invocationName,
-                    new SortedDictionary<string, string>(StringComparer.Ordinal)
-                    {
-                        ["argumentCount"] = (invocation.ArgumentList?.Arguments.Count ?? 0).ToString(),
-                        ["callKind"] = "SyntaxInvocation",
-                        ["calleeName"] = invocationName,
-                        ["callerName"] = containingMember ?? string.Empty,
-                        ["coverageLabel"] = "syntax-only",
-                        ["receiverName"] = GetInvocationReceiverName(invocation.Expression) ?? string.Empty
-                    },
+                    properties,
                     budget,
                     sourceSymbol: containingMember))
         {
@@ -1002,6 +1009,80 @@ public static class VisualBasicSyntaxExtractor
         return TryAddExplicitDataAdapterFillFact(
             manifest, facts, filePath, root, invocation, invocationName, containingMember, budget);
     }
+
+    private static string[]? TryGetExplicitInvocationArgumentTypes(InvocationExpressionSyntax invocation)
+    {
+        var arguments = invocation.ArgumentList?.Arguments.OfType<SimpleArgumentSyntax>().ToArray() ?? [];
+        if (arguments.Length == 0
+            || arguments.Length != (invocation.ArgumentList?.Arguments.Count ?? 0)
+            || arguments.Any(argument => argument.NameColonEquals is not null))
+        {
+            return null;
+        }
+
+        var types = new List<string>(arguments.Length);
+        foreach (var argument in arguments)
+        {
+            var type = TryGetExplicitExpressionType(invocation, argument.Expression);
+            if (string.IsNullOrWhiteSpace(type))
+            {
+                return null;
+            }
+            types.Add(type);
+        }
+        return types.ToArray();
+    }
+
+    private static string? TryGetExplicitExpressionType(
+        InvocationExpressionSyntax invocation,
+        ExpressionSyntax expression)
+    {
+        if (expression is ObjectCreationExpressionSyntax creation)
+        {
+            return creation.Type.ToString().Trim();
+        }
+        if (expression is not IdentifierNameSyntax identifier)
+        {
+            return null;
+        }
+
+        var name = identifier.Identifier.ValueText;
+        var containingMethod = invocation.Ancestors().OfType<MethodBlockBaseSyntax>().FirstOrDefault();
+        if (containingMethod is not null)
+        {
+            var parameterTypes = MethodParameters(containingMethod.BlockStatement)
+                .Where(parameter => parameter.Identifier.Identifier.ValueText.Equals(name, StringComparison.OrdinalIgnoreCase))
+                .Select(ExplicitParameterType)
+                .Where(type => !string.IsNullOrWhiteSpace(type))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (parameterTypes.Length == 1)
+            {
+                return parameterTypes[0];
+            }
+
+            var localTypes = containingMethod.DescendantNodes().OfType<VariableDeclaratorSyntax>()
+                .Where(declaration => declaration.SpanStart < invocation.SpanStart)
+                .Where(declaration => declaration.Ancestors().OfType<MethodBlockBaseSyntax>().FirstOrDefault() == containingMethod)
+                .Where(declaration => declaration.Names.Any(candidate =>
+                    candidate.Identifier.ValueText.Equals(name, StringComparison.OrdinalIgnoreCase)))
+                .Select(ExplicitVariableType)
+                .Where(type => !string.IsNullOrWhiteSpace(type))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (localTypes.Length == 1)
+            {
+                return localTypes[0];
+            }
+        }
+
+        return null;
+    }
+
+    private static string? ExplicitParameterType(ParameterSyntax parameter) =>
+        parameter.AsClause is SimpleAsClauseSyntax simple
+            ? simple.Type.ToString().Trim()
+            : null;
 
     private static bool AddInvocationNameFact(
         ScanManifest manifest,
@@ -1222,6 +1303,15 @@ public static class VisualBasicSyntaxExtractor
 
     private static IEnumerable<string> MethodParameterTypes(MethodBaseSyntax statement)
     {
+        return MethodParameters(statement).Select(parameter => parameter.AsClause switch
+        {
+            SimpleAsClauseSyntax simple => simple.Type.ToString().Trim(),
+            _ => "unavailable"
+        });
+    }
+
+    private static IEnumerable<ParameterSyntax> MethodParameters(MethodBaseSyntax statement)
+    {
         var parameters = statement switch
         {
             MethodStatementSyntax method => method.ParameterList?.Parameters,
@@ -1229,11 +1319,7 @@ public static class VisualBasicSyntaxExtractor
             OperatorStatementSyntax operation => operation.ParameterList?.Parameters,
             _ => null
         };
-        return parameters?.Select(parameter => parameter.AsClause switch
-        {
-            SimpleAsClauseSyntax simple => simple.Type.ToString().Trim(),
-            _ => "unavailable"
-        }) ?? [];
+        return parameters ?? [];
     }
 
     private static string GetInvocationName(ExpressionSyntax expression)
