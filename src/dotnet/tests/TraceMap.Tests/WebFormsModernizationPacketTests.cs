@@ -1361,6 +1361,59 @@ public sealed class WebFormsModernizationPacketTests
         var typedOverloadChain = Assert.Single(typedOverloadPacket.EventChains);
         Assert.Equal("sql-query", typedOverloadChain.TerminalKind);
 
+        var parametersListType = Fact(manifest, FactTypes.TypeDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "WebApplication/App_Code/DataAccess.vb", 30, source: null, target: "ParametersList", contract: null,
+            ("baseTypes", "System.Collections.ArrayList"), ("kind", "class"), ("name", "ParametersList"),
+            ("namespace", "BusinessLogic"), ("qualifiedName", "BusinessLogic.ParametersList")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var derivedArgumentSqlCall = inheritedSqlCall with
+        {
+            Properties = new SortedDictionary<string, string>(
+                inheritedSqlCall.Properties.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+                StringComparer.Ordinal)
+            {
+                ["argumentTypes"] = "String;ParametersList",
+                ["argumentTypeResolution"] = "explicit-caller-syntax"
+            }
+        };
+        var derivedArgumentWebIndex = Path.Combine(temp.Path, "derived-argument-web-index.sqlite");
+        SqliteIndexWriter.Write(derivedArgumentWebIndex, manifest,
+            [page, binding, handler, creation, invocation, flow, businessDeclaration, qualifiedDataAccessDeclaration, businessField,
+                businessCreation, businessInvocation, inheritedDataAccessType, parametersListType, derivedArgumentSqlCall]);
+        var derivedArgumentCombinedIndex = Path.Combine(temp.Path, "derived-argument-combined-index.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [derivedArgumentWebIndex, typedOverloadBackendIndex], derivedArgumentCombinedIndex, ["web", "backend"]));
+        var derivedArgumentPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(derivedArgumentCombinedIndex, Path.Combine(temp.Path, "derived-argument-output")));
+        var derivedArgumentChain = Assert.Single(derivedArgumentPacket.EventChains);
+        Assert.Equal("sql-query", derivedArgumentChain.TerminalKind);
+
+        var competingParametersListType = parametersListType with
+        {
+            FactId = "fact-competing-parameters-list",
+            TargetSymbol = "Other.ParametersList",
+            Properties = new SortedDictionary<string, string>(
+                parametersListType.Properties.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+                StringComparer.Ordinal)
+            {
+                ["namespace"] = "Other",
+                ["qualifiedName"] = "Other.ParametersList"
+            }
+        };
+        var ambiguousArgumentWebIndex = Path.Combine(temp.Path, "ambiguous-argument-web-index.sqlite");
+        SqliteIndexWriter.Write(ambiguousArgumentWebIndex, manifest,
+            [page, binding, handler, creation, invocation, flow, businessDeclaration, qualifiedDataAccessDeclaration, businessField,
+                businessCreation, businessInvocation, inheritedDataAccessType, parametersListType, competingParametersListType,
+                derivedArgumentSqlCall]);
+        var ambiguousArgumentCombinedIndex = Path.Combine(temp.Path, "ambiguous-argument-combined-index.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [ambiguousArgumentWebIndex, typedOverloadBackendIndex], ambiguousArgumentCombinedIndex, ["web", "backend"]));
+        var ambiguousArgumentPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(ambiguousArgumentCombinedIndex, Path.Combine(temp.Path, "ambiguous-argument-output")));
+        Assert.Null(Assert.Single(ambiguousArgumentPacket.EventChains).TerminalKind);
+
         var unsafePartialBackendIndex = Path.Combine(temp.Path, "unsafe-partial-backend-index.sqlite");
         SqliteIndexWriter.Write(unsafePartialBackendIndex, recursiveBackendManifest,
             [sqlBaseType, inheritedSqlField, inheritedSqlDeclaration, inheritedSqlUnsafePartialOverload,
