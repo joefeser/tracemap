@@ -2,10 +2,13 @@
 
 ## Purpose
 
-The historical `dotnetperf` repository is a candidate public validation corpus
-for TraceMap's .NET source, metadata, PDB, and IL identity model. It is a strong
-legacy Cecil/.NET Framework rewriting corpus, not a comprehensive modern
-ECMA-335 or cross-language corpus.
+The historical `dotnetperf` repository is a candidate external validation
+corpus for TraceMap's .NET source, metadata, PDB, and IL identity model. It is a
+strong legacy Cecil/.NET Framework rewriting corpus, not a comprehensive modern
+ECMA-335 or cross-language corpus. Its recorded Bitbucket origin currently
+requires repository access, so it must not be presented as a reproducibly
+public fixture unless a licensed public mirror or independently reproducible
+fixture set is established.
 
 Tracking issue: [#759](https://github.com/joefeser/tracemap/issues/759).
 
@@ -14,6 +17,32 @@ Pin all investigation to commit:
 ```text
 db8c3359badfec620ccdc6df062b1756ef9607f8
 ```
+
+## Source and Checkout
+
+The inspected checkout records this origin:
+
+```text
+git@bitbucket.org:metadatadashboard/dotnetperf.git
+```
+
+On an authorized Windows machine, create an isolated checkout and detach it at
+the pinned commit:
+
+```powershell
+$DotNetPerfRoot = 'C:\work\dotnetperf-validation'
+git clone git@bitbucket.org:metadatadashboard/dotnetperf.git $DotNetPerfRoot
+git -C $DotNetPerfRoot fetch --all --tags --prune
+git -C $DotNetPerfRoot checkout --detach db8c3359badfec620ccdc6df062b1756ef9607f8
+git -C $DotNetPerfRoot status --short
+```
+
+The final command must produce no paths before validation begins. If the origin
+cannot be fetched with the operator's existing authorized SSH configuration,
+stop and record the corpus as unavailable. Do not request, embed, recover, or
+reuse historical repository credentials or signing material. A private local
+checkout can inform research, but it cannot satisfy a public reproducibility
+claim.
 
 The inspected repository contains approximately 34,606 declared MSTest methods.
 Most are generated control-flow matrices, so the method count must not be
@@ -54,7 +83,9 @@ edges:
 Do not collapse them into a shared display-string identity. Regression cases
 must include:
 
-- operand-insensitive method-body hashes;
+- operand-aware canonical method-body hashes that preserve opcode operands;
+- operand-insensitive method-body hashes only as explicitly non-unique
+  heuristics that cannot establish an identity edge;
 - nested-type `/` versus `+` naming;
 - same-name and same-arity overloads;
 - properties and events versus generated accessors;
@@ -81,7 +112,17 @@ not an acceptance contract.
 
 ## Staged Windows Validation
 
-Use an isolated Windows x64 environment and begin with the smallest proof:
+Use an isolated Windows x64 environment. From the authorized checkout above,
+verify and enter the pinned repository root before beginning the smallest proof:
+
+```powershell
+if ((git -C $DotNetPerfRoot rev-parse HEAD).Trim() -ne 'db8c3359badfec620ccdc6df062b1756ef9607f8') {
+    throw 'DOTNETPERF_PINNED_COMMIT_MISMATCH'
+}
+Set-Location $DotNetPerfRoot
+```
+
+Then run:
 
 ```bat
 "C:\Windows\Microsoft.NET\Framework\v4.0.30319\ilasm.exe" /NOLOGO /DLL /DEBUG /OPTIMIZE /OUTPUT:"%TEMP%\dotnetperf-ret.dll" "src\NetPerf.Tests.Unit\Test Data\instr_ret.il.txt"
