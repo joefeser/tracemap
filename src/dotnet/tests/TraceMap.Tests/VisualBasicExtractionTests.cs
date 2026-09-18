@@ -647,6 +647,9 @@ public sealed class VisualBasicExtractionTests
         var repo = Path.Combine(temp.Path, "repo");
         Directory.CreateDirectory(repo);
         File.WriteAllText(Path.Combine(repo, "DataAccess.vb"), """
+            Imports System.Data
+            Imports OdbcAlias = System.Data.Odbc
+
             Public Class ProviderBase
                 Protected inheritedCommand As SqlCommand
             End Class
@@ -663,6 +666,8 @@ public sealed class VisualBasicExtractionTests
                     Dim sql As SqlCommand = New SqlCommand()
                     Dim custom As WidgetCommand = New WidgetCommand()
                     Dim impostor As Contoso.SqlCommand = Nothing
+                    Dim qualifiedOdbc As Odbc.OdbcCommand = Nothing
+                    Dim aliasedOdbc As OdbcAlias.OdbcCommand = Nothing
                     Dim a = odbc.ExecuteScalar()
                     Dim b = db2.ExecuteReader()
                     oracle.ExecuteNonQuery()
@@ -670,6 +675,8 @@ public sealed class VisualBasicExtractionTests
                     Dim d = sql.ExecuteReader()
                     custom.ExecuteScalar()
                     impostor.ExecuteNonQuery()
+                    qualifiedOdbc.ExecuteScalar()
+                    aliasedOdbc.ExecuteReader()
                     inheritedCommand.ExecuteNonQuery()
                 End Sub
 
@@ -709,7 +716,7 @@ public sealed class VisualBasicExtractionTests
         var operations = result.Facts.Where(fact =>
             fact.FactType == FactTypes.DatabaseOperationCandidate
             && fact.RuleId == RuleIds.VisualBasicSyntaxDatabaseOperation).ToArray();
-        Assert.Equal(9, operations.Length);
+        Assert.Equal(11, operations.Length);
         Assert.All(operations, operation =>
         {
             Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, operation.EvidenceTier);
@@ -719,6 +726,10 @@ public sealed class VisualBasicExtractionTests
         Assert.Contains(operations, operation => operation.Properties["receiverType"] == "OdbcCommand"
             && operation.Properties["operationKind"] == "scalar-candidate");
         Assert.Contains(operations, operation => operation.Properties["receiverType"] == "IBM.Data.DB2.DB2Command"
+            && operation.Properties["operationKind"] == "select-candidate");
+        Assert.Contains(operations, operation => operation.Properties["receiverType"] == "Odbc.OdbcCommand"
+            && operation.Properties["operationKind"] == "scalar-candidate");
+        Assert.Contains(operations, operation => operation.Properties["receiverType"] == "OdbcAlias.OdbcCommand"
             && operation.Properties["operationKind"] == "select-candidate");
         Assert.Contains(operations, operation => operation.Properties["receiverType"] == "OracleCommand"
             && operation.Properties["operationKind"] == "execute-candidate");

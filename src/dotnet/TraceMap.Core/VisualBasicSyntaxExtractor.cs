@@ -549,7 +549,7 @@ public static class VisualBasicSyntaxExtractor
         CompilationUnitSyntax root,
         InvocationExpressionSyntax invocation,
         string receiverName,
-        Func<string, bool> supportedType,
+        Func<CompilationUnitSyntax, string, bool> supportedType,
         out string receiverType)
     {
         receiverType = string.Empty;
@@ -568,7 +568,7 @@ public static class VisualBasicSyntaxExtractor
             {
                 var parameterTypes = matchingParameters
                     .Select(ExplicitParameterType)
-                    .Where(type => type is not null && supportedType(type))
+                    .Where(type => type is not null && supportedType(root, type))
                     .Select(type => type!)
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToArray();
@@ -587,7 +587,7 @@ public static class VisualBasicSyntaxExtractor
             if (nearestLocal is not null)
             {
                 var localType = ExplicitVariableType(nearestLocal);
-                if (localType is null || !supportedType(localType)) return false;
+                if (localType is null || !supportedType(root, localType)) return false;
                 receiverType = localType;
                 return true;
             }
@@ -609,7 +609,7 @@ public static class VisualBasicSyntaxExtractor
             if (matchingFields.Length > 0)
             {
                 var fieldTypes = matchingFields.Select(ExplicitVariableType)
-                    .Where(type => type is not null && supportedType(type))
+                    .Where(type => type is not null && supportedType(root, type))
                     .Select(type => type!)
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToArray();
@@ -673,16 +673,17 @@ public static class VisualBasicSyntaxExtractor
             : null;
     }
 
-    private static bool IsKnownDataAdapterType(string typeName)
+    private static bool IsKnownDataAdapterType(CompilationUnitSyntax root, string typeName)
     {
         var normalized = NormalizeKnownDatabaseType(typeName);
         if (normalized.Contains('.', StringComparison.Ordinal))
         {
-            return normalized.Equals("System.Data.Common.DbDataAdapter", StringComparison.OrdinalIgnoreCase)
-                || normalized.Equals("System.Data.SqlClient.SqlDataAdapter", StringComparison.OrdinalIgnoreCase)
-                || normalized.Equals("Microsoft.Data.SqlClient.SqlDataAdapter", StringComparison.OrdinalIgnoreCase)
-                || normalized.Equals("System.Data.OleDb.OleDbDataAdapter", StringComparison.OrdinalIgnoreCase)
-                || normalized.Equals("System.Data.Odbc.OdbcDataAdapter", StringComparison.OrdinalIgnoreCase);
+            return ExpandVisualBasicImportedTypeNames(root, normalized).Any(candidate =>
+                candidate.Equals("System.Data.Common.DbDataAdapter", StringComparison.OrdinalIgnoreCase)
+                || candidate.Equals("System.Data.SqlClient.SqlDataAdapter", StringComparison.OrdinalIgnoreCase)
+                || candidate.Equals("Microsoft.Data.SqlClient.SqlDataAdapter", StringComparison.OrdinalIgnoreCase)
+                || candidate.Equals("System.Data.OleDb.OleDbDataAdapter", StringComparison.OrdinalIgnoreCase)
+                || candidate.Equals("System.Data.Odbc.OdbcDataAdapter", StringComparison.OrdinalIgnoreCase));
         }
         var simple = normalized;
         return simple.Equals("DbDataAdapter", StringComparison.OrdinalIgnoreCase)
@@ -691,24 +692,25 @@ public static class VisualBasicSyntaxExtractor
             || simple.Equals("OdbcDataAdapter", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool IsKnownDatabaseCommandType(string typeName)
+    private static bool IsKnownDatabaseCommandType(CompilationUnitSyntax root, string typeName)
     {
         var normalized = NormalizeKnownDatabaseType(typeName);
         if (normalized.Contains('.', StringComparison.Ordinal))
         {
-            return normalized.Equals("System.Data.Common.DbCommand", StringComparison.OrdinalIgnoreCase)
-                || normalized.Equals("System.Data.IDbCommand", StringComparison.OrdinalIgnoreCase)
-                || normalized.Equals("System.Data.SqlClient.SqlCommand", StringComparison.OrdinalIgnoreCase)
-                || normalized.Equals("Microsoft.Data.SqlClient.SqlCommand", StringComparison.OrdinalIgnoreCase)
-                || normalized.Equals("System.Data.OleDb.OleDbCommand", StringComparison.OrdinalIgnoreCase)
-                || normalized.Equals("System.Data.Odbc.OdbcCommand", StringComparison.OrdinalIgnoreCase)
-                || normalized.Equals("Oracle.ManagedDataAccess.Client.OracleCommand", StringComparison.OrdinalIgnoreCase)
-                || normalized.Equals("Oracle.DataAccess.Client.OracleCommand", StringComparison.OrdinalIgnoreCase)
-                || normalized.Equals("System.Data.SQLite.SQLiteCommand", StringComparison.OrdinalIgnoreCase)
-                || normalized.Equals("Microsoft.Data.Sqlite.SqliteCommand", StringComparison.OrdinalIgnoreCase)
-                || normalized.Equals("IBM.Data.DB2.DB2Command", StringComparison.OrdinalIgnoreCase)
-                || normalized.Equals("Npgsql.NpgsqlCommand", StringComparison.OrdinalIgnoreCase)
-                || normalized.Equals("MySql.Data.MySqlClient.MySqlCommand", StringComparison.OrdinalIgnoreCase);
+            return ExpandVisualBasicImportedTypeNames(root, normalized).Any(candidate =>
+                candidate.Equals("System.Data.Common.DbCommand", StringComparison.OrdinalIgnoreCase)
+                || candidate.Equals("System.Data.IDbCommand", StringComparison.OrdinalIgnoreCase)
+                || candidate.Equals("System.Data.SqlClient.SqlCommand", StringComparison.OrdinalIgnoreCase)
+                || candidate.Equals("Microsoft.Data.SqlClient.SqlCommand", StringComparison.OrdinalIgnoreCase)
+                || candidate.Equals("System.Data.OleDb.OleDbCommand", StringComparison.OrdinalIgnoreCase)
+                || candidate.Equals("System.Data.Odbc.OdbcCommand", StringComparison.OrdinalIgnoreCase)
+                || candidate.Equals("Oracle.ManagedDataAccess.Client.OracleCommand", StringComparison.OrdinalIgnoreCase)
+                || candidate.Equals("Oracle.DataAccess.Client.OracleCommand", StringComparison.OrdinalIgnoreCase)
+                || candidate.Equals("System.Data.SQLite.SQLiteCommand", StringComparison.OrdinalIgnoreCase)
+                || candidate.Equals("Microsoft.Data.Sqlite.SqliteCommand", StringComparison.OrdinalIgnoreCase)
+                || candidate.Equals("IBM.Data.DB2.DB2Command", StringComparison.OrdinalIgnoreCase)
+                || candidate.Equals("Npgsql.NpgsqlCommand", StringComparison.OrdinalIgnoreCase)
+                || candidate.Equals("MySql.Data.MySqlClient.MySqlCommand", StringComparison.OrdinalIgnoreCase));
         }
         var simple = normalized;
         return simple.Equals("DbCommand", StringComparison.OrdinalIgnoreCase)
@@ -729,6 +731,32 @@ public static class VisualBasicSyntaxExtractor
         typeName.Trim().StartsWith("Global.", StringComparison.OrdinalIgnoreCase)
             ? typeName.Trim()["Global.".Length..]
             : typeName.Trim();
+
+    private static IEnumerable<string> ExpandVisualBasicImportedTypeNames(
+        CompilationUnitSyntax root,
+        string qualifiedTypeName)
+    {
+        yield return qualifiedTypeName;
+        var firstSeparator = qualifiedTypeName.IndexOf('.');
+        if (firstSeparator <= 0 || firstSeparator == qualifiedTypeName.Length - 1) yield break;
+        var qualifier = qualifiedTypeName[..firstSeparator];
+        var suffix = qualifiedTypeName[(firstSeparator + 1)..];
+        foreach (var clause in root.Imports
+            .SelectMany(statement => statement.ImportsClauses)
+            .OfType<SimpleImportsClauseSyntax>())
+        {
+            var importedName = NormalizeKnownDatabaseType(clause.Name.ToString());
+            if (clause.Alias is { } alias)
+            {
+                if (alias.Identifier.ValueText.Equals(qualifier, StringComparison.OrdinalIgnoreCase))
+                {
+                    yield return $"{importedName}.{suffix}";
+                }
+                continue;
+            }
+            yield return $"{importedName}.{qualifiedTypeName}";
+        }
+    }
 
     private static string SyntaxFillResultKind(InvocationExpressionSyntax invocation)
     {
