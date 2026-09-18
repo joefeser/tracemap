@@ -374,7 +374,9 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
             .GroupBy(edge => edge.FromNodeId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.OrderBy(edge => edge.EdgeId, StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
         var starts = inventory.Nodes
-            .Where(node => (node.SymbolId ?? node.DisplayName).Contains("ExecProc_Scalar/2", StringComparison.OrdinalIgnoreCase))
+            .Where(node => QualifiedMemberKey(node.SymbolId ?? node.DisplayName) is { } member
+                && member.Name.Equals("ExecProc_Scalar", StringComparison.OrdinalIgnoreCase)
+                && member.Arity == 2)
             .OrderBy(node => node.NodeId, StringComparer.Ordinal)
             .ToArray();
         var queue = new Queue<(string NodeId, int Depth)>();
