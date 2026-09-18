@@ -7,6 +7,83 @@ namespace TraceMap.Tests;
 public sealed class WebFormsRawEvidenceAuditTests
 {
     [Fact]
+    public void PageGraphDumpIncludesEveryResolvedHandlerAndHashesItsGeneratorAndInput()
+    {
+        WithFixture((db, report) =>
+        {
+            using (var connection = new SqliteConnection($"Data Source={db};Pooling=False"))
+            {
+                connection.Open();
+                using var command = connection.CreateCommand();
+                command.CommandText = """
+                    insert into facts(fact_id,fact_type,target_symbol,file_path)
+                    values('terminal-handler','WebFormsHandlerResolved','Private.TerminalHandler()','B.aspx');
+                    insert into facts(fact_id,fact_type,source_symbol,target_symbol,file_path,start_line)
+                    values('terminal-call','CallEdge','Private.TerminalHandler()','System.Data.Common.DbDataAdapter.Fill(System.Data.DataSet)','B.cs',12);
+                    insert into facts(fact_id,fact_type,source_symbol,target_symbol,file_path,start_line,rule_id,evidence_tier)
+                    values('terminal-database','DatabaseOperationCandidate','Private.TerminalHandler()','Fill','B.cs',12,'database.operation.call-pattern.v1','Tier1Semantic');
+                    """;
+                command.ExecuteNonQuery();
+            }
+            File.WriteAllText(report, JsonSerializer.Serialize(new
+            {
+                schemaVersion = "webforms-modernization-packet.v1",
+                sources = new[] { new { scanId = "scan-one", commitSha = "commit-one" } },
+                eventChains = new object[]
+                {
+                    new { handlerFactId = "handler", bindingFactId = "handler", surfaceId = "surface", terminalKind = "", traversalObservation = new { stopState = "other-or-unavailable" } },
+                    new { handlerFactId = "terminal-handler", bindingFactId = "terminal-handler", surfaceId = "surface", terminalKind = "database", traversalObservation = new { stopState = "terminal-reached" } }
+                }
+            }));
+            var path = Path.Combine(Path.GetDirectoryName(report)!, "page-graph.json");
+
+            var lines = WebFormsRawEvidenceAudit.Run(db, report, inspectionPath: path,
+                inspectAllHandlers: true, includeEveryResolvedHandler: true);
+
+            Assert.Contains("selection=every-resolved-page-handler", lines);
+            Assert.Contains("batchInspection=created|chains=2|handlers=2|boundedHandlers=0", lines);
+            using var document = JsonDocument.Parse(File.ReadAllText(path));
+            var root = document.RootElement;
+            Assert.Equal(64, root.GetProperty("generatorSha256").GetString()!.Length);
+            Assert.Equal(64, root.GetProperty("sourceReportSha256").GetString()!.Length);
+            Assert.Equal(64, root.GetProperty("sourceIndexSha256").GetString()!.Length);
+            Assert.Equal(2, root.GetProperty("cases").GetArrayLength());
+            Assert.Contains(root.GetProperty("cases").EnumerateArray(), item =>
+                item.GetProperty("handler").GetString() == "Private.TerminalHandler()");
+            var terminal = Assert.Single(root.GetProperty("cases").EnumerateArray(), item =>
+                item.GetProperty("handler").GetString() == "Private.TerminalHandler()");
+            Assert.Equal("database-evidence-observed", terminal.GetProperty("terminalEvidenceConclusion").GetString());
+            Assert.Equal("retained-terminal-evidence-observed-with-unresolved-leaves", terminal.GetProperty("evidenceConclusion").GetString());
+            Assert.Equal("retained-backend-evidence-observed", terminal.GetProperty("backendTerminalConclusion").GetString());
+            Assert.Single(terminal.GetProperty("terminalEvidence").EnumerateArray());
+        });
+    }
+
+    [Fact]
+    public void BatchInspectionWritesNonApplicableSnapshotWhenNoSemanticHandlerCasesExist()
+    {
+        WithFixture((db, report) =>
+        {
+            File.WriteAllText(report, JsonSerializer.Serialize(new
+            {
+                schemaVersion = "webforms-modernization-packet.v1",
+                sources = new[] { new { scanId = "scan-one", commitSha = "commit-one" } },
+                eventChains = Array.Empty<object>()
+            }));
+            var path = Path.Combine(Path.GetDirectoryName(report)!, "empty-batch.json");
+
+            var lines = WebFormsRawEvidenceAudit.Run(db, report, inspectionPath: path, inspectAllHandlers: true);
+
+            Assert.Contains("batchInspection=created|chains=0|handlers=0|boundedHandlers=0", lines);
+            Assert.Contains("batchReview=not-applicable;reason=no-semantic-handler-cases;primary-workbench-remains-valid", lines);
+            using var json = JsonDocument.Parse(File.ReadAllText(path));
+            Assert.Equal("no-semantic-handler-cases", json.RootElement.GetProperty("availability").GetString());
+            Assert.Empty(json.RootElement.GetProperty("cases").EnumerateArray());
+            Assert.Contains("primary application workbench remains valid", File.ReadAllText(Path.ChangeExtension(path, ".md")), StringComparison.OrdinalIgnoreCase);
+        });
+    }
+
+    [Fact]
     public void BatchInspectionDistinguishesUiEndpointsWithoutOtherUnresolvedLeaves()
     {
         WithFixture((db, report) =>
@@ -29,7 +106,7 @@ public sealed class WebFormsRawEvidenceAuditTests
             Assert.Equal("ui-control-operations-observed-no-other-unresolved-leaves", item.GetProperty("evidenceConclusion").GetString());
             Assert.Single(item.GetProperty("uiControlEndpoints").EnumerateArray());
             Assert.Empty(item.GetProperty("unresolvedOtherLeaves").EnumerateArray());
-            Assert.Contains(lines, line => line.Contains("uiControlEndpoints=1|unresolvedOtherLeaves=0|evidence=ui-control-operations-observed-no-other-unresolved-leaves", StringComparison.Ordinal));
+            Assert.Contains(lines, line => line.Contains("uiControlEndpoints=1|unresolvedOtherLeaves=0|terminalEvidence=0|terminalFamilies=|terminalConclusion=no-supported-terminal-evidence-observed|evidence=ui-control-operations-observed-no-other-unresolved-leaves", StringComparison.Ordinal));
         });
     }
 
@@ -90,9 +167,9 @@ public sealed class WebFormsRawEvidenceAuditTests
             Assert.Contains("case-001", markdown);
             Assert.Contains("case-002", markdown);
             Assert.Contains("Evidence conclusion: **ui-control-operations-observed-with-unresolved-leaves**", markdown);
-            Assert.Contains("Observed UI/control endpoints: 1; other unresolved leaves: 2; supported backend terminal: not observed.", markdown);
+            Assert.Contains("Observed UI/control endpoints: 1; other unresolved leaves: 2; retained terminal evidence: 0 (); terminal conclusion: no-supported-terminal-evidence-observed.", markdown);
             Assert.Contains("Manual result: **unreviewed**", markdown);
-            Assert.Contains(lines, line => line.Contains("uiControlEndpoints=1|unresolvedOtherLeaves=2|evidence=ui-control-operations-observed-with-unresolved-leaves", StringComparison.Ordinal));
+            Assert.Contains(lines, line => line.Contains("uiControlEndpoints=1|unresolvedOtherLeaves=2|terminalEvidence=0|terminalFamilies=|terminalConclusion=no-supported-terminal-evidence-observed|evidence=ui-control-operations-observed-with-unresolved-leaves", StringComparison.Ordinal));
             Assert.Equal(before, File.ReadAllBytes(db));
             Assert.Throws<IOException>(() => WebFormsRawEvidenceAudit.Run(db, report, inspectionPath: path, inspectAllHandlers: true));
             Assert.Equal(markdown, File.ReadAllText(Path.ChangeExtension(path, ".md")));

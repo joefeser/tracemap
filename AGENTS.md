@@ -12,6 +12,7 @@ This is not an AI impact-analysis tool. Do not add LLM calls, embeddings, vector
 - No evidence without a rule ID.
 - No rule without documented limitations.
 - No scan without repo and commit SHA.
+- No new derived machine-readable artifact without the exact generator SHA-256 and a SHA-256 of its bounded input. Shareable artifacts must hash only their privacy-projected input, never a private source artifact.
 - Failed build is not a clean repo.
 - Partial analysis is useful, but must be labeled as partial.
 - Prefer deterministic, testable extractors.

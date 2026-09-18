@@ -22,6 +22,10 @@ Start here:
 - [Language adapter contract](docs/LANGUAGE_ADAPTER_CONTRACT.md)
 - [Adapter runway](docs/ADAPTER_RUNWAY.md)
 - [Web Forms modernization packet runbook](docs/WEBFORMS_MODERNIZATION_PACKET.md)
+- [Web Forms review quickstart](docs/WEBFORMS_REVIEW_QUICKSTART.md): one commented config, a preflight, and one resumable C#/VB.NET pipeline from bounded scan to application workbench.
+- [Web Forms evidence use cases](docs/WEBFORMS_AGENT_USE_CASES.md) and [agent handoff](docs/WEBFORMS_AGENT_HANDOFF.md): bounded downstream interpretation without turning agent output into scanner evidence.
+- [Private Web Forms review workflow](docs/WEBFORMS_PRIVATE_REVIEW_WORKFLOW.md): evidence, interpretation, human review, approval, and ticket creation remain separate gates.
+- [Public Web Forms smoke baseline](docs/validation/webforms-public-smoke-2026-09-15.md): privacy-safe observed coverage from the refreshed public legacy corpus.
 - [Focused Web Forms human-review workflow](scripts/webforms-review/README.md): supported PowerShell entry points, private/shareable artifact boundaries, and review-set usage.
 - [Large Web Forms indexes and OOM recovery](docs/WEBFORMS_MODERNIZATION_PACKET.md#large-indexes-and-oom-recovery): retry packet generation from the existing read-only scan index, with bounded input and streamed JSON.
 - [PR review loop](docs/PR_REVIEW_LOOP.md)

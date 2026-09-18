@@ -15,6 +15,10 @@ $parsePaths = @(
     (Join-Path $scripts 'New-FocusedWebFormsCodePathReview.ps1'),
     (Join-Path $scripts 'New-FocusedWebFormsCodePathReviewSet.ps1'),
     (Join-Path $scripts 'New-FocusedWebFormsApplicationWorkbench.ps1'),
+    (Join-Path $scripts 'Export-FocusedWebFormsPageShareable.ps1'),
+    (Join-Path $scripts 'Test-FocusedWebFormsReviewConfig.ps1'),
+    (Join-Path $scripts 'Show-FocusedWebFormsReviewStatus.ps1'),
+    (Join-Path $scripts 'Start-FocusedWebFormsClaudeReview.ps1'),
     (Join-Path $scripts 'webforms-review/Invoke-WitsApplicationReview.ps1')
 )
 foreach ($path in $parsePaths) {
@@ -58,6 +62,30 @@ try {
     if ($config.IndexPath -ne 'C:/private-output/scan/index.sqlite') { throw 'Index path was not retained.' }
     if ($config.OutputRoot -ne 'C:/private-output') { throw 'Output root was not retained.' }
     if ($config.Forms.Count -ne 2 -or $config.Forms[1] -ne 'source/WebApp/Second.ASPX') { throw 'Form paths were not normalized.' }
+
+    $reviewRoot = Join-Path $temp 'review-root'
+    $reviewConfigPath = Join-Path $reviewRoot 'config/webforms-review.json'
+    [IO.Directory]::CreateDirectory((Split-Path -Parent $reviewConfigPath)) | Out-Null
+    [IO.File]::WriteAllText($reviewConfigPath, (([ordered]@{
+        schemaVersion = 'focused-webforms-review-config.v1'
+        sourceRoot = '/source'
+        webFormsFolder = 'Web'
+        backendFolder = 'Backend'
+        controlsFolder = 'Controls'
+        projectSelection = [ordered]@{ mode = 'solution'; solutionRelativePath = 'App.sln'; projectRelativePaths = @() }
+        outputRoot = $reviewRoot
+        pageSelection = [ordered]@{ mode = 'selected'; forms = @('Web/Chosen.aspx') }
+    } | ConvertTo-Json -Depth 10) + "`n"), [Text.UTF8Encoding]::new($false))
+    $reviewInputs = Resolve-FocusedWebFormsPageListInputs -ReviewRoot $reviewRoot -ScriptsRoot $scripts
+    if ($reviewInputs.ConfigKind -ne 'review-root' -or $reviewInputs.Forms.Count -ne 1 -or
+        $reviewInputs.Forms[0] -ne 'Web/Chosen.aspx' -or
+        $reviewInputs.IndexPath -ne (Join-Path $reviewRoot 'scan/index.sqlite')) {
+        throw 'Review-root page selection was not retained.'
+    }
+    $explicitInputs = Resolve-FocusedWebFormsPageListInputs -ReviewRoot $reviewRoot -ConfigPath $validPath -ScriptsRoot $scripts
+    if ($explicitInputs.ConfigKind -ne 'legacy-local' -or $explicitInputs.Forms.Count -ne 2) {
+        throw 'Explicit legacy page-list configuration did not override review-root selection.'
+    }
 
     Assert-ConfigFailure -Path (Write-TestConfig '{') -ExpectedCode 'FocusedWebFormsConfigInvalidJson'
     Assert-ConfigFailure -Path (Write-TestConfig '["not","an","object"]') -ExpectedCode 'FocusedWebFormsConfigPropertiesInvalid'

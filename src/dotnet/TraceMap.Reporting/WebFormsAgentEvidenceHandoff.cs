@@ -83,7 +83,7 @@ public static class WebFormsAgentEvidenceHandoff
     internal const long MaximumCorpusManifestBytes = 64L * 1024 * 1024;
     internal const long MaximumCorpusJsonLinesBytes = 2L * 1024 * 1024 * 1024;
     private const int MaximumCorpusLines = 100_000;
-    private const int MaximumCorpusLineCharacters = 4 * 1024 * 1024;
+    internal const int MaximumCorpusLineCharacters = 128 * 1024 * 1024;
     private const int MaximumHintsPerCase = 128;
     private const int MaximumRecommendedChunksPerCase = 32;
     private static readonly StringComparison PathComparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
@@ -664,7 +664,6 @@ public static class WebFormsAgentEvidenceHandoff
             }
             if (!SafeChunkTokenPattern.IsMatch(chunk.ChunkId) || !SafeChunkTokenPattern.IsMatch(chunk.ChunkFamily) || !SafeChunkTokenPattern.IsMatch(chunk.ChunkType))
                 throw new InvalidDataException("AgentHandoffCorpusSchemaMismatch");
-            if (chunk.SupportingIds.Count > 2048) throw new InvalidDataException("AgentHandoffCorpusLimit");
             var chunkSupports = chunk.SupportingIds.ToHashSet(StringComparer.Ordinal);
             var chunkHints = chunk.RetrievalHints.Select(HintIdentity).ToHashSet(StringComparer.Ordinal);
             var belongsToSnapshot = chunk.SourceRefs.Any(source => string.Equals(source.ScanId, scanId, StringComparison.Ordinal)

@@ -261,7 +261,8 @@ public static class CSharpSyntaxExtractor
                 {
                     ["callerName"] = containingMember ?? string.Empty,
                     ["calleeName"] = invocationName,
-                    ["callKind"] = "SyntaxInvocation"
+                    ["callKind"] = "SyntaxInvocation",
+                    ["coverageLabel"] = "syntax-only"
                 }));
 
             if (IsSerializationName(invocationName) || (receiverName?.Contains("Serializer", StringComparison.Ordinal) ?? false))
@@ -326,7 +327,8 @@ public static class CSharpSyntaxExtractor
                     ["calleeName"] = typeName,
                     ["calleeContainingType"] = typeName,
                     ["callKind"] = "SyntaxObjectCreation",
-                    ["assignedTo"] = assignedTo ?? string.Empty
+                    ["assignedTo"] = assignedTo ?? string.Empty,
+                    ["coverageLabel"] = "syntax-only"
                 }));
         }
     }

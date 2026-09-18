@@ -2361,6 +2361,7 @@ rules:
     description: Resolves markup event handlers to linked code-behind partial methods by semantic source-symbol evidence when available, otherwise by scoped structural or syntax fallback.
     evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
     emits:
+      - WebFormsClientHttpHandlerDeclared
       - WebFormsHandlerResolved
       - AnalysisGap
     limitations:
@@ -2430,6 +2431,76 @@ rules:
       - Registration-call syntax does not prove successful registration, rendered output, script execution, browser behavior, branch execution, or runtime reachability.
       - Dynamic payloads, ambiguous, shadowed, or custom same-named receivers, unsupported positional or named argument shapes, wrapper methods, reflection, generated scripts, and unsupported registration APIs remain gaps; raw script bodies are not retained.
 
+  - id: legacy.webforms.inline-client-behavior.v1
+    name: Legacy WebForms inline jQuery behavior candidates
+    description: Emits bounded textual candidates for supported inline jQuery event bindings, UI mutations, numeric maximum-length constraints, generated ASP.NET client-ID dependencies, exact same-surface server-control correlation, and a unique retained server event/handler correlation when one supported static binding is present.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - WebFormsClientEventBindingCandidate
+      - WebFormsClientUiMutationCandidate
+      - WebFormsClientValidationConstraintCandidate
+    limitations:
+      - Supported input is limited to inline script blocks and literal jQuery selectors using exact IDs, ID suffixes, ID contains selectors, or CSS classes, with click, keyup, change, input, or submit callback shapes. External files, delegated events, aliases, computed selectors, plugins, minified syntax, and arbitrary JavaScript remain outside coverage.
+      - Mutation candidates cover only show, hide, class addition/removal, disabled property changes, value attributes, and text setters. Argument expressions are not evaluated and a retained candidate does not prove DOM selection, browser execution, event firing, validation enforcement, postback, or server-handler execution.
+      - Same-surface server correlation requires one literal selector target matching one inventoried server-control ID. A server handler is retained only when a supported client event maps to exactly one retained binding and handler, including markup, VB Handles, or AddHandler evidence. ASP.NET-generated client-ID suffix or contains matching is a structural candidate and does not prove the rendered client ID, postback, or handler execution.
+      - Numeric maximum-length declarations are retained only inside the callback or within 4096 characters before it in the same inline script when the callback references that exact variable name; this bounded textual association does not prove data flow or enforcement.
+      - Raw script bodies and mutation argument values are not retained; evidence uses paths, exact line spans, bounded safe selector targets, and snippet hashes.
+
+  - id: legacy.webforms.inline-client-http-request.v1
+    name: Legacy Web Forms inline jQuery HTTP request candidates
+    description: Emits bounded textual candidates for inline literal `$.ajax` request objects and resolves literal `.ashx` routes to one repository handler file when a unique suffix or filename match exists.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - WebFormsClientHttpRequestCandidate
+    limitations:
+      - Admission requires an inline script `$.ajax` call with a literal URL. Computed URLs, aliases, wrapper libraries, fetch, XMLHttpRequest, external scripts, and malformed or unbalanced objects remain outside coverage.
+      - The HTTP method defaults to GET only when the request object omits literal type/method syntax, matching the bounded jQuery shape; callback names, literal content/data types, and verification-token presence are syntax observations, not proof of request or callback execution.
+      - Repository handler resolution uses a unique normalized `.ashx` path suffix, falling back to a unique handler filename. It does not prove deployment virtual-directory mapping, routing, handler registration, authentication, authorization, successful responses, or runtime reachability.
+      - Raw URLs, request data, headers, callback bodies, token values, and response values are not retained. Evidence stores safe endpoint/file metadata, route and snippet hashes, and exact source spans.
+
+  - id: legacy.webforms.client-http-handler-resolution.v1
+    name: Legacy Web Forms client HTTP handler resolution
+    description: Joins a uniquely resolved inline jQuery `.ashx` request through its WebHandler Class directive to one retained external or single-file inline `ProcessRequest` declaration for bounded downstream traversal.
+    evidenceTier: Tier1Semantic or Tier2Structural or Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - WebFormsClientHttpHandlerDeclared
+      - WebFormsHandlerResolved
+      - CallEdge
+      - AnalysisGap
+    limitations:
+      - Resolution requires one literal request target, one repository `.ashx` file, a supported WebHandler Class directive, and one matching `ProcessRequest` declaration from inline VB/C# source, an explicit CodeFile/CodeBehind path, or a uniquely matching retained type declaration.
+      - Semantic method evidence produces Tier1; an exact directive/type/source/method structural join produces Tier2. Neither proves virtual-directory mapping, handler registration, request dispatch, authentication, authorization, handler construction, or runtime execution.
+      - Calls inside a single-file inline `ProcessRequest` are bounded to 256 syntax invocations and emit Tier3 call edges. They do not prove overload resolution, receiver type, dynamic dispatch, branch feasibility, runtime request handling, or callee execution.
+      - Missing and ambiguous handler source or `ProcessRequest` declarations are emitted as Tier4 gaps. They are not proof that a runtime handler is absent.
+      - Downstream paths remain bounded by retained call-edge and terminal evidence and inherit the legacy-flow traversal limitations.
+
+  - id: legacy.webforms.server-behavior.v1
+    name: Legacy Web Forms projectless Visual Basic server behavior candidates
+    description: Emits bounded syntax candidates for Response.Redirect calls, CompleteRequest lifecycle calls, and supported same-surface server-control property assignments inside retained Visual Basic Web Forms handlers.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - WebFormsServerNavigationCandidate
+      - WebFormsRequestLifecycleCandidate
+      - WebFormsServerControlStateMutationCandidate
+    limitations:
+      - Admission requires a retained Visual Basic handler uniquely associated with a Web Forms surface. Compiler identity is not inferred for projectless Web Site code.
+      - Navigation candidates require a syntactic Response.Redirect receiver. Static string targets are represented only by a digest and length; dynamic or unsupported targets remain classified without preserving raw expressions. The optional endResponse Boolean is retained only for literal True or False.
+      - CompleteRequest admission requires a member-access receiver ending in ApplicationInstance. It is a request-lifecycle syntax candidate and does not prove framework receiver identity, pipeline behavior, request termination, method return, redirect completion, or runtime ordering.
+      - Server-control state mutation candidates cover a bounded property allowlist and correlate only a unique same-surface markup control ID. Assignments retain the property name, exact span, value-expression digest, and nearest supported If, ElseIf, Else, or single-line If context; they do not prove branch feasibility, rendered state, event execution, or business intent.
+      - Multiple controls may legitimately bind to one handler. Trigger bindings remain separate while identical handler behavior is emitted once with all retained handler-resolution facts as support.
+
+  - id: legacy.webforms.inline-server-expression.v1
+    name: Legacy Web Forms inline server-expression reference candidates
+    description: Emits bounded syntax candidates when a qualified identifier inside an inline render or data-binding expression has one exact longest-prefix repository type declaration, including projectless App_Code declarations.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - WebFormsInlineServerExpressionReferenceCandidate
+    limitations:
+      - Supported expressions are limited to `<%=` render expressions and `<%#` data-binding expressions containing a qualified identifier chain. Code blocks, directives, helper indirection, imports, aliases, generics, indexers, invocations with complex syntax, and dynamic expressions remain outside this bounded join.
+      - Resolution requires exactly one repository declaration site for the longest qualified type-name prefix. Visual Basic-linked pages compare identifiers case-insensitively; unresolved or ambiguous references do not emit a positive candidate.
+      - A retained candidate proves only the markup span and unique repository declaration. It does not prove ASP.NET dynamic compilation, member binding, expression execution, rendered output, or runtime reachability.
+      - Raw expression text and member names after the matched type are not retained; only bounded safe type/path metadata, segment counts, hashes, and exact evidence spans are emitted.
+
   - id: legacy.webforms.postback-target.v1
     name: Legacy WebForms postback target candidates
     description: Emits bounded syntax candidates for literal __doPostBack targets in markup and literal registered client-script payloads, with same-surface control correlation where exact.
@@ -2462,6 +2533,7 @@ rules:
       - AnalysisGap
     limitations:
       - Packet rows preserve upstream evidence and deterministic structural connectivity; they do not add extractor conclusions or prove runtime reachability, event firing, postback behavior, validation, authorization, persistence, production usage, or complete workflow coverage.
+      - Handler-call rows are limited to call-edge fact IDs already cited by a retained event-flow fact. They preserve only safe callee identity, call kind, provenance, and limitations; they do not retain arguments or prove receiver type, overload resolution, branch execution, or runtime dispatch.
       - Downstream-boundary rows inventory only supported terminal evidence already composed by the bounded legacy-flow path reader; they do not prove successful service, message, configuration, database, or other external interaction.
       - General file-operation extraction is unavailable in this packet version and remains an explicit capability gap; absence of a file boundary is not evidence that a handler does not access files.
       - Structural slice candidates do not infer business capabilities, parity, migration scope, effort, cloud readiness, target architecture, test completeness, security approval, release approval, or safety to change; owner naming and confirmation remain required.
@@ -3162,6 +3234,22 @@ rules:
       - Short-name reconciliation is review evidence only and cannot produce a strong static path.
       - Ambiguous same-name candidates must remain gaps or review evidence rather than arbitrary strong links.
       - Reconciliation does not prove runtime dispatch, dependency injection binding, reflection targets, branch feasibility, serializer behavior, or SQL execution.
+
+  - id: combined.paths.projectless-vb-receiver-bridge.v1
+    name: Projectless Visual Basic receiver-provenance bridge
+    description: Derives an in-memory review-tier path edge from a handler-owned syntax-only VB invocation to a unique retained VB method declaration when receiver provenance is established by a preceding local creation, a containing-type typed field, or a typed field reached through one unique retained base-type chain, and the retained method identity is compatible.
+    evidenceTier: Tier2Structural
+    emits:
+      - projectless-vb-receiver-bridge path edge
+      - ProjectlessVisualBasicReceiverCreationAmbiguous gap
+      - ProjectlessVisualBasicReceiverTargetUnavailable gap
+      - ProjectlessVisualBasicReceiverTargetAmbiguous gap
+    limitations:
+      - The receiver creation and invocation must be source-index-local; the unique semantic declaration may come from that source or another explicitly combined TraceMap index.
+      - Local creation takes precedence. Field provenance requires one typed declaration on the containing type or one typed field reached through a unique retained syntax-only base-type chain; ambiguous field or inheritance evidence fails closed.
+      - The bridge does not perform compiler binding for the projectless caller and does not infer properties, factories, dependency-injection, late-bound, reflection, or reassigned receiver targets.
+      - Type matching uses a case-insensitive canonical declaring-type identity, method name, arity, and any available ordered argument/parameter types; zero or multiple compatible declarations remain explicit gaps.
+      - A bridge is static review evidence only and does not prove runtime dispatch, branch feasibility, database execution, or successful binding.
 
   - id: combined.paths.query-gap.v1
     name: Combined dependency path query gap
@@ -4023,7 +4111,7 @@ rules:
   - id: vb.syntax.declarations.v1
     name: Visual Basic syntax declarations
     description: Bounded syntax-only declarations over readable Visual Basic files that received no compiler-resolved coverage, plus per-file parse, read, and budget gaps for that fallback.
-    evidenceTier: Tier3SyntaxOrTextual
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - TypeDeclared
       - MethodDeclared
@@ -4035,6 +4123,7 @@ rules:
       - AnalysisGap
     limitations:
       - Syntax-only names are text evidence; they are never compiler-resolved targets and never join to semantic symbols by identity.
+      - A parser or bounded extraction-phase failure is retained as a category-only Tier4 gap at line 1 for the affected file. Other files and phases continue, but missing phase evidence is not evidence of absence and the gap does not establish root cause.
       - Designer, generated, and auto-generated-header files are skipped; unreadable files and parse errors emit bounded Tier4 gap rows with diagnostic codes and message hashes only, never raw message text.
       - Emission is bounded by a deterministic per-file fact budget; when the budget is exhausted the remainder is reported by a `SyntaxFallbackBudgetExhausted` gap, and absence of a fact beyond the budget is not absence in source.
       - Syntax fallback does not claim the file compiles, binds, or runs; partial analysis remains labeled reduced through `vb.semantic.workspace.v1` gaps.
@@ -4082,6 +4171,18 @@ rules:
       - Created types are raw `New ...` syntax text and are never compiler-resolved targets; the type may not resolve or exist.
       - Creation candidates prove syntax presence only; constructor identity, executed constructor, and runtime allocation are not claimed.
       - In an otherwise semantically analyzed file, this rule is used only when the created type is known but its constructor is unresolved, and a `CallSiteSemanticResolutionUnavailable` Tier4 gap accompanies it.
+
+  - id: vb.syntax.database-operation.v1
+    name: Visual Basic syntax database operation
+    description: Bounded syntax-only database-operation candidates where a Visual Basic `Fill`, `ExecuteScalar[Async]`, `ExecuteReader[Async]`, or `ExecuteNonQuery[Async]` invocation has a receiver declared with an explicit supported ADO.NET adapter or command type.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - DatabaseOperationCandidate
+    limitations:
+      - The receiver type is explicit source syntax, not a compiler-resolved type; aliases, provider identity, and successful binding are not established. Lexical parameters and preceding locals shadow fields; inherited fields require one bounded, unique syntax-only base-type chain.
+      - Adapter recognition is limited to `DbDataAdapter`, `SqlDataAdapter`, `OleDbDataAdapter`, and `OdbcDataAdapter`. Command recognition is limited to the allowlisted `DbCommand`/`IDbCommand` and common SQL, OLE DB, ODBC, Oracle, SQLite, DB2, PostgreSQL, and MySQL command type names; name-only calls and custom receiver types are not classified.
+      - The fact does not retain or infer SQL text, connection identity, table identity, runtime reachability, branch feasibility, or successful execution.
+      - Emission is bounded by the Visual Basic syntax fallback per-file fact budget and remains reduced syntax coverage.
 
   - id: build.environment.target-framework.v1
     name: Build environment target framework diagnostics

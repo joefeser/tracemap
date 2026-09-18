@@ -41,9 +41,15 @@ if ($LASTEXITCODE -ne 0) { Stop-ApplicationReview 'WITS_APPLICATION_REVIEW_PACKE
 $bytes = [IO.File]::ReadAllBytes($packetFile.FullName)
 $packetSha = ([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes))).ToLowerInvariant()
 $packet = [Text.Encoding]::UTF8.GetString($bytes) | ConvertFrom-Json -Depth 100
-if ($packet.schemaVersion -cne 'webforms-modernization-packet.v1' -or @($packet.sources).Count -ne 1 -or @($packet.surfaces).Count -lt 1 -or @($packet.surfaces).Count -gt 1000) { Stop-ApplicationReview 'WITS_APPLICATION_REVIEW_PACKET_INVALID' }
-$source = @($packet.sources)[0]
-foreach ($value in @($packet.packetId, $packet.ruleId, $source.scanId, $source.commitSha)) { [void](Require-Text $value 1024 'WITS_APPLICATION_REVIEW_PACKET_INVALID') }
+$sources = @($packet.sources)
+if ($packet.schemaVersion -cne 'webforms-modernization-packet.v1' -or $sources.Count -lt 1 -or $sources.Count -gt 64 -or @($packet.surfaces).Count -lt 1 -or @($packet.surfaces).Count -gt 1000) { Stop-ApplicationReview 'WITS_APPLICATION_REVIEW_PACKET_INVALID' }
+$sourceKeys = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+foreach ($packetSource in $sources) {
+    foreach ($value in @($packetSource.scanId, $packetSource.commitSha)) { [void](Require-Text $value 1024 'WITS_APPLICATION_REVIEW_PACKET_INVALID') }
+    if ([string]$packetSource.commitSha -cnotmatch '^[0-9a-f]{40}$' -or !$sourceKeys.Add("$($packetSource.scanId)|$($packetSource.commitSha)")) { Stop-ApplicationReview 'WITS_APPLICATION_REVIEW_PACKET_INVALID' }
+}
+$source = $sources[0]
+foreach ($value in @($packet.packetId, $packet.ruleId)) { [void](Require-Text $value 1024 'WITS_APPLICATION_REVIEW_PACKET_INVALID') }
 $expected = [Collections.Generic.Dictionary[string,object]]::new([StringComparer]::Ordinal)
 $ordinal = 0
 foreach ($surface in @($packet.surfaces | Sort-Object @{ Expression = { [string]$_.evidence.filePath } }, @{ Expression = { [string]$_.surfaceId } })) {

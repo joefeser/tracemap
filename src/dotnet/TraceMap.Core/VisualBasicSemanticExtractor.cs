@@ -789,6 +789,7 @@ public static class VisualBasicSemanticExtractor
                         ["methodName"] = method.Name,
                         ["methodKind"] = method.MethodKind.ToString(),
                         ["isShared"] = method.IsShared().ToString(),
+                        ["parameterCount"] = method.Parameters.Length.ToString(),
                         ["returnsVoid"] = method.ReturnsVoid ? "True" : "False"
                     },
                     "target",
