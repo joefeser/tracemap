@@ -153,8 +153,10 @@ if (git -C $TraceMapRoot status --porcelain --untracked-files=all) {
 
 dotnet build "$TraceMapRoot\src\dotnet\TraceMap.Cli\TraceMap.Cli.csproj" -c Release
 if ($LASTEXITCODE -ne 0) { throw "TRACEMAP_BUILD_FAILED:$LASTEXITCODE" }
+$TraceMapGenerator = "$TraceMapRoot\src\dotnet\TraceMap.Cli\bin\Release\net10.0\tracemap.dll"
+$GeneratorSha256 = (Get-FileHash -LiteralPath $TraceMapGenerator -Algorithm SHA256).Hash.ToLowerInvariant()
 Remove-Item -LiteralPath $TraceMapOut -Recurse -Force -ErrorAction SilentlyContinue
-dotnet "$TraceMapRoot\src\dotnet\TraceMap.Cli\bin\Release\net10.0\tracemap.dll" `
+dotnet $TraceMapGenerator `
     scan --repo $DotNetPerfRoot --out $TraceMapOut
 if ($LASTEXITCODE -ne 0) { throw "TRACEMAP_SCAN_FAILED:$LASTEXITCODE" }
 ```
@@ -184,6 +186,9 @@ if ($manifest.commitSha -ne 'db8c3359badfec620ccdc6df062b1756ef9607f8') {
 if ([string]::IsNullOrWhiteSpace([string]$manifest.scannerVersion)) {
     throw 'TRACEMAP_SCANNER_VERSION_MISSING'
 }
+if ([string]$manifest.sourceSnapshotDigest -notmatch '^[0-9a-f]{64}$') {
+    throw 'TRACEMAP_BOUNDED_INPUT_SHA256_MISSING'
+}
 
 $facts = @(Get-Content -LiteralPath (Join-Path $TraceMapOut 'facts.ndjson') |
     ForEach-Object { $_ | ConvertFrom-Json })
@@ -200,13 +205,22 @@ if ($invalidFacts.Count -ne 0) {
 }
 
 "traceMapCommit=$TraceMapCommit"
+"generatorPath=src/dotnet/TraceMap.Cli/bin/Release/net10.0/tracemap.dll"
+"generatorSha256=$GeneratorSha256"
 "corpusCommit=$($manifest.commitSha)"
+"boundedInputSha256=$($manifest.sourceSnapshotDigest)"
 "scannerVersion=$($manifest.scannerVersion)"
 $facts |
     Group-Object { "$($_.evidence.extractorId)|$($_.evidence.extractorVersion)" } |
     Sort-Object Name |
     ForEach-Object { "extractor=$($_.Name);facts=$($_.Count)" }
 ```
+
+Retain those receipt lines with the private validation run. They bind the
+baseline to the invoked generator bytes and TraceMap's bounded source snapshot.
+Do not publish this private-corpus receipt as a shareable artifact. Any
+shareable derivative must first apply its documented privacy projection and
+hash that projected input rather than this private source snapshot.
 
 This stage is only a pinned TraceMap baseline until the scanner has documented
 rule IDs and fact shapes for source-to-metadata, metadata-to-PDB, and
