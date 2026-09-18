@@ -1377,6 +1377,54 @@ public sealed class WebFormsModernizationPacketTests
         var typedOverloadChain = Assert.Single(typedOverloadPacket.EventChains);
         Assert.Equal("sql-query", typedOverloadChain.TerminalKind);
 
+        var wrapperWebCall = inheritedSqlCall with
+        {
+            Properties = new SortedDictionary<string, string>(
+                inheritedSqlCall.Properties.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+                StringComparer.Ordinal)
+            {
+                ["argumentTypes"] = "String;ArrayList",
+                ["argumentTypeResolution"] = "explicit-caller-syntax"
+            }
+        };
+        var wrapperWebIndex = Path.Combine(temp.Path, "wrapper-web-index.sqlite");
+        SqliteIndexWriter.Write(wrapperWebIndex, manifest,
+            [page, binding, handler, creation, invocation, flow, businessDeclaration, qualifiedDataAccessDeclaration, businessField,
+                businessCreation, businessInvocation, inheritedDataAccessType, wrapperWebCall]);
+        var implicitOverloadCall = Fact(recursiveBackendManifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph,
+            "Common/DataAccess.vb", 223,
+            source: "UnitedFramework.DataAccess.SqlDataAccess.ExecProc_Scalar(String,ArrayList)",
+            target: "ExecProc_Scalar", contract: "ExecProc_Scalar",
+            ("argumentCount", "2"), ("argumentTypes", "String;SqlDataAccessParam()"),
+            ("argumentTypeResolution", "explicit-caller-syntax"), ("callKind", "SyntaxInvocation"),
+            ("calleeName", "ExecProc_Scalar"), ("callerName", "SqlDataAccess.ExecProc_Scalar/2"),
+            ("coverageLabel", "syntax-only")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var typedSqlBody = inheritedSqlBody with
+        {
+            SourceSymbol = "UnitedFramework.DataAccess.SqlDataAccess.ExecProc_Scalar(String,SqlDataAccessParam())"
+        };
+        var typedSqlTerminal = inheritedSqlTerminal with
+        {
+            SourceSymbol = "UnitedFramework.DataAccess.SqlDataAccess.ExecProc_Scalar(String,SqlDataAccessParam())"
+        };
+        var implicitOverloadBackendIndex = Path.Combine(temp.Path, "implicit-overload-backend-index.sqlite");
+        SqliteIndexWriter.Write(implicitOverloadBackendIndex, recursiveBackendManifest,
+            [sqlBaseType, inheritedSqlField, inheritedSqlDeclaration, inheritedSqlSameArityOverload,
+                implicitOverloadCall, typedSqlBody, typedSqlTerminal]);
+        var implicitOverloadCombinedIndex = Path.Combine(temp.Path, "implicit-overload-combined-index.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [wrapperWebIndex, implicitOverloadBackendIndex], implicitOverloadCombinedIndex, ["web", "backend"]));
+        var implicitOverloadPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(implicitOverloadCombinedIndex, Path.Combine(temp.Path, "implicit-overload-output")));
+        var implicitOverloadChain = Assert.Single(implicitOverloadPacket.EventChains);
+        Assert.Equal("sql-query", implicitOverloadChain.TerminalKind);
+        Assert.True(implicitOverloadChain.TraversalObservation?.TerminalPathCount > 0);
+        Assert.True(implicitOverloadChain.PathEvidence.Count(evidence =>
+            evidence.RuleId == "combined.paths.projectless-vb-receiver-bridge.v1") >= 2);
+
         var parametersListType = Fact(manifest, FactTypes.TypeDeclared, RuleIds.VisualBasicSyntaxDeclarations,
             "WebApplication/App_Code/DataAccess.vb", 30, source: null, target: "ParametersList", contract: null,
             ("baseTypes", "System.Collections.ArrayList"), ("kind", "class"), ("name", "ParametersList"),
