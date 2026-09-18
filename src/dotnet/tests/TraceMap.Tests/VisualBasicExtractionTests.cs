@@ -47,6 +47,13 @@ public sealed class VisualBasicExtractionTests
             fact.FactType == FactTypes.EventDeclared
             && fact.ContractElement == "PriceRecalculated"
             && fact.EvidenceTier == EvidenceTiers.Tier1Semantic);
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.ObjectCreated
+            && fact.RuleId == RuleIds.VisualBasicSemanticObjectCreation
+            && int.TryParse(fact.Properties.GetValueOrDefault("lexicalScopeStartLine"), out var scopeStartLine)
+            && int.TryParse(fact.Properties.GetValueOrDefault("lexicalScopeEndLine"), out var scopeEndLine)
+            && scopeStartLine <= fact.Evidence.StartLine
+            && scopeEndLine >= fact.Evidence.EndLine);
     }
 
     [Fact]
@@ -344,6 +351,10 @@ public sealed class VisualBasicExtractionTests
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.ObjectCreated
             && fact.Properties["assignedTo"] == "factory");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.ObjectCreated
+            && int.Parse(fact.Properties["lexicalScopeStartLine"]) <= fact.Evidence.StartLine
+            && int.Parse(fact.Properties["lexicalScopeEndLine"]) >= fact.Evidence.EndLine);
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.CallEdge
             && fact.Properties.GetValueOrDefault("callKind") == "SyntaxObjectCreation"

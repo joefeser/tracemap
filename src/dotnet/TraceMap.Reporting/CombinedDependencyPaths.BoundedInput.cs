@@ -174,7 +174,7 @@ public static partial class CombinedDependencyPathReporter
                 select fact_id, scan_id, repo, commit_sha, fact_type, rule_id, evidence_tier,
                        source_symbol, target_symbol, contract_element, file_path, start_line, end_line,
                        case when fact_type = '{{FactTypes.CallEdge}}' and json_valid(properties_json) then
-                           json_object(
+                           json_patch(json_object(
                                'argumentCount', coalesce(cast(json_extract(properties_json, '$.argumentCount') as text), ''),
                                'argumentTypes', coalesce(cast(json_extract(properties_json, '$.argumentTypes') as text), ''),
                                'argumentTypeResolution', coalesce(cast(json_extract(properties_json, '$.argumentTypeResolution') as text), ''),
@@ -188,7 +188,13 @@ public static partial class CombinedDependencyPathReporter
                                'coverageLabel', coalesce(cast(json_extract(properties_json, '$.coverageLabel') as text), ''),
                                'receiverName', coalesce(cast(json_extract(properties_json, '$.receiverName') as text), ''),
                                'targetSymbolId', coalesce(cast(json_extract(properties_json, '$.targetSymbolId') as text), ''),
-                               'targetContainingSymbolId', coalesce(cast(json_extract(properties_json, '$.targetContainingSymbolId') as text), ''))
+                               'targetContainingSymbolId', coalesce(cast(json_extract(properties_json, '$.targetContainingSymbolId') as text), '')),
+                               case when json_type(properties_json, '$.lexicalScopeStartLine') is not null
+                                      or json_type(properties_json, '$.lexicalScopeEndLine') is not null then
+                                   json_object(
+                                       'lexicalScopeStartLine', coalesce(cast(json_extract(properties_json, '$.lexicalScopeStartLine') as text), ''),
+                                       'lexicalScopeEndLine', coalesce(cast(json_extract(properties_json, '$.lexicalScopeEndLine') as text), ''))
+                               else '{}' end)
                             when fact_type = '{{FactTypes.MethodDeclared}}'
                                 and rule_id = '{{RuleIds.VisualBasicSemanticDeclarations}}'
                                 and json_valid(properties_json) then
@@ -643,38 +649,88 @@ public static partial class CombinedDependencyPathReporter
             }
         }
 
-        var bridgeRequests = syntaxCalls
-            .Where(call => string.Equals(call.Properties.GetValueOrDefault("callKind"), "SyntaxInvocation", StringComparison.Ordinal)
-                && !string.IsNullOrWhiteSpace(call.Properties.GetValueOrDefault("receiverName"))
-                && !string.IsNullOrWhiteSpace(call.Properties.GetValueOrDefault("calleeName"))
-                && int.TryParse(call.Properties.GetValueOrDefault("argumentCount"), out _))
-            .Select(call =>
-            {
-                var receiver = call.Properties.GetValueOrDefault("receiverName")!;
-                var creations = syntaxCalls
-                    .Where(creation => IsSupportedVisualBasicReceiverCreation(
-                            creation.RuleId,
-                            creation.EvidenceTier,
-                            creation.Properties.GetValueOrDefault("callKind"))
-                        && SameVisualBasicContainingMember(creation.SourceSymbol, creation.Properties, call.SourceSymbol, call.Properties)
-                        && string.Equals(creation.FilePath, call.FilePath, StringComparison.OrdinalIgnoreCase)
-                        && creation.StartLine <= call.StartLine
-                        && string.Equals(creation.Properties.GetValueOrDefault("assignedTo"), receiver, StringComparison.OrdinalIgnoreCase))
-                    .ToArray();
-                return creations.Length == 1
-                    ? new
-                    {
-                        TypeName = SimpleVisualBasicTypeName(creations[0].Properties.GetValueOrDefault("calleeContainingType")
-                            ?? creations[0].Properties.GetValueOrDefault("calleeName")),
-                        MethodName = call.Properties.GetValueOrDefault("calleeName")!,
-                        ArgumentCount = int.Parse(call.Properties.GetValueOrDefault("argumentCount")!)
-                    }
-                    : null;
-            })
-            .Where(request => request is not null && !string.IsNullOrWhiteSpace(request.TypeName))
-            .Select(request => request!)
+        var receiverNames = syntaxCalls
+            .Where(call => string.Equals(call.Properties.GetValueOrDefault("callKind"), "SyntaxInvocation", StringComparison.Ordinal))
+            .Select(call => call.Properties.GetValueOrDefault("receiverName")?.Split('.').Last())
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        if (bridgeRequests.Length == 0)
+        var receiverFields = new List<(string ContainingType, string FieldName, string FieldType)>();
+        if (receiverNames.Length > 0)
+        {
+            await using var fieldCommand = connection.CreateCommand();
+            fieldCommand.CommandText = "select properties_json from facts "
+                + "where fact_type = $fact_type and rule_id = $rule_id "
+                + "and length(cast(properties_json as blob)) <= $max_row_bytes and json_valid(properties_json) "
+                + "and cast(json_extract(properties_json, '$.fieldName') as text) collate nocase "
+                + "in (select value from json_each($field_names)) "
+                + "order by fact_id collate binary limit $candidate_limit;";
+            fieldCommand.Parameters.AddWithValue("$fact_type", FactTypes.FieldDeclared);
+            fieldCommand.Parameters.AddWithValue("$rule_id", RuleIds.VisualBasicSyntaxDeclarations);
+            fieldCommand.Parameters.AddWithValue("$max_row_bytes", ReportInputBudget.MaxRowTextBytes);
+            fieldCommand.Parameters.AddWithValue("$field_names", JsonSerializer.Serialize(receiverNames));
+            fieldCommand.Parameters.AddWithValue("$candidate_limit", maxTargets + 1L);
+            await using var fieldReader = await fieldCommand.ExecuteReaderAsync(cancellationToken);
+            while (await fieldReader.ReadAsync(cancellationToken))
+            {
+                var properties = ParseProperties(fieldReader.GetString(0));
+                receiverFields.Add((
+                    NormalizeVisualBasicTypeName(CombinedDependencyReporter.FirstValue(properties, "qualifiedContainingType", "containingType")),
+                    properties.GetValueOrDefault("fieldName") ?? string.Empty,
+                    NormalizeVisualBasicTypeName(CombinedDependencyReporter.FirstValue(properties, "fieldType", "declaredType"))));
+                if (receiverFields.Count > maxTargets)
+                    throw new ReportInputLimitException("handler-call-target-frontier");
+            }
+        }
+
+        var bridgeRequests = new List<(string TypeName, string MethodName, int ArgumentCount)>();
+        foreach (var call in syntaxCalls.Where(call =>
+            string.Equals(call.Properties.GetValueOrDefault("callKind"), "SyntaxInvocation", StringComparison.Ordinal)
+            && !string.IsNullOrWhiteSpace(call.Properties.GetValueOrDefault("receiverName"))
+            && !string.IsNullOrWhiteSpace(call.Properties.GetValueOrDefault("calleeName"))
+            && int.TryParse(call.Properties.GetValueOrDefault("argumentCount"), out _)))
+        {
+            var receiver = call.Properties.GetValueOrDefault("receiverName")!;
+            var receiverLookupName = receiver.Split('.').Last();
+            var creations = syntaxCalls
+                .Where(creation => IsSupportedVisualBasicReceiverCreation(
+                        creation.RuleId,
+                        creation.EvidenceTier,
+                        creation.Properties.GetValueOrDefault("callKind"))
+                    && SameVisualBasicContainingMember(creation.SourceSymbol, creation.Properties, call.SourceSymbol, call.Properties)
+                    && string.Equals(creation.FilePath, call.FilePath, StringComparison.OrdinalIgnoreCase)
+                    && creation.StartLine <= call.StartLine
+                    && IsVisualBasicReceiverCreationInScope(creation.Properties, call.StartLine, call.StartLine)
+                    && string.Equals(creation.Properties.GetValueOrDefault("assignedTo"), receiverLookupName, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            var receiverTypes = creations.Length == 1
+                ? new[] { NormalizeVisualBasicTypeName(creations[0].Properties.GetValueOrDefault("calleeContainingType")
+                    ?? creations[0].Properties.GetValueOrDefault("calleeName")) }
+                : [];
+            if (creations.Length == 0 && !receiver.StartsWith("MyBase.", StringComparison.OrdinalIgnoreCase))
+            {
+                var caller = VisualBasicQualifiedMemberKey(call.SourceSymbol
+                    ?? call.Properties.GetValueOrDefault("callerName"));
+                if (caller is not null)
+                {
+                    receiverTypes = receiverFields
+                        .Where(field => string.Equals(field.FieldName, receiverLookupName, StringComparison.OrdinalIgnoreCase)
+                            && VisualBasicTypeMatches(field.ContainingType, caller.Value.Type))
+                        .Select(field => field.FieldType)
+                        .Where(type => !string.IsNullOrWhiteSpace(type))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToArray();
+                }
+            }
+            if (receiverTypes.Length == 1)
+            {
+                bridgeRequests.Add((
+                    receiverTypes[0],
+                    call.Properties.GetValueOrDefault("calleeName")!,
+                    int.Parse(call.Properties.GetValueOrDefault("argumentCount")!)));
+            }
+        }
+        if (bridgeRequests.Count == 0)
         {
             return symbols;
         }
@@ -709,7 +765,9 @@ public static partial class CombinedDependencyPathReporter
         foreach (var request in bridgeRequests)
         {
             var matches = declarationCandidates
-                .Where(candidate => string.Equals(SimpleVisualBasicTypeName(candidate.Properties.GetValueOrDefault("containingType")), request.TypeName, StringComparison.OrdinalIgnoreCase)
+                .Where(candidate => VisualBasicTypeMatches(
+                        CombinedDependencyReporter.FirstValue(candidate.Properties, "qualifiedContainingType", "containingType") ?? string.Empty,
+                        request.TypeName)
                     && string.Equals(candidate.Properties.GetValueOrDefault("methodName"), request.MethodName, StringComparison.OrdinalIgnoreCase)
                     && int.TryParse(candidate.Properties.GetValueOrDefault("parameterCount"), out var parameterCount)
                     && parameterCount == request.ArgumentCount)

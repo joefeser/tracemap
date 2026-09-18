@@ -873,7 +873,8 @@ public sealed class WebFormsModernizationPacketTests
         var creation = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph, "WebApplication/Feedback.aspx.vb", 22,
             source: "Submit_Click", target: "BusinessObject", contract: "BusinessObject",
             ("assignedTo", "bl"), ("callKind", "SyntaxObjectCreation"), ("calleeContainingType", "BusinessObject"),
-            ("calleeName", "BusinessObject"), ("callerName", "Submit_Click"), ("coverageLabel", "syntax-only"));
+            ("calleeName", "BusinessObject"), ("callerName", "Submit_Click"), ("coverageLabel", "syntax-only"),
+            ("lexicalScopeStartLine", "20"), ("lexicalScopeEndLine", "30"));
         var invocation = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph, "WebApplication/Feedback.aspx.vb", 23,
             source: "Submit_Click", target: "InsertFeedback", contract: "InsertFeedback",
             ("argumentCount", "1"), ("callKind", "SyntaxInvocation"), ("calleeName", "InsertFeedback"),
@@ -912,7 +913,12 @@ public sealed class WebFormsModernizationPacketTests
         var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(index, Path.Combine(temp.Path, "output")));
 
         var chain = Assert.Single(packet.EventChains);
-        Assert.Equal("sql-query", chain.TerminalKind);
+        Assert.True(chain.TerminalKind == "sql-query", System.Text.Json.JsonSerializer.Serialize(new
+        {
+            chain.TraversalObservation,
+            chain.PathEvidence,
+            packet.Gaps
+        }));
         Assert.True(chain.TraversalObservation?.TerminalPathCount > 0);
         Assert.Contains("projectless-vb-receiver-bridge", chain.TraversalObservation?.TraversedEdgeKinds ?? []);
         Assert.Contains("combined.paths.projectless-vb-receiver-bridge.v1", chain.TraversalObservation?.TraversedRuleIds ?? []);
@@ -1009,7 +1015,9 @@ public sealed class WebFormsModernizationPacketTests
                 ["calleeContainingType"] = "BusinessLayer.BusinessObject",
                 ["calleeName"] = "BusinessObject",
                 ["callerName"] = handlerSymbol,
-                ["coverageLabel"] = "bounded-static-call"
+                ["coverageLabel"] = "bounded-static-call",
+                ["lexicalScopeStartLine"] = "20",
+                ["lexicalScopeEndLine"] = "30"
             });
         var mixedFlow = Fact(manifest, FactTypes.WebFormsEventFlowProjected, RuleIds.LegacyWebFormsEventFlow, "WebApplication/Feedback.aspx.vb", 20,
             source: handlerSymbol, target: "flow-terminal-unavailable", contract: "Submit_Click",
@@ -1150,6 +1158,117 @@ public sealed class WebFormsModernizationPacketTests
             Assert.Contains("projectless-vb-receiver-bridge", singleSyntaxChain.TraversalObservation?.TraversedEdgeKinds ?? []);
             Assert.Equal("sql-query", singleSyntaxChain.TerminalKind);
         });
+
+        var semanticFieldFlow = Fact(manifest, FactTypes.WebFormsEventFlowProjected, RuleIds.LegacyWebFormsEventFlow,
+            "WebApplication/Feedback.aspx.vb", 20, source: handlerSymbol, target: "flow-terminal-unavailable", contract: "Submit_Click",
+            ("supportingFactIds", $"{handler.FactId},{singleFieldInvocation.FactId}"),
+            ("supportingEdgeIds", singleFieldInvocation.FactId), ("flowClassification", "UnknownAnalysisGap"),
+            ("coverageLabel", "reduced-static-webforms-flow"));
+        var semanticFieldIndex = Path.Combine(temp.Path, "single-semantic-field-index.sqlite");
+        SqliteIndexWriter.Write(semanticFieldIndex, manifest,
+            [page, binding, handler, singleFieldInvocation, callerTypeDeclaration, receiverFieldDeclaration,
+                declaration, downstream, terminal, semanticFieldFlow]);
+        var semanticFieldPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(semanticFieldIndex, Path.Combine(temp.Path, "single-semantic-field-output")));
+        var semanticFieldChains = semanticFieldPacket.EventChains.ToArray();
+        Assert.NotEmpty(semanticFieldChains);
+        Assert.All(semanticFieldChains, semanticFieldChain =>
+        {
+            Assert.Equal("sql-query", semanticFieldChain.TerminalKind);
+            Assert.Contains("projectless-vb-receiver-bridge", semanticFieldChain.TraversalObservation?.TraversedEdgeKinds ?? []);
+        });
+
+        var unqualifiedFieldInvocation = singleFieldInvocation with
+        {
+            FactId = "fact-unqualified-field-invocation",
+            Properties = new SortedDictionary<string, string>(
+                singleFieldInvocation.Properties.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+                StringComparer.Ordinal)
+            {
+                ["receiverName"] = "service"
+            }
+        };
+        var staleBlockCreation = creation with
+        {
+            FactId = "fact-stale-block-creation",
+            Evidence = creation.Evidence with { StartLine = 6, EndLine = 6 },
+            TargetSymbol = "WrongService",
+            Properties = new SortedDictionary<string, string>(
+                creation.Properties.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+                StringComparer.Ordinal)
+            {
+                ["assignedTo"] = "service",
+                ["calleeContainingType"] = "Wrong.Service",
+                ["calleeName"] = "WrongService",
+                ["lexicalScopeStartLine"] = "5",
+                ["lexicalScopeEndLine"] = "7"
+            }
+        };
+        var staleBlockFlow = Fact(manifest, FactTypes.WebFormsEventFlowProjected, RuleIds.LegacyWebFormsEventFlow,
+            "WebApplication/Feedback.aspx.vb", 20, source: handlerSymbol, target: "flow-terminal-unavailable", contract: "Submit_Click",
+            ("supportingFactIds", $"{handler.FactId},{staleBlockCreation.FactId},{unqualifiedFieldInvocation.FactId}"),
+            ("supportingEdgeIds", $"{staleBlockCreation.FactId},{unqualifiedFieldInvocation.FactId}"),
+            ("flowClassification", "UnknownAnalysisGap"), ("coverageLabel", "reduced-static-webforms-flow"));
+        var staleBlockIndex = Path.Combine(temp.Path, "stale-block-receiver-index.sqlite");
+        SqliteIndexWriter.Write(staleBlockIndex, manifest,
+            [page, binding, handler, staleBlockCreation, unqualifiedFieldInvocation, callerTypeDeclaration,
+                receiverFieldDeclaration, declaration, downstream, terminal, staleBlockFlow]);
+        var staleBlockPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(staleBlockIndex, Path.Combine(temp.Path, "stale-block-receiver-output")));
+        var staleBlockChains = staleBlockPacket.EventChains.ToArray();
+        Assert.NotEmpty(staleBlockChains);
+        Assert.All(staleBlockChains, staleBlockChain =>
+        {
+            Assert.Equal("sql-query", staleBlockChain.TerminalKind);
+            Assert.Contains("projectless-vb-receiver-bridge", staleBlockChain.TraversalObservation?.TraversedEdgeKinds ?? []);
+        });
+
+        var qualifiedBaseCaller = callerTypeDeclaration with
+        {
+            FactId = "fact-qualified-base-caller",
+            Properties = new SortedDictionary<string, string>(
+                callerTypeDeclaration.Properties.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+                StringComparer.Ordinal)
+            {
+                ["baseTypes"] = "Expected.FeedbackBase"
+            }
+        };
+        var wrongNamespaceBase = callerBaseTypeDeclaration with
+        {
+            FactId = "fact-wrong-namespace-base",
+            Properties = new SortedDictionary<string, string>(
+                callerBaseTypeDeclaration.Properties.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+                StringComparer.Ordinal)
+            {
+                ["name"] = "FeedbackBase",
+                ["qualifiedName"] = "Other.FeedbackBase"
+            }
+        };
+        var wrongNamespaceBaseField = receiverBaseFieldDeclaration with
+        {
+            FactId = "fact-wrong-namespace-base-field",
+            Properties = new SortedDictionary<string, string>(
+                receiverBaseFieldDeclaration.Properties.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+                StringComparer.Ordinal)
+            {
+                ["containingType"] = "Other.FeedbackBase",
+                ["qualifiedContainingType"] = "Other.FeedbackBase"
+            }
+        };
+        var qualifiedBaseFlow = Fact(manifest, FactTypes.WebFormsEventFlowProjected, RuleIds.LegacyWebFormsEventFlow,
+            "WebApplication/Feedback.aspx.vb", 20, source: handlerSymbol, target: "flow-terminal-unavailable", contract: "Submit_Click",
+            ("supportingFactIds", $"{handler.FactId},{singleBaseFieldInvocation.FactId}"),
+            ("supportingEdgeIds", singleBaseFieldInvocation.FactId),
+            ("flowClassification", "UnknownAnalysisGap"), ("coverageLabel", "reduced-static-webforms-flow"));
+        var qualifiedBaseIndex = Path.Combine(temp.Path, "qualified-base-receiver-index.sqlite");
+        SqliteIndexWriter.Write(qualifiedBaseIndex, manifest,
+            [page, binding, handler, singleBaseFieldInvocation, qualifiedBaseCaller,
+                wrongNamespaceBase, wrongNamespaceBaseField, qualifiedBaseFlow]);
+        var qualifiedBasePacket = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(qualifiedBaseIndex, Path.Combine(temp.Path, "qualified-base-receiver-output")));
+        Assert.DoesNotContain(qualifiedBasePacket.EventChains, chain =>
+            chain.TraversalObservation?.TraversedEdgeKinds.Contains("projectless-vb-receiver-bridge", StringComparer.Ordinal) == true);
+        Assert.DoesNotContain(qualifiedBasePacket.EventChains, chain => chain.TerminalKind == "sql-query");
 
         var businessDeclaration = Fact(manifest, FactTypes.MethodDeclared, RuleIds.VisualBasicSyntaxDeclarations,
             "WebApplication/App_Code/DataAccess.vb", 10, source: null, target: "InsertFeedback", contract: null,

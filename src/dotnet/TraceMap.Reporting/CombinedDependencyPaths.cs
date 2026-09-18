@@ -2604,6 +2604,7 @@ public static partial class CombinedDependencyPathReporter
                     && string.Equals(creation.FilePath, call.FilePath, StringComparison.OrdinalIgnoreCase)
                     && SameVisualBasicContainingMember(creation.SourceSymbol, creation.Properties, call.SourceSymbol, call.Properties)
                     && creation.StartLine <= call.StartLine
+                    && IsVisualBasicReceiverCreationInScope(creation.Properties, call.StartLine, call.EndLine)
                     && string.Equals(CombinedDependencyReporter.FirstValue(creation.Properties, "assignedTo"), receiverLookupName, StringComparison.OrdinalIgnoreCase))
                 .OrderBy(creation => creation.StartLine)
                 .ThenBy(creation => creation.CombinedFactId, StringComparer.Ordinal)
@@ -3083,10 +3084,6 @@ public static partial class CombinedDependencyPathReporter
             foreach (var baseName in SplitVisualBasicBaseTypes(
                 CombinedDependencyReporter.FirstValue(declaration.Properties, "baseTypes")))
             {
-                // The derived declaration itself proves the immediate base
-                // relationship. This still permits a field match when the base
-                // type's own declaration was retained in another source index.
-                AddFieldCandidates(baseName, path);
                 var baseDeclarations = typeDeclarations
                     .Where(candidate => VisualBasicTypeMatches(VisualBasicTypeDeclarationName(candidate), baseName))
                     .OrderBy(candidate => candidate.CombinedFactId, StringComparer.Ordinal)
@@ -3126,10 +3123,19 @@ public static partial class CombinedDependencyPathReporter
         string.IsNullOrWhiteSpace(value)
             ? []
             : value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Select(SimpleVisualBasicTypeName)
+                .Select(NormalizeVisualBasicTypeName)
                 .Where(type => !string.IsNullOrWhiteSpace(type))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
+
+    private static bool IsVisualBasicReceiverCreationInScope(
+        IReadOnlyDictionary<string, string> properties,
+        int callStartLine,
+        int callEndLine) =>
+        int.TryParse(CombinedDependencyReporter.FirstValue(properties, "lexicalScopeStartLine"), out var scopeStartLine)
+        && int.TryParse(CombinedDependencyReporter.FirstValue(properties, "lexicalScopeEndLine"), out var scopeEndLine)
+        && scopeStartLine <= callStartLine
+        && scopeEndLine >= callEndLine;
 
     private static (string Name, int Arity)? VisualBasicMemberKey(string? value)
     {

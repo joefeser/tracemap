@@ -1834,6 +1834,7 @@ public static class VisualBasicSemanticExtractor
                     constructor),
                 enclosing?.ContainingAssembly,
                 type.ContainingAssembly);
+            AddVisualBasicLexicalScopeProperties(objectProperties, creation);
 
             facts.Add(CreateSemanticFact(
                 FactTypes.ObjectCreated,
@@ -1864,6 +1865,7 @@ public static class VisualBasicSemanticExtractor
                     constructor),
                 enclosing?.ContainingAssembly,
                 type.ContainingAssembly);
+            AddVisualBasicLexicalScopeProperties(callProperties, creation);
 
             facts.Add(CreateSemanticFact(
                 FactTypes.CallEdge,
@@ -1907,6 +1909,16 @@ public static class VisualBasicSemanticExtractor
         var callerName = enclosing?.ToDisplayString(SymbolFormat);
         var typeName = type.Name;
         var assignedTo = GetAssignedVariableName(creation) ?? string.Empty;
+        var objectProperties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["argumentCount"] = (creation.ArgumentList?.Arguments.Count ?? 0).ToString(),
+            ["assignedTo"] = assignedTo,
+            ["callerName"] = callerName ?? string.Empty,
+            ["createdType"] = typeName,
+            ["creationKind"] = "SyntaxObjectCreation",
+            ["resolution"] = "unresolved-constructor"
+        };
+        AddVisualBasicLexicalScopeProperties(objectProperties, creation);
         facts.Add(CreateSyntaxFallbackFact(
             FactTypes.ObjectCreated,
             RuleIds.VisualBasicSyntaxObjectCreation,
@@ -1916,15 +1928,17 @@ public static class VisualBasicSemanticExtractor
             sourceSymbol: callerName,
             targetSymbol: typeName,
             contractElement: typeName,
-            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["argumentCount"] = (creation.ArgumentList?.Arguments.Count ?? 0).ToString(),
-                ["assignedTo"] = assignedTo,
-                ["callerName"] = callerName ?? string.Empty,
-                ["createdType"] = typeName,
-                ["creationKind"] = "SyntaxObjectCreation",
-                ["resolution"] = "unresolved-constructor"
-            }));
+            properties: objectProperties));
+        var callProperties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["assignedTo"] = assignedTo,
+            ["callKind"] = "SyntaxObjectCreation",
+            ["calleeContainingType"] = typeName,
+            ["calleeName"] = typeName,
+            ["callerName"] = callerName ?? string.Empty,
+            ["resolution"] = "unresolved-constructor"
+        };
+        AddVisualBasicLexicalScopeProperties(callProperties, creation);
         facts.Add(CreateSyntaxFallbackFact(
             FactTypes.CallEdge,
             RuleIds.VisualBasicSyntaxCallGraph,
@@ -1934,15 +1948,23 @@ public static class VisualBasicSemanticExtractor
             sourceSymbol: callerName,
             targetSymbol: typeName,
             contractElement: typeName,
-            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["assignedTo"] = assignedTo,
-                ["callKind"] = "SyntaxObjectCreation",
-                ["calleeContainingType"] = typeName,
-                ["calleeName"] = typeName,
-                ["callerName"] = callerName ?? string.Empty,
-                ["resolution"] = "unresolved-constructor"
-            }));
+            properties: callProperties));
+    }
+
+    private static void AddVisualBasicLexicalScopeProperties(
+        SortedDictionary<string, string> properties,
+        SyntaxNode node)
+    {
+        var containingMethod = node.Ancestors().OfType<MethodBlockBaseSyntax>().FirstOrDefault();
+        if (containingMethod is null) return;
+        var lexicalScope = node.Ancestors()
+            .TakeWhile(ancestor => ancestor != containingMethod)
+            .FirstOrDefault(ancestor => ancestor is LambdaExpressionSyntax
+                || ancestor.GetType().Name.EndsWith("BlockSyntax", StringComparison.Ordinal))
+            ?? containingMethod;
+        var span = lexicalScope.SyntaxTree.GetLineSpan(lexicalScope.Span);
+        properties["lexicalScopeStartLine"] = (span.StartLinePosition.Line + 1).ToString();
+        properties["lexicalScopeEndLine"] = (span.EndLinePosition.Line + 1).ToString();
     }
 
     private static void AddAdoNetBoundaryFacts(

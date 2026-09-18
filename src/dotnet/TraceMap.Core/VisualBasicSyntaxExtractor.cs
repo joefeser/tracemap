@@ -1190,6 +1190,15 @@ public static class VisualBasicSyntaxExtractor
     {
         var typeName = creation.Type.ToString();
         var containingMember = GetContainingMemberName(creation);
+        var objectProperties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["argumentCount"] = (creation.ArgumentList?.Arguments.Count ?? 0).ToString(),
+            ["assignedTo"] = GetAssignedVariableName(creation) ?? string.Empty,
+            ["callerName"] = containingMember ?? string.Empty,
+            ["createdType"] = typeName,
+            ["creationKind"] = "SyntaxObjectCreation"
+        };
+        AddVisualBasicLexicalScopeProperties(objectProperties, creation);
         if (!TryAddSyntaxFact(
                     manifest,
                     facts,
@@ -1198,20 +1207,23 @@ public static class VisualBasicSyntaxExtractor
                     filePath,
                     creation,
                     targetSymbol: typeName,
-                    new SortedDictionary<string, string>(StringComparer.Ordinal)
-                    {
-                        ["argumentCount"] = (creation.ArgumentList?.Arguments.Count ?? 0).ToString(),
-                        ["assignedTo"] = GetAssignedVariableName(creation) ?? string.Empty,
-                        ["callerName"] = containingMember ?? string.Empty,
-                        ["createdType"] = typeName,
-                        ["creationKind"] = "SyntaxObjectCreation"
-                    },
+                    objectProperties,
                     budget,
                     sourceSymbol: containingMember))
         {
             return false;
         }
 
+        var callProperties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["assignedTo"] = GetAssignedVariableName(creation) ?? string.Empty,
+            ["callKind"] = "SyntaxObjectCreation",
+            ["calleeContainingType"] = typeName,
+            ["calleeName"] = typeName,
+            ["callerName"] = containingMember ?? string.Empty,
+            ["coverageLabel"] = "syntax-only"
+        };
+        AddVisualBasicLexicalScopeProperties(callProperties, creation);
         return TryAddSyntaxFact(
                     manifest,
                     facts,
@@ -1220,17 +1232,25 @@ public static class VisualBasicSyntaxExtractor
                     filePath,
                     creation,
                     targetSymbol: typeName,
-                    new SortedDictionary<string, string>(StringComparer.Ordinal)
-                    {
-                        ["assignedTo"] = GetAssignedVariableName(creation) ?? string.Empty,
-                        ["callKind"] = "SyntaxObjectCreation",
-                        ["calleeContainingType"] = typeName,
-                        ["calleeName"] = typeName,
-                        ["callerName"] = containingMember ?? string.Empty,
-                        ["coverageLabel"] = "syntax-only"
-                    },
+                    callProperties,
                     budget,
                     sourceSymbol: containingMember);
+    }
+
+    private static void AddVisualBasicLexicalScopeProperties(
+        SortedDictionary<string, string> properties,
+        SyntaxNode node)
+    {
+        var containingMethod = node.Ancestors().OfType<MethodBlockBaseSyntax>().FirstOrDefault();
+        if (containingMethod is null) return;
+        var lexicalScope = node.Ancestors()
+            .TakeWhile(ancestor => ancestor != containingMethod)
+            .FirstOrDefault(ancestor => ancestor is LambdaExpressionSyntax
+                || ancestor.GetType().Name.EndsWith("BlockSyntax", StringComparison.Ordinal))
+            ?? containingMethod;
+        var span = lexicalScope.SyntaxTree.GetLineSpan(lexicalScope.Span);
+        properties["lexicalScopeStartLine"] = (span.StartLinePosition.Line + 1).ToString();
+        properties["lexicalScopeEndLine"] = (span.EndLinePosition.Line + 1).ToString();
     }
 
     private static bool TryAddSyntaxFact(
