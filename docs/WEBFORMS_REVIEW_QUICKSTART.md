@@ -1,0 +1,362 @@
+# Web Forms Review Quickstart
+
+This is the shortest supported path from an authorized ASP.NET Web Forms
+checkout to a private application workbench and an optional evidence handoff.
+It applies to C# and VB.NET applications, including old Web Site projects that
+do not have a usable `.csproj` or `.vbproj`.
+
+TraceMap produces deterministic static evidence. It does not execute the
+application, infer business intent, predict migration effort, or approve a
+conversion.
+
+## Before you start
+
+Keep the application source and all generated private artifacts on an
+authorized machine. Use a clean, committed source checkout when practical so
+the recorded repository and commit SHA identify the reviewed state.
+
+Identify three bounded roots:
+
+- the Web Forms pages;
+- the backend or shared application code; and
+- shared server controls.
+
+These roots may be the same folder. They may each contain multiple projects.
+Solution and project discovery must remain inside those three roots, except for
+an explicitly named solution file. A projectless Web Site is a supported
+reduced-coverage input; it is not a failed scan.
+
+## Create one review root and run the pipeline
+
+From the TraceMap repository root, create an empty private review root:
+
+```powershell
+$ReviewRoot = 'C:\work\webforms-review'
+.\scripts\Initialize-FocusedWebFormsReview.ps1 -ReviewRoot $ReviewRoot
+notepad (Join-Path $ReviewRoot 'config\webforms-review.jsonc')
+```
+
+The config has seven operational settings: source root, Web Forms folder,
+backend folder, controls folder, project selection, output root, and page
+selection. Leave `outputRoot` equal to `$ReviewRoot`.
+
+The generated JSONC comments explain those settings in place. Existing review
+roots that contain only `config/webforms-review.json` remain supported. Do not
+keep both names in one root. Comments are supported; trailing commas are
+deliberately rejected so configuration hashing and cross-tool parsing remain
+unsurprising.
+
+Use forward slashes in JSON paths, including on Windows: `C:/source/application`.
+A path such as `C:\source\application` contains unescaped JSON backslashes and
+is rejected before parsing with corrective guidance. A doubled backslash is
+valid JSON, but forward slashes are easier to read and edit safely.
+
+Project selection modes:
+
+- `solution`: one explicit `.sln`; only projects beneath the three configured
+  folders are admitted;
+- `projects`: an explicit JSON array of `.csproj`/`.vbproj` paths beneath those
+  folders;
+- `discover`: find all `.csproj`/`.vbproj` files beneath only those folders; and
+- `projectless`: retain syntax/structural Web Site evidence without pretending
+  semantic compilation was available.
+
+`webFormsFolder`, `backendFolder`, and `controlsFolder` each name one directory,
+but each directory may contain any number of nested projects. They are not
+semicolon lists or arrays. When four physical folders cannot be covered by
+three honest roots, choose the narrowest common parent for one field; do not
+invent a project or flatten the source tree. In `projects` mode,
+`projectRelativePaths` is the array of explicit `.csproj`/`.vbproj` paths.
+
+For a mixed legacy layout where the Web Forms Web Site is projectless but a
+sibling business or data layer has a real project in the same Git repository,
+set `sourceRoot` to their common repository root and use `projects` mode for the
+compiled sibling. The loose Web Site files still receive syntax fallback; the
+selected sibling project receives semantic analysis.
+
+When those folders are separate Git repositories under a non-Git parent, use
+two configs and preserve their provenance independently:
+
+```powershell
+.\scripts\Invoke-FocusedWebFormsPipeline.ps1 -ReviewRoot $WebReviewRoot -ScanOnly
+.\scripts\Invoke-FocusedWebFormsPipeline.ps1 -ReviewRoot $BackendReviewRoot -ScanOnly
+.\scripts\Merge-FocusedWebFormsReview.ps1 `
+  -WebReviewRoot $WebReviewRoot `
+  -BackendReviewRoot $BackendReviewRoot `
+  -OutputRoot $MergedReviewRoot
+```
+
+The Web Site config uses its repository as `sourceRoot` and `projectless`
+selection. The backend config uses its own repository as `sourceRoot` and
+`projects` selection with the `.vbproj` path relative to that root. The merge
+validates both scan receipts and Git commits, then generates the final packet,
+evidence docs, workbench, and normal receipt from the combined index. Never use
+the non-Git parent as a fake common source root. A prior full-mode run that
+failed after its scan stage may also be used as an input: the merge accepts it
+only when the scan stage is receipted as complete and the retained index still
+matches its recorded byte count and SHA-256.
+
+Page selection mode `all` retains every discovered Web Forms surface up to the
+documented 1,000-surface bound. Mode `selected` uses the explicit `forms` array.
+
+After editing the config, run the preflight and then the pipeline:
+
+```powershell
+.\scripts\Test-FocusedWebFormsReviewConfig.ps1 -ReviewRoot $ReviewRoot
+.\scripts\Invoke-FocusedWebFormsPipeline.ps1 -ReviewRoot $ReviewRoot
+```
+
+The preflight checks the config shape, mode conflicts, source/folder paths,
+solution or explicit project paths, selected page paths, one-root output rule,
+and TraceMap checkout before a scan starts. Failures print `errorCode`,
+`errorDetail`, and `nextAction` instead of leaving only a PowerShell line dump.
+
+### Refresh reports from an existing index
+
+After a report-only TraceMap change, regenerate the configured page-list packet
+without rescanning, then create a new immutable receipted workbench from that
+exact packet. The second command may also export one anonymous page packet from
+the new workbench:
+
+```powershell
+.\scripts\Run-FocusedWebFormsPageList.ps1 -ReviewRoot $ReviewRoot
+.\scripts\New-FocusedWebFormsStandaloneReview.ps1 -OutputRoot $ReviewRoot -PageId page-008
+```
+
+The standalone review is written under the configured output root as
+`webforms-standalone-review-<timestamp>-<suffix>/workbench`. It does not mutate
+or silently invalidate a completed pipeline workbench. The console prints the
+new review root, packet path, and optional ZIP path. Page aliases are determined
+by the newly generated workbench; confirm the retained route before sharing.
+The standalone command reads only `outputRoot` from the local configuration;
+it does not require `indexPath` or the page list because it consumes an already
+generated packet.
+
+Page aliases are report-local. To export the corresponding page from the newest
+standalone workbench using its alias from the original pipeline workbench, run:
+
+```powershell
+.\scripts\Export-LatestFocusedWebFormsPageShareable.ps1 -ReviewRoot $ReviewRoot -PriorPageId page-008
+```
+
+The wrapper validates both receipts, matches the private route locally, prints
+only the old and new aliases, and delegates to the anonymous exporter. It does
+not print or copy the private route.
+
+`-ReviewRoot` derives the retained index as `scan/index.sqlite`, reads the page
+selection from that root's `config/webforms-review.jsonc` (or legacy `.json`),
+and publishes the new page-list packet beneath the same review root. It does
+not consult the ignored legacy workstation configuration unless `-ConfigPath`
+is explicitly supplied.
+
+After the pipeline completes, print the receipt-validated alias-only totals
+with one short command:
+
+```powershell
+.\scripts\Show-FocusedWebFormsOutlierSummary.ps1 -ReviewRoot $ReviewRoot
+.\scripts\Show-FocusedWebFormsReviewStatus.ps1 -ReviewRoot $ReviewRoot
+```
+
+The status command prints the fixed config, scan, packet, evidence-doc, and
+workbench locations plus counts of immutable report-refresh folders. Timestamped
+refreshes remain beneath the same review root; they are not additional scans
+and should not be selected by guessing a folder.
+
+To pass the completed receipted evidence to a resumable Claude review without
+granting application source access, continue with the
+[Web Forms agent handoff](WEBFORMS_AGENT_HANDOFF.md). The handoff records an
+exact session UUID because non-interactive print-mode sessions do not appear in
+Claude's session picker.
+
+To diagnose one page's bounded traversal without creating another report
+folder or printing its private route, summarize the newest receipted standalone
+review using the page alias from the original pipeline workbench:
+
+```powershell
+.\scripts\Show-FocusedWebFormsPageTraversalSummary.ps1 -ReviewRoot $ReviewRoot -PriorPageId page-008
+```
+
+The output contains aliases, packet hashes, counts, and closed traversal-state
+categories only. It validates the standalone packet snapshot against the
+workbench input hash before reading it.
+
+To create a private all-handler closure plus an anonymous graph ZIP for the
+same receipted page, run:
+
+```powershell
+.\scripts\New-FocusedWebFormsPageGraphDump.ps1 -ReviewRoot $ReviewRoot -PriorPageId page-008
+```
+
+The raw graph dump is intentionally limited to a single-source `scan/index.sqlite`.
+For a merged review, inspect the already-retained combined traversal diagnostics:
+
+```powershell
+.\scripts\Show-FocusedWebFormsPageTraversalSummary.ps1 `
+  -ReviewRoot $MergedReviewRoot `
+  -PriorPageId page-011 `
+  -StandaloneReviewRoot $MergedReviewRoot
+```
+
+The summary reports traversed edge kinds and rules, leaf and frontier shapes,
+source availability, and deterministic truncation reasons without disclosing
+private paths or symbols.
+
+For a local-only mixed projectless/compiled VB receiver investigation, add
+`-IncludePrivateReceiverIdentities`. This explicitly opted-in output includes
+the receiver call identity plus the source label, project path, rule, tier, and
+retained methods for each matching receiver type. Keep that output private; it
+is intended to distinguish a missing compiled-project fact from an ambiguous
+bridge and is not part of the shareable artifact.
+
+Share only the reported `page-graph.shareable.zip`. Each distinct handler case
+reports retained terminal-evidence families (`database`, `http`, or
+`callback-or-async`), the terminal fact count, and whether unresolved leaves
+remain. These are joined retained static facts, not proof of execution or of
+the absence of another terminal.
+
+The summary verifies the completed run receipt and the recorded outlier-file
+size and SHA-256 before reading it. It prints page, call, and gap totals; gap
+classifications; and the generator/input hashes. It never selects a folder by
+timestamp and does not print private page identities.
+
+To share the anonymous path shape for one page without disclosing its route,
+files, controls, handlers, methods, types, assemblies, URLs, source spans, scan
+identity, or commit identity, run:
+
+```powershell
+.\scripts\Export-FocusedWebFormsPageShareable.ps1 -ReviewRoot $ReviewRoot -PageId page-043
+```
+
+Send only the resulting `workbench\page-043.paths.shareable.zip`. Its JSON
+preserves chain-to-handler, shared-endpoint, normalized-call-site, and
+callee-alias equality plus bounded categorical structural signals. Those
+signals help distinguish candidates such as WCF proxy shape, database command
+execution, connection lifecycle, dynamic text construction, Telerik, file,
+and HTTP calls without exposing the names that triggered them. They remain
+static shape candidates, not proof of runtime execution or business intent.
+The artifact hashes the exact exporter and its sanitized projection; it does
+not publish a fingerprint of the private page handoff.
+
+The pipeline uses one run ID and writes exact paths and hashes to
+`run-receipt.json`. Rerunning the same command validates and reuses completed
+stages. It never selects an artifact by “newest timestamp.” A changed config,
+source commit, TraceMap commit, generator, or completed artifact fails resume
+validation rather than silently mixing runs.
+
+Wrong solution and project paths report the requested value and up to ten
+bounded candidates. Project candidates are searched only beneath the three
+configured folders.
+
+## First-run recovery
+
+The project modes are a deliberate progression, not interchangeable labels:
+
+- `SOLUTION_SCOPE_HAS_NO_IN_SCOPE_PROJECTS` means the solution was readable,
+  but none of its C# or VB.NET projects were beneath the three configured
+  folders. Correct the solution/folder relationship or try `discover`.
+- `PROJECT_DISCOVERY_EMPTY` means no `.csproj` or `.vbproj` was found beneath
+  those folders. Use `projectless`; this retains reduced syntax and structural
+  evidence for an old Web Site without claiming semantic compilation.
+- `WEBFORMS_PIPELINE_RESUME_PROVENANCE_MISMATCH` after editing a failed
+  first-run config means the receipt still identifies the previous config.
+
+When the failure occurred before the `scan` stage completed and no `scan/`,
+`packet/`, `evidence-docs/`, or `workbench/` directory exists, remove only the
+failed receipt and rerun:
+
+```powershell
+Remove-Item (Join-Path $ReviewRoot 'run-receipt.json')
+.\scripts\Invoke-FocusedWebFormsPipeline.ps1 -ReviewRoot $ReviewRoot
+```
+
+Do not remove the receipt from a run with completed retained stages. Restore
+the original config to resume it, or initialize a different empty review root
+for the changed config.
+
+`WEBFORMS_PIPELINE_ARTIFACT_LIMIT` for `scan/facts.ndjson` after the scan
+completed was a pipeline-receipt limit, not a scanner failure. Update TraceMap
+and rerun the same pipeline command against the same review root. The guarded
+recovery verifies the unchanged config and source commit, requires the prior
+TraceMap commit to be an ancestor, records both tool revisions and generator
+hashes, hashes retained scan artifacts up to 16 GiB, and continues at packet
+generation without rescanning. Do not delete `scan/` or `run-receipt.json`.
+
+## One-root artifact map
+
+| Path | Retention | Purpose |
+| --- | --- | --- |
+| `config/` | Keep | Commented `webforms-review.jsonc` (or one legacy `.json`) and optional selected-page list. |
+| `run-receipt.json` | Keep | Run identity, commits, generator/config hashes, exact stage paths, artifact hashes, and state. |
+| `scan/` | Keep | Required scan manifest, facts, index, report, and analyzer log. |
+| `packet/` | Keep | Complete Web Forms modernization JSON and Markdown packet. |
+| `evidence-docs/` | Keep | Manifest, closed query recipes, `chunks.jsonl`, and rendered evidence docs. |
+| `workbench/` | Keep | Private application/page review and explicitly named shareable outlier files. |
+| `logs/` | Diagnostic | Progress, local-review receipt, and bounded summaries. Archive or delete only after accepting the retained run. |
+
+Do not delete individual required folders, mix them with another review root,
+or copy the whole root outside the authorized environment. Only files explicitly
+named `*.shareable.html` or `*.shareable.json` are intended for identity-free
+exchange, and they should still be inspected before sending.
+
+## Manual compatibility workflow
+
+The older individual scripts remain supported for diagnostics and recovery.
+Use the [full focused review reference](../scripts/webforms-review/README.md)
+when a particular stage must be run manually. The single pipeline is the
+default for a new clean run.
+
+## Read the call accounting correctly
+
+`P / F / S` means:
+
+- `P`: chain-associated call projections;
+- `F`: unique retained call facts; and
+- `S`: normalized source call sites.
+
+`P` can exceed `F` when more than one chain projects the same retained fact.
+`F` can exceed `S` when syntax and semantic evidence describe the same source
+site. None of these values is a runtime invocation count.
+
+The workbench separately identifies evidence ceilings, explicitly omitted
+projections, unresolved handlers, incomplete chains, and coverage gaps. A
+ceiling means additional static evidence may be unavailable; it does not prove
+that a method contains exactly the ceiling count.
+
+`Handler unavailable` means an event source was retained but the packet did not
+contain a usable handler fact and source span from which to continue the chain.
+It is an evidence limitation, not proof that the application has no handler or
+that the control is broken. `Recorded gap facts` is a separate count of explicit
+gap records associated with the page.
+
+New packets retain a bounded private control display projection: markup control
+ID, control type, stable control identity, and supporting fact ID. The private
+application index displays the full retained route and all retained control
+names/types beneath each aliased page row. Shareable outlier artifacts continue
+to contain aliases and counts only.
+
+## Private and shareable outputs
+
+The application workbench and page handoffs are private. They can contain paths,
+symbols, scan identity, commit identity, and optional raw source.
+
+Only outputs explicitly named `*.shareable.html` or `*.shareable.json` are
+designed for identity-free exchange. Inspect them before sending. Shareable
+provenance hashes the sanitized alias/count projection rather than the private
+packet, avoiding a private packet fingerprint.
+
+The per-page exporter also creates an explicitly named `*.shareable.zip`
+containing only its adjacent anonymous JSON. Do not send the private
+`page-NNN.handoff.json` file.
+
+Every newly derived machine-readable artifact must record:
+
+- the exact generator SHA-256; and
+- a bounded SHA-256 of the input it actually used.
+
+## What is optional
+
+The WITS review overlay and exceptional-handler code-path review set are
+supplemental. They do not replace the packet, evidence corpus, or full
+application workbench. Use the [full focused review
+reference](../scripts/webforms-review/README.md) for those steps, detailed
+artifact contracts, limits, and recovery procedures.

@@ -1,13 +1,13 @@
 param(
     [switch]$CompareDepths,
+    [string]$ReviewRoot = '',
     [string]$OutputRootOverride = '',
     [string]$ConfigPath = ''
 )
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'webforms-review/FocusedWebFormsConfig.ps1')
-if (!$ConfigPath) { $ConfigPath = Join-Path $PSScriptRoot 'Run-FocusedWebFormsPageList.json' }
-$config = Read-FocusedWebFormsConfig -ConfigPath $ConfigPath
+$config = Resolve-FocusedWebFormsPageListInputs -ReviewRoot $ReviewRoot -ConfigPath $ConfigPath -ScriptsRoot $PSScriptRoot
 $IndexPath = $config.IndexPath
 $OutputRoot = $config.OutputRoot
 $pagePaths = @($config.Forms)

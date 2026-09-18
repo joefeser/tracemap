@@ -17,6 +17,7 @@ public static partial class LegacyWcfExtractor
         IEnumerable<CodeFact>? semanticServiceFacts = null)
     {
         var facts = new List<CodeFact>();
+        var semanticFacts = (semanticServiceFacts ?? []).ToArray();
         var files = inventory.OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray();
 
         foreach (var file in files.Where(item => item.Kind == "Config"))
@@ -39,12 +40,12 @@ public static partial class LegacyWcfExtractor
             ExtractServiceReferenceMetadata(repoPath, manifest, file, facts);
         }
 
-        facts.AddRange((semanticServiceFacts ?? []).Where(fact => fact.FactType is
+        facts.AddRange(semanticFacts.Where(fact => fact.FactType is
             FactTypes.WcfServiceContractDeclared
             or FactTypes.WcfOperationContractDeclared
             or FactTypes.WcfGeneratedClientDeclared));
 
-        AddMappings(manifest, facts);
+        AddMappings(manifest, facts, semanticFacts);
         return facts;
     }
 
@@ -466,7 +467,10 @@ public static partial class LegacyWcfExtractor
         }
     }
 
-    private static void AddMappings(ScanManifest manifest, List<CodeFact> facts)
+    private static void AddMappings(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        IReadOnlyList<CodeFact> semanticFacts)
     {
         var endpoints = facts
             .Where(fact => fact.FactType is FactTypes.WcfClientEndpointDeclared or FactTypes.WcfServiceEndpointDeclared)
@@ -490,8 +494,10 @@ public static partial class LegacyWcfExtractor
             .OrderBy(candidate => candidate.ContractName, StringComparer.Ordinal)
             .ThenBy(candidate => candidate.NormalizedOperationName, StringComparer.Ordinal)
             .ToArray();
+        var compilerResolvedCallsByClientOperation = BuildCompilerResolvedClientOperationCallIndex(semanticFacts);
         var clientCandidates = BuildClientCandidates(generatedMethods, operationCandidates, metadataOperations, manifest, facts)
-            .OrderBy(candidate => candidate.Rank)
+            .OrderBy(candidate => CompilerResolvedClientOperationCalls(candidate.Fact, compilerResolvedCallsByClientOperation).Length > 0 ? 0 : 1)
+            .ThenBy(candidate => candidate.Rank)
             .ThenBy(candidate => candidate.Fact.TargetSymbol, StringComparer.Ordinal)
             .ThenBy(candidate => candidate.NormalizedOperationName, StringComparer.Ordinal)
             .ToArray();
@@ -522,6 +528,12 @@ public static partial class LegacyWcfExtractor
         foreach (var candidate in clientCandidates)
         {
             var client = candidate.Fact;
+            var compilerResolvedCalls = CompilerResolvedClientOperationCalls(client, compilerResolvedCallsByClientOperation);
+            var compilerResolvedSourceSymbol = compilerResolvedCalls
+                .Select(fact => fact.TargetSymbol)
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Distinct(StringComparer.Ordinal)
+                .SingleOrDefault();
             var clientContractName = client.Properties.GetValueOrDefault("clientContractName", string.Empty);
             var matchingOperations = operationCandidates
                 .Where(operation => operation.NormalizedOperationName.Equals(candidate.NormalizedOperationName, StringComparison.Ordinal))
@@ -618,6 +630,7 @@ public static partial class LegacyWcfExtractor
                     ? candidate.ConfigMappingKind
                     : candidate.NoEndpointMappingKind;
                 var metadataHash = candidate.MetadataHash ?? string.Empty;
+                var mappingSourceSymbol = compilerResolvedSourceSymbol ?? client.TargetSymbol;
                 var logicalKey = string.Join("|", clientContractName, contractName, candidate.NormalizedOperationName);
                 if (!emittedLogicalMappings.Add(logicalKey))
                 {
@@ -633,7 +646,8 @@ public static partial class LegacyWcfExtractor
                     ["hostCount"] = matchingHosts.Length.ToString(),
                     ["mappingKind"] = mappingKind,
                     ["operationName"] = candidate.NormalizedOperationName,
-                    ["originalOperationName"] = candidate.OriginalOperationName
+                    ["originalOperationName"] = candidate.OriginalOperationName,
+                    ["ruleLimitations"] = "WCF client mappings are bounded static evidence. A compiler-resolved call target can connect local callers to a generated proxy operation, but does not prove runtime dispatch, endpoint availability, remote implementation behavior, or downstream database access."
                 };
                 if (!candidate.NormalizationKind.Equals("ExactOriginal", StringComparison.Ordinal))
                 {
@@ -644,12 +658,18 @@ public static partial class LegacyWcfExtractor
                 {
                     properties["metadataHash"] = metadataHash;
                 }
+                if (compilerResolvedSourceSymbol is not null)
+                {
+                    properties["clientOperationSymbol"] = compilerResolvedSourceSymbol;
+                    properties["sourceIdentityKind"] = "compiler-resolved-call-target";
+                }
                 var metadataSupportFacts = string.IsNullOrWhiteSpace(metadataHash)
                     ? Array.Empty<CodeFact>()
                     : connectedMetadata;
                 var supportingFactIds = new[] { client.FactId, operation.Fact.FactId }
                     .Concat(operation.SupportingFactIds)
                     .Concat(metadataSupportFacts.Select(fact => fact.FactId))
+                    .Concat(compilerResolvedCalls.Select(fact => fact.FactId))
                     .Distinct(StringComparer.Ordinal)
                     .OrderBy(value => value, StringComparer.Ordinal)
                     .ToArray();
@@ -698,13 +718,53 @@ public static partial class LegacyWcfExtractor
                     RuleIds.LegacyWcfMapping,
                     tier,
                     client.Evidence,
-                    sourceSymbol: client.TargetSymbol,
+                    sourceSymbol: mappingSourceSymbol,
                     targetSymbol: operation.Fact.TargetSymbol,
                     contractElement: candidate.NormalizedOperationName,
                     properties: properties));
             }
         }
     }
+
+    private static IReadOnlyDictionary<string, CodeFact[]> BuildCompilerResolvedClientOperationCallIndex(
+        IReadOnlyList<CodeFact> semanticFacts)
+    {
+        return semanticFacts
+            .Where(fact => fact.FactType == FactTypes.CallEdge
+                && fact.RuleId == RuleIds.CSharpSemanticCallGraph
+                && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+                && !string.IsNullOrWhiteSpace(fact.TargetSymbol)
+                && !string.IsNullOrWhiteSpace(fact.Properties.GetValueOrDefault("calleeName", string.Empty))
+                && !string.IsNullOrWhiteSpace(fact.Properties.GetValueOrDefault("calleeContainingType", string.Empty)))
+            .GroupBy(fact => ClientOperationKey(
+                fact.Properties.GetValueOrDefault("calleeContainingType", string.Empty),
+                fact.Properties.GetValueOrDefault("calleeName", string.Empty)), StringComparer.Ordinal)
+            .Where(group => group.Select(fact => fact.TargetSymbol).Distinct(StringComparer.Ordinal).Count() == 1)
+            .ToDictionary(
+                group => group.Key,
+                group => group.OrderBy(fact => fact.FactId, StringComparer.Ordinal).ToArray(),
+                StringComparer.Ordinal);
+    }
+
+    private static CodeFact[] CompilerResolvedClientOperationCalls(
+        CodeFact client,
+        IReadOnlyDictionary<string, CodeFact[]> compilerResolvedCallsByClientOperation)
+    {
+        var operationName = client.Properties.GetValueOrDefault("operationName", string.Empty);
+        var clientTypeName = client.Properties.GetValueOrDefault("typeName", string.Empty);
+        if (string.IsNullOrWhiteSpace(operationName) || string.IsNullOrWhiteSpace(clientTypeName))
+        {
+            return [];
+        }
+
+        return compilerResolvedCallsByClientOperation.GetValueOrDefault(ClientOperationKey(clientTypeName, operationName)) ?? [];
+    }
+
+    private static string ClientOperationKey(string clientTypeName, string operationName) =>
+        string.Join("|", NormalizeCSharpDisplayName(clientTypeName), operationName);
+
+    private static string NormalizeCSharpDisplayName(string value) =>
+        value.StartsWith("global::", StringComparison.Ordinal) ? value["global::".Length..] : value;
 
     private sealed record ClientOperationCandidate(
         CodeFact Fact,

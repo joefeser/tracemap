@@ -30,7 +30,9 @@ human-readable projection of the same packet. Both are local-only artifacts.
 The packet can contain:
 
 - declared `.aspx`, `.ascx`, and `.master` surfaces;
-- server controls and declared master/user-control composition;
+- server controls and declared master/user-control composition, including a
+  bounded private control display projection containing the declared markup ID,
+  control type, stable control identity, and supporting fact ID;
 - supported markup and named code subscriptions;
 - statically resolved handler identities;
 - existing bounded static paths to supported terminal surfaces;
@@ -205,9 +207,9 @@ report.
 | `--max-gaps` | 1000 | Maximum structured gaps, including a limit gap. |
 | `--max-depth` | 8 | Maximum legacy static-flow traversal depth. |
 | `--max-paths` | 1000 | Maximum legacy static-flow paths considered. |
-| `--max-input-facts` | 250000 | Maximum retained snapshot plus graph fact rows, after conservative syntax-witness compaction. |
-| `--max-input-edges` | 250000 | Ceiling for loaded dependency rows and, separately, derived graph edges. |
-| `--max-input-text-bytes` | 134217728 | Retained UTF-8 input text admission budget (128 MiB), shared by snapshot/facts/edges. |
+| `--max-input-facts` | 250000 | Per-stage maximum retained fact rows, after conservative syntax-witness compaction. |
+| `--max-input-edges` | 250000 | Per-stage ceiling for loaded dependency rows and derived graph edges. |
+| `--max-input-text-bytes` | 134217728 | Per-stage retained UTF-8 input text admission budget (128 MiB). |
 
 ### Large indexes and OOM recovery
 
@@ -219,14 +221,22 @@ Repository-wide symbols remain visible to reconciliation and dispatch so this
 optimization cannot turn hidden competing symbols into a false unique match.
 The scan index is opened read-only and is not filtered or rewritten on disk.
 
-The input limits are separate from output/traversal limits. A row is checked
-before allocating its managed strings/JSON; a single retained row is limited to
-1 MiB of UTF-8 text. Derived graph nodes are capped at twice `--max-input-facts`.
-If admission or graph construction exceeds a limit, the packet emits
+The input limits are separate from output/traversal limits. Snapshot admission
+and selected-handler graph composition each receive an independent bounded
+budget, so reading a large repository inventory cannot consume the graph's
+entire allowance before traversal begins. A row is checked before allocating
+its managed strings/JSON; a single retained row is limited to 1 MiB of UTF-8
+text. Derived graph nodes are capped at twice `--max-input-facts`.
+
+If graph construction exceeds a limit, the packet emits
 `WebFormsModernizationInputLimitReached`, is reduced/truncated, and does **not**
-classify paths from an incomplete graph. Retained markup/configuration inventory
-remains available. Event chains use `UnknownAnalysisGap` instead of a fabricated
-`NoBackendEvidence`. One admission gap survives even with `--max-gaps 1`.
+classify paths from the incomplete graph. If only the broader snapshot is
+limited, a path whose complete supporting nodes, edges, provenance, and terminal
+were retained by the independently bounded graph may still be reported as
+positive evidence. Missing-path and absence conclusions remain unavailable:
+those chains use `UnknownAnalysisGap` instead of a fabricated
+`NoBackendEvidence`. Retained markup/configuration inventory remains available.
+One admission gap survives even with `--max-gaps 1`.
 Limits count serialized input text/rows, not a hard process RSS quota. Raising
 limits can increase memory pressure. The general `paths`/`relate` commands do
 not inherit this packet-specific reader.
@@ -385,6 +395,8 @@ generated file.
 | `surfaceSelection` | Optional ordered, alias-only result of `--surface-list`. Raw list values are not retained. Unique matches restrict page/event output; unmatched or ambiguous entries emit explicit packet gaps. |
 | `eventChains` | Bounded static chains from a surface/control event to a handler and, when evidence permits, an existing static terminal path. |
 | `eventChains[].classification` | May be a legacy static-path classification, `NoBackendEvidence`, or `handler-unavailable`. It is evidence-relative, not a runtime result. |
+| `eventChains[].callEvidence` | Up to 256 retained handler-owned call facts. Each row has a deterministic call-site identity and an explicit producer coverage label: `bounded-semantic-callgraph` for compiler-resolved C# calls or `syntax-only` for C# syntax fallback. Compiler-resolved rows may also include declaring type, assembly, resolution, and a bounded technology family. Syntax and semantic facts remain separately retained even when they describe one normalized source site. |
+| `eventChains[].callEvidenceTruncated` | True when the packet can prove that retained call facts were omitted. A retained total of 256 also reaches the fixed ceiling and must be treated as potentially incomplete even when an upstream bound prevents an exact omitted count. |
 | `downstreamBoundaries` | Bounded terminal projections from retained event chains. Each row keeps an opaque target identity, terminal evidence ID, path evidence, rules, tiers, coverage, and supporting IDs. It is not proof that the interaction ran or succeeded. |
 | `identityStateInventory` | Bounded supported identity/state declarations with allowlisted categorical metadata, provenance, supporting IDs, and limitations. Values, users, roles, credentials, provider names, machine keys, connection strings, cookie names, and login targets are not rendered. |
 | `batchDataMovementInventory` | Bounded supported batch/data-movement candidates with allowlisted categories, declaration signals, provenance, supporting IDs, and limitations. Raw schedules, paths, destinations, SQL, connection material, config values, and source values are not rendered. |
@@ -397,6 +409,14 @@ Every evidence-bearing row should retain a rule ID, evidence tier, coverage
 label, commit SHA, repository-relative file span, extractor ID/version,
 supporting IDs, and limitations. Missing required provenance fails closed as a
 gap or removes the unsupported path conclusion.
+
+For a compiler-resolved C# call to a generated WCF client operation, bounded
+static traversal may cross local helper methods and retain a
+`wcf-operation` downstream boundary. That operation is an external terminal:
+TraceMap does not traverse into the remote service or claim its implementation,
+database access, deployment, availability, or runtime dispatch. When the other
+service is scanned separately, its evidence remains a separate source until an
+explicit contract-aware composition joins the two.
 
 The current scanner inventories compiler-resolved and explicitly qualified
 supported file-operation declarations, but it does not prove indirect wrappers,
@@ -447,10 +467,26 @@ semantic certainty.
 
 ### `NoBackendEvidence`
 
-The handler was retained, but the bounded snapshot did not prove a supported
-terminal path. It does not mean the handler has no backend behavior. Possible
-causes include unsupported frameworks, dynamic dispatch, reflection, missing
-dependencies, reduced semantic loading, or traversal bounds.
+The handler was retained, but the completed bounded traversal retained neither
+a downstream edge nor a supported terminal path. It does not mean the handler
+has no backend behavior. Possible causes include UI-only work, unsupported
+frameworks, dynamic dispatch, reflection, missing dependencies, or reduced
+semantic loading.
+
+### `DownstreamWithoutSupportedTerminal`
+
+The handler retained at least one downstream edge, but the bounded traversal
+did not reach a supported terminal. Inspect `callEvidence` and
+`traversalObservation` before deciding whether the leaf is an unsupported
+framework surface, application helper, dynamic boundary, or an expected
+non-terminal call. This classification does not prove runtime reachability.
+
+### `BoundedTraversalTruncated`
+
+The handler traversal stopped at a configured depth, frontier, path, cycle, or
+work bound before a supported terminal was retained. Inspect
+`traversalObservation.truncationReasons`; do not interpret the missing terminal
+as absence.
 
 ### `handler-unavailable`
 

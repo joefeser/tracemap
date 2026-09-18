@@ -138,16 +138,13 @@ public sealed class WebFormsReportMemoryTests(ITestOutputHelper output)
         output.WriteLine($"fullReaderComparison={fullReader}; noiseRows={count}; factsVisited={budget.FactsVisited}; factsRetained={budget.FactsRetained}; edgesRetained={budget.EdgesRetained}; retainedTextBytes={budget.TextBytesRetained}; indexBytes={new FileInfo(index).Length}; originalAllocatedBytes={originalAllocatedBytes}; boundedAllocatedBytes={boundedAllocatedBytes}");
     }
 
-    [Theory]
-    [InlineData(5, 100, 100_000)]
-    [InlineData(100, 1, 100_000)]
-    [InlineData(100, 100, 2_000)]
-    public async Task Input_limits_keep_inventory_but_never_classify_an_incomplete_graph(int facts, int edges, int bytes)
+    [Fact]
+    public async Task Graph_input_limits_keep_inventory_but_never_classify_an_incomplete_graph()
     {
         using var temp = new TempDirectory();
         var index = Write(temp.Path, Fixture());
         var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(index, "unused",
-            MaxGaps: 1, MaxInputFacts: facts, MaxInputEdges: edges, MaxInputTextBytes: bytes));
+            MaxGaps: 1, MaxInputFacts: 100, MaxInputEdges: 1, MaxInputTextBytes: 100_000));
         Assert.True(packet.Summary.Truncated);
         Assert.Equal("reduced-static-webforms-modernization", packet.Coverage);
         Assert.Contains(packet.Gaps, gap => gap.Classification == "WebFormsModernizationInputLimitReached"
@@ -160,6 +157,23 @@ public sealed class WebFormsReportMemoryTests(ITestOutputHelper output)
             Assert.Null(chain.TerminalKind);
         });
         Assert.DoesNotContain(packet.Gaps, gap => gap.Classification == "NoBackendEvidence");
+    }
+
+    [Theory]
+    [InlineData(5, 100_000)]
+    [InlineData(100, 2_000)]
+    public async Task Snapshot_and_graph_receive_independent_bounded_budgets(int facts, int bytes)
+    {
+        using var temp = new TempDirectory();
+        var index = Write(temp.Path, Fixture());
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(index, "unused",
+            MaxGaps: 10, MaxInputFacts: facts, MaxInputEdges: 100, MaxInputTextBytes: bytes));
+
+        Assert.DoesNotContain(packet.Gaps, gap => gap.Classification == "WebFormsModernizationInputLimitReached");
+        var chain = Assert.Single(packet.EventChains);
+        Assert.NotEqual("UnknownAnalysisGap", chain.Classification);
+        Assert.NotNull(chain.TerminalKind);
+        Assert.Single(packet.DownstreamBoundaries);
     }
 
     [Theory]

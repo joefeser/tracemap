@@ -290,6 +290,15 @@ public static class MarkdownReportWriter
 
         AddFactSection(
             lines,
+            "WebForms Server Behavior",
+            result.Facts.Where(fact => fact.FactType is FactTypes.WebFormsServerNavigationCandidate
+                or FactTypes.WebFormsRequestLifecycleCandidate
+                or FactTypes.WebFormsServerControlStateMutationCandidate
+                or FactTypes.WebFormsInlineServerExpressionReferenceCandidate),
+            fact => $"- `{fact.Properties.GetValueOrDefault("behaviorKind") ?? "unknown"}` in `{fact.Properties.GetValueOrDefault("handlerName") ?? "markup-expression"}` for `{fact.Properties.GetValueOrDefault("controlId") ?? fact.Properties.GetValueOrDefault("navigationKind") ?? fact.Properties.GetValueOrDefault("lifecycleOperation") ?? fact.Properties.GetValueOrDefault("referencedTypeName") ?? "unknown"}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}-{fact.Evidence.EndLine}`");
+
+        AddFactSection(
+            lines,
             "WinForms Static Evidence",
             result.Facts.Where(fact => fact.FactType is FactTypes.WinFormsSurfaceDeclared
                 or FactTypes.WinFormsControlDeclared

@@ -315,6 +315,12 @@ public static class CombinedSurfaceProjection
             return "http-route";
         }
 
+        if (fact.FactType == FactTypes.DatabaseOperationCandidate
+            && FirstValue(fact.Properties, "operationKind") is "data-adapter-fill" or "select-candidate" or "scalar-candidate")
+        {
+            return "sql-query";
+        }
+
         if (fact.FactType is FactTypes.DatabaseColumnMapping or FactTypes.DatabaseOperationCandidate)
         {
             return "sql-persistence";

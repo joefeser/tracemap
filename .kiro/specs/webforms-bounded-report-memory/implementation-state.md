@@ -1,5 +1,34 @@
 # Implementation state
 
+## Independent snapshot and handler-graph admission (2026-09-14)
+
+Large private indexes exposed a budget-ordering defect: the packet snapshot and
+selected-handler graph shared one mutable input budget, so snapshot admission
+could consume the allowance before graph composition began. The two stages now
+have independent fact, edge, and text budgets. A graph that is itself limited
+still fails closed and publishes no path classifications. When only the broader
+snapshot is partial, a fully provenance-supported positive graph path and its
+terminal boundary may be retained; missing-path, no-downstream, and other
+absence conclusions remain `UnknownAnalysisGap`. Regression coverage pins both
+the positive-path retention and the fail-closed no-path case. No private source
+names or snippets are included in the fixture.
+
+The existing page-list runner intentionally publishes a standalone packet and
+does not mutate a completed pipeline workbench. Added a separate standalone
+review wrapper that selects the newest page-list packet, creates a new immutable
+`workbench/` plus compatible hash receipt, and can immediately invoke the
+anonymous page exporter against that exact workbench. This prevents a report-only
+rerun from accidentally exporting an older receipted pipeline packet. Its config
+reader deliberately consumes only `outputRoot`; requiring the page-list runner's
+`indexPath` and form array at this post-packet stage was an unnecessary coupling.
+The page-list runner also accepts `-ReviewRoot`, deriving `scan/index.sqlite` and
+the packet output location from the completed pipeline root while retaining the
+configured form list. This avoids copying or retyping a stale absolute index path.
+Because page aliases are report-local ordinals, a dedicated export wrapper now
+validates the original and newest standalone receipts, matches the retained
+private route locally, and exports the corresponding new alias without printing
+or copying the route. This replaces a manual PowerShell folder-selection pipeline.
+
 ## Handler-rooted HTML and anonymous review packet (2026-09-10)
 
 The one-case source review now renders private HTML organized as trigger,
@@ -997,6 +1026,31 @@ entry scripts remain at their already dogfooded root paths instead of being move
 behind compatibility wrappers. The guide separates the normal two-command batch
 and review-set path from optional diagnostic tools, inventories every set artifact,
 and repeats the private/shareable and static-evidence boundaries.
+
+On `codex/vb-webforms-battle-test`, handler-resolution gaps now retain the event
+binding fact that caused them. The modernization packet joins that evidence back
+to an unavailable event chain and emits one closed diagnostic state: resolved,
+missing linked method, ambiguous linked method, unproven cross-file, or
+unclassified unavailable. The private workbench associates gaps by retained
+support as well as scope ID, and the anonymous page-path export preserves only
+the closed state. This fixes pages that previously reported unavailable handlers
+and zero gaps even though the scanner had emitted the resolution evidence.
+
+The anonymous page-path exporter now assigns chain aliases in the deterministic
+source-evidence order already established by the private workbench. It no longer
+sorts presentation order by opaque fact-derived chain hashes, which caused noisy
+whole-page diffs whenever an extractor version changed. The order remains static
+evidence order and explicitly does not claim runtime execution sequence.
+
+Field validation isolated six apparently unavailable handlers to unfamiliar
+framework-specific grid event attributes. The extractor already retained these
+identifier-valued `On...` attributes as Tier 3 server-event candidates but
+intentionally skipped the otherwise independent linked-method resolution step.
+`legacy-webforms/0.13.3` now resolves an exact method in the linked page class
+for these candidates while preserving reduced candidate coverage and an explicit
+limitation that the unfamiliar attribute's framework event semantics, binding,
+and runtime execution remain unproven. Client-prefixed attributes and dynamic or
+non-identifier values remain excluded.
 
 ### Post-fairness field result and actionable summary
 

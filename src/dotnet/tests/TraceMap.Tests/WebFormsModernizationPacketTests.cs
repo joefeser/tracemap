@@ -11,6 +11,243 @@ namespace TraceMap.Tests;
 
 public sealed class WebFormsModernizationPacketTests
 {
+    [Fact]
+    public async Task Packet_composes_client_http_handler_through_local_helper_to_external_wcf_boundary()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        Directory.CreateDirectory(Path.Combine(repo, "api"));
+        File.WriteAllText(Path.Combine(repo, "App.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), """
+            <%@ Page Language="C#" %>
+            <script>
+            $.ajax({ type: 'POST', url: '/api/Send.ashx' });
+            </script>
+            """);
+        File.WriteAllText(Path.Combine(repo, "api", "Send.ashx"), """
+            <%@ WebHandler Language="C#" Class="Sample.SendHandler" CodeBehind="Send.ashx.cs" %>
+            """);
+        File.WriteAllText(Path.Combine(repo, "api", "Send.ashx.cs"), """
+            namespace Sample;
+            public sealed class SendHandler
+            {
+                public void ProcessRequest(object context)
+                {
+                    Gateway.Send();
+                }
+            }
+            """);
+        File.WriteAllText(Path.Combine(repo, "Gateway.cs"), """
+            namespace Sample;
+            public static class Gateway
+            {
+                public static string Send()
+                {
+                    var client = new External.ExternalClient();
+                    return client.Send("request");
+                }
+            }
+            """);
+        File.WriteAllText(Path.Combine(repo, "Reference.cs"), """
+            using System.ServiceModel;
+            namespace External;
+
+            [ServiceContract]
+            public interface IExternal
+            {
+                [OperationContract]
+                string Send(string request);
+            }
+
+            public sealed class ExternalClient : ClientBase<IExternal>, IExternal
+            {
+                public string Send(string request) => Channel.Send(request);
+            }
+            """);
+        File.WriteAllText(Path.Combine(repo, "WcfStubs.cs"), """
+            using System;
+            namespace System.ServiceModel;
+            [AttributeUsage(AttributeTargets.Interface)]
+            public sealed class ServiceContractAttribute : Attribute { }
+            [AttributeUsage(AttributeTargets.Method)]
+            public sealed class OperationContractAttribute : Attribute { }
+            public abstract class ClientBase<T> where T : class
+            {
+                protected T Channel => default!;
+            }
+            """);
+
+        var scan = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "scan")));
+        Assert.Equal("Succeeded", scan.Manifest.BuildStatus);
+        var wcfMapping = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.WcfServiceReferenceMapping);
+        Assert.StartsWith("global::External.ExternalClient.Send(", wcfMapping.SourceSymbol, StringComparison.Ordinal);
+        Assert.Equal("compiler-resolved-call-target", wcfMapping.Properties.GetValueOrDefault("sourceIdentityKind"));
+        const string commitSha = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        var manifest = scan.Manifest with { CommitSha = commitSha };
+        var facts = scan.Facts.Select(fact => fact with { CommitSha = commitSha }).ToArray();
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, manifest, facts);
+
+        var written = await WebFormsModernizationPacketReporter.WriteAsync(new(index, Path.Combine(temp.Path, "packet")));
+
+        var chain = Assert.Single(written.Packet.EventChains, item => item.HandlerSymbol?.Contains("ProcessRequest", StringComparison.Ordinal) == true);
+        Assert.Equal("wcf-operation", chain.TerminalKind);
+        Assert.True(chain.TraversalObservation?.TerminalPathCount > 0);
+        var boundary = Assert.Single(written.Packet.DownstreamBoundaries, item => item.ChainId == chain.ChainId);
+        Assert.Equal("wcf-operation", boundary.BoundaryKind);
+        Assert.Contains(RuleIds.LegacyWcfMapping, boundary.RuleIds);
+        Assert.DoesNotContain(written.Packet.DownstreamBoundaries, item => item.ChainId == chain.ChainId && item.BoundaryCategory == "database");
+    }
+
+    [Fact]
+    public async Task Packet_and_docs_retain_inline_client_behavior_inventory()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "App_Code", "Controls"));
+        Directory.CreateDirectory(Path.Combine(repo, "api"));
+        File.WriteAllText(Path.Combine(repo, "OrderEditor.aspx"), """
+            <%@ Page Language="VB" CodeFile="OrderEditor.aspx.vb" Inherits="OrderEditor" %>
+            <asp:Button runat="server" ID="SaveOrder" OnClick="SaveOrder_Click" />
+            <asp:TextBox runat="server" ID="OrderNameText" />
+            <span><%= Sample.Controls.OrderPolicy.DisplayName %></span>
+            <script>
+            $("#ctl00_ContentPlaceHolder1_SaveOrder").on('click', function () {
+              $(this).attr('value', 'Saving...');
+              $.ajax({ type: 'POST', url: '/app/api/SaveAudit.ashx', complete: function (result) { } });
+            });
+            var maxlength = 50;
+            $("[id*=OrderNameText]").keyup(function () {
+              $("#rchars").text(maxlength - $(this).val().length);
+            });
+            </script>
+            """);
+        File.WriteAllText(Path.Combine(repo, "OrderEditor.aspx.vb"), """
+            Partial Public Class OrderEditor
+                Protected Sub SaveOrder_Click(sender As Object, e As EventArgs)
+                    If CanSave Then
+                        SaveOrder.Text = CurrentText
+                        Response.Redirect("Next.aspx", False)
+                        Context.ApplicationInstance.CompleteRequest()
+                    End If
+                End Sub
+            End Class
+            """);
+        File.WriteAllText(Path.Combine(repo, "App_Code", "Controls", "OrderPolicy.vb"), """
+            Namespace Sample.Controls
+                Public Class OrderPolicy
+                End Class
+            End Namespace
+            """);
+        File.WriteAllText(Path.Combine(repo, "api", "SaveAudit.ashx"), "<%@ WebHandler Language=\"VB\" Class=\"SaveAudit\" CodeFile=\"SaveAudit.ashx.vb\" %>");
+        File.WriteAllText(Path.Combine(repo, "api", "SaveAudit.ashx.vb"), """
+            Public Class SaveAudit
+                Public Sub ProcessRequest(context As Object)
+                    AuditStore.Save()
+                End Sub
+            End Class
+
+            Public Class AuditStore
+                Public Shared Sub Save()
+                End Sub
+            End Class
+            """);
+        var scan = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "scan")));
+        const string commitSha = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        var manifest = scan.Manifest with { CommitSha = commitSha };
+        var facts = scan.Facts.Select(fact => fact with { CommitSha = commitSha }).ToArray();
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, manifest, facts);
+
+        var written = await WebFormsModernizationPacketReporter.WriteAsync(new(index, Path.Combine(temp.Path, "packet")));
+        var page = Assert.Single(written.Packet.Surfaces, surface => surface.Evidence.FilePath == "OrderEditor.aspx");
+        Assert.Contains(page.Controls, control =>
+            control.DeclaredId == "SaveOrder"
+            && control.ControlType == "Button"
+            && control.ControlIdentity.StartsWith("webforms-control:", StringComparison.Ordinal)
+            && !string.IsNullOrWhiteSpace(control.SupportingFactId));
+        Assert.Contains(page.Controls, control => control.DeclaredId == "OrderNameText" && control.ControlType == "TextBox");
+        Assert.Equal(6, written.Packet.Summary.ClientBehaviorCount);
+        Assert.Equal(6, written.Packet.ClientBehaviorInventory.Count);
+        Assert.Contains(written.Packet.ClientBehaviorInventory, item =>
+            item.BehaviorKind == "client-event-binding"
+            && item.SafeMetadata.GetValueOrDefault("serverHandlerName") == "SaveOrder_Click"
+            && item.SafeMetadata.GetValueOrDefault("generatedClientIdDependency") == "true");
+        Assert.Contains(written.Packet.ClientBehaviorInventory, item =>
+            item.BehaviorKind == "validation-constraint"
+            && item.SafeMetadata.GetValueOrDefault("constraintValue") == "50");
+        Assert.Contains(written.Packet.ClientBehaviorInventory, item =>
+            item.BehaviorKind == "client-event-binding"
+            && item.SelectorKind == "id-contains"
+            && item.SafeMetadata.GetValueOrDefault("controlId") == "OrderNameText");
+        Assert.Contains(written.Packet.ClientBehaviorInventory, item =>
+            item.BehaviorKind == "client-http-request"
+            && item.SafeMetadata.GetValueOrDefault("httpMethod") == "POST"
+            && item.SafeMetadata.GetValueOrDefault("endpointName") == "SaveAudit.ashx"
+            && item.SafeMetadata.GetValueOrDefault("endpointDeclarationFile") == "api/SaveAudit.ashx"
+            && item.TargetResolution == "unique-repository-handler-file");
+        var httpChain = Assert.Single(written.Packet.EventChains, chain =>
+            chain.EventSourceId.StartsWith("webforms-client-http:", StringComparison.Ordinal)
+            && chain.HandlerSymbol?.Contains("ProcessRequest", StringComparison.Ordinal) == true
+            && chain.Evidence.Any(evidence => evidence.FilePath == "api/SaveAudit.ashx.vb"));
+        Assert.True(httpChain.TraversalObservation?.HandlerOwnedCallEvidenceCount > 0);
+        Assert.True(httpChain.TraversalObservation?.DownstreamEdgeCount > 0,
+            JsonSerializer.Serialize(httpChain.TraversalObservation));
+        var httpCall = Assert.Single(httpChain.CallEvidence, call => call.CalleeName == "Save");
+        Assert.Equal("api/SaveAudit.ashx.vb", httpCall.Evidence.FilePath);
+        Assert.Equal("SyntaxInvocation", httpCall.CallKind);
+        Assert.Equal("syntax-only", httpCall.Resolution);
+        Assert.Equal("unresolved", httpCall.TechnologyFamily);
+        Assert.False(string.IsNullOrWhiteSpace(httpCall.CallSiteId));
+        Assert.Equal(httpChain.CallEvidence.Count, httpChain.CallEvidenceTotalCount);
+        Assert.False(httpChain.CallEvidenceTruncated);
+        Assert.Equal(4, written.Packet.Summary.ServerBehaviorCount);
+        Assert.Equal(4, written.Packet.ServerBehaviorInventory.Count);
+        Assert.Contains(written.Packet.ServerBehaviorInventory, item =>
+            item.BehaviorKind == "navigation"
+            && item.SafeMetadata.GetValueOrDefault("endResponse") == "false");
+        Assert.Contains(written.Packet.ServerBehaviorInventory, item =>
+            item.BehaviorKind == "request-lifecycle"
+            && item.SafeMetadata.GetValueOrDefault("lifecycleOperation") == "complete-request");
+        Assert.Contains(written.Packet.ServerBehaviorInventory, item =>
+            item.BehaviorKind == "control-state-mutation"
+            && item.SafeMetadata.GetValueOrDefault("controlId") == "SaveOrder"
+            && item.SafeMetadata.GetValueOrDefault("branchContext") == "if");
+        Assert.Contains(written.Packet.ServerBehaviorInventory, item =>
+            item.BehaviorKind == "inline-server-reference"
+            && item.SafeMetadata.GetValueOrDefault("referencedTypeName") == "Sample.Controls.OrderPolicy"
+            && item.SafeMetadata.GetValueOrDefault("declarationPathKind") == "app-code");
+
+        var docs = await EvidenceDocsExporter.ExportAsync(new EvidenceDocsExportOptions(
+            index,
+            Path.Combine(temp.Path, "docs"),
+            Families: "webforms-modernization,gap,limitation",
+            WebFormsPacketPaths: [written.JsonPath]));
+        var clientBehaviorChunks = docs.Chunks.Where(chunk =>
+            chunk.Title == "Web Forms inline client behavior evidence").ToArray();
+        Assert.Equal(6, clientBehaviorChunks.Length);
+        Assert.Contains(clientBehaviorChunks, chunk =>
+            chunk.BodyMarkdown.Contains("SaveOrder_Click", StringComparison.Ordinal));
+        Assert.Contains(clientBehaviorChunks, chunk =>
+            chunk.BodyMarkdown.Contains("SaveAudit.ashx", StringComparison.Ordinal)
+            && chunk.BodyMarkdown.Contains("POST", StringComparison.Ordinal));
+        var serverBehaviorChunks = docs.Chunks.Where(chunk =>
+            chunk.Title == "Web Forms server behavior evidence").ToArray();
+        Assert.Equal(4, serverBehaviorChunks.Length);
+        Assert.Contains(serverBehaviorChunks, chunk =>
+            chunk.BodyMarkdown.Contains("complete-request", StringComparison.Ordinal));
+        Assert.Contains(serverBehaviorChunks, chunk =>
+            chunk.BodyMarkdown.Contains("Sample.Controls.OrderPolicy", StringComparison.Ordinal)
+            && chunk.BodyMarkdown.Contains("App_Code/Controls/OrderPolicy.vb", StringComparison.Ordinal));
+    }
+
     [Theory]
     [InlineData("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]
     [InlineData("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB")]
@@ -211,6 +448,10 @@ public sealed class WebFormsModernizationPacketTests
         });
         Assert.Contains(first.Packet.Gaps, gap => gap.Classification == "NoBackendEvidence");
         Assert.Contains(first.Packet.Gaps, gap => gap.Classification == "MissingWebFormsHandler");
+        var missingChain = Assert.Single(first.Packet.EventChains, chain => chain.HandlerFactId is null);
+        Assert.Equal("missing-linked-method", missingChain.HandlerResolution);
+        var missingGap = Assert.Single(first.Packet.Gaps, gap => gap.Classification == "MissingWebFormsHandler");
+        Assert.Contains(missingGap.SupportingFactIds, id => missingChain.SupportingFactIds.Contains(id, StringComparer.Ordinal));
         Assert.Contains(first.Packet.Gaps, gap => gap.Classification == "DynamicWebFormsEventSubscription");
         Assert.Contains(first.Packet.StructuralSliceCandidates, candidate => candidate.SurfaceIds.Count > 1);
         var areaPage = first.Packet.Surfaces.Single(surface => surface.Evidence.FilePath == "AreaA/Default.aspx");
@@ -327,6 +568,7 @@ public sealed class WebFormsModernizationPacketTests
             {
                 CompositionTargetIds = item.CompositionTargetIds.Reverse().ToArray(),
                 ControlIds = item.ControlIds.Reverse().ToArray(),
+                Controls = item.Controls.Reverse().ToArray(),
                 Evidence = ReverseEvidence(item.Evidence),
                 SupportingEvidence = item.SupportingEvidence.Reverse().Select(ReverseEvidence).ToArray(),
                 SupportingFactIds = item.SupportingFactIds.Reverse().ToArray()
@@ -503,7 +745,14 @@ public sealed class WebFormsModernizationPacketTests
             ("supportingEdgeIds", unjoinedSyntaxCall.FactId), ("flowClassification", "UnknownAnalysisGap"),
             ("coverageLabel", "reduced-static-webforms-flow"));
         var downstreamCall = Fact(manifest, FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, "Pages/Traversal.aspx.cs", 30,
-            source: "method:downstream", target: "method:leaf", contract: "Leaf", ("coverageLabel", "bounded-static-call"));
+            source: "method:downstream", target: "method:leaf", contract: "Leaf", ("coverageLabel", "bounded-static-call"),
+            ("calleeName", "Leaf"), ("callKind", "SemanticMethodInvocation"),
+            ("calleeContainingType", "Telerik.Web.UI.SampleControl"), ("callerAssemblyName", "Sample.Web"), ("calleeAssemblyName", "Telerik.Web.UI"));
+        var downstreamFlow = Fact(manifest, FactTypes.WebFormsEventFlowProjected, RuleIds.LegacyWebFormsEventFlow, "Pages/Traversal.aspx.cs", 22,
+            source: "method:downstream", target: "flow-terminal-unavailable", contract: "Downstream_Click",
+            ("supportingFactIds", $"{handlers[2].FactId},{downstreamCall.FactId}"),
+            ("supportingEdgeIds", downstreamCall.FactId), ("flowClassification", "UnknownAnalysisGap"),
+            ("coverageLabel", "reduced-static-webforms-flow"));
         var leafInvocationWithoutCall = Fact(manifest, FactTypes.MethodInvoked, RuleIds.CSharpSemanticMethodInvocation, "Pages/Traversal.aspx.cs", 32,
             source: "method:leaf", target: "method:missing-call-edge", contract: "MissingCallEdge", ("coverageLabel", "bounded-static-call"));
         var leafDeclaration = Fact(manifest, FactTypes.MethodDeclared, RuleIds.CSharpSyntaxDeclarations, "Pages/Traversal.aspx.cs", 29,
@@ -534,7 +783,7 @@ public sealed class WebFormsModernizationPacketTests
                 ["coverageLabel"] = "bounded-static-call"
             });
         var index = Path.Combine(temp.Path, "index.sqlite");
-        SqliteIndexWriter.Write(index, manifest, [page, .. bindings, .. handlers, unjoinedSyntaxCall, unrelatedSameNameCall, unjoinedFlow, downstreamCall, leafInvocationWithoutCall, leafDeclaration, leafBodyEvidence, terminalCall, query, fillCall, frameworkFill]);
+        SqliteIndexWriter.Write(index, manifest, [page, .. bindings, .. handlers, unjoinedSyntaxCall, unrelatedSameNameCall, unjoinedFlow, downstreamCall, downstreamFlow, leafInvocationWithoutCall, leafDeclaration, leafBodyEvidence, terminalCall, query, fillCall, frameworkFill]);
 
         var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(index, Path.Combine(temp.Path, "output")));
 
@@ -549,6 +798,13 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Equal("joined-downstream-edge-observed", unjoined.TraversalObservation?.CallEvidenceState);
         Assert.Equal(1, unjoined.TraversalObservation?.HandlerOwnedCallEvidenceCount);
         Assert.Equal(1, unjoined.TraversalObservation?.DownstreamEdgeCount);
+        var unjoinedCall = Assert.Single(unjoined.CallEvidence);
+        Assert.Equal("syntax-only", unjoinedCall.Resolution);
+        Assert.Equal("unresolved", unjoinedCall.TechnologyFamily);
+        Assert.Equal("semantic-call-resolution", unjoined.NextEvidenceKind);
+        Assert.Contains(unjoinedCall.CalleeName, unjoined.UnresolvedCallTargets);
+        Assert.Contains("project-or-assembly-input-containing-the-listed-call-targets", unjoined.NextEvidenceInputs);
+        Assert.False(string.IsNullOrWhiteSpace(unjoinedCall.CallSiteId));
         Assert.Contains("SymbolCandidate", unjoined.TraversalObservation?.LeafNodeKinds ?? []);
         Assert.Contains(EvidenceTiers.Tier2Structural, unjoined.TraversalObservation?.LeafEvidenceTiers ?? []);
         Assert.Contains("nonsemantic-projection-isolated-by-evidence-tier", unjoined.TraversalObservation?.LeafReconciliationStates ?? []);
@@ -561,11 +817,18 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Contains("Symbol", downstream.TraversalObservation?.LeafNodeKinds ?? []);
         Assert.Contains("calls", downstream.TraversalObservation?.TraversedEdgeKinds ?? []);
         Assert.Contains(RuleIds.CSharpSemanticCallGraph, downstream.TraversalObservation?.TraversedRuleIds ?? []);
+        var downstreamCallEvidence = Assert.Single(downstream.CallEvidence, call => call.CalleeName == "Leaf");
+        Assert.Equal("compiler-resolved", downstreamCallEvidence.Resolution);
+        Assert.Equal("telerik", downstreamCallEvidence.TechnologyFamily);
+        Assert.Equal("Telerik.Web.UI.SampleControl", downstreamCallEvidence.DeclaringType);
+        Assert.Equal("Telerik.Web.UI", downstreamCallEvidence.AssemblyName);
+        Assert.False(string.IsNullOrWhiteSpace(downstreamCallEvidence.CallSiteId));
         Assert.Contains(EvidenceTiers.Tier2Structural, downstream.TraversalObservation?.LeafEvidenceTiers ?? []);
         Assert.Contains("canonical-symbol-no-reconciliation-needed", downstream.TraversalObservation?.LeafReconciliationStates ?? []);
         Assert.Contains("method-invocation-source-retained-without-call-fact", downstream.TraversalObservation?.LeafCallEvidenceStates ?? []);
         Assert.Contains("exact-method-declaration-and-body-evidence-retained", downstream.TraversalObservation?.LeafSourceAvailabilityStates ?? []);
         Assert.False(downstream.TraversalObservation?.DiagnosticShapesTruncated);
+        Assert.Equal("downstream-call-edge", downstream.NextEvidenceKind);
         var terminal = packet.EventChains.Single(chain => chain.HandlerFactId == handlers[3].FactId);
         Assert.Equal("supported-terminal-reached", terminal.TraversalObservation?.StopState);
         Assert.True(terminal.TraversalObservation?.TerminalPathCount > 0);
@@ -573,13 +836,605 @@ public sealed class WebFormsModernizationPacketTests
         var fill = packet.EventChains.Single(chain => chain.HandlerFactId == handlers[4].FactId);
         Assert.Equal("supported-terminal-reached", fill.TraversalObservation?.StopState);
         Assert.Equal("sql-query", fill.TerminalKind);
+        Assert.Equal("none", fill.NextEvidenceKind);
         Assert.Contains(fill.SupportingFactIds, id => id.EndsWith(frameworkFill.FactId, StringComparison.Ordinal));
+        Assert.Contains(packet.Gaps, gap => gap.Classification == "NoBackendEvidence");
+        Assert.Contains(packet.Gaps, gap => gap.Classification == "DownstreamWithoutSupportedTerminal");
         Assert.All(packet.EventChains, chain =>
         {
             Assert.Equal(RuleIds.LegacyFlowStaticTraversal, chain.TraversalObservation?.RuleId);
             Assert.Equal(chain.TraversalObservation?.Truncated, chain.TraversalObservation?.TruncationReasons.Count > 0);
             Assert.Contains("do not prove runtime", string.Join(' ', chain.TraversalObservation?.Limitations ?? []), StringComparison.OrdinalIgnoreCase);
         });
+    }
+
+    [Fact]
+    public async Task Projectless_vb_local_receiver_bridge_reaches_unique_semantic_backend_terminal()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("FailedOrPartial") with { AnalysisLevel = "Level1SemanticAnalysisReduced" };
+        const string surface = "webforms-surface:vb-projectless";
+        const string handlerSymbol = "Sample.Feedback.Submit_Click(Object, System.EventArgs)";
+        const string backendMethod = "BusinessLayer.BusinessObject.InsertFeedback(String)";
+        var page = Fact(manifest, FactTypes.WebFormsPageDeclared, RuleIds.LegacyWebFormsInventory, "WebApplication/Feedback.aspx", 1,
+            source: surface, target: "Sample.Feedback", contract: "Feedback.aspx",
+            ("surfaceIdentity", surface), ("directiveKind", "Page"), ("coverageLabel", "bounded-static-webforms-inventory"));
+        var binding = Fact(manifest, FactTypes.WebFormsEventBindingDeclared, RuleIds.LegacyWebFormsEventBinding, "WebApplication/Feedback.aspx", 8,
+            source: "control:submit", target: "handler:submit", contract: "Submit_Click",
+            ("surfaceIdentity", surface), ("eventSourceIdentity", "control:submit"), ("eventName", "OnClick"),
+            ("controlId", "submit"), ("handlerName", "Submit_Click"), ("markupFile", "WebApplication/Feedback.aspx"),
+            ("coverageLabel", "bounded-static-webforms-event"));
+        var handler = Fact(manifest, FactTypes.WebFormsHandlerResolved, RuleIds.LegacyWebFormsHandlerResolution, "WebApplication/Feedback.aspx.vb", 20,
+            source: "control:submit", target: "handler:submit", contract: "Submit_Click",
+            ("surfaceIdentity", surface), ("bindingFactId", binding.FactId), ("handlerSymbolId", "handler:submit"),
+            ("handlerSymbol", handlerSymbol), ("handlerName", "Submit_Click"), ("controlId", "submit"),
+            ("eventName", "OnClick"), ("markupFile", "WebApplication/Feedback.aspx"),
+            ("coverageLabel", "reduced-static-webforms-handler"));
+        var creation = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph, "WebApplication/Feedback.aspx.vb", 22,
+            source: "Submit_Click", target: "BusinessObject", contract: "BusinessObject",
+            ("assignedTo", "bl"), ("callKind", "SyntaxObjectCreation"), ("calleeContainingType", "BusinessObject"),
+            ("calleeName", "BusinessObject"), ("callerName", "Submit_Click"), ("coverageLabel", "syntax-only"));
+        var invocation = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph, "WebApplication/Feedback.aspx.vb", 23,
+            source: "Submit_Click", target: "InsertFeedback", contract: "InsertFeedback",
+            ("argumentCount", "1"), ("callKind", "SyntaxInvocation"), ("calleeName", "InsertFeedback"),
+            ("callerName", "Submit_Click"), ("coverageLabel", "syntax-only"), ("receiverName", "bl"));
+        var declaration = FactFactory.Create(
+            manifest,
+            FactTypes.MethodDeclared,
+            RuleIds.VisualBasicSemanticDeclarations,
+            EvidenceTiers.Tier1Semantic,
+            new("BusinessLayer/BusinessObject.vb", 10, 10, null, "SyntheticFixture", ScannerVersions.VisualBasicSemanticExtractor),
+            sourceSymbol: "BusinessLayer.BusinessObject",
+            targetSymbol: backendMethod,
+            contractElement: "InsertFeedback",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["containingType"] = "BusinessLayer.BusinessObject",
+                ["methodName"] = "InsertFeedback",
+                ["parameterCount"] = "1"
+            });
+        var downstream = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSemanticCallGraph, "BusinessLayer/BusinessObject.vb", 12,
+            source: backendMethod, target: "BusinessLayer.FeedbackQuery.Insert(String)", contract: "Insert",
+            ("callKind", "SemanticMethodInvocation"), ("coverageLabel", "bounded-static-call"));
+        var terminal = Fact(manifest, FactTypes.QueryPatternDetected, RuleIds.CSharpSyntaxQueryPattern, "BusinessLayer/FeedbackQuery.vb", 30,
+            source: "BusinessLayer.FeedbackQuery.Insert(String)", target: "feedback-query-shape", contract: "query",
+            ("operationName", "INSERT"), ("tableName", "feedback"), ("columnNames", "comment"),
+            ("sqlSourceKind", "literal-string"), ("queryShapeHash", "feedback-shape-hash"),
+            ("coverageLabel", "bounded-static-query"));
+        var flow = Fact(manifest, FactTypes.WebFormsEventFlowProjected, RuleIds.LegacyWebFormsEventFlow, "WebApplication/Feedback.aspx.vb", 20,
+            source: handlerSymbol, target: "flow-terminal-unavailable", contract: "Submit_Click",
+            ("supportingFactIds", $"{handler.FactId},{creation.FactId},{invocation.FactId}"),
+            ("supportingEdgeIds", $"{creation.FactId},{invocation.FactId}"), ("flowClassification", "UnknownAnalysisGap"),
+            ("coverageLabel", "reduced-static-webforms-flow"));
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, manifest, [page, binding, handler, creation, invocation, declaration, downstream, terminal, flow]);
+
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(index, Path.Combine(temp.Path, "output")));
+
+        var chain = Assert.Single(packet.EventChains);
+        Assert.Equal("sql-query", chain.TerminalKind);
+        Assert.True(chain.TraversalObservation?.TerminalPathCount > 0);
+        Assert.Contains("projectless-vb-receiver-bridge", chain.TraversalObservation?.TraversedEdgeKinds ?? []);
+        Assert.Contains("combined.paths.projectless-vb-receiver-bridge.v1", chain.TraversalObservation?.TraversedRuleIds ?? []);
+
+        var webIndex = Path.Combine(temp.Path, "web-index.sqlite");
+        SqliteIndexWriter.Write(webIndex, manifest, [page, binding, handler, creation, invocation, flow]);
+        var backendManifest = manifest with
+        {
+            ScanId = "scan-backend",
+            RepoName = "business-layer",
+            CommitSha = "2222222222222222222222222222222222222222"
+        };
+        var backendDeclaration = FactFactory.Create(
+            backendManifest,
+            FactTypes.MethodDeclared,
+            RuleIds.VisualBasicSemanticDeclarations,
+            EvidenceTiers.Tier1Semantic,
+            new("BusinessLayer/BusinessObject.vb", 10, 10, null, "SyntheticFixture", ScannerVersions.VisualBasicSemanticExtractor),
+            sourceSymbol: "BusinessLayer.BusinessObject",
+            targetSymbol: backendMethod,
+            contractElement: "InsertFeedback",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["containingType"] = "BusinessLayer.BusinessObject",
+                ["methodName"] = "InsertFeedback",
+                ["parameterCount"] = "1"
+            });
+        var backendDownstream = Fact(backendManifest, FactTypes.CallEdge, RuleIds.VisualBasicSemanticCallGraph, "BusinessLayer/BusinessObject.vb", 12,
+            source: backendMethod, target: "BusinessLayer.FeedbackQuery.Insert(String)", contract: "Insert",
+            ("callKind", "SemanticMethodInvocation"), ("coverageLabel", "bounded-static-call"));
+        var backendTerminal = Fact(backendManifest, FactTypes.QueryPatternDetected, RuleIds.CSharpSyntaxQueryPattern, "BusinessLayer/FeedbackQuery.vb", 30,
+            source: "BusinessLayer.FeedbackQuery.Insert(String)", target: "feedback-query-shape", contract: "query",
+            ("operationName", "INSERT"), ("tableName", "feedback"), ("columnNames", "comment"),
+            ("sqlSourceKind", "literal-string"), ("queryShapeHash", "feedback-shape-hash"),
+            ("coverageLabel", "bounded-static-query"));
+        var backendIndex = Path.Combine(temp.Path, "backend-index.sqlite");
+        SqliteIndexWriter.Write(backendIndex, backendManifest, [backendDeclaration, backendDownstream, backendTerminal]);
+        var combinedIndex = Path.Combine(temp.Path, "combined-index.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([webIndex, backendIndex], combinedIndex, ["web", "backend"]));
+
+        var combinedWritten = await WebFormsModernizationPacketReporter.WriteAsync(
+            new(combinedIndex, Path.Combine(temp.Path, "combined-output")));
+        var combinedPacket = combinedWritten.Packet;
+
+        var combinedChain = Assert.Single(combinedPacket.EventChains);
+        Assert.Equal("sql-query", combinedChain.TerminalKind);
+        Assert.Contains("projectless-vb-receiver-bridge", combinedChain.TraversalObservation?.TraversedEdgeKinds ?? []);
+        Assert.Equal(2, combinedPacket.Sources.Count);
+        Assert.Equal(manifest.CommitSha, combinedPacket.Sources[0].CommitSha);
+        Assert.Contains(combinedPacket.Sources, source => source.CommitSha == backendManifest.CommitSha);
+        var receiverAudit = WebFormsVisualBasicReceiverBridgeAudit.Run(
+            combinedIndex, combinedWritten.JsonPath, surface);
+        Assert.Contains("receiverBridgeAudit=valid", receiverAudit);
+        Assert.Contains("syntaxReceiverInvocations=1", receiverAudit);
+        Assert.Contains("receiverCreations=1", receiverAudit);
+        Assert.Contains("receiverBridgeStatus.ready-semantic=1", receiverAudit);
+        var privateReceiverAudit = WebFormsVisualBasicReceiverBridgeAudit.Run(
+            combinedIndex, combinedWritten.JsonPath, surface, includePrivateIdentities: true);
+        Assert.Contains("receiverBridgePrivate=enabled", privateReceiverAudit);
+        Assert.Contains("receiverBridgePrivate.calls=1", privateReceiverAudit);
+        Assert.Contains(privateReceiverAudit, line => line.Contains("callee=InsertFeedback", StringComparison.Ordinal));
+        Assert.Contains(privateReceiverAudit, line => line.Contains("receiverType=BusinessObject", StringComparison.Ordinal));
+        Assert.Contains(privateReceiverAudit, line => line.StartsWith("receiverBridgePrivate.call-01.declarationSites=", StringComparison.Ordinal)
+            && line.Contains("source=backend", StringComparison.Ordinal)
+            && line.Contains($"rule={RuleIds.VisualBasicSemanticDeclarations}", StringComparison.Ordinal));
+        Assert.Contains(privateReceiverAudit, line => line.StartsWith("receiverBridgePrivate.call-01.receiverTypeMethods=", StringComparison.Ordinal)
+            && line.Contains("member=BusinessLayer.BusinessObject.InsertFeedback/1", StringComparison.Ordinal)
+            && line.Contains($"tier={EvidenceTiers.Tier1Semantic}", StringComparison.Ordinal));
+        Assert.Contains(privateReceiverAudit, line => line.StartsWith("receiverBridgePrivate.callStatus-01.", StringComparison.Ordinal)
+            && line.Contains("source=Submit_Click", StringComparison.Ordinal)
+            && line.Contains("callee=InsertFeedback", StringComparison.Ordinal)
+            && line.Contains("receiver=bl", StringComparison.Ordinal)
+            && line.Contains("matchingCreations=1", StringComparison.Ordinal)
+            && line.Contains("assignedTo=bl,type=BusinessObject", StringComparison.Ordinal));
+        Assert.Contains("receiverBridgePrivate.callStatuses=1", privateReceiverAudit);
+
+        var mixedInvocation = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph, "WebApplication/Feedback.aspx.vb", 23,
+            source: "Sample.Feedback.Submit_Click/2", target: "InsertFeedback", contract: "InsertFeedback",
+            ("argumentCount", "1"), ("callKind", "SyntaxInvocation"), ("calleeName", "InsertFeedback"),
+            ("callerName", "Sample.Feedback.Submit_Click/2"), ("coverageLabel", "syntax-only"), ("receiverName", "bl"));
+        var semanticCreation = FactFactory.Create(
+            manifest,
+            FactTypes.CallEdge,
+            RuleIds.VisualBasicSemanticCallGraph,
+            EvidenceTiers.Tier1Semantic,
+            new("WebApplication/Feedback.aspx.vb", 22, 22, null, "SyntheticFixture", ScannerVersions.VisualBasicSemanticExtractor),
+            sourceSymbol: handlerSymbol,
+            targetSymbol: "BusinessLayer.BusinessObject.New()",
+            contractElement: "BusinessObject",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["assignedTo"] = "bl",
+                ["callKind"] = "SemanticObjectCreation",
+                ["calleeContainingType"] = "BusinessLayer.BusinessObject",
+                ["calleeName"] = "BusinessObject",
+                ["callerName"] = handlerSymbol,
+                ["coverageLabel"] = "bounded-static-call"
+            });
+        var mixedFlow = Fact(manifest, FactTypes.WebFormsEventFlowProjected, RuleIds.LegacyWebFormsEventFlow, "WebApplication/Feedback.aspx.vb", 20,
+            source: handlerSymbol, target: "flow-terminal-unavailable", contract: "Submit_Click",
+            ("supportingFactIds", $"{handler.FactId},{semanticCreation.FactId},{mixedInvocation.FactId}"),
+            ("supportingEdgeIds", $"{semanticCreation.FactId},{mixedInvocation.FactId}"), ("flowClassification", "UnknownAnalysisGap"),
+            ("coverageLabel", "reduced-static-webforms-flow"));
+        var mixedWebIndex = Path.Combine(temp.Path, "mixed-web-index.sqlite");
+        SqliteIndexWriter.Write(mixedWebIndex, manifest, [page, binding, handler, semanticCreation, mixedInvocation, mixedFlow]);
+        var mixedCombinedIndex = Path.Combine(temp.Path, "mixed-combined-index.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([mixedWebIndex, backendIndex], mixedCombinedIndex, ["web", "backend"]));
+        var mixedPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(mixedCombinedIndex, Path.Combine(temp.Path, "mixed-combined-output")));
+        var mixedChain = Assert.Single(mixedPacket.EventChains);
+        Assert.Equal("sql-query", mixedChain.TerminalKind);
+        Assert.Contains("projectless-vb-receiver-bridge", mixedChain.TraversalObservation?.TraversedEdgeKinds ?? []);
+
+        var syntaxDeclaration = Fact(backendManifest, FactTypes.MethodDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "BusinessLayer/BusinessObject.vb", 10, source: null, target: "InsertFeedback", contract: null,
+            ("containingType", "BusinessObject"), ("name", "InsertFeedback")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var syntaxDownstream = Fact(backendManifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph,
+            "BusinessLayer/BusinessObject.vb", 12, source: "BusinessObject.InsertFeedback/1", target: "FeedbackQuery.Insert/1", contract: "Insert",
+            ("argumentCount", "1"), ("callKind", "SyntaxInvocation"), ("calleeName", "Insert"),
+            ("callerName", "BusinessObject.InsertFeedback/1"), ("coverageLabel", "syntax-only"), ("receiverName", "query")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var syntaxTerminal = Fact(backendManifest, FactTypes.QueryPatternDetected, RuleIds.CSharpSyntaxQueryPattern,
+            "BusinessLayer/FeedbackQuery.vb", 30, source: "FeedbackQuery.Insert/1", target: "feedback-query-shape", contract: "query",
+            ("operationName", "INSERT"), ("tableName", "feedback"), ("columnNames", "comment"),
+            ("sqlSourceKind", "literal-string"), ("queryShapeHash", "feedback-shape-hash"),
+            ("coverageLabel", "bounded-static-query"));
+        var syntaxBackendIndex = Path.Combine(temp.Path, "syntax-backend-index.sqlite");
+        SqliteIndexWriter.Write(syntaxBackendIndex, backendManifest, [syntaxDeclaration, syntaxDownstream, syntaxTerminal]);
+        var syntaxCombinedIndex = Path.Combine(temp.Path, "syntax-combined-index.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([webIndex, syntaxBackendIndex], syntaxCombinedIndex, ["web", "backend"]));
+        var syntaxWritten = await WebFormsModernizationPacketReporter.WriteAsync(
+            new(syntaxCombinedIndex, Path.Combine(temp.Path, "syntax-combined-output")));
+        var syntaxPacket = syntaxWritten.Packet;
+        var syntaxChain = Assert.Single(syntaxPacket.EventChains);
+        Assert.Equal("sql-query", syntaxChain.TerminalKind);
+        Assert.Contains("projectless-vb-receiver-bridge", syntaxChain.TraversalObservation?.TraversedEdgeKinds ?? []);
+        var syntaxReceiverAudit = WebFormsVisualBasicReceiverBridgeAudit.Run(
+            syntaxCombinedIndex, syntaxWritten.JsonPath, surface);
+        Assert.Contains("semanticMethodCandidates=0", syntaxReceiverAudit);
+        Assert.Contains("syntaxMethodCandidates=1", syntaxReceiverAudit);
+        Assert.Contains("receiverBridgeStatus.ready-syntax=1", syntaxReceiverAudit);
+
+        var singleFieldInvocation = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph,
+            "WebApplication/Feedback.aspx.vb", 23, source: handlerSymbol, target: "InsertFeedback", contract: "InsertFeedback",
+            ("argumentCount", "1"), ("callKind", "SyntaxInvocation"), ("calleeName", "InsertFeedback"),
+            ("callerName", handlerSymbol), ("coverageLabel", "syntax-only"), ("receiverName", "Me.service"));
+        var singleBaseFieldInvocation = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph,
+            "WebApplication/Feedback.aspx.vb", 24, source: handlerSymbol, target: "InsertFeedback", contract: "InsertFeedback",
+            ("argumentCount", "1"), ("callKind", "SyntaxInvocation"), ("calleeName", "InsertFeedback"),
+            ("callerName", handlerSymbol), ("coverageLabel", "syntax-only"), ("receiverName", "MyBase.baseService"));
+        var callerTypeDeclaration = Fact(manifest, FactTypes.TypeDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "WebApplication/Feedback.aspx.vb", 2, source: null, target: "Feedback", contract: null,
+            ("name", "Feedback"), ("qualifiedName", "Sample.Feedback"), ("baseTypes", "Sample.FeedbackBase")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var callerBaseTypeDeclaration = Fact(manifest, FactTypes.TypeDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "WebApplication/FeedbackBase.vb", 2, source: null, target: "FeedbackBase", contract: null,
+            ("name", "FeedbackBase"), ("qualifiedName", "Sample.FeedbackBase"), ("baseTypes", "")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var receiverFieldDeclaration = Fact(manifest, FactTypes.FieldDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "WebApplication/Feedback.aspx.vb", 4, source: "Sample.Feedback", target: "service", contract: "service",
+            ("containingType", "Sample.Feedback"), ("qualifiedContainingType", "Sample.Feedback"),
+            ("fieldName", "service"), ("fieldType", "BusinessLayer.BusinessObject")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var receiverBaseFieldDeclaration = Fact(manifest, FactTypes.FieldDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "WebApplication/FeedbackBase.vb", 4, source: "Sample.FeedbackBase", target: "baseService", contract: "baseService",
+            ("containingType", "Sample.FeedbackBase"), ("qualifiedContainingType", "Sample.FeedbackBase"),
+            ("fieldName", "baseService"), ("fieldType", "BusinessLayer.BusinessObject")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var receiverTypeDeclaration = Fact(manifest, FactTypes.TypeDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "BusinessLayer/BusinessObject.vb", 2, source: null, target: "BusinessObject", contract: null,
+            ("name", "BusinessObject"), ("qualifiedName", "BusinessLayer.BusinessObject"), ("baseTypes", "")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var singleSyntaxDeclaration = Fact(manifest, FactTypes.MethodDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "BusinessLayer/BusinessObject.vb", 10, source: null, target: "InsertFeedback", contract: null,
+            ("containingType", "BusinessLayer.BusinessObject"), ("qualifiedContainingType", "BusinessLayer.BusinessObject"),
+            ("name", "InsertFeedback"), ("memberIdentity", "BusinessLayer.BusinessObject.InsertFeedback(String)"),
+            ("parameterCount", "1"), ("parameterTypes", "String")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var singleDownstream = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph,
+            "BusinessLayer/BusinessObject.vb", 12, source: "BusinessLayer.BusinessObject.InsertFeedback(String)",
+            target: "FeedbackQuery.Insert", contract: "Insert", ("argumentCount", "1"),
+            ("callKind", "SyntaxInvocation"), ("calleeName", "Insert"),
+            ("callerName", "BusinessLayer.BusinessObject.InsertFeedback(String)"), ("coverageLabel", "syntax-only"),
+            ("receiverName", "query")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var singleTerminal = Fact(manifest, FactTypes.QueryPatternDetected, RuleIds.CSharpSyntaxQueryPattern,
+            "BusinessLayer/BusinessObject.vb", 13, source: "BusinessLayer.BusinessObject.InsertFeedback(String)", target: "feedback-query-shape", contract: "query",
+            ("operationName", "INSERT"), ("tableName", "feedback"), ("columnNames", "comment"),
+            ("sqlSourceKind", "literal-string"), ("queryShapeHash", "feedback-shape-hash"),
+            ("coverageLabel", "bounded-static-query"));
+        var singleFlow = Fact(manifest, FactTypes.WebFormsEventFlowProjected, RuleIds.LegacyWebFormsEventFlow,
+            "WebApplication/Feedback.aspx.vb", 20, source: handlerSymbol, target: "flow-terminal-unavailable", contract: "Submit_Click",
+            ("supportingFactIds", $"{handler.FactId},{singleFieldInvocation.FactId},{singleBaseFieldInvocation.FactId},{singleDownstream.FactId},{singleTerminal.FactId}"),
+            ("supportingEdgeIds", $"{singleFieldInvocation.FactId},{singleBaseFieldInvocation.FactId},{singleDownstream.FactId}"), ("flowClassification", "UnknownAnalysisGap"),
+            ("coverageLabel", "reduced-static-webforms-flow"));
+        var singleSyntaxIndex = Path.Combine(temp.Path, "single-syntax-field-index.sqlite");
+        SqliteIndexWriter.Write(singleSyntaxIndex, manifest,
+            [page, binding, handler, singleFieldInvocation, singleBaseFieldInvocation, callerTypeDeclaration, callerBaseTypeDeclaration,
+                receiverFieldDeclaration, receiverBaseFieldDeclaration,
+                receiverTypeDeclaration, singleSyntaxDeclaration, singleDownstream, singleTerminal, singleFlow]);
+        var singleSyntaxPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(singleSyntaxIndex, Path.Combine(temp.Path, "single-syntax-field-output")));
+        var singleSyntaxChains = singleSyntaxPacket.EventChains.ToArray();
+        Assert.NotEmpty(singleSyntaxChains);
+        Assert.All(singleSyntaxChains, singleSyntaxChain =>
+        {
+            Assert.Contains("projectless-vb-receiver-bridge", singleSyntaxChain.TraversalObservation?.TraversedEdgeKinds ?? []);
+            Assert.Equal("sql-query", singleSyntaxChain.TerminalKind);
+        });
+
+        var businessDeclaration = Fact(manifest, FactTypes.MethodDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "WebApplication/App_Code/DataAccess.vb", 10, source: null, target: "InsertFeedback", contract: null,
+            ("containingType", "BusinessObject"), ("name", "InsertFeedback")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var dataAccessDeclaration = Fact(manifest, FactTypes.MethodDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "WebApplication/App_Code/DataAccess.vb", 40, source: null, target: "InsertFeedback", contract: null,
+            ("containingType", "DataAccess"), ("name", "InsertFeedback")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var businessField = Fact(manifest, FactTypes.FieldDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "WebApplication/App_Code/DataAccess.vb", 12, source: "BusinessObject", target: "BusinessObject.dal", contract: "dal",
+            ("containingType", "BusinessObject"), ("fieldName", "dal")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var businessCreation = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph,
+            "WebApplication/App_Code/DataAccess.vb", 12, source: null, target: "DataAccess", contract: "DataAccess",
+            ("assignedTo", "dal"), ("callKind", "SyntaxObjectCreation"), ("calleeContainingType", "DataAccess"),
+            ("calleeName", "DataAccess"), ("callerName", ""), ("coverageLabel", "syntax-only")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var businessInvocation = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph,
+            "WebApplication/App_Code/DataAccess.vb", 13, source: "BusinessObject.InsertFeedback/1", target: "InsertFeedback", contract: "InsertFeedback",
+            ("argumentCount", "1"), ("callKind", "SyntaxInvocation"), ("calleeName", "InsertFeedback"),
+            ("callerName", "BusinessObject.InsertFeedback/1"), ("coverageLabel", "syntax-only"), ("receiverName", "dal")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var dataAccessBody = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph,
+            "WebApplication/App_Code/DataAccess.vb", 42, source: "DataAccess.InsertFeedback/1", target: "ExecuteNonQuery", contract: "ExecuteNonQuery",
+            ("argumentCount", "0"), ("callKind", "SyntaxInvocation"), ("calleeName", "ExecuteNonQuery"),
+            ("callerName", "DataAccess.InsertFeedback/1"), ("coverageLabel", "syntax-only"), ("receiverName", "command")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var recursiveTerminal = Fact(manifest, FactTypes.QueryPatternDetected, RuleIds.CSharpSyntaxQueryPattern,
+            "WebApplication/App_Code/DataAccess.vb", 43, source: "DataAccess.InsertFeedback/1", target: "feedback-query-shape", contract: "query",
+            ("operationName", "INSERT"), ("tableName", "feedback"), ("columnNames", "comment"),
+            ("sqlSourceKind", "literal-string"), ("queryShapeHash", "recursive-feedback-shape-hash"),
+            ("coverageLabel", "bounded-static-query"));
+        var recursiveIndex = Path.Combine(temp.Path, "recursive-index.sqlite");
+        SqliteIndexWriter.Write(recursiveIndex, manifest,
+            [page, binding, handler, creation, invocation, flow, businessDeclaration, dataAccessDeclaration, businessField,
+                businessCreation, businessInvocation, dataAccessBody, recursiveTerminal]);
+        var recursiveBackendManifest = manifest with
+        {
+            ScanId = "scan-recursive-backend",
+            RepoName = "recursive-backend",
+            CommitSha = "3333333333333333333333333333333333333333"
+        };
+        var unrelatedBackendType = Fact(recursiveBackendManifest, FactTypes.TypeDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "Backend/Unrelated.vb", 1, source: null, target: "Unrelated", contract: null,
+            ("kind", "class"), ("name", "Unrelated")) with { EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual };
+        var recursiveBackendIndex = Path.Combine(temp.Path, "recursive-backend-index.sqlite");
+        SqliteIndexWriter.Write(recursiveBackendIndex, recursiveBackendManifest, [unrelatedBackendType]);
+        var recursiveCombinedIndex = Path.Combine(temp.Path, "recursive-combined-index.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [recursiveIndex, recursiveBackendIndex], recursiveCombinedIndex, ["web", "backend"]));
+        var recursivePacket = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(recursiveCombinedIndex, Path.Combine(temp.Path, "recursive-output")));
+        var recursiveChain = Assert.Single(recursivePacket.EventChains);
+        Assert.Equal("sql-query", recursiveChain.TerminalKind);
+        Assert.True(recursiveChain.TraversalObservation?.TerminalPathCount > 0);
+        Assert.True(recursiveChain.PathEvidence.Count(evidence =>
+            evidence.RuleId == "combined.paths.projectless-vb-receiver-bridge.v1") >= 2);
+
+        var inheritedDataAccessType = Fact(manifest, FactTypes.TypeDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "WebApplication/App_Code/DataAccess.vb", 35, source: null, target: "DataAccess", contract: null,
+            ("baseTypes", "UnitedFramework.DataAccess.SQLBaseDA"), ("kind", "class"), ("name", "DataAccess"),
+            ("namespace", "BusinessLogic"), ("qualifiedName", "BusinessLogic.DataAccess")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var qualifiedDataAccessDeclaration = Fact(manifest, FactTypes.MethodDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "WebApplication/App_Code/DataAccess.vb", 40, source: null, target: "InsertFeedback", contract: null,
+            ("containingType", "DataAccess"), ("qualifiedContainingType", "BusinessLogic.DataAccess"),
+            ("name", "InsertFeedback"), ("parameterCount", "1"), ("parameterTypes", "String")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var inheritedSqlCall = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph,
+            "WebApplication/App_Code/DataAccess.vb", 42, source: "BusinessLogic.DataAccess.InsertFeedback/1", target: "ExecProc_Scalar", contract: "ExecProc_Scalar",
+            ("argumentCount", "2"), ("callKind", "SyntaxInvocation"), ("calleeName", "ExecProc_Scalar"),
+            ("callerName", "DataAccess.InsertFeedback/1"), ("coverageLabel", "syntax-only"), ("receiverName", "SQLDA")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var inheritedWebIndex = Path.Combine(temp.Path, "inherited-web-index.sqlite");
+        SqliteIndexWriter.Write(inheritedWebIndex, manifest,
+            [page, binding, handler, creation, invocation, flow, businessDeclaration, qualifiedDataAccessDeclaration, businessField,
+                businessCreation, businessInvocation, inheritedDataAccessType, inheritedSqlCall]);
+
+        var sqlBaseType = Fact(recursiveBackendManifest, FactTypes.TypeDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "Common/DataAccess.vb", 100, source: null, target: "SQLBaseDA", contract: null,
+            ("baseTypes", ""), ("kind", "class"), ("name", "SQLBaseDA"),
+            ("namespace", "UnitedFramework.DataAccess"), ("qualifiedName", "UnitedFramework.DataAccess.SQLBaseDA")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var inheritedSqlField = Fact(recursiveBackendManifest, FactTypes.FieldDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "Common/DataAccess.vb", 102, source: "SQLBaseDA", target: "SQLBaseDA.SQLDA", contract: "SQLDA",
+            ("containingType", "SQLBaseDA"), ("qualifiedContainingType", "UnitedFramework.DataAccess.SQLBaseDA"),
+            ("fieldName", "SQLDA"), ("fieldType", "SqlDataAccess"), ("isWithEvents", "False")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var inheritedSqlDeclaration = Fact(recursiveBackendManifest, FactTypes.MethodDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "Common/DataAccess.vb", 220, source: null, target: "ExecProc_Scalar", contract: null,
+            ("containingType", "SqlDataAccess"), ("qualifiedContainingType", "UnitedFramework.DataAccess.SqlDataAccess"),
+            ("name", "ExecProc_Scalar"), ("parameterCount", "2"), ("parameterTypes", "String;ArrayList")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var inheritedSqlOverload = Fact(recursiveBackendManifest, FactTypes.MethodDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "Common/DataAccess.vb", 210, source: null, target: "ExecProc_Scalar", contract: null,
+            ("containingType", "SqlDataAccess"), ("name", "ExecProc_Scalar"), ("parameterCount", "1")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var inheritedSqlSameArityOverload = Fact(recursiveBackendManifest, FactTypes.MethodDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "Common/DataAccess.vb", 215, source: null, target: "ExecProc_Scalar", contract: null,
+            ("containingType", "SqlDataAccess"), ("qualifiedContainingType", "UnitedFramework.DataAccess.SqlDataAccess"),
+            ("name", "ExecProc_Scalar"), ("parameterCount", "2"), ("parameterTypes", "String;SqlDataAccessParam()")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var inheritedSqlUnsafePartialOverload = Fact(recursiveBackendManifest, FactTypes.MethodDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "Common/DataAccess.vb", 216, source: null, target: "ExecProc_Scalar", contract: null,
+            ("containingType", "SqlDataAccess"), ("qualifiedContainingType", "UnitedFramework.DataAccess.SqlDataAccess"),
+            ("name", "ExecProc_Scalar"), ("parameterCount", "2"), ("parameterTypes", "Integer;SqlDataAccessParam()")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var inheritedSqlBody = Fact(recursiveBackendManifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph,
+            "Common/DataAccess.vb", 225, source: "UnitedFramework.DataAccess.SqlDataAccess.ExecProc_Scalar/2", target: "ExecuteScalar", contract: "ExecuteScalar",
+            ("argumentCount", "0"), ("callKind", "SyntaxInvocation"), ("calleeName", "ExecuteScalar"),
+            ("callerName", "SqlDataAccess.ExecProc_Scalar/2"), ("coverageLabel", "syntax-only"), ("receiverName", "command")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var inheritedSqlTerminal = Fact(recursiveBackendManifest, FactTypes.DatabaseOperationCandidate, RuleIds.VisualBasicSyntaxDatabaseOperation,
+            "Common/DataAccess.vb", 225, source: "UnitedFramework.DataAccess.SqlDataAccess.ExecProc_Scalar/2", target: "SqlCommand.ExecuteScalar", contract: "scalar-candidate",
+            ("coverageLabel", "reduced-syntax-vb-database-operation"), ("operationKind", "scalar-candidate"),
+            ("receiverName", "command"), ("receiverType", "SqlCommand"), ("resolutionKind", "ExplicitSyntaxType"),
+            ("resultKind", "scalar"), ("sqlSourceKind", "vb-syntax-explicit-database-command")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var inheritedBackendIndex = Path.Combine(temp.Path, "inherited-backend-index.sqlite");
+        SqliteIndexWriter.Write(inheritedBackendIndex, recursiveBackendManifest,
+            [sqlBaseType, inheritedSqlField, inheritedSqlDeclaration, inheritedSqlOverload,
+                inheritedSqlBody, inheritedSqlTerminal]);
+        var inheritedCombinedIndex = Path.Combine(temp.Path, "inherited-combined-index.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [inheritedWebIndex, inheritedBackendIndex], inheritedCombinedIndex, ["web", "backend"]));
+        var inheritedPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(inheritedCombinedIndex, Path.Combine(temp.Path, "inherited-output")));
+        var inheritedChain = Assert.Single(inheritedPacket.EventChains);
+        Assert.True(inheritedChain.TraversalObservation?.TerminalPathCount > 0,
+            System.Text.Json.JsonSerializer.Serialize(new
+            {
+                inheritedChain.TraversalObservation,
+                inheritedChain.PathEvidence,
+                inheritedPacket.Gaps
+            }));
+        Assert.True(inheritedChain.PathEvidence.Count(evidence =>
+            evidence.RuleId == "combined.paths.projectless-vb-receiver-bridge.v1") >= 3);
+
+        var ambiguousOverloadBackendIndex = Path.Combine(temp.Path, "ambiguous-overload-backend-index.sqlite");
+        SqliteIndexWriter.Write(ambiguousOverloadBackendIndex, recursiveBackendManifest,
+            [sqlBaseType, inheritedSqlField, inheritedSqlDeclaration, inheritedSqlOverload, inheritedSqlSameArityOverload,
+                inheritedSqlBody, inheritedSqlTerminal]);
+        var ambiguousOverloadCombinedIndex = Path.Combine(temp.Path, "ambiguous-overload-combined-index.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [inheritedWebIndex, ambiguousOverloadBackendIndex], ambiguousOverloadCombinedIndex, ["web", "backend"]));
+        var ambiguousOverloadPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(ambiguousOverloadCombinedIndex, Path.Combine(temp.Path, "ambiguous-overload-output")));
+        var ambiguousOverloadChain = Assert.Single(ambiguousOverloadPacket.EventChains);
+        Assert.Null(ambiguousOverloadChain.TerminalKind);
+
+        var typedInheritedSqlCall = inheritedSqlCall with
+        {
+            Properties = new SortedDictionary<string, string>(
+                inheritedSqlCall.Properties.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+                StringComparer.Ordinal)
+            {
+                ["argumentTypes"] = "unavailable;ArrayList",
+                ["argumentTypeResolution"] = "partial-explicit-caller-syntax"
+            }
+        };
+        var typedInheritedWebIndex = Path.Combine(temp.Path, "typed-inherited-web-index.sqlite");
+        SqliteIndexWriter.Write(typedInheritedWebIndex, manifest,
+            [page, binding, handler, creation, invocation, flow, businessDeclaration, qualifiedDataAccessDeclaration, businessField,
+                businessCreation, businessInvocation, inheritedDataAccessType, typedInheritedSqlCall]);
+        var typedOverloadBackendIndex = Path.Combine(temp.Path, "typed-overload-backend-index.sqlite");
+        SqliteIndexWriter.Write(typedOverloadBackendIndex, recursiveBackendManifest,
+            [sqlBaseType, inheritedSqlField, inheritedSqlDeclaration, inheritedSqlSameArityOverload,
+                inheritedSqlBody, inheritedSqlTerminal]);
+        var typedOverloadCombinedIndex = Path.Combine(temp.Path, "typed-overload-combined-index.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [typedInheritedWebIndex, typedOverloadBackendIndex], typedOverloadCombinedIndex, ["web", "backend"]));
+        var typedOverloadPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(typedOverloadCombinedIndex, Path.Combine(temp.Path, "typed-overload-output")));
+        var typedOverloadChain = Assert.Single(typedOverloadPacket.EventChains);
+        Assert.Equal("sql-query", typedOverloadChain.TerminalKind);
+
+        var unsafePartialBackendIndex = Path.Combine(temp.Path, "unsafe-partial-backend-index.sqlite");
+        SqliteIndexWriter.Write(unsafePartialBackendIndex, recursiveBackendManifest,
+            [sqlBaseType, inheritedSqlField, inheritedSqlDeclaration, inheritedSqlUnsafePartialOverload,
+                inheritedSqlBody, inheritedSqlTerminal]);
+        var unsafePartialCombinedIndex = Path.Combine(temp.Path, "unsafe-partial-combined-index.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [typedInheritedWebIndex, unsafePartialBackendIndex], unsafePartialCombinedIndex, ["web", "backend"]));
+        var unsafePartialPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(unsafePartialCombinedIndex, Path.Combine(temp.Path, "unsafe-partial-output")));
+        var unsafePartialChain = Assert.Single(unsafePartialPacket.EventChains);
+        Assert.Null(unsafePartialChain.TerminalKind);
+
+        var semanticBodyDownstream = Fact(backendManifest, FactTypes.ObjectCreated, RuleIds.VisualBasicSemanticObjectCreation,
+            "BusinessLayer/BusinessObject.vb", 12,
+            source: "BusinessLayer.BusinessObject.InsertFeedback(String)", target: "FeedbackQuery", contract: "FeedbackQuery",
+            ("argumentCount", "0"), ("createdType", "FeedbackQuery"), ("createdTypeName", "FeedbackQuery"),
+            ("creationKind", "SemanticObjectCreation"), ("coverageLabel", "bounded-static-call")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier1Semantic
+        };
+        var semanticBodyDeclaration = Fact(backendManifest, FactTypes.MethodDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "BusinessLayer/BusinessObject.vb", 10, source: null, target: "InsertFeedback", contract: null,
+            ("containingType", "BusinessObject"), ("qualifiedContainingType", "BusinessLayer.BusinessObject"),
+            ("name", "InsertFeedback"), ("parameterCount", "1"), ("parameterTypes", "String")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var semanticBodyTerminal = syntaxTerminal with { SourceSymbol = "FeedbackQuery" };
+        var semanticBodyBackendIndex = Path.Combine(temp.Path, "semantic-body-backend-index.sqlite");
+        SqliteIndexWriter.Write(semanticBodyBackendIndex, backendManifest, [semanticBodyDeclaration, semanticBodyDownstream, semanticBodyTerminal]);
+        var semanticBodyCombinedIndex = Path.Combine(temp.Path, "semantic-body-combined-index.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([webIndex, semanticBodyBackendIndex], semanticBodyCombinedIndex, ["web", "backend"]));
+        var semanticBodyWritten = await WebFormsModernizationPacketReporter.WriteAsync(
+            new(semanticBodyCombinedIndex, Path.Combine(temp.Path, "semantic-body-combined-output")));
+        var semanticBodyPacket = semanticBodyWritten.Packet;
+        var semanticBodyChain = Assert.Single(semanticBodyPacket.EventChains);
+        Assert.Equal("sql-query", semanticBodyChain.TerminalKind);
+        Assert.Contains("projectless-vb-receiver-bridge", semanticBodyChain.TraversalObservation?.TraversedEdgeKinds ?? []);
+        var semanticBodyAudit = WebFormsVisualBasicReceiverBridgeAudit.Run(
+            semanticBodyCombinedIndex, semanticBodyWritten.JsonPath, surface);
+        Assert.Contains("receiverBridgeStatus.ready-syntax=1", semanticBodyAudit);
+
+        var combinedDocs = await EvidenceDocsExporter.ExportAsync(new(
+            combinedIndex,
+            Path.Combine(temp.Path, "combined-docs"),
+            Families: "webforms-modernization,gap,limitation",
+            WebFormsPacketPaths: [combinedWritten.JsonPath]));
+        Assert.Contains(combinedDocs.Chunks, chunk => chunk.ChunkFamily == "webforms-modernization");
+        using var combinedCliOutput = new StringWriter();
+        using var combinedCliError = new StringWriter();
+        var combinedCliExit = await TraceMapCommand.RunAsync(
+            ["webforms-modernization", "--index", combinedIndex, "--out", Path.Combine(temp.Path, "combined-cli-output")],
+            combinedCliOutput,
+            combinedCliError);
+        Assert.Equal(0, combinedCliExit);
+        Assert.Equal(string.Empty, combinedCliError.ToString());
+        Assert.Contains("Sources: 2", combinedCliOutput.ToString(), StringComparison.Ordinal);
+
+        var competingDeclaration = FactFactory.Create(
+            manifest,
+            FactTypes.MethodDeclared,
+            RuleIds.VisualBasicSemanticDeclarations,
+            EvidenceTiers.Tier1Semantic,
+            new("AlternateBusinessLayer/BusinessObject.vb", 10, 10, null, "SyntheticFixture", ScannerVersions.VisualBasicSemanticExtractor),
+            sourceSymbol: "AlternateBusinessLayer.BusinessObject",
+            targetSymbol: "AlternateBusinessLayer.BusinessObject.InsertFeedback(String)",
+            contractElement: "InsertFeedback",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["containingType"] = "AlternateBusinessLayer.BusinessObject",
+                ["methodName"] = "InsertFeedback",
+                ["parameterCount"] = "1"
+            });
+        var ambiguousIndex = Path.Combine(temp.Path, "ambiguous-index.sqlite");
+        SqliteIndexWriter.Write(ambiguousIndex, manifest,
+            [page, binding, handler, creation, invocation, declaration, competingDeclaration, downstream, terminal, flow]);
+
+        var ambiguousPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(ambiguousIndex, Path.Combine(temp.Path, "ambiguous-output")));
+
+        var ambiguousChain = Assert.Single(ambiguousPacket.EventChains);
+        Assert.Null(ambiguousChain.TerminalKind);
+        Assert.DoesNotContain("projectless-vb-receiver-bridge", ambiguousChain.TraversalObservation?.TraversedEdgeKinds ?? []);
     }
 
     [Fact]
@@ -644,7 +1499,11 @@ public sealed class WebFormsModernizationPacketTests
         Assert.DoesNotContain(chain.PathEvidence, evidence => evidence.FilePath?.StartsWith("Other/", StringComparison.Ordinal) == true);
         var bounded = await WebFormsModernizationPacketReporter.WriteAsync(new(index, Path.Combine(temp.Path, "bounded"), MaxDepth: 3));
         Assert.True(bounded.Packet.Summary.Truncated);
+        Assert.Contains("bounded-output-truncated", bounded.Packet.Summary.CoverageReductionReasons);
+        Assert.Contains(bounded.Packet.Summary.TruncationReasons,
+            reason => reason.StartsWith("packet-gap:TruncatedByLimit:depth", StringComparison.Ordinal));
         Assert.Contains(bounded.Packet.Gaps, gap => gap.Classification == "TruncatedByLimit" && gap.TruncationReason == "depth");
+        Assert.Contains(bounded.Packet.Gaps, gap => gap.Classification == "BoundedTraversalTruncated");
         Assert.Contains(bounded.Packet.EventChains, chain => chain.TraversalObservation?.TruncationReasons.Contains("depth", StringComparer.Ordinal) == true);
         Assert.All(bounded.Packet.EventChains.Where(chain => chain.TraversalObservation?.Truncated == true),
             chain => Assert.NotEmpty(chain.TraversalObservation!.TruncationReasons));
@@ -900,6 +1759,98 @@ public sealed class WebFormsModernizationPacketTests
         Assert.NotNull(roundTrip);
         Assert.Equal(unbounded.DownstreamBoundaries.Count, roundTrip.DownstreamBoundaries.Count);
         Assert.DoesNotContain("/orders", System.Text.Encoding.UTF8.GetString(bytes), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Semantic_call_facts_preserve_paths_when_normalized_call_edges_are_missing()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("Succeeded") with { AnalysisLevel = "Level1SemanticAnalysis" };
+        var surface = "surface:resume";
+        var binding = Fact(manifest, FactTypes.WebFormsEventBindingDeclared, RuleIds.LegacyWebFormsEventBinding, "Pages/Resume.aspx", 5,
+            source: "control:run", target: "method:handler", contract: "Run_Click",
+            ("surfaceIdentity", surface), ("eventSourceIdentity", "control:run"), ("coverageLabel", "bounded-static-webforms-event"));
+        var handler = Fact(manifest, FactTypes.WebFormsHandlerResolved, RuleIds.LegacyWebFormsHandlerResolution, "Pages/Resume.aspx.cs", 12,
+            source: "control:run", target: "method:handler", contract: "Run_Click",
+            ("surfaceIdentity", surface), ("bindingFactId", binding.FactId), ("handlerSymbolId", "method:handler"),
+            ("handlerSymbol", "method:handler"), ("coverageLabel", "bounded-static-webforms-handler"));
+        var call = Fact(manifest, FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, "Pages/Resume.aspx.cs", 14,
+            source: "method:handler", target: "method:query", contract: "Query",
+            ("coverageLabel", "bounded-static-call")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier1Semantic
+        };
+        var supportingCallIds = Enumerable.Range(0, 10_001)
+            .Select(index => $"retained-call-{index:D5}")
+            .Append(call.FactId)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var flow = Fact(manifest, FactTypes.WebFormsEventFlowProjected, RuleIds.LegacyWebFormsEventFlow, "Pages/Resume.aspx.cs", 12,
+            source: "method:handler", target: "method:handler", contract: "Run_Click",
+            ("surfaceIdentity", surface), ("supportingFactIds", handler.FactId),
+            ("supportingEdgeIds", string.Join(',', supportingCallIds)),
+            ("coverageLabel", "bounded-static-webforms-flow"));
+        var query = Fact(manifest, FactTypes.DatabaseOperationCandidate, RuleIds.DatabaseOperationCallPattern, "Data/Query.cs", 30,
+            source: "method:query", target: "query-target", contract: "fill",
+            ("operationKind", "fill"), ("coverageLabel", "bounded-static-query"));
+        var page = Page(surface, "Pages/Resume.aspx", manifest);
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, manifest, [page, binding, handler, flow, call, query]);
+        using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={index};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "delete from call_edges where fact_id=$id";
+            command.Parameters.AddWithValue("$id", call.FactId);
+            Assert.Equal(1, command.ExecuteNonQuery());
+        }
+
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(index, Path.Combine(temp.Path, "output")));
+
+        var chain = Assert.Single(packet.EventChains);
+        Assert.Equal("sql-persistence", chain.TerminalKind);
+        Assert.Contains(packet.DownstreamBoundaries, boundary => boundary.ChainId == chain.ChainId
+            && boundary.BoundaryCategory == "database");
+        Assert.Contains(chain.SupportingEdgeIds, id => id.EndsWith(call.FactId, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Bounded_graph_compacts_unused_call_properties_without_losing_terminal_paths()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("Succeeded") with { AnalysisLevel = "Level1SemanticAnalysis" };
+        var binding = Fact(manifest, FactTypes.WebFormsEventBindingDeclared, RuleIds.LegacyWebFormsEventBinding, "Pages/Compact.aspx", 5,
+            source: "control:run", target: "method:handler", contract: "Run_Click",
+            ("surfaceIdentity", "surface:compact"), ("eventSourceIdentity", "control:run"),
+            ("coverageLabel", "bounded-static-webforms-event"));
+        var handler = Fact(manifest, FactTypes.WebFormsHandlerResolved, RuleIds.LegacyWebFormsHandlerResolution, "Pages/Compact.aspx.cs", 12,
+            source: "control:run", target: "method:handler", contract: "Run_Click",
+            ("surfaceIdentity", "surface:compact"), ("bindingFactId", binding.FactId),
+            ("handlerSymbolId", "method:handler"), ("handlerSymbol", "method:handler"),
+            ("coverageLabel", "bounded-static-webforms-handler"));
+        var call = Fact(manifest, FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, "Pages/Compact.aspx.cs", 14,
+            source: "method:handler", target: "method:query", contract: "Query",
+            ("calleeName", "Query"), ("unusedPayload", new string('x', 64 * 1024)),
+            ("coverageLabel", "bounded-static-call")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier1Semantic
+        };
+        var query = Fact(manifest, FactTypes.DatabaseOperationCandidate, RuleIds.DatabaseOperationCallPattern, "Data/Query.cs", 30,
+            source: "method:query", target: "query-target", contract: "fill",
+            ("operationKind", "fill"), ("coverageLabel", "bounded-static-query"));
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, manifest, [Page("surface:compact", "Pages/Compact.aspx", manifest), binding, handler, call, query]);
+
+        var report = await CombinedDependencyPathReporter.BuildBoundedSingleIndexReportAsync(
+            new(index, Path.Combine(temp.Path, "unused"), View: LegacyFlowReportConstants.View, IncludeLegacyRoots: true)
+            {
+                StartingNodeLimit = 1,
+                StartingFactIds = new HashSet<string>(["single:" + handler.FactId], StringComparer.Ordinal)
+            },
+            new ReportInputBudget(100, 100, 32 * 1024));
+
+        Assert.False(report.Summary.Truncated);
+        Assert.Contains(report.Paths, path => path.Nodes.LastOrDefault()?.SurfaceKind == "sql-persistence");
     }
 
     [Fact]
@@ -1167,9 +2118,72 @@ public sealed class WebFormsModernizationPacketTests
             SupportingEdgeIds = []
         };
         Assert.Throws<InvalidDataException>(() => StaticHtmlEvidenceExplorer.ValidateWebFormsPacket(
-            singlePacket with { DownstreamBoundaries = singlePacket.DownstreamBoundaries.Select(boundary =>
-                boundary.BoundaryId == retainedBoundary.BoundaryId ? unsupportedBoundary : boundary).ToArray() },
+            singlePacket with
+            {
+                DownstreamBoundaries = singlePacket.DownstreamBoundaries.Select(boundary =>
+                boundary.BoundaryId == retainedBoundary.BoundaryId ? unsupportedBoundary : boundary).ToArray()
+            },
             expectedCommitSha: null));
+    }
+
+    [Fact]
+    public void Partial_snapshot_retains_supported_positive_paths_but_not_absence_conclusions()
+    {
+        var manifest = Manifest("Succeeded") with { AnalysisLevel = "Level1SemanticAnalysis" };
+        var page = Page("surface:orders", "Pages/Orders.aspx", manifest);
+        var firstBinding = Fact(manifest, FactTypes.WebFormsEventBindingDeclared, RuleIds.LegacyWebFormsEventBinding, "Pages/Orders.aspx", 10,
+            source: "control:first", target: "method:first", contract: "First_Click",
+            ("surfaceIdentity", "surface:orders"), ("eventSourceIdentity", "control:first"), ("coverageLabel", "bounded-static-webforms-event"));
+        var secondBinding = Fact(manifest, FactTypes.WebFormsEventBindingDeclared, RuleIds.LegacyWebFormsEventBinding, "Pages/Orders.aspx", 11,
+            source: "control:second", target: "method:second", contract: "Second_Click",
+            ("surfaceIdentity", "surface:orders"), ("eventSourceIdentity", "control:second"), ("coverageLabel", "bounded-static-webforms-event"));
+        var firstHandler = Fact(manifest, FactTypes.WebFormsHandlerResolved, RuleIds.LegacyWebFormsHandlerResolution, "Pages/Orders.aspx.cs", 20,
+            source: "control:first", target: "method:first", contract: "First_Click",
+            ("bindingFactId", firstBinding.FactId), ("handlerSymbolId", "method:first"), ("coverageLabel", "bounded-static-webforms-handler"));
+        var secondHandler = Fact(manifest, FactTypes.WebFormsHandlerResolved, RuleIds.LegacyWebFormsHandlerResolution, "Pages/Orders.aspx.cs", 30,
+            source: "control:second", target: "method:second", contract: "Second_Click",
+            ("bindingFactId", secondBinding.FactId), ("handlerSymbolId", "method:second"), ("coverageLabel", "bounded-static-webforms-handler"));
+        var root = PathNode("root:first", "symbol", "method:first", manifest, symbolId: "method:first");
+        var terminal = PathNode(
+            "database:first", "surface", "database-operation", manifest,
+            ruleId: RuleIds.CSharpSemanticMethodInvocation,
+            evidenceTier: EvidenceTiers.Tier1Semantic,
+            filePath: "Data/OrdersQuery.cs",
+            startLine: 40,
+            endLine: 40,
+            surfaceKind: "database-operation");
+        var edge = new CombinedPathEdge(
+            "edge:first", "call", root.NodeId, terminal.NodeId,
+            CombinedDependencyPathClassifications.ProbableStaticPath,
+            RuleIds.CSharpSemanticCallGraph,
+            EvidenceTiers.Tier1Semantic,
+            [firstHandler.FactId], [], "Pages/Orders.aspx.cs", 20, 20);
+        var path = new CombinedPath(
+            "path:first", CombinedDependencyPathClassifications.ProbableStaticPath, "Medium", 1,
+            root.NodeId, terminal.NodeId, [root, terminal], [edge],
+            [firstBinding.FactId, firstHandler.FactId], [edge.EdgeId], []);
+        var snapshot = new WebFormsModernizationPacketReporter.Snapshot(
+            manifest.RepoName, manifest.ScanId, manifest.CommitSha, manifest.AnalysisLevel, manifest.BuildStatus,
+            [page, firstBinding, secondBinding, firstHandler, secondHandler], "fact limit reached");
+
+        var packet = WebFormsModernizationPacketReporter.Build(snapshot, LegacyFlow(path), new("unused", "unused"));
+
+        var supported = Assert.Single(packet.EventChains, chain => chain.BindingFactId == firstBinding.FactId);
+        Assert.Equal(CombinedDependencyPathClassifications.ProbableStaticPath, supported.Classification);
+        Assert.Equal("database-operation", supported.TerminalKind);
+        Assert.Contains(supported.Limitations, limitation => limitation.Contains("positive downstream path", StringComparison.Ordinal));
+        Assert.Single(packet.DownstreamBoundaries, boundary => boundary.ChainId == supported.ChainId);
+
+        var incomplete = Assert.Single(packet.EventChains, chain => chain.BindingFactId == secondBinding.FactId);
+        Assert.Equal("UnknownAnalysisGap", incomplete.Classification);
+        Assert.Null(incomplete.TerminalKind);
+        Assert.Null(incomplete.TraversalObservation);
+        Assert.DoesNotContain(packet.DownstreamBoundaries, boundary => boundary.ChainId == incomplete.ChainId);
+        Assert.True(packet.Summary.Truncated);
+        Assert.Contains("bounded-output-truncated", packet.Summary.CoverageReductionReasons);
+        Assert.Contains(packet.Summary.TruncationReasons,
+            reason => reason.StartsWith("input-limit:fact limit reached", StringComparison.Ordinal));
+        Assert.Contains(packet.Gaps, gap => gap.Classification == "WebFormsModernizationInputLimitReached");
     }
 
     [Fact]
@@ -1356,8 +2370,9 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Contains("Downstream boundaries: 0", stdout.ToString(), StringComparison.Ordinal);
         Assert.Contains("Identity/state declarations: 0", stdout.ToString(), StringComparison.Ordinal);
         Assert.Contains("Batch/data-movement declarations: 0", stdout.ToString(), StringComparison.Ordinal);
-        Assert.Contains("Repository: repository-", stdout.ToString(), StringComparison.Ordinal);
-        Assert.Contains($"Commit SHA: {manifest.CommitSha}", stdout.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Sources: 1", stdout.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Source repository: repository-", stdout.ToString(), StringComparison.Ordinal);
+        Assert.Contains($"commit SHA: {manifest.CommitSha}", stdout.ToString(), StringComparison.Ordinal);
         Assert.True(File.Exists(Path.Combine(output, "webforms-modernization.json")));
         Assert.True(File.Exists(Path.Combine(output, "webforms-modernization.md")));
 
@@ -1571,6 +2586,30 @@ public sealed class WebFormsModernizationPacketTests
             ("surfaceIdentity", surface), ("directiveKind", "Page"), ("coverageLabel", "bounded-static-webforms-inventory"));
 
     [Fact]
+    public async Task Duplicate_page_evidence_for_one_surface_is_collapsed_before_control_ownership_projection()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("FailedOrPartial") with { AnalysisLevel = "Level1SemanticAnalysisReduced" };
+        const string surface = "webforms-surface:duplicate-page";
+        var firstPage = Page(surface, "Pages/Duplicate.aspx", manifest);
+        var secondPage = Fact(manifest, FactTypes.WebFormsPageDeclared, RuleIds.LegacyWebFormsInventory, "Pages/Duplicate.aspx", 2,
+            source: surface, target: "Sample.Duplicate", contract: "Duplicate.aspx",
+            ("surfaceIdentity", surface), ("directiveKind", "Page"), ("coverageLabel", "bounded-static-webforms-inventory"));
+        var control = Fact(manifest, FactTypes.WebFormsControlDeclared, RuleIds.LegacyWebFormsInventory, "Pages/Duplicate.aspx", 5,
+            source: surface, target: "control:save", contract: "Save",
+            ("surfaceIdentity", surface), ("controlIdentity", "control:save"), ("controlId", "Save"),
+            ("controlType", "asp:Button"), ("coverageLabel", "bounded-static-webforms-control"));
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, manifest, [firstPage, secondPage, control]);
+
+        var packet = await WebFormsModernizationPacketReporter.BuildAsync(new(index, Path.Combine(temp.Path, "output")));
+
+        var retained = Assert.Single(packet.Surfaces);
+        Assert.Equal(surface, retained.SurfaceId);
+        Assert.Contains("control:save", retained.ControlIds);
+    }
+
+    [Fact]
     public async Task Combined_and_multi_manifest_indexes_fail_closed_with_stable_errors()
     {
         using var temp = new TempDirectory();
@@ -1618,6 +2657,9 @@ public sealed class WebFormsModernizationPacketTests
             reducedIndex,
             Path.Combine(temp.Path, "reduced-output")));
         Assert.Equal("reduced-static-webforms-modernization", reduced.Coverage);
+        Assert.False(reduced.Summary.Truncated);
+        Assert.Empty(reduced.Summary.TruncationReasons);
+        Assert.Contains("source-analysis-reduced", reduced.Summary.CoverageReductionReasons);
         Assert.Contains(reduced.Gaps, gap => gap.Classification == "SourceAnalysisCoverageReduced"
             && gap.ScopeId == reduced.Sources.Single().ScanId);
 

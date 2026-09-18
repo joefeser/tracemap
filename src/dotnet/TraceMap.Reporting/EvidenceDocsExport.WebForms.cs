@@ -88,6 +88,10 @@ public static partial class EvidenceDocsExporter
                     .Select(value => CreateWebFormsBatchChunk(packet, value, SourceFor(value.Evidence, sourceMap))));
                 chunks.AddRange(packet.StructuralSliceCandidates.OrderBy(value => value.CandidateId, StringComparer.Ordinal)
                     .Select(value => CreateWebFormsSliceChunk(packet, value, sourceMap)));
+                chunks.AddRange(packet.ClientBehaviorInventory.OrderBy(value => value.ClientBehaviorId, StringComparer.Ordinal)
+                    .Select(value => CreateWebFormsClientBehaviorChunk(packet, value, SourceFor(value.Evidence, sourceMap))));
+                chunks.AddRange(packet.ServerBehaviorInventory.OrderBy(value => value.ServerBehaviorId, StringComparer.Ordinal)
+                    .Select(value => CreateWebFormsServerBehaviorChunk(packet, value, SourceFor(value.Evidence, sourceMap))));
             }
 
             if (selectedFamilies.Contains("gap", StringComparer.Ordinal))
@@ -123,15 +127,29 @@ public static partial class EvidenceDocsExporter
     }
 
     private static DocSource SourceFor(WebFormsModernizationEvidence evidence, IReadOnlyDictionary<string, DocSource> sourceMap)
-        => SourceFor(evidence.CommitSha, sourceMap);
+        => SourceFor(evidence.ScanId, evidence.CommitSha, sourceMap);
 
     private static DocSource SourceFor(WebFormsModernizationPathEvidence evidence, IReadOnlyDictionary<string, DocSource> sourceMap)
-        => SourceFor(evidence.CommitSha, sourceMap);
+        => SourceFor(evidence.ScanId, evidence.CommitSha, sourceMap);
 
     private static DocSource SourceFor(string commitSha, IReadOnlyDictionary<string, DocSource> sourceMap)
+        => SourceFor(string.Empty, commitSha, sourceMap);
+
+    private static DocSource SourceFor(string scanId, string commitSha, IReadOnlyDictionary<string, DocSource> sourceMap)
     {
         var normalized = CommitOrNull(commitSha);
-        return sourceMap.Values.Single(source => normalized is not null && string.Equals(source.CommitSha, normalized, StringComparison.Ordinal));
+        var commitMatches = sourceMap.Values.Where(source =>
+            normalized is not null
+            && string.Equals(source.CommitSha, normalized, StringComparison.Ordinal)).ToArray();
+        var matches = string.IsNullOrWhiteSpace(scanId)
+            ? commitMatches
+            : commitMatches.Where(source => string.Equals(source.ScanId, scanId, StringComparison.Ordinal)).ToArray();
+        if (matches.Length == 0 && commitMatches.Length == 1) matches = commitMatches;
+        if (matches.Length != 1)
+        {
+            throw new InvalidOperationException("InputSourceIdentityMismatch: Web Forms evidence does not uniquely match a packet source by scan and commit.");
+        }
+        return matches[0];
     }
 
     private static EvidenceDocChunk CreateWebFormsOverviewChunk(WebFormsModernizationPacket packet, IReadOnlyList<EvidenceDocSourceRef> sourceRefs)
@@ -170,6 +188,8 @@ public static partial class EvidenceDocsExporter
             .AppendLine($"| Identity and state records | `{summary.IdentityStateCount}` |")
             .AppendLine($"| Batch and data-movement records | `{summary.BatchDataMovementCount}` |")
             .AppendLine($"| Structural slices | `{summary.StructuralSliceCandidateCount}` |")
+            .AppendLine($"| Inline client behaviors | `{summary.ClientBehaviorCount}` |")
+            .AppendLine($"| Server behaviors | `{summary.ServerBehaviorCount}` |")
             .AppendLine($"| Gaps | `{summary.GapCount}` |")
             .AppendLine($"| Truncated | `{summary.Truncated.ToString().ToLowerInvariant()}` |")
             .AppendLine()
@@ -292,6 +312,9 @@ public static partial class EvidenceDocsExporter
             | Traversal stop state | `{EscapeInline(traversal?.StopState ?? "unavailable")}` |
             | Traversed edges | `{traversal?.TraversedEdgeCount ?? 0}` |
             | Truncated | `{(traversal?.Truncated ?? false).ToString().ToLowerInvariant()}` |
+            | Next evidence kind | `{EscapeInline(value.NextEvidenceKind)}` |
+            | Unresolved call targets | `{EscapeInline(string.Join(", ", value.UnresolvedCallTargets))}` |
+            | Required inputs | `{EscapeInline(string.Join(", ", value.NextEvidenceInputs))}` |
             """;
         var sourceRefs = value.Evidence.Select(evidence => ToSourceRef(SourceFor(evidence, sources)))
             .Concat(value.PathEvidence.Select(evidence => ToSourceRef(SourceFor(evidence, sources))))
@@ -368,6 +391,73 @@ public static partial class EvidenceDocsExporter
         return value.SurfaceId is null
             ? chunk
             : WithRetrievalHints(chunk, [Hint("webforms-surface-facts", "Retrieve other facts associated with this identity/state record's Web Forms surface.", [("surface_id", value.SurfaceId), ("limit", "250")], [value.IdentityStateId])]);
+    }
+
+    private static EvidenceDocChunk CreateWebFormsClientBehaviorChunk(WebFormsModernizationPacket packet, WebFormsModernizationClientBehavior value, DocSource source)
+    {
+        var body = $"""
+            ## Web Forms inline client behavior
+
+            | Field | Value |
+            | --- | --- |
+            | Behavior ID | `{EscapeInline(value.ClientBehaviorId)}` |
+            | Surface ID | `{EscapeInline(value.SurfaceId)}` |
+            | Kind | `{EscapeInline(value.BehaviorKind)}` |
+            | Selector kind | `{EscapeInline(value.SelectorKind)}` |
+            | Selector target | `{EscapeInline(value.SelectorTarget ?? "unavailable")}` |
+            | Target resolution | `{EscapeInline(value.TargetResolution)}` |
+            | Client event | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("clientEventName", "not-applicable"))}` |
+            | UI mutations | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("mutationKinds", "not-applicable"))}` |
+            | Constraint | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("constraintKind", "not-applicable"))} {EscapeInline(value.SafeMetadata.GetValueOrDefault("constraintValue", ""))}` |
+            | Server handler | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("serverHandlerName", "not-applicable"))}` |
+            | HTTP method | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("httpMethod", "not-applicable"))}` |
+            | Endpoint kind | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("endpointKind", "not-applicable"))}` |
+            | Endpoint name | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("endpointName", "not-applicable"))}` |
+            | Endpoint declaration | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("endpointDeclarationFile", "not-applicable"))}` |
+            | Callbacks | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("callbackKinds", "not-applicable"))}` |
+            | Verification token candidate | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("requestVerificationTokenCandidate", "false"))}` |
+            | File span | `{EscapeInline(FormatSpan(value.Evidence))}` |
+            """;
+        var chunk = CreateWebFormsChunk(packet, "client-behavior", "Web Forms inline client behavior evidence", body,
+            [Citation(value.Evidence, source)], [ToSourceRef(source)], [value.ClientBehaviorId, .. value.SupportingFactIds],
+            [value.Evidence.RuleId], [value.Evidence.EvidenceTier], [value.Evidence.CoverageLabel], value.Limitations);
+        return WithRetrievalHints(chunk,
+        [
+            Hint("webforms-surface-facts", "Retrieve other facts associated with this client behavior's Web Forms surface.", [("surface_id", value.SurfaceId), ("limit", "250")], [value.ClientBehaviorId])
+        ]);
+    }
+
+    private static EvidenceDocChunk CreateWebFormsServerBehaviorChunk(WebFormsModernizationPacket packet, WebFormsModernizationServerBehavior value, DocSource source)
+    {
+        var body = $"""
+            ## Web Forms server behavior
+
+            | Field | Value |
+            | --- | --- |
+            | Behavior ID | `{EscapeInline(value.ServerBehaviorId)}` |
+            | Surface ID | `{EscapeInline(value.SurfaceId)}` |
+            | Kind | `{EscapeInline(value.BehaviorKind)}` |
+            | Handler | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("handlerName", "unavailable"))}` |
+            | Control | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("controlId", "not-applicable"))}` |
+            | State member | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("stateMember", "not-applicable"))}` |
+            | Branch context | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("branchContext", "unconditional"))}` |
+            | Navigation | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("navigationKind", "not-applicable"))}` |
+            | End response | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("endResponse", "not-applicable"))}` |
+            | Lifecycle operation | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("lifecycleOperation", "not-applicable"))}` |
+            | Expression kind | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("expressionKind", "not-applicable"))}` |
+            | Referenced type | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("referencedTypeName", "not-applicable"))}` |
+            | Declaration file | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("declarationFile", "not-applicable"))}` |
+            | Declaration path kind | `{EscapeInline(value.SafeMetadata.GetValueOrDefault("declarationPathKind", "not-applicable"))}` |
+            | Target resolution | `{EscapeInline(value.TargetResolution)}` |
+            | File span | `{EscapeInline(FormatSpan(value.Evidence))}` |
+            """;
+        var chunk = CreateWebFormsChunk(packet, "server-behavior", "Web Forms server behavior evidence", body,
+            [Citation(value.Evidence, source)], [ToSourceRef(source)], [value.ServerBehaviorId, .. value.SupportingFactIds],
+            [value.Evidence.RuleId], [value.Evidence.EvidenceTier], [value.Evidence.CoverageLabel], value.Limitations);
+        return WithRetrievalHints(chunk,
+        [
+            Hint("webforms-surface-facts", "Retrieve other facts associated with this server behavior's Web Forms surface.", [("surface_id", value.SurfaceId), ("limit", "250")], [value.ServerBehaviorId])
+        ]);
     }
 
     private static EvidenceDocChunk CreateWebFormsBatchChunk(WebFormsModernizationPacket packet, WebFormsModernizationBatchDataMovement value, DocSource source)
@@ -462,6 +552,7 @@ public static partial class EvidenceDocsExporter
             | Rule ID | `{EscapeInline(value.RuleId)}` |
             | Evidence tier | `{EscapeInline(value.EvidenceTier)}` |
             | Coverage | `{EscapeInline(value.CoverageLabel)}` |
+            | Safe metadata | `{EscapeInline(string.Join(", ", value.SafeMetadata.Select(item => $"{item.Key}={item.Value}")))}` |
 
             This gap preserves bounded uncertainty and does not prove evidence or behavior is absent.
             """;

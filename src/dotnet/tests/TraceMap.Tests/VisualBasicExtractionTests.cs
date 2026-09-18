@@ -25,7 +25,8 @@ public sealed class VisualBasicExtractionTests
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.MethodDeclared
             && fact.RuleId == RuleIds.VisualBasicSemanticDeclarations
-            && fact.ContractElement == "Fulfill");
+            && fact.ContractElement == "Fulfill"
+            && fact.Properties["parameterCount"] == "1");
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.PropertyDeclared
             && fact.ContractElement == "CustomerCode"
@@ -182,6 +183,116 @@ public sealed class VisualBasicExtractionTests
     // ---------- Task 6: bounded per-file syntax fallback ----------
 
     [Fact]
+    public void Vb_syntax_phase_failure_becomes_a_sanitized_file_gap()
+    {
+        var manifest = new ScanManifest(
+            "scan-vb-phase-failure",
+            "synthetic-vb",
+            null,
+            "test",
+            "0123456789abcdef",
+            ScannerVersions.TraceMap,
+            DateTimeOffset.UnixEpoch,
+            "Level3SyntaxAnalysis",
+            "NotRun",
+            [],
+            [],
+            [],
+            []);
+        var facts = new List<CodeFact>();
+
+        var completed = VisualBasicSyntaxExtractor.TryRunPhase(
+            manifest,
+            facts,
+            "Legacy/Default.aspx.vb",
+            RuleIds.VisualBasicSyntaxInvocation,
+            "invocations",
+            () => throw new ArgumentOutOfRangeException("private-value"));
+
+        Assert.False(completed);
+        var gap = Assert.Single(facts);
+        Assert.Equal(FactTypes.AnalysisGap, gap.FactType);
+        Assert.Equal(RuleIds.VisualBasicSyntaxInvocation, gap.RuleId);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
+        Assert.Equal("Legacy/Default.aspx.vb", gap.Evidence.FilePath);
+        Assert.Equal("VisualBasicSyntaxFallbackPhaseFailed", gap.Properties["gapKind"]);
+        Assert.Equal("invocations", gap.Properties["phase"]);
+        Assert.Equal("range-failure", gap.Properties["failureCategory"]);
+        Assert.Equal("category-only", gap.Properties["sanitization"]);
+        Assert.DoesNotContain("private-value", string.Join('|', gap.Properties.Values), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Vb_syntax_phase_does_not_swallow_cancellation()
+    {
+        var manifest = new ScanManifest(
+            "scan-vb-cancellation",
+            "synthetic-vb",
+            null,
+            "test",
+            "0123456789abcdef",
+            ScannerVersions.TraceMap,
+            DateTimeOffset.UnixEpoch,
+            "Level3SyntaxAnalysis",
+            "NotRun",
+            [],
+            [],
+            [],
+            []);
+
+        Assert.Throws<OperationCanceledException>(() => VisualBasicSyntaxExtractor.TryRunPhase(
+            manifest,
+            [],
+            "Legacy/Default.aspx.vb",
+            RuleIds.VisualBasicSyntaxDeclarations,
+            "declarations",
+            () => throw new OperationCanceledException()));
+    }
+
+    [Fact]
+    public void Projectless_vb_with_block_and_event_receiver_do_not_abort_syntax_phases()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "LegacyPage.aspx.vb"), """
+            Public Class LegacyPage
+                Public Event Load As EventHandler
+
+                Public Sub Configure(value As Object)
+                    With value
+                        .Text = .Name
+                        .Refresh()
+                        AddHandler .Changed, AddressOf .OnChanged
+                    End With
+                End Sub
+
+                Private Sub LegacyPage_Load(sender As Object, e As EventArgs) Handles Me.Load
+                End Sub
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.Properties.GetValueOrDefault("gapKind") == "VisualBasicSyntaxFallbackPhaseFailed");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.MemberAccessName
+            && fact.RuleId == RuleIds.VisualBasicSyntaxMemberAccess
+            && fact.Properties.GetValueOrDefault("expressionKind") == "ImplicitWithReceiver"
+            && fact.SourceSymbol == "implicit-with");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.VisualBasicEventBindingDeclared
+            && fact.RuleId == RuleIds.VisualBasicSyntaxEventWiring
+            && fact.Properties.GetValueOrDefault("receiverName") == "Me");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.VisualBasicSyntaxEventWiring
+            && fact.Properties.GetValueOrDefault("gapKind") == "UnsupportedVisualBasicEventReceiver");
+    }
+
+    [Fact]
     public void Orphan_vb_files_without_a_project_fall_back_to_bounded_syntax_facts()
     {
         using var temp = new TempDirectory();
@@ -214,7 +325,10 @@ public sealed class VisualBasicExtractionTests
             fact.FactType == FactTypes.CallEdge
             && fact.RuleId == RuleIds.VisualBasicSyntaxCallGraph
             && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
-            && fact.Properties["callKind"] == "SyntaxInvocation");
+            && fact.Properties["callKind"] == "SyntaxInvocation"
+            && fact.Properties["receiverName"] == "factory"
+            && fact.Properties["argumentCount"] == "0"
+            && fact.Properties["coverageLabel"] == "syntax-only");
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.ObjectCreated
             && fact.RuleId == RuleIds.VisualBasicSyntaxObjectCreation
@@ -230,6 +344,10 @@ public sealed class VisualBasicExtractionTests
         Assert.Contains(result.Facts, fact =>
             fact.FactType == FactTypes.ObjectCreated
             && fact.Properties["assignedTo"] == "factory");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.CallEdge
+            && fact.Properties.GetValueOrDefault("callKind") == "SyntaxObjectCreation"
+            && fact.Properties.GetValueOrDefault("coverageLabel") == "syntax-only");
 
         // Explicit per-file Tier4 gap plus the scan-level no-project gap; the
         // manifest records sanitized categorical gap messages.
@@ -248,6 +366,343 @@ public sealed class VisualBasicExtractionTests
         Assert.DoesNotContain(result.Facts, fact =>
             fact.RuleId.StartsWith("vb.syntax.", StringComparison.Ordinal)
             && fact.Properties.Any(pair => pair.Key.EndsWith("SymbolId", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void Large_projectless_vb_files_retain_calls_and_receiver_creations_before_member_access_budget_exhaustion()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        var source = new System.Text.StringBuilder("""
+            Public Class BusinessLogic
+                Private dal As New DataAccess()
+
+                Public Sub InsertFeedBack(comment As String, userId As Integer)
+                    dal.InsertFeedBack(comment, userId)
+                End Sub
+
+                Public Sub Noise(noisy As Object)
+            """);
+        for (var index = 0; index < 5_100; index++)
+        {
+            source.AppendLine($"        noisy.Method{index}()");
+        }
+        source.AppendLine("""
+                End Sub
+            End Class
+
+            Public Class DataAccess
+                Inherits SQLBaseDA
+
+                Public Sub InsertFeedBack(comment As String, userId As Integer)
+                    command.Execute()
+                End Sub
+            End Class
+
+            Public Class SQLBaseDA
+                Protected SQLDA As SqlDataAccess
+            End Class
+            """);
+        File.WriteAllText(Path.Combine(repo, "DataAccess.vb"), source.ToString());
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.CallEdge
+            && fact.RuleId == RuleIds.VisualBasicSyntaxCallGraph
+            && fact.SourceSymbol == "BusinessLogic.InsertFeedBack(String,Integer)"
+            && fact.TargetSymbol == "InsertFeedBack"
+            && fact.Properties.GetValueOrDefault("receiverName") == "dal"
+            && fact.Properties.GetValueOrDefault("argumentCount") == "2");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.ObjectCreated
+            && fact.RuleId == RuleIds.VisualBasicSyntaxObjectCreation
+            && fact.TargetSymbol == "DataAccess"
+            && fact.Properties.GetValueOrDefault("assignedTo") == "dal");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.FieldDeclared
+            && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+            && fact.Properties.GetValueOrDefault("containingType") == "BusinessLogic"
+            && fact.Properties.GetValueOrDefault("fieldName") == "dal"
+            && fact.Properties.GetValueOrDefault("fieldType") == "DataAccess");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.CallEdge
+            && fact.RuleId == RuleIds.VisualBasicSyntaxCallGraph
+            && fact.SourceSymbol == "DataAccess.InsertFeedBack(String,Integer)"
+            && fact.TargetSymbol == "Execute"
+            && fact.Properties.GetValueOrDefault("receiverName") == "command");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.MethodDeclared
+            && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+            && fact.Properties.GetValueOrDefault("containingType") == "DataAccess"
+            && fact.Properties.GetValueOrDefault("name") == "InsertFeedBack"
+            && fact.Properties.GetValueOrDefault("parameterCount") == "2");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.TypeDeclared
+            && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+            && fact.Properties.GetValueOrDefault("name") == "DataAccess"
+            && fact.Properties.GetValueOrDefault("baseTypes") == "SQLBaseDA");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.FieldDeclared
+            && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+            && fact.Properties.GetValueOrDefault("containingType") == "SQLBaseDA"
+            && fact.Properties.GetValueOrDefault("fieldName") == "SQLDA"
+            && fact.Properties.GetValueOrDefault("fieldType") == "SqlDataAccess");
+        Assert.Contains(result.Facts, fact =>
+            fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "SyntaxFallbackBudgetExhausted");
+    }
+
+    [Fact]
+    public void Projectless_vb_declarations_retain_namespace_type_and_parameter_identity()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Workers.vb"), """
+            Namespace Alpha
+                Public Class Worker
+                    Public Sub Save(value As String)
+                    End Sub
+                End Class
+            End Namespace
+
+            Namespace Beta
+                Public Class Worker
+                    Public Sub Save(value As Integer)
+                    End Sub
+                End Class
+            End Namespace
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var declarations = result.Facts
+            .Where(fact => fact.FactType == FactTypes.MethodDeclared
+                && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+                && fact.TargetSymbol == "Save")
+            .OrderBy(fact => fact.SourceSymbol, StringComparer.Ordinal)
+            .ToArray();
+
+        var types = result.Facts
+            .Where(fact => fact.FactType == FactTypes.TypeDeclared
+                && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+                && fact.TargetSymbol == "Worker")
+            .Select(fact => fact.Properties["qualifiedName"])
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(2, declarations.Length);
+        Assert.Equal(["Alpha.Worker", "Beta.Worker"], types);
+        Assert.Collection(declarations,
+            declaration =>
+            {
+                Assert.Equal("Alpha.Worker", declaration.Properties["qualifiedContainingType"]);
+                Assert.Equal("String", declaration.Properties["parameterTypes"]);
+                Assert.Equal("Alpha.Worker.Save(String)", declaration.Properties["memberIdentity"]);
+            },
+            declaration =>
+            {
+                Assert.Equal("Beta.Worker", declaration.Properties["qualifiedContainingType"]);
+                Assert.Equal("Integer", declaration.Properties["parameterTypes"]);
+                Assert.Equal("Beta.Worker.Save(Integer)", declaration.Properties["memberIdentity"]);
+            });
+    }
+
+    [Fact]
+    public void Projectless_vb_same_arity_overloads_retain_distinct_caller_identities()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Worker.vb"), """
+            Public Class Worker
+                Public Sub Save(value As String)
+                    Write(value)
+                End Sub
+
+                Public Sub Save(value As Integer)
+                    Write(value)
+                End Sub
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var callers = result.Facts
+            .Where(fact => fact.FactType == FactTypes.CallEdge
+                && fact.RuleId == RuleIds.VisualBasicSyntaxCallGraph
+                && fact.TargetSymbol == "Write")
+            .Select(fact => fact.SourceSymbol!)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(["Worker.Save(Integer)", "Worker.Save(String)"], callers);
+    }
+
+    [Fact]
+    public void Projectless_vb_invocation_retains_only_fully_explicit_argument_types()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "DataAccess.vb"), """
+            Imports System.Collections
+
+            Public Class DataAccess
+                Public Function Save(commandText As String, parameters As ArrayList) As Object
+                    Dim localParameters As ArrayList = parameters
+                    SQLDA.ExecProc_Scalar(commandText, localParameters)
+                    SQLDA.ExecProc_Scalar(BuildCommand(), localParameters)
+                    SQLDA.ExecProc_Scalar(parameters:=localParameters, commandText:=commandText)
+                    Return Nothing
+                End Function
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var calls = result.Facts
+            .Where(fact => fact.FactType == FactTypes.CallEdge
+                && fact.RuleId == RuleIds.VisualBasicSyntaxCallGraph
+                && fact.TargetSymbol == "ExecProc_Scalar")
+            .OrderBy(fact => fact.Evidence.StartLine)
+            .ToArray();
+
+        Assert.Equal(3, calls.Length);
+        Assert.Equal("String;ArrayList", calls[0].Properties["argumentTypes"]);
+        Assert.Equal("explicit-caller-syntax", calls[0].Properties["argumentTypeResolution"]);
+        Assert.Equal("unavailable;ArrayList", calls[1].Properties["argumentTypes"]);
+        Assert.Equal("partial-explicit-caller-syntax", calls[1].Properties["argumentTypeResolution"]);
+        Assert.DoesNotContain("argumentTypes", calls[2].Properties.Keys);
+        Assert.DoesNotContain("argumentTypeResolution", calls[2].Properties.Keys);
+    }
+
+    [Fact]
+    public void Projectless_vb_explicit_data_adapter_fill_is_a_reduced_database_candidate()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Query.vb"), """
+            Imports System.Data
+            Imports System.Data.SqlClient
+
+            Public Class Query
+                Public Function Load() As DataSet
+                    Dim adapter As SqlDataAdapter = New SqlDataAdapter()
+                    Dim result As New DataSet()
+                    adapter.Fill(result)
+                    Return result
+                End Function
+
+                Public Sub DoNotGuess(custom As WidgetAdapter)
+                    custom.Fill(New DataSet())
+                End Sub
+
+                Public Sub DoNotBorrowTypeFromAnotherMethod(adapter As Object)
+                    adapter.Fill(New DataSet())
+                End Sub
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var operation = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.DatabaseOperationCandidate
+            && fact.RuleId == RuleIds.VisualBasicSyntaxDatabaseOperation);
+        Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, operation.EvidenceTier);
+        Assert.Equal("data-adapter-fill", operation.Properties["operationKind"]);
+        Assert.Equal("SqlDataAdapter", operation.Properties["receiverType"]);
+        Assert.Equal("reduced-syntax-vb-database-operation", operation.Properties["coverageLabel"]);
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.DatabaseOperationCandidate
+            && fact.Properties.GetValueOrDefault("receiverName") is "custom" or "adapter"
+            && fact.Evidence.StartLine > 12);
+    }
+
+    [Fact]
+    public void Projectless_vb_explicit_provider_commands_are_reduced_database_candidates()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "DataAccess.vb"), """
+            Public Class ProviderBase
+                Protected inheritedCommand As SqlCommand
+            End Class
+
+            Public Class ProviderDataAccess
+                Inherits ProviderBase
+                Private sql As SqlCommand
+
+                Public Sub Run()
+                    Dim odbc As OdbcCommand = New OdbcCommand()
+                    Dim db2 As IBM.Data.DB2.DB2Command = New IBM.Data.DB2.DB2Command()
+                    Dim oracle As OracleCommand = New OracleCommand()
+                    Dim sqlite As SQLiteCommand = New SQLiteCommand()
+                    Dim sql As SqlCommand = New SqlCommand()
+                    Dim custom As WidgetCommand = New WidgetCommand()
+                    Dim a = odbc.ExecuteScalar()
+                    Dim b = db2.ExecuteReader()
+                    oracle.ExecuteNonQuery()
+                    Dim c = sqlite.ExecuteScalar()
+                    Dim d = sql.ExecuteReader()
+                    custom.ExecuteScalar()
+                    inheritedCommand.ExecuteNonQuery()
+                End Sub
+
+                Public Sub DoNotBorrowTypeFromAnotherMethod(sql As Object)
+                    sql.ExecuteScalar()
+                End Sub
+
+                Public Sub LocalShadowsField()
+                    Dim sql As Object = Nothing
+                    sql.ExecuteNonQuery()
+                    Me.sql.ExecuteNonQuery()
+                End Sub
+
+                Public Sub QualifiedInheritedField(inheritedCommand As Object)
+                    MyBase.inheritedCommand.ExecuteNonQuery()
+                End Sub
+
+                Public Sub CompletedNestedScopeDoesNotShadowField()
+                    If DateTime.Now.Ticks > 0 Then
+                        Dim sql As Object = Nothing
+                    End If
+                    sql.ExecuteNonQuery()
+                End Sub
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var operations = result.Facts.Where(fact =>
+            fact.FactType == FactTypes.DatabaseOperationCandidate
+            && fact.RuleId == RuleIds.VisualBasicSyntaxDatabaseOperation).ToArray();
+        Assert.Equal(9, operations.Length);
+        Assert.All(operations, operation =>
+        {
+            Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, operation.EvidenceTier);
+            Assert.Equal("ExplicitSyntaxType", operation.Properties["resolutionKind"]);
+            Assert.Equal("reduced-syntax-vb-database-operation", operation.Properties["coverageLabel"]);
+        });
+        Assert.Contains(operations, operation => operation.Properties["receiverType"] == "OdbcCommand"
+            && operation.Properties["operationKind"] == "scalar-candidate");
+        Assert.Contains(operations, operation => operation.Properties["receiverType"] == "IBM.Data.DB2.DB2Command"
+            && operation.Properties["operationKind"] == "select-candidate");
+        Assert.Contains(operations, operation => operation.Properties["receiverType"] == "OracleCommand"
+            && operation.Properties["operationKind"] == "execute-candidate");
+        Assert.Contains(operations, operation => operation.Properties["receiverName"] == "inheritedCommand"
+            && operation.Properties["operationKind"] == "execute-candidate");
+        Assert.Contains(operations, operation => operation.Properties["receiverName"] == "Me.sql"
+            && operation.Properties["receiverType"] == "SqlCommand");
+        Assert.Contains(operations, operation => operation.Properties["receiverName"] == "MyBase.inheritedCommand"
+            && operation.Properties["receiverType"] == "SqlCommand");
+        Assert.DoesNotContain(operations, operation => operation.Properties["receiverName"] == "custom");
+        Assert.Equal(2, operations.Count(operation => operation.Properties["receiverName"] == "sql"));
     }
 
     [Fact]

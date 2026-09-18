@@ -937,6 +937,11 @@ python3 scripts/legacy_codebase_validation.py \
 
 The summary must stay label-only. Do not commit local sample paths, raw scan outputs, raw WSDL/DISCO/XSD contents, endpoint addresses, SOAP actions, namespace URIs, config values, secrets, or generated smoke outputs. WCF metadata facts are static checked-in design-time evidence; they do not prove runtime reachability, deployment, service version compatibility, authorization, binding compatibility, or branch feasibility.
 
+The checked-in Web Forms packet regression also covers the C# composition
+shape `inline AJAX -> ASHX handler -> local helper -> generated WCF client
+operation`. It must end at `wcf-operation` and must not infer remote service or
+database behavior.
+
 ## Legacy WebForms Event Flow Smoke
 
 When changing WebForms markup, code-behind, designer, handler-resolution, or event-flow extraction, run:
@@ -1002,6 +1007,18 @@ unchanged. Inspect `coverage`, `gaps`, and `truncated` before using the packet;
 publish local-only packet output or treat structural candidates as named
 business capabilities, migration estimates, parity, target architecture, or
 release approval.
+
+For projectless VB Web Forms correlation changes, also run:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --filter ProjectlessVisualBasicWebFormsDiagnosticsTests
+```
+
+The public fixture intentionally contains no `.vbproj` or solution. Confirm
+direct calls are retained by exact handler identity and containing span, the
+UI-only handler remains call-free, and terminal-free gaps distinguish observed
+downstream edges, bounded traversal truncation, and no retained backend edge.
 
 When changing Web Forms batch/data-movement extraction or packet composition,
 run the focused `LegacyBatchDataMovementExtractorTests` and
@@ -2226,4 +2243,78 @@ Confirm that one deterministic report/handoff pair is generated per selected
 surface, reports return to the root index, raw source remains opt-in and bounded,
 and an explicitly supplied evidence-docs corpus remains byte-unchanged. The
 workbench is navigation over retained evidence, not a scan, BRD, runtime claim,
-or human-review overlay.
+or human-review overlay. Confirm that call projections, unique call facts, and
+normalized source call sites remain distinct; matching syntax/semantic evidence
+collapses only in the normalized view; compiler-resolved declaring type, assembly,
+and technology-family metadata survives into the private handoff; and reaching the
+256-fact call-evidence ceiling is visible separately from traversal truncation.
+Ceiling detection is a bounded-coverage warning and must not be rendered as proof of
+an exact source-call count.
+
+For inline Web Forms client behavior, also confirm that supported jQuery event
+bindings, mutations, and numeric maximum-length constraints retain Tier3 rule
+IDs and exact markup spans through the modernization packet, docs export, and
+page handoff. Trigger rows must render their retained binding and handler spans,
+and source excerpts must remain readable without inheriting inline-code block
+background styling.
+
+### Web Forms one-root review pipeline
+
+For changes to clean-run setup, persisted configuration, bounded project
+selection, resume behavior, or the one-root artifact layout, run:
+
+```bash
+pwsh -NoProfile -File scripts/Invoke-FocusedWebFormsReview.Tests.ps1
+pwsh -NoProfile -File scripts/tests/Test-FocusedWebFormsPipeline.ps1
+pwsh -NoProfile -File scripts/tests/Test-FocusedWebFormsApplicationWorkbench.ps1
+```
+
+Confirm the generated config has exactly seven operational settings; explicit
+solution, project, discovery, and projectless modes remain distinct; discovery
+does not escape the three configured roots; and all-page mode does not create a
+surface list. Confirm an unescaped Windows path fails before JSON parsing with
+forward-slash guidance, including a path containing `\t` that the JSON parser
+could otherwise silently interpret as a tab. A clean end-to-end fixture must
+publish scan, packet, evidence-docs, and workbench folders under one review
+root. Immediately rerun
+the unchanged command and confirm every completed stage reports `state=reused`
+under the same run ID. Changing the config, source commit, TraceMap commit,
+pipeline generator, or any retained artifact must fail resume validation.
+
+Inspect `run-receipt.json` and confirm it records the config and generator
+SHA-256 values, source and TraceMap commits, and the exact relative path, byte
+count, and SHA-256 for every retained stage artifact. Public/shareable
+regression checks must continue to reject private paths, symbols, source, scan
+identity, commit identity, and private-input fingerprints.
+
+## Required multi-language canonical-identity corpus
+
+After the current projectless VB/Web Forms traversal correction is complete,
+add checked-in synthetic repository fixtures for C#, VB.NET, and F#. This is a
+required larger validation track, not optional cleanup. If an F# extractor is
+not yet implemented when the corpus lands, the F# cases must assert an explicit
+unsupported/coverage-gap result and no inferred joins until that adapter exists.
+
+Each language corpus must exercise both successful semantic analysis and
+failed-build/projectless syntax fallback where the adapter supports those
+lanes. Include, at minimum:
+
+- identical simple type and member names in different namespaces and source
+  assemblies/projects;
+- nested types with repeated names, partial types, namespace/root-namespace
+  composition, aliases/imports, and linked source files;
+- overloads with equal arity but different parameter types, generic arity,
+  ref/in/out/ByRef shape, constructors, properties/indexers, and operators;
+- inheritance across projects, provider-specific implementations behind a
+  shared base type, and cross-language call candidates;
+- reflection, runtime assembly loading, generated/dynamic assemblies, and
+  unresolved factory/registration paths that must fail closed unless bounded
+  deterministic evidence proves the target.
+
+The end-to-end tests must scan the repositories, validate `facts.ndjson` and
+`index.sqlite`, combine multiple source indexes, and exercise reducers/reports.
+They must prove that simple name plus arity is candidate discovery only; a final
+join requires the adapter's canonical source/assembly, namespace/module,
+containing-type chain, member kind/name/generic arity, and parameter-signature
+identity. Ambiguity must produce a bounded Tier4 gap rather than an edge.
+Repeated clean scans must also prove deterministic facts and reports.

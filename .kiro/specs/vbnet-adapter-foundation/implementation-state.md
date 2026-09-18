@@ -257,8 +257,43 @@ caller-text regression over the full scan pipeline.
   validated output; value sentinels suppressed (test-enforced).
 - `git diff --check` clean; `scripts/check-private-paths.sh` passes.
 
+## Private projectless Web Forms battle-test follow-up (2026-09-18)
+
+- Corrected syntax type declarations that duplicated their own type segment
+  (`Namespace.Type.Type`) and bumped the fallback identity to `vb-syntax/0.3.15`.
+- The regenerated private two-repository scan then advanced inherited `SQLDA`
+  provenance from unavailable to one `SqlDataAccess` receiver, but correctly
+  stopped at two `ExecProc_Scalar` overloads with the same argument count.
+- `vb-syntax/0.3.17` retains explicit positional argument types from caller
+  parameters, locals, and object creations while marking unresolved positions.
+  The bridge establishes a unique source-index/qualified receiver identity
+  before applying signature evidence. Complete signatures may eliminate exact
+  mismatches; partial signatures may do so only when every unresolved position
+  is identical across all retained candidates. Named, wholly unknown,
+  conflicting, or signature-incomplete evidence still fails closed. Focused
+  extraction and packet regressions cover both the successful constrained
+  partial signature and the untyped same-arity ambiguity.
+- Private two-repository validation completed after regenerating the
+  projectless Web scan and merged review. For focused page `page-011`, traversal
+  advanced from 41 reached nodes / 57 traversed edges / 54 downstream edges /
+  zero terminal paths to 53 / 83 / 80 / one terminal path. The receipted packet
+  reports `terminalKind.sql-query=1`, proving the bounded receiver/inheritance/
+  overload bridge reached the intended retained database-operation surface.
+  Two unrelated downstream branches remain explicitly stopped as
+  `no-observed-downstream-edge`, and the bounded traversal remains labeled
+  truncated rather than being presented as complete runtime coverage.
+
 ## Remaining work / follow-ups
 
+- Required post-debug validation track: build the checked-in C#, VB.NET, and F#
+  synthetic repository matrix documented in `docs/VALIDATION.md` under
+  "Required multi-language canonical-identity corpus." It must cover semantic
+  and projectless/failed-build lanes, cross-namespace and cross-assembly
+  collisions, nested/repeated type names, same-arity overloads, inheritance,
+  cross-language candidates, and reflection/dynamic assembly gaps. The current
+  focused regressions are necessary but are not a substitute for these larger
+  end-to-end repository scans. Until an F# adapter exists, its fixtures must
+  prove explicit unsupported coverage and zero inferred joins.
 - Cross-language symbol-identity joins (VB symbols to C#-declared symbols)
   remain unestablished; display-string and fact-level evidence cross the
   language boundary. Future slice.

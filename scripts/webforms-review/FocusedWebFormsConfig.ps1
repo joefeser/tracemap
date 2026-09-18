@@ -77,3 +77,47 @@ function Read-FocusedWebFormsConfig {
         Forms = $forms.ToArray()
     }
 }
+
+function Resolve-FocusedWebFormsPageListInputs {
+    [CmdletBinding()]
+    param(
+        [string]$ReviewRoot = '',
+        [string]$ConfigPath = '',
+        [Parameter(Mandatory = $true)][string]$ScriptsRoot
+    )
+
+    if ($ReviewRoot -and !$ConfigPath) {
+        . (Join-Path $PSScriptRoot 'FocusedWebFormsPipelineConfig.ps1')
+        $root = [IO.Path]::GetFullPath($ReviewRoot).TrimEnd('\', '/')
+        $pipelineConfigPath = Resolve-FocusedWebFormsPipelineConfigPath -ReviewRoot $root
+        $pipelineConfig = Read-FocusedWebFormsPipelineConfig -ConfigPath $pipelineConfigPath
+        $configuredRoot = [IO.Path]::GetFullPath($pipelineConfig.OutputRoot).TrimEnd('\', '/')
+        if (!$configuredRoot.Equals($root, [StringComparison]::OrdinalIgnoreCase)) {
+            throw 'WEBFORMS_PAGE_LIST_OUTPUT_ROOT_MISMATCH'
+        }
+        return [pscustomobject]@{
+            IndexPath = Join-Path $root 'scan/index.sqlite'
+            OutputRoot = $root
+            Forms = @($pipelineConfig.Forms)
+            PageMode = $pipelineConfig.PageMode
+            ConfigKind = 'review-root'
+        }
+    }
+
+    if (!$ConfigPath) { $ConfigPath = Join-Path $ScriptsRoot 'Run-FocusedWebFormsPageList.json' }
+    $localConfig = Read-FocusedWebFormsConfig -ConfigPath $ConfigPath
+    $indexPath = $localConfig.IndexPath
+    $outputRoot = $localConfig.OutputRoot
+    if ($ReviewRoot) {
+        $root = [IO.Path]::GetFullPath($ReviewRoot).TrimEnd('\', '/')
+        $indexPath = Join-Path $root 'scan/index.sqlite'
+        $outputRoot = $root
+    }
+    return [pscustomobject]@{
+        IndexPath = $indexPath
+        OutputRoot = $outputRoot
+        Forms = @($localConfig.Forms)
+        PageMode = 'selected'
+        ConfigKind = 'legacy-local'
+    }
+}
