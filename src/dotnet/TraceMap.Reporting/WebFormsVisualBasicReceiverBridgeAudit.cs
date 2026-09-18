@@ -374,7 +374,9 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
             .GroupBy(edge => edge.FromNodeId, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.OrderBy(edge => edge.EdgeId, StringComparer.Ordinal).ToArray(), StringComparer.Ordinal);
         var starts = inventory.Nodes
-            .Where(node => (node.SymbolId ?? node.DisplayName).Contains("ExecProc_Scalar/2", StringComparison.OrdinalIgnoreCase))
+            .Where(node => QualifiedMemberKey(node.SymbolId ?? node.DisplayName) is { } member
+                && member.Name.Equals("ExecProc_Scalar", StringComparison.OrdinalIgnoreCase)
+                && member.Arity == 2)
             .OrderBy(node => node.NodeId, StringComparer.Ordinal)
             .ToArray();
         var queue = new Queue<(string NodeId, int Depth)>();
@@ -400,6 +402,40 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
         }
         output.Add($"receiverBridgePrivate.execProcStarts={starts.Length}");
         output.Add($"receiverBridgePrivate.execProcReachableNodes={visited.Count}");
+        var startIndex = 0;
+        foreach (var start in starts)
+        {
+            startIndex++;
+            var startQueue = new Queue<(string NodeId, int Depth)>();
+            var startVisited = new HashSet<string>(StringComparer.Ordinal) { start.NodeId };
+            startQueue.Enqueue((start.NodeId, 0));
+            while (startQueue.Count > 0 && startVisited.Count <= 2_000)
+            {
+                var current = startQueue.Dequeue();
+                if (current.Depth >= 12 || !outgoing.TryGetValue(current.NodeId, out var edges)) continue;
+                foreach (var edge in edges)
+                {
+                    if (startVisited.Add(edge.ToNodeId)) startQueue.Enqueue((edge.ToNodeId, current.Depth + 1));
+                }
+            }
+
+            var sqlSurfaces = startVisited
+                .Select(nodeId => nodes.GetValueOrDefault(nodeId))
+                .OfType<CombinedPathNode>()
+                .Where(node => node.SurfaceKind is "sql-query" or "sql-persistence")
+                .OrderBy(node => node.FilePath, StringComparer.Ordinal)
+                .ThenBy(node => node.StartLine ?? 0)
+                .ThenBy(node => node.DisplayName, StringComparer.Ordinal)
+                .Take(20)
+                .ToArray();
+            output.Add($"receiverBridgePrivate.execProcStart-{startIndex:D2}.name={start.SymbolId ?? start.DisplayName};file={start.FilePath ?? "unavailable"};line={start.StartLine ?? 0};reachableNodes={startVisited.Count};sqlSurfaces={sqlSurfaces.Length}");
+            var surfaceIndex = 0;
+            foreach (var surface in sqlSurfaces)
+            {
+                surfaceIndex++;
+                output.Add($"receiverBridgePrivate.execProcStart-{startIndex:D2}.sqlSurface-{surfaceIndex:D2}.name={surface.DisplayName};surface={surface.SurfaceKind};file={surface.FilePath ?? "unavailable"};line={surface.StartLine ?? 0};rule={surface.RuleId ?? "unavailable"};tier={surface.EvidenceTier ?? "unavailable"}");
+            }
+        }
         var index = 0;
         foreach (var leaf in leaves
             .DistinctBy(node => node.NodeId, StringComparer.Ordinal)

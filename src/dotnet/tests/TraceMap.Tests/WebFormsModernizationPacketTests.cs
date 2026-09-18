@@ -1063,6 +1063,7 @@ public sealed class WebFormsModernizationPacketTests
         var singleFieldInvocation = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph,
             "WebApplication/Feedback.aspx.vb", 23, source: handlerSymbol, target: "InsertFeedback", contract: "InsertFeedback",
             ("argumentCount", "1"), ("callKind", "SyntaxInvocation"), ("calleeName", "InsertFeedback"),
+            ("argumentTypes", "String"), ("argumentTypeResolution", "explicit-caller-syntax"),
             ("callerName", handlerSymbol), ("coverageLabel", "syntax-only"), ("receiverName", "Me.service"));
         var singleBaseFieldInvocation = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph,
             "WebApplication/Feedback.aspx.vb", 24, source: handlerSymbol, target: "InsertFeedback", contract: "InsertFeedback",
@@ -1108,6 +1109,14 @@ public sealed class WebFormsModernizationPacketTests
         {
             EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
         };
+        var singleSyntaxOverload = Fact(manifest, FactTypes.MethodDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "BusinessLayer/BusinessObject.vb", 11, source: null, target: "InsertFeedback", contract: null,
+            ("containingType", "BusinessLayer.BusinessObject"), ("qualifiedContainingType", "BusinessLayer.BusinessObject"),
+            ("name", "InsertFeedback"), ("memberIdentity", "BusinessLayer.BusinessObject.InsertFeedback(Integer)"),
+            ("parameterCount", "1"), ("parameterTypes", "Integer")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
         var singleDownstream = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph,
             "BusinessLayer/BusinessObject.vb", 12, source: "BusinessLayer.BusinessObject.InsertFeedback(String)",
             target: "FeedbackQuery.Insert", contract: "Insert", ("argumentCount", "1"),
@@ -1124,14 +1133,14 @@ public sealed class WebFormsModernizationPacketTests
             ("coverageLabel", "bounded-static-query"));
         var singleFlow = Fact(manifest, FactTypes.WebFormsEventFlowProjected, RuleIds.LegacyWebFormsEventFlow,
             "WebApplication/Feedback.aspx.vb", 20, source: handlerSymbol, target: "flow-terminal-unavailable", contract: "Submit_Click",
-            ("supportingFactIds", $"{handler.FactId},{singleFieldInvocation.FactId},{singleBaseFieldInvocation.FactId},{singleDownstream.FactId},{singleTerminal.FactId}"),
-            ("supportingEdgeIds", $"{singleFieldInvocation.FactId},{singleBaseFieldInvocation.FactId},{singleDownstream.FactId}"), ("flowClassification", "UnknownAnalysisGap"),
+            ("supportingFactIds", $"{handler.FactId},{singleFieldInvocation.FactId},{singleBaseFieldInvocation.FactId}"),
+            ("supportingEdgeIds", $"{singleFieldInvocation.FactId},{singleBaseFieldInvocation.FactId}"), ("flowClassification", "UnknownAnalysisGap"),
             ("coverageLabel", "reduced-static-webforms-flow"));
         var singleSyntaxIndex = Path.Combine(temp.Path, "single-syntax-field-index.sqlite");
         SqliteIndexWriter.Write(singleSyntaxIndex, manifest,
             [page, binding, handler, singleFieldInvocation, singleBaseFieldInvocation, callerTypeDeclaration, callerBaseTypeDeclaration,
                 receiverFieldDeclaration, receiverBaseFieldDeclaration,
-                receiverTypeDeclaration, singleSyntaxDeclaration, singleDownstream, singleTerminal, singleFlow]);
+                receiverTypeDeclaration, singleSyntaxDeclaration, singleSyntaxOverload, singleDownstream, singleTerminal, singleFlow]);
         var singleSyntaxPacket = await WebFormsModernizationPacketReporter.BuildAsync(
             new(singleSyntaxIndex, Path.Combine(temp.Path, "single-syntax-field-output")));
         var singleSyntaxChains = singleSyntaxPacket.EventChains.ToArray();
@@ -1255,7 +1264,8 @@ public sealed class WebFormsModernizationPacketTests
         var inheritedSqlDeclaration = Fact(recursiveBackendManifest, FactTypes.MethodDeclared, RuleIds.VisualBasicSyntaxDeclarations,
             "Common/DataAccess.vb", 220, source: null, target: "ExecProc_Scalar", contract: null,
             ("containingType", "SqlDataAccess"), ("qualifiedContainingType", "UnitedFramework.DataAccess.SqlDataAccess"),
-            ("name", "ExecProc_Scalar"), ("parameterCount", "2"), ("parameterTypes", "String;ArrayList")) with
+            ("name", "ExecProc_Scalar"), ("memberIdentity", "UnitedFramework.DataAccess.SqlDataAccess.ExecProc_Scalar(String,ArrayList)"),
+            ("parameterCount", "2"), ("parameterTypes", "String;ArrayList")) with
         {
             EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
         };
@@ -1268,26 +1278,28 @@ public sealed class WebFormsModernizationPacketTests
         var inheritedSqlSameArityOverload = Fact(recursiveBackendManifest, FactTypes.MethodDeclared, RuleIds.VisualBasicSyntaxDeclarations,
             "Common/DataAccess.vb", 215, source: null, target: "ExecProc_Scalar", contract: null,
             ("containingType", "SqlDataAccess"), ("qualifiedContainingType", "UnitedFramework.DataAccess.SqlDataAccess"),
-            ("name", "ExecProc_Scalar"), ("parameterCount", "2"), ("parameterTypes", "String;SqlDataAccessParam()")) with
+            ("name", "ExecProc_Scalar"), ("memberIdentity", "UnitedFramework.DataAccess.SqlDataAccess.ExecProc_Scalar(String,SqlDataAccessParam())"),
+            ("parameterCount", "2"), ("parameterTypes", "String;SqlDataAccessParam()")) with
         {
             EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
         };
         var inheritedSqlUnsafePartialOverload = Fact(recursiveBackendManifest, FactTypes.MethodDeclared, RuleIds.VisualBasicSyntaxDeclarations,
             "Common/DataAccess.vb", 216, source: null, target: "ExecProc_Scalar", contract: null,
             ("containingType", "SqlDataAccess"), ("qualifiedContainingType", "UnitedFramework.DataAccess.SqlDataAccess"),
-            ("name", "ExecProc_Scalar"), ("parameterCount", "2"), ("parameterTypes", "Integer;SqlDataAccessParam()")) with
+            ("name", "ExecProc_Scalar"), ("memberIdentity", "UnitedFramework.DataAccess.SqlDataAccess.ExecProc_Scalar(Integer,SqlDataAccessParam())"),
+            ("parameterCount", "2"), ("parameterTypes", "Integer;SqlDataAccessParam()")) with
         {
             EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
         };
         var inheritedSqlBody = Fact(recursiveBackendManifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph,
-            "Common/DataAccess.vb", 225, source: "UnitedFramework.DataAccess.SqlDataAccess.ExecProc_Scalar/2", target: "ExecuteScalar", contract: "ExecuteScalar",
+            "Common/DataAccess.vb", 225, source: "UnitedFramework.DataAccess.SqlDataAccess.ExecProc_Scalar(String,ArrayList)", target: "ExecuteScalar", contract: "ExecuteScalar",
             ("argumentCount", "0"), ("callKind", "SyntaxInvocation"), ("calleeName", "ExecuteScalar"),
             ("callerName", "SqlDataAccess.ExecProc_Scalar/2"), ("coverageLabel", "syntax-only"), ("receiverName", "command")) with
         {
             EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
         };
         var inheritedSqlTerminal = Fact(recursiveBackendManifest, FactTypes.DatabaseOperationCandidate, RuleIds.VisualBasicSyntaxDatabaseOperation,
-            "Common/DataAccess.vb", 225, source: "UnitedFramework.DataAccess.SqlDataAccess.ExecProc_Scalar/2", target: "SqlCommand.ExecuteScalar", contract: "scalar-candidate",
+            "Common/DataAccess.vb", 225, source: "UnitedFramework.DataAccess.SqlDataAccess.ExecProc_Scalar(String,ArrayList)", target: "SqlCommand.ExecuteScalar", contract: "scalar-candidate",
             ("coverageLabel", "reduced-syntax-vb-database-operation"), ("operationKind", "scalar-candidate"),
             ("receiverName", "command"), ("receiverType", "SqlCommand"), ("resolutionKind", "ExplicitSyntaxType"),
             ("resultKind", "scalar"), ("sqlSourceKind", "vb-syntax-explicit-database-command")) with
@@ -1301,8 +1313,9 @@ public sealed class WebFormsModernizationPacketTests
         var inheritedCombinedIndex = Path.Combine(temp.Path, "inherited-combined-index.sqlite");
         await CombinedIndexBuilder.CombineAsync(new CombineOptions(
             [inheritedWebIndex, inheritedBackendIndex], inheritedCombinedIndex, ["web", "backend"]));
-        var inheritedPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+        var inheritedWritten = await WebFormsModernizationPacketReporter.WriteAsync(
             new(inheritedCombinedIndex, Path.Combine(temp.Path, "inherited-output")));
+        var inheritedPacket = inheritedWritten.Packet;
         var inheritedChain = Assert.Single(inheritedPacket.EventChains);
         Assert.True(inheritedChain.TraversalObservation?.TerminalPathCount > 0,
             System.Text.Json.JsonSerializer.Serialize(new
@@ -1313,6 +1326,18 @@ public sealed class WebFormsModernizationPacketTests
             }));
         Assert.True(inheritedChain.PathEvidence.Count(evidence =>
             evidence.RuleId == "combined.paths.projectless-vb-receiver-bridge.v1") >= 3);
+        var inheritedPrivateAudit = WebFormsVisualBasicReceiverBridgeAudit.Run(
+            inheritedCombinedIndex, inheritedWritten.JsonPath, surface, includePrivateIdentities: true);
+        Assert.Contains("receiverBridgePrivate.execProcStarts=1", inheritedPrivateAudit);
+        Assert.Contains(inheritedPrivateAudit, line => line.StartsWith(
+            "receiverBridgePrivate.execProcReachableNodes=", StringComparison.Ordinal)
+            && !line.EndsWith("=0", StringComparison.Ordinal));
+        Assert.Contains(inheritedPrivateAudit, line => line.StartsWith(
+            "receiverBridgePrivate.execProcStart-01.name=", StringComparison.Ordinal)
+            && line.Contains(";sqlSurfaces=1", StringComparison.Ordinal));
+        Assert.Contains(inheritedPrivateAudit, line => line.StartsWith(
+            "receiverBridgePrivate.execProcStart-01.sqlSurface-01.", StringComparison.Ordinal)
+            && line.Contains("surface=sql-query", StringComparison.Ordinal));
 
         var ambiguousOverloadBackendIndex = Path.Combine(temp.Path, "ambiguous-overload-backend-index.sqlite");
         SqliteIndexWriter.Write(ambiguousOverloadBackendIndex, recursiveBackendManifest,
@@ -1351,6 +1376,107 @@ public sealed class WebFormsModernizationPacketTests
             new(typedOverloadCombinedIndex, Path.Combine(temp.Path, "typed-overload-output")));
         var typedOverloadChain = Assert.Single(typedOverloadPacket.EventChains);
         Assert.Equal("sql-query", typedOverloadChain.TerminalKind);
+
+        var wrapperWebCall = inheritedSqlCall with
+        {
+            Properties = new SortedDictionary<string, string>(
+                inheritedSqlCall.Properties.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+                StringComparer.Ordinal)
+            {
+                ["argumentTypes"] = "String;ArrayList",
+                ["argumentTypeResolution"] = "explicit-caller-syntax"
+            }
+        };
+        var wrapperWebIndex = Path.Combine(temp.Path, "wrapper-web-index.sqlite");
+        SqliteIndexWriter.Write(wrapperWebIndex, manifest,
+            [page, binding, handler, creation, invocation, flow, businessDeclaration, qualifiedDataAccessDeclaration, businessField,
+                businessCreation, businessInvocation, inheritedDataAccessType, wrapperWebCall]);
+        var implicitOverloadCall = Fact(recursiveBackendManifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph,
+            "Common/DataAccess.vb", 223,
+            source: "UnitedFramework.DataAccess.SqlDataAccess.ExecProc_Scalar(String,ArrayList)",
+            target: "ExecProc_Scalar", contract: "ExecProc_Scalar",
+            ("argumentCount", "2"), ("argumentTypes", "String;SqlDataAccessParam()"),
+            ("argumentTypeResolution", "explicit-caller-syntax"), ("callKind", "SyntaxInvocation"),
+            ("calleeName", "ExecProc_Scalar"), ("callerName", "SqlDataAccess.ExecProc_Scalar/2"),
+            ("coverageLabel", "syntax-only")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var typedSqlBody = inheritedSqlBody with
+        {
+            SourceSymbol = "UnitedFramework.DataAccess.SqlDataAccess.ExecProc_Scalar(String,SqlDataAccessParam())"
+        };
+        var typedSqlTerminal = inheritedSqlTerminal with
+        {
+            SourceSymbol = "UnitedFramework.DataAccess.SqlDataAccess.ExecProc_Scalar(String,SqlDataAccessParam())"
+        };
+        var implicitOverloadBackendIndex = Path.Combine(temp.Path, "implicit-overload-backend-index.sqlite");
+        SqliteIndexWriter.Write(implicitOverloadBackendIndex, recursiveBackendManifest,
+            [sqlBaseType, inheritedSqlField, inheritedSqlDeclaration, inheritedSqlSameArityOverload,
+                implicitOverloadCall, typedSqlBody, typedSqlTerminal]);
+        var implicitOverloadCombinedIndex = Path.Combine(temp.Path, "implicit-overload-combined-index.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [wrapperWebIndex, implicitOverloadBackendIndex], implicitOverloadCombinedIndex, ["web", "backend"]));
+        var implicitOverloadPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(implicitOverloadCombinedIndex, Path.Combine(temp.Path, "implicit-overload-output")));
+        var implicitOverloadChain = Assert.Single(implicitOverloadPacket.EventChains);
+        Assert.Equal("sql-query", implicitOverloadChain.TerminalKind);
+        Assert.True(implicitOverloadChain.TraversalObservation?.TerminalPathCount > 0);
+        Assert.True(implicitOverloadChain.PathEvidence.Count(evidence =>
+            evidence.RuleId == "combined.paths.projectless-vb-receiver-bridge.v1") >= 2);
+
+        var parametersListType = Fact(manifest, FactTypes.TypeDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "WebApplication/App_Code/DataAccess.vb", 30, source: null, target: "ParametersList", contract: null,
+            ("baseTypes", "System.Collections.ArrayList"), ("kind", "class"), ("name", "ParametersList"),
+            ("namespace", "BusinessLogic"), ("qualifiedName", "BusinessLogic.ParametersList")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var derivedArgumentSqlCall = inheritedSqlCall with
+        {
+            Properties = new SortedDictionary<string, string>(
+                inheritedSqlCall.Properties.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+                StringComparer.Ordinal)
+            {
+                ["argumentTypes"] = "String;ParametersList",
+                ["argumentTypeResolution"] = "explicit-caller-syntax"
+            }
+        };
+        var derivedArgumentWebIndex = Path.Combine(temp.Path, "derived-argument-web-index.sqlite");
+        SqliteIndexWriter.Write(derivedArgumentWebIndex, manifest,
+            [page, binding, handler, creation, invocation, flow, businessDeclaration, qualifiedDataAccessDeclaration, businessField,
+                businessCreation, businessInvocation, inheritedDataAccessType, parametersListType, derivedArgumentSqlCall]);
+        var derivedArgumentCombinedIndex = Path.Combine(temp.Path, "derived-argument-combined-index.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [derivedArgumentWebIndex, typedOverloadBackendIndex], derivedArgumentCombinedIndex, ["web", "backend"]));
+        var derivedArgumentPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(derivedArgumentCombinedIndex, Path.Combine(temp.Path, "derived-argument-output")));
+        var derivedArgumentChain = Assert.Single(derivedArgumentPacket.EventChains);
+        Assert.Equal("sql-query", derivedArgumentChain.TerminalKind);
+
+        var competingParametersListType = parametersListType with
+        {
+            FactId = "fact-competing-parameters-list",
+            TargetSymbol = "Other.ParametersList",
+            Properties = new SortedDictionary<string, string>(
+                parametersListType.Properties.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+                StringComparer.Ordinal)
+            {
+                ["namespace"] = "Other",
+                ["qualifiedName"] = "Other.ParametersList"
+            }
+        };
+        var ambiguousArgumentWebIndex = Path.Combine(temp.Path, "ambiguous-argument-web-index.sqlite");
+        SqliteIndexWriter.Write(ambiguousArgumentWebIndex, manifest,
+            [page, binding, handler, creation, invocation, flow, businessDeclaration, qualifiedDataAccessDeclaration, businessField,
+                businessCreation, businessInvocation, inheritedDataAccessType, parametersListType, competingParametersListType,
+                derivedArgumentSqlCall]);
+        var ambiguousArgumentCombinedIndex = Path.Combine(temp.Path, "ambiguous-argument-combined-index.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [ambiguousArgumentWebIndex, typedOverloadBackendIndex], ambiguousArgumentCombinedIndex, ["web", "backend"]));
+        var ambiguousArgumentPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(ambiguousArgumentCombinedIndex, Path.Combine(temp.Path, "ambiguous-argument-output")));
+        Assert.Null(Assert.Single(ambiguousArgumentPacket.EventChains).TerminalKind);
 
         var unsafePartialBackendIndex = Path.Combine(temp.Path, "unsafe-partial-backend-index.sqlite");
         SqliteIndexWriter.Write(unsafePartialBackendIndex, recursiveBackendManifest,

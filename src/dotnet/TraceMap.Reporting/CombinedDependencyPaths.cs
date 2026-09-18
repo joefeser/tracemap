@@ -1073,6 +1073,7 @@ public static partial class CombinedDependencyPathReporter
 
         AddSymbolReconciliationEdges(graph);
         AddProjectlessVisualBasicReceiverBridgeEdges(graph, read.Facts);
+        AddProjectlessVisualBasicImplicitReceiverBridgeEdges(graph, read.Facts);
         AddDispatchCandidateEdges(graph, read.Facts, read.Sources, read.HasFactExtractorVersion);
         graph.Sort();
         return graph;
@@ -2732,12 +2733,33 @@ public static partial class CombinedDependencyPathReporter
                             declaration.SourceIndexId == syntaxReceiverIdentity.Value.SourceIndexId
                             && string.Equals(VisualBasicContainingType(declaration), syntaxReceiverIdentity.Value.TypeName, StringComparison.OrdinalIgnoreCase)))
                     .ToArray();
-                var signatureCandidates = FilterVisualBasicExplicitArgumentTypes(call, syntaxCandidates);
+                var signatureCandidates = FilterVisualBasicExplicitArgumentTypes(
+                    call,
+                    syntaxCandidates,
+                    syntaxTypeDeclarations);
+                var signatureIdentities = signatureCandidates
+                    .GroupBy(VisualBasicSyntaxMemberIdentity, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+                if (signatureIdentities.Length > 1)
+                {
+                    AddProjectlessVisualBasicReceiverBridgeGap(
+                        graph,
+                        call,
+                        "ProjectlessVisualBasicReceiverTargetAmbiguous",
+                        "The receiver type, method name, arity, and retained argument types still matched multiple distinct syntax method signatures; TraceMap did not use body availability to choose an overload.",
+                        "syntax-signature-ambiguous",
+                        signatureIdentities.Length,
+                        signatureCandidates.Select(candidate => candidate.CombinedFactId)
+                            .Concat(receiverEvidence.Evidence.Select(fact => fact.CombinedFactId)).Append(call.CombinedFactId));
+                    continue;
+                }
                 var syntaxTargets = signatureCandidates
                     .Select(declaration => new
                     {
                         Declaration = declaration,
-                        BodyFacts = receiverBodyFacts.GetValueOrDefault($"{declaration.SourceIndexId}\0{VisualBasicContainingType(declaration)}\0{methodName}\0{argumentCount}", [])
+                        BodyFacts = VisualBasicBodyFactsForDeclaration(
+                            declaration,
+                            receiverBodyFacts.GetValueOrDefault($"{declaration.SourceIndexId}\0{VisualBasicContainingType(declaration)}\0{methodName}\0{argumentCount}", []))
                     })
                     // The declaration itself does not retain overload arity in older
                     // syntax artifacts. Require the exact arity-bearing member node
@@ -2777,6 +2799,12 @@ public static partial class CombinedDependencyPathReporter
                     .ToArray();
                 if (syntaxDestinations.Length != 1)
                 {
+                    var noSignatureMatch = syntaxCandidates.Length > 0 && signatureCandidates.Length == 0;
+                    var unavailableReason = noSignatureMatch
+                        ? "syntax-argument-types-unmatched"
+                        : syntaxTargets.Length == 0
+                            ? "syntax-body-target-unavailable"
+                            : "target-unavailable";
                     AddProjectlessVisualBasicReceiverBridgeGap(
                         graph,
                         call,
@@ -2784,10 +2812,12 @@ public static partial class CombinedDependencyPathReporter
                             ? "ProjectlessVisualBasicReceiverTargetUnavailable"
                             : "ProjectlessVisualBasicReceiverTargetAmbiguous",
                         syntaxDestinations.Length == 0
-                            ? "A syntax-only invocation receiver has one retained local object creation, but neither a unique semantic declaration nor a unique syntax declaration with exact arity-bearing body evidence matched its type and method."
+                            ? noSignatureMatch
+                                ? "The receiver type, method name, and arity matched retained syntax declarations, but the explicit argument types matched none of their parameter signatures or statically proven base types."
+                                : "A syntax-only invocation receiver has one retained local object creation or declared field, but neither a unique semantic declaration nor a unique syntax declaration with exact arity-bearing body evidence matched its type and method."
                             : "A syntax-only invocation receiver matched multiple distinct syntax method destinations with exact arity-bearing body evidence; TraceMap did not choose a target.",
-                        syntaxDestinations.Length == 0 ? "target-unavailable" : "syntax-target-ambiguous",
-                        syntaxDestinations.Length,
+                        syntaxDestinations.Length == 0 ? unavailableReason : "syntax-target-ambiguous",
+                        noSignatureMatch ? syntaxCandidates.Length : syntaxDestinations.Length,
                         syntaxTargets.Select(candidate => candidate.Declaration.CombinedFactId)
                             .Concat(receiverEvidence.Evidence.Select(fact => fact.CombinedFactId)).Append(call.CombinedFactId));
                     continue;
@@ -2831,6 +2861,107 @@ public static partial class CombinedDependencyPathReporter
             || fact.RuleId == RuleIds.VisualBasicSemanticCallGraph
                 && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
                 && string.Equals(callKind, "SemanticObjectCreation", StringComparison.Ordinal);
+    }
+
+    private static void AddProjectlessVisualBasicImplicitReceiverBridgeEdges(
+        EvidenceGraph graph,
+        IReadOnlyList<CombinedFactRow> facts)
+    {
+        var declarations = facts
+            .Where(fact => fact.FactType == FactTypes.MethodDeclared
+                && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+                && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+                && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "memberIdentity"))
+                && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "qualifiedContainingType", "containingType"))
+                && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "methodName", "name")))
+            .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal)
+            .ToArray();
+        var typeDeclarations = facts
+            .Where(fact => fact.FactType == FactTypes.TypeDeclared
+                && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+                && fact.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual)
+            .ToArray();
+        var bodyFacts = facts
+            .Where(fact => IsVisualBasicReceiverBodyFact(fact)
+                && !string.IsNullOrWhiteSpace(fact.SourceSymbol))
+            .GroupBy(fact => fact.SourceSymbol!.Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal).ToArray(), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var call in facts
+            .Where(fact => fact.FactType == FactTypes.CallEdge
+                && fact.RuleId == RuleIds.VisualBasicSyntaxCallGraph
+                && string.Equals(CombinedDependencyReporter.FirstValue(fact.Properties, "callKind"), "SyntaxInvocation", StringComparison.Ordinal)
+                && string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "receiverName"))
+                && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "calleeName"))
+                && VisualBasicQualifiedMemberKey(fact.SourceSymbol) is not null)
+            .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
+        {
+            if (!int.TryParse(CombinedDependencyReporter.FirstValue(call.Properties, "argumentCount"), out var argumentCount)) continue;
+            var caller = VisualBasicQualifiedMemberKey(call.SourceSymbol)!.Value;
+            var methodName = CombinedDependencyReporter.FirstValue(call.Properties, "calleeName")!;
+            var candidates = declarations
+                .Where(declaration => declaration.SourceIndexId == call.SourceIndexId
+                    && string.Equals(VisualBasicContainingType(declaration), caller.Type, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(CombinedDependencyReporter.FirstValue(declaration.Properties, "methodName", "name"), methodName, StringComparison.OrdinalIgnoreCase)
+                    && int.TryParse(CombinedDependencyReporter.FirstValue(declaration.Properties, "parameterCount"), out var parameterCount)
+                    && parameterCount == argumentCount)
+                .ToArray();
+            if (candidates.Length == 0) continue;
+
+            var signatureCandidates = FilterVisualBasicExplicitArgumentTypes(call, candidates, typeDeclarations);
+            var destinations = signatureCandidates
+                .Select(declaration => new
+                {
+                    Declaration = declaration,
+                    Identity = CombinedDependencyReporter.FirstValue(declaration.Properties, "memberIdentity")!,
+                    BodyFacts = bodyFacts.GetValueOrDefault(
+                        CombinedDependencyReporter.FirstValue(declaration.Properties, "memberIdentity")!, [])
+                })
+                .Where(candidate => candidate.BodyFacts.Length > 0
+                    && graph.Nodes.ContainsKey(SymbolNodeId(candidate.Declaration.SourceIndexId, candidate.Identity)))
+                .GroupBy(candidate => candidate.Identity, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First())
+                .OrderBy(candidate => candidate.Identity, StringComparer.Ordinal)
+                .ToArray();
+            if (destinations.Length != 1)
+            {
+                AddProjectlessVisualBasicReceiverBridgeGap(
+                    graph,
+                    call,
+                    destinations.Length == 0
+                        ? "ProjectlessVisualBasicImplicitReceiverTargetUnavailable"
+                        : "ProjectlessVisualBasicImplicitReceiverTargetAmbiguous",
+                    destinations.Length == 0
+                        ? "An unqualified syntax-only VB call matched declarations on its exact containing type, but no unique typed declaration with retained body evidence was available."
+                        : "An unqualified syntax-only VB call matched multiple typed declarations with retained body evidence on its exact containing type; TraceMap did not choose a target.",
+                    destinations.Length == 0 ? "implicit-target-unavailable" : "implicit-target-ambiguous",
+                    destinations.Length == 0 ? candidates.Length : destinations.Length,
+                    candidates.Select(candidate => candidate.CombinedFactId).Append(call.CombinedFactId));
+                continue;
+            }
+
+            if (!graph.Nodes.TryGetValue(SymbolNodeId(call.SourceIndexId, call.SourceSymbol!), out var sourceNode)) continue;
+            var destination = destinations[0];
+            var targetNode = graph.Nodes[SymbolNodeId(destination.Declaration.SourceIndexId, destination.Identity)];
+            graph.AddEdge(new GraphEdge(
+                $"projectless-vb-implicit-receiver-bridge:{call.CombinedFactId}:{destination.Declaration.CombinedFactId}",
+                "projectless-vb-receiver-bridge",
+                sourceNode.NodeId,
+                targetNode.NodeId,
+                "EvidenceEdge",
+                ProjectlessVisualBasicReceiverBridgeRuleId,
+                EvidenceTiers.Tier3SyntaxOrTextual,
+                destination.BodyFacts.Select(fact => fact.CombinedFactId)
+                    .Append(call.CombinedFactId)
+                    .Append(destination.Declaration.CombinedFactId)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(value => value, StringComparer.Ordinal)
+                    .ToArray(),
+                [],
+                SafePath(call.FilePath),
+                call.StartLine,
+                call.EndLine));
+        }
     }
 
     private static bool IsVisualBasicReceiverBodyFact(CombinedFactRow fact) =>
@@ -3152,9 +3283,29 @@ public static partial class CombinedDependencyPathReporter
             CombinedDependencyReporter.FirstValue(declaration.Properties, "parameterCount") ?? string.Empty);
     }
 
+    private static CombinedFactRow[] VisualBasicBodyFactsForDeclaration(
+        CombinedFactRow declaration,
+        IReadOnlyList<CombinedFactRow> bodyFacts)
+    {
+        var memberIdentity = CombinedDependencyReporter.FirstValue(declaration.Properties, "memberIdentity");
+        if (string.IsNullOrWhiteSpace(memberIdentity)) return bodyFacts.ToArray();
+
+        // Current syntax extraction emits the same fully qualified, typed
+        // identity for the declaration and every fact owned by its body. Once
+        // that evidence exists, never collapse back to type/name/arity: doing
+        // so would merge same-arity overloads and authorize the wrong body.
+        return bodyFacts
+            .Where(fact => string.Equals(
+                fact.SourceSymbol?.Trim(),
+                memberIdentity.Trim(),
+                StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+    }
+
     private static CombinedFactRow[] FilterVisualBasicExplicitArgumentTypes(
         CombinedFactRow call,
-        IReadOnlyList<CombinedFactRow> candidates)
+        IReadOnlyList<CombinedFactRow> candidates,
+        IReadOnlyList<CombinedFactRow> typeDeclarations)
     {
         var argumentTypes = SplitVisualBasicSignatureTypes(
             CombinedDependencyReporter.FirstValue(call.Properties, "argumentTypes"));
@@ -3190,8 +3341,63 @@ public static partial class CombinedDependencyPathReporter
         return signatures
             .Where(signature => argumentTypes.Select((type, index) => (type, index)).All(item =>
                 item.type.Equals("unavailable", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(item.type, signature.Types[item.index], StringComparison.OrdinalIgnoreCase)))
+                || VisualBasicArgumentTypeMatchesParameter(
+                    call.SourceIndexId,
+                    item.type,
+                    signature.Types[item.index],
+                    typeDeclarations)))
             .Select(signature => signature.Candidate)
+            .ToArray();
+    }
+
+    private static bool VisualBasicArgumentTypeMatchesParameter(
+        string sourceIndexId,
+        string argumentType,
+        string parameterType,
+        IReadOnlyList<CombinedFactRow> typeDeclarations)
+    {
+        if (string.Equals(argumentType, parameterType, StringComparison.OrdinalIgnoreCase)) return true;
+        if (argumentType.EndsWith("()", StringComparison.Ordinal)
+            || parameterType.EndsWith("()", StringComparison.Ordinal)) return false;
+
+        var roots = UniqueVisualBasicTypeDeclarations(argumentType, sourceIndexId, typeDeclarations);
+        if (roots.Length != 1) return false;
+
+        var queue = new Queue<CombinedFactRow>();
+        queue.Enqueue(roots[0]);
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        while (queue.Count > 0 && visited.Count < 16)
+        {
+            var declaration = queue.Dequeue();
+            var declarationName = VisualBasicTypeDeclarationName(declaration);
+            if (!visited.Add($"{declaration.SourceIndexId}\0{declarationName}")) continue;
+            foreach (var baseType in SplitVisualBasicBaseTypes(
+                CombinedDependencyReporter.FirstValue(declaration.Properties, "baseTypes")))
+            {
+                if (VisualBasicTypeMatches(baseType, parameterType)) return true;
+                var next = UniqueVisualBasicTypeDeclarations(baseType, declaration.SourceIndexId, typeDeclarations);
+                if (next.Length == 1) queue.Enqueue(next[0]);
+            }
+        }
+
+        return false;
+    }
+
+    private static CombinedFactRow[] UniqueVisualBasicTypeDeclarations(
+        string typeName,
+        string preferredSourceIndexId,
+        IReadOnlyList<CombinedFactRow> typeDeclarations)
+    {
+        var matches = typeDeclarations
+            .Where(declaration => VisualBasicTypeMatches(VisualBasicTypeDeclarationName(declaration), typeName))
+            .OrderBy(declaration => declaration.CombinedFactId, StringComparer.Ordinal)
+            .ToArray();
+        var local = matches.Where(declaration => declaration.SourceIndexId == preferredSourceIndexId).ToArray();
+        if (local.Length > 0) matches = local;
+        return matches
+            .GroupBy(declaration => $"{declaration.SourceIndexId}\0{VisualBasicTypeDeclarationName(declaration)}", StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .Take(2)
             .ToArray();
     }
 
@@ -3751,9 +3957,17 @@ public static partial class CombinedDependencyPathReporter
                 if (state.NodeIds.Contains(edge.ToNodeId, StringComparer.Ordinal))
                 {
                     if (edge.EdgeKind == "calls") callEdgeFilteredByCycle = true;
-                    truncated = true;
-                    traversal[state.RootNodeId].MarkTruncated("cycle");
-                    gaps.Add(TruncatedGap("cycle", edge.ToNodeId, graph));
+                    // Symbol reconciliation is deliberately bidirectional so a
+                    // bare syntax name and its unique qualified identity can
+                    // share downstream evidence. Its reverse edge is an alias
+                    // back-edge, not evidence that bounded traversal omitted a
+                    // reachable branch.
+                    if (edge.EdgeKind != "symbol-reconciliation")
+                    {
+                        truncated = true;
+                        traversal[state.RootNodeId].MarkTruncated("cycle");
+                        gaps.Add(TruncatedGap("cycle", edge.ToNodeId, graph));
+                    }
                     continue;
                 }
 
@@ -4099,7 +4313,7 @@ public static partial class CombinedDependencyPathReporter
 
         if (edges.Any(edge => edge.EdgeKind == "projectless-vb-receiver-bridge"))
         {
-            notes.Add(new CombinedPathNote("ProjectlessVisualBasicReceiverBridge", "This review-tier hop joins a syntax-only VB invocation using one uniquely retained receiver provenance plus method identity. Provenance may be a local object creation, a containing-type field initializer, or one typed field reached through a unique retained syntax-only base-type chain; local creation takes precedence. It may continue from a reached syntax method through another independently supported receiver call. It prefers one semantic type/name/arity declaration; under reduced semantic coverage it requires one syntax type/name declaration and an exact arity-bearing member-body symbol. Only after receiver identity is unique may exact ordered text-only argument/parameter types eliminate different-signature overloads. Partial argument types may narrow candidates only when every unresolved position has the same retained parameter type across all candidates. Named, wholly unknown, conflicting, or signature-incomplete evidence does not authorize that filter. Ambiguous receiver, inheritance, field, signature, or target evidence fails closed. The resulting target hop is not compiler-resolved call evidence or proof of runtime execution."));
+            notes.Add(new CombinedPathNote("ProjectlessVisualBasicReceiverBridge", "This review-tier hop joins a syntax-only VB invocation using one uniquely retained receiver provenance plus method identity. Provenance may be a local object creation, a containing-type field initializer, one typed field reached through a unique retained syntax-only base-type chain, or the exact containing type for an unqualified implicit-Me call; local creation takes precedence. It may continue from a reached syntax method through another independently supported receiver call. It prefers one semantic type/name/arity declaration; under reduced semantic coverage it requires one syntax type/name declaration and an exact arity-bearing member-body symbol. Only after receiver identity is unique may exact ordered text-only argument/parameter types eliminate different-signature overloads. Partial argument types may narrow candidates only when every unresolved position has the same retained parameter type across all candidates. Named, wholly unknown, conflicting, or signature-incomplete evidence does not authorize that filter. Ambiguous receiver, inheritance, field, signature, or target evidence fails closed. The resulting target hop is not compiler-resolved call evidence or proof of runtime execution."));
         }
 
         if (edges.Any(edge => edge.EdgeKind is "remoting-evidence" or "remoting-channel-link"))
