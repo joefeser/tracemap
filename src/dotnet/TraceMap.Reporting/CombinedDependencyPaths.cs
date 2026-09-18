@@ -2732,7 +2732,10 @@ public static partial class CombinedDependencyPathReporter
                             declaration.SourceIndexId == syntaxReceiverIdentity.Value.SourceIndexId
                             && string.Equals(VisualBasicContainingType(declaration), syntaxReceiverIdentity.Value.TypeName, StringComparison.OrdinalIgnoreCase)))
                     .ToArray();
-                var signatureCandidates = FilterVisualBasicExplicitArgumentTypes(call, syntaxCandidates);
+                var signatureCandidates = FilterVisualBasicExplicitArgumentTypes(
+                    call,
+                    syntaxCandidates,
+                    syntaxTypeDeclarations);
                 var syntaxTargets = signatureCandidates
                     .Select(declaration => new
                     {
@@ -2777,6 +2780,12 @@ public static partial class CombinedDependencyPathReporter
                     .ToArray();
                 if (syntaxDestinations.Length != 1)
                 {
+                    var noSignatureMatch = syntaxCandidates.Length > 0 && signatureCandidates.Length == 0;
+                    var unavailableReason = noSignatureMatch
+                        ? "syntax-argument-types-unmatched"
+                        : syntaxTargets.Length == 0
+                            ? "syntax-body-target-unavailable"
+                            : "target-unavailable";
                     AddProjectlessVisualBasicReceiverBridgeGap(
                         graph,
                         call,
@@ -2784,10 +2793,12 @@ public static partial class CombinedDependencyPathReporter
                             ? "ProjectlessVisualBasicReceiverTargetUnavailable"
                             : "ProjectlessVisualBasicReceiverTargetAmbiguous",
                         syntaxDestinations.Length == 0
-                            ? "A syntax-only invocation receiver has one retained local object creation, but neither a unique semantic declaration nor a unique syntax declaration with exact arity-bearing body evidence matched its type and method."
+                            ? noSignatureMatch
+                                ? "The receiver type, method name, and arity matched retained syntax declarations, but the explicit argument types matched none of their parameter signatures or statically proven base types."
+                                : "A syntax-only invocation receiver has one retained local object creation or declared field, but neither a unique semantic declaration nor a unique syntax declaration with exact arity-bearing body evidence matched its type and method."
                             : "A syntax-only invocation receiver matched multiple distinct syntax method destinations with exact arity-bearing body evidence; TraceMap did not choose a target.",
-                        syntaxDestinations.Length == 0 ? "target-unavailable" : "syntax-target-ambiguous",
-                        syntaxDestinations.Length,
+                        syntaxDestinations.Length == 0 ? unavailableReason : "syntax-target-ambiguous",
+                        noSignatureMatch ? syntaxCandidates.Length : syntaxDestinations.Length,
                         syntaxTargets.Select(candidate => candidate.Declaration.CombinedFactId)
                             .Concat(receiverEvidence.Evidence.Select(fact => fact.CombinedFactId)).Append(call.CombinedFactId));
                     continue;
@@ -3154,7 +3165,8 @@ public static partial class CombinedDependencyPathReporter
 
     private static CombinedFactRow[] FilterVisualBasicExplicitArgumentTypes(
         CombinedFactRow call,
-        IReadOnlyList<CombinedFactRow> candidates)
+        IReadOnlyList<CombinedFactRow> candidates,
+        IReadOnlyList<CombinedFactRow> typeDeclarations)
     {
         var argumentTypes = SplitVisualBasicSignatureTypes(
             CombinedDependencyReporter.FirstValue(call.Properties, "argumentTypes"));
@@ -3190,8 +3202,63 @@ public static partial class CombinedDependencyPathReporter
         return signatures
             .Where(signature => argumentTypes.Select((type, index) => (type, index)).All(item =>
                 item.type.Equals("unavailable", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(item.type, signature.Types[item.index], StringComparison.OrdinalIgnoreCase)))
+                || VisualBasicArgumentTypeMatchesParameter(
+                    call.SourceIndexId,
+                    item.type,
+                    signature.Types[item.index],
+                    typeDeclarations)))
             .Select(signature => signature.Candidate)
+            .ToArray();
+    }
+
+    private static bool VisualBasicArgumentTypeMatchesParameter(
+        string sourceIndexId,
+        string argumentType,
+        string parameterType,
+        IReadOnlyList<CombinedFactRow> typeDeclarations)
+    {
+        if (string.Equals(argumentType, parameterType, StringComparison.OrdinalIgnoreCase)) return true;
+        if (argumentType.EndsWith("()", StringComparison.Ordinal)
+            || parameterType.EndsWith("()", StringComparison.Ordinal)) return false;
+
+        var roots = UniqueVisualBasicTypeDeclarations(argumentType, sourceIndexId, typeDeclarations);
+        if (roots.Length != 1) return false;
+
+        var queue = new Queue<CombinedFactRow>();
+        queue.Enqueue(roots[0]);
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        while (queue.Count > 0 && visited.Count < 16)
+        {
+            var declaration = queue.Dequeue();
+            var declarationName = VisualBasicTypeDeclarationName(declaration);
+            if (!visited.Add($"{declaration.SourceIndexId}\0{declarationName}")) continue;
+            foreach (var baseType in SplitVisualBasicBaseTypes(
+                CombinedDependencyReporter.FirstValue(declaration.Properties, "baseTypes")))
+            {
+                if (VisualBasicTypeMatches(baseType, parameterType)) return true;
+                var next = UniqueVisualBasicTypeDeclarations(baseType, declaration.SourceIndexId, typeDeclarations);
+                if (next.Length == 1) queue.Enqueue(next[0]);
+            }
+        }
+
+        return false;
+    }
+
+    private static CombinedFactRow[] UniqueVisualBasicTypeDeclarations(
+        string typeName,
+        string preferredSourceIndexId,
+        IReadOnlyList<CombinedFactRow> typeDeclarations)
+    {
+        var matches = typeDeclarations
+            .Where(declaration => VisualBasicTypeMatches(VisualBasicTypeDeclarationName(declaration), typeName))
+            .OrderBy(declaration => declaration.CombinedFactId, StringComparer.Ordinal)
+            .ToArray();
+        var local = matches.Where(declaration => declaration.SourceIndexId == preferredSourceIndexId).ToArray();
+        if (local.Length > 0) matches = local;
+        return matches
+            .GroupBy(declaration => $"{declaration.SourceIndexId}\0{VisualBasicTypeDeclarationName(declaration)}", StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .Take(2)
             .ToArray();
     }
 
