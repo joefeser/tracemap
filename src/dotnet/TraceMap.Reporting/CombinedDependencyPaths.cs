@@ -3751,9 +3751,17 @@ public static partial class CombinedDependencyPathReporter
                 if (state.NodeIds.Contains(edge.ToNodeId, StringComparer.Ordinal))
                 {
                     if (edge.EdgeKind == "calls") callEdgeFilteredByCycle = true;
-                    truncated = true;
-                    traversal[state.RootNodeId].MarkTruncated("cycle");
-                    gaps.Add(TruncatedGap("cycle", edge.ToNodeId, graph));
+                    // Symbol reconciliation is deliberately bidirectional so a
+                    // bare syntax name and its unique qualified identity can
+                    // share downstream evidence. Its reverse edge is an alias
+                    // back-edge, not evidence that bounded traversal omitted a
+                    // reachable branch.
+                    if (edge.EdgeKind != "symbol-reconciliation")
+                    {
+                        truncated = true;
+                        traversal[state.RootNodeId].MarkTruncated("cycle");
+                        gaps.Add(TruncatedGap("cycle", edge.ToNodeId, graph));
+                    }
                     continue;
                 }
 
