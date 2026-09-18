@@ -1,6 +1,10 @@
 $ErrorActionPreference = 'Stop'
 $scripts = Split-Path -Parent $PSScriptRoot
 $subject = Join-Path $scripts 'New-FocusedWebFormsPageGraphDump.ps1'
+$subjectText = [IO.File]::ReadAllText($subject)
+foreach ($expected in @('WEBFORMS_PAGE_GRAPH_DUMP_PAGE_NOT_RECEIPTED', 'WEBFORMS_PAGE_GRAPH_DUMP_PAGE_ARTIFACT_MISMATCH', 'sourceIndexSha256')) {
+    if (!$subjectText.Contains($expected, [StringComparison]::Ordinal)) { throw "Page graph dump omitted receipted-input guard: $expected" }
+}
 $temp = Join-Path ([IO.Path]::GetTempPath()) ('tracemap-page-graph-layout-' + [Guid]::NewGuid().ToString('N'))
 
 function Write-Json([string]$Path, [object]$Value, [int]$Depth = 20) {
