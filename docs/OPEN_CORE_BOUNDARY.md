@@ -61,10 +61,11 @@ publicly supported language or framework correct belongs in the open engine.
 ## Validation and Private Samples
 
 Validation infrastructure is part of product correctness even when a fixture
-cannot be redistributed. Public repositories such as the historical
-`dotnetperf` corpus, synthetic language-equivalence projects, and sanitized
-reproductions of real failures should pin the open behavior wherever licensing
-and safety allow.
+cannot be redistributed. Access-controlled external corpora such as the
+historical `dotnetperf` repository may inform validation on authorized private
+workers, but they are not public reproducibility fixtures. Public repositories,
+synthetic language-equivalence projects, and sanitized reproductions of real
+failures should pin the open behavior wherever licensing and safety allow.
 
 Private customer or employer samples remain private. They may reveal a defect,
 but a public fix requires an independently reproduced fixture with no private
