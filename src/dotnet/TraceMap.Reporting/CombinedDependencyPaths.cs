@@ -2736,11 +2736,29 @@ public static partial class CombinedDependencyPathReporter
                     call,
                     syntaxCandidates,
                     syntaxTypeDeclarations);
+                var signatureIdentities = signatureCandidates
+                    .GroupBy(VisualBasicSyntaxMemberIdentity, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+                if (signatureIdentities.Length > 1)
+                {
+                    AddProjectlessVisualBasicReceiverBridgeGap(
+                        graph,
+                        call,
+                        "ProjectlessVisualBasicReceiverTargetAmbiguous",
+                        "The receiver type, method name, arity, and retained argument types still matched multiple distinct syntax method signatures; TraceMap did not use body availability to choose an overload.",
+                        "syntax-signature-ambiguous",
+                        signatureIdentities.Length,
+                        signatureCandidates.Select(candidate => candidate.CombinedFactId)
+                            .Concat(receiverEvidence.Evidence.Select(fact => fact.CombinedFactId)).Append(call.CombinedFactId));
+                    continue;
+                }
                 var syntaxTargets = signatureCandidates
                     .Select(declaration => new
                     {
                         Declaration = declaration,
-                        BodyFacts = receiverBodyFacts.GetValueOrDefault($"{declaration.SourceIndexId}\0{VisualBasicContainingType(declaration)}\0{methodName}\0{argumentCount}", [])
+                        BodyFacts = VisualBasicBodyFactsForDeclaration(
+                            declaration,
+                            receiverBodyFacts.GetValueOrDefault($"{declaration.SourceIndexId}\0{VisualBasicContainingType(declaration)}\0{methodName}\0{argumentCount}", []))
                     })
                     // The declaration itself does not retain overload arity in older
                     // syntax artifacts. Require the exact arity-bearing member node
@@ -3161,6 +3179,25 @@ public static partial class CombinedDependencyPathReporter
             CombinedDependencyReporter.FirstValue(declaration.Properties, "methodName", "name") ?? string.Empty,
             parameterTypes.Length > 0 ? parameterTypes : $"legacy-declaration:{declaration.CombinedFactId}",
             CombinedDependencyReporter.FirstValue(declaration.Properties, "parameterCount") ?? string.Empty);
+    }
+
+    private static CombinedFactRow[] VisualBasicBodyFactsForDeclaration(
+        CombinedFactRow declaration,
+        IReadOnlyList<CombinedFactRow> bodyFacts)
+    {
+        var memberIdentity = CombinedDependencyReporter.FirstValue(declaration.Properties, "memberIdentity");
+        if (string.IsNullOrWhiteSpace(memberIdentity)) return bodyFacts.ToArray();
+
+        // Current syntax extraction emits the same fully qualified, typed
+        // identity for the declaration and every fact owned by its body. Once
+        // that evidence exists, never collapse back to type/name/arity: doing
+        // so would merge same-arity overloads and authorize the wrong body.
+        return bodyFacts
+            .Where(fact => string.Equals(
+                fact.SourceSymbol?.Trim(),
+                memberIdentity.Trim(),
+                StringComparison.OrdinalIgnoreCase))
+            .ToArray();
     }
 
     private static CombinedFactRow[] FilterVisualBasicExplicitArgumentTypes(
