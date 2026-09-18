@@ -1,9 +1,32 @@
 # Focused Web Forms review workflow
 
+For the shortest C# or VB.NET operator path, start with the [Web Forms review
+quickstart](../../docs/WEBFORMS_REVIEW_QUICKSTART.md). This file is the full
+reference for optional review overlays, exceptional-handler inspection,
+diagnostics, limits, and recovery.
+
+New clean runs should use `Initialize-FocusedWebFormsReview.ps1`, validate the
+commented JSONC with `Test-FocusedWebFormsReviewConfig.ps1`, then run
+`Invoke-FocusedWebFormsPipeline.ps1`. They keep the scan, packet, evidence
+corpus, workbench, logs, config, and hashed run receipt under one review root.
+Use `Show-FocusedWebFormsReviewStatus.ps1` to print those fixed locations. The
+individual commands below remain supported for stage-specific recovery.
+They are compatibility and diagnostic entry points, not competing onboarding
+flows; do not chain them for a new run when the one-root pipeline applies.
+Use `Merge-FocusedWebFormsReview.ps1` only to compose separately authorized web
+and backend review roots. After either source root is refreshed, run
+`Refresh-FocusedWebFormsMergedReview.ps1` to rebuild the merged packet,
+evidence docs, workbench, and receipted page handoffs from those retained
+inputs.
+
 This folder documents the supported operator path for turning an existing
 focused Web Forms packet into bounded, local source-review pages. The executable
 entry points remain in `scripts/` for compatibility with existing work-machine
 commands.
+
+For the pinned legacy VB.NET validation sequence, use
+[VBNET_BATTLE_TEST.md](VBNET_BATTLE_TEST.md) as a battle-test appendix rather
+than the general onboarding path.
 
 ## Start here: complete work-machine run
 
@@ -26,6 +49,12 @@ projects. Generic parameterized form:
   -ControlsFolder SharedControls `
   -SolutionRelativePath Application.sln
 ```
+
+The three folder parameters may identify the same directory, including `.` for
+a repository-root application. For an old ASP.NET Web Site solution that has no
+`.vbproj` or `.csproj`, omit the solution and project parameters and pass
+`-Projectless`; this intentionally produces reduced coverage rather than
+pretending a semantic compilation was available.
 
 Keep the newest `C:\work\tracemap-output\focused-webforms-<timestamp>` folder.
 Its `scan\index.sqlite` is the retained source of truth. The adjacent progress
@@ -79,7 +108,84 @@ rescan source or rewrite the packet/chunks:
 Open the printed `webforms-application-workbench-<timestamp>\index.html`. It
 links one report and one handoff JSON for every selected page. Add
 `-IncludeRawSource -SourceRoot C:\path\to\authorized-source` only on an
-authorized private machine when bounded working-tree excerpts are needed.
+authorized private machine when bounded working-tree excerpts are needed. The
+index uses a compact triage table; expand a row's Diagnostics control for its
+retained file, full chain outcomes, boundary and gap counts, review state, and
+handoff link.
+
+The workbench also emits a private `application-outliers.html` where each page
+alias links to its detailed report and displays its source-relative path. The
+separate `application-outliers.shareable.html` and
+`application-outliers.shareable.json` contain page aliases, bounded counts,
+generic gap classifications, and deterministic review signals only. Retained
+paths, symbols, repository identifiers, packet identifiers, scan identifiers,
+and commit SHAs are omitted from both shareable artifacts.
+Outlier ordering is a review-navigation aid, not runtime evidence, business
+priority, or predicted migration effort. Call metrics distinguish retained
+projections, unique call facts, and normalized source call sites. Matching semantic
+and syntax evidence is collapsed only in the normalized view, and chains at the
+256-fact call-evidence ceiling are identified separately from truncated graph
+traversal. A ceiling signal means more evidence may be unavailable; it does not prove
+that the handler contains exactly 256 calls.
+
+After a completed one-root run, export one anonymous page-path artifact with:
+
+```powershell
+.\scripts\Export-FocusedWebFormsPageShareable.ps1 `
+  -ReviewRoot $ReviewRoot `
+  -PageId page-043
+```
+
+Share only `workbench\page-043.paths.shareable.zip`. The contained JSON replaces
+routes, files, controls, handlers, methods, types, assemblies, URLs, source
+spans, and evidence identities with local aliases while preserving equality
+relationships between chains, endpoints, handlers, normalized call sites, and
+callees. Bounded structural signals can flag WCF-proxy shape, database APIs,
+connection lifecycle, dynamic text construction, Telerik, file, and HTTP calls.
+They are static candidates and do not prove execution. The published input hash
+covers the sanitized projection, not the private page handoff.
+
+Terminal-free gap categories are deliberately distinct:
+`NoBackendEvidence` means the completed bounded traversal retained no downstream
+edge, `DownstreamWithoutSupportedTerminal` means calls or other downstream edges
+were retained but no supported terminal was reached, and
+`BoundedTraversalTruncated` means a configured traversal bound stopped the
+inspection. None proves absence or runtime behavior.
+
+`New-FocusedWebFormsPageGraphDump.ps1` independently closes every resolved
+handler on one receipted page. Its anonymous graph projection separates event
+chain fan-out from distinct handler cases and reports per-case retained
+terminal-evidence families (`database`, `http`, or `callback-or-async`), counts,
+and unresolved-leaf state. Terminal evidence is joined only when its source
+symbol belongs to that handler closure; it remains static evidence rather than
+an execution claim.
+
+Private page and application handoff JSON retain the exact generator-script SHA-256
+and input-packet SHA-256. The alias-only outlier JSON retains the same generator
+SHA-256 but hashes only its sanitized alias/count input projection, avoiding a
+fingerprint of the private packet or source repository. Each provenance block names
+the byte/canonicalization rule used to reproduce its digest.
+
+Current packets also carry compiler-resolved declaring type and assembly metadata for
+retained call facts. The workbench derives bounded `application`, `framework`,
+`telerik`, `third-party`, or `unresolved` technology-family labels from that semantic
+metadata and prefers the semantic row when a matching syntax fallback exists. These
+labels identify static compiler evidence, not runtime receiver type or dispatch.
+Older packets remain readable but require packet regeneration from the existing index
+to gain the new semantic metadata; no source rescan is required.
+
+When the scan observes supported inline jQuery shapes, each page report also
+lists client event bindings, UI-mutation candidates, and numeric maximum-length
+constraints with exact markup spans. Literal ID, ID-suffix, and ID-contains selectors are
+correlated to controls declared on the same surface; generated ASP.NET client
+IDs are labeled explicitly. These Tier3 records are static candidates only:
+they do not prove DOM selection, browser execution, postback, or server-handler
+execution. Re-run the scan after upgrading TraceMap; regenerating a workbench
+from an older packet cannot add evidence that the older scan did not emit.
+
+Trigger rows show separate binding and handler source spans when the retained
+chain cites them. A missing span remains an evidence gap rather than being
+guessed from a similarly named method.
 
 To review every selected page, first export an immutable-overlay draft:
 
@@ -122,7 +228,7 @@ handler paths, but it is not the complete application evidence:
   -SourceRoot C:\path\to\authorized-source `
   -IndexPath C:\work\tracemap-output\focused-webforms-<scan>\scan\index.sqlite `
   -EvidenceDocsRoot C:\work\tracemap-output\evidence-docs-<run> `
-  -TriggerContextLines 50 `
+  -TriggerContextLines 10 `
   -IncludeRawSource
 ```
 
@@ -194,7 +300,7 @@ Then run:
 
 ```powershell
 .\scripts\New-FocusedWebFormsBatchInspection.ps1
-.\scripts\New-FocusedWebFormsCodePathReviewSet.ps1 -SourceRoot C:\path\to\authorized-source -TriggerContextLines 50 -IncludeRawSource
+.\scripts\New-FocusedWebFormsCodePathReviewSet.ps1 -SourceRoot C:\path\to\authorized-source -TriggerContextLines 10 -IncludeRawSource
 ```
 
 The first command reads existing scan evidence and creates a private batch
@@ -276,9 +382,11 @@ matching the inspection scan and commit. When a docs-export root is supplied,
 its manifest and query catalog must match the same provenance; matching chunks
 are selected only through retained supporting IDs or exact retrieval-hint
 parameters. Manifests are bounded at 64 MiB, and large `chunks.jsonl` corpora
-are streamed and bounded at 2 GiB;
-missing/empty corpus files and corpus-size limit failures report distinct safe
-diagnostic codes. If either optional artifact is omitted, the handoff records that it
+are streamed and bounded at 2 GiB, 100,000 lines, and 128 MiB per line.
+Supporting-ID lists produced within those bounds are accepted without a
+separate item-count cap. Missing or empty corpus files and corpus-size limit
+failures retain distinct safe diagnostic codes. If either optional artifact is
+omitted, the handoff records that it
 was not supplied instead of guessing a location.
 
 TraceMap's `index.sqlite` is the source of truth for retained static evidence.
@@ -296,6 +404,7 @@ workflow:
 | Script | Purpose |
 | --- | --- |
 | `Test-FocusedWebFormsRawEvidence.ps1` | Read-only exact semantic call audit over the retained index. |
+| `New-FocusedWebFormsPageGraphDump.ps1` | Private page dump of every resolved handler's bounded exact semantic call closure, with provenance hashes. |
 | `New-FocusedWebFormsLocalInspection.ps1` | Create the earlier single-handler private inspection. |
 | `New-FocusedWebFormsMethodInspection.ps1` | Start a private inspection from one unique method hint. |
 | `Test-FocusedWebFormsDatabaseEvidence.ps1` | Audit exact framework `DataAdapter.Fill` caller evidence. |
@@ -311,14 +420,36 @@ restricted-workstation workflow do not break. This directory is their
 documentation namespace; moving the entry points would require compatibility
 wrappers and would not improve the generated artifact layout.
 
+The Claude handoff does not require the private review or conversation files to
+live in the TraceMap repository. `Start-FocusedWebFormsClaudeReview.ps1`
+defaults the stable conversation directory to `<ReviewRoot>/claude-workspace`
+and accepts `-ConversationRoot` for any other location. It records a session
+UUID under the review root plus session-scoped numbered prompt/response turns
+under the conversation root. Invoke
+`Continue-FocusedWebFormsClaudeReview.ps1` by full path from any working
+directory to resume that exact session without replacing the earlier turn.
+
 ### Supported operator path
 
 | Script | Reads source? | Starts analysis? | Intended use |
 | --- | --- | --- | --- |
+| `Initialize-FocusedWebFormsReview.ps1` | No | No | Create an empty one-root review layout and commented JSONC configuration. |
+| `Invoke-FocusedWebFormsPipeline.ps1` | Yes | Yes, one bounded focused scan | Preferred one-root workflow: validate configuration, scan, create the packet and evidence corpus, publish the workbench, and receipt every stage. |
 | `Invoke-FocusedWebFormsReview.ps1` | Yes | Yes, one bounded focused scan | Initial restricted-workstation collection. |
 | `Invoke-FocusedWebFormsPageListReport.ps1` | No | Existing-index report traversal only | Parameterized page-list packet generation. |
-| `Run-FocusedWebFormsPageList.ps1` | No | Existing-index report traversal only | Runner backed by the ignored local JSON configuration. |
+| `Run-FocusedWebFormsPageList.ps1` | No | Existing-index report traversal only | `-ReviewRoot` derives its retained index and page selection from the review-root configuration; an explicit `-ConfigPath` retains the legacy workstation-config workflow. |
 | `Run-AndTriage-FocusedWebFormsPageList.ps1` | No | Existing-index report traversal only | Run the configured packet and triage only its exact new artifact. |
+| `Test-FocusedWebFormsReviewConfig.ps1` | No | No | Validate JSONC, paths, modes, and one-root layout before scanning. |
+| `Show-FocusedWebFormsReviewStatus.ps1` | No | No | Print fixed retained artifact paths and refresh counts for one review root. |
+| `Show-FocusedWebFormsOutlierSummary.ps1` | No | No | Print receipt-validated alias-only application totals and gap buckets. |
+| `Start-FocusedWebFormsClaudeReview.ps1` | No | No | Validate receipted evidence and launch the bounded downstream prompt in Claude Code plan mode. |
+| `Continue-FocusedWebFormsClaudeReview.ps1` | No | No | Resume the exact retained Claude session from its private conversation root and save a numbered follow-up turn. |
+| `Start-FocusedWebFormsClaudeSourceReview.ps1` | Explicitly selected files only | No | After separate authorization, stage 1–12 explicit source files temporarily and launch a source-assisted review without granting the full source tree. |
+| `New-FocusedWebFormsStandaloneReview.ps1` | No | Existing packet only | Create a new immutable receipted workbench and optionally export one anonymous page from that exact packet. |
+| `Export-FocusedWebFormsPageShareable.ps1` | No | No analysis | Export one alias-only page-path ZIP from the receipted pipeline workbench. |
+| `Export-LatestFocusedWebFormsPageShareable.ps1` | No | No analysis | Map a prior page alias to the newest standalone workbench locally and export the corresponding anonymous page. |
+| `Show-FocusedWebFormsPageTraversalSummary.ps1` | Optional private identities with explicit switch | No | Map a prior page alias to a receipted standalone review and print bounded traversal counts and states; `-IncludePrivateReceiverIdentities` also identifies retained mixed VB receiver projects and methods for local diagnosis. |
+| `New-FocusedWebFormsPageGraphDump.ps1` | No | No scan; reads retained index evidence | Create a private all-handler graph dump and its separately sanitized anonymous graph ZIP. |
 | `New-FocusedWebFormsBatchInspection.ps1` | No | No scan; reads retained index evidence | Build the private case inventory used by review sets. |
 | `New-FocusedWebFormsCodePathReviewSet.ps1` | Yes, bounded local reads; raw serialization is opt-in | No scan | Generate the normal multi-case HTML review set and `index.md` verdict queue. |
 | `New-FocusedWebFormsCodePathReview.ps1` | Yes, bounded local reads; raw serialization is opt-in | No scan | Generate one case during focused investigation. |
@@ -335,12 +466,18 @@ wrappers and would not improve the generated artifact layout.
 | `Summarize-CompletedWebFormsDepths.ps1` | Small bounded comparison of already completed depth 8/10 artifacts. |
 | `Compare-CompletedWebFormsPageTriage.ps1` | Provenance-gated comparison of completed depth reports. |
 | `Compare-FocusedWebFormsDepth.ps1` | Compatibility reader for an explicit depth 8/10/12 set; it never launches deeper runs. |
+| `Resume-FocusedWebFormsReview.ps1` | Legacy retained-scan summary recovery used by the VB battle-test appendix; the one-root pipeline is preferred for new runs. |
 
 ### Collection summaries and narrow diagnostics
 
-| Script family | Purpose |
+| Script | Purpose |
 | --- | --- |
-| `Export-FocusedWebForms*Summary.ps1` | Create sanitized progress, performance, evidence, workspace, and accuracy readbacks from a focused collection. |
+| `Export-FocusedWebFormsProgressSummary.ps1` | Create a sanitized stage-progress readback from a focused collection receipt. |
+| `Export-FocusedWebFormsPerformanceSummary.ps1` | Create a sanitized extractor-timing readback from a focused collection performance receipt. |
+| `Export-FocusedWebFormsEvidenceSummary.ps1` | Create a sanitized evidence and gap-extractor readback from retained scan artifacts. |
+| `Export-FocusedWebFormsWorkspaceSummary.ps1` | Create a sanitized workspace/build-coverage readback for the configured source scopes. |
+| `Export-FocusedWebFormsAccuracySummary.ps1` | Create a sanitized extractor accuracy and coverage readback for the configured source scopes. |
+| `Debug-FocusedWebFormsPageCallSites.ps1` | Print private per-chain call counts and retained call-site IDs, source spans, kinds, and resolutions for one workbench page. |
 | `Test-FocusedWebFormsRawEvidence.ps1` | Shared bounded diagnostic engine for exact retained witnesses and private inspections. |
 | `New-FocusedWebFormsLocalInspection.ps1` | Earlier single-handler private JSON inspection. |
 | `New-FocusedWebFormsMethodInspection.ps1` | Private method-hint inspection across retained abstraction layers. |
@@ -356,6 +493,8 @@ From the repository root, the focused synthetic checks are:
 ```powershell
 pwsh -NoProfile -File .\scripts\Invoke-FocusedWebFormsReview.Tests.ps1
 pwsh -NoProfile -File .\scripts\tests\Test-FocusedWebFormsConfiguration.ps1
+pwsh -NoProfile -File .\scripts\tests\Test-FocusedWebFormsDocumentation.ps1
+pwsh -NoProfile -File .\scripts\tests\Test-FocusedWebFormsPageCallSitesDebug.ps1
 pwsh -NoProfile -File .\scripts\tests\Test-FocusedWebFormsCodePathReviewSet.ps1
 pwsh -NoProfile -File .\scripts\tests\Test-FocusedWebFormsApplicationWorkbench.ps1
 pwsh -NoProfile -File .\scripts\webforms-review\Test-WitsApplicationReview.ps1

@@ -18,6 +18,7 @@ configuration, or business logic are used.
 | `samples/vb-modern-sample` | SDK-style `.vbproj`, net10.0, `Option Strict On` | Builds with the .NET SDK (verified on macOS arm64, SDK 10.0.302) | Full semantic path (`Tier1Semantic`), no reduced-coverage label expected from the VB side |
 | `samples/vb-legacy-sample` | Old-style `ToolsVersion=3.5` `.vbproj`, `Option Strict Off`, `My Project` folder | Does not build with the modern SDK (expected MSB3644: .NET Framework 3.5 reference assemblies unavailable) | Partial compiler-backed evidence where syntax trees load, bounded call-site fallback for unresolved invocations, explicit `Tier4Unknown` gaps, and a reduced-coverage label |
 | `samples/vb-webforms-sample` | Old-style .NET Framework 4.8 Web Application project with `.aspx`, code-behind, and designer | Does not build with the modern SDK (expected MSB3644: net48 reference assemblies; Web Application targets) | Bounded VB event and shared Web Forms composition corpus for #738 |
+| `samples/vb-projectless-webforms-sample` | Projectless ASP.NET Web Site with `CodeFile`, inline jQuery, server controls, and `App_Code` | Intentionally has no project or solution; scanner uses bounded syntax analysis | Projectless handler/call ownership and terminal-free diagnostic corpus |
 
 ## samples/vb-modern-sample (semantic success fixture)
 
@@ -136,6 +137,20 @@ code-behind, designer), compiler-resolved or bounded syntax event facts,
 shared Web Forms page/control/handler/lifecycle evidence, and `Tier4Unknown`
 gaps for unresolved framework metadata, late binding, ambiguity, and the
 unbuildable legacy project.
+
+## samples/vb-projectless-webforms-sample
+
+This intentionally projectless fixture models an ASP.NET Web Site without
+inventing build metadata. It keeps inline jQuery, a UI-only event handler, and
+handlers with direct syntax calls in one small corpus. VB syntax caller
+identities include their parameter-count suffix; the shared Web Forms
+projection must normalize that exact suffix while retaining same-file,
+containing-span ownership.
+
+Expected packet outcomes: the direct-call handlers retain their call evidence
+and report `DownstreamWithoutSupportedTerminal` when no supported terminal is
+reached; the UI-only handler retains zero call evidence and reports
+`NoBackendEvidence`. Neither outcome proves runtime execution or absence.
 
 ## Validation commands
 

@@ -13,7 +13,7 @@ namespace TraceMap.Core;
 // diagnostics, and a deterministic per-file fact budget.
 public static class VisualBasicSyntaxExtractor
 {
-    private const int MaxFactsPerFile = 2000;
+    private const int MaxFactsPerFile = 5000;
     private const int MaxParseDiagnosticGapsPerFile = 20;
 
     public static IReadOnlyList<CodeFact> Extract(
@@ -70,23 +70,114 @@ public static class VisualBasicSyntaxExtractor
                 continue;
             }
 
-            var tree = VisualBasicSyntaxTree.ParseText(SourceText.From(source), path: file.RelativePath);
-            AddParseDiagnostics(manifest, facts, tree, file.RelativePath);
-            var root = tree.GetCompilationUnitRoot();
+            CompilationUnitSyntax root;
+            try
+            {
+                var tree = VisualBasicSyntaxTree.ParseText(SourceText.From(source), path: file.RelativePath);
+                AddParseDiagnostics(manifest, facts, tree, file.RelativePath);
+                root = tree.GetCompilationUnitRoot();
+            }
+            catch (Exception ex) when (IsRecoverablePhaseFailure(ex))
+            {
+                AddPhaseFailureGap(manifest, facts, file.RelativePath, RuleIds.VisualBasicSyntaxDeclarations, "parse", ex);
+                continue;
+            }
+
             var fileProtectedSpans = protectedSourceSpans?
                 .Where(span => span.FilePath.Equals(file.RelativePath, StringComparison.Ordinal))
                 .ToArray() ?? [];
             var budget = new FactBudget(MaxFactsPerFile);
             facts.Add(CreateSemanticUnavailableGap(manifest, file.RelativePath));
-            AddDeclarationFacts(manifest, facts, file.RelativePath, root, budget);
-            AddEventCompositionFacts(manifest, facts, file.RelativePath, root, budget);
-            AddMemberAccessFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans, budget);
-            AddInvocationFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans, budget);
-            AddObjectCreationFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans, budget);
+            TryRunPhase(manifest, facts, file.RelativePath, RuleIds.VisualBasicSyntaxDeclarations, "declarations",
+                () => AddDeclarationFacts(manifest, facts, file.RelativePath, root, budget));
+            TryRunPhase(manifest, facts, file.RelativePath, RuleIds.VisualBasicSyntaxEventWiring, "event-composition",
+                () => AddEventCompositionFacts(manifest, facts, file.RelativePath, root, budget));
+            // Call-path evidence is more useful than isolated member names when
+            // a large legacy file reaches the shared per-file fallback budget.
+            // Retain invocations and receiver creations together with bounded,
+            // deterministic round-robin admission across containing members.
+            // This prevents one high-volume method from starving receiver
+            // provenance or body evidence in later methods in the same file.
+            TryRunPhase(manifest, facts, file.RelativePath, RuleIds.VisualBasicSyntaxCallGraph, "calls-and-object-creations",
+                () => AddCallAndObjectCreationFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans, budget));
+            TryRunPhase(manifest, facts, file.RelativePath, RuleIds.VisualBasicSyntaxMemberAccess, "member-access",
+                () => AddMemberAccessFacts(manifest, facts, file.RelativePath, root, fileProtectedSpans, budget));
         }
 
         return facts;
     }
+
+    internal static bool TryRunPhase(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        string filePath,
+        string ruleId,
+        string phase,
+        Action action)
+    {
+        try
+        {
+            action();
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (IsRecoverablePhaseFailure(ex))
+        {
+            AddPhaseFailureGap(manifest, facts, filePath, ruleId, phase, ex);
+            return false;
+        }
+    }
+
+    private static void AddPhaseFailureGap(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        string filePath,
+        string ruleId,
+        string phase,
+        Exception exception)
+    {
+        facts.Add(FactFactory.Create(
+            manifest,
+            FactTypes.AnalysisGap,
+            ruleId,
+            EvidenceTiers.Tier4Unknown,
+            new EvidenceSpan(
+                FileInventory.NormalizeRelativePath(filePath),
+                1,
+                1,
+                null,
+                "VisualBasicSyntaxExtractor",
+                ScannerVersions.VisualBasicSyntaxExtractor),
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["coverageEffect"] = "reduces-syntax-coverage-for-file",
+                ["failureCategory"] = ClassifyPhaseFailure(exception),
+                ["failureTypeHash"] = FactFactory.Hash(exception.GetType().FullName ?? exception.GetType().Name, 24),
+                ["gapKind"] = "VisualBasicSyntaxFallbackPhaseFailed",
+                ["message"] = "One bounded Visual Basic syntax fallback phase failed for this file; other files and phases continued without inferring the missing evidence.",
+                ["phase"] = phase,
+                ["sanitization"] = "category-only"
+            }));
+    }
+
+    private static string ClassifyPhaseFailure(Exception exception) => exception switch
+    {
+        IndexOutOfRangeException or ArgumentOutOfRangeException => "range-failure",
+        ArgumentException => "argument-failure",
+        InvalidOperationException => "invalid-operation",
+        NullReferenceException => "null-reference",
+        IOException or UnauthorizedAccessException => "file-access-failure",
+        _ => "unexpected-failure"
+    };
+
+    private static bool IsRecoverablePhaseFailure(Exception exception) =>
+        exception is not OperationCanceledException
+            and not OutOfMemoryException
+            and not StackOverflowException
+            and not AccessViolationException;
 
     private static void AddDeclarationFacts(
         ScanManifest manifest,
@@ -113,12 +204,26 @@ public static class VisualBasicSyntaxExtractor
             var namespaceName = GetSyntacticNamespace(statement);
             var containingTypeNames = statement.Ancestors()
                 .OfType<TypeBlockSyntax>()
+                // A TypeStatementSyntax is the BlockStatement of its own parent
+                // TypeBlockSyntax. Exclude that block here because declared.name
+                // is appended below; retaining it produces Worker.Worker.
+                .Where(block => !ReferenceEquals(block.BlockStatement, statement))
                 .Select(block => block.BlockStatement.Identifier.ValueText)
                 .Reverse();
             var qualifiedName = string.Join(".", new[] { namespaceName }
                 .Concat(containingTypeNames)
                 .Append(declared.name)
                 .Where(item => !string.IsNullOrWhiteSpace(item)));
+            var baseTypes = statement.Parent is TypeBlockSyntax typeBlock
+                ? typeBlock.ChildNodes()
+                    .OfType<InheritsStatementSyntax>()
+                    .SelectMany(inherits => inherits.Types)
+                    .Select(type => type.ToString().Trim())
+                    .Where(type => type.Length > 0)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(type => type, StringComparer.OrdinalIgnoreCase)
+                    .ToArray()
+                : [];
             if (!TryAddSyntaxFact(
                     manifest,
                     facts,
@@ -132,7 +237,8 @@ public static class VisualBasicSyntaxExtractor
                         ["kind"] = declared.kind,
                         ["name"] = declared.name,
                         ["namespace"] = namespaceName,
-                        ["qualifiedName"] = qualifiedName
+                        ["qualifiedName"] = qualifiedName,
+                        ["baseTypes"] = string.Join(";", baseTypes)
                     },
                     budget))
             {
@@ -204,6 +310,15 @@ public static class VisualBasicSyntaxExtractor
             var containingType = statement.Ancestors()
                 .OfType<TypeBlockSyntax>()
                 .FirstOrDefault()?.BlockStatement.Identifier.ValueText ?? string.Empty;
+            var qualifiedContainingType = GetSyntacticContainingType(statement);
+            var parameterTypes = MethodParameterTypes(statement).ToArray();
+            var parameterCount = statement switch
+            {
+                MethodStatementSyntax methodStatement => methodStatement.ParameterList?.Parameters.Count ?? 0,
+                SubNewStatementSyntax constructor => constructor.ParameterList?.Parameters.Count ?? 0,
+                OperatorStatementSyntax operatorStatement => operatorStatement.ParameterList?.Parameters.Count ?? 0,
+                _ => 0
+            };
             if (!TryAddSyntaxFact(
                     manifest,
                     facts,
@@ -215,7 +330,12 @@ public static class VisualBasicSyntaxExtractor
                     new SortedDictionary<string, string>(StringComparer.Ordinal)
                     {
                         ["containingType"] = containingType,
-                        ["name"] = methodName
+                        ["memberIdentity"] = $"{qualifiedContainingType}.{methodName}({string.Join(",", parameterTypes)})",
+                        ["qualifiedMemberName"] = $"{qualifiedContainingType}.{methodName}",
+                        ["qualifiedContainingType"] = qualifiedContainingType,
+                        ["name"] = methodName,
+                        ["parameterCount"] = parameterCount.ToString(),
+                        ["parameterTypes"] = string.Join(";", parameterTypes)
                     },
                     budget))
             {
@@ -254,23 +374,35 @@ public static class VisualBasicSyntaxExtractor
         foreach (var field in root.DescendantNodes().OfType<FieldDeclarationSyntax>())
         {
             var containingType = field.Ancestors().OfType<TypeBlockSyntax>().FirstOrDefault()?.BlockStatement.Identifier.ValueText ?? string.Empty;
-            foreach (var name in field.Declarators.SelectMany(declarator => declarator.Names))
+            var qualifiedContainingType = GetSyntacticContainingType(field);
+            foreach (var declarator in field.Declarators)
             {
-                var fieldName = name.Identifier.ValueText;
-                if (!TryAddSyntaxFact(manifest, facts, FactTypes.FieldDeclared, RuleIds.VisualBasicSyntaxDeclarations,
-                        filePath, name,
-                        string.IsNullOrWhiteSpace(containingType) ? fieldName : $"{containingType}.{fieldName}",
-                        new SortedDictionary<string, string>(StringComparer.Ordinal)
-                        {
-                            ["containingType"] = containingType,
-                            ["fieldName"] = fieldName,
-                            ["isWithEvents"] = field.Modifiers.Any(SyntaxKind.WithEventsKeyword) ? "True" : "False"
-                        },
-                        budget,
-                        sourceSymbol: containingType,
-                        contractElement: fieldName))
+                var fieldType = declarator.AsClause switch
                 {
-                    return;
+                    SimpleAsClauseSyntax simple => simple.Type.ToString().Trim(),
+                    AsNewClauseSyntax { NewExpression: ObjectCreationExpressionSyntax creation } => creation.Type.ToString().Trim(),
+                    _ => string.Empty
+                };
+                foreach (var name in declarator.Names)
+                {
+                    var fieldName = name.Identifier.ValueText;
+                    if (!TryAddSyntaxFact(manifest, facts, FactTypes.FieldDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+                            filePath, name,
+                            string.IsNullOrWhiteSpace(containingType) ? fieldName : $"{containingType}.{fieldName}",
+                            new SortedDictionary<string, string>(StringComparer.Ordinal)
+                            {
+                                ["containingType"] = containingType,
+                                ["qualifiedContainingType"] = qualifiedContainingType,
+                                ["fieldName"] = fieldName,
+                                ["fieldType"] = fieldType,
+                                ["isWithEvents"] = field.Modifiers.Any(SyntaxKind.WithEventsKeyword) ? "True" : "False"
+                            },
+                            budget,
+                            sourceSymbol: containingType,
+                            contractElement: fieldName))
+                    {
+                        return;
+                    }
                 }
             }
         }
@@ -315,6 +447,265 @@ public static class VisualBasicSyntaxExtractor
         }
     }
 
+    private static bool TryAddExplicitDataAdapterFillFact(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        string filePath,
+        CompilationUnitSyntax root,
+        InvocationExpressionSyntax invocation,
+        string invocationName,
+        string? containingMember,
+        FactBudget budget)
+    {
+        if (!invocationName.Equals("Fill", StringComparison.OrdinalIgnoreCase)
+            || GetInvocationReceiverName(invocation.Expression) is not { Length: > 0 } receiverName
+            || !TryResolveExplicitDataAdapterType(root, invocation, receiverName, out var receiverType))
+        {
+            return true;
+        }
+
+        return TryAddSyntaxFact(
+            manifest,
+            facts,
+            FactTypes.DatabaseOperationCandidate,
+            RuleIds.VisualBasicSyntaxDatabaseOperation,
+            filePath,
+            invocation,
+            targetSymbol: $"{receiverType}.Fill",
+            new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["coverageLabel"] = "reduced-syntax-vb-database-operation",
+                ["operationKind"] = "data-adapter-fill",
+                ["receiverName"] = receiverName,
+                ["receiverType"] = receiverType,
+                ["resolutionKind"] = "ExplicitSyntaxType",
+                ["resultKind"] = SyntaxFillResultKind(invocation),
+                ["ruleLimitations"] = "The receiver has an explicit data-adapter type in Visual Basic syntax, but compiler identity, provider binding, query text, connection identity, successful execution, and runtime reachability are not established.",
+                ["sqlSourceKind"] = "vb-syntax-explicit-data-adapter-fill"
+            },
+            budget,
+            sourceSymbol: containingMember,
+            contractElement: "data-adapter-fill");
+    }
+
+    private static bool TryAddExplicitDatabaseCommandOperationFact(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        string filePath,
+        CompilationUnitSyntax root,
+        InvocationExpressionSyntax invocation,
+        string invocationName,
+        string? containingMember,
+        FactBudget budget)
+    {
+        var operation = invocationName.ToLowerInvariant() switch
+        {
+            "executescalar" or "executescalarasync" => (Kind: "scalar-candidate", Result: "scalar"),
+            "executereader" or "executereaderasync" => (Kind: "select-candidate", Result: "data-reader"),
+            "executenonquery" or "executenonqueryasync" => (Kind: "execute-candidate", Result: "row-count"),
+            _ => default
+        };
+        if (operation == default
+            || GetInvocationReceiverName(invocation.Expression) is not { Length: > 0 } receiverName
+            || !TryResolveExplicitReceiverType(root, invocation, receiverName, IsKnownDatabaseCommandType, out var receiverType))
+        {
+            return true;
+        }
+
+        return TryAddSyntaxFact(
+            manifest,
+            facts,
+            FactTypes.DatabaseOperationCandidate,
+            RuleIds.VisualBasicSyntaxDatabaseOperation,
+            filePath,
+            invocation,
+            targetSymbol: $"{receiverType}.{invocationName}",
+            new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["coverageLabel"] = "reduced-syntax-vb-database-operation",
+                ["operationKind"] = operation.Kind,
+                ["receiverName"] = receiverName,
+                ["receiverType"] = receiverType,
+                ["resolutionKind"] = "ExplicitSyntaxType",
+                ["resultKind"] = operation.Result,
+                ["ruleLimitations"] = "The invocation receiver has an explicit supported ADO.NET command type in Visual Basic syntax, but compiler identity, provider binding, command text, connection identity, successful execution, and runtime reachability are not established.",
+                ["sqlSourceKind"] = "vb-syntax-explicit-database-command"
+            },
+            budget,
+            sourceSymbol: containingMember,
+            contractElement: operation.Kind);
+    }
+
+    private static bool TryResolveExplicitDataAdapterType(
+        CompilationUnitSyntax root,
+        InvocationExpressionSyntax invocation,
+        string receiverName,
+        out string receiverType)
+    {
+        return TryResolveExplicitReceiverType(root, invocation, receiverName, IsKnownDataAdapterType, out receiverType);
+    }
+
+    private static bool TryResolveExplicitReceiverType(
+        CompilationUnitSyntax root,
+        InvocationExpressionSyntax invocation,
+        string receiverName,
+        Func<string, bool> supportedType,
+        out string receiverType)
+    {
+        receiverType = string.Empty;
+        var simpleReceiver = receiverName.Split('.').Last();
+        var explicitlyQualifiedField = receiverName.StartsWith("Me.", StringComparison.OrdinalIgnoreCase)
+            || receiverName.StartsWith("MyBase.", StringComparison.OrdinalIgnoreCase);
+        var explicitlyQualifiedBaseField = receiverName.StartsWith("MyBase.", StringComparison.OrdinalIgnoreCase);
+        var containingMethod = invocation.Ancestors().OfType<MethodBlockBaseSyntax>().FirstOrDefault();
+        var containingType = invocation.Ancestors().OfType<TypeBlockSyntax>().FirstOrDefault();
+        if (containingMethod is not null && !explicitlyQualifiedField)
+        {
+            var matchingParameters = MethodParameters(containingMethod.BlockStatement)
+                .Where(parameter => parameter.Identifier.Identifier.ValueText.Equals(simpleReceiver, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            if (matchingParameters.Length > 0)
+            {
+                var parameterTypes = matchingParameters
+                    .Select(ExplicitParameterType)
+                    .Where(type => type is not null && supportedType(type))
+                    .Select(type => type!)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+                if (parameterTypes.Length != 1) return false;
+                receiverType = parameterTypes[0];
+                return true;
+            }
+
+            var nearestLocal = containingMethod.DescendantNodes().OfType<VariableDeclaratorSyntax>()
+                .Where(declaration => declaration.SpanStart < invocation.SpanStart)
+                .Where(declaration => declaration.Ancestors().OfType<MethodBlockBaseSyntax>().FirstOrDefault() == containingMethod)
+                .Where(declaration => IsVisualBasicLocalInScope(declaration, invocation, containingMethod))
+                .Where(declaration => declaration.Names.Any(name => name.Identifier.ValueText.Equals(simpleReceiver, StringComparison.OrdinalIgnoreCase)))
+                .OrderByDescending(declaration => declaration.SpanStart)
+                .FirstOrDefault();
+            if (nearestLocal is not null)
+            {
+                var localType = ExplicitVariableType(nearestLocal);
+                if (localType is null || !supportedType(localType)) return false;
+                receiverType = localType;
+                return true;
+            }
+        }
+
+        var visitedTypes = new HashSet<TypeBlockSyntax>();
+        var currentType = containingType;
+        if (explicitlyQualifiedBaseField && currentType is not null)
+        {
+            currentType = ResolveUniqueVisualBasicBaseType(root, currentType);
+        }
+        for (var depth = 0; currentType is not null && depth < 16 && visitedTypes.Add(currentType); depth++)
+        {
+            var matchingFields = currentType.DescendantNodes().OfType<VariableDeclaratorSyntax>()
+                .Where(declaration => declaration.Ancestors().OfType<MethodBlockBaseSyntax>().FirstOrDefault() is null)
+                .Where(declaration => declaration.Ancestors().OfType<TypeBlockSyntax>().FirstOrDefault() == currentType)
+                .Where(declaration => declaration.Names.Any(name => name.Identifier.ValueText.Equals(simpleReceiver, StringComparison.OrdinalIgnoreCase)))
+                .ToArray();
+            if (matchingFields.Length > 0)
+            {
+                var fieldTypes = matchingFields.Select(ExplicitVariableType)
+                    .Where(type => type is not null && supportedType(type))
+                    .Select(type => type!)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+                if (fieldTypes.Length != 1) return false;
+                receiverType = fieldTypes[0];
+                return true;
+            }
+
+            currentType = ResolveUniqueVisualBasicBaseType(root, currentType);
+        }
+        return false;
+    }
+
+    private static bool IsVisualBasicLocalInScope(
+        VariableDeclaratorSyntax declaration,
+        InvocationExpressionSyntax invocation,
+        MethodBlockBaseSyntax containingMethod)
+    {
+        var lexicalScope = declaration.Ancestors()
+            .TakeWhile(ancestor => ancestor != containingMethod)
+            .FirstOrDefault(ancestor => ancestor is LambdaExpressionSyntax
+                || ancestor.GetType().Name.EndsWith("BlockSyntax", StringComparison.Ordinal))
+            ?? containingMethod;
+        return lexicalScope.Span.Contains(invocation.SpanStart);
+    }
+
+    private static TypeBlockSyntax? ResolveUniqueVisualBasicBaseType(CompilationUnitSyntax root, TypeBlockSyntax currentType)
+    {
+        var baseNames = currentType.ChildNodes().OfType<InheritsStatementSyntax>()
+            .SelectMany(statement => statement.Types)
+            .Select(type => type.ToString().Trim())
+            .Where(type => type.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (baseNames.Length != 1) return null;
+        var simpleBaseName = baseNames[0].Split('.').Last();
+        var baseCandidates = root.DescendantNodes().OfType<TypeBlockSyntax>()
+            .Where(type => type.BlockStatement.Identifier.ValueText.Equals(simpleBaseName, StringComparison.OrdinalIgnoreCase)
+                || GetSyntacticContainingType(type.BlockStatement).Equals(baseNames[0], StringComparison.OrdinalIgnoreCase))
+            .Distinct()
+            .ToArray();
+        return baseCandidates.Length == 1 ? baseCandidates[0] : null;
+    }
+
+    private static string? ExplicitVariableType(VariableDeclaratorSyntax declaration)
+    {
+        if (declaration.AsClause is SimpleAsClauseSyntax simple)
+        {
+            return simple.Type.ToString().Trim();
+        }
+
+        if (declaration.AsClause is AsNewClauseSyntax { NewExpression: ObjectCreationExpressionSyntax asNewCreation })
+        {
+            return asNewCreation.Type.ToString().Trim();
+        }
+
+        return declaration.Initializer?.Value is ObjectCreationExpressionSyntax creation
+            ? creation.Type.ToString().Trim()
+            : null;
+    }
+
+    private static bool IsKnownDataAdapterType(string typeName)
+    {
+        var simple = typeName.Split('.').Last();
+        return simple.Equals("DbDataAdapter", StringComparison.OrdinalIgnoreCase)
+            || simple.Equals("SqlDataAdapter", StringComparison.OrdinalIgnoreCase)
+            || simple.Equals("OleDbDataAdapter", StringComparison.OrdinalIgnoreCase)
+            || simple.Equals("OdbcDataAdapter", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsKnownDatabaseCommandType(string typeName)
+    {
+        var simple = typeName.Split('.').Last();
+        return simple.Equals("DbCommand", StringComparison.OrdinalIgnoreCase)
+            || simple.Equals("IDbCommand", StringComparison.OrdinalIgnoreCase)
+            || simple.Equals("SqlCommand", StringComparison.OrdinalIgnoreCase)
+            || simple.Equals("OleDbCommand", StringComparison.OrdinalIgnoreCase)
+            || simple.Equals("OdbcCommand", StringComparison.OrdinalIgnoreCase)
+            || simple.Equals("OracleCommand", StringComparison.OrdinalIgnoreCase)
+            || simple.Equals("OracleDbCommand", StringComparison.OrdinalIgnoreCase)
+            || simple.Equals("SQLiteCommand", StringComparison.OrdinalIgnoreCase)
+            || simple.Equals("SqliteCommand", StringComparison.OrdinalIgnoreCase)
+            || simple.Equals("DB2Command", StringComparison.OrdinalIgnoreCase)
+            || simple.Equals("NpgsqlCommand", StringComparison.OrdinalIgnoreCase)
+            || simple.Equals("MySqlCommand", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string SyntaxFillResultKind(InvocationExpressionSyntax invocation)
+    {
+        var first = invocation.ArgumentList?.Arguments.OfType<SimpleArgumentSyntax>().FirstOrDefault()?.Expression;
+        var typeName = first is ObjectCreationExpressionSyntax creation ? creation.Type.ToString().Split('.').Last() : null;
+        return typeName?.Equals("DataSet", StringComparison.OrdinalIgnoreCase) == true ? "data-set"
+            : typeName?.Equals("DataTable", StringComparison.OrdinalIgnoreCase) == true ? "data-table"
+            : "unknown";
+    }
+
     private static void AddMemberAccessFacts(
         ScanManifest manifest,
         List<CodeFact> facts,
@@ -330,11 +721,14 @@ public static class VisualBasicSyntaxExtractor
                 continue;
             }
 
-            var memberName = memberAccess.Name.Identifier.ValueText;
+            var memberName = memberAccess.Name?.Identifier.ValueText ?? string.Empty;
             if (string.IsNullOrWhiteSpace(memberName))
             {
-                memberName = memberAccess.Name.ToString();
+                memberName = memberAccess.Name?.ToString() ?? string.Empty;
             }
+            var expressionText = memberAccess.Expression?.ToString() ?? string.Empty;
+            var expressionKind = memberAccess.Expression?.Kind().ToString() ?? "ImplicitWithReceiver";
+            var sourceSymbol = GetSafeExpressionName(memberAccess.Expression) ?? "implicit-with";
 
             if (!TryAddSyntaxFact(
                     manifest,
@@ -346,12 +740,12 @@ public static class VisualBasicSyntaxExtractor
                     targetSymbol: memberName,
                     new SortedDictionary<string, string>(StringComparer.Ordinal)
                     {
-                        ["expressionHash"] = FactFactory.Hash(memberAccess.Expression.ToString(), 32),
-                        ["expressionKind"] = memberAccess.Expression.Kind().ToString(),
+                        ["expressionHash"] = FactFactory.Hash(expressionText, 32),
+                        ["expressionKind"] = expressionKind,
                         ["memberName"] = memberName
                     },
                     budget,
-                    sourceSymbol: GetSafeExpressionName(memberAccess.Expression)))
+                    sourceSymbol: sourceSymbol))
             {
                 return;
             }
@@ -374,9 +768,9 @@ public static class VisualBasicSyntaxExtractor
 
             foreach (var item in method.HandlesClause.Events)
             {
-                var eventName = item.EventMember.Identifier.ValueText;
+                var eventName = item.EventMember?.Identifier.ValueText ?? string.Empty;
                 var receiverName = SafeEventReceiverName(item.EventContainer);
-                if (string.IsNullOrWhiteSpace(receiverName))
+                if (string.IsNullOrWhiteSpace(receiverName) || string.IsNullOrWhiteSpace(eventName))
                 {
                     if (!AddSyntaxEventGap(manifest, facts, filePath, item, "UnsupportedVisualBasicEventReceiver", budget)) return;
                     continue;
@@ -451,7 +845,12 @@ public static class VisualBasicSyntaxExtractor
 
         foreach (var statement in root.DescendantNodes().OfType<RaiseEventStatementSyntax>())
         {
-            var eventName = statement.Name.Identifier.ValueText;
+            var eventName = statement.Name?.Identifier.ValueText ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(eventName))
+            {
+                if (!AddSyntaxEventGap(manifest, facts, filePath, statement, "UnsupportedVisualBasicEventName", budget)) return;
+                continue;
+            }
             if (!TryAddSyntaxFact(
                     manifest,
                     facts,
@@ -476,14 +875,14 @@ public static class VisualBasicSyntaxExtractor
         }
     }
 
-    private static (string ReceiverName, string EventName) SyntaxEventName(ExpressionSyntax expression) => expression switch
+    private static (string ReceiverName, string EventName) SyntaxEventName(ExpressionSyntax? expression) => expression switch
     {
-        MemberAccessExpressionSyntax member => (SafeEventReceiverName(member.Expression), member.Name.Identifier.ValueText),
+        MemberAccessExpressionSyntax member => (SafeEventReceiverName(member.Expression), member.Name?.Identifier.ValueText ?? string.Empty),
         IdentifierNameSyntax identifier => ("implicit", identifier.Identifier.ValueText),
         _ => ("unsupported", string.Empty)
     };
 
-    private static string SyntaxHandlerName(ExpressionSyntax expression)
+    private static string SyntaxHandlerName(ExpressionSyntax? expression)
     {
         if (expression is not UnaryExpressionSyntax unary || !unary.IsKind(SyntaxKind.AddressOfExpression))
         {
@@ -495,21 +894,26 @@ public static class VisualBasicSyntaxExtractor
         {
             IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
             MemberAccessExpressionSyntax member
-                when member.Expression.ToString().Equals("Me", StringComparison.OrdinalIgnoreCase)
-                    || member.Expression.ToString().Equals("MyClass", StringComparison.OrdinalIgnoreCase) => member.Name.Identifier.ValueText,
+                when member.Name is not null
+                    && (member.Expression?.ToString().Equals("Me", StringComparison.OrdinalIgnoreCase) == true
+                        || member.Expression?.ToString().Equals("MyClass", StringComparison.OrdinalIgnoreCase) == true) => member.Name.Identifier.ValueText,
             _ => string.Empty
         };
     }
 
-    private static string SafeEventReceiverName(ExpressionSyntax expression)
+    private static string SafeEventReceiverName(ExpressionSyntax? expression)
     {
+        if (expression is null)
+        {
+            return string.Empty;
+        }
         var text = expression.ToString();
         if (text.Equals("Me", StringComparison.OrdinalIgnoreCase)
             || text.Equals("MyBase", StringComparison.OrdinalIgnoreCase)
             || text.Equals("MyClass", StringComparison.OrdinalIgnoreCase)) return text;
-        if (expression is MemberAccessExpressionSyntax member
-            && (member.Expression.ToString().Equals("Me", StringComparison.OrdinalIgnoreCase)
-                || member.Expression.ToString().Equals("MyClass", StringComparison.OrdinalIgnoreCase)))
+        if (expression is MemberAccessExpressionSyntax { Name: not null } member
+            && (member.Expression?.ToString().Equals("Me", StringComparison.OrdinalIgnoreCase) == true
+                || member.Expression?.ToString().Equals("MyClass", StringComparison.OrdinalIgnoreCase) == true))
         {
             return member.Name.Identifier.ValueText;
         }
@@ -548,7 +952,7 @@ public static class VisualBasicSyntaxExtractor
         return true;
     }
 
-    private static void AddInvocationFacts(
+    private static void AddCallAndObjectCreationFacts(
         ScanManifest manifest,
         List<CodeFact> facts,
         string filePath,
@@ -556,38 +960,106 @@ public static class VisualBasicSyntaxExtractor
         IReadOnlyList<ProtectedSourceSpan> protectedSpans,
         FactBudget budget)
     {
-        foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
-        {
-            if (OverlapsProtected(invocation, protectedSpans))
-            {
-                continue;
-            }
+        var candidates = root.DescendantNodes()
+            .Where(node => node is InvocationExpressionSyntax or ObjectCreationExpressionSyntax)
+            .Where(node => !OverlapsProtected(node, protectedSpans))
+            .ToArray();
+        var scopes = candidates
+            .GroupBy(GetCallEvidenceScopeKey, StringComparer.Ordinal)
+            .Select(group => new Queue<SyntaxNode>(group
+                .OrderBy(node => node.SpanStart)
+                .ThenBy(node => node is ObjectCreationExpressionSyntax ? 0 : 1)))
+            .OrderBy(queue => queue.Peek().SpanStart)
+            .ToArray();
 
-            var invocationName = GetInvocationName(invocation.Expression);
-            var containingMember = GetContainingMemberName(invocation);
-            if (!TryAddSyntaxFact(
-                    manifest,
-                    facts,
-                    FactTypes.InvocationName,
-                    RuleIds.VisualBasicSyntaxInvocation,
-                    filePath,
-                    invocation,
-                    targetSymbol: invocationName,
-                    new SortedDictionary<string, string>(StringComparer.Ordinal)
-                    {
-                        ["expressionHash"] = FactFactory.Hash(invocation.Expression.ToString(), 32),
-                        ["expressionKind"] = invocation.Expression.Kind().ToString(),
-                        ["invocationName"] = invocationName,
-                        ["receiverName"] = GetInvocationReceiverName(invocation.Expression) ?? string.Empty
-                    },
-                    budget))
+        var remaining = scopes.Sum(queue => queue.Count);
+        while (remaining > 0)
+        {
+            foreach (var scope in scopes)
+            {
+                if (scope.Count == 0)
+                {
+                    continue;
+                }
+
+                var node = scope.Dequeue();
+                remaining--;
+                var retained = node switch
+                {
+                    InvocationExpressionSyntax invocation => AddInvocationCallFacts(
+                        manifest, facts, filePath, root, invocation, budget),
+                    ObjectCreationExpressionSyntax creation => AddObjectCreationFacts(
+                        manifest, facts, filePath, creation, budget),
+                    _ => true
+                };
+                if (!retained)
+                {
+                    return;
+                }
+            }
+        }
+
+        // InvocationName is a navigation witness, while CallEdge is the path
+        // evidence consumed by reducers. Admit these auxiliary witnesses only
+        // after every bounded call candidate had a chance at one primary edge.
+        foreach (var invocation in candidates.OfType<InvocationExpressionSyntax>().OrderBy(node => node.SpanStart))
+        {
+            if (!AddInvocationNameFact(manifest, facts, filePath, invocation, budget))
             {
                 return;
             }
+        }
+    }
 
-            // The callee is invocation text only: never a compiler-resolved
-            // target and never a symbol-ID join.
-            if (!TryAddSyntaxFact(
+    private static string GetCallEvidenceScopeKey(SyntaxNode node)
+    {
+        var member = GetContainingMemberName(node);
+        if (!string.IsNullOrWhiteSpace(member))
+        {
+            return $"member:{member}";
+        }
+
+        var containingTypes = node.Ancestors()
+            .OfType<TypeBlockSyntax>()
+            .Select(type => type.BlockStatement.Identifier.ValueText)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Reverse()
+            .ToArray();
+        return containingTypes.Length == 0
+            ? "initializer:global"
+            : $"initializer:{string.Join('.', containingTypes)}";
+    }
+
+    private static bool AddInvocationCallFacts(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        string filePath,
+        CompilationUnitSyntax root,
+        InvocationExpressionSyntax invocation,
+        FactBudget budget)
+    {
+        var invocationName = GetInvocationName(invocation.Expression);
+        var containingMember = GetContainingMemberName(invocation);
+        var argumentTypes = TryGetExplicitInvocationArgumentTypes(invocation);
+        var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["argumentCount"] = (invocation.ArgumentList?.Arguments.Count ?? 0).ToString(),
+            ["callKind"] = "SyntaxInvocation",
+            ["calleeName"] = invocationName,
+            ["callerName"] = containingMember ?? string.Empty,
+            ["coverageLabel"] = "syntax-only",
+            ["receiverName"] = GetInvocationReceiverName(invocation.Expression) ?? string.Empty
+        };
+        if (argumentTypes is not null)
+        {
+            properties["argumentTypes"] = string.Join(";", argumentTypes);
+            properties["argumentTypeResolution"] = argumentTypes.All(type => type != "unavailable")
+                ? "explicit-caller-syntax"
+                : "partial-explicit-caller-syntax";
+        }
+        // The callee is invocation text only: never a compiler-resolved
+        // target and never a symbol-ID join.
+        if (!TryAddSyntaxFact(
                     manifest,
                     facts,
                     FactTypes.CallEdge,
@@ -595,38 +1067,131 @@ public static class VisualBasicSyntaxExtractor
                     filePath,
                     invocation,
                     targetSymbol: invocationName,
-                    new SortedDictionary<string, string>(StringComparer.Ordinal)
-                    {
-                        ["callKind"] = "SyntaxInvocation",
-                        ["calleeName"] = invocationName,
-                        ["callerName"] = containingMember ?? string.Empty
-                    },
+                    properties,
                     budget,
                     sourceSymbol: containingMember))
-            {
-                return;
-            }
+        {
+            return false;
         }
+
+        if (!TryAddExplicitDatabaseCommandOperationFact(
+                manifest, facts, filePath, root, invocation, invocationName, containingMember, budget))
+        {
+            return false;
+        }
+
+        return TryAddExplicitDataAdapterFillFact(
+            manifest, facts, filePath, root, invocation, invocationName, containingMember, budget);
     }
 
-    private static void AddObjectCreationFacts(
+    private static string[]? TryGetExplicitInvocationArgumentTypes(InvocationExpressionSyntax invocation)
+    {
+        var arguments = invocation.ArgumentList?.Arguments.OfType<SimpleArgumentSyntax>().ToArray() ?? [];
+        if (arguments.Length == 0
+            || arguments.Length != (invocation.ArgumentList?.Arguments.Count ?? 0)
+            || arguments.Any(argument => argument.NameColonEquals is not null))
+        {
+            return null;
+        }
+
+        var types = new List<string>(arguments.Length);
+        var resolved = 0;
+        foreach (var argument in arguments)
+        {
+            var type = TryGetExplicitExpressionType(invocation, argument.Expression);
+            types.Add(string.IsNullOrWhiteSpace(type) ? "unavailable" : type);
+            if (!string.IsNullOrWhiteSpace(type)) resolved++;
+        }
+        return resolved == 0 ? null : types.ToArray();
+    }
+
+    private static string? TryGetExplicitExpressionType(
+        InvocationExpressionSyntax invocation,
+        ExpressionSyntax expression)
+    {
+        if (expression is ObjectCreationExpressionSyntax creation)
+        {
+            return creation.Type.ToString().Trim();
+        }
+        if (expression is not IdentifierNameSyntax identifier)
+        {
+            return null;
+        }
+
+        var name = identifier.Identifier.ValueText;
+        var containingMethod = invocation.Ancestors().OfType<MethodBlockBaseSyntax>().FirstOrDefault();
+        if (containingMethod is not null)
+        {
+            var parameterTypes = MethodParameters(containingMethod.BlockStatement)
+                .Where(parameter => parameter.Identifier.Identifier.ValueText.Equals(name, StringComparison.OrdinalIgnoreCase))
+                .Select(ExplicitParameterType)
+                .Where(type => !string.IsNullOrWhiteSpace(type))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (parameterTypes.Length == 1)
+            {
+                return parameterTypes[0];
+            }
+
+            var localTypes = containingMethod.DescendantNodes().OfType<VariableDeclaratorSyntax>()
+                .Where(declaration => declaration.SpanStart < invocation.SpanStart)
+                .Where(declaration => declaration.Ancestors().OfType<MethodBlockBaseSyntax>().FirstOrDefault() == containingMethod)
+                .Where(declaration => declaration.Names.Any(candidate =>
+                    candidate.Identifier.ValueText.Equals(name, StringComparison.OrdinalIgnoreCase)))
+                .Select(ExplicitVariableType)
+                .Where(type => !string.IsNullOrWhiteSpace(type))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            if (localTypes.Length == 1)
+            {
+                return localTypes[0];
+            }
+        }
+
+        return null;
+    }
+
+    private static string? ExplicitParameterType(ParameterSyntax parameter) =>
+        parameter.AsClause is SimpleAsClauseSyntax simple
+            ? simple.Type.ToString().Trim()
+            : null;
+
+    private static bool AddInvocationNameFact(
         ScanManifest manifest,
         List<CodeFact> facts,
         string filePath,
-        CompilationUnitSyntax root,
-        IReadOnlyList<ProtectedSourceSpan> protectedSpans,
+        InvocationExpressionSyntax invocation,
         FactBudget budget)
     {
-        foreach (var creation in root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
-        {
-            if (OverlapsProtected(creation, protectedSpans))
+        var invocationName = GetInvocationName(invocation.Expression);
+        return TryAddSyntaxFact(
+            manifest,
+            facts,
+            FactTypes.InvocationName,
+            RuleIds.VisualBasicSyntaxInvocation,
+            filePath,
+            invocation,
+            targetSymbol: invocationName,
+            new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
-                continue;
-            }
+                ["expressionHash"] = FactFactory.Hash(invocation.Expression.ToString(), 32),
+                ["expressionKind"] = invocation.Expression.Kind().ToString(),
+                ["invocationName"] = invocationName,
+                ["receiverName"] = GetInvocationReceiverName(invocation.Expression) ?? string.Empty
+            },
+            budget);
+    }
 
-            var typeName = creation.Type.ToString();
-            var containingMember = GetContainingMemberName(creation);
-            if (!TryAddSyntaxFact(
+    private static bool AddObjectCreationFacts(
+        ScanManifest manifest,
+        List<CodeFact> facts,
+        string filePath,
+        ObjectCreationExpressionSyntax creation,
+        FactBudget budget)
+    {
+        var typeName = creation.Type.ToString();
+        var containingMember = GetContainingMemberName(creation);
+        if (!TryAddSyntaxFact(
                     manifest,
                     facts,
                     FactTypes.ObjectCreated,
@@ -644,11 +1209,11 @@ public static class VisualBasicSyntaxExtractor
                     },
                     budget,
                     sourceSymbol: containingMember))
-            {
-                return;
-            }
+        {
+            return false;
+        }
 
-            if (!TryAddSyntaxFact(
+        return TryAddSyntaxFact(
                     manifest,
                     facts,
                     FactTypes.CallEdge,
@@ -662,14 +1227,11 @@ public static class VisualBasicSyntaxExtractor
                         ["callKind"] = "SyntaxObjectCreation",
                         ["calleeContainingType"] = typeName,
                         ["calleeName"] = typeName,
-                        ["callerName"] = containingMember ?? string.Empty
+                        ["callerName"] = containingMember ?? string.Empty,
+                        ["coverageLabel"] = "syntax-only"
                     },
                     budget,
-                    sourceSymbol: containingMember))
-            {
-                return;
-            }
-        }
+                    sourceSymbol: containingMember);
     }
 
     private static bool TryAddSyntaxFact(
@@ -799,6 +1361,39 @@ public static class VisualBasicSyntaxExtractor
             .Where(item => !string.IsNullOrWhiteSpace(item)));
     }
 
+    private static string GetSyntacticContainingType(SyntaxNode declaration)
+    {
+        var namespaceName = GetSyntacticNamespace(declaration);
+        var typeNames = declaration.Ancestors()
+            .OfType<TypeBlockSyntax>()
+            .Select(type => type.BlockStatement.Identifier.ValueText)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Reverse();
+        return string.Join(".", new[] { namespaceName }.Concat(typeNames)
+            .Where(value => !string.IsNullOrWhiteSpace(value)));
+    }
+
+    private static IEnumerable<string> MethodParameterTypes(MethodBaseSyntax statement)
+    {
+        return MethodParameters(statement).Select(parameter => parameter.AsClause switch
+        {
+            SimpleAsClauseSyntax simple => simple.Type.ToString().Trim(),
+            _ => "unavailable"
+        });
+    }
+
+    private static IEnumerable<ParameterSyntax> MethodParameters(MethodBaseSyntax statement)
+    {
+        var parameters = statement switch
+        {
+            MethodStatementSyntax method => method.ParameterList?.Parameters,
+            SubNewStatementSyntax constructor => constructor.ParameterList?.Parameters,
+            OperatorStatementSyntax operation => operation.ParameterList?.Parameters,
+            _ => null
+        };
+        return parameters ?? [];
+    }
+
     private static string GetInvocationName(ExpressionSyntax expression)
     {
         return expression switch
@@ -818,14 +1413,14 @@ public static class VisualBasicSyntaxExtractor
         };
     }
 
-    private static string? GetSafeExpressionName(ExpressionSyntax expression)
+    private static string? GetSafeExpressionName(ExpressionSyntax? expression)
     {
         return expression switch
         {
             IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
             MeExpressionSyntax => "Me",
             MyBaseExpressionSyntax => "MyBase",
-            MemberAccessExpressionSyntax memberAccess
+            MemberAccessExpressionSyntax { Name: not null } memberAccess
                 when GetSafeExpressionName(memberAccess.Expression) is { Length: > 0 } receiver =>
                 $"{receiver}.{memberAccess.Name.Identifier.ValueText}",
             InvocationExpressionSyntax invocation => GetInvocationName(invocation.Expression),
@@ -840,30 +1435,24 @@ public static class VisualBasicSyntaxExtractor
             switch (ancestor)
             {
                 case MethodBlockSyntax methodBlock:
-                    return QualifyContainingMember(methodBlock, methodBlock.SubOrFunctionStatement.Identifier.ValueText, methodBlock.SubOrFunctionStatement.ParameterList?.Parameters.Count ?? 0);
+                    return QualifyContainingMember(methodBlock, methodBlock.SubOrFunctionStatement.Identifier.ValueText, MethodParameterTypes(methodBlock.SubOrFunctionStatement));
                 case ConstructorBlockSyntax constructorBlock:
-                    return QualifyContainingMember(constructorBlock, "New", constructorBlock.SubNewStatement.ParameterList?.Parameters.Count ?? 0);
+                    return QualifyContainingMember(constructorBlock, "New", MethodParameterTypes(constructorBlock.SubNewStatement));
                 case OperatorBlockSyntax operatorBlock:
-                    return QualifyContainingMember(operatorBlock, operatorBlock.OperatorStatement.OperatorToken.ValueText, operatorBlock.OperatorStatement.ParameterList?.Parameters.Count ?? 0);
+                    return QualifyContainingMember(operatorBlock, operatorBlock.OperatorStatement.OperatorToken.ValueText, MethodParameterTypes(operatorBlock.OperatorStatement));
                 case PropertyBlockSyntax propertyBlock:
-                    return QualifyContainingMember(propertyBlock, propertyBlock.PropertyStatement.Identifier.ValueText, 0);
+                    return QualifyContainingMember(propertyBlock, propertyBlock.PropertyStatement.Identifier.ValueText, []);
             }
         }
 
         return null;
     }
 
-    private static string QualifyContainingMember(SyntaxNode member, string memberName, int parameterCount)
+    private static string QualifyContainingMember(SyntaxNode member, string memberName, IEnumerable<string> parameterTypes)
     {
-        var typeNames = member
-            .Ancestors()
-            .OfType<TypeBlockSyntax>()
-            .Select(type => type.BlockStatement.Identifier.ValueText)
-            .Where(name => !string.IsNullOrWhiteSpace(name))
-            .Reverse()
-            .ToArray();
-        var typePrefix = typeNames.Length == 0 ? "global" : string.Join(".", typeNames);
-        return $"{typePrefix}.{memberName}/{parameterCount}";
+        var containingType = GetSyntacticContainingType(member);
+        var typePrefix = containingType.Length == 0 ? "global" : containingType;
+        return $"{typePrefix}.{memberName}({string.Join(",", parameterTypes)})";
     }
 
     private static string? GetAssignedVariableName(ObjectCreationExpressionSyntax creation)

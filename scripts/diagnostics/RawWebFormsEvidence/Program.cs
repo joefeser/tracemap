@@ -32,6 +32,17 @@ try
         foreach (var line in WebFormsRawEvidenceAudit.Run(args[1], args[2], inspectionPath: args[3], inspectAllHandlers: true)) Console.WriteLine(line);
         return 0;
     }
+    if (args.Length == 4 && args[0] == "--page-graph-dump")
+    {
+        foreach (var line in WebFormsRawEvidenceAudit.Run(args[1], args[2], inspectionPath: args[3], inspectAllHandlers: true, includeEveryResolvedHandler: true)) Console.WriteLine(line);
+        return 0;
+    }
+    if (args.Length is 4 or 5 && args[0] == "--vb-receiver-bridge-audit")
+    {
+        if (args.Length == 5 && args[4] != "--include-private-identities") throw new InvalidDataException("ReceiverBridgeAuditPrivateOptionInvalid");
+        foreach (var line in WebFormsVisualBasicReceiverBridgeAudit.Run(args[1], args[2], args[3], args.Length == 5)) Console.WriteLine(line);
+        return 0;
+    }
     if (args.Length == 3 && args[0] == "--database-evidence")
     {
         foreach (var line in WebFormsDatabaseEvidenceAudit.Run(args[1], args[2], Console.WriteLine)) Console.WriteLine(line);
@@ -61,6 +72,7 @@ catch (Exception error)
         "AgentHandoffCorpusSchemaMismatch", "AgentHandoffCorpusProvenanceMismatch", "AgentHandoffCorpusIntegrityMismatch",
         "AgentHandoffRecipeSchemaMismatch", "AgentHandoffRecipeCatalogMismatch"];
     safeCodes = [.. safeCodes, "ApplicationWorkbenchPacketUnavailable", "ApplicationWorkbenchPacketSchemaMismatch"];
+    safeCodes = [.. safeCodes, "ReceiverBridgeAuditInputLimit", "ReceiverBridgeAuditSchemaMismatch", "ReceiverBridgeAuditPrivateOptionInvalid"];
     var code = error is InvalidDataException && safeCodes.Contains(error.Message, StringComparer.Ordinal)
         ? error.Message : "RawAuditInputOrRuntimeFailure";
     Console.Error.WriteLine($"raw-webforms-evidence=failed;code={code}");
