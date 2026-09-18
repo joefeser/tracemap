@@ -79,7 +79,7 @@ function Write-PrefixedMetrics([string]$Prefix, [System.Collections.IDictionary]
 }
 
 function Test-HighSignalMetric([string]$Key) {
-    return $Key -match '^(artifact\.|chains$|boundaries$|observations$|reachedNodes$|traversedEdges$|downstreamEdges$|terminalPaths$|truncatedObservations$|packetTruncated$|diagnosticShapesTruncated$|terminalKind\.|stopState\.|receiverBridgeGap\.|receiverBridgeStatus\.|receiverBridgePrivate\.execProcReachableNodes$|inputLimit\.|traversedEdge\.|traversedRule\.)'
+    return $Key -match '^(artifact\.|chains$|boundaries$|observations$|reachedNodes$|traversedEdges$|downstreamEdges$|terminalPaths$|truncatedObservations$|packetTruncated$|diagnosticShapesTruncated$|terminalKind\.|stopState\.|receiverBridgeGap\.|receiverBridgeStatus\.|receiverBridgePrivate\.(execProcReachableNodes$|execProc(Start|Leaf)-|graphGap-)|inputLimit\.|traversedEdge\.|traversedRule\.)'
 }
 
 $currentRoot = Resolve-ReviewRoot $ReviewRoot 'WEBFORMS_REVIEW_REGRESSION_CURRENT_ROOT_UNAVAILABLE'
