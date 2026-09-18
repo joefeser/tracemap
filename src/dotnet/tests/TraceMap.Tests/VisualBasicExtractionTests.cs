@@ -543,8 +543,8 @@ public sealed class VisualBasicExtractionTests
         Assert.Equal(3, calls.Length);
         Assert.Equal("String;ArrayList", calls[0].Properties["argumentTypes"]);
         Assert.Equal("explicit-caller-syntax", calls[0].Properties["argumentTypeResolution"]);
-        Assert.DoesNotContain("argumentTypes", calls[1].Properties.Keys);
-        Assert.DoesNotContain("argumentTypeResolution", calls[1].Properties.Keys);
+        Assert.Equal("unavailable;ArrayList", calls[1].Properties["argumentTypes"]);
+        Assert.Equal("partial-explicit-caller-syntax", calls[1].Properties["argumentTypeResolution"]);
         Assert.DoesNotContain("argumentTypes", calls[2].Properties.Keys);
         Assert.DoesNotContain("argumentTypeResolution", calls[2].Properties.Keys);
     }

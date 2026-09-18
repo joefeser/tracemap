@@ -79,11 +79,12 @@ candidate. The resulting hop is Tier2 review evidence, not compiler resolution;
 missing or ambiguous candidates remain explicit gaps.
 
 For a syntax-only target with same-arity overloads, argument count is not
-enough. When every positional call argument has one explicit caller-side
-syntax type, the call edge retains the ordered text-only argument types and the
-bridge may eliminate declarations whose retained parameter types do not match
-exactly. Named, computed, unknown, conflicting, or partially resolved arguments
-still fail closed rather than selecting an overload.
+enough. Positional call arguments retain explicit caller-side syntax types when
+available. Only after receiver identity is unique may the bridge eliminate an
+exact parameter-type mismatch. Partial argument types can narrow candidates
+only when every unresolved position has the same retained parameter type on all
+candidates. Named, wholly unknown, conflicting, or signature-incomplete
+evidence still fails closed rather than selecting an overload.
 
 If the Web Site and business layer are separate Git repositories, do not point
 `sourceRoot` at their non-Git parent directory and do not invent an umbrella

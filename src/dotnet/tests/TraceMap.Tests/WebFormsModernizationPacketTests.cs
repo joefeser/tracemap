@@ -1190,6 +1190,13 @@ public sealed class WebFormsModernizationPacketTests
         {
             EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
         };
+        var inheritedSqlUnsafePartialOverload = Fact(recursiveBackendManifest, FactTypes.MethodDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "Common/DataAccess.vb", 216, source: null, target: "ExecProc_Scalar", contract: null,
+            ("containingType", "SqlDataAccess"), ("qualifiedContainingType", "UnitedFramework.DataAccess.SqlDataAccess"),
+            ("name", "ExecProc_Scalar"), ("parameterCount", "2"), ("parameterTypes", "Integer;SqlDataAccessParam()")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
         var inheritedSqlBody = Fact(recursiveBackendManifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph,
             "Common/DataAccess.vb", 225, source: "UnitedFramework.DataAccess.SqlDataAccess.ExecProc_Scalar/2", target: "ExecuteScalar", contract: "ExecuteScalar",
             ("argumentCount", "0"), ("callKind", "SyntaxInvocation"), ("calleeName", "ExecuteScalar"),
@@ -1243,8 +1250,8 @@ public sealed class WebFormsModernizationPacketTests
                 inheritedSqlCall.Properties.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
                 StringComparer.Ordinal)
             {
-                ["argumentTypes"] = "String;ArrayList",
-                ["argumentTypeResolution"] = "explicit-caller-syntax"
+                ["argumentTypes"] = "unavailable;ArrayList",
+                ["argumentTypeResolution"] = "partial-explicit-caller-syntax"
             }
         };
         var typedInheritedWebIndex = Path.Combine(temp.Path, "typed-inherited-web-index.sqlite");
@@ -1262,6 +1269,18 @@ public sealed class WebFormsModernizationPacketTests
             new(typedOverloadCombinedIndex, Path.Combine(temp.Path, "typed-overload-output")));
         var typedOverloadChain = Assert.Single(typedOverloadPacket.EventChains);
         Assert.Equal("sql-query", typedOverloadChain.TerminalKind);
+
+        var unsafePartialBackendIndex = Path.Combine(temp.Path, "unsafe-partial-backend-index.sqlite");
+        SqliteIndexWriter.Write(unsafePartialBackendIndex, recursiveBackendManifest,
+            [sqlBaseType, inheritedSqlField, inheritedSqlDeclaration, inheritedSqlUnsafePartialOverload,
+                inheritedSqlBody, inheritedSqlTerminal]);
+        var unsafePartialCombinedIndex = Path.Combine(temp.Path, "unsafe-partial-combined-index.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [typedInheritedWebIndex, unsafePartialBackendIndex], unsafePartialCombinedIndex, ["web", "backend"]));
+        var unsafePartialPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(unsafePartialCombinedIndex, Path.Combine(temp.Path, "unsafe-partial-output")));
+        var unsafePartialChain = Assert.Single(unsafePartialPacket.EventChains);
+        Assert.Null(unsafePartialChain.TerminalKind);
 
         var semanticBodyDownstream = Fact(backendManifest, FactTypes.ObjectCreated, RuleIds.VisualBasicSemanticObjectCreation,
             "BusinessLayer/BusinessObject.vb", 12,

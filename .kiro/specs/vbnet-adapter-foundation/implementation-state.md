@@ -264,13 +264,15 @@ caller-text regression over the full scan pipeline.
 - The regenerated private two-repository scan then advanced inherited `SQLDA`
   provenance from unavailable to one `SqlDataAccess` receiver, but correctly
   stopped at two `ExecProc_Scalar` overloads with the same argument count.
-- `vb-syntax/0.3.16` retains ordered argument types only when every positional
-  argument is backed by one explicit caller parameter/local declaration or an
-  explicit object creation. The projectless receiver bridge may use an exact
-  ordered text match to eliminate different-signature overloads. Named,
-  computed, unknown, conflicting, or partially resolved arguments still fail
-  closed. Focused extraction and packet regressions cover both the successful
-  typed overload and the untyped same-arity ambiguity.
+- `vb-syntax/0.3.17` retains explicit positional argument types from caller
+  parameters, locals, and object creations while marking unresolved positions.
+  The bridge establishes a unique source-index/qualified receiver identity
+  before applying signature evidence. Complete signatures may eliminate exact
+  mismatches; partial signatures may do so only when every unresolved position
+  is identical across all retained candidates. Named, wholly unknown,
+  conflicting, or signature-incomplete evidence still fails closed. Focused
+  extraction and packet regressions cover both the successful constrained
+  partial signature and the untyped same-arity ambiguity.
 
 ## Remaining work / follow-ups
 

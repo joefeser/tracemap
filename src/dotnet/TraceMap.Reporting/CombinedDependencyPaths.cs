@@ -2712,20 +2712,22 @@ public static partial class CombinedDependencyPathReporter
             }
             else
             {
-                var syntaxCandidates = syntaxDeclarations
+                var syntaxIdentityCandidates = syntaxDeclarations
                     .Where(declaration => VisualBasicTypeMatches(VisualBasicContainingType(declaration), createdType)
                         && string.Equals(CombinedDependencyReporter.FirstValue(declaration.Properties, "methodName", "name"), methodName, StringComparison.OrdinalIgnoreCase)
                         && (!int.TryParse(CombinedDependencyReporter.FirstValue(declaration.Properties, "parameterCount"), out var declarationParameterCount)
-                            || declarationParameterCount == argumentCount)
-                        && VisualBasicExplicitArgumentTypesMatch(call, declaration))
+                            || declarationParameterCount == argumentCount))
                     .OrderBy(declaration => declaration.CombinedFactId, StringComparer.Ordinal)
                     .ToArray();
-                var syntaxReceiverIdentity = ResolveUniqueVisualBasicReceiverTypeIdentity(syntaxCandidates, createdType);
-                var syntaxTargets = (syntaxReceiverIdentity is null
+                var syntaxReceiverIdentity = ResolveUniqueVisualBasicReceiverTypeIdentity(syntaxIdentityCandidates, createdType);
+                var syntaxCandidates = (syntaxReceiverIdentity is null
                         ? []
-                        : syntaxCandidates.Where(declaration =>
+                        : syntaxIdentityCandidates.Where(declaration =>
                             declaration.SourceIndexId == syntaxReceiverIdentity.Value.SourceIndexId
                             && string.Equals(VisualBasicContainingType(declaration), syntaxReceiverIdentity.Value.TypeName, StringComparison.OrdinalIgnoreCase)))
+                    .ToArray();
+                var signatureCandidates = FilterVisualBasicExplicitArgumentTypes(call, syntaxCandidates);
+                var syntaxTargets = signatureCandidates
                     .Select(declaration => new
                     {
                         Declaration = declaration,
@@ -2745,7 +2747,7 @@ public static partial class CombinedDependencyPathReporter
                         && graph.Nodes.ContainsKey(SymbolNodeId(candidate.Declaration.SourceIndexId, candidate.BodySymbols[0])))
                     .OrderBy(candidate => candidate.Declaration.CombinedFactId, StringComparer.Ordinal)
                     .ToArray();
-                if (syntaxCandidates.Length > 0 && syntaxReceiverIdentity is null)
+                if (syntaxIdentityCandidates.Length > 0 && syntaxReceiverIdentity is null)
                 {
                     AddProjectlessVisualBasicReceiverBridgeGap(
                         graph,
@@ -2753,8 +2755,8 @@ public static partial class CombinedDependencyPathReporter
                         "ProjectlessVisualBasicReceiverTargetAmbiguous",
                         "A syntax-only invocation receiver discovered multiple syntax VB type identities by simple name. Simple names cannot authorize a member join, so TraceMap did not choose a target.",
                         "syntax-type-identity-ambiguous",
-                        syntaxCandidates.Length,
-                        syntaxCandidates.Select(fact => fact.CombinedFactId)
+                        syntaxIdentityCandidates.Length,
+                        syntaxIdentityCandidates.Select(fact => fact.CombinedFactId)
                             .Concat(receiverEvidence.Evidence.Select(fact => fact.CombinedFactId)).Append(call.CombinedFactId));
                     continue;
                 }
@@ -3140,22 +3142,47 @@ public static partial class CombinedDependencyPathReporter
             CombinedDependencyReporter.FirstValue(declaration.Properties, "parameterCount") ?? string.Empty);
     }
 
-    private static bool VisualBasicExplicitArgumentTypesMatch(
+    private static CombinedFactRow[] FilterVisualBasicExplicitArgumentTypes(
         CombinedFactRow call,
-        CombinedFactRow declaration)
+        IReadOnlyList<CombinedFactRow> candidates)
     {
         var argumentTypes = SplitVisualBasicSignatureTypes(
             CombinedDependencyReporter.FirstValue(call.Properties, "argumentTypes"));
-        if (argumentTypes.Length == 0)
+        if (argumentTypes.Length == 0 || candidates.Count < 2)
         {
-            return true;
+            return candidates.ToArray();
         }
 
-        var parameterTypes = SplitVisualBasicSignatureTypes(
-            CombinedDependencyReporter.FirstValue(declaration.Properties, "parameterTypes"));
-        return parameterTypes.Length == argumentTypes.Length
-            && parameterTypes.Zip(argumentTypes).All(pair =>
-                string.Equals(pair.First, pair.Second, StringComparison.OrdinalIgnoreCase));
+        var signatures = candidates
+            .Select(candidate => new
+            {
+                Candidate = candidate,
+                Types = SplitVisualBasicSignatureTypes(
+                    CombinedDependencyReporter.FirstValue(candidate.Properties, "parameterTypes"))
+            })
+            .ToArray();
+        if (signatures.Any(signature => signature.Types.Length != argumentTypes.Length
+                || signature.Types.Any(type => type.Equals("unavailable", StringComparison.OrdinalIgnoreCase))))
+        {
+            return candidates.ToArray();
+        }
+
+        for (var index = 0; index < argumentTypes.Length; index++)
+        {
+            if (!argumentTypes[index].Equals("unavailable", StringComparison.OrdinalIgnoreCase)) continue;
+            if (signatures.Select(signature => signature.Types[index])
+                .Distinct(StringComparer.OrdinalIgnoreCase).Skip(1).Any())
+            {
+                return candidates.ToArray();
+            }
+        }
+
+        return signatures
+            .Where(signature => argumentTypes.Select((type, index) => (type, index)).All(item =>
+                item.type.Equals("unavailable", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(item.type, signature.Types[item.index], StringComparison.OrdinalIgnoreCase)))
+            .Select(signature => signature.Candidate)
+            .ToArray();
     }
 
     private static string[] SplitVisualBasicSignatureTypes(string? value) =>
@@ -3163,7 +3190,7 @@ public static partial class CombinedDependencyPathReporter
             ? []
             : value.Split(';', StringSplitOptions.TrimEntries)
                 .Select(NormalizeVisualBasicSignatureType)
-                .Where(type => type.Length > 0 && !type.Equals("unavailable", StringComparison.OrdinalIgnoreCase))
+                .Where(type => type.Length > 0)
                 .ToArray();
 
     private static string NormalizeVisualBasicSignatureType(string value)
@@ -4062,7 +4089,7 @@ public static partial class CombinedDependencyPathReporter
 
         if (edges.Any(edge => edge.EdgeKind == "projectless-vb-receiver-bridge"))
         {
-            notes.Add(new CombinedPathNote("ProjectlessVisualBasicReceiverBridge", "This review-tier hop joins a syntax-only VB invocation using one uniquely retained receiver provenance plus method identity. Provenance may be a local object creation, a containing-type field initializer, or one typed field reached through a unique retained syntax-only base-type chain; local creation takes precedence. It may continue from a reached syntax method through another independently supported receiver call. It prefers one semantic type/name/arity declaration; under reduced semantic coverage it requires one syntax type/name declaration and an exact arity-bearing member-body symbol. If every positional call argument has one explicit caller-side syntax type, exact ordered text-only argument/parameter types may eliminate different-signature overloads. Named, computed, unknown, conflicting, or partial argument types do not authorize that filter. Ambiguous receiver, inheritance, field, signature, or target evidence fails closed. The resulting target hop is not compiler-resolved call evidence or proof of runtime execution."));
+            notes.Add(new CombinedPathNote("ProjectlessVisualBasicReceiverBridge", "This review-tier hop joins a syntax-only VB invocation using one uniquely retained receiver provenance plus method identity. Provenance may be a local object creation, a containing-type field initializer, or one typed field reached through a unique retained syntax-only base-type chain; local creation takes precedence. It may continue from a reached syntax method through another independently supported receiver call. It prefers one semantic type/name/arity declaration; under reduced semantic coverage it requires one syntax type/name declaration and an exact arity-bearing member-body symbol. Only after receiver identity is unique may exact ordered text-only argument/parameter types eliminate different-signature overloads. Partial argument types may narrow candidates only when every unresolved position has the same retained parameter type across all candidates. Named, wholly unknown, conflicting, or signature-incomplete evidence does not authorize that filter. Ambiguous receiver, inheritance, field, signature, or target evidence fails closed. The resulting target hop is not compiler-resolved call evidence or proof of runtime execution."));
         }
 
         if (edges.Any(edge => edge.EdgeKind is "remoting-evidence" or "remoting-channel-link"))

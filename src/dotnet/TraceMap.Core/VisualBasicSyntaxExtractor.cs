@@ -981,7 +981,9 @@ public static class VisualBasicSyntaxExtractor
         if (argumentTypes is not null)
         {
             properties["argumentTypes"] = string.Join(";", argumentTypes);
-            properties["argumentTypeResolution"] = "explicit-caller-syntax";
+            properties["argumentTypeResolution"] = argumentTypes.All(type => type != "unavailable")
+                ? "explicit-caller-syntax"
+                : "partial-explicit-caller-syntax";
         }
         // The callee is invocation text only: never a compiler-resolved
         // target and never a symbol-ID join.
@@ -1021,16 +1023,14 @@ public static class VisualBasicSyntaxExtractor
         }
 
         var types = new List<string>(arguments.Length);
+        var resolved = 0;
         foreach (var argument in arguments)
         {
             var type = TryGetExplicitExpressionType(invocation, argument.Expression);
-            if (string.IsNullOrWhiteSpace(type))
-            {
-                return null;
-            }
-            types.Add(type);
+            types.Add(string.IsNullOrWhiteSpace(type) ? "unavailable" : type);
+            if (!string.IsNullOrWhiteSpace(type)) resolved++;
         }
-        return types.ToArray();
+        return resolved == 0 ? null : types.ToArray();
     }
 
     private static string? TryGetExplicitExpressionType(
