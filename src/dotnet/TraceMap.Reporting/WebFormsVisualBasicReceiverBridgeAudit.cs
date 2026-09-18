@@ -235,7 +235,7 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
         if (includePrivateIdentities)
         {
             output.Add("receiverBridgePrivate=enabled");
-            AddPrivateExecProcDownstreamLeaves(output, graphInventory);
+            AddPrivateExecProcDownstreamLeaves(output, graphInventory, db, transaction);
             var privateGapIndex = 0;
             foreach (var gap in graphReceiverGaps
                 .Where(gap => gap.CombinedFactId is not null
@@ -367,7 +367,9 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
 
     private static void AddPrivateExecProcDownstreamLeaves(
         List<string> output,
-        CombinedPathGraphInventory inventory)
+        CombinedPathGraphInventory inventory,
+        SqliteConnection db,
+        SqliteTransaction transaction)
     {
         var nodes = inventory.Nodes.ToDictionary(node => node.NodeId, StringComparer.Ordinal);
         var outgoing = inventory.Edges
@@ -445,9 +447,44 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
             .Take(20))
         {
             index++;
-            output.Add($"receiverBridgePrivate.execProcLeaf-{index:D2}.name={leaf.DisplayName};kind={leaf.NodeKind};surface={leaf.SurfaceKind ?? "none"};file={leaf.FilePath ?? "unavailable"};line={leaf.StartLine ?? 0};rule={leaf.RuleId ?? "unavailable"};tier={leaf.EvidenceTier ?? "unavailable"}");
+            var factDetails = ReadSurfaceFactDetails(db, transaction, leaf);
+            output.Add($"receiverBridgePrivate.execProcLeaf-{index:D2}.name={leaf.DisplayName};kind={leaf.NodeKind};surface={leaf.SurfaceKind ?? "none"};file={leaf.FilePath ?? "unavailable"};line={leaf.StartLine ?? 0};rule={leaf.RuleId ?? "unavailable"};tier={leaf.EvidenceTier ?? "unavailable"}{factDetails}");
         }
         output.Add($"receiverBridgePrivate.execProcLeaves={index}");
+    }
+
+    private static string ReadSurfaceFactDetails(
+        SqliteConnection db,
+        SqliteTransaction transaction,
+        CombinedPathNode node)
+    {
+        if (node.SurfaceKind is not ("sql-query" or "sql-persistence")
+            || string.IsNullOrWhiteSpace(node.FilePath)
+            || node.StartLine is null
+            || string.IsNullOrWhiteSpace(node.RuleId))
+        {
+            return string.Empty;
+        }
+
+        using var command = db.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = "select fact_type, coalesce(source_symbol,''), coalesce(target_symbol,''), properties_json "
+            + "from combined_facts where file_path=$file collate nocase and start_line=$line and rule_id=$rule "
+            + "order by combined_fact_id limit 6;";
+        command.Parameters.AddWithValue("$file", node.FilePath);
+        command.Parameters.AddWithValue("$line", node.StartLine.Value);
+        command.Parameters.AddWithValue("$rule", node.RuleId);
+        var details = new List<string>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            var properties = JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(3)) ?? [];
+            string Clean(string? value) => string.IsNullOrWhiteSpace(value)
+                ? "unavailable"
+                : value.Replace(';', ',').Replace('|', '/');
+            details.Add($"factType={Clean(reader.GetString(0))},source={Clean(reader.GetString(1))},target={Clean(reader.GetString(2))},receiver={Clean(Value(properties, "receiverName"))},receiverType={Clean(Value(properties, "receiverType"))},resolution={Clean(Value(properties, "resolutionKind"))},operation={Clean(Value(properties, "operationKind"))},sqlSource={Clean(Value(properties, "sqlSourceKind"))}");
+        }
+        return details.Count == 0 ? string.Empty : $";factDetails={string.Join("||", details)}";
     }
 
     private static IReadOnlyList<string> ReadReceiverTypeMethods(SqliteConnection db, SqliteTransaction transaction, string receiverType)
