@@ -645,10 +645,12 @@ public static class VisualBasicSyntaxExtractor
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
         if (baseNames.Length != 1) return null;
+        var qualifiedReference = baseNames[0].Contains('.', StringComparison.Ordinal);
         var simpleBaseName = baseNames[0].Split('.').Last();
         var baseCandidates = root.DescendantNodes().OfType<TypeBlockSyntax>()
-            .Where(type => type.BlockStatement.Identifier.ValueText.Equals(simpleBaseName, StringComparison.OrdinalIgnoreCase)
-                || GetSyntacticContainingType(type.BlockStatement).Equals(baseNames[0], StringComparison.OrdinalIgnoreCase))
+            .Where(type => GetSyntacticContainingType(type.BlockStatement).Equals(baseNames[0], StringComparison.OrdinalIgnoreCase)
+                || !qualifiedReference
+                    && type.BlockStatement.Identifier.ValueText.Equals(simpleBaseName, StringComparison.OrdinalIgnoreCase))
             .Distinct()
             .ToArray();
         return baseCandidates.Length == 1 ? baseCandidates[0] : null;
@@ -673,7 +675,16 @@ public static class VisualBasicSyntaxExtractor
 
     private static bool IsKnownDataAdapterType(string typeName)
     {
-        var simple = typeName.Split('.').Last();
+        var normalized = NormalizeKnownDatabaseType(typeName);
+        if (normalized.Contains('.', StringComparison.Ordinal))
+        {
+            return normalized.Equals("System.Data.Common.DbDataAdapter", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("System.Data.SqlClient.SqlDataAdapter", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("Microsoft.Data.SqlClient.SqlDataAdapter", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("System.Data.OleDb.OleDbDataAdapter", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("System.Data.Odbc.OdbcDataAdapter", StringComparison.OrdinalIgnoreCase);
+        }
+        var simple = normalized;
         return simple.Equals("DbDataAdapter", StringComparison.OrdinalIgnoreCase)
             || simple.Equals("SqlDataAdapter", StringComparison.OrdinalIgnoreCase)
             || simple.Equals("OleDbDataAdapter", StringComparison.OrdinalIgnoreCase)
@@ -682,7 +693,24 @@ public static class VisualBasicSyntaxExtractor
 
     private static bool IsKnownDatabaseCommandType(string typeName)
     {
-        var simple = typeName.Split('.').Last();
+        var normalized = NormalizeKnownDatabaseType(typeName);
+        if (normalized.Contains('.', StringComparison.Ordinal))
+        {
+            return normalized.Equals("System.Data.Common.DbCommand", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("System.Data.IDbCommand", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("System.Data.SqlClient.SqlCommand", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("Microsoft.Data.SqlClient.SqlCommand", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("System.Data.OleDb.OleDbCommand", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("System.Data.Odbc.OdbcCommand", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("Oracle.ManagedDataAccess.Client.OracleCommand", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("Oracle.DataAccess.Client.OracleCommand", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("System.Data.SQLite.SQLiteCommand", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("Microsoft.Data.Sqlite.SqliteCommand", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("IBM.Data.DB2.DB2Command", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("Npgsql.NpgsqlCommand", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("MySql.Data.MySqlClient.MySqlCommand", StringComparison.OrdinalIgnoreCase);
+        }
+        var simple = normalized;
         return simple.Equals("DbCommand", StringComparison.OrdinalIgnoreCase)
             || simple.Equals("IDbCommand", StringComparison.OrdinalIgnoreCase)
             || simple.Equals("SqlCommand", StringComparison.OrdinalIgnoreCase)
@@ -696,6 +724,11 @@ public static class VisualBasicSyntaxExtractor
             || simple.Equals("NpgsqlCommand", StringComparison.OrdinalIgnoreCase)
             || simple.Equals("MySqlCommand", StringComparison.OrdinalIgnoreCase);
     }
+
+    private static string NormalizeKnownDatabaseType(string typeName) =>
+        typeName.Trim().StartsWith("Global.", StringComparison.OrdinalIgnoreCase)
+            ? typeName.Trim()["Global.".Length..]
+            : typeName.Trim();
 
     private static string SyntaxFillResultKind(InvocationExpressionSyntax invocation)
     {

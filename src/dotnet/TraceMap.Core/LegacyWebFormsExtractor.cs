@@ -2115,10 +2115,8 @@ public static partial class LegacyWebFormsExtractor
         var matches = controls.Where(control => kind != "css-class" &&
                 (target.Equals(control.ControlId, StringComparison.OrdinalIgnoreCase)
                 || kind == "exact-id" && target.EndsWith("_" + control.ControlId, StringComparison.OrdinalIgnoreCase)))
-            .Select(control => control.ControlId)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        var controlId = matches.Length == 1 ? matches[0] : null;
+        var controlId = matches.Length == 1 ? matches[0].ControlId : null;
         var generatedIdShape = kind is "id-suffix" or "id-contains"
             || kind == "exact-id" && (controlId is not null && !target.Equals(controlId, StringComparison.OrdinalIgnoreCase)
                 || GeneratedWebFormsClientIdRegex().IsMatch(target));

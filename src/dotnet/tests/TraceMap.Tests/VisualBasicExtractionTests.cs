@@ -662,12 +662,14 @@ public sealed class VisualBasicExtractionTests
                     Dim sqlite As SQLiteCommand = New SQLiteCommand()
                     Dim sql As SqlCommand = New SqlCommand()
                     Dim custom As WidgetCommand = New WidgetCommand()
+                    Dim impostor As Contoso.SqlCommand = Nothing
                     Dim a = odbc.ExecuteScalar()
                     Dim b = db2.ExecuteReader()
                     oracle.ExecuteNonQuery()
                     Dim c = sqlite.ExecuteScalar()
                     Dim d = sql.ExecuteReader()
                     custom.ExecuteScalar()
+                    impostor.ExecuteNonQuery()
                     inheritedCommand.ExecuteNonQuery()
                 End Sub
 
@@ -690,6 +692,14 @@ public sealed class VisualBasicExtractionTests
                         Dim sql As Object = Nothing
                     End If
                     sql.ExecuteNonQuery()
+                End Sub
+            End Class
+
+            Public Class QualifiedMissingBase
+                Inherits Missing.ProviderBase
+
+                Public Sub DoNotBorrowQualifiedBase()
+                    MyBase.inheritedCommand.ExecuteNonQuery()
                 End Sub
             End Class
             """);
@@ -719,6 +729,8 @@ public sealed class VisualBasicExtractionTests
         Assert.Contains(operations, operation => operation.Properties["receiverName"] == "MyBase.inheritedCommand"
             && operation.Properties["receiverType"] == "SqlCommand");
         Assert.DoesNotContain(operations, operation => operation.Properties["receiverName"] == "custom");
+        Assert.DoesNotContain(operations, operation => operation.Properties["receiverName"] == "impostor");
+        Assert.DoesNotContain(operations, operation => operation.SourceSymbol?.Contains("DoNotBorrowQualifiedBase", StringComparison.Ordinal) == true);
         Assert.Equal(2, operations.Count(operation => operation.Properties["receiverName"] == "sql"));
     }
 

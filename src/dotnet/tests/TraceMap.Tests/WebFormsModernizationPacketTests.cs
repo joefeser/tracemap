@@ -1178,6 +1178,25 @@ public sealed class WebFormsModernizationPacketTests
             Assert.Contains("projectless-vb-receiver-bridge", semanticFieldChain.TraversalObservation?.TraversedEdgeKinds ?? []);
         });
 
+        var semanticBaseFieldFlow = Fact(manifest, FactTypes.WebFormsEventFlowProjected, RuleIds.LegacyWebFormsEventFlow,
+            "WebApplication/Feedback.aspx.vb", 20, source: handlerSymbol, target: "flow-terminal-unavailable", contract: "Submit_Click",
+            ("supportingFactIds", $"{handler.FactId},{singleBaseFieldInvocation.FactId}"),
+            ("supportingEdgeIds", singleBaseFieldInvocation.FactId), ("flowClassification", "UnknownAnalysisGap"),
+            ("coverageLabel", "reduced-static-webforms-flow"));
+        var semanticBaseFieldIndex = Path.Combine(temp.Path, "single-semantic-base-field-index.sqlite");
+        SqliteIndexWriter.Write(semanticBaseFieldIndex, manifest,
+            [page, binding, handler, singleBaseFieldInvocation, callerTypeDeclaration, callerBaseTypeDeclaration,
+                receiverBaseFieldDeclaration, declaration, downstream, terminal, semanticBaseFieldFlow]);
+        var semanticBaseFieldPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(semanticBaseFieldIndex, Path.Combine(temp.Path, "single-semantic-base-field-output")));
+        var semanticBaseFieldChains = semanticBaseFieldPacket.EventChains.ToArray();
+        Assert.NotEmpty(semanticBaseFieldChains);
+        Assert.All(semanticBaseFieldChains, semanticBaseFieldChain =>
+        {
+            Assert.Equal("sql-query", semanticBaseFieldChain.TerminalKind);
+            Assert.Contains("projectless-vb-receiver-bridge", semanticBaseFieldChain.TraversalObservation?.TraversedEdgeKinds ?? []);
+        });
+
         var unqualifiedFieldInvocation = singleFieldInvocation with
         {
             FactId = "fact-unqualified-field-invocation",

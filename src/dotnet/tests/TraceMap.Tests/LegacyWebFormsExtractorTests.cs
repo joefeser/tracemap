@@ -1676,6 +1676,7 @@ public sealed class LegacyWebFormsExtractorTests
               <asp:Label runat="server" ID="Duplicate" Text='<%# Eval("InnerField") %>' />
             </asp:Panel></asp:Panel>
             <asp:Label runat="server" ID="Duplicate" Text='<%# Bind("OuterField") %>' />
+            <script>$("#Duplicate").on("click", function () { });</script>
             """);
         File.WriteAllText(Path.Combine(repo, "Default.aspx.cs"), """
             namespace Sample;
@@ -1733,6 +1734,12 @@ public sealed class LegacyWebFormsExtractorTests
         Assert.Contains(result.Facts, fact => fact.Properties.GetValueOrDefault("gapKind") == "AmbiguousWebFormsClientScriptRegistrationReceiver");
         Assert.Contains(result.Facts, fact => fact.Properties.GetValueOrDefault("gapKind") == "DynamicWebFormsPostBackTarget");
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.WebFormsPostBackTargetCandidate && fact.Properties.GetValueOrDefault("sourceKind") == "client-script-literal");
+        var duplicateSelector = Assert.Single(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsClientEventBindingCandidate
+            && fact.Properties.GetValueOrDefault("selectorTarget") == "Duplicate");
+        Assert.Equal("multiple-templated-targets", duplicateSelector.Properties.GetValueOrDefault("targetResolution"));
+        Assert.Equal("2", duplicateSelector.Properties.GetValueOrDefault("staticTargetCount"));
+        Assert.DoesNotContain("controlId", duplicateSelector.Properties.Keys);
     }
 
     [Fact]
@@ -1818,7 +1825,9 @@ public sealed class LegacyWebFormsExtractorTests
         var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
 
         var clientEvent = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WebFormsClientEventBindingCandidate);
-        Assert.Equal("Save", clientEvent.Properties.GetValueOrDefault("controlId"));
+        Assert.DoesNotContain("controlId", clientEvent.Properties.Keys);
+        Assert.Equal("multiple-templated-targets", clientEvent.Properties.GetValueOrDefault("targetResolution"));
+        Assert.Equal("2", clientEvent.Properties.GetValueOrDefault("staticTargetCount"));
         var supportingFactIds = clientEvent.Properties.GetValueOrDefault("supportingFactIds") ?? string.Empty;
         Assert.All(result.Facts.Where(fact => fact.FactType == FactTypes.WebFormsControlDeclared
                 && fact.Properties.GetValueOrDefault("controlId") == "Save"),
@@ -1841,7 +1850,9 @@ public sealed class LegacyWebFormsExtractorTests
         var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
 
         var clientEvent = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WebFormsClientEventBindingCandidate);
-        Assert.Equal("Choice", clientEvent.Properties.GetValueOrDefault("controlId"));
+        Assert.DoesNotContain("controlId", clientEvent.Properties.Keys);
+        Assert.Equal("multiple-templated-targets", clientEvent.Properties.GetValueOrDefault("targetResolution"));
+        Assert.Equal("2", clientEvent.Properties.GetValueOrDefault("staticTargetCount"));
         Assert.DoesNotContain("serverEventName", clientEvent.Properties.Keys);
     }
 

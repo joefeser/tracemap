@@ -656,6 +656,7 @@ public static partial class CombinedDependencyPathReporter
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
         var receiverFields = new List<(string ContainingType, string FieldName, string FieldType)>();
+        var receiverTypeDeclarations = new List<(string TypeName, string BaseTypes)>();
         if (receiverNames.Length > 0)
         {
             await using var fieldCommand = connection.CreateCommand();
@@ -679,6 +680,26 @@ public static partial class CombinedDependencyPathReporter
                     properties.GetValueOrDefault("fieldName") ?? string.Empty,
                     NormalizeVisualBasicTypeName(CombinedDependencyReporter.FirstValue(properties, "fieldType", "declaredType"))));
                 if (receiverFields.Count > maxTargets)
+                    throw new ReportInputLimitException("handler-call-target-frontier");
+            }
+
+            await using var typeCommand = connection.CreateCommand();
+            typeCommand.CommandText = "select properties_json from facts "
+                + "where fact_type = $fact_type and rule_id = $rule_id "
+                + "and length(cast(properties_json as blob)) <= $max_row_bytes and json_valid(properties_json) "
+                + "order by fact_id collate binary limit $candidate_limit;";
+            typeCommand.Parameters.AddWithValue("$fact_type", FactTypes.TypeDeclared);
+            typeCommand.Parameters.AddWithValue("$rule_id", RuleIds.VisualBasicSyntaxDeclarations);
+            typeCommand.Parameters.AddWithValue("$max_row_bytes", ReportInputBudget.MaxRowTextBytes);
+            typeCommand.Parameters.AddWithValue("$candidate_limit", maxTargets + 1L);
+            await using var typeReader = await typeCommand.ExecuteReaderAsync(cancellationToken);
+            while (await typeReader.ReadAsync(cancellationToken))
+            {
+                var properties = ParseProperties(typeReader.GetString(0));
+                receiverTypeDeclarations.Add((
+                    NormalizeVisualBasicTypeName(CombinedDependencyReporter.FirstValue(properties, "qualifiedName", "name")),
+                    properties.GetValueOrDefault("baseTypes") ?? string.Empty));
+                if (receiverTypeDeclarations.Count > maxTargets)
                     throw new ReportInputLimitException("handler-call-target-frontier");
             }
         }
@@ -707,19 +728,18 @@ public static partial class CombinedDependencyPathReporter
                 ? new[] { NormalizeVisualBasicTypeName(creations[0].Properties.GetValueOrDefault("calleeContainingType")
                     ?? creations[0].Properties.GetValueOrDefault("calleeName")) }
                 : [];
-            if (creations.Length == 0 && !receiver.StartsWith("MyBase.", StringComparison.OrdinalIgnoreCase))
+            if (creations.Length == 0)
             {
                 var caller = VisualBasicQualifiedMemberKey(call.SourceSymbol
                     ?? call.Properties.GetValueOrDefault("callerName"));
                 if (caller is not null)
                 {
-                    receiverTypes = receiverFields
-                        .Where(field => string.Equals(field.FieldName, receiverLookupName, StringComparison.OrdinalIgnoreCase)
-                            && VisualBasicTypeMatches(field.ContainingType, caller.Value.Type))
-                        .Select(field => field.FieldType)
-                        .Where(type => !string.IsNullOrWhiteSpace(type))
-                        .Distinct(StringComparer.OrdinalIgnoreCase)
-                        .ToArray();
+                    receiverTypes = FindBoundedVisualBasicReceiverFieldTypes(
+                        caller.Value.Type,
+                        receiverLookupName,
+                        receiver.StartsWith("MyBase.", StringComparison.OrdinalIgnoreCase),
+                        receiverFields,
+                        receiverTypeDeclarations);
                 }
             }
             if (receiverTypes.Length == 1)
@@ -792,6 +812,45 @@ public static partial class CombinedDependencyPathReporter
             || ruleId == RuleIds.VisualBasicSemanticCallGraph
                 && evidenceTier == EvidenceTiers.Tier1Semantic
                 && string.Equals(callKind, "SemanticObjectCreation", StringComparison.Ordinal);
+    }
+
+    private static string[] FindBoundedVisualBasicReceiverFieldTypes(
+        string callerType,
+        string fieldName,
+        bool startAtBase,
+        IReadOnlyList<(string ContainingType, string FieldName, string FieldType)> fields,
+        IReadOnlyList<(string TypeName, string BaseTypes)> typeDeclarations)
+    {
+        var currentType = NormalizeVisualBasicTypeName(callerType);
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var depth = 0; !string.IsNullOrWhiteSpace(currentType) && depth < 16 && visited.Add(currentType); depth++)
+        {
+            if (!startAtBase)
+            {
+                var matches = fields
+                    .Where(field => string.Equals(field.FieldName, fieldName, StringComparison.OrdinalIgnoreCase)
+                        && VisualBasicTypeMatches(field.ContainingType, currentType))
+                    .Select(field => field.FieldType)
+                    .Where(type => !string.IsNullOrWhiteSpace(type))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+                if (matches.Length > 0) return matches;
+            }
+
+            var declarations = typeDeclarations
+                .Where(declaration => VisualBasicTypeMatches(declaration.TypeName, currentType))
+                .ToArray();
+            if (declarations.Length != 1) return [];
+            var baseNames = SplitVisualBasicBaseTypes(declarations[0].BaseTypes);
+            if (baseNames.Length != 1) return [];
+            var baseDeclarations = typeDeclarations
+                .Where(declaration => VisualBasicTypeMatches(declaration.TypeName, baseNames[0]))
+                .ToArray();
+            if (baseDeclarations.Length != 1) return [];
+            currentType = baseDeclarations[0].TypeName;
+            startAtBase = false;
+        }
+        return [];
     }
 
     private static CombinedFactRow ReadProjectedFact(SqliteDataReader reader, CombinedReportSource source) => new(
