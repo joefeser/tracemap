@@ -1264,7 +1264,8 @@ public sealed class WebFormsModernizationPacketTests
         var inheritedSqlDeclaration = Fact(recursiveBackendManifest, FactTypes.MethodDeclared, RuleIds.VisualBasicSyntaxDeclarations,
             "Common/DataAccess.vb", 220, source: null, target: "ExecProc_Scalar", contract: null,
             ("containingType", "SqlDataAccess"), ("qualifiedContainingType", "UnitedFramework.DataAccess.SqlDataAccess"),
-            ("name", "ExecProc_Scalar"), ("parameterCount", "2"), ("parameterTypes", "String;ArrayList")) with
+            ("name", "ExecProc_Scalar"), ("memberIdentity", "UnitedFramework.DataAccess.SqlDataAccess.ExecProc_Scalar(String,ArrayList)"),
+            ("parameterCount", "2"), ("parameterTypes", "String;ArrayList")) with
         {
             EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
         };
@@ -1277,26 +1278,28 @@ public sealed class WebFormsModernizationPacketTests
         var inheritedSqlSameArityOverload = Fact(recursiveBackendManifest, FactTypes.MethodDeclared, RuleIds.VisualBasicSyntaxDeclarations,
             "Common/DataAccess.vb", 215, source: null, target: "ExecProc_Scalar", contract: null,
             ("containingType", "SqlDataAccess"), ("qualifiedContainingType", "UnitedFramework.DataAccess.SqlDataAccess"),
-            ("name", "ExecProc_Scalar"), ("parameterCount", "2"), ("parameterTypes", "String;SqlDataAccessParam()")) with
+            ("name", "ExecProc_Scalar"), ("memberIdentity", "UnitedFramework.DataAccess.SqlDataAccess.ExecProc_Scalar(String,SqlDataAccessParam())"),
+            ("parameterCount", "2"), ("parameterTypes", "String;SqlDataAccessParam()")) with
         {
             EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
         };
         var inheritedSqlUnsafePartialOverload = Fact(recursiveBackendManifest, FactTypes.MethodDeclared, RuleIds.VisualBasicSyntaxDeclarations,
             "Common/DataAccess.vb", 216, source: null, target: "ExecProc_Scalar", contract: null,
             ("containingType", "SqlDataAccess"), ("qualifiedContainingType", "UnitedFramework.DataAccess.SqlDataAccess"),
-            ("name", "ExecProc_Scalar"), ("parameterCount", "2"), ("parameterTypes", "Integer;SqlDataAccessParam()")) with
+            ("name", "ExecProc_Scalar"), ("memberIdentity", "UnitedFramework.DataAccess.SqlDataAccess.ExecProc_Scalar(Integer,SqlDataAccessParam())"),
+            ("parameterCount", "2"), ("parameterTypes", "Integer;SqlDataAccessParam()")) with
         {
             EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
         };
         var inheritedSqlBody = Fact(recursiveBackendManifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph,
-            "Common/DataAccess.vb", 225, source: "UnitedFramework.DataAccess.SqlDataAccess.ExecProc_Scalar/2", target: "ExecuteScalar", contract: "ExecuteScalar",
+            "Common/DataAccess.vb", 225, source: "UnitedFramework.DataAccess.SqlDataAccess.ExecProc_Scalar(String,ArrayList)", target: "ExecuteScalar", contract: "ExecuteScalar",
             ("argumentCount", "0"), ("callKind", "SyntaxInvocation"), ("calleeName", "ExecuteScalar"),
             ("callerName", "SqlDataAccess.ExecProc_Scalar/2"), ("coverageLabel", "syntax-only"), ("receiverName", "command")) with
         {
             EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
         };
         var inheritedSqlTerminal = Fact(recursiveBackendManifest, FactTypes.DatabaseOperationCandidate, RuleIds.VisualBasicSyntaxDatabaseOperation,
-            "Common/DataAccess.vb", 225, source: "UnitedFramework.DataAccess.SqlDataAccess.ExecProc_Scalar/2", target: "SqlCommand.ExecuteScalar", contract: "scalar-candidate",
+            "Common/DataAccess.vb", 225, source: "UnitedFramework.DataAccess.SqlDataAccess.ExecProc_Scalar(String,ArrayList)", target: "SqlCommand.ExecuteScalar", contract: "scalar-candidate",
             ("coverageLabel", "reduced-syntax-vb-database-operation"), ("operationKind", "scalar-candidate"),
             ("receiverName", "command"), ("receiverType", "SqlCommand"), ("resolutionKind", "ExplicitSyntaxType"),
             ("resultKind", "scalar"), ("sqlSourceKind", "vb-syntax-explicit-database-command")) with
@@ -1310,8 +1313,9 @@ public sealed class WebFormsModernizationPacketTests
         var inheritedCombinedIndex = Path.Combine(temp.Path, "inherited-combined-index.sqlite");
         await CombinedIndexBuilder.CombineAsync(new CombineOptions(
             [inheritedWebIndex, inheritedBackendIndex], inheritedCombinedIndex, ["web", "backend"]));
-        var inheritedPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+        var inheritedWritten = await WebFormsModernizationPacketReporter.WriteAsync(
             new(inheritedCombinedIndex, Path.Combine(temp.Path, "inherited-output")));
+        var inheritedPacket = inheritedWritten.Packet;
         var inheritedChain = Assert.Single(inheritedPacket.EventChains);
         Assert.True(inheritedChain.TraversalObservation?.TerminalPathCount > 0,
             System.Text.Json.JsonSerializer.Serialize(new
@@ -1322,6 +1326,12 @@ public sealed class WebFormsModernizationPacketTests
             }));
         Assert.True(inheritedChain.PathEvidence.Count(evidence =>
             evidence.RuleId == "combined.paths.projectless-vb-receiver-bridge.v1") >= 3);
+        var inheritedPrivateAudit = WebFormsVisualBasicReceiverBridgeAudit.Run(
+            inheritedCombinedIndex, inheritedWritten.JsonPath, surface, includePrivateIdentities: true);
+        Assert.Contains("receiverBridgePrivate.execProcStarts=1", inheritedPrivateAudit);
+        Assert.Contains(inheritedPrivateAudit, line => line.StartsWith(
+            "receiverBridgePrivate.execProcReachableNodes=", StringComparison.Ordinal)
+            && !line.EndsWith("=0", StringComparison.Ordinal));
 
         var ambiguousOverloadBackendIndex = Path.Combine(temp.Path, "ambiguous-overload-backend-index.sqlite");
         SqliteIndexWriter.Write(ambiguousOverloadBackendIndex, recursiveBackendManifest,
