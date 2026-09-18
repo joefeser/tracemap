@@ -128,6 +128,94 @@ Then run:
 "C:\Windows\Microsoft.NET\Framework\v4.0.30319\ilasm.exe" /NOLOGO /DLL /DEBUG /OPTIMIZE /OUTPUT:"%TEMP%\dotnetperf-ret.dll" "src\NetPerf.Tests.Unit\Test Data\instr_ret.il.txt"
 ```
 
+Run TraceMap itself from a separate clean checkout pinned to the exact candidate
+commit. Do not substitute a globally installed tool whose source commit is
+unknown:
+
+```powershell
+$TraceMapRoot = 'C:\work\tracemap-validation'
+$TraceMapCommit = '<approved 40-character TraceMap commit SHA>'
+$TraceMapOut = Join-Path $env:TEMP "tracemap-dotnetperf-$($TraceMapCommit.Substring(0, 12))"
+
+if ($TraceMapCommit -notmatch '^[0-9a-f]{40}$') {
+    throw 'TRACEMAP_PINNED_COMMIT_REQUIRED'
+}
+git -C $TraceMapRoot fetch origin $TraceMapCommit
+if ($LASTEXITCODE -ne 0) { throw "TRACEMAP_FETCH_FAILED:$LASTEXITCODE" }
+git -C $TraceMapRoot checkout --detach $TraceMapCommit
+if ($LASTEXITCODE -ne 0) { throw "TRACEMAP_CHECKOUT_FAILED:$LASTEXITCODE" }
+if ((git -C $TraceMapRoot rev-parse HEAD).Trim() -ne $TraceMapCommit) {
+    throw 'TRACEMAP_PINNED_COMMIT_MISMATCH'
+}
+if (git -C $TraceMapRoot status --porcelain --untracked-files=all) {
+    throw 'TRACEMAP_CHECKOUT_NOT_CLEAN'
+}
+
+dotnet build "$TraceMapRoot\src\dotnet\TraceMap.Cli\TraceMap.Cli.csproj" -c Release
+if ($LASTEXITCODE -ne 0) { throw "TRACEMAP_BUILD_FAILED:$LASTEXITCODE" }
+Remove-Item -LiteralPath $TraceMapOut -Recurse -Force -ErrorAction SilentlyContinue
+dotnet "$TraceMapRoot\src\dotnet\TraceMap.Cli\bin\Release\net10.0\tracemap.dll" `
+    scan --repo $DotNetPerfRoot --out $TraceMapOut
+if ($LASTEXITCODE -ne 0) { throw "TRACEMAP_SCAN_FAILED:$LASTEXITCODE" }
+```
+
+Assert the bounded artifact and provenance contract before inspecting any
+identity result:
+
+```powershell
+$requiredArtifacts = @(
+    'scan-manifest.json',
+    'facts.ndjson',
+    'index.sqlite',
+    'report.md',
+    'logs\analyzer.log'
+)
+foreach ($relativePath in $requiredArtifacts) {
+    if (-not (Test-Path -LiteralPath (Join-Path $TraceMapOut $relativePath) -PathType Leaf)) {
+        throw "TRACEMAP_REQUIRED_ARTIFACT_MISSING:$relativePath"
+    }
+}
+
+$manifest = Get-Content -LiteralPath (Join-Path $TraceMapOut 'scan-manifest.json') -Raw |
+    ConvertFrom-Json
+if ($manifest.commitSha -ne 'db8c3359badfec620ccdc6df062b1756ef9607f8') {
+    throw 'TRACEMAP_CORPUS_COMMIT_MISMATCH'
+}
+if ([string]::IsNullOrWhiteSpace([string]$manifest.scannerVersion)) {
+    throw 'TRACEMAP_SCANNER_VERSION_MISSING'
+}
+
+$facts = @(Get-Content -LiteralPath (Join-Path $TraceMapOut 'facts.ndjson') |
+    ForEach-Object { $_ | ConvertFrom-Json })
+if ($facts.Count -eq 0) { throw 'TRACEMAP_FACTS_EMPTY' }
+$invalidFacts = @($facts | Where-Object {
+    $_.commitSha -ne 'db8c3359badfec620ccdc6df062b1756ef9607f8' -or
+    [string]::IsNullOrWhiteSpace([string]$_.ruleId) -or
+    [string]::IsNullOrWhiteSpace([string]$_.evidenceTier) -or
+    [string]::IsNullOrWhiteSpace([string]$_.evidence.extractorId) -or
+    [string]::IsNullOrWhiteSpace([string]$_.evidence.extractorVersion)
+})
+if ($invalidFacts.Count -ne 0) {
+    throw "TRACEMAP_FACT_PROVENANCE_INVALID:$($invalidFacts.Count)"
+}
+
+"traceMapCommit=$TraceMapCommit"
+"corpusCommit=$($manifest.commitSha)"
+"scannerVersion=$($manifest.scannerVersion)"
+$facts |
+    Group-Object { "$($_.evidence.extractorId)|$($_.evidence.extractorVersion)" } |
+    Sort-Object Name |
+    ForEach-Object { "extractor=$($_.Name);facts=$($_.Count)" }
+```
+
+This stage is only a pinned TraceMap baseline until the scanner has documented
+rule IDs and fact shapes for source-to-metadata, metadata-to-PDB, and
+metadata-to-rewritten-IL identity edges. Before calling a run identity-corpus
+validation, add assertions for those exact rule IDs, both endpoint identities,
+evidence tiers, spans or metadata locations, extractor versions, and expected
+explicit gaps. A successful build, test run, scan exit code, artifact count, or
+artifact byte size does not prove those identity edges.
+
 Then proceed in bounded stages:
 
 1. Record Windows, Visual Studio, MSBuild, .NET Framework, ILAsm, and test-runner
@@ -136,11 +224,14 @@ Then proceed in bounded stages:
 3. Build the smallest viable project/test slice.
 4. Run representative branch, switch, exception-region, `leave`, instrumentation,
    nested/generic, and duplicate-identity tests.
-5. Capture exact commands, exit codes, logs, selected tests, output paths, and
-   blockers.
-6. Add public TraceMap regression fixtures only after the expected identity and
+5. Run the pinned TraceMap scan and provenance assertions above.
+6. Capture exact commands, exit codes, logs, selected tests, output paths,
+   TraceMap commit, scanner/extractor versions, and blockers.
+7. Add public TraceMap regression fixtures only after the expected identity and
    evidence contract is documented.
-7. Run the complete historical corpus only after the bounded slices are stable.
+8. Add rule-specific identity-edge assertions; until they pass, label the run a
+   baseline rather than identity-corpus validation.
+9. Run the complete historical corpus only after the bounded slices are stable.
 
 Do not push modernization changes from the validation environment. Do not use
 or disclose historical keys, credentials, or signing material.
