@@ -114,6 +114,7 @@ Write-Output "terminalPaths=$(Sum-Property $observations 'terminalPathCount')"
 Write-Output "truncatedObservations=$(@($observations | Where-Object { [bool](Property-Value $_ 'truncated') }).Count)"
 Write-Groups 'inputLimit' $inputLimits
 Write-Groups 'receiverBridgeGap' $receiverBridgeGaps
+Write-Groups 'terminalKind' @($chains | ForEach-Object { Property-Value $_ 'terminalKind' })
 Write-Groups 'stopState' @($observations | ForEach-Object { Property-Value $_ 'stopState' })
 Write-Groups 'callEvidenceState' @($observations | ForEach-Object { Property-Value $_ 'callEvidenceState' })
 Write-Groups 'traversedEdge' @($observations | ForEach-Object { @(Property-Value $_ 'traversedEdgeKinds') })

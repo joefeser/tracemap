@@ -39,6 +39,7 @@ try {
         eventChains = @(
             [ordered]@{
                 surfaceId = 'surface-fixture'
+                terminalKind = 'sql-query'
                 traversalObservation = [ordered]@{
                     stopState = 'observed-downstream-without-supported-terminal'
                     reachedNodeCount = 4
@@ -79,6 +80,7 @@ try {
         'reachedNodes=4', 'traversedEdges=3', 'downstreamEdges=2', 'terminalPaths=0',
         'inputLimit.graph-frontier=1',
         'receiverBridgeGap.ProjectlessVisualBasicReceiverTargetUnavailable=1',
+        'terminalKind.sql-query=1',
         'stopState.observed-downstream-without-supported-terminal=1',
         'callEvidenceState.joined-downstream-edge-observed=1',
         'traversedEdge.projectless-vb-receiver-bridge=1',
