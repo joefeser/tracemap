@@ -54,6 +54,10 @@ Commercial workflows may add convenience, scale, governance, and human-approved
 decisions. They must preserve the open engine's rule provenance, coverage, and
 limitations rather than replacing them with opaque conclusions.
 
+Paid custom-adapter work means implementation, integration, and support for a
+customer-specific environment. Generic adapter logic required to make a
+publicly supported language or framework correct belongs in the open engine.
+
 ## Validation and Private Samples
 
 Validation infrastructure is part of product correctness even when a fixture
