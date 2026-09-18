@@ -204,6 +204,10 @@ public static class VisualBasicSyntaxExtractor
             var namespaceName = GetSyntacticNamespace(statement);
             var containingTypeNames = statement.Ancestors()
                 .OfType<TypeBlockSyntax>()
+                // A TypeStatementSyntax is the BlockStatement of its own parent
+                // TypeBlockSyntax. Exclude that block here because declared.name
+                // is appended below; retaining it produces Worker.Worker.
+                .Where(block => !ReferenceEquals(block.BlockStatement, statement))
                 .Select(block => block.BlockStatement.Identifier.ValueText)
                 .Reverse();
             var qualifiedName = string.Join(".", new[] { namespaceName }

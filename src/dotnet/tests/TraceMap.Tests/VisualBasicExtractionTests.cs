@@ -486,7 +486,16 @@ public sealed class VisualBasicExtractionTests
             .OrderBy(fact => fact.SourceSymbol, StringComparer.Ordinal)
             .ToArray();
 
+        var types = result.Facts
+            .Where(fact => fact.FactType == FactTypes.TypeDeclared
+                && fact.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+                && fact.TargetSymbol == "Worker")
+            .Select(fact => fact.Properties["qualifiedName"])
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
         Assert.Equal(2, declarations.Length);
+        Assert.Equal(["Alpha.Worker", "Beta.Worker"], types);
         Assert.Collection(declarations,
             declaration =>
             {
