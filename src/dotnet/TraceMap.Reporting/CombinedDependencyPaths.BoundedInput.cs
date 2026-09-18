@@ -176,6 +176,8 @@ public static partial class CombinedDependencyPathReporter
                        case when fact_type = '{{FactTypes.CallEdge}}' and json_valid(properties_json) then
                            json_object(
                                'argumentCount', coalesce(cast(json_extract(properties_json, '$.argumentCount') as text), ''),
+                               'argumentTypes', coalesce(cast(json_extract(properties_json, '$.argumentTypes') as text), ''),
+                               'argumentTypeResolution', coalesce(cast(json_extract(properties_json, '$.argumentTypeResolution') as text), ''),
                                'assignedTo', coalesce(cast(json_extract(properties_json, '$.assignedTo') as text), ''),
                                'callKind', coalesce(cast(json_extract(properties_json, '$.callKind') as text), ''),
                                'calleeContainingType', coalesce(cast(json_extract(properties_json, '$.calleeContainingType') as text), ''),
@@ -352,6 +354,76 @@ public static partial class CombinedDependencyPathReporter
 
                 budget.Retain(bytes);
                 rows.Add(row);
+            }
+
+            // Syntax-only receiver targets need their member body facts in
+            // the bounded graph, not just declaration metadata. Discover
+            // exact type/name/arity body symbols from the retained syntax
+            // declarations, then admit every fact owned by those symbols so
+            // downstream calls and terminals remain connected.
+            var syntaxMembers = rows
+                .Where(row => row.FactType == FactTypes.MethodDeclared
+                    && row.RuleId == RuleIds.VisualBasicSyntaxDeclarations
+                    && int.TryParse(CombinedDependencyReporter.FirstValue(row.Properties, "parameterCount"), out _))
+                .Select(row => new
+                {
+                    Type = VisualBasicContainingType(row),
+                    Name = CombinedDependencyReporter.FirstValue(row.Properties, "methodName", "name"),
+                    Arity = int.Parse(CombinedDependencyReporter.FirstValue(row.Properties, "parameterCount")!)
+                })
+                .Where(member => !string.IsNullOrWhiteSpace(member.Type) && !string.IsNullOrWhiteSpace(member.Name))
+                .Distinct()
+                .ToArray();
+            if (syntaxMembers.Length > 0)
+            {
+                var bodySymbols = new SortedSet<string>(StringComparer.Ordinal);
+                await using (var bodyCommand = connection.CreateCommand())
+                {
+                    bodyCommand.CommandText = "select distinct source_symbol from facts "
+                        + "where source_symbol is not null and trim(source_symbol) <> '' "
+                        + "and exists (select 1 from json_each($method_names) names "
+                        + "where instr(lower(source_symbol), lower(cast(names.value as text))) > 0) "
+                        + "order by source_symbol collate binary limit $candidate_limit;";
+                    bodyCommand.Parameters.AddWithValue("$method_names", JsonSerializer.Serialize(bridgeMethodNames));
+                    bodyCommand.Parameters.AddWithValue("$candidate_limit", budget.MaxFacts + 1L);
+                    await using var bodyReader = await bodyCommand.ExecuteReaderAsync(cancellationToken);
+                    while (await bodyReader.ReadAsync(cancellationToken))
+                    {
+                        var symbol = bodyReader.GetString(0);
+                        var member = VisualBasicQualifiedMemberKey(symbol);
+                        if (member is not null && syntaxMembers.Any(candidate =>
+                            candidate.Arity == member.Value.Arity
+                            && string.Equals(candidate.Name, member.Value.Name, StringComparison.OrdinalIgnoreCase)
+                            && VisualBasicTypeMatches(candidate.Type, member.Value.Type)))
+                        {
+                            bodySymbols.Add(symbol);
+                            if (bodySymbols.Count > budget.MaxFacts)
+                                throw new ReportInputLimitException("handler-call-target-frontier");
+                        }
+                    }
+                }
+
+                if (bodySymbols.Count > 0)
+                {
+                    await using var bodyFactsCommand = connection.CreateCommand();
+                    bodyFactsCommand.CommandText = CompactFactQuery(hasExtractorVersion,
+                        "source_symbol in (select value from json_each($body_symbols))");
+                    bodyFactsCommand.Parameters.AddWithValue("$body_symbols", JsonSerializer.Serialize(bodySymbols));
+                    await using var bodyFactsReader = await bodyFactsCommand.ExecuteReaderAsync(cancellationToken);
+                    while (await bodyFactsReader.ReadAsync(cancellationToken))
+                    {
+                        var factType = bodyFactsReader.GetString(4);
+                        var symbolOnly = bodyFactsReader.GetBoolean(15);
+                        if (symbolOnly && factType != FactTypes.MethodInvoked) continue;
+                        budget.VisitFact();
+                        var bytes = bodyFactsReader.GetInt64(16);
+                        budget.CheckRow(bytes);
+                        var row = ReadProjectedFact(bodyFactsReader, source);
+                        if (!retainedIds.Add(row.OriginalFactId)) continue;
+                        budget.Retain(bytes);
+                        rows.Add(row);
+                    }
+                }
             }
         }
         return rows;

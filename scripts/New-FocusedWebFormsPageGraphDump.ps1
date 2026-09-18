@@ -97,6 +97,15 @@ $currentPages = @($current.Application.pages | Where-Object {
 if ($currentPages.Count -ne 1) { throw 'WEBFORMS_PAGE_GRAPH_DUMP_ROUTE_MATCH_UNAVAILABLE' }
 $pageId = [string]$currentPages[0].pageId
 $pagePath = Join-Path $currentRoot "workbench/$pageId.handoff.json"
+$pageArtifact = @($current.Receipt.stages.workbench.artifacts | Where-Object {
+    ([string]$_.path).Replace('\', '/').Equals("workbench/$pageId.handoff.json", [StringComparison]::OrdinalIgnoreCase)
+})
+if ($pageArtifact.Count -ne 1) { throw 'WEBFORMS_PAGE_GRAPH_DUMP_PAGE_NOT_RECEIPTED' }
+$pageFile = Get-Item -LiteralPath $pagePath -ErrorAction Stop
+$pageHash = (Get-FileHash -LiteralPath $pagePath -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($pageFile.Length -ne [long]$pageArtifact[0].bytes -or $pageHash -ne [string]$pageArtifact[0].sha256) {
+    throw 'WEBFORMS_PAGE_GRAPH_DUMP_PAGE_ARTIFACT_MISMATCH'
+}
 $page = Read-BoundedJson $pagePath 128MB 'WEBFORMS_PAGE_GRAPH_DUMP_PAGE_UNAVAILABLE'
 if ($page.schemaVersion -ne 'webforms-application-page-handoff.v1' -or $page.claimLevel -ne 'local-only' -or
     $page.pageId -ne $pageId -or $page.provenance.inputSha256 -ne $current.Application.provenance.inputSha256 -or
@@ -289,7 +298,8 @@ try {
             generator = 'scripts/New-FocusedWebFormsPageGraphDump.ps1'
             generatorSha256 = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
             helperSha256 = (Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash.ToLowerInvariant()
-            sourcePageHandoffSha256 = (Get-FileHash -LiteralPath $pagePath -Algorithm SHA256).Hash.ToLowerInvariant()
+            sourcePageHandoffSha256 = $pageHash
+            sourceIndexSha256 = (Get-FileHash -LiteralPath $indexPath -Algorithm SHA256).Hash.ToLowerInvariant()
             sourcePacketSha256 = [string]$page.provenance.inputSha256
             scanId = [string]$page.packet.scanId
             commitSha = [string]$page.packet.commitSha

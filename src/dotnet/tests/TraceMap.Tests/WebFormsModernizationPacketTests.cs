@@ -1063,6 +1063,7 @@ public sealed class WebFormsModernizationPacketTests
         var singleFieldInvocation = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph,
             "WebApplication/Feedback.aspx.vb", 23, source: handlerSymbol, target: "InsertFeedback", contract: "InsertFeedback",
             ("argumentCount", "1"), ("callKind", "SyntaxInvocation"), ("calleeName", "InsertFeedback"),
+            ("argumentTypes", "String"), ("argumentTypeResolution", "explicit-caller-syntax"),
             ("callerName", handlerSymbol), ("coverageLabel", "syntax-only"), ("receiverName", "Me.service"));
         var singleBaseFieldInvocation = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph,
             "WebApplication/Feedback.aspx.vb", 24, source: handlerSymbol, target: "InsertFeedback", contract: "InsertFeedback",
@@ -1108,6 +1109,14 @@ public sealed class WebFormsModernizationPacketTests
         {
             EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
         };
+        var singleSyntaxOverload = Fact(manifest, FactTypes.MethodDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "BusinessLayer/BusinessObject.vb", 11, source: null, target: "InsertFeedback", contract: null,
+            ("containingType", "BusinessLayer.BusinessObject"), ("qualifiedContainingType", "BusinessLayer.BusinessObject"),
+            ("name", "InsertFeedback"), ("memberIdentity", "BusinessLayer.BusinessObject.InsertFeedback(Integer)"),
+            ("parameterCount", "1"), ("parameterTypes", "Integer")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
         var singleDownstream = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph,
             "BusinessLayer/BusinessObject.vb", 12, source: "BusinessLayer.BusinessObject.InsertFeedback(String)",
             target: "FeedbackQuery.Insert", contract: "Insert", ("argumentCount", "1"),
@@ -1124,14 +1133,14 @@ public sealed class WebFormsModernizationPacketTests
             ("coverageLabel", "bounded-static-query"));
         var singleFlow = Fact(manifest, FactTypes.WebFormsEventFlowProjected, RuleIds.LegacyWebFormsEventFlow,
             "WebApplication/Feedback.aspx.vb", 20, source: handlerSymbol, target: "flow-terminal-unavailable", contract: "Submit_Click",
-            ("supportingFactIds", $"{handler.FactId},{singleFieldInvocation.FactId},{singleBaseFieldInvocation.FactId},{singleDownstream.FactId},{singleTerminal.FactId}"),
-            ("supportingEdgeIds", $"{singleFieldInvocation.FactId},{singleBaseFieldInvocation.FactId},{singleDownstream.FactId}"), ("flowClassification", "UnknownAnalysisGap"),
+            ("supportingFactIds", $"{handler.FactId},{singleFieldInvocation.FactId},{singleBaseFieldInvocation.FactId}"),
+            ("supportingEdgeIds", $"{singleFieldInvocation.FactId},{singleBaseFieldInvocation.FactId}"), ("flowClassification", "UnknownAnalysisGap"),
             ("coverageLabel", "reduced-static-webforms-flow"));
         var singleSyntaxIndex = Path.Combine(temp.Path, "single-syntax-field-index.sqlite");
         SqliteIndexWriter.Write(singleSyntaxIndex, manifest,
             [page, binding, handler, singleFieldInvocation, singleBaseFieldInvocation, callerTypeDeclaration, callerBaseTypeDeclaration,
                 receiverFieldDeclaration, receiverBaseFieldDeclaration,
-                receiverTypeDeclaration, singleSyntaxDeclaration, singleDownstream, singleTerminal, singleFlow]);
+                receiverTypeDeclaration, singleSyntaxDeclaration, singleSyntaxOverload, singleDownstream, singleTerminal, singleFlow]);
         var singleSyntaxPacket = await WebFormsModernizationPacketReporter.BuildAsync(
             new(singleSyntaxIndex, Path.Combine(temp.Path, "single-syntax-field-output")));
         var singleSyntaxChains = singleSyntaxPacket.EventChains.ToArray();
