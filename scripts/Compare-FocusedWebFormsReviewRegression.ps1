@@ -3,7 +3,8 @@ param(
     [Parameter(Mandatory = $true)][string]$ReviewRoot,
     [string]$OldReviewRoot = '',
     [ValidatePattern('^page-[0-9]{3,4}$')][string]$PriorPageId = 'page-011',
-    [switch]$IncludePrivateReceiverIdentities
+    [switch]$IncludePrivateReceiverIdentities,
+    [switch]$SummaryOnly
 )
 
 Set-StrictMode -Version Latest
@@ -72,8 +73,13 @@ function Read-ReviewMetrics([string]$Root) {
 
 function Write-PrefixedMetrics([string]$Prefix, [System.Collections.IDictionary]$Values) {
     foreach ($key in @($Values.Keys | Sort-Object)) {
+        if ($SummaryOnly -and !(Test-HighSignalMetric $key)) { continue }
         Write-Output "$Prefix.$key=$($Values[$key])"
     }
+}
+
+function Test-HighSignalMetric([string]$Key) {
+    return $Key -match '^(artifact\.|chains$|boundaries$|observations$|reachedNodes$|traversedEdges$|downstreamEdges$|terminalPaths$|truncatedObservations$|packetTruncated$|diagnosticShapesTruncated$|terminalKind\.|stopState\.|receiverBridgeGap\.|receiverBridgeStatus\.|receiverBridgePrivate\.execProcReachableNodes$|inputLimit\.|traversedEdge\.|traversedRule\.)'
 }
 
 $currentRoot = Resolve-ReviewRoot $ReviewRoot 'WEBFORMS_REVIEW_REGRESSION_CURRENT_ROOT_UNAVAILABLE'
@@ -88,6 +94,7 @@ if (![string]::IsNullOrWhiteSpace($OldReviewRoot)) {
     Write-PrefixedMetrics 'old' $old
     $keys = @($current.Keys + $old.Keys | Sort-Object -Unique)
     foreach ($key in $keys) {
+        if ($SummaryOnly -and !(Test-HighSignalMetric $key)) { continue }
         $currentValue = if ($current.Contains($key)) { [string]$current[$key] } else { '<missing>' }
         $oldValue = if ($old.Contains($key)) { [string]$old[$key] } else { '<missing>' }
         if ($currentValue -eq $oldValue) { continue }

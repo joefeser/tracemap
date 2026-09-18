@@ -83,6 +83,14 @@ try {
         'delta.artifact.pageHtml.bytes=5')) {
         if ($expected -notin $output) { throw "Review regression diagnostic omitted: $expected" }
     }
+
+    $summary = @(& $subject -ReviewRoot $current -OldReviewRoot $old -SummaryOnly)
+    if ('delta.reachedNodes=5' -notin $summary -or 'delta.artifact.pageHtml.bytes=5' -notin $summary) {
+        throw 'Review regression summary omitted high-signal deltas.'
+    }
+    if (@($summary | Where-Object { $_ -match 'packetSha256' }).Count -gt 0) {
+        throw 'Review regression summary retained low-signal packet identity.'
+    }
     Write-Host 'PASS focused Web Forms review regression diagnostic'
 }
 finally {
