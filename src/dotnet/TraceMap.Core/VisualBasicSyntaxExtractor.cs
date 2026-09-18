@@ -1133,18 +1133,17 @@ public static class VisualBasicSyntaxExtractor
                 return parameterTypes[0];
             }
 
-            var localTypes = containingMethod.DescendantNodes().OfType<VariableDeclaratorSyntax>()
+            var nearestLocal = containingMethod.DescendantNodes().OfType<VariableDeclaratorSyntax>()
                 .Where(declaration => declaration.SpanStart < invocation.SpanStart)
                 .Where(declaration => declaration.Ancestors().OfType<MethodBlockBaseSyntax>().FirstOrDefault() == containingMethod)
+                .Where(declaration => IsVisualBasicLocalInScope(declaration, invocation, containingMethod))
                 .Where(declaration => declaration.Names.Any(candidate =>
                     candidate.Identifier.ValueText.Equals(name, StringComparison.OrdinalIgnoreCase)))
-                .Select(ExplicitVariableType)
-                .Where(type => !string.IsNullOrWhiteSpace(type))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-            if (localTypes.Length == 1)
+                .OrderByDescending(declaration => declaration.SpanStart)
+                .FirstOrDefault();
+            if (nearestLocal is not null)
             {
-                return localTypes[0];
+                return ExplicitVariableType(nearestLocal);
             }
         }
 

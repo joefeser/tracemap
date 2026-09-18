@@ -557,6 +557,10 @@ public sealed class VisualBasicExtractionTests
                     SQLDA.ExecProc_Scalar(commandText, localParameters)
                     SQLDA.ExecProc_Scalar(BuildCommand(), localParameters)
                     SQLDA.ExecProc_Scalar(parameters:=localParameters, commandText:=commandText)
+                    If Date.Now.Year > 2000 Then
+                        Dim staleParameters As ArrayList = parameters
+                    End If
+                    SQLDA.ExecProc_Scalar(commandText, staleParameters)
                     Return Nothing
                 End Function
             End Class
@@ -571,13 +575,15 @@ public sealed class VisualBasicExtractionTests
             .OrderBy(fact => fact.Evidence.StartLine)
             .ToArray();
 
-        Assert.Equal(3, calls.Length);
+        Assert.Equal(4, calls.Length);
         Assert.Equal("String;ArrayList", calls[0].Properties["argumentTypes"]);
         Assert.Equal("explicit-caller-syntax", calls[0].Properties["argumentTypeResolution"]);
         Assert.Equal("unavailable;ArrayList", calls[1].Properties["argumentTypes"]);
         Assert.Equal("partial-explicit-caller-syntax", calls[1].Properties["argumentTypeResolution"]);
         Assert.DoesNotContain("argumentTypes", calls[2].Properties.Keys);
         Assert.DoesNotContain("argumentTypeResolution", calls[2].Properties.Keys);
+        Assert.Equal("String;unavailable", calls[3].Properties["argumentTypes"]);
+        Assert.Equal("partial-explicit-caller-syntax", calls[3].Properties["argumentTypeResolution"]);
     }
 
     [Fact]

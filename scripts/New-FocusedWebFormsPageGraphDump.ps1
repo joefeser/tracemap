@@ -75,6 +75,29 @@ $reviewRootPrefix = $root + [IO.Path]::DirectorySeparatorChar
 $pathComparison = if ($IsWindows) { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
 if (!$indexPath.StartsWith($reviewRootPrefix, $pathComparison)) { throw 'WEBFORMS_PAGE_GRAPH_DUMP_INDEX_LAYOUT_INVALID' }
 if (!(Test-Path -LiteralPath $indexPath -PathType Leaf)) { throw 'WEBFORMS_PAGE_GRAPH_DUMP_INDEX_UNAVAILABLE' }
+$indexRelativePath = "$scanDirectory/index.sqlite"
+$indexArtifacts = @($prior.Receipt.stages.scan.artifacts | Where-Object {
+    ([string]$_.path).Replace('\', '/').Equals($indexRelativePath, [StringComparison]::OrdinalIgnoreCase)
+})
+if ($indexArtifacts.Count -ne 1) { throw 'WEBFORMS_PAGE_GRAPH_DUMP_INDEX_NOT_RECEIPTED' }
+$indexFile = Get-Item -LiteralPath $indexPath
+$indexSha256 = (Get-FileHash -LiteralPath $indexPath -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($indexFile.Length -ne [long]$indexArtifacts[0].bytes -or $indexSha256 -ne [string]$indexArtifacts[0].sha256) {
+    throw 'WEBFORMS_PAGE_GRAPH_DUMP_INDEX_ARTIFACT_MISMATCH'
+}
+$manifestRelativePath = "$scanDirectory/scan-manifest.json"
+$manifestArtifacts = @($prior.Receipt.stages.scan.artifacts | Where-Object {
+    ([string]$_.path).Replace('\', '/').Equals($manifestRelativePath, [StringComparison]::OrdinalIgnoreCase)
+})
+if ($manifestArtifacts.Count -ne 1) { throw 'WEBFORMS_PAGE_GRAPH_DUMP_INDEX_MANIFEST_NOT_RECEIPTED' }
+$manifestPath = Join-Path $root $manifestRelativePath
+if (!(Test-Path -LiteralPath $manifestPath -PathType Leaf)) { throw 'WEBFORMS_PAGE_GRAPH_DUMP_INDEX_MANIFEST_UNAVAILABLE' }
+$manifestFile = Get-Item -LiteralPath $manifestPath
+$manifestHash = (Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($manifestFile.Length -ne [long]$manifestArtifacts[0].bytes -or $manifestHash -ne [string]$manifestArtifacts[0].sha256) {
+    throw 'WEBFORMS_PAGE_GRAPH_DUMP_INDEX_MANIFEST_ARTIFACT_MISMATCH'
+}
+$indexManifest = Read-BoundedJson $manifestPath 16MB 'WEBFORMS_PAGE_GRAPH_DUMP_INDEX_MANIFEST_INVALID'
 
 if ($StandaloneReviewRoot) {
     $currentRoot = [IO.Path]::GetFullPath($StandaloneReviewRoot).TrimEnd('\', '/')
@@ -88,6 +111,18 @@ else {
 }
 
 $current = Get-ReceiptedApplication $currentRoot
+$currentPacketSources = if ($null -ne $current.Application.packet.PSObject.Properties['sources']) {
+    @($current.Application.packet.sources)
+} else {
+    @([pscustomobject]@{ scanId = $current.Application.packet.scanId; commitSha = $current.Application.packet.commitSha })
+}
+$matchingIndexSources = @($currentPacketSources | Where-Object {
+    [string]::Equals([string]$_.scanId, [string]$indexManifest.scanId, [StringComparison]::Ordinal) -and
+    [string]::Equals([string]$_.commitSha, [string]$indexManifest.commitSha, [StringComparison]::OrdinalIgnoreCase)
+})
+if ($matchingIndexSources.Count -ne 1) {
+    throw 'WEBFORMS_PAGE_GRAPH_DUMP_INDEX_PACKET_PROVENANCE_MISMATCH'
+}
 $priorPages = @($prior.Application.pages | Where-Object { $_.pageId -eq $PriorPageId })
 if ($priorPages.Count -ne 1) { throw 'WEBFORMS_PAGE_GRAPH_DUMP_PRIOR_PAGE_UNAVAILABLE' }
 $priorPath = [string]$priorPages[0].filePath

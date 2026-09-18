@@ -2147,7 +2147,16 @@ public static partial class LegacyWebFormsExtractor
         {
             return [];
         }
-        var controlType = controls.SingleOrDefault(control => control.ControlId.Equals(controlId, StringComparison.OrdinalIgnoreCase))?.ControlType ?? string.Empty;
+        var controlTypes = controls
+            .Where(control => control.ControlId.Equals(controlId, StringComparison.OrdinalIgnoreCase))
+            .Select(control => control.ControlType)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (controlTypes.Length != 1)
+        {
+            return [];
+        }
+        var controlType = controlTypes[0];
         if (controlType.Contains("RadioButton", StringComparison.OrdinalIgnoreCase)
             || controlType.Contains("CheckBox", StringComparison.OrdinalIgnoreCase))
         {
@@ -2201,11 +2210,17 @@ public static partial class LegacyWebFormsExtractor
             var endpointPath = url.Split(['?', '#'], 2)[0].Replace('\\', '/').Trim();
             var normalizedEndpointPath = endpointPath.TrimStart('/');
             var endpointName = Path.GetFileName(endpointPath);
-            var candidates = handlerFiles
-                .Where(path => normalizedEndpointPath.Equals(path, StringComparison.OrdinalIgnoreCase)
-                    || path.EndsWith("/" + normalizedEndpointPath, StringComparison.OrdinalIgnoreCase))
-                .ToArray();
-            if (candidates.Length == 0 && !string.IsNullOrWhiteSpace(endpointName))
+            var isExternalAbsoluteUrl = endpointPath.StartsWith("//", StringComparison.Ordinal)
+                || Uri.TryCreate(endpointPath, UriKind.Absolute, out var absoluteEndpoint)
+                    && (absoluteEndpoint.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+                        || absoluteEndpoint.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase));
+            var candidates = isExternalAbsoluteUrl
+                ? []
+                : handlerFiles
+                    .Where(path => normalizedEndpointPath.Equals(path, StringComparison.OrdinalIgnoreCase)
+                        || path.EndsWith("/" + normalizedEndpointPath, StringComparison.OrdinalIgnoreCase))
+                    .ToArray();
+            if (!isExternalAbsoluteUrl && candidates.Length == 0 && !string.IsNullOrWhiteSpace(endpointName))
             {
                 var fileNameMatches = handlerFiles.Where(path => Path.GetFileName(path).Equals(endpointName, StringComparison.OrdinalIgnoreCase)).ToArray();
                 if (fileNameMatches.Length == 1)

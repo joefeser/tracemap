@@ -1826,6 +1826,26 @@ public sealed class LegacyWebFormsExtractorTests
     }
 
     [Fact]
+    public void Inline_jquery_change_does_not_infer_server_event_for_ambiguous_repeated_control_types()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Repeated.aspx"), """
+            <%@ Page Language="VB" Inherits="Repeated" %>
+            <asp:Panel runat="server" ID="First"><asp:CheckBox runat="server" ID="Choice" /></asp:Panel>
+            <asp:Panel runat="server" ID="Second"><asp:TextBox runat="server" ID="Choice" /></asp:Panel>
+            <script>$("[id*=Choice]").on('change', function () { $(this).hide(); });</script>
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        var clientEvent = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WebFormsClientEventBindingCandidate);
+        Assert.Equal("Choice", clientEvent.Properties.GetValueOrDefault("controlId"));
+        Assert.DoesNotContain("serverEventName", clientEvent.Properties.Keys);
+    }
+
+    [Fact]
     public void Inline_jquery_ajax_retains_safe_http_evidence_and_selector_target_cardinality()
     {
         using var temp = new TempDirectory();
@@ -1930,6 +1950,45 @@ public sealed class LegacyWebFormsExtractorTests
         Assert.DoesNotContain("/virtual/app", serialized, StringComparison.Ordinal);
         Assert.DoesNotContain("'POS'", serialized, StringComparison.Ordinal);
         Assert.DoesNotContain("__RequestVerificationToken", serialized, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Inline_jquery_ajax_does_not_resolve_external_absolute_url_by_repository_basename()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(Path.Combine(repo, "api"));
+        File.WriteAllText(Path.Combine(repo, "Default.aspx"), """
+            <%@ Page Language="VB" Inherits="DefaultPage" %>
+            <script>
+              $.ajax({ url: 'https://api.example/Save.ashx' });
+              $.ajax({ url: '//api.example/Save.ashx' });
+            </script>
+            """);
+        File.WriteAllText(Path.Combine(repo, "api", "Save.ashx"), """
+            <%@ WebHandler Language="VB" Class="SaveHandler" %>
+            Public Class SaveHandler
+                Public Sub ProcessRequest(context As Object)
+                End Sub
+            End Class
+            """);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        var requests = result.Facts
+            .Where(fact => fact.FactType == FactTypes.WebFormsClientHttpRequestCandidate)
+            .OrderBy(fact => fact.Evidence.StartLine)
+            .ToArray();
+        Assert.Equal(2, requests.Length);
+        Assert.All(requests, request =>
+        {
+            Assert.Equal("Save.ashx", request.Properties.GetValueOrDefault("endpointName"));
+            Assert.Equal("no-static-handler-file-declared", request.Properties.GetValueOrDefault("targetResolution"));
+            Assert.DoesNotContain("endpointDeclarationFile", request.Properties.Keys);
+        });
+        Assert.DoesNotContain(result.Facts, fact =>
+            fact.FactType == FactTypes.WebFormsHandlerResolved
+            && fact.RuleId == RuleIds.LegacyWebFormsClientHttpHandlerResolution);
     }
 
     [Fact]

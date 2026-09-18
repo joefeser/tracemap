@@ -220,6 +220,7 @@ $packetFile = Get-Item -LiteralPath $PacketPath
 if ($packetFile.Length -le 0 -or $packetFile.Length -gt 128MB) { throw 'ApplicationWorkbenchPacketLimit' }
 $generatorSha256 = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
 $packetSha256 = (Get-FileHash -LiteralPath $packetFile.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+$evidenceDocsSha256 = $null
 $packet = [IO.File]::ReadAllText($packetFile.FullName) | ConvertFrom-Json -Depth 100
 if ($packet.schemaVersion -ne 'webforms-modernization-packet.v1') { throw 'ApplicationWorkbenchPacketSchemaMismatch' }
 $sources = @(Values $packet.sources)
@@ -259,6 +260,14 @@ if ($LASTEXITCODE -ne 0) { throw 'ApplicationWorkbenchValidatorBuildFailed' }
 $validatorDll = Join-Path $PSScriptRoot 'diagnostics/RawWebFormsEvidence/bin/Release/net10.0/RawWebFormsEvidence.dll'
 & dotnet $validatorDll '--validate-application-workbench-inputs' $packetFile.FullName $(if ($EvidenceDocsRoot) { [IO.Path]::GetFullPath($EvidenceDocsRoot) } else { '-' })
 if ($LASTEXITCODE -ne 0) { throw 'ApplicationWorkbenchInputValidationFailed' }
+if ($EvidenceDocsRoot) {
+    $evidenceDocsDigestProjection = (@('chunks.jsonl', 'manifest.json', 'query-recipes.json') | ForEach-Object {
+        $name = $_
+        $sha256 = (Get-FileHash -LiteralPath (Join-Path $EvidenceDocsRoot $name) -Algorithm SHA256).Hash.ToLowerInvariant()
+        "${name}:$sha256"
+    }) -join "`n"
+    $evidenceDocsSha256 = Get-TextSha256 $evidenceDocsDigestProjection
+}
 
 # Packet contracts deliberately omit properties that are not established for a
 # particular evidence row. PowerShell strict mode must distinguish a missing
@@ -490,7 +499,7 @@ try {
             schemaVersion = 'webforms-application-page-handoff.v1'
             ruleId = 'diagnostic.webforms.application-page-handoff.v1'
             claimLevel = 'local-only'
-            provenance = [ordered]@{ generator = 'scripts/New-FocusedWebFormsApplicationWorkbench.ps1'; generatorSha256 = $generatorSha256; generatorCanonicalization = 'raw-file-bytes'; inputKind = 'webforms-modernization-packet.v1'; inputSha256 = $packetSha256; inputCanonicalization = 'raw-file-bytes'; reviewOverlayKind = if ($ReviewPath) { 'wits-application-review.v1' } else { 'not-supplied' }; reviewOverlaySha256 = $reviewSha256; reviewOverlayCanonicalization = if ($ReviewPath) { 'raw-file-bytes' } else { 'not-applicable' } }
+            provenance = [ordered]@{ generator = 'scripts/New-FocusedWebFormsApplicationWorkbench.ps1'; generatorSha256 = $generatorSha256; generatorCanonicalization = 'raw-file-bytes'; inputKind = 'webforms-modernization-packet.v1'; inputSha256 = $packetSha256; inputCanonicalization = 'raw-file-bytes'; evidenceDocsKind = if ($EvidenceDocsRoot) { 'tracemap-evidence-docs.v1' } else { 'not-supplied' }; evidenceDocsSha256 = $evidenceDocsSha256; evidenceDocsCanonicalization = if ($EvidenceDocsRoot) { 'named-file-sha256-lines-utf8-v1' } else { 'not-applicable' }; reviewOverlayKind = if ($ReviewPath) { 'wits-application-review.v1' } else { 'not-supplied' }; reviewOverlaySha256 = $reviewSha256; reviewOverlayCanonicalization = if ($ReviewPath) { 'raw-file-bytes' } else { 'not-applicable' } }
             pageId = $pageId
             packet = [ordered]@{ packetId = [string]$packet.packetId; scanId = [string]$sources[0].scanId; commitSha = [string]$sources[0].commitSha; sources = @($sources | ForEach-Object { [ordered]@{ sourceId = [string]$_.sourceId; scanId = [string]$_.scanId; commitSha = [string]$_.commitSha } }) }
             subject = [ordered]@{ surfaceId = [string]$surface.surfaceId; surfaceKind = [string]$surface.surfaceKind; projectId = [string]$surface.projectId; filePath = [string]$surface.evidence.filePath }
@@ -783,7 +792,7 @@ try {
     [IO.File]::WriteAllText((Join-Path $staging 'application-outliers.html'), $privateOutlierHtml, [Text.UTF8Encoding]::new($false))
     $appHandoff = [ordered]@{
         schemaVersion = 'webforms-application-handoff.v1'; ruleId = 'diagnostic.webforms.application-handoff.v1'; claimLevel = 'local-only'
-        provenance = [ordered]@{ generator = 'scripts/New-FocusedWebFormsApplicationWorkbench.ps1'; generatorSha256 = $generatorSha256; generatorCanonicalization = 'raw-file-bytes'; inputKind = 'webforms-modernization-packet.v1'; inputSha256 = $packetSha256; inputCanonicalization = 'raw-file-bytes'; reviewOverlayKind = if ($ReviewPath) { 'wits-application-review.v1' } else { 'not-supplied' }; reviewOverlaySha256 = $reviewSha256; reviewOverlayCanonicalization = if ($ReviewPath) { 'raw-file-bytes' } else { 'not-applicable' } }
+        provenance = [ordered]@{ generator = 'scripts/New-FocusedWebFormsApplicationWorkbench.ps1'; generatorSha256 = $generatorSha256; generatorCanonicalization = 'raw-file-bytes'; inputKind = 'webforms-modernization-packet.v1'; inputSha256 = $packetSha256; inputCanonicalization = 'raw-file-bytes'; evidenceDocsKind = if ($EvidenceDocsRoot) { 'tracemap-evidence-docs.v1' } else { 'not-supplied' }; evidenceDocsSha256 = $evidenceDocsSha256; evidenceDocsCanonicalization = if ($EvidenceDocsRoot) { 'named-file-sha256-lines-utf8-v1' } else { 'not-applicable' }; reviewOverlayKind = if ($ReviewPath) { 'wits-application-review.v1' } else { 'not-supplied' }; reviewOverlaySha256 = $reviewSha256; reviewOverlayCanonicalization = if ($ReviewPath) { 'raw-file-bytes' } else { 'not-applicable' } }
         packet = [ordered]@{ packetId = [string]$packet.packetId; scanId = [string]$sources[0].scanId; commitSha = [string]$sources[0].commitSha; sources = @($sources | ForEach-Object { [ordered]@{ sourceId = [string]$_.sourceId; scanId = [string]$_.scanId; commitSha = [string]$_.commitSha } }); snapshot = 'webforms-modernization.snapshot.json' }
         analysis = [ordered]@{
             status = $applicationStatus

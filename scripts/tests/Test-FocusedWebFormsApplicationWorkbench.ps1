@@ -143,7 +143,14 @@ try {
     $handoff = [IO.File]::ReadAllText((Join-Path $workbench 'page-001.handoff.json')) | ConvertFrom-Json -Depth 30
     $expectedGeneratorSha = (Get-FileHash -LiteralPath $scriptPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $expectedPacketSha = (Get-FileHash -LiteralPath $packetPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $evidenceDocsDigestProjection = (@('chunks.jsonl', 'manifest.json', 'query-recipes.json') | ForEach-Object {
+        $name = $_
+        $sha256 = (Get-FileHash -LiteralPath (Join-Path $corpus $name) -Algorithm SHA256).Hash.ToLowerInvariant()
+        "${name}:$sha256"
+    }) -join "`n"
+    $expectedEvidenceDocsSha = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.UTF8Encoding]::new($false).GetBytes($evidenceDocsDigestProjection))).ToLowerInvariant()
     if ($handoff.provenance.generatorSha256 -ne $expectedGeneratorSha -or $handoff.provenance.inputSha256 -ne $expectedPacketSha) { throw 'Page handoff omitted exact generator or packet provenance.' }
+    if ($handoff.provenance.evidenceDocsKind -ne 'tracemap-evidence-docs.v1' -or $handoff.provenance.evidenceDocsSha256 -ne $expectedEvidenceDocsSha -or $handoff.provenance.evidenceDocsCanonicalization -ne 'named-file-sha256-lines-utf8-v1') { throw 'Page handoff omitted exact evidence-docs provenance.' }
     if ($handoff.subject.filePath -ne 'Pages/First.aspx' -or $handoff.counts.eventChains -ne 5 -or $handoff.counts.clientBehaviors -ne 3 -or $handoff.counts.serverBehaviors -ne 2 -or $handoff.analysis.boundaryStatus -ne '1 detected' -or $handoff.evidenceDocs.status -ne 'supplied-read-only') { throw 'Page handoff projection was incomplete.' }
     if (!$handoff.analysis.packetTruncated -or $handoff.analysis.packetTruncationScope -ne 'application-packet' -or @($handoff.analysis.packetTruncationReasons | Where-Object { $_ -eq 'legacy-flow:TruncatedByLimit:depth' }).Count -ne 1 -or $handoff.analysis.pageTraversalTruncated) { throw 'Page handoff conflated application packet truncation with page traversal truncation.' }
     if ($handoff.counts.retainedCalls -ne 3 -or $handoff.counts.chainAssociatedRetainedCalls -ne 3 -or $handoff.counts.reportedCallProjections -ne 257 -or $handoff.counts.omittedCallProjections -ne 254 -or $handoff.counts.uniqueRetainedCallFacts -ne 2 -or $handoff.counts.normalizedCallSites -ne 1 -or $handoff.counts.callEvidenceCeilingChains -ne 1 -or $handoff.chainOutcomes.unresolvedHandlers -ne 1 -or $handoff.chainOutcomes.downstreamWithoutSupportedTerminal -ne 2 -or $handoff.chainOutcomes.otherIncomplete -ne 1) { throw 'Page handoff omitted chain-outcome or retained-call counts.' }
@@ -161,6 +168,7 @@ try {
     if (@($handoff.retrievalHints).Count -ne 3 -or @($handoff.retrievalHints | Where-Object { !$_.recipeId }).Count -ne 0) { throw 'Retrieval hints were not serialized as a flat recipe list.' }
     $applicationHandoff = [IO.File]::ReadAllText((Join-Path $workbench 'application-handoff.json')) | ConvertFrom-Json -Depth 30
     if ($applicationHandoff.provenance.generatorSha256 -ne $expectedGeneratorSha -or $applicationHandoff.provenance.inputSha256 -ne $expectedPacketSha) { throw 'Application handoff omitted exact generator or packet provenance.' }
+    if ($applicationHandoff.provenance.evidenceDocsKind -ne 'tracemap-evidence-docs.v1' -or $applicationHandoff.provenance.evidenceDocsSha256 -ne $expectedEvidenceDocsSha -or $applicationHandoff.provenance.evidenceDocsCanonicalization -ne 'named-file-sha256-lines-utf8-v1') { throw 'Application handoff omitted exact evidence-docs provenance.' }
     if (@($applicationHandoff.projectDataMovement).Count -ne 1 -or $applicationHandoff.projectDataMovement[0].id -ne 'batch-one' -or
         $applicationHandoff.projectDataMovement[0].evidence.factId -ne 'fact-surface-1') { throw 'Application handoff omitted project-scoped data movement evidence.' }
     if ($applicationHandoff.outlierReview.privateHtml -ne 'application-outliers.html' -or $applicationHandoff.outlierReview.json -ne 'application-outliers.shareable.json' -or $applicationHandoff.pages[0].chainOutcomes.otherIncomplete -ne 1 -or $applicationHandoff.pages[0].gapCategories[0].classification -ne 'HandlerTerminalUnavailable') { throw 'Application handoff omitted outlier-review navigation or page breakdowns.' }
