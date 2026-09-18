@@ -79,7 +79,26 @@ function Write-PrefixedMetrics([string]$Prefix, [System.Collections.IDictionary]
 }
 
 function Test-HighSignalMetric([string]$Key) {
-    return $Key -match '^(artifact\.|chains$|boundaries$|observations$|reachedNodes$|traversedEdges$|downstreamEdges$|terminalPaths$|truncatedObservations$|packetTruncated$|diagnosticShapesTruncated$|terminalKind\.|stopState\.|receiverBridgeGap\.|receiverBridgeStatus\.|receiverBridgePrivate\.(execProcReachableNodes$|execProc(Start|Leaf)-|graphGap-)|inputLimit\.|traversedEdge\.|traversedRule\.)'
+    return $Key -match '^(artifact\.|chains$|boundaries$|observations$|reachedNodes$|traversedEdges$|downstreamEdges$|terminalPaths$|truncatedObservations$|packetTruncated$|diagnosticShapesTruncated$|terminalKind\.|stopState\.|receiverBridgeGap\.|receiverBridgeStatus\.|receiverBridgePrivate\.execProcReachableNodes$|inputLimit\.|traversedEdge\.|traversedRule\.)'
+}
+
+function Write-IdentitySetDelta(
+    [System.Collections.IDictionary]$Current,
+    [System.Collections.IDictionary]$Old,
+    [string]$KeyPattern,
+    [string]$Name) {
+    $currentValues = @($Current.Keys | Where-Object { $_ -match $KeyPattern } | ForEach-Object { [string]$Current[$_] } | Sort-Object -Unique)
+    $oldValues = @($Old.Keys | Where-Object { $_ -match $KeyPattern } | ForEach-Object { [string]$Old[$_] } | Sort-Object -Unique)
+    $removed = @($oldValues | Where-Object { $_ -notin $currentValues })
+    $added = @($currentValues | Where-Object { $_ -notin $oldValues })
+    Write-Output "delta.$Name.removed=$($removed.Count)"
+    Write-Output "delta.$Name.added=$($added.Count)"
+    for ($index = 0; $index -lt $removed.Count; $index++) {
+        Write-Output "removed.$Name-$($index + 1)=$($removed[$index])"
+    }
+    for ($index = 0; $index -lt $added.Count; $index++) {
+        Write-Output "added.$Name-$($index + 1)=$($added[$index])"
+    }
 }
 
 $currentRoot = Resolve-ReviewRoot $ReviewRoot 'WEBFORMS_REVIEW_REGRESSION_CURRENT_ROOT_UNAVAILABLE'
@@ -92,6 +111,11 @@ if (![string]::IsNullOrWhiteSpace($OldReviewRoot)) {
     $oldRoot = Resolve-ReviewRoot $OldReviewRoot 'WEBFORMS_REVIEW_REGRESSION_OLD_ROOT_UNAVAILABLE'
     $old = Read-ReviewMetrics $oldRoot
     Write-PrefixedMetrics 'old' $old
+    if ($SummaryOnly) {
+        Write-IdentitySetDelta $current $old '^receiverBridgePrivate\.execProcStart-' 'execProcStart'
+        Write-IdentitySetDelta $current $old '^receiverBridgePrivate\.execProcLeaf-' 'execProcLeaf'
+        Write-IdentitySetDelta $current $old '^receiverBridgePrivate\.graphGap-' 'graphGap'
+    }
     $keys = @($current.Keys + $old.Keys | Sort-Object -Unique)
     foreach ($key in $keys) {
         if ($SummaryOnly -and !(Test-HighSignalMetric $key)) { continue }

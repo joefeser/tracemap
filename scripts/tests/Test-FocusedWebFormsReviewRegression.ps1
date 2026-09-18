@@ -88,6 +88,9 @@ try {
     if ('delta.reachedNodes=5' -notin $summary -or 'delta.artifact.pageHtml.bytes=5' -notin $summary) {
         throw 'Review regression summary omitted high-signal deltas.'
     }
+    if ('delta.execProcLeaf.removed=0' -notin $summary -or 'delta.execProcLeaf.added=0' -notin $summary) {
+        throw 'Review regression summary omitted bounded terminal identity deltas.'
+    }
     if (@($summary | Where-Object { $_ -match 'packetSha256' }).Count -gt 0) {
         throw 'Review regression summary retained low-signal packet identity.'
     }
