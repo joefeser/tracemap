@@ -273,6 +273,15 @@ caller-text regression over the full scan pipeline.
   conflicting, or signature-incomplete evidence still fails closed. Focused
   extraction and packet regressions cover both the successful constrained
   partial signature and the untyped same-arity ambiguity.
+- Private two-repository validation completed after regenerating the
+  projectless Web scan and merged review. For focused page `page-011`, traversal
+  advanced from 41 reached nodes / 57 traversed edges / 54 downstream edges /
+  zero terminal paths to 53 / 83 / 80 / one terminal path. The receipted packet
+  reports `terminalKind.sql-query=1`, proving the bounded receiver/inheritance/
+  overload bridge reached the intended retained database-operation surface.
+  Two unrelated downstream branches remain explicitly stopped as
+  `no-observed-downstream-edge`, and the bounded traversal remains labeled
+  truncated rather than being presented as complete runtime coverage.
 
 ## Remaining work / follow-ups
 
