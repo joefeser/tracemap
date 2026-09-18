@@ -2286,3 +2286,35 @@ SHA-256 values, source and TraceMap commits, and the exact relative path, byte
 count, and SHA-256 for every retained stage artifact. Public/shareable
 regression checks must continue to reject private paths, symbols, source, scan
 identity, commit identity, and private-input fingerprints.
+
+## Required multi-language canonical-identity corpus
+
+After the current projectless VB/Web Forms traversal correction is complete,
+add checked-in synthetic repository fixtures for C#, VB.NET, and F#. This is a
+required larger validation track, not optional cleanup. If an F# extractor is
+not yet implemented when the corpus lands, the F# cases must assert an explicit
+unsupported/coverage-gap result and no inferred joins until that adapter exists.
+
+Each language corpus must exercise both successful semantic analysis and
+failed-build/projectless syntax fallback where the adapter supports those
+lanes. Include, at minimum:
+
+- identical simple type and member names in different namespaces and source
+  assemblies/projects;
+- nested types with repeated names, partial types, namespace/root-namespace
+  composition, aliases/imports, and linked source files;
+- overloads with equal arity but different parameter types, generic arity,
+  ref/in/out/ByRef shape, constructors, properties/indexers, and operators;
+- inheritance across projects, provider-specific implementations behind a
+  shared base type, and cross-language call candidates;
+- reflection, runtime assembly loading, generated/dynamic assemblies, and
+  unresolved factory/registration paths that must fail closed unless bounded
+  deterministic evidence proves the target.
+
+The end-to-end tests must scan the repositories, validate `facts.ndjson` and
+`index.sqlite`, combine multiple source indexes, and exercise reducers/reports.
+They must prove that simple name plus arity is candidate discovery only; a final
+join requires the adapter's canonical source/assembly, namespace/module,
+containing-type chain, member kind/name/generic arity, and parameter-signature
+identity. Ambiguity must produce a bounded Tier4 gap rather than an edge.
+Repeated clean scans must also prove deterministic facts and reports.

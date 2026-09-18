@@ -259,6 +259,15 @@ caller-text regression over the full scan pipeline.
 
 ## Remaining work / follow-ups
 
+- Required post-debug validation track: build the checked-in C#, VB.NET, and F#
+  synthetic repository matrix documented in `docs/VALIDATION.md` under
+  "Required multi-language canonical-identity corpus." It must cover semantic
+  and projectless/failed-build lanes, cross-namespace and cross-assembly
+  collisions, nested/repeated type names, same-arity overloads, inheritance,
+  cross-language candidates, and reflection/dynamic assembly gaps. The current
+  focused regressions are necessary but are not a substitute for these larger
+  end-to-end repository scans. Until an F# adapter exists, its fixtures must
+  prove explicit unsupported coverage and zero inferred joins.
 - Cross-language symbol-identity joins (VB symbols to C#-declared symbols)
   remain unestablished; display-string and fact-level evidence cross the
   language boundary. Future slice.
