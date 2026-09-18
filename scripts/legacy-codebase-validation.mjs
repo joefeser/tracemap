@@ -186,6 +186,8 @@ function positiveInteger(value, defaultValue, field) {
 
 async function runSample({ sample, sampleOut, root }) {
   await mkdir(sampleOut, { recursive: true });
+  const processLogPath = validationProcessLogPath(sampleOut);
+  await mkdir(dirname(processLogPath), { recursive: true });
   const started = Date.now();
   const command = process.env.TRACEMAP_SCAN_COMMAND
     ? splitCommand(process.env.TRACEMAP_SCAN_COMMAND)
@@ -194,7 +196,7 @@ async function runSample({ sample, sampleOut, root }) {
   const run = await runProcess(command[0], args, {
     cwd: root,
     timeoutSeconds: sample.timeoutSeconds,
-    logPath: join(sampleOut, "legacy-validation-run.log")
+    logPath: processLogPath
   });
   const durationSeconds = Math.round((Date.now() - started) / 1000);
   const artifactBytes = await directorySize(sampleOut);
@@ -246,6 +248,10 @@ async function runSample({ sample, sampleOut, root }) {
       publicSafe: !rawArtifactFamilies.has(basename(artifact))
     }))
   });
+}
+
+export function validationProcessLogPath(sampleOut) {
+  return join(dirname(sampleOut), "_process-logs", `${basename(sampleOut)}.log`);
 }
 
 function splitCommand(value) {

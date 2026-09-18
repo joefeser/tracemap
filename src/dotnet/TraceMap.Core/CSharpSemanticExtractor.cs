@@ -1485,7 +1485,8 @@ public static class CSharpSemanticExtractor
                     ["calleeSymbol"] = method.ToDisplayString(SymbolFormat),
                     ["calleeName"] = method.Name,
                     ["calleeContainingType"] = method.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty,
-                    ["callKind"] = "SemanticMethodInvocation"
+                    ["callKind"] = "SemanticMethodInvocation",
+                    ["coverageLabel"] = "bounded-semantic-callgraph"
                 },
                 enclosing?.ContainingAssembly,
                 method.ContainingAssembly);
@@ -1582,7 +1583,8 @@ public static class CSharpSemanticExtractor
                     ["calleeName"] = type.Name,
                     ["calleeContainingType"] = createdType,
                     ["callKind"] = "SemanticObjectCreation",
-                    ["assignedTo"] = assignedTo ?? string.Empty
+                    ["assignedTo"] = assignedTo ?? string.Empty,
+                    ["coverageLabel"] = "bounded-semantic-callgraph"
                 },
                 enclosing?.ContainingAssembly,
                 type.ContainingAssembly);

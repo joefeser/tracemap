@@ -619,8 +619,11 @@ public static class TraceMapCommand
             values.GetValueOrDefault("--surface-list"),
             ParsePositiveInt(values, "--max-traversal-work", 100_000)), cancellationToken);
         await output.WriteLineAsync($"TraceMap Web Forms modernization packet completed: {result.JsonPath}");
-        await output.WriteLineAsync($"Repository: {result.Packet.Sources.Single().RepositoryId}");
-        await output.WriteLineAsync($"Commit SHA: {result.Packet.Sources.Single().CommitSha}");
+        await output.WriteLineAsync($"Sources: {result.Packet.Sources.Count}");
+        foreach (var source in result.Packet.Sources)
+        {
+            await output.WriteLineAsync($"Source repository: {source.RepositoryId}; commit SHA: {source.CommitSha}; scan: {source.ScanId}");
+        }
         await output.WriteLineAsync($"Coverage: {result.Packet.Coverage}");
         await output.WriteLineAsync($"Surfaces: {result.Packet.Summary.SurfaceCount}");
         await output.WriteLineAsync($"Event chains: {result.Packet.Summary.EventChainCount}");

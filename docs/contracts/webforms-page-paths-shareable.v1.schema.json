@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tracemap.tools/contracts/webforms-page-paths-shareable.v1.schema.json",
+  "title": "TraceMap anonymous Web Forms page path projection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "ruleId", "privacy", "provenance", "projection"],
+  "properties": {
+    "schemaVersion": { "const": "webforms-page-paths-shareable.v1" },
+    "ruleId": { "const": "diagnostic.webforms.page-paths-shareable.v1" },
+    "privacy": { "const": "anonymous-structure-only" },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["generator", "generatorSha256", "generatorCanonicalization", "inputKind", "inputSha256", "inputCanonicalization", "sourceWorkbenchGeneratorSha256"],
+      "properties": {
+        "generator": { "const": "scripts/Export-FocusedWebFormsPageShareable.ps1" },
+        "generatorSha256": { "$ref": "#/$defs/sha256" },
+        "generatorCanonicalization": { "const": "raw-file-bytes" },
+        "inputKind": { "const": "anonymous-page-path-projection" },
+        "inputSha256": { "$ref": "#/$defs/sha256" },
+        "inputCanonicalization": { "const": "powershell-json-compact-depth-20-utf8-v1" },
+        "sourceWorkbenchGeneratorSha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "projection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pageId", "analysis", "counts", "chainOutcomes", "clientBehaviors", "chains", "callSites", "limitations"],
+      "properties": {
+        "pageId": { "$ref": "#/$defs/pageAlias" },
+        "analysis": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "coverage", "packetTruncated"],
+          "properties": {
+            "status": { "enum": ["complete", "partial"] },
+            "coverage": { "enum": ["bounded-static-webforms-modernization", "reduced-static-webforms-modernization", "reduced", "unavailable"] },
+            "packetTruncated": { "type": "boolean" }
+          }
+        },
+        "counts": { "$ref": "#/$defs/counts" },
+        "chainOutcomes": { "$ref": "#/$defs/chainOutcomes" },
+        "clientBehaviors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["behaviorKind", "endpointAlias", "endpointKind", "httpMethod", "targetResolution"],
+            "properties": {
+              "behaviorKind": { "enum": ["client-http-request", "client-event-binding", "other"] },
+              "endpointAlias": { "$ref": "#/$defs/endpointAlias" },
+              "endpointKind": { "enum": ["ashx", "asmx", "api-route", "relative-url", "absolute-url", "other-or-unavailable"] },
+              "httpMethod": { "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "other-or-unavailable"] },
+              "targetResolution": { "enum": ["unique-repository-handler-file", "unique-static-target", "ambiguous", "unresolved", "other-or-unavailable"] }
+            }
+          }
+        },
+        "chains": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["chainAlias", "originKind", "endpointAlias", "handlerState", "handlerResolution", "handlerAlias", "classification", "terminalKind", "traversalStopState", "retainedCallFactCount", "reportedCallFactCount", "callEvidenceTruncated", "retainedCallSiteAliases"],
+            "properties": {
+              "chainAlias": { "$ref": "#/$defs/chainAlias" },
+              "originKind": { "enum": ["client-http", "server-event-or-lifecycle"] },
+              "endpointAlias": { "$ref": "#/$defs/endpointAlias" },
+              "handlerState": { "enum": ["resolved-static-handler", "handler-unavailable"] },
+              "handlerResolution": { "enum": ["resolved-static-handler", "missing-linked-method", "ambiguous-linked-method", "unproven-cross-file", "unavailable-unclassified"] },
+              "handlerAlias": { "$ref": "#/$defs/handlerAlias" },
+              "classification": { "enum": ["terminal-reached", "NoBackendEvidence", "handler-unavailable", "UnknownAnalysisGap", "NeedsReviewStaticPath", "AnalysisGap", "ReducedCoverage", "other"] },
+              "terminalKind": { "enum": ["database", "service", "http-client", "wcf-operation", "file", "message-queue", "message-topic", "package-config", "none-observed"] },
+              "traversalStopState": { "enum": ["observed-downstream-without-supported-terminal", "no-observed-downstream-edge", "bounded-traversal-truncated", "other-or-unavailable"] },
+              "retainedCallFactCount": { "$ref": "#/$defs/nonnegative" },
+              "reportedCallFactCount": { "$ref": "#/$defs/nonnegative" },
+              "callEvidenceTruncated": { "type": "boolean" },
+              "retainedCallSiteAliases": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/callSiteAlias" } }
+            }
+          }
+        },
+        "callSites": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["callSiteAlias", "sourceFileAlias", "calleeAlias", "evidenceFactCount", "semanticEvidence", "syntaxEvidence", "callKinds", "resolutions", "technologyFamilies", "ruleIds", "evidenceTiers", "coverageLabels", "structuralSignals"],
+            "properties": {
+              "callSiteAlias": { "$ref": "#/$defs/callSiteAlias" },
+              "sourceFileAlias": { "type": "string", "pattern": "^(?:unavailable|source-file-[0-9]{3,4})$" },
+              "calleeAlias": { "type": "string", "pattern": "^(?:unavailable|callee-[0-9]{3,4})$" },
+              "evidenceFactCount": { "$ref": "#/$defs/nonnegative" },
+              "semanticEvidence": { "type": "boolean" },
+              "syntaxEvidence": { "type": "boolean" },
+              "callKinds": { "type": "array", "uniqueItems": true, "items": { "enum": ["SemanticMethodInvocation", "SemanticObjectCreation", "SyntaxInvocation", "SyntaxObjectCreation", "other"] } },
+              "resolutions": { "type": "array", "uniqueItems": true, "items": { "enum": ["compiler-resolved", "syntax-only", "unavailable"] } },
+              "technologyFamilies": { "type": "array", "uniqueItems": true, "items": { "enum": ["application", "framework", "telerik", "third-party", "unresolved", "other"] } },
+              "ruleIds": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z0-9.-]+\\.v[0-9]+$" } },
+              "evidenceTiers": { "type": "array", "uniqueItems": true, "items": { "enum": ["Tier1Semantic", "Tier2Structural", "Tier3SyntaxOrTextual", "Tier4Unknown"] } },
+              "coverageLabels": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z0-9-]{1,96}$" } },
+              "structuralSignals": { "type": "array", "uniqueItems": true, "items": { "enum": ["wcf-framework-call", "generated-client-proxy-shape", "database-api-call", "database-command-execution", "connection-open", "connection-close-or-dispose", "outbound-http-call", "file-api-call", "dynamic-text-construction", "response-write", "telerik-call", "unclassified-static-call"] } }
+            }
+          }
+        },
+        "limitations": { "type": "array", "minItems": 4, "items": { "type": "string" } }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "nonnegative": { "type": "integer", "minimum": 0 },
+    "pageAlias": { "type": "string", "pattern": "^page-[0-9]{3,4}$" },
+    "chainAlias": { "type": "string", "pattern": "^chain-[0-9]{3,4}$" },
+    "callSiteAlias": { "type": "string", "pattern": "^call-site-[0-9]{3,4}$" },
+    "endpointAlias": { "type": "string", "pattern": "^(?:unavailable|endpoint-[0-9]{3,4})$" },
+    "handlerAlias": { "type": "string", "pattern": "^(?:unavailable|handler-[0-9]{3,4})$" },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["controls", "eventChains", "clientBehaviors", "serverBehaviors", "boundaries", "callProjections", "reportedCallProjections", "omittedCallProjections", "uniqueCallFacts", "normalizedCallSites", "callEvidenceCeilingChains", "projectionReuse", "gaps"],
+      "properties": {
+        "controls": { "$ref": "#/$defs/nonnegative" },
+        "eventChains": { "$ref": "#/$defs/nonnegative" },
+        "clientBehaviors": { "$ref": "#/$defs/nonnegative" },
+        "serverBehaviors": { "$ref": "#/$defs/nonnegative" },
+        "boundaries": { "$ref": "#/$defs/nonnegative" },
+        "callProjections": { "$ref": "#/$defs/nonnegative" },
+        "reportedCallProjections": { "$ref": "#/$defs/nonnegative" },
+        "omittedCallProjections": { "$ref": "#/$defs/nonnegative" },
+        "uniqueCallFacts": { "$ref": "#/$defs/nonnegative" },
+        "normalizedCallSites": { "$ref": "#/$defs/nonnegative" },
+        "callEvidenceCeilingChains": { "$ref": "#/$defs/nonnegative" },
+        "projectionReuse": { "$ref": "#/$defs/nonnegative" },
+        "gaps": { "$ref": "#/$defs/nonnegative" }
+      }
+    },
+    "chainOutcomes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unresolvedHandlers", "downstreamWithoutSupportedTerminal", "noObservedDownstream", "truncated", "otherIncomplete"],
+      "properties": {
+        "unresolvedHandlers": { "$ref": "#/$defs/nonnegative" },
+        "downstreamWithoutSupportedTerminal": { "$ref": "#/$defs/nonnegative" },
+        "noObservedDownstream": { "$ref": "#/$defs/nonnegative" },
+        "truncated": { "$ref": "#/$defs/nonnegative" },
+        "otherIncomplete": { "$ref": "#/$defs/nonnegative" }
+      }
+    }
+  }
+}

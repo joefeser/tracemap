@@ -69,7 +69,11 @@ public sealed class CSharpSyntaxExtractorTests
             && fact.RuleId == RuleIds.CSharpSyntaxCallGraph
             && fact.TargetSymbol == "CustomerProfile"
             && fact.Properties.TryGetValue("callKind", out var callKind)
-            && callKind == "SyntaxObjectCreation");
+            && callKind == "SyntaxObjectCreation"
+            && fact.Properties.GetValueOrDefault("coverageLabel") == "syntax-only");
+        Assert.All(
+            result.Facts.Where(fact => fact.RuleId == RuleIds.CSharpSyntaxCallGraph),
+            fact => Assert.Equal("syntax-only", fact.Properties.GetValueOrDefault("coverageLabel")));
 
         Assert.All(
             result.Facts.Where(fact => fact.RuleId.StartsWith("csharp.syntax.", StringComparison.Ordinal)),

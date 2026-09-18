@@ -752,6 +752,72 @@ public sealed class VisualBasicWebFormsCompositionTests
         Assert.Equal("NotIsPostBackBranch", lifecycle.ContractElement);
     }
 
+    [Fact]
+    public void Projectless_vb_server_behavior_retains_redirect_lifecycle_control_writes_and_shared_handler_support()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Options.aspx"), """
+            <%@ Page Language="VB" CodeFile="Options.aspx.vb" Inherits="OptionsPage" %>
+            <asp:RadioButton runat="server" ID="ChoiceA" />
+            <asp:RadioButton runat="server" ID="ChoiceB" />
+            <asp:TextBox runat="server" ID="NameText" />
+            <asp:Panel runat="server" ID="DetailsPanel" />
+            """);
+        File.WriteAllText(Path.Combine(repo, "Options.aspx.vb"), """
+            Partial Public Class OptionsPage
+                Protected Sub Page_Init(sender As Object, e As EventArgs) Handles Me.Init
+                    If ShouldLeave Then
+                        Response.Redirect("Next.aspx", False)
+                        Context.ApplicationInstance.CompleteRequest()
+                    End If
+                End Sub
+
+                Protected Sub Page_Load(sender As Object, e As EventArgs) Handles Me.Load
+                    If Controls.Count <> 0 Then
+                        NameText.Text = CurrentName
+                        ChoiceA.Checked = IsFirst
+                    End If
+                End Sub
+
+                Protected Sub Choice_CheckedChanged(sender As Object, e As EventArgs) Handles ChoiceA.CheckedChanged, ChoiceB.CheckedChanged
+                    If ChoiceA.Checked Then
+                        DetailsPanel.Visible = True
+                    ElseIf ChoiceB.Checked Then
+                        DetailsPanel.Visible = False
+                    End If
+                End Sub
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+
+        var navigation = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WebFormsServerNavigationCandidate);
+        Assert.Equal("response-redirect", navigation.Properties.GetValueOrDefault("navigationKind"));
+        Assert.Equal("static-string-literal", navigation.Properties.GetValueOrDefault("targetResolution"));
+        Assert.Equal("false", navigation.Properties.GetValueOrDefault("endResponse"));
+        Assert.DoesNotContain("Next.aspx", System.Text.Json.JsonSerializer.Serialize(navigation), StringComparison.Ordinal);
+        var lifecycle = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.WebFormsRequestLifecycleCandidate);
+        Assert.Equal("complete-request", lifecycle.Properties.GetValueOrDefault("lifecycleOperation"));
+
+        var mutations = result.Facts.Where(fact => fact.FactType == FactTypes.WebFormsServerControlStateMutationCandidate).ToArray();
+        Assert.Equal(4, mutations.Length);
+        Assert.Contains(mutations, fact => fact.Properties.GetValueOrDefault("controlId") == "NameText"
+            && fact.Properties.GetValueOrDefault("stateMember") == "text"
+            && fact.Properties.GetValueOrDefault("branchContext") == "if");
+        Assert.Contains(mutations, fact => fact.Properties.GetValueOrDefault("controlId") == "ChoiceA"
+            && fact.Properties.GetValueOrDefault("stateMember") == "checked");
+        var shared = mutations.Where(fact => fact.Properties.GetValueOrDefault("controlId") == "DetailsPanel").ToArray();
+        Assert.Equal(2, shared.Length);
+        Assert.Contains(shared, fact => fact.Properties.GetValueOrDefault("branchContext") == "if");
+        Assert.Contains(shared, fact => fact.Properties.GetValueOrDefault("branchContext") == "else-if");
+        Assert.All(shared, fact => Assert.Equal(2, fact.Properties.GetValueOrDefault("supportingFactIds")!.Split(',').Length));
+        Assert.Equal(2, result.Facts.Count(fact => fact.FactType == FactTypes.WebFormsHandlerResolved
+            && fact.Properties.GetValueOrDefault("handlerName") == "Choice_CheckedChanged"));
+    }
+
     private static void Commit(string repo)
     {
         RunGit(repo, "init");
