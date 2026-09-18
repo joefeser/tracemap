@@ -843,6 +843,20 @@ public static partial class CombinedDependencyPathReporter
             if (declarations.Length != 1) return [];
             var baseNames = SplitVisualBasicBaseTypes(declarations[0].BaseTypes);
             if (baseNames.Length != 1) return [];
+            if (baseNames[0].Contains('.', StringComparison.Ordinal))
+            {
+                var directBaseMatches = fields
+                    .Where(field => string.Equals(field.FieldName, fieldName, StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(
+                            NormalizeVisualBasicTypeName(field.ContainingType),
+                            NormalizeVisualBasicTypeName(baseNames[0]),
+                            StringComparison.OrdinalIgnoreCase))
+                    .Select(field => field.FieldType)
+                    .Where(type => !string.IsNullOrWhiteSpace(type))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+                if (directBaseMatches.Length > 0) return directBaseMatches;
+            }
             var baseDeclarations = typeDeclarations
                 .Where(declaration => VisualBasicTypeMatches(declaration.TypeName, baseNames[0]))
                 .ToArray();

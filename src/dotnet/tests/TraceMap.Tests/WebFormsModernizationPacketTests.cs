@@ -1197,6 +1197,21 @@ public sealed class WebFormsModernizationPacketTests
             Assert.Contains("projectless-vb-receiver-bridge", semanticBaseFieldChain.TraversalObservation?.TraversedEdgeKinds ?? []);
         });
 
+        var qualifiedBaseWithoutDeclarationIndex = Path.Combine(temp.Path, "qualified-base-without-declaration-index.sqlite");
+        SqliteIndexWriter.Write(qualifiedBaseWithoutDeclarationIndex, manifest,
+            [page, binding, handler, singleBaseFieldInvocation, callerTypeDeclaration,
+                receiverBaseFieldDeclaration, declaration, downstream, terminal, semanticBaseFieldFlow]);
+        var qualifiedBaseWithoutDeclarationPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(qualifiedBaseWithoutDeclarationIndex, Path.Combine(temp.Path, "qualified-base-without-declaration-output")));
+        var qualifiedBaseWithoutDeclarationChains = qualifiedBaseWithoutDeclarationPacket.EventChains.ToArray();
+        Assert.NotEmpty(qualifiedBaseWithoutDeclarationChains);
+        Assert.All(qualifiedBaseWithoutDeclarationChains, chain =>
+        {
+            Assert.Equal("sql-query", chain.TerminalKind);
+            Assert.Contains("projectless-vb-receiver-bridge",
+                chain.TraversalObservation?.TraversedEdgeKinds ?? []);
+        });
+
         var unqualifiedFieldInvocation = singleFieldInvocation with
         {
             FactId = "fact-unqualified-field-invocation",

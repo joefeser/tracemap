@@ -3084,6 +3084,15 @@ public static partial class CombinedDependencyPathReporter
             foreach (var baseName in SplitVisualBasicBaseTypes(
                 CombinedDependencyReporter.FirstValue(declaration.Properties, "baseTypes")))
             {
+                // A qualified immediate base name on the derived declaration is
+                // itself sufficient syntax evidence for a field owned by that
+                // exact base type. The base declaration may live in a different
+                // project or may not have been retained, so do not require it as
+                // an otherwise redundant intermediate witness.
+                if (baseName.Contains('.', StringComparison.Ordinal))
+                {
+                    AddFieldCandidates(baseName, path, requireExactOwner: true);
+                }
                 var baseDeclarations = typeDeclarations
                     .Where(candidate => VisualBasicTypeMatches(VisualBasicTypeDeclarationName(candidate), baseName))
                     .OrderBy(candidate => candidate.CombinedFactId, StringComparer.Ordinal)
@@ -3104,10 +3113,18 @@ public static partial class CombinedDependencyPathReporter
             .OrderBy(candidate => candidate.Evidence[^1].CombinedFactId, StringComparer.Ordinal)
             .ToArray();
 
-        void AddFieldCandidates(string ownerName, IReadOnlyList<CombinedFactRow> path)
+        void AddFieldCandidates(
+            string ownerName,
+            IReadOnlyList<CombinedFactRow> path,
+            bool requireExactOwner = false)
         {
             foreach (var field in fieldDeclarations.Where(field =>
-                VisualBasicTypeMatches(VisualBasicContainingType(field), ownerName)
+                (requireExactOwner
+                    ? string.Equals(
+                        NormalizeVisualBasicTypeName(VisualBasicContainingType(field)),
+                        NormalizeVisualBasicTypeName(ownerName),
+                        StringComparison.OrdinalIgnoreCase)
+                    : VisualBasicTypeMatches(VisualBasicContainingType(field), ownerName))
                 && string.Equals(CombinedDependencyReporter.FirstValue(field.Properties, "fieldName"), receiverName, StringComparison.OrdinalIgnoreCase)))
             {
                 var fieldType = NormalizeVisualBasicTypeName(CombinedDependencyReporter.FirstValue(field.Properties, "fieldType", "declaredType"));
