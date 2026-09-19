@@ -14,14 +14,18 @@ Status: implemented
 
 ## 2026-09-19 terminal reachability follow-up
 
-- Algorithm version `1.1` keeps the ordinary path-enumeration depth bound but
-  uses remaining work/frontier budget to retain one deterministic shortest
-  terminal witness for a root that otherwise stopped at the depth frontier.
-- The prewalk is iterative and cycle safe. It deduplicates graph node plus
-  dispatch mode, preserves dispatch-cross-hop restrictions, and does not add a
-  graph database or runtime-reachability claim.
-- Depth gaps remain when other branches were not enumerated, so finding one
-  deeper terminal does not turn partial evidence into a completeness claim.
-- Validation: focused terminal, cycle, Web Forms, fairness, and memory-budget
-  checks passed 7/7; the full .NET solution passed 1,958/1,958; `git diff
-  --check` passed.
+- Algorithm version `1.2` inventories all distinct supported terminal nodes for
+  every selected Web Forms handler and retains one shortest deterministic
+  witness per terminal before ordinary depth-limited detail enumeration.
+- The prewalk is iterative and cycle safe. It deduplicates handler, graph node,
+  and dispatch mode, preserves dispatch-cross-hop restrictions, and does not
+  add a graph database or runtime-reachability claim.
+- Packet, handoff, comparison, and HTML outputs distinguish retained-graph
+  terminal reachability completeness from path-detail truncation. Work,
+  frontier, and path safety limits explicitly make the terminal inventory
+  incomplete instead of supporting a false absence conclusion.
+- The targeted diagnostic regenerates depth 8 and depth 10 from the same merged
+  index and current generator before comparison.
+- Validation: focused traversal/Web Forms tests passed 90/90; the full .NET
+  solution passed 1,959/1,959; all 18 PowerShell regression scripts passed;
+  `git diff --check` passed.

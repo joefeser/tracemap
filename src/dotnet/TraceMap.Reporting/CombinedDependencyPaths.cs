@@ -32,6 +32,9 @@ public sealed record CombinedDependencyPathOptions(
     internal IReadOnlySet<string>? StartingFactIds { get; init; }
     // Deterministic work bound, including nonterminal/cyclic exploration.
     public int MaxTraversalWork { get; init; } = 100_000;
+    // Web Forms packet composition inventories one shortest witness per
+    // distinct supported terminal before enumerating depth-bounded details.
+    internal bool InventoryDistinctTerminals { get; init; }
 }
 
 public sealed record CombinedDependencyPathResult(
@@ -260,7 +263,7 @@ public static partial class CombinedDependencyPathReporter
     private const int MaxTraversalDiagnosticShapes = 32;
     private const string Version = "1.0";
     private const string Algorithm = "bounded-bfs";
-    private const string AlgorithmVersion = "1.1";
+    private const string AlgorithmVersion = "1.2";
     private const int MarkdownPathLimit = 100;
     private const int MarkdownInventoryLimit = 200;
     private const string EndpointMatchRuleId = "combined.paths.endpoint-match.v1";
@@ -350,7 +353,7 @@ public static partial class CombinedDependencyPathReporter
             return (report, starts.Select(node => node.NodeId).ToHashSet(StringComparer.Ordinal));
         }
 
-        return (report, Search(graph, starts, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier, options.IncludeLegacyRoots || IsLegacyView(options.View), options.MaxTraversalWork).ReachedNodeIds);
+        return (report, Search(graph, starts, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier, options.IncludeLegacyRoots || IsLegacyView(options.View), options.MaxTraversalWork, options.InventoryDistinctTerminals).ReachedNodeIds);
     }
 
     internal static async Task<CombinedPathGraphInventory> BuildGraphInventoryAsync(
@@ -535,7 +538,7 @@ public static partial class CombinedDependencyPathReporter
             // Preserve bounded outgoing-graph observations even when the index
             // contains no supported terminal surface. The public path result
             // remains SelectorNoMatch and makes no terminal claim.
-            search = Search(graph, startNodes, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier, legacyMode, options.MaxTraversalWork);
+            search = Search(graph, startNodes, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier, legacyMode, options.MaxTraversalWork, options.InventoryDistinctTerminals);
             gaps.AddRange(search.Gaps);
             truncated = truncated || search.Truncated;
             gaps.Add(new CombinedPathGap(
@@ -555,7 +558,7 @@ public static partial class CombinedDependencyPathReporter
         }
         else
         {
-            search = Search(graph, startNodes, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier, legacyMode, options.MaxTraversalWork);
+            search = Search(graph, startNodes, terminalNodes, options.MaxDepth, options.MaxPaths, options.MaxFrontier, legacyMode, options.MaxTraversalWork, options.InventoryDistinctTerminals);
             paths.AddRange(search.Paths);
             gaps.AddRange(search.Gaps);
             truncated = truncated || search.Truncated;
@@ -711,6 +714,10 @@ public static partial class CombinedDependencyPathReporter
         IEnumerable<CombinedDependencyTraversalObservation> observations)
     {
         var rows = observations.ToArray();
+        var terminalDistances = rows
+            .Where(row => row.MinimumTerminalDistance is not null)
+            .Select(row => row.MinimumTerminalDistance!.Value)
+            .ToArray();
         var merged = new CombinedDependencyTraversalObservation(
             rows.Sum(row => row.ReachedNodeCount),
             rows.Sum(row => row.TraversedEdgeCount),
@@ -730,7 +737,23 @@ public static partial class CombinedDependencyPathReporter
             FrontierSurfaceKinds = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.FrontierSurfaceKinds)),
             FrontierRuleIds = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.FrontierRuleIds)),
             TraversedEdgeKinds = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.TraversedEdgeKinds)),
-            TraversedRuleIds = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.TraversedRuleIds))
+            TraversedRuleIds = BoundedTraversalDiagnosticValues(rows.SelectMany(row => row.TraversedRuleIds)),
+            TerminalReachabilityComplete = rows.Length > 0 && rows.All(row => row.TerminalReachabilityComplete),
+            DistinctReachableTerminalCount = rows.SelectMany(row => row.ReachableTerminalNodeIds).Distinct(StringComparer.Ordinal).Count(),
+            MinimumTerminalDistance = terminalDistances.Length > 0 ? terminalDistances.Min() : null,
+            TerminalReachabilityLimitReasons = rows.SelectMany(row => row.TerminalReachabilityLimitReasons)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray(),
+            PathEnumerationTruncated = rows.Any(row => row.PathEnumerationTruncated),
+            PathEnumerationTruncationReasons = rows.SelectMany(row => row.PathEnumerationTruncationReasons)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray(),
+            ReachableTerminalNodeIds = rows.SelectMany(row => row.ReachableTerminalNodeIds)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray()
         };
         merged = merged with
         {
@@ -3799,7 +3822,7 @@ public static partial class CombinedDependencyPathReporter
         return cleaned.Length == 0 ? null : cleaned.ToLowerInvariant();
     }
 
-    private static SearchResult Search(EvidenceGraph graph, IReadOnlyList<GraphNode> starts, IReadOnlySet<string> terminalNodeIds, int maxDepth, int maxPaths, int maxFrontier, bool depthFirst = false, int maxTraversalWork = 100_000)
+    private static SearchResult Search(EvidenceGraph graph, IReadOnlyList<GraphNode> starts, IReadOnlySet<string> terminalNodeIds, int maxDepth, int maxPaths, int maxFrontier, bool depthFirst = false, int maxTraversalWork = 100_000, bool inventoryDistinctTerminals = false)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxTraversalWork);
         // Legacy reports enumerate bounded evidence paths, not shortest paths.
@@ -3844,6 +3867,39 @@ public static partial class CombinedDependencyPathReporter
         var sequence = 0;
         var work = 0;
         var workExhausted = false;
+        if (inventoryDistinctTerminals)
+        {
+            var inventory = FindDistinctTerminalWitnesses(
+                graph,
+                starts,
+                terminalNodeIds,
+                maxPaths,
+                maxFrontier,
+                maxTraversalWork,
+                traversal,
+                reachedNodeIds);
+            work = inventory.Work;
+            if (inventory.LimitReason is not null)
+            {
+                truncated = true;
+                gaps.Add(TruncatedGap(inventory.LimitReason, inventory.LimitNodeId ?? starts[0].NodeId, graph));
+            }
+            foreach (var witness in inventory.Witnesses)
+            {
+                sequence++;
+                var path = ToPath($"path:{sequence:0000}", graph, witness);
+                paths.Add(path with
+                {
+                    Notes =
+                    [
+                        .. path.Notes,
+                        new CombinedPathNote(
+                            "TerminalReachabilityInventory",
+                            "A cycle-safe bounded reachability inventory retained one deterministic shortest witness for this distinct supported terminal. Completeness is reported separately, and static reachability does not prove runtime execution.")
+                    ]
+                });
+            }
+        }
         var activeLegacyRootId = "";
         var activeLegacyRootWork = 0;
         var legacyRootWorkSlice = Math.Max(1, Math.Min(64, maxTraversalWork / Math.Max(1, starts.Count)));
@@ -3937,9 +3993,12 @@ public static partial class CombinedDependencyPathReporter
             var currentNodeId = state.NodeIds[^1];
             if (terminalNodeIds.Contains(currentNodeId) && state.EdgeIds.Count > 0)
             {
-                traversal[state.RootNodeId].TerminalPathCount++;
-                sequence++;
-                paths.Add(ToPath($"path:{sequence:0000}", graph, state));
+                if (!inventoryDistinctTerminals)
+                {
+                    traversal[state.RootNodeId].TerminalPathCount++;
+                    sequence++;
+                    paths.Add(ToPath($"path:{sequence:0000}", graph, state));
+                }
                 YieldLegacyRoot(state.RootNodeId);
                 continue;
             }
@@ -4052,7 +4111,7 @@ public static partial class CombinedDependencyPathReporter
         // reached the depth frontier without a terminal, perform one bounded,
         // cycle-safe reachability prewalk and retain a deterministic shortest
         // terminal witness. Other truncated branches remain explicitly partial.
-        if (!workExhausted && paths.Count < maxPaths && terminalNodeIds.Count > 0)
+        if (!inventoryDistinctTerminals && !workExhausted && paths.Count < maxPaths && terminalNodeIds.Count > 0)
         {
             foreach (var start in starts
                 .OrderBy(node => node.SourceLabel, StringComparer.Ordinal)
@@ -4149,9 +4208,194 @@ public static partial class CombinedDependencyPathReporter
                     FrontierRuleIds = BoundedTraversalDiagnosticValues(item.Value.FrontierRuleIds),
                     TraversedEdgeKinds = BoundedTraversalDiagnosticValues(item.Value.TraversedEdgeKinds),
                     TraversedRuleIds = BoundedTraversalDiagnosticValues(item.Value.TraversedRuleIds),
-                    DiagnosticShapesTruncated = item.Value.DiagnosticShapeValueCount > MaxTraversalDiagnosticShapes
+                    DiagnosticShapesTruncated = item.Value.DiagnosticShapeValueCount > MaxTraversalDiagnosticShapes,
+                    TerminalReachabilityComplete = item.Value.TerminalReachabilityComplete,
+                    DistinctReachableTerminalCount = item.Value.ReachableTerminalNodeIds.Count,
+                    MinimumTerminalDistance = item.Value.MinimumTerminalDistance,
+                    TerminalReachabilityLimitReasons = item.Value.TerminalReachabilityLimitReasons.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                    PathEnumerationTruncated = item.Value.PathEnumerationTruncated,
+                    PathEnumerationTruncationReasons = item.Value.PathEnumerationTruncationReasons.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+                    ReachableTerminalNodeIds = item.Value.ReachableTerminalNodeIds.OrderBy(value => value, StringComparer.Ordinal).ToArray()
                 },
                 StringComparer.Ordinal));
+    }
+
+    private static TerminalInventoryResult FindDistinctTerminalWitnesses(
+        EvidenceGraph graph,
+        IReadOnlyList<GraphNode> starts,
+        IReadOnlySet<string> terminalNodeIds,
+        int maxPaths,
+        int maxFrontier,
+        int maxWork,
+        IReadOnlyDictionary<string, TraversalAccumulator> traversal,
+        ISet<string> reachedNodeIds)
+    {
+        var queue = new Queue<TerminalInventoryKey>();
+        var predecessors = new Dictionary<TerminalInventoryKey, TerminalInventoryPredecessor?>();
+        var pendingByRoot = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var start in starts
+            .OrderBy(node => node.SourceLabel, StringComparer.Ordinal)
+            .ThenBy(node => node.DisplayName, StringComparer.Ordinal)
+            .ThenBy(node => node.NodeId, StringComparer.Ordinal))
+        {
+            var key = new TerminalInventoryKey(start.NodeId, start.NodeId, DispatchTraversalMode.None);
+            predecessors.Add(key, null);
+            queue.Enqueue(key);
+            pendingByRoot[start.NodeId] = 1;
+        }
+
+        var witnesses = new List<PathState>();
+        var work = 0;
+        string? limitReason = null;
+        string? limitNodeId = null;
+
+        void Enqueue(TerminalInventoryKey key)
+        {
+            queue.Enqueue(key);
+            pendingByRoot[key.RootNodeId] = pendingByRoot.GetValueOrDefault(key.RootNodeId) + 1;
+        }
+
+        TerminalInventoryKey Dequeue()
+        {
+            var key = queue.Dequeue();
+            if (pendingByRoot[key.RootNodeId] == 1) pendingByRoot.Remove(key.RootNodeId);
+            else pendingByRoot[key.RootNodeId]--;
+            return key;
+        }
+
+        void MarkIncomplete(string reason, string nodeId, string? activeRoot = null)
+        {
+            limitReason = reason;
+            limitNodeId = nodeId;
+            var affectedRoots = queue.Select(item => item.RootNodeId).ToHashSet(StringComparer.Ordinal);
+            if (activeRoot is not null) affectedRoots.Add(activeRoot);
+            foreach (var root in affectedRoots)
+                traversal[root].MarkTerminalReachabilityIncomplete(reason);
+        }
+
+        while (queue.Count > 0)
+        {
+            if (queue.Count > maxFrontier)
+            {
+                MarkIncomplete("frontier", queue.Peek().NodeId);
+                break;
+            }
+            if (work >= maxWork)
+            {
+                MarkIncomplete("work", queue.Peek().NodeId);
+                break;
+            }
+
+            var current = Dequeue();
+            work++;
+            var accumulator = traversal[current.RootNodeId];
+            if (!string.Equals(current.NodeId, current.RootNodeId, StringComparison.Ordinal)
+                && terminalNodeIds.Contains(current.NodeId))
+            {
+                if (accumulator.ReachableTerminalNodeIds.Add(current.NodeId))
+                {
+                    var distance = predecessors[current]?.Distance ?? 0;
+                    accumulator.MinimumTerminalDistance = accumulator.MinimumTerminalDistance is null
+                        ? distance
+                        : Math.Min(accumulator.MinimumTerminalDistance.Value, distance);
+                    if (witnesses.Count >= maxPaths)
+                    {
+                        MarkIncomplete("path", current.NodeId, current.RootNodeId);
+                        break;
+                    }
+                    witnesses.Add(ReconstructTerminalWitness(current, predecessors));
+                }
+                if (!pendingByRoot.ContainsKey(current.RootNodeId)) accumulator.TerminalReachabilityComplete = true;
+                continue;
+            }
+
+            if (graph.Outgoing.TryGetValue(current.NodeId, out var outgoing))
+            {
+                foreach (var edge in outgoing)
+                {
+                    if (work >= maxWork)
+                    {
+                        MarkIncomplete("work", current.NodeId, current.RootNodeId);
+                        break;
+                    }
+                    work++;
+                    if (!TryAdvanceDispatchMode(current.DispatchMode, edge.EdgeKind, out var nextMode)) continue;
+                    var next = new TerminalInventoryKey(current.RootNodeId, edge.ToNodeId, nextMode);
+                    if (predecessors.ContainsKey(next)) continue;
+                    if (queue.Count >= maxFrontier)
+                    {
+                        MarkIncomplete("frontier", edge.ToNodeId, current.RootNodeId);
+                        break;
+                    }
+                    predecessors.Add(
+                        next,
+                        new TerminalInventoryPredecessor(
+                            current,
+                            edge.EdgeId,
+                            (predecessors[current]?.Distance ?? 0) + 1));
+
+                    Enqueue(next);
+                    accumulator.ReachedNodeIds.Add(edge.ToNodeId);
+                    accumulator.TraversedEdgeIds.Add(edge.EdgeId);
+                    reachedNodeIds.Add(edge.ToNodeId);
+                    if (edge.EdgeKind != "legacy-root-selection")
+                    {
+                        accumulator.DownstreamEdgeIds.Add(edge.EdgeId);
+                        accumulator.TraversedEdgeKinds.Add(edge.EdgeKind);
+                        accumulator.TraversedRuleIds.Add(edge.RuleId);
+                    }
+                }
+            }
+            if (limitReason is not null) break;
+            if (!pendingByRoot.ContainsKey(current.RootNodeId)) accumulator.TerminalReachabilityComplete = true;
+        }
+
+        foreach (var accumulator in traversal.Values)
+            accumulator.TerminalPathCount = accumulator.ReachableTerminalNodeIds.Count;
+
+        return new TerminalInventoryResult(witnesses, work, limitReason, limitNodeId);
+    }
+
+    private static PathState ReconstructTerminalWitness(
+        TerminalInventoryKey terminal,
+        IReadOnlyDictionary<TerminalInventoryKey, TerminalInventoryPredecessor?> predecessors)
+    {
+        var nodes = new List<string>();
+        var edges = new List<string>();
+        var cursor = terminal;
+        while (true)
+        {
+            nodes.Add(cursor.NodeId);
+            var predecessor = predecessors[cursor];
+            if (predecessor is null) break;
+            edges.Add(predecessor.EdgeId);
+            cursor = predecessor.Previous;
+        }
+        nodes.Reverse();
+        edges.Reverse();
+        RemoveTerminalWitnessCycles(nodes, edges);
+        return new PathState(terminal.RootNodeId, nodes, edges);
+    }
+
+    private static void RemoveTerminalWitnessCycles(List<string> nodes, List<string> edges)
+    {
+        while (true)
+        {
+            var firstByNode = new Dictionary<string, int>(StringComparer.Ordinal);
+            var removed = false;
+            for (var index = 0; index < nodes.Count; index++)
+            {
+                if (!firstByNode.TryAdd(nodes[index], index))
+                {
+                    var first = firstByNode[nodes[index]];
+                    nodes.RemoveRange(first + 1, index - first);
+                    edges.RemoveRange(first, index - first);
+                    removed = true;
+                    break;
+                }
+            }
+            if (!removed) return;
+        }
     }
 
     private static TerminalWitnessResult FindShortestTerminalWitness(
@@ -6166,6 +6410,13 @@ public static partial class CombinedDependencyPathReporter
         public IReadOnlyList<string> TraversedEdgeKinds { get; init; } = [];
         public IReadOnlyList<string> TraversedRuleIds { get; init; } = [];
         public bool DiagnosticShapesTruncated { get; init; }
+        public bool TerminalReachabilityComplete { get; init; }
+        public int DistinctReachableTerminalCount { get; init; }
+        public int? MinimumTerminalDistance { get; init; }
+        public IReadOnlyList<string> TerminalReachabilityLimitReasons { get; init; } = [];
+        public bool PathEnumerationTruncated { get; init; }
+        public IReadOnlyList<string> PathEnumerationTruncationReasons { get; init; } = [];
+        internal IReadOnlyList<string> ReachableTerminalNodeIds { get; init; } = [];
     }
 
     private sealed record SearchResult(
@@ -6204,6 +6455,22 @@ public static partial class CombinedDependencyPathReporter
         bool FrontierExceeded,
         string? FrontierNodeId);
 
+    private sealed record TerminalInventoryKey(
+        string RootNodeId,
+        string NodeId,
+        DispatchTraversalMode DispatchMode);
+
+    private sealed record TerminalInventoryPredecessor(
+        TerminalInventoryKey Previous,
+        string EdgeId,
+        int Distance);
+
+    private sealed record TerminalInventoryResult(
+        IReadOnlyList<PathState> Witnesses,
+        int Work,
+        string? LimitReason,
+        string? LimitNodeId);
+
     private sealed class TraversalAccumulator
     {
         public HashSet<string> ReachedNodeIds { get; } = new(StringComparer.Ordinal);
@@ -6239,11 +6506,27 @@ public static partial class CombinedDependencyPathReporter
         public int TerminalPathCount { get; set; }
         public bool Truncated { get; set; }
         public HashSet<string> TruncationReasons { get; } = new(StringComparer.Ordinal);
+        public bool TerminalReachabilityComplete { get; set; }
+        public HashSet<string> ReachableTerminalNodeIds { get; } = new(StringComparer.Ordinal);
+        public int? MinimumTerminalDistance { get; set; }
+        public HashSet<string> TerminalReachabilityLimitReasons { get; } = new(StringComparer.Ordinal);
+        public bool PathEnumerationTruncated { get; set; }
+        public HashSet<string> PathEnumerationTruncationReasons { get; } = new(StringComparer.Ordinal);
 
         public void MarkTruncated(string reason)
         {
             Truncated = true;
             TruncationReasons.Add(reason);
+            PathEnumerationTruncated = true;
+            PathEnumerationTruncationReasons.Add(reason);
+        }
+
+        public void MarkTerminalReachabilityIncomplete(string reason)
+        {
+            TerminalReachabilityComplete = false;
+            Truncated = true;
+            TruncationReasons.Add(reason);
+            TerminalReachabilityLimitReasons.Add(reason);
         }
     }
 

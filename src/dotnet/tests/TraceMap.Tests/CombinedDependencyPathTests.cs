@@ -1362,7 +1362,10 @@ public sealed class CombinedDependencyPathTests
                 combinedPath,
                 Path.Combine(temp.Path, "paths"),
                 FromSymbol: implementationA,
-                ToSurface: "sql-query"));
+                ToSurface: "sql-query")
+            {
+                InventoryDistinctTerminals = true
+            });
 
         Assert.DoesNotContain(result.Report.Paths, path => path.Edges.Any(edge => edge.EdgeKind == "interface-candidate"));
         Assert.DoesNotContain(result.Report.Paths, path => path.Nodes.Any(node => node.DisplayName == implementationB));

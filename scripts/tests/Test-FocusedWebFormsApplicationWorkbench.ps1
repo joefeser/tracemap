@@ -121,7 +121,7 @@ try {
     foreach ($removedHeading in @('<th>Retained file</th>','<th>Client behaviors</th>','<th>Server behaviors</th>','<th>Evidence gaps</th>')) {
         if ($index.Contains($removedHeading, [StringComparison]::Ordinal)) { throw "Application index retained wide diagnostic heading: $removedHeading" }
     }
-    foreach ($detail in @('<dt>Retained route</dt>','<dt>Kind</dt>','<dt>Calls</dt>','<dt>Call evidence ceiling</dt>','<dt>Handler unavailable</dt>','<dt>Downstream / no terminal</dt>','<dt>No downstream</dt>','<dt>Traversal truncated</dt>','<dt>Other incomplete</dt>','<dt>Boundaries</dt>','<dt>Recorded gap facts</dt>','<dt>Review</dt>','<dt>Evidence handoff</dt>')) {
+    foreach ($detail in @('<dt>Retained route</dt>','<dt>Kind</dt>','<dt>Calls</dt>','<dt>Call evidence ceiling</dt>','<dt>Handler unavailable</dt>','<dt>Downstream / no terminal</dt>','<dt>No downstream</dt>','<dt>Terminal inventory incomplete</dt>','<dt>Path detail truncated</dt>','<dt>Other incomplete</dt>','<dt>Boundaries</dt>','<dt>Recorded gap facts</dt>','<dt>Review</dt>','<dt>Evidence handoff</dt>')) {
         if (!$index.Contains($detail, [StringComparison]::Ordinal)) { throw "Application index omitted expandable diagnostic: $detail" }
     }
     if (!$index.Contains('P = chain-associated projections; F = unique retained facts; S = normalized source sites', [StringComparison]::Ordinal)) { throw 'Application index omitted compact call-accounting legend.' }

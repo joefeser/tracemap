@@ -149,18 +149,21 @@ Terminal-free gap categories are deliberately distinct:
 `NoBackendEvidence` means the completed bounded traversal retained no downstream
 edge, `DownstreamWithoutSupportedTerminal` means calls or other downstream edges
 were retained but no supported terminal was reached, and
-`BoundedTraversalTruncated` means a configured traversal bound stopped the
-inspection. None proves absence or runtime behavior.
+`BoundedTraversalTruncated` means a terminal-inventory safety limit stopped the
+inspection. “No supported terminal reachable” applies only when
+`terminalReachabilityComplete=true`, only to the retained graph, and never proves
+runtime absence or behavior.
 
 The ordinary packet remains fixed at depth 8. When one or two receipted pages
 retain depth truncation, run the guarded depth-10 diagnostic without changing
 the production packet:
 
-Depth bounds ordinary path enumeration. If that enumeration reaches the depth
-frontier before finding a terminal for a handler, TraceMap uses the remaining
-work/frontier budget to retain one deterministic shortest terminal witness.
-The packet still reports depth truncation for other unenumerated branches, and
-the witness remains static evidence rather than proof of runtime execution.
+Depth bounds ordinary path-detail enumeration, not terminal discovery. For each
+selected handler TraceMap pre-walks the retained graph, inventories every
+distinct supported terminal, and retains one shortest deterministic witness per
+terminal. `terminalReachabilityComplete` and its work/frontier/path limit reasons
+are independent from `pathEnumerationTruncated` and its detail reasons. All
+witnesses remain static evidence rather than proof of runtime execution.
 
 ```powershell
 .\scripts\Invoke-FocusedWebFormsTargetedDepthDiagnostic.ps1 `
@@ -168,14 +171,15 @@ the witness remains static evidence rather than proof of runtime execution.
   -PageId page-002,page-003
 ```
 
-The diagnostic reuses the receipted combined index, validates the page aliases
-against the application handoff, caps traversal work at 100,000, and runs under
+The diagnostic reuses the receipted combined index, regenerates both depth 8 and
+depth 10 with the current code, validates the page aliases against the
+application handoff, caps traversal work at 100,000, and runs under
 the existing five-minute/4-GiB process watchdog. It accepts at most two pages
 and never permits depth 12. Its retained evidence is comparative static
 evidence, not proof of runtime execution or complete traversal.
 
-After it completes, compare the newest diagnostic with the receipted depth-8
-page handoffs without rerunning traversal:
+After it completes, compare the two packets generated from that same merged
+index:
 
 ```powershell
 .\scripts\Compare-FocusedWebFormsTargetedDepthDiagnostic.ps1 `
@@ -183,8 +187,9 @@ page handoffs without rerunning traversal:
   -PageId page-002,page-003
 ```
 
-The comparison prints only page aliases and counts of depth-truncated chains
-and distinct retained terminal-evidence identities. It does not disclose the
+The comparison prints only page aliases, path-detail truncation, terminal
+inventory completeness and limit reasons, minimum terminal distance, and counts
+of distinct retained terminal-evidence identities. It does not disclose the
 private terminal identities or equate them with runtime operations.
 
 `New-FocusedWebFormsPageGraphDump.ps1` independently closes every resolved
@@ -445,6 +450,8 @@ workflow:
 | `Test-FocusedWebFormsDatabaseEvidence.ps1` | Audit exact framework `DataAdapter.Fill` caller evidence. |
 | `Summarize-FocusedWebFormsActionableGaps.ps1` | Print privacy-safe unresolved bucket counts. |
 | `Triage-FocusedWebFormsUnresolvedChains.ps1` | Print retained unresolved-chain states and bounds. |
+| `Invoke-FocusedWebFormsTargetedDepthDiagnostic.ps1` | Regenerate paired depth-8/depth-10 packets from one merged index for at most two pages. |
+| `Compare-FocusedWebFormsTargetedDepthDiagnostic.ps1` | Compare terminal-inventory completeness separately from path-detail truncation. |
 | `Triage-CompletedWebFormsPages.ps1` | Compare retained per-page terminal and gap states. |
 | `Compare-CompletedWebFormsPageTriage.ps1` | Compare compatible completed depth packets. |
 
