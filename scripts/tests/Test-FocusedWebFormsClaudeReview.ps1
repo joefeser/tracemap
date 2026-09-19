@@ -60,7 +60,7 @@ $launcher = @'
 [IO.File]::WriteAllText($env:TRACEMAP_TEST_LAUNCHER_ARGUMENTS, ($args | ConvertTo-Json -Compress), [Text.UTF8Encoding]::new($false))
 [IO.File]::WriteAllText($env:TRACEMAP_TEST_LAUNCHER_PROMPT, (@($input) -join "`n"), [Text.UTF8Encoding]::new($false))
 [IO.File]::WriteAllText($env:TRACEMAP_TEST_LAUNCHER_LOCATION, (Get-Location).Path, [Text.UTF8Encoding]::new($false))
-Write-Output '# Complete evidence assessment'
+Write-Output '# Complete evidence assessment — café'
 $global:LASTEXITCODE = 0
 '@
     [IO.File]::WriteAllText($launcherPath, $launcher, [Text.UTF8Encoding]::new($false))
@@ -87,9 +87,14 @@ $global:LASTEXITCODE = 0
     }
     $assessmentPath = Join-Path $temp 'agent-reviews/claude-evidence-review.md'
     $assessmentExists = Test-Path -LiteralPath $assessmentPath -PathType Leaf
-    $assessmentRetained = $assessmentExists -and [IO.File]::ReadAllText($assessmentPath).Contains('# Complete evidence assessment', [StringComparison]::Ordinal)
+    $assessmentText = if ($assessmentExists) { [IO.File]::ReadAllText($assessmentPath, [Text.UTF8Encoding]::new($false, $true)) } else { '' }
+    $assessmentBytes = if ($assessmentExists) { [IO.File]::ReadAllBytes($assessmentPath) } else { @() }
+    $assessmentRetained = $assessmentText.Contains('# Complete evidence assessment — café', [StringComparison]::Ordinal)
     if (!$assessmentRetained -or $launcherOutput -notcontains 'claudeAssessment=agent-reviews/claude-evidence-review.md') {
         throw 'Corporate launcher did not retain its completed assessment under the review root.'
+    }
+    if ($assessmentBytes.Count -ge 3 -and $assessmentBytes[0] -eq 0xEF -and $assessmentBytes[1] -eq 0xBB -and $assessmentBytes[2] -eq 0xBF) {
+        throw 'Corporate launcher assessment unexpectedly retained a UTF-8 BOM.'
     }
     $sessionPath = Join-Path $temp 'agent-reviews/claude-session.json'
     $session = [IO.File]::ReadAllText($sessionPath) | ConvertFrom-Json
