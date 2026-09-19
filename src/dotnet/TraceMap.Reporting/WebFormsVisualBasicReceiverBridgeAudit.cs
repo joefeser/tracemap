@@ -24,6 +24,12 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
         var selectedChains = root.GetProperty("eventChains").EnumerateArray()
             .Where(chain => chain.GetProperty("surfaceId").GetString() == surfaceId)
             .ToArray();
+        var selectedHandlerSymbols = selectedChains
+            .Where(chain => chain.TryGetProperty("handlerSymbol", out var symbol)
+                && !string.IsNullOrWhiteSpace(symbol.GetString()))
+            .Select(chain => chain.GetProperty("handlerSymbol").GetString()!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
         var ids = selectedChains
             .SelectMany(chain => chain.GetProperty("supportingEdgeIds").EnumerateArray().Select(id => id.GetString())
                 .Concat(chain.TryGetProperty("callEvidence", out var evidence)
@@ -45,7 +51,7 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
             command.CommandText = """
                 select source_index_id,
                        coalesce((select label from index_sources where index_sources.source_index_id=combined_facts.source_index_id), source_index_id),
-                       project_path, original_fact_id, source_symbol, file_path, start_line,
+                       project_path, combined_fact_id, source_symbol, file_path, start_line,
                        rule_id, evidence_tier, properties_json
                 from combined_facts
                 where scan_id=$scan and commit_sha=$commit and fact_type='CallEdge'
@@ -222,6 +228,14 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
             }
             if (graphGapCalls.Count > 10_000) throw new InvalidDataException("ReceiverBridgeAuditInputLimit");
         }
+        var relevantGraphReceiverGaps = graphReceiverGaps
+            .Where(gap => gap.CombinedFactId is not null
+                && graphGapCalls.TryGetValue(gap.CombinedFactId, out var call)
+                && !string.IsNullOrWhiteSpace(call.SourceSymbol)
+                && (calls.Any(selected => selected.Id == gap.CombinedFactId)
+                    || selectedHandlerSymbols.Any(handler => SameQualifiedMember(handler, call.SourceSymbol))
+                    || methodNames.Any(name => call.SourceSymbol.Contains(name, StringComparison.OrdinalIgnoreCase))))
+            .ToArray();
         var output = new List<string> { "receiverBridgeAudit=valid", $"supportingCallFacts={facts.Count}",
             $"syntaxReceiverInvocations={calls.Length}", $"receiverCreations={creations.Length}",
             $"semanticMethodCandidates={semanticDeclarations}", $"syntaxMethodCandidates={syntaxDeclarations}",
@@ -232,16 +246,20 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
             .GroupBy(gap => gap.GapKind, StringComparer.Ordinal)
             .OrderBy(group => group.Key, StringComparer.Ordinal)
             .Select(group => $"receiverBridgeWholeIndexGraphGap.{group.Key}={group.Count()}"));
+        output.AddRange(relevantGraphReceiverGaps
+            .GroupBy(gap => gap.GapKind, StringComparer.Ordinal)
+            .OrderBy(group => group.Key, StringComparer.Ordinal)
+            .Select(group => $"receiverBridgeRelevantGraphGap.{group.Key}={group.Count()}"));
+        output.AddRange(relevantGraphReceiverGaps
+            .GroupBy(gap => gap.Reason ?? "unavailable", StringComparer.Ordinal)
+            .OrderBy(group => group.Key, StringComparer.Ordinal)
+            .Select(group => $"receiverBridgeRelevantGraphGapReason.{group.Key}={group.Count()}"));
         if (includePrivateIdentities)
         {
             output.Add("receiverBridgePrivate=enabled");
             AddPrivateExecProcDownstreamLeaves(output, graphInventory);
             var privateGapIndex = 0;
-            foreach (var gap in graphReceiverGaps
-                .Where(gap => gap.CombinedFactId is not null
-                    && graphGapCalls.TryGetValue(gap.CombinedFactId, out var call)
-                    && !string.IsNullOrWhiteSpace(call.SourceSymbol)
-                    && methodNames.Any(name => call.SourceSymbol.Contains(name, StringComparison.OrdinalIgnoreCase)))
+            foreach (var gap in relevantGraphReceiverGaps
                 .OrderBy(gap => gap.FilePath, StringComparer.Ordinal)
                 .ThenBy(gap => gap.StartLine)
                 .ThenBy(gap => gap.GapKind, StringComparer.Ordinal)
@@ -249,10 +267,14 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
             {
                 privateGapIndex++;
                 var call = graphGapCalls[gap.CombinedFactId!];
-                output.Add($"receiverBridgePrivate.graphGap-{privateGapIndex:D2}.kind={gap.GapKind};file={gap.FilePath};line={gap.StartLine};source={call.SourceSymbol};callee={Value(call, "calleeName") ?? "unavailable"};receiver={Value(call, "receiverName") ?? "unavailable"};arity={Value(call, "argumentCount") ?? "unavailable"};reason={gap.Reason};candidates={gap.CandidateCount ?? 0}");
+                output.Add($"receiverBridgePrivate.graphGap-{privateGapIndex:D2}.kind={gap.GapKind};sourceIndex={call.SourceLabel};project={call.ProjectPath ?? "unavailable"};file={gap.FilePath};line={gap.StartLine};source={call.SourceSymbol};callee={Value(call, "calleeName") ?? "unavailable"};receiver={Value(call, "receiverName") ?? "unavailable"};arity={Value(call, "argumentCount") ?? "unavailable"};argumentTypes={Value(call, "argumentTypes") ?? "unavailable"};reason={gap.Reason};candidates={gap.CandidateCount ?? 0}");
                 if (gap.Reason == "receiver-provenance-unavailable")
                 {
                     output.Add($"receiverBridgePrivate.graphGap-{privateGapIndex:D2}.provenance={ReadReceiverProvenanceFacts(db, transaction, call)}");
+                }
+                else
+                {
+                    output.Add($"receiverBridgePrivate.graphGap-{privateGapIndex:D2}.targets={ReadReceiverTargetFacts(db, transaction, call)}");
                 }
             }
             output.Add($"receiverBridgePrivate.graphGaps={graphReceiverGaps.Length}");
@@ -360,6 +382,33 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
         }
 
         return $"callerType={caller.Value.Type};roots={string.Join('|', roots)};fields={string.Join('|', fields)}";
+    }
+
+    private static string ReadReceiverTargetFacts(
+        SqliteConnection db,
+        SqliteTransaction transaction,
+        Fact call)
+    {
+        var methodName = Value(call, "calleeName");
+        if (string.IsNullOrWhiteSpace(methodName)) return "callee-unavailable";
+
+        var targets = new List<string>();
+        using var command = db.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = "select coalesce((select label from index_sources where index_sources.source_index_id=combined_facts.source_index_id), source_index_id), "
+            + "project_path, file_path, start_line, rule_id, evidence_tier, properties_json "
+            + "from combined_facts where fact_type='MethodDeclared' and json_valid(properties_json) "
+            + "and lower(coalesce(cast(json_extract(properties_json,'$.methodName') as text), cast(json_extract(properties_json,'$.name') as text),''))=$name "
+            + "order by combined_fact_id limit 21;";
+        command.Parameters.AddWithValue("$name", methodName.ToLowerInvariant());
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            var properties = JsonSerializer.Deserialize<Dictionary<string, string>>(reader.GetString(6)) ?? [];
+            targets.Add($"source={reader.GetString(0)},project={(reader.IsDBNull(1) ? "unavailable" : reader.GetString(1))},type={Value(properties, "qualifiedContainingType") ?? Value(properties, "containingType") ?? "unavailable"},arity={Value(properties, "parameterCount") ?? "unavailable"},member={Value(properties, "memberIdentity") ?? "unavailable"},site={reader.GetString(2)}:{reader.GetInt32(3)},rule={reader.GetString(4)},tier={reader.GetString(5)}");
+        }
+
+        return targets.Count == 0 ? "none" : string.Join('|', targets);
     }
 
     private static string? Value(IReadOnlyDictionary<string, string> properties, string key) =>
@@ -488,6 +537,17 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
         var l = MemberKey(left.SourceSymbol ?? Value(left, "callerName"));
         var r = MemberKey(right.SourceSymbol ?? Value(right, "callerName"));
         return l is not null && r is not null && l.Value.Arity == r.Value.Arity && l.Value.Name.Equals(r.Value.Name, StringComparison.OrdinalIgnoreCase);
+    }
+    private static bool SameQualifiedMember(string? left, string? right)
+    {
+        if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right)) return false;
+        if (string.Equals(left.Trim(), right.Trim(), StringComparison.OrdinalIgnoreCase)) return true;
+        var l = QualifiedMemberKey(left);
+        var r = QualifiedMemberKey(right);
+        return l is not null && r is not null
+            && l.Value.Arity == r.Value.Arity
+            && l.Value.Name.Equals(r.Value.Name, StringComparison.OrdinalIgnoreCase)
+            && l.Value.Type.Equals(r.Value.Type, StringComparison.OrdinalIgnoreCase);
     }
     private static (string Name, int Arity)? MemberKey(string? value)
     {
