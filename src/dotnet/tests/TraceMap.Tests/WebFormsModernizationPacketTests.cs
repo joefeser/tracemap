@@ -1555,12 +1555,25 @@ public sealed class WebFormsModernizationPacketTests
         SqliteIndexWriter.Write(ambiguousIndex, manifest,
             [page, binding, handler, creation, invocation, declaration, competingDeclaration, downstream, terminal, flow]);
 
-        var ambiguousPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+        var ambiguousWritten = await WebFormsModernizationPacketReporter.WriteAsync(
             new(ambiguousIndex, Path.Combine(temp.Path, "ambiguous-output")));
+        var ambiguousPacket = ambiguousWritten.Packet;
 
         var ambiguousChain = Assert.Single(ambiguousPacket.EventChains);
         Assert.Null(ambiguousChain.TerminalKind);
         Assert.DoesNotContain("projectless-vb-receiver-bridge", ambiguousChain.TraversalObservation?.TraversedEdgeKinds ?? []);
+        var ambiguousAudit = WebFormsVisualBasicReceiverBridgeAudit.Run(
+            ambiguousIndex, ambiguousWritten.JsonPath, surface,
+            includePrivateIdentities: true);
+        Assert.Contains("receiverBridgeRelevantGraphGap.ProjectlessVisualBasicReceiverTargetAmbiguous=1", ambiguousAudit);
+        Assert.Contains("receiverBridgeRelevantGraphGapReason.semantic-type-identity-ambiguous=1", ambiguousAudit);
+        Assert.Contains(ambiguousAudit, line => line.StartsWith("receiverBridgePrivate.graphGap-01.kind=", StringComparison.Ordinal)
+            && line.Contains("sourceIndex=", StringComparison.Ordinal)
+            && line.Contains("argumentTypes=unavailable", StringComparison.Ordinal));
+        Assert.Contains(ambiguousAudit, line => line.StartsWith("receiverBridgePrivate.graphGap-01.targets=", StringComparison.Ordinal)
+            && line.Contains("source=", StringComparison.Ordinal)
+            && line.Contains("type=BusinessLayer.BusinessObject", StringComparison.Ordinal)
+            && line.Contains("type=AlternateBusinessLayer.BusinessObject", StringComparison.Ordinal));
     }
 
     [Fact]
