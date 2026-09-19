@@ -168,6 +168,19 @@ the existing five-minute/4-GiB process watchdog. It accepts at most two pages
 and never permits depth 12. Its retained evidence is comparative static
 evidence, not proof of runtime execution or complete traversal.
 
+After it completes, compare the newest diagnostic with the receipted depth-8
+page handoffs without rerunning traversal:
+
+```powershell
+.\scripts\Compare-FocusedWebFormsTargetedDepthDiagnostic.ps1 `
+  -ReviewRoot $MergedReviewRoot `
+  -PageId page-002,page-003
+```
+
+The comparison prints only page aliases and counts of depth-truncated chains
+and distinct retained terminal-evidence identities. It does not disclose the
+private terminal identities or equate them with runtime operations.
+
 `New-FocusedWebFormsPageGraphDump.ps1` independently closes every resolved
 handler on one receipted page. Its anonymous graph projection separates event
 chain fan-out from distinct handler cases and reports per-case retained
