@@ -989,6 +989,47 @@ public sealed class WebFormsModernizationPacketTests
             && line.Contains("assignedTo=bl,type=BusinessObject", StringComparison.Ordinal));
         Assert.Contains("receiverBridgePrivate.callStatuses=1", privateReceiverAudit);
 
+        var qualifiedBackendType = Fact(backendManifest, FactTypes.TypeDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "BusinessLayer/BusinessObject.vb", 1, source: null, target: "BusinessLayer.BusinessObject", contract: null,
+            ("kind", "class"), ("name", "BusinessObject"), ("namespace", "BusinessLayer"),
+            ("qualifiedName", "BusinessLayer.BusinessObject")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var qualifiedStaticInvocation = invocation with
+        {
+            Properties = new SortedDictionary<string, string>(
+                invocation.Properties.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+                StringComparer.Ordinal)
+            {
+                ["receiverName"] = "BusinessLayer.BusinessObject"
+            }
+        };
+        var qualifiedStaticFlow = flow with
+        {
+            Properties = new SortedDictionary<string, string>(
+                flow.Properties.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+                StringComparer.Ordinal)
+            {
+                ["supportingFactIds"] = $"{handler.FactId},{qualifiedStaticInvocation.FactId}",
+                ["supportingEdgeIds"] = qualifiedStaticInvocation.FactId
+            }
+        };
+        var qualifiedStaticWebIndex = Path.Combine(temp.Path, "qualified-static-web-index.sqlite");
+        SqliteIndexWriter.Write(qualifiedStaticWebIndex, manifest,
+            [page, binding, handler, qualifiedStaticInvocation, qualifiedStaticFlow]);
+        var qualifiedStaticBackendIndex = Path.Combine(temp.Path, "qualified-static-backend-index.sqlite");
+        SqliteIndexWriter.Write(qualifiedStaticBackendIndex, backendManifest,
+            [qualifiedBackendType, backendDeclaration, backendDownstream, backendTerminal]);
+        var qualifiedStaticCombinedIndex = Path.Combine(temp.Path, "qualified-static-combined-index.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [qualifiedStaticWebIndex, qualifiedStaticBackendIndex], qualifiedStaticCombinedIndex, ["web", "backend"]));
+        var qualifiedStaticPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(qualifiedStaticCombinedIndex, Path.Combine(temp.Path, "qualified-static-output")));
+        var qualifiedStaticChain = Assert.Single(qualifiedStaticPacket.EventChains);
+        Assert.Equal("sql-query", qualifiedStaticChain.TerminalKind);
+        Assert.Contains("projectless-vb-receiver-bridge", qualifiedStaticChain.TraversalObservation?.TraversedEdgeKinds ?? []);
+
         var mixedInvocation = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph, "WebApplication/Feedback.aspx.vb", 23,
             source: "Sample.Feedback.Submit_Click/2", target: "InsertFeedback", contract: "InsertFeedback",
             ("argumentCount", "1"), ("callKind", "SyntaxInvocation"), ("calleeName", "InsertFeedback"),
@@ -1424,6 +1465,32 @@ public sealed class WebFormsModernizationPacketTests
         Assert.True(implicitOverloadChain.TraversalObservation?.TerminalPathCount > 0);
         Assert.True(implicitOverloadChain.PathEvidence.Count(evidence =>
             evidence.RuleId == "combined.paths.projectless-vb-receiver-bridge.v1") >= 2);
+
+        foreach (var explicitSelfReceiver in new[] { "Me", "MyClass" })
+        {
+            var explicitSelfCall = implicitOverloadCall with
+            {
+                Properties = new SortedDictionary<string, string>(
+                    implicitOverloadCall.Properties.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+                    StringComparer.Ordinal)
+                {
+                    ["receiverName"] = explicitSelfReceiver
+                }
+            };
+            var suffix = explicitSelfReceiver.ToLowerInvariant();
+            var explicitSelfBackendIndex = Path.Combine(temp.Path, $"explicit-{suffix}-overload-backend-index.sqlite");
+            SqliteIndexWriter.Write(explicitSelfBackendIndex, recursiveBackendManifest,
+                [sqlBaseType, inheritedSqlField, inheritedSqlDeclaration, inheritedSqlSameArityOverload,
+                    explicitSelfCall, typedSqlBody, typedSqlTerminal]);
+            var explicitSelfCombinedIndex = Path.Combine(temp.Path, $"explicit-{suffix}-overload-combined-index.sqlite");
+            await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+                [wrapperWebIndex, explicitSelfBackendIndex], explicitSelfCombinedIndex, ["web", "backend"]));
+            var explicitSelfPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+                new(explicitSelfCombinedIndex, Path.Combine(temp.Path, $"explicit-{suffix}-overload-output")));
+            var explicitSelfChain = Assert.Single(explicitSelfPacket.EventChains);
+            Assert.Equal("sql-query", explicitSelfChain.TerminalKind);
+            Assert.True(explicitSelfChain.TraversalObservation?.TerminalPathCount > 0);
+        }
 
         var parametersListType = Fact(manifest, FactTypes.TypeDeclared, RuleIds.VisualBasicSyntaxDeclarations,
             "WebApplication/App_Code/DataAccess.vb", 30, source: null, target: "ParametersList", contract: null,

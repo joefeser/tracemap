@@ -2502,6 +2502,7 @@ public static partial class CombinedDependencyPathReporter
                 && fact.RuleId == RuleIds.VisualBasicSyntaxCallGraph
                 && string.Equals(CombinedDependencyReporter.FirstValue(fact.Properties, "callKind"), "SyntaxInvocation", StringComparison.Ordinal)
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "receiverName"))
+                && !IsVisualBasicExplicitSelfReceiver(CombinedDependencyReporter.FirstValue(fact.Properties, "receiverName"))
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "calleeName")))
             .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal)
             .ToArray();
@@ -2615,32 +2616,36 @@ public static partial class CombinedDependencyPathReporter
                     .OrderBy(creation => creation.StartLine)
                     .ThenBy(creation => creation.CombinedFactId, StringComparer.Ordinal)
                     .ToArray();
-            var declaredFieldReceivers = receiverCreations.Length == 0
+            var qualifiedTypeReceivers = receiverCreations.Length == 0
+                ? FindExactVisualBasicQualifiedTypeReceivers(receiverName, syntaxTypeDeclarations)
+                : [];
+            var declaredFieldReceivers = receiverCreations.Length == 0 && qualifiedTypeReceivers.Length == 0
                 ? FindVisualBasicDeclaredFieldReceivers(call, receiverLookupName, explicitlyQualifiedBaseField, syntaxTypeDeclarations, fieldDeclarations)
                 : [];
-            if (receiverCreations.Length == 0 && declaredFieldReceivers.Length == 0)
+            if (receiverCreations.Length == 0 && qualifiedTypeReceivers.Length == 0 && declaredFieldReceivers.Length == 0)
             {
                 AddProjectlessVisualBasicReceiverBridgeGap(
                     graph,
                     call,
                     "ProjectlessVisualBasicReceiverCreationUnavailable",
-                    "No retained syntax or semantic VB object creation, or uniquely declared typed field on the caller type or its retained base-type chain, associates the invocation receiver with a type.",
+                    "No retained syntax or semantic VB object creation, exact qualified VB type, or uniquely declared typed field on the caller type or its retained base-type chain associates the invocation receiver with a type.",
                     "receiver-provenance-unavailable",
                     0,
                     [call.CombinedFactId]);
                 continue;
             }
 
-            if (receiverCreations.Length > 1 || declaredFieldReceivers.Length > 1)
+            if (receiverCreations.Length > 1 || qualifiedTypeReceivers.Length > 1 || declaredFieldReceivers.Length > 1)
             {
                 AddProjectlessVisualBasicReceiverBridgeGap(
                     graph,
                     call,
                     "ProjectlessVisualBasicReceiverCreationAmbiguous",
-                    "Multiple retained object creations or declared typed fields can own the syntax-only invocation receiver; TraceMap did not choose a target.",
+                    "Multiple retained object creations, exact qualified types, or declared typed fields can own the syntax-only invocation receiver; TraceMap did not choose a target.",
                     "receiver-provenance-ambiguous",
-                    receiverCreations.Length + declaredFieldReceivers.Length,
+                    receiverCreations.Length + qualifiedTypeReceivers.Length + declaredFieldReceivers.Length,
                     receiverCreations.Select(fact => fact.CombinedFactId)
+                        .Concat(qualifiedTypeReceivers.SelectMany(candidate => candidate.Evidence.Select(fact => fact.CombinedFactId)))
                         .Concat(declaredFieldReceivers.SelectMany(candidate => candidate.Evidence.Select(fact => fact.CombinedFactId)))
                         .Append(call.CombinedFactId));
                 continue;
@@ -2650,7 +2655,9 @@ public static partial class CombinedDependencyPathReporter
                 ? new VisualBasicReceiverProvenance(
                     NormalizeVisualBasicTypeName(CombinedDependencyReporter.FirstValue(receiverCreations[0].Properties, "calleeContainingType", "calleeName")),
                     [receiverCreations[0]])
-                : declaredFieldReceivers[0];
+                : qualifiedTypeReceivers.Length == 1
+                    ? qualifiedTypeReceivers[0]
+                    : declaredFieldReceivers[0];
             var createdType = receiverEvidence.TypeName;
             var methodName = CombinedDependencyReporter.FirstValue(call.Properties, "calleeName")!;
             if (string.IsNullOrWhiteSpace(createdType))
@@ -2891,7 +2898,8 @@ public static partial class CombinedDependencyPathReporter
             .Where(fact => fact.FactType == FactTypes.CallEdge
                 && fact.RuleId == RuleIds.VisualBasicSyntaxCallGraph
                 && string.Equals(CombinedDependencyReporter.FirstValue(fact.Properties, "callKind"), "SyntaxInvocation", StringComparison.Ordinal)
-                && string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "receiverName"))
+                && (string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "receiverName"))
+                    || IsVisualBasicExplicitSelfReceiver(CombinedDependencyReporter.FirstValue(fact.Properties, "receiverName")))
                 && !string.IsNullOrWhiteSpace(CombinedDependencyReporter.FirstValue(fact.Properties, "calleeName"))
                 && VisualBasicQualifiedMemberKey(fact.SourceSymbol) is not null)
             .OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal))
@@ -2963,6 +2971,10 @@ public static partial class CombinedDependencyPathReporter
                 call.EndLine));
         }
     }
+
+    private static bool IsVisualBasicExplicitSelfReceiver(string? receiverName) =>
+        string.Equals(receiverName?.Trim(), "Me", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(receiverName?.Trim(), "MyClass", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsVisualBasicReceiverBodyFact(CombinedFactRow fact) =>
         fact.FactType == FactTypes.CallEdge
@@ -3038,6 +3050,29 @@ public static partial class CombinedDependencyPathReporter
     private sealed record VisualBasicReceiverProvenance(
         string TypeName,
         IReadOnlyList<CombinedFactRow> Evidence);
+
+    private static VisualBasicReceiverProvenance[] FindExactVisualBasicQualifiedTypeReceivers(
+        string receiverName,
+        IReadOnlyList<CombinedFactRow> typeDeclarations)
+    {
+        var normalizedReceiver = NormalizeVisualBasicTypeName(receiverName);
+        if (!normalizedReceiver.Contains('.', StringComparison.Ordinal))
+        {
+            return [];
+        }
+
+        return typeDeclarations
+            .Where(declaration => string.Equals(
+                VisualBasicTypeDeclarationName(declaration),
+                normalizedReceiver,
+                StringComparison.OrdinalIgnoreCase))
+            .GroupBy(declaration => $"{declaration.SourceIndexId}\0{VisualBasicTypeDeclarationName(declaration)}", StringComparer.OrdinalIgnoreCase)
+            .Select(group => new VisualBasicReceiverProvenance(
+                VisualBasicTypeDeclarationName(group.First()),
+                group.OrderBy(declaration => declaration.CombinedFactId, StringComparer.Ordinal).ToArray()))
+            .OrderBy(candidate => candidate.Evidence[0].CombinedFactId, StringComparer.Ordinal)
+            .ToArray();
+    }
 
     private static VisualBasicReceiverProvenance[] FindVisualBasicDeclaredFieldReceivers(
         CombinedFactRow call,
@@ -4313,7 +4348,7 @@ public static partial class CombinedDependencyPathReporter
 
         if (edges.Any(edge => edge.EdgeKind == "projectless-vb-receiver-bridge"))
         {
-            notes.Add(new CombinedPathNote("ProjectlessVisualBasicReceiverBridge", "This review-tier hop joins a syntax-only VB invocation using one uniquely retained receiver provenance plus method identity. Provenance may be a local object creation, a containing-type field initializer, one typed field reached through a unique retained syntax-only base-type chain, or the exact containing type for an unqualified implicit-Me call; local creation takes precedence. It may continue from a reached syntax method through another independently supported receiver call. It prefers one semantic type/name/arity declaration; under reduced semantic coverage it requires one syntax type/name declaration and an exact arity-bearing member-body symbol. Only after receiver identity is unique may exact ordered text-only argument/parameter types eliminate different-signature overloads. Partial argument types may narrow candidates only when every unresolved position has the same retained parameter type across all candidates. Named, wholly unknown, conflicting, or signature-incomplete evidence does not authorize that filter. Ambiguous receiver, inheritance, field, signature, or target evidence fails closed. The resulting target hop is not compiler-resolved call evidence or proof of runtime execution."));
+            notes.Add(new CombinedPathNote("ProjectlessVisualBasicReceiverBridge", "This review-tier hop joins a syntax-only VB invocation using one uniquely retained receiver provenance plus method identity. Provenance may be a local object creation, an exact namespace-qualified retained type, a containing-type field initializer, one typed field reached through a unique retained syntax-only base-type chain, or the exact containing type for an unqualified implicit-Me or explicit Me/MyClass call; local creation takes precedence. It may continue from a reached syntax method through another independently supported receiver call. It prefers one semantic type/name/arity declaration; under reduced semantic coverage it requires one syntax type/name declaration and an exact arity-bearing member-body symbol. Only after receiver identity is unique may exact ordered text-only argument/parameter types eliminate different-signature overloads. Partial argument types may narrow candidates only when every unresolved position has the same retained parameter type across all candidates. Named, wholly unknown, conflicting, or signature-incomplete evidence does not authorize that filter. Ambiguous receiver, inheritance, field, signature, or target evidence fails closed. The resulting target hop is not compiler-resolved call evidence or proof of runtime execution."));
         }
 
         if (edges.Any(edge => edge.EdgeKind is "remoting-evidence" or "remoting-channel-link"))
