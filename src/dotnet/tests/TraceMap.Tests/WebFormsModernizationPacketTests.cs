@@ -1030,6 +1030,39 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Equal("sql-query", qualifiedStaticChain.TerminalKind);
         Assert.Contains("projectless-vb-receiver-bridge", qualifiedStaticChain.TraversalObservation?.TraversedEdgeKinds ?? []);
 
+        var typedReceiverInvocation = invocation with
+        {
+            Properties = new SortedDictionary<string, string>(
+                invocation.Properties.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+                StringComparer.Ordinal)
+            {
+                ["receiverName"] = "service",
+                ["receiverType"] = "BusinessLayer.BusinessObject",
+                ["receiverTypeResolution"] = "explicit-caller-syntax"
+            }
+        };
+        var typedReceiverFlow = flow with
+        {
+            Properties = new SortedDictionary<string, string>(
+                flow.Properties.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+                StringComparer.Ordinal)
+            {
+                ["supportingFactIds"] = $"{handler.FactId},{typedReceiverInvocation.FactId}",
+                ["supportingEdgeIds"] = typedReceiverInvocation.FactId
+            }
+        };
+        var typedReceiverWebIndex = Path.Combine(temp.Path, "typed-receiver-web-index.sqlite");
+        SqliteIndexWriter.Write(typedReceiverWebIndex, manifest,
+            [page, binding, handler, typedReceiverInvocation, typedReceiverFlow]);
+        var typedReceiverCombinedIndex = Path.Combine(temp.Path, "typed-receiver-combined-index.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [typedReceiverWebIndex, backendIndex], typedReceiverCombinedIndex, ["web", "backend"]));
+        var typedReceiverPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(typedReceiverCombinedIndex, Path.Combine(temp.Path, "typed-receiver-output")));
+        var typedReceiverChain = Assert.Single(typedReceiverPacket.EventChains);
+        Assert.Equal("sql-query", typedReceiverChain.TerminalKind);
+        Assert.Contains("projectless-vb-receiver-bridge", typedReceiverChain.TraversalObservation?.TraversedEdgeKinds ?? []);
+
         var mixedInvocation = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph, "WebApplication/Feedback.aspx.vb", 23,
             source: "Sample.Feedback.Submit_Click/2", target: "InsertFeedback", contract: "InsertFeedback",
             ("argumentCount", "1"), ("callKind", "SyntaxInvocation"), ("calleeName", "InsertFeedback"),
@@ -1629,8 +1662,11 @@ public sealed class WebFormsModernizationPacketTests
         var ambiguousChain = Assert.Single(ambiguousPacket.EventChains);
         Assert.Null(ambiguousChain.TerminalKind);
         Assert.DoesNotContain("projectless-vb-receiver-bridge", ambiguousChain.TraversalObservation?.TraversedEdgeKinds ?? []);
+        var ambiguousCombinedIndex = Path.Combine(temp.Path, "ambiguous-combined-index.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [ambiguousIndex], ambiguousCombinedIndex, ["ambiguous"]));
         var ambiguousAudit = WebFormsVisualBasicReceiverBridgeAudit.Run(
-            ambiguousIndex, ambiguousWritten.JsonPath, surface,
+            ambiguousCombinedIndex, ambiguousWritten.JsonPath, surface,
             includePrivateIdentities: true);
         Assert.Contains("receiverBridgeRelevantGraphGap.ProjectlessVisualBasicReceiverTargetAmbiguous=1", ambiguousAudit);
         Assert.Contains("receiverBridgeRelevantGraphGapReason.semantic-type-identity-ambiguous=1", ambiguousAudit);

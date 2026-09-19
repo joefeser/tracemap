@@ -268,7 +268,7 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
             {
                 privateGapIndex++;
                 var call = graphGapCalls[gap.CombinedFactId!];
-                output.Add($"receiverBridgePrivate.graphGap-{privateGapIndex:D2}.kind={gap.GapKind};sourceIndex={call.SourceLabel};project={call.ProjectPath ?? "unavailable"};file={gap.FilePath};line={gap.StartLine};source={call.SourceSymbol};callee={Value(call, "calleeName") ?? "unavailable"};receiver={Value(call, "receiverName") ?? "unavailable"};arity={Value(call, "argumentCount") ?? "unavailable"};argumentTypes={Value(call, "argumentTypes") ?? "unavailable"};reason={gap.Reason};candidates={gap.CandidateCount ?? 0}");
+                output.Add($"receiverBridgePrivate.graphGap-{privateGapIndex:D2}.kind={gap.GapKind};sourceIndex={call.SourceLabel};project={call.ProjectPath ?? "unavailable"};file={gap.FilePath};line={gap.StartLine};source={call.SourceSymbol};callee={Value(call, "calleeName") ?? "unavailable"};receiver={Value(call, "receiverName") ?? "unavailable"};receiverType={Value(call, "receiverType") ?? "unavailable"};arity={Value(call, "argumentCount") ?? "unavailable"};argumentTypes={Value(call, "argumentTypes") ?? "unavailable"};reason={gap.Reason};candidates={gap.CandidateCount ?? 0}");
                 if (gap.Reason == "receiver-provenance-unavailable")
                 {
                     output.Add($"receiverBridgePrivate.graphGap-{privateGapIndex:D2}.provenance={ReadReceiverProvenanceFacts(db, transaction, call)}");

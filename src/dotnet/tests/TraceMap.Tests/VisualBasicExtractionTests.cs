@@ -581,6 +581,39 @@ public sealed class VisualBasicExtractionTests
     }
 
     [Fact]
+    public void Projectless_vb_invocation_retains_unique_explicit_receiver_types()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Worker.vb"), """
+            Public Class Worker
+                Private repository As Repository
+
+                Public Sub Run(url As String)
+                    Dim row As DataRow
+                    url.Split(",")
+                    row.Item(0)
+                    repository.Save()
+                End Sub
+            End Class
+            """);
+        Commit(repo);
+
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "out")));
+        var calls = result.Facts
+            .Where(fact => fact.FactType == FactTypes.CallEdge
+                && fact.RuleId == RuleIds.VisualBasicSyntaxCallGraph)
+            .ToDictionary(fact => fact.TargetSymbol!, StringComparer.Ordinal);
+
+        Assert.Equal("String", calls["Split"].Properties["receiverType"]);
+        Assert.Equal("DataRow", calls["Item"].Properties["receiverType"]);
+        Assert.Equal("Repository", calls["Save"].Properties["receiverType"]);
+        Assert.All(calls.Values, call =>
+            Assert.Equal("explicit-caller-syntax", call.Properties["receiverTypeResolution"]));
+    }
+
+    [Fact]
     public void Projectless_vb_explicit_data_adapter_fill_is_a_reduced_database_candidate()
     {
         using var temp = new TempDirectory();
