@@ -174,7 +174,7 @@ public static partial class CombinedDependencyPathReporter
                 select fact_id, scan_id, repo, commit_sha, fact_type, rule_id, evidence_tier,
                        source_symbol, target_symbol, contract_element, file_path, start_line, end_line,
                        case when fact_type = '{{FactTypes.CallEdge}}' and json_valid(properties_json) then
-                           json_object(
+                           json_patch(json_object(
                                'argumentCount', coalesce(cast(json_extract(properties_json, '$.argumentCount') as text), ''),
                                'argumentTypes', coalesce(cast(json_extract(properties_json, '$.argumentTypes') as text), ''),
                                'argumentTypeResolution', coalesce(cast(json_extract(properties_json, '$.argumentTypeResolution') as text), ''),
@@ -188,7 +188,10 @@ public static partial class CombinedDependencyPathReporter
                                'coverageLabel', coalesce(cast(json_extract(properties_json, '$.coverageLabel') as text), ''),
                                'receiverName', coalesce(cast(json_extract(properties_json, '$.receiverName') as text), ''),
                                'targetSymbolId', coalesce(cast(json_extract(properties_json, '$.targetSymbolId') as text), ''),
-                               'targetContainingSymbolId', coalesce(cast(json_extract(properties_json, '$.targetContainingSymbolId') as text), ''))
+                               'targetContainingSymbolId', coalesce(cast(json_extract(properties_json, '$.targetContainingSymbolId') as text), '')),
+                               case when json_type(properties_json, '$.receiverType') is not null
+                                    then json_object('receiverType', cast(json_extract(properties_json, '$.receiverType') as text))
+                                    else json('{}') end)
                             when fact_type = '{{FactTypes.MethodDeclared}}'
                                 and rule_id = '{{RuleIds.VisualBasicSemanticDeclarations}}'
                                 and json_valid(properties_json) then

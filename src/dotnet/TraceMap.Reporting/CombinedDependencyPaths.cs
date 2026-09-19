@@ -2616,19 +2616,24 @@ public static partial class CombinedDependencyPathReporter
                     .OrderBy(creation => creation.StartLine)
                     .ThenBy(creation => creation.CombinedFactId, StringComparer.Ordinal)
                     .ToArray();
-            var qualifiedTypeReceivers = receiverCreations.Length == 0
+            var explicitReceiverType = NormalizeVisualBasicTypeName(
+                CombinedDependencyReporter.FirstValue(call.Properties, "receiverType"));
+            var typedReceiver = receiverCreations.Length == 0 && !string.IsNullOrWhiteSpace(explicitReceiverType)
+                ? new VisualBasicReceiverProvenance(explicitReceiverType, [call])
+                : null;
+            var qualifiedTypeReceivers = receiverCreations.Length == 0 && typedReceiver is null
                 ? FindExactVisualBasicQualifiedTypeReceivers(receiverName, syntaxTypeDeclarations)
                 : [];
-            var declaredFieldReceivers = receiverCreations.Length == 0 && qualifiedTypeReceivers.Length == 0
+            var declaredFieldReceivers = receiverCreations.Length == 0 && typedReceiver is null && qualifiedTypeReceivers.Length == 0
                 ? FindVisualBasicDeclaredFieldReceivers(call, receiverLookupName, explicitlyQualifiedBaseField, syntaxTypeDeclarations, fieldDeclarations)
                 : [];
-            if (receiverCreations.Length == 0 && qualifiedTypeReceivers.Length == 0 && declaredFieldReceivers.Length == 0)
+            if (receiverCreations.Length == 0 && typedReceiver is null && qualifiedTypeReceivers.Length == 0 && declaredFieldReceivers.Length == 0)
             {
                 AddProjectlessVisualBasicReceiverBridgeGap(
                     graph,
                     call,
                     "ProjectlessVisualBasicReceiverCreationUnavailable",
-                    "No retained syntax or semantic VB object creation, exact qualified VB type, or uniquely declared typed field on the caller type or its retained base-type chain associates the invocation receiver with a type.",
+                    "No retained syntax or semantic VB object creation, explicit caller parameter/local/field receiver type, exact qualified VB type, or uniquely declared typed field on the caller type or its retained base-type chain associates the invocation receiver with a type.",
                     "receiver-provenance-unavailable",
                     0,
                     [call.CombinedFactId]);
@@ -2655,9 +2660,10 @@ public static partial class CombinedDependencyPathReporter
                 ? new VisualBasicReceiverProvenance(
                     NormalizeVisualBasicTypeName(CombinedDependencyReporter.FirstValue(receiverCreations[0].Properties, "calleeContainingType", "calleeName")),
                     [receiverCreations[0]])
-                : qualifiedTypeReceivers.Length == 1
-                    ? qualifiedTypeReceivers[0]
-                    : declaredFieldReceivers[0];
+                : typedReceiver
+                    ?? (qualifiedTypeReceivers.Length == 1
+                        ? qualifiedTypeReceivers[0]
+                        : declaredFieldReceivers[0]);
             var createdType = receiverEvidence.TypeName;
             var methodName = CombinedDependencyReporter.FirstValue(call.Properties, "calleeName")!;
             if (string.IsNullOrWhiteSpace(createdType))
@@ -4348,7 +4354,7 @@ public static partial class CombinedDependencyPathReporter
 
         if (edges.Any(edge => edge.EdgeKind == "projectless-vb-receiver-bridge"))
         {
-            notes.Add(new CombinedPathNote("ProjectlessVisualBasicReceiverBridge", "This review-tier hop joins a syntax-only VB invocation using one uniquely retained receiver provenance plus method identity. Provenance may be a local object creation, an exact namespace-qualified retained type, a containing-type field initializer, one typed field reached through a unique retained syntax-only base-type chain, or the exact containing type for an unqualified implicit-Me or explicit Me/MyClass call; local creation takes precedence. It may continue from a reached syntax method through another independently supported receiver call. It prefers one semantic type/name/arity declaration; under reduced semantic coverage it requires one syntax type/name declaration and an exact arity-bearing member-body symbol. Only after receiver identity is unique may exact ordered text-only argument/parameter types eliminate different-signature overloads. Partial argument types may narrow candidates only when every unresolved position has the same retained parameter type across all candidates. Named, wholly unknown, conflicting, or signature-incomplete evidence does not authorize that filter. Ambiguous receiver, inheritance, field, signature, or target evidence fails closed. The resulting target hop is not compiler-resolved call evidence or proof of runtime execution."));
+            notes.Add(new CombinedPathNote("ProjectlessVisualBasicReceiverBridge", "This review-tier hop joins a syntax-only VB invocation using one uniquely retained receiver provenance plus method identity. Provenance may be a local object creation, one explicit caller parameter/local/field type, an exact namespace-qualified retained type, a containing-type field initializer, one typed field reached through a unique retained syntax-only base-type chain, or the exact containing type for an unqualified implicit-Me or explicit Me/MyClass call; local creation takes precedence. It may continue from a reached syntax method through another independently supported receiver call. It prefers one semantic type/name/arity declaration; under reduced semantic coverage it requires one syntax type/name declaration and an exact arity-bearing member-body symbol. Only after receiver identity is unique may exact ordered text-only argument/parameter types eliminate different-signature overloads. Partial argument types may narrow candidates only when every unresolved position has the same retained parameter type across all candidates. Named, wholly unknown, conflicting, or signature-incomplete evidence does not authorize that filter. Ambiguous receiver, inheritance, field, signature, or target evidence fails closed. The resulting target hop is not compiler-resolved call evidence or proof of runtime execution."));
         }
 
         if (edges.Any(edge => edge.EdgeKind is "remoting-evidence" or "remoting-channel-link"))
