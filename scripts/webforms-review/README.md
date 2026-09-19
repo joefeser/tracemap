@@ -152,6 +152,22 @@ were retained but no supported terminal was reached, and
 `BoundedTraversalTruncated` means a configured traversal bound stopped the
 inspection. None proves absence or runtime behavior.
 
+The ordinary packet remains fixed at depth 8. When one or two receipted pages
+retain depth truncation, run the guarded depth-10 diagnostic without changing
+the production packet:
+
+```powershell
+.\scripts\Invoke-FocusedWebFormsTargetedDepthDiagnostic.ps1 `
+  -ReviewRoot $MergedReviewRoot `
+  -PageId page-002,page-003
+```
+
+The diagnostic reuses the receipted combined index, validates the page aliases
+against the application handoff, caps traversal work at 100,000, and runs under
+the existing five-minute/4-GiB process watchdog. It accepts at most two pages
+and never permits depth 12. Its retained evidence is comparative static
+evidence, not proof of runtime execution or complete traversal.
+
 `New-FocusedWebFormsPageGraphDump.ps1` independently closes every resolved
 handler on one receipted page. Its anonymous graph projection separates event
 chain fan-out from distinct handler cases and reports per-case retained
