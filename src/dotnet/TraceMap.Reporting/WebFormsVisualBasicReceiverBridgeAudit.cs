@@ -69,7 +69,8 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
 
         var calls = facts.Where(fact => fact.RuleId == RuleIds.VisualBasicSyntaxCallGraph
             && Value(fact, "callKind") == "SyntaxInvocation"
-            && !string.IsNullOrWhiteSpace(Value(fact, "receiverName")))
+            && !string.IsNullOrWhiteSpace(Value(fact, "receiverName"))
+            && !IsExplicitSelfReceiver(Value(fact, "receiverName")))
             .ToArray();
         var creations = facts.Where(IsCreation).ToArray();
         var methodNames = calls.Select(call => Value(call, "calleeName"))
@@ -413,6 +414,9 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
 
     private static string? Value(IReadOnlyDictionary<string, string> properties, string key) =>
         properties.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value) ? value : null;
+    private static bool IsExplicitSelfReceiver(string? receiverName) =>
+        string.Equals(receiverName?.Trim(), "Me", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(receiverName?.Trim(), "MyClass", StringComparison.OrdinalIgnoreCase);
 
     private static void AddPrivateExecProcDownstreamLeaves(
         List<string> output,
