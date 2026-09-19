@@ -1827,12 +1827,108 @@ public sealed class WebFormsModernizationPacketTests
         var cheapChain = first.Packet.EventChains.Single(chain => chain.HandlerFactId == cheapResolved.FactId);
         Assert.Equal("sql-query", cheapChain.TerminalKind);
         Assert.Equal("supported-terminal-reached", cheapChain.TraversalObservation?.StopState);
-        Assert.DoesNotContain("work", cheapChain.TraversalObservation?.TruncationReasons ?? []);
+        Assert.True(cheapChain.TraversalObservation?.TerminalReachabilityComplete);
+        Assert.DoesNotContain("work", cheapChain.TraversalObservation?.TerminalReachabilityLimitReasons ?? []);
+        Assert.Contains("work", cheapChain.TraversalObservation?.PathEnumerationTruncationReasons ?? []);
         Assert.Contains(first.Packet.EventChains, chain => chain.HandlerFactId == noisyResolved.FactId
             && chain.TraversalObservation?.TruncationReasons.Contains("work", StringComparer.Ordinal) == true);
         var second = await WebFormsModernizationPacketReporter.WriteAsync(new(
             index, Path.Combine(temp.Path, "second"), MaxTraversalWork: 40));
         Assert.Equal(JsonSerializer.Serialize(first.Packet), JsonSerializer.Serialize(second.Packet));
+    }
+
+    [Fact]
+    public async Task Terminal_inventory_retains_all_distinct_shortest_witnesses_beyond_display_depth()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("Succeeded") with { AnalysisLevel = "Level1SemanticAnalysis" };
+        const string surface = "webforms-surface:terminal-inventory";
+        const string handlerId = "symbol-id:terminal-inventory-handler";
+        const string handlerSymbol = "Sample.TerminalInventory.Run_Click(object, System.EventArgs)";
+        var page = Fact(manifest, FactTypes.WebFormsPageDeclared, RuleIds.LegacyWebFormsInventory, "Pages/TerminalInventory.aspx", 1,
+            source: surface, target: "Sample.TerminalInventory", contract: "TerminalInventory.aspx",
+            ("surfaceIdentity", surface), ("directiveKind", "Page"), ("coverageLabel", "bounded-static-webforms-inventory"));
+        var binding = Fact(manifest, FactTypes.WebFormsEventBindingDeclared, RuleIds.LegacyWebFormsEventBinding, "Pages/TerminalInventory.aspx", 10,
+            source: "control:run", target: handlerId, contract: "Run_Click",
+            ("surfaceIdentity", surface), ("eventSourceIdentity", "control:run"), ("eventName", "OnClick"),
+            ("controlId", "run"), ("handlerName", "Run_Click"), ("markupFile", "Pages/TerminalInventory.aspx"),
+            ("coverageLabel", "bounded-static-webforms-event"));
+        var handler = Fact(manifest, FactTypes.WebFormsHandlerResolved, RuleIds.LegacyWebFormsHandlerResolution, "Pages/TerminalInventory.aspx.cs", 20,
+            source: "control:run", target: handlerId, contract: "Run_Click",
+            ("surfaceIdentity", surface), ("bindingFactId", binding.FactId), ("handlerSymbolId", handlerId),
+            ("handlerSymbol", handlerSymbol), ("handlerName", "Run_Click"), ("controlId", "run"),
+            ("eventName", "OnClick"), ("markupFile", "Pages/TerminalInventory.aspx"),
+            ("coverageLabel", "bounded-static-webforms-handler"));
+        var calls = new List<CodeFact>();
+        string Previous(string branch, int index) => index == 0 ? handlerSymbol : $"Sample.{branch}.M{index}()";
+        for (var index = 0; index < 12; index++)
+        {
+            calls.Add(Fact(manifest, FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, "Services/First.cs", 30 + index,
+                source: Previous("First", index), target: $"Sample.First.M{index + 1}()", contract: $"M{index + 1}",
+                ("coverageLabel", "bounded-static-call")) with { EvidenceTier = EvidenceTiers.Tier1Semantic });
+            calls.Add(Fact(manifest, FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, "Services/Second.cs", 60 + index,
+                source: Previous("Second", index), target: $"Sample.Second.M{index + 1}()", contract: $"M{index + 1}",
+                ("coverageLabel", "bounded-static-call")) with { EvidenceTier = EvidenceTiers.Tier1Semantic });
+        }
+        calls.Add(Fact(manifest, FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, "Services/First.cs", 90,
+            source: "Sample.First.M2()", target: "Sample.First.M10()", contract: "M10", ("coverageLabel", "bounded-static-call")) with { EvidenceTier = EvidenceTiers.Tier1Semantic });
+        calls.Add(Fact(manifest, FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, "Services/First.cs", 91,
+            source: "Sample.First.M5()", target: "Sample.First.M2()", contract: "M2", ("coverageLabel", "bounded-static-call")) with { EvidenceTier = EvidenceTiers.Tier1Semantic });
+        var firstTerminal = Fact(manifest, FactTypes.QueryPatternDetected, RuleIds.CSharpSyntaxQueryPattern, "Services/First.cs", 100,
+            source: "Sample.First.M12()", target: "first-query", contract: "SELECT",
+            ("operationName", "SELECT"), ("tableName", "first"), ("columnNames", "id"), ("sqlSourceKind", "literal-string"),
+            ("queryShapeHash", "first-terminal"), ("coverageLabel", "bounded-static-query"));
+        var secondTerminal = Fact(manifest, FactTypes.QueryPatternDetected, RuleIds.CSharpSyntaxQueryPattern, "Services/Second.cs", 101,
+            source: "Sample.Second.M12()", target: "second-query", contract: "SELECT",
+            ("operationName", "SELECT"), ("tableName", "second"), ("columnNames", "id"), ("sqlSourceKind", "literal-string"),
+            ("queryShapeHash", "second-terminal"), ("coverageLabel", "bounded-static-query"));
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(indexPath, manifest, [page, binding, handler, .. calls, firstTerminal, secondTerminal]);
+        var backendManifest = manifest with { ScanId = "scan-terminal-inventory-backend", RepoName = "terminal-inventory-backend" };
+        var backendIndexPath = Path.Combine(temp.Path, "backend-index.sqlite");
+        SqliteIndexWriter.Write(backendIndexPath, backendManifest, []);
+        var combinedIndexPath = Path.Combine(temp.Path, "combined-index.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([indexPath, backendIndexPath], combinedIndexPath, ["web", "backend"]));
+
+        var depth3 = await WebFormsModernizationPacketReporter.BuildAsync(new(combinedIndexPath, Path.Combine(temp.Path, "depth3"), MaxDepth: 3));
+        var depth10 = await WebFormsModernizationPacketReporter.BuildAsync(new(combinedIndexPath, Path.Combine(temp.Path, "depth10"), MaxDepth: 10));
+
+        Assert.True(depth3.EventChains.Count == 2, JsonSerializer.Serialize(new
+        {
+            Chains = depth3.EventChains.Select(chain => new { chain.TerminalKind, chain.LegacyPathId, chain.SupportingFactIds, chain.TraversalObservation }),
+            Boundaries = depth3.DownstreamBoundaries.Select(boundary => new { boundary.TerminalEvidenceId, boundary.BoundaryTargetId }),
+            Gaps = depth3.Gaps.Select(gap => new { gap.Classification, gap.TruncationReason })
+        }));
+        Assert.Equal(2, depth3.DownstreamBoundaries.Select(boundary => boundary.TerminalEvidenceId).Distinct(StringComparer.Ordinal).Count());
+        Assert.All(depth3.EventChains, chain =>
+        {
+            Assert.True(chain.TraversalObservation?.TerminalReachabilityComplete);
+            Assert.Equal(2, chain.TraversalObservation?.DistinctReachableTerminalCount);
+            Assert.True(chain.TraversalObservation?.PathEnumerationTruncated);
+            Assert.Contains("depth", chain.TraversalObservation?.PathEnumerationTruncationReasons ?? []);
+            Assert.Empty(chain.TraversalObservation?.TerminalReachabilityLimitReasons ?? []);
+            Assert.Equal(chain.PathEvidence.Select(item => item.EvidenceId).Distinct(StringComparer.Ordinal).Count(), chain.PathEvidence.Count);
+        });
+        Assert.Equal(
+            depth3.DownstreamBoundaries.Select(boundary => boundary.TerminalEvidenceId).OrderBy(value => value, StringComparer.Ordinal),
+            depth10.DownstreamBoundaries.Select(boundary => boundary.TerminalEvidenceId).OrderBy(value => value, StringComparer.Ordinal));
+        var shortestFirst = depth3.EventChains.Single(chain => chain.PathEvidence.Any(item => item.FilePath == "Services/First.cs" && item.StartLine == 100));
+        Assert.DoesNotContain(shortestFirst.PathEvidence, item => item.FilePath == "Services/First.cs" && item.StartLine is >= 33 and <= 38);
+
+        foreach (var (bounded, reason) in new[]
+        {
+            (await WebFormsModernizationPacketReporter.BuildAsync(new(combinedIndexPath, Path.Combine(temp.Path, "path-limit"), MaxDepth: 3, MaxPaths: 1)), "path"),
+            (await WebFormsModernizationPacketReporter.BuildAsync(new(combinedIndexPath, Path.Combine(temp.Path, "frontier-limit"), MaxDepth: 3, MaxFrontier: 1)), "frontier"),
+            (await WebFormsModernizationPacketReporter.BuildAsync(new(combinedIndexPath, Path.Combine(temp.Path, "work-limit"), MaxDepth: 3, MaxTraversalWork: 4)), "work")
+        })
+        {
+            Assert.Contains(bounded.EventChains, chain => chain.TraversalObservation is
+            {
+                TerminalReachabilityComplete: false
+            } observation && observation.TerminalReachabilityLimitReasons.Contains(reason, StringComparer.Ordinal));
+            Assert.Contains(bounded.Gaps, gap => gap.Classification == "TruncatedByLimit" && gap.TruncationReason == reason);
+            Assert.DoesNotContain(bounded.Gaps, gap => gap.Classification is "NoBackendEvidence" or "DownstreamWithoutSupportedTerminal");
+        }
     }
 
     [Fact]

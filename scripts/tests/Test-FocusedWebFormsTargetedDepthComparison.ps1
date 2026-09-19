@@ -16,11 +16,18 @@ function Write-Artifact([string]$Root, [string]$RelativePath, [object]$Value) {
         sha256 = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
     }
 }
-function New-Chain([string]$SurfaceId, [bool]$DepthTruncated) {
+function New-Chain([string]$SurfaceId, [bool]$DepthTruncated, [int]$TerminalCount = 0) {
     return [ordered]@{
         surfaceId = $SurfaceId
+        handlerFactId = "handler-$SurfaceId"
         traversalObservation = [ordered]@{
             truncationReasons = if ($DepthTruncated) { @('depth') } else { @() }
+            terminalReachabilityComplete = $true
+            distinctReachableTerminalCount = $TerminalCount
+            minimumTerminalDistance = if ($TerminalCount -gt 0) { 11 } else { $null }
+            terminalReachabilityLimitReasons = @()
+            pathEnumerationTruncated = $DepthTruncated
+            pathEnumerationTruncationReasons = if ($DepthTruncated) { @('depth') } else { @() }
         }
     }
 }
@@ -82,8 +89,8 @@ try {
             [ordered]@{ alias = 'page-002'; status = 'matched'; surfaceIds = @('surface-003') }
         ) }
         eventChains = @(
-            (New-Chain 'surface-002' $false),
-            (New-Chain 'surface-002' $false),
+            (New-Chain 'surface-002' $false 2),
+            (New-Chain 'surface-002' $false 2),
             (New-Chain 'surface-003' $true)
         )
         downstreamBoundaries = @(
@@ -92,6 +99,19 @@ try {
         )
     }
     [IO.File]::WriteAllText((Join-Path $diagnostic 'webforms-modernization.json'), (($diagnosticPacket | ConvertTo-Json -Depth 20) + "`n"), [Text.UTF8Encoding]::new($false))
+    $baselinePacket = [ordered]@{
+        schemaVersion = 'webforms-modernization-packet.v1'
+        sources = @($source)
+        surfaceSelection = $diagnosticPacket.surfaceSelection
+        eventChains = @(
+            (New-Chain 'surface-002' $true 2),
+            (New-Chain 'surface-002' $false 2),
+            (New-Chain 'surface-003' $true)
+        )
+        downstreamBoundaries = @((New-Boundary 'a' 'surface-002'))
+    }
+    [IO.Directory]::CreateDirectory((Join-Path $diagnostic 'baseline-depth-8')) | Out-Null
+    [IO.File]::WriteAllText((Join-Path $diagnostic 'baseline-depth-8/webforms-modernization.json'), (($baselinePacket | ConvertTo-Json -Depth 20) + "`n"), [Text.UTF8Encoding]::new($false))
 
     $output = @(& $subject -ReviewRoot $temp -TraceMapRoot $repo)
     foreach ($expected in @(
@@ -102,6 +122,11 @@ try {
         'depth10DepthTruncated=1',
         'terminalDelta=added:1|lost:0')) {
         if ($expected -notin $output) { throw "Targeted comparison omitted: $expected" }
+    }
+    foreach ($expected in @(
+        'reachability=page-002|depth8Available=True|depth8Complete=True|depth8DistinctTerminals=2|depth8MinimumDistance=11|depth8LimitReasons=|depth8PathDetailTruncated=True|depth8PathDetailReasons=depth|depth10Complete=True|depth10DistinctTerminals=2',
+        'reachability=page-003|depth8Available=True|depth8Complete=True|depth8DistinctTerminals=0')) {
+        if (@($output | Where-Object { $_.StartsWith($expected, [StringComparison]::Ordinal) }).Count -ne 1) { throw "Targeted comparison omitted reachability separation: $expected" }
     }
     if (@($output | Where-Object { $_ -match 'target-a|evidence-a|surface-002' }).Count -ne 0) {
         throw 'Targeted comparison disclosed a private evidence identity.'

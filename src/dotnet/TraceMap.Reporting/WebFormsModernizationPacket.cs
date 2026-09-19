@@ -23,7 +23,8 @@ public sealed record WebFormsModernizationOptions(
     int MaxInputEdges = 250_000,
     int MaxInputTextBytes = 128 * 1024 * 1024,
     string? SurfaceListPath = null,
-    int MaxTraversalWork = 100_000);
+    int MaxTraversalWork = 100_000,
+    int MaxFrontier = 10_000);
 
 public sealed record WebFormsModernizationResult(
     WebFormsModernizationPacket Packet,
@@ -212,6 +213,12 @@ public sealed record WebFormsModernizationTraversalObservation(
     public IReadOnlyList<string> TraversedEdgeKinds { get; init; } = [];
     public IReadOnlyList<string> TraversedRuleIds { get; init; } = [];
     public bool DiagnosticShapesTruncated { get; init; }
+    public bool TerminalReachabilityComplete { get; init; }
+    public int DistinctReachableTerminalCount { get; init; }
+    public int? MinimumTerminalDistance { get; init; }
+    public IReadOnlyList<string> TerminalReachabilityLimitReasons { get; init; } = [];
+    public bool PathEnumerationTruncated { get; init; }
+    public IReadOnlyList<string> PathEnumerationTruncationReasons { get; init; } = [];
 }
 
 public sealed record WebFormsModernizationPathEvidence(
@@ -466,11 +473,13 @@ public static class WebFormsModernizationPacketReporter
             View: LegacyFlowReportConstants.View,
             IncludeLegacyRoots: true,
             MaxDepth: options.MaxDepth,
-            MaxPaths: options.MaxPaths)
+            MaxPaths: options.MaxPaths,
+            MaxFrontier: options.MaxFrontier)
         {
             StartingNodeLimit = Math.Max(1, startingFactIds.Count),
             StartingFactIds = startingFactIds,
-            MaxTraversalWork = options.MaxTraversalWork
+            MaxTraversalWork = options.MaxTraversalWork,
+            InventoryDistinctTerminals = true
         };
         var legacyFlowBuild = snapshot.IsCombined
             ? await CombinedDependencyPathReporter.BuildBoundedCombinedIndexReportWithTraversalAsync(graphOptions, graphBudget, cancellationToken)
@@ -530,9 +539,9 @@ public static class WebFormsModernizationPacketReporter
                 handlerOwnedCallEvidenceCount);
         }
 
-        var stopState = observation.Truncated
-            ? "bounded-traversal-truncated"
-            : observation.TerminalPathCount > 0
+        var stopState = !observation.TerminalReachabilityComplete
+            ? "terminal-reachability-incomplete"
+            : observation.DistinctReachableTerminalCount > 0
                 ? "supported-terminal-reached"
                 : observation.DownstreamEdgeCount == 0
                     ? "no-observed-downstream-edge"
@@ -541,7 +550,7 @@ public static class WebFormsModernizationPacketReporter
             ? "joined-downstream-edge-observed"
             : handlerOwnedCallEvidenceCount > 0
                 ? "handler-owned-call-evidence-unjoined"
-                : observation.Truncated
+                : !observation.TerminalReachabilityComplete
                     ? "call-evidence-observation-incomplete"
                     : "no-handler-owned-call-evidence-retained";
         return new WebFormsModernizationTraversalObservation(
@@ -552,7 +561,7 @@ public static class WebFormsModernizationPacketReporter
             observation.DownstreamEdgeCount,
             observation.TerminalPathCount,
             observation.Truncated,
-            ["Counts describe bounded static graph observations after handler-root selection; handler-owned call evidence is limited to call-edge facts explicitly retained by the handler flow projection. These observations do not prove runtime reachability, execution, branch feasibility, successful binding, or absence."],
+            ["Counts describe bounded static graph observations after handler-root selection. Terminal reachability completeness applies only to the retained graph; handler-owned call evidence is limited to call-edge facts explicitly retained by the handler flow projection. These observations do not prove runtime reachability, execution, branch feasibility, successful binding, or runtime absence."],
             callEvidenceState,
             handlerOwnedCallEvidenceCount)
         {
@@ -569,7 +578,13 @@ public static class WebFormsModernizationPacketReporter
             FrontierRuleIds = observation.FrontierRuleIds,
             TraversedEdgeKinds = observation.TraversedEdgeKinds,
             TraversedRuleIds = observation.TraversedRuleIds,
-            DiagnosticShapesTruncated = observation.DiagnosticShapesTruncated
+            DiagnosticShapesTruncated = observation.DiagnosticShapesTruncated,
+            TerminalReachabilityComplete = observation.TerminalReachabilityComplete,
+            DistinctReachableTerminalCount = observation.DistinctReachableTerminalCount,
+            MinimumTerminalDistance = observation.MinimumTerminalDistance,
+            TerminalReachabilityLimitReasons = observation.TerminalReachabilityLimitReasons,
+            PathEnumerationTruncated = observation.PathEnumerationTruncated,
+            PathEnumerationTruncationReasons = observation.PathEnumerationTruncationReasons
         };
     }
 
@@ -1427,7 +1442,7 @@ public static class WebFormsModernizationPacketReporter
     private static string TerminalFreeGapClassification(WebFormsModernizationTraversalObservation? observation) =>
         observation?.StopState switch
         {
-            "bounded-traversal-truncated" => "BoundedTraversalTruncated",
+            "terminal-reachability-incomplete" => "BoundedTraversalTruncated",
             "observed-downstream-without-supported-terminal" => "DownstreamWithoutSupportedTerminal",
             _ => "NoBackendEvidence"
         };
@@ -1455,12 +1470,12 @@ public static class WebFormsModernizationPacketReporter
         {
             return new("handler-source-or-binding", targets, ["linked-code-behind-or-inherited-handler-declaration"]);
         }
-        if (traversal?.Truncated == true)
+        if (traversal is not null && !traversal.TerminalReachabilityComplete)
         {
             return new(
                 "traversal-bound",
                 targets,
-                traversal.TruncationReasons.Select(reason => $"increase-or-inspect-{reason}-bound").OrderBy(value => value, StringComparer.Ordinal).ToArray());
+                traversal.TerminalReachabilityLimitReasons.Select(reason => $"increase-or-inspect-{reason}-bound").OrderBy(value => value, StringComparer.Ordinal).ToArray());
         }
         if (targets.Length > 0)
         {
@@ -1843,9 +1858,15 @@ public static class WebFormsModernizationPacketReporter
             var truncationReasons = chain.TraversalObservation?.TruncationReasons.Count > 0
                 ? string.Join(", ", chain.TraversalObservation.TruncationReasons.Select(reason => $"`{reason}`"))
                 : "none retained";
+            var terminalReachabilityLimitReasons = chain.TraversalObservation?.TerminalReachabilityLimitReasons.Count > 0
+                ? string.Join(", ", chain.TraversalObservation.TerminalReachabilityLimitReasons.Select(reason => $"`{reason}`"))
+                : "none retained";
+            var pathEnumerationTruncationReasons = chain.TraversalObservation?.PathEnumerationTruncationReasons.Count > 0
+                ? string.Join(", ", chain.TraversalObservation.PathEnumerationTruncationReasons.Select(reason => $"`{reason}`"))
+                : "none retained";
             var traversal = chain.TraversalObservation is null
                 ? "traversal observation unavailable"
-                : $"traversal `{chain.TraversalObservation.StopState}` (reached nodes {chain.TraversalObservation.ReachedNodeCount}, traversed edges {chain.TraversalObservation.TraversedEdgeCount}, downstream edges {chain.TraversalObservation.DownstreamEdgeCount}, truncation reasons {truncationReasons}); call evidence `{chain.TraversalObservation.CallEvidenceState}` (handler-owned call edges {chain.TraversalObservation.HandlerOwnedCallEvidenceCount}); terminal-free shapes (leaf node kinds {MarkdownValues(chain.TraversalObservation.LeafNodeKinds)}, leaf surface kinds {MarkdownValues(chain.TraversalObservation.LeafSurfaceKinds)}, leaf rules {MarkdownValues(chain.TraversalObservation.LeafRuleIds)}, leaf tiers {MarkdownValues(chain.TraversalObservation.LeafEvidenceTiers)}, leaf reconciliation states {MarkdownValues(chain.TraversalObservation.LeafReconciliationStates)}, leaf call evidence states {MarkdownValues(chain.TraversalObservation.LeafCallEvidenceStates)}, leaf source availability states {MarkdownValues(chain.TraversalObservation.LeafSourceAvailabilityStates)}, frontier node kinds {MarkdownValues(chain.TraversalObservation.FrontierNodeKinds)}, frontier surface kinds {MarkdownValues(chain.TraversalObservation.FrontierSurfaceKinds)}, frontier rules {MarkdownValues(chain.TraversalObservation.FrontierRuleIds)}, traversed edge kinds {MarkdownValues(chain.TraversalObservation.TraversedEdgeKinds)}, traversed rules {MarkdownValues(chain.TraversalObservation.TraversedRuleIds)}, shape sets truncated `{chain.TraversalObservation.DiagnosticShapesTruncated}`)";
+                : $"traversal `{chain.TraversalObservation.StopState}` (reached nodes {chain.TraversalObservation.ReachedNodeCount}, traversed edges {chain.TraversalObservation.TraversedEdgeCount}, downstream edges {chain.TraversalObservation.DownstreamEdgeCount}, compatibility truncation reasons {truncationReasons}); terminal inventory (complete `{chain.TraversalObservation.TerminalReachabilityComplete}`, distinct supported terminals {chain.TraversalObservation.DistinctReachableTerminalCount}, minimum distance {chain.TraversalObservation.MinimumTerminalDistance?.ToString() ?? "unavailable"}, limit reasons {terminalReachabilityLimitReasons}); path detail (truncated `{chain.TraversalObservation.PathEnumerationTruncated}`, reasons {pathEnumerationTruncationReasons}); call evidence `{chain.TraversalObservation.CallEvidenceState}` (handler-owned call edges {chain.TraversalObservation.HandlerOwnedCallEvidenceCount}); terminal-free shapes (leaf node kinds {MarkdownValues(chain.TraversalObservation.LeafNodeKinds)}, leaf surface kinds {MarkdownValues(chain.TraversalObservation.LeafSurfaceKinds)}, leaf rules {MarkdownValues(chain.TraversalObservation.LeafRuleIds)}, leaf tiers {MarkdownValues(chain.TraversalObservation.LeafEvidenceTiers)}, leaf reconciliation states {MarkdownValues(chain.TraversalObservation.LeafReconciliationStates)}, leaf call evidence states {MarkdownValues(chain.TraversalObservation.LeafCallEvidenceStates)}, leaf source availability states {MarkdownValues(chain.TraversalObservation.LeafSourceAvailabilityStates)}, frontier node kinds {MarkdownValues(chain.TraversalObservation.FrontierNodeKinds)}, frontier surface kinds {MarkdownValues(chain.TraversalObservation.FrontierSurfaceKinds)}, frontier rules {MarkdownValues(chain.TraversalObservation.FrontierRuleIds)}, traversed edge kinds {MarkdownValues(chain.TraversalObservation.TraversedEdgeKinds)}, traversed rules {MarkdownValues(chain.TraversalObservation.TraversedRuleIds)}, shape sets truncated `{chain.TraversalObservation.DiagnosticShapesTruncated}`)";
             b.AppendLine($"- `{chain.ChainId}` — `{chain.EventSourceId}` -> `{chain.HandlerId ?? "handler-unavailable"}` -> `{chain.TerminalKind ?? "terminal-unavailable"}`; classification `{chain.Classification}`; {traversal}; next evidence `{chain.NextEvidenceKind}` (targets {MarkdownValues(chain.UnresolvedCallTargets)}, inputs {MarkdownValues(chain.NextEvidenceInputs)}); supporting facts {string.Join(", ", chain.SupportingFactIds.Select(id => $"`{id}`"))}.");
         }
         b.AppendLine().AppendLine("## Downstream boundaries").AppendLine();
@@ -1991,7 +2012,7 @@ public static class WebFormsModernizationPacketReporter
         if (string.IsNullOrWhiteSpace(options.OutputDirectory)) throw new ArgumentException("webforms-modernization requires --out <directory>.");
         if (!File.Exists(options.IndexPath)) throw new FileNotFoundException("WebFormsModernizationIndexUnavailable");
         if (options.SurfaceListPath is not null && !File.Exists(options.SurfaceListPath)) throw new FileNotFoundException("WebFormsSurfaceListUnavailable");
-        if (options.MaxSurfaces <= 0 || options.MaxEventChains <= 0 || options.MaxCandidates <= 0 || options.MaxGaps <= 0 || options.MaxDepth <= 0 || options.MaxPaths <= 0 || options.MaxBoundaries <= 0 || options.MaxIdentityState <= 0 || options.MaxBatchDataMovement <= 0 || options.MaxInputFacts <= 0 || options.MaxInputEdges <= 0 || options.MaxInputTextBytes <= 0 || options.MaxTraversalWork <= 0)
+        if (options.MaxSurfaces <= 0 || options.MaxEventChains <= 0 || options.MaxCandidates <= 0 || options.MaxGaps <= 0 || options.MaxDepth <= 0 || options.MaxPaths <= 0 || options.MaxBoundaries <= 0 || options.MaxIdentityState <= 0 || options.MaxBatchDataMovement <= 0 || options.MaxInputFacts <= 0 || options.MaxInputEdges <= 0 || options.MaxInputTextBytes <= 0 || options.MaxTraversalWork <= 0 || options.MaxFrontier <= 0)
             throw new ArgumentOutOfRangeException(nameof(options), "Web Forms modernization bounds must be positive.");
     }
 

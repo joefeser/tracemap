@@ -51,9 +51,15 @@ $diagnosticRoot = Join-Path $root 'diagnostics'
 [IO.Directory]::CreateDirectory($diagnosticRoot) | Out-Null
 $runName = 'targeted-depth-10-{0}-{1}' -f ($requestedPageIds -join '-'), ([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ'))
 $outputDirectory = Join-Path $diagnosticRoot $runName
+$baselineOutputDirectory = Join-Path $outputDirectory 'baseline-depth-8'
 $temporaryList = Join-Path ([IO.Path]::GetTempPath()) "tracemap-targeted-depth-$([Guid]::NewGuid().ToString('N')).txt"
 try {
     [IO.File]::WriteAllLines($temporaryList, @($selectedPages.filePath), [Text.UTF8Encoding]::new($false))
+    & (Join-Path $PSScriptRoot 'Invoke-FocusedWebFormsPageListReport.ps1') `
+        -IndexPath $indexPath `
+        -PageListPath $temporaryList `
+        -OutputDirectory $baselineOutputDirectory `
+        -MaxDepth 8
     & (Join-Path $PSScriptRoot 'Invoke-FocusedWebFormsPageListReport.ps1') `
         -IndexPath $indexPath `
         -PageListPath $temporaryList `
@@ -84,5 +90,6 @@ Write-Output "boundaryRecords=$(@($packet.downstreamBoundaries).Count)"
 Write-Output "depthGaps=$depthGapCount"
 Write-Output "otherTruncationGaps=$otherTruncationCount"
 Write-Output "packetTruncated=$([bool]$packet.summary.truncated)"
+Write-Output "baselinePacket=$(Join-Path $baselineOutputDirectory 'webforms-modernization.json')"
 Write-Output "diagnosticPacket=$packetPath"
 Write-Output 'nonClaim=deeper-bounded-static-traversal-does-not-prove-runtime-execution-completeness-or-distinct-operations'

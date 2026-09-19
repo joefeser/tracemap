@@ -38,12 +38,37 @@ function Get-DepthChainCount([object[]]$Chains) {
     return @($Chains | Where-Object {
         $observation = Property-Value $_ 'traversalObservation'
         $reasons = if ($null -ne $observation) {
-            Values (Property-Value $observation 'truncationReasons')
+            $pathReasons = Property-Value $observation 'pathEnumerationTruncationReasons'
+            if ($null -ne $pathReasons) { Values $pathReasons } else { Values (Property-Value $observation 'truncationReasons') }
         } else {
             Values (Property-Value $_ 'traversalTruncationReasons')
         }
         $reasons -contains 'depth'
     }).Count
+}
+function Get-ReachabilitySummary([object[]]$Chains) {
+    $seenHandlers = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    $observations = @($Chains | ForEach-Object {
+        $observation = Property-Value $_ 'traversalObservation'
+        if ($null -eq $observation) { return }
+        $handlerKey = [string](Property-Value $_ 'handlerFactId')
+        if ([string]::IsNullOrWhiteSpace($handlerKey)) { $handlerKey = [string](Property-Value $_ 'chainId') }
+        if ([string]::IsNullOrWhiteSpace($handlerKey)) { $handlerKey = "anonymous-$($seenHandlers.Count)" }
+        if ($seenHandlers.Add($handlerKey)) { $observation }
+    })
+    if ($observations.Count -eq 0) {
+        return [pscustomobject]@{ Available = $false; Complete = $null; TerminalCount = $null; MinimumDistance = $null; LimitReasons = @(); PathTruncated = $null; PathReasons = @() }
+    }
+    $minimums = @($observations | ForEach-Object { Property-Value $_ 'minimumTerminalDistance' } | Where-Object { $null -ne $_ })
+    return [pscustomobject]@{
+        Available = $true
+        Complete = @($observations | Where-Object { !(Property-Value $_ 'terminalReachabilityComplete') }).Count -eq 0
+        TerminalCount = [int](($observations | ForEach-Object { [int](Property-Value $_ 'distinctReachableTerminalCount') } | Measure-Object -Sum).Sum)
+        MinimumDistance = if ($minimums.Count -gt 0) { [int](($minimums | Measure-Object -Minimum).Minimum) } else { $null }
+        LimitReasons = @($observations | ForEach-Object { Values (Property-Value $_ 'terminalReachabilityLimitReasons') } | Select-Object -Unique | Sort-Object)
+        PathTruncated = @($observations | Where-Object { Property-Value $_ 'pathEnumerationTruncated' }).Count -gt 0
+        PathReasons = @($observations | ForEach-Object { Values (Property-Value $_ 'pathEnumerationTruncationReasons') } | Select-Object -Unique | Sort-Object)
+    }
 }
 
 $requestedPageIds = @($PageId | ForEach-Object { $_.Trim() } | Select-Object -Unique)
@@ -73,6 +98,22 @@ if ($diagnosticPacket.schemaVersion -ne 'webforms-modernization-packet.v1' -or
     @($diagnosticPacket.surfaceSelection.items | Where-Object { $_.status -ne 'matched' }).Count -ne 0) {
     throw 'WEBFORMS_TARGETED_DEPTH_COMPARE_PACKET_INVALID'
 }
+$baselinePacketPath = Join-Path $diagnosticRoot 'baseline-depth-8/webforms-modernization.json'
+$baselinePacket = if (Test-Path -LiteralPath $baselinePacketPath -PathType Leaf) {
+    Read-FocusedWebFormsBoundedJson $baselinePacketPath 128MB 'WEBFORMS_TARGETED_DEPTH_COMPARE_BASELINE_PACKET_UNAVAILABLE'
+} else { $null }
+if ($null -ne $baselinePacket -and ($baselinePacket.schemaVersion -ne 'webforms-modernization-packet.v1' -or
+    $baselinePacket.surfaceSelection.items.Count -ne $requestedPageIds.Count -or
+    @($baselinePacket.surfaceSelection.items | Where-Object { $_.status -ne 'matched' }).Count -ne 0)) {
+    throw 'WEBFORMS_TARGETED_DEPTH_COMPARE_BASELINE_PACKET_INVALID'
+}
+if ($null -ne $baselinePacket) {
+    $baselinePacketSources = @($baselinePacket.sources | ForEach-Object { "$($_.scanId)|$($_.commitSha)" } | Sort-Object)
+    $diagnosticPacketSources = @($diagnosticPacket.sources | ForEach-Object { "$($_.scanId)|$($_.commitSha)" } | Sort-Object)
+    if (($baselinePacketSources -join "`n") -cne ($diagnosticPacketSources -join "`n")) {
+        throw 'WEBFORMS_TARGETED_DEPTH_COMPARE_PROVENANCE_MISMATCH'
+    }
+}
 
 $aggregateBaselineKeys = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
 $aggregateDiagnosticKeys = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
@@ -93,8 +134,15 @@ for ($index = 0; $index -lt $requestedPageIds.Count; $index++) {
     $surfaceIds = @(Values $selection.surfaceIds)
     $diagnosticChains = @($diagnosticPacket.eventChains | Where-Object { $_.surfaceId -in $surfaceIds })
     $diagnosticBoundaries = @($diagnosticPacket.downstreamBoundaries | Where-Object { $_.surfaceId -in $surfaceIds })
-    $baselineChains = @(Values $baseline.eventChains)
-    $baselineBoundaries = @(Values $baseline.downstreamBoundaries)
+    if ($null -ne $baselinePacket) {
+        $baselineSelection = $baselinePacket.surfaceSelection.items[$index]
+        $baselineSurfaceIds = @(Values $baselineSelection.surfaceIds)
+        $baselineChains = @($baselinePacket.eventChains | Where-Object { $_.surfaceId -in $baselineSurfaceIds })
+        $baselineBoundaries = @($baselinePacket.downstreamBoundaries | Where-Object { $_.surfaceId -in $baselineSurfaceIds })
+    } else {
+        $baselineChains = @(Values $baseline.eventChains)
+        $baselineBoundaries = @(Values $baseline.downstreamBoundaries)
+    }
     $baselineKeys = Get-TerminalKeys $baselineBoundaries
     $diagnosticKeys = Get-TerminalKeys $diagnosticBoundaries
     foreach ($key in $baselineKeys) { [void]$aggregateBaselineKeys.Add($key) }
@@ -106,6 +154,9 @@ for ($index = 0; $index -lt $requestedPageIds.Count; $index++) {
     $added = @($diagnosticKeys | Where-Object { !$baselineKeys.Contains($_) }).Count
     $lost = @($baselineKeys | Where-Object { !$diagnosticKeys.Contains($_) }).Count
     Write-Output "page=$pageId|depth8Chains=$($baselineChains.Count)|depth10Chains=$($diagnosticChains.Count)|depth8DepthTruncated=$baselinePageDepth|depth10DepthTruncated=$diagnosticPageDepth|depth8TerminalEvidence=$($baselineKeys.Count)|depth10TerminalEvidence=$($diagnosticKeys.Count)|addedTerminalEvidence=$added|lostTerminalEvidence=$lost"
+    $baselineReachability = Get-ReachabilitySummary $baselineChains
+    $diagnosticReachability = Get-ReachabilitySummary $diagnosticChains
+    Write-Output "reachability=$pageId|depth8Available=$($baselineReachability.Available)|depth8Complete=$($baselineReachability.Complete)|depth8DistinctTerminals=$($baselineReachability.TerminalCount)|depth8MinimumDistance=$($baselineReachability.MinimumDistance)|depth8LimitReasons=$($baselineReachability.LimitReasons -join ',')|depth8PathDetailTruncated=$($baselineReachability.PathTruncated)|depth8PathDetailReasons=$($baselineReachability.PathReasons -join ',')|depth10Complete=$($diagnosticReachability.Complete)|depth10DistinctTerminals=$($diagnosticReachability.TerminalCount)|depth10MinimumDistance=$($diagnosticReachability.MinimumDistance)|depth10LimitReasons=$($diagnosticReachability.LimitReasons -join ',')|depth10PathDetailTruncated=$($diagnosticReachability.PathTruncated)|depth10PathDetailReasons=$($diagnosticReachability.PathReasons -join ',')"
 }
 
 $aggregateAdded = @($aggregateDiagnosticKeys | Where-Object { !$aggregateBaselineKeys.Contains($_) }).Count
