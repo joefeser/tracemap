@@ -51,6 +51,15 @@ try {
     try { & (Join-Path $scripts 'Compare-FocusedWebFormsDepth.ps1') }
     catch { $disabled = $_.Exception.Message -like '*disabled*' }
     if (-not $disabled) { throw 'Automatic comparison was not disabled.' }
+
+    $targetedDiagnosticScript = [IO.File]::ReadAllText((Join-Path $scripts 'Invoke-FocusedWebFormsTargetedDepthDiagnostic.ps1'))
+    $diagnosticOutputMarker = '-OutputDirectory $outputDirectory'
+    $baselineOutputMarker = '-OutputDirectory $baselineOutputDirectory'
+    $diagnosticOutputIndex = $targetedDiagnosticScript.IndexOf($diagnosticOutputMarker, [StringComparison]::Ordinal)
+    $baselineOutputIndex = $targetedDiagnosticScript.IndexOf($baselineOutputMarker, [StringComparison]::Ordinal)
+    if ($diagnosticOutputIndex -lt 0 -or $baselineOutputIndex -lt 0 -or $diagnosticOutputIndex -gt $baselineOutputIndex) {
+        throw 'Depth-10 output must be generated before its depth-8 child output.'
+    }
     Write-Host 'PASS summaries and unsafe-depth launch rejection'
 }
 finally {

@@ -58,14 +58,14 @@ try {
     & (Join-Path $PSScriptRoot 'Invoke-FocusedWebFormsPageListReport.ps1') `
         -IndexPath $indexPath `
         -PageListPath $temporaryList `
-        -OutputDirectory $baselineOutputDirectory `
-        -MaxDepth 8
-    & (Join-Path $PSScriptRoot 'Invoke-FocusedWebFormsPageListReport.ps1') `
-        -IndexPath $indexPath `
-        -PageListPath $temporaryList `
         -OutputDirectory $outputDirectory `
         -MaxDepth 10 `
         -TargetedDepthDiagnostic
+    & (Join-Path $PSScriptRoot 'Invoke-FocusedWebFormsPageListReport.ps1') `
+        -IndexPath $indexPath `
+        -PageListPath $temporaryList `
+        -OutputDirectory $baselineOutputDirectory `
+        -MaxDepth 8
 }
 finally {
     Remove-Item -LiteralPath $temporaryList -Force -ErrorAction SilentlyContinue
