@@ -137,6 +137,7 @@ paths-report.json
 11. WHEN reduced coverage exists THEN path absence SHALL be labeled coverage-relative and SHALL NOT be described as proof that no dependency exists.
 12. WHEN a path crosses languages or source indexes THEN every crossing SHALL include source labels, scan IDs, commit SHAs, rule IDs, evidence tiers, and file spans.
 13. WHEN path search reaches a terminal surface THEN the path SHALL stop unless the user opts into deeper expansion in a future command.
+14. WHEN ordinary path enumeration reaches `maxDepth` before finding a terminal for a root THEN TraceMap MAY use the remaining traversal-work and frontier budgets to retain one deterministic shortest terminal witness beyond `maxDepth`; it SHALL continue reporting the depth-truncated branches as partial and SHALL NOT treat static reachability as runtime execution.
 
 ### Requirement 5: Path Classifications
 

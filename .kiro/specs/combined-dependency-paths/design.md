@@ -373,6 +373,8 @@ Traversal:
 - Record cycle/depth/path/frontier truncation gaps.
 - Stop at terminal surfaces unless future options allow expansion.
 - Use ordinary BFS by path depth. Within each frontier expansion, sort outgoing edges by traversal rank, then target display name, file path, line, and edge ID. This down-ranks broad relationship edges without changing BFS into a weighted search.
+- When ordinary enumeration reaches `maxDepth` without finding a terminal for a root, use the remaining shared work and frontier budgets for a cycle-safe breadth-first reachability prewalk. Retain at most one deterministic shortest terminal witness for that root, even when the witness is longer than `maxDepth`. Keep the original depth gap because other branches remain partial, and label the witness so consumers do not mistake static reachability for runtime execution.
+- The terminal prewalk tracks whether interface/override relationship or candidate edges have been used, preserving the existing prohibition against crossing both dispatch directions in one path. It deduplicates `(node, dispatch-mode)` states rather than materializing an exponentially duplicated tree.
 
 Traversal edge rank:
 

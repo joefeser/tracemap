@@ -2775,7 +2775,9 @@ public static class TraceMapCommand
                                          Maximum batch/data-movement rows (default 1000).
               --max-candidates <n>       Maximum structural candidates (default 1000).
               --max-gaps <n>             Maximum gap rows (default 1000).
-              --max-depth <n>            Legacy static-flow traversal depth (default 8).
+              --max-depth <n>            Ordinary legacy path-enumeration depth (default 8).
+                                         A bounded shortest-terminal prewalk may retain one
+                                         longer witness while other branches remain partial.
               --max-paths <n>            Legacy static-flow path limit (default 1000).
               --max-traversal-work <n>   Shared legacy traversal work ceiling (default 100000).
               --max-input-facts <n>      Retained snapshot/graph fact rows (default 250000).
@@ -2829,7 +2831,9 @@ public static class TraceMapCommand
               --view legacy-flows         Use legacy static-flow wording and schema metadata.
 
             Bounds:
-              --max-depth <n>            Default: 8.
+              --max-depth <n>            Ordinary path-enumeration depth. Default: 8.
+                                         A bounded shortest-terminal prewalk may retain one
+                                         longer witness while other branches remain partial.
               --max-paths <n>            Default: 100.
               --max-frontier <n>         Default: 10000.
 

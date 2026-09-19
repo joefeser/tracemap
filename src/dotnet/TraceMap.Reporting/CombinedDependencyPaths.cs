@@ -260,7 +260,7 @@ public static partial class CombinedDependencyPathReporter
     private const int MaxTraversalDiagnosticShapes = 32;
     private const string Version = "1.0";
     private const string Algorithm = "bounded-bfs";
-    private const string AlgorithmVersion = "1.0";
+    private const string AlgorithmVersion = "1.1";
     private const int MarkdownPathLimit = 100;
     private const int MarkdownInventoryLimit = 200;
     private const string EndpointMatchRuleId = "combined.paths.endpoint-match.v1";
@@ -4047,6 +4047,81 @@ public static partial class CombinedDependencyPathReporter
             gaps.Add(TruncatedGap("path", queue.First!.Value.NodeIds[0], graph));
         }
 
+        // Depth bounds ordinary evidence-path enumeration, but it should not
+        // decide whether a supported terminal is discoverable. For roots that
+        // reached the depth frontier without a terminal, perform one bounded,
+        // cycle-safe reachability prewalk and retain a deterministic shortest
+        // terminal witness. Other truncated branches remain explicitly partial.
+        if (!workExhausted && paths.Count < maxPaths && terminalNodeIds.Count > 0)
+        {
+            foreach (var start in starts
+                .OrderBy(node => node.SourceLabel, StringComparer.Ordinal)
+                .ThenBy(node => node.DisplayName, StringComparer.Ordinal)
+                .ThenBy(node => node.NodeId, StringComparer.Ordinal))
+            {
+                var accumulator = traversal[start.NodeId];
+                if (accumulator.TerminalPathCount > 0
+                    || !accumulator.TruncationReasons.Contains("depth")
+                    || paths.Count >= maxPaths)
+                    continue;
+
+                var remainingWork = maxTraversalWork - work;
+                if (remainingWork <= 0)
+                {
+                    ExhaustWork(start.NodeId);
+                    break;
+                }
+
+                var witness = FindShortestTerminalWitness(
+                    graph,
+                    start.NodeId,
+                    terminalNodeIds,
+                    maxFrontier,
+                    remainingWork);
+                work += witness.Work;
+                if (witness.FrontierExceeded)
+                {
+                    truncated = true;
+                    accumulator.MarkTruncated("frontier");
+                    gaps.Add(TruncatedGap("frontier", witness.FrontierNodeId ?? start.NodeId, graph));
+                }
+                if (witness.WorkExhausted)
+                {
+                    ExhaustWork(start.NodeId);
+                    break;
+                }
+                if (witness.State is null) continue;
+
+                foreach (var nodeId in witness.State.NodeIds.Skip(1))
+                {
+                    accumulator.ReachedNodeIds.Add(nodeId);
+                    reachedNodeIds.Add(nodeId);
+                }
+                foreach (var edgeId in witness.State.EdgeIds)
+                {
+                    var edge = graph.EdgesById[edgeId];
+                    accumulator.TraversedEdgeIds.Add(edgeId);
+                    if (edge.EdgeKind == "legacy-root-selection") continue;
+                    accumulator.DownstreamEdgeIds.Add(edgeId);
+                    accumulator.TraversedEdgeKinds.Add(edge.EdgeKind);
+                    accumulator.TraversedRuleIds.Add(edge.RuleId);
+                }
+                accumulator.TerminalPathCount++;
+                sequence++;
+                var path = ToPath($"path:{sequence:0000}", graph, witness.State);
+                paths.Add(path with
+                {
+                    Notes =
+                    [
+                        .. path.Notes,
+                        new CombinedPathNote(
+                            "TerminalReachabilityPrewalk",
+                            $"A cycle-safe bounded reachability prewalk found this shortest terminal witness after ordinary path enumeration reached its configured depth of {maxDepth}. Other branches can remain partial, and static reachability does not prove runtime execution.")
+                    ]
+                });
+            }
+        }
+
         return new SearchResult(
             paths,
             gaps,
@@ -4077,6 +4152,90 @@ public static partial class CombinedDependencyPathReporter
                     DiagnosticShapesTruncated = item.Value.DiagnosticShapeValueCount > MaxTraversalDiagnosticShapes
                 },
                 StringComparer.Ordinal));
+    }
+
+    private static TerminalWitnessResult FindShortestTerminalWitness(
+        EvidenceGraph graph,
+        string rootNodeId,
+        IReadOnlySet<string> terminalNodeIds,
+        int maxFrontier,
+        int maxWork)
+    {
+        var root = new TerminalWitnessKey(rootNodeId, DispatchTraversalMode.None);
+        var queue = new Queue<TerminalWitnessKey>();
+        var predecessors = new Dictionary<TerminalWitnessKey, TerminalWitnessPredecessor?>
+        {
+            [root] = null
+        };
+        queue.Enqueue(root);
+        var work = 0;
+
+        while (queue.Count > 0)
+        {
+            if (queue.Count > maxFrontier)
+                return new TerminalWitnessResult(null, work, false, true, queue.Peek().NodeId);
+            if (work >= maxWork)
+                return new TerminalWitnessResult(null, work, true, false, queue.Peek().NodeId);
+
+            var current = queue.Dequeue();
+            work++;
+            if (!string.Equals(current.NodeId, rootNodeId, StringComparison.Ordinal)
+                && terminalNodeIds.Contains(current.NodeId))
+            {
+                var nodes = new List<string>();
+                var edges = new List<string>();
+                var cursor = current;
+                while (true)
+                {
+                    nodes.Add(cursor.NodeId);
+                    var predecessor = predecessors[cursor];
+                    if (predecessor is null) break;
+                    edges.Add(predecessor.EdgeId);
+                    cursor = predecessor.Previous;
+                }
+                nodes.Reverse();
+                edges.Reverse();
+                return new TerminalWitnessResult(
+                    new PathState(rootNodeId, nodes, edges),
+                    work,
+                    false,
+                    false,
+                    null);
+            }
+
+            if (!graph.Outgoing.TryGetValue(current.NodeId, out var outgoing)) continue;
+            foreach (var edge in outgoing)
+            {
+                if (work >= maxWork)
+                    return new TerminalWitnessResult(null, work, true, false, current.NodeId);
+                work++;
+                if (!TryAdvanceDispatchMode(current.DispatchMode, edge.EdgeKind, out var nextMode)) continue;
+                var next = new TerminalWitnessKey(edge.ToNodeId, nextMode);
+                if (!predecessors.TryAdd(next, new TerminalWitnessPredecessor(current, edge.EdgeId))) continue;
+                queue.Enqueue(next);
+            }
+        }
+
+        return new TerminalWitnessResult(null, work, false, false, null);
+    }
+
+    private static bool TryAdvanceDispatchMode(
+        DispatchTraversalMode current,
+        string edgeKind,
+        out DispatchTraversalMode next)
+    {
+        next = current;
+        if (edgeKind is "implements" or "overrides")
+        {
+            if (current == DispatchTraversalMode.Candidate) return false;
+            next = DispatchTraversalMode.Relationship;
+        }
+        else if (edgeKind is "interface-candidate" or "override-candidate")
+        {
+            if (current == DispatchTraversalMode.Relationship) return false;
+            next = DispatchTraversalMode.Candidate;
+        }
+        return true;
     }
 
     private static bool IsDispatchCandidateCrossHop(EvidenceGraph graph, PathState state, GraphEdge edge)
@@ -6022,6 +6181,28 @@ public static partial class CombinedDependencyPathReporter
         IReadOnlyList<string> EdgeIds,
         int NextOutgoingIndex = 0,
         bool TraversedOutgoing = false);
+
+    private enum DispatchTraversalMode
+    {
+        None,
+        Relationship,
+        Candidate
+    }
+
+    private sealed record TerminalWitnessKey(
+        string NodeId,
+        DispatchTraversalMode DispatchMode);
+
+    private sealed record TerminalWitnessPredecessor(
+        TerminalWitnessKey Previous,
+        string EdgeId);
+
+    private sealed record TerminalWitnessResult(
+        PathState? State,
+        int Work,
+        bool WorkExhausted,
+        bool FrontierExceeded,
+        string? FrontierNodeId);
 
     private sealed class TraversalAccumulator
     {
