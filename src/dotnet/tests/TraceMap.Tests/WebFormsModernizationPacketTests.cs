@@ -1745,7 +1745,8 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Contains(bounded.Packet.Summary.TruncationReasons,
             reason => reason.StartsWith("packet-gap:TruncatedByLimit:depth", StringComparison.Ordinal));
         Assert.Contains(bounded.Packet.Gaps, gap => gap.Classification == "TruncatedByLimit" && gap.TruncationReason == "depth");
-        Assert.Contains(bounded.Packet.Gaps, gap => gap.Classification == "BoundedTraversalTruncated");
+        Assert.DoesNotContain(bounded.Packet.Gaps, gap => gap.Classification == "BoundedTraversalTruncated");
+        Assert.Equal("sql-query", Assert.Single(bounded.Packet.EventChains).TerminalKind);
         Assert.Contains(bounded.Packet.EventChains, chain => chain.TraversalObservation?.TruncationReasons.Contains("depth", StringComparer.Ordinal) == true);
         Assert.All(bounded.Packet.EventChains.Where(chain => chain.TraversalObservation?.Truncated == true),
             chain => Assert.NotEmpty(chain.TraversalObservation!.TruncationReasons));

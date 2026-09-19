@@ -156,6 +156,12 @@ The ordinary packet remains fixed at depth 8. When one or two receipted pages
 retain depth truncation, run the guarded depth-10 diagnostic without changing
 the production packet:
 
+Depth bounds ordinary path enumeration. If that enumeration reaches the depth
+frontier before finding a terminal for a handler, TraceMap uses the remaining
+work/frontier budget to retain one deterministic shortest terminal witness.
+The packet still reports depth truncation for other unenumerated branches, and
+the witness remains static evidence rather than proof of runtime execution.
+
 ```powershell
 .\scripts\Invoke-FocusedWebFormsTargetedDepthDiagnostic.ps1 `
   -ReviewRoot $MergedReviewRoot `
