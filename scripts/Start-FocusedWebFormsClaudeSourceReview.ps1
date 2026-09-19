@@ -103,8 +103,14 @@ try {
     Write-Output 'sourceAccess=selected-files-explicitly-granted'
     Write-Output 'permissionMode=plan'
     Write-Output 'promptTransport=stdin'
-    $prompt | & $launcher @arguments | Tee-Object -FilePath $assessmentPath
-    if ($LASTEXITCODE -ne 0) { throw "WEBFORMS_CLAUDE_CLI_FAILED;exitCode=$LASTEXITCODE" }
+    $claudeExitCode = 0
+    Invoke-FocusedWebFormsClaudePrint `
+        -Launcher $launcher `
+        -Arguments $arguments `
+        -Prompt $prompt `
+        -OutputPath $assessmentPath `
+        -ExitCode ([ref]$claudeExitCode)
+    if ($claudeExitCode -ne 0) { throw "WEBFORMS_CLAUDE_CLI_FAILED;exitCode=$claudeExitCode" }
     if ((Get-Item -LiteralPath $assessmentPath).Length -le 0) { throw 'WEBFORMS_CLAUDE_ASSESSMENT_EMPTY' }
     Write-Output 'claudeAssessment=agent-reviews/claude-selected-source-review.md'
 }
