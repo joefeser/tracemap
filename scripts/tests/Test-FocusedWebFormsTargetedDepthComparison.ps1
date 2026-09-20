@@ -115,12 +115,13 @@ try {
 
     $output = @(& $subject -ReviewRoot $temp -TraceMapRoot $repo)
     foreach ($expected in @(
-        'page=page-002|depth8Chains=2|depth10Chains=2|depth8DepthTruncated=1|depth10DepthTruncated=0|depth8TerminalEvidence=1|depth10TerminalEvidence=2|addedTerminalEvidence=1|lostTerminalEvidence=0',
-        'page=page-003|depth8Chains=1|depth10Chains=1|depth8DepthTruncated=1|depth10DepthTruncated=1|depth8TerminalEvidence=0|depth10TerminalEvidence=0|addedTerminalEvidence=0|lostTerminalEvidence=0',
+        'page=page-002|depth8Chains=2|depth10Chains=2|depth8DepthTruncated=1|depth10DepthTruncated=0|depth8RenderedBoundaryTuples=1|depth10RenderedBoundaryTuples=2|addedRenderedBoundaryTuples=1|lostRenderedBoundaryTuples=0',
+        'page=page-003|depth8Chains=1|depth10Chains=1|depth8DepthTruncated=1|depth10DepthTruncated=1|depth8RenderedBoundaryTuples=0|depth10RenderedBoundaryTuples=0|addedRenderedBoundaryTuples=0|lostRenderedBoundaryTuples=0',
         'webformsTargetedDepthComparison=completed',
         'depth8DepthTruncated=2',
         'depth10DepthTruncated=1',
-        'terminalDelta=added:1|lost:0')) {
+        'renderedBoundaryTupleBasis=boundaryKind+boundaryTargetId+terminalEvidenceId;path-detail-output-not-terminal-inventory',
+        'renderedBoundaryTupleDelta=added:1|lost:0')) {
         if ($expected -notin $output) { throw "Targeted comparison omitted: $expected" }
     }
     foreach ($expected in @(
