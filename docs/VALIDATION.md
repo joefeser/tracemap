@@ -2306,6 +2306,65 @@ build behavior, the historical `dotnetperf` corpus, and C++/CLI remain explicit
 Windows lanes. A macOS pass must report those checks as not run rather than
 implying coverage.
 
+### Compiled .NET evidence foundation
+
+The first compiled-evidence slice accepts only assemblies named explicitly by
+`--compiled-input` and dependencies named explicitly by
+`--compiled-dependency`. Both options are repeatable. It does not discover or
+load dependencies from the host, NuGet cache, runtime directory, application
+base, or `PATH`. Run the portable fixture matrix with:
+
+```bash
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --no-restore --filter FullyQualifiedName~ManagedMetadataExtractorTests
+dotnet test src/dotnet/TraceMap.sln --no-restore
+```
+
+The focused matrix builds public C#, VB.NET, and F# fixtures and checks exact
+assembly, module, type, field, method, constructor, property, and event
+identities. It also covers global and colliding namespaces, nested and generic
+types, overloads, generated members, full CLR signatures, deterministic repeat
+output, metadata-location round trips, missing/malformed/native/over-budget
+inputs, reader disagreement, unbound/stale/mismatched provenance, duplicate
+assemblies, and zero/multiple declared dependency candidates. The
+`local-distribution-validation.yml` macOS and Windows jobs run this same focused
+matrix; Windows-specific PDB, legacy framework, Web Forms build, historical
+corpus, and C++/CLI lanes remain deferred.
+
+A representative local scan is:
+
+```bash
+dotnet run --project src/dotnet/TraceMap.Cli -- scan \
+  --repo samples/modern-sample \
+  --out /tmp/tracemap-compiled-scan \
+  --compiled-input samples/compiled-dotnet-evidence/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll
+python3 scripts/validate-adapter-artifacts.py /tmp/tracemap-compiled-scan
+```
+
+Inspect all five required artifacts. `scan-manifest.json` must contain
+`compiledInputProvenance` with expected inputs, effective limits, ordered
+outcomes, generator and bounded-input SHA-256 values, coverage, and
+`artifactVisibility=local-only`. Compiled facts must use safe locators,
+`evidenceLocationKind=managed-metadata-v1`, module-local metadata tokens, and a
+`1..1` non-source sentinel with no source snippet hash. Adding compiled inputs
+must not change normalized source facts.
+
+Optional receipts use `compiled-input-binding-set.v1` with a `bindings` array.
+Each `compiled-input-binding.v1` entry names the exact `safeLocator`, artifact
+SHA-256, optional exact assembly identity, binary source repository, 40-hex
+source commit, and binary build identity. A receipt is bound only when the
+artifact and optional assembly identity match and all source/build fields are
+complete; otherwise the lane emits an explicit incomplete, stale, mismatch, or
+unbound gap. Receipt paths and raw repository names are not emitted.
+
+The admission budget defaults to 32 artifacts, 64 MiB per file, 50,000 types,
+250,000 members, 4,096 characters per retained text value, and 500,000 total
+work units. Override these only with the positive `--compiled-max-artifacts`,
+`--compiled-max-file-bytes`, `--compiled-max-types`,
+`--compiled-max-members`, `--compiled-max-text`, and `--compiled-max-work`
+options. A limit failure is partial coverage, never a clean or complete result.
+
 ### Independent source canonical-identity matrix
 
 The compiled-evidence matrix does not replace the existing source-side adapter
