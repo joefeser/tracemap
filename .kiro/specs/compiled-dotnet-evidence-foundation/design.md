@@ -78,11 +78,16 @@ contract, not an implied substitution into `CodeFact.Repo` or
 
 The local/private bounded-input-set digest commits to the admission policy,
 expected-input declarations, effective size/count/work limits, deterministic
-ordered candidate/admission outcomes, admitted safe locators, roles, raw file
-digests, and each provenance-binding-input digest. The provenance-binding input
-includes every receipt field that can change source association or freshness
-classification, such as the safe source identity, source commit, build
-identity, declared assembly mapping, and receipt schema/version.
+ordered candidate/admission outcomes, canonical pre-digest admission records,
+admitted safe locators, roles, raw file digests, and each
+provenance-binding-input digest. The canonical pre-digest payload excludes the
+bounded-input-set digest itself and every downstream value derived from it,
+including `scanId`, fact IDs, and artifact IDs. After hashing that payload, the
+generator attaches the result to the manifest and admission records, then
+derives `scanId` and fact IDs. The provenance-binding input includes every
+receipt field that can change source association or freshness classification,
+such as the safe source identity, source commit, build identity, declared
+assembly mapping, and receipt schema/version.
 
 A shareable projection must omit the raw file digest for an access-controlled
 or private assembly. It first applies the documented privacy projection to the
@@ -119,12 +124,16 @@ Keep these nodes distinct:
 5. IL method body and operands (later slice); and
 6. rewritten assembly/member/body (later slice).
 
-The normalized metadata key includes assembly/module identity, declaring type,
-member kind, member name, generic arity, calling convention, full return and
+The normalized metadata key includes assembly/module identity, the exact
+metadata namespace (including the empty/global namespace), the fully
+namespace-qualified nested declaring-type chain, member kind, member name,
+generic arity, calling convention, full namespace-qualified return and
 parameter signatures, field type, event type, and readable custom modifiers on
-each applicable type position. Metadata tokens are locations within one module,
-not portable global identities. MVIDs distinguish modules but do not bind them
-to source by themselves.
+each applicable type position. `A.Widget` and `B.Widget` therefore never share
+a normalized type/member identity merely because their simple names and shapes
+match. Metadata tokens are locations within one module, not portable global
+identities. MVIDs distinguish modules but do not bind them to source by
+themselves.
 
 Metadata-only facts use binary-location convention `managed-metadata-v1`
 without pretending that a PDB or source span exists. The existing
@@ -167,6 +176,7 @@ The default metadata-only fast matrix is targeted, not Cartesian:
 | Shape | C# | VB.NET | F# | macOS fast | Windows |
 | --- | :---: | :---: | :---: | :---: | :---: |
 | Overloads; generic methods/types; nested/generated names | yes | yes | yes | required | required |
+| Same simple type/member names across distinct metadata namespaces | yes | yes | targeted compiled shape | required | required |
 | Interfaces, explicit implementations, inheritance, overrides, virtual dispatch declarations | yes | yes | targeted compiled shape | required | required |
 | Delegates, events, lambdas, async and iterator state machines | yes | yes | targeted compiled shape | required | required |
 | `ref`/`out`/`in`, `ByRef`, arrays, pointers, function pointers where toolchains support them | yes | yes where representable | targeted | portable subset | full supported subset |

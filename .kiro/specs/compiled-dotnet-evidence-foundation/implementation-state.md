@@ -39,6 +39,11 @@ reconciliation, historical corpus execution, or C++/CLI support.
   forbidden; only declared, admitted, hashed dependencies may be read.
 - Metadata tokens are module-local locations. MVID, path, timestamp, and display
   string alone cannot prove source identity or freshness.
+- Bounded-input hashing uses a canonical pre-digest payload that excludes the
+  digest and all downstream identities derived from it; the computed digest is
+  attached before scan/fact IDs are derived.
+- Normalized type/member/signature identities preserve exact metadata
+  namespaces, including the empty/global namespace and nested declaring chain.
 - Missing, stale, ambiguous, unbound, or mismatched inputs reduce compiled
   coverage and never erase or upgrade source-derived evidence. Timestamps alone
   do not establish staleness.
