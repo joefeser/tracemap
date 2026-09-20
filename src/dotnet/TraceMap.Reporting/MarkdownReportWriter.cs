@@ -4,6 +4,8 @@ namespace TraceMap.Reporting;
 
 public static class MarkdownReportWriter
 {
+    private const int CompiledMetadataFactLimit = 50;
+
     public static async Task WriteAsync(string path, ScanResult result, CancellationToken cancellationToken = default)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
@@ -69,6 +71,7 @@ public static class MarkdownReportWriter
 
         AddBuildEnvironmentDiagnostics(lines, result);
         AddAnalyzerCapabilityDiagnostics(lines, result);
+        AddCompiledMetadataEvidence(lines, result);
 
         lines.Add("");
         lines.Add("## Facts By Type");
@@ -431,6 +434,45 @@ public static class MarkdownReportWriter
 
         lines.Add("");
         return string.Join(Environment.NewLine, lines);
+    }
+
+    private static void AddCompiledMetadataEvidence(List<string> lines, ScanResult result)
+    {
+        var provenance = result.Manifest.CompiledInputProvenance;
+        if (provenance is null)
+            return;
+
+        lines.Add("");
+        lines.Add("## Compiled .NET Metadata Evidence");
+        lines.Add("");
+        lines.Add($"- Coverage: `{provenance.CoverageState}`");
+        lines.Add($"- Artifact visibility: `{provenance.ArtifactVisibility}`");
+        lines.Add($"- Bounded input SHA-256: `{provenance.BoundedInputSha256}`");
+        lines.Add($"- Generator SHA-256: `{provenance.GeneratorSha256}`");
+        if (provenance.OmittedInputCount > 0)
+            lines.Add($"- Compiled inputs omitted by artifact limit: `{provenance.OmittedInputCount}`; omitted-input SHA-256: `{provenance.OmittedInputSha256}`.");
+        lines.Add("- Binary locations use admitted safe locators and metadata tokens; the serialized `1..1` span is a non-source sentinel, not a source line.");
+        lines.Add("- Metadata declarations do not prove source ownership, build freshness, runtime loading, execution, dispatch, or reachability.");
+
+        foreach (var outcome in provenance.Outcomes.OrderBy(item => item.SafeLocator, StringComparer.Ordinal).ThenBy(item => item.Role, StringComparer.Ordinal))
+        {
+            lines.Add($"- Input `{outcome.SafeLocator}` ({outcome.Role}): `{outcome.Outcome}`, provenance `{outcome.ProvenanceState}`, gaps `{(outcome.GapKinds.Count == 0 ? "none" : string.Join(",", outcome.GapKinds))}`.");
+        }
+
+        var facts = result.Facts
+            .Where(fact => fact.Properties.GetValueOrDefault("evidenceLocationKind") == ManagedMetadataExtractor.MetadataLocationKind)
+            .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
+            .ThenBy(fact => fact.Properties.GetValueOrDefault("metadataToken"), StringComparer.Ordinal)
+            .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
+            .ToArray();
+        foreach (var fact in facts.Take(CompiledMetadataFactLimit))
+        {
+            lines.Add($"- `{fact.FactType}` `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at binary `{fact.Evidence.FilePath}` token `{fact.Properties.GetValueOrDefault("metadataToken") ?? "unknown"}`.");
+        }
+        if (facts.Length > CompiledMetadataFactLimit)
+        {
+            lines.Add($"- {facts.Length - CompiledMetadataFactLimit} additional compiled metadata facts omitted from this human-readable sample; exhaustive rows remain in `facts.ndjson` and `index.sqlite`.");
+        }
     }
 
     private static void AddFactSection(List<string> lines, string title, IEnumerable<CodeFact> facts, Func<CodeFact, string> format)

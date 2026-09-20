@@ -71,8 +71,12 @@ fallback and without promoting build artifacts beyond their provenance.
    commit.
 2. Binary-source repository, commit, and build identity shall use separate
    optional fields such as `binarySourceRepository`, `binarySourceCommitSha`,
-   and `binaryBuildIdentity`. They shall be recorded only when supplied by a
-   validated scan/build receipt or another documented deterministic binding.
+   `binarySourceCommitRelation`, and `binaryBuildIdentity`. They shall be
+   recorded only when supplied by a validated scan/build receipt or another
+   documented deterministic binding. An unequal source commit shall be called
+   stale only when the receipt explicitly establishes the
+   `ancestor-of-scan` relation; inequality without that evidence is a
+   provenance mismatch.
 3. Every receipt or binding field that can change the source association or
    `bound`/`stale`/`mismatch` classification shall participate in a canonical
    privacy-projected provenance-binding input SHA-256. Raw private receipt
@@ -83,6 +87,9 @@ fallback and without promoting build artifacts beyond their provenance.
    source/build mismatches, unresolved dependencies, unavailable symbols,
    reader failures, and limit exhaustion shall produce explicit partial or
    unknown coverage.
+6. Any binding-receipt read, schema, ambiguity, count, text, size, depth, or
+   work-budget gap shall make compiled coverage partial even when admitted
+   binary outcomes are otherwise bound.
 6. File timestamps alone shall not prove freshness or staleness.
 7. Compiled facts shall remain distinguishable from source semantic and syntax
    facts in rules, extractor identity, coverage labels, and reports.

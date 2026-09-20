@@ -87,11 +87,14 @@ public static class AnalyzerCapabilityDiagnosticExtractor
         SemanticExtractionResult? csharpSemanticResult = null)
     {
         var diagnostics = new List<CapabilityCandidate>();
-        var buildEnvironmentFacts = facts
+        var sourceLaneFacts = facts
+            .Where(fact => !fact.RuleId.StartsWith("dotnet.compiled.", StringComparison.Ordinal))
+            .ToArray();
+        var buildEnvironmentFacts = sourceLaneFacts
             .Where(fact => fact.FactType == FactTypes.BuildEnvironmentDiagnostic)
             .OrderBy(SupportFactSortKey, StringComparer.Ordinal)
             .ToArray();
-        var analysisGaps = facts
+        var analysisGaps = sourceLaneFacts
             .Where(fact => fact.FactType == FactTypes.AnalysisGap
                 && fact.RuleId != RuleIds.CSharpRazorSemanticModelBindingGap)
             .OrderBy(SupportFactSortKey, StringComparer.Ordinal)
@@ -99,7 +102,7 @@ public static class AnalyzerCapabilityDiagnosticExtractor
         var csharpAnalysisGaps = analysisGaps
             .Where(fact => fact.Evidence.ExtractorVersion == ScannerVersions.CSharpSemanticExtractor)
             .ToArray();
-        var buildStatusFacts = facts
+        var buildStatusFacts = sourceLaneFacts
             .Where(fact => fact.FactType == FactTypes.BuildStatus)
             .OrderBy(SupportFactSortKey, StringComparer.Ordinal)
             .ToArray();
@@ -131,7 +134,7 @@ public static class AnalyzerCapabilityDiagnosticExtractor
             }
             diagnostics.Add(ProjectLoadCapability(manifest, semanticResult, dotNetProjectScopes, dotNetSourceFiles, buildStatusFacts, buildEnvironmentFacts, analysisGaps));
             diagnostics.AddRange(ReferenceAssemblyCapabilities(manifest, semanticResult, buildEnvironmentFacts));
-            diagnostics.Add(SyntaxFallbackCapability(manifest, semanticResult, facts, dotNetProjectScopes, dotNetSourceFiles, analysisGaps));
+            diagnostics.Add(SyntaxFallbackCapability(manifest, semanticResult, sourceLaneFacts, dotNetProjectScopes, dotNetSourceFiles, analysisGaps));
         }
 
         diagnostics.AddRange(ProjectConfigCapabilities(manifest, buildEnvironmentFacts));
@@ -139,8 +142,8 @@ public static class AnalyzerCapabilityDiagnosticExtractor
         diagnostics.AddRange(LegacyToolsetCapabilities(manifest, buildEnvironmentFacts));
         diagnostics.AddRange(RestoreCapabilities(manifest, buildEnvironmentFacts, options));
         diagnostics.AddRange(GeneratedCapabilities(manifest, buildEnvironmentFacts));
-        diagnostics.AddRange(LegacyWebCapabilities(manifest, facts, buildEnvironmentFacts));
-        diagnostics.AddRange(LegacyRemotingCapabilities(manifest, facts));
+        diagnostics.AddRange(LegacyWebCapabilities(manifest, sourceLaneFacts, buildEnvironmentFacts));
+        diagnostics.AddRange(LegacyRemotingCapabilities(manifest, sourceLaneFacts));
 
         if (diagnostics.Any(item => item.CapabilityState is States.Reduced or States.Unavailable or States.Unknown))
         {

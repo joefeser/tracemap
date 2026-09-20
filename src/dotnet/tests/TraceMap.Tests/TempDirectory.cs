@@ -2,9 +2,9 @@ namespace TraceMap.Tests;
 
 internal sealed class TempDirectory : IDisposable
 {
-    public TempDirectory()
+    public TempDirectory(string? root = null)
     {
-        Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "tracemap-tests", Guid.NewGuid().ToString("N"));
+        Path = System.IO.Path.Combine(root ?? System.IO.Path.GetTempPath(), "tracemap-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(Path);
     }
 

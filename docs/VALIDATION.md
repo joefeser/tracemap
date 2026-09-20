@@ -2306,6 +2306,87 @@ build behavior, the historical `dotnetperf` corpus, and C++/CLI remain explicit
 Windows lanes. A macOS pass must report those checks as not run rather than
 implying coverage.
 
+### Compiled .NET evidence foundation
+
+The first compiled-evidence slice accepts only assemblies named explicitly by
+`--compiled-input` and dependencies named explicitly by
+`--compiled-dependency`. Both options are repeatable. It does not discover or
+load dependencies from the host, NuGet cache, runtime directory, application
+base, or `PATH`. Run the portable fixture matrix with:
+
+```bash
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --no-restore --filter FullyQualifiedName~ManagedMetadataExtractorTests
+dotnet test src/dotnet/TraceMap.sln --no-restore
+```
+
+The focused matrix builds public C#, VB.NET, and F# fixtures and checks exact
+assembly, module, type, field, method, constructor, property, and event
+identities. It also covers global and colliding namespaces, nested and generic
+types, overloads, generated members, full CLR signatures, deterministic repeat
+output, metadata-location round trips, missing/malformed/native/over-budget
+inputs, reader disagreement, unbound/stale/mismatched provenance, duplicate
+assemblies, metadata-bearing secondary modules, delimiter-bearing identity
+components, filesystem-semantic receipt-path deduplication, source-analysis
+level isolation, and zero/multiple declared dependency candidates. The
+`local-distribution-validation.yml` macOS and Windows jobs run this same focused
+matrix; Windows-specific PDB, legacy framework, Web Forms build, historical
+corpus, and C++/CLI lanes remain deferred.
+
+A representative local scan is:
+
+```bash
+compiled_fixture="$(pwd)/samples/compiled-dotnet-evidence/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll"
+dotnet run --project src/dotnet/TraceMap.Cli -- scan \
+  --repo samples/modern-sample \
+  --out /tmp/tracemap-compiled-scan \
+  --compiled-input "$compiled_fixture"
+python3 scripts/validate-adapter-artifacts.py /tmp/tracemap-compiled-scan
+```
+
+Relative compiled-input paths are resolved against `--repo`; use an absolute
+path when the admitted binary is outside that repository root.
+
+Inspect all five required artifacts. `scan-manifest.json` must contain
+`compiledInputProvenance` with expected inputs, effective limits, ordered
+outcomes, generator and bounded-input SHA-256 values, coverage, and
+`artifactVisibility=local-only`. Compiled facts must use safe locators,
+`evidenceLocationKind=managed-metadata-v1`, module-local metadata tokens, and a
+`1..1` non-source sentinel with no source snippet hash. Adding compiled inputs
+must not change normalized source facts.
+
+Optional receipts use `compiled-input-binding-set.v1` with a `bindings` array.
+Each `compiled-input-binding.v1` entry names the exact `safeLocator`, artifact
+SHA-256, optional exact assembly identity, binary source repository, 40-hex
+source commit, and binary build identity. When the source commit differs from
+the scan commit, `binarySourceCommitRelation` must be exactly
+`ancestor-of-scan` for the input to be classified as stale; an unequal commit
+without that externally validated relation is a mismatch, because inequality
+alone does not prove ancestry. A receipt is bound only when the artifact and
+optional assembly identity match and all source/build fields are complete;
+otherwise the lane emits an explicit incomplete, stale, mismatch, or unbound
+gap. Receipt paths, raw repository names, and raw build identities are not
+emitted; local facts retain SHA-256 commitments for repository/build identity
+plus the validated source commit and categorical binding state. Any receipt
+read, limit, ambiguity, or schema gap makes compiled coverage partial even when
+all admitted binaries have otherwise bound receipts.
+
+The admission budget defaults to 32 artifacts, 64 MiB per file, 50,000 types,
+250,000 members, 4,096 characters per retained text value, and 500,000 total
+work units. Override these only with the positive `--compiled-max-artifacts`,
+`--compiled-max-file-bytes`, `--compiled-max-types`,
+`--compiled-max-members`, `--compiled-max-text`, and `--compiled-max-work`
+options. All limits must be positive, and `--compiled-max-text` must be at least
+71 characters so a privacy-projected locator can retain its complete SHA-256
+identity. A limit failure is partial coverage, never a clean or complete result.
+When declarations exceed the artifact limit, provenance retains no more than
+the configured number of per-input rows and records the omitted declaration
+count plus a SHA-256 commitment over their privacy-projected identities.
+Receipt paths use the same file/count/text/work budget and a maximum nesting
+depth of 16; metadata-row work for both independent readers is charged from the
+total-work budget before either reader materializes observations.
+
 ### Independent source canonical-identity matrix
 
 The compiled-evidence matrix does not replace the existing source-side adapter
