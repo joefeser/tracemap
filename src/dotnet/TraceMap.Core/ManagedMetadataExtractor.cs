@@ -44,11 +44,11 @@ public static class ManagedMetadataExtractor
         var limits = options.CompiledInputLimits ?? new CompiledInputLimits();
         ValidateLimits(limits);
         var generatorSha256 = GeneratorSha256();
-        var receipts = ReadReceipts(repoPath, receiptPaths);
+        var workBudget = new WorkBudget(limits.MaxTotalWorkUnits);
+        var receipts = ReadReceipts(repoPath, receiptPaths, limits, workBudget);
         var descriptors = CreateDescriptors(repoPath, primaryPaths, dependencyPaths);
         var evaluated = new List<EvaluatedInput>();
         var globalCandidates = new List<CompiledEvidenceCandidate>();
-        long totalWork = 0;
 
         foreach (var descriptor in descriptors)
         {
@@ -74,7 +74,12 @@ public static class ManagedMetadataExtractor
                     evaluated.Add(EvaluatedInput.Gap(descriptor, "limit-exhausted", "ManagedInputFileSizeLimitExceeded"));
                     continue;
                 }
-                bytes = File.ReadAllBytes(descriptor.FullPath);
+                bytes = ReadBoundedFile(descriptor.FullPath, limits.MaxFileSizeBytes, "ManagedInputFileSizeLimitExceeded");
+            }
+            catch (ManagedInputException exception)
+            {
+                evaluated.Add(EvaluatedInput.Gap(descriptor, exception.Outcome, exception.GapKind));
+                continue;
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
@@ -83,78 +88,75 @@ public static class ManagedMetadataExtractor
             }
 
             var rawSha256 = Sha256(bytes);
+            var admittedDescriptor = FinalizeSafeLocator(descriptor, rawSha256);
             try
             {
-                PreflightManagedInput(bytes);
+                var workUnits = PreflightManagedInput(bytes, limits);
+                if (!workBudget.TryConsume(workUnits))
+                {
+                    evaluated.Add(EvaluatedInput.Gap(admittedDescriptor, "limit-exhausted", "ManagedInputTotalWorkLimitExceeded", rawSha256));
+                    continue;
+                }
             }
             catch (ManagedInputException exception)
             {
-                evaluated.Add(EvaluatedInput.Gap(descriptor, exception.Outcome, exception.GapKind, rawSha256));
+                evaluated.Add(EvaluatedInput.Gap(admittedDescriptor, exception.Outcome, exception.GapKind, rawSha256));
                 continue;
             }
             catch (BadImageFormatException)
             {
-                evaluated.Add(EvaluatedInput.Gap(descriptor, "unreadable", "MalformedManagedInput", rawSha256));
+                evaluated.Add(EvaluatedInput.Gap(admittedDescriptor, "unreadable", "MalformedManagedInput", rawSha256));
+                continue;
+            }
+            catch (Exception exception) when (IsRecoverableMetadataException(exception))
+            {
+                evaluated.Add(EvaluatedInput.Gap(admittedDescriptor, "unreadable", "MalformedManagedInput", rawSha256));
                 continue;
             }
             MetadataReadResult cecil;
             MetadataReadResult srm;
             try
             {
-                cecil = ReadWithCecil(bytes, descriptor.SafeLocator, limits);
+                cecil = ReadWithCecil(bytes, admittedDescriptor.SafeLocator, limits);
             }
             catch (ManagedInputException exception)
             {
-                evaluated.Add(EvaluatedInput.Gap(descriptor, exception.Outcome, exception.GapKind, rawSha256));
+                evaluated.Add(EvaluatedInput.Gap(admittedDescriptor, exception.Outcome, exception.GapKind, rawSha256));
                 continue;
             }
-            catch (Exception exception) when (exception is BadImageFormatException
-                or IOException
-                or InvalidOperationException
-                or ArgumentException)
+            catch (Exception exception) when (IsRecoverableMetadataException(exception))
             {
-                evaluated.Add(EvaluatedInput.Gap(descriptor, "unreadable", "CecilManagedMetadataReaderFailure", rawSha256));
+                evaluated.Add(EvaluatedInput.Gap(admittedDescriptor, "unreadable", "CecilManagedMetadataReaderFailure", rawSha256));
                 continue;
             }
             try
             {
-                srm = ReadWithSystemReflectionMetadata(bytes, descriptor.SafeLocator, limits);
+                srm = ReadWithSystemReflectionMetadata(bytes, admittedDescriptor.SafeLocator, limits);
             }
             catch (ManagedInputException exception)
             {
-                evaluated.Add(EvaluatedInput.Gap(descriptor, exception.Outcome, exception.GapKind, rawSha256));
+                evaluated.Add(EvaluatedInput.Gap(admittedDescriptor, exception.Outcome, exception.GapKind, rawSha256));
                 continue;
             }
-            catch (Exception exception) when (exception is BadImageFormatException
-                or IOException
-                or InvalidOperationException
-                or ArgumentException)
+            catch (Exception exception) when (IsRecoverableMetadataException(exception))
             {
-                evaluated.Add(EvaluatedInput.Gap(descriptor, "unreadable", "SystemReflectionMetadataReaderFailure", rawSha256));
+                evaluated.Add(EvaluatedInput.Gap(admittedDescriptor, "unreadable", "SystemReflectionMetadataReaderFailure", rawSha256));
                 continue;
             }
-
-            var work = 1L + cecil.Observations.Count + cecil.AssemblyReferences.Count;
-            if (work > limits.MaxTotalWorkUnits - totalWork)
-            {
-                evaluated.Add(EvaluatedInput.Gap(descriptor, "limit-exhausted", "ManagedInputTotalWorkLimitExceeded", rawSha256));
-                continue;
-            }
-            totalWork += work;
 
             var disagreement = CrossCheck(cecil.Observations, srm.Observations);
             var receipt = receipts.Receipts.FirstOrDefault(candidate =>
-                string.Equals(candidate.SafeLocator, descriptor.SafeLocator, StringComparison.Ordinal));
+                string.Equals(candidate.SafeLocator, admittedDescriptor.SafeLocator, StringComparison.Ordinal));
             var binding = ClassifyBinding(receipt, rawSha256, cecil.AssemblyIdentity, scanCommitSha);
             var gaps = new List<string>();
             if (binding.State != "bound")
                 gaps.Add(binding.GapKind);
             gaps.AddRange(ReaderDisagreementGapKinds(disagreement));
 
-            var candidates = BuildCandidates(descriptor, cecil, disagreement, rawSha256, binding)
+            var candidates = BuildCandidates(admittedDescriptor, cecil, disagreement, rawSha256, binding)
                 .ToList();
             evaluated.Add(new EvaluatedInput(
-                descriptor,
+                admittedDescriptor,
                 "admitted",
                 binding.State,
                 rawSha256,
@@ -392,11 +394,11 @@ public static class ManagedMetadataExtractor
             if (!string.IsNullOrWhiteSpace(result.TargetFramework))
                 properties["targetFramework"] = result.TargetFramework;
             if (binding.Receipt?.BinarySourceRepository is not null)
-                properties["binarySourceRepository"] = binding.Receipt.BinarySourceRepository;
+                properties["binarySourceRepositorySha256"] = Sha256(Encoding.UTF8.GetBytes(binding.Receipt.BinarySourceRepository));
             if (binding.Receipt?.BinarySourceCommitSha is not null)
                 properties["binarySourceCommitSha"] = binding.Receipt.BinarySourceCommitSha;
             if (binding.Receipt?.BinaryBuildIdentity is not null)
-                properties["binaryBuildIdentity"] = binding.Receipt.BinaryBuildIdentity;
+                properties["binaryBuildIdentitySha256"] = Sha256(Encoding.UTF8.GetBytes(binding.Receipt.BinaryBuildIdentity));
 
             yield return new CompiledEvidenceCandidate(
                 descriptor.SafeLocator,
@@ -480,29 +482,63 @@ public static class ManagedMetadataExtractor
         return new BindingClassification("bound", string.Empty, digest, receipt);
     }
 
-    private static ReceiptReadResult ReadReceipts(string repoPath, IReadOnlyList<string> receiptPaths)
+    private static ReceiptReadResult ReadReceipts(
+        string repoPath,
+        IReadOnlyList<string> receiptPaths,
+        CompiledInputLimits limits,
+        WorkBudget workBudget)
     {
         var receipts = new List<CompiledBindingReceipt>();
         var gaps = new List<string>();
-        foreach (var path in receiptPaths.OrderBy(value => value, StringComparer.Ordinal))
+        foreach (var (path, index) in receiptPaths.OrderBy(value => value, StringComparer.Ordinal).Select((value, index) => (value, index)))
         {
+            if (index >= limits.MaxArtifactCount)
+            {
+                gaps.Add("ManagedBindingReceiptCountLimitExceeded");
+                continue;
+            }
             try
             {
                 var fullPath = ResolvePath(repoPath, path);
-                using var stream = File.OpenRead(fullPath);
-                var document = JsonSerializer.Deserialize<CompiledBindingReceiptDocument>(stream, new JsonSerializerOptions
+                var receiptByteLimit = Math.Min(
+                    limits.MaxFileSizeBytes,
+                    checked((long)limits.MaxTextLength * (limits.MaxArtifactCount + 1L) * 8L));
+                var bytes = ReadBoundedFile(fullPath, receiptByteLimit, "ManagedBindingReceiptFileSizeLimitExceeded");
+                var bindingCount = CountReceiptBindings(bytes, limits.MaxArtifactCount);
+                if (bindingCount < 0)
+                {
+                    gaps.Add("ManagedBindingReceiptBindingCountLimitExceeded");
+                    continue;
+                }
+                if (!workBudget.TryConsume(1L + bindingCount))
+                {
+                    gaps.Add("ManagedBindingReceiptWorkLimitExceeded");
+                    continue;
+                }
+                var document = JsonSerializer.Deserialize<CompiledBindingReceiptDocument>(bytes, new JsonSerializerOptions
                 {
                     PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                    PropertyNameCaseInsensitive = false
+                    PropertyNameCaseInsensitive = false,
+                    MaxDepth = 16
                 });
                 if (document?.SchemaVersion != "compiled-input-binding-set.v1" || document.Bindings is null)
                 {
                     gaps.Add("UnsupportedManagedBindingReceipt");
                     continue;
                 }
+                if ((document.SchemaVersion?.Length ?? 0) > limits.MaxTextLength
+                    || document.Bindings.Any(item => item is null || ReceiptTextValues(item).Any(value => value.Length > limits.MaxTextLength)))
+                {
+                    gaps.Add("ManagedBindingReceiptTextLimitExceeded");
+                    continue;
+                }
                 receipts.AddRange(document.Bindings.Where(item => !string.IsNullOrWhiteSpace(item.SafeLocator)));
             }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
+            catch (ManagedInputException exception)
+            {
+                gaps.Add(exception.GapKind);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or OverflowException)
             {
                 gaps.Add("UnreadableManagedBindingReceipt");
             }
@@ -519,6 +555,49 @@ public static class ManagedMetadataExtractor
             uniqueReceipts,
             gaps.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
             uniqueReceipts.Select(ReceiptDigest).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray());
+    }
+
+    private static IEnumerable<string> ReceiptTextValues(CompiledBindingReceipt receipt)
+    {
+        yield return receipt.SchemaVersion ?? string.Empty;
+        yield return receipt.SafeLocator ?? string.Empty;
+        yield return receipt.ArtifactSha256 ?? string.Empty;
+        yield return receipt.AssemblyIdentity ?? string.Empty;
+        yield return receipt.BinarySourceRepository ?? string.Empty;
+        yield return receipt.BinarySourceCommitSha ?? string.Empty;
+        yield return receipt.BinaryBuildIdentity ?? string.Empty;
+    }
+
+    private static int CountReceiptBindings(byte[] bytes, int maximumBindings)
+    {
+        var reader = new Utf8JsonReader(bytes, new JsonReaderOptions { MaxDepth = 16 });
+        var bindingsArrayDepth = -1;
+        var count = 0;
+        while (reader.Read())
+        {
+            if (reader.TokenType == JsonTokenType.PropertyName
+                && reader.ValueTextEquals("bindings")
+                && reader.Read()
+                && reader.TokenType == JsonTokenType.StartArray)
+            {
+                bindingsArrayDepth = reader.CurrentDepth;
+                continue;
+            }
+            if (bindingsArrayDepth >= 0
+                && reader.TokenType == JsonTokenType.StartObject
+                && reader.CurrentDepth == bindingsArrayDepth + 1
+                && ++count > maximumBindings)
+            {
+                return -1;
+            }
+            if (bindingsArrayDepth >= 0
+                && reader.TokenType == JsonTokenType.EndArray
+                && reader.CurrentDepth == bindingsArrayDepth)
+            {
+                bindingsArrayDepth = -1;
+            }
+        }
+        return count;
     }
 
     private static string ReceiptDigest(CompiledBindingReceipt receipt) => CanonicalDigest(new
@@ -550,10 +629,10 @@ public static class ManagedMetadataExtractor
         if (collisions.Length == 0)
             return descriptors;
         var collisionOrdinals = collisions
-            .SelectMany(group => group.OrderBy(item => item.FullPath, StringComparer.Ordinal)
-                .Select((item, index) => (item.FullPath, Suffix: $"-candidate-{index + 1:D3}")))
-            .ToDictionary(item => item.FullPath, item => item.Suffix, StringComparer.Ordinal);
-        return descriptors.Select(item => collisionOrdinals.TryGetValue(item.FullPath, out var suffix)
+            .SelectMany(group => group.OrderBy(item => item.FullPath, StringComparer.Ordinal).ThenBy(item => item.Role, StringComparer.Ordinal)
+                .Select((item, index) => (Key: (item.FullPath, item.Role), Suffix: $"-candidate-{index + 1:D3}")))
+            .ToDictionary(item => item.Key, item => item.Suffix);
+        return descriptors.Select(item => collisionOrdinals.TryGetValue((item.FullPath, item.Role), out var suffix)
                 ? item with { SafeLocator = item.SafeLocator + suffix }
                 : item)
             .OrderBy(item => item.SafeLocator, StringComparer.Ordinal)
@@ -574,23 +653,20 @@ public static class ManagedMetadataExtractor
         else
         {
             var name = SafeFileName(Path.GetFileName(fullPath));
-            if (File.Exists(fullPath))
-            {
-                try
-                {
-                    safeLocator = $"__external__/{role}/{Sha256(File.ReadAllBytes(fullPath))[..12]}-{name}";
-                }
-                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-                {
-                    safeLocator = $"__external__/{role}/unreadable-{name}";
-                }
-            }
-            else
-            {
-                safeLocator = $"__external__/{role}/missing-{name}";
-            }
+            safeLocator = $"__external__/{role}/{(File.Exists(fullPath) ? "pending" : "missing")}-{name}";
         }
-        return new InputDescriptor(fullPath, safeLocator, role);
+        return new InputDescriptor(fullPath, safeLocator, role, !withinRepo);
+    }
+
+    private static InputDescriptor FinalizeSafeLocator(InputDescriptor descriptor, string rawSha256)
+    {
+        if (!descriptor.IsExternal)
+            return descriptor;
+        var pendingPrefix = $"__external__/{descriptor.Role}/pending-";
+        var retainedNameAndSuffix = descriptor.SafeLocator.StartsWith(pendingPrefix, StringComparison.Ordinal)
+            ? descriptor.SafeLocator[pendingPrefix.Length..]
+            : SafeFileName(Path.GetFileName(descriptor.FullPath));
+        return descriptor with { SafeLocator = $"__external__/{descriptor.Role}/{rawSha256[..12]}-{retainedNameAndSuffix}" };
     }
 
     private static MetadataReadResult ReadWithCecil(byte[] bytes, string safeLocator, CompiledInputLimits limits)
@@ -618,6 +694,8 @@ public static class ManagedMetadataExtractor
             module.Assembly?.Name?.Culture,
             module.Assembly?.Name?.PublicKeyToken);
         var targetFramework = TargetFramework(module.Assembly);
+        if (targetFramework?.Length > limits.MaxTextLength)
+            throw new ManagedInputException("limit-exhausted", "ManagedInputTextLimitExceeded");
         var assemblyIdentity = AssemblyArtifactIdentity(assemblyReferenceIdentity, module.Name, targetFramework);
         var observations = new List<MetadataObservation>();
         observations.Add(Observation("assembly", 0x20000001, FactTypes.ManagedAssemblyDeclared, RuleIds.DotNetCompiledAssembly, assemblyIdentity, "assembly",
@@ -680,7 +758,7 @@ public static class ManagedMetadataExtractor
             assemblyReferenceIdentity);
     }
 
-    private static void PreflightManagedInput(byte[] bytes)
+    private static long PreflightManagedInput(byte[] bytes, CompiledInputLimits limits)
     {
         using var stream = new MemoryStream(bytes, writable: false);
         using var pe = new PEReader(stream, PEStreamOptions.LeaveOpen);
@@ -688,6 +766,23 @@ public static class ManagedMetadataExtractor
             throw new ManagedInputException("unsupported", "NonManagedBinaryInput");
         if ((pe.PEHeaders.CorHeader.Flags & CorFlags.ILOnly) == 0)
             throw new ManagedInputException("unsupported", "NativeOrMixedModeManagedInput");
+        var reader = pe.GetMetadataReader();
+        if (!reader.IsAssembly)
+            throw new ManagedInputException("unsupported", "ManagedNetmoduleInputUnsupported");
+        var typeCount = Math.Max(0, reader.TypeDefinitions.Count - 1);
+        var memberCount = (long)reader.GetTableRowCount(TableIndex.MethodDef)
+            + reader.GetTableRowCount(TableIndex.Field)
+            + reader.GetTableRowCount(TableIndex.Property)
+            + reader.GetTableRowCount(TableIndex.Event);
+        EnforceMetadataLimits(typeCount, memberCount, limits);
+        try
+        {
+            return checked(2L * (1L + typeCount + memberCount + reader.AssemblyReferences.Count));
+        }
+        catch (OverflowException)
+        {
+            throw new ManagedInputException("limit-exhausted", "ManagedInputTotalWorkLimitExceeded");
+        }
     }
 
     private static MetadataReadResult ReadWithSystemReflectionMetadata(byte[] bytes, string safeLocator, CompiledInputLimits limits)
@@ -711,6 +806,8 @@ public static class ManagedMetadataExtractor
         var moduleName = reader.GetString(module.Name);
         var moduleMvid = reader.GetGuid(module.Mvid).ToString("D", CultureInfo.InvariantCulture);
         var targetFramework = TargetFramework(reader);
+        if (targetFramework?.Length > limits.MaxTextLength)
+            throw new ManagedInputException("limit-exhausted", "ManagedInputTextLimitExceeded");
         string assemblyIdentity;
         string assemblyName;
         string assemblyVersion;
@@ -856,6 +953,15 @@ public static class ManagedMetadataExtractor
     private static string PropertySignature<T>(T propertyType, IEnumerable<T> parameters, string callingConvention, bool hasThis) =>
         $"call:{callingConvention}|hasThis:{hasThis.ToString().ToLowerInvariant()}|({string.Join(",", parameters)})->{propertyType}";
 
+    internal static string FormatArrayShape(int rank, IEnumerable<int> sizes, IEnumerable<int> lowerBounds) =>
+        $"[rank={rank};sizes={FormatShapeValues(sizes)};lowerBounds={FormatShapeValues(lowerBounds)}]";
+
+    private static string FormatShapeValues(IEnumerable<int> values)
+    {
+        var materialized = values.ToArray();
+        return materialized.Length == 0 ? "-" : string.Join(",", materialized.Select(value => value.ToString(CultureInfo.InvariantCulture)));
+    }
+
     private static string FormatType(CecilTypeReference type)
     {
         if (type is CecilCustomModifier modifier)
@@ -865,13 +971,20 @@ public static class ManagedMetadataExtractor
         if (type is CecilPointerType pointer)
             return FormatType(pointer.ElementType) + "*";
         if (type is CecilArrayType array)
-            return FormatType(array.ElementType) + (array.IsVector ? "[]" : $"[{new string(',', Math.Max(0, array.Rank - 1))}]");
+            return FormatType(array.ElementType) + (array.IsVector
+                ? "[]"
+                : FormatArrayShape(
+                    array.Rank,
+                    array.Dimensions.TakeWhile(dimension => dimension.LowerBound.HasValue && dimension.UpperBound.HasValue)
+                        .Select(dimension => checked(dimension.UpperBound!.Value - dimension.LowerBound!.Value + 1)),
+                    array.Dimensions.TakeWhile(dimension => dimension.LowerBound.HasValue)
+                        .Select(dimension => dimension.LowerBound!.Value)));
         if (type is CecilGenericInstanceType generic)
             return FormatType(generic.ElementType) + "<" + string.Join(",", generic.GenericArguments.Select(FormatType)) + ">";
         if (type is CecilGenericParameter parameter)
             return parameter.Type == GenericParameterType.Method ? $"!!{parameter.Position}" : $"!{parameter.Position}";
         if (type is CecilFunctionPointerType functionPointer)
-            return "fnptr:" + MethodSignature(FormatType(functionPointer.ReturnType), functionPointer.Parameters.Select(item => FormatType(item.ParameterType)), 0,
+            return "fnptr:" + MethodSignature(FormatType(functionPointer.ReturnType), functionPointer.Parameters.Select(item => FormatType(item.ParameterType)), functionPointer.GenericParameters.Count,
                 functionPointer.CallingConvention == MethodCallingConvention.VarArg ? "vararg" : "default", functionPointer.HasThis, functionPointer.ExplicitThis);
         var declaring = type.DeclaringType is null ? null : FormatType(type.DeclaringType) + "+";
         if (declaring is not null)
@@ -1059,6 +1172,28 @@ public static class ManagedMetadataExtractor
     private static bool IsSha256(string? value) => value is { Length: 64 } && value.All(character => character is (>= '0' and <= '9') or (>= 'a' and <= 'f'));
 
     private static bool IsCommitSha(string? value) => value is { Length: 40 } && value.All(character => character is (>= '0' and <= '9') or (>= 'a' and <= 'f') or (>= 'A' and <= 'F'));
+    private static bool IsRecoverableMetadataException(Exception exception) => exception is
+        BadImageFormatException or IOException or InvalidOperationException or ArgumentException or NotSupportedException
+        or TypeLoadException or FormatException or OverflowException or IndexOutOfRangeException;
+
+    private static byte[] ReadBoundedFile(string path, long maximumBytes, string gapKind)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 81_920, FileOptions.SequentialScan);
+        using var output = new MemoryStream((int)Math.Min(maximumBytes, 1_048_576));
+        var buffer = new byte[81_920];
+        long total = 0;
+        while (true)
+        {
+            var read = stream.Read(buffer, 0, buffer.Length);
+            if (read == 0)
+                return output.ToArray();
+            total += read;
+            if (total > maximumBytes)
+                throw new ManagedInputException("limit-exhausted", gapKind);
+            output.Write(buffer, 0, read);
+        }
+    }
+
     private static string ResolvePath(string repoPath, string path) => Path.GetFullPath(Path.IsPathRooted(path) ? path : Path.Combine(repoPath, path));
     private static string SafeFileName(string value)
     {
@@ -1093,7 +1228,7 @@ public static class ManagedMetadataExtractor
         IReadOnlyList<string> AssemblyReferences,
         string AssemblyReferenceIdentity);
 
-    private sealed record InputDescriptor(string FullPath, string SafeLocator, string Role);
+    private sealed record InputDescriptor(string FullPath, string SafeLocator, string Role, bool IsExternal);
 
     private sealed class EvaluatedInput
     {
@@ -1156,6 +1291,19 @@ public static class ManagedMetadataExtractor
         public string GapKind { get; } = gapKind;
     }
 
+    private sealed class WorkBudget(long remaining)
+    {
+        private long _remaining = remaining;
+
+        public bool TryConsume(long units)
+        {
+            if (units < 0 || units > _remaining)
+                return false;
+            _remaining -= units;
+            return true;
+        }
+    }
+
     private sealed class RejectingAssemblyResolver : IAssemblyResolver
     {
         public Mono.Cecil.AssemblyDefinition Resolve(AssemblyNameReference name) => throw new AssemblyResolutionException(name);
@@ -1165,7 +1313,7 @@ public static class ManagedMetadataExtractor
 
     private sealed class MetadataTypeProvider(MetadataReader reader) : ISignatureTypeProvider<string, object?>
     {
-        public string GetArrayType(string elementType, ArrayShape shape) => elementType + $"[{new string(',', Math.Max(0, shape.Rank - 1))}]";
+        public string GetArrayType(string elementType, ArrayShape shape) => elementType + FormatArrayShape(shape.Rank, shape.Sizes, shape.LowerBounds);
         public string GetByReferenceType(string elementType) => elementType + "&";
         public string GetFunctionPointerType(MethodSignature<string> signature) => "fnptr:" + MethodSignature(signature.ReturnType, signature.ParameterTypes, signature.GenericParameterCount,
             signature.Header.CallingConvention == SignatureCallingConvention.VarArgs ? "vararg" : "default", signature.Header.IsInstance, (signature.Header.RawValue & 0x40) != 0);
