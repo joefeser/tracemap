@@ -1,6 +1,6 @@
 # .NET Evidence Completeness Status
 
-Status: compiled metadata foundation implemented locally; final PR validation pending as of 2026-09-20
+Status: compiled metadata foundation implemented and portable cross-platform validation complete as of 2026-09-20; exact-head required review remains pending
 
 Authority: implementation branch based on `origin/dev` at `0b728b62943de7c0c52a44e170e870c2691dcd34`
 
@@ -92,12 +92,19 @@ rows are withheld. Source and compiled facts remain separate, private compiled
 facts remain local-only, and the scan identity commits the compiled admission
 contract before fact IDs are derived.
 
-Local macOS validation is in progress. The portable focused matrix is wired to
-the repository's Windows, Ubuntu, and macOS workflow, and completion remains
-partial until the final-head Windows job passes. This slice does not add broad
-IL traversal, source-to-metadata reconciliation, rewrite analysis, PDB
-reconciliation, legacy framework execution, historical-corpus execution, or
-C++/CLI support.
+Local validation passed 1,971 tests with zero failures or skips, including 11
+focused managed-metadata tests and a 19-test managed-metadata/report set. Two
+admitted compiled-input CLI scans each emitted 107 facts, including 80 compiled
+facts; their `facts.ndjson` files were byte-identical, both artifact sets passed
+the adapter validator, and neither output contained local absolute paths. On PR
+#772 implementation head `5e17ee4a`, the portable matrix and package smoke
+passed on Windows, Ubuntu, and macOS, and the .NET, combined-adapter, and
+private-path jobs passed. ACK still withholds merge readiness because required
+review evidence names older head `7df78401`; no merge is implied by green CI.
+
+This slice does not add broad IL traversal, source-to-metadata reconciliation,
+rewrite analysis, PDB reconciliation, legacy framework execution,
+historical-corpus execution, or C++/CLI support.
 
 Correctness work belongs to the open evidence engine. Managed fleet execution,
 hosted retention, and managed private Windows workers may belong to a later

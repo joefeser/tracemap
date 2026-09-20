@@ -1,6 +1,6 @@
 # Compiled .NET Evidence Foundation Implementation State
 
-Status: first-slice implementation complete locally; Windows CI validation pending
+Status: first-slice implementation and portable cross-platform validation complete; exact-head PR review evidence pending
 
 Branch: `codex/compiled-dotnet-evidence-foundation`
 
@@ -86,24 +86,36 @@ Implementation commit: `a70ac803` (`feat: add bounded compiled metadata evidence
 
 Portable fixture/test commit: `522e4325` (`test: add portable compiled metadata fixture matrix`)
 
+Final bounds/provenance fix commits: `f28c4e93`, `7df78401`, and `5e17ee4a`.
+
 Local macOS validation on 2026-09-20:
 
 - `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with zero warnings
   and zero errors.
-- `dotnet test src/dotnet/TraceMap.sln --no-build --no-restore`: 1,968 passed,
+- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,971 passed,
   zero failed, zero skipped.
-- focused `ManagedMetadataExtractorTests`: 9 passed, zero failed.
-- two explicit compiled-input CLI scans: byte-identical `facts.ndjson`; all five
-  required artifacts present; both output directories passed
-  `scripts/validate-adapter-artifacts.py`.
+- focused `ManagedMetadataExtractorTests`: 11 passed, zero failed; the combined
+  managed-metadata/report focused set passed 19 of 19.
+- two explicit admitted compiled-input CLI scans: 107 facts each, including 80
+  compiled-rule facts; byte-identical `facts.ndjson`; all five required
+  artifacts present; both output directories passed
+  `scripts/validate-adapter-artifacts.py`; neither output contained a local
+  absolute path.
 - `scripts/check-private-paths.sh`: passed.
 - `node scripts/kiro-review.mjs --self-test`: passed; implementation prompt
   dry-run completed with `Coverage: NotRun` as expected because it did not
   invoke the external Kiro reviewer.
 - `git diff --check`: passed.
 
-Task 7 remains unchecked until the PR's Windows job has passed on the final
-implementation head. macOS does not prove Windows PDB, legacy .NET Framework or
+Task 7 is complete. On PR #772 implementation head `5e17ee4a`, the portable
+matrix and package smoke passed on Windows, Ubuntu, and macOS; the .NET adapter,
+combined-adapter, and private-path jobs also passed. ACK reported a clean merge
+state, zero unresolved threads, zero pending/failed checks, and zero actionable
+findings, but correctly withheld merge readiness because the required Codex/Qodo
+review evidence still names older head `7df78401`. No reviewer was manually
+retagged and no merge was performed.
+
+Portable Windows success does not prove Windows PDB, legacy .NET Framework or
 Web Forms build behavior, ILAsm/ILDAsm parity, the historical `dotnetperf`
 corpus, or C++/CLI feasibility. The following remain deferred without implied
 support: source-to-metadata reconciliation, PDB identity, operand-aware IL,
