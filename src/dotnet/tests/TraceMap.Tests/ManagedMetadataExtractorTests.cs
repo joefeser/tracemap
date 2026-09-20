@@ -669,8 +669,11 @@ public sealed class ManagedMetadataExtractorTests
             Assert.Contains("compiledInputProvenance", machineReadable, StringComparison.Ordinal);
         }
 
-        var baseline = ReadFacts(baselineOut).Where(IsSourceEvidence).Select(NormalizeFact).ToArray();
-        var compiled = ReadFacts(firstOut).Where(IsSourceEvidence).Select(NormalizeFact).ToArray();
+        // Compiled facts may change their interleaving with source facts in the complete
+        // scan output. Compare the canonical source-evidence projection so this assertion
+        // proves content and cardinality are unchanged without depending on that interleaving.
+        var baseline = ReadFacts(baselineOut).Where(IsSourceEvidence).Select(NormalizeFact).Order(StringComparer.Ordinal).ToArray();
+        var compiled = ReadFacts(firstOut).Where(IsSourceEvidence).Select(NormalizeFact).Order(StringComparer.Ordinal).ToArray();
         Assert.Equal(baseline, compiled);
 
         using var connection = new SqliteConnection($"Data Source={Path.Combine(firstOut, "index.sqlite")}");
