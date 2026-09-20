@@ -1,9 +1,11 @@
 # Implementation state
 
+- Record type: historical delivery record.
 - Issue: #738
 - Branch: `codex/issue-738-vbnet-webforms`
 - Base: `origin/dev` at `5abd59d79acd074f29e6986d0dd4a31102ac74f1`
-- Status: implementation and validation complete; branch pushed for review
+- Status: implementation and validation complete; the work is present on
+  current `dev`.
 - Initial series: `8a306018` (implementation/tests), `4f64f340`
   (spec/docs/catalog), `c5cb4519` (validation bookkeeping)
 

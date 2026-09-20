@@ -1,8 +1,13 @@
 # Web Forms Review Productization Implementation State
 
-Status: clean-run-pipeline-implemented
-Readiness: public-and-work-first
-Branch: codex/vb-webforms-battle-test
+Record type: historical implementation and validation record
+
+Status: clean-run pipeline present on current `dev`; PR #770 is authoritative
+for terminal reachability
+
+Historical branch: `codex/vb-webforms-battle-test` (retained research only; do
+not merge wholesale)
+
 Public claim level: hidden
 
 ## Completed foundation

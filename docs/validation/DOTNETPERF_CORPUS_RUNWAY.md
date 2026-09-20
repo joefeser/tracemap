@@ -12,6 +12,13 @@ fixture set is established.
 
 Tracking issue: [#759](https://github.com/joefeser/tracemap/issues/759).
 
+This document is a historical-corpus validation record, not the active
+implementation plan. The current status and first compiled-evidence slice live
+in [../DOTNET_COMPLETENESS_STATUS.md](../DOTNET_COMPLETENESS_STATUS.md) and the
+[`compiled-dotnet-evidence-foundation`](../../.kiro/specs/compiled-dotnet-evidence-foundation/requirements.md)
+Kiro spec. Issues #766-#769 divide public fixtures, the Windows lane, and corpus
+minimization. Do not duplicate those plans here.
+
 Pin all investigation to commit:
 
 ```text

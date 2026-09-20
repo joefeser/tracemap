@@ -2289,32 +2289,42 @@ identity, commit identity, and private-input fingerprints.
 
 ## Required multi-language canonical-identity corpus
 
-After the current projectless VB/Web Forms traversal correction is complete,
-add checked-in synthetic repository fixtures for C#, VB.NET, and F#. This is a
-required larger validation track, not optional cleanup. If an F# extractor is
-not yet implemented when the corpus lands, the F# cases must assert an explicit
-unsupported/coverage-gap result and no inferred joins until that adapter exists.
+This required track is now scoped by issue #767 and
+`.kiro/specs/compiled-dotnet-evidence-foundation/`. Its fixture and platform
+matrix is authoritative; do not maintain a second case list here.
 
-Each language corpus must exercise both successful semantic analysis and
-failed-build/projectless syntax fallback where the adapter supports those
-lanes. Include, at minimum:
+The validation floor remains: checked-in public C#, VB.NET, and F# fixtures;
+semantic and failed-build/projectless lanes where supported; explicit F# source
+coverage gaps until an adapter exists; exact full-signature identities; bounded
+ambiguity gaps; validated `facts.ndjson` and `index.sqlite`; deterministic
+repeat scans; and unchanged source-derived evidence when compiled inputs are
+missing, stale, ambiguous, unbound, mismatched, unreadable, or unsupported.
 
-- identical simple type and member names in different namespaces and source
-  assemblies/projects;
-- nested types with repeated names, partial types, namespace/root-namespace
-  composition, aliases/imports, and linked source files;
-- overloads with equal arity but different parameter types, generic arity,
-  ref/in/out/ByRef shape, constructors, properties/indexers, and operators;
-- inheritance across projects, provider-specific implementations behind a
-  shared base type, and cross-language call candidates;
+The default fast suite runs portable managed fixtures on macOS and Windows.
+Legacy .NET Framework builds, Windows PDB behavior, ILAsm/ILDAsm, Web Forms
+build behavior, the historical `dotnetperf` corpus, and C++/CLI remain explicit
+Windows lanes. A macOS pass must report those checks as not run rather than
+implying coverage.
+
+### Independent source canonical-identity matrix
+
+The compiled-evidence matrix does not replace the existing source-side adapter
+regressions. The source matrix remains independently required and must cover:
+
+- identical simple type and member names across namespaces, assemblies,
+  projects, and languages;
+- nested/repeated and partial types, VB root namespaces, aliases/imports, and
+  linked source files;
+- equal-arity overloads with different complete signatures, constructors,
+  properties/indexers, operators, inheritance, and cross-language candidates;
 - reflection, runtime assembly loading, generated/dynamic assemblies, and
-  unresolved factory/registration paths that must fail closed unless bounded
-  deterministic evidence proves the target.
+  unresolved factory or registration paths that must fail closed; and
+- end-to-end repository scans, `facts.ndjson`/`index.sqlite` validation,
+  multi-source combine, reducers/reports, bounded ambiguity gaps, and
+  deterministic repeat outputs.
 
-The end-to-end tests must scan the repositories, validate `facts.ndjson` and
-`index.sqlite`, combine multiple source indexes, and exercise reducers/reports.
-They must prove that simple name plus arity is candidate discovery only; a final
-join requires the adapter's canonical source/assembly, namespace/module,
-containing-type chain, member kind/name/generic arity, and parameter-signature
-identity. Ambiguity must produce a bounded Tier4 gap rather than an edge.
-Repeated clean scans must also prove deterministic facts and reports.
+Where an adapter lacks a source lane, including F# until its adapter exists,
+the matrix must assert explicit unsupported coverage and zero inferred source
+joins. Task 8 of the compiled-evidence foundation may consume these source
+fixtures for reconciliation, but it must not redefine or remove their
+source-only acceptance contract.
