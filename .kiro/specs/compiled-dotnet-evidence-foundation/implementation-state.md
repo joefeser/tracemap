@@ -174,7 +174,7 @@ Local macOS Task 8 validation on 2026-09-20:
   and zero errors;
 - `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,991 passed, zero failed,
   zero skipped;
-- two bound C# fixture CLI scans: 311 facts each, 47 exact reconciliation edges,
+- two bound C# fixture CLI scans: 307 facts each, 47 exact reconciliation edges,
   and two explicit incomplete source-identity gaps; `facts.ndjson`, report,
   reconciliation manifest summary, and normalized SQLite fact rows matched;
   both output directories contained all five required artifacts and passed
