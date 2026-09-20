@@ -2400,13 +2400,16 @@ and extractor versions, bounded-input and generator SHA-256 values, receipt
 binding SHA-256, compiled provenance state, relationship proof, and limitation.
 The reconciliation-only source endpoint is a complete source-derived normalized
 metadata shape, including enclosing generic arity, generic-parameter ordinals,
-method arity, ref/ByRef modes, and the complete signature. The original Roslyn
+method arity, ref/ByRef modes, constructed enclosing-type arguments, and the
+complete signature. The original Roslyn
 declaration identity is retained separately as `sourceDeclarationIdentity`;
 source-only scans and their ordinary source fact identities are unchanged.
 Named signature types include their full assembly-reference scope on both the
 Roslyn and managed-metadata paths, preventing same namespace/name types from
 different assemblies from comparing equal. Primitive signature codes retain
-their intrinsic ECMA identity. Roslyn error types and unavailable type scopes
+their intrinsic ECMA identity; `System.Decimal`, which metadata encodes as a
+scoped value-type reference rather than a CLI primitive, retains that scope.
+Roslyn error types and unavailable type scopes
 fail closed as incomplete identities and can never produce a Tier1 edge.
 
 The following never select a candidate: display strings, simple names,
@@ -2424,8 +2427,9 @@ IDs, exact expected source and metadata identities, expected rule and tier,
 expected gaps, and non-claims. The focused tests cover namespaces, nested and
 generic types, overloads with complete signatures, constructors,
 properties/indexers, events and accessors, `ref`/`ByRef`, optional parameters,
-explicit interfaces where representable, and same-looking declarations across
-assemblies and languages. F# has no source adapter: its compiled identities
+explicit interfaces where representable, scoped decimal signatures,
+constructed nested generic signatures with outermost-first arguments, and
+same-looking declarations across assemblies and languages. F# has no source adapter: its compiled identities
 remain available, one explicit unsupported-source-adapter gap is emitted, and
 no source join is guessed.
 
