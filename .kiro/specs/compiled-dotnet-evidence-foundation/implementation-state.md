@@ -84,8 +84,10 @@ type inventory, filesystem-aware path deduplication, and bounded projection of
 overlong input locators. It also pins top-level receipt binding counts, rejects
 text limits too small for a complete projected digest, and converts excessive
 metadata-signature nesting into an explicit partial-coverage gap. The local
-distribution workflow runs the same focused tests on Windows, Ubuntu, and
-macOS.
+metadata-signature nesting into an explicit partial-coverage gap. Artifact
+overflow retains only the configured number of per-input rows plus a
+deterministic omitted-count/digest commitment. The local distribution workflow
+runs the same focused tests on Windows, Ubuntu, and macOS.
 
 Implementation commit: `a70ac803` (`feat: add bounded compiled metadata evidence lane`)
 
@@ -97,10 +99,10 @@ Local macOS validation on 2026-09-20:
 
 - `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with zero warnings
   and zero errors.
-- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,978 passed,
+- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,979 passed,
   zero failed, zero skipped.
-- focused `ManagedMetadataExtractorTests`: 18 passed, zero failed; the combined
-  managed-metadata/report focused set passed 25 of 25.
+- focused `ManagedMetadataExtractorTests`: 19 passed, zero failed; the combined
+  managed-metadata/report focused set passed 26 of 26.
 - two explicit admitted compiled-input CLI scans: 107 facts each, including 80
   compiled-rule facts; byte-identical `facts.ndjson`; all five required
   artifacts present; both output directories passed

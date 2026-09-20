@@ -53,10 +53,16 @@ public static class ManagedMetadataExtractor
         var evaluated = new List<EvaluatedInput>();
         var globalCandidates = new List<CompiledEvidenceCandidate>();
         var globalGapKinds = new List<string>(receipts.Gaps);
+        var omittedDescriptors = descriptors.Skip(limits.MaxArtifactCount).ToArray();
+        var omittedInputSha256 = omittedDescriptors.Length == 0
+            ? null
+            : CanonicalDigest(omittedDescriptors.Select(descriptor => new { descriptor.SafeLocator, descriptor.Role }).ToArray());
+        if (omittedDescriptors.Length > 0)
+            globalGapKinds.Add("LimitArtifactCountExceeded");
         if (descriptors.Count == 0)
             globalGapKinds.Add("NoManagedInputDeclared");
 
-        foreach (var descriptor in descriptors)
+        foreach (var descriptor in descriptors.Take(limits.MaxArtifactCount))
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (descriptor.SafeLocatorTextLimitExceeded)
@@ -64,12 +70,6 @@ public static class ManagedMetadataExtractor
                 evaluated.Add(EvaluatedInput.Gap(descriptor, "limit-exhausted", "ManagedInputTextLimitExceeded"));
                 continue;
             }
-            if (evaluated.Count >= limits.MaxArtifactCount)
-            {
-                evaluated.Add(EvaluatedInput.Gap(descriptor, "limit-exhausted", "LimitArtifactCountExceeded"));
-                continue;
-            }
-
             if (!File.Exists(descriptor.FullPath))
             {
                 evaluated.Add(EvaluatedInput.Gap(descriptor, "missing", "MissingManagedInput"));
@@ -189,8 +189,17 @@ public static class ManagedMetadataExtractor
         AddDuplicateAndDependencyGaps(evaluated, limits);
         foreach (var globalGapKind in globalGapKinds.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal))
         {
-            var safeLocator = globalGapKind == "NoManagedInputDeclared" ? "compiled-input-set" : "compiled-binding-receipt";
-            globalCandidates.Add(GapCandidate(safeLocator, globalGapKind, "unknown", null, null));
+            var inputSetGap = globalGapKind is "NoManagedInputDeclared" or "LimitArtifactCountExceeded";
+            var safeLocator = inputSetGap ? "compiled-input-set" : "compiled-binding-receipt";
+            var candidate = GapCandidate(safeLocator, globalGapKind, "unknown", null, null);
+            if (globalGapKind == "LimitArtifactCountExceeded")
+            {
+                var properties = CopyProperties(candidate.Properties);
+                properties["omittedInputCount"] = omittedDescriptors.Length.ToString(CultureInfo.InvariantCulture);
+                properties["omittedInputSha256"] = omittedInputSha256!;
+                candidate = candidate with { Properties = properties };
+            }
+            globalCandidates.Add(candidate);
         }
 
         var expectedInputs = evaluated
@@ -211,7 +220,9 @@ public static class ManagedMetadataExtractor
             outcomes = preDigestOutcomes,
             declaredBindingDigests = receipts.BindingDigests,
             bindingReceiptGaps = receipts.Gaps.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
-            globalGapKinds = globalGapKinds.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray()
+            globalGapKinds = globalGapKinds.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            omittedInputCount = omittedDescriptors.Length,
+            omittedInputSha256 = omittedInputSha256 ?? string.Empty
         });
 
         var outcomes = evaluated.Select(item => new CompiledInputOutcome(
@@ -230,7 +241,7 @@ public static class ManagedMetadataExtractor
             .OrderBy(item => item.SafeLocator, StringComparer.Ordinal)
             .ThenBy(item => item.Role, StringComparer.Ordinal)
             .ToArray();
-        var coverage = receipts.Gaps.Count == 0
+        var coverage = globalGapKinds.Count == 0
             && outcomes.Length > 0
             && outcomes.All(item => item.Outcome == "admitted" && item.ProvenanceState == "bound" && item.GapKinds.Count == 0)
                 ? "compiled-metadata-complete"
@@ -250,7 +261,9 @@ public static class ManagedMetadataExtractor
                 .ToArray(),
             boundedInputSha256,
             "local-only",
-            coverage);
+            coverage,
+            omittedDescriptors.Length,
+            omittedInputSha256);
 
         var candidatesWithProvenance = evaluated
             .SelectMany(item => MaterializeInputCandidates(item, boundedInputSha256, generatorSha256, coverage))
