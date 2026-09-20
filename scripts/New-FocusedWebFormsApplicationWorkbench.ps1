@@ -444,13 +444,13 @@ try {
         }).Count
         $terminalInventoryIncompleteChainCount = @($chains | Where-Object {
             $available = Property-Value $_.traversalObservation 'terminalReachabilityAvailable'
-            if ($null -eq $available) { $available = $null -ne $_.traversalObservation }
+            if ($null -eq $available) { $available = $false }
             $value = Property-Value $_.traversalObservation 'terminalReachabilityComplete'
             $available -eq $true -and $null -ne $value -and $value -eq $false
         }).Count
         $terminalInventoryUnavailableChainCount = @($chains | Where-Object {
             $available = Property-Value $_.traversalObservation 'terminalReachabilityAvailable'
-            if ($null -eq $available) { $available = $null -ne $_.traversalObservation }
+            if ($null -eq $available) { $available = $false }
             $available -ne $true
         }).Count
         $otherIncompleteCount = @($chains | Where-Object {
@@ -540,6 +540,7 @@ try {
                 terminalReachabilityAvailable = Property-Value $_.traversalObservation 'terminalReachabilityAvailable'
                 terminalReachabilityComplete = Property-Value $_.traversalObservation 'terminalReachabilityComplete'
                 distinctReachableTerminalCount = Property-Value $_.traversalObservation 'distinctReachableTerminalCount'
+                reachableTerminalIds = @(Values (Property-Value $_.traversalObservation 'reachableTerminalIds'))
                 minimumTerminalDistance = Property-Value $_.traversalObservation 'minimumTerminalDistance'
                 terminalReachabilityLimitReasons = @(Values (Property-Value $_.traversalObservation 'terminalReachabilityLimitReasons'))
                 pathEnumerationTruncated = Property-Value $_.traversalObservation 'pathEnumerationTruncated'

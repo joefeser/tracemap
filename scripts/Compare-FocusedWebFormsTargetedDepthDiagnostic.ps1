@@ -59,6 +59,11 @@ function Get-ReachabilitySummary([object[]]$Chains) {
     $seenHandlers = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     $observations = @($Chains | ForEach-Object {
         $observation = Property-Value $_ 'traversalObservation'
+        if ($null -eq $observation -and ($null -ne (Property-Value $_ 'terminalReachabilityAvailable') -or
+            $null -ne (Property-Value $_ 'terminalReachabilityComplete') -or
+            $null -ne (Property-Value $_ 'distinctReachableTerminalCount'))) {
+            $observation = $_
+        }
         if ($null -eq $observation) { return }
         $handlerKey = [string](Property-Value $_ 'handlerFactId')
         if ([string]::IsNullOrWhiteSpace($handlerKey)) { $handlerKey = [string](Property-Value $_ 'chainId') }
@@ -78,10 +83,22 @@ function Get-ReachabilitySummary([object[]]$Chains) {
     }
     $minimums = @($observations | ForEach-Object { Property-Value $_ 'minimumTerminalDistance' } | Where-Object { $null -ne $_ })
     $terminalIds = @($observations | ForEach-Object { Values (Property-Value $_ 'reachableTerminalIds') } | Where-Object { $_ } | Select-Object -Unique | Sort-Object)
+    $countsWithoutIds = @($observations | Where-Object {
+        [int](Property-Value $_ 'distinctReachableTerminalCount') -gt 0 -and
+        @(Values (Property-Value $_ 'reachableTerminalIds')).Count -eq 0
+    })
+    if ($countsWithoutIds.Count -gt 0 -and $observations.Count -gt 1) {
+        return [pscustomobject]@{ Available = $false; Complete = $null; TerminalCount = $null; MinimumDistance = $null; LimitReasons = @('terminal-identities-unavailable'); PathTruncated = @($observations | Where-Object { Property-Value $_ 'pathEnumerationTruncated' }).Count -gt 0; PathReasons = @($observations | ForEach-Object { Values (Property-Value $_ 'pathEnumerationTruncationReasons') } | Select-Object -Unique | Sort-Object) }
+    }
+    $terminalCount = if ($terminalIds.Count -gt 0) {
+        $terminalIds.Count
+    } elseif ($observations.Count -eq 1 -and $null -ne (Property-Value $observations[0] 'distinctReachableTerminalCount')) {
+        [int](Property-Value $observations[0] 'distinctReachableTerminalCount')
+    } else { 0 }
     return [pscustomobject]@{
         Available = $true
         Complete = @($observations | Where-Object { !(Property-Value $_ 'terminalReachabilityComplete') }).Count -eq 0
-        TerminalCount = $terminalIds.Count
+        TerminalCount = $terminalCount
         MinimumDistance = if ($minimums.Count -gt 0) { [int](($minimums | Measure-Object -Minimum).Minimum) } else { $null }
         LimitReasons = @($observations | ForEach-Object { Values (Property-Value $_ 'terminalReachabilityLimitReasons') } | Select-Object -Unique | Sort-Object)
         PathTruncated = @($observations | Where-Object { Property-Value $_ 'pathEnumerationTruncated' }).Count -gt 0
