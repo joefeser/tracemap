@@ -24,6 +24,12 @@ reconciliation, historical corpus execution, or C++/CLI support.
   rule justifies a different tier. Reader/provenance/availability gaps are
   Tier4 unknown.
 - Source, metadata, PDB, IL, and rewritten identities stay separate.
+- Every compiled fact retains the ordinary scan repository/commit identity,
+  while optional receipt-validated binary-source/build provenance uses
+  separate fields and may remain absent for an unbound input.
+- Manifest-level compiled-input provenance is unconditional, including when no
+  assembly is admitted, and its local or privacy-projected bounded-input digest
+  participates in the corresponding `scanId` before fact IDs are derived.
 - Metadata tokens are module-local locations. MVID, path, timestamp, and display
   string alone cannot prove source identity or freshness.
 - Missing, stale, ambiguous, unbound, or mismatched inputs reduce compiled

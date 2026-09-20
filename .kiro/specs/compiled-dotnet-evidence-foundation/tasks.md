@@ -15,7 +15,10 @@ slices and require an implementation-state update before work begins.
   safe locators, expected-input declarations, effective limits, and provenance
   states. Commit every output-affecting admission-policy input to the local
   bounded-input digest; recompute shareable digests only over privacy-projected
-  fields and never retain a raw private assembly digest.
+  fields and never retain a raw private assembly digest. Emit unconditional
+  manifest-level compiled-input provenance, including for a zero-admission
+  scan, and bind the view-appropriate digest into `scanId` before fact IDs are
+  derived.
 - [ ] 4. Implement assembly/module/type/member inventory with a pinned
   Mono.Cecil version; reject native, mixed-mode, unreadable, and over-budget
   inputs with explicit gaps.
@@ -24,7 +27,9 @@ slices and require an implementation-state update before work begins.
   facts so no later reconciliation can consume them.
 - [ ] 6. Keep source and compiled facts separate; add missing, stale, ambiguous,
   unbound, mismatch, and unsupported-input gap tests without emitting a
-  source-to-metadata identity edge.
+  source-to-metadata identity edge. Preserve the mandatory scan repository and
+  commit on every compiled fact while keeping optional receipt-validated binary
+  source/build provenance in separate fields.
 - [ ] 7. Validate byte determinism, privacy, unchanged Roslyn/syntax behavior,
   CLI sample output, full .NET tests, and the portable managed fixture matrix on
   both macOS and Windows. Explicitly defer only the later Windows-specific

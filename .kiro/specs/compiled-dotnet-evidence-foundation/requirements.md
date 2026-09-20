@@ -25,32 +25,54 @@ fallback and without promoting build artifacts beyond their provenance.
    payload after privacy projection, excluding digest fields.
 3. The local/private bounded-input SHA-256 shall commit to every
    output-affecting admission-policy input, including expected-input
-   declarations, effective limits, admitted input records, raw file digests,
-   and provenance-binding inputs. A shareable bounded-input SHA-256 shall be
-   recomputed only from the canonical privacy-projected counterparts and shall
-   never hash a private source artifact or raw private assembly bytes.
-4. Assembly identity shall include name, version, culture, public-key-token
+   declarations, effective limits, deterministic candidate/admission outcomes,
+   admitted input records, raw file digests, and provenance-binding inputs. A
+   shareable bounded-input SHA-256 shall be recomputed only from the canonical
+   privacy-projected counterparts and shall never hash a private source
+   artifact or raw private assembly bytes.
+4. Every scan that evaluates the compiled-input lane shall emit an
+   unconditional scan-level compiled-input provenance section in the manifest,
+   even when no assembly is admitted. It shall carry the policy/schema version,
+   exact generator SHA-256, extractor IDs/versions, expected-input declarations,
+   effective limits, deterministic candidate/admission outcomes, applicable
+   provenance-binding-input digests, and the bounded-input SHA-256 for the
+   artifact view. Missing, rejected, unreadable, unsupported, and over-budget
+   outcomes therefore remain bound to provenance rather than depending on an
+   admitted-input record.
+5. The bounded-input SHA-256 for the emitted artifact view shall participate in
+   `scanId` before fact IDs are derived. Local/private artifacts shall use the
+   local digest. A shareable projection shall recompute `scanId` and every
+   scan-ID-derived fact ID from its privacy-projected digest and shall not reuse
+   an identity derived from private bytes.
+6. Assembly identity shall include name, version, culture, public-key-token
    state, module name, and target framework when available. None of these alone
    proves source equivalence or authenticity.
-5. Native, mixed-mode, unreadable, oversized, or unsupported inputs shall fail
+7. Native, mixed-mode, unreadable, oversized, or unsupported inputs shall fail
    closed with rule-backed gaps rather than guessed managed facts.
 
 ### 2. Provenance and coverage
 
-1. Source repository and commit shall be recorded only when supplied by a
+1. Every compiled fact shall retain the ordinary `CodeFact.Repo` and
+   `CodeFact.CommitSha` scan identity for the repository snapshot TraceMap is
+   inspecting. Those required fields identify scan execution context only and
+   shall not claim that a compiled input was built from that repository or
+   commit.
+2. Binary-source repository, commit, and build identity shall use separate
+   optional fields such as `binarySourceRepository`, `binarySourceCommitSha`,
+   and `binaryBuildIdentity`. They shall be recorded only when supplied by a
    validated scan/build receipt or another documented deterministic binding.
-2. Every receipt or binding field that can change the source association or
+3. Every receipt or binding field that can change the source association or
    `bound`/`stale`/`mismatch` classification shall participate in a canonical
    privacy-projected provenance-binding input SHA-256. Raw private receipt
    fields and private source digests shall not enter shareable artifacts.
-3. A binary discovered under a source tree without such a binding shall be
+4. A binary discovered under a source tree without such a binding shall be
    labeled unbound compiled input, not current output of that source commit.
-4. Missing expected binaries, proven stale binaries, ambiguous inputs, proven
+5. Missing expected binaries, proven stale binaries, ambiguous inputs, proven
    source/build mismatches, unresolved dependencies, unavailable symbols,
    reader failures, and limit exhaustion shall produce explicit partial or
    unknown coverage.
-5. File timestamps alone shall not prove freshness or staleness.
-6. Compiled facts shall remain distinguishable from source semantic and syntax
+6. File timestamps alone shall not prove freshness or staleness.
+7. Compiled facts shall remain distinguishable from source semantic and syntax
    facts in rules, extractor identity, coverage labels, and reports.
 
 ### 3. Metadata identity
