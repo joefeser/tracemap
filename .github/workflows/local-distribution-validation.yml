@@ -6,6 +6,11 @@ on:
       - ".github/workflows/local-distribution-validation.yml"
       - "scripts/smoke-local-distribution.ps1"
       - "src/dotnet/**"
+      - "samples/compiled-dotnet-evidence/**"
+      - "rules/rule-catalog.yml"
+      - ".kiro/specs/compiled-dotnet-evidence-foundation/**"
+      - "docs/DOTNET_COMPLETENESS_STATUS.md"
+      - "docs/VALIDATION.md"
       - "docs/LOCAL_DISTRIBUTION.md"
       - "docs/LOCAL_REVIEW_WORKFLOW.md"
       - "docs/contracts/local-review-result.v1.schema.json"
@@ -32,6 +37,8 @@ jobs:
           dotnet-version: 10.0.x
       - name: Restore locked dependencies
         run: dotnet restore src/dotnet/TraceMap.sln --locked-mode
+      - name: Run portable compiled metadata fixture matrix
+        run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~ManagedMetadataExtractorTests
       - name: Run local distribution smoke
         shell: pwsh
         run: ./scripts/smoke-local-distribution.ps1 -OutputDirectory "${{ runner.temp }}/tracemap-local-distribution"

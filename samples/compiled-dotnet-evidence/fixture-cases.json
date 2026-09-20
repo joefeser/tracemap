@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "compiled-dotnet-fixture-cases.v1",
+  "cases": [
+    { "id": "CS-OVERLOAD-001", "language": "csharp", "shape": "same-name overloads retain complete parameter and return signatures" },
+    { "id": "CS-GENERIC-002", "language": "csharp", "shape": "generic type, generic method, and nested generic type retain arity" },
+    { "id": "CS-INTERFACE-003", "language": "csharp", "shape": "interface, explicit implementation, virtual member, and override remain distinct declarations" },
+    { "id": "CS-SIGNATURE-004", "language": "csharp", "shape": "ref, out, in, array, nullable, and pointer shapes survive metadata normalization" },
+    { "id": "CS-GENERATED-005", "language": "csharp", "shape": "event, lambda, async, and iterator compiler-generated declarations are labeled without source reconciliation" },
+    { "id": "VB-OVERLOAD-001", "language": "visualbasic", "shape": "overloads, default indexed property, interface implementation, override, ByRef, array, module, and generic member" },
+    { "id": "FS-SHAPES-001", "language": "fsharp", "shape": "curried, tupled, record, union, generic, and CompiledName metadata shapes" },
+    { "id": "NS-COLLISION-001", "language": "cross-language", "shape": "same simple type and member names in distinct metadata namespaces remain distinct" }
+  ]
+}
