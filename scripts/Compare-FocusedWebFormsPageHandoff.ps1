@@ -97,6 +97,11 @@ function Measure-Handoff([object]$InputHandoff) {
 
     $pathOwners = @($chains) + @($boundaries)
     $inventories = Property-Value $handoff 'inventories'
+    $gapClassifications = [ordered]@{}
+    foreach ($group in @(Values (Property-Value $handoff 'gaps') | Group-Object { [string](Property-Value $_ 'classification') } | Sort-Object Name)) {
+        $name = if ($group.Name) { [string]$group.Name } else { 'unclassified' }
+        $gapClassifications[$name] = [int]$group.Count
+    }
 
     return [pscustomobject]@{
         Bytes = [long]$InputHandoff.Bytes
@@ -124,6 +129,7 @@ function Measure-Handoff([object]$InputHandoff) {
         CoreChainOutcomes = $coreChainOutcomes
         TerminalInventoryOutcomes = $terminalInventoryOutcomes
         BoundaryOutcomes = $boundaryOutcomes
+        GapClassifications = $gapClassifications
         SectionBytes = [ordered]@{
             eventChains = Json-Bytes $handoff.eventChains
             downstreamBoundaries = Json-Bytes $handoff.downstreamBoundaries
@@ -167,6 +173,13 @@ foreach ($name in $prior.SectionBytes.Keys) {
     $priorValue = [long]$prior.SectionBytes[$name]
     $currentValue = [long]$current.SectionBytes[$name]
     Write-Output "sectionBytes.$name=prior:$priorValue|current:$currentValue|delta:$($currentValue - $priorValue)"
+}
+foreach ($name in @($prior.GapClassifications.Keys) + @($current.GapClassifications.Keys) | Sort-Object -Unique) {
+    $priorValue = if ($prior.GapClassifications.Contains($name)) { [int]$prior.GapClassifications[$name] } else { 0 }
+    $currentValue = if ($current.GapClassifications.Contains($name)) { [int]$current.GapClassifications[$name] } else { 0 }
+    if ($priorValue -ne $currentValue) {
+        Write-Output "gapClass.$name=prior:$priorValue|current:$currentValue|delta:$($currentValue - $priorValue)"
+    }
 }
 Write-Output "coreChainOutcomeDifferences=$coreChainOutcomeDifferences"
 Write-Output "terminalInventoryOutcomeDifferences=$terminalInventoryOutcomeDifferences"

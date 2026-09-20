@@ -31,6 +31,7 @@ function Write-Handoff([string]$Root, [int]$PathCount, [bool]$IncludeTerminalInv
             terminalEvidenceId = 'terminal-evidence-one'; classification = 'StrongStaticPath'; legacyPathId = 'legacy-one'
             pathEvidence = @(); supportingFactIds = @(); supportingEdgeIds = @()
         })
+        gaps = if ($IncludeTerminalInventory) { @() } else { @(@{ classification = 'ObsoleteReachabilityGap' }) }
     }
     [IO.File]::WriteAllText((Join-Path $workbench 'page-011.handoff.json'), (($handoff | ConvertTo-Json -Depth 20) + "`n"), [Text.UTF8Encoding]::new($false))
 }
@@ -59,6 +60,7 @@ try {
     foreach ($expected in @(
         'coreChainOutcomeDifferences=0',
         'terminalInventoryChange=added',
+        'gapClass.ObsoleteReachabilityGap=prior:1|current:0|delta:-1',
         'retainedOutcomeDifferences=0',
         'classification=stable-retained-outcomes-with-terminal-inventory-added')) {
         if ($expected -notin $enrichedOutput) { throw "Page handoff enrichment comparison omitted: $expected" }
