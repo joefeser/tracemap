@@ -29,6 +29,11 @@ public sealed class SourceMetadataReconciliationTests
             && edge.TargetSymbol.Contains("|(!0,!1)->!1", StringComparison.Ordinal));
         Assert.Equal(2, edges.Count(edge => edge.TargetSymbol!.Contains("|method:8:RefShape|", StringComparison.Ordinal)));
         Assert.Equal(2, edges.Count(edge => edge.TargetSymbol!.Contains("|method:12:GenericArity|", StringComparison.Ordinal)));
+        foreach (var caseId in new[] { "CS-RECON-REF-006", "CS-RECON-NESTED-GENERIC-007" })
+        {
+            var expected = ReadCase(caseId);
+            Assert.Contains(edges, edge => edge.SourceSymbol == expected.SourceIdentity && edge.TargetSymbol == expected.MetadataIdentity);
+        }
         Assert.All(edges, edge =>
         {
             Assert.Equal(RuleIds.DotNetCompiledSourceIdentity, edge.RuleId);
@@ -67,6 +72,11 @@ public sealed class SourceMetadataReconciliationTests
         Assert.Contains(edges, edge => edge.TargetSymbol!.Contains("|property:12:OptionalItem|", StringComparison.Ordinal)
             && edge.Properties["optionalParameterOrdinals"] == "0");
         Assert.Equal(2, edges.Count(edge => edge.TargetSymbol!.Contains("|method:12:GenericArity|", StringComparison.Ordinal)));
+        foreach (var caseId in new[] { "VB-RECON-OPTIONAL-PROPERTY-008", "VB-RECON-GENERIC-ARITY-009" })
+        {
+            var expected = ReadCase(caseId);
+            Assert.Contains(edges, edge => edge.SourceSymbol == expected.SourceIdentity && edge.TargetSymbol == expected.MetadataIdentity);
+        }
         Assert.Contains(edges, edge => edge.TargetSymbol!.Contains("|names:6:Widget|arity:0|method:6:Format|", StringComparison.Ordinal));
     }
 
@@ -138,6 +148,51 @@ public sealed class SourceMetadataReconciliationTests
         Assert.False(string.IsNullOrWhiteSpace(entry.EvidenceFactId));
         Assert.False(string.IsNullOrWhiteSpace(entry.FilePath));
         Assert.False(string.IsNullOrWhiteSpace(entry.CommitSha));
+    }
+
+    [Fact]
+    public void Reconciliation_summary_is_partial_when_semantic_source_identity_is_unavailable()
+    {
+        var manifest = ReconciliationManifest("Level3SyntaxAnalysis");
+
+        var summary = SourceMetadataReconciler.BuildSummary(manifest, []);
+
+        Assert.NotNull(summary);
+        Assert.Equal("source-metadata-partial", summary.CoverageState);
+        Assert.Equal(0, summary.ExactJoinCount);
+        Assert.Equal(0, summary.ExplicitGapCount);
+    }
+
+    [Fact]
+    public void Reconciliation_summary_bounds_compiled_support_and_commits_every_omitted_entry_field()
+    {
+        var manifest = ReconciliationManifest("Level1SemanticAnalysis");
+        var compiledIds = Enumerable.Range(0, 300).Select(index => $"fact-{index:x20}").ToArray();
+        CodeFact Gap(string limitation) => FactFactory.Create(
+            manifest,
+            FactTypes.AnalysisGap,
+            RuleIds.DotNetCompiledSourceIdentity,
+            EvidenceTiers.Tier4Unknown,
+            new EvidenceSpan("Fixture.cs", 7, 9, null, nameof(SourceMetadataReconciler), ScannerVersions.SourceMetadataReconciliationExtractor),
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["details"] = string.Join(',', compiledIds),
+                ["gapKind"] = "SourceMetadataReconciliationMultipleCandidates",
+                ["limitation"] = limitation,
+                ["reconciliationState"] = "unjoined",
+                ["sourceIdentity"] = "source:C#|complete",
+                ["sourceFactId"] = "fact-aaaaaaaaaaaaaaaaaaaa"
+            });
+
+        var retained = SourceMetadataReconciler.BuildSummary(manifest, [Gap("first")])!;
+        var firstDigest = SourceMetadataReconciler.BuildSummary(manifest, [Gap("first")], maximumEntries: 0)!;
+        var secondDigest = SourceMetadataReconciler.BuildSummary(manifest, [Gap("second")], maximumEntries: 0)!;
+
+        var entry = Assert.Single(retained.Entries);
+        Assert.Equal(256, entry.CompiledFactIds.Count);
+        Assert.Equal(44, entry.OmittedCompiledFactIdCount);
+        Assert.False(string.IsNullOrWhiteSpace(entry.OmittedCompiledFactIdSha256));
+        Assert.NotEqual(firstDigest.OmittedEntrySha256, secondDigest.OmittedEntrySha256);
     }
 
     [Fact]
@@ -231,6 +286,33 @@ public sealed class SourceMetadataReconciliationTests
             temp.Delete(recursive: true);
         }
     }
+
+    private static ScanManifest ReconciliationManifest(string analysisLevel) => new(
+        "scan-aaaaaaaaaaaaaaaaaaaa",
+        "fixture",
+        null,
+        "test",
+        new string('a', 40),
+        "test",
+        DateTimeOffset.UnixEpoch,
+        analysisLevel,
+        analysisLevel.StartsWith("Level1", StringComparison.Ordinal) ? "Succeeded" : "NotRun",
+        [],
+        [],
+        [],
+        [],
+        CompiledInputProvenance: new CompiledInputProvenance(
+            "compiled-input-provenance.v1",
+            "explicit-managed-input.v1",
+            new string('b', 64),
+            ["managed-metadata/test"],
+            [],
+            new CompiledInputLimits(),
+            [],
+            [],
+            new string('c', 64),
+            "local-only",
+            "compiled-metadata-complete"));
 
     private static void WriteBoundReceipt(string sourceRepo, IReadOnlyList<string> assemblies, string receiptPath)
     {

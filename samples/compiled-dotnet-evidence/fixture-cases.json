@@ -16,7 +16,7 @@
     {
       "id": "CS-RECON-EXACT-001",
       "language": "csharp",
-      "expectedSourceIdentity": "csharp method csharp%20type%20CompiledEvidence.CSharp%25401.0.0.0%20TraceMap.CompiledFixtures.CSharp.Alpha.Widget%253CT%253E Overload(System.Runtime%4010.0.0.0%3Aint)-\u003ESystem.Runtime%4010.0.0.0%3Aint",
+      "expectedSourceIdentity": "source:C#|assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:8:Overload|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32))-\u003Etype(namespace:6:System|names:5:Int32)",
       "expectedMetadataIdentity": "assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:8:Overload|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32))-\u003Etype(namespace:6:System|names:5:Int32)",
       "expectedRuleId": "dotnet.compiled.source-identity.v1",
       "expectedTier": "Tier1Semantic",
@@ -27,7 +27,7 @@
     {
       "id": "VB-RECON-EXACT-002",
       "language": "visualbasic",
-      "expectedSourceIdentity": "visualbasic method visualbasic%20type%20CompiledEvidence.VisualBasic%25401.0.0.0%20TraceMap.CompiledFixtures.VisualBasic.Widget Shapes(System.Runtime%4010.0.0.0%3AInteger%2CSystem.Runtime%4010.0.0.0%3AInteger%5B%5D)-\u003Evoid",
+      "expectedSourceIdentity": "source:Visual Basic|assembly:name:28:CompiledEvidence.VisualBasic|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:32:CompiledEvidence.VisualBasic.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:37:TraceMap.CompiledFixtures.VisualBasic|names:6:Widget|arity:0|method:6:Shapes|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32)\u0026,type(namespace:6:System|names:5:Int32)[])-\u003Etype(namespace:6:System|names:4:Void)",
       "expectedMetadataIdentity": "assembly:name:28:CompiledEvidence.VisualBasic|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:32:CompiledEvidence.VisualBasic.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:37:TraceMap.CompiledFixtures.VisualBasic|names:6:Widget|arity:0|method:6:Shapes|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32)\u0026,type(namespace:6:System|names:5:Int32)[])-\u003Etype(namespace:6:System|names:4:Void)",
       "expectedRuleId": "dotnet.compiled.source-identity.v1",
       "expectedTier": "Tier1Semantic",
@@ -49,7 +49,7 @@
     {
       "id": "CS-RECON-ZERO-004",
       "language": "csharp",
-      "expectedSourceIdentity": "csharp method csharp%20type%20CompiledEvidence.CSharp%25401.0.0.0%20TraceMap.CompiledFixtures.CSharp.Alpha.Widget%253CT%253E Overload(System.Runtime%4010.0.0.0%3Aint)-\u003ESystem.Runtime%4010.0.0.0%3Aint",
+      "expectedSourceIdentity": "source:C#|assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:8:Overload|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32))-\u003Etype(namespace:6:System|names:5:Int32)",
       "expectedMetadataIdentity": "assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:8:Overload|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32))-\u003Etype(namespace:6:System|names:5:Int32)",
       "expectedRuleId": "dotnet.compiled.source-identity.v1",
       "expectedTier": "Tier4Unknown",
@@ -60,13 +60,57 @@
     {
       "id": "CS-RECON-MULTIPLE-005",
       "language": "csharp",
-      "expectedSourceIdentity": "csharp method csharp%20type%20CompiledEvidence.CSharp%25401.0.0.0%20TraceMap.CompiledFixtures.CSharp.Alpha.Widget%253CT%253E Overload(System.Runtime%4010.0.0.0%3Aint)-\u003ESystem.Runtime%4010.0.0.0%3Aint",
+      "expectedSourceIdentity": "source:C#|assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:8:Overload|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32))-\u003Etype(namespace:6:System|names:5:Int32)",
       "expectedMetadataIdentity": "assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:8:Overload|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32))-\u003Etype(namespace:6:System|names:5:Int32)",
       "expectedRuleId": "dotnet.compiled.source-identity.v1",
       "expectedTier": "Tier4Unknown",
       "expectedOutcome": "unjoined",
       "expectedGaps": ["SourceMetadataReconciliationMultipleCandidates", "AmbiguousDuplicateManagedAssembly"],
       "nonClaims": ["candidate-selection", "path-preference", "token-preference"]
+    },
+    {
+      "id": "CS-RECON-REF-006",
+      "language": "csharp",
+      "expectedSourceIdentity": "source:C#|assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:8:RefShape|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32)\u0026)-\u003Etype(namespace:6:System|names:5:Int32)",
+      "expectedMetadataIdentity": "assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:8:RefShape|arity:0|call:default|hasThis:true|explicitThis:false|(type(namespace:6:System|names:5:Int32)\u0026)-\u003Etype(namespace:6:System|names:5:Int32)",
+      "expectedRuleId": "dotnet.compiled.source-identity.v1",
+      "expectedTier": "Tier1Semantic",
+      "expectedOutcome": "exact-one-candidate",
+      "expectedGaps": [],
+      "nonClaims": ["same-display-string-equivalence", "same-arity-equivalence"]
+    },
+    {
+      "id": "CS-RECON-NESTED-GENERIC-007",
+      "language": "csharp",
+      "expectedSourceIdentity": "source:C#|assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`18:Nested`1|arity:2|method:4:Echo|arity:0|call:default|hasThis:true|explicitThis:false|(!0,!1)-\u003E!1",
+      "expectedMetadataIdentity": "assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`18:Nested`1|arity:2|method:4:Echo|arity:0|call:default|hasThis:true|explicitThis:false|(!0,!1)-\u003E!1",
+      "expectedRuleId": "dotnet.compiled.source-identity.v1",
+      "expectedTier": "Tier1Semantic",
+      "expectedOutcome": "exact-one-candidate",
+      "expectedGaps": [],
+      "nonClaims": ["simple-name-join", "containing-generic-parameter-collapse"]
+    },
+    {
+      "id": "VB-RECON-OPTIONAL-PROPERTY-008",
+      "language": "visualbasic",
+      "expectedSourceIdentity": "source:Visual Basic|assembly:name:28:CompiledEvidence.VisualBasic|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:32:CompiledEvidence.VisualBasic.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:37:TraceMap.CompiledFixtures.VisualBasic|names:6:Widget|arity:0|property:12:OptionalItem|call:default|hasThis:true|(type(namespace:6:System|names:5:Int32))-\u003Etype(namespace:6:System|names:6:String)",
+      "expectedMetadataIdentity": "assembly:name:28:CompiledEvidence.VisualBasic|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:32:CompiledEvidence.VisualBasic.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:37:TraceMap.CompiledFixtures.VisualBasic|names:6:Widget|arity:0|property:12:OptionalItem|call:default|hasThis:true|(type(namespace:6:System|names:5:Int32))-\u003Etype(namespace:6:System|names:6:String)",
+      "expectedRuleId": "dotnet.compiled.source-identity.v1",
+      "expectedTier": "Tier1Semantic",
+      "expectedOutcome": "exact-one-candidate",
+      "expectedGaps": [],
+      "nonClaims": ["optional-default-value-equivalence", "accessor-call-equivalence"]
+    },
+    {
+      "id": "VB-RECON-GENERIC-ARITY-009",
+      "language": "visualbasic",
+      "expectedSourceIdentity": "source:Visual Basic|assembly:name:28:CompiledEvidence.VisualBasic|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:32:CompiledEvidence.VisualBasic.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:37:TraceMap.CompiledFixtures.VisualBasic|names:6:Widget|arity:0|method:12:GenericArity|arity:2|call:default|hasThis:true|explicitThis:false|()-\u003Etype(namespace:6:System|names:5:Int32)",
+      "expectedMetadataIdentity": "assembly:name:28:CompiledEvidence.VisualBasic|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:32:CompiledEvidence.VisualBasic.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:37:TraceMap.CompiledFixtures.VisualBasic|names:6:Widget|arity:0|method:12:GenericArity|arity:2|call:default|hasThis:true|explicitThis:false|()-\u003Etype(namespace:6:System|names:5:Int32)",
+      "expectedRuleId": "dotnet.compiled.source-identity.v1",
+      "expectedTier": "Tier1Semantic",
+      "expectedOutcome": "exact-one-candidate",
+      "expectedGaps": [],
+      "nonClaims": ["same-name-join", "same-parameter-count-equivalence"]
     }
   ]
 }
