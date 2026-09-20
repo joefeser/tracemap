@@ -256,7 +256,7 @@ internal static class SourceMetadataIdentityProvider
             IFunctionPointerTypeSymbol => throw new NotSupportedException("SourceFunctionPointerIdentityUnsupported"),
             ITypeParameterSymbol parameter => (parameter.TypeParameterKind == TypeParameterKind.Method ? "!!" : "!") + MetadataParameterOrdinal(parameter).ToString(CultureInfo.InvariantCulture),
             IErrorTypeSymbol => throw new NotSupportedException("SourceErrorTypeIdentityUnavailable"),
-            _ when type.SpecialType != SpecialType.None => FormatSpecialType(type.SpecialType),
+            _ when type.SpecialType is not (SpecialType.None or SpecialType.System_Decimal) => FormatSpecialType(type.SpecialType),
             INamedTypeSymbol named => FormatNamedType(named.IsTupleType ? named.TupleUnderlyingType! : named),
             _ => throw new NotSupportedException("SourceTypeIdentityUnsupported")
         };
@@ -294,8 +294,16 @@ internal static class SourceMetadataIdentityProvider
         var result = "scope(" + AssemblyReferenceIdentity(definition.ContainingAssembly) + ")type(namespace:" + ManagedMetadataExtractor.EncodeIdentityComponent(ns)
             + "|names:" + string.Concat(names.Select(ManagedMetadataExtractor.EncodeIdentityComponent)) + ")";
         return named.IsGenericType
-            ? result + "<" + string.Join(",", named.TypeArguments.Select(FormatType)) + ">"
+            ? result + "<" + string.Join(",", CompleteTypeArguments(named).Select(FormatType)) + ">"
             : result;
+    }
+
+    private static IEnumerable<ITypeSymbol> CompleteTypeArguments(INamedTypeSymbol named)
+    {
+        var containingTypes = new Stack<INamedTypeSymbol>();
+        for (INamedTypeSymbol? current = named; current is not null; current = current.ContainingType)
+            containingTypes.Push(current);
+        return containingTypes.SelectMany(type => type.TypeArguments);
     }
 
     private static string FormatSpecialType(SpecialType specialType)
@@ -314,7 +322,6 @@ internal static class SourceMetadataIdentityProvider
             SpecialType.System_UInt32 => ("System", "UInt32"),
             SpecialType.System_Int64 => ("System", "Int64"),
             SpecialType.System_UInt64 => ("System", "UInt64"),
-            SpecialType.System_Decimal => ("System", "Decimal"),
             SpecialType.System_Single => ("System", "Single"),
             SpecialType.System_Double => ("System", "Double"),
             SpecialType.System_String => ("System", "String"),

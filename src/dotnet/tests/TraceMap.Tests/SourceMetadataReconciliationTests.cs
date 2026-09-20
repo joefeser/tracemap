@@ -34,7 +34,13 @@ public sealed class SourceMetadataReconciliationTests
         Assert.Contains(edges, edge => edge.TargetSymbol!.Contains("|method:6:Shapes|", StringComparison.Ordinal)
             && edge.TargetSymbol.Contains("scope(assembly:name:14:System.Runtime", StringComparison.Ordinal)
             && edge.TargetSymbol.Contains("type(namespace:6:System|names:4:Guid)", StringComparison.Ordinal));
-        foreach (var caseId in new[] { "CS-RECON-REF-006", "CS-RECON-NESTED-GENERIC-007" })
+        foreach (var caseId in new[]
+                 {
+                     "CS-RECON-REF-006",
+                     "CS-RECON-NESTED-GENERIC-007",
+                     "CS-RECON-DECIMAL-SCOPE-010",
+                     "CS-RECON-CONSTRUCTED-NESTED-011"
+                 })
         {
             var expected = ReadCase(caseId);
             Assert.Contains(edges, edge => edge.SourceSymbol == expected.SourceIdentity && edge.TargetSymbol == expected.MetadataIdentity);
