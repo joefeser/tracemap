@@ -10,12 +10,32 @@ namespace TraceMap.CompiledFixtures.CSharp.Alpha
 
     public class Widget<T> : IExplicit
     {
+        private EventHandler? explicitChanged;
         public event EventHandler? Changed;
         public T? Value;
         public virtual string Name { get; set; } = string.Empty;
 
+        public Widget()
+        {
+        }
+
+        public Widget(T value) => Value = value;
+
+        public string this[int index]
+        {
+            get => index.ToString();
+            set => _ = value;
+        }
+
+        public event EventHandler? ExplicitChanged
+        {
+            add => explicitChanged += value;
+            remove => explicitChanged -= value;
+        }
+
         public int Overload(int value) => value;
         public string Overload(string value) => value;
+        public int Optional(int value = 7) => value;
         public TResult Generic<TResult>(TResult value) => value;
         public void Shapes(ref int byRef, out string output, in Guid readOnly, int[] values, int? nullable)
         {

@@ -2387,6 +2387,64 @@ Receipt paths use the same file/count/text/work budget and a maximum nesting
 depth of 16; metadata-row work for both independent readers is charged from the
 total-work budget before either reader materializes observations.
 
+### Exact source-to-metadata reconciliation
+
+Task 8 activates `dotnet.compiled.source-identity.v1`. The reconciler consumes
+compiler-resolved C# and Visual Basic declaration identities without changing
+their ordinary source facts, and compares them only to the complete normalized
+managed metadata identity. A positive `SourceMetadataIdentityReconciled` edge
+is Tier1 semantic evidence and requires exactly one metadata candidate plus a
+validated `bound` compiled-input receipt. The edge retains the source and
+metadata endpoint identities, source and compiled supporting fact IDs, rule
+and extractor versions, bounded-input and generator SHA-256 values, receipt
+binding SHA-256, compiled provenance state, relationship proof, and limitation.
+
+The following never select a candidate: display strings, simple names,
+equal arity, path proximity, timestamps, or metadata tokens. Zero candidates,
+multiple candidates, incomplete source identities, optional-parameter state
+disagreement, and unbound, stale, mismatched, ambiguous, disputed, unsupported,
+or incomplete compiled evidence emit Tier4 `AnalysisGap` facts and no edge.
+Compiler-generated members remain separate except for Roslyn's explicit
+associated property/event accessor relationship. State machines, lambda
+methods, backing fields, and generated types are not inferred back to source.
+
+The public cases are versioned in
+`samples/compiled-dotnet-evidence/fixture-cases.json`. They record stable case
+IDs, exact expected source and metadata identities, expected rule and tier,
+expected gaps, and non-claims. The focused tests cover namespaces, nested and
+generic types, overloads with complete signatures, constructors,
+properties/indexers, events and accessors, `ref`/`ByRef`, optional parameters,
+explicit interfaces where representable, and same-looking declarations across
+assemblies and languages. F# has no source adapter: its compiled identities
+remain available, one explicit unsupported-source-adapter gap is emitted, and
+no source join is guessed.
+
+Run the reconciliation lane with:
+
+```bash
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --no-restore --filter FullyQualifiedName~SourceMetadataReconciliationTests
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj \
+  --no-restore --filter FullyQualifiedName~ManagedMetadataExtractorTests
+```
+
+For positive CLI scans, pass the exact fixture assembly and its validated
+`compiled-input-binding-set.v1` receipt. Inspect `facts.ndjson` and
+`index.sqlite` for the exhaustive edge/gap rows. `scan-manifest.json`,
+`report.md`, and `scan-receipt.json` carry the bounded
+`source-metadata-reconciliation.v1` summary; each retained entry keeps both
+endpoint identities and provenance, while any receipt-view overflow is
+committed by omitted count and SHA-256. Repeated-scan checks compare
+`facts.ndjson`, the human report, the reconciliation summary, and the indexed
+fact rows byte-for-byte; the operational wall-clock `scannedAt` field and
+receipt stage durations are intentionally not evidence identifiers.
+
+Reconciliation coverage is independent of `analysisLevel`. Missing or partial
+compiled inputs never erase, re-tier, or otherwise change source-derived facts.
+This slice does not read PDBs or sequence points, inspect IL bodies or calls,
+perform rewrite analysis, execute private or historical corpora, add legacy
+Framework/Web Forms or C++/CLI support, or introduce fuzzy/AI matching.
+
 ### Independent source canonical-identity matrix
 
 The compiled-evidence matrix does not replace the existing source-side adapter
