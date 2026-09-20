@@ -30,6 +30,16 @@ define that rule as active nor emit source-to-metadata edges.
 
 ## Provenance model
 
+Every scan that evaluates compiled inputs emits a manifest-level
+`compiledInputProvenance` section before facts are identified. The section is
+unconditional: an empty admitted set still records the policy/schema version,
+exact generator SHA-256, extractor IDs/versions, expected-input declarations,
+effective bounds, deterministic candidate/admission outcomes, ordered
+provenance-binding-input digests, and the bounded-input-set SHA-256 for that
+artifact view. Missing, rejected, unreadable, unsupported, and over-budget
+outcomes therefore retain generator and bounded-input provenance even though
+no per-input admission record exists.
+
 Each compiled input record contains:
 
 - safe input locator and input role;
@@ -41,17 +51,27 @@ Each compiled input record contains:
 - exact invoked generator SHA-256;
 - extractor ID and version, including the pinned Mono.Cecil version;
 - normalized assembly and module identity plus MVID when readable;
-- source repository and commit only when a validated receipt binds them;
-- build/toolchain identity when a validated receipt supplies it; and
+- optional binary-source repository and commit only when a validated receipt
+  binds them;
+- optional binary build/toolchain identity when a validated receipt supplies
+  it; and
 - coverage state and categorical gaps.
+
+Every compiled `CodeFact` also carries the required scan repository and commit
+in its ordinary envelope. These identify the repository snapshot TraceMap is
+inspecting, not the source or build provenance of an admitted binary. Optional
+receipt-validated fields such as `binarySourceRepository`,
+`binarySourceCommitSha`, and `binaryBuildIdentity` carry that separate claim.
+An unbound in-tree or external assembly therefore retains valid scan identity
+without being mislabeled as output of the scan commit.
 
 The local/private bounded-input-set digest commits to the admission policy,
 expected-input declarations, effective size/count/work limits, deterministic
-ordered records of admitted safe locators, roles, raw file digests, and each
-provenance-binding-input digest. The provenance-binding input includes every
-receipt field that can change source association or freshness classification,
-such as the safe source identity, source commit, build identity, declared
-assembly mapping, and receipt schema/version.
+ordered candidate/admission outcomes, admitted safe locators, roles, raw file
+digests, and each provenance-binding-input digest. The provenance-binding input
+includes every receipt field that can change source association or freshness
+classification, such as the safe source identity, source commit, build
+identity, declared assembly mapping, and receipt schema/version.
 
 A shareable projection must omit the raw file digest for an access-controlled
 or private assembly. It first applies the documented privacy projection to the
@@ -62,6 +82,14 @@ privacy-projected fields. It never
 hashes or republishes a private source artifact, receipt, source digest, path,
 identifier, or raw assembly digest. The projection algorithm and omitted or
 replaced fields are part of the rule's documented limitations.
+
+The bounded-input-set SHA-256 for the emitted artifact view participates in
+`scanId` before any fact IDs are derived. Local/private artifacts use the local
+digest. A shareable projection recomputes `scanId` and every scan-ID-derived
+fact ID from the privacy-projected bounded-input digest; it never reuses a scan
+identity derived from private assembly bytes. Thus changes to external managed
+inputs, admission policy, effective limits, or zero-admission outcomes cannot
+silently reuse the identity of a materially different compiled-evidence scan.
 
 Freshness states are `bound`, `stale`, `unbound`, `mismatch`, `missing`, and
 `unknown`. Only a validated build/scan receipt can establish `bound`, `stale`,
