@@ -124,6 +124,7 @@ internal static class SourceMetadataReconciler
                     ["reconciliationState"] = "exact-one-candidate",
                     ["relationshipProof"] = string.Join(",", relationshipProofs.OrderBy(value => value, StringComparer.Ordinal)),
                     ["sourceExtractorVersion"] = first.Evidence.ExtractorVersion,
+                    ["sourceDeclarationIdentity"] = first.SourceDeclarationIdentity,
                     ["sourceFactId"] = sourceObservation.FactId,
                     ["sourceIdentity"] = first.SourceIdentity,
                     ["sourceLanguage"] = first.Language,
@@ -190,6 +191,7 @@ internal static class SourceMetadataReconciler
                 ["optionalParameterOrdinals"] = string.Join(",", candidates.SelectMany(candidate => candidate.OptionalParameterOrdinals).Distinct().OrderBy(value => value)),
                 ["relationshipProof"] = string.Join(",", candidates.Select(candidate => candidate.RelationshipProof).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal)),
                 ["sourceExtractorVersion"] = first.Evidence.ExtractorVersion,
+                ["sourceDeclarationIdentity"] = first.SourceDeclarationIdentity,
                 ["sourceIdentity"] = first.SourceIdentity,
                 ["sourceLanguage"] = first.Language
             });
@@ -225,6 +227,7 @@ internal static class SourceMetadataReconciler
                 ["compiledProvenanceState"] = compiledFact?.Properties.GetValueOrDefault("provenanceState") ?? "unknown",
                 ["provenanceBindingInputSha256"] = compiledFact?.Properties.GetValueOrDefault("provenanceBindingInputSha256") ?? string.Empty,
                 ["reconciliationState"] = "unjoined",
+                ["sourceDeclarationIdentity"] = source.SourceDeclarationIdentity,
                 ["sourceFactId"] = sourceObservation.FactId,
                 ["sourceIdentity"] = source.SourceIdentity,
                 ["supportingFactIds"] = sourceObservation.FactId

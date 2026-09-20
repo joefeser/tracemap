@@ -15,6 +15,7 @@ public sealed record SourceMetadataIdentityCandidate(
     string? ProjectPath,
     string RelationshipProof,
     IReadOnlyList<int> OptionalParameterOrdinals,
+    string SourceDeclarationIdentity,
     string? IncompleteReason = null);
 
 internal static class SourceMetadataIdentityCollector
@@ -33,6 +34,10 @@ internal static class SourceMetadataIdentityCollector
             var symbol = model.GetDeclaredSymbol(node);
             if (symbol is null)
             {
+                if (node is Microsoft.CodeAnalysis.CSharp.Syntax.VariableDeclaratorSyntax
+                    or Microsoft.CodeAnalysis.VisualBasic.Syntax.VariableDeclaratorSyntax
+                    or ModifiedIdentifierSyntax)
+                    continue;
                 AddIncomplete(node, "SourceDeclaredSymbolUnavailable");
                 continue;
             }
@@ -66,7 +71,8 @@ internal static class SourceMetadataIdentityCollector
                 : CSharpSymbolIdentityProvider.TryCreate(symbol);
             if (sourceIdentity is null)
             {
-                AddCandidate(SyntaxIdentity(node), metadataIdentity, memberKind, node, relationshipProof, [], "SourceDeclarationIdentityUnavailable");
+                var syntaxIdentity = SyntaxIdentity(node);
+                AddCandidate(syntaxIdentity, metadataIdentity, memberKind, node, relationshipProof, [], syntaxIdentity, "SourceDeclarationIdentityUnavailable");
                 return;
             }
 
@@ -76,11 +82,17 @@ internal static class SourceMetadataIdentityCollector
                 IPropertySymbol property => property.Parameters.Where(parameter => parameter.IsOptional).Select(parameter => parameter.Ordinal).ToArray(),
                 _ => []
             };
-            AddCandidate(sourceIdentity.SymbolId, metadataIdentity, memberKind, node, relationshipProof, optionalParameters, metadataIncompleteReason);
+            var reconciliationIdentity = metadataIdentity is null
+                ? sourceIdentity.SymbolId
+                : $"source:{language}|{metadataIdentity}";
+            AddCandidate(reconciliationIdentity, metadataIdentity, memberKind, node, relationshipProof, optionalParameters, sourceIdentity.SymbolId, metadataIncompleteReason);
         }
 
-        void AddIncomplete(SyntaxNode node, string reason) =>
-            AddCandidate(SyntaxIdentity(node), null, "declaration", node, "syntax-located-unresolved-declaration", [], reason);
+        void AddIncomplete(SyntaxNode node, string reason)
+        {
+            var syntaxIdentity = SyntaxIdentity(node);
+            AddCandidate(syntaxIdentity, null, "declaration", node, "syntax-located-unresolved-declaration", [], syntaxIdentity, reason);
+        }
 
         string SyntaxIdentity(SyntaxNode node)
         {
@@ -95,6 +107,7 @@ internal static class SourceMetadataIdentityCollector
             SyntaxNode node,
             string relationshipProof,
             IReadOnlyList<int> optionalParameters,
+            string sourceDeclarationIdentity,
             string? incompleteReason)
         {
             var lineSpan = node.GetLocation().GetLineSpan();
@@ -118,19 +131,21 @@ internal static class SourceMetadataIdentityCollector
                 projectPath,
                 relationshipProof,
                 optionalParameters,
+                sourceDeclarationIdentity,
                 incompleteReason));
         }
     }
 
-    private static bool IsDeclarationNode(SyntaxNode node) => node is
-        MemberDeclarationSyntax
+    private static bool IsDeclarationNode(SyntaxNode node) =>
+        node is not AccessorDeclarationSyntax
+        && node is not Microsoft.CodeAnalysis.VisualBasic.Syntax.AccessorBlockSyntax
+        && node is (MemberDeclarationSyntax
         or BaseMethodDeclarationSyntax
         or Microsoft.CodeAnalysis.CSharp.Syntax.VariableDeclaratorSyntax
         or Microsoft.CodeAnalysis.VisualBasic.Syntax.VariableDeclaratorSyntax
-        or AccessorDeclarationSyntax
         or Microsoft.CodeAnalysis.VisualBasic.Syntax.MethodBlockBaseSyntax
         or DeclarationStatementSyntax
-        or ModifiedIdentifierSyntax;
+        or ModifiedIdentifierSyntax);
 
     private static bool IsSupportedDeclaration(ISymbol? symbol) => symbol is
         INamedTypeSymbol
