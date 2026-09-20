@@ -25,7 +25,9 @@ override this page or a later current-head record.
 - The handoff size reduction from 338,775 to 174,738 bytes reflects 22 removed
   `LegacyPathEvidenceCoverageUnavailable` gaps after overlapping alternate
   terminal routes were replaced by one deterministic shortest witness per
-  distinct terminal. It is not evidence loss.
+  distinct terminal. The comparison found no loss of retained terminal
+  inventory or chain/boundary outcomes; alternate path detail was deliberately
+  reduced and remains labeled as such.
 - VB.NET adapter foundation, data/external-boundary extraction, Web Forms event
   composition, review/export parity, annotated source views, and agent evidence
   handoffs are merged. Their Kiro state files retain the implementation-time

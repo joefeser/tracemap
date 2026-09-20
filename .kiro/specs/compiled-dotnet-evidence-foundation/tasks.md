@@ -3,8 +3,9 @@
 The first implementation PR must remain within tasks 1-7. Tasks 8-11 are later
 slices and require an implementation-state update before work begins.
 
-- [ ] 1. Finalize the compiled input, assembly, member, reconciliation, and gap
-  rule contracts in the rule catalog, including limitations and coverage labels.
+- [ ] 1. Finalize the first-slice compiled input, assembly, member, and gap rule
+  contracts in the rule catalog, including limitations and coverage labels;
+  keep the later reconciliation rule inactive and non-emitting.
 - [ ] 2. Add public minimal C#, VB.NET, and F# fixture projects for assembly,
   type, full member-signature, nested/generic, generated-member, overload, and
   ambiguity cases; record stable case IDs and expected CLR shapes.
