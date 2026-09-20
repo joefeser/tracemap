@@ -44,14 +44,15 @@ Each compiled input record contains:
 - build/toolchain identity when a validated receipt supplies it; and
 - coverage state and categorical gaps.
 
-The bounded-input-set digest commits to deterministic ordered records of
-admitted safe locators, roles, file digests, and each provenance-binding-input
-digest. The provenance-binding input includes every receipt field that can
-change source association or freshness classification, such as the safe source
-identity, source commit, build identity, declared assembly mapping, and receipt
-schema/version. A shareable projection computes both digests after privacy
-projection and never republishes a private receipt, source digest, path, or
-identifier.
+The bounded-input-set digest commits to the canonical privacy-projected
+admission policy, expected-input declarations, effective size/count/work
+limits, deterministic ordered records of admitted safe locators, roles, file
+digests, and each provenance-binding-input digest. The provenance-binding input
+includes every receipt field that can change source association or freshness
+classification, such as the safe source identity, source commit, build
+identity, declared assembly mapping, and receipt schema/version. A shareable
+projection computes both digests after privacy projection and never republishes
+a private receipt, source digest, path, or identifier.
 
 Freshness states are `bound`, `stale`, `unbound`, `mismatch`, `missing`, and
 `unknown`. Only a validated build/scan receipt can establish `bound`, `stale`,
@@ -72,9 +73,10 @@ Keep these nodes distinct:
 
 The normalized metadata key includes assembly/module identity, declaring type,
 member kind, member name, generic arity, calling convention, full return and
-parameter signatures, and readable custom modifiers. Metadata tokens are
-locations within one module, not portable global identities. MVIDs distinguish
-modules but do not bind them to source by themselves.
+parameter signatures, field type, event type, and readable custom modifiers on
+each applicable type position. Metadata tokens are locations within one module,
+not portable global identities. MVIDs distinguish modules but do not bind them
+to source by themselves.
 
 ## Reader disagreement
 
@@ -111,9 +113,10 @@ suite:
 | --- | --- | --- | --- | --- |
 | Source/compiled reconciliation and ambiguity | Independent source canonical-identity matrix plus C#, VB.NET, and F# compiled identities | later | later | task 8 |
 | Portable PDB identity and sequence points | C#, VB.NET, F# | later | later | task 9 |
+| Windows PDB identity and sequence points | Windows-produced C# and VB.NET inputs | explicit not-run | required later lane | task 9 |
 | `call`, `callvirt`, constrained calls, `newobj`, `ldftn`, `ldvirtftn` | compiled/IL fixtures | later | ILAsm cross-check | task 10 |
 | Exception handlers and unusual control flow | curated public IL cases | later read-only lane | ILAsm/runtime-safe checks | task 10 |
-| Windows PDB and legacy .NET Framework/Web Forms build | Windows-produced inputs | explicit not-run | required later lane | task 11 |
+| Legacy .NET Framework/Web Forms build | Windows-produced inputs | explicit not-run | required later lane | task 11 |
 | C++/CLI and mixed mode | separate feasibility inputs | unsupported | separate feasibility lane | task 11 |
 
 Every promoted regression case, in its owning slice, records a stable case ID,

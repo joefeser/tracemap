@@ -11,7 +11,9 @@ slices and require an implementation-state update before work begins.
   ambiguity cases; record stable case IDs and expected CLR shapes.
 - [ ] 3. Add the bounded compiled-input policy and deterministic input-set
   digest, privacy-projected provenance-binding-input digest, generator SHA-256,
-  file digests, safe locators, and provenance states.
+  file digests, safe locators, expected-input declarations, effective limits,
+  and provenance states. Commit every output-affecting admission-policy input
+  to the bounded-input digest.
 - [ ] 4. Implement assembly/module/type/member inventory with a pinned
   Mono.Cecil version; reject native, mixed-mode, unreadable, and over-budget
   inputs with explicit gaps.

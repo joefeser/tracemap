@@ -20,10 +20,14 @@ fallback and without promoting build artifacts beyond their provenance.
    external safe locator, file SHA-256, assembly identity, module MVID when
    readable, extractor ID/version, exact generator SHA-256, and bounded-input
    SHA-256.
-3. Assembly identity shall include name, version, culture, public-key-token
+3. The bounded-input SHA-256 shall commit to the canonical privacy-projected
+   admission policy, expected-input declarations, effective limits, admitted
+   input records, and provenance-binding inputs that can change facts, gaps, or
+   coverage.
+4. Assembly identity shall include name, version, culture, public-key-token
    state, module name, and target framework when available. None of these alone
    proves source equivalence or authenticity.
-4. Native, mixed-mode, unreadable, oversized, or unsupported inputs shall fail
+5. Native, mixed-mode, unreadable, oversized, or unsupported inputs shall fail
    closed with rule-backed gaps rather than guessed managed facts.
 
 ### 2. Provenance and coverage
@@ -51,8 +55,8 @@ fallback and without promoting build artifacts beyond their provenance.
    signatures.
 2. Identity shall preserve declaring assembly/module, nested type structure,
    generic arity and construction state, parameter and return types,
-   by-reference and pointer shapes, custom modifiers when readable, and member
-   kind.
+   field types, event types, by-reference and pointer shapes, custom modifiers
+   when readable, and member kind.
 3. Properties and events shall remain distinct from generated accessors.
 4. Compiler-generated members shall be labeled; their relationship to a source
    construct shall remain unknown until a separate rule proves it.
