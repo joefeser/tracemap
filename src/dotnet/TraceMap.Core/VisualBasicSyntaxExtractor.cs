@@ -553,13 +553,18 @@ public static class VisualBasicSyntaxExtractor
         out string receiverType)
     {
         receiverType = string.Empty;
-        var simpleReceiver = receiverName.Split('.').Last();
+        var receiverParts = receiverName.Split('.', StringSplitOptions.RemoveEmptyEntries);
+        if (receiverParts.Length == 0) return false;
+        var simpleReceiver = receiverParts[^1];
+        var unqualifiedReceiver = receiverParts.Length == 1;
         var explicitlyQualifiedField = receiverName.StartsWith("Me.", StringComparison.OrdinalIgnoreCase)
             || receiverName.StartsWith("MyBase.", StringComparison.OrdinalIgnoreCase);
+        explicitlyQualifiedField = explicitlyQualifiedField && receiverParts.Length == 2;
         var explicitlyQualifiedBaseField = receiverName.StartsWith("MyBase.", StringComparison.OrdinalIgnoreCase);
+        if (!unqualifiedReceiver && !explicitlyQualifiedField) return false;
         var containingMethod = invocation.Ancestors().OfType<MethodBlockBaseSyntax>().FirstOrDefault();
         var containingType = invocation.Ancestors().OfType<TypeBlockSyntax>().FirstOrDefault();
-        if (containingMethod is not null && !explicitlyQualifiedField)
+        if (containingMethod is not null && unqualifiedReceiver)
         {
             var matchingParameters = MethodParameters(containingMethod.BlockStatement)
                 .Where(parameter => parameter.Identifier.Identifier.ValueText.Equals(simpleReceiver, StringComparison.OrdinalIgnoreCase))

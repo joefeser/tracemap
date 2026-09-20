@@ -213,8 +213,10 @@ public sealed record WebFormsModernizationTraversalObservation(
     public IReadOnlyList<string> TraversedEdgeKinds { get; init; } = [];
     public IReadOnlyList<string> TraversedRuleIds { get; init; } = [];
     public bool DiagnosticShapesTruncated { get; init; }
+    public bool TerminalReachabilityAvailable { get; init; }
     public bool TerminalReachabilityComplete { get; init; }
     public int DistinctReachableTerminalCount { get; init; }
+    public IReadOnlyList<string> ReachableTerminalIds { get; init; } = [];
     public int? MinimumTerminalDistance { get; init; }
     public IReadOnlyList<string> TerminalReachabilityLimitReasons { get; init; } = [];
     public bool PathEnumerationTruncated { get; init; }
@@ -579,8 +581,10 @@ public static class WebFormsModernizationPacketReporter
             TraversedEdgeKinds = observation.TraversedEdgeKinds,
             TraversedRuleIds = observation.TraversedRuleIds,
             DiagnosticShapesTruncated = observation.DiagnosticShapesTruncated,
+            TerminalReachabilityAvailable = true,
             TerminalReachabilityComplete = observation.TerminalReachabilityComplete,
             DistinctReachableTerminalCount = observation.DistinctReachableTerminalCount,
+            ReachableTerminalIds = observation.ReachableTerminalNodeIds,
             MinimumTerminalDistance = observation.MinimumTerminalDistance,
             TerminalReachabilityLimitReasons = observation.TerminalReachabilityLimitReasons,
             PathEnumerationTruncated = observation.PathEnumerationTruncated,

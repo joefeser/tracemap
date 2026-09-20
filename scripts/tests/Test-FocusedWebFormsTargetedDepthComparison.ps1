@@ -16,6 +16,12 @@ function Write-Artifact([string]$Root, [string]$RelativePath, [object]$Value) {
         sha256 = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
     }
 }
+function Get-RequestId([string]$FilePath) {
+    $normalized = $FilePath.Trim().Replace('\', '/').TrimStart('/').ToUpperInvariant()
+    $material = "webforms-modernization/surface-request/v1`0$normalized"
+    $hash = [Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($material))
+    return 'surface-request-' + [Convert]::ToHexString($hash).ToLowerInvariant().Substring(0, 24)
+}
 function New-Chain([string]$SurfaceId, [bool]$DepthTruncated, [int]$TerminalCount = 0) {
     return [ordered]@{
         surfaceId = $SurfaceId
@@ -24,6 +30,7 @@ function New-Chain([string]$SurfaceId, [bool]$DepthTruncated, [int]$TerminalCoun
             truncationReasons = if ($DepthTruncated) { @('depth') } else { @() }
             terminalReachabilityComplete = $true
             distinctReachableTerminalCount = $TerminalCount
+            reachableTerminalIds = if ($TerminalCount -gt 0) { @(0..($TerminalCount - 1) | ForEach-Object { "terminal-$SurfaceId-$_" }) } else { @() }
             minimumTerminalDistance = if ($TerminalCount -gt 0) { 11 } else { $null }
             terminalReachabilityLimitReasons = @()
             pathEnumerationTruncated = $DepthTruncated
@@ -58,12 +65,14 @@ try {
     })
     $page002 = Write-Artifact $temp 'workbench/page-002.handoff.json' ([ordered]@{
         schemaVersion = 'webforms-application-page-handoff.v1'
+        subject = [ordered]@{ filePath = 'UIBid/BidGroup.aspx' }
         packet = [ordered]@{ sources = @($source) }
         eventChains = @((New-HandoffChain $true), (New-HandoffChain $false))
         downstreamBoundaries = @((New-Boundary 'a'))
     })
     $page003 = Write-Artifact $temp 'workbench/page-003.handoff.json' ([ordered]@{
         schemaVersion = 'webforms-application-page-handoff.v1'
+        subject = [ordered]@{ filePath = 'UIBid/Other.aspx' }
         packet = [ordered]@{ sources = @($source) }
         eventChains = @((New-HandoffChain $true))
         downstreamBoundaries = @()
@@ -85,8 +94,8 @@ try {
         schemaVersion = 'webforms-modernization-packet.v1'
         sources = @($source)
         surfaceSelection = [ordered]@{ items = @(
-            [ordered]@{ alias = 'page-001'; status = 'matched'; surfaceIds = @('surface-002') }
-            [ordered]@{ alias = 'page-002'; status = 'matched'; surfaceIds = @('surface-003') }
+            [ordered]@{ alias = 'page-001'; requestId = Get-RequestId 'UIBid/BidGroup.aspx'; status = 'matched'; surfaceIds = @('surface-002') }
+            [ordered]@{ alias = 'page-002'; requestId = Get-RequestId 'UIBid/Other.aspx'; status = 'matched'; surfaceIds = @('surface-003') }
         ) }
         eventChains = @(
             (New-Chain 'surface-002' $false 2),
@@ -131,6 +140,16 @@ try {
     }
     if (@($output | Where-Object { $_ -match 'target-a|evidence-a|surface-002' }).Count -ne 0) {
         throw 'Targeted comparison disclosed a private evidence identity.'
+    }
+
+    $diagnosticPacket.surfaceSelection.items[0].requestId = 'surface-request-ffffffffffffffffffffffff'
+    [IO.File]::WriteAllText((Join-Path $diagnostic 'webforms-modernization.json'), (($diagnosticPacket | ConvertTo-Json -Depth 20) + "`n"), [Text.UTF8Encoding]::new($false))
+    try {
+        & $subject -ReviewRoot $temp -TraceMapRoot $repo | Out-Null
+        throw 'Targeted comparison accepted a packet with the wrong surface request identity.'
+    }
+    catch {
+        if ($_.Exception.Message -notmatch 'PACKET_INVALID') { throw }
     }
     Write-Host 'PASS focused Web Forms targeted depth comparison'
 }

@@ -23,6 +23,15 @@ function Property-Value([object]$Value, [string]$Name) {
     if ($null -eq $property) { return $null }
     return $property.Value
 }
+function Get-SurfaceRequestId([string]$FilePath) {
+    $normalized = $FilePath.Trim().Replace('\', '/')
+    while ($normalized.StartsWith('./', [StringComparison]::Ordinal)) { $normalized = $normalized.Substring(2) }
+    $normalized = $normalized.TrimStart('/')
+    if ([string]::IsNullOrWhiteSpace($normalized)) { throw 'WEBFORMS_TARGETED_DEPTH_COMPARE_PAGE_IDENTITY_INVALID' }
+    $material = "webforms-modernization/surface-request/v1`0$($normalized.ToUpperInvariant())"
+    $bytes = [Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($material))
+    return 'surface-request-' + [Convert]::ToHexString($bytes).ToLowerInvariant().Substring(0, 24)
+}
 function Get-RenderedBoundaryTupleKeys([object[]]$Boundaries) {
     $keys = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     foreach ($boundary in $Boundaries) {
@@ -59,11 +68,20 @@ function Get-ReachabilitySummary([object[]]$Chains) {
     if ($observations.Count -eq 0) {
         return [pscustomobject]@{ Available = $false; Complete = $null; TerminalCount = $null; MinimumDistance = $null; LimitReasons = @(); PathTruncated = $null; PathReasons = @() }
     }
+    $availableObservations = @($observations | Where-Object {
+        $available = Property-Value $_ 'terminalReachabilityAvailable'
+        if ($null -ne $available) { return $available -eq $true }
+        return $null -ne (Property-Value $_ 'terminalReachabilityComplete')
+    })
+    if ($availableObservations.Count -ne $observations.Count) {
+        return [pscustomobject]@{ Available = $false; Complete = $null; TerminalCount = $null; MinimumDistance = $null; LimitReasons = @(); PathTruncated = @($observations | Where-Object { Property-Value $_ 'pathEnumerationTruncated' }).Count -gt 0; PathReasons = @($observations | ForEach-Object { Values (Property-Value $_ 'pathEnumerationTruncationReasons') } | Select-Object -Unique | Sort-Object) }
+    }
     $minimums = @($observations | ForEach-Object { Property-Value $_ 'minimumTerminalDistance' } | Where-Object { $null -ne $_ })
+    $terminalIds = @($observations | ForEach-Object { Values (Property-Value $_ 'reachableTerminalIds') } | Where-Object { $_ } | Select-Object -Unique | Sort-Object)
     return [pscustomobject]@{
         Available = $true
         Complete = @($observations | Where-Object { !(Property-Value $_ 'terminalReachabilityComplete') }).Count -eq 0
-        TerminalCount = [int](($observations | ForEach-Object { [int](Property-Value $_ 'distinctReachableTerminalCount') } | Measure-Object -Sum).Sum)
+        TerminalCount = $terminalIds.Count
         MinimumDistance = if ($minimums.Count -gt 0) { [int](($minimums | Measure-Object -Minimum).Minimum) } else { $null }
         LimitReasons = @($observations | ForEach-Object { Values (Property-Value $_ 'terminalReachabilityLimitReasons') } | Select-Object -Unique | Sort-Object)
         PathTruncated = @($observations | Where-Object { Property-Value $_ 'pathEnumerationTruncated' }).Count -gt 0
@@ -79,6 +97,16 @@ if ($requestedPageIds.Count -lt 1 -or $requestedPageIds.Count -gt 2 -or
 
 $context = Get-FocusedWebFormsClaudeEvidenceContext $ReviewRoot $TraceMapRoot
 $root = $context.Root
+$receipt = Read-FocusedWebFormsBoundedJson (Join-Path $root 'run-receipt.json') 16MB 'WEBFORMS_TARGETED_DEPTH_COMPARE_RECEIPT_UNAVAILABLE'
+$pageContexts = @($requestedPageIds | ForEach-Object {
+    $pageId = $_
+    $handoffRelativePath = "workbench/$pageId.handoff.json"
+    Assert-FocusedWebFormsReceiptedArtifact $receipt 'workbench' $root $handoffRelativePath
+    $handoff = Read-FocusedWebFormsBoundedJson (Join-Path $root $handoffRelativePath) 32MB 'WEBFORMS_TARGETED_DEPTH_COMPARE_HANDOFF_UNAVAILABLE'
+    $filePath = [string](Property-Value (Property-Value $handoff 'subject') 'filePath')
+    [pscustomobject]@{ PageId = $pageId; Handoff = $handoff; RequestId = Get-SurfaceRequestId $filePath }
+})
+$expectedRequestIds = @($pageContexts.RequestId | Sort-Object)
 $prefix = 'targeted-depth-10-' + ($requestedPageIds -join '-') + '-'
 if ([string]::IsNullOrWhiteSpace($DiagnosticDirectory)) {
     $diagnosticsRoot = Join-Path $root 'diagnostics'
@@ -95,7 +123,9 @@ if (!$diagnosticRoot.StartsWith($expectedRoot, $comparison)) { throw 'WEBFORMS_T
 $diagnosticPacket = Read-FocusedWebFormsBoundedJson (Join-Path $diagnosticRoot 'webforms-modernization.json') 128MB 'WEBFORMS_TARGETED_DEPTH_COMPARE_PACKET_UNAVAILABLE'
 if ($diagnosticPacket.schemaVersion -ne 'webforms-modernization-packet.v1' -or
     $diagnosticPacket.surfaceSelection.items.Count -ne $requestedPageIds.Count -or
-    @($diagnosticPacket.surfaceSelection.items | Where-Object { $_.status -ne 'matched' }).Count -ne 0) {
+    @($diagnosticPacket.surfaceSelection.items | Where-Object { $_.status -ne 'matched' }).Count -ne 0 -or
+    ((@($diagnosticPacket.surfaceSelection.items.requestId | Sort-Object) -join "`n") -cne ($expectedRequestIds -join "`n")) -or
+    @($diagnosticPacket.surfaceSelection.items.requestId | Select-Object -Unique).Count -ne $requestedPageIds.Count) {
     throw 'WEBFORMS_TARGETED_DEPTH_COMPARE_PACKET_INVALID'
 }
 $baselinePacketPath = Join-Path $diagnosticRoot 'baseline-depth-8/webforms-modernization.json'
@@ -104,7 +134,9 @@ $baselinePacket = if (Test-Path -LiteralPath $baselinePacketPath -PathType Leaf)
 } else { $null }
 if ($null -ne $baselinePacket -and ($baselinePacket.schemaVersion -ne 'webforms-modernization-packet.v1' -or
     $baselinePacket.surfaceSelection.items.Count -ne $requestedPageIds.Count -or
-    @($baselinePacket.surfaceSelection.items | Where-Object { $_.status -ne 'matched' }).Count -ne 0)) {
+    @($baselinePacket.surfaceSelection.items | Where-Object { $_.status -ne 'matched' }).Count -ne 0 -or
+    ((@($baselinePacket.surfaceSelection.items.requestId | Sort-Object) -join "`n") -cne ($expectedRequestIds -join "`n")) -or
+    @($baselinePacket.surfaceSelection.items.requestId | Select-Object -Unique).Count -ne $requestedPageIds.Count)) {
     throw 'WEBFORMS_TARGETED_DEPTH_COMPARE_BASELINE_PACKET_INVALID'
 }
 if ($null -ne $baselinePacket) {
@@ -120,22 +152,24 @@ $aggregateDiagnosticKeys = [Collections.Generic.HashSet[string]]::new([StringCom
 $baselineDepthChains = 0
 $diagnosticDepthChains = 0
 for ($index = 0; $index -lt $requestedPageIds.Count; $index++) {
-    $pageId = $requestedPageIds[$index]
-    $handoffRelativePath = "workbench/$pageId.handoff.json"
-    $receipt = Read-FocusedWebFormsBoundedJson (Join-Path $root 'run-receipt.json') 16MB 'WEBFORMS_TARGETED_DEPTH_COMPARE_RECEIPT_UNAVAILABLE'
-    Assert-FocusedWebFormsReceiptedArtifact $receipt 'workbench' $root $handoffRelativePath
-    $baseline = Read-FocusedWebFormsBoundedJson (Join-Path $root $handoffRelativePath) 32MB 'WEBFORMS_TARGETED_DEPTH_COMPARE_HANDOFF_UNAVAILABLE'
+    $pageContext = $pageContexts[$index]
+    $pageId = $pageContext.PageId
+    $baseline = $pageContext.Handoff
     $baselineSources = @($baseline.packet.sources | ForEach-Object { "$($_.scanId)|$($_.commitSha)" } | Sort-Object)
     $diagnosticSources = @($diagnosticPacket.sources | ForEach-Object { "$($_.scanId)|$($_.commitSha)" } | Sort-Object)
     if (($baselineSources -join "`n") -cne ($diagnosticSources -join "`n")) {
         throw 'WEBFORMS_TARGETED_DEPTH_COMPARE_PROVENANCE_MISMATCH'
     }
-    $selection = $diagnosticPacket.surfaceSelection.items[$index]
+    $selection = @($diagnosticPacket.surfaceSelection.items | Where-Object { $_.requestId -ceq $pageContext.RequestId })
+    if ($selection.Count -ne 1) { throw 'WEBFORMS_TARGETED_DEPTH_COMPARE_PACKET_IDENTITY_INVALID' }
+    $selection = $selection[0]
     $surfaceIds = @(Values $selection.surfaceIds)
     $diagnosticChains = @($diagnosticPacket.eventChains | Where-Object { $_.surfaceId -in $surfaceIds })
     $diagnosticBoundaries = @($diagnosticPacket.downstreamBoundaries | Where-Object { $_.surfaceId -in $surfaceIds })
     if ($null -ne $baselinePacket) {
-        $baselineSelection = $baselinePacket.surfaceSelection.items[$index]
+        $baselineSelection = @($baselinePacket.surfaceSelection.items | Where-Object { $_.requestId -ceq $pageContext.RequestId })
+        if ($baselineSelection.Count -ne 1) { throw 'WEBFORMS_TARGETED_DEPTH_COMPARE_BASELINE_IDENTITY_INVALID' }
+        $baselineSelection = $baselineSelection[0]
         $baselineSurfaceIds = @(Values $baselineSelection.surfaceIds)
         $baselineChains = @($baselinePacket.eventChains | Where-Object { $_.surfaceId -in $baselineSurfaceIds })
         $baselineBoundaries = @($baselinePacket.downstreamBoundaries | Where-Object { $_.surfaceId -in $baselineSurfaceIds })
