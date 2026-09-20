@@ -133,6 +133,28 @@
       "expectedOutcome": "exact-one-candidate",
       "expectedGaps": [],
       "nonClaims": ["inner-argument-only-equivalence", "open-constructed-type-equivalence"]
+    },
+    {
+      "id": "CS-RECON-DATETIME-SCOPE-012",
+      "language": "csharp",
+      "expectedSourceIdentity": "source:C#|assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:9:DateShape|arity:0|call:default|hasThis:true|explicitThis:false|(scope(assembly:name:14:System.Runtime|version:8:10.0.0.0|culture:7:neutral|publicKeyToken:16:b03f5f7f11d50a3a)type(namespace:6:System|names:8:DateTime))->scope(assembly:name:14:System.Runtime|version:8:10.0.0.0|culture:7:neutral|publicKeyToken:16:b03f5f7f11d50a3a)type(namespace:6:System|names:8:DateTime)",
+      "expectedMetadataIdentity": "assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:9:DateShape|arity:0|call:default|hasThis:true|explicitThis:false|(scope(assembly:name:14:System.Runtime|version:8:10.0.0.0|culture:7:neutral|publicKeyToken:16:b03f5f7f11d50a3a)type(namespace:6:System|names:8:DateTime))->scope(assembly:name:14:System.Runtime|version:8:10.0.0.0|culture:7:neutral|publicKeyToken:16:b03f5f7f11d50a3a)type(namespace:6:System|names:8:DateTime)",
+      "expectedRuleId": "dotnet.compiled.source-identity.v1",
+      "expectedTier": "Tier1Semantic",
+      "expectedOutcome": "exact-one-candidate",
+      "expectedGaps": [],
+      "nonClaims": ["special-type-implies-cli-primitive", "scope-free-datetime-equivalence"]
+    },
+    {
+      "id": "CS-RECON-NONGENERIC-NESTED-013",
+      "language": "csharp",
+      "expectedSourceIdentity": "source:C#|assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:27:ConstructedNonGenericNested|arity:0|call:default|hasThis:true|explicitThis:false|(scope(assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null)type(namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`116:NonGenericNested)<type(namespace:6:System|names:5:Int32)>)->scope(assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null)type(namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`116:NonGenericNested)<type(namespace:6:System|names:5:Int32)>",
+      "expectedMetadataIdentity": "assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:27:CompiledEvidence.CSharp.dll|targetFramework:25:.NETCoreApp,Version=v10.0|type:namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`1|arity:1|method:27:ConstructedNonGenericNested|arity:0|call:default|hasThis:true|explicitThis:false|(scope(assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null)type(namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`116:NonGenericNested)<type(namespace:6:System|names:5:Int32)>)->scope(assembly:name:23:CompiledEvidence.CSharp|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null)type(namespace:38:TraceMap.CompiledFixtures.CSharp.Alpha|names:8:Widget`116:NonGenericNested)<type(namespace:6:System|names:5:Int32)>",
+      "expectedRuleId": "dotnet.compiled.source-identity.v1",
+      "expectedTier": "Tier1Semantic",
+      "expectedOutcome": "exact-one-candidate",
+      "expectedGaps": [],
+      "nonClaims": ["nested-isgeneric-gate", "containing-argument-omission"]
     }
   ]
 }

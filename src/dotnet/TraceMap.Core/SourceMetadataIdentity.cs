@@ -256,7 +256,7 @@ internal static class SourceMetadataIdentityProvider
             IFunctionPointerTypeSymbol => throw new NotSupportedException("SourceFunctionPointerIdentityUnsupported"),
             ITypeParameterSymbol parameter => (parameter.TypeParameterKind == TypeParameterKind.Method ? "!!" : "!") + MetadataParameterOrdinal(parameter).ToString(CultureInfo.InvariantCulture),
             IErrorTypeSymbol => throw new NotSupportedException("SourceErrorTypeIdentityUnavailable"),
-            _ when type.SpecialType is not (SpecialType.None or SpecialType.System_Decimal) => FormatSpecialType(type.SpecialType),
+            _ when IsCliPrimitiveSpecialType(type.SpecialType) => FormatSpecialType(type.SpecialType),
             INamedTypeSymbol named => FormatNamedType(named.IsTupleType ? named.TupleUnderlyingType! : named),
             _ => throw new NotSupportedException("SourceTypeIdentityUnsupported")
         };
@@ -293,10 +293,30 @@ internal static class SourceMetadataIdentityProvider
             throw new NotSupportedException("SourceTypeAssemblyScopeUnavailable");
         var result = "scope(" + AssemblyReferenceIdentity(definition.ContainingAssembly) + ")type(namespace:" + ManagedMetadataExtractor.EncodeIdentityComponent(ns)
             + "|names:" + string.Concat(names.Select(ManagedMetadataExtractor.EncodeIdentityComponent)) + ")";
-        return named.IsGenericType
-            ? result + "<" + string.Join(",", CompleteTypeArguments(named).Select(FormatType)) + ">"
+        var typeArguments = CompleteTypeArguments(named).ToArray();
+        return typeArguments.Length > 0
+            ? result + "<" + string.Join(",", typeArguments.Select(FormatType)) + ">"
             : result;
     }
+
+    private static bool IsCliPrimitiveSpecialType(SpecialType specialType) => specialType is
+        SpecialType.System_Void
+        or SpecialType.System_Object
+        or SpecialType.System_Boolean
+        or SpecialType.System_Char
+        or SpecialType.System_SByte
+        or SpecialType.System_Byte
+        or SpecialType.System_Int16
+        or SpecialType.System_UInt16
+        or SpecialType.System_Int32
+        or SpecialType.System_UInt32
+        or SpecialType.System_Int64
+        or SpecialType.System_UInt64
+        or SpecialType.System_Single
+        or SpecialType.System_Double
+        or SpecialType.System_String
+        or SpecialType.System_IntPtr
+        or SpecialType.System_UIntPtr;
 
     private static IEnumerable<ITypeSymbol> CompleteTypeArguments(INamedTypeSymbol named)
     {

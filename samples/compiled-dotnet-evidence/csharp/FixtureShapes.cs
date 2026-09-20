@@ -42,7 +42,9 @@ namespace TraceMap.CompiledFixtures.CSharp.Alpha
         public int Optional(int value = 7) => value;
         public TResult Generic<TResult>(TResult value) => value;
         public decimal DecimalShape(decimal value) => value;
+        public DateTime DateShape(DateTime value) => value;
         public Widget<int>.Nested<string> ConstructedNested(Widget<int>.Nested<string> value) => value;
+        public Widget<int>.NonGenericNested ConstructedNonGenericNested(Widget<int>.NonGenericNested value) => value;
         public void Shapes(ref int byRef, out string output, in Guid readOnly, int[] values, int? nullable)
         {
             output = $"{byRef}:{readOnly}:{values.Length}:{nullable}";
@@ -60,6 +62,10 @@ namespace TraceMap.CompiledFixtures.CSharp.Alpha
         public class Nested<TNested>
         {
             public TNested Echo(T left, TNested right) => right;
+        }
+
+        public class NonGenericNested
+        {
         }
     }
 
