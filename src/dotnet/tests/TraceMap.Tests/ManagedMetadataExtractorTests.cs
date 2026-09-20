@@ -186,6 +186,41 @@ public sealed class ManagedMetadataExtractorTests
     }
 
     [Fact]
+    public void Artifact_limit_retains_a_bounded_input_set_with_an_aggregate_omission_commitment()
+    {
+        using var temp = new TempDirectory();
+        var paths = Enumerable.Range(0, 100)
+            .Select(index => Path.Combine(temp.Path, $"missing-{index:D3}.dll"))
+            .ToArray();
+
+        var first = Evaluate(paths);
+        var second = Evaluate(paths.Reverse().ToArray());
+
+        Assert.Equal(3, first.Provenance!.ExpectedInputs.Count);
+        Assert.Equal(3, first.Provenance.Outcomes.Count);
+        Assert.Equal(97, first.Provenance.OmittedInputCount);
+        Assert.Matches("^[0-9a-f]{64}$", first.Provenance.OmittedInputSha256!);
+        Assert.Equal("compiled-metadata-partial", first.Provenance.CoverageState);
+        Assert.Contains(first.KnownGaps, gap => gap.Contains("LimitArtifactCountExceeded", StringComparison.Ordinal));
+        var aggregateGap = Assert.Single(first.Candidates, candidate =>
+            candidate.Properties.GetValueOrDefault("gapKind") == "LimitArtifactCountExceeded");
+        Assert.Equal("97", aggregateGap.Properties["omittedInputCount"]);
+        Assert.Equal(first.Provenance.OmittedInputSha256, aggregateGap.Properties["omittedInputSha256"]);
+        Assert.Equal(
+            JsonSerializer.Serialize(first.Provenance, JsonOptions.Stable),
+            JsonSerializer.Serialize(second.Provenance, JsonOptions.Stable));
+
+        CompiledInputEvaluation Evaluate(IReadOnlyList<string> inputs) => ManagedMetadataExtractor.Evaluate(
+            temp.Path,
+            new string('a', 40),
+            new ScanOptions(
+                temp.Path,
+                "unused",
+                CompiledInputPaths: inputs,
+                CompiledInputLimits: new CompiledInputLimits(MaxArtifactCount: 3)));
+    }
+
+    [Fact]
     public void Receipt_binding_preflight_ignores_nested_bindings_properties_and_counts_the_complete_top_level_array()
     {
         using var temp = new TempDirectory();

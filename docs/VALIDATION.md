@@ -2378,6 +2378,9 @@ work units. Override these only with the positive `--compiled-max-artifacts`,
 options. All limits must be positive, and `--compiled-max-text` must be at least
 71 characters so a privacy-projected locator can retain its complete SHA-256
 identity. A limit failure is partial coverage, never a clean or complete result.
+When declarations exceed the artifact limit, provenance retains no more than
+the configured number of per-input rows and records the omitted declaration
+count plus a SHA-256 commitment over their privacy-projected identities.
 Receipt paths use the same file/count/text/work budget and a maximum nesting
 depth of 16; metadata-row work for both independent readers is charged from the
 total-work budget before either reader materializes observations.

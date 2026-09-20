@@ -37,7 +37,9 @@ public sealed record CompiledInputProvenance(
     IReadOnlyList<string> ProvenanceBindingInputSha256s,
     string BoundedInputSha256,
     string ArtifactVisibility,
-    string CoverageState);
+    string CoverageState,
+    int OmittedInputCount = 0,
+    string? OmittedInputSha256 = null);
 
 internal sealed record CompiledEvidenceCandidate(
     string SafeLocator,

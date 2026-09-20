@@ -449,6 +449,8 @@ public static class MarkdownReportWriter
         lines.Add($"- Artifact visibility: `{provenance.ArtifactVisibility}`");
         lines.Add($"- Bounded input SHA-256: `{provenance.BoundedInputSha256}`");
         lines.Add($"- Generator SHA-256: `{provenance.GeneratorSha256}`");
+        if (provenance.OmittedInputCount > 0)
+            lines.Add($"- Compiled inputs omitted by artifact limit: `{provenance.OmittedInputCount}`; omitted-input SHA-256: `{provenance.OmittedInputSha256}`.");
         lines.Add("- Binary locations use admitted safe locators and metadata tokens; the serialized `1..1` span is a non-source sentinel, not a source line.");
         lines.Add("- Metadata declarations do not prove source ownership, build freshness, runtime loading, execution, dispatch, or reachability.");
 
