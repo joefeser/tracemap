@@ -2398,6 +2398,11 @@ validated `bound` compiled-input receipt. The edge retains the source and
 metadata endpoint identities, source and compiled supporting fact IDs, rule
 and extractor versions, bounded-input and generator SHA-256 values, receipt
 binding SHA-256, compiled provenance state, relationship proof, and limitation.
+The reconciliation-only source endpoint is a complete source-derived normalized
+metadata shape, including enclosing generic arity, generic-parameter ordinals,
+method arity, ref/ByRef modes, and the complete signature. The original Roslyn
+declaration identity is retained separately as `sourceDeclarationIdentity`;
+source-only scans and their ordinary source fact identities are unchanged.
 
 The following never select a candidate: display strings, simple names,
 equal arity, path proximity, timestamps, or metadata tokens. Zero candidates,
@@ -2439,11 +2444,29 @@ committed by omitted count and SHA-256. Repeated-scan checks compare
 fact rows byte-for-byte; the operational wall-clock `scannedAt` field and
 receipt stage durations are intentionally not evidence identifiers.
 
+Summary entries also retain their own evidence fact ID, source file and line
+span, commit SHA, exact total join/gap counts, and known rejected-provenance
+state. Per-entry compiled supporting IDs are bounded to 256 with an omitted
+count and digest; summary overflow hashing uses length-framed canonical values
+for every serialized entry field. The Markdown report independently discloses
+its 50-row display bound and points to exhaustive `facts.ndjson` and
+`index.sqlite` rows. If semantic source identity collection is unavailable,
+reconciliation coverage is `source-metadata-partial` even when no candidate row
+could be emitted; this does not change compiled-input coverage.
+
 Reconciliation coverage is independent of `analysisLevel`. Missing or partial
 compiled inputs never erase, re-tier, or otherwise change source-derived facts.
 This slice does not read PDBs or sequence points, inspect IL bodies or calls,
 perform rewrite analysis, execute private or historical corpora, add legacy
 Framework/Web Forms or C++/CLI support, or introduce fuzzy/AI matching.
+
+The C# and Visual Basic changes in this slice are restricted to the internal
+candidate lane activated by explicit compiled inputs. The full .NET suite and
+source-only partial-compilation regression are required to prove ordinary
+adapter facts stay unchanged. The pinned C#/VB public OSS smoke is explicitly
+deferred for this slice because it does not supply admitted compiled inputs and
+therefore cannot exercise source-to-metadata reconciliation; no public-smoke
+coverage claim is made.
 
 ### Independent source canonical-identity matrix
 
