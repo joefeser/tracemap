@@ -73,7 +73,7 @@
       "additionalProperties": false,
       "required": [
         "schemaVersion", "ruleId", "extractorVersion", "coverageState",
-        "boundedInputSha256", "compiledGeneratorSha256", "entries",
+        "boundedInputSha256", "compiledGeneratorSha256", "exactJoinCount", "explicitGapCount", "entries",
         "omittedEntryCount", "omittedEntrySha256"
       ],
       "properties": {
@@ -83,6 +83,8 @@
         "coverageState": { "enum": ["source-metadata-complete", "source-metadata-partial"] },
         "boundedInputSha256": { "$ref": "#/$defs/sha256" },
         "compiledGeneratorSha256": { "$ref": "#/$defs/sha256" },
+        "exactJoinCount": { "type": "integer", "minimum": 0 },
+        "explicitGapCount": { "type": "integer", "minimum": 0 },
         "entries": {
           "type": "array",
           "maxItems": 256,
@@ -98,7 +100,9 @@
       "required": [
         "reconciliationState", "sourceIdentity", "metadataIdentity", "sourceFactId",
         "compiledFactIds", "ruleId", "evidenceTier", "extractorVersion",
-        "compiledProvenanceState", "provenanceBindingInputSha256", "gapKind", "limitation"
+        "compiledProvenanceState", "provenanceBindingInputSha256", "gapKind", "limitation",
+        "evidenceFactId", "filePath", "startLine", "endLine", "commitSha",
+        "omittedCompiledFactIdCount", "omittedCompiledFactIdSha256"
       ],
       "properties": {
         "reconciliationState": { "enum": ["exact-one-candidate", "unjoined", "unsupported-source-adapter"] },
@@ -112,7 +116,14 @@
         "compiledProvenanceState": { "type": "string", "maxLength": 32 },
         "provenanceBindingInputSha256": { "type": "string", "maxLength": 64 },
         "gapKind": { "type": "string", "maxLength": 128 },
-        "limitation": { "type": "string", "minLength": 1, "maxLength": 500 }
+        "limitation": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "evidenceFactId": { "type": "string", "minLength": 1, "maxLength": 25 },
+        "filePath": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "startLine": { "type": "integer", "minimum": 1 },
+        "endLine": { "type": "integer", "minimum": 1 },
+        "commitSha": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "omittedCompiledFactIdCount": { "type": "integer", "minimum": 0 },
+        "omittedCompiledFactIdSha256": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] }
       }
     },
     "stage": {

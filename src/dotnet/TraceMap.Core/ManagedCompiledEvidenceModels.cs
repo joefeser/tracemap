@@ -53,7 +53,14 @@ public sealed record SourceMetadataReconciliationEntry(
     string CompiledProvenanceState,
     string ProvenanceBindingInputSha256,
     string GapKind,
-    string Limitation);
+    string Limitation,
+    string EvidenceFactId,
+    string FilePath,
+    int StartLine,
+    int EndLine,
+    string CommitSha,
+    int OmittedCompiledFactIdCount,
+    string? OmittedCompiledFactIdSha256);
 
 public sealed record SourceMetadataReconciliationSummary(
     string SchemaVersion,
@@ -62,6 +69,8 @@ public sealed record SourceMetadataReconciliationSummary(
     string CoverageState,
     string BoundedInputSha256,
     string CompiledGeneratorSha256,
+    int ExactJoinCount,
+    int ExplicitGapCount,
     IReadOnlyList<SourceMetadataReconciliationEntry> Entries,
     int OmittedEntryCount,
     string? OmittedEntrySha256);

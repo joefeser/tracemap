@@ -846,7 +846,7 @@ public static class ManagedMetadataExtractor
                     accessor?.CallingConvention == MethodCallingConvention.VarArg ? "vararg" : "default",
                     accessor?.HasThis == true);
                 observations.Add(Observation("property", unchecked((int)property.MetadataToken.ToUInt32()), FactTypes.ManagedPropertyDeclared, RuleIds.DotNetCompiledMember,
-                    $"{typeIdentity}|property:{EncodeIdentityComponent(property.Name)}|{signature}", "property", MemberProperties(property, 0, IsCompilerGenerated(property), signature)));
+                    $"{typeIdentity}|property:{EncodeIdentityComponent(property.Name)}|{signature}", "property", PropertyProperties(property, signature)));
             }
             foreach (var @event in type.Events)
             {
@@ -991,7 +991,7 @@ public static class ManagedMetadataExtractor
                     decoded.Header.CallingConvention == SignatureCallingConvention.VarArgs ? "vararg" : "default",
                     decoded.Header.IsInstance);
                 observations.Add(Observation("property", MetadataTokens.GetToken(propertyHandle), FactTypes.ManagedPropertyDeclared, RuleIds.DotNetCompiledMember,
-                    $"{typeIdentity}|property:{EncodeIdentityComponent(name)}|{signature}", "property", MemberProperties(name, 0, false, signature)));
+                    $"{typeIdentity}|property:{EncodeIdentityComponent(name)}|{signature}", "property", PropertyProperties(reader, property, name, signature)));
             }
             foreach (var eventHandle in type.GetEvents())
             {
@@ -1159,6 +1159,16 @@ public static class ManagedMetadataExtractor
         return result;
     }
 
+    private static IReadOnlyDictionary<string, string> PropertyProperties(Mono.Cecil.PropertyDefinition property, string signature)
+    {
+        var result = CopyProperties(MemberProperties(property, 0, IsCompilerGenerated(property), signature));
+        result["optionalParameterOrdinals"] = string.Join(",", property.Parameters
+            .Select((parameter, ordinal) => (parameter, ordinal))
+            .Where(item => item.parameter.IsOptional)
+            .Select(item => item.ordinal.ToString(CultureInfo.InvariantCulture)));
+        return result;
+    }
+
     private static IReadOnlyDictionary<string, string> MethodProperties(
         MetadataReader reader,
         System.Reflection.Metadata.MethodDefinition method,
@@ -1171,6 +1181,33 @@ public static class ManagedMetadataExtractor
             .Where(parameter => parameter.SequenceNumber > 0 && (parameter.Attributes & System.Reflection.ParameterAttributes.Optional) != 0)
             .Select(parameter => (parameter.SequenceNumber - 1).ToString(CultureInfo.InvariantCulture))
             .OrderBy(value => value, StringComparer.Ordinal));
+        return result;
+    }
+
+    private static IReadOnlyDictionary<string, string> PropertyProperties(
+        MetadataReader reader,
+        System.Reflection.Metadata.PropertyDefinition property,
+        string name,
+        string signature)
+    {
+        var result = CopyProperties(MemberProperties(name, 0, false, signature));
+        var accessors = property.GetAccessors();
+        var accessorHandle = !accessors.Getter.IsNil ? accessors.Getter : accessors.Setter;
+        if (accessorHandle.IsNil)
+        {
+            result["optionalParameterOrdinals"] = string.Empty;
+            return result;
+        }
+        var parameters = reader.GetMethodDefinition(accessorHandle).GetParameters()
+            .Select(handle => reader.GetParameter(handle))
+            .Where(parameter => parameter.SequenceNumber > 0)
+            .OrderBy(parameter => parameter.SequenceNumber)
+            .ToArray();
+        var propertyParameterCount = property.DecodeSignature(new MetadataTypeProvider(reader), genericContext: null).ParameterTypes.Length;
+        result["optionalParameterOrdinals"] = string.Join(",", parameters
+            .Take(propertyParameterCount)
+            .Where(parameter => (parameter.Attributes & System.Reflection.ParameterAttributes.Optional) != 0)
+            .Select(parameter => (parameter.SequenceNumber - 1).ToString(CultureInfo.InvariantCulture)));
         return result;
     }
 
