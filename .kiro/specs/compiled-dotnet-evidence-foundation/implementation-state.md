@@ -79,8 +79,10 @@ The public portable fixture matrix lives under
 exercise exact CLR identities, duplicate and unresolved dependencies,
 provenance states, malformed/native/missing/over-budget inputs, reader
 disagreement, deterministic bytes, privacy, all five scan artifacts, and
-unchanged source evidence. The local distribution workflow runs the same
-focused tests on Windows, Ubuntu, and macOS.
+unchanged source evidence. Review hardening also covers iterative deeply nested
+type inventory, filesystem-aware path deduplication, and bounded projection of
+overlong input locators. The local distribution workflow runs the same focused
+tests on Windows, Ubuntu, and macOS.
 
 Implementation commit: `a70ac803` (`feat: add bounded compiled metadata evidence lane`)
 
@@ -92,10 +94,10 @@ Local macOS validation on 2026-09-20:
 
 - `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with zero warnings
   and zero errors.
-- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,972 passed,
+- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,975 passed,
   zero failed, zero skipped.
-- focused `ManagedMetadataExtractorTests`: 12 passed, zero failed; the combined
-  managed-metadata/report focused set passed 19 of 19.
+- focused `ManagedMetadataExtractorTests`: 15 passed, zero failed; the combined
+  managed-metadata/report focused set passed 22 of 22.
 - two explicit admitted compiled-input CLI scans: 107 facts each, including 80
   compiled-rule facts; byte-identical `facts.ndjson`; all five required
   artifacts present; both output directories passed

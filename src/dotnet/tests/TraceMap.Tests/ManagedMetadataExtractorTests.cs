@@ -99,6 +99,76 @@ public sealed class ManagedMetadataExtractorTests
     }
 
     [Fact]
+    public void Nested_type_inventory_is_iterative_and_preserves_depth_first_order()
+    {
+        const int nestedTypeCount = 10_000;
+        var root = new TypeDefinition("Fixture", "Root", Mono.Cecil.TypeAttributes.Public);
+        var current = root;
+        for (var index = 0; index < nestedTypeCount; index++)
+        {
+            var nested = new TypeDefinition(string.Empty, $"Nested{index:D5}", Mono.Cecil.TypeAttributes.NestedPublic);
+            current.NestedTypes.Add(nested);
+            current = nested;
+        }
+        var secondRoot = new TypeDefinition("Fixture", "SecondRoot", Mono.Cecil.TypeAttributes.Public);
+
+        var flattened = ManagedMetadataExtractor.FlattenTypes([root, secondRoot]).ToArray();
+
+        Assert.Equal(nestedTypeCount + 2, flattened.Length);
+        Assert.Same(root, flattened[0]);
+        Assert.Equal("Nested00000", flattened[1].Name);
+        Assert.Equal($"Nested{nestedTypeCount - 1:D5}", flattened[^2].Name);
+        Assert.Same(secondRoot, flattened[^1]);
+    }
+
+    [Fact]
+    public void Input_deduplication_uses_actual_filesystem_case_semantics()
+    {
+        using var temp = new TempDirectory();
+        var source = FixtureAssemblies(FindRepoRoot()).CSharp;
+        var mixedCasePath = Path.Combine(temp.Path, "MixedCase.dll");
+        var alternateCasePath = Path.Combine(temp.Path, "mixedcase.dll");
+        File.Copy(source, mixedCasePath);
+        var comparer = CSharpSemanticExtractor.CreateSourcePathComparer(temp.Path);
+
+        var first = ManagedMetadataExtractor.Evaluate(temp.Path, new string('a', 40), new ScanOptions(
+            temp.Path,
+            "unused",
+            CompiledInputPaths: [mixedCasePath, alternateCasePath]));
+        var second = ManagedMetadataExtractor.Evaluate(temp.Path, new string('a', 40), new ScanOptions(
+            temp.Path,
+            "unused",
+            CompiledInputPaths: [alternateCasePath, mixedCasePath]));
+
+        Assert.Equal(comparer.Equals(mixedCasePath, alternateCasePath) ? 1 : 2, first.Provenance!.Outcomes.Count);
+        Assert.Equal(
+            JsonSerializer.Serialize(first.Provenance, JsonOptions.Stable),
+            JsonSerializer.Serialize(second.Provenance, JsonOptions.Stable));
+        if (comparer.Equals(mixedCasePath, alternateCasePath))
+            Assert.DoesNotContain(first.Provenance.Outcomes.SelectMany(outcome => outcome.GapKinds), gap => gap == "AmbiguousDuplicateManagedAssembly");
+    }
+
+    [Fact]
+    public void Overlong_safe_locators_are_projected_before_missing_or_admitted_outcomes_are_retained()
+    {
+        using var temp = new TempDirectory();
+        const int maxTextLength = 32;
+        var privateSegment = new string('p', 80);
+        var missingPath = Path.Combine(temp.Path, privateSegment, privateSegment, "missing.dll");
+        var evaluation = ManagedMetadataExtractor.Evaluate(temp.Path, new string('a', 40), new ScanOptions(
+            temp.Path,
+            "unused",
+            CompiledInputPaths: [missingPath],
+            CompiledInputLimits: new CompiledInputLimits(MaxTextLength: maxTextLength)));
+
+        var outcome = Assert.Single(evaluation.Provenance!.Outcomes);
+        Assert.Equal("limit-exhausted", outcome.Outcome);
+        Assert.Contains("ManagedInputTextLimitExceeded", outcome.GapKinds);
+        Assert.True(outcome.SafeLocator.Length <= maxTextLength);
+        Assert.DoesNotContain(privateSegment, JsonSerializer.Serialize(evaluation.Provenance), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Missing_native_corrupt_and_limit_exhausted_inputs_are_explicit_partial_gaps()
     {
         using var temp = new TempDirectory();

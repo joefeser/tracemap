@@ -92,15 +92,17 @@ rows are withheld. Source and compiled facts remain separate, private compiled
 facts remain local-only, and the scan identity commits the compiled admission
 contract before fact IDs are derived.
 
-Local validation passed 1,972 tests with zero failures or skips, including 12
-focused managed-metadata tests and a 19-test managed-metadata/report set. Two
+Local validation passed 1,975 tests with zero failures or skips, including 15
+focused managed-metadata tests and a 22-test managed-metadata/report set. The
+focused set includes iterative deeply nested type inventory, filesystem-aware
+path deduplication, and bounded projection of overlong input locators. Two
 admitted compiled-input CLI scans each emitted 107 facts, including 80 compiled
 facts; their `facts.ndjson` files were byte-identical, both artifact sets passed
 the adapter validator, and neither output contained local absolute paths. On PR
 #772 implementation head `5e17ee4a`, the portable matrix and package smoke
 passed on Windows, Ubuntu, and macOS, and the .NET, combined-adapter, and
-private-path jobs passed. ACK still withholds merge readiness because required
-review evidence names older head `7df78401`; no merge is implied by green CI.
+private-path jobs passed. Exact-head ACK remains the merge-readiness authority;
+green CI alone does not imply merge readiness.
 
 This slice does not add broad IL traversal, source-to-metadata reconciliation,
 rewrite analysis, PDB reconciliation, legacy framework execution,
