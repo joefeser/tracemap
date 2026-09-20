@@ -1,5 +1,7 @@
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using TraceMap.Cli;
 using TraceMap.Core;
 
@@ -29,6 +31,9 @@ public sealed class SourceMetadataReconciliationTests
             && edge.TargetSymbol.Contains("|(!0,!1)->!1", StringComparison.Ordinal));
         Assert.Equal(2, edges.Count(edge => edge.TargetSymbol!.Contains("|method:8:RefShape|", StringComparison.Ordinal)));
         Assert.Equal(2, edges.Count(edge => edge.TargetSymbol!.Contains("|method:12:GenericArity|", StringComparison.Ordinal)));
+        Assert.Contains(edges, edge => edge.TargetSymbol!.Contains("|method:6:Shapes|", StringComparison.Ordinal)
+            && edge.TargetSymbol.Contains("scope(assembly:name:14:System.Runtime", StringComparison.Ordinal)
+            && edge.TargetSymbol.Contains("type(namespace:6:System|names:4:Guid)", StringComparison.Ordinal));
         foreach (var caseId in new[] { "CS-RECON-REF-006", "CS-RECON-NESTED-GENERIC-007" })
         {
             var expected = ReadCase(caseId);
@@ -150,10 +155,12 @@ public sealed class SourceMetadataReconciliationTests
         Assert.False(string.IsNullOrWhiteSpace(entry.CommitSha));
     }
 
-    [Fact]
-    public void Reconciliation_summary_is_partial_when_semantic_source_identity_is_unavailable()
+    [Theory]
+    [InlineData("Level3SyntaxAnalysis")]
+    [InlineData("Level1SemanticAnalysisReduced")]
+    public void Reconciliation_summary_is_partial_when_semantic_source_identity_is_unavailable(string analysisLevel)
     {
-        var manifest = ReconciliationManifest("Level3SyntaxAnalysis");
+        var manifest = ReconciliationManifest(analysisLevel);
 
         var summary = SourceMetadataReconciler.BuildSummary(manifest, []);
 
@@ -193,6 +200,30 @@ public sealed class SourceMetadataReconciliationTests
         Assert.Equal(44, entry.OmittedCompiledFactIdCount);
         Assert.False(string.IsNullOrWhiteSpace(entry.OmittedCompiledFactIdSha256));
         Assert.NotEqual(firstDigest.OmittedEntrySha256, secondDigest.OmittedEntrySha256);
+    }
+
+    [Fact]
+    public void Roslyn_error_types_emit_incomplete_identity_candidates_instead_of_exact_shapes()
+    {
+        var tree = CSharpSyntaxTree.ParseText("[assembly:System.Runtime.Versioning.TargetFramework(\".NETCoreApp,Version=v10.0\")] namespace Fixture; public class Sample { public Missing Echo(Missing value) => value; }");
+        var compilation = CSharpCompilation.Create(
+            "ErrorTypeFixture",
+            [tree],
+            [MetadataReference.CreateFromFile(typeof(object).Assembly.Location)],
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        var candidates = new List<SourceMetadataIdentityCandidate>();
+
+        SourceMetadataIdentityCollector.Collect(
+            tree.GetRoot(),
+            compilation.GetSemanticModel(tree, ignoreAccessibility: true),
+            "Fixture.csproj",
+            "Fixture.cs",
+            LanguageNames.CSharp,
+            candidates);
+
+        var candidate = Assert.Single(candidates, item => item.SourceDeclarationIdentity.Contains("Echo", StringComparison.Ordinal));
+        Assert.Null(candidate.MetadataIdentity);
+        Assert.Equal("SourceErrorTypeIdentityUnavailable", candidate.IncompleteReason);
     }
 
     [Fact]

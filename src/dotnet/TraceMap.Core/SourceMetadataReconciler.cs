@@ -260,7 +260,7 @@ internal static class SourceMetadataReconciler
         var omitted = allEntries.Skip(maximumEntries).ToArray();
         var exactJoinCount = allEntries.Count(entry => entry.ReconciliationState == "exact-one-candidate");
         var explicitGapCount = allEntries.Length - exactJoinCount;
-        var semanticUnavailable = !manifest.AnalysisLevel.StartsWith("Level1SemanticAnalysis", StringComparison.Ordinal);
+        var semanticUnavailable = !string.Equals(manifest.AnalysisLevel, "Level1SemanticAnalysis", StringComparison.Ordinal);
         var coverage = semanticUnavailable || explicitGapCount > 0
             ? "source-metadata-partial"
             : "source-metadata-complete";

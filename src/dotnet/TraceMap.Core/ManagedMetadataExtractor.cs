@@ -1143,7 +1143,34 @@ public static class ManagedMetadataExtractor
         if (type is CecilSentinelType sentinel)
             return FormatType(sentinel.ElementType, nesting + 1);
         var (ns, names) = CecilTypeName(type);
-        return "type(" + MetadataTypePath(ns, names) + ")";
+        var typePath = "type(" + MetadataTypePath(ns, names) + ")";
+        return IsPrimitiveSignatureType(type.MetadataType)
+            ? typePath
+            : "scope(" + CecilAssemblyScope(type) + ")" + typePath;
+    }
+
+    private static bool IsPrimitiveSignatureType(MetadataType type) => type is
+        MetadataType.Void or MetadataType.Boolean or MetadataType.Char or MetadataType.SByte or MetadataType.Byte
+        or MetadataType.Int16 or MetadataType.UInt16 or MetadataType.Int32 or MetadataType.UInt32
+        or MetadataType.Int64 or MetadataType.UInt64 or MetadataType.Single or MetadataType.Double
+        or MetadataType.String or MetadataType.TypedByReference or MetadataType.IntPtr or MetadataType.UIntPtr
+        or MetadataType.Object;
+
+    private static string CecilAssemblyScope(CecilTypeReference type)
+    {
+        var assemblyName = type.Scope switch
+        {
+            AssemblyNameReference reference => reference,
+            Mono.Cecil.ModuleDefinition module => module.Assembly?.Name,
+            _ => null
+        };
+        if (assemblyName is null)
+            throw new ManagedInputException("unsupported", "ManagedSignatureAssemblyScopeUnavailable");
+        return AssemblyReferenceIdentity(
+            assemblyName.Name,
+            assemblyName.Version?.ToString() ?? "0.0.0.0",
+            assemblyName.Culture,
+            assemblyName.PublicKeyToken);
     }
 
     private static IReadOnlyDictionary<string, string> MemberProperties(IMemberDefinition member, int genericArity, bool generated, string? signature = null) =>
@@ -1547,6 +1574,7 @@ public static class ManagedMetadataExtractor
 
     private sealed class MetadataTypeProvider(MetadataReader reader) : ISignatureTypeProvider<string, object?>
     {
+        private readonly string _definitionScope = DefinitionScope(reader);
         public string GetArrayType(string elementType, ArrayShape shape) => elementType + FormatArrayShape(shape.Rank, shape.Sizes, shape.LowerBounds);
         public string GetByReferenceType(string elementType) => elementType + "&";
         public string GetFunctionPointerType(MethodSignature<string> signature) => "fnptr:" + FunctionPointerSignature(
@@ -1596,10 +1624,10 @@ public static class ManagedMetadataExtractor
             HandleKind.TypeSpecification => reader.GetTypeSpecification((TypeSpecificationHandle)handle).DecodeSignature(this, null),
             _ => "<unsupported-type>"
         };
-        private static string TypeName(MetadataReader metadataReader, TypeDefinitionHandle handle)
+        private string TypeName(MetadataReader metadataReader, TypeDefinitionHandle handle)
         {
             var (ns, names, _) = MetadataTypeName(metadataReader, handle);
-            return "type(" + MetadataTypePath(ns, names) + ")";
+            return "scope(" + _definitionScope + ")type(" + MetadataTypePath(ns, names) + ")";
         }
         private static string SystemType(string name) => "type(" + MetadataTypePath("System", [name]) + ")";
         private static string TypeName(MetadataReader metadataReader, TypeReferenceHandle handle)
@@ -1607,14 +1635,48 @@ public static class ManagedMetadataExtractor
             var names = new Stack<string>();
             var current = handle;
             string ns = string.Empty;
+            EntityHandle resolutionScope = default;
             while (!current.IsNil)
             {
                 var reference = metadataReader.GetTypeReference(current);
                 names.Push(metadataReader.GetString(reference.Name));
                 ns = reference.Namespace.IsNil ? ns : metadataReader.GetString(reference.Namespace);
+                resolutionScope = reference.ResolutionScope;
                 current = reference.ResolutionScope.Kind == HandleKind.TypeReference ? (TypeReferenceHandle)reference.ResolutionScope : default;
             }
-            return "type(" + MetadataTypePath(ns, names) + ")";
+            return "scope(" + ResolutionScope(metadataReader, resolutionScope) + ")type(" + MetadataTypePath(ns, names) + ")";
+        }
+
+        private static string DefinitionScope(MetadataReader metadataReader)
+        {
+            if (!metadataReader.IsAssembly)
+                throw new ManagedInputException("unsupported", "ManagedSignatureAssemblyScopeUnavailable");
+            var assembly = metadataReader.GetAssemblyDefinition();
+            var token = assembly.PublicKey.IsNil ? [] : PublicKeyTokenFromPublicKey(metadataReader.GetBlobBytes(assembly.PublicKey));
+            return AssemblyReferenceIdentity(
+                metadataReader.GetString(assembly.Name),
+                assembly.Version.ToString(),
+                assembly.Culture.IsNil ? null : metadataReader.GetString(assembly.Culture),
+                token);
+        }
+
+        private static string ResolutionScope(MetadataReader metadataReader, EntityHandle scope)
+        {
+            if (scope.Kind == HandleKind.AssemblyReference)
+            {
+                var reference = metadataReader.GetAssemblyReference((AssemblyReferenceHandle)scope);
+                var token = reference.PublicKeyOrToken.IsNil ? [] : metadataReader.GetBlobBytes(reference.PublicKeyOrToken);
+                if ((reference.Flags & AssemblyFlags.PublicKey) != 0)
+                    token = PublicKeyTokenFromPublicKey(token);
+                return AssemblyReferenceIdentity(
+                    metadataReader.GetString(reference.Name),
+                    reference.Version.ToString(),
+                    reference.Culture.IsNil ? null : metadataReader.GetString(reference.Culture),
+                    token);
+            }
+            if (scope.Kind == HandleKind.ModuleDefinition)
+                return DefinitionScope(metadataReader);
+            throw new ManagedInputException("unsupported", "ManagedSignatureAssemblyScopeUnavailable");
         }
     }
 }
