@@ -32,9 +32,10 @@ fallback and without promoting build artifacts beyond their provenance.
    validated scan/build receipt or another documented deterministic binding.
 2. A binary discovered under a source tree without such a binding shall be
    labeled unbound compiled input, not current output of that source commit.
-3. Missing expected binaries, proven source/build mismatches, unresolved
-   dependencies, unavailable symbols, reader failures, and limit exhaustion
-   shall produce explicit partial or unknown coverage.
+3. Missing expected binaries, proven stale binaries, ambiguous inputs, proven
+   source/build mismatches, unresolved dependencies, unavailable symbols,
+   reader failures, and limit exhaustion shall produce explicit partial or
+   unknown coverage.
 4. File timestamps alone shall not prove freshness or staleness.
 5. Compiled facts shall remain distinguishable from source semantic and syntax
    facts in rules, extractor identity, coverage labels, and reports.
@@ -54,15 +55,18 @@ fallback and without promoting build artifacts beyond their provenance.
 5. Metadata declarations are direct structural evidence, not proof of runtime
    execution, source ownership, dispatch, reachability, or build freshness.
 
-### 4. Deterministic source/compiled reconciliation
+### 4. Deterministic source/compiled reconciliation contract
 
-1. Source and compiled identities shall be joined only through documented
-   deterministic identities with explicit ambiguity handling.
-2. Display strings, short names, same-arity overloads, timestamps, and path
+1. The first slice shall keep source and compiled identities separate and shall
+   not emit source-to-metadata identity edges.
+2. A later reconciliation slice may join source and compiled identities only
+   through documented deterministic identities with explicit ambiguity
+   handling.
+3. Display strings, short names, same-arity overloads, timestamps, and path
    proximity shall not establish a join.
-3. Zero or multiple candidates shall emit an explicit gap; the extractor shall
+4. Zero or multiple candidates shall emit an explicit gap; the extractor shall
    not choose a convenient candidate.
-4. Reconciliation shall preserve both endpoint identities and the rule,
+5. Reconciliation shall preserve both endpoint identities and the rule,
    evidence tier, supporting IDs, limitations, and provenance that authorize
    the edge.
 
