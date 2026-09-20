@@ -33,7 +33,8 @@ define that rule as active nor emit source-to-metadata edges.
 Each compiled input record contains:
 
 - safe input locator and input role;
-- file SHA-256;
+- raw file SHA-256 in the local/private admission record only, or a
+  privacy-projected-input SHA-256 in a shareable projection;
 - bounded-input-set SHA-256;
 - provenance-binding-input SHA-256 over the canonical privacy-projected
   receipt/binding fields used to classify provenance;
@@ -44,15 +45,23 @@ Each compiled input record contains:
 - build/toolchain identity when a validated receipt supplies it; and
 - coverage state and categorical gaps.
 
-The bounded-input-set digest commits to the canonical privacy-projected
-admission policy, expected-input declarations, effective size/count/work
-limits, deterministic ordered records of admitted safe locators, roles, file
-digests, and each provenance-binding-input digest. The provenance-binding input
-includes every receipt field that can change source association or freshness
-classification, such as the safe source identity, source commit, build
-identity, declared assembly mapping, and receipt schema/version. A shareable
-projection computes both digests after privacy projection and never republishes
-a private receipt, source digest, path, or identifier.
+The local/private bounded-input-set digest commits to the admission policy,
+expected-input declarations, effective size/count/work limits, deterministic
+ordered records of admitted safe locators, roles, raw file digests, and each
+provenance-binding-input digest. The provenance-binding input includes every
+receipt field that can change source association or freshness classification,
+such as the safe source identity, source commit, build identity, declared
+assembly mapping, and receipt schema/version.
+
+A shareable projection must omit the raw file digest for an access-controlled
+or private assembly. It first applies the documented privacy projection to the
+admitted input record, computes a privacy-projected-input SHA-256 only over
+that canonical projected payload (excluding digest fields), and then recomputes
+the bounded-input-set and provenance-binding-input digests only from
+privacy-projected fields. It never
+hashes or republishes a private source artifact, receipt, source digest, path,
+identifier, or raw assembly digest. The projection algorithm and omitted or
+replaced fields are part of the rule's documented limitations.
 
 Freshness states are `bound`, `stale`, `unbound`, `mismatch`, `missing`, and
 `unknown`. Only a validated build/scan receipt can establish `bound`, `stale`,
