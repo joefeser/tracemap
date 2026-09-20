@@ -23,7 +23,7 @@ function Property-Value([object]$Value, [string]$Name) {
     if ($null -eq $property) { return $null }
     return $property.Value
 }
-function Get-TerminalKeys([object[]]$Boundaries) {
+function Get-RenderedBoundaryTupleKeys([object[]]$Boundaries) {
     $keys = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
     foreach ($boundary in $Boundaries) {
         $parts = @([string]$boundary.boundaryKind, [string]$boundary.boundaryTargetId, [string]$boundary.terminalEvidenceId)
@@ -143,8 +143,8 @@ for ($index = 0; $index -lt $requestedPageIds.Count; $index++) {
         $baselineChains = @(Values $baseline.eventChains)
         $baselineBoundaries = @(Values $baseline.downstreamBoundaries)
     }
-    $baselineKeys = Get-TerminalKeys $baselineBoundaries
-    $diagnosticKeys = Get-TerminalKeys $diagnosticBoundaries
+    $baselineKeys = Get-RenderedBoundaryTupleKeys $baselineBoundaries
+    $diagnosticKeys = Get-RenderedBoundaryTupleKeys $diagnosticBoundaries
     foreach ($key in $baselineKeys) { [void]$aggregateBaselineKeys.Add($key) }
     foreach ($key in $diagnosticKeys) { [void]$aggregateDiagnosticKeys.Add($key) }
     $baselinePageDepth = Get-DepthChainCount $baselineChains
@@ -153,7 +153,7 @@ for ($index = 0; $index -lt $requestedPageIds.Count; $index++) {
     $diagnosticDepthChains += $diagnosticPageDepth
     $added = @($diagnosticKeys | Where-Object { !$baselineKeys.Contains($_) }).Count
     $lost = @($baselineKeys | Where-Object { !$diagnosticKeys.Contains($_) }).Count
-    Write-Output "page=$pageId|depth8Chains=$($baselineChains.Count)|depth10Chains=$($diagnosticChains.Count)|depth8DepthTruncated=$baselinePageDepth|depth10DepthTruncated=$diagnosticPageDepth|depth8TerminalEvidence=$($baselineKeys.Count)|depth10TerminalEvidence=$($diagnosticKeys.Count)|addedTerminalEvidence=$added|lostTerminalEvidence=$lost"
+    Write-Output "page=$pageId|depth8Chains=$($baselineChains.Count)|depth10Chains=$($diagnosticChains.Count)|depth8DepthTruncated=$baselinePageDepth|depth10DepthTruncated=$diagnosticPageDepth|depth8RenderedBoundaryTuples=$($baselineKeys.Count)|depth10RenderedBoundaryTuples=$($diagnosticKeys.Count)|addedRenderedBoundaryTuples=$added|lostRenderedBoundaryTuples=$lost"
     $baselineReachability = Get-ReachabilitySummary $baselineChains
     $diagnosticReachability = Get-ReachabilitySummary $diagnosticChains
     Write-Output "reachability=$pageId|depth8Available=$($baselineReachability.Available)|depth8Complete=$($baselineReachability.Complete)|depth8DistinctTerminals=$($baselineReachability.TerminalCount)|depth8MinimumDistance=$($baselineReachability.MinimumDistance)|depth8LimitReasons=$($baselineReachability.LimitReasons -join ',')|depth8PathDetailTruncated=$($baselineReachability.PathTruncated)|depth8PathDetailReasons=$($baselineReachability.PathReasons -join ',')|depth10Complete=$($diagnosticReachability.Complete)|depth10DistinctTerminals=$($diagnosticReachability.TerminalCount)|depth10MinimumDistance=$($diagnosticReachability.MinimumDistance)|depth10LimitReasons=$($diagnosticReachability.LimitReasons -join ',')|depth10PathDetailTruncated=$($diagnosticReachability.PathTruncated)|depth10PathDetailReasons=$($diagnosticReachability.PathReasons -join ',')"
@@ -165,8 +165,9 @@ Write-Output 'webformsTargetedDepthComparison=completed'
 Write-Output "pageIds=$($requestedPageIds -join ',')"
 Write-Output "depth8DepthTruncated=$baselineDepthChains"
 Write-Output "depth10DepthTruncated=$diagnosticDepthChains"
-Write-Output "depth8TerminalEvidence=$($aggregateBaselineKeys.Count)"
-Write-Output "depth10TerminalEvidence=$($aggregateDiagnosticKeys.Count)"
-Write-Output "terminalDelta=added:$aggregateAdded|lost:$aggregateLost"
+Write-Output 'renderedBoundaryTupleBasis=boundaryKind+boundaryTargetId+terminalEvidenceId;path-detail-output-not-terminal-inventory'
+Write-Output "depth8RenderedBoundaryTuples=$($aggregateBaselineKeys.Count)"
+Write-Output "depth10RenderedBoundaryTuples=$($aggregateDiagnosticKeys.Count)"
+Write-Output "renderedBoundaryTupleDelta=added:$aggregateAdded|lost:$aggregateLost"
 Write-Output "diagnosticPacket=$(Join-Path $diagnosticRoot 'webforms-modernization.json')"
 Write-Output 'nonClaim=distinct-evidence-tuples-not-runtime-operations;partial-results-do-not-prove-absence'
