@@ -47,7 +47,8 @@ public sealed record ScanExecutionReceipt(
     IReadOnlyList<ScanStageReceipt> Stages,
     IReadOnlyList<string> SupportingFactIds,
     IReadOnlyList<string> SupportingGapIds,
-    IReadOnlyList<string> Limitations);
+    IReadOnlyList<string> Limitations,
+    SourceMetadataReconciliationSummary? SourceMetadataReconciliation = null);
 
 /// <summary>
 /// Collects bounded, sanitized operational observations. Receipts describe the
@@ -101,6 +102,7 @@ public sealed class ScanReceiptRecorder
     private string coverage = "unknown";
     private string outcome = "failed";
     private IReadOnlyList<string> extractorVersions = [ScannerVersions.TraceMap];
+    private SourceMetadataReconciliationSummary? sourceMetadataReconciliation;
 
     public ScanReceiptRecorder(ScanOptions options, IEnumerable<string>? additionalAuthorizedInputs = null)
     {
@@ -135,6 +137,9 @@ public sealed class ScanReceiptRecorder
     public void Bind(ScanResult result)
     {
         Bind(result.Manifest);
+        sourceMetadataReconciliation = result.Manifest.SourceMetadataReconciliation is null
+            ? null
+            : SourceMetadataReconciler.BuildSummary(result.Manifest, result.Facts, ScanReceiptSchema.MaxSupportingIds);
         extractorVersions = result.Facts
             .Select(fact => fact.Evidence?.ExtractorVersion)
             .Where(value => !string.IsNullOrWhiteSpace(value))
@@ -229,7 +234,8 @@ public sealed class ScanReceiptRecorder
             ordered,
             finalFactIds,
             finalGapIds,
-            ReceiptLimitations);
+            ReceiptLimitations,
+            sourceMetadataReconciliation);
     }
 
     internal void Record(

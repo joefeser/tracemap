@@ -33,6 +33,13 @@ internal static class SemanticExtractionResultMerge
                 .OrderBy(span => span.FilePath, StringComparer.Ordinal)
                 .ThenBy(span => span.Start)
                 .ThenBy(span => span.Length)
+                .ToArray(),
+            SourceMetadataCandidates: (first.SourceMetadataCandidates ?? [])
+                .Concat(second.SourceMetadataCandidates ?? [])
+                .OrderBy(candidate => candidate.SourceIdentity, StringComparer.Ordinal)
+                .ThenBy(candidate => candidate.MetadataIdentity, StringComparer.Ordinal)
+                .ThenBy(candidate => candidate.Evidence.FilePath, StringComparer.Ordinal)
+                .ThenBy(candidate => candidate.Evidence.StartLine)
                 .ToArray());
     }
 

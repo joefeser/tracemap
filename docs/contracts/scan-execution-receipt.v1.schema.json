@@ -38,7 +38,13 @@
     },
     "supportingFactIds": { "$ref": "#/$defs/supportingFactIds" },
     "supportingGapIds": { "$ref": "#/$defs/supportingGapIds" },
-    "limitations": { "$ref": "#/$defs/limitations" }
+    "limitations": { "$ref": "#/$defs/limitations" },
+    "sourceMetadataReconciliation": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/sourceMetadataReconciliation" }
+      ]
+    }
   },
   "$defs": {
     "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
@@ -61,6 +67,53 @@
       "maxItems": 16,
       "uniqueItems": true,
       "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+    },
+    "sourceMetadataReconciliation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion", "ruleId", "extractorVersion", "coverageState",
+        "boundedInputSha256", "compiledGeneratorSha256", "entries",
+        "omittedEntryCount", "omittedEntrySha256"
+      ],
+      "properties": {
+        "schemaVersion": { "const": "source-metadata-reconciliation.v1" },
+        "ruleId": { "const": "dotnet.compiled.source-identity.v1" },
+        "extractorVersion": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "coverageState": { "enum": ["source-metadata-complete", "source-metadata-partial"] },
+        "boundedInputSha256": { "$ref": "#/$defs/sha256" },
+        "compiledGeneratorSha256": { "$ref": "#/$defs/sha256" },
+        "entries": {
+          "type": "array",
+          "maxItems": 256,
+          "items": { "$ref": "#/$defs/sourceMetadataReconciliationEntry" }
+        },
+        "omittedEntryCount": { "type": "integer", "minimum": 0 },
+        "omittedEntrySha256": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] }
+      }
+    },
+    "sourceMetadataReconciliationEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reconciliationState", "sourceIdentity", "metadataIdentity", "sourceFactId",
+        "compiledFactIds", "ruleId", "evidenceTier", "extractorVersion",
+        "compiledProvenanceState", "provenanceBindingInputSha256", "gapKind", "limitation"
+      ],
+      "properties": {
+        "reconciliationState": { "enum": ["exact-one-candidate", "unjoined", "unsupported-source-adapter"] },
+        "sourceIdentity": { "type": "string", "maxLength": 4096 },
+        "metadataIdentity": { "type": "string", "maxLength": 4096 },
+        "sourceFactId": { "type": "string", "maxLength": 25 },
+        "compiledFactIds": { "$ref": "#/$defs/supportingFactIds" },
+        "ruleId": { "const": "dotnet.compiled.source-identity.v1" },
+        "evidenceTier": { "enum": ["Tier1Semantic", "Tier4Unknown"] },
+        "extractorVersion": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "compiledProvenanceState": { "type": "string", "maxLength": 32 },
+        "provenanceBindingInputSha256": { "type": "string", "maxLength": 64 },
+        "gapKind": { "type": "string", "maxLength": 128 },
+        "limitation": { "type": "string", "minLength": 1, "maxLength": 500 }
+      }
     },
     "stage": {
       "type": "object",

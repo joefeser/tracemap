@@ -47,6 +47,11 @@ public static class VisualBasicSemanticExtractor
         var gaps = new List<SemanticFactCandidate>();
         var analyzedFiles = new HashSet<string>(StringComparer.Ordinal);
         var compilationInputFiles = new HashSet<string>(StringComparer.Ordinal);
+        List<SourceMetadataIdentityCandidate>? sourceMetadataCandidates = options.CompiledInputPaths is { Count: > 0 }
+            || options.CompiledDependencyPaths is { Count: > 0 }
+            || options.CompiledBindingReceiptPaths is { Count: > 0 }
+                ? []
+                : null;
         var projects = inventory
             .Where(item => item.Kind == "VisualBasicProject")
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
@@ -168,6 +173,7 @@ public static class VisualBasicSemanticExtractor
                         loadedProjectPaths,
                         analyzedFiles,
                         compilationInputFiles,
+                        sourceMetadataCandidates,
                         options.ProjectPaths is { Count: > 0 } ? selectedProjectPaths : null,
                         cancellationToken);
                 }
@@ -215,6 +221,7 @@ public static class VisualBasicSemanticExtractor
                     gaps,
                     analyzedFiles,
                     compilationInputFiles,
+                    sourceMetadataCandidates,
                     cancellationToken);
                 loadedProjectPaths.Add(projectItem.RelativePath);
             }
@@ -268,7 +275,8 @@ public static class VisualBasicSemanticExtractor
             AnalyzedFiles: analyzedFiles,
             ScopeReduced: explicitlyExcludedSourcePaths.Count > 0,
             CompilationInputFiles: compilationInputFiles,
-            ProtectedSourceSpans: []);
+            ProtectedSourceSpans: [],
+            SourceMetadataCandidates: sourceMetadataCandidates ?? []);
     }
 
     private static void ExtractSolution(
@@ -283,6 +291,7 @@ public static class VisualBasicSemanticExtractor
         HashSet<string> loadedProjectPaths,
         HashSet<string> analyzedFiles,
         HashSet<string> compilationInputFiles,
+        List<SourceMetadataIdentityCandidate>? sourceMetadataCandidates,
         IReadOnlySet<string>? selectedProjectPaths,
         CancellationToken cancellationToken)
     {
@@ -310,6 +319,7 @@ public static class VisualBasicSemanticExtractor
                 gaps,
                 analyzedFiles,
                 compilationInputFiles,
+                sourceMetadataCandidates,
                 cancellationToken);
             if (!string.IsNullOrWhiteSpace(project.FilePath))
             {
@@ -327,6 +337,7 @@ public static class VisualBasicSemanticExtractor
         List<SemanticFactCandidate> gaps,
         HashSet<string> analyzedFiles,
         HashSet<string> compilationInputFiles,
+        List<SourceMetadataIdentityCandidate>? sourceMetadataCandidates,
         CancellationToken cancellationToken)
     {
         var projectPath = CSharpSemanticExtractor.ToRelativePath(repoPath, project.FilePath);
@@ -412,6 +423,7 @@ public static class VisualBasicSemanticExtractor
                 facts,
                 gaps,
                 analyzedFiles,
+                sourceMetadataCandidates,
                 canonicalEvidencePath,
                 cancellationToken);
         }
@@ -457,6 +469,7 @@ public static class VisualBasicSemanticExtractor
         List<SemanticFactCandidate> facts,
         List<SemanticFactCandidate> gaps,
         HashSet<string> analyzedFiles,
+        List<SourceMetadataIdentityCandidate>? sourceMetadataCandidates,
         string? canonicalEvidencePath,
         CancellationToken cancellationToken)
     {
@@ -516,6 +529,8 @@ public static class VisualBasicSemanticExtractor
         AddAdoNetBoundaryFacts(projectPath, filePath, root, model, facts, gaps);
         AddExternalBoundaryFacts(projectPath, filePath, root, model, facts, gaps);
         AddLegacyServiceDeclarationFacts(projectPath, filePath, root, model, facts);
+        if (sourceMetadataCandidates is not null)
+            SourceMetadataIdentityCollector.Collect(root, model, projectPath, filePath, LanguageNames.VisualBasic, sourceMetadataCandidates);
     }
 
     private static void AddLegacyServiceDeclarationFacts(

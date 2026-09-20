@@ -43,14 +43,17 @@ rules:
       - File timestamps are not freshness evidence, and source association requires a validated binding receipt.
 
   - id: dotnet.compiled.source-identity.v1
-    status: deferred
+    status: active
     name: Source to compiled metadata identity reconciliation
-    description: Reserved for a later independently reviewed exact source-to-metadata reconciliation slice.
-    evidenceTier: Tier4Unknown
-    emits: []
+    description: Records a deterministic edge only when one compiler-resolved source declaration and exactly one admitted metadata declaration share the complete normalized assembly, module, type, member, and signature identity under a validated bound receipt; otherwise records an explicit bounded gap.
+    evidenceTier: Tier1Semantic
+    emits: [SourceMetadataIdentityObserved, SourceMetadataIdentityReconciled, AnalysisGap]
     limitations:
-      - This rule is inactive and must not emit in the compiled metadata foundation slice.
-      - Display strings, short names, timestamps, path proximity, and metadata tokens alone cannot establish a source-to-metadata identity edge.
+      - Display strings, simple names, same arity, path proximity, timestamps, and metadata tokens alone cannot establish a source-to-metadata identity edge.
+      - Zero or multiple exact candidates, incomplete source identities, unsupported source adapters, and unbound, stale, mismatched, ambiguous, disputed, unsupported, or incomplete compiled evidence emit Tier4Unknown gaps and no edge.
+      - Compiler-generated members remain separate unless the compiler supplies a specific associated property or event accessor relationship; no state-machine, lambda, backing-field, or generated-type relationship is inferred.
+      - An exact edge proves identity reconciliation only for this scan; it does not prove PDB correspondence, IL ownership, rewrite equivalence, runtime loading, execution, dispatch, reachability, behavior, or impact.
+      - Reconciliation coverage is independent of source analysis level and never erases, upgrades, or otherwise changes source-derived facts.
 
   - id: adapter.scan-truth.conformance.v1
     name: Cross-adapter scan truth conformance

@@ -454,6 +454,20 @@ public static class MarkdownReportWriter
         lines.Add("- Binary locations use admitted safe locators and metadata tokens; the serialized `1..1` span is a non-source sentinel, not a source line.");
         lines.Add("- Metadata declarations do not prove source ownership, build freshness, runtime loading, execution, dispatch, or reachability.");
 
+        if (result.Manifest.SourceMetadataReconciliation is { } reconciliation)
+        {
+            var joined = reconciliation.Entries.Count(entry => entry.ReconciliationState == "exact-one-candidate");
+            var gaps = reconciliation.Entries.Count - joined;
+            lines.Add($"- Source/metadata reconciliation: `{reconciliation.CoverageState}`; exact joins `{joined}`; explicit gaps `{gaps}`; rule `{reconciliation.RuleId}`; extractor `{reconciliation.ExtractorVersion}`.");
+            lines.Add("- Every positive join requires one exact complete identity candidate and bound compiled provenance; zero, multiple, unacceptable, incomplete, and unsupported cases remain unjoined.");
+            foreach (var entry in reconciliation.Entries.Take(CompiledMetadataFactLimit))
+            {
+                lines.Add($"- Reconciliation `{entry.ReconciliationState}`: source `{entry.SourceIdentity}`, metadata `{entry.MetadataIdentity}`, tier `{entry.EvidenceTier}`, provenance `{entry.CompiledProvenanceState}`, gap `{(string.IsNullOrEmpty(entry.GapKind) ? "none" : entry.GapKind)}`.");
+            }
+            if (reconciliation.OmittedEntryCount > 0)
+                lines.Add($"- {reconciliation.OmittedEntryCount} reconciliation entries omitted from this manifest/report view; omitted-entry SHA-256: `{reconciliation.OmittedEntrySha256}`.");
+        }
+
         foreach (var outcome in provenance.Outcomes.OrderBy(item => item.SafeLocator, StringComparer.Ordinal).ThenBy(item => item.Role, StringComparer.Ordinal))
         {
             lines.Add($"- Input `{outcome.SafeLocator}` ({outcome.Role}): `{outcome.Outcome}`, provenance `{outcome.ProvenanceState}`, gaps `{(outcome.GapKinds.Count == 0 ? "none" : string.Join(",", outcome.GapKinds))}`.");
