@@ -192,6 +192,21 @@ inventory completeness and limit reasons, minimum terminal distance, and counts
 of distinct retained terminal-evidence identities. It does not disclose the
 private terminal identities or equate them with runtime operations.
 
+To compare one generated page handoff before and after a change, including its
+file size and the retained chain, boundary, terminal-inventory, and repeated
+path-detail counts, run:
+
+```powershell
+& $TraceMapRoot\scripts\Compare-FocusedWebFormsPageHandoff.ps1 `
+  -PriorReviewRoot $MergedReviewRootOG `
+  -ReviewRoot $MergedReviewRoot `
+  -PageId page-011
+```
+
+The command classifies whether retained chain and boundary outcomes stayed
+stable while repeated path detail decreased. It emits counts only; it does not
+print private evidence identities or claim runtime equivalence.
+
 `New-FocusedWebFormsPageGraphDump.ps1` independently closes every resolved
 handler on one receipted page. Its anonymous graph projection separates event
 chain fan-out from distinct handler cases and reports per-case retained
@@ -452,6 +467,7 @@ workflow:
 | `Triage-FocusedWebFormsUnresolvedChains.ps1` | Print retained unresolved-chain states and bounds. |
 | `Invoke-FocusedWebFormsTargetedDepthDiagnostic.ps1` | Regenerate paired depth-8/depth-10 packets from one merged index for at most two pages. |
 | `Compare-FocusedWebFormsTargetedDepthDiagnostic.ps1` | Compare terminal-inventory completeness separately from path-detail truncation. |
+| `Compare-FocusedWebFormsPageHandoff.ps1` | Compare one prior/current page handoff's retained outcomes separately from repeated path detail. |
 | `Triage-CompletedWebFormsPages.ps1` | Compare retained per-page terminal and gap states. |
 | `Compare-CompletedWebFormsPageTriage.ps1` | Compare compatible completed depth packets. |
 
