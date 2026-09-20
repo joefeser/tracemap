@@ -4,6 +4,8 @@ namespace TraceMap.Reporting;
 
 public static class MarkdownReportWriter
 {
+    private const int CompiledMetadataFactLimit = 50;
+
     public static async Task WriteAsync(string path, ScanResult result, CancellationToken cancellationToken = default)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
@@ -459,10 +461,15 @@ public static class MarkdownReportWriter
             .Where(fact => fact.Properties.GetValueOrDefault("evidenceLocationKind") == ManagedMetadataExtractor.MetadataLocationKind)
             .OrderBy(fact => fact.Evidence.FilePath, StringComparer.Ordinal)
             .ThenBy(fact => fact.Properties.GetValueOrDefault("metadataToken"), StringComparer.Ordinal)
-            .ThenBy(fact => fact.FactId, StringComparer.Ordinal);
-        foreach (var fact in facts)
+            .ThenBy(fact => fact.FactId, StringComparer.Ordinal)
+            .ToArray();
+        foreach (var fact in facts.Take(CompiledMetadataFactLimit))
         {
             lines.Add($"- `{fact.FactType}` `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at binary `{fact.Evidence.FilePath}` token `{fact.Properties.GetValueOrDefault("metadataToken") ?? "unknown"}`.");
+        }
+        if (facts.Length > CompiledMetadataFactLimit)
+        {
+            lines.Add($"- {facts.Length - CompiledMetadataFactLimit} additional compiled metadata facts omitted from this human-readable sample; exhaustive rows remain in `facts.ndjson` and `index.sqlite`.");
         }
     }
 

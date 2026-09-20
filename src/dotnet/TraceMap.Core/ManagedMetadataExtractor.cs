@@ -14,6 +14,7 @@ using CecilFunctionPointerType = Mono.Cecil.FunctionPointerType;
 using CecilGenericInstanceType = Mono.Cecil.GenericInstanceType;
 using CecilGenericParameter = Mono.Cecil.GenericParameter;
 using CecilPointerType = Mono.Cecil.PointerType;
+using CecilSentinelType = Mono.Cecil.SentinelType;
 using CecilTypeDefinition = Mono.Cecil.TypeDefinition;
 using CecilTypeReference = Mono.Cecil.TypeReference;
 
@@ -963,6 +964,33 @@ public static class ManagedMetadataExtractor
     private static string PropertySignature<T>(T propertyType, IEnumerable<T> parameters, string callingConvention, bool hasThis) =>
         $"call:{callingConvention}|hasThis:{hasThis.ToString().ToLowerInvariant()}|({string.Join(",", parameters)})->{propertyType}";
 
+    private static string FunctionPointerSignature<T>(T returnType, IEnumerable<T> parameters, int genericArity, string callingConvention, bool hasThis, bool explicitThis, int requiredParameterCount) =>
+        MethodSignature(returnType, parameters, genericArity, callingConvention, hasThis, explicitThis)
+        + $"|requiredParameters:{requiredParameterCount.ToString(CultureInfo.InvariantCulture)}";
+
+    private static string FunctionPointerCallingConvention(MethodCallingConvention callingConvention) => ((int)callingConvention & 0x0f) switch
+    {
+        0 => "default",
+        1 => "cdecl",
+        2 => "stdcall",
+        3 => "thiscall",
+        4 => "fastcall",
+        5 => "vararg",
+        var value => $"unknown-{value.ToString(CultureInfo.InvariantCulture)}"
+    };
+
+    private static string FunctionPointerCallingConvention(SignatureCallingConvention callingConvention) => callingConvention switch
+    {
+        SignatureCallingConvention.Default => "default",
+        SignatureCallingConvention.CDecl => "cdecl",
+        SignatureCallingConvention.StdCall => "stdcall",
+        SignatureCallingConvention.ThisCall => "thiscall",
+        SignatureCallingConvention.FastCall => "fastcall",
+        SignatureCallingConvention.VarArgs => "vararg",
+        SignatureCallingConvention.Unmanaged => "unmanaged",
+        _ => $"unknown-{((int)callingConvention).ToString(CultureInfo.InvariantCulture)}"
+    };
+
     internal static string FormatArrayShape(int rank, IEnumerable<int> sizes, IEnumerable<int> lowerBounds) =>
         $"[rank={rank};sizes={FormatShapeValues(sizes)};lowerBounds={FormatShapeValues(lowerBounds)}]";
 
@@ -994,8 +1022,19 @@ public static class ManagedMetadataExtractor
         if (type is CecilGenericParameter parameter)
             return parameter.Type == GenericParameterType.Method ? $"!!{parameter.Position}" : $"!{parameter.Position}";
         if (type is CecilFunctionPointerType functionPointer)
-            return "fnptr:" + MethodSignature(FormatType(functionPointer.ReturnType), functionPointer.Parameters.Select(item => FormatType(item.ParameterType)), functionPointer.GenericParameters.Count,
-                functionPointer.CallingConvention == MethodCallingConvention.VarArg ? "vararg" : "default", functionPointer.HasThis, functionPointer.ExplicitThis);
+        {
+            var requiredParameterCount = functionPointer.Parameters.TakeWhile(item => item.ParameterType is not CecilSentinelType).Count();
+            return "fnptr:" + FunctionPointerSignature(
+                FormatType(functionPointer.ReturnType),
+                functionPointer.Parameters.Select(item => FormatType(item.ParameterType)),
+                functionPointer.GenericParameters.Count,
+                FunctionPointerCallingConvention(functionPointer.CallingConvention),
+                functionPointer.HasThis,
+                functionPointer.ExplicitThis,
+                requiredParameterCount);
+        }
+        if (type is CecilSentinelType sentinel)
+            return FormatType(sentinel.ElementType);
         var declaring = type.DeclaringType is null ? null : FormatType(type.DeclaringType) + "+";
         if (declaring is not null)
             return declaring + type.Name;
@@ -1326,8 +1365,14 @@ public static class ManagedMetadataExtractor
     {
         public string GetArrayType(string elementType, ArrayShape shape) => elementType + FormatArrayShape(shape.Rank, shape.Sizes, shape.LowerBounds);
         public string GetByReferenceType(string elementType) => elementType + "&";
-        public string GetFunctionPointerType(MethodSignature<string> signature) => "fnptr:" + MethodSignature(signature.ReturnType, signature.ParameterTypes, signature.GenericParameterCount,
-            signature.Header.CallingConvention == SignatureCallingConvention.VarArgs ? "vararg" : "default", signature.Header.IsInstance, (signature.Header.RawValue & 0x40) != 0);
+        public string GetFunctionPointerType(MethodSignature<string> signature) => "fnptr:" + FunctionPointerSignature(
+            signature.ReturnType,
+            signature.ParameterTypes,
+            signature.GenericParameterCount,
+            FunctionPointerCallingConvention(signature.Header.CallingConvention),
+            signature.Header.IsInstance,
+            (signature.Header.RawValue & 0x40) != 0,
+            signature.RequiredParameterCount);
         public string GetGenericInstantiation(string genericType, ImmutableArray<string> typeArguments) => genericType + "<" + string.Join(",", typeArguments) + ">";
         public string GetGenericMethodParameter(object? genericContext, int index) => $"!!{index}";
         public string GetGenericTypeParameter(object? genericContext, int index) => $"!{index}";

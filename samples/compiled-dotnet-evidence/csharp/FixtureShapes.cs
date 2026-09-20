@@ -23,6 +23,8 @@ namespace TraceMap.CompiledFixtures.CSharp.Alpha
         }
 
         public unsafe int* Pointer(int* value) => value;
+        public unsafe delegate* unmanaged[Cdecl]<int> CdeclPointer(delegate* unmanaged[Cdecl]<int> value) => value;
+        public unsafe delegate* unmanaged[Stdcall]<int> StdcallPointer(delegate* unmanaged[Stdcall]<int> value) => value;
         string IExplicit.Format(int value) => value.ToString();
         public async Task<int> AsyncShape(int value) { await Task.Yield(); return value; }
         public IEnumerable<int> IteratorShape(int value) { yield return value; }
