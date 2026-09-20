@@ -4455,7 +4455,10 @@ public static partial class CombinedDependencyPathReporter
                 work++;
                 if (!TryAdvanceDispatchMode(current.DispatchMode, edge.EdgeKind, out var nextMode)) continue;
                 var next = new TerminalWitnessKey(edge.ToNodeId, nextMode);
-                if (!predecessors.TryAdd(next, new TerminalWitnessPredecessor(current, edge.EdgeId))) continue;
+                if (predecessors.ContainsKey(next)) continue;
+                if (queue.Count >= maxFrontier)
+                    return new TerminalWitnessResult(null, work, false, true, edge.ToNodeId);
+                predecessors.Add(next, new TerminalWitnessPredecessor(current, edge.EdgeId));
                 queue.Enqueue(next);
             }
         }
