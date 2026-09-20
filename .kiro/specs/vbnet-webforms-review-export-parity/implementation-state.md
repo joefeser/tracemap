@@ -1,9 +1,11 @@
 # Implementation state
 
+- Record type: historical delivery record.
 - Issue: #750
 - Branch: `codex/issue-750-vb-webforms-review`
 - Base: `origin/dev` at `3666356d`
-- Status: implementation and validation complete; ready for PR review
+- Status: implementation and validation complete; merged by PR #751 on
+  2026-09-12.
 
 ## Scope decisions
 

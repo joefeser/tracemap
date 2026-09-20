@@ -1,6 +1,8 @@
 # VB.NET Adapter Foundation Implementation State
 
-- Status: complete (spec tasks 1-11 done; PR to `dev` opened from this branch)
+- Record type: historical delivery record; current cross-.NET planning is in
+  `docs/DOTNET_COMPLETENESS_STATUS.md`.
+- Status: complete and merged by PR #742 (spec tasks 1-11 done)
 - Branch: `codex/issue-736-vbnet-adapter-foundation`
 - Slice start: `673cf6f19af4b470f4a031479317fed3947d26b9` (foundation slice,
   tasks 1-4)
@@ -285,15 +287,10 @@ caller-text regression over the full scan pipeline.
 
 ## Remaining work / follow-ups
 
-- Required post-debug validation track: build the checked-in C#, VB.NET, and F#
-  synthetic repository matrix documented in `docs/VALIDATION.md` under
-  "Required multi-language canonical-identity corpus." It must cover semantic
-  and projectless/failed-build lanes, cross-namespace and cross-assembly
-  collisions, nested/repeated type names, same-arity overloads, inheritance,
-  cross-language candidates, and reflection/dynamic assembly gaps. The current
-  focused regressions are necessary but are not a substitute for these larger
-  end-to-end repository scans. Until an F# adapter exists, its fixtures must
-  prove explicit unsupported coverage and zero inferred joins.
+- The required C#, VB.NET, and F# compiled-identity fixture track now lives in
+  issue #767 and `.kiro/specs/compiled-dotnet-evidence-foundation/`. Until an F#
+  source adapter exists, those fixtures must retain explicit unsupported source
+  coverage and zero inferred source joins.
 - Cross-language symbol-identity joins (VB symbols to C#-declared symbols)
   remain unestablished; display-string and fact-level evidence cross the
   language boundary. Future slice.
