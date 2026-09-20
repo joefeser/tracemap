@@ -25,6 +25,10 @@ public sealed class SourceMetadataReconciliationTests
         Assert.Contains(edges, edge => edge.TargetSymbol!.Contains("|constructor:5:.ctor|", StringComparison.Ordinal));
         Assert.Contains(edges, edge => edge.TargetSymbol!.Contains("|property:4:Name|", StringComparison.Ordinal));
         Assert.Contains(edges, edge => edge.TargetSymbol!.Contains("|event:7:Changed|", StringComparison.Ordinal));
+        Assert.Contains(edges, edge => edge.TargetSymbol!.Contains("8:Nested`1|arity:2|method:4:Echo|", StringComparison.Ordinal)
+            && edge.TargetSymbol.Contains("|(!0,!1)->!1", StringComparison.Ordinal));
+        Assert.Equal(2, edges.Count(edge => edge.TargetSymbol!.Contains("|method:8:RefShape|", StringComparison.Ordinal)));
+        Assert.Equal(2, edges.Count(edge => edge.TargetSymbol!.Contains("|method:12:GenericArity|", StringComparison.Ordinal)));
         Assert.All(edges, edge =>
         {
             Assert.Equal(RuleIds.DotNetCompiledSourceIdentity, edge.RuleId);
@@ -60,6 +64,9 @@ public sealed class SourceMetadataReconciliationTests
             && edge.TargetSymbol.Contains("Int32)&", StringComparison.Ordinal));
         Assert.Contains(edges, edge => edge.TargetSymbol!.Contains("OptionalValue", StringComparison.Ordinal)
             && edge.Properties["optionalParameterOrdinals"] == "0");
+        Assert.Contains(edges, edge => edge.TargetSymbol!.Contains("|property:12:OptionalItem|", StringComparison.Ordinal)
+            && edge.Properties["optionalParameterOrdinals"] == "0");
+        Assert.Equal(2, edges.Count(edge => edge.TargetSymbol!.Contains("|method:12:GenericArity|", StringComparison.Ordinal)));
         Assert.Contains(edges, edge => edge.TargetSymbol!.Contains("|names:6:Widget|arity:0|method:6:Format|", StringComparison.Ordinal));
     }
 
@@ -127,6 +134,10 @@ public sealed class SourceMetadataReconciliationTests
         Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.SourceMetadataIdentityReconciled);
         var gap = Assert.Single(result.Facts, fact => fact.Properties.GetValueOrDefault("gapKind") == "SourceMetadataReconciliationUnsupportedLanguage");
         Assert.Equal("fsharp", gap.Properties["language"]);
+        var entry = Assert.Single(result.Manifest.SourceMetadataReconciliation!.Entries);
+        Assert.False(string.IsNullOrWhiteSpace(entry.EvidenceFactId));
+        Assert.False(string.IsNullOrWhiteSpace(entry.FilePath));
+        Assert.False(string.IsNullOrWhiteSpace(entry.CommitSha));
     }
 
     [Fact]
@@ -162,9 +173,13 @@ public sealed class SourceMetadataReconciliationTests
             var summary = manifest.RootElement.GetProperty("sourceMetadataReconciliation");
             Assert.Equal(summary.GetRawText(), secondManifest.RootElement.GetProperty("sourceMetadataReconciliation").GetRawText());
             Assert.Equal("source-metadata-reconciliation.v1", summary.GetProperty("schemaVersion").GetString());
+            Assert.True(summary.GetProperty("exactJoinCount").GetInt32() > 0);
             Assert.Contains(summary.GetProperty("entries").EnumerateArray(), entry => entry.GetProperty("reconciliationState").GetString() == "exact-one-candidate"
                 && !string.IsNullOrWhiteSpace(entry.GetProperty("sourceIdentity").GetString())
                 && !string.IsNullOrWhiteSpace(entry.GetProperty("metadataIdentity").GetString())
+                && !string.IsNullOrWhiteSpace(entry.GetProperty("evidenceFactId").GetString())
+                && !string.IsNullOrWhiteSpace(entry.GetProperty("filePath").GetString())
+                && !string.IsNullOrWhiteSpace(entry.GetProperty("commitSha").GetString())
                 && entry.GetProperty("compiledProvenanceState").GetString() == "bound");
 
             var operationalReceipt = JsonSerializer.Deserialize<ScanExecutionReceipt>(

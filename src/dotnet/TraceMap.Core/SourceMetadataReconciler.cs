@@ -26,7 +26,7 @@ internal static class SourceMetadataReconciler
             .ToArray();
 
         foreach (var group in (sourceCandidates ?? [])
-            .GroupBy(candidate => candidate.SourceIdentity, StringComparer.Ordinal)
+            .GroupBy(ReconciliationDeclarationKey, StringComparer.Ordinal)
             .OrderBy(group => group.Key, StringComparer.Ordinal))
         {
             var candidates = group
@@ -45,7 +45,7 @@ internal static class SourceMetadataReconciler
             var sourceObservation = CreateSourceObservation(manifest, first, candidates, metadataIdentities);
             results.Add(sourceObservation);
 
-            if (metadataIdentities.Length == 0)
+            if (candidates.Any(candidate => candidate.IncompleteReason is not null) || metadataIdentities.Length == 0)
             {
                 results.Add(CreateGap(manifest, first, sourceObservation, "SourceMetadataIdentityIncomplete", 0,
                     candidates.Select(candidate => candidate.IncompleteReason ?? "SourceMetadataIdentityIncomplete")));
@@ -91,7 +91,7 @@ internal static class SourceMetadataReconciler
             if (metadataFact.Properties.GetValueOrDefault("sourceReconciliationEligibility") != "eligible")
             {
                 results.Add(CreateGap(manifest, first, sourceObservation, "SourceMetadataReconciliationCompiledEvidenceUnacceptable", 1,
-                    [metadataFact.FactId, metadataFact.Properties.GetValueOrDefault("sourceReconciliationBlocker") ?? "unknown"]));
+                    [metadataFact.FactId, metadataFact.Properties.GetValueOrDefault("sourceReconciliationBlocker") ?? "unknown"], metadataFact));
                 continue;
             }
 
@@ -156,6 +156,14 @@ internal static class SourceMetadataReconciler
         return results;
     }
 
+    private static string ReconciliationDeclarationKey(SourceMetadataIdentityCandidate candidate) => string.Join('\u001f',
+        candidate.SourceIdentity,
+        candidate.MetadataIdentity ?? candidate.IncompleteReason ?? string.Empty,
+        candidate.Evidence.FilePath,
+        candidate.Evidence.StartLine.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        candidate.Evidence.EndLine.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        candidate.RelationshipProof);
+
     private static CodeFact CreateSourceObservation(
         ScanManifest manifest,
         SourceMetadataIdentityCandidate first,
@@ -192,7 +200,8 @@ internal static class SourceMetadataReconciler
         CodeFact sourceObservation,
         string gapKind,
         int candidateCount,
-        IEnumerable<string> details) => FactFactory.Create(
+        IEnumerable<string> details,
+        CodeFact? compiledFact = null) => FactFactory.Create(
             manifest,
             FactTypes.AnalysisGap,
             RuleIds.DotNetCompiledSourceIdentity,
@@ -213,6 +222,8 @@ internal static class SourceMetadataReconciler
                 ["expectedMetadataIdentity"] = source.MetadataIdentity ?? string.Empty,
                 ["gapKind"] = gapKind,
                 ["limitation"] = GapLimitation,
+                ["compiledProvenanceState"] = compiledFact?.Properties.GetValueOrDefault("provenanceState") ?? "unknown",
+                ["provenanceBindingInputSha256"] = compiledFact?.Properties.GetValueOrDefault("provenanceBindingInputSha256") ?? string.Empty,
                 ["reconciliationState"] = "unjoined",
                 ["sourceFactId"] = sourceObservation.FactId,
                 ["sourceIdentity"] = source.SourceIdentity,
@@ -236,7 +247,7 @@ internal static class SourceMetadataReconciler
         var allEntries = facts
             .Where(fact => fact.RuleId == RuleIds.DotNetCompiledSourceIdentity)
             .Where(fact => fact.FactType is FactTypes.SourceMetadataIdentityReconciled or FactTypes.AnalysisGap)
-            .Select(ToEntry)
+            .Select(fact => ToEntry(manifest, fact))
             .OrderBy(entry => entry.SourceIdentity, StringComparer.Ordinal)
             .ThenBy(entry => entry.MetadataIdentity, StringComparer.Ordinal)
             .ThenBy(entry => entry.ReconciliationState, StringComparer.Ordinal)
@@ -244,7 +255,10 @@ internal static class SourceMetadataReconciler
             .ToArray();
         var retained = allEntries.Take(maximumEntries).ToArray();
         var omitted = allEntries.Skip(maximumEntries).ToArray();
-        var coverage = allEntries.Any(entry => entry.ReconciliationState != "exact-one-candidate")
+        var exactJoinCount = allEntries.Count(entry => entry.ReconciliationState == "exact-one-candidate");
+        var explicitGapCount = allEntries.Length - exactJoinCount;
+        var semanticUnavailable = !manifest.AnalysisLevel.StartsWith("Level1SemanticAnalysis", StringComparison.Ordinal);
+        var coverage = semanticUnavailable || explicitGapCount > 0
             ? "source-metadata-partial"
             : "source-metadata-complete";
         return new SourceMetadataReconciliationSummary(
@@ -254,14 +268,17 @@ internal static class SourceMetadataReconciler
             coverage,
             manifest.CompiledInputProvenance.BoundedInputSha256,
             manifest.CompiledInputProvenance.GeneratorSha256,
+            exactJoinCount,
+            explicitGapCount,
             retained,
             omitted.Length,
             omitted.Length == 0 ? null : Digest(omitted));
     }
 
-    private static SourceMetadataReconciliationEntry ToEntry(CodeFact fact)
+    private static SourceMetadataReconciliationEntry ToEntry(ScanManifest manifest, CodeFact fact)
     {
-        var compiledFactIds = new[]
+        const int maximumCompiledFactIds = 256;
+        var allCompiledFactIds = new[]
             {
                 fact.Properties.GetValueOrDefault("compiledFactId") ?? string.Empty,
                 fact.Properties.GetValueOrDefault("details") ?? string.Empty
@@ -271,6 +288,8 @@ internal static class SourceMetadataReconciler
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
+        var compiledFactIds = allCompiledFactIds.Take(maximumCompiledFactIds).ToArray();
+        var omittedCompiledFactIds = allCompiledFactIds.Skip(maximumCompiledFactIds).ToArray();
         return new SourceMetadataReconciliationEntry(
             fact.Properties.GetValueOrDefault("reconciliationState") ?? "unjoined",
             fact.Properties.GetValueOrDefault("sourceIdentity") ?? fact.SourceSymbol ?? string.Empty,
@@ -278,7 +297,7 @@ internal static class SourceMetadataReconciler
                 ?? fact.Properties.GetValueOrDefault("expectedMetadataIdentity")
                 ?? fact.TargetSymbol
                 ?? string.Empty,
-            fact.Properties.GetValueOrDefault("sourceFactId") ?? string.Empty,
+            fact.Properties.GetValueOrDefault("sourceFactId") ?? fact.FactId,
             compiledFactIds,
             fact.RuleId,
             fact.EvidenceTier,
@@ -286,18 +305,45 @@ internal static class SourceMetadataReconciler
             fact.Properties.GetValueOrDefault("compiledProvenanceState") ?? "unknown",
             fact.Properties.GetValueOrDefault("provenanceBindingInputSha256") ?? string.Empty,
             fact.Properties.GetValueOrDefault("gapKind") ?? string.Empty,
-            fact.Properties.GetValueOrDefault("limitation") ?? GapLimitation);
+            fact.Properties.GetValueOrDefault("limitation") ?? GapLimitation,
+            fact.FactId,
+            fact.Evidence.FilePath,
+            fact.Evidence.StartLine,
+            fact.Evidence.EndLine,
+            manifest.CommitSha,
+            omittedCompiledFactIds.Length,
+            omittedCompiledFactIds.Length == 0 ? null : DigestStrings(omittedCompiledFactIds));
     }
 
     private static string Digest(IEnumerable<SourceMetadataReconciliationEntry> entries)
     {
-        var value = string.Join('\n', entries.Select(entry => string.Join('|',
+        var value = string.Concat(entries.Select(entry => Frame([
             entry.ReconciliationState,
             entry.SourceIdentity,
             entry.MetadataIdentity,
             entry.SourceFactId,
-            string.Join(',', entry.CompiledFactIds),
-            entry.GapKind)));
+            .. entry.CompiledFactIds,
+            entry.RuleId,
+            entry.EvidenceTier,
+            entry.ExtractorVersion,
+            entry.CompiledProvenanceState,
+            entry.ProvenanceBindingInputSha256,
+            entry.GapKind,
+            entry.Limitation,
+            entry.EvidenceFactId,
+            entry.FilePath,
+            entry.StartLine.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            entry.EndLine.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            entry.CommitSha,
+            entry.OmittedCompiledFactIdCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            entry.OmittedCompiledFactIdSha256 ?? string.Empty
+        ])));
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
     }
+
+    private static string DigestStrings(IEnumerable<string> values) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Frame(values)))).ToLowerInvariant();
+
+    private static string Frame(IEnumerable<string> values) => string.Concat(values.Select(value =>
+        value.Length.ToString(System.Globalization.CultureInfo.InvariantCulture) + ":" + value));
 }

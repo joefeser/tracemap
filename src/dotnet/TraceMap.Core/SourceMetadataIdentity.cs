@@ -31,7 +31,12 @@ internal static class SourceMetadataIdentityCollector
         foreach (var node in root.DescendantNodesAndSelf().Where(IsDeclarationNode))
         {
             var symbol = model.GetDeclaredSymbol(node);
-            if (!IsSupportedDeclaration(symbol) || symbol!.IsImplicitlyDeclared)
+            if (symbol is null)
+            {
+                AddIncomplete(node, "SourceDeclaredSymbolUnavailable");
+                continue;
+            }
+            if (!IsSupportedDeclaration(symbol) || symbol.IsImplicitlyDeclared)
                 continue;
 
             Add(symbol, node, "source-declaration");
@@ -55,13 +60,43 @@ internal static class SourceMetadataIdentityCollector
 
         void Add(ISymbol symbol, SyntaxNode node, string relationshipProof)
         {
+            var metadataIdentity = SourceMetadataIdentityProvider.TryCreate(symbol, out var memberKind, out var metadataIncompleteReason);
             var sourceIdentity = language == LanguageNames.VisualBasic
                 ? VisualBasicSymbolIdentityProvider.TryCreate(symbol)
                 : CSharpSymbolIdentityProvider.TryCreate(symbol);
             if (sourceIdentity is null)
+            {
+                AddCandidate(SyntaxIdentity(node), metadataIdentity, memberKind, node, relationshipProof, [], "SourceDeclarationIdentityUnavailable");
                 return;
+            }
 
-            var metadataIdentity = SourceMetadataIdentityProvider.TryCreate(symbol, out var memberKind, out var incompleteReason);
+            var optionalParameters = symbol switch
+            {
+                IMethodSymbol method => method.Parameters.Where(parameter => parameter.IsOptional).Select(parameter => parameter.Ordinal).ToArray(),
+                IPropertySymbol property => property.Parameters.Where(parameter => parameter.IsOptional).Select(parameter => parameter.Ordinal).ToArray(),
+                _ => []
+            };
+            AddCandidate(sourceIdentity.SymbolId, metadataIdentity, memberKind, node, relationshipProof, optionalParameters, metadataIncompleteReason);
+        }
+
+        void AddIncomplete(SyntaxNode node, string reason) =>
+            AddCandidate(SyntaxIdentity(node), null, "declaration", node, "syntax-located-unresolved-declaration", [], reason);
+
+        string SyntaxIdentity(SyntaxNode node)
+        {
+            var line = node.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+            return $"{language}:unresolved:{ManagedMetadataExtractor.EncodeIdentityComponent(filePath)}:{line.ToString(CultureInfo.InvariantCulture)}:{node.RawKind.ToString(CultureInfo.InvariantCulture)}";
+        }
+
+        void AddCandidate(
+            string sourceIdentity,
+            string? metadataIdentity,
+            string memberKind,
+            SyntaxNode node,
+            string relationshipProof,
+            IReadOnlyList<int> optionalParameters,
+            string? incompleteReason)
+        {
             var lineSpan = node.GetLocation().GetLineSpan();
             var evidence = new EvidenceSpan(
                 filePath,
@@ -70,21 +105,15 @@ internal static class SourceMetadataIdentityCollector
                 null,
                 language == LanguageNames.VisualBasic ? nameof(VisualBasicSemanticExtractor) : nameof(CSharpSemanticExtractor),
                 language == LanguageNames.VisualBasic ? ScannerVersions.VisualBasicSemanticExtractor : ScannerVersions.CSharpSemanticExtractor);
-            var optionalParameters = symbol switch
-            {
-                IMethodSymbol method => method.Parameters.Where(parameter => parameter.IsOptional).Select(parameter => parameter.Ordinal).ToArray(),
-                IPropertySymbol property => property.Parameters.Where(parameter => parameter.IsOptional).Select(parameter => parameter.Ordinal).ToArray(),
-                _ => []
-            };
-            var key = string.Join('|', sourceIdentity.SymbolId, metadataIdentity ?? incompleteReason ?? string.Empty, evidence.FilePath,
+            var key = string.Join('|', sourceIdentity, metadataIdentity ?? incompleteReason ?? string.Empty, evidence.FilePath,
                 evidence.StartLine.ToString(CultureInfo.InvariantCulture), relationshipProof);
             if (!seen.Add(key))
                 return;
             candidates.Add(new SourceMetadataIdentityCandidate(
-                sourceIdentity.SymbolId,
+                sourceIdentity,
                 metadataIdentity,
                 memberKind,
-                sourceIdentity.Language,
+                language,
                 evidence,
                 projectPath,
                 relationshipProof,
@@ -192,7 +221,8 @@ internal static class SourceMetadataIdentityProvider
         var ns = definition.ContainingNamespace is { IsGlobalNamespace: false } containingNamespace
             ? containingNamespace.ToDisplayString()
             : string.Empty;
-        return $"{assemblyIdentity}|type:namespace:{ManagedMetadataExtractor.EncodeIdentityComponent(ns)}|names:{string.Concat(names.Select(ManagedMetadataExtractor.EncodeIdentityComponent))}|arity:{definition.Arity.ToString(CultureInfo.InvariantCulture)}";
+        var metadataArity = ContainingTypeArity(definition);
+        return $"{assemblyIdentity}|type:namespace:{ManagedMetadataExtractor.EncodeIdentityComponent(ns)}|names:{string.Concat(names.Select(ManagedMetadataExtractor.EncodeIdentityComponent))}|arity:{metadataArity.ToString(CultureInfo.InvariantCulture)}";
     }
 
     private static string FormatType(ITypeSymbol type)
@@ -206,11 +236,29 @@ internal static class SourceMetadataIdentityProvider
                 : ManagedMetadataExtractor.FormatArrayShape(array.Rank, [], [])),
             IPointerTypeSymbol pointer => FormatType(pointer.PointedAtType) + "*",
             IFunctionPointerTypeSymbol => throw new NotSupportedException("SourceFunctionPointerIdentityUnsupported"),
-            ITypeParameterSymbol parameter => (parameter.TypeParameterKind == TypeParameterKind.Method ? "!!" : "!") + parameter.Ordinal.ToString(CultureInfo.InvariantCulture),
+            ITypeParameterSymbol parameter => (parameter.TypeParameterKind == TypeParameterKind.Method ? "!!" : "!") + MetadataParameterOrdinal(parameter).ToString(CultureInfo.InvariantCulture),
             INamedTypeSymbol named => FormatNamedType(named.IsTupleType ? named.TupleUnderlyingType! : named),
             _ when type.SpecialType != SpecialType.None => FormatSpecialType(type.SpecialType),
             _ => throw new NotSupportedException("SourceTypeIdentityUnsupported")
         };
+    }
+
+    private static int ContainingTypeArity(INamedTypeSymbol type)
+    {
+        var arity = 0;
+        for (INamedTypeSymbol? current = type.OriginalDefinition; current is not null; current = current.ContainingType)
+            arity += current.Arity;
+        return arity;
+    }
+
+    private static int MetadataParameterOrdinal(ITypeParameterSymbol parameter)
+    {
+        if (parameter.TypeParameterKind == TypeParameterKind.Method)
+            return parameter.Ordinal;
+        var ordinal = parameter.Ordinal;
+        for (var current = parameter.DeclaringType?.ContainingType; current is not null; current = current.ContainingType)
+            ordinal += current.Arity;
+        return ordinal;
     }
 
     private static string FormatNamedType(INamedTypeSymbol named)
