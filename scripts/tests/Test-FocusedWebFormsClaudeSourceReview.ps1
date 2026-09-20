@@ -45,7 +45,7 @@ try {
 $dirs = for ($index = 0; $index -lt $args.Count - 1; $index++) { if ($args[$index] -eq '--add-dir') { $args[$index + 1] } }
 $selection = Join-Path $dirs[-1] 'selection-manifest.json'
 [IO.File]::Copy($selection, $env:TRACEMAP_TEST_SOURCE_MANIFEST, $true)
-Write-Output '# Selected source assessment'
+Write-Output '# Selected source assessment — café'
 $global:LASTEXITCODE = 0
 '@
     [IO.File]::WriteAllText($launcherPath, $launcher, [Text.UTF8Encoding]::new($false))
@@ -67,7 +67,8 @@ $global:LASTEXITCODE = 0
         throw 'Selected-source aliases were not deterministic.'
     }
     $assessment = Join-Path $review 'agent-reviews/claude-selected-source-review.md'
-    $assessmentRetained = (Test-Path -LiteralPath $assessment -PathType Leaf) -and [IO.File]::ReadAllText($assessment).Contains('# Selected source assessment', [StringComparison]::Ordinal)
+    $assessmentRetained = (Test-Path -LiteralPath $assessment -PathType Leaf) -and
+        [IO.File]::ReadAllText($assessment, [Text.UTF8Encoding]::new($false, $true)).Contains('# Selected source assessment — café', [StringComparison]::Ordinal)
     if (!$assessmentRetained) { throw 'Selected-source assessment was not retained under the review root.' }
 
     $failure = $null

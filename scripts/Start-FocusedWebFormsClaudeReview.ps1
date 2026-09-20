@@ -69,15 +69,21 @@ try {
     if ($ClaudeLauncherPath) {
         Write-Output 'promptTransport=stdin'
         Write-Output 'claudeMode=print'
-        $prompt | & $launcher @claudeArguments --print | Tee-Object -FilePath $assessmentPath
+        $claudeExitCode = 0
+        Invoke-FocusedWebFormsClaudePrint `
+            -Launcher $launcher `
+            -Arguments @($claudeArguments + '--print') `
+            -Prompt $prompt `
+            -OutputPath $assessmentPath `
+            -ExitCode ([ref]$claudeExitCode)
     }
     else {
         if ($null -eq (Get-Command claude -ErrorAction SilentlyContinue)) { throw 'WEBFORMS_CLAUDE_CLI_UNAVAILABLE' }
         Write-Output 'promptTransport=argument'
         Write-Output 'claudeMode=interactive'
         & claude @claudeArguments $prompt
+        $claudeExitCode = $LASTEXITCODE
     }
-    $claudeExitCode = $LASTEXITCODE
 }
 finally {
     Pop-Location

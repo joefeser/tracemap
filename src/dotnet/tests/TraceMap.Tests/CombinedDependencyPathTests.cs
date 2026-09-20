@@ -76,6 +76,44 @@ public sealed class CombinedDependencyPathTests
     }
 
     [Fact]
+    public async Task Legacy_terminal_prewalk_retains_shortest_witness_beyond_display_depth()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("server", "terminal-prewalk");
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        var facts = Enumerable.Range(0, 12)
+            .Select(index => CallFact(
+                manifest,
+                $"Chain.M{index}()",
+                $"Chain.M{index + 1}()",
+                "Chain.cs",
+                index + 1))
+            .Append(CallFact(manifest, "Chain.M5()", "Chain.M2()", "Chain.cs", 15))
+            .Append(QueryPatternFact(manifest, "Chain.M12()", "Chain.cs", 20))
+            .ToArray();
+        SqliteIndexWriter.Write(index, manifest, facts);
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["server"]));
+
+        var result = await CombinedDependencyPathReporter.WriteAsync(new(
+            combined,
+            Path.Combine(temp.Path, "out"),
+            FromSymbol: "Chain.M0()",
+            ToSurface: "sql-query",
+            View: LegacyFlowReportConstants.View,
+            MaxDepth: 3,
+            MaxPaths: 10,
+            MaxFrontier: 100));
+
+        var path = Assert.Single(result.Report.Paths);
+        Assert.True(path.Length > result.Report.Query.MaxDepth);
+        Assert.Equal(path.Nodes.Count, path.Nodes.Select(node => node.NodeId).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal("sql-query", path.Nodes[^1].SurfaceKind);
+        Assert.Contains(path.Notes, note => note.Code == "TerminalReachabilityPrewalk");
+        Assert.Contains(result.Report.Gaps, gap => gap.Reason == "depth" && gap.GapKind == "TruncatedByLimit");
+    }
+
+    [Fact]
     public async Task Paths_writes_endpoint_to_sql_markdown_and_json_without_mutating_combined_index()
     {
         using var temp = new TempDirectory();
@@ -1324,7 +1362,10 @@ public sealed class CombinedDependencyPathTests
                 combinedPath,
                 Path.Combine(temp.Path, "paths"),
                 FromSymbol: implementationA,
-                ToSurface: "sql-query"));
+                ToSurface: "sql-query")
+            {
+                InventoryDistinctTerminals = true
+            });
 
         Assert.DoesNotContain(result.Report.Paths, path => path.Edges.Any(edge => edge.EdgeKind == "interface-candidate"));
         Assert.DoesNotContain(result.Report.Paths, path => path.Nodes.Any(node => node.DisplayName == implementationB));

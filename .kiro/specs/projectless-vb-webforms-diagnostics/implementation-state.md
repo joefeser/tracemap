@@ -46,3 +46,19 @@ spurious coverage-label gaps were absent; the remaining 52 terminal-free gaps
 split exactly into 9 `BoundedTraversalTruncated`, 32
 `DownstreamWithoutSupportedTerminal`, and 11 `NoBackendEvidence` rows. Both
 sanitized generator and input provenance hashes were present and validated.
+
+## 2026-09-19 receiver precision follow-up
+
+- `vb-syntax/0.3.18` retains a syntax-only receiver type when exactly one
+  explicit caller parameter, in-scope local, or field declaration supplies it.
+- The projectless receiver bridge may use that retained type, explicit
+  `Me`/`MyClass`, or one exact namespace-qualified retained type. It still
+  fails closed on ambiguous provenance, type identity, overload, or target
+  evidence.
+- This follow-up was prompted by private page-scoped diagnostics dominated by
+  typed parameters/locals and Web Forms/framework property chains. It does not
+  infer framework properties or chained property return types.
+- Validation: the focused extractor/receiver-bridge/memory-budget tests passed
+  4/4; the full .NET solution passed 1,957/1,957; `git diff --check` passed.
+- Because the producer version changed, external validation requires fresh
+  source scans before recombining and regenerating the Web Forms packet.
