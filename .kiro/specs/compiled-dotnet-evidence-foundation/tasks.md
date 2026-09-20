@@ -21,13 +21,15 @@ slices and require an implementation-state update before work begins.
   unbound, mismatch, and unsupported-input gap tests without emitting a
   source-to-metadata identity edge.
 - [ ] 7. Validate byte determinism, privacy, unchanged Roslyn/syntax behavior,
-  CLI sample output, full .NET tests, macOS portable fixtures, and explicit
-  Windows deferrals. Update docs and implementation state with exact results.
+  CLI sample output, full .NET tests, and the portable managed fixture matrix on
+  both macOS and Windows. Explicitly defer only the later Windows-specific
+  lanes. Update docs and implementation state with exact results.
 - [ ] 8. Later slice: add exact deterministic source-to-metadata reconciliation
   with zero/multiple-candidate gaps and both endpoint identities.
 - [ ] 9. Later slice: add PDB identity and sequence-point contracts and portable
   versus Windows validation lanes.
 - [ ] 10. Later slice: add operand-aware IL body/call evidence and the public
   ECMA-335/rewrite suite from #766.
-- [ ] 11. Later slice: run the isolated Windows `dotnetperf`/C++/CLI lane from
-  #768 and mine/minimize the optional stress corpus from #769.
+- [ ] 11. Later slice: validate legacy .NET Framework/Web Forms build behavior,
+  run the isolated Windows `dotnetperf`/C++/CLI lane from #768, and
+  mine/minimize the optional stress corpus from #769.
