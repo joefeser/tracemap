@@ -1057,11 +1057,15 @@ public sealed class WebFormsModernizationPacketTests
         var typedReceiverCombinedIndex = Path.Combine(temp.Path, "typed-receiver-combined-index.sqlite");
         await CombinedIndexBuilder.CombineAsync(new CombineOptions(
             [typedReceiverWebIndex, backendIndex], typedReceiverCombinedIndex, ["web", "backend"]));
-        var typedReceiverPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+        var typedReceiverWritten = await WebFormsModernizationPacketReporter.WriteAsync(
             new(typedReceiverCombinedIndex, Path.Combine(temp.Path, "typed-receiver-output")));
-        var typedReceiverChain = Assert.Single(typedReceiverPacket.EventChains);
+        var typedReceiverChain = Assert.Single(typedReceiverWritten.Packet.EventChains);
         Assert.Equal("sql-query", typedReceiverChain.TerminalKind);
         Assert.Contains("projectless-vb-receiver-bridge", typedReceiverChain.TraversalObservation?.TraversedEdgeKinds ?? []);
+        var typedReceiverAudit = WebFormsVisualBasicReceiverBridgeAudit.Run(
+            typedReceiverCombinedIndex, typedReceiverWritten.JsonPath, surface);
+        Assert.Contains("receiverCreations=0", typedReceiverAudit);
+        Assert.Contains("receiverBridgeStatus.ready-semantic=1", typedReceiverAudit);
 
         var mixedInvocation = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph, "WebApplication/Feedback.aspx.vb", 23,
             source: "Sample.Feedback.Submit_Click/2", target: "InsertFeedback", contract: "InsertFeedback",
@@ -1902,8 +1906,10 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Equal(2, depth3.DownstreamBoundaries.Select(boundary => boundary.TerminalEvidenceId).Distinct(StringComparer.Ordinal).Count());
         Assert.All(depth3.EventChains, chain =>
         {
+            Assert.True(chain.TraversalObservation?.TerminalReachabilityAvailable);
             Assert.True(chain.TraversalObservation?.TerminalReachabilityComplete);
             Assert.Equal(2, chain.TraversalObservation?.DistinctReachableTerminalCount);
+            Assert.Equal(2, chain.TraversalObservation?.ReachableTerminalIds.Count);
             Assert.True(chain.TraversalObservation?.PathEnumerationTruncated);
             Assert.Contains("depth", chain.TraversalObservation?.PathEnumerationTruncationReasons ?? []);
             Assert.Empty(chain.TraversalObservation?.TerminalReachabilityLimitReasons ?? []);

@@ -443,8 +443,15 @@ try {
             return (Property-Value $_.traversalObservation 'truncated') -eq $true
         }).Count
         $terminalInventoryIncompleteChainCount = @($chains | Where-Object {
+            $available = Property-Value $_.traversalObservation 'terminalReachabilityAvailable'
+            if ($null -eq $available) { $available = $null -ne $_.traversalObservation }
             $value = Property-Value $_.traversalObservation 'terminalReachabilityComplete'
-            $null -ne $value -and $value -eq $false
+            $available -eq $true -and $null -ne $value -and $value -eq $false
+        }).Count
+        $terminalInventoryUnavailableChainCount = @($chains | Where-Object {
+            $available = Property-Value $_.traversalObservation 'terminalReachabilityAvailable'
+            if ($null -eq $available) { $available = $null -ne $_.traversalObservation }
+            $available -ne $true
         }).Count
         $otherIncompleteCount = @($chains | Where-Object {
             !$_.terminalKind -and (Property-Value $_ 'handlerFactId') -and
@@ -457,6 +464,7 @@ try {
         } | ForEach-Object { Values (Property-Value $_.traversalObservation 'pathEnumerationTruncationReasons') } | Where-Object { $_ } | Sort-Object -Unique)
         if ($pathDetailTruncatedChainCount -gt 0 -and $pagePathDetailTruncationReasons.Count -eq 0) { $pagePathDetailTruncationReasons = @('reason-unavailable') }
         $pageTerminalReachabilityLimitReasons = @($chains | Where-Object {
+            (Property-Value $_.traversalObservation 'terminalReachabilityAvailable') -eq $true -and
             (Property-Value $_.traversalObservation 'terminalReachabilityComplete') -eq $false
         } | ForEach-Object { Values (Property-Value $_.traversalObservation 'terminalReachabilityLimitReasons') } | Where-Object { $_ } | Sort-Object -Unique)
         if ($terminalInventoryIncompleteChainCount -gt 0 -and $pageTerminalReachabilityLimitReasons.Count -eq 0) { $pageTerminalReachabilityLimitReasons = @('reason-unavailable') }
@@ -490,7 +498,7 @@ try {
             $family = [string](Property-Value $_ 'technologyFamily')
             if ($family) { $family } elseif (([string]$_.callKind) -like 'Semantic*') { 'resolved-unspecified' } else { 'unresolved' }
         } | Group-Object | Sort-Object Name | ForEach-Object { [ordered]@{ family = [string]$_.Name; retainedFacts = [int]$_.Count } })
-        $behaviorSummary = "Retained evidence records $($chains.Count) event chain(s), $($clientBehavior.Count) inline client behavior(s), and $($serverBehavior.Count) server behavior(s). $linkedClientEventCount of $clientEventCount client event binding(s) correlate to one retained server handler. $linkedHttpRequestCount of $httpRequestCount inline HTTP request(s) join through a handler declaration to one retained entry method. Chain outcomes include $unresolvedHandlerCount unresolved handler(s), $downstreamWithoutTerminalCount with downstream calls but no supported terminal, $noDownstreamCount with no observed downstream edge, $terminalInventoryIncompleteChainCount incomplete terminal inventory(s), $pathDetailTruncatedChainCount path-detail truncation(s), and $otherIncompleteCount other incomplete chain(s). $chainAssociatedCallCount retained chain-associated call fact projection(s) represent $uniqueRetainedCallCount unique retained call fact(s) and $uniqueCallSiteCount normalized source call site(s). $callEvidenceCeilingChainCount chain(s) reached or exceeded the 256-fact call-evidence ceiling; $callEvidenceOmittedCount additional fact projection(s) are explicitly reported as omitted. Server evidence includes $navigationCount navigation candidate(s), $lifecycleCount request-lifecycle candidate(s), $serverMutationCount control-state mutation(s), and $inlineReferenceCount inline server-expression reference(s)."
+        $behaviorSummary = "Retained evidence records $($chains.Count) event chain(s), $($clientBehavior.Count) inline client behavior(s), and $($serverBehavior.Count) server behavior(s). $linkedClientEventCount of $clientEventCount client event binding(s) correlate to one retained server handler. $linkedHttpRequestCount of $httpRequestCount inline HTTP request(s) join through a handler declaration to one retained entry method. Chain outcomes include $unresolvedHandlerCount unresolved handler(s), $downstreamWithoutTerminalCount with downstream calls but no supported terminal, $noDownstreamCount with no observed downstream edge, $terminalInventoryIncompleteChainCount incomplete terminal inventory(s), $terminalInventoryUnavailableChainCount unavailable terminal inventory observation(s), $pathDetailTruncatedChainCount path-detail truncation(s), and $otherIncompleteCount other incomplete chain(s). $chainAssociatedCallCount retained chain-associated call fact projection(s) represent $uniqueRetainedCallCount unique retained call fact(s) and $uniqueCallSiteCount normalized source call site(s). $callEvidenceCeilingChainCount chain(s) reached or exceeded the 256-fact call-evidence ceiling; $callEvidenceOmittedCount additional fact projection(s) are explicitly reported as omitted. Server evidence includes $navigationCount navigation candidate(s), $lifecycleCount request-lifecycle candidate(s), $serverMutationCount control-state mutation(s), and $inlineReferenceCount inline server-expression reference(s)."
         $retrievalHints = [Collections.Generic.List[object]]::new()
         $retrievalHints.Add([ordered]@{ recipeId = 'webforms-surface-facts'; parameters = [ordered]@{ surface_id = [string]$surface.surfaceId; limit = 500 } })
         foreach ($handler in $handlers) { $retrievalHints.Add([ordered]@{ recipeId = 'calls-from-handler'; parameters = [ordered]@{ handler_symbol = $handler; limit = 500 } }) }
@@ -514,13 +522,14 @@ try {
                 pageTraversalTruncationReasons = @($pagePathDetailTruncationReasons)
                 pagePathEnumerationTruncated = ($pathDetailTruncatedChainCount -gt 0)
                 pagePathEnumerationTruncationReasons = @($pagePathDetailTruncationReasons)
-                pageTerminalReachabilityComplete = ($terminalInventoryIncompleteChainCount -eq 0)
+                pageTerminalReachabilityAvailable = ($terminalInventoryUnavailableChainCount -eq 0)
+                pageTerminalReachabilityComplete = if ($terminalInventoryUnavailableChainCount -gt 0) { $null } else { $terminalInventoryIncompleteChainCount -eq 0 }
                 pageTerminalReachabilityLimitReasons = @($pageTerminalReachabilityLimitReasons)
                 boundaryStatus = $boundaryStatus
             }
             counts = [ordered]@{ controls = @(Values $surface.controlIds).Count; eventChains = $chains.Count; clientBehaviors = $clientBehavior.Count; serverBehaviors = $serverBehavior.Count; boundaries = $boundaries.Count; identityState = $identity.Count; projectDataMovement = $projectBatchCount; structuralCandidates = $candidates.Count; gaps = $gaps.Count; retainedCalls = $chainAssociatedCallCount; chainAssociatedRetainedCalls = $chainAssociatedCallCount; reportedCallProjections = [int]$reportedCallProjectionCount; omittedCallProjections = $callEvidenceOmittedCount; uniqueRetainedCallFacts = $uniqueRetainedCallCount; normalizedCallSites = $uniqueCallSiteCount; callEvidenceCeilingChains = $callEvidenceCeilingChainCount }
             callTechnologyFamilies = @($technologyFamilies)
-            chainOutcomes = [ordered]@{ unresolvedHandlers = $unresolvedHandlerCount; downstreamWithoutSupportedTerminal = $downstreamWithoutTerminalCount; noObservedDownstream = $noDownstreamCount; terminalInventoryIncomplete = $terminalInventoryIncompleteChainCount; pathDetailTruncated = $pathDetailTruncatedChainCount; truncated = $pathDetailTruncatedChainCount; otherIncomplete = $otherIncompleteCount }
+            chainOutcomes = [ordered]@{ unresolvedHandlers = $unresolvedHandlerCount; downstreamWithoutSupportedTerminal = $downstreamWithoutTerminalCount; noObservedDownstream = $noDownstreamCount; terminalInventoryIncomplete = $terminalInventoryIncompleteChainCount; terminalInventoryUnavailable = $terminalInventoryUnavailableChainCount; pathDetailTruncated = $pathDetailTruncatedChainCount; truncated = $pathDetailTruncatedChainCount; otherIncomplete = $otherIncompleteCount }
             eventChains = @($chains | ForEach-Object { [ordered]@{
                 chainId = [string]$_.chainId; eventSourceId = [string]$_.eventSourceId; bindingFactId = [string]$_.bindingFactId
                 handlerId = [string]$_.handlerId; handlerFactId = [string]$_.handlerFactId; handlerSymbol = $_.handlerSymbol
@@ -528,6 +537,7 @@ try {
                 classification = [string]$_.classification; legacyPathId = $_.legacyPathId; terminalKind = $_.terminalKind
                 traversalStopState = $_.traversalObservation.stopState
                 traversalTruncationReasons = @(Values (Property-Value $_.traversalObservation 'truncationReasons'))
+                terminalReachabilityAvailable = Property-Value $_.traversalObservation 'terminalReachabilityAvailable'
                 terminalReachabilityComplete = Property-Value $_.traversalObservation 'terminalReachabilityComplete'
                 distinctReachableTerminalCount = Property-Value $_.traversalObservation 'distinctReachableTerminalCount'
                 minimumTerminalDistance = Property-Value $_.traversalObservation 'minimumTerminalDistance'

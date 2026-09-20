@@ -145,9 +145,13 @@ public static class WebFormsVisualBasicReceiverBridgeAudit
                 && creation.Line <= call.Line
                 && SameMember(creation, call)
                 && string.Equals(Value(creation, "assignedTo"), receiver, StringComparison.OrdinalIgnoreCase)).ToArray();
-            if (matches.Length == 0) { Hit("receiver-creation-unavailable"); continue; }
-            if (matches.Length != 1) { Hit("receiver-creation-ambiguous"); continue; }
-            var type = SimpleType(Value(matches[0], "calleeContainingType") ?? Value(matches[0], "calleeName"));
+            if (matches.Length > 1) { Hit("receiver-creation-ambiguous"); continue; }
+            var retainedReceiverType = SimpleType(Value(call, "receiverType"));
+            if (matches.Length == 0 && string.IsNullOrWhiteSpace(retainedReceiverType))
+            { Hit("receiver-creation-unavailable"); continue; }
+            var type = matches.Length == 1
+                ? SimpleType(Value(matches[0], "calleeContainingType") ?? Value(matches[0], "calleeName"))
+                : retainedReceiverType;
             if (string.IsNullOrWhiteSpace(type)) { Hit("receiver-type-unavailable"); continue; }
             var targets = declarations.Where(declaration => declaration.RuleId == RuleIds.VisualBasicSemanticDeclarations &&
                 SimpleType(Value(declaration, "containingType")).Equals(type, StringComparison.OrdinalIgnoreCase)

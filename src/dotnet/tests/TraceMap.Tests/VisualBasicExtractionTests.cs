@@ -592,9 +592,11 @@ public sealed class VisualBasicExtractionTests
 
                 Public Sub Run(url As String)
                     Dim row As DataRow
+                    Dim collision As Repository
                     url.Split(",")
                     row.Item(0)
                     repository.Save()
+                    Container.collision.Delete()
                 End Sub
             End Class
             """);
@@ -609,8 +611,12 @@ public sealed class VisualBasicExtractionTests
         Assert.Equal("String", calls["Split"].Properties["receiverType"]);
         Assert.Equal("DataRow", calls["Item"].Properties["receiverType"]);
         Assert.Equal("Repository", calls["Save"].Properties["receiverType"]);
+        Assert.DoesNotContain("receiverType", calls["Delete"].Properties.Keys);
         Assert.All(calls.Values, call =>
-            Assert.Equal("explicit-caller-syntax", call.Properties["receiverTypeResolution"]));
+        {
+            if (call.TargetSymbol == "Delete") return;
+            Assert.Equal("explicit-caller-syntax", call.Properties["receiverTypeResolution"]);
+        });
     }
 
     [Fact]
