@@ -173,7 +173,9 @@ internal static class SourceMetadataReconciler
             manifest,
             FactTypes.SourceMetadataIdentityObserved,
             RuleIds.DotNetCompiledSourceIdentity,
-            EvidenceTiers.Tier1Semantic,
+            first.RelationshipProof == "syntax-located-unresolved-declaration"
+                ? EvidenceTiers.Tier3SyntaxOrTextual
+                : EvidenceTiers.Tier1Semantic,
             first.Evidence with
             {
                 ExtractorId = nameof(SourceMetadataReconciler),

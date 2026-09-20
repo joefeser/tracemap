@@ -139,6 +139,7 @@ internal static class SourceMetadataIdentityCollector
 
     private static bool IsDeclarationNode(SyntaxNode node) =>
         node is not AccessorDeclarationSyntax
+        && node is not GlobalStatementSyntax
         && node is not Microsoft.CodeAnalysis.VisualBasic.Syntax.AccessorBlockSyntax
         && node is (MemberDeclarationSyntax
         or BaseMethodDeclarationSyntax
