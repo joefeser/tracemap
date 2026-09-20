@@ -204,8 +204,10 @@ path-detail counts, run:
 ```
 
 The command classifies whether retained chain and boundary outcomes stayed
-stable while repeated path detail decreased. It emits counts only; it does not
-print private evidence identities or claim runtime equivalence.
+stable while repeated path detail decreased or terminal-inventory metadata was
+added. It also reports byte deltas for the major handoff sections so a file-size
+change can be localized. It emits counts only; it does not print private
+evidence identities or claim runtime equivalence.
 
 `New-FocusedWebFormsPageGraphDump.ps1` independently closes every resolved
 handler on one receipted page. Its anonymous graph projection separates event
