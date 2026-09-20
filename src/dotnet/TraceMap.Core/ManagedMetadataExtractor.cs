@@ -47,7 +47,7 @@ public static class ManagedMetadataExtractor
         var generatorSha256 = GeneratorSha256();
         var workBudget = new WorkBudget(limits.MaxTotalWorkUnits);
         var receipts = ReadReceipts(repoPath, receiptPaths, limits, workBudget);
-        var descriptors = CreateDescriptors(repoPath, primaryPaths, dependencyPaths);
+        var descriptors = CreateDescriptors(repoPath, primaryPaths, dependencyPaths, limits);
         var evaluated = new List<EvaluatedInput>();
         var globalCandidates = new List<CompiledEvidenceCandidate>();
         var globalGapKinds = new List<string>(receipts.Gaps);
@@ -57,6 +57,11 @@ public static class ManagedMetadataExtractor
         foreach (var descriptor in descriptors)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (descriptor.SafeLocatorTextLimitExceeded)
+            {
+                evaluated.Add(EvaluatedInput.Gap(descriptor, "limit-exhausted", "ManagedInputTextLimitExceeded"));
+                continue;
+            }
             if (evaluated.Count >= limits.MaxArtifactCount)
             {
                 evaluated.Add(EvaluatedInput.Gap(descriptor, "limit-exhausted", "LimitArtifactCountExceeded"));
@@ -92,7 +97,12 @@ public static class ManagedMetadataExtractor
             }
 
             var rawSha256 = Sha256(bytes);
-            var admittedDescriptor = FinalizeSafeLocator(descriptor, rawSha256);
+            var admittedDescriptor = FinalizeSafeLocator(descriptor, rawSha256, limits);
+            if (admittedDescriptor.SafeLocatorTextLimitExceeded)
+            {
+                evaluated.Add(EvaluatedInput.Gap(admittedDescriptor, "limit-exhausted", "ManagedInputTextLimitExceeded", rawSha256));
+                continue;
+            }
             try
             {
                 var workUnits = PreflightManagedInput(bytes, limits);
@@ -643,12 +653,16 @@ public static class ManagedMetadataExtractor
     private static IReadOnlyList<InputDescriptor> CreateDescriptors(
         string repoPath,
         IReadOnlyList<string> primaryPaths,
-        IReadOnlyList<string> dependencyPaths)
+        IReadOnlyList<string> dependencyPaths,
+        CompiledInputLimits limits)
     {
-        var descriptors = primaryPaths.Select(path => CreateDescriptor(repoPath, path, "primary"))
-            .Concat(dependencyPaths.Select(path => CreateDescriptor(repoPath, path, "dependency")))
-            .GroupBy(item => (item.FullPath, item.Role))
-            .Select(group => group.First())
+        var pathComparer = CSharpSemanticExtractor.CreateSourcePathComparer(repoPath);
+        var descriptors = primaryPaths.Select(path => CreateDescriptor(repoPath, path, "primary", limits))
+            .Concat(dependencyPaths.Select(path => CreateDescriptor(repoPath, path, "dependency", limits)))
+            .GroupBy(item => item.Role, StringComparer.Ordinal)
+            .SelectMany(roleGroup => roleGroup
+                .GroupBy(item => item.FullPath, pathComparer)
+                .Select(pathGroup => pathGroup.OrderBy(item => item.FullPath, StringComparer.Ordinal).First()))
             .OrderBy(item => item.SafeLocator, StringComparer.Ordinal)
             .ThenBy(item => item.Role, StringComparer.Ordinal)
             .ThenBy(item => item.FullPath, StringComparer.Ordinal)
@@ -661,14 +675,14 @@ public static class ManagedMetadataExtractor
                 .Select((item, index) => (Key: (item.FullPath, item.Role), Suffix: $"-candidate-{index + 1:D3}")))
             .ToDictionary(item => item.Key, item => item.Suffix);
         return descriptors.Select(item => collisionOrdinals.TryGetValue((item.FullPath, item.Role), out var suffix)
-                ? item with { SafeLocator = item.SafeLocator + suffix }
+                ? item with { SafeLocator = AppendBoundedSuffix(item.SafeLocator, suffix, limits.MaxTextLength) }
                 : item)
             .OrderBy(item => item.SafeLocator, StringComparer.Ordinal)
             .ThenBy(item => item.Role, StringComparer.Ordinal)
             .ToArray();
     }
 
-    private static InputDescriptor CreateDescriptor(string repoPath, string path, string role)
+    private static InputDescriptor CreateDescriptor(string repoPath, string path, string role, CompiledInputLimits limits)
     {
         var fullPath = ResolvePath(repoPath, path);
         var relative = Path.GetRelativePath(repoPath, fullPath);
@@ -683,10 +697,16 @@ public static class ManagedMetadataExtractor
             var name = SafeFileName(Path.GetFileName(fullPath));
             safeLocator = $"__external__/{role}/{(File.Exists(fullPath) ? "pending" : "missing")}-{name}";
         }
-        return new InputDescriptor(fullPath, safeLocator, role, !withinRepo);
+        var textLimitExceeded = safeLocator.Length > limits.MaxTextLength;
+        return new InputDescriptor(
+            fullPath,
+            textLimitExceeded ? ProjectBoundedText(safeLocator, limits.MaxTextLength) : safeLocator,
+            role,
+            !withinRepo,
+            textLimitExceeded);
     }
 
-    private static InputDescriptor FinalizeSafeLocator(InputDescriptor descriptor, string rawSha256)
+    private static InputDescriptor FinalizeSafeLocator(InputDescriptor descriptor, string rawSha256, CompiledInputLimits limits)
     {
         if (!descriptor.IsExternal)
             return descriptor;
@@ -694,7 +714,28 @@ public static class ManagedMetadataExtractor
         var retainedNameAndSuffix = descriptor.SafeLocator.StartsWith(pendingPrefix, StringComparison.Ordinal)
             ? descriptor.SafeLocator[pendingPrefix.Length..]
             : SafeFileName(Path.GetFileName(descriptor.FullPath));
-        return descriptor with { SafeLocator = $"__external__/{descriptor.Role}/{rawSha256[..12]}-{retainedNameAndSuffix}" };
+        var safeLocator = $"__external__/{descriptor.Role}/{rawSha256[..12]}-{retainedNameAndSuffix}";
+        var textLimitExceeded = safeLocator.Length > limits.MaxTextLength;
+        return descriptor with
+        {
+            SafeLocator = textLimitExceeded ? ProjectBoundedText(safeLocator, limits.MaxTextLength) : safeLocator,
+            SafeLocatorTextLimitExceeded = descriptor.SafeLocatorTextLimitExceeded || textLimitExceeded
+        };
+    }
+
+    private static string AppendBoundedSuffix(string value, string suffix, int maxTextLength)
+    {
+        if (value.Length + suffix.Length <= maxTextLength)
+            return value + suffix;
+        if (suffix.Length < maxTextLength)
+            return value[..Math.Min(value.Length, maxTextLength - suffix.Length)] + suffix;
+        return ProjectBoundedText(value + suffix, maxTextLength);
+    }
+
+    private static string ProjectBoundedText(string value, int maxTextLength)
+    {
+        var projection = "sha256:" + Sha256(Encoding.UTF8.GetBytes(value));
+        return projection[..Math.Min(maxTextLength, projection.Length)];
     }
 
     private static MetadataReadResult ReadWithCecil(byte[] bytes, string safeLocator, CompiledInputLimits limits)
@@ -1094,13 +1135,15 @@ public static class ManagedMetadataExtractor
         provider.HasCustomAttributes && provider.CustomAttributes.Any(attribute =>
             attribute.AttributeType.FullName == "System.Runtime.CompilerServices.CompilerGeneratedAttribute");
 
-    private static IEnumerable<CecilTypeDefinition> FlattenTypes(IEnumerable<CecilTypeDefinition> roots)
+    internal static IEnumerable<CecilTypeDefinition> FlattenTypes(IEnumerable<CecilTypeDefinition> roots)
     {
-        foreach (var type in roots)
+        var stack = new Stack<CecilTypeDefinition>(roots.Reverse());
+        while (stack.Count > 0)
         {
+            var type = stack.Pop();
             yield return type;
-            foreach (var nested in FlattenTypes(type.NestedTypes))
-                yield return nested;
+            for (var index = type.NestedTypes.Count - 1; index >= 0; index--)
+                stack.Push(type.NestedTypes[index]);
         }
     }
 
@@ -1302,7 +1345,12 @@ public static class ManagedMetadataExtractor
         IReadOnlyList<string> AssemblyReferences,
         string AssemblyReferenceIdentity);
 
-    private sealed record InputDescriptor(string FullPath, string SafeLocator, string Role, bool IsExternal);
+    private sealed record InputDescriptor(
+        string FullPath,
+        string SafeLocator,
+        string Role,
+        bool IsExternal,
+        bool SafeLocatorTextLimitExceeded);
 
     private sealed class EvaluatedInput
     {
