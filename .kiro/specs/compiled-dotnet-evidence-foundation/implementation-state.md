@@ -1,12 +1,16 @@
 # Compiled .NET Evidence Foundation Implementation State
 
-Status: first-slice implementation and portable cross-platform validation complete; PR #772 merged into `dev`
+Status: Task 8 exact source-to-metadata reconciliation implemented and locally accepted; PR creation and exact-head ACK review pending
 
 Branch: `codex/source-metadata-reconciliation`
 
 Base: `origin/dev` at `532fccfb0a7588ab64397f672ca6a8dddef8d083`
 
 Tracking: #759, #766, #767, #768, #769
+
+Task 8 implementation commits: `010502ef` (`feat: reconcile exact source and
+metadata identities`) and `55fefd48` (`test: prove source metadata
+reconciliation matrix`).
 
 ## Scope decision
 
@@ -131,3 +135,60 @@ The later exact-head review added regression coverage for receipt-only scans
 and oversized assembly-reference identities. Receipt-only activation now emits
 the rule-backed `NoManagedInputDeclared` gap, and assembly-reference plus
 dependency-resolution strings honor the configured compiled text limit.
+
+## Task 8 exact source-to-metadata reconciliation
+
+`dotnet.compiled.source-identity.v1` is active. When the compiled lane is
+explicitly requested, the C# and Visual Basic semantic adapters retain internal
+compiler-resolved source declaration identities without changing their normal
+source facts. The reconciler emits one Tier1 edge only for one complete exact
+metadata identity candidate backed by a validated `bound` receipt. Each edge
+retains both endpoint identities, source and compiled fact IDs, rule and
+extractor versions, bounded-input and generator digests, receipt-binding digest,
+compiled provenance state, relationship proof, and the rule limitation.
+
+Zero and multiple candidates, incomplete source identities, optional-parameter
+state disagreement, and unacceptable compiled provenance remain Tier4 gaps
+with no edge. Display strings, simple names, arity, path proximity, timestamps,
+and metadata tokens never select a candidate. Compiler-generated declarations
+remain separate except for Roslyn's specific associated property/event accessor
+relationship. F# compiled identities remain available, but its `.fsproj` lane
+emits `SourceMetadataReconciliationUnsupportedLanguage` and zero guessed joins.
+Compiled coverage remains independent from source `analysisLevel`.
+
+The v2 public fixture contract records stable reconciliation case IDs, exact
+source and metadata identities, expected rule/tier/outcome/gaps, and non-claims.
+The matrix covers namespaces, nested/generic declarations, complete overload
+signatures, constructors, properties/indexers, events/accessors, C# ref and VB
+ByRef shapes, optional parameters, explicit interfaces where representable,
+same-looking cross-assembly/language declarations, exact zero candidates, exact
+multiple candidates, unbound inputs, and the F# unsupported source lane.
+
+Local macOS Task 8 validation on 2026-09-20:
+
+- focused `SourceMetadataReconciliationTests`: 7 passed, zero failed, zero
+  skipped;
+- existing `ManagedMetadataExtractorTests`: 22 passed, zero failed, zero
+  skipped;
+- `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with zero warnings
+  and zero errors;
+- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,989 passed, zero failed,
+  zero skipped;
+- two bound C# fixture CLI scans: 267 facts each, 30 exact reconciliation edges,
+  and three explicit incomplete source-identity gaps; `facts.ndjson`, report,
+  reconciliation manifest summary, and normalized SQLite fact rows matched;
+  both output directories contained all five required artifacts and passed
+  `scripts/validate-adapter-artifacts.py`;
+- `scripts/check-private-paths.sh`: passed;
+- `node scripts/kiro-review.mjs --self-test`: passed; and
+- `git diff --check`: passed.
+
+The three retained C# gaps are the existing unmanaged function-pointer shapes;
+compiled identities remain available, but source reconciliation intentionally
+fails closed as `SourceFunctionPointerIdentityUnsupported` until a separately
+documented complete Roslyn custom-calling-convention identity contract exists.
+Task 8 makes no PDB/sequence-point, IL body/call, rewrite, `dotnetperf`/private
+corpus, legacy Framework/Web Forms, or C++/CLI claim. Tasks 9-11 remain
+deferred. Operational `scannedAt` and receipt durations remain wall-clock
+diagnostics rather than deterministic evidence identifiers; deterministic
+evidence payloads and normalized artifact content were compared instead.
