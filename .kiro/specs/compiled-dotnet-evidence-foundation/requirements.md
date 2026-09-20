@@ -73,10 +73,11 @@ fallback and without promoting build artifacts beyond their provenance.
 ### 5. Fixture and platform validation
 
 1. The fast suite shall use public, purpose-built C#, VB.NET, and F# fixtures
-   covering the matrix in `design.md`.
+   covering the first-slice metadata matrix in `design.md`. The deferred matrix
+   is not part of tasks 1-7.
 2. The suite shall include semantic/projectless or failed-build states where
-   applicable, missing/stale/unbound binaries, unresolved dependencies, reader
-   disagreement, and deterministic repeat runs.
+   applicable, missing/stale/ambiguous/unbound/mismatched binaries, unresolved
+   dependencies, reader disagreement, and deterministic repeat runs.
 3. Mono.Cecil shall be a supplemental reader, not the sole oracle. Admitted
    identities shall be cross-checked with `System.Reflection.Metadata` in the
    first slice.

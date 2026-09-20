@@ -7,21 +7,26 @@ compiled-input boundary. Cross-check normalized assembly/member identities with
 `System.Reflection.Metadata`. Keep compiled facts in a separate evidence lane
 and join them to source facts only through later rule-backed reconciliation.
 
-## Evidence contract
+## First-slice evidence contract
 
-The initial rule families should be named and documented before code lands:
+The first-slice rule families must be named and documented before code lands:
 
 | Purpose | Proposed rule | Tier | Required limitation |
 | --- | --- | --- | --- |
 | Managed input admitted and hashed | `dotnet.compiled.input.v1` | Tier2Structural | Admission proves inspected bytes only, not freshness or source ownership. |
 | Assembly/module identity | `dotnet.compiled.assembly.v1` | Tier2Structural | Metadata identity is not authenticity or runtime load evidence. |
 | Type/member declaration | `dotnet.compiled.member.v1` | Tier2Structural | Declaration does not prove execution, dispatch, or reachability. |
-| Exact source/metadata identity edge | `dotnet.compiled.source-identity.v1` | Tier2Structural | Valid only with the documented complete identity and provenance inputs; ambiguity fails closed. |
 | Missing, stale, unreadable, unbound, mismatched, ambiguous, disagreed, or bounded input | owning rule plus categorical gap | Tier4Unknown | The gap reduces only the coverage it actually bounds. |
 
 Final rule names must be added to the rule catalog with explicit limitations.
 Compiled facts must carry a compiled-specific extractor and coverage label; an
 existing source fact is never re-tiered because matching metadata exists.
+
+The later reconciliation slice, not the first implementation slice, owns the
+proposed `dotnet.compiled.source-identity.v1` rule. That rule may emit an exact
+source/metadata identity edge only with complete documented identity and
+provenance inputs; ambiguity must fail closed. The first slice must neither
+define that rule as active nor emit source-to-metadata edges.
 
 ## Provenance model
 
@@ -69,12 +74,13 @@ modules but do not bind them to source by themselves.
 Mono.Cecil is the primary convenience reader for the first slice.
 `System.Reflection.Metadata` independently reads the admitted identity fields.
 If the readers disagree, TraceMap emits a categorical disagreement gap and
-withholds the disputed normalized fact or join. There is no majority vote and
-no fallback to a display-string match.
+withholds the disputed normalized fact so it cannot participate in later
+reconciliation. There is no majority vote and no fallback to a display-string
+match.
 
-## Fixture matrix
+## First-slice fixture matrix
 
-The default fast matrix is targeted, not Cartesian:
+The default metadata-only fast matrix is targeted, not Cartesian:
 
 | Shape | C# | VB.NET | F# | macOS fast | Windows |
 | --- | :---: | :---: | :---: | :---: | :---: |
@@ -82,18 +88,31 @@ The default fast matrix is targeted, not Cartesian:
 | Interfaces, explicit implementations, inheritance, overrides, virtual dispatch declarations | yes | yes | targeted compiled shape | required | required |
 | Delegates, events, lambdas, async and iterator state machines | yes | yes | targeted compiled shape | required | required |
 | `ref`/`out`/`in`, `ByRef`, arrays, pointers, function pointers where toolchains support them | yes | yes where representable | targeted | portable subset | full supported subset |
-| `call`, `callvirt`, constrained calls, `newobj`, `ldftn`, `ldvirtftn` | IL/compiled fixture | IL/compiled fixture | IL/compiled fixture | metadata/IL read | ILAsm cross-check |
-| Exception handlers and unusual control flow | curated IL/public cases | compiled cases | compiled cases | read-only subset | ILAsm/runtime-safe checks |
 | Missing/unresolved/partial dependencies and malformed bounded inputs | yes | yes | yes | required | required |
-| Deterministic source/compiled reconciliation and ambiguity | yes | yes | unsupported-source gap plus compiled identity | required | required |
-| Portable PDB | yes | yes | yes | later slice | later slice |
-| Windows PDB, legacy .NET Framework/Web Forms build | no | no | no | explicit not-run | required later lane |
-| C++/CLI and mixed mode | no | no | no | unsupported | separate feasibility lane |
 
-Every promoted regression case records a stable case ID, source construct,
-expected CLR shape, expected rules/tiers, expected gaps, toolchain lane, and the
-single behavior it proves. A larger optional stress corpus stays outside the
-default suite.
+The first slice asserts compiled metadata identities and explicit input,
+provenance, dependency, reader, and bound gaps. It does not read IL method
+bodies, reconcile source identities, inspect PDB sequence points, or require
+ILAsm.
+
+## Deferred validation matrix
+
+These rows are later-slice contracts and are not part of the tasks 1-7 fast
+suite:
+
+| Shape | Language/input | macOS | Windows | Owning slice |
+| --- | --- | --- | --- | --- |
+| Source/compiled reconciliation and ambiguity | C#, VB.NET, F# compiled identity with unsupported F# source gap | later | later | task 8 |
+| Portable PDB identity and sequence points | C#, VB.NET, F# | later | later | task 9 |
+| `call`, `callvirt`, constrained calls, `newobj`, `ldftn`, `ldvirtftn` | compiled/IL fixtures | later | ILAsm cross-check | task 10 |
+| Exception handlers and unusual control flow | curated public IL cases | later read-only lane | ILAsm/runtime-safe checks | task 10 |
+| Windows PDB and legacy .NET Framework/Web Forms build | Windows-produced inputs | explicit not-run | required later lane | task 11 |
+| C++/CLI and mixed mode | separate feasibility inputs | unsupported | separate feasibility lane | task 11 |
+
+Every promoted regression case, in its owning slice, records a stable case ID,
+source construct, expected CLR shape, expected rules/tiers, expected gaps,
+toolchain lane, and the single behavior it proves. A larger optional stress
+corpus stays outside the default suite.
 
 ## `dotnetperf` use
 
