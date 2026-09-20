@@ -2413,6 +2413,10 @@ Other Roslyn special types that lack CLI primitive signature codes, including
 `System.DateTime`, also follow the scoped named-type path.
 Roslyn error types and unavailable type scopes
 fail closed as incomplete identities and can never produce a Tier1 edge.
+Top-level C# statements are not declarations and do not enter the candidate
+lane. If Roslyn cannot resolve a declaration symbol, its syntax-located
+observation is Tier3 rather than Tier1 and remains paired with an explicit
+Tier4 incomplete-identity gap.
 
 The following never select a candidate: display strings, simple names,
 equal arity, path proximity, timestamps, or metadata tokens. Zero candidates,
