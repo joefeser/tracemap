@@ -57,7 +57,6 @@ namespace TraceMap.CompiledFixtures.CSharp.Alpha
 
         public class Nested<TNested>
         {
-            public (T, TNested) Pair(T left, TNested right) => (left, right);
             public TNested Echo(T left, TNested right) => right;
         }
     }
