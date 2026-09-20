@@ -166,16 +166,16 @@ multiple candidates, unbound inputs, and the F# unsupported source lane.
 
 Local macOS Task 8 validation on 2026-09-20:
 
-- focused `SourceMetadataReconciliationTests`: 7 passed, zero failed, zero
+- focused `SourceMetadataReconciliationTests`: 9 passed, zero failed, zero
   skipped;
 - existing `ManagedMetadataExtractorTests`: 22 passed, zero failed, zero
   skipped;
 - `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with zero warnings
   and zero errors;
-- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,989 passed, zero failed,
+- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,991 passed, zero failed,
   zero skipped;
-- two bound C# fixture CLI scans: 267 facts each, 30 exact reconciliation edges,
-  and three explicit incomplete source-identity gaps; `facts.ndjson`, report,
+- two bound C# fixture CLI scans: 311 facts each, 47 exact reconciliation edges,
+  and two explicit incomplete source-identity gaps; `facts.ndjson`, report,
   reconciliation manifest summary, and normalized SQLite fact rows matched;
   both output directories contained all five required artifacts and passed
   `scripts/validate-adapter-artifacts.py`;
@@ -183,7 +183,7 @@ Local macOS Task 8 validation on 2026-09-20:
 - `node scripts/kiro-review.mjs --self-test`: passed; and
 - `git diff --check`: passed.
 
-The three retained C# gaps are the existing unmanaged function-pointer shapes;
+The two retained C# gaps are the existing unmanaged function-pointer shapes;
 compiled identities remain available, but source reconciliation intentionally
 fails closed as `SourceFunctionPointerIdentityUnsupported` until a separately
 documented complete Roslyn custom-calling-convention identity contract exists.
@@ -192,3 +192,16 @@ corpus, legacy Framework/Web Forms, or C++/CLI claim. Tasks 9-11 remain
 deferred. Operational `scannedAt` and receipt durations remain wall-clock
 diagnostics rather than deterministic evidence identifiers; deterministic
 evidence payloads and normalized artifact content were compared instead.
+
+Current-head review remediation adds reconciliation-only complete source
+identities without changing ordinary source fact IDs; enclosing nested generic
+arity and parameter ordinals; independent value/ref and generic-arity overload
+joins; optional VB indexed-property parameter evidence in both metadata
+readers; explicit unresolved declaration gaps; partial coverage when semantic
+identity collection is unavailable; known rejected provenance on gaps; and
+bounded, fully committed summary/supporting-ID overflow. Summary rows now carry
+their evidence fact ID, file/line span, commit SHA, total join/gap counts, and
+report-level truncation disclosure. The pinned C#/VB OSS smoke remains
+explicitly deferred because it supplies no admitted compiled input and cannot
+exercise this internal reconciliation-only lane; the full source-only suite
+remains the acceptance guard for unchanged ordinary adapter facts.

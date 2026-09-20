@@ -35,6 +35,7 @@ internal static class SourceMetadataIdentityCollector
             if (symbol is null)
             {
                 if (node is Microsoft.CodeAnalysis.CSharp.Syntax.VariableDeclaratorSyntax
+                    or BaseFieldDeclarationSyntax
                     or Microsoft.CodeAnalysis.VisualBasic.Syntax.VariableDeclaratorSyntax
                     or ModifiedIdentifierSyntax)
                     continue;
