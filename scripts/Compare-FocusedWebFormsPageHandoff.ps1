@@ -19,6 +19,12 @@ function Values([object]$Value) {
     return @($Value)
 }
 
+function Json-Bytes([object]$Value) {
+    if ($null -eq $Value) { return 0 }
+    $json = ConvertTo-Json -InputObject $Value -Depth 100 -Compress
+    return [Text.Encoding]::UTF8.GetByteCount($json)
+}
+
 function Read-Handoff([string]$Root) {
     $path = Join-Path ([IO.Path]::GetFullPath($Root)) "workbench/$PageId.handoff.json"
     if (!(Test-Path -LiteralPath $path -PathType Leaf)) {
@@ -56,13 +62,18 @@ function Measure-Handoff([object]$InputHandoff) {
     }) | Measure-Object -Sum).Sum
     if ($null -eq $reportedTerminalSum) { $reportedTerminalSum = 0 }
 
-    $chainOutcomes = @($chains | ForEach-Object {
+    $coreChainOutcomes = @($chains | ForEach-Object {
         @(
             [string](Property-Value $_ 'chainId'),
             [string](Property-Value $_ 'handlerFactId'),
             [string](Property-Value $_ 'classification'),
             [string](Property-Value $_ 'terminalKind'),
-            [string](Property-Value $_ 'traversalStopState'),
+            [string](Property-Value $_ 'traversalStopState')
+        ) -join '|'
+    } | Sort-Object)
+    $terminalInventoryOutcomes = @($chains | ForEach-Object {
+        @(
+            [string](Property-Value $_ 'chainId'),
             [string](Property-Value $_ 'terminalReachabilityAvailable'),
             [string](Property-Value $_ 'terminalReachabilityComplete'),
             [string](Property-Value $_ 'distinctReachableTerminalCount'),
@@ -85,6 +96,7 @@ function Measure-Handoff([object]$InputHandoff) {
     } | Sort-Object)
 
     $pathOwners = @($chains) + @($boundaries)
+    $inventories = Property-Value $handoff 'inventories'
 
     return [pscustomobject]@{
         Bytes = [long]$InputHandoff.Bytes
@@ -94,6 +106,14 @@ function Measure-Handoff([object]$InputHandoff) {
         CallEvidence = [int]((@($chains | ForEach-Object { @(Values (Property-Value $_ 'callEvidence')).Count }) | Measure-Object -Sum).Sum)
         SupportingFacts = [int]((@($pathOwners | ForEach-Object { @(Values (Property-Value $_ 'supportingFactIds')).Count }) | Measure-Object -Sum).Sum)
         SupportingEdges = [int]((@($pathOwners | ForEach-Object { @(Values (Property-Value $_ 'supportingEdgeIds')).Count }) | Measure-Object -Sum).Sum)
+        Evidence = [int]((@($pathOwners | ForEach-Object { @(Values (Property-Value $_ 'evidence')).Count }) | Measure-Object -Sum).Sum)
+        ClientBehaviors = @(Values (Property-Value $inventories 'clientBehavior')).Count
+        ServerBehaviors = @(Values (Property-Value $inventories 'serverBehavior')).Count
+        IdentityState = @(Values (Property-Value $inventories 'identityState')).Count
+        StructuralCandidates = @(Values (Property-Value $inventories 'structuralCandidates')).Count
+        Gaps = @(Values (Property-Value $handoff 'gaps')).Count
+        SupportingIds = @(Values (Property-Value $handoff 'supportingIds')).Count
+        RetrievalHints = @(Values (Property-Value $handoff 'retrievalHints')).Count
         TerminalInventoryAvailableChains = $available
         TerminalInventoryCompleteChains = $complete
         TerminalInventoryIncompleteChains = $incomplete
@@ -101,21 +121,41 @@ function Measure-Handoff([object]$InputHandoff) {
         DistinctTerminalIds = if ($terminalIds.Count -gt 0) { $terminalIds.Count } else { $null }
         ReportedTerminalCountSum = [int]$reportedTerminalSum
         PathDetailTruncatedChains = @($chains | Where-Object { (Property-Value $_ 'pathEnumerationTruncated') -eq $true }).Count
-        ChainOutcomes = $chainOutcomes
+        CoreChainOutcomes = $coreChainOutcomes
+        TerminalInventoryOutcomes = $terminalInventoryOutcomes
         BoundaryOutcomes = $boundaryOutcomes
+        SectionBytes = [ordered]@{
+            eventChains = Json-Bytes $handoff.eventChains
+            downstreamBoundaries = Json-Bytes $handoff.downstreamBoundaries
+            inventories = Json-Bytes $inventories
+            gaps = Json-Bytes (Property-Value $handoff 'gaps')
+            supportingIds = Json-Bytes (Property-Value $handoff 'supportingIds')
+            retrievalHints = Json-Bytes (Property-Value $handoff 'retrievalHints')
+        }
     }
 }
 
 $prior = Measure-Handoff (Read-Handoff $PriorReviewRoot)
 $current = Measure-Handoff (Read-Handoff $ReviewRoot)
-$chainOutcomeDifferences = @(Compare-Object $prior.ChainOutcomes $current.ChainOutcomes).Count
+$coreChainOutcomeDifferences = @(Compare-Object $prior.CoreChainOutcomes $current.CoreChainOutcomes).Count
+$terminalInventoryOutcomeDifferences = @(Compare-Object $prior.TerminalInventoryOutcomes $current.TerminalInventoryOutcomes).Count
 $boundaryOutcomeDifferences = @(Compare-Object $prior.BoundaryOutcomes $current.BoundaryOutcomes).Count
-$retainedOutcomeDifferences = $chainOutcomeDifferences + $boundaryOutcomeDifferences
+$retainedOutcomeDifferences = $coreChainOutcomeDifferences + $boundaryOutcomeDifferences
+$terminalInventoryChange = if ($prior.TerminalInventoryAvailableChains -eq 0 -and $current.TerminalInventoryAvailableChains -gt 0) {
+    'added'
+} elseif ($prior.TerminalInventoryAvailableChains -gt 0 -and $current.TerminalInventoryAvailableChains -eq 0) {
+    'removed'
+} elseif ($terminalInventoryOutcomeDifferences -eq 0) {
+    'stable'
+} else {
+    'changed'
+}
 
 Write-Output 'webFormsPageHandoffComparison=valid'
 Write-Output "pageId=$PageId"
 foreach ($name in @(
-    'Bytes','EventChains','Boundaries','PathEvidence','CallEvidence','SupportingFacts','SupportingEdges',
+    'Bytes','EventChains','Boundaries','PathEvidence','CallEvidence','SupportingFacts','SupportingEdges','Evidence',
+    'ClientBehaviors','ServerBehaviors','IdentityState','StructuralCandidates','Gaps','SupportingIds','RetrievalHints',
     'TerminalInventoryAvailableChains','TerminalInventoryCompleteChains','TerminalInventoryIncompleteChains',
     'TerminalInventoryUnavailableChains','DistinctTerminalIds','ReportedTerminalCountSum','PathDetailTruncatedChains')) {
     $priorValue = Property-Value $prior $name
@@ -123,8 +163,15 @@ foreach ($name in @(
     $delta = if ($priorValue -is [ValueType] -and $currentValue -is [ValueType]) { [long]$currentValue - [long]$priorValue } else { 'unavailable' }
     Write-Output "$name=prior:$priorValue|current:$currentValue|delta:$delta"
 }
-Write-Output "chainOutcomeDifferences=$chainOutcomeDifferences"
+foreach ($name in $prior.SectionBytes.Keys) {
+    $priorValue = [long]$prior.SectionBytes[$name]
+    $currentValue = [long]$current.SectionBytes[$name]
+    Write-Output "sectionBytes.$name=prior:$priorValue|current:$currentValue|delta:$($currentValue - $priorValue)"
+}
+Write-Output "coreChainOutcomeDifferences=$coreChainOutcomeDifferences"
+Write-Output "terminalInventoryOutcomeDifferences=$terminalInventoryOutcomeDifferences"
+Write-Output "terminalInventoryChange=$terminalInventoryChange"
 Write-Output "boundaryOutcomeDifferences=$boundaryOutcomeDifferences"
 Write-Output "retainedOutcomeDifferences=$retainedOutcomeDifferences"
-Write-Output "classification=$(if ($retainedOutcomeDifferences -eq 0 -and $current.PathEvidence -lt $prior.PathEvidence) { 'stable-retained-outcomes-with-reduced-path-detail' } elseif ($retainedOutcomeDifferences -eq 0) { 'stable-retained-outcomes' } else { 'retained-outcomes-changed-review-required' })"
+Write-Output "classification=$(if ($retainedOutcomeDifferences -eq 0 -and $terminalInventoryChange -eq 'added') { 'stable-retained-outcomes-with-terminal-inventory-added' } elseif ($retainedOutcomeDifferences -eq 0 -and $current.PathEvidence -lt $prior.PathEvidence) { 'stable-retained-outcomes-with-reduced-path-detail' } elseif ($retainedOutcomeDifferences -eq 0) { 'stable-retained-outcomes' } else { 'retained-outcomes-changed-review-required' })"
 Write-Output 'nonClaim=static-handoff-comparison-does-not-prove-runtime-equivalence-or-execution'
