@@ -41,6 +41,8 @@ namespace TraceMap.CompiledFixtures.CSharp.Alpha
         public int GenericArity<TOne, TTwo>() => 2;
         public int Optional(int value = 7) => value;
         public TResult Generic<TResult>(TResult value) => value;
+        public decimal DecimalShape(decimal value) => value;
+        public Widget<int>.Nested<string> ConstructedNested(Widget<int>.Nested<string> value) => value;
         public void Shapes(ref int byRef, out string output, in Guid readOnly, int[] values, int? nullable)
         {
             output = $"{byRef}:{readOnly}:{values.Length}:{nullable}";
