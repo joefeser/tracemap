@@ -124,9 +124,11 @@ internal static class SourceMetadataIdentityCollector
 
     private static bool IsDeclarationNode(SyntaxNode node) => node is
         MemberDeclarationSyntax
+        or BaseMethodDeclarationSyntax
         or Microsoft.CodeAnalysis.CSharp.Syntax.VariableDeclaratorSyntax
         or Microsoft.CodeAnalysis.VisualBasic.Syntax.VariableDeclaratorSyntax
         or AccessorDeclarationSyntax
+        or Microsoft.CodeAnalysis.VisualBasic.Syntax.MethodBlockBaseSyntax
         or DeclarationStatementSyntax
         or ModifiedIdentifierSyntax;
 
