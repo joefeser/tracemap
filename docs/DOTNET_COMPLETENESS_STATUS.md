@@ -92,20 +92,22 @@ rows are withheld. Source and compiled facts remain separate, private compiled
 facts remain local-only, and the scan identity commits the compiled admission
 contract before fact IDs are derived.
 
-Local validation passed 1,979 tests with zero failures or skips, including 19
-focused managed-metadata tests and a 26-test managed-metadata/report set. The
+Local validation passed 1,982 tests with zero failures or skips, including 22
+focused managed-metadata tests. The
 focused set includes iterative deeply nested type inventory, filesystem-aware
-path deduplication, bounded projection of overlong input locators, top-level
-receipt binding counts, minimum digest projection capacity, and bounded
-metadata-signature nesting. Artifact overflow retains a bounded per-input set
-plus a deterministic omitted-count/digest commitment. Two
+input and receipt-path deduplication, bounded projection of overlong input
+locators, top-level receipt binding counts, minimum digest projection capacity,
+bounded metadata-signature nesting, explicit multi-module rejection, and
+unambiguous length-prefixed metadata identities. Compiled coverage gaps remain
+separate from the source `analysisLevel`. Artifact overflow retains a bounded
+per-input set plus a deterministic omitted-count/digest commitment. Two
 admitted compiled-input CLI scans each emitted 107 facts, including 80 compiled
 facts; their `facts.ndjson` files were byte-identical, both artifact sets passed
 the adapter validator, and neither output contained local absolute paths. On PR
-#772 implementation head `5e17ee4a`, the portable matrix and package smoke
-passed on Windows, Ubuntu, and macOS, and the .NET, combined-adapter, and
-private-path jobs passed. Exact-head ACK remains the merge-readiness authority;
-green CI alone does not imply merge readiness.
+#772 heads, the portable matrix and package smoke passed on Windows, Ubuntu,
+and macOS, and the .NET, combined-adapter, and private-path jobs passed.
+Exact-head ACK remains the merge-readiness authority; green CI alone does not
+imply merge readiness.
 
 This slice does not add broad IL traversal, source-to-metadata reconciliation,
 rewrite analysis, PDB reconciliation, legacy framework execution,
