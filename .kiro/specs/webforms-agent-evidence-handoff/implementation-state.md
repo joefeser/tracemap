@@ -1,5 +1,7 @@
 # Implementation state: Web Forms agent evidence handoff
 
+Record type: historical delivery record. PR #735 merged on 2026-09-11.
+
 Branch: `codex/issue-734-agent-evidence-handoff`
 
 Issue: #734

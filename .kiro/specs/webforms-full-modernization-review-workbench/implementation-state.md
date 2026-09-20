@@ -1,5 +1,8 @@
 # Implementation state
 
+- Record type: historical delivery and discovery record. Forward-looking notes
+  below describe the state when this slice was implemented; current completion
+  and next-slice authority is `docs/DOTNET_COMPLETENESS_STATUS.md`.
 - Branch: `codex/issue-744-webforms-application-workbench`
 - Base: stacked on the docs-export safety fixes in PR #741.
 - Scope: issue #744 workbench, issue #745 review overlay, and issue #746
