@@ -22,6 +22,7 @@ Start here:
 - [Language adapter contract](docs/LANGUAGE_ADAPTER_CONTRACT.md)
 - [Adapter runway](docs/ADAPTER_RUNWAY.md)
 - [Web Forms modernization packet runbook](docs/WEBFORMS_MODERNIZATION_PACKET.md)
+- [.NET evidence completeness and next-slice status](docs/DOTNET_COMPLETENESS_STATUS.md)
 - [Web Forms review quickstart](docs/WEBFORMS_REVIEW_QUICKSTART.md): one commented config, a preflight, and one resumable C#/VB.NET pipeline from bounded scan to application workbench.
 - [Web Forms evidence use cases](docs/WEBFORMS_AGENT_USE_CASES.md) and [agent handoff](docs/WEBFORMS_AGENT_HANDOFF.md): bounded downstream interpretation without turning agent output into scanner evidence.
 - [Private Web Forms review workflow](docs/WEBFORMS_PRIVATE_REVIEW_WORKFLOW.md): evidence, interpretation, human review, approval, and ticket creation remain separate gates.

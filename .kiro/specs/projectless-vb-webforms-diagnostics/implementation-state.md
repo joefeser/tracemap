@@ -1,7 +1,11 @@
 # Implementation state
 
+- Record type: historical implementation and validation record. Current status
+  is summarized in `docs/DOTNET_COMPLETENESS_STATUS.md`; PR #770 at
+  `046d3c41` is authoritative for terminal reachability.
 - Branch: `codex/vb-webforms-battle-test`
-- Status: implementation and validation complete; branch pushed
+- Historical status: implementation and validation completed on the retained
+  investigation branch; do not merge that branch wholesale.
 - Implementation commit: `72b7470c`
 - Private input: anonymous aggregate counts only; no private source, route, or
   file identity is retained in this spec or fixture.
@@ -62,3 +66,14 @@ sanitized generator and input provenance hashes were present and validated.
   4/4; the full .NET solution passed 1,957/1,957; `git diff --check` passed.
 - Because the producer version changed, external validation requires fresh
   source scans before recombining and regenerating the Web Forms packet.
+
+## Current-head reconciliation
+
+- PR #770 completed retained-graph terminal inventory on `dev`; it did not make
+  projectless receiver resolution complete.
+- The verified comparison retains 20 combined receiver gaps. Creation gaps
+  changed 7 to 8 and target gaps changed 13 to 12, so one item changed category
+  without reducing the combined gap count.
+- Branch-only diagnostics and experiments are historical research inputs. Any
+  carry-forward requires a minimized public fixture and review against current
+  `dev`.
