@@ -328,7 +328,13 @@ public static class ManagedMetadataExtractor
         string generatorSha256,
         string coverage)
     {
+        var reconciliationBlocker = item.ProvenanceState != "bound"
+            ? $"CompiledProvenance{CultureInfo.InvariantCulture.TextInfo.ToTitleCase(item.ProvenanceState)}"
+            : item.GapKinds.Contains("AmbiguousDuplicateManagedAssembly", StringComparer.Ordinal)
+                ? "AmbiguousDuplicateManagedAssembly"
+                : null;
         var result = item.Candidates
+            .Select(candidate => WithReconciliationEligibility(candidate, reconciliationBlocker))
             .Select(candidate => WithCommonProvenance(candidate, boundedInputSha256, generatorSha256, coverage, item.RawSha256, item.BindingDigest))
             .ToList();
         if (item.Outcome == "admitted")
@@ -362,6 +368,16 @@ public static class ManagedMetadataExtractor
                 item.BindingDigest));
         }
         return result;
+    }
+
+    private static CompiledEvidenceCandidate WithReconciliationEligibility(
+        CompiledEvidenceCandidate candidate,
+        string? blocker)
+    {
+        var properties = CopyProperties(candidate.Properties);
+        properties["sourceReconciliationEligibility"] = blocker is null ? "eligible" : "ineligible";
+        properties["sourceReconciliationBlocker"] = blocker ?? string.Empty;
+        return candidate with { Properties = properties };
     }
 
     private static CompiledEvidenceCandidate WithCommonProvenance(
@@ -813,7 +829,7 @@ public static class ManagedMetadataExtractor
                     method.CallingConvention == MethodCallingConvention.VarArg ? "vararg" : "default", method.HasThis, method.ExplicitThis);
                 observations.Add(Observation(memberKind, unchecked((int)method.MetadataToken.ToUInt32()), FactTypes.ManagedMethodDeclared, RuleIds.DotNetCompiledMember,
                     $"{typeIdentity}|{memberKind}:{EncodeIdentityComponent(method.Name)}|{signature}", memberKind,
-                    MemberProperties(method, method.GenericParameters.Count, IsCompilerGenerated(method), signature)));
+                    MethodProperties(method, signature)));
             }
             foreach (var field in type.Fields)
             {
@@ -954,7 +970,7 @@ public static class ManagedMetadataExtractor
                     decoded.Header.IsInstance, (decoded.Header.RawValue & 0x40) != 0);
                 observations.Add(Observation(memberKind, MetadataTokens.GetToken(methodHandle), FactTypes.ManagedMethodDeclared, RuleIds.DotNetCompiledMember,
                     $"{typeIdentity}|{memberKind}:{EncodeIdentityComponent(name)}|{signature}", memberKind,
-                    MemberProperties(name, method.GetGenericParameters().Count, false, signature)));
+                    MethodProperties(reader, method, name, signature)));
             }
             foreach (var fieldHandle in type.GetFields())
             {
@@ -1132,6 +1148,31 @@ public static class ManagedMetadataExtractor
 
     private static IReadOnlyDictionary<string, string> MemberProperties(IMemberDefinition member, int genericArity, bool generated, string? signature = null) =>
         MemberProperties(member.Name, genericArity, generated, signature);
+
+    private static IReadOnlyDictionary<string, string> MethodProperties(Mono.Cecil.MethodDefinition method, string signature)
+    {
+        var result = CopyProperties(MemberProperties(method, method.GenericParameters.Count, IsCompilerGenerated(method), signature));
+        result["optionalParameterOrdinals"] = string.Join(",", method.Parameters
+            .Select((parameter, ordinal) => (parameter, ordinal))
+            .Where(item => item.parameter.IsOptional)
+            .Select(item => item.ordinal.ToString(CultureInfo.InvariantCulture)));
+        return result;
+    }
+
+    private static IReadOnlyDictionary<string, string> MethodProperties(
+        MetadataReader reader,
+        System.Reflection.Metadata.MethodDefinition method,
+        string name,
+        string signature)
+    {
+        var result = CopyProperties(MemberProperties(name, method.GetGenericParameters().Count, false, signature));
+        result["optionalParameterOrdinals"] = string.Join(",", method.GetParameters()
+            .Select(handle => reader.GetParameter(handle))
+            .Where(parameter => parameter.SequenceNumber > 0 && (parameter.Attributes & System.Reflection.ParameterAttributes.Optional) != 0)
+            .Select(parameter => (parameter.SequenceNumber - 1).ToString(CultureInfo.InvariantCulture))
+            .OrderBy(value => value, StringComparer.Ordinal));
+        return result;
+    }
 
     private static IReadOnlyDictionary<string, string> MemberProperties(string name, int genericArity, bool generated, string? signature)
     {
