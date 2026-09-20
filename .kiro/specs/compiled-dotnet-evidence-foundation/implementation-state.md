@@ -92,9 +92,9 @@ Local macOS validation on 2026-09-20:
 
 - `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with zero warnings
   and zero errors.
-- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,971 passed,
+- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,972 passed,
   zero failed, zero skipped.
-- focused `ManagedMetadataExtractorTests`: 11 passed, zero failed; the combined
+- focused `ManagedMetadataExtractorTests`: 12 passed, zero failed; the combined
   managed-metadata/report focused set passed 19 of 19.
 - two explicit admitted compiled-input CLI scans: 107 facts each, including 80
   compiled-rule facts; byte-identical `facts.ndjson`; all five required
@@ -120,3 +120,8 @@ Web Forms build behavior, ILAsm/ILDAsm parity, the historical `dotnetperf`
 corpus, or C++/CLI feasibility. The following remain deferred without implied
 support: source-to-metadata reconciliation, PDB identity, operand-aware IL,
 rewriting, legacy build execution, the historical corpus, and C++/CLI.
+
+The later exact-head review added regression coverage for receipt-only scans
+and oversized assembly-reference identities. Receipt-only activation now emits
+the rule-backed `NoManagedInputDeclared` gap, and assembly-reference plus
+dependency-resolution strings honor the configured compiled text limit.
