@@ -1,10 +1,10 @@
 # Compiled .NET Evidence Foundation Implementation State
 
-Status: design and documentation only; implementation not started
+Status: first-slice implementation and portable cross-platform validation complete; exact-head review fixes validated locally and ACK rerun pending
 
-Branch: `codex/compiled-dotnet-evidence-spec`
+Branch: `codex/compiled-dotnet-evidence-foundation`
 
-Base: `dev` at `046d3c4166f0999e8b0f9928d365708a84dc8ec0`
+Base: `origin/dev` at `0b728b62943de7c0c52a44e170e870c2691dcd34`
 
 Tracking: #759, #766, #767, #768, #769
 
@@ -42,8 +42,9 @@ reconciliation, historical corpus execution, or C++/CLI support.
 - Bounded-input hashing uses a canonical pre-digest payload that excludes the
   digest and all downstream identities derived from it; the computed digest is
   attached before scan/fact IDs are derived.
-- Normalized type/member/signature identities preserve exact metadata
-  namespaces, including the empty/global namespace and nested declaring chain.
+- Normalized assembly/type/member/signature identities length-prefix every
+  free-text component, preserving delimiters, the empty/global namespace, and
+  nested declaring chains without ambiguous concatenation.
 - Missing, stale, ambiguous, unbound, or mismatched inputs reduce compiled
   coverage and never erase or upgrade source-derived evidence. Timestamps alone
   do not establish staleness.
@@ -66,6 +67,67 @@ reconciliation, historical corpus execution, or C++/CLI support.
 
 ## Validation state
 
-Documentation guards only are required for this branch. No implementation,
-package addition, build artifact, fact schema, or rule catalog change has been
-made. Implementation validation remains unchecked in `tasks.md`.
+Tasks 1-6 are implemented. The lane uses pinned Mono.Cecil `0.11.6` with
+deferred reading and a resolver that rejects ambient resolution, then
+independently compares normalized rows from `System.Reflection.Metadata`.
+Disputed rows are withheld. The CLI accepts explicit primary, dependency, and
+binding-receipt inputs plus validated admission limits; the manifest, `scanId`,
+facts, SQLite index, Markdown report, and execution receipt retain the bounded
+contract without exposing raw absolute paths.
+
+The public portable fixture matrix lives under
+`samples/compiled-dotnet-evidence/` and covers C#, VB.NET, and F#. Focused tests
+exercise exact CLR identities, duplicate and unresolved dependencies,
+provenance states, malformed/native/missing/over-budget inputs, reader
+disagreement, deterministic bytes, privacy, all five scan artifacts, and
+unchanged source evidence. Review hardening also covers iterative deeply nested
+type inventory, filesystem-aware input and receipt-path deduplication, bounded
+projection of overlong input locators, and explicit rejection of metadata-bearing
+secondary modules. It also pins top-level receipt binding counts, rejects text
+limits too small for a complete projected digest, converts excessive
+metadata-signature nesting into an explicit partial-coverage gap, and keeps
+compiled coverage separate from the source `analysisLevel`. Artifact overflow
+retains only the configured number of per-input rows plus a deterministic
+omitted-count/digest commitment. The local distribution workflow runs the same
+focused tests on Windows, Ubuntu, and macOS.
+
+Implementation commit: `a70ac803` (`feat: add bounded compiled metadata evidence lane`)
+
+Portable fixture/test commit: `522e4325` (`test: add portable compiled metadata fixture matrix`)
+
+Final bounds/provenance fix commits: `f28c4e93`, `7df78401`, and `5e17ee4a`.
+
+Local macOS validation on 2026-09-20:
+
+- `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with zero warnings
+  and zero errors.
+- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,982 passed,
+  zero failed, zero skipped.
+- focused `ManagedMetadataExtractorTests`: 22 passed, zero failed.
+- two explicit admitted compiled-input CLI scans: 107 facts each, including 80
+  compiled-rule facts; byte-identical `facts.ndjson`; all five required
+  artifacts present; both output directories passed
+  `scripts/validate-adapter-artifacts.py`; neither output contained a local
+  absolute path.
+- `scripts/check-private-paths.sh`: passed.
+- `node scripts/kiro-review.mjs --self-test`: passed; implementation prompt
+  dry-run completed with `Coverage: NotRun` as expected because it did not
+  invoke the external Kiro reviewer.
+- `git diff --check`: passed.
+
+Task 7 is complete. Earlier PR #772 heads passed the portable matrix and package
+smoke on Windows, Ubuntu, and macOS plus the .NET adapter, combined-adapter, and
+private-path jobs. The latest exact-head findings have been fixed and validated
+locally; ACK remains the authority after the fixes are pushed. No reviewer was
+manually retagged and no merge was performed.
+
+Portable Windows success does not prove Windows PDB, legacy .NET Framework or
+Web Forms build behavior, ILAsm/ILDAsm parity, the historical `dotnetperf`
+corpus, or C++/CLI feasibility. The following remain deferred without implied
+support: source-to-metadata reconciliation, PDB identity, operand-aware IL,
+rewriting, legacy build execution, the historical corpus, and C++/CLI.
+
+The later exact-head review added regression coverage for receipt-only scans
+and oversized assembly-reference identities. Receipt-only activation now emits
+the rule-backed `NoManagedInputDeclared` gap, and assembly-reference plus
+dependency-resolution strings honor the configured compiled text limit.

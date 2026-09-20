@@ -1,8 +1,8 @@
 # .NET Evidence Completeness Status
 
-Status: current planning index as of 2026-09-19
+Status: compiled metadata foundation implemented and portable cross-platform validation complete as of 2026-09-20; exact-head required review remains pending
 
-Authority: `dev` at `046d3c4166f0999e8b0f9928d365708a84dc8ec0`
+Authority: implementation branch based on `origin/dev` at `0b728b62943de7c0c52a44e170e870c2691dcd34`
 
 This page is the current index for completed Web Forms work, remaining .NET
 evidence gaps, and the next implementation slice. Older Kiro
@@ -79,14 +79,39 @@ override this page or a later current-head record.
   outcome; issue disposition should be reconciled against that merge rather
   than inferred from the older branch plan.
 
-## Active next plan
+## Active implementation
 
 The active design is
 [`compiled-dotnet-evidence-foundation`](../.kiro/specs/compiled-dotnet-evidence-foundation/requirements.md).
-Its first implementation slice is deliberately narrow: define and test managed
-assembly inventory, metadata identity, provenance, and explicit gap contracts
-against small public C#/VB.NET/F# fixtures. It does not add broad IL traversal,
-rewrite analysis, PDB reconciliation, or Windows historical-corpus execution.
+Its first implementation slice now inventories explicitly admitted managed
+assemblies with exact assembly/module/type/member metadata identities, bounded
+and privacy-projected provenance, explicit dependency-resolution outcomes, and
+explicit gap contracts against small public C#/VB.NET/F# fixtures. Mono.Cecil
+rows are independently checked with `System.Reflection.Metadata`; disputed
+rows are withheld. Source and compiled facts remain separate, private compiled
+facts remain local-only, and the scan identity commits the compiled admission
+contract before fact IDs are derived.
+
+Local validation passed 1,982 tests with zero failures or skips, including 22
+focused managed-metadata tests. The
+focused set includes iterative deeply nested type inventory, filesystem-aware
+input and receipt-path deduplication, bounded projection of overlong input
+locators, top-level receipt binding counts, minimum digest projection capacity,
+bounded metadata-signature nesting, explicit multi-module rejection, and
+unambiguous length-prefixed metadata identities. Compiled coverage gaps remain
+separate from the source `analysisLevel`. Artifact overflow retains a bounded
+per-input set plus a deterministic omitted-count/digest commitment. Two
+admitted compiled-input CLI scans each emitted 107 facts, including 80 compiled
+facts; their `facts.ndjson` files were byte-identical, both artifact sets passed
+the adapter validator, and neither output contained local absolute paths. On PR
+#772 heads, the portable matrix and package smoke passed on Windows, Ubuntu,
+and macOS, and the .NET, combined-adapter, and private-path jobs passed.
+Exact-head ACK remains the merge-readiness authority; green CI alone does not
+imply merge readiness.
+
+This slice does not add broad IL traversal, source-to-metadata reconciliation,
+rewrite analysis, PDB reconciliation, legacy framework execution,
+historical-corpus execution, or C++/CLI support.
 
 Correctness work belongs to the open evidence engine. Managed fleet execution,
 hosted retention, and managed private Windows workers may belong to a later

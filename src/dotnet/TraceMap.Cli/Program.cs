@@ -262,7 +262,17 @@ public static class TraceMapCommand
             TargetFramework: values.GetValueOrDefault("--target-framework"),
             Restore: values.HasFlag("--restore"),
             BinlogPaths: values.GetMany("--binlog"),
-            BinlogCommitSha: values.GetValueOrDefault("--binlog-commit-sha"));
+            BinlogCommitSha: values.GetValueOrDefault("--binlog-commit-sha"),
+            CompiledInputPaths: values.GetMany("--compiled-input"),
+            CompiledDependencyPaths: values.GetMany("--compiled-dependency"),
+            CompiledBindingReceiptPaths: values.GetMany("--compiled-binding-receipt"),
+            CompiledInputLimits: new CompiledInputLimits(
+                ParsePositiveInt(values, "--compiled-max-artifacts", 32),
+                ParsePositiveLong(values, "--compiled-max-file-bytes", 67_108_864),
+                ParsePositiveInt(values, "--compiled-max-types", 50_000),
+                ParsePositiveInt(values, "--compiled-max-members", 250_000),
+                ParsePositiveInt(values, "--compiled-max-text", 4_096),
+                ParsePositiveLong(values, "--compiled-max-work", 500_000)));
         var receiptRecorder = new ScanReceiptRecorder(
             scanOptions,
             sqlValidationSummaryPaths.Append(sqlValidationAsOf?.ToString("O") ?? string.Empty));
@@ -2275,6 +2285,21 @@ public static class TraceMapCommand
         throw new ArgumentException($"{key} must be a positive integer.");
     }
 
+    private static long ParsePositiveLong(ParsedOptions values, string key, long defaultValue)
+    {
+        if (!values.TryGetValue(key, out var value))
+        {
+            return defaultValue;
+        }
+
+        if (long.TryParse(value, out var parsed) && parsed > 0)
+        {
+            return parsed;
+        }
+
+        throw new ArgumentException($"{key} must be a positive integer.");
+    }
+
     private static int ParseBoundedPositiveInt(
         ParsedOptions values,
         string key,
@@ -2673,7 +2698,7 @@ public static class TraceMapCommand
     {
         return """
             Usage:
-              tracemap scan --repo <path> --out <path> [--solution <path>] [--project <path>] [--include <glob>] [--exclude <glob>] [--target-framework <tfm>] [--restore] [--binlog <path> --binlog-commit-sha <sha>] [--sql-validation-summary <path>]
+              tracemap scan --repo <path> --out <path> [--solution <path>] [--project <path>] [--include <glob>] [--exclude <glob>] [--target-framework <tfm>] [--restore] [--binlog <path> --binlog-commit-sha <sha>] [--compiled-input <assembly>] [--compiled-dependency <assembly>] [--compiled-binding-receipt <json>] [--sql-validation-summary <path>]
 
             Required:
               --repo <path>   Repository or folder to scan.
@@ -2689,6 +2714,18 @@ public static class TraceMapCommand
               --binlog <path>          Explicit local MSBuild binary log to ingest offline. Repeatable; never discovered.
               --binlog-commit-sha <sha>
                                        Required with --binlog and must match the repository commit detected by TraceMap.
+              --compiled-input <path>  Explicit primary managed assembly. Repeatable; never discovered.
+              --compiled-dependency <path>
+                                       Explicit dependency candidate admitted under the same bounded policy. Repeatable.
+              --compiled-binding-receipt <path>
+                                       Optional compiled-input-binding-set.v1 receipt. Repeatable.
+              --compiled-max-artifacts <count>
+              --compiled-max-file-bytes <count>
+              --compiled-max-types <count>
+              --compiled-max-members <count>
+              --compiled-max-text <count>
+              --compiled-max-work <count>
+                                       Positive deterministic compiled-input limits; max-text must be at least 71.
               --sql-validation-summary <path>
                                        Explicit sql-validation-summary/v1 input. Repeatable; never executed.
               --sql-validation-as-of <timestamp>

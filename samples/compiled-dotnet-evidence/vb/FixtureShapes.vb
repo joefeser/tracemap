@@ -1,0 +1,61 @@
+Namespace TraceMap.CompiledFixtures.VisualBasic
+    Public Interface IFormatter
+        Function Format(value As Integer) As String
+    End Interface
+
+    Public Class BaseWidget
+        Public Overridable Function Describe(value As Integer) As String
+            Return value.ToString()
+        End Function
+    End Class
+
+    Public Class Widget
+        Inherits BaseWidget
+        Implements IFormatter
+
+        Private ReadOnly items(9) As String
+
+        Default Public Property Item(index As Integer) As String
+            Get
+                Return items(index)
+            End Get
+            Set(value As String)
+                items(index) = value
+            End Set
+        End Property
+
+        Public Overloads Function SelectValue(value As Integer) As Integer
+            Return value
+        End Function
+
+        Public Overloads Function SelectValue(value As String) As String
+            Return value
+        End Function
+
+        Public Overrides Function Describe(value As Integer) As String
+            Return "vb:" & value.ToString()
+        End Function
+
+        Public Sub Shapes(ByRef value As Integer, values As Integer())
+            value += values.Length
+        End Sub
+
+        Private Function Format(value As Integer) As String Implements IFormatter.Format
+            Return value.ToString()
+        End Function
+    End Class
+
+    Public Module ModuleShapes
+        Public Function GenericValue(Of T)(value As T) As T
+            Return value
+        End Function
+    End Module
+End Namespace
+
+Namespace TraceMap.CompiledFixtures.VisualBasic.Other
+    Public Class Widget
+        Public Function SelectValue(value As Integer) As Integer
+            Return value + 1
+        End Function
+    End Class
+End Namespace
