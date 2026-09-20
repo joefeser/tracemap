@@ -237,8 +237,8 @@ public sealed class ManagedMetadataExtractorTests
     [Fact]
     public async Task Cli_outputs_are_deterministic_private_safe_and_preserve_source_evidence()
     {
-        using var temp = new TempDirectory();
         var repoRoot = FindRepoRoot();
+        using var temp = new TempDirectory(Path.GetDirectoryName(repoRoot));
         var repo = Path.Combine(repoRoot, "samples", "modern-sample");
         var assembly = FixtureAssemblies(repoRoot).CSharp;
         var baselineOut = Path.Combine(temp.Path, "baseline");
