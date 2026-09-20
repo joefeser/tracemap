@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Reflection.Metadata.Ecma335;
+using System.Reflection.PortableExecutable;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
@@ -36,7 +38,7 @@ public sealed class ManagedMetadataExtractorTests
             evaluation.Provenance.Outcomes.Single(item => item.SafeLocator.EndsWith("CompiledEvidence.CSharp.dll", StringComparison.Ordinal)).RawFileSha256);
         Assert.Equal(3, facts.Count(fact => fact.FactType == FactTypes.ManagedAssemblyDeclared));
         Assert.All(facts.Where(fact => fact.FactType == FactTypes.ManagedAssemblyDeclared), fact =>
-            Assert.Contains("|targetFramework:.NETCoreApp,Version=v10.0", fact.TargetSymbol, StringComparison.Ordinal));
+            Assert.Contains("|targetFramework:25:.NETCoreApp,Version=v10.0", fact.TargetSymbol, StringComparison.Ordinal));
         Assert.DoesNotContain(facts, fact => fact.Properties.GetValueOrDefault("gapKind") == "MetadataReaderDisagreement");
         Assert.All(facts.Where(fact => fact.RuleId.StartsWith("dotnet.compiled", StringComparison.Ordinal)), fact =>
         {
@@ -55,22 +57,25 @@ public sealed class ManagedMetadataExtractorTests
         });
 
         var overloads = facts.Where(fact => fact.FactType == FactTypes.ManagedMethodDeclared
-            && fact.TargetSymbol?.Contains("|method:Overload|", StringComparison.Ordinal) == true).ToArray();
+            && fact.TargetSymbol?.Contains("|method:8:Overload|", StringComparison.Ordinal) == true).ToArray();
         Assert.Equal(3, overloads.Length);
         Assert.Equal(3, overloads.Select(fact => fact.TargetSymbol).Distinct(StringComparer.Ordinal).Count());
-        Assert.Contains(facts, fact => fact.TargetSymbol?.Contains("namespace:TraceMap.CompiledFixtures.CSharp.Alpha|name:Widget`1+Nested`1", StringComparison.Ordinal) == true);
-        Assert.Contains(facts, fact => fact.TargetSymbol?.Contains("method:Generic|arity:1", StringComparison.Ordinal) == true);
-        Assert.Contains(facts, fact => fact.TargetSymbol?.Contains("System.Int32&", StringComparison.Ordinal) == true);
-        Assert.Contains(facts, fact => fact.TargetSymbol?.Contains("System.Int32[]", StringComparison.Ordinal) == true);
-        Assert.Contains(facts, fact => fact.TargetSymbol?.Contains("System.Int32*", StringComparison.Ordinal) == true);
+        Assert.Contains(facts, fact => fact.TargetSymbol?.Contains("|names:", StringComparison.Ordinal) == true
+            && fact.TargetSymbol.Contains("Widget`1", StringComparison.Ordinal)
+            && fact.TargetSymbol.Contains("Nested`1", StringComparison.Ordinal));
+        Assert.Contains(facts, fact => fact.TargetSymbol?.Contains("method:7:Generic|arity:1", StringComparison.Ordinal) == true);
+        Assert.Contains(facts, fact => fact.TargetSymbol?.Contains("type(namespace:6:System|names:5:Int32)&", StringComparison.Ordinal) == true);
+        Assert.Contains(facts, fact => fact.TargetSymbol?.Contains("type(namespace:6:System|names:5:Int32)[]", StringComparison.Ordinal) == true);
+        Assert.Contains(facts, fact => fact.TargetSymbol?.Contains("type(namespace:6:System|names:5:Int32)*", StringComparison.Ordinal) == true);
         var functionPointers = facts.Where(fact => fact.FactType == FactTypes.ManagedMethodDeclared
             && fact.TargetSymbol?.Contains("Pointer|", StringComparison.Ordinal) == true).ToArray();
         Assert.Contains(functionPointers, fact => fact.TargetSymbol?.Contains("call:cdecl", StringComparison.Ordinal) == true);
         Assert.Contains(functionPointers, fact => fact.TargetSymbol?.Contains("call:stdcall", StringComparison.Ordinal) == true);
         Assert.Equal(functionPointers.Length, functionPointers.Select(fact => fact.TargetSymbol).Distinct(StringComparer.Ordinal).Count());
-        Assert.Contains(facts, fact => fact.TargetSymbol?.Contains("namespace:<global>|name:GlobalNamespaceShape", StringComparison.Ordinal) == true);
-        Assert.Contains(facts, fact => fact.FactType == FactTypes.ManagedPropertyDeclared && fact.TargetSymbol?.Contains("property:Item", StringComparison.Ordinal) == true);
-        Assert.Contains(facts, fact => fact.TargetSymbol?.Contains("method:RenamedForMetadata", StringComparison.Ordinal) == true);
+        Assert.Contains(facts, fact => fact.TargetSymbol?.Contains("namespace:0:|names:", StringComparison.Ordinal) == true
+            && fact.TargetSymbol.Contains("GlobalNamespaceShape", StringComparison.Ordinal));
+        Assert.Contains(facts, fact => fact.FactType == FactTypes.ManagedPropertyDeclared && fact.TargetSymbol?.Contains("property:4:Item", StringComparison.Ordinal) == true);
+        Assert.Contains(facts, fact => fact.TargetSymbol?.Contains(":RenamedForMetadata|", StringComparison.Ordinal) == true);
         Assert.Contains(facts, fact => fact.Properties.GetValueOrDefault("compilerGenerated") == "true");
         Assert.Contains(facts, fact => fact.Properties.GetValueOrDefault("genericConstructionState") == "open-definition");
         Assert.Contains(facts, fact => fact.Properties.GetValueOrDefault("gapKind") == "UnresolvedManagedAssemblyReference");
@@ -249,6 +254,80 @@ public sealed class ManagedMetadataExtractorTests
             CompiledInputLimits: new CompiledInputLimits(MaxArtifactCount: 1)));
 
         Assert.Contains(evaluation.KnownGaps, gap => gap.Contains("ManagedBindingReceiptBindingCountLimitExceeded", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Receipt_paths_are_deduplicated_using_actual_filesystem_case_semantics()
+    {
+        using var temp = new TempDirectory();
+        var receipt = Path.Combine(temp.Path, "Receipt.json");
+        var alternateCase = Path.Combine(temp.Path, "receipt.json");
+        File.WriteAllText(receipt, """
+            {
+              "schemaVersion": "compiled-input-binding-set.v1",
+              "bindings": [
+                {
+                  "schemaVersion": "compiled-input-binding.v1",
+                  "safeLocator": "fixture.dll",
+                  "artifactSha256": "0000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ]
+            }
+            """);
+
+        var evaluation = ManagedMetadataExtractor.Evaluate(temp.Path, new string('a', 40), new ScanOptions(
+            temp.Path,
+            "unused",
+            CompiledBindingReceiptPaths: [receipt, alternateCase]));
+
+        Assert.Single(evaluation.Provenance!.ProvenanceBindingInputSha256s);
+        if (CSharpSemanticExtractor.CreateSourcePathComparer(temp.Path).Equals(receipt, alternateCase))
+            Assert.DoesNotContain(evaluation.KnownGaps, gap => gap.Contains("AmbiguousManagedBindingReceipt", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Metadata_bearing_secondary_modules_are_explicitly_unsupported()
+    {
+        using var temp = new TempDirectory();
+        var assemblyPath = Path.Combine(temp.Path, "multi-module.dll");
+        WriteMultiModuleManifest(assemblyPath);
+
+        var evaluation = ManagedMetadataExtractor.Evaluate(temp.Path, new string('a', 40), new ScanOptions(
+            temp.Path,
+            "unused",
+            CompiledInputPaths: [assemblyPath]));
+
+        AssertGap(evaluation, "MultiModuleManagedAssemblyUnsupported");
+    }
+
+    [Fact]
+    public void Metadata_identity_length_prefixes_delimiter_bearing_components()
+    {
+        using var temp = new TempDirectory();
+        var assemblyPath = Path.Combine(temp.Path, "delimiter-identities.dll");
+        using (var assembly = AssemblyDefinition.CreateAssembly(
+            new AssemblyNameDefinition("DelimiterIdentities", new Version(1, 0)),
+            "DelimiterIdentities",
+            ModuleKind.Dll))
+        {
+            var module = assembly.MainModule;
+            module.Types.Add(new TypeDefinition("A", "B|name:C", Mono.Cecil.TypeAttributes.Public, module.TypeSystem.Object));
+            module.Types.Add(new TypeDefinition("A|name:B", "C", Mono.Cecil.TypeAttributes.Public, module.TypeSystem.Object));
+            assembly.Write(assemblyPath);
+        }
+
+        var evaluation = ManagedMetadataExtractor.Evaluate(temp.Path, new string('a', 40), new ScanOptions(
+            temp.Path,
+            "unused",
+            CompiledInputPaths: [assemblyPath]));
+        var facts = ManagedMetadataExtractor.MaterializeFacts(Manifest(new string('a', 40), evaluation.Provenance), evaluation);
+        var types = facts.Where(fact => fact.FactType == FactTypes.ManagedTypeDeclared).ToArray();
+
+        Assert.Equal(2, types.Length);
+        Assert.Equal(2, types.Select(fact => fact.TargetSymbol).Distinct(StringComparer.Ordinal).Count());
+        Assert.Contains(types, fact => fact.TargetSymbol?.Contains("8:B|name:C", StringComparison.Ordinal) == true);
+        Assert.Contains(types, fact => fact.TargetSymbol?.Contains("8:A|name:B", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(evaluation.KnownGaps, gap => gap.Contains("MetadataReaderDisagreement", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -571,6 +650,12 @@ public sealed class ManagedMetadataExtractorTests
         var secondScanId = secondManifestDocument.RootElement.GetProperty("scanId").GetString();
         Assert.NotEqual(baselineScanId, firstScanId);
         Assert.Equal(firstScanId, secondScanId);
+        Assert.Equal(
+            baselineManifestDocument.RootElement.GetProperty("analysisLevel").GetString(),
+            firstManifestDocument.RootElement.GetProperty("analysisLevel").GetString());
+        Assert.Equal(
+            "compiled-metadata-partial",
+            firstManifestDocument.RootElement.GetProperty("compiledInputProvenance").GetProperty("coverageState").GetString());
         foreach (var output in new[] { firstOut, secondOut })
         {
             Assert.True(File.Exists(Path.Combine(output, "scan-manifest.json")));
@@ -613,6 +698,43 @@ public sealed class ManagedMetadataExtractorTests
         Assert.Contains("- id: dotnet.compiled.gap.v1", catalog, StringComparison.Ordinal);
         var deferred = catalog[catalog.IndexOf("- id: dotnet.compiled.source-identity.v1", StringComparison.Ordinal)..];
         Assert.Contains("status: deferred", deferred[..Math.Min(deferred.Length, 500)], StringComparison.Ordinal);
+    }
+
+    private static void WriteMultiModuleManifest(string path)
+    {
+        var metadata = new MetadataBuilder();
+        metadata.AddModule(
+            0,
+            metadata.GetOrAddString("multi-module.dll"),
+            metadata.GetOrAddGuid(Guid.Parse("11111111-1111-1111-1111-111111111111")),
+            default,
+            default);
+        metadata.AddAssembly(
+            metadata.GetOrAddString("MultiModule"),
+            new Version(1, 0, 0, 0),
+            default,
+            default,
+            (System.Reflection.AssemblyFlags)0,
+            System.Reflection.AssemblyHashAlgorithm.Sha256);
+        metadata.AddAssemblyFile(
+            metadata.GetOrAddString("secondary.netmodule"),
+            metadata.GetOrAddBlob(SHA256.HashData([1, 2, 3])),
+            containsMetadata: true);
+        metadata.AddTypeDefinition(
+            System.Reflection.TypeAttributes.NotPublic,
+            default,
+            metadata.GetOrAddString("<Module>"),
+            default,
+            MetadataTokens.FieldDefinitionHandle(1),
+            MetadataTokens.MethodDefinitionHandle(1));
+        var peBuilder = new ManagedPEBuilder(
+            new PEHeaderBuilder(imageCharacteristics: Characteristics.ExecutableImage | Characteristics.Dll),
+            new MetadataRootBuilder(metadata),
+            new System.Reflection.Metadata.BlobBuilder(),
+            flags: CorFlags.ILOnly);
+        var peBlob = new System.Reflection.Metadata.BlobBuilder();
+        peBuilder.Serialize(peBlob);
+        File.WriteAllBytes(path, peBlob.ToArray());
     }
 
     private static void AssertGap(CompiledInputEvaluation evaluation, params string[] expected)

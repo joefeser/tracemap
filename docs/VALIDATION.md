@@ -2327,7 +2327,9 @@ identities. It also covers global and colliding namespaces, nested and generic
 types, overloads, generated members, full CLR signatures, deterministic repeat
 output, metadata-location round trips, missing/malformed/native/over-budget
 inputs, reader disagreement, unbound/stale/mismatched provenance, duplicate
-assemblies, and zero/multiple declared dependency candidates. The
+assemblies, metadata-bearing secondary modules, delimiter-bearing identity
+components, filesystem-semantic receipt-path deduplication, source-analysis
+level isolation, and zero/multiple declared dependency candidates. The
 `local-distribution-validation.yml` macOS and Windows jobs run this same focused
 matrix; Windows-specific PDB, legacy framework, Web Forms build, historical
 corpus, and C++/CLI lanes remain deferred.

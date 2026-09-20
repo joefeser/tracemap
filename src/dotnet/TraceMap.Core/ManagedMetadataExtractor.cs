@@ -541,7 +541,14 @@ public static class ManagedMetadataExtractor
     {
         var receipts = new List<CompiledBindingReceipt>();
         var gaps = new List<string>();
-        foreach (var (path, index) in receiptPaths.OrderBy(value => value, StringComparer.Ordinal).Select((value, index) => (value, index)))
+        var pathComparer = CSharpSemanticExtractor.CreateSourcePathComparer(repoPath);
+        var resolvedReceiptPaths = receiptPaths
+            .Select(path => ResolvePath(repoPath, path))
+            .GroupBy(path => path, pathComparer)
+            .Select(group => group.OrderBy(path => path, StringComparer.Ordinal).First())
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+        foreach (var (fullPath, index) in resolvedReceiptPaths.Select((value, index) => (value, index)))
         {
             if (index >= limits.MaxArtifactCount)
             {
@@ -550,7 +557,6 @@ public static class ManagedMetadataExtractor
             }
             try
             {
-                var fullPath = ResolvePath(repoPath, path);
                 var receiptByteLimit = Math.Min(
                     limits.MaxFileSizeBytes,
                     checked((long)limits.MaxTextLength * (limits.MaxArtifactCount + 1L) * 8L));
@@ -806,14 +812,14 @@ public static class ManagedMetadataExtractor
                 var signature = MethodSignature(FormatType(method.ReturnType), method.Parameters.Select(parameter => FormatType(parameter.ParameterType)), method.GenericParameters.Count,
                     method.CallingConvention == MethodCallingConvention.VarArg ? "vararg" : "default", method.HasThis, method.ExplicitThis);
                 observations.Add(Observation(memberKind, unchecked((int)method.MetadataToken.ToUInt32()), FactTypes.ManagedMethodDeclared, RuleIds.DotNetCompiledMember,
-                    $"{typeIdentity}|{memberKind}:{method.Name}|{signature}", memberKind,
+                    $"{typeIdentity}|{memberKind}:{EncodeIdentityComponent(method.Name)}|{signature}", memberKind,
                     MemberProperties(method, method.GenericParameters.Count, IsCompilerGenerated(method), signature)));
             }
             foreach (var field in type.Fields)
             {
                 var signature = FormatType(field.FieldType);
                 observations.Add(Observation("field", unchecked((int)field.MetadataToken.ToUInt32()), FactTypes.ManagedFieldDeclared, RuleIds.DotNetCompiledMember,
-                    $"{typeIdentity}|field:{field.Name}|type:{signature}", "field", MemberProperties(field, 0, IsCompilerGenerated(field), signature)));
+                    $"{typeIdentity}|field:{EncodeIdentityComponent(field.Name)}|type:{signature}", "field", MemberProperties(field, 0, IsCompilerGenerated(field), signature)));
             }
             foreach (var property in type.Properties)
             {
@@ -824,13 +830,13 @@ public static class ManagedMetadataExtractor
                     accessor?.CallingConvention == MethodCallingConvention.VarArg ? "vararg" : "default",
                     accessor?.HasThis == true);
                 observations.Add(Observation("property", unchecked((int)property.MetadataToken.ToUInt32()), FactTypes.ManagedPropertyDeclared, RuleIds.DotNetCompiledMember,
-                    $"{typeIdentity}|property:{property.Name}|{signature}", "property", MemberProperties(property, 0, IsCompilerGenerated(property), signature)));
+                    $"{typeIdentity}|property:{EncodeIdentityComponent(property.Name)}|{signature}", "property", MemberProperties(property, 0, IsCompilerGenerated(property), signature)));
             }
             foreach (var @event in type.Events)
             {
                 var signature = FormatType(@event.EventType);
                 observations.Add(Observation("event", unchecked((int)@event.MetadataToken.ToUInt32()), FactTypes.ManagedEventDeclared, RuleIds.DotNetCompiledMember,
-                    $"{typeIdentity}|event:{@event.Name}|type:{signature}", "event", MemberProperties(@event, 0, IsCompilerGenerated(@event), signature)));
+                    $"{typeIdentity}|event:{EncodeIdentityComponent(@event.Name)}|type:{signature}", "event", MemberProperties(@event, 0, IsCompilerGenerated(@event), signature)));
             }
         }
         var references = module.AssemblyReferences
@@ -859,6 +865,8 @@ public static class ManagedMetadataExtractor
         var reader = pe.GetMetadataReader();
         if (!reader.IsAssembly)
             throw new ManagedInputException("unsupported", "ManagedNetmoduleInputUnsupported");
+        if (reader.AssemblyFiles.Any(handle => reader.GetAssemblyFile(handle).ContainsMetadata))
+            throw new ManagedInputException("unsupported", "MultiModuleManagedAssemblyUnsupported");
         var typeCount = Math.Max(0, reader.TypeDefinitions.Count - 1);
         var memberCount = (long)reader.GetTableRowCount(TableIndex.MethodDef)
             + reader.GetTableRowCount(TableIndex.Field)
@@ -945,7 +953,7 @@ public static class ManagedMetadataExtractor
                 var signature = MethodSignature(decoded.ReturnType, decoded.ParameterTypes, method.GetGenericParameters().Count, callingConvention,
                     decoded.Header.IsInstance, (decoded.Header.RawValue & 0x40) != 0);
                 observations.Add(Observation(memberKind, MetadataTokens.GetToken(methodHandle), FactTypes.ManagedMethodDeclared, RuleIds.DotNetCompiledMember,
-                    $"{typeIdentity}|{memberKind}:{name}|{signature}", memberKind,
+                    $"{typeIdentity}|{memberKind}:{EncodeIdentityComponent(name)}|{signature}", memberKind,
                     MemberProperties(name, method.GetGenericParameters().Count, false, signature)));
             }
             foreach (var fieldHandle in type.GetFields())
@@ -954,7 +962,7 @@ public static class ManagedMetadataExtractor
                 var name = reader.GetString(field.Name);
                 var signature = field.DecodeSignature(provider, genericContext: null);
                 observations.Add(Observation("field", MetadataTokens.GetToken(fieldHandle), FactTypes.ManagedFieldDeclared, RuleIds.DotNetCompiledMember,
-                    $"{typeIdentity}|field:{name}|type:{signature}", "field", MemberProperties(name, 0, false, signature)));
+                    $"{typeIdentity}|field:{EncodeIdentityComponent(name)}|type:{signature}", "field", MemberProperties(name, 0, false, signature)));
             }
             foreach (var propertyHandle in type.GetProperties())
             {
@@ -967,7 +975,7 @@ public static class ManagedMetadataExtractor
                     decoded.Header.CallingConvention == SignatureCallingConvention.VarArgs ? "vararg" : "default",
                     decoded.Header.IsInstance);
                 observations.Add(Observation("property", MetadataTokens.GetToken(propertyHandle), FactTypes.ManagedPropertyDeclared, RuleIds.DotNetCompiledMember,
-                    $"{typeIdentity}|property:{name}|{signature}", "property", MemberProperties(name, 0, false, signature)));
+                    $"{typeIdentity}|property:{EncodeIdentityComponent(name)}|{signature}", "property", MemberProperties(name, 0, false, signature)));
             }
             foreach (var eventHandle in type.GetEvents())
             {
@@ -975,7 +983,7 @@ public static class ManagedMetadataExtractor
                 var name = reader.GetString(@event.Name);
                 var signature = provider.GetTypeFromEntityHandle(@event.Type);
                 observations.Add(Observation("event", MetadataTokens.GetToken(eventHandle), FactTypes.ManagedEventDeclared, RuleIds.DotNetCompiledMember,
-                    $"{typeIdentity}|event:{name}|type:{signature}", "event", MemberProperties(name, 0, false, signature)));
+                    $"{typeIdentity}|event:{EncodeIdentityComponent(name)}|type:{signature}", "event", MemberProperties(name, 0, false, signature)));
             }
         }
         var references = reader.AssemblyReferences.Select(handle =>
@@ -995,17 +1003,17 @@ public static class ManagedMetadataExtractor
 
     private static string TypeIdentity(string assemblyIdentity, CecilTypeDefinition type)
     {
-        var (ns, chain) = CecilTypeName(type);
-        return $"{assemblyIdentity}|type:namespace:{Namespace(ns)}|name:{chain}|arity:{type.GenericParameters.Count}";
+        var (ns, names) = CecilTypeName(type);
+        return $"{assemblyIdentity}|type:{MetadataTypePath(ns, names)}|arity:{type.GenericParameters.Count}";
     }
 
     private static string TypeIdentity(string assemblyIdentity, MetadataReader reader, TypeDefinitionHandle handle)
     {
-        var (ns, chain, arity) = MetadataTypeName(reader, handle);
-        return $"{assemblyIdentity}|type:namespace:{Namespace(ns)}|name:{chain}|arity:{arity}";
+        var (ns, names, arity) = MetadataTypeName(reader, handle);
+        return $"{assemblyIdentity}|type:{MetadataTypePath(ns, names)}|arity:{arity}";
     }
 
-    private static (string Namespace, string Chain) CecilTypeName(CecilTypeDefinition type)
+    private static (string Namespace, IReadOnlyList<string> Names) CecilTypeName(CecilTypeReference type)
     {
         var names = new Stack<string>();
         CecilTypeReference? current = type;
@@ -1015,12 +1023,12 @@ public static class ManagedMetadataExtractor
             current = current.DeclaringType;
         }
         var outer = type;
-        while (outer.DeclaringType is CecilTypeDefinition declaring)
-            outer = declaring;
-        return (outer.Namespace ?? string.Empty, string.Join("+", names));
+        while (outer.DeclaringType is not null)
+            outer = outer.DeclaringType;
+        return (outer.Namespace ?? string.Empty, names.ToArray());
     }
 
-    private static (string Namespace, string Chain, int Arity) MetadataTypeName(MetadataReader reader, TypeDefinitionHandle handle)
+    private static (string Namespace, IReadOnlyList<string> Names, int Arity) MetadataTypeName(MetadataReader reader, TypeDefinitionHandle handle)
     {
         var names = new Stack<string>();
         var current = handle;
@@ -1034,7 +1042,7 @@ public static class ManagedMetadataExtractor
                 ns = definition.Namespace.IsNil ? string.Empty : reader.GetString(definition.Namespace);
             current = definition.GetDeclaringType();
         }
-        return (ns, string.Join("+", names), arity);
+        return (ns, names.ToArray(), arity);
     }
 
     private static string MethodSignature<T>(T returnType, IEnumerable<T> parameters, int genericArity, string callingConvention, bool hasThis, bool explicitThis) =>
@@ -1118,10 +1126,8 @@ public static class ManagedMetadataExtractor
         }
         if (type is CecilSentinelType sentinel)
             return FormatType(sentinel.ElementType, nesting + 1);
-        var declaring = type.DeclaringType is null ? null : FormatType(type.DeclaringType, nesting + 1) + "+";
-        if (declaring is not null)
-            return declaring + type.Name;
-        return string.IsNullOrEmpty(type.Namespace) ? $"<global>.{type.Name}" : $"{type.Namespace}.{type.Name}";
+        var (ns, names) = CecilTypeName(type);
+        return "type(" + MetadataTypePath(ns, names) + ")";
     }
 
     private static IReadOnlyDictionary<string, string> MemberProperties(IMemberDefinition member, int genericArity, bool generated, string? signature = null) =>
@@ -1289,10 +1295,15 @@ public static class ManagedMetadataExtractor
     }
 
     private static string AssemblyReferenceIdentity(string name, string version, string? culture, byte[]? publicKeyToken) =>
-        $"assembly:{name},version={version},culture={NormalizeCulture(culture)},publicKeyToken={PublicKeyToken(publicKeyToken)}";
+        $"assembly:name:{EncodeIdentityComponent(name)}|version:{EncodeIdentityComponent(version)}|culture:{EncodeIdentityComponent(NormalizeCulture(culture))}|publicKeyToken:{EncodeIdentityComponent(PublicKeyToken(publicKeyToken))}";
 
     private static string AssemblyArtifactIdentity(string referenceIdentity, string moduleName, string? targetFramework) =>
-        $"{referenceIdentity}|module:{moduleName}|targetFramework:{(string.IsNullOrWhiteSpace(targetFramework) ? "unknown" : targetFramework)}";
+        $"{referenceIdentity}|module:{EncodeIdentityComponent(moduleName)}|targetFramework:{EncodeIdentityComponent(string.IsNullOrWhiteSpace(targetFramework) ? "unknown" : targetFramework)}";
+
+    internal static string EncodeIdentityComponent(string value) => $"{value.Length.ToString(CultureInfo.InvariantCulture)}:{value}";
+
+    private static string MetadataTypePath(string @namespace, IEnumerable<string> names) =>
+        $"namespace:{EncodeIdentityComponent(@namespace)}|names:{string.Concat(names.Select(EncodeIdentityComponent))}";
 
     private static string NormalizeCulture(string? culture) => string.IsNullOrWhiteSpace(culture) ? "neutral" : culture;
     private static string PublicKeyToken(byte[]? token) => token is { Length: > 0 } ? Convert.ToHexString(token).ToLowerInvariant() : "null";
@@ -1303,7 +1314,6 @@ public static class ManagedMetadataExtractor
         var hash = SHA1.HashData(key);
         return hash[^8..].Reverse().ToArray();
     }
-    private static string Namespace(string value) => string.IsNullOrEmpty(value) ? "<global>" : value;
     private static string Token(int token) => $"0x{unchecked((uint)token):x8}";
     private static string Token(uint token) => $"0x{token:x8}";
     private static string Sha256(byte[] value) => Convert.ToHexString(SHA256.HashData(value)).ToLowerInvariant();
@@ -1477,25 +1487,25 @@ public static class ManagedMetadataExtractor
         public string GetPointerType(string elementType) => elementType + "*";
         public string GetPrimitiveType(PrimitiveTypeCode typeCode) => typeCode switch
         {
-            PrimitiveTypeCode.Void => "System.Void",
-            PrimitiveTypeCode.Boolean => "System.Boolean",
-            PrimitiveTypeCode.Char => "System.Char",
-            PrimitiveTypeCode.SByte => "System.SByte",
-            PrimitiveTypeCode.Byte => "System.Byte",
-            PrimitiveTypeCode.Int16 => "System.Int16",
-            PrimitiveTypeCode.UInt16 => "System.UInt16",
-            PrimitiveTypeCode.Int32 => "System.Int32",
-            PrimitiveTypeCode.UInt32 => "System.UInt32",
-            PrimitiveTypeCode.Int64 => "System.Int64",
-            PrimitiveTypeCode.UInt64 => "System.UInt64",
-            PrimitiveTypeCode.Single => "System.Single",
-            PrimitiveTypeCode.Double => "System.Double",
-            PrimitiveTypeCode.String => "System.String",
-            PrimitiveTypeCode.TypedReference => "System.TypedReference",
-            PrimitiveTypeCode.IntPtr => "System.IntPtr",
-            PrimitiveTypeCode.UIntPtr => "System.UIntPtr",
-            PrimitiveTypeCode.Object => "System.Object",
-            _ => typeCode.ToString()
+            PrimitiveTypeCode.Void => SystemType("Void"),
+            PrimitiveTypeCode.Boolean => SystemType("Boolean"),
+            PrimitiveTypeCode.Char => SystemType("Char"),
+            PrimitiveTypeCode.SByte => SystemType("SByte"),
+            PrimitiveTypeCode.Byte => SystemType("Byte"),
+            PrimitiveTypeCode.Int16 => SystemType("Int16"),
+            PrimitiveTypeCode.UInt16 => SystemType("UInt16"),
+            PrimitiveTypeCode.Int32 => SystemType("Int32"),
+            PrimitiveTypeCode.UInt32 => SystemType("UInt32"),
+            PrimitiveTypeCode.Int64 => SystemType("Int64"),
+            PrimitiveTypeCode.UInt64 => SystemType("UInt64"),
+            PrimitiveTypeCode.Single => SystemType("Single"),
+            PrimitiveTypeCode.Double => SystemType("Double"),
+            PrimitiveTypeCode.String => SystemType("String"),
+            PrimitiveTypeCode.TypedReference => SystemType("TypedReference"),
+            PrimitiveTypeCode.IntPtr => SystemType("IntPtr"),
+            PrimitiveTypeCode.UIntPtr => SystemType("UIntPtr"),
+            PrimitiveTypeCode.Object => SystemType("Object"),
+            _ => "primitive:" + ((int)typeCode).ToString(CultureInfo.InvariantCulture)
         };
         public string GetSZArrayType(string elementType) => elementType + "[]";
         public string GetTypeFromDefinition(MetadataReader metadataReader, TypeDefinitionHandle handle, byte rawTypeKind) => TypeName(metadataReader, handle);
@@ -1510,9 +1520,10 @@ public static class ManagedMetadataExtractor
         };
         private static string TypeName(MetadataReader metadataReader, TypeDefinitionHandle handle)
         {
-            var (ns, chain, _) = MetadataTypeName(metadataReader, handle);
-            return Namespace(ns) + "." + chain;
+            var (ns, names, _) = MetadataTypeName(metadataReader, handle);
+            return "type(" + MetadataTypePath(ns, names) + ")";
         }
+        private static string SystemType(string name) => "type(" + MetadataTypePath("System", [name]) + ")";
         private static string TypeName(MetadataReader metadataReader, TypeReferenceHandle handle)
         {
             var names = new Stack<string>();
@@ -1525,7 +1536,7 @@ public static class ManagedMetadataExtractor
                 ns = reference.Namespace.IsNil ? ns : metadataReader.GetString(reference.Namespace);
                 current = reference.ResolutionScope.Kind == HandleKind.TypeReference ? (TypeReferenceHandle)reference.ResolutionScope : default;
             }
-            return Namespace(ns) + "." + string.Join("+", names);
+            return "type(" + MetadataTypePath(ns, names) + ")";
         }
     }
 }

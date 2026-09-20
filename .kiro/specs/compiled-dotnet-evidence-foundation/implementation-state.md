@@ -1,6 +1,6 @@
 # Compiled .NET Evidence Foundation Implementation State
 
-Status: first-slice implementation and portable cross-platform validation complete; exact-head PR review evidence pending
+Status: first-slice implementation and portable cross-platform validation complete; exact-head review fixes validated locally and ACK rerun pending
 
 Branch: `codex/compiled-dotnet-evidence-foundation`
 
@@ -42,8 +42,9 @@ reconciliation, historical corpus execution, or C++/CLI support.
 - Bounded-input hashing uses a canonical pre-digest payload that excludes the
   digest and all downstream identities derived from it; the computed digest is
   attached before scan/fact IDs are derived.
-- Normalized type/member/signature identities preserve exact metadata
-  namespaces, including the empty/global namespace and nested declaring chain.
+- Normalized assembly/type/member/signature identities length-prefix every
+  free-text component, preserving delimiters, the empty/global namespace, and
+  nested declaring chains without ambiguous concatenation.
 - Missing, stale, ambiguous, unbound, or mismatched inputs reduce compiled
   coverage and never erase or upgrade source-derived evidence. Timestamps alone
   do not establish staleness.
@@ -80,14 +81,15 @@ exercise exact CLR identities, duplicate and unresolved dependencies,
 provenance states, malformed/native/missing/over-budget inputs, reader
 disagreement, deterministic bytes, privacy, all five scan artifacts, and
 unchanged source evidence. Review hardening also covers iterative deeply nested
-type inventory, filesystem-aware path deduplication, and bounded projection of
-overlong input locators. It also pins top-level receipt binding counts, rejects
-text limits too small for a complete projected digest, and converts excessive
-metadata-signature nesting into an explicit partial-coverage gap. The local
-metadata-signature nesting into an explicit partial-coverage gap. Artifact
-overflow retains only the configured number of per-input rows plus a
-deterministic omitted-count/digest commitment. The local distribution workflow
-runs the same focused tests on Windows, Ubuntu, and macOS.
+type inventory, filesystem-aware input and receipt-path deduplication, bounded
+projection of overlong input locators, and explicit rejection of metadata-bearing
+secondary modules. It also pins top-level receipt binding counts, rejects text
+limits too small for a complete projected digest, converts excessive
+metadata-signature nesting into an explicit partial-coverage gap, and keeps
+compiled coverage separate from the source `analysisLevel`. Artifact overflow
+retains only the configured number of per-input rows plus a deterministic
+omitted-count/digest commitment. The local distribution workflow runs the same
+focused tests on Windows, Ubuntu, and macOS.
 
 Implementation commit: `a70ac803` (`feat: add bounded compiled metadata evidence lane`)
 
@@ -99,10 +101,9 @@ Local macOS validation on 2026-09-20:
 
 - `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with zero warnings
   and zero errors.
-- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,979 passed,
+- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,982 passed,
   zero failed, zero skipped.
-- focused `ManagedMetadataExtractorTests`: 19 passed, zero failed; the combined
-  managed-metadata/report focused set passed 26 of 26.
+- focused `ManagedMetadataExtractorTests`: 22 passed, zero failed.
 - two explicit admitted compiled-input CLI scans: 107 facts each, including 80
   compiled-rule facts; byte-identical `facts.ndjson`; all five required
   artifacts present; both output directories passed
@@ -114,13 +115,11 @@ Local macOS validation on 2026-09-20:
   invoke the external Kiro reviewer.
 - `git diff --check`: passed.
 
-Task 7 is complete. On PR #772 implementation head `5e17ee4a`, the portable
-matrix and package smoke passed on Windows, Ubuntu, and macOS; the .NET adapter,
-combined-adapter, and private-path jobs also passed. ACK reported a clean merge
-state, zero unresolved threads, zero pending/failed checks, and zero actionable
-findings, but correctly withheld merge readiness because the required Codex/Qodo
-review evidence still names older head `7df78401`. No reviewer was manually
-retagged and no merge was performed.
+Task 7 is complete. Earlier PR #772 heads passed the portable matrix and package
+smoke on Windows, Ubuntu, and macOS plus the .NET adapter, combined-adapter, and
+private-path jobs. The latest exact-head findings have been fixed and validated
+locally; ACK remains the authority after the fixes are pushed. No reviewer was
+manually retagged and no merge was performed.
 
 Portable Windows success does not prove Windows PDB, legacy .NET Framework or
 Web Forms build behavior, ILAsm/ILDAsm parity, the historical `dotnetperf`
