@@ -21,7 +21,8 @@ public sealed record ScanManifest(
     string? ScanRootRelativePath = null,
     string? ScanRootPathHash = null,
     string? GitRootHash = null,
-    string? SourceSnapshotDigest = null) : IJsonOnDeserialized
+    string? SourceSnapshotDigest = null,
+    CompiledInputProvenance? CompiledInputProvenance = null) : IJsonOnDeserialized
 {
     public string? SourceSnapshotDigest { get; init; } = ValidateSourceSnapshotDigest(SourceSnapshotDigest);
 
@@ -71,7 +72,8 @@ public sealed record ScanManifest(
             ScanRootRelativePath,
             ScanRootPathHash,
             GitRootHash,
-            SourceSnapshotDigest: null)
+            SourceSnapshotDigest: null,
+            CompiledInputProvenance: null)
     {
     }
 }
@@ -136,7 +138,11 @@ public sealed record ScanOptions(
     string? TargetFramework = null,
     bool Restore = false,
     IReadOnlyList<string>? BinlogPaths = null,
-    string? BinlogCommitSha = null);
+    string? BinlogCommitSha = null,
+    IReadOnlyList<string>? CompiledInputPaths = null,
+    IReadOnlyList<string>? CompiledDependencyPaths = null,
+    IReadOnlyList<string>? CompiledBindingReceiptPaths = null,
+    CompiledInputLimits? CompiledInputLimits = null);
 
 public sealed record FileInventoryItem(
     string RelativePath,
@@ -370,6 +376,14 @@ public static class FactTypes
     public const string MessagePublisherSurface = nameof(MessagePublisherSurface);
     public const string MessageConsumerSurface = nameof(MessageConsumerSurface);
     public const string MessageBindingDeclared = nameof(MessageBindingDeclared);
+    public const string ManagedAssemblyDeclared = nameof(ManagedAssemblyDeclared);
+    public const string ManagedInputAdmitted = nameof(ManagedInputAdmitted);
+    public const string ManagedModuleDeclared = nameof(ManagedModuleDeclared);
+    public const string ManagedTypeDeclared = nameof(ManagedTypeDeclared);
+    public const string ManagedMethodDeclared = nameof(ManagedMethodDeclared);
+    public const string ManagedFieldDeclared = nameof(ManagedFieldDeclared);
+    public const string ManagedPropertyDeclared = nameof(ManagedPropertyDeclared);
+    public const string ManagedEventDeclared = nameof(ManagedEventDeclared);
 }
 
 public static class RuleIds
@@ -581,6 +595,10 @@ public static class RuleIds
     public const string MessageFlowGap = "message.flow.gap.v1";
     public const string ReverseImpactTraversal = "impact.reverse.traversal.v1";
     public const string ReverseImpactGap = "impact.reverse.gap.v1";
+    public const string DotNetCompiledInput = "dotnet.compiled.input.v1";
+    public const string DotNetCompiledAssembly = "dotnet.compiled.assembly.v1";
+    public const string DotNetCompiledMember = "dotnet.compiled.member.v1";
+    public const string DotNetCompiledGap = "dotnet.compiled.gap.v1";
 }
 
 public static class ScannerVersions
@@ -601,6 +619,7 @@ public static class ScannerVersions
     public const string CSharpPropertyMappingExtractor = "csharp-property-mapping/0.1.0";
     public const string FrameworkMigrationEvidenceExtractor = "framework-migration/0.1.0";
     public const string FrameworkMigrationSyntaxFallbackExtractor = "framework-migration-syntax-fallback/0.1.0";
+    public const string ManagedMetadataExtractor = "managed-metadata/0.1.0+cecil-0.11.6";
     public const string ConfigExtractor = "config/0.1.0";
     public const string SqlTextExtractor = "sql-text/0.1.0";
     public const string SqlShapeExtractor = "sql-shape/0.1.0";

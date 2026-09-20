@@ -113,6 +113,10 @@ public sealed class ScanReceiptRecorder
             options.Restore ? "restore" : "no-restore",
             Normalize(options.BinlogPaths),
             options.BinlogCommitSha?.Trim() ?? string.Empty,
+            Normalize(options.CompiledInputPaths),
+            Normalize(options.CompiledDependencyPaths),
+            Normalize(options.CompiledBindingReceiptPaths),
+            options.CompiledInputLimits?.ToString() ?? string.Empty,
             Normalize(additionalAuthorizedInputs)));
     }
 
