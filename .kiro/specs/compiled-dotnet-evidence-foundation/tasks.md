@@ -1,6 +1,6 @@
 # Compiled .NET Evidence Foundation Tasks
 
-The first implementation PR must remain within tasks 1-7. Tasks 8-10 are later
+The first implementation PR must remain within tasks 1-7. Tasks 8-11 are later
 slices and require an implementation-state update before work begins.
 
 - [ ] 1. Finalize the compiled input, assembly, member, reconciliation, and gap
@@ -15,16 +15,18 @@ slices and require an implementation-state update before work begins.
   inputs with explicit gaps.
 - [ ] 5. Cross-check admitted normalized identities with
   `System.Reflection.Metadata`; emit disagreement gaps and withhold disputed
-  facts or joins.
-- [ ] 6. Implement only exact, deterministic source-to-metadata joins supported
-  by complete identities and validated provenance; add zero/multiple-candidate,
-  unbound, mismatch, and missing-binary tests.
+  facts so no later reconciliation can consume them.
+- [ ] 6. Keep source and compiled facts separate; add missing, stale, ambiguous,
+  unbound, mismatch, and unsupported-input gap tests without emitting a
+  source-to-metadata identity edge.
 - [ ] 7. Validate byte determinism, privacy, unchanged Roslyn/syntax behavior,
   CLI sample output, full .NET tests, macOS portable fixtures, and explicit
   Windows deferrals. Update docs and implementation state with exact results.
-- [ ] 8. Later slice: add PDB identity and sequence-point contracts and portable
+- [ ] 8. Later slice: add exact deterministic source-to-metadata reconciliation
+  with zero/multiple-candidate gaps and both endpoint identities.
+- [ ] 9. Later slice: add PDB identity and sequence-point contracts and portable
   versus Windows validation lanes.
-- [ ] 9. Later slice: add operand-aware IL body/call evidence and the public
+- [ ] 10. Later slice: add operand-aware IL body/call evidence and the public
   ECMA-335/rewrite suite from #766.
-- [ ] 10. Later slice: run the isolated Windows `dotnetperf`/C++/CLI lane from
+- [ ] 11. Later slice: run the isolated Windows `dotnetperf`/C++/CLI lane from
   #768 and mine/minimize the optional stress corpus from #769.

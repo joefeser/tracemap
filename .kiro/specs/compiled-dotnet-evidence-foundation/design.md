@@ -17,7 +17,7 @@ The initial rule families should be named and documented before code lands:
 | Assembly/module identity | `dotnet.compiled.assembly.v1` | Tier2Structural | Metadata identity is not authenticity or runtime load evidence. |
 | Type/member declaration | `dotnet.compiled.member.v1` | Tier2Structural | Declaration does not prove execution, dispatch, or reachability. |
 | Exact source/metadata identity edge | `dotnet.compiled.source-identity.v1` | Tier2Structural | Valid only with the documented complete identity and provenance inputs; ambiguity fails closed. |
-| Missing, unreadable, unbound, ambiguous, disagreed, or bounded input | owning rule plus categorical gap | Tier4Unknown | The gap reduces only the coverage it actually bounds. |
+| Missing, stale, unreadable, unbound, mismatched, ambiguous, disagreed, or bounded input | owning rule plus categorical gap | Tier4Unknown | The gap reduces only the coverage it actually bounds. |
 
 Final rule names must be added to the rule catalog with explicit limitations.
 Compiled facts must carry a compiled-specific extractor and coverage label; an
@@ -41,9 +41,11 @@ The bounded-input-set digest uses deterministic ordered records of admitted
 safe locators, roles, and file digests. A shareable projection computes its
 digest after privacy projection and never republishes a private source digest.
 
-Freshness states are `bound`, `unbound`, `mismatch`, `missing`, and `unknown`.
-Only a validated build/scan receipt can establish `bound` or `mismatch`.
-Timestamps may be reported locally as diagnostics but cannot set those states.
+Freshness states are `bound`, `stale`, `unbound`, `mismatch`, `missing`, and
+`unknown`. Only a validated build/scan receipt can establish `bound`, `stale`,
+or `mismatch`. `stale` requires evidence that the binary is bound to an older
+source commit than the source snapshot under analysis. Timestamps may be
+reported locally as diagnostics but cannot set those states.
 
 ## Identity model
 
@@ -96,7 +98,8 @@ default suite.
 ## `dotnetperf` use
 
 The pinned historical corpus is an access-controlled validation source, not a
-normal CI dependency or an oracle. Mine its distinct exception-region,
+mandatory default-CI dependency or an oracle. Do not import its more than
+15,000 tests wholesale. Mine its distinct exception-region,
 branch/switch, `leave`, retargeting, nested/generic, duplicate-assembly, raw-IL,
 netmodule, and PDB dimensions. Promote only minimized public reproductions when
 licensing and privacy permit. Keep the full corpus in the later isolated
@@ -104,9 +107,9 @@ Windows endurance lane.
 
 ## Failure behavior
 
-Missing expected assembly, unreadable metadata, native/mixed-mode input,
-dependency failure, unsupported signature, reader disagreement, provenance
-absence/mismatch, budget exhaustion, or reconciliation ambiguity emits an
+Missing, stale, ambiguous, unbound, or mismatched assembly evidence; unreadable
+metadata; native/mixed-mode input; dependency failure; unsupported signature;
+reader disagreement; budget exhaustion; or reconciliation ambiguity emits an
 explicit rule-backed gap and reduces the bounded compiled coverage. It never
 turns into a clean absence conclusion and never degrades already valid source
 evidence.

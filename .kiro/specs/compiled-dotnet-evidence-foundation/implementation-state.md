@@ -12,9 +12,10 @@ Tracking: #759, #766, #767, #768, #769
 
 The first implementation slice ends at bounded managed-input inventory,
 assembly/module/type/member metadata identity, provenance/coverage gaps,
-cross-reader agreement, and small public C#/VB.NET/F# fixtures. It does not
-begin broad IL traversal, rewrite analysis, PDB reconciliation, historical
-corpus execution, or C++/CLI support.
+cross-reader agreement, and small public C#/VB.NET/F# fixtures. Source and
+compiled facts remain separate in this slice. It does not begin
+source-to-metadata reconciliation, broad IL traversal, rewrite analysis, PDB
+reconciliation, historical corpus execution, or C++/CLI support.
 
 ## Evidence decisions
 
@@ -25,8 +26,9 @@ corpus execution, or C++/CLI support.
 - Source, metadata, PDB, IL, and rewritten identities stay separate.
 - Metadata tokens are module-local locations. MVID, path, timestamp, and display
   string alone cannot prove source identity or freshness.
-- Missing/unbound/mismatched inputs reduce compiled coverage and never erase or
-  upgrade source-derived evidence.
+- Missing, stale, ambiguous, unbound, or mismatched inputs reduce compiled
+  coverage and never erase or upgrade source-derived evidence. Timestamps alone
+  do not establish staleness.
 - Correctness, fixtures, and validation contracts are open-core. Managed
   private Windows execution is outside this implementation slice.
 

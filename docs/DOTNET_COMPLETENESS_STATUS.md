@@ -43,9 +43,10 @@ override this page or a later current-head record.
   collapsed through display strings.
 - F# source extraction is not implemented. F# fixtures may validate compiled
   CLR shapes while source-side coverage remains explicitly unsupported.
-- Missing binaries, binaries without source/build provenance, dependency
+- Missing, stale, ambiguous, unbound, or mismatched binaries, dependency
   resolution failures, reader disagreement, and bounded-input truncation must
-  remain explicit partial or unknown coverage.
+  remain explicit partial or unknown coverage. Timestamps alone cannot prove
+  staleness.
 
 ## Windows-only validation
 

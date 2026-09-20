@@ -2298,7 +2298,7 @@ semantic and failed-build/projectless lanes where supported; explicit F# source
 coverage gaps until an adapter exists; exact full-signature identities; bounded
 ambiguity gaps; validated `facts.ndjson` and `index.sqlite`; deterministic
 repeat scans; and unchanged source-derived evidence when compiled inputs are
-missing, unbound, mismatched, unreadable, or unsupported.
+missing, stale, ambiguous, unbound, mismatched, unreadable, or unsupported.
 
 The default fast suite runs portable managed fixtures on macOS and Windows.
 Legacy .NET Framework builds, Windows PDB behavior, ILAsm/ILDAsm, Web Forms
