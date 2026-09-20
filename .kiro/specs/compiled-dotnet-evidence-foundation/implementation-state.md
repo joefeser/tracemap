@@ -167,16 +167,19 @@ types inside constructed generic containers, same-looking cross-assembly/languag
 declarations, exact zero candidates, exact multiple candidates, unbound inputs,
 and the F# unsupported source lane. Optional-parameter mismatch gaps retain the
 rejected metadata candidate's compiled provenance and receipt-binding digest.
+Top-level C# statements are excluded from declaration collection, and
+syntax-located declarations without a Roslyn symbol emit Tier3 observations
+plus Tier4 incomplete gaps rather than claiming Tier1 semantic identity.
 
 Local macOS Task 8 validation on 2026-09-20:
 
-- focused `SourceMetadataReconciliationTests`: 12 passed, zero failed, zero
+- focused `SourceMetadataReconciliationTests`: 14 passed, zero failed, zero
   skipped;
 - existing `ManagedMetadataExtractorTests`: 22 passed, zero failed, zero
   skipped;
 - `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with zero warnings
   and zero errors;
-- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,994 passed, zero failed,
+- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,996 passed, zero failed,
   zero skipped;
 - two bound C# fixture CLI scans: 333 facts each, 52 exact reconciliation edges,
   and two explicit incomplete source-identity gaps; `facts.ndjson`, report,
