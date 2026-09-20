@@ -39,7 +39,7 @@ slices and require an implementation-state update before work begins.
   source/build provenance in separate fields. Serialize metadata-only evidence
   with the `managed-metadata-v1` safe-locator/token convention and documented
   non-source `EvidenceSpan` sentinel.
-- [ ] 7. Validate byte determinism, privacy, unchanged Roslyn/syntax behavior,
+- [x] 7. Validate byte determinism, privacy, unchanged Roslyn/syntax behavior,
   CLI sample output, full .NET tests, and the portable managed fixture matrix on
   both macOS and Windows. Explicitly defer only the later Windows-specific
   lanes. Include host-resolution decoys, zero/multiple dependency candidates,
