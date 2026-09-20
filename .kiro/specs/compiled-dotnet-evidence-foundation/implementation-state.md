@@ -1,10 +1,10 @@
 # Compiled .NET Evidence Foundation Implementation State
 
-Status: first-slice implementation and portable cross-platform validation complete; exact-head review fixes validated locally and ACK rerun pending
+Status: first-slice implementation and portable cross-platform validation complete; PR #772 merged into `dev`
 
-Branch: `codex/compiled-dotnet-evidence-foundation`
+Branch: `codex/source-metadata-reconciliation`
 
-Base: `origin/dev` at `0b728b62943de7c0c52a44e170e870c2691dcd34`
+Base: `origin/dev` at `532fccfb0a7588ab64397f672ca6a8dddef8d083`
 
 Tracking: #759, #766, #767, #768, #769
 
@@ -117,9 +117,9 @@ Local macOS validation on 2026-09-20:
 
 Task 7 is complete. Earlier PR #772 heads passed the portable matrix and package
 smoke on Windows, Ubuntu, and macOS plus the .NET adapter, combined-adapter, and
-private-path jobs. The latest exact-head findings have been fixed and validated
-locally; ACK remains the authority after the fixes are pushed. No reviewer was
-manually retagged and no merge was performed.
+private-path jobs. PR #772 was merged into `dev` as
+`532fccfb0a7588ab64397f672ca6a8dddef8d083` on 2026-09-20. No reviewer was
+manually retagged during the completed first-slice review loop.
 
 Portable Windows success does not prove Windows PDB, legacy .NET Framework or
 Web Forms build behavior, ILAsm/ILDAsm parity, the historical `dotnetperf`
