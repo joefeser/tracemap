@@ -16,14 +16,19 @@ fallback and without promoting build artifacts beyond their provenance.
 
 1. The scanner shall inspect only assemblies admitted by an explicit bounded
    input policy.
-2. Every admitted input shall retain a repository-relative or explicitly
-   external safe locator, file SHA-256, assembly identity, module MVID when
-   readable, extractor ID/version, exact generator SHA-256, and bounded-input
-   SHA-256.
-3. The bounded-input SHA-256 shall commit to the canonical privacy-projected
-   admission policy, expected-input declarations, effective limits, admitted
-   input records, and provenance-binding inputs that can change facts, gaps, or
-   coverage.
+2. Every locally retained admission record shall carry a repository-relative
+   or explicitly external safe locator, raw file SHA-256, assembly identity,
+   module MVID when readable, extractor ID/version, exact generator SHA-256,
+   and bounded-input SHA-256. A shareable record for an access-controlled or
+   private assembly shall omit the raw file SHA-256 and carry a
+   privacy-projected-input SHA-256 computed only over the canonical projected
+   payload after privacy projection, excluding digest fields.
+3. The local/private bounded-input SHA-256 shall commit to every
+   output-affecting admission-policy input, including expected-input
+   declarations, effective limits, admitted input records, raw file digests,
+   and provenance-binding inputs. A shareable bounded-input SHA-256 shall be
+   recomputed only from the canonical privacy-projected counterparts and shall
+   never hash a private source artifact or raw private assembly bytes.
 4. Assembly identity shall include name, version, culture, public-key-token
    state, module name, and target framework when available. None of these alone
    proves source equivalence or authenticity.
@@ -99,7 +104,8 @@ fallback and without promoting build artifacts beyond their provenance.
 ### 6. Safety and product boundary
 
 1. The extractor shall not store source snippets, raw private paths, secrets,
-   signing material, or private corpus identities in shareable artifacts.
+   signing material, private corpus identities, or raw private assembly
+   digests in shareable artifacts.
 2. No LLM, embedding, vector database, graph database, or prompt classifier may
    participate in extraction or reconciliation.
 3. All correctness contracts and public fixtures belong to the open evidence
