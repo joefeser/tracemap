@@ -162,21 +162,23 @@ The matrix covers namespaces, nested/generic declarations, complete overload
 signatures, constructors, properties/indexers, events/accessors, C# ref and VB
 ByRef shapes, optional parameters, explicit interfaces where representable,
 scoped decimal signatures, constructed nested generic signatures with their
-enclosing arguments, same-looking cross-assembly/language declarations, exact
-zero candidates, exact multiple candidates, unbound inputs, and the F#
-unsupported source lane.
+enclosing arguments, scoped non-primitive special types, non-generic nested
+types inside constructed generic containers, same-looking cross-assembly/language
+declarations, exact zero candidates, exact multiple candidates, unbound inputs,
+and the F# unsupported source lane. Optional-parameter mismatch gaps retain the
+rejected metadata candidate's compiled provenance and receipt-binding digest.
 
 Local macOS Task 8 validation on 2026-09-20:
 
-- focused `SourceMetadataReconciliationTests`: 11 passed, zero failed, zero
+- focused `SourceMetadataReconciliationTests`: 12 passed, zero failed, zero
   skipped;
 - existing `ManagedMetadataExtractorTests`: 22 passed, zero failed, zero
   skipped;
 - `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with zero warnings
   and zero errors;
-- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,993 passed, zero failed,
+- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,994 passed, zero failed,
   zero skipped;
-- two bound C# fixture CLI scans: 317 facts each, 49 exact reconciliation edges,
+- two bound C# fixture CLI scans: 333 facts each, 52 exact reconciliation edges,
   and two explicit incomplete source-identity gaps; `facts.ndjson`, report,
   reconciliation manifest summary, and normalized SQLite fact rows matched;
   both output directories contained all five required artifacts and passed
