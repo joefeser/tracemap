@@ -85,7 +85,7 @@ internal static class SourceMetadataReconciler
             if (!string.Equals(sourceOptionalParameters, compiledOptionalParameters, StringComparison.Ordinal))
             {
                 results.Add(CreateGap(manifest, first, sourceObservation, "SourceMetadataOptionalParameterMismatch", 1,
-                    [metadataFact.FactId, $"source:{sourceOptionalParameters}", $"metadata:{compiledOptionalParameters}"]));
+                    [metadataFact.FactId, $"source:{sourceOptionalParameters}", $"metadata:{compiledOptionalParameters}"], metadataFact));
                 continue;
             }
             if (metadataFact.Properties.GetValueOrDefault("sourceReconciliationEligibility") != "eligible")

@@ -39,7 +39,9 @@ public sealed class SourceMetadataReconciliationTests
                      "CS-RECON-REF-006",
                      "CS-RECON-NESTED-GENERIC-007",
                      "CS-RECON-DECIMAL-SCOPE-010",
-                     "CS-RECON-CONSTRUCTED-NESTED-011"
+                     "CS-RECON-CONSTRUCTED-NESTED-011",
+                     "CS-RECON-DATETIME-SCOPE-012",
+                     "CS-RECON-NONGENERIC-NESTED-013"
                  })
         {
             var expected = ReadCase(caseId);
@@ -230,6 +232,46 @@ public sealed class SourceMetadataReconciliationTests
         var candidate = Assert.Single(candidates, item => item.SourceDeclarationIdentity.Contains("Echo", StringComparison.Ordinal));
         Assert.Null(candidate.MetadataIdentity);
         Assert.Equal("SourceErrorTypeIdentityUnavailable", candidate.IncompleteReason);
+    }
+
+    [Fact]
+    public void Optional_parameter_mismatch_gap_preserves_rejected_compiled_provenance()
+    {
+        var manifest = ReconciliationManifest("Level1SemanticAnalysis");
+        const string metadataIdentity = "assembly:test|type:test|method:Optional";
+        var source = new SourceMetadataIdentityCandidate(
+            $"source:C#|{metadataIdentity}",
+            metadataIdentity,
+            "method",
+            LanguageNames.CSharp,
+            new EvidenceSpan("Fixture.cs", 7, 7, null, "csharp-semantic", "test"),
+            "Fixture.csproj",
+            "source-declaration",
+            [0],
+            "csharp method Fixture.Optional");
+        var compiled = FactFactory.Create(
+            manifest,
+            FactTypes.ManagedMethodDeclared,
+            RuleIds.DotNetCompiledMember,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan("fixture.dll", 1, 1, null, "managed-metadata", "test"),
+            targetSymbol: metadataIdentity,
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["optionalParameterOrdinals"] = string.Empty,
+                ["provenanceBindingInputSha256"] = new string('d', 64),
+                ["provenanceState"] = "bound",
+                ["sourceReconciliationEligibility"] = "eligible"
+            });
+
+        var facts = SourceMetadataReconciler.Reconcile(manifest, [source], [compiled], []);
+
+        var gap = Assert.Single(facts, fact => fact.Properties.GetValueOrDefault("gapKind") == "SourceMetadataOptionalParameterMismatch");
+        Assert.Equal("bound", gap.Properties["compiledProvenanceState"]);
+        Assert.Equal(new string('d', 64), gap.Properties["provenanceBindingInputSha256"]);
+        var summaryEntry = Assert.Single(SourceMetadataReconciler.BuildSummary(manifest, facts)!.Entries);
+        Assert.Equal("bound", summaryEntry.CompiledProvenanceState);
+        Assert.Equal(new string('d', 64), summaryEntry.ProvenanceBindingInputSha256);
     }
 
     [Fact]
