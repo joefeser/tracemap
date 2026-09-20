@@ -2356,7 +2356,9 @@ SHA-256, optional exact assembly identity, binary source repository, 40-hex
 source commit, and binary build identity. A receipt is bound only when the
 artifact and optional assembly identity match and all source/build fields are
 complete; otherwise the lane emits an explicit incomplete, stale, mismatch, or
-unbound gap. Receipt paths and raw repository names are not emitted.
+unbound gap. Receipt paths, raw repository names, and raw build identities are
+not emitted; local facts retain SHA-256 commitments for repository/build
+identity plus the validated source commit and categorical binding state.
 
 The admission budget defaults to 32 artifacts, 64 MiB per file, 50,000 types,
 250,000 members, 4,096 characters per retained text value, and 500,000 total
@@ -2364,6 +2366,9 @@ work units. Override these only with the positive `--compiled-max-artifacts`,
 `--compiled-max-file-bytes`, `--compiled-max-types`,
 `--compiled-max-members`, `--compiled-max-text`, and `--compiled-max-work`
 options. A limit failure is partial coverage, never a clean or complete result.
+Receipt paths use the same file/count/text/work budget and a maximum nesting
+depth of 16; metadata-row work for both independent readers is charged from the
+total-work budget before either reader materializes observations.
 
 ### Independent source canonical-identity matrix
 

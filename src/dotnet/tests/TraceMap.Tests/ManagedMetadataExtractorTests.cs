@@ -111,6 +111,14 @@ public sealed class ManagedMetadataExtractorTests
             CompiledInputPaths: [fixture],
             CompiledInputLimits: new CompiledInputLimits(MaxTypeCount: 1)));
         AssertGap(limited, "ManagedInputTypeCountLimitExceeded");
+        var workLimited = ManagedMetadataExtractor.Evaluate(repo, commit, new ScanOptions(repo, "unused",
+            CompiledInputPaths: [fixture],
+            CompiledInputLimits: new CompiledInputLimits(MaxTotalWorkUnits: 1)));
+        AssertGap(workLimited, "ManagedInputTotalWorkLimitExceeded");
+        var sizeLimited = ManagedMetadataExtractor.Evaluate(repo, commit, new ScanOptions(repo, "unused",
+            CompiledInputPaths: [native],
+            CompiledInputLimits: new CompiledInputLimits(MaxFileSizeBytes: 1)));
+        AssertGap(sizeLimited, "ManagedInputFileSizeLimitExceeded");
 
         CompiledInputEvaluation Evaluate(string path) => ManagedMetadataExtractor.Evaluate(repo, commit,
             new ScanOptions(repo, "unused", CompiledInputPaths: [path]));
@@ -132,6 +140,11 @@ public sealed class ManagedMetadataExtractorTests
         var bound = EvaluateReceipt(commit, outcome.RawFileSha256!);
         Assert.Equal("bound", Assert.Single(bound.Provenance!.Outcomes).ProvenanceState);
         Assert.DoesNotContain("UnboundManagedInput", Assert.Single(bound.Provenance.Outcomes).GapKinds);
+        var serializedBound = JsonSerializer.Serialize(bound.Provenance) + JsonSerializer.Serialize(
+            ManagedMetadataExtractor.MaterializeFacts(Manifest(commit, bound.Provenance), bound));
+        Assert.DoesNotContain("credential-bearing.example", serializedBound, StringComparison.Ordinal);
+        Assert.DoesNotContain("private-build-name", serializedBound, StringComparison.Ordinal);
+        Assert.Contains("binarySourceRepositorySha256", serializedBound, StringComparison.Ordinal);
 
         var stale = EvaluateReceipt(new string('1', 40), outcome.RawFileSha256!);
         Assert.Equal("stale", Assert.Single(stale.Provenance!.Outcomes).ProvenanceState);
@@ -155,9 +168,9 @@ public sealed class ManagedMetadataExtractorTests
                         safeLocator = outcome.SafeLocator,
                         artifactSha256,
                         assemblyIdentity = outcome.AssemblyIdentity,
-                        binarySourceRepository = "fixture-repository",
+                        binarySourceRepository = "https://token@credential-bearing.example/private/repository",
                         binarySourceCommitSha = sourceCommit,
-                        binaryBuildIdentity = "fixture-build-v1"
+                        binaryBuildIdentity = "private-build-name"
                     }
                 }
             }));
@@ -232,6 +245,52 @@ public sealed class ManagedMetadataExtractorTests
 
         Assert.Equal(2, evaluation.Provenance!.Outcomes.Count);
         Assert.All(evaluation.Provenance.Outcomes, outcome => Assert.Contains("AmbiguousDuplicateManagedAssembly", outcome.GapKinds));
+    }
+
+    [Fact]
+    public void Dual_role_inputs_and_receipt_limits_fail_closed_without_aborting()
+    {
+        using var temp = new TempDirectory();
+        var repo = FindRepoRoot();
+        var commit = Git(repo, "rev-parse", "HEAD");
+        var assembly = FixtureAssemblies(repo).CSharp;
+        var dualRole = ManagedMetadataExtractor.Evaluate(repo, commit, new ScanOptions(repo, "unused",
+            CompiledInputPaths: [assembly],
+            CompiledDependencyPaths: [assembly]));
+
+        Assert.Equal(2, dualRole.Provenance!.Outcomes.Count);
+        Assert.Equal(["dependency", "primary"], dualRole.Provenance.Outcomes.Select(item => item.Role).OrderBy(value => value, StringComparer.Ordinal).ToArray());
+        Assert.Equal(2, dualRole.Provenance.Outcomes.Select(item => item.SafeLocator).Distinct(StringComparer.Ordinal).Count());
+
+        var oversizedReceipt = Path.Combine(temp.Path, "oversized.json");
+        File.WriteAllText(oversizedReceipt, new string('x', 32));
+        var sizeLimited = ManagedMetadataExtractor.Evaluate(repo, commit, new ScanOptions(repo, "unused",
+            CompiledBindingReceiptPaths: [oversizedReceipt],
+            CompiledInputLimits: new CompiledInputLimits(MaxFileSizeBytes: 8)));
+        Assert.Contains(sizeLimited.KnownGaps, gap => gap.Contains("ManagedBindingReceiptFileSizeLimitExceeded", StringComparison.Ordinal));
+
+        var bindingLimitedReceipt = Path.Combine(temp.Path, "bindings.json");
+        File.WriteAllText(bindingLimitedReceipt, JsonSerializer.Serialize(new
+        {
+            schemaVersion = "compiled-input-binding-set.v1",
+            bindings = new[]
+            {
+                new { schemaVersion = "compiled-input-binding.v1", safeLocator = "one", artifactSha256 = new string('0', 64) },
+                new { schemaVersion = "compiled-input-binding.v1", safeLocator = "two", artifactSha256 = new string('1', 64) }
+            }
+        }));
+        var bindingLimited = ManagedMetadataExtractor.Evaluate(repo, commit, new ScanOptions(repo, "unused",
+            CompiledBindingReceiptPaths: [bindingLimitedReceipt],
+            CompiledInputLimits: new CompiledInputLimits(MaxArtifactCount: 1)));
+        Assert.Contains(bindingLimited.KnownGaps, gap => gap.Contains("ManagedBindingReceiptBindingCountLimitExceeded", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Array_shape_normalization_preserves_non_vector_rank_sizes_and_bounds()
+    {
+        Assert.Equal("[rank=1;sizes=-;lowerBounds=-]", ManagedMetadataExtractor.FormatArrayShape(1, [], []));
+        Assert.Equal("[rank=2;sizes=3,4;lowerBounds=-1,2]", ManagedMetadataExtractor.FormatArrayShape(2, [3, 4], [-1, 2]));
+        Assert.NotEqual("[]", ManagedMetadataExtractor.FormatArrayShape(1, [], []));
     }
 
     [Fact]
