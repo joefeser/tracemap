@@ -2409,6 +2409,8 @@ Roslyn and managed-metadata paths, preventing same namespace/name types from
 different assemblies from comparing equal. Primitive signature codes retain
 their intrinsic ECMA identity; `System.Decimal`, which metadata encodes as a
 scoped value-type reference rather than a CLI primitive, retains that scope.
+Other Roslyn special types that lack CLI primitive signature codes, including
+`System.DateTime`, also follow the scoped named-type path.
 Roslyn error types and unavailable type scopes
 fail closed as incomplete identities and can never produce a Tier1 edge.
 
@@ -2417,6 +2419,9 @@ equal arity, path proximity, timestamps, or metadata tokens. Zero candidates,
 multiple candidates, incomplete source identities, optional-parameter state
 disagreement, and unbound, stale, mismatched, ambiguous, disputed, unsupported,
 or incomplete compiled evidence emit Tier4 `AnalysisGap` facts and no edge.
+When an exact metadata candidate is rejected for optional-parameter mismatch,
+the gap retains that candidate's compiled provenance state and receipt-binding
+digest.
 Compiler-generated members remain separate except for Roslyn's explicit
 associated property/event accessor relationship. State machines, lambda
 methods, backing fields, and generated types are not inferred back to source.
@@ -2428,7 +2433,8 @@ expected gaps, and non-claims. The focused tests cover namespaces, nested and
 generic types, overloads with complete signatures, constructors,
 properties/indexers, events and accessors, `ref`/`ByRef`, optional parameters,
 explicit interfaces where representable, scoped decimal signatures,
-constructed nested generic signatures with outermost-first arguments, and
+scoped non-primitive special types, constructed nested signatures with
+outermost-first arguments even when the nested type declares no parameters, and
 same-looking declarations across assemblies and languages. F# has no source adapter: its compiled identities
 remain available, one explicit unsupported-source-adapter gap is emitted, and
 no source join is guessed.
