@@ -92,7 +92,7 @@ rows are withheld. Source and compiled facts remain separate, private compiled
 facts remain local-only, and the scan identity commits the compiled admission
 contract before fact IDs are derived.
 
-Local validation passed 1,971 tests with zero failures or skips, including 11
+Local validation passed 1,972 tests with zero failures or skips, including 12
 focused managed-metadata tests and a 19-test managed-metadata/report set. Two
 admitted compiled-input CLI scans each emitted 107 facts, including 80 compiled
 facts; their `facts.ndjson` files were byte-identical, both artifact sets passed

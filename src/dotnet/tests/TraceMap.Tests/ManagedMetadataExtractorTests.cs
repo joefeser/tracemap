@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
+using Mono.Cecil;
 using TraceMap.Cli;
 using TraceMap.Core;
 using TraceMap.Storage;
@@ -127,6 +128,46 @@ public sealed class ManagedMetadataExtractorTests
 
         CompiledInputEvaluation Evaluate(string path) => ManagedMetadataExtractor.Evaluate(repo, commit,
             new ScanOptions(repo, "unused", CompiledInputPaths: [path]));
+    }
+
+    [Fact]
+    public void Receipt_only_and_oversized_assembly_reference_inputs_emit_rule_backed_gaps()
+    {
+        using var temp = new TempDirectory();
+        var repo = FindRepoRoot();
+        var commit = Git(repo, "rev-parse", "HEAD");
+        var receipt = Path.Combine(temp.Path, "receipt.json");
+        File.WriteAllText(receipt, JsonSerializer.Serialize(new
+        {
+            schemaVersion = "compiled-input-binding-set.v1",
+            bindings = Array.Empty<object>()
+        }));
+
+        var receiptOnly = ManagedMetadataExtractor.Evaluate(repo, commit, new ScanOptions(
+            repo,
+            "unused",
+            CompiledBindingReceiptPaths: [receipt]));
+
+        Assert.Equal("compiled-metadata-partial", receiptOnly.Provenance!.CoverageState);
+        Assert.Contains(receiptOnly.KnownGaps, gap => gap.Contains("NoManagedInputDeclared", StringComparison.Ordinal));
+        Assert.Contains(receiptOnly.Candidates, candidate => candidate.FactType == FactTypes.AnalysisGap
+            && candidate.Properties.GetValueOrDefault("gapKind") == "NoManagedInputDeclared");
+
+        var oversizedReferenceAssembly = Path.Combine(temp.Path, "oversized-reference.dll");
+        using (var assembly = AssemblyDefinition.ReadAssembly(FixtureAssemblies(repo).CSharp))
+        {
+            assembly.MainModule.AssemblyReferences.Add(new AssemblyNameReference(new string('x', 5_000), new Version(1, 0)));
+            assembly.Write(oversizedReferenceAssembly);
+        }
+
+        var textLimited = ManagedMetadataExtractor.Evaluate(repo, commit, new ScanOptions(
+            repo,
+            "unused",
+            CompiledInputPaths: [oversizedReferenceAssembly]));
+
+        AssertGap(textLimited, "ManagedInputTextLimitExceeded");
+        Assert.DoesNotContain(textLimited.Provenance!.Outcomes.SelectMany(outcome => outcome.DependencyResolutionOutcomes),
+            outcome => outcome.Length > textLimited.Provenance.EffectiveLimits.MaxTextLength);
     }
 
     [Fact]

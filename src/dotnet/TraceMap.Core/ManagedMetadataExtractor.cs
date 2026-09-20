@@ -50,6 +50,9 @@ public static class ManagedMetadataExtractor
         var descriptors = CreateDescriptors(repoPath, primaryPaths, dependencyPaths);
         var evaluated = new List<EvaluatedInput>();
         var globalCandidates = new List<CompiledEvidenceCandidate>();
+        var globalGapKinds = new List<string>(receipts.Gaps);
+        if (descriptors.Count == 0)
+            globalGapKinds.Add("NoManagedInputDeclared");
 
         foreach (var descriptor in descriptors)
         {
@@ -171,9 +174,12 @@ public static class ManagedMetadataExtractor
                 candidates));
         }
 
-        AddDuplicateAndDependencyGaps(evaluated);
-        foreach (var receiptGap in receipts.Gaps)
-            globalCandidates.Add(GapCandidate("compiled-binding-receipt", receiptGap, "unknown", null, null));
+        AddDuplicateAndDependencyGaps(evaluated, limits);
+        foreach (var globalGapKind in globalGapKinds.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal))
+        {
+            var safeLocator = globalGapKind == "NoManagedInputDeclared" ? "compiled-input-set" : "compiled-binding-receipt";
+            globalCandidates.Add(GapCandidate(safeLocator, globalGapKind, "unknown", null, null));
+        }
 
         var expectedInputs = evaluated
             .Select(item => new CompiledExpectedInput(item.Descriptor.SafeLocator, item.Descriptor.Role))
@@ -192,7 +198,8 @@ public static class ManagedMetadataExtractor
             effectiveLimits = limits,
             outcomes = preDigestOutcomes,
             declaredBindingDigests = receipts.BindingDigests,
-            bindingReceiptGaps = receipts.Gaps.OrderBy(value => value, StringComparer.Ordinal).ToArray()
+            bindingReceiptGaps = receipts.Gaps.OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            globalGapKinds = globalGapKinds.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray()
         });
 
         var outcomes = evaluated.Select(item => new CompiledInputOutcome(
@@ -243,7 +250,7 @@ public static class ManagedMetadataExtractor
             .ToArray();
         var knownGaps = outcomes
             .SelectMany(item => item.GapKinds)
-            .Concat(receipts.Gaps)
+            .Concat(globalGapKinds)
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)
             .Select(value => $"Compiled metadata coverage reduced: {value}.")
@@ -415,7 +422,7 @@ public static class ManagedMetadataExtractor
         }
     }
 
-    private static void AddDuplicateAndDependencyGaps(List<EvaluatedInput> inputs)
+    private static void AddDuplicateAndDependencyGaps(List<EvaluatedInput> inputs, CompiledInputLimits limits)
     {
         foreach (var group in inputs.Where(item => item.Outcome == "admitted" && item.Descriptor.Role == "primary" && item.AssemblyIdentity is not null)
             .GroupBy(item => item.AssemblyIdentity!, StringComparer.Ordinal)
@@ -436,19 +443,29 @@ public static class ManagedMetadataExtractor
                 if (matches.Length == 0)
                 {
                     input.GapKinds.Add("UnresolvedManagedAssemblyReference");
-                    input.DependencyResolutionOutcomes.Add($"{reference}=>unresolved");
+                    AddDependencyResolutionOutcome(input, $"{reference}=>unresolved", limits);
                 }
                 else if (matches.Length > 1)
                 {
                     input.GapKinds.Add("AmbiguousManagedAssemblyReference");
-                    input.DependencyResolutionOutcomes.Add($"{reference}=>ambiguous:{string.Join(",", matches.Select(item => item.Descriptor.SafeLocator))}");
+                    AddDependencyResolutionOutcome(input, $"{reference}=>ambiguous:{string.Join(",", matches.Select(item => item.Descriptor.SafeLocator))}", limits);
                 }
                 else
                 {
-                    input.DependencyResolutionOutcomes.Add($"{reference}=>resolved:{matches[0].Descriptor.SafeLocator}");
+                    AddDependencyResolutionOutcome(input, $"{reference}=>resolved:{matches[0].Descriptor.SafeLocator}", limits);
                 }
             }
         }
+    }
+
+    private static void AddDependencyResolutionOutcome(EvaluatedInput input, string outcome, CompiledInputLimits limits)
+    {
+        if (outcome.Length > limits.MaxTextLength)
+        {
+            input.GapKinds.Add("ManagedInputTextLimitExceeded");
+            return;
+        }
+        input.DependencyResolutionOutcomes.Add(outcome);
     }
 
     private static BindingClassification ClassifyBinding(
@@ -758,14 +775,18 @@ public static class ManagedMetadataExtractor
                     $"{typeIdentity}|event:{@event.Name}|type:{signature}", "event", MemberProperties(@event, 0, IsCompilerGenerated(@event), signature)));
             }
         }
-        EnforceTextLimits(observations, limits);
+        var references = module.AssemblyReferences
+            .Select(reference => AssemblyReferenceIdentity(reference.Name, reference.Version?.ToString() ?? "0.0.0.0", reference.Culture, reference.PublicKeyToken))
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToArray();
+        EnforceTextLimits(observations, references, limits);
         return new MetadataReadResult(
             assemblyIdentity,
             module.Name,
             module.Mvid.ToString("D", CultureInfo.InvariantCulture),
             targetFramework,
             observations.OrderBy(item => item.Key, StringComparer.Ordinal).ToArray(),
-            module.AssemblyReferences.Select(reference => AssemblyReferenceIdentity(reference.Name, reference.Version?.ToString() ?? "0.0.0.0", reference.Culture, reference.PublicKeyToken)).OrderBy(value => value, StringComparer.Ordinal).ToArray(),
+            references,
             assemblyReferenceIdentity);
     }
 
@@ -907,7 +928,7 @@ public static class ManagedMetadataExtractor
                 token = PublicKeyTokenFromPublicKey(token);
             return AssemblyReferenceIdentity(reader.GetString(reference.Name), reference.Version.ToString(), reference.Culture.IsNil ? null : reader.GetString(reference.Culture), token);
         }).OrderBy(value => value, StringComparer.Ordinal).ToArray();
-        EnforceTextLimits(observations, limits);
+        EnforceTextLimits(observations, references, limits);
         return new MetadataReadResult(assemblyIdentity, moduleName, moduleMvid, targetFramework, observations.OrderBy(item => item.Key, StringComparer.Ordinal).ToArray(), references, assemblyReferenceIdentity);
     }
 
@@ -1119,10 +1140,14 @@ public static class ManagedMetadataExtractor
             throw new ManagedInputException("limit-exhausted", "ManagedInputMemberCountLimitExceeded");
     }
 
-    private static void EnforceTextLimits(IEnumerable<MetadataObservation> observations, CompiledInputLimits limits)
+    private static void EnforceTextLimits(
+        IEnumerable<MetadataObservation> observations,
+        IEnumerable<string> assemblyReferences,
+        CompiledInputLimits limits)
     {
         if (observations.Any(item => item.Identity.Length > limits.MaxTextLength
-            || item.Properties.Any(property => property.Key.Length > limits.MaxTextLength || property.Value.Length > limits.MaxTextLength)))
+            || item.Properties.Any(property => property.Key.Length > limits.MaxTextLength || property.Value.Length > limits.MaxTextLength))
+            || assemblyReferences.Any(reference => reference.Length > limits.MaxTextLength))
         {
             throw new ManagedInputException("limit-exhausted", "ManagedInputTextLimitExceeded");
         }
