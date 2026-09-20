@@ -19,17 +19,23 @@ fallback and without promoting build artifacts beyond their provenance.
 2. Every locally retained admission record shall carry a repository-relative
    or explicitly external safe locator, raw file SHA-256, assembly identity,
    module MVID when readable, extractor ID/version, exact generator SHA-256,
-   and bounded-input SHA-256. A shareable record for an access-controlled or
-   private assembly shall omit the raw file SHA-256 and carry a
+   and the bounded-input SHA-256 attached after that digest is computed. A
+   shareable record for an access-controlled or private assembly shall omit the
+   raw file SHA-256 and carry a
    privacy-projected-input SHA-256 computed only over the canonical projected
    payload after privacy projection, excluding digest fields.
 3. The local/private bounded-input SHA-256 shall commit to every
    output-affecting admission-policy input, including expected-input
    declarations, effective limits, deterministic candidate/admission outcomes,
-   admitted input records, raw file digests, and provenance-binding inputs. A
-   shareable bounded-input SHA-256 shall be recomputed only from the canonical
-   privacy-projected counterparts and shall never hash a private source
-   artifact or raw private assembly bytes.
+   canonical pre-digest admission records, raw file digests, and
+   provenance-binding inputs. The pre-digest payload shall exclude the
+   bounded-input SHA-256 itself plus `scanId`, fact IDs, artifact IDs, and any
+   other value derived from that digest. The computed digest is then attached
+   to the manifest and emitted admission records before `scanId` and fact IDs
+   are derived. A shareable bounded-input SHA-256 shall be recomputed only from
+   the canonical privacy-projected counterparts under the same no-recursion
+   rule and shall never hash a private source artifact or raw private assembly
+   bytes.
 4. Every scan that evaluates the compiled-input lane shall emit an
    unconditional scan-level compiled-input provenance section in the manifest,
    even when no assembly is admitted. It shall carry the policy/schema version,
@@ -96,9 +102,11 @@ fallback and without promoting build artifacts beyond their provenance.
    constructors, fields, properties, events, and their metadata tokens and full
    signatures.
 2. Identity shall preserve declaring assembly/module, nested type structure,
-   generic arity and construction state, parameter and return types,
-   field types, event types, by-reference and pointer shapes, custom modifiers
-   when readable, and member kind.
+   the exact metadata namespace (including the empty/global namespace), the
+   namespace-qualified declaring-type chain, generic arity and construction
+   state, namespace-qualified parameter and return types, field types, event
+   types, by-reference and pointer shapes, custom modifiers when readable, and
+   member kind.
 3. Properties and events shall remain distinct from generated accessors.
 4. Compiler-generated members shall be labeled; their relationship to a source
    construct shall remain unknown until a separate rule proves it.

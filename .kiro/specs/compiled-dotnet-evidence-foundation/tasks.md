@@ -8,14 +8,17 @@ slices and require an implementation-state update before work begins.
   keep the later reconciliation rule inactive and non-emitting.
 - [ ] 2. Add public minimal C#, VB.NET, and F# fixture projects for assembly,
   type, full member-signature, nested/generic, generated-member, overload, and
-  ambiguity cases; record stable case IDs and expected CLR shapes.
+  ambiguity cases, including identical simple type/member names in distinct
+  metadata namespaces; record stable case IDs and expected CLR shapes.
 - [ ] 3. Add the bounded compiled-input policy and deterministic input-set
   digest, privacy-projected provenance-binding-input digest, generator SHA-256,
   local/private raw file digests, shareable privacy-projected-input digests,
   safe locators, expected-input declarations, effective limits, and provenance
   states. Commit every output-affecting admission-policy input to the local
-  bounded-input digest; recompute shareable digests only over privacy-projected
-  fields and never retain a raw private assembly digest. Emit unconditional
+  bounded-input digest through a canonical pre-digest payload that excludes the
+  digest and all identities derived from it; attach the result afterward.
+  Recompute shareable digests only over privacy-projected fields and never
+  retain a raw private assembly digest. Emit unconditional
   manifest-level compiled-input provenance, including for a zero-admission
   scan, and bind the view-appropriate digest into `scanId` before fact IDs are
   derived. Keep private compiled fact/index outputs local-only; any shareable
@@ -40,7 +43,8 @@ slices and require an implementation-state update before work begins.
   CLI sample output, full .NET tests, and the portable managed fixture matrix on
   both macOS and Windows. Explicitly defer only the later Windows-specific
   lanes. Include host-resolution decoys, zero/multiple dependency candidates,
-  metadata-location round trips, and private-output non-shareability checks.
+  metadata-location round trips, cross-namespace identity collisions,
+  pre-digest recursion guards, and private-output non-shareability checks.
   Update docs and implementation state with exact results.
 - [ ] 8. Later slice: add exact deterministic source-to-metadata reconciliation
   with zero/multiple-candidate gaps and both endpoint identities; consume the
