@@ -214,6 +214,9 @@ public static class ScanEngine
             .Select(item => item.RelativePath)
             .OrderBy(path => path, StringComparer.Ordinal)
             .ToArray();
+        var compiledEvaluation = ManagedMetadataExtractor.Evaluate(repoPath, git.CommitSha, options, cancellationToken);
+        var compiledReducedCoverage = compiledEvaluation.Provenance is not null
+            && compiledEvaluation.Provenance.CoverageState != "compiled-metadata-complete";
         var projects = inventory
             .Where(item => item.Kind is "Project" or "SqlProject" or "VisualBasicProject")
             .Select(item => item.RelativePath)
@@ -236,6 +239,7 @@ public static class ScanEngine
         var semanticKnownGaps = git.KnownGaps
             .Concat(semanticResult.GapFacts.Select(GetGapMessage))
             .Concat(migrationFallbackGaps)
+            .Concat(compiledEvaluation.KnownGaps)
             .OrderBy(gap => gap, StringComparer.Ordinal)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
@@ -254,8 +258,8 @@ public static class ScanEngine
             ? semanticBuildReducedCoverage ? "FailedOrPartial" : "Succeeded"
             : "NotRun";
         var semanticAnalysisLevel = semanticResult.Attempted
-            ? semanticToolchainReducedCoverage || migrationFallbackReducedCoverage || nugetLockfileReducedCoverage ? "Level1SemanticAnalysisReduced" : "Level1SemanticAnalysis"
-            : migrationFallbackReducedCoverage || nugetLockfileReducedCoverage ? "Level3SyntaxAnalysisReduced" : "Level3SyntaxAnalysis";
+            ? semanticToolchainReducedCoverage || migrationFallbackReducedCoverage || nugetLockfileReducedCoverage || compiledReducedCoverage ? "Level1SemanticAnalysisReduced" : "Level1SemanticAnalysis"
+            : migrationFallbackReducedCoverage || nugetLockfileReducedCoverage || compiledReducedCoverage ? "Level3SyntaxAnalysisReduced" : "Level3SyntaxAnalysis";
         var provisionalBuildStatus = nugetLockfileReducedCoverage ? "FailedOrPartial" : semanticBuildStatus;
         var provisionalKnownGaps = semanticKnownGaps
             .Concat(nugetLockfileGaps)
@@ -264,7 +268,7 @@ public static class ScanEngine
             .ToArray();
 
         var provisionalManifest = new ScanManifest(
-            CreateScanId(git, inventory, sourceSnapshotDigest, options),
+            CreateScanId(git, inventory, sourceSnapshotDigest, options, compiledEvaluation.Provenance?.BoundedInputSha256),
             git.RepoName,
             git.RemoteUrl,
             git.Branch,
@@ -280,7 +284,8 @@ public static class ScanEngine
             GetScanRootRelativePath(repoPath, git),
             FactFactory.Hash(repoPath, 32),
             string.IsNullOrWhiteSpace(git.GitRootPath) ? null : FactFactory.Hash(Path.GetFullPath(git.GitRootPath), 32),
-            sourceSnapshotDigest);
+            sourceSnapshotDigest,
+            compiledEvaluation.Provenance);
 
         var binlogFacts = MsBuildBinlogExtractor.Extract(repoPath, provisionalManifest, options.BinlogPaths);
         var binlogGaps = binlogFacts
@@ -327,6 +332,7 @@ public static class ScanEngine
                     options,
                     binlogFacts,
                     migrationSyntaxFallback,
+                    compiledEvaluation,
                     progress,
                     cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
@@ -414,7 +420,8 @@ public static class ScanEngine
         GitMetadata git,
         IReadOnlyList<FileInventoryItem> inventory,
         string sourceSnapshotDigest,
-        ScanOptions options)
+        ScanOptions options,
+        string? compiledBoundedInputSha256)
     {
         var signature = string.Join('\n', inventory.Select(item => $"{item.RelativePath}|{item.Kind}|{item.SizeBytes}"));
         var binlogSignature = MsBuildBinlogExtractor.CreateInputSignature(options.BinlogPaths, repoPath: options.RepoPath);
@@ -425,7 +432,8 @@ public static class ScanEngine
             FrameValues((options.ExcludeGlobs ?? []).Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => NormalizePathForFileSystemComparison(value.Trim()))),
             FrameValues(string.IsNullOrWhiteSpace(options.TargetFramework) ? [] : [options.TargetFramework.Trim()]),
             $"restore={options.Restore.ToString().ToLowerInvariant()}",
-            FrameValues(string.IsNullOrWhiteSpace(options.BinlogCommitSha) ? [] : [options.BinlogCommitSha.Trim()]));
+            FrameValues(string.IsNullOrWhiteSpace(options.BinlogCommitSha) ? [] : [options.BinlogCommitSha.Trim()]),
+            $"compiled={compiledBoundedInputSha256 ?? string.Empty}");
         var repoIdentity = string.IsNullOrWhiteSpace(git.RemoteUrl) ? git.RepoName : git.RemoteUrl;
         return "scan-" + FactFactory.Hash($"{repoIdentity}|{git.CommitSha}|{sourceSnapshotDigest}|{signature}|{optionSignature}|{binlogSignature}", 20);
     }
@@ -623,6 +631,7 @@ public static class ScanEngine
         ScanOptions options,
         IReadOnlyList<CodeFact> binlogFacts,
         FrameworkMigrationEvidenceExtractor.SyntaxProtectionResult migrationSyntaxFallback,
+        CompiledInputEvaluation compiledEvaluation,
         ScanProgressReporter? progress = null,
         CancellationToken cancellationToken = default)
     {
@@ -661,6 +670,8 @@ public static class ScanEngine
 
         foreach (var gap in knownGaps)
         {
+            if (gap.StartsWith("Compiled metadata coverage reduced:", StringComparison.Ordinal))
+                continue;
             facts.Add(FactFactory.Create(
                 manifest,
                 FactTypes.AnalysisGap,
@@ -672,6 +683,8 @@ public static class ScanEngine
                     ["message"] = gap
                 }));
         }
+
+        facts.AddRange(ManagedMetadataExtractor.MaterializeFacts(manifest, compiledEvaluation));
 
         foreach (var item in inventory)
         {

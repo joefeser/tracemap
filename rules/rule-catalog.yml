@@ -3,6 +3,55 @@
 # - deferred: documented future/planned rule that must not appear in emitted facts.
 # Existing rules without an explicit status are treated as active.
 rules:
+  - id: dotnet.compiled.input.v1
+    name: Explicit bounded managed input
+    description: Records an explicitly declared managed assembly or dependency admitted under the deterministic compiled-input policy with local-only byte and provenance digests.
+    evidenceTier: Tier2Structural
+    emits: [ManagedInputAdmitted, AnalysisGap]
+    limitations:
+      - Admission proves only that the explicitly supplied bounded bytes were inspected; it does not prove freshness, source ownership, authenticity, runtime load, or completeness.
+      - Missing, unreadable, native, mixed-mode, ambiguous, unbound, stale, mismatched, and over-budget inputs remain Tier4Unknown gaps and never become absence conclusions.
+      - Ordinary compiled facts and indexes containing repository, commit, safe locator, receipt, or binary identities are local-only in this slice; no shareable CodeFact projection is defined.
+      - Dependency resolution considers only explicitly declared admitted dependency inputs and never probes the host GAC, runtime, SDK, package caches, working directory, or ambient Mono.Cecil resolver.
+
+  - id: dotnet.compiled.assembly.v1
+    name: Managed assembly and module metadata identity
+    description: Records Cecil-derived assembly and module identities independently cross-checked with System.Reflection.Metadata.
+    evidenceTier: Tier2Structural
+    emits: [ManagedAssemblyDeclared, ManagedModuleDeclared, AnalysisGap]
+    limitations:
+      - Assembly name, version, culture, public-key token, module name, MVID, target framework, metadata token, and path do not prove authenticity, source equivalence, freshness, runtime loading, or execution.
+      - Reader disagreement withholds the disputed fact and emits a deterministic Tier4Unknown gap; there is no display-string fallback or majority vote.
+
+  - id: dotnet.compiled.member.v1
+    name: Managed type and member metadata identity
+    description: Records exact metadata identities for types, methods, constructors, fields, properties, and events with full signatures and module-local token locations.
+    evidenceTier: Tier2Structural
+    emits: [ManagedTypeDeclared, ManagedMethodDeclared, ManagedFieldDeclared, ManagedPropertyDeclared, ManagedEventDeclared, AnalysisGap]
+    limitations:
+      - A metadata declaration does not prove source ownership, runtime execution, dispatch, reachability, behavior, build freshness, or impact.
+      - Metadata tokens are module-local locations and are never stable cross-build identities by themselves.
+      - Compiler-generated labels report metadata attributes or shapes only and do not establish a relationship to a source construct.
+
+  - id: dotnet.compiled.gap.v1
+    name: Compiled metadata coverage gap
+    description: Records categorical unavailable, malformed, stale, ambiguous, unbound, mismatched, unsupported, unresolved, reader-disagreed, or bounded compiled-input coverage.
+    evidenceTier: Tier4Unknown
+    emits: [AnalysisGap]
+    limitations:
+      - The gap reduces only the explicitly bounded compiled-input coverage; it does not prove absence and does not alter, erase, or upgrade source-derived evidence.
+      - File timestamps are not freshness evidence, and source association requires a validated binding receipt.
+
+  - id: dotnet.compiled.source-identity.v1
+    status: deferred
+    name: Source to compiled metadata identity reconciliation
+    description: Reserved for a later independently reviewed exact source-to-metadata reconciliation slice.
+    evidenceTier: Tier4Unknown
+    emits: []
+    limitations:
+      - This rule is inactive and must not emit in the compiled metadata foundation slice.
+      - Display strings, short names, timestamps, path proximity, and metadata tokens alone cannot establish a source-to-metadata identity edge.
+
   - id: adapter.scan-truth.conformance.v1
     name: Cross-adapter scan truth conformance
     description: Validates bounded synthetic adapter outputs against the shared v1 repository authority, analyzed-byte identity, determinism, artifact, coverage, exclusion, gap, path, and persistence contract.
