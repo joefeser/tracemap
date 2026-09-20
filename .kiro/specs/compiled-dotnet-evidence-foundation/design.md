@@ -65,6 +65,17 @@ receipt-validated fields such as `binarySourceRepository`,
 An unbound in-tree or external assembly therefore retains valid scan identity
 without being mislabeled as output of the scan commit.
 
+The first slice does not create shareable `CodeFact` or index projections from
+a private repository or access-controlled compiled input. Their ordinary
+`facts.ndjson` and `index.sqlite` remain local-only because the required scan
+repository and commit are private identities. A separately generated
+shareable summary, if produced, uses a distinct non-`CodeFact` schema and
+artifact identity computed only from its privacy-projected inputs; it omits raw
+repository, commit, path, receipt, and assembly identities. Designing a
+privacy-safe shareable scan envelope for fact/index rows is a later reviewed
+contract, not an implied substitution into `CodeFact.Repo` or
+`CodeFact.CommitSha`.
+
 The local/private bounded-input-set digest commits to the admission policy,
 expected-input declarations, effective size/count/work limits, deterministic
 ordered candidate/admission outcomes, admitted safe locators, roles, raw file
@@ -83,13 +94,13 @@ hashes or republishes a private source artifact, receipt, source digest, path,
 identifier, or raw assembly digest. The projection algorithm and omitted or
 replaced fields are part of the rule's documented limitations.
 
-The bounded-input-set SHA-256 for the emitted artifact view participates in
-`scanId` before any fact IDs are derived. Local/private artifacts use the local
-digest. A shareable projection recomputes `scanId` and every scan-ID-derived
-fact ID from the privacy-projected bounded-input digest; it never reuses a scan
-identity derived from private assembly bytes. Thus changes to external managed
+The bounded-input-set SHA-256 for the emitted local fact/index view participates
+in `scanId` before any fact IDs are derived. Thus changes to external managed
 inputs, admission policy, effective limits, or zero-admission outcomes cannot
 silently reuse the identity of a materially different compiled-evidence scan.
+A distinct shareable summary uses its privacy-projected bounded-input digest in
+its own artifact identity and never reuses a scan identity derived from private
+assembly bytes.
 
 Freshness states are `bound`, `stale`, `unbound`, `mismatch`, `missing`, and
 `unknown`. Only a validated build/scan receipt can establish `bound`, `stale`,
@@ -114,6 +125,31 @@ parameter signatures, field type, event type, and readable custom modifiers on
 each applicable type position. Metadata tokens are locations within one module,
 not portable global identities. MVIDs distinguish modules but do not bind them
 to source by themselves.
+
+Metadata-only facts use binary-location convention `managed-metadata-v1`
+without pretending that a PDB or source span exists. The existing
+`EvidenceSpan` serializes the admitted safe locator as `FilePath`, uses `1..1`
+as a documented non-source sentinel, and leaves `SnippetHash` null. Properties
+carry `evidenceLocationKind=managed-metadata-v1`, the module MVID when readable,
+and `metadataToken=0x` followed by exactly eight lowercase hexadecimal digits
+(for example, `0x02000001`) for row-backed facts; a deterministic metadata
+offset is optional only when directly exposed by a reader. An
+input-level gap without a row uses `managed-input-v1` and omits token/offset.
+Human and machine consumers must label both forms as binary locations and must
+not render the sentinel as source line evidence.
+
+## Bounded dependency resolution
+
+The first slice never invokes Mono.Cecil's ambient/default resolver. Resolution
+is limited to explicitly declared dependency inputs admitted through the same
+bounded policy. Before a dependency's metadata is read, its bytes, safe
+locator, role, and digest are recorded. The bounded-input-set digest commits to
+normalized declared resolution roots and deterministic ordered outcomes from
+each assembly reference to one admitted candidate, ambiguity, or unresolved
+state. The resolver does not probe the host GAC, runtime directories, SDK,
+NuGet caches, working directory, or other implicit roots. Zero or multiple
+admitted candidates fail closed with categorical gaps, so host installation
+state cannot change facts or coverage under the same digest.
 
 ## Reader disagreement
 

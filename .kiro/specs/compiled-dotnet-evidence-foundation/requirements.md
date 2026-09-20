@@ -41,9 +41,15 @@ fallback and without promoting build artifacts beyond their provenance.
    admitted-input record.
 5. The bounded-input SHA-256 for the emitted artifact view shall participate in
    `scanId` before fact IDs are derived. Local/private artifacts shall use the
-   local digest. A shareable projection shall recompute `scanId` and every
-   scan-ID-derived fact ID from its privacy-projected digest and shall not reuse
-   an identity derived from private bytes.
+   local digest. The first slice shall treat `facts.ndjson` and `index.sqlite`
+   from a private repository or access-controlled compiled input as local-only;
+   it shall not project their required `CodeFact.Repo` or
+   `CodeFact.CommitSha` fields into a shareable fact/index artifact. Any
+   shareable derivative shall use a distinct schema without `CodeFact` rows,
+   recompute its artifact identity from privacy-projected inputs, and omit raw
+   repository, commit, path, receipt, and binary identities. A future
+   shareable fact/index contract requires a separately reviewed privacy-safe
+   scan-envelope design.
 6. Assembly identity shall include name, version, culture, public-key-token
    state, module name, and target framework when available. None of these alone
    proves source equivalence or authenticity.
@@ -74,6 +80,15 @@ fallback and without promoting build artifacts beyond their provenance.
 6. File timestamps alone shall not prove freshness or staleness.
 7. Compiled facts shall remain distinguishable from source semantic and syntax
    facts in rules, extractor identity, coverage labels, and reports.
+8. Dependency resolution shall read only explicitly declared inputs admitted by
+   the bounded policy. It shall not probe the host GAC, runtime directories,
+   SDK installation, NuGet caches, working directory, or other implicit search
+   roots. Every dependency byte sequence consulted shall have an admission
+   record and digest before metadata is read; normalized declared resolution
+   roots, ordered reference-to-candidate outcomes, ambiguity, and unresolved
+   outcomes shall participate in the bounded-input SHA-256. An unadmitted or
+   multiply matched dependency shall emit an explicit gap without selecting a
+   host-dependent candidate.
 
 ### 3. Metadata identity
 
@@ -89,6 +104,18 @@ fallback and without promoting build artifacts beyond their provenance.
    construct shall remain unknown until a separate rule proves it.
 5. Metadata declarations are direct structural evidence, not proof of runtime
    execution, source ownership, dispatch, reachability, or build freshness.
+6. Metadata-only facts shall use the versioned binary-location convention
+   `managed-metadata-v1`. `EvidenceSpan.FilePath` shall contain the admitted
+   safe input locator, `StartLine` and `EndLine` shall both be the sentinel
+   value `1`, and `SnippetHash` shall be null. Fact properties shall contain
+   `evidenceLocationKind=managed-metadata-v1`, module MVID when readable, and
+   `metadataToken=0x` followed by exactly eight lowercase hexadecimal digits
+   (for example, `0x02000001`) for a row-backed fact; a deterministic metadata
+   offset may be added only when the reader exposes one. Input-level
+   gaps without a metadata row shall use
+   `evidenceLocationKind=managed-input-v1` and omit token/offset. Reports and
+   consumers shall label these as binary locations and shall not present the
+   sentinel span as a source line.
 
 ### 4. Deterministic source/compiled reconciliation contract
 
@@ -128,9 +155,14 @@ fallback and without promoting build artifacts beyond their provenance.
 1. The extractor shall not store source snippets, raw private paths, secrets,
    signing material, private corpus identities, or raw private assembly
    digests in shareable artifacts.
-2. No LLM, embedding, vector database, graph database, or prompt classifier may
+2. Ordinary compiled `facts.ndjson` and `index.sqlite` containing private scan
+   or binary identities are local-only in the first slice. A distinct
+   privacy-projected summary may be shared only if its schema, generator hash,
+   bounded privacy-projected input hash, omissions, and limitations are
+   documented and it contains no `CodeFact` rows.
+3. No LLM, embedding, vector database, graph database, or prompt classifier may
    participate in extraction or reconciliation.
-3. All correctness contracts and public fixtures belong to the open evidence
+4. All correctness contracts and public fixtures belong to the open evidence
    engine. Hosted orchestration, managed private workers, retention, and policy
    workflows are outside this implementation slice.
 

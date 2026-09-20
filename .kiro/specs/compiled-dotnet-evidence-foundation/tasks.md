@@ -18,10 +18,14 @@ slices and require an implementation-state update before work begins.
   fields and never retain a raw private assembly digest. Emit unconditional
   manifest-level compiled-input provenance, including for a zero-admission
   scan, and bind the view-appropriate digest into `scanId` before fact IDs are
-  derived.
+  derived. Keep private compiled fact/index outputs local-only; any shareable
+  summary uses a distinct non-`CodeFact` schema and privacy-projected artifact
+  identity.
 - [ ] 4. Implement assembly/module/type/member inventory with a pinned
   Mono.Cecil version; reject native, mixed-mode, unreadable, and over-budget
-  inputs with explicit gaps.
+  inputs with explicit gaps. Disable ambient dependency probing and resolve
+  only declared, admitted, hashed dependency inputs; bind resolution roots and
+  ordered outcomes into the bounded-input digest.
 - [ ] 5. Cross-check admitted normalized identities with
   `System.Reflection.Metadata`; emit disagreement gaps and withhold disputed
   facts so no later reconciliation can consume them.
@@ -29,11 +33,15 @@ slices and require an implementation-state update before work begins.
   unbound, mismatch, and unsupported-input gap tests without emitting a
   source-to-metadata identity edge. Preserve the mandatory scan repository and
   commit on every compiled fact while keeping optional receipt-validated binary
-  source/build provenance in separate fields.
+  source/build provenance in separate fields. Serialize metadata-only evidence
+  with the `managed-metadata-v1` safe-locator/token convention and documented
+  non-source `EvidenceSpan` sentinel.
 - [ ] 7. Validate byte determinism, privacy, unchanged Roslyn/syntax behavior,
   CLI sample output, full .NET tests, and the portable managed fixture matrix on
   both macOS and Windows. Explicitly defer only the later Windows-specific
-  lanes. Update docs and implementation state with exact results.
+  lanes. Include host-resolution decoys, zero/multiple dependency candidates,
+  metadata-location round trips, and private-output non-shareability checks.
+  Update docs and implementation state with exact results.
 - [ ] 8. Later slice: add exact deterministic source-to-metadata reconciliation
   with zero/multiple-candidate gaps and both endpoint identities; consume the
   independent source canonical-identity matrix from `docs/VALIDATION.md`

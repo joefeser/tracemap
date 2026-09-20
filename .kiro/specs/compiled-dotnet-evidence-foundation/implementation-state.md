@@ -28,8 +28,15 @@ reconciliation, historical corpus execution, or C++/CLI support.
   while optional receipt-validated binary-source/build provenance uses
   separate fields and may remain absent for an unbound input.
 - Manifest-level compiled-input provenance is unconditional, including when no
-  assembly is admitted, and its local or privacy-projected bounded-input digest
-  participates in the corresponding `scanId` before fact IDs are derived.
+  assembly is admitted. Its local bounded-input digest participates in `scanId`
+  before fact IDs are derived; a distinct shareable summary binds its
+  privacy-projected digest into its own artifact identity.
+- Private compiled facts/indexes remain local-only in the first slice; a
+  shareable derivative must be a distinct non-`CodeFact` privacy-projected
+  summary rather than leaking or substituting required scan identity fields.
+- Metadata-only facts use a safe assembly locator, `1..1` non-source sentinel,
+  and versioned token-bearing properties. Ambient dependency resolution is
+  forbidden; only declared, admitted, hashed dependencies may be read.
 - Metadata tokens are module-local locations. MVID, path, timestamp, and display
   string alone cannot prove source identity or freshness.
 - Missing, stale, ambiguous, unbound, or mismatched inputs reduce compiled
