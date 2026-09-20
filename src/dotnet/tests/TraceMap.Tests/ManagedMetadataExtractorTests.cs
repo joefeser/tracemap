@@ -152,7 +152,7 @@ public sealed class ManagedMetadataExtractorTests
     public void Overlong_safe_locators_are_projected_before_missing_or_admitted_outcomes_are_retained()
     {
         using var temp = new TempDirectory();
-        const int maxTextLength = 32;
+        const int maxTextLength = ManagedMetadataExtractor.MinimumProjectedTextLength;
         var privateSegment = new string('p', 80);
         var missingPath = Path.Combine(temp.Path, privateSegment, privateSegment, "missing.dll");
         var evaluation = ManagedMetadataExtractor.Evaluate(temp.Path, new string('a', 40), new ScanOptions(
@@ -166,6 +166,85 @@ public sealed class ManagedMetadataExtractorTests
         Assert.Contains("ManagedInputTextLimitExceeded", outcome.GapKinds);
         Assert.True(outcome.SafeLocator.Length <= maxTextLength);
         Assert.DoesNotContain(privateSegment, JsonSerializer.Serialize(evaluation.Provenance), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Text_limits_smaller_than_a_complete_projected_digest_are_rejected()
+    {
+        using var temp = new TempDirectory();
+
+        var exception = Assert.Throws<ArgumentException>(() => ManagedMetadataExtractor.Evaluate(
+            temp.Path,
+            new string('a', 40),
+            new ScanOptions(
+                temp.Path,
+                "unused",
+                CompiledInputPaths: [Path.Combine(temp.Path, "missing.dll")],
+                CompiledInputLimits: new CompiledInputLimits(MaxTextLength: ManagedMetadataExtractor.MinimumProjectedTextLength - 1))));
+
+        Assert.Contains(ManagedMetadataExtractor.MinimumProjectedTextLength.ToString(), exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Receipt_binding_preflight_ignores_nested_bindings_properties_and_counts_the_complete_top_level_array()
+    {
+        using var temp = new TempDirectory();
+        var receipt = Path.Combine(temp.Path, "receipt.json");
+        File.WriteAllText(receipt, """
+            {
+              "schemaVersion": "compiled-input-binding-set.v1",
+              "bindings": [
+                {
+                  "schemaVersion": "compiled-input-binding.v1",
+                  "safeLocator": "first.dll",
+                  "ignored": { "bindings": [ {} ] }
+                },
+                {
+                  "schemaVersion": "compiled-input-binding.v1",
+                  "safeLocator": "second.dll"
+                }
+              ]
+            }
+            """);
+
+        var evaluation = ManagedMetadataExtractor.Evaluate(temp.Path, new string('a', 40), new ScanOptions(
+            temp.Path,
+            "unused",
+            CompiledBindingReceiptPaths: [receipt],
+            CompiledInputLimits: new CompiledInputLimits(MaxArtifactCount: 1)));
+
+        Assert.Contains(evaluation.KnownGaps, gap => gap.Contains("ManagedBindingReceiptBindingCountLimitExceeded", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Deep_metadata_signature_nesting_becomes_an_explicit_partial_gap()
+    {
+        using var temp = new TempDirectory();
+        var assemblyPath = Path.Combine(temp.Path, "deep-signature.dll");
+        using (var assembly = AssemblyDefinition.CreateAssembly(
+            new AssemblyNameDefinition("DeepSignature", new Version(1, 0)),
+            "DeepSignature",
+            ModuleKind.Dll))
+        {
+            var module = assembly.MainModule;
+            var type = new TypeDefinition("Fixture", "DeepSignature", Mono.Cecil.TypeAttributes.Public, module.TypeSystem.Object);
+            module.Types.Add(type);
+            TypeReference returnType = module.TypeSystem.Int32;
+            for (var index = 0; index <= ManagedMetadataExtractor.MaximumSignatureTypeNesting; index++)
+                returnType = new PointerType(returnType);
+            type.Methods.Add(new MethodDefinition(
+                "Read",
+                Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static,
+                returnType));
+            assembly.Write(assemblyPath);
+        }
+
+        var evaluation = ManagedMetadataExtractor.Evaluate(temp.Path, new string('a', 40), new ScanOptions(
+            temp.Path,
+            "unused",
+            CompiledInputPaths: [assemblyPath]));
+
+        AssertGap(evaluation, "ManagedInputSignatureNestingLimitExceeded");
     }
 
     [Fact]

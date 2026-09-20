@@ -2725,7 +2725,7 @@ public static class TraceMapCommand
               --compiled-max-members <count>
               --compiled-max-text <count>
               --compiled-max-work <count>
-                                       Positive deterministic compiled-input limits.
+                                       Positive deterministic compiled-input limits; max-text must be at least 71.
               --sql-validation-summary <path>
                                        Explicit sql-validation-summary/v1 input. Repeatable; never executed.
               --sql-validation-as-of <timestamp>
