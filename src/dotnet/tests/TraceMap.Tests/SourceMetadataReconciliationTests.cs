@@ -235,6 +235,53 @@ public sealed class SourceMetadataReconciliationTests
     }
 
     [Fact]
+    public void Csharp_top_level_statements_are_not_collected_as_unresolved_declarations()
+    {
+        var tree = CSharpSyntaxTree.ParseText("[assembly:System.Runtime.Versioning.TargetFramework(\".NETCoreApp,Version=v10.0\")]\nSystem.Console.WriteLine(\"fixture\");\npublic sealed class Sample { public int Value { get; set; } }");
+        var compilation = CSharpCompilation.Create(
+            "TopLevelFixture",
+            [tree],
+            [MetadataReference.CreateFromFile(typeof(object).Assembly.Location), MetadataReference.CreateFromFile(typeof(Console).Assembly.Location)],
+            new CSharpCompilationOptions(OutputKind.ConsoleApplication));
+        var candidates = new List<SourceMetadataIdentityCandidate>();
+
+        SourceMetadataIdentityCollector.Collect(
+            tree.GetRoot(),
+            compilation.GetSemanticModel(tree, ignoreAccessibility: true),
+            "Fixture.csproj",
+            "Fixture.cs",
+            LanguageNames.CSharp,
+            candidates);
+
+        Assert.NotEmpty(candidates);
+        Assert.DoesNotContain(candidates, candidate => candidate.RelationshipProof == "syntax-located-unresolved-declaration");
+    }
+
+    [Fact]
+    public void Syntax_located_unresolved_observations_are_not_tier1_semantic_evidence()
+    {
+        var manifest = ReconciliationManifest("Level1SemanticAnalysisReduced");
+        var candidate = new SourceMetadataIdentityCandidate(
+            "C#:unresolved:Fixture.cs:7:0",
+            null,
+            "declaration",
+            LanguageNames.CSharp,
+            new EvidenceSpan("Fixture.cs", 7, 7, null, "csharp-semantic", "test"),
+            "Fixture.csproj",
+            "syntax-located-unresolved-declaration",
+            [],
+            "C#:unresolved:Fixture.cs:7:0",
+            "SourceDeclaredSymbolUnavailable");
+
+        var facts = SourceMetadataReconciler.Reconcile(manifest, [candidate], [], []);
+
+        var observation = Assert.Single(facts, fact => fact.FactType == FactTypes.SourceMetadataIdentityObserved);
+        Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, observation.EvidenceTier);
+        Assert.Contains(facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "SourceMetadataIdentityIncomplete");
+    }
+
+    [Fact]
     public void Optional_parameter_mismatch_gap_preserves_rejected_compiled_provenance()
     {
         var manifest = ReconciliationManifest("Level1SemanticAnalysis");
