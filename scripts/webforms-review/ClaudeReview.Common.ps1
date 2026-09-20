@@ -61,3 +61,36 @@ function Resolve-FocusedWebFormsClaudeLauncher([string]$ClaudeLauncherPath) {
     }
     return (Resolve-Path -LiteralPath $launcherInput).Path
 }
+
+function Invoke-FocusedWebFormsClaudePrint {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)][string]$Launcher,
+        [Parameter(Mandatory = $true)][object[]]$Arguments,
+        [Parameter(Mandatory = $true)][string]$Prompt,
+        [Parameter(Mandatory = $true)][string]$OutputPath,
+        [Parameter(Mandatory = $true)][ref]$ExitCode
+    )
+
+    # PowerShell uses $OutputEncoding for native stdin and the console output
+    # encoding to decode native stdout. Windows cmd.exe launchers otherwise
+    # commonly inherit an OEM code page, turning UTF-8 punctuation such as an
+    # em dash into mojibake before Tee-Object persists the response.
+    $utf8NoBom = [Text.UTF8Encoding]::new($false)
+    $priorOutputEncoding = $OutputEncoding
+    $priorConsoleInputEncoding = [Console]::InputEncoding
+    $priorConsoleOutputEncoding = [Console]::OutputEncoding
+    try {
+        $OutputEncoding = $utf8NoBom
+        [Console]::InputEncoding = $utf8NoBom
+        [Console]::OutputEncoding = $utf8NoBom
+        $Prompt | & $Launcher @Arguments |
+            Tee-Object -LiteralPath $OutputPath -Encoding utf8NoBOM
+        $ExitCode.Value = [int]$LASTEXITCODE
+    }
+    finally {
+        $OutputEncoding = $priorOutputEncoding
+        [Console]::InputEncoding = $priorConsoleInputEncoding
+        [Console]::OutputEncoding = $priorConsoleOutputEncoding
+    }
+}

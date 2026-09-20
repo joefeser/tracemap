@@ -6,6 +6,8 @@ assessment unless the question explicitly asks for that.
 
 For the new question:
 
+- begin directly with Markdown content and do not emit YAML frontmatter or a
+  leading `---` delimiter;
 - distinguish retained fact, inference, and unknown;
 - cite the relevant page alias and retained handoff/evidence category;
 - re-read current supplied evidence when the answer depends on an artifact that

@@ -24,6 +24,9 @@ TraceMap evidence directories supplied to this session.
 
 Return the complete Markdown assessment on stdout with these sections:
 
+Begin directly with a level-one Markdown heading. Do not emit YAML frontmatter
+or a leading `---` delimiter.
+
 1. **Evidence and source receipt** — compatible provenance, evidence coverage,
    selected aliases, byte count, and any mismatch.
 2. **Questions answered by selected source** — link each answer to the prior

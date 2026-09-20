@@ -137,6 +137,11 @@ paths-report.json
 11. WHEN reduced coverage exists THEN path absence SHALL be labeled coverage-relative and SHALL NOT be described as proof that no dependency exists.
 12. WHEN a path crosses languages or source indexes THEN every crossing SHALL include source labels, scan IDs, commit SHAs, rule IDs, evidence tiers, and file spans.
 13. WHEN path search reaches a terminal surface THEN the path SHALL stop unless the user opts into deeper expansion in a future command.
+14. WHEN Web Forms packet traversal selects a handler root THEN TraceMap SHALL inventory every distinct supported terminal in the retained graph before depth-limited path-detail enumeration and SHALL retain one deterministic shortest witness per terminal, including terminals beyond `maxDepth`.
+15. WHEN multiple routes reach the same supported terminal THEN the terminal inventory SHALL deduplicate by terminal node and retain only the shortest deterministic witness.
+16. WHEN terminal inventory reaches the work, frontier, or path safety limit THEN TraceMap SHALL mark `terminalReachabilityComplete` false and record the applicable limit reason rather than concluding that no supported terminal is reachable.
+17. WHEN path detail reaches depth, path, work, frontier, or cycle bounds THEN TraceMap SHALL report `pathEnumerationTruncated` independently of terminal inventory completeness.
+18. WHEN terminal reachability completes with no supported terminal THEN the conclusion SHALL remain limited to the retained static graph and SHALL NOT be described as runtime absence.
 
 ### Requirement 5: Path Classifications
 

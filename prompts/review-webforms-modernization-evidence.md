@@ -60,6 +60,9 @@ external systems, or infer private identities.
 
 Produce a bounded Markdown assessment with these sections:
 
+Begin directly with a level-one Markdown heading. Do not emit YAML frontmatter
+or a leading `---` delimiter.
+
 1. **Evidence receipt** — artifact schemas, generator/input hashes, coverage,
    truncation/ceiling state, and any provenance mismatch.
 2. **What the evidence establishes** — facts only, with page alias and evidence

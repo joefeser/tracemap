@@ -989,6 +989,84 @@ public sealed class WebFormsModernizationPacketTests
             && line.Contains("assignedTo=bl,type=BusinessObject", StringComparison.Ordinal));
         Assert.Contains("receiverBridgePrivate.callStatuses=1", privateReceiverAudit);
 
+        var qualifiedBackendType = Fact(backendManifest, FactTypes.TypeDeclared, RuleIds.VisualBasicSyntaxDeclarations,
+            "BusinessLayer/BusinessObject.vb", 1, source: null, target: "BusinessLayer.BusinessObject", contract: null,
+            ("kind", "class"), ("name", "BusinessObject"), ("namespace", "BusinessLayer"),
+            ("qualifiedName", "BusinessLayer.BusinessObject")) with
+        {
+            EvidenceTier = EvidenceTiers.Tier3SyntaxOrTextual
+        };
+        var qualifiedStaticInvocation = invocation with
+        {
+            Properties = new SortedDictionary<string, string>(
+                invocation.Properties.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+                StringComparer.Ordinal)
+            {
+                ["receiverName"] = "BusinessLayer.BusinessObject"
+            }
+        };
+        var qualifiedStaticFlow = flow with
+        {
+            Properties = new SortedDictionary<string, string>(
+                flow.Properties.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+                StringComparer.Ordinal)
+            {
+                ["supportingFactIds"] = $"{handler.FactId},{qualifiedStaticInvocation.FactId}",
+                ["supportingEdgeIds"] = qualifiedStaticInvocation.FactId
+            }
+        };
+        var qualifiedStaticWebIndex = Path.Combine(temp.Path, "qualified-static-web-index.sqlite");
+        SqliteIndexWriter.Write(qualifiedStaticWebIndex, manifest,
+            [page, binding, handler, qualifiedStaticInvocation, qualifiedStaticFlow]);
+        var qualifiedStaticBackendIndex = Path.Combine(temp.Path, "qualified-static-backend-index.sqlite");
+        SqliteIndexWriter.Write(qualifiedStaticBackendIndex, backendManifest,
+            [qualifiedBackendType, backendDeclaration, backendDownstream, backendTerminal]);
+        var qualifiedStaticCombinedIndex = Path.Combine(temp.Path, "qualified-static-combined-index.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [qualifiedStaticWebIndex, qualifiedStaticBackendIndex], qualifiedStaticCombinedIndex, ["web", "backend"]));
+        var qualifiedStaticPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+            new(qualifiedStaticCombinedIndex, Path.Combine(temp.Path, "qualified-static-output")));
+        var qualifiedStaticChain = Assert.Single(qualifiedStaticPacket.EventChains);
+        Assert.Equal("sql-query", qualifiedStaticChain.TerminalKind);
+        Assert.Contains("projectless-vb-receiver-bridge", qualifiedStaticChain.TraversalObservation?.TraversedEdgeKinds ?? []);
+
+        var typedReceiverInvocation = invocation with
+        {
+            Properties = new SortedDictionary<string, string>(
+                invocation.Properties.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+                StringComparer.Ordinal)
+            {
+                ["receiverName"] = "service",
+                ["receiverType"] = "BusinessLayer.BusinessObject",
+                ["receiverTypeResolution"] = "explicit-caller-syntax"
+            }
+        };
+        var typedReceiverFlow = flow with
+        {
+            Properties = new SortedDictionary<string, string>(
+                flow.Properties.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+                StringComparer.Ordinal)
+            {
+                ["supportingFactIds"] = $"{handler.FactId},{typedReceiverInvocation.FactId}",
+                ["supportingEdgeIds"] = typedReceiverInvocation.FactId
+            }
+        };
+        var typedReceiverWebIndex = Path.Combine(temp.Path, "typed-receiver-web-index.sqlite");
+        SqliteIndexWriter.Write(typedReceiverWebIndex, manifest,
+            [page, binding, handler, typedReceiverInvocation, typedReceiverFlow]);
+        var typedReceiverCombinedIndex = Path.Combine(temp.Path, "typed-receiver-combined-index.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [typedReceiverWebIndex, backendIndex], typedReceiverCombinedIndex, ["web", "backend"]));
+        var typedReceiverWritten = await WebFormsModernizationPacketReporter.WriteAsync(
+            new(typedReceiverCombinedIndex, Path.Combine(temp.Path, "typed-receiver-output")));
+        var typedReceiverChain = Assert.Single(typedReceiverWritten.Packet.EventChains);
+        Assert.Equal("sql-query", typedReceiverChain.TerminalKind);
+        Assert.Contains("projectless-vb-receiver-bridge", typedReceiverChain.TraversalObservation?.TraversedEdgeKinds ?? []);
+        var typedReceiverAudit = WebFormsVisualBasicReceiverBridgeAudit.Run(
+            typedReceiverCombinedIndex, typedReceiverWritten.JsonPath, surface);
+        Assert.Contains("receiverCreations=0", typedReceiverAudit);
+        Assert.Contains("receiverBridgeStatus.ready-semantic=1", typedReceiverAudit);
+
         var mixedInvocation = Fact(manifest, FactTypes.CallEdge, RuleIds.VisualBasicSyntaxCallGraph, "WebApplication/Feedback.aspx.vb", 23,
             source: "Sample.Feedback.Submit_Click/2", target: "InsertFeedback", contract: "InsertFeedback",
             ("argumentCount", "1"), ("callKind", "SyntaxInvocation"), ("calleeName", "InsertFeedback"),
@@ -1425,6 +1503,32 @@ public sealed class WebFormsModernizationPacketTests
         Assert.True(implicitOverloadChain.PathEvidence.Count(evidence =>
             evidence.RuleId == "combined.paths.projectless-vb-receiver-bridge.v1") >= 2);
 
+        foreach (var explicitSelfReceiver in new[] { "Me", "MyClass" })
+        {
+            var explicitSelfCall = implicitOverloadCall with
+            {
+                Properties = new SortedDictionary<string, string>(
+                    implicitOverloadCall.Properties.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+                    StringComparer.Ordinal)
+                {
+                    ["receiverName"] = explicitSelfReceiver
+                }
+            };
+            var suffix = explicitSelfReceiver.ToLowerInvariant();
+            var explicitSelfBackendIndex = Path.Combine(temp.Path, $"explicit-{suffix}-overload-backend-index.sqlite");
+            SqliteIndexWriter.Write(explicitSelfBackendIndex, recursiveBackendManifest,
+                [sqlBaseType, inheritedSqlField, inheritedSqlDeclaration, inheritedSqlSameArityOverload,
+                    explicitSelfCall, typedSqlBody, typedSqlTerminal]);
+            var explicitSelfCombinedIndex = Path.Combine(temp.Path, $"explicit-{suffix}-overload-combined-index.sqlite");
+            await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+                [wrapperWebIndex, explicitSelfBackendIndex], explicitSelfCombinedIndex, ["web", "backend"]));
+            var explicitSelfPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+                new(explicitSelfCombinedIndex, Path.Combine(temp.Path, $"explicit-{suffix}-overload-output")));
+            var explicitSelfChain = Assert.Single(explicitSelfPacket.EventChains);
+            Assert.Equal("sql-query", explicitSelfChain.TerminalKind);
+            Assert.True(explicitSelfChain.TraversalObservation?.TerminalPathCount > 0);
+        }
+
         var parametersListType = Fact(manifest, FactTypes.TypeDeclared, RuleIds.VisualBasicSyntaxDeclarations,
             "WebApplication/App_Code/DataAccess.vb", 30, source: null, target: "ParametersList", contract: null,
             ("baseTypes", "System.Collections.ArrayList"), ("kind", "class"), ("name", "ParametersList"),
@@ -1555,12 +1659,28 @@ public sealed class WebFormsModernizationPacketTests
         SqliteIndexWriter.Write(ambiguousIndex, manifest,
             [page, binding, handler, creation, invocation, declaration, competingDeclaration, downstream, terminal, flow]);
 
-        var ambiguousPacket = await WebFormsModernizationPacketReporter.BuildAsync(
+        var ambiguousWritten = await WebFormsModernizationPacketReporter.WriteAsync(
             new(ambiguousIndex, Path.Combine(temp.Path, "ambiguous-output")));
+        var ambiguousPacket = ambiguousWritten.Packet;
 
         var ambiguousChain = Assert.Single(ambiguousPacket.EventChains);
         Assert.Null(ambiguousChain.TerminalKind);
         Assert.DoesNotContain("projectless-vb-receiver-bridge", ambiguousChain.TraversalObservation?.TraversedEdgeKinds ?? []);
+        var ambiguousCombinedIndex = Path.Combine(temp.Path, "ambiguous-combined-index.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions(
+            [ambiguousIndex], ambiguousCombinedIndex, ["ambiguous"]));
+        var ambiguousAudit = WebFormsVisualBasicReceiverBridgeAudit.Run(
+            ambiguousCombinedIndex, ambiguousWritten.JsonPath, surface,
+            includePrivateIdentities: true);
+        Assert.Contains("receiverBridgeRelevantGraphGap.ProjectlessVisualBasicReceiverTargetAmbiguous=1", ambiguousAudit);
+        Assert.Contains("receiverBridgeRelevantGraphGapReason.semantic-type-identity-ambiguous=1", ambiguousAudit);
+        Assert.Contains(ambiguousAudit, line => line.StartsWith("receiverBridgePrivate.graphGap-01.kind=", StringComparison.Ordinal)
+            && line.Contains("sourceIndex=", StringComparison.Ordinal)
+            && line.Contains("argumentTypes=unavailable", StringComparison.Ordinal));
+        Assert.Contains(ambiguousAudit, line => line.StartsWith("receiverBridgePrivate.graphGap-01.targets=", StringComparison.Ordinal)
+            && line.Contains("source=", StringComparison.Ordinal)
+            && line.Contains("type=BusinessLayer.BusinessObject", StringComparison.Ordinal)
+            && line.Contains("type=AlternateBusinessLayer.BusinessObject", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -1629,7 +1749,8 @@ public sealed class WebFormsModernizationPacketTests
         Assert.Contains(bounded.Packet.Summary.TruncationReasons,
             reason => reason.StartsWith("packet-gap:TruncatedByLimit:depth", StringComparison.Ordinal));
         Assert.Contains(bounded.Packet.Gaps, gap => gap.Classification == "TruncatedByLimit" && gap.TruncationReason == "depth");
-        Assert.Contains(bounded.Packet.Gaps, gap => gap.Classification == "BoundedTraversalTruncated");
+        Assert.DoesNotContain(bounded.Packet.Gaps, gap => gap.Classification == "BoundedTraversalTruncated");
+        Assert.Equal("sql-query", Assert.Single(bounded.Packet.EventChains).TerminalKind);
         Assert.Contains(bounded.Packet.EventChains, chain => chain.TraversalObservation?.TruncationReasons.Contains("depth", StringComparer.Ordinal) == true);
         Assert.All(bounded.Packet.EventChains.Where(chain => chain.TraversalObservation?.Truncated == true),
             chain => Assert.NotEmpty(chain.TraversalObservation!.TruncationReasons));
@@ -1710,12 +1831,110 @@ public sealed class WebFormsModernizationPacketTests
         var cheapChain = first.Packet.EventChains.Single(chain => chain.HandlerFactId == cheapResolved.FactId);
         Assert.Equal("sql-query", cheapChain.TerminalKind);
         Assert.Equal("supported-terminal-reached", cheapChain.TraversalObservation?.StopState);
-        Assert.DoesNotContain("work", cheapChain.TraversalObservation?.TruncationReasons ?? []);
+        Assert.True(cheapChain.TraversalObservation?.TerminalReachabilityComplete);
+        Assert.DoesNotContain("work", cheapChain.TraversalObservation?.TerminalReachabilityLimitReasons ?? []);
+        Assert.Contains("work", cheapChain.TraversalObservation?.PathEnumerationTruncationReasons ?? []);
         Assert.Contains(first.Packet.EventChains, chain => chain.HandlerFactId == noisyResolved.FactId
             && chain.TraversalObservation?.TruncationReasons.Contains("work", StringComparer.Ordinal) == true);
         var second = await WebFormsModernizationPacketReporter.WriteAsync(new(
             index, Path.Combine(temp.Path, "second"), MaxTraversalWork: 40));
         Assert.Equal(JsonSerializer.Serialize(first.Packet), JsonSerializer.Serialize(second.Packet));
+    }
+
+    [Fact]
+    public async Task Terminal_inventory_retains_all_distinct_shortest_witnesses_beyond_display_depth()
+    {
+        using var temp = new TempDirectory();
+        var manifest = Manifest("Succeeded") with { AnalysisLevel = "Level1SemanticAnalysis" };
+        const string surface = "webforms-surface:terminal-inventory";
+        const string handlerId = "symbol-id:terminal-inventory-handler";
+        const string handlerSymbol = "Sample.TerminalInventory.Run_Click(object, System.EventArgs)";
+        var page = Fact(manifest, FactTypes.WebFormsPageDeclared, RuleIds.LegacyWebFormsInventory, "Pages/TerminalInventory.aspx", 1,
+            source: surface, target: "Sample.TerminalInventory", contract: "TerminalInventory.aspx",
+            ("surfaceIdentity", surface), ("directiveKind", "Page"), ("coverageLabel", "bounded-static-webforms-inventory"));
+        var binding = Fact(manifest, FactTypes.WebFormsEventBindingDeclared, RuleIds.LegacyWebFormsEventBinding, "Pages/TerminalInventory.aspx", 10,
+            source: "control:run", target: handlerId, contract: "Run_Click",
+            ("surfaceIdentity", surface), ("eventSourceIdentity", "control:run"), ("eventName", "OnClick"),
+            ("controlId", "run"), ("handlerName", "Run_Click"), ("markupFile", "Pages/TerminalInventory.aspx"),
+            ("coverageLabel", "bounded-static-webforms-event"));
+        var handler = Fact(manifest, FactTypes.WebFormsHandlerResolved, RuleIds.LegacyWebFormsHandlerResolution, "Pages/TerminalInventory.aspx.cs", 20,
+            source: "control:run", target: handlerId, contract: "Run_Click",
+            ("surfaceIdentity", surface), ("bindingFactId", binding.FactId), ("handlerSymbolId", handlerId),
+            ("handlerSymbol", handlerSymbol), ("handlerName", "Run_Click"), ("controlId", "run"),
+            ("eventName", "OnClick"), ("markupFile", "Pages/TerminalInventory.aspx"),
+            ("coverageLabel", "bounded-static-webforms-handler"));
+        var calls = new List<CodeFact>();
+        string Previous(string branch, int index) => index == 0 ? handlerSymbol : $"Sample.{branch}.M{index}()";
+        for (var index = 0; index < 12; index++)
+        {
+            calls.Add(Fact(manifest, FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, "Services/First.cs", 30 + index,
+                source: Previous("First", index), target: $"Sample.First.M{index + 1}()", contract: $"M{index + 1}",
+                ("coverageLabel", "bounded-static-call")) with { EvidenceTier = EvidenceTiers.Tier1Semantic });
+            calls.Add(Fact(manifest, FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, "Services/Second.cs", 60 + index,
+                source: Previous("Second", index), target: $"Sample.Second.M{index + 1}()", contract: $"M{index + 1}",
+                ("coverageLabel", "bounded-static-call")) with { EvidenceTier = EvidenceTiers.Tier1Semantic });
+        }
+        calls.Add(Fact(manifest, FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, "Services/First.cs", 90,
+            source: "Sample.First.M2()", target: "Sample.First.M10()", contract: "M10", ("coverageLabel", "bounded-static-call")) with { EvidenceTier = EvidenceTiers.Tier1Semantic });
+        calls.Add(Fact(manifest, FactTypes.CallEdge, RuleIds.CSharpSemanticCallGraph, "Services/First.cs", 91,
+            source: "Sample.First.M5()", target: "Sample.First.M2()", contract: "M2", ("coverageLabel", "bounded-static-call")) with { EvidenceTier = EvidenceTiers.Tier1Semantic });
+        var firstTerminal = Fact(manifest, FactTypes.QueryPatternDetected, RuleIds.CSharpSyntaxQueryPattern, "Services/First.cs", 100,
+            source: "Sample.First.M12()", target: "first-query", contract: "SELECT",
+            ("operationName", "SELECT"), ("tableName", "first"), ("columnNames", "id"), ("sqlSourceKind", "literal-string"),
+            ("queryShapeHash", "first-terminal"), ("coverageLabel", "bounded-static-query"));
+        var secondTerminal = Fact(manifest, FactTypes.QueryPatternDetected, RuleIds.CSharpSyntaxQueryPattern, "Services/Second.cs", 101,
+            source: "Sample.Second.M12()", target: "second-query", contract: "SELECT",
+            ("operationName", "SELECT"), ("tableName", "second"), ("columnNames", "id"), ("sqlSourceKind", "literal-string"),
+            ("queryShapeHash", "second-terminal"), ("coverageLabel", "bounded-static-query"));
+        var indexPath = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(indexPath, manifest, [page, binding, handler, .. calls, firstTerminal, secondTerminal]);
+        var backendManifest = manifest with { ScanId = "scan-terminal-inventory-backend", RepoName = "terminal-inventory-backend" };
+        var backendIndexPath = Path.Combine(temp.Path, "backend-index.sqlite");
+        SqliteIndexWriter.Write(backendIndexPath, backendManifest, []);
+        var combinedIndexPath = Path.Combine(temp.Path, "combined-index.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([indexPath, backendIndexPath], combinedIndexPath, ["web", "backend"]));
+
+        var depth3 = await WebFormsModernizationPacketReporter.BuildAsync(new(combinedIndexPath, Path.Combine(temp.Path, "depth3"), MaxDepth: 3));
+        var depth10 = await WebFormsModernizationPacketReporter.BuildAsync(new(combinedIndexPath, Path.Combine(temp.Path, "depth10"), MaxDepth: 10));
+
+        Assert.True(depth3.EventChains.Count == 2, JsonSerializer.Serialize(new
+        {
+            Chains = depth3.EventChains.Select(chain => new { chain.TerminalKind, chain.LegacyPathId, chain.SupportingFactIds, chain.TraversalObservation }),
+            Boundaries = depth3.DownstreamBoundaries.Select(boundary => new { boundary.TerminalEvidenceId, boundary.BoundaryTargetId }),
+            Gaps = depth3.Gaps.Select(gap => new { gap.Classification, gap.TruncationReason })
+        }));
+        Assert.Equal(2, depth3.DownstreamBoundaries.Select(boundary => boundary.TerminalEvidenceId).Distinct(StringComparer.Ordinal).Count());
+        Assert.All(depth3.EventChains, chain =>
+        {
+            Assert.True(chain.TraversalObservation?.TerminalReachabilityAvailable);
+            Assert.True(chain.TraversalObservation?.TerminalReachabilityComplete);
+            Assert.Equal(2, chain.TraversalObservation?.DistinctReachableTerminalCount);
+            Assert.Equal(2, chain.TraversalObservation?.ReachableTerminalIds.Count);
+            Assert.True(chain.TraversalObservation?.PathEnumerationTruncated);
+            Assert.Contains("depth", chain.TraversalObservation?.PathEnumerationTruncationReasons ?? []);
+            Assert.Empty(chain.TraversalObservation?.TerminalReachabilityLimitReasons ?? []);
+            Assert.Equal(chain.PathEvidence.Select(item => item.EvidenceId).Distinct(StringComparer.Ordinal).Count(), chain.PathEvidence.Count);
+        });
+        Assert.Equal(
+            depth3.DownstreamBoundaries.Select(boundary => boundary.TerminalEvidenceId).OrderBy(value => value, StringComparer.Ordinal),
+            depth10.DownstreamBoundaries.Select(boundary => boundary.TerminalEvidenceId).OrderBy(value => value, StringComparer.Ordinal));
+        var shortestFirst = depth3.EventChains.Single(chain => chain.PathEvidence.Any(item => item.FilePath == "Services/First.cs" && item.StartLine == 100));
+        Assert.DoesNotContain(shortestFirst.PathEvidence, item => item.FilePath == "Services/First.cs" && item.StartLine is >= 33 and <= 38);
+
+        foreach (var (bounded, reason) in new[]
+        {
+            (await WebFormsModernizationPacketReporter.BuildAsync(new(combinedIndexPath, Path.Combine(temp.Path, "path-limit"), MaxDepth: 3, MaxPaths: 1)), "path"),
+            (await WebFormsModernizationPacketReporter.BuildAsync(new(combinedIndexPath, Path.Combine(temp.Path, "frontier-limit"), MaxDepth: 3, MaxFrontier: 1)), "frontier"),
+            (await WebFormsModernizationPacketReporter.BuildAsync(new(combinedIndexPath, Path.Combine(temp.Path, "work-limit"), MaxDepth: 3, MaxTraversalWork: 4)), "work")
+        })
+        {
+            Assert.Contains(bounded.EventChains, chain => chain.TraversalObservation is
+            {
+                TerminalReachabilityComplete: false
+            } observation && observation.TerminalReachabilityLimitReasons.Contains(reason, StringComparer.Ordinal));
+            Assert.Contains(bounded.Gaps, gap => gap.Classification == "TruncatedByLimit" && gap.TruncationReason == reason);
+            Assert.DoesNotContain(bounded.Gaps, gap => gap.Classification is "NoBackendEvidence" or "DownstreamWithoutSupportedTerminal");
+        }
     }
 
     [Fact]
