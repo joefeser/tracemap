@@ -2305,3 +2305,26 @@ Legacy .NET Framework builds, Windows PDB behavior, ILAsm/ILDAsm, Web Forms
 build behavior, the historical `dotnetperf` corpus, and C++/CLI remain explicit
 Windows lanes. A macOS pass must report those checks as not run rather than
 implying coverage.
+
+### Independent source canonical-identity matrix
+
+The compiled-evidence matrix does not replace the existing source-side adapter
+regressions. The source matrix remains independently required and must cover:
+
+- identical simple type and member names across namespaces, assemblies,
+  projects, and languages;
+- nested/repeated and partial types, VB root namespaces, aliases/imports, and
+  linked source files;
+- equal-arity overloads with different complete signatures, constructors,
+  properties/indexers, operators, inheritance, and cross-language candidates;
+- reflection, runtime assembly loading, generated/dynamic assemblies, and
+  unresolved factory or registration paths that must fail closed; and
+- end-to-end repository scans, `facts.ndjson`/`index.sqlite` validation,
+  multi-source combine, reducers/reports, bounded ambiguity gaps, and
+  deterministic repeat outputs.
+
+Where an adapter lacks a source lane, including F# until its adapter exists,
+the matrix must assert explicit unsupported coverage and zero inferred source
+joins. Task 8 of the compiled-evidence foundation may consume these source
+fixtures for reconciliation, but it must not redefine or remove their
+source-only acceptance contract.

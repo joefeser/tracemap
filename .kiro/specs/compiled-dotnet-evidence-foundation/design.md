@@ -35,6 +35,8 @@ Each compiled input record contains:
 - safe input locator and input role;
 - file SHA-256;
 - bounded-input-set SHA-256;
+- provenance-binding-input SHA-256 over the canonical privacy-projected
+  receipt/binding fields used to classify provenance;
 - exact invoked generator SHA-256;
 - extractor ID and version, including the pinned Mono.Cecil version;
 - normalized assembly and module identity plus MVID when readable;
@@ -42,9 +44,14 @@ Each compiled input record contains:
 - build/toolchain identity when a validated receipt supplies it; and
 - coverage state and categorical gaps.
 
-The bounded-input-set digest uses deterministic ordered records of admitted
-safe locators, roles, and file digests. A shareable projection computes its
-digest after privacy projection and never republishes a private source digest.
+The bounded-input-set digest commits to deterministic ordered records of
+admitted safe locators, roles, file digests, and each provenance-binding-input
+digest. The provenance-binding input includes every receipt field that can
+change source association or freshness classification, such as the safe source
+identity, source commit, build identity, declared assembly mapping, and receipt
+schema/version. A shareable projection computes both digests after privacy
+projection and never republishes a private receipt, source digest, path, or
+identifier.
 
 Freshness states are `bound`, `stale`, `unbound`, `mismatch`, `missing`, and
 `unknown`. Only a validated build/scan receipt can establish `bound`, `stale`,
@@ -102,7 +109,7 @@ suite:
 
 | Shape | Language/input | macOS | Windows | Owning slice |
 | --- | --- | --- | --- | --- |
-| Source/compiled reconciliation and ambiguity | C#, VB.NET, F# compiled identity with unsupported F# source gap | later | later | task 8 |
+| Source/compiled reconciliation and ambiguity | Independent source canonical-identity matrix plus C#, VB.NET, and F# compiled identities | later | later | task 8 |
 | Portable PDB identity and sequence points | C#, VB.NET, F# | later | later | task 9 |
 | `call`, `callvirt`, constrained calls, `newobj`, `ldftn`, `ldvirtftn` | compiled/IL fixtures | later | ILAsm cross-check | task 10 |
 | Exception handlers and unusual control flow | curated public IL cases | later read-only lane | ILAsm/runtime-safe checks | task 10 |
