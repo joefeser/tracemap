@@ -38,9 +38,17 @@ function New-Chain([string]$SurfaceId, [bool]$DepthTruncated, [int]$TerminalCoun
         }
     }
 }
-function New-HandoffChain([bool]$DepthTruncated) {
+function New-HandoffChain([bool]$DepthTruncated, [int]$TerminalCount = 0) {
     return [ordered]@{
         traversalTruncationReasons = if ($DepthTruncated) { @('depth') } else { @() }
+        terminalReachabilityAvailable = $true
+        terminalReachabilityComplete = $true
+        distinctReachableTerminalCount = $TerminalCount
+        reachableTerminalIds = if ($TerminalCount -gt 0) { @(0..($TerminalCount - 1) | ForEach-Object { "terminal-handoff-$_" }) } else { @() }
+        minimumTerminalDistance = if ($TerminalCount -gt 0) { 11 } else { $null }
+        terminalReachabilityLimitReasons = @()
+        pathEnumerationTruncated = $DepthTruncated
+        pathEnumerationTruncationReasons = if ($DepthTruncated) { @('depth') } else { @() }
     }
 }
 function New-Boundary([string]$Suffix, [string]$SurfaceId = '') {
@@ -67,14 +75,14 @@ try {
         schemaVersion = 'webforms-application-page-handoff.v1'
         subject = [ordered]@{ filePath = 'UIBid/BidGroup.aspx' }
         packet = [ordered]@{ sources = @($source) }
-        eventChains = @((New-HandoffChain $true), (New-HandoffChain $false))
+        eventChains = @((New-HandoffChain $true 2), (New-HandoffChain $false 2))
         downstreamBoundaries = @((New-Boundary 'a'))
     })
     $page003 = Write-Artifact $temp 'workbench/page-003.handoff.json' ([ordered]@{
         schemaVersion = 'webforms-application-page-handoff.v1'
         subject = [ordered]@{ filePath = 'UIBid/Other.aspx' }
         packet = [ordered]@{ sources = @($source) }
-        eventChains = @((New-HandoffChain $true))
+        eventChains = @((New-HandoffChain $true 0))
         downstreamBoundaries = @()
     })
     $receipt = [ordered]@{
@@ -141,6 +149,16 @@ try {
     if (@($output | Where-Object { $_ -match 'target-a|evidence-a|surface-002' }).Count -ne 0) {
         throw 'Targeted comparison disclosed a private evidence identity.'
     }
+
+    $baselinePath = Join-Path $diagnostic 'baseline-depth-8/webforms-modernization.json'
+    Move-Item -LiteralPath $baselinePath -Destination "$baselinePath.saved"
+    $handoffFallback = @(& $subject -ReviewRoot $temp -TraceMapRoot $repo)
+    foreach ($expected in @(
+        'reachability=page-002|depth8Available=True|depth8Complete=True|depth8DistinctTerminals=2',
+        'reachability=page-003|depth8Available=True|depth8Complete=True|depth8DistinctTerminals=0')) {
+        if (@($handoffFallback | Where-Object { $_.StartsWith($expected, [StringComparison]::Ordinal) }).Count -ne 1) { throw "Handoff fallback omitted terminal inventory: $expected" }
+    }
+    Move-Item -LiteralPath "$baselinePath.saved" -Destination $baselinePath
 
     $diagnosticPacket.surfaceSelection.items[0].requestId = 'surface-request-ffffffffffffffffffffffff'
     [IO.File]::WriteAllText((Join-Path $diagnostic 'webforms-modernization.json'), (($diagnosticPacket | ConvertTo-Json -Depth 20) + "`n"), [Text.UTF8Encoding]::new($false))
