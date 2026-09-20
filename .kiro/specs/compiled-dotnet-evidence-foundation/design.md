@@ -61,7 +61,11 @@ Every compiled `CodeFact` also carries the required scan repository and commit
 in its ordinary envelope. These identify the repository snapshot TraceMap is
 inspecting, not the source or build provenance of an admitted binary. Optional
 receipt-validated fields such as `binarySourceRepository`,
-`binarySourceCommitSha`, and `binaryBuildIdentity` carry that separate claim.
+`binarySourceCommitSha`, `binarySourceCommitRelation`, and
+`binaryBuildIdentity` carry that separate claim. The relation is optional, but
+the only accepted value is `ancestor-of-scan`, and it is required before an
+unequal source commit can be classified as stale; without explicit ancestry
+evidence, an unequal commit is a provenance mismatch.
 An unbound in-tree or external assembly therefore retains valid scan identity
 without being mislabeled as output of the scan commit.
 

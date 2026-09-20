@@ -210,7 +210,8 @@ public static class ManagedMetadataExtractor
             .OrderBy(item => item.SafeLocator, StringComparer.Ordinal)
             .ThenBy(item => item.Role, StringComparer.Ordinal)
             .ToArray();
-        var coverage = outcomes.Length > 0
+        var coverage = receipts.Gaps.Count == 0
+            && outcomes.Length > 0
             && outcomes.All(item => item.Outcome == "admitted" && item.ProvenanceState == "bound" && item.GapKinds.Count == 0)
                 ? "compiled-metadata-complete"
                 : "compiled-metadata-partial";
@@ -463,6 +464,7 @@ public static class ManagedMetadataExtractor
             assemblyIdentityMatch = receipt?.AssemblyIdentity is null ? "not-supplied" : string.Equals(receipt.AssemblyIdentity, assemblyIdentity, StringComparison.Ordinal) ? "match" : "mismatch",
             sourceRepositorySha256 = receipt?.BinarySourceRepository is null ? string.Empty : Sha256(Encoding.UTF8.GetBytes(receipt.BinarySourceRepository)),
             sourceCommitSha256 = receipt?.BinarySourceCommitSha is null ? string.Empty : Sha256(Encoding.UTF8.GetBytes(receipt.BinarySourceCommitSha)),
+            sourceCommitRelation = receipt?.BinarySourceCommitRelation ?? string.Empty,
             buildIdentitySha256 = receipt?.BinaryBuildIdentity is null ? string.Empty : Sha256(Encoding.UTF8.GetBytes(receipt.BinaryBuildIdentity))
         };
         var digest = CanonicalDigest(projection);
@@ -477,6 +479,12 @@ public static class ManagedMetadataExtractor
             || !IsCommitSha(receipt.BinarySourceCommitSha)
             || string.IsNullOrWhiteSpace(receipt.BinaryBuildIdentity))
             return new BindingClassification("unknown", "ManagedInputBindingIncomplete", digest, null);
+        if (!string.IsNullOrEmpty(receipt.BinarySourceCommitRelation)
+            && !string.Equals(receipt.BinarySourceCommitRelation, "ancestor-of-scan", StringComparison.Ordinal))
+            return new BindingClassification("mismatch", "ManagedInputProvenanceMismatch", digest, null);
+        if (!string.Equals(receipt.BinarySourceCommitSha, scanCommitSha, StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(receipt.BinarySourceCommitRelation, "ancestor-of-scan", StringComparison.Ordinal))
+            return new BindingClassification("mismatch", "ManagedInputProvenanceMismatch", digest, null);
         if (!string.Equals(receipt.BinarySourceCommitSha, scanCommitSha, StringComparison.OrdinalIgnoreCase))
             return new BindingClassification("stale", "StaleManagedInput", digest, receipt);
         return new BindingClassification("bound", string.Empty, digest, receipt);
@@ -565,6 +573,7 @@ public static class ManagedMetadataExtractor
         yield return receipt.AssemblyIdentity ?? string.Empty;
         yield return receipt.BinarySourceRepository ?? string.Empty;
         yield return receipt.BinarySourceCommitSha ?? string.Empty;
+        yield return receipt.BinarySourceCommitRelation ?? string.Empty;
         yield return receipt.BinaryBuildIdentity ?? string.Empty;
     }
 
@@ -609,6 +618,7 @@ public static class ManagedMetadataExtractor
         assemblyIdentityCommitment = receipt.AssemblyIdentity is null ? string.Empty : Sha256(Encoding.UTF8.GetBytes(receipt.AssemblyIdentity)),
         sourceRepositoryCommitment = receipt.BinarySourceRepository is null ? string.Empty : Sha256(Encoding.UTF8.GetBytes(receipt.BinarySourceRepository)),
         sourceCommitCommitment = receipt.BinarySourceCommitSha is null ? string.Empty : Sha256(Encoding.UTF8.GetBytes(receipt.BinarySourceCommitSha)),
+        sourceCommitRelation = receipt.BinarySourceCommitRelation ?? string.Empty,
         buildIdentityCommitment = receipt.BinaryBuildIdentity is null ? string.Empty : Sha256(Encoding.UTF8.GetBytes(receipt.BinaryBuildIdentity))
     });
 
@@ -1283,6 +1293,7 @@ public static class ManagedMetadataExtractor
         string? AssemblyIdentity,
         string? BinarySourceRepository,
         string? BinarySourceCommitSha,
+        string? BinarySourceCommitRelation,
         string? BinaryBuildIdentity);
 
     private sealed class ManagedInputException(string outcome, string gapKind) : Exception(gapKind)

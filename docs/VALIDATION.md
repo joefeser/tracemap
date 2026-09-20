@@ -2353,12 +2353,18 @@ must not change normalized source facts.
 Optional receipts use `compiled-input-binding-set.v1` with a `bindings` array.
 Each `compiled-input-binding.v1` entry names the exact `safeLocator`, artifact
 SHA-256, optional exact assembly identity, binary source repository, 40-hex
-source commit, and binary build identity. A receipt is bound only when the
-artifact and optional assembly identity match and all source/build fields are
-complete; otherwise the lane emits an explicit incomplete, stale, mismatch, or
-unbound gap. Receipt paths, raw repository names, and raw build identities are
-not emitted; local facts retain SHA-256 commitments for repository/build
-identity plus the validated source commit and categorical binding state.
+source commit, and binary build identity. When the source commit differs from
+the scan commit, `binarySourceCommitRelation` must be exactly
+`ancestor-of-scan` for the input to be classified as stale; an unequal commit
+without that externally validated relation is a mismatch, because inequality
+alone does not prove ancestry. A receipt is bound only when the artifact and
+optional assembly identity match and all source/build fields are complete;
+otherwise the lane emits an explicit incomplete, stale, mismatch, or unbound
+gap. Receipt paths, raw repository names, and raw build identities are not
+emitted; local facts retain SHA-256 commitments for repository/build identity
+plus the validated source commit and categorical binding state. Any receipt
+read, limit, ambiguity, or schema gap makes compiled coverage partial even when
+all admitted binaries have otherwise bound receipts.
 
 The admission budget defaults to 32 artifacts, 64 MiB per file, 50,000 types,
 250,000 members, 4,096 characters per retained text value, and 500,000 total

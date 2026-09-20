@@ -125,7 +125,7 @@ public sealed class ManagedMetadataExtractorTests
     }
 
     [Fact]
-    public void Binding_receipts_classify_bound_stale_and_mismatch_without_timestamps()
+    public void Binding_receipts_require_explicit_ancestry_evidence_for_stale_classification()
     {
         using var temp = new TempDirectory();
         var repo = FindRepoRoot();
@@ -146,15 +146,35 @@ public sealed class ManagedMetadataExtractorTests
         Assert.DoesNotContain("private-build-name", serializedBound, StringComparison.Ordinal);
         Assert.Contains("binarySourceRepositorySha256", serializedBound, StringComparison.Ordinal);
 
-        var stale = EvaluateReceipt(new string('1', 40), outcome.RawFileSha256!);
+        var stale = EvaluateReceipt(new string('1', 40), outcome.RawFileSha256!, "ancestor-of-scan");
         Assert.Equal("stale", Assert.Single(stale.Provenance!.Outcomes).ProvenanceState);
         Assert.Contains("StaleManagedInput", Assert.Single(stale.Provenance.Outcomes).GapKinds);
+
+        var unrelatedCommit = EvaluateReceipt(new string('2', 40), outcome.RawFileSha256!);
+        Assert.Equal("mismatch", Assert.Single(unrelatedCommit.Provenance!.Outcomes).ProvenanceState);
+        Assert.Contains("ManagedInputProvenanceMismatch", Assert.Single(unrelatedCommit.Provenance.Outcomes).GapKinds);
+
+        var unsupportedRelation = EvaluateReceipt(commit, outcome.RawFileSha256!, "descendant-of-scan");
+        Assert.Equal("mismatch", Assert.Single(unsupportedRelation.Provenance!.Outcomes).ProvenanceState);
+        Assert.Contains("ManagedInputProvenanceMismatch", Assert.Single(unsupportedRelation.Provenance.Outcomes).GapKinds);
 
         var mismatch = EvaluateReceipt(commit, new string('0', 64));
         Assert.Equal("mismatch", Assert.Single(mismatch.Provenance!.Outcomes).ProvenanceState);
         Assert.Contains("ManagedInputProvenanceMismatch", Assert.Single(mismatch.Provenance.Outcomes).GapKinds);
 
-        CompiledInputEvaluation EvaluateReceipt(string sourceCommit, string artifactSha256)
+        var receiptGap = EvaluateReceipt(
+            commit,
+            outcome.RawFileSha256!,
+            additionalReceiptPaths: [Path.Combine(temp.Path, "missing-receipt.json")]);
+        Assert.Equal("bound", Assert.Single(receiptGap.Provenance!.Outcomes).ProvenanceState);
+        Assert.Equal("compiled-metadata-partial", receiptGap.Provenance.CoverageState);
+        Assert.Contains(receiptGap.KnownGaps, gap => gap.Contains("UnreadableManagedBindingReceipt", StringComparison.Ordinal));
+
+        CompiledInputEvaluation EvaluateReceipt(
+            string sourceCommit,
+            string artifactSha256,
+            string? sourceCommitRelation = null,
+            IReadOnlyList<string>? additionalReceiptPaths = null)
         {
             var receipt = Path.Combine(temp.Path, Guid.NewGuid().ToString("N") + ".json");
             File.WriteAllText(receipt, JsonSerializer.Serialize(new
@@ -170,12 +190,14 @@ public sealed class ManagedMetadataExtractorTests
                         assemblyIdentity = outcome.AssemblyIdentity,
                         binarySourceRepository = "https://token@credential-bearing.example/private/repository",
                         binarySourceCommitSha = sourceCommit,
+                        binarySourceCommitRelation = sourceCommitRelation,
                         binaryBuildIdentity = "private-build-name"
                     }
                 }
             }));
             return ManagedMetadataExtractor.Evaluate(repo, commit, new ScanOptions(repo, "unused",
-                CompiledInputPaths: [assembly], CompiledBindingReceiptPaths: [receipt]));
+                CompiledInputPaths: [assembly],
+                CompiledBindingReceiptPaths: [receipt, .. additionalReceiptPaths ?? []]));
         }
     }
 
