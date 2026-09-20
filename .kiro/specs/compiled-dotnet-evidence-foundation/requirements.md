@@ -30,14 +30,18 @@ fallback and without promoting build artifacts beyond their provenance.
 
 1. Source repository and commit shall be recorded only when supplied by a
    validated scan/build receipt or another documented deterministic binding.
-2. A binary discovered under a source tree without such a binding shall be
+2. Every receipt or binding field that can change the source association or
+   `bound`/`stale`/`mismatch` classification shall participate in a canonical
+   privacy-projected provenance-binding input SHA-256. Raw private receipt
+   fields and private source digests shall not enter shareable artifacts.
+3. A binary discovered under a source tree without such a binding shall be
    labeled unbound compiled input, not current output of that source commit.
-3. Missing expected binaries, proven stale binaries, ambiguous inputs, proven
+4. Missing expected binaries, proven stale binaries, ambiguous inputs, proven
    source/build mismatches, unresolved dependencies, unavailable symbols,
    reader failures, and limit exhaustion shall produce explicit partial or
    unknown coverage.
-4. File timestamps alone shall not prove freshness or staleness.
-5. Compiled facts shall remain distinguishable from source semantic and syntax
+5. File timestamps alone shall not prove freshness or staleness.
+6. Compiled facts shall remain distinguishable from source semantic and syntax
    facts in rules, extractor identity, coverage labels, and reports.
 
 ### 3. Metadata identity

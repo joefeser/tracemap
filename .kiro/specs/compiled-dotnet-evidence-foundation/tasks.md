@@ -10,7 +10,8 @@ slices and require an implementation-state update before work begins.
   type, full member-signature, nested/generic, generated-member, overload, and
   ambiguity cases; record stable case IDs and expected CLR shapes.
 - [ ] 3. Add the bounded compiled-input policy and deterministic input-set
-  digest, generator SHA-256, file digests, safe locators, and provenance states.
+  digest, privacy-projected provenance-binding-input digest, generator SHA-256,
+  file digests, safe locators, and provenance states.
 - [ ] 4. Implement assembly/module/type/member inventory with a pinned
   Mono.Cecil version; reject native, mixed-mode, unreadable, and over-budget
   inputs with explicit gaps.
@@ -25,7 +26,9 @@ slices and require an implementation-state update before work begins.
   both macOS and Windows. Explicitly defer only the later Windows-specific
   lanes. Update docs and implementation state with exact results.
 - [ ] 8. Later slice: add exact deterministic source-to-metadata reconciliation
-  with zero/multiple-candidate gaps and both endpoint identities.
+  with zero/multiple-candidate gaps and both endpoint identities; consume the
+  independent source canonical-identity matrix from `docs/VALIDATION.md`
+  without replacing it with compiled fixtures.
 - [ ] 9. Later slice: add PDB identity and sequence-point contracts and portable
   versus Windows validation lanes.
 - [ ] 10. Later slice: add operand-aware IL body/call evidence and the public
