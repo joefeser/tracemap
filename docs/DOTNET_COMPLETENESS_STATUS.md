@@ -92,10 +92,12 @@ rows are withheld. Source and compiled facts remain separate, private compiled
 facts remain local-only, and the scan identity commits the compiled admission
 contract before fact IDs are derived.
 
-Local validation passed 1,975 tests with zero failures or skips, including 15
-focused managed-metadata tests and a 22-test managed-metadata/report set. The
+Local validation passed 1,978 tests with zero failures or skips, including 18
+focused managed-metadata tests and a 25-test managed-metadata/report set. The
 focused set includes iterative deeply nested type inventory, filesystem-aware
-path deduplication, and bounded projection of overlong input locators. Two
+path deduplication, bounded projection of overlong input locators, top-level
+receipt binding counts, minimum digest projection capacity, and bounded
+metadata-signature nesting. Two
 admitted compiled-input CLI scans each emitted 107 facts, including 80 compiled
 facts; their `facts.ndjson` files were byte-identical, both artifact sets passed
 the adapter validator, and neither output contained local absolute paths. On PR

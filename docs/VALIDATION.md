@@ -2375,7 +2375,9 @@ The admission budget defaults to 32 artifacts, 64 MiB per file, 50,000 types,
 work units. Override these only with the positive `--compiled-max-artifacts`,
 `--compiled-max-file-bytes`, `--compiled-max-types`,
 `--compiled-max-members`, `--compiled-max-text`, and `--compiled-max-work`
-options. A limit failure is partial coverage, never a clean or complete result.
+options. All limits must be positive, and `--compiled-max-text` must be at least
+71 characters so a privacy-projected locator can retain its complete SHA-256
+identity. A limit failure is partial coverage, never a clean or complete result.
 Receipt paths use the same file/count/text/work budget and a maximum nesting
 depth of 16; metadata-row work for both independent readers is charged from the
 total-work budget before either reader materializes observations.

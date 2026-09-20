@@ -22,6 +22,8 @@ namespace TraceMap.Core;
 
 public static class ManagedMetadataExtractor
 {
+    internal const int MinimumProjectedTextLength = 71;
+    internal const int MaximumSignatureTypeNesting = 256;
     public const string SchemaVersion = "compiled-input-provenance.v1";
     public const string PolicyVersion = "explicit-managed-input.v1";
     public const string MetadataLocationKind = "managed-metadata-v1";
@@ -612,7 +614,9 @@ public static class ManagedMetadataExtractor
         var count = 0;
         while (reader.Read())
         {
-            if (reader.TokenType == JsonTokenType.PropertyName
+            if (bindingsArrayDepth < 0
+                && reader.TokenType == JsonTokenType.PropertyName
+                && reader.CurrentDepth == 1
                 && reader.ValueTextEquals("bindings")
                 && reader.Read()
                 && reader.TokenType == JsonTokenType.StartArray)
@@ -1062,16 +1066,20 @@ public static class ManagedMetadataExtractor
         return materialized.Length == 0 ? "-" : string.Join(",", materialized.Select(value => value.ToString(CultureInfo.InvariantCulture)));
     }
 
-    private static string FormatType(CecilTypeReference type)
+    private static string FormatType(CecilTypeReference type) => FormatType(type, 0);
+
+    private static string FormatType(CecilTypeReference type, int nesting)
     {
+        if (nesting > MaximumSignatureTypeNesting)
+            throw new ManagedInputException("limit-exhausted", "ManagedInputSignatureNestingLimitExceeded");
         if (type is CecilCustomModifier modifier)
-            return $"{(modifier is RequiredModifierType ? "modreq" : "modopt")}({FormatType(modifier.ModifierType)}) {FormatType(modifier.ElementType)}";
+            return $"{(modifier is RequiredModifierType ? "modreq" : "modopt")}({FormatType(modifier.ModifierType, nesting + 1)}) {FormatType(modifier.ElementType, nesting + 1)}";
         if (type is ByReferenceType byReference)
-            return FormatType(byReference.ElementType) + "&";
+            return FormatType(byReference.ElementType, nesting + 1) + "&";
         if (type is CecilPointerType pointer)
-            return FormatType(pointer.ElementType) + "*";
+            return FormatType(pointer.ElementType, nesting + 1) + "*";
         if (type is CecilArrayType array)
-            return FormatType(array.ElementType) + (array.IsVector
+            return FormatType(array.ElementType, nesting + 1) + (array.IsVector
                 ? "[]"
                 : FormatArrayShape(
                     array.Rank,
@@ -1080,15 +1088,15 @@ public static class ManagedMetadataExtractor
                     array.Dimensions.TakeWhile(dimension => dimension.LowerBound.HasValue)
                         .Select(dimension => dimension.LowerBound!.Value)));
         if (type is CecilGenericInstanceType generic)
-            return FormatType(generic.ElementType) + "<" + string.Join(",", generic.GenericArguments.Select(FormatType)) + ">";
+            return FormatType(generic.ElementType, nesting + 1) + "<" + string.Join(",", generic.GenericArguments.Select(argument => FormatType(argument, nesting + 1))) + ">";
         if (type is CecilGenericParameter parameter)
             return parameter.Type == GenericParameterType.Method ? $"!!{parameter.Position}" : $"!{parameter.Position}";
         if (type is CecilFunctionPointerType functionPointer)
         {
             var requiredParameterCount = functionPointer.Parameters.TakeWhile(item => item.ParameterType is not CecilSentinelType).Count();
             return "fnptr:" + FunctionPointerSignature(
-                FormatType(functionPointer.ReturnType),
-                functionPointer.Parameters.Select(item => FormatType(item.ParameterType)),
+                FormatType(functionPointer.ReturnType, nesting + 1),
+                functionPointer.Parameters.Select(item => FormatType(item.ParameterType, nesting + 1)),
                 functionPointer.GenericParameters.Count,
                 FunctionPointerCallingConvention(functionPointer.CallingConvention),
                 functionPointer.HasThis,
@@ -1096,8 +1104,8 @@ public static class ManagedMetadataExtractor
                 requiredParameterCount);
         }
         if (type is CecilSentinelType sentinel)
-            return FormatType(sentinel.ElementType);
-        var declaring = type.DeclaringType is null ? null : FormatType(type.DeclaringType) + "+";
+            return FormatType(sentinel.ElementType, nesting + 1);
+        var declaring = type.DeclaringType is null ? null : FormatType(type.DeclaringType, nesting + 1) + "+";
         if (declaring is not null)
             return declaring + type.Name;
         return string.IsNullOrEmpty(type.Namespace) ? $"<global>.{type.Name}" : $"{type.Namespace}.{type.Name}";
@@ -1323,6 +1331,8 @@ public static class ManagedMetadataExtractor
     {
         if (limits.MaxArtifactCount <= 0 || limits.MaxFileSizeBytes <= 0 || limits.MaxTypeCount <= 0 || limits.MaxMemberCount <= 0 || limits.MaxTextLength <= 0 || limits.MaxTotalWorkUnits <= 0)
             throw new ArgumentException("Compiled input limits must all be positive.");
+        if (limits.MaxTextLength < MinimumProjectedTextLength)
+            throw new ArgumentException($"Compiled input maximum text length must be at least {MinimumProjectedTextLength} characters.");
     }
 
     internal sealed record MetadataObservation(
