@@ -1,10 +1,10 @@
 # Compiled .NET Evidence Foundation Implementation State
 
-Status: design and documentation only; implementation not started
+Status: first-slice implementation complete locally; Windows CI validation pending
 
-Branch: `codex/compiled-dotnet-evidence-spec`
+Branch: `codex/compiled-dotnet-evidence-foundation`
 
-Base: `dev` at `046d3c4166f0999e8b0f9928d365708a84dc8ec0`
+Base: `origin/dev` at `0b728b62943de7c0c52a44e170e870c2691dcd34`
 
 Tracking: #759, #766, #767, #768, #769
 
@@ -66,6 +66,45 @@ reconciliation, historical corpus execution, or C++/CLI support.
 
 ## Validation state
 
-Documentation guards only are required for this branch. No implementation,
-package addition, build artifact, fact schema, or rule catalog change has been
-made. Implementation validation remains unchecked in `tasks.md`.
+Tasks 1-6 are implemented. The lane uses pinned Mono.Cecil `0.11.6` with
+deferred reading and a resolver that rejects ambient resolution, then
+independently compares normalized rows from `System.Reflection.Metadata`.
+Disputed rows are withheld. The CLI accepts explicit primary, dependency, and
+binding-receipt inputs plus positive admission limits; the manifest, `scanId`,
+facts, SQLite index, Markdown report, and execution receipt retain the bounded
+contract without exposing raw absolute paths.
+
+The public portable fixture matrix lives under
+`samples/compiled-dotnet-evidence/` and covers C#, VB.NET, and F#. Focused tests
+exercise exact CLR identities, duplicate and unresolved dependencies,
+provenance states, malformed/native/missing/over-budget inputs, reader
+disagreement, deterministic bytes, privacy, all five scan artifacts, and
+unchanged source evidence. The local distribution workflow runs the same
+focused tests on Windows, Ubuntu, and macOS.
+
+Implementation commit: `a70ac803` (`feat: add bounded compiled metadata evidence lane`)
+
+Portable fixture/test commit: `522e4325` (`test: add portable compiled metadata fixture matrix`)
+
+Local macOS validation on 2026-09-20:
+
+- `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with zero warnings
+  and zero errors.
+- `dotnet test src/dotnet/TraceMap.sln --no-build --no-restore`: 1,968 passed,
+  zero failed, zero skipped.
+- focused `ManagedMetadataExtractorTests`: 9 passed, zero failed.
+- two explicit compiled-input CLI scans: byte-identical `facts.ndjson`; all five
+  required artifacts present; both output directories passed
+  `scripts/validate-adapter-artifacts.py`.
+- `scripts/check-private-paths.sh`: passed.
+- `node scripts/kiro-review.mjs --self-test`: passed; implementation prompt
+  dry-run completed with `Coverage: NotRun` as expected because it did not
+  invoke the external Kiro reviewer.
+- `git diff --check`: passed.
+
+Task 7 remains unchecked until the PR's Windows job has passed on the final
+implementation head. macOS does not prove Windows PDB, legacy .NET Framework or
+Web Forms build behavior, ILAsm/ILDAsm parity, the historical `dotnetperf`
+corpus, or C++/CLI feasibility. The following remain deferred without implied
+support: source-to-metadata reconciliation, PDB identity, operand-aware IL,
+rewriting, legacy build execution, the historical corpus, and C++/CLI.

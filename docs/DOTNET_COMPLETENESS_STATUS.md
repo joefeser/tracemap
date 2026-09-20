@@ -1,8 +1,8 @@
 # .NET Evidence Completeness Status
 
-Status: current planning index as of 2026-09-19
+Status: compiled metadata foundation implemented locally; final PR validation pending as of 2026-09-20
 
-Authority: `dev` at `046d3c4166f0999e8b0f9928d365708a84dc8ec0`
+Authority: implementation branch based on `origin/dev` at `0b728b62943de7c0c52a44e170e870c2691dcd34`
 
 This page is the current index for completed Web Forms work, remaining .NET
 evidence gaps, and the next implementation slice. Older Kiro
@@ -79,14 +79,25 @@ override this page or a later current-head record.
   outcome; issue disposition should be reconciled against that merge rather
   than inferred from the older branch plan.
 
-## Active next plan
+## Active implementation
 
 The active design is
 [`compiled-dotnet-evidence-foundation`](../.kiro/specs/compiled-dotnet-evidence-foundation/requirements.md).
-Its first implementation slice is deliberately narrow: define and test managed
-assembly inventory, metadata identity, provenance, and explicit gap contracts
-against small public C#/VB.NET/F# fixtures. It does not add broad IL traversal,
-rewrite analysis, PDB reconciliation, or Windows historical-corpus execution.
+Its first implementation slice now inventories explicitly admitted managed
+assemblies with exact assembly/module/type/member metadata identities, bounded
+and privacy-projected provenance, explicit dependency-resolution outcomes, and
+explicit gap contracts against small public C#/VB.NET/F# fixtures. Mono.Cecil
+rows are independently checked with `System.Reflection.Metadata`; disputed
+rows are withheld. Source and compiled facts remain separate, private compiled
+facts remain local-only, and the scan identity commits the compiled admission
+contract before fact IDs are derived.
+
+Local macOS validation is in progress. The portable focused matrix is wired to
+the repository's Windows, Ubuntu, and macOS workflow, and completion remains
+partial until the final-head Windows job passes. This slice does not add broad
+IL traversal, source-to-metadata reconciliation, rewrite analysis, PDB
+reconciliation, legacy framework execution, historical-corpus execution, or
+C++/CLI support.
 
 Correctness work belongs to the open evidence engine. Managed fleet execution,
 hosted retention, and managed private Windows workers may belong to a later

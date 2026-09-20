@@ -3,14 +3,14 @@
 The first implementation PR must remain within tasks 1-7. Tasks 8-11 are later
 slices and require an implementation-state update before work begins.
 
-- [ ] 1. Finalize the first-slice compiled input, assembly, member, and gap rule
+- [x] 1. Finalize the first-slice compiled input, assembly, member, and gap rule
   contracts in the rule catalog, including limitations and coverage labels;
   keep the later reconciliation rule inactive and non-emitting.
-- [ ] 2. Add public minimal C#, VB.NET, and F# fixture projects for assembly,
+- [x] 2. Add public minimal C#, VB.NET, and F# fixture projects for assembly,
   type, full member-signature, nested/generic, generated-member, overload, and
   ambiguity cases, including identical simple type/member names in distinct
   metadata namespaces; record stable case IDs and expected CLR shapes.
-- [ ] 3. Add the bounded compiled-input policy and deterministic input-set
+- [x] 3. Add the bounded compiled-input policy and deterministic input-set
   digest, privacy-projected provenance-binding-input digest, generator SHA-256,
   local/private raw file digests, shareable privacy-projected-input digests,
   safe locators, expected-input declarations, effective limits, and provenance
@@ -24,15 +24,15 @@ slices and require an implementation-state update before work begins.
   derived. Keep private compiled fact/index outputs local-only; any shareable
   summary uses a distinct non-`CodeFact` schema and privacy-projected artifact
   identity.
-- [ ] 4. Implement assembly/module/type/member inventory with a pinned
+- [x] 4. Implement assembly/module/type/member inventory with a pinned
   Mono.Cecil version; reject native, mixed-mode, unreadable, and over-budget
   inputs with explicit gaps. Disable ambient dependency probing and resolve
   only declared, admitted, hashed dependency inputs; bind resolution roots and
   ordered outcomes into the bounded-input digest.
-- [ ] 5. Cross-check admitted normalized identities with
+- [x] 5. Cross-check admitted normalized identities with
   `System.Reflection.Metadata`; emit disagreement gaps and withhold disputed
   facts so no later reconciliation can consume them.
-- [ ] 6. Keep source and compiled facts separate; add missing, stale, ambiguous,
+- [x] 6. Keep source and compiled facts separate; add missing, stale, ambiguous,
   unbound, mismatch, and unsupported-input gap tests without emitting a
   source-to-metadata identity edge. Preserve the mandatory scan repository and
   commit on every compiled fact while keeping optional receipt-validated binary
