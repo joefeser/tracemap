@@ -166,13 +166,13 @@ multiple candidates, unbound inputs, and the F# unsupported source lane.
 
 Local macOS Task 8 validation on 2026-09-20:
 
-- focused `SourceMetadataReconciliationTests`: 9 passed, zero failed, zero
+- focused `SourceMetadataReconciliationTests`: 11 passed, zero failed, zero
   skipped;
 - existing `ManagedMetadataExtractorTests`: 22 passed, zero failed, zero
   skipped;
 - `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with zero warnings
   and zero errors;
-- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,991 passed, zero failed,
+- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,993 passed, zero failed,
   zero skipped;
 - two bound C# fixture CLI scans: 307 facts each, 47 exact reconciliation edges,
   and two explicit incomplete source-identity gaps; `facts.ndjson`, report,
@@ -205,3 +205,11 @@ report-level truncation disclosure. The pinned C#/VB OSS smoke remains
 explicitly deferred because it supplies no admitted compiled input and cannot
 exercise this internal reconciliation-only lane; the full source-only suite
 remains the acceptance guard for unchanged ordinary adapter facts.
+
+The second exact-head review tightened three fail-closed boundaries. Reduced
+semantic analysis now makes reconciliation partial even when every retained
+candidate joins. Named signature types now include complete assembly-reference
+scope in both source and Cecil/SRM metadata identities, so same-looking types
+from different assemblies cannot compare equal. Roslyn `IErrorTypeSymbol`
+values emit `SourceErrorTypeIdentityUnavailable` rather than a plausible
+namespace/name identity. Focused regressions cover all three behaviors.

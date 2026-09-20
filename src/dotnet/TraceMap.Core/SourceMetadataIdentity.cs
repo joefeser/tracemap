@@ -255,8 +255,9 @@ internal static class SourceMetadataIdentityProvider
             IPointerTypeSymbol pointer => FormatType(pointer.PointedAtType) + "*",
             IFunctionPointerTypeSymbol => throw new NotSupportedException("SourceFunctionPointerIdentityUnsupported"),
             ITypeParameterSymbol parameter => (parameter.TypeParameterKind == TypeParameterKind.Method ? "!!" : "!") + MetadataParameterOrdinal(parameter).ToString(CultureInfo.InvariantCulture),
-            INamedTypeSymbol named => FormatNamedType(named.IsTupleType ? named.TupleUnderlyingType! : named),
+            IErrorTypeSymbol => throw new NotSupportedException("SourceErrorTypeIdentityUnavailable"),
             _ when type.SpecialType != SpecialType.None => FormatSpecialType(type.SpecialType),
+            INamedTypeSymbol named => FormatNamedType(named.IsTupleType ? named.TupleUnderlyingType! : named),
             _ => throw new NotSupportedException("SourceTypeIdentityUnsupported")
         };
     }
@@ -288,7 +289,9 @@ internal static class SourceMetadataIdentityProvider
         var ns = definition.ContainingNamespace is { IsGlobalNamespace: false } containingNamespace
             ? containingNamespace.ToDisplayString()
             : string.Empty;
-        var result = "type(namespace:" + ManagedMetadataExtractor.EncodeIdentityComponent(ns)
+        if (definition.ContainingAssembly is null)
+            throw new NotSupportedException("SourceTypeAssemblyScopeUnavailable");
+        var result = "scope(" + AssemblyReferenceIdentity(definition.ContainingAssembly) + ")type(namespace:" + ManagedMetadataExtractor.EncodeIdentityComponent(ns)
             + "|names:" + string.Concat(names.Select(ManagedMetadataExtractor.EncodeIdentityComponent)) + ")";
         return named.IsGenericType
             ? result + "<" + string.Join(",", named.TypeArguments.Select(FormatType)) + ">"
@@ -328,6 +331,14 @@ internal static class SourceMetadataIdentityProvider
         var token = identity.PublicKeyToken.IsDefaultOrEmpty ? "null" : Convert.ToHexString(identity.PublicKeyToken.ToArray()).ToLowerInvariant();
         var culture = string.IsNullOrWhiteSpace(identity.CultureName) ? "neutral" : identity.CultureName;
         return $"assembly:name:{ManagedMetadataExtractor.EncodeIdentityComponent(identity.Name)}|version:{ManagedMetadataExtractor.EncodeIdentityComponent(identity.Version.ToString())}|culture:{ManagedMetadataExtractor.EncodeIdentityComponent(culture)}|publicKeyToken:{ManagedMetadataExtractor.EncodeIdentityComponent(token)}|module:{ManagedMetadataExtractor.EncodeIdentityComponent(moduleName)}|targetFramework:{ManagedMetadataExtractor.EncodeIdentityComponent(targetFramework)}";
+    }
+
+    private static string AssemblyReferenceIdentity(IAssemblySymbol assembly)
+    {
+        var identity = assembly.Identity;
+        var token = identity.PublicKeyToken.IsDefaultOrEmpty ? "null" : Convert.ToHexString(identity.PublicKeyToken.ToArray()).ToLowerInvariant();
+        var culture = string.IsNullOrWhiteSpace(identity.CultureName) ? "neutral" : identity.CultureName;
+        return $"assembly:name:{ManagedMetadataExtractor.EncodeIdentityComponent(identity.Name)}|version:{ManagedMetadataExtractor.EncodeIdentityComponent(identity.Version.ToString())}|culture:{ManagedMetadataExtractor.EncodeIdentityComponent(culture)}|publicKeyToken:{ManagedMetadataExtractor.EncodeIdentityComponent(token)}";
     }
 
     private static string? TargetFramework(IAssemblySymbol assembly)

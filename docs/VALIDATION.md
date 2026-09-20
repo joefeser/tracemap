@@ -2403,6 +2403,11 @@ metadata shape, including enclosing generic arity, generic-parameter ordinals,
 method arity, ref/ByRef modes, and the complete signature. The original Roslyn
 declaration identity is retained separately as `sourceDeclarationIdentity`;
 source-only scans and their ordinary source fact identities are unchanged.
+Named signature types include their full assembly-reference scope on both the
+Roslyn and managed-metadata paths, preventing same namespace/name types from
+different assemblies from comparing equal. Primitive signature codes retain
+their intrinsic ECMA identity. Roslyn error types and unavailable type scopes
+fail closed as incomplete identities and can never produce a Tier1 edge.
 
 The following never select a candidate: display strings, simple names,
 equal arity, path proximity, timestamps, or metadata tokens. Zero candidates,
@@ -2452,7 +2457,9 @@ for every serialized entry field. The Markdown report independently discloses
 its 50-row display bound and points to exhaustive `facts.ndjson` and
 `index.sqlite` rows. If semantic source identity collection is unavailable,
 reconciliation coverage is `source-metadata-partial` even when no candidate row
-could be emitted; this does not change compiled-input coverage.
+could be emitted. `Level1SemanticAnalysisReduced` is also partial because a
+failed project may have omitted declarations even when every retained candidate
+joins; this does not change compiled-input coverage.
 
 Reconciliation coverage is independent of `analysisLevel`. Missing or partial
 compiled inputs never erase, re-tier, or otherwise change source-derived facts.
