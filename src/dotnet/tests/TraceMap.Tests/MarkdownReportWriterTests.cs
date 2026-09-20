@@ -204,6 +204,44 @@ public sealed class MarkdownReportWriterTests
         Assert.Contains("`AsyncBoundary` `AwaitBoundary`", report);
     }
 
+    [Fact]
+    public void Build_caps_compiled_metadata_rows_and_reports_the_omitted_count()
+    {
+        var manifest = CreateManifest() with
+        {
+            CompiledInputProvenance = new CompiledInputProvenance(
+                ManagedMetadataExtractor.SchemaVersion,
+                ManagedMetadataExtractor.PolicyVersion,
+                new string('a', 64),
+                ["managed-metadata/1.0"],
+                [new CompiledExpectedInput("fixture.dll", "primary")],
+                new CompiledInputLimits(),
+                [],
+                [],
+                new string('b', 64),
+                "local-only",
+                "compiled-metadata-partial")
+        };
+        var facts = Enumerable.Range(1, 51).Select(index => FactFactory.Create(
+            manifest,
+            FactTypes.ManagedMethodDeclared,
+            RuleIds.DotNetCompiledMember,
+            EvidenceTiers.Tier2Structural,
+            new EvidenceSpan("fixture.dll", 1, 1, null, "managed-metadata", "1.0"),
+            targetSymbol: $"method:{index:D3}",
+            properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["evidenceLocationKind"] = ManagedMetadataExtractor.MetadataLocationKind,
+                ["metadataToken"] = $"0x06{index:X6}"
+            })).ToArray();
+
+        var report = MarkdownReportWriter.Build(new ScanResult(manifest, facts, []));
+
+        Assert.Equal(50, report.Split(" at binary `", StringSplitOptions.None).Length - 1);
+        Assert.Contains("1 additional compiled metadata facts omitted", report, StringComparison.Ordinal);
+        Assert.Contains("exhaustive rows remain in `facts.ndjson` and `index.sqlite`", report, StringComparison.Ordinal);
+    }
+
     private static ScanManifest CreateManifest()
     {
         return new ScanManifest(

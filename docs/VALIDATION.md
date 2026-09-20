@@ -2335,12 +2335,16 @@ corpus, and C++/CLI lanes remain deferred.
 A representative local scan is:
 
 ```bash
+compiled_fixture="$(pwd)/samples/compiled-dotnet-evidence/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll"
 dotnet run --project src/dotnet/TraceMap.Cli -- scan \
   --repo samples/modern-sample \
   --out /tmp/tracemap-compiled-scan \
-  --compiled-input samples/compiled-dotnet-evidence/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll
+  --compiled-input "$compiled_fixture"
 python3 scripts/validate-adapter-artifacts.py /tmp/tracemap-compiled-scan
 ```
+
+Relative compiled-input paths are resolved against `--repo`; use an absolute
+path when the admitted binary is outside that repository root.
 
 Inspect all five required artifacts. `scan-manifest.json` must contain
 `compiledInputProvenance` with expected inputs, effective limits, ordered

@@ -62,6 +62,11 @@ public sealed class ManagedMetadataExtractorTests
         Assert.Contains(facts, fact => fact.TargetSymbol?.Contains("System.Int32&", StringComparison.Ordinal) == true);
         Assert.Contains(facts, fact => fact.TargetSymbol?.Contains("System.Int32[]", StringComparison.Ordinal) == true);
         Assert.Contains(facts, fact => fact.TargetSymbol?.Contains("System.Int32*", StringComparison.Ordinal) == true);
+        var functionPointers = facts.Where(fact => fact.FactType == FactTypes.ManagedMethodDeclared
+            && fact.TargetSymbol?.Contains("Pointer|", StringComparison.Ordinal) == true).ToArray();
+        Assert.Contains(functionPointers, fact => fact.TargetSymbol?.Contains("call:cdecl", StringComparison.Ordinal) == true);
+        Assert.Contains(functionPointers, fact => fact.TargetSymbol?.Contains("call:stdcall", StringComparison.Ordinal) == true);
+        Assert.Equal(functionPointers.Length, functionPointers.Select(fact => fact.TargetSymbol).Distinct(StringComparer.Ordinal).Count());
         Assert.Contains(facts, fact => fact.TargetSymbol?.Contains("namespace:<global>|name:GlobalNamespaceShape", StringComparison.Ordinal) == true);
         Assert.Contains(facts, fact => fact.FactType == FactTypes.ManagedPropertyDeclared && fact.TargetSymbol?.Contains("property:Item", StringComparison.Ordinal) == true);
         Assert.Contains(facts, fact => fact.TargetSymbol?.Contains("method:RenamedForMetadata", StringComparison.Ordinal) == true);
