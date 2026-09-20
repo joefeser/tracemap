@@ -161,8 +161,10 @@ source and metadata identities, expected rule/tier/outcome/gaps, and non-claims.
 The matrix covers namespaces, nested/generic declarations, complete overload
 signatures, constructors, properties/indexers, events/accessors, C# ref and VB
 ByRef shapes, optional parameters, explicit interfaces where representable,
-same-looking cross-assembly/language declarations, exact zero candidates, exact
-multiple candidates, unbound inputs, and the F# unsupported source lane.
+scoped decimal signatures, constructed nested generic signatures with their
+enclosing arguments, same-looking cross-assembly/language declarations, exact
+zero candidates, exact multiple candidates, unbound inputs, and the F#
+unsupported source lane.
 
 Local macOS Task 8 validation on 2026-09-20:
 
@@ -174,7 +176,7 @@ Local macOS Task 8 validation on 2026-09-20:
   and zero errors;
 - `dotnet test src/dotnet/TraceMap.sln --no-restore`: 1,993 passed, zero failed,
   zero skipped;
-- two bound C# fixture CLI scans: 307 facts each, 47 exact reconciliation edges,
+- two bound C# fixture CLI scans: 317 facts each, 49 exact reconciliation edges,
   and two explicit incomplete source-identity gaps; `facts.ndjson`, report,
   reconciliation manifest summary, and normalized SQLite fact rows matched;
   both output directories contained all five required artifacts and passed
