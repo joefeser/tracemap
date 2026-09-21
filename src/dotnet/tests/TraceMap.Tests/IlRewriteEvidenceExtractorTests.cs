@@ -142,6 +142,66 @@ public sealed class IlRewriteEvidenceExtractorTests
     }
 
     [Fact]
+    public void Non_instruction_body_change_is_classified_as_body_structure_change()
+    {
+        using var temp = new TempDirectory();
+        var before = Path.Combine(temp.Path, "RewriteShapes.dll");
+        var after = Path.Combine(temp.Path, "RewriteShapes.after.dll");
+        WriteBeforeAssembly(before);
+        MutateAddLocal(before, after, "Stable");
+
+        var result = Scan(PairOptions(before, after));
+
+        var stable = EdgeFact(result, "Stable");
+        Assert.Equal("body-structure-change", stable.Properties["relationshipKind"]);
+        Assert.Equal("true", stable.Properties["opcodeSequencePreserved"]);
+        Assert.Equal("0", stable.Properties["callRetargetCount"]);
+        Assert.NotEqual(stable.Properties["beforeIlBodySha256"], stable.Properties["afterIlBodySha256"]);
+        // Unmodified members are never swept into the structural change.
+        Assert.Equal("unchanged", EdgeFact(result, "Constant").Properties["relationshipKind"]);
+    }
+
+    [Fact]
+    public void Mixed_operand_and_structure_change_is_never_labeled_operand_only()
+    {
+        using var temp = new TempDirectory();
+        var before = Path.Combine(temp.Path, "RewriteShapes.dll");
+        var after = Path.Combine(temp.Path, "RewriteShapes.after.dll");
+        WriteBeforeAssembly(before);
+        MutateConstantOperand(before, after);
+        MutateAddLocal(after, after, "Constant");
+
+        var result = Scan(PairOptions(before, after));
+
+        Assert.Equal("operand-and-body-structure-change", EdgeFact(result, "Constant").Properties["relationshipKind"]);
+    }
+
+    [Fact]
+    public void Omitted_overflow_pairs_commit_their_declared_locators_to_the_digest()
+    {
+        using var temp = new TempDirectory();
+        var first = Path.Combine(temp.Path, "RewriteShapes.dll");
+        var second = Path.Combine(temp.Path, "RewriteShapesSecond.dll");
+        WriteBeforeAssembly(first);
+        File.Copy(first, second);
+        var options = new ScanOptions(
+            RepoRoot(),
+            TempOutput(),
+            IlRewriteEvidence: true,
+            IlRewriteBeforePaths: [first, second],
+            IlRewriteAfterPaths: [first, second],
+            IlRewriteLimits: new IlRewriteLimits(MaxPairCount: 1));
+        var firstOmitted = ScanEngine.Scan(options);
+        var other = ScanEngine.Scan(options with { IlRewriteBeforePaths = [first, first], IlRewriteAfterPaths = [first, first] });
+
+        var overflow = firstOmitted.Manifest.IlRewriteProvenance!.Outcomes[1];
+        Assert.Equal("IlRewritePairCountLimitExceeded", Assert.Single(overflow.GapKinds));
+        Assert.Contains("RewriteShapesSecond", overflow.BeforeSafeLocator, StringComparison.Ordinal);
+        var otherProvenance = other.Manifest.IlRewriteProvenance!;
+        Assert.NotEqual(firstOmitted.Manifest.IlRewriteProvenance!.BoundedInputSha256, otherProvenance.BoundedInputSha256);
+    }
+
+    [Fact]
     public void Duplicate_identity_on_after_side_fails_closed()
     {
         using var temp = new TempDirectory();
@@ -836,6 +896,18 @@ public sealed class IlRewriteEvidenceExtractorTests
     {
         assembly.Name.Name = "RewriteShapesDifferent";
     });
+
+    private static void MutateAddLocal(string before, string after, string methodName)
+    {
+        using var assembly = CecilAssemblyDefinition.ReadAssembly(before);
+        var type = (CecilTypeDefinition)assembly.MainModule.Types.Single(item => item.Name == "RewriteShapes");
+        var method = FindMethod(type, methodName);
+        // A new local changes only the non-instruction body structure: the
+        // opcode stream, operands, and call sites stay byte-identical.
+        method.Body.Variables.Add(new VariableDefinition(type.Module.TypeSystem.Int32));
+        method.Body.InitLocals = true;
+        assembly.Write(after);
+    }
 
     private static void MutateUserString(string before, string after, string from, string to)
     {

@@ -403,6 +403,23 @@
       ]
     },
     {
+      "id": "CS-ILRW-STRUCTURE-009",
+      "language": "csharp",
+      "shape": "a new local variable changes only non-instruction body structure while the opcode stream and operands stay identical",
+      "expectedIdentity": "rewrite:<exact-method-identity>|before:sha256:<digest>:after:sha256:<digest>",
+      "expectedRuleIds": [
+        "dotnet.compiled.il-rewrite.v1"
+      ],
+      "expectedTier": "Tier2Structural",
+      "expectedRelationshipKind": "body-structure-change",
+      "expectedGaps": [],
+      "nonClaims": [
+        "semantic-equivalence",
+        "operand-change",
+        "behavior-preservation"
+      ]
+    },
+    {
       "id": "ILRW-BUDGET-008",
       "language": "csharp",
       "shape": "exhausted shared work budget stops joining and emits a limit gap instead of guessed edges",
