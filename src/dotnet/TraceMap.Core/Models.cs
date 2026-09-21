@@ -25,7 +25,8 @@ public sealed record ScanManifest(
     CompiledInputProvenance? CompiledInputProvenance = null,
     SourceMetadataReconciliationSummary? SourceMetadataReconciliation = null,
     PdbInputProvenance? PdbInputProvenance = null,
-    PdbEvidenceSummary? PdbEvidenceSummary = null) : IJsonOnDeserialized
+    PdbEvidenceSummary? PdbEvidenceSummary = null,
+    IlBodyProvenance? IlBodyProvenance = null) : IJsonOnDeserialized
 {
     public string? SourceSnapshotDigest { get; init; } = ValidateSourceSnapshotDigest(SourceSnapshotDigest);
 
@@ -79,7 +80,8 @@ public sealed record ScanManifest(
             CompiledInputProvenance: null,
             SourceMetadataReconciliation: null,
             PdbInputProvenance: null,
-            PdbEvidenceSummary: null)
+            PdbEvidenceSummary: null,
+            IlBodyProvenance: null)
     {
     }
 }
@@ -150,7 +152,9 @@ public sealed record ScanOptions(
     IReadOnlyList<string>? CompiledBindingReceiptPaths = null,
     CompiledInputLimits? CompiledInputLimits = null,
     IReadOnlyList<string>? PdbInputPaths = null,
-    PdbInputLimits? PdbInputLimits = null);
+    PdbInputLimits? PdbInputLimits = null,
+    bool IlBodyEvidence = false,
+    IlBodyLimits? IlBodyLimits = null);
 
 public sealed record FileInventoryItem(
     string RelativePath,
@@ -400,6 +404,8 @@ public static class FactTypes
     public const string PdbSequencePointDeclared = nameof(PdbSequencePointDeclared);
     public const string MetadataPdbMethodReconciled = nameof(MetadataPdbMethodReconciled);
     public const string PdbSourceDocumentReconciled = nameof(PdbSourceDocumentReconciled);
+    public const string ManagedIlBodyDeclared = nameof(ManagedIlBodyDeclared);
+    public const string ManagedIlCallObserved = nameof(ManagedIlCallObserved);
 }
 
 public static class RuleIds
@@ -620,6 +626,9 @@ public static class RuleIds
     public const string DotNetPdbIdentity = "dotnet.compiled.pdb-identity.v1";
     public const string DotNetPdbSequencePoint = "dotnet.compiled.sequence-point.v1";
     public const string DotNetPdbGap = "dotnet.compiled.pdb-gap.v1";
+    public const string DotNetIlBody = "dotnet.compiled.il-body.v1";
+    public const string DotNetIlCall = "dotnet.compiled.il-call.v1";
+    public const string DotNetIlGap = "dotnet.compiled.il-gap.v1";
 }
 
 public static class ScannerVersions
@@ -643,6 +652,7 @@ public static class ScannerVersions
     public const string ManagedMetadataExtractor = "managed-metadata/0.1.0+cecil-0.11.6";
     public const string SourceMetadataReconciliationExtractor = "source-metadata-reconciliation/0.1.0";
     public const string PortablePdbExtractor = "portable-pdb/0.1.0+srm-10.0.0+cecil-0.11.6";
+    public const string IlBodyEvidenceExtractor = "il-body-evidence/0.1.0+srm-10.0.0+cecil-0.11.6";
     public const string ConfigExtractor = "config/0.1.0";
     public const string SqlTextExtractor = "sql-text/0.1.0";
     public const string SqlShapeExtractor = "sql-shape/0.1.0";
