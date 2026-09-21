@@ -2769,8 +2769,16 @@ the full first-slice dual-reader IL body contract (raw
 System.Reflection.Metadata decode first, then Mono.Cecil, then exact
 comparison) before any join is attempted. A side that is missing, unreadable,
 oversized, malformed, disputed, unsupported, or over-limit withholds the whole
-pair behind a Tier4 gap with `side` and `cause` properties; no partial edge
-set is emitted.
+pair behind Tier4 gaps; every side-scoped failure is emitted as its own gap
+fact carrying that failing side's `side`, `cause`, and evidence locator, and
+outcome summaries retain the exact `side:cause` pairing. No partial edge set
+is emitted, positive edges always keep the `managed-il-rewrite-v1` location
+kind, and pair outcome labels are exact (`unavailable`, `malformed`,
+`disputed`, `mismatched`, `ambiguous`, `unsupported`, `invalid`,
+`membership-delta`, or `limit-exhausted`) rather than a generic fallback.
+The lane validates the reused body and compiled limits identically to their
+owning extractors before any provenance exists, and the omitted-membership
+digest commits exactly the identities beyond the retained prefix.
 
 An edge is emitted only when the complete exact assembly-scoped method
 identity text occurs exactly once on each side. The edge records both assembly

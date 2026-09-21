@@ -34,6 +34,11 @@ internal static class IlRewriteEvidenceExtractor
             throw new ArgumentException("IL rewrite limits must be positive.");
         var bodyLimits = options.IlBodyLimits ?? new IlBodyLimits();
         var compiledLimits = options.CompiledInputLimits ?? new CompiledInputLimits();
+        // The lane reuses both foreign limit sets, so it applies the identical
+        // validation the owning extractors enforce before any provenance or
+        // facts exist.
+        IlBodyEvidenceExtractor.ValidateLimits(bodyLimits);
+        ManagedMetadataExtractor.ValidateLimits(compiledLimits);
         var generatorSha256 = GeneratorSha256();
         var beforePaths = CleanOrderedPaths(options.IlRewriteBeforePaths);
         var afterPaths = CleanOrderedPaths(options.IlRewriteAfterPaths);
@@ -152,23 +157,18 @@ internal static class IlRewriteEvidenceExtractor
         var before = AdmitSide(repoPath, beforePath, "rewrite-before", compiledLimits, cancellationToken);
         var after = AdmitSide(repoPath, afterPath, "rewrite-after", compiledLimits, cancellationToken);
         var gapKinds = new List<string>();
-        var causes = new List<string>();
-        var sides = new List<string>();
+        // Each entry keeps the failing side, its gap kind, its cause, and that
+        // side's own locator so every side-specific gap is evidenced on the
+        // input that failed, never on the healthy opposite side.
+        var sideFailures = new List<IlRewriteSideFailure>();
         if (before.Error is { } beforeError)
-        {
-            gapKinds.Add("IlRewriteSideUnavailable");
-            sides.Add("before");
-            causes.Add(beforeError);
-        }
+            sideFailures.Add(new IlRewriteSideFailure("before", "IlRewriteSideUnavailable", beforeError, before.Descriptor?.SafeLocator ?? before.FallbackSafeLocator!));
         if (after.Error is { } afterError)
-        {
-            gapKinds.Add("IlRewriteSideUnavailable");
-            sides.Add("after");
-            causes.Add(afterError);
-        }
+            sideFailures.Add(new IlRewriteSideFailure("after", "IlRewriteSideUnavailable", afterError, after.Descriptor?.SafeLocator ?? after.FallbackSafeLocator!));
+        gapKinds.AddRange(sideFailures.Select(failure => failure.GapKind));
 
-        IlBodyEvidenceExtractor.IlReaderResult? beforeResult = ReadAdmittedSide(before.Bytes, bodyLimits, workBudget, cancellationToken, "before", gapKinds, causes, sides);
-        IlBodyEvidenceExtractor.IlReaderResult? afterResult = ReadAdmittedSide(after.Bytes, bodyLimits, workBudget, cancellationToken, "after", gapKinds, causes, sides);
+        IlBodyEvidenceExtractor.IlReaderResult? beforeResult = ReadAdmittedSide(before.Bytes, bodyLimits, workBudget, cancellationToken, "before", before.Descriptor?.SafeLocator ?? before.FallbackSafeLocator!, sideFailures, gapKinds);
+        IlBodyEvidenceExtractor.IlReaderResult? afterResult = ReadAdmittedSide(after.Bytes, bodyLimits, workBudget, cancellationToken, "after", after.Descriptor?.SafeLocator ?? after.FallbackSafeLocator!, sideFailures, gapKinds);
 
         var edges = new List<IlRewriteEdge>();
         var deltas = new List<IlRewriteMembershipDelta>();
@@ -194,7 +194,7 @@ internal static class IlRewriteEvidenceExtractor
             pairId,
             before.Descriptor?.SafeLocator ?? before.FallbackSafeLocator!,
             after.Descriptor?.SafeLocator ?? after.FallbackSafeLocator!,
-            distinctGapKinds.Length == 0 ? "admitted" : GapOutcome(distinctGapKinds[0]),
+            OutcomeLabel(distinctGapKinds),
             before.RawFileSha256,
             after.RawFileSha256,
             beforeResult?.AssemblyIdentity,
@@ -208,9 +208,16 @@ internal static class IlRewriteEvidenceExtractor
                 gapKinds = distinctGapKinds
             }),
             distinctGapKinds,
-            sides.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray() is { Length: > 0 } sidesValue ? string.Join("+", sidesValue) : null,
-            causes.Count == 0 ? null : string.Join("+", causes.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal)));
-        return new EvaluatedIlRewritePair(outcome, edges, deltas);
+            sideFailures.Count == 0
+                ? null
+                : string.Join("+", sideFailures.Select(failure => failure.Side).Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal)),
+            sideFailures.Count == 0
+                ? null
+                : string.Join("+", sideFailures
+                    .Select(failure => $"{failure.Side}:{failure.Cause}")
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(value => value, StringComparer.Ordinal)));
+        return new EvaluatedIlRewritePair(outcome, edges, deltas, sideFailures);
     }
 
     private static IlBodyEvidenceExtractor.IlReaderResult? ReadAdmittedSide(
@@ -219,9 +226,9 @@ internal static class IlRewriteEvidenceExtractor
         IlBodyEvidenceExtractor.IlWorkBudget budget,
         CancellationToken cancellationToken,
         string side,
-        List<string> gapKinds,
-        List<string> causes,
-        List<string> sides)
+        string sideLocator,
+        List<IlRewriteSideFailure> sideFailures,
+        List<string> gapKinds)
     {
         if (bytes is null)
             return null;
@@ -236,8 +243,7 @@ internal static class IlRewriteEvidenceExtractor
             if (IlBodyEvidenceExtractor.CompareBodies(cecil, srm).Count > 0)
             {
                 gapKinds.Add("IlRewriteReaderDisagreement");
-                sides.Add(side);
-                causes.Add("IlReaderDisagreement");
+                sideFailures.Add(new IlRewriteSideFailure(side, "IlRewriteReaderDisagreement", "IlReaderDisagreement", sideLocator));
                 return null;
             }
 
@@ -246,26 +252,22 @@ internal static class IlRewriteEvidenceExtractor
         catch (IlBodyEvidenceExtractor.IlEvidenceException exception)
         {
             gapKinds.Add(RewriteGapKind(exception.GapKind));
-            sides.Add(side);
-            causes.Add(exception.GapKind);
+            sideFailures.Add(new IlRewriteSideFailure(side, RewriteGapKind(exception.GapKind), exception.GapKind, sideLocator));
         }
         catch (ManagedMetadataExtractor.ManagedInputException exception)
         {
             gapKinds.Add(RewriteGapKind(exception.GapKind));
-            sides.Add(side);
-            causes.Add(exception.GapKind);
+            sideFailures.Add(new IlRewriteSideFailure(side, RewriteGapKind(exception.GapKind), exception.GapKind, sideLocator));
         }
         catch (BadImageFormatException)
         {
             gapKinds.Add("IlRewriteMalformedInput");
-            sides.Add(side);
-            causes.Add("MalformedIlBody");
+            sideFailures.Add(new IlRewriteSideFailure(side, "IlRewriteMalformedInput", "MalformedIlBody", sideLocator));
         }
         catch (Exception exception) when (exception is IOException or InvalidOperationException or ArgumentException or NotSupportedException or FormatException or OverflowException or IndexOutOfRangeException)
         {
             gapKinds.Add("IlRewriteMalformedInput");
-            sides.Add(side);
-            causes.Add("MalformedIlBody");
+            sideFailures.Add(new IlRewriteSideFailure(side, "IlRewriteMalformedInput", "MalformedIlBody", sideLocator));
         }
 
         return null;
@@ -507,8 +509,10 @@ internal static class IlRewriteEvidenceExtractor
         identities.Count,
         identities.Take(MembershipRetainedIdentityCount).ToArray(),
         Math.Max(0, identities.Count - MembershipRetainedIdentityCount),
+        // The commitment covers exactly the omitted suffix so consumers can
+        // recompute it from identities beyond the retained prefix.
         identities.Count > MembershipRetainedIdentityCount
-            ? ManagedMetadataExtractor.CanonicalDigest(identities)
+            ? ManagedMetadataExtractor.CanonicalDigest(identities.Skip(MembershipRetainedIdentityCount).ToArray())
             : null);
 
     internal static IReadOnlyList<CodeFact> MaterializeFacts(
@@ -526,7 +530,7 @@ internal static class IlRewriteEvidenceExtractor
             var outcome = pair.Outcome;
             var common = new Dictionary<string, string>(StringComparer.Ordinal)
             {
-                ["evidenceLocationKind"] = outcome.GapKinds.Count > 0 ? "managed-input-v1" : RewriteLocationKind,
+                ["evidenceLocationKind"] = RewriteLocationKind,
                 ["ilRewriteBoundedInputSha256"] = provenance.BoundedInputSha256,
                 ["ilRewriteGeneratorSha256"] = provenance.GeneratorSha256,
                 ["ilRewriteCoverage"] = provenance.CoverageState,
@@ -544,23 +548,38 @@ internal static class IlRewriteEvidenceExtractor
             if (outcome.AfterRawFileSha256 is not null)
                 common["afterRawFileSha256"] = outcome.AfterRawFileSha256;
 
-            // One-side-only membership kinds are emitted as dedicated bounded
-            // membership facts below; the pair-level loop must not duplicate
-            // them, but they still count toward the outcome's gap coverage.
-            foreach (var gapKind in outcome.GapKinds.Where(kind =>
-                         kind is not ("IlRewriteMethodBeforeOnly" or "IlRewriteMethodAfterOnly")))
+            // Side-scoped failures emit one gap per failing side with that
+            // side's own cause and locator; one-side-only membership kinds emit
+            // dedicated bounded membership facts below. The pair-level loop
+            // covers only pair-scoped kinds so nothing is duplicated.
+            var sideFailureKinds = pair.SideFailures.Select(failure => failure.GapKind).ToHashSet(StringComparer.Ordinal);
+            foreach (var failure in pair.SideFailures.OrderBy(item => item.Side, StringComparer.Ordinal).ThenBy(item => item.GapKind, StringComparer.Ordinal))
             {
                 var properties = new Dictionary<string, string>(common)
                 {
+                    ["evidenceLocationKind"] = "managed-input-v1",
+                    ["gapKind"] = failure.GapKind,
+                    ["side"] = failure.Side,
+                    ["cause"] = failure.Cause,
+                    ["limitation"] = GapLimitation
+                };
+                properties.Remove("beforeAssemblyIdentity");
+                properties.Remove("afterAssemblyIdentity");
+                facts.Add(GapFact(manifest, failure.SideLocator, failure.GapKind, properties));
+            }
+
+            foreach (var gapKind in outcome.GapKinds.Where(kind =>
+                         kind is not ("IlRewriteMethodBeforeOnly" or "IlRewriteMethodAfterOnly")
+                         && !sideFailureKinds.Contains(kind)))
+            {
+                var properties = new Dictionary<string, string>(common)
+                {
+                    ["evidenceLocationKind"] = "managed-input-v1",
                     ["gapKind"] = gapKind,
                     ["limitation"] = GapLimitation
                 };
                 properties.Remove("beforeAssemblyIdentity");
                 properties.Remove("afterAssemblyIdentity");
-                if (outcome.Side is not null)
-                    properties["side"] = outcome.Side;
-                if (outcome.Cause is not null)
-                    properties["cause"] = outcome.Cause;
                 facts.Add(GapFact(manifest, outcome.BeforeSafeLocator, gapKind, properties));
             }
 
@@ -568,6 +587,7 @@ internal static class IlRewriteEvidenceExtractor
             {
                 var properties = new Dictionary<string, string>(common)
                 {
+                    ["evidenceLocationKind"] = "managed-input-v1",
                     ["gapKind"] = delta.Side == "before" ? "IlRewriteMethodBeforeOnly" : "IlRewriteMethodAfterOnly",
                     ["side"] = delta.Side,
                     ["identityCount"] = delta.IdentityCount.ToString(CultureInfo.InvariantCulture),
@@ -680,18 +700,32 @@ internal static class IlRewriteEvidenceExtractor
             null,
             detail),
         [],
+        [],
         []);
 
     private static string GapOutcome(string gapKind) => gapKind switch
     {
         "IlRewritePairUnavailable" => "missing",
-        "IlRewritePairDeclarationInvalid" => "invalid",
-        "IlRewriteSideUnavailable" or "IlRewriteMalformedInput" => "malformed",
+        "IlRewritePairDeclarationInvalid" or "IlRewriteSideDeclarationInvalid" => "invalid",
+        "IlRewriteSideUnavailable" => "unavailable",
+        "IlRewriteMalformedInput" => "malformed",
         "IlRewriteReaderDisagreement" => "disputed",
         "IlRewriteAssemblyIdentityMismatch" => "mismatched",
         "IlRewriteIdentityAmbiguous" => "ambiguous",
+        "IlRewriteUnsupportedShape" => "unsupported",
+        "IlRewriteMethodBeforeOnly" or "IlRewriteMethodAfterOnly" => "membership-delta",
         _ => "limit-exhausted"
     };
+
+    private static string OutcomeLabel(IReadOnlyList<string> gapKinds)
+    {
+        if (gapKinds.Count == 0)
+            return "admitted";
+        // A membership delta never mislabels the outcome when it is the only
+        // gap; otherwise the strongest non-membership kind names it.
+        var nonMembership = gapKinds.Where(kind => kind is not ("IlRewriteMethodBeforeOnly" or "IlRewriteMethodAfterOnly")).ToArray();
+        return GapOutcome(nonMembership.Length > 0 ? nonMembership[0] : gapKinds[0]);
+    }
 
     private static IReadOnlyList<string> CleanOrderedPaths(IReadOnlyList<string>? values) =>
         (values ?? [])
