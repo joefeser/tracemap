@@ -919,7 +919,7 @@ public sealed class PortablePdbExtractorTests
     {
         using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(
             FindRepoRoot(), "samples", "compiled-dotnet-evidence", "fixture-cases.json")));
-        Assert.Equal("compiled-dotnet-fixture-cases.v4", document.RootElement.GetProperty("schemaVersion").GetString());
+        Assert.Equal("compiled-dotnet-fixture-cases.v5", document.RootElement.GetProperty("schemaVersion").GetString());
         var cases = document.RootElement.GetProperty("pdbCases").EnumerateArray().ToArray();
         Assert.Equal(6, cases.Length);
         Assert.Equal(cases.Length, cases.Select(item => item.GetProperty("id").GetString()).Distinct(StringComparer.Ordinal).Count());
