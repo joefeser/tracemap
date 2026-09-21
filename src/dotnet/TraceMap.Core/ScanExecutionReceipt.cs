@@ -51,7 +51,8 @@ public sealed record ScanExecutionReceipt(
     SourceMetadataReconciliationSummary? SourceMetadataReconciliation = null,
     PdbInputProvenance? PdbInputProvenance = null,
     PdbEvidenceSummary? PdbEvidenceSummary = null,
-    IlBodyProvenance? IlBodyProvenance = null);
+    IlBodyProvenance? IlBodyProvenance = null,
+    IlRewriteProvenance? IlRewriteProvenance = null);
 
 /// <summary>
 /// Collects bounded, sanitized operational observations. Receipts describe the
@@ -109,6 +110,7 @@ public sealed class ScanReceiptRecorder
     private PdbInputProvenance? pdbInputProvenance;
     private PdbEvidenceSummary? pdbEvidenceSummary;
     private IlBodyProvenance? ilBodyProvenance;
+    private IlRewriteProvenance? ilRewriteProvenance;
 
     public ScanReceiptRecorder(ScanOptions options, IEnumerable<string>? additionalAuthorizedInputs = null)
     {
@@ -129,6 +131,10 @@ public sealed class ScanReceiptRecorder
             options.PdbInputLimits?.ToString() ?? string.Empty,
             options.IlBodyEvidence ? "il-body-evidence" : "no-il-body-evidence",
             options.IlBodyLimits?.ToString() ?? string.Empty,
+            options.IlRewriteEvidence ? "il-rewrite-evidence" : "no-il-rewrite-evidence",
+            Normalize(options.IlRewriteBeforePaths),
+            Normalize(options.IlRewriteAfterPaths),
+            options.IlRewriteLimits?.ToString() ?? string.Empty,
             Normalize(additionalAuthorizedInputs)));
     }
 
@@ -153,6 +159,7 @@ public sealed class ScanReceiptRecorder
         pdbInputProvenance = result.Manifest.PdbInputProvenance;
         pdbEvidenceSummary = PortablePdbExtractor.BuildSummary(result.Manifest, result.Facts, ScanReceiptSchema.MaxSupportingIds);
         ilBodyProvenance = result.Manifest.IlBodyProvenance;
+        ilRewriteProvenance = result.Manifest.IlRewriteProvenance;
         extractorVersions = result.Facts
             .Select(fact => fact.Evidence?.ExtractorVersion)
             .Where(value => !string.IsNullOrWhiteSpace(value))
@@ -251,7 +258,8 @@ public sealed class ScanReceiptRecorder
             sourceMetadataReconciliation,
             pdbInputProvenance,
             pdbEvidenceSummary,
-            ilBodyProvenance);
+            ilBodyProvenance,
+            ilRewriteProvenance);
     }
 
     internal void Record(

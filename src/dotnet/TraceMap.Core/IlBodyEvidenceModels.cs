@@ -47,6 +47,11 @@ internal sealed record IlBodyObservation(
     string MethodIdentity,
     int InstructionCount,
     string InstructionsSha256,
+    // Digest over the opcode-name sequence only, without operands. Kept
+    // internal to the IL lanes: it supports rewrite change classification
+    // (opcode streams preserved while operands changed) and is not part of
+    // the canonical body identity or any emitted body fact property.
+    string OpcodesSha256,
     int LocalCount,
     string LocalsSha256,
     int ExceptionRegionCount,
