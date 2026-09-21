@@ -44,6 +44,18 @@
         { "type": "null" },
         { "$ref": "#/$defs/sourceMetadataReconciliation" }
       ]
+    },
+    "pdbInputProvenance": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/pdbInputProvenance" }
+      ]
+    },
+    "pdbEvidenceSummary": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/pdbEvidenceSummary" }
+      ]
     }
   },
   "$defs": {
@@ -124,6 +136,141 @@
         "commitSha": { "type": "string", "minLength": 1, "maxLength": 64 },
         "omittedCompiledFactIdCount": { "type": "integer", "minimum": 0 },
         "omittedCompiledFactIdSha256": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] }
+      }
+    },
+    "pdbInputProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion", "policyVersion", "generatorSha256", "extractorIdentities",
+        "expectedInputs", "effectiveLimits", "outcomes", "boundedInputSha256",
+        "artifactVisibility", "coverageState", "omittedInputCount", "omittedInputSha256"
+      ],
+      "properties": {
+        "schemaVersion": { "const": "pdb-input-provenance.v1" },
+        "policyVersion": { "const": "explicit-pdb-input.v1" },
+        "generatorSha256": { "$ref": "#/$defs/sha256" },
+        "extractorIdentities": {
+          "type": "array", "minItems": 2, "maxItems": 16, "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 120 }
+        },
+        "expectedInputs": {
+          "type": "array", "maxItems": 32,
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["safeLocator"],
+            "properties": { "safeLocator": { "type": "string", "minLength": 1, "maxLength": 4096 } }
+          }
+        },
+        "effectiveLimits": { "$ref": "#/$defs/pdbInputLimits" },
+        "outcomes": {
+          "type": "array", "maxItems": 33,
+          "items": { "$ref": "#/$defs/pdbInputOutcome" }
+        },
+        "boundedInputSha256": { "$ref": "#/$defs/sha256" },
+        "artifactVisibility": { "const": "local-only" },
+        "coverageState": { "enum": ["pdb-complete", "pdb-partial"] },
+        "omittedInputCount": { "type": "integer", "minimum": 0 },
+        "omittedInputSha256": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] }
+      }
+    },
+    "pdbInputLimits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maxArtifactCount", "maxFileSizeBytes", "maxDocumentCount", "maxMethodCount",
+        "maxSequencePointCount", "maxSourceFileCount", "maxSourceFileSizeBytes",
+        "maxSourceTotalBytes", "maxTextLength", "maxTotalWorkUnits"
+      ],
+      "properties": {
+        "maxArtifactCount": { "type": "integer", "minimum": 1, "maximum": 32 },
+        "maxFileSizeBytes": { "type": "integer", "minimum": 1 },
+        "maxDocumentCount": { "type": "integer", "minimum": 1 },
+        "maxMethodCount": { "type": "integer", "minimum": 1 },
+        "maxSequencePointCount": { "type": "integer", "minimum": 1 },
+        "maxSourceFileCount": { "type": "integer", "minimum": 1 },
+        "maxSourceFileSizeBytes": { "type": "integer", "minimum": 1 },
+        "maxSourceTotalBytes": { "type": "integer", "minimum": 1 },
+        "maxTextLength": { "type": "integer", "minimum": 1 },
+        "maxTotalWorkUnits": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "pdbInputOutcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "safeLocator", "outcome", "format", "rawFileSha256", "privacyProjectedInputSha256",
+        "pdbContentId", "matchedAssemblySafeLocator", "matchedAssemblyIdentity",
+        "provenanceBindingInputSha256", "bindingState", "gapKinds"
+      ],
+      "properties": {
+        "safeLocator": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "outcome": { "enum": ["admitted", "missing", "unreadable", "malformed", "mismatched", "ambiguous", "unbound", "unsupported", "unsupported-platform", "disputed", "limit-exhausted"] },
+        "format": { "enum": ["portable", "windows-pdb", "unknown"] },
+        "rawFileSha256": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
+        "privacyProjectedInputSha256": { "$ref": "#/$defs/sha256" },
+        "pdbContentId": { "oneOf": [{ "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[0-9a-f]{8}$" }, { "type": "null" }] },
+        "matchedAssemblySafeLocator": { "oneOf": [{ "type": "string", "maxLength": 4096 }, { "type": "null" }] },
+        "matchedAssemblyIdentity": { "oneOf": [{ "type": "string", "maxLength": 4096 }, { "type": "null" }] },
+        "provenanceBindingInputSha256": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
+        "bindingState": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "gapKinds": {
+          "type": "array", "maxItems": 32, "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+        }
+      }
+    },
+    "pdbEvidenceSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion", "coverageState", "boundedInputSha256", "generatorSha256",
+        "documentCount", "methodCount", "sequencePointCount", "metadataMethodJoinCount",
+        "sourceDocumentJoinCount", "explicitGapCount", "entries", "omittedEntryCount", "omittedEntrySha256"
+      ],
+      "properties": {
+        "schemaVersion": { "const": "pdb-evidence-summary.v1" },
+        "coverageState": { "enum": ["pdb-complete", "pdb-partial"] },
+        "boundedInputSha256": { "$ref": "#/$defs/sha256" },
+        "generatorSha256": { "$ref": "#/$defs/sha256" },
+        "documentCount": { "type": "integer", "minimum": 0 },
+        "methodCount": { "type": "integer", "minimum": 0 },
+        "sequencePointCount": { "type": "integer", "minimum": 0 },
+        "metadataMethodJoinCount": { "type": "integer", "minimum": 0 },
+        "sourceDocumentJoinCount": { "type": "integer", "minimum": 0 },
+        "explicitGapCount": { "type": "integer", "minimum": 0 },
+        "entries": {
+          "type": "array", "maxItems": 256,
+          "items": { "$ref": "#/$defs/pdbEvidenceSummaryEntry" }
+        },
+        "omittedEntryCount": { "type": "integer", "minimum": 0 },
+        "omittedEntrySha256": { "oneOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] }
+      }
+    },
+    "pdbEvidenceSummaryEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "factType", "sourceIdentity", "targetIdentity", "evidenceFactId", "supportingFactIds",
+        "ruleId", "evidenceTier", "extractorVersion", "provenanceState",
+        "provenanceBindingInputSha256", "filePath", "startLine", "endLine",
+        "commitSha", "limitation"
+      ],
+      "properties": {
+        "factType": { "enum": ["MetadataPdbMethodReconciled", "PdbSourceDocumentReconciled", "PdbSequencePointDeclared"] },
+        "sourceIdentity": { "type": "string", "maxLength": 4096 },
+        "targetIdentity": { "type": "string", "maxLength": 4096 },
+        "evidenceFactId": { "type": "string", "pattern": "^fact-[0-9a-f]{20}$" },
+        "supportingFactIds": { "$ref": "#/$defs/supportingFactIds" },
+        "ruleId": { "enum": ["dotnet.compiled.pdb-identity.v1", "dotnet.compiled.sequence-point.v1"] },
+        "evidenceTier": { "const": "Tier2Structural" },
+        "extractorVersion": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "provenanceState": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "provenanceBindingInputSha256": { "$ref": "#/$defs/sha256" },
+        "filePath": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "startLine": { "type": "integer", "minimum": 1 },
+        "endLine": { "type": "integer", "minimum": 1 },
+        "commitSha": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "limitation": { "type": "string", "minLength": 1, "maxLength": 500 }
       }
     },
     "stage": {

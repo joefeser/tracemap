@@ -1,16 +1,19 @@
 # Compiled .NET Evidence Foundation Implementation State
 
-Status: Task 8 exact source-to-metadata reconciliation implemented and locally accepted; PR #773 exact-head ACK review in progress
+Status: Task 8 exact source-to-metadata reconciliation merged in PR #773; Task 9 implemented in PR #774 with local and cross-platform acceptance green, final exact-head ACK pending
 
-Branch: `codex/source-metadata-reconciliation`
+Branch: `codex/pdb-sequence-point-evidence`
 
-Base: `origin/dev` at `532fccfb0a7588ab64397f672ca6a8dddef8d083`
+Base: `origin/dev` at `7dc943f2f9d5de82b0963e3e1b8aa9196116b51c`
 
 Tracking: #759, #766, #767, #768, #769
 
 Task 8 implementation commits: `010502ef` (`feat: reconcile exact source and
 metadata identities`) and `55fefd48` (`test: prove source metadata
 reconciliation matrix`).
+
+PR #773 merged into `dev` as
+`7dc943f2f9d5de82b0963e3e1b8aa9196116b51c` on 2026-09-20.
 
 ## Scope decision
 
@@ -156,7 +159,7 @@ relationship. F# compiled identities remain available, but its `.fsproj` lane
 emits `SourceMetadataReconciliationUnsupportedLanguage` and zero guessed joins.
 Compiled coverage remains independent from source `analysisLevel`.
 
-The v2 public fixture contract records stable reconciliation case IDs, exact
+The v3 public fixture contract retains the stable reconciliation case IDs, exact
 source and metadata identities, expected rule/tier/outcome/gaps, and non-claims.
 The matrix covers namespaces, nested/generic declarations, complete overload
 signatures, constructors, properties/indexers, events/accessors, C# ref and VB
@@ -197,8 +200,9 @@ compiled identities remain available, but source reconciliation intentionally
 fails closed as `SourceFunctionPointerIdentityUnsupported` until a separately
 documented complete Roslyn custom-calling-convention identity contract exists.
 Task 8 makes no PDB/sequence-point, IL body/call, rewrite, `dotnetperf`/private
-corpus, legacy Framework/Web Forms, or C++/CLI claim. Tasks 9-11 remain
-deferred. Operational `scannedAt` and receipt durations remain wall-clock
+corpus, legacy Framework/Web Forms, or C++/CLI claim. PDB work was deferred
+from that slice; Task 9 is documented below and Tasks 10-11 remain open.
+Operational `scannedAt` and receipt durations remain wall-clock
 diagnostics rather than deterministic evidence identifiers; deterministic
 evidence payloads and normalized artifact content were compared instead.
 
@@ -222,3 +226,174 @@ scope in both source and Cecil/SRM metadata identities, so same-looking types
 from different assemblies cannot compare equal. Roslyn `IErrorTypeSymbol`
 values emit `SourceErrorTypeIdentityUnavailable` rather than a plausible
 namespace/name identity. Focused regressions cover all three behaviors.
+
+## Task 9 PDB identity and sequence points
+
+Task 9 activates the explicit bounded PDB input, PDB identity,
+sequence-point, and PDB gap rules. Portable PDBs bind to exactly one admitted
+assembly only through the exact portable content GUID/stamp and PE CodeView
+entry, with `bound` compiled receipt provenance required before any positive
+fact. System.Reflection.Metadata and Mono.Cecil independently read the complete
+portable method/sequence-point shape; disagreement withholds the input. PDB
+documents and method rows remain distinct from metadata and source identities.
+
+Positive facts preserve the PDB input, document, method, compiled method, and
+metadata/PDB reconciliation supporting fact IDs as applicable, plus content
+identity, both endpoint identities, matched assembly identity, compiled
+receipt-binding digest, rule, tier, extractor version, generator and bounded
+input SHA-256 values, provenance state, and limitation. Source documents join
+only by one exact supported checksum candidate. Zero/multiple candidates,
+unsupported checksums, missing/malformed/over-budget inputs, CodeView mismatch,
+ambiguous assembly binding, unacceptable compiled provenance, and reader
+disagreement remain explicit Tier4 gaps.
+
+The v3 public fixture catalog adds six PDB cases. C# proves hidden,
+multi-document, non-monotonic, async, iterator, lambda, and separate generated
+member shapes; VB proves exact portable document/method evidence; F# retains
+compiled PDB facts while emitting
+`PdbSourceReconciliationUnsupportedLanguage` and zero guessed source joins.
+Duplicate exact source bytes prove the multiple-checksum-candidate gap without
+path selection. Focused CLI tests retain PDB provenance and endpoints across
+the manifest, facts, SQLite index, Markdown report, and execution receipt and
+compare deterministic repeat output.
+
+Native Windows PDBs remain explicitly unsupported rather than trusting
+Mono.Cecil as a sole oracle. Windows emits
+`WindowsPdbIndependentReaderUnavailable`; non-Windows hosts emit
+`WindowsPdbRequiresWindows`. The Windows CI lane builds real C# and VB native
+PDBs and proves zero positive PDB facts for that bounded gap. Positive native
+Windows PDB reading is deferred until an independent deterministic reader can
+cross-check the result. Task 9 does not begin IL body/call extraction, rewrite
+analysis, private or `dotnetperf` corpus execution, legacy Framework/Web Forms
+build validation, or C++/CLI.
+
+Final local macOS Task 9 validation on 2026-09-21:
+
+- focused `PortablePdbExtractorTests`: 29 passed, zero failed, zero skipped;
+- combined PDB, source/metadata reconciliation, managed metadata, and receipt
+  contract filter: 89 passed, zero failed, zero skipped;
+- `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with zero warnings
+  and zero errors;
+- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 2,030 passed, zero failed,
+  zero skipped;
+- two bound C# CLI scans emitted all five required scan artifacts plus the
+  execution receipt; `facts.ndjson` and `report.md` were byte-identical, PDB
+  provenance and bounded endpoint summaries were identical, and SQLite retained
+  exact source/target identities with supporting document/method fact IDs;
+- `scripts/check-private-paths.sh`: passed;
+- `node scripts/kiro-review.mjs --self-test`: passed; and
+- `git diff --check`: passed.
+
+The consolidated review correction enforces three subsystem-wide invariants:
+resource admission occurs before retention or expensive work; positive evidence
+requires a complete deterministic support chain with truthful coverage and
+input commitments; and format/assembly binding is exact across primary and
+dependency inputs. Sibling hardening adds streaming single-pass source checksum
+indexes with explicit file/byte/work bounds, incremental SRM and Cecil work
+accounting, exact native MSF classification, bounded expected-input receipts,
+source-snapshot-bound endpoint summaries with direct file/line/commit context,
+zero sequence-point facts without a one-candidate metadata-method edge, work
+charges for every SRM/Cecil method-row inspection, and cancellation polling
+through source checksum streaming.
+
+An earlier exact-head review found two sibling violations of the same
+admission/work-bound invariant. PDB assembly binding now consumes only exact
+artifacts retained by the compiled evaluator's admitted prefix, so an omitted
+byte-identical assembly cannot reenter matching or manufacture an ambiguous
+candidate. Cecil type traversal now reuses the iterative managed-metadata
+walker and charges every type before its methods, so deeply nested empty types
+cannot overflow the stack or evade the PDB work budget. The regression matrix
+covers the omitted duplicate, 10,000 nested empty types, and type-budget
+exhaustion before any method visit.
+
+The next settled three-finding review batch exposed two independent
+post-admission invariants. First, exact method and document joins must be
+linear in the bounded evidence set: compiled methods are indexed once by
+assembly locator and MethodDef token, and PDB documents are indexed once by
+row ID before sequence-point facts are emitted. Second, PDB input identity is
+the normalized path under the checkout filesystem's case semantics, not the
+raw option spelling. The regression matrix covers zero/one/multiple method
+candidates, a same-token member in another assembly, multi-document
+sequence-point support IDs, and both present and missing PDB aliases; an
+aliased positive CLI scan completes without duplicate fact IDs.
+
+The subsequent exact-head Codex batch exposed one shared resource-admission
+invariant across two findings: compiled binding discovery must be cancelable
+without retaining all admitted PE byte arrays. The consolidated correction
+keeps only path, admitted digest, and CodeView identities, then boundedly
+rereads and rehashes the unique matched assembly before Cecil comparison. A
+changed, missing, oversized, or unreadable match fails closed with
+`PdbCompiledArtifactChangedOrUnreadable`. The same cancellation polling applies
+to PDB file reads. Regression matrix:
+
+| Case | Expected evidence |
+| --- | --- |
+| Normal bound C#/VB/F# fixture | Existing exact PDB/metadata facts remain unchanged in shape. |
+| Changed, missing, or oversized matched PE on reread | Verification returns no bytes; no positive PDB evidence may use it. |
+| Cancellation before compiled binding admission | `OperationCanceledException`, not a PDB gap. |
+| Cancellation after a bounded input read chunk | `OperationCanceledException` before the next chunk or positive evidence. |
+
+Finding URLs: https://github.com/joefeser/tracemap/pull/774#discussion_r4062850503
+(PE byte retention) and
+https://github.com/joefeser/tracemap/pull/774#discussion_r4062850521
+(cancellation during binding reads).
+
+The next settled exact-head batch has three findings with two independent
+correctness invariants. The input provenance digest must describe only its
+bounded PDB/assembly admission inputs; source and method reconciliation may
+change final coverage, but not the provenance object or its commitment.
+`PdbEvidenceSummary` carries the final source-bound coverage and digest, and
+the report displays that final coverage separately from input coverage. The
+second invariant is linear, charged post-admission evidence work: the bounded
+summary retains only its configured prefix and incrementally hashes omitted
+entries in canonical order; independent reader shapes are compared as exact
+duplicate-sensitive counts, charging each comparison rather than sorting.
+The PDB regression matrix now includes:
+
+| Case | Expected evidence |
+| --- | --- |
+| Same bound PE/PDB, exact then changed source bytes | Input provenance object and digest unchanged; source-bound summary digest changes and unmatched source emits a gap. |
+| Bounded summary with omitted endpoints | Retained prefix only; incremental omitted digest equals canonical JSON array digest, including zero-omission case. |
+| Same shapes in different order, duplicate mismatch | Order-independent exact agreement; duplicate mismatch disputes reader evidence. |
+| Shape comparison exceeds remaining work units | `PdbInputTotalWorkLimitExceeded` before positive facts. |
+
+Finding URLs: https://github.com/joefeser/tracemap/pull/774#discussion_r4063129385
+(input provenance commitment),
+https://github.com/joefeser/tracemap/pull/774#discussion_r4063129409
+(summary allocation), and
+https://github.com/joefeser/tracemap/pull/774#discussion_r4063129423
+(shape comparison work).
+
+The next exact-head batch exposed one shared candidate-completeness invariant:
+an exact-one join must count every eligible source path and every matching
+CodeView directory entry before accepting a positive edge. The checksum index
+now uses the existing C#/VB inventory-kind classifiers; F# remains explicitly
+unsupported for source reconciliation, so specialized source kinds cannot silently
+disappear. CodeView identities retain duplicate entries; two matching entries
+within one PE or matching entries across two admitted PEs are ambiguous. The
+audit found no other candidate-thinning PDB path: normalized PDB path aliases
+identify one physical input, supported checksum algorithms are capabilities
+rather than candidate identities, and metadata/source candidate lists retain
+multiplicity. No legacy parser or source adapter was added. Regression matrix:
+
+| Case | Expected evidence |
+| --- | --- |
+| Existing C#/VB/F# source-kind matrix | All C#/VB inventory source kinds are checksum candidates; non-source markup/Razor are excluded; F# still has no guessed source join. |
+| Two same-checksum specialized C# or VB files | Exact multiple-candidate gap with count 2 and zero selected source edge. |
+| One, zero, or duplicate matching CodeView identities in one PE | Counts 1, 0, or 2 without collapsing identical entries. |
+| Two admitted same-CodeView PEs | `AmbiguousPdbAssemblyMatch` and zero positive PDB facts. |
+
+Finding URLs: https://github.com/joefeser/tracemap/pull/774#discussion_r4063521136
+(source-kind candidate completeness) and
+https://github.com/joefeser/tracemap/pull/774#discussion_r4063521146
+(CodeView entry multiplicity).
+
+PR #774 implementation-head CI at
+`34ded8aef9b60b6f7db225d1c8af5df6b96ea159`
+passed the .NET, JVM, Python, Swift, TypeScript, five-adapter combine, private
+path, and package-smoke jobs on macOS, Ubuntu, and Windows. The Windows lane
+used desktop Roslyn C# and VB compilers to produce real MSF PDBs, recognized the
+complete native signature, emitted only the bounded unsupported-reader gap, and
+produced zero positive native PDB facts. This is not a native-Windows support
+claim. The Task 9 checkbox is complete; final current-head ACK remains the PR
+terminal gate, and the PR must not be merged by this task.

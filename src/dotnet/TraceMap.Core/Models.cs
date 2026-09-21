@@ -23,7 +23,9 @@ public sealed record ScanManifest(
     string? GitRootHash = null,
     string? SourceSnapshotDigest = null,
     CompiledInputProvenance? CompiledInputProvenance = null,
-    SourceMetadataReconciliationSummary? SourceMetadataReconciliation = null) : IJsonOnDeserialized
+    SourceMetadataReconciliationSummary? SourceMetadataReconciliation = null,
+    PdbInputProvenance? PdbInputProvenance = null,
+    PdbEvidenceSummary? PdbEvidenceSummary = null) : IJsonOnDeserialized
 {
     public string? SourceSnapshotDigest { get; init; } = ValidateSourceSnapshotDigest(SourceSnapshotDigest);
 
@@ -75,7 +77,9 @@ public sealed record ScanManifest(
             GitRootHash,
             SourceSnapshotDigest: null,
             CompiledInputProvenance: null,
-            SourceMetadataReconciliation: null)
+            SourceMetadataReconciliation: null,
+            PdbInputProvenance: null,
+            PdbEvidenceSummary: null)
     {
     }
 }
@@ -144,7 +148,9 @@ public sealed record ScanOptions(
     IReadOnlyList<string>? CompiledInputPaths = null,
     IReadOnlyList<string>? CompiledDependencyPaths = null,
     IReadOnlyList<string>? CompiledBindingReceiptPaths = null,
-    CompiledInputLimits? CompiledInputLimits = null);
+    CompiledInputLimits? CompiledInputLimits = null,
+    IReadOnlyList<string>? PdbInputPaths = null,
+    PdbInputLimits? PdbInputLimits = null);
 
 public sealed record FileInventoryItem(
     string RelativePath,
@@ -388,6 +394,12 @@ public static class FactTypes
     public const string ManagedEventDeclared = nameof(ManagedEventDeclared);
     public const string SourceMetadataIdentityObserved = nameof(SourceMetadataIdentityObserved);
     public const string SourceMetadataIdentityReconciled = nameof(SourceMetadataIdentityReconciled);
+    public const string PdbInputAdmitted = nameof(PdbInputAdmitted);
+    public const string PdbDocumentDeclared = nameof(PdbDocumentDeclared);
+    public const string PdbMethodDeclared = nameof(PdbMethodDeclared);
+    public const string PdbSequencePointDeclared = nameof(PdbSequencePointDeclared);
+    public const string MetadataPdbMethodReconciled = nameof(MetadataPdbMethodReconciled);
+    public const string PdbSourceDocumentReconciled = nameof(PdbSourceDocumentReconciled);
 }
 
 public static class RuleIds
@@ -604,6 +616,10 @@ public static class RuleIds
     public const string DotNetCompiledMember = "dotnet.compiled.member.v1";
     public const string DotNetCompiledGap = "dotnet.compiled.gap.v1";
     public const string DotNetCompiledSourceIdentity = "dotnet.compiled.source-identity.v1";
+    public const string DotNetPdbInput = "dotnet.compiled.pdb-input.v1";
+    public const string DotNetPdbIdentity = "dotnet.compiled.pdb-identity.v1";
+    public const string DotNetPdbSequencePoint = "dotnet.compiled.sequence-point.v1";
+    public const string DotNetPdbGap = "dotnet.compiled.pdb-gap.v1";
 }
 
 public static class ScannerVersions
@@ -626,6 +642,7 @@ public static class ScannerVersions
     public const string FrameworkMigrationSyntaxFallbackExtractor = "framework-migration-syntax-fallback/0.1.0";
     public const string ManagedMetadataExtractor = "managed-metadata/0.1.0+cecil-0.11.6";
     public const string SourceMetadataReconciliationExtractor = "source-metadata-reconciliation/0.1.0";
+    public const string PortablePdbExtractor = "portable-pdb/0.1.0+srm-10.0.0+cecil-0.11.6";
     public const string ConfigExtractor = "config/0.1.0";
     public const string SqlTextExtractor = "sql-text/0.1.0";
     public const string SqlShapeExtractor = "sql-shape/0.1.0";

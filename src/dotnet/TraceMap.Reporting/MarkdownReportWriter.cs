@@ -440,7 +440,10 @@ public static class MarkdownReportWriter
     {
         var provenance = result.Manifest.CompiledInputProvenance;
         if (provenance is null)
+        {
+            AddPdbEvidence(lines, result);
             return;
+        }
 
         lines.Add("");
         lines.Add("## Compiled .NET Metadata Evidence");
@@ -487,6 +490,40 @@ public static class MarkdownReportWriter
         if (facts.Length > CompiledMetadataFactLimit)
         {
             lines.Add($"- {facts.Length - CompiledMetadataFactLimit} additional compiled metadata facts omitted from this human-readable sample; exhaustive rows remain in `facts.ndjson` and `index.sqlite`.");
+        }
+
+        AddPdbEvidence(lines, result);
+    }
+
+    private static void AddPdbEvidence(List<string> lines, ScanResult result)
+    {
+        if (result.Manifest.PdbInputProvenance is not { } pdb)
+            return;
+        var pdbFacts = result.Facts.Where(fact => fact.RuleId is
+                RuleIds.DotNetPdbInput or RuleIds.DotNetPdbIdentity or RuleIds.DotNetPdbSequencePoint or RuleIds.DotNetPdbGap)
+            .ToArray();
+        lines.Add("");
+        lines.Add("## Compiled .NET PDB Evidence");
+        lines.Add("");
+        lines.Add($"- Coverage: `{result.Manifest.PdbEvidenceSummary?.CoverageState ?? pdb.CoverageState}`");
+        lines.Add($"- PDB input coverage: `{pdb.CoverageState}`");
+        lines.Add($"- Artifact visibility: `{pdb.ArtifactVisibility}`");
+        lines.Add($"- Bounded input SHA-256: `{pdb.BoundedInputSha256}`");
+        lines.Add($"- Generator SHA-256: `{pdb.GeneratorSha256}`");
+        lines.Add($"- Documents: `{pdbFacts.Count(fact => fact.FactType == FactTypes.PdbDocumentDeclared)}`; methods: `{pdbFacts.Count(fact => fact.FactType == FactTypes.PdbMethodDeclared)}`; sequence points: `{pdbFacts.Count(fact => fact.FactType == FactTypes.PdbSequencePointDeclared)}`; metadata joins: `{pdbFacts.Count(fact => fact.FactType == FactTypes.MetadataPdbMethodReconciled)}`; source-document joins: `{pdbFacts.Count(fact => fact.FactType == FactTypes.PdbSourceDocumentReconciled)}`; gaps: `{pdbFacts.Count(fact => fact.FactType == FactTypes.AnalysisGap)}`.");
+        lines.Add("- PDB inputs bind to assemblies only through exact CodeView/content identity; source documents bind only through one exact checksum candidate. Raw document names are omitted.");
+        lines.Add("- Sequence points are compiler-produced debug metadata and do not prove statement execution, control flow, calls, behavior, or rewrite preservation.");
+        foreach (var outcome in pdb.Outcomes.OrderBy(item => item.SafeLocator, StringComparer.Ordinal))
+            lines.Add($"- PDB input `{outcome.SafeLocator}`: `{outcome.Outcome}`, format `{outcome.Format}`, binding `{outcome.BindingState}`, gaps `{(outcome.GapKinds.Count == 0 ? "none" : string.Join(",", outcome.GapKinds))}`.");
+        if (result.Manifest.PdbEvidenceSummary is { } summary)
+        {
+            foreach (var entry in summary.Entries.Take(CompiledMetadataFactLimit))
+                lines.Add($"- `{entry.FactType}` endpoint `{entry.SourceIdentity}` -> `{entry.TargetIdentity}` ({entry.EvidenceTier}, fact `{entry.EvidenceFactId}`, provenance `{entry.ProvenanceState}`).");
+            var reportOmitted = Math.Max(0, summary.Entries.Count - CompiledMetadataFactLimit);
+            if (reportOmitted > 0)
+                lines.Add($"- {reportOmitted} retained PDB endpoint entries omitted from this report display; exhaustive rows remain in `facts.ndjson` and `index.sqlite`.");
+            if (summary.OmittedEntryCount > 0)
+                lines.Add($"- {summary.OmittedEntryCount} PDB endpoint entries omitted from the bounded manifest summary; omitted-entry SHA-256: `{summary.OmittedEntrySha256}`; exhaustive rows remain in `facts.ndjson` and `index.sqlite`.");
         }
     }
 
