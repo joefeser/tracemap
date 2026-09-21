@@ -6,6 +6,9 @@ public sealed record PdbInputLimits(
     int MaxDocumentCount = 50_000,
     int MaxMethodCount = 250_000,
     int MaxSequencePointCount = 1_000_000,
+    int MaxSourceFileCount = 50_000,
+    long MaxSourceFileSizeBytes = 67_108_864,
+    long MaxSourceTotalBytes = 1_073_741_824,
     int MaxTextLength = 4_096,
     long MaxTotalWorkUnits = 1_500_000);
 
@@ -49,6 +52,10 @@ public sealed record PdbEvidenceSummaryEntry(
     string ExtractorVersion,
     string ProvenanceState,
     string ProvenanceBindingInputSha256,
+    string FilePath,
+    int StartLine,
+    int EndLine,
+    string CommitSha,
     string Limitation);
 
 public sealed record PdbEvidenceSummary(
@@ -99,7 +106,8 @@ internal sealed record EvaluatedPdbInput(
 internal sealed record PdbInputEvaluation(
     PdbInputProvenance? Provenance,
     IReadOnlyList<EvaluatedPdbInput> Inputs,
-    IReadOnlyList<string> KnownGaps)
+    IReadOnlyList<string> KnownGaps,
+    long ConsumedWorkUnits)
 {
-    public static readonly PdbInputEvaluation Disabled = new(null, [], []);
+    public static readonly PdbInputEvaluation Disabled = new(null, [], [], 0);
 }

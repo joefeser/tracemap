@@ -178,14 +178,18 @@
       "additionalProperties": false,
       "required": [
         "maxArtifactCount", "maxFileSizeBytes", "maxDocumentCount", "maxMethodCount",
-        "maxSequencePointCount", "maxTextLength", "maxTotalWorkUnits"
+        "maxSequencePointCount", "maxSourceFileCount", "maxSourceFileSizeBytes",
+        "maxSourceTotalBytes", "maxTextLength", "maxTotalWorkUnits"
       ],
       "properties": {
-        "maxArtifactCount": { "type": "integer", "minimum": 1 },
+        "maxArtifactCount": { "type": "integer", "minimum": 1, "maximum": 32 },
         "maxFileSizeBytes": { "type": "integer", "minimum": 1 },
         "maxDocumentCount": { "type": "integer", "minimum": 1 },
         "maxMethodCount": { "type": "integer", "minimum": 1 },
         "maxSequencePointCount": { "type": "integer", "minimum": 1 },
+        "maxSourceFileCount": { "type": "integer", "minimum": 1 },
+        "maxSourceFileSizeBytes": { "type": "integer", "minimum": 1 },
+        "maxSourceTotalBytes": { "type": "integer", "minimum": 1 },
         "maxTextLength": { "type": "integer", "minimum": 1 },
         "maxTotalWorkUnits": { "type": "integer", "minimum": 1 }
       }
@@ -248,7 +252,8 @@
       "required": [
         "factType", "sourceIdentity", "targetIdentity", "evidenceFactId", "supportingFactIds",
         "ruleId", "evidenceTier", "extractorVersion", "provenanceState",
-        "provenanceBindingInputSha256", "limitation"
+        "provenanceBindingInputSha256", "filePath", "startLine", "endLine",
+        "commitSha", "limitation"
       ],
       "properties": {
         "factType": { "enum": ["MetadataPdbMethodReconciled", "PdbSourceDocumentReconciled", "PdbSequencePointDeclared"] },
@@ -257,10 +262,14 @@
         "evidenceFactId": { "type": "string", "pattern": "^fact-[0-9a-f]{20}$" },
         "supportingFactIds": { "$ref": "#/$defs/supportingFactIds" },
         "ruleId": { "enum": ["dotnet.compiled.pdb-identity.v1", "dotnet.compiled.sequence-point.v1"] },
-        "evidenceTier": { "enum": ["Tier1Semantic", "Tier2Structural"] },
+        "evidenceTier": { "const": "Tier2Structural" },
         "extractorVersion": { "type": "string", "minLength": 1, "maxLength": 120 },
         "provenanceState": { "type": "string", "minLength": 1, "maxLength": 64 },
         "provenanceBindingInputSha256": { "$ref": "#/$defs/sha256" },
+        "filePath": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "startLine": { "type": "integer", "minimum": 1 },
+        "endLine": { "type": "integer", "minimum": 1 },
+        "commitSha": { "type": "string", "minLength": 1, "maxLength": 64 },
         "limitation": { "type": "string", "minLength": 1, "maxLength": 500 }
       }
     },

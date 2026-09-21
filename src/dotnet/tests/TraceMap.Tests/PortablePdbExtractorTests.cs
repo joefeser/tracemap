@@ -16,7 +16,7 @@ public sealed class PortablePdbExtractorTests
 
         Assert.NotNull(result.Manifest.PdbInputProvenance);
         Assert.NotNull(result.Manifest.PdbEvidenceSummary);
-        Assert.Equal("pdb-complete", result.Manifest.PdbInputProvenance.CoverageState);
+        Assert.Equal("pdb-partial", result.Manifest.PdbInputProvenance.CoverageState);
         Assert.Single(result.Facts, fact => fact.FactType == FactTypes.PdbInputAdmitted);
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.PdbDocumentDeclared);
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.PdbMethodDeclared);
@@ -25,7 +25,8 @@ public sealed class PortablePdbExtractorTests
             result.Facts.Count(fact => fact.FactType == FactTypes.PdbMethodDeclared),
             result.Facts.Count(fact => fact.FactType == FactTypes.MetadataPdbMethodReconciled));
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.PdbSourceDocumentReconciled
-            && fact.Evidence.FilePath == "FixtureShapes.cs");
+            && fact.Evidence.FilePath == "FixtureShapes.cs"
+            && fact.EvidenceTier == EvidenceTiers.Tier2Structural);
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.PdbSequencePointDeclared
             && fact.Properties.GetValueOrDefault("hidden") == "true");
         Assert.All(result.Facts.Where(fact => fact.RuleId is RuleIds.DotNetPdbInput or RuleIds.DotNetPdbIdentity or RuleIds.DotNetPdbSequencePoint), fact =>
@@ -107,6 +108,27 @@ public sealed class PortablePdbExtractorTests
     }
 
     [Fact]
+    public void Bound_dependency_pdb_uses_the_exact_dependency_provenance_outcome()
+    {
+        var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
+        using var temp = new TempDirectory();
+        var receipt = Path.Combine(temp.Path, "binding.json");
+        WriteBoundReceipt(fixture.Source, fixture.Assembly, receipt, dependency: true);
+        var result = Scan(new ScanOptions(
+            fixture.Source,
+            TempOutput(),
+            CompiledDependencyPaths: [fixture.Assembly],
+            CompiledBindingReceiptPaths: [receipt],
+            PdbInputPaths: [fixture.Pdb]));
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.PdbInputAdmitted);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.MetadataPdbMethodReconciled);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.PdbSequencePointDeclared);
+        Assert.DoesNotContain(result.Facts, fact => fact.RuleId == RuleIds.DotNetPdbGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "PdbAssemblyIdentityMismatch");
+    }
+
+    [Fact]
     public void Pdb_with_different_codeview_identity_emits_mismatch_gap_without_candidate_selection()
     {
         var csharp = Fixture("csharp", "CompiledEvidence.CSharp");
@@ -161,6 +183,40 @@ public sealed class PortablePdbExtractorTests
         Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.PdbSequencePointDeclared);
         Assert.Contains(result.Facts, fact => fact.RuleId == RuleIds.DotNetPdbGap
             && fact.Properties.GetValueOrDefault("gapKind") == "PdbInputTotalWorkLimitExceeded");
+    }
+
+    [Fact]
+    public void Source_checksum_index_limits_fail_closed_without_removing_compiled_pdb_evidence()
+    {
+        var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
+        var result = ScanBound(fixture.Source, fixture.Assembly, fixture.Pdb, new PdbInputLimits(MaxSourceFileCount: 1));
+
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.PdbMethodDeclared);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.PdbSequencePointDeclared);
+        Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.PdbSourceDocumentReconciled);
+        Assert.Contains(result.Facts, fact => fact.RuleId == RuleIds.DotNetPdbGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "PdbSourceFileCountExceeded");
+        Assert.Equal("pdb-partial", result.Manifest.PdbInputProvenance!.CoverageState);
+    }
+
+    [Fact]
+    public void Pdb_expected_inputs_and_outcomes_remain_within_the_published_artifact_bound()
+    {
+        var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
+        var paths = Enumerable.Range(0, PortablePdbExtractor.MaximumArtifactCount + 1)
+            .Select(index => Path.Combine(Path.GetDirectoryName(fixture.Pdb)!, $"missing-{index:D2}.pdb"))
+            .ToArray();
+        var result = Scan(new ScanOptions(fixture.Source, TempOutput(), PdbInputPaths: paths));
+
+        Assert.Equal(PortablePdbExtractor.MaximumArtifactCount, result.Manifest.PdbInputProvenance!.ExpectedInputs.Count);
+        Assert.Equal(PortablePdbExtractor.MaximumArtifactCount + 1, result.Manifest.PdbInputProvenance.Outcomes.Count);
+        Assert.Equal(1, result.Manifest.PdbInputProvenance.OmittedInputCount);
+        Assert.Matches("^[0-9a-f]{64}$", result.Manifest.PdbInputProvenance.OmittedInputSha256);
+        Assert.Throws<ArgumentException>(() => Scan(new ScanOptions(
+            fixture.Source,
+            TempOutput(),
+            PdbInputPaths: [fixture.Pdb],
+            PdbInputLimits: new PdbInputLimits(MaxArtifactCount: PortablePdbExtractor.MaximumArtifactCount + 1))));
     }
 
     [Fact]
@@ -225,6 +281,49 @@ public sealed class PortablePdbExtractorTests
     }
 
     [Fact]
+    public void Sequence_points_require_exactly_one_metadata_method_candidate()
+    {
+        var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
+        using var temp = new TempDirectory();
+        var receipt = Path.Combine(temp.Path, "binding.json");
+        WriteBoundReceipt(fixture.Source, fixture.Assembly, receipt);
+        var options = new ScanOptions(
+            fixture.Source,
+            TempOutput(),
+            CompiledInputPaths: [fixture.Assembly],
+            CompiledBindingReceiptPaths: [receipt],
+            PdbInputPaths: [fixture.Pdb]);
+        var baseline = Scan(options);
+        var compiledEvaluation = ManagedMetadataExtractor.Evaluate(fixture.Source, baseline.Manifest.CommitSha, options);
+        var pdbEvaluation = PortablePdbExtractor.Evaluate(fixture.Source, options, compiledEvaluation);
+        var compiledFacts = ManagedMetadataExtractor.MaterializeFacts(baseline.Manifest, compiledEvaluation);
+
+        var zero = PortablePdbExtractor.MaterializeFacts(
+            fixture.Source,
+            baseline.Manifest,
+            pdbEvaluation,
+            compiledFacts.Where(fact => fact.FactType != FactTypes.ManagedMethodDeclared).ToArray(),
+            []);
+        Assert.Contains(zero, fact => fact.RuleId == RuleIds.DotNetPdbGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "PdbMetadataMethodZeroCandidate");
+        Assert.DoesNotContain(zero, fact => fact.FactType == FactTypes.PdbSequencePointDeclared);
+
+        var duplicated = compiledFacts.ToList();
+        var duplicate = compiledFacts.First(fact => fact.FactType == FactTypes.ManagedMethodDeclared);
+        duplicated.Add(duplicate with { FactId = "fact-00000000000000000000" });
+        var multiple = PortablePdbExtractor.MaterializeFacts(
+            fixture.Source,
+            baseline.Manifest,
+            pdbEvaluation,
+            duplicated,
+            []);
+        var multipleGap = Assert.Single(multiple, fact => fact.RuleId == RuleIds.DotNetPdbGap
+            && fact.Properties.GetValueOrDefault("gapKind") == "PdbMetadataMethodMultipleCandidates");
+        Assert.DoesNotContain(multiple, fact => fact.FactType == FactTypes.PdbSequencePointDeclared
+            && fact.SourceSymbol == multipleGap.Properties["pdbMethodIdentity"]);
+    }
+
+    [Fact]
     public void Missing_malformed_and_windows_pdb_inputs_emit_bounded_gaps()
     {
         var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
@@ -234,24 +333,46 @@ public sealed class PortablePdbExtractorTests
             var malformed = Path.Combine(temp.FullName, "malformed.pdb");
             File.WriteAllBytes(malformed, [(byte)'B', (byte)'S', (byte)'J', (byte)'B', 0xff]);
             var windows = Path.Combine(temp.FullName, "windows.pdb");
-            File.WriteAllBytes(windows, "Microsoft C/C++ MSF 7.00"u8.ToArray());
+            File.WriteAllBytes(windows, "Microsoft C/C++ MSF 7.00\r\n\u001aDS\0\0\0"u8.ToArray());
+            var unrelated = Path.Combine(temp.FullName, "unrelated.pdb");
+            File.WriteAllBytes(unrelated, "not a pdb"u8.ToArray());
             var result = Scan(new ScanOptions(
                 fixture.Source,
                 TempOutput(),
                 CompiledInputPaths: [fixture.Assembly],
-                PdbInputPaths: [Path.Combine(temp.FullName, "missing.pdb"), malformed, windows]));
+                PdbInputPaths: [Path.Combine(temp.FullName, "missing.pdb"), malformed, windows, unrelated]));
 
             var gaps = result.Facts.Where(fact => fact.RuleId == RuleIds.DotNetPdbGap)
                 .Select(fact => fact.Properties.GetValueOrDefault("gapKind"))
                 .ToArray();
             Assert.Contains("MissingPdbInput", gaps);
             Assert.Contains("MalformedPortablePdb", gaps);
+            Assert.Contains("MalformedPdbInput", gaps);
             Assert.Contains(OperatingSystem.IsWindows() ? "WindowsPdbIndependentReaderUnavailable" : "WindowsPdbRequiresWindows", gaps);
         }
         finally
         {
             temp.Delete(recursive: true);
         }
+    }
+
+    [Fact]
+    public void Undeclared_sequence_point_document_rows_are_recoverable_malformed_input()
+    {
+        var documents = new[]
+        {
+            new PdbDocumentObservation(1, "document-1", "name", Guid.Empty.ToString("D"), "checksum", Guid.Empty.ToString("D"))
+        };
+        var methods = new[]
+        {
+            new PdbMethodObservation(1, "0x06000001", "method-1",
+            [
+                new PdbSequencePointObservation(0, 0, 2, false, 1, 1, 1, 2, "point-1")
+            ])
+        };
+
+        var exception = Assert.Throws<InvalidDataException>(() => PortablePdbExtractor.CanonicalShapes(documents, methods));
+        Assert.True(PortablePdbExtractor.IsRecoverable(exception));
     }
 
     [Fact]
@@ -273,7 +394,7 @@ public sealed class PortablePdbExtractorTests
             var pdb = Path.Combine(root, language, assemblyName + ".pdb");
             Assert.True(File.Exists(assembly), assembly);
             Assert.True(File.Exists(pdb), pdb);
-            Assert.False(File.ReadAllBytes(pdb).AsSpan().StartsWith("BSJB"u8), $"Expected a native Windows PDB: {pdb}");
+            Assert.True(PortablePdbExtractor.IsWindowsPdb(File.ReadAllBytes(pdb)), $"Expected a native Windows PDB: {pdb}");
 
             var source = Path.Combine(FindRepoRoot(), "samples", "compiled-dotnet-evidence", language);
             var result = ScanBound(source, assembly, pdb);
@@ -319,6 +440,28 @@ public sealed class PortablePdbExtractorTests
     }
 
     [Fact]
+    public void Pdb_summary_input_commitment_changes_with_the_source_snapshot()
+    {
+        var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
+        using var repo = new TempDirectory();
+        File.Copy(Path.Combine(fixture.Source, "FixtureShapes.cs"), Path.Combine(repo.Path, "FixtureShapes.cs"));
+        RunGit(repo.Path, "init", "-b", "main");
+        RunGit(repo.Path, "config", "user.email", "fixtures@tracemap.invalid");
+        RunGit(repo.Path, "config", "user.name", "TraceMap Fixtures");
+        RunGit(repo.Path, "add", ".");
+        RunGit(repo.Path, "commit", "-m", "fixture");
+
+        var first = ScanBound(repo.Path, fixture.Assembly, fixture.Pdb);
+        File.WriteAllText(Path.Combine(repo.Path, "Additional.cs"), "internal sealed class Additional { }");
+        var second = ScanBound(repo.Path, fixture.Assembly, fixture.Pdb);
+
+        Assert.Equal(first.Manifest.CommitSha, second.Manifest.CommitSha);
+        Assert.Equal(first.Manifest.PdbInputProvenance!.BoundedInputSha256, second.Manifest.PdbInputProvenance!.BoundedInputSha256);
+        Assert.NotEqual(first.Manifest.SourceSnapshotDigest, second.Manifest.SourceSnapshotDigest);
+        Assert.NotEqual(first.Manifest.PdbEvidenceSummary!.BoundedInputSha256, second.Manifest.PdbEvidenceSummary!.BoundedInputSha256);
+    }
+
+    [Fact]
     public async Task Cli_repeat_scans_preserve_pdb_provenance_and_endpoints_in_all_artifacts()
     {
         var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
@@ -352,13 +495,17 @@ public sealed class PortablePdbExtractorTests
         Assert.Equal(provenance.GetRawText(), secondManifest.RootElement.GetProperty("pdbInputProvenance").GetRawText());
         Assert.Equal(summary.GetRawText(), secondManifest.RootElement.GetProperty("pdbEvidenceSummary").GetRawText());
         Assert.Equal("pdb-input-provenance.v1", provenance.GetProperty("schemaVersion").GetString());
-        Assert.Equal("pdb-complete", provenance.GetProperty("coverageState").GetString());
+        Assert.Equal("pdb-partial", provenance.GetProperty("coverageState").GetString());
         Assert.Equal("pdb-evidence-summary.v1", summary.GetProperty("schemaVersion").GetString());
         Assert.Contains(summary.GetProperty("entries").EnumerateArray(), entry =>
             !string.IsNullOrWhiteSpace(entry.GetProperty("sourceIdentity").GetString())
             && !string.IsNullOrWhiteSpace(entry.GetProperty("targetIdentity").GetString())
             && !string.IsNullOrWhiteSpace(entry.GetProperty("evidenceFactId").GetString())
             && entry.GetProperty("supportingFactIds").GetArrayLength() > 0
+            && !string.IsNullOrWhiteSpace(entry.GetProperty("filePath").GetString())
+            && entry.GetProperty("startLine").GetInt32() > 0
+            && entry.GetProperty("endLine").GetInt32() > 0
+            && !string.IsNullOrWhiteSpace(entry.GetProperty("commitSha").GetString())
             && !string.IsNullOrWhiteSpace(entry.GetProperty("provenanceBindingInputSha256").GetString()));
         Assert.Contains("Compiled .NET PDB Evidence", await File.ReadAllTextAsync(Path.Combine(first, "report.md")), StringComparison.Ordinal);
 
@@ -441,10 +588,14 @@ public sealed class PortablePdbExtractorTests
             PdbInputLimits: limits));
     }
 
-    private static void WriteBoundReceipt(string source, string assembly, string receipt)
+    private static void WriteBoundReceipt(string source, string assembly, string receipt, bool dependency = false)
     {
         var commit = GitMetadataProvider.Detect(source).CommitSha;
-        var initial = ManagedMetadataExtractor.Evaluate(source, commit, new ScanOptions(source, "unused", CompiledInputPaths: [assembly]));
+        var initial = ManagedMetadataExtractor.Evaluate(source, commit, new ScanOptions(
+            source,
+            "unused",
+            CompiledInputPaths: dependency ? null : [assembly],
+            CompiledDependencyPaths: dependency ? [assembly] : null));
         File.WriteAllText(receipt, JsonSerializer.Serialize(new
         {
             schemaVersion = "compiled-input-binding-set.v1",
