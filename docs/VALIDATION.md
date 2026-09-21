@@ -2687,7 +2687,15 @@ yet be independently verified are not promoted to positive evidence:
 non-call token operands such as field and signature tokens are committed by
 raw module-local token only, and string literals are committed by digest only
 and never retained verbatim because literal text is unbounded and may contain
-secrets.
+secrets. The `constrained.` prefix target is cross-checked as a
+`constrainedtype` call observation, but its module-local token stays
+explicitly unclaimed because Mono.Cecil cannot reproduce the raw TypeSpec
+token after resolving the operand. `--il-max-text` bounds user strings,
+resolved target identities, and body identities on both readers; a violation
+emits `IlTextLimitExceeded` and withholds the input. The raw reader runs
+first, validating opcode bytes, operand extents, and switch jump tables —
+including overflow-safe table-extent checks and per-target work charges —
+before Mono.Cecil materializes the same operand.
 
 Positive facts keep every required commitment: exact assembly identity, module
 name and MVID, module-local MethodDef token, `evidenceLocationKind=

@@ -83,6 +83,22 @@ public static class IlBodyShapes
         return total;
     }
 
+    // CS-IL-BRANCH-007: dense case set compiles to a genuine multi-target
+    // switch opcode whose jump-table deltas are all relative to the shared
+    // offset after the complete table.
+    public static int SwitchTable(int value)
+    {
+        switch (value)
+        {
+            case 0: return 10;
+            case 1: return 20;
+            case 2: return 30;
+            case 3: return 40;
+            case 4: return 50;
+            default: return 60;
+        }
+    }
+
     // CS-IL-ASSEMBLY-007: identical trivial body shared across languages and
     // assemblies; identity scoping must keep them distinct.
     public static int IlIdentity(int value) => value;
