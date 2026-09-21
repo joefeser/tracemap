@@ -322,7 +322,10 @@ public sealed class PortablePdbExtractorTests
     public async Task Cli_repeat_scans_preserve_pdb_provenance_and_endpoints_in_all_artifacts()
     {
         var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
-        using var temp = new TempDirectory();
+        // Keep CLI output on the checkout volume. On Windows CI the system temp
+        // directory is on C: while the checkout is on D:, and the protected-root
+        // validation intentionally reasons about paths within one volume.
+        using var temp = new TempDirectory(Path.GetDirectoryName(FindRepoRoot()));
         var binding = Path.Combine(temp.Path, "binding.json");
         WriteBoundReceipt(fixture.Source, fixture.Assembly, binding);
         var first = Path.Combine(temp.Path, "first");
