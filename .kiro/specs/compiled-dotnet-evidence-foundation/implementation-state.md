@@ -455,6 +455,18 @@ Local macOS validation on 2026-09-21:
 
 - focused `IlBodyEvidenceExtractorTests`: 26 passed, zero failed, zero skipped;
 - neighbor suites: `ManagedMetadataExtractorTests` + `PortablePdbExtractorTests`
-  + `SourceMetadataReconciliationTests`: 91 passed, zero failed;
-- full `dotnet build`/`dotnet test` results recorded in the PR validation
-  summary below.
+  + `SourceMetadataReconciliationTests`: 91 passed, zero failed, zero skipped;
+- `dotnet build src/dotnet/TraceMap.sln --no-restore`: passed with zero
+  warnings and zero errors;
+- `dotnet test src/dotnet/TraceMap.sln --no-restore`: 2,077 passed, zero
+  failed, zero skipped (one early concurrent run showed two transient
+  failures that did not reproduce on the immediate clean rerun);
+- three-language CLI scan (C# primary, VB and F# dependencies) with
+  `--il-body-evidence`: `il-complete`, all five artifacts plus the execution
+  receipt present, byte-identical `facts.ndjson` and `report.md` on repeat,
+  154 IL body and 125 IL call rows in `facts.ndjson` and `index.sqlite`;
+  `scripts/validate-adapter-artifacts.py` passed and no output contained a
+  local absolute path or an IL string literal;
+- `scripts/check-private-paths.sh`: passed;
+- `node scripts/kiro-review.mjs --self-test`: passed; and
+- `git diff --check`: passed.
